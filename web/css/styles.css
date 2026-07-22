@@ -550,3 +550,23 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   background: rgba(251, 44, 70, 0.12); border: 1px solid rgba(251, 44, 70, 0.32);
 }
 .live-refresh .live-dot { background: #fb2c46; }
+
+/* ---------------- Bankroll control ---------------- */
+.control.bankroll { min-width: 230px; }
+.bankroll-inputs {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--panel-3); border: 1px solid var(--border); border-radius: 10px;
+  padding: 6px 10px;
+}
+.bankroll-inputs .pfx, .bankroll-inputs .sfx { color: var(--text-mute); font-size: 12.5px; font-weight: 600; }
+.bankroll-inputs input {
+  background: transparent; border: 0; outline: none; color: var(--text);
+  font-family: inherit; font-size: 14px; font-weight: 700; width: 70px;
+  -moz-appearance: textfield;
+}
+.bankroll-inputs input::-webkit-outer-spin-button,
+.bankroll-inputs input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.bankroll-inputs input#unit-pct { width: 40px; text-align: right; color: var(--text-dim); }
+.control.bankroll label b { color: var(--good); font-weight: 700; }
+
+.tile-sub { color: var(--text-mute); font-size: 12px; font-weight: 600; margin-top: 2px; }

@@ -11,7 +11,35 @@ const state = {
   view: "recommended", search: "",
   sport: new URLSearchParams(location.search).get("sport") === "mlb" ? "mlb" : "nfl",
   static: new URLSearchParams(location.search).has("static"),
+  bankroll: null, unitPct: 1.0,      // per-user bankroll sizing (localStorage)
 };
+
+/* ---------------- bankroll sizing ---------------- */
+function loadBankroll() {
+  const qp = new URLSearchParams(location.search);
+  try {
+    const b = localStorage.getItem("ge-bankroll");
+    const u = localStorage.getItem("ge-unit-pct");
+    if (b !== null && b !== "") state.bankroll = parseFloat(b);
+    if (u !== null && u !== "") state.unitPct = parseFloat(u) || 1.0;
+  } catch (e) {}
+  // URL params win (shareable sizing), e.g. ?bankroll=2500&unit=1
+  if (qp.has("bankroll")) { const b = parseFloat(qp.get("bankroll")); if (b > 0) state.bankroll = b; }
+  if (qp.has("unit")) { const u = parseFloat(qp.get("unit")); if (u > 0) state.unitPct = u; }
+}
+function unitDollars() {
+  return (state.bankroll && state.bankroll > 0) ? state.bankroll * (state.unitPct / 100) : 0;
+}
+function money(x) {
+  return "$" + x.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function stakeDollars(units) { return units * unitDollars(); }
+function updateUnitNote() {
+  const el = document.getElementById("unit-note");
+  if (!el) return;
+  const u = unitDollars();
+  el.textContent = u > 0 ? `1u = ${money(u)}` : "enter to size bets";
+}
 
 const SPORT_META = {
   nfl: { logo: "🏈", tagline: "AI-powered NFL player-prop model",
@@ -183,17 +211,21 @@ function renderStats() {
   const rec = recs.filter((r) => r._ok);
   const avgEdge = rec.reduce((s, r) => s + r.edge, 0) / (rec.length || 1);
   const exposure = rec.reduce((s, r) => s + r.stake_units, 0);
+  const ud = unitDollars();
   const tiles = [
     { k: "Props analyzed", to: d.counts.props_analyzed, dec: 0 },
     { k: "Recommended", to: rec.length, dec: 0 },
     { k: "Avg edge", to: rec.length ? avgEdge * 100 : 0, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "", cls: "pos" },
-    { k: "Suggested exposure", to: exposure, dec: 2, suf: "u" },
+    ud > 0
+      ? { k: "Suggested exposure", to: exposure * ud, dec: 2, pre: "$", sub: `${exposure.toFixed(2)}u` }
+      : { k: "Suggested exposure", to: exposure, dec: 2, suf: "u" },
   ];
   const fmt = (t) => (t.pre || "") + Number(t.to).toFixed(t.dec) + (t.suf || "");
   const instant = state.static || state.quiet;
   document.getElementById("stats").innerHTML = tiles.map((t) =>
     `<div class="tile"><div class="k">${t.k}</div>
-       <div class="v ${t.cls || ""}" data-to="${t.to}" data-dec="${t.dec}" data-pre="${t.pre || ""}" data-suf="${t.suf || ""}">${instant ? fmt(t) : "0"}</div></div>`
+       <div class="v ${t.cls || ""}" data-to="${t.to}" data-dec="${t.dec}" data-pre="${t.pre || ""}" data-suf="${t.suf || ""}">${instant ? fmt(t) : "0"}</div>
+       ${t.sub ? `<div class="tile-sub">${t.sub}</div>` : ""}</div>`
   ).join("");
   if (!instant) document.querySelectorAll("#stats .v[data-to]").forEach(countUp);
 }
@@ -329,7 +361,11 @@ function booksChip(r) {
 function cardHTML(r) {
   const reasons = (r.reasons || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
   const warnings = (r.warnings || []).map((w) => `<div class="warning">⚠️ ${escapeHtml(w)}</div>`).join("");
-  const stakeChip = r._ok ? `<span class="chip stake">Stake ${r.stake_units.toFixed(2)}u</span>` : "";
+  const ud = unitDollars();
+  const stakeTxt = ud > 0
+    ? `Stake ${money(stakeDollars(r.stake_units))} · ${r.stake_units.toFixed(2)}u`
+    : `Stake ${r.stake_units.toFixed(2)}u`;
+  const stakeChip = r._ok ? `<span class="chip stake">💰 ${stakeTxt}</span>` : "";
   return `
     <article class="card ${r._ok ? "" : "faded"}" style="--grade-color:${gradeColor(r.grade)}">
       ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
@@ -532,14 +568,37 @@ function bind() {
   document.getElementById("player-search").addEventListener("input", (e) => {
     state.search = e.target.value; renderPlayers();
   });
+
+  const bankrollEl = document.getElementById("bankroll");
+  const unitEl = document.getElementById("unit-pct");
+  if (state.bankroll) bankrollEl.value = state.bankroll;
+  unitEl.value = state.unitPct;
+  const onBankrollChange = () => {
+    const b = parseFloat(bankrollEl.value);
+    state.bankroll = isFinite(b) && b > 0 ? b : null;
+    const u = parseFloat(unitEl.value);
+    state.unitPct = isFinite(u) && u > 0 ? u : 1.0;
+    try {
+      localStorage.setItem("ge-bankroll", state.bankroll == null ? "" : String(state.bankroll));
+      localStorage.setItem("ge-unit-pct", String(state.unitPct));
+    } catch (e) {}
+    updateUnitNote();
+    renderStats();
+    renderRecommended();
+    renderPlayers();
+  };
+  bankrollEl.addEventListener("input", onBankrollChange);
+  unitEl.addEventListener("input", onBankrollChange);
   document.getElementById("refresh").addEventListener("click", load);
   document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
   window.addEventListener("resize", moveIndicator);
 }
 
 initTheme();
+loadBankroll();
 bind();
 applySport();
+updateUnitNote();
 initialView();
 requestAnimationFrame(moveIndicator);
 load();

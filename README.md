@@ -28,6 +28,8 @@ python3 server.py
 # → open http://localhost:8000
 ```
 
+For real NFL/MLB data, live odds and the historical database, see **[SETUP.md](SETUP.md)**.
+
 Tighten the model from the CLI or the UI sliders:
 
 ```bash
@@ -626,6 +628,10 @@ python3 ledger.py demo                            # runnable end-to-end demo
 - **Bankroll-aware sizing**: each unit is a set percent of the *current* bankroll,
   so dollar stakes scale with the roll; the model's fractional-Kelly `stake_units`
   sets how many units.
+- **On the website**: the Recommended tab has a **Bankroll** control — anyone
+  enters their bankroll and unit %, and every pick shows its exact dollar stake
+  (`💰 Stake $7.50 · 0.75u`) with total exposure in dollars. Saved in the browser
+  (`localStorage`) and shareable via `?bankroll=1000&unit=1`. No account needed.
 - **Reporting**: record (W-L-P), win rate, ROI, net units/dollars, closing-line
   value, and breakdowns by grade and market — so over a season you see exactly
   where the model is strong or weak.
