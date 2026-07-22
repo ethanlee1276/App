@@ -19,6 +19,7 @@ import sys
 from engine.sources.nflverse import build_games, build_slate, weather_from_row, load_schedules
 from engine.sources.fetch import DataUnavailable
 from engine.sources import oddsapi
+from engine.sources import injuries as injuries_feed
 from engine.pipeline import run_slate
 from engine.rules import RuleConfig
 
@@ -43,6 +44,8 @@ def main() -> None:
     ap.add_argument("week", type=int)
     ap.add_argument("--games-only", action="store_true",
                     help="Only print real games + weather (no stats needed).")
+    ap.add_argument("--injuries", action="store_true",
+                    help="Attach real nflverse injury reports (holds + knock-on effects).")
     ap.add_argument("--odds", action="store_true",
                     help="Attach real sportsbook lines via The Odds API (needs ODDS_API_KEY).")
     ap.add_argument("--books", default=None,
@@ -63,6 +66,17 @@ def main() -> None:
         print(exc)
         print("\nTip: run with --games-only to use just the live schedule/weather layer.")
         sys.exit(2)
+
+    if args.injuries:
+        try:
+            ir = injuries_feed.attach_injuries_to_slate(slate, args.season, args.week)
+            summary = ", ".join(f"{n}×{s}" for s, n in sorted(ir.by_status.items()))
+            print(f"\nInjuries: {ir.total} designations this week ({summary}).")
+            if ir.holds:
+                print(f"  Holding {len(ir.holds)} prop(s) on injured players: "
+                      f"{', '.join(ir.holds)}")
+        except DataUnavailable as exc:
+            print(f"\n⚠️  Injury feed unavailable — projecting without it.\n   {exc}")
 
     real_odds = False
     if args.odds:

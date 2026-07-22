@@ -124,6 +124,7 @@ engine/
     fetch.py      cached HTTP CSV fetch (stdlib, proxy-aware, gzip)
     nflverse.py   real nflverse → Slate (schedules, weather, stats, defenses)
     oddsapi.py    The Odds API → real book lines (de-vig, best-line shopping)
+    injuries.py   nflverse injury reports → holds + knock-on effects
 data/
   sample_slate.json   illustrative slate (7 props across 3 games)
   cache/              downloaded feeds (git-ignored)
@@ -144,8 +145,9 @@ file — same math, real inputs:
 ```bash
 python3 nfl_build.py 2024 5 --games-only   # real games + weather (no stats needed)
 python3 nfl_build.py 2024 5                 # full model (needs weekly stats, see below)
+python3 nfl_build.py 2024 5 --injuries      # real injury holds + knock-on effects
 python3 nfl_build.py 2024 5 --odds          # price against real sportsbook lines
-python3 nfl_build.py 2024 5 --odds --out web/data/recommendations.json
+python3 nfl_build.py 2024 5 --injuries --odds --out web/data/recommendations.json
 ```
 
 `engine/sources/nflverse.py` is the adapter. What it pulls, and from where:
@@ -198,6 +200,33 @@ python3 nfl_build.py 2024 5 --odds
 > Note: some managed/sandboxed environments block outbound access to
 > `api.the-odds-api.com`; run `--odds` where the host is reachable.
 
+## Real injury reports (nflverse)
+
+`engine/sources/injuries.py` feeds the injury module with nflverse's weekly
+injury reports:
+
+```bash
+python3 nfl_build.py 2024 5 --injuries
+```
+
+- **Own-player holds** (the headline): any prop on a player listed
+  Questionable / Doubtful / Out / IR is suppressed by the rules engine and
+  reported — the discipline rule, now on real data.
+- **Knock-on effects**: an opposing DT/NT or offensive tackle ruled out shifts
+  the affected rush/pass projections.
+- Same release-gated delivery as weekly stats, with the same
+  `data/cache/injuries_<season>.csv` fallback:
+
+  ```python
+  import nfl_data_py as nfl
+  nfl.import_injuries([2024]).to_csv("data/cache/injuries_2024.csv", index=False)
+  ```
+
+> Caveat: the report gives a player's position but no depth-chart / coverage
+> detail, so knock-on effects treat a ruled-out starter generically —
+> distinguishing an *elite* CB from depth, or LT from RT, needs a depth-chart /
+> grades source (a later phase). The own-player hold needs none of that.
+
 ## The road to live data
 
 The engine is decoupled from its sources by one seam — a `Slate` (from the
@@ -208,7 +237,7 @@ sample file *or* `engine/sources/nflverse.py`). Remaining adapters to add:
 | 3–5 yrs of stats   | **nflverse** (`nfl_data_py` / release CSVs)                  | ✅ integrated (release-gated) |
 | Weather            | nflverse schedules (temp/wind/roof)                          | ✅ integrated; add precip via a weather API |
 | Sportsbook lines   | **The Odds API** (7-book comparison + de-vig)               | ✅ integrated (`--odds`) |
-| Injuries           | nflverse injuries release + a news feed for game-time calls  | ➖ next |
+| Injuries           | nflverse weekly injury reports (holds + knock-on)           | ✅ integrated (`--injuries`) |
 
 Planned next phases (not yet built):
 
