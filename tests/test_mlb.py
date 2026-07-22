@@ -102,6 +102,33 @@ def test_poisson_over_one_and_half():
     assert approx(_poisson_over(1.5, lam), expected, 1e-9)
 
 
+# --- park-relative wind geometry --------------------------------------------
+def test_relative_wind_out_in_cross():
+    from engine.mlb.sources.mlbstats import relative_wind
+    # Wrigley CF bearing ~30° (NNE). Air travels toward from_deg+180.
+    assert relative_wind(210, 30) == "out"    # blows toward CF (30°)
+    assert relative_wind(30, 30) == "in"      # blows back toward the plate
+    assert relative_wind(120, 30) == "cross"  # perpendicular
+
+
+def test_relative_wind_threshold_and_wraparound():
+    from engine.mlb.sources.mlbstats import relative_wind, _ang_diff
+    # Exactly 45° off center still counts as out (inclusive threshold).
+    assert relative_wind(225, 0) == "out"     # blow_to 45, delta 45
+    # Wraparound across 0/360 handled.
+    assert relative_wind(190, 10) == "out"    # blow_to 10, delta 0
+    assert _ang_diff(350, 10) == 20
+    assert _ang_diff(10, 350) == 20
+
+
+def test_relative_wind_covers_all_parks():
+    from engine.mlb.sources.mlbstats import PARK_ORIENTATION, PARK_COORDS
+    # Every park we fetch weather for has an orientation so wind can be
+    # classified (no silent fallback to neutral for a mapped park).
+    for key in PARK_COORDS:
+        assert key in PARK_ORIENTATION
+
+
 # --- pipeline ---------------------------------------------------------------
 def test_pipeline_runs_and_holds_lineup():
     result = run_mlb_slate(SLATE)

@@ -396,10 +396,21 @@ What's curated for baseball (`engine/mlb/`):
 **MLB Stats API** (schedule, venues, probable pitchers — no key needed) and
 **Open-Meteo** (per-park weather by coordinates). Both hosts are blocked in
 some sandboxed environments; the adapters cache responses under `data/cache/`
-and degrade with instructions, exactly like the nflverse feeds. Confirmed
-lineups, per-player game logs, and Statcast metrics are the next adapter
-phase; the odds adapter already supports MLB player props via The Odds API
-market keys.
+and degrade with instructions, exactly like the nflverse feeds.
+
+**Park-relative wind**: Open-Meteo reports an absolute wind bearing, which is
+meaningless for baseball until it's oriented to the park. Each park has a
+`PARK_ORIENTATION` (home-plate→center-field compass bearing); `relative_wind()`
+converts the absolute "from" bearing into **in / out / cross** relative to that
+park. This is what makes "wind blowing out at Wrigley" fall out of live data —
+at Wrigley (CF to the NNE) a south wind classifies as *out* (HR boost) and a
+north wind off the lake as *in*, matching reality. Bearings are approximate
+published orientations (the 45°/135° buckets tolerate that); refine per park as
+needed.
+
+Confirmed lineups, per-player game logs, and Statcast metrics are the next
+adapter phase; the odds adapter already supports MLB player props via The Odds
+API market keys.
 
 ---
 

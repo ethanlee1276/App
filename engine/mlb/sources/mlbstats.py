@@ -55,6 +55,49 @@ PARK_COORDS = {
     "tropicana": (27.768, -82.653), "chase": (33.445, -112.067),
 }
 
+# Park orientation = compass bearing (degrees from true north) from home plate
+# toward center field. This is what turns an absolute wind bearing into a
+# park-relative in/out/cross classification. Values are approximate published
+# orientations — good enough for the 45°/135° buckets, refine per park as
+# needed. Dome/retractable parks are included but only matter when the roof is
+# open.
+PARK_ORIENTATION = {
+    "wrigley": 30,     # CF to the NNE
+    "coors": 5,        # CF roughly north
+    "loandepot": 40,   # retractable (usually closed)
+    "yankee": 78,      # CF to the ENE
+    "fenway": 45,      # CF to the NE
+    "oracle": 88,      # CF roughly east, toward the bay
+    "petco": 5,        # CF roughly north
+    "gabp": 115,       # CF to the ESE, toward the river
+    "tropicana": 45,   # dome
+    "chase": 22,       # retractable
+}
+
+
+def _ang_diff(a: float, b: float) -> float:
+    """Smallest absolute angle between two compass bearings (0-180)."""
+    d = abs((a - b) % 360.0)
+    return min(d, 360.0 - d)
+
+
+def relative_wind(from_deg: float, cf_bearing: float,
+                  out_thresh: float = 45.0, in_thresh: float = 135.0) -> str:
+    """Classify wind relative to a park.
+
+    ``from_deg`` is the meteorological direction the wind blows *from* (as
+    Open-Meteo reports it). Air therefore travels toward ``from_deg + 180``.
+    When that travel bearing points toward center field the wind is blowing
+    *out*; when it points back toward home plate it's blowing *in*.
+    """
+    blow_to = (from_deg + 180.0) % 360.0
+    delta = _ang_diff(blow_to, cf_bearing)
+    if delta <= out_thresh:
+        return "out"
+    if delta >= in_thresh:
+        return "in"
+    return "cross"
+
 
 def _get_json(url: str, cache_name: str, ttl: int = 900, timeout: int = 30) -> dict:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -88,15 +131,24 @@ def park_weather(park_key: str) -> MLBWeather:
     lat, lon = coords
     url = (f"{METEO_BASE}?latitude={lat}&longitude={lon}"
            f"&current=temperature_2m,relative_humidity_2m,wind_speed_10m,"
-           f"precipitation_probability&temperature_unit=fahrenheit"
-           f"&wind_speed_unit=mph")
+           f"wind_direction_10m,precipitation_probability"
+           f"&temperature_unit=fahrenheit&wind_speed_unit=mph")
     data = _get_json(url, f"meteo_{park_key}.json", ttl=1800)
     cur = data.get("current", {})
+
+    # Convert the absolute wind bearing to park-relative in/out/cross when we
+    # know the park's orientation; otherwise fall back to neutral "cross".
+    cf_bearing = PARK_ORIENTATION.get(park_key)
+    if cf_bearing is not None and "wind_direction_10m" in cur:
+        wind_dir = relative_wind(float(cur["wind_direction_10m"]), cf_bearing)
+    else:
+        wind_dir = "cross"
+
     return MLBWeather(
         roof_closed=False,
         temp_f=float(cur.get("temperature_2m", 72.0)),
         wind_mph=float(cur.get("wind_speed_10m", 6.0)),
-        wind_dir_rel="cross",
+        wind_dir_rel=wind_dir,
         humidity=float(cur.get("relative_humidity_2m", 50.0)) / 100.0,
         precip_chance=float(cur.get("precipitation_probability", 0.0)) / 100.0,
     )
