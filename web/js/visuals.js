@@ -236,6 +236,10 @@ function sparkline(values, opts = {}) {
   const thresh = line == null ? "" :
     `<line x1="${pad}" y1="${y(line)}" x2="${w - pad}" y2="${y(line)}"
        stroke="var(--warn)" stroke-width="1" stroke-dasharray="4 4" opacity="0.8"/>`;
+  // radar "ping" behind the most recent game
+  const li = data.length - 1;
+  const lastC = line == null ? stroke : (data[li] > line ? "var(--good)" : "var(--bad)");
+  const ping = `<circle class="spark-pulse" cx="${x(li)}" cy="${y(data[li])}" r="3" fill="${lastC}"/>`;
 
   return `
   <svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
@@ -247,6 +251,7 @@ function sparkline(values, opts = {}) {
     </defs>
     <path d="${areaPath}" fill="url(#${uid}a)"/>
     ${thresh}
+    ${ping}
     <path class="spark-line" d="${linePath}" fill="none" stroke="${stroke}"
           stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     ${dots}

@@ -160,7 +160,8 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   border: 1px solid var(--border-soft); border-radius: var(--radius); box-shadow: var(--shadow);
   transition: transform .14s ease, border-color .2s ease;
 }
-.game-card:hover { transform: translateY(-4px); border-color: var(--brand); }
+.game-card { transform-style: preserve-3d; transition: box-shadow .25s ease, border-color .2s ease; }
+.game-card:hover { border-color: var(--brand); box-shadow: var(--shadow-lg); }
 .stadium-wrap { line-height: 0; background: #070b16; }
 .stadium-wrap .stadium { width: 100%; height: auto; display: block; }
 .game-info { padding: 11px 15px 3px; }
@@ -188,12 +189,11 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   border: 1px solid var(--border-soft); border-radius: var(--radius);
   padding: 18px; box-shadow: var(--shadow);
   display: flex; flex-direction: column; gap: 14px;
-  animation: rise .4s ease both; transition: transform .14s ease, border-color .2s ease;
+  transition: box-shadow .28s ease, border-color .2s ease;
 }
-.card:hover { transform: translateY(-3px); border-color: var(--border); }
+.card:hover { border-color: var(--border); box-shadow: var(--shadow-lg), 0 0 30px -12px var(--grade-color, transparent); }
 .card.faded { opacity: .6; }
 .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--grade-color, var(--text-mute)); }
-@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
 .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .card-id { display: flex; gap: 12px; align-items: flex-start; }
@@ -276,7 +276,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .profile {
   background: linear-gradient(180deg, var(--panel-2), var(--panel));
   border: 1px solid var(--border-soft); border-radius: var(--radius); box-shadow: var(--shadow);
-  overflow: hidden; animation: rise .4s ease both;
+  overflow: hidden;
 }
 .profile-head { display: flex; gap: 14px; align-items: center; padding: 18px; position: relative; overflow: hidden; }
 .profile-head::after { content: ""; position: absolute; inset: 0; background: var(--profile-grad); opacity: 0.12; pointer-events: none; z-index: 0; }
@@ -380,3 +380,55 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 }
 @keyframes shimmer { from { background-position: 140% 0; } to { background-position: -40% 0; } }
 @media (prefers-reduced-motion: reduce) { .skeleton-card { animation: none; } }
+
+/* ============================================================
+   Motion — scroll reveal, tilt, projection-bar & sparkline pings.
+   All gated behind prefers-reduced-motion at the bottom.
+   ============================================================ */
+
+/* staggered scroll-reveal (JS toggles .in via IntersectionObserver) */
+.reveal { opacity: 0; transform: translateY(16px); }
+.reveal.in {
+  opacity: 1; transform: none;
+  transition: opacity .5s ease, transform .55s cubic-bezier(.2, .7, .3, 1);
+  transition-delay: calc(var(--i, 0) * 45ms);
+}
+
+/* pointer tilt on stadium cards */
+.tilt { transition: transform .3s cubic-bezier(.2, .7, .3, 1), box-shadow .25s ease; will-change: transform; }
+.tilt.tilting { transition: box-shadow .25s ease; }
+
+/* projection bar draws in on each render */
+.range { transform-origin: left center; animation: growW .7s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes growW { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.proj-dot, .line-dot { animation: dotPop .5s .18s cubic-bezier(.4, 1.5, .5, 1) both; }
+@keyframes dotPop {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* radar "ping" behind the latest sparkline point */
+.spark-pulse { transform-box: fill-box; transform-origin: center; animation: sparkPing 1.9s ease-out infinite; }
+@keyframes sparkPing {
+  0%   { transform: scale(.5); opacity: .55; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+/* animated brand shimmer on the logo */
+.logo { position: relative; overflow: hidden; }
+.logo::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.35) 50%, transparent 70%);
+  transform: translateX(-120%); animation: sheen 5.5s ease-in-out infinite;
+}
+@keyframes sheen { 0%, 70% { transform: translateX(-120%); } 85%, 100% { transform: translateX(120%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; }
+  .reveal.in { transition: none; }
+  .tilt { transition: none; }
+  .range { animation: none; }
+  .proj-dot, .line-dot { animation: none; }
+  .spark-pulse { animation: none; opacity: 0; }
+  .logo::after { animation: none; }
+}

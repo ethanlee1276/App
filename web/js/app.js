@@ -24,6 +24,47 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+/* ---------------- motion ---------------- */
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const revealObserver = ("IntersectionObserver" in window) && !reduceMotion
+  ? new IntersectionObserver((entries, obs) => {
+      entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); obs.unobserve(e.target); } });
+    }, { threshold: 0.08, rootMargin: "0px 0px -6% 0px" })
+  : null;
+
+// Tag children for staggered reveal, then observe (or show immediately).
+function revealChildren(container) {
+  if (!container) return;
+  const instant = reduceMotion || state.static || !revealObserver;
+  const kids = container.children;
+  for (let i = 0; i < kids.length; i++) {
+    const el = kids[i];
+    el.classList.add("reveal");
+    el.style.setProperty("--i", Math.min(i, 12));
+    if (instant) el.classList.add("in");
+    else revealObserver.observe(el);
+  }
+}
+
+// Subtle pointer tilt for stadium cards.
+function enableTilt(container) {
+  if (!container || reduceMotion) return;
+  container.querySelectorAll(".tilt").forEach((card) => {
+    card.addEventListener("pointermove", (ev) => {
+      const r = card.getBoundingClientRect();
+      const px = (ev.clientX - r.left) / r.width - 0.5;
+      const py = (ev.clientY - r.top) / r.height - 0.5;
+      card.classList.add("tilting");
+      card.style.transform = `perspective(760px) rotateY(${px * 7}deg) rotateX(${-py * 7}deg) translateZ(6px)`;
+    });
+    card.addEventListener("pointerleave", () => {
+      card.classList.remove("tilting");
+      card.style.transform = "";
+    });
+  });
+}
+
 /* ---------------- theme ---------------- */
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
@@ -106,6 +147,8 @@ function renderGames() {
   const host = document.getElementById("games");
   if (!games.length) { host.innerHTML = ""; return; }
   host.innerHTML = games.map(gameCard).join("");
+  revealChildren(host);
+  enableTilt(host);
 }
 
 function gameCard(g) {
@@ -113,7 +156,7 @@ function gameCard(g) {
   const cond = w.dome ? "Indoor" : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
   const favTxt = g.favorite ? `${teamName(g.favorite)} −${Math.abs(g.spread).toFixed(1)}` : "";
   return `
-    <article class="game-card">
+    <article class="game-card tilt">
       <div class="stadium-wrap">${stadium(g)}</div>
       <div class="game-info">
         <div class="matchup"><span class="away">${escapeHtml(teamName(g.away))}</span>
@@ -134,6 +177,7 @@ function renderRecommended() {
   }
   host.innerHTML = visible.map(cardHTML).join("");
   host.querySelectorAll(".conf-fill[data-w]").forEach((el) => requestAnimationFrame(() => (el.style.width = el.dataset.w)));
+  revealChildren(host);
 }
 
 function projBar(r) {
@@ -212,11 +256,13 @@ function renderTrending() {
     { title: "❄️ Cooling Off", sub: "Production sliding vs prior form", rows: fallers, metric: (r) => `<span class="val neg">${r.trend_delta}</span>`, stroke: "var(--bad)" },
     { title: "💎 Biggest Edges", sub: "Model vs the sportsbook line", rows: edges, metric: (r) => `<span class="val cyan">${signedPct(r.edge)}</span>`, stroke: "var(--cyan)" },
   ];
-  document.getElementById("trending").innerHTML = cols.map((c) => `
+  const host = document.getElementById("trending");
+  host.innerHTML = cols.map((c) => `
     <div class="trend-col">
       <h3>${c.title}</h3><div class="colsub">${c.sub}</div>
       ${c.rows.length ? c.rows.map((r, i) => trendRow(r, i, c)).join("") : `<div class="empty" style="padding:24px">No movers.</div>`}
     </div>`).join("");
+  revealChildren(host);
 }
 
 function trendRow(r, i, col) {
@@ -248,6 +294,7 @@ function renderPlayers() {
   }
   host.innerHTML = players.map(profileHTML).join("");
   host.querySelectorAll(".conf-fill[data-w]").forEach((el) => requestAnimationFrame(() => (el.style.width = el.dataset.w)));
+  revealChildren(host);
 }
 
 function profileHTML(r) {

@@ -67,6 +67,11 @@ Visual details:
 - **Cartoony player avatars** — a team-colored helmet avatar beside each name.
   These are stylized marks, not likenesses; `playerAvatar()` will use a real
   `headshot` URL (nflverse/ESPN provide them) when one is supplied.
+- **Motion** — staggered scroll-reveal (IntersectionObserver), pointer-tilt on
+  the stadium cards, projection bars that draw in, a radar "ping" on each
+  player's latest game, grade-colored hover glow, and a logo sheen. All honor
+  `prefers-reduced-motion`, and `?static` disables entrance motion for
+  repeatable screenshots.
 
 > On real player likenesses: generating photoreal/cartoon faces of specific
 > players isn't done here (capability + likeness rights). The avatar system is
