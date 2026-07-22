@@ -60,7 +60,7 @@ const revealObserver = ("IntersectionObserver" in window) && !reduceMotion
 // Tag children for staggered reveal, then observe (or show immediately).
 function revealChildren(container) {
   if (!container) return;
-  const instant = reduceMotion || state.static || !revealObserver;
+  const instant = reduceMotion || state.static || state.quiet || !revealObserver;
   const kids = container.children;
   for (let i = 0; i < kids.length; i++) {
     const el = kids[i];
@@ -114,10 +114,11 @@ function showSkeleton() {
   if (host) host.innerHTML = Array.from({ length: 6 }, () => `<div class="skeleton-card"></div>`).join("");
 }
 
-async function load() {
-  showSkeleton();
+async function load(quiet = false) {
+  state.quiet = quiet;                       // silent re-render (no entrance anim)
+  if (!quiet) showSkeleton();
   const refreshBtn = document.getElementById("refresh");
-  if (refreshBtn) refreshBtn.classList.add("loading");
+  if (refreshBtn && !quiet) refreshBtn.classList.add("loading");
   const meta = SPORT_META[state.sport];
   const params = new URLSearchParams({ min_confidence: state.minConf, min_edge: state.minEdge });
   try {
@@ -129,7 +130,33 @@ async function load() {
     state.data = await res.json();
   }
   renderAll();
-  if (refreshBtn) refreshBtn.classList.remove("loading");
+  state.lastLoad = Date.now();
+  state.quiet = false;
+  if (refreshBtn && !quiet) refreshBtn.classList.remove("loading");
+  manageAutoRefresh();
+  updateAgo();
+}
+
+/* Poll for live updates every 30s while any game is in progress. */
+function manageAutoRefresh() {
+  const hasLive = (state.data?.games || []).some((g) => (g.live || {}).state === "live");
+  const el = document.getElementById("live-refresh");
+  if (hasLive && !state.static) {
+    if (!state.refreshTimer) state.refreshTimer = setInterval(() => load(true), 30000);
+    if (!state.tickTimer) state.tickTimer = setInterval(updateAgo, 1000);
+    if (el) el.style.display = "";
+  } else {
+    clearInterval(state.refreshTimer); state.refreshTimer = null;
+    clearInterval(state.tickTimer); state.tickTimer = null;
+    if (el) el.style.display = "none";
+  }
+}
+
+function updateAgo() {
+  const el = document.getElementById("live-refresh");
+  if (!el || !state.lastLoad) return;
+  const s = Math.max(0, Math.round((Date.now() - state.lastLoad) / 1000));
+  el.innerHTML = `<span class="live-dot"></span>Auto · updated ${s}s ago`;
 }
 
 function passesFilters(r) {
@@ -163,11 +190,12 @@ function renderStats() {
     { k: "Suggested exposure", to: exposure, dec: 2, suf: "u" },
   ];
   const fmt = (t) => (t.pre || "") + Number(t.to).toFixed(t.dec) + (t.suf || "");
+  const instant = state.static || state.quiet;
   document.getElementById("stats").innerHTML = tiles.map((t) =>
     `<div class="tile"><div class="k">${t.k}</div>
-       <div class="v ${t.cls || ""}" data-to="${t.to}" data-dec="${t.dec}" data-pre="${t.pre || ""}" data-suf="${t.suf || ""}">${state.static ? fmt(t) : "0"}</div></div>`
+       <div class="v ${t.cls || ""}" data-to="${t.to}" data-dec="${t.dec}" data-pre="${t.pre || ""}" data-suf="${t.suf || ""}">${instant ? fmt(t) : "0"}</div></div>`
   ).join("");
-  if (!state.static) document.querySelectorAll("#stats .v[data-to]").forEach(countUp);
+  if (!instant) document.querySelectorAll("#stats .v[data-to]").forEach(countUp);
 }
 
 function renderGames() {
@@ -213,8 +241,23 @@ function gameCard(g) {
   } else if (isFinal) {
     badge = `<div class="status-badge final">FINAL${live.period && live.period !== "Final" ? " · " + escapeHtml(live.period) : ""}</div>`;
   }
-  const liveDetail = isLive && live.detail
-    ? `<div class="live-detail"><span class="live-dot sm"></span>${escapeHtml(live.detail)}</div>` : "";
+  // MLB live: a mini base-state diamond replaces the outs/runners text.
+  // NFL live: the down & distance line.
+  let liveDetail = "";
+  if (isLive && mlb) {
+    const outs = live.outs == null ? 0 : live.outs;
+    liveDetail = `
+      <div class="live-detail base">
+        ${baseDiamond(live.bases, live.outs)}
+        <span class="base-label">${outs} out${outs === 1 ? "" : "s"}</span>
+      </div>`;
+  } else if (isLive && live.detail) {
+    liveDetail = `<div class="live-detail"><span class="live-dot sm"></span>${escapeHtml(live.detail)}</div>`;
+  }
+  // The wind gauge and (for MLB live) the base diamond share the footer row.
+  const footer = isLive && mlb
+    ? `<div class="wind-wrap live-footer">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span>${liveDetail}</div>`
+    : `<div class="wind-wrap">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span></div>`;
   return `
     <article class="game-card tilt ${isLive ? "is-live" : ""}">
       <div class="stadium-wrap">${art}${badge}</div>
@@ -224,10 +267,17 @@ function gameCard(g) {
           <span class="at">@</span>
           <span class="mt home">${teamMark(g.home, 18)} ${escapeHtml(teamName(g.home))} ${score("home")}</span></div>
         <div class="game-sub">${escapeHtml(sub)}</div>
-        ${liveDetail}
+        ${isLive && !mlb ? liveDetail : ""}
       </div>
-      <div class="wind-wrap">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span></div>
+      ${footer}
     </article>`;
+}
+
+function fillMeters(host) {
+  host.querySelectorAll(".conf-fill[data-w]").forEach((el) => {
+    if (state.quiet) { el.style.transition = "none"; el.style.width = el.dataset.w; }
+    else requestAnimationFrame(() => (el.style.width = el.dataset.w));
+  });
 }
 
 function renderRecommended() {
@@ -239,7 +289,7 @@ function renderRecommended() {
     return;
   }
   host.innerHTML = visible.map(cardHTML).join("");
-  host.querySelectorAll(".conf-fill[data-w]").forEach((el) => requestAnimationFrame(() => (el.style.width = el.dataset.w)));
+  fillMeters(host);
   revealChildren(host);
 }
 
@@ -357,7 +407,7 @@ function renderPlayers() {
     return;
   }
   host.innerHTML = players.map(profileHTML).join("");
-  host.querySelectorAll(".conf-fill[data-w]").forEach((el) => requestAnimationFrame(() => (el.style.width = el.dataset.w)));
+  fillMeters(host);
   revealChildren(host);
 }
 

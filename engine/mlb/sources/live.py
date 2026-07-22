@@ -37,13 +37,19 @@ def parse_live(schedule_json: dict) -> dict[frozenset, LiveStatus]:
             half = ls.get("inningState", "")
             period = f"{half} {inning}".strip() if state == "live" else \
                      (status.get("detailedState", "") if state == "final" else "")
-            outs = ls.get("outs")
-            detail = f"{outs} out{'s' if outs != 1 else ''}" if (state == "live" and outs is not None) else ""
+            outs = ls.get("outs") if state == "live" else None
+            # Occupied bases from the offense block (a base key is present only
+            # when a runner is on it).
+            bases = None
+            if state == "live":
+                off = ls.get("offense", {}) or {}
+                occ = [b for b, k in ((1, "first"), (2, "second"), (3, "third")) if off.get(k)]
+                bases = occ
             out[frozenset((home_ab, away_ab))] = LiveStatus(
                 state=state,
                 home_score=teams.get("home", {}).get("score"),
                 away_score=teams.get("away", {}).get("score"),
-                period=period, detail=detail,
+                period=period, outs=outs, bases=bases,
                 start_time=g.get("gameDate", ""),
             )
     return out

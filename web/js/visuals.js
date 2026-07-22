@@ -343,6 +343,35 @@ function ballpark(game, opts = {}) {
   </svg>`;
 }
 
+/* ---------------- Mini base-state diamond (MLB live) --------------------- */
+function baseDiamond(bases, outs, opts = {}) {
+  const size = opts.size || 46;
+  const occ = new Set(bases || []);
+  const on = "#ffd24a", off = "#2c3557", edge = "#0c1020";
+  // rotated-square base at (cx,cy); occupied bases glow gold.
+  const base = (cx, cy, n) => {
+    const lit = occ.has(n);
+    return `<rect x="${cx - 5}" y="${cy - 5}" width="10" height="10" rx="1.5"
+      transform="rotate(45 ${cx} ${cy})" fill="${lit ? on : off}"
+      stroke="${lit ? shade(on, -30) : edge}" stroke-width="1.2"
+      ${lit ? 'filter="url(#baseglow)"' : ""}/>`;
+  };
+  const outDot = (cx, filled) =>
+    `<circle cx="${cx}" cy="43" r="2.6" fill="${filled ? "#fb2c46" : off}"/>`;
+  const nOuts = outs == null ? 0 : outs;
+  return `
+  <svg class="basediamond" width="${size}" height="${size}" viewBox="0 0 48 50" aria-label="base state">
+    <defs><filter id="baseglow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="0" stdDeviation="1.6" flood-color="${on}" flood-opacity="0.9"/>
+    </filter></defs>
+    ${base(24, 12, 2)}   <!-- 2B top -->
+    ${base(36, 24, 1)}   <!-- 1B right -->
+    ${base(12, 24, 3)}   <!-- 3B left -->
+    ${outDot(18, nOuts >= 1)}
+    ${outDot(30, nOuts >= 2)}
+  </svg>`;
+}
+
 /* ---------------- Sparkline (game-log trend) ----------------------------- */
 function sparkline(values, opts = {}) {
   // values come newest-first from the API; chart oldest -> newest.

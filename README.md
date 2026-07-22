@@ -536,9 +536,20 @@ Models are written to `data/models/` (git-ignored).
 
 Both sports show games as they happen: a game in progress gets a pulsing **🔴 LIVE**
 badge, the **current score**, and period/inning state (Q3 8:42 · down & distance
-for NFL; Top 6th · outs/baserunners for MLB); finals show a **FINAL** badge. Live
-games float to the front of the strip, and picks on a live game carry a
-**LIVE · in-play** ribbon so you can act on them while the market is moving.
+for NFL; for MLB a **mini base-state diamond** with the occupied bases lit gold
+and outs as dots); finals show a **FINAL** badge. Live games float to the front
+of the strip, and picks on a live game carry a **LIVE · in-play** ribbon so you
+can act on them while the market is moving.
+
+- **Auto-refresh**: while any game is live the dashboard polls every 30s and
+  re-renders silently (no entrance re-animation), with an "Auto · updated Ns ago"
+  indicator in the header. Stops automatically when nothing is live.
+- **Live lines**: `--odds` pulls current prices across **DraftKings, FanDuel,
+  BetMGM, Caesars, ESPN BET, Fanatics and Hard Rock** for both NFL
+  (`player_*` markets) and MLB (`batter_*` / `pitcher_strikeouts`). During a
+  game the Odds API event-odds endpoint returns **in-play** prices, so the same
+  call yields live lines; the model re-shops the best number and re-prices the
+  edge each refresh.
 
 - NFL live state comes from **ESPN's public scoreboard** (`engine/sources/livescores.py`,
   keyless); MLB from the **MLB Stats API** schedule + linescore

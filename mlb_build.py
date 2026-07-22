@@ -28,6 +28,8 @@ from engine.rules import RuleConfig
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build a live MLB slate and run the model.")
     ap.add_argument("date", help="slate date, YYYY-MM-DD")
+    ap.add_argument("--odds", action="store_true",
+                    help="Attach real (live during a game) sportsbook lines via The Odds API.")
     ap.add_argument("--min-confidence", type=float, default=6.0)
     ap.add_argument("--min-edge", type=float, default=0.02)
     ap.add_argument("--out", default=None, help="write recommendations JSON here")
@@ -46,6 +48,15 @@ def main() -> None:
     if live_n:
         live_now = sum(1 for g in slate.games if g.live and g.live.state == "live")
         print(f"Live scores: {live_n} game(s) matched, {live_now} in progress.")
+
+    if args.odds:
+        from engine.sources import oddsapi
+        try:
+            res = oddsapi.apply_odds_to_slate(slate, sport="mlb")
+            print(f"Odds API: matched {res.matched} props across {res.events_used} games "
+                  f"(quota remaining {res.quota.remaining}).")
+        except oddsapi.OddsAPIError as exc:
+            print(f"⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
 
     if not slate.props:
         print(f"No props built for {args.date} — lineups may not be posted yet. "

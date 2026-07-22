@@ -143,8 +143,10 @@ class LiveStatus:
     away_score: Optional[int] = None
     period: str = ""             # "Q3", "Top 5th", "HALFTIME", "F/10"
     clock: str = ""              # "10:32" (NFL) or "" (MLB)
-    detail: str = ""             # freeform, e.g. "2nd & 7 at DEN 45" / "2 outs"
+    detail: str = ""             # freeform, e.g. "2nd & 7 at DEN 45"
     start_time: str = ""         # ISO or human, for scheduled games
+    outs: Optional[int] = None            # MLB: 0-2
+    bases: Optional[list] = None          # MLB: occupied bases, e.g. [2] or [1, 3]
 
 
 def live_to_dict(live) -> Optional[dict]:
@@ -159,6 +161,8 @@ def live_to_dict(live) -> Optional[dict]:
         "clock": live.clock,
         "detail": live.detail,
         "start_time": live.start_time,
+        "outs": live.outs,
+        "bases": live.bases,
     }
 
 

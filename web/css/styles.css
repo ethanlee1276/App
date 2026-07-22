@@ -535,3 +535,18 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .live-ribbon .live-dot { background: #fff; }
 
 @media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+
+/* base-state diamond sits inline in the live footer, breathing room around it */
+.wind-wrap.live-footer { justify-content: flex-start; gap: 12px; flex-wrap: wrap; }
+.live-detail.base { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.basediamond { display: block; flex-shrink: 0; }
+.base-label { font-size: 11px; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
+
+/* live auto-refresh indicator in the header */
+.live-refresh {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; color: #ff8a97;
+  padding: 5px 10px; border-radius: 999px;
+  background: rgba(251, 44, 70, 0.12); border: 1px solid rgba(251, 44, 70, 0.32);
+}
+.live-refresh .live-dot { background: #fb2c46; }

@@ -33,7 +33,7 @@ from ..models import (
 ODDS_BASE = "https://api.the-odds-api.com/v4"
 SPORT = "americanfootball_nfl"
 
-# The Odds API market key  <->  engine market constant.
+# The Odds API market key  <->  engine market constant (NFL).
 ODDS_TO_MARKET = {
     "player_pass_yds": PASS_YDS,
     "player_rush_yds": RUSH_YDS,
@@ -41,6 +41,15 @@ ODDS_TO_MARKET = {
     "player_receptions": RECEPTIONS,
 }
 MARKET_TO_ODDS = {v: k for k, v in ODDS_TO_MARKET.items()}
+
+# MLB market keys (engine.mlb.models markets). Kept as strings to avoid an
+# import cycle with the MLB package.
+MLB_ODDS_TO_MARKET = {
+    "batter_total_bases": "total_bases",
+    "batter_hits": "hits",
+    "batter_home_runs": "home_runs",
+    "pitcher_strikeouts": "strikeouts",
+}
 
 # Default books to shop, matching the project vision. Keys are The Odds API's.
 DEFAULT_BOOKS = [
@@ -67,6 +76,29 @@ TEAM_ABBR = {
     "New York Jets": "NYJ", "Philadelphia Eagles": "PHI", "Pittsburgh Steelers": "PIT",
     "San Francisco 49ers": "SF", "Seattle Seahawks": "SEA", "Tampa Bay Buccaneers": "TB",
     "Tennessee Titans": "TEN", "Washington Commanders": "WAS",
+}
+
+# The Odds API uses full team names; the MLB engine uses abbreviations.
+MLB_TEAM_ABBR = {
+    "Arizona Diamondbacks": "ARI", "Atlanta Braves": "ATL", "Baltimore Orioles": "BAL",
+    "Boston Red Sox": "BOS", "Chicago Cubs": "CHC", "Chicago White Sox": "CWS",
+    "Cincinnati Reds": "CIN", "Cleveland Guardians": "CLE", "Colorado Rockies": "COL",
+    "Detroit Tigers": "DET", "Houston Astros": "HOU", "Kansas City Royals": "KC",
+    "Los Angeles Angels": "LAA", "Los Angeles Dodgers": "LAD", "Miami Marlins": "MIA",
+    "Milwaukee Brewers": "MIL", "Minnesota Twins": "MIN", "New York Mets": "NYM",
+    "New York Yankees": "NYY", "Oakland Athletics": "OAK", "Athletics": "OAK",
+    "Philadelphia Phillies": "PHI", "Pittsburgh Pirates": "PIT", "San Diego Padres": "SD",
+    "San Francisco Giants": "SF", "Seattle Mariners": "SEA", "St. Louis Cardinals": "STL",
+    "Tampa Bay Rays": "TBR", "Texas Rangers": "TEX", "Toronto Blue Jays": "TOR",
+    "Washington Nationals": "WSH",
+}
+
+# Per-sport wiring: The Odds API sport key, market map, and team-name map.
+SPORT_CONFIG = {
+    "nfl": {"sport_key": "americanfootball_nfl",
+            "markets": ODDS_TO_MARKET, "teams": TEAM_ABBR},
+    "mlb": {"sport_key": "baseball_mlb",
+            "markets": MLB_ODDS_TO_MARKET, "teams": MLB_TEAM_ABBR},
 }
 
 
@@ -137,19 +169,22 @@ def _request(url: str, cache_name: str, ttl: int = 300,
 
 
 # --- endpoints --------------------------------------------------------------
-def list_events(api_key: str | None = None, ttl: int = 300) -> list[dict]:
+def list_events(api_key: str | None = None, ttl: int = 300,
+                sport: str = "nfl") -> list[dict]:
     key = get_api_key(api_key)
-    url = f"{ODDS_BASE}/sports/{SPORT}/events?{urllib.parse.urlencode({'apiKey': key})}"
-    data, _ = _request(url, "odds_events.json", ttl=ttl)
+    sport_key = SPORT_CONFIG[sport]["sport_key"]
+    url = f"{ODDS_BASE}/sports/{sport_key}/events?{urllib.parse.urlencode({'apiKey': key})}"
+    data, _ = _request(url, f"odds_events_{sport}.json", ttl=ttl)
     return data
 
 
 def fetch_event_odds(event_id: str, api_key: str | None = None,
                      markets: list[str] | None = None,
                      books: list[str] | None = None,
-                     ttl: int = 300) -> tuple[dict, Quota]:
+                     ttl: int = 300, sport: str = "nfl") -> tuple[dict, Quota]:
     key = get_api_key(api_key)
-    markets = markets or list(ODDS_TO_MARKET)
+    cfg = SPORT_CONFIG[sport]
+    markets = markets or list(cfg["markets"])
     books = books or DEFAULT_BOOKS
     params = {
         "apiKey": key,
@@ -158,23 +193,26 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
         "oddsFormat": "american",
         "bookmakers": ",".join(books),
     }
-    url = f"{ODDS_BASE}/sports/{SPORT}/events/{event_id}/odds?{urllib.parse.urlencode(params)}"
+    url = (f"{ODDS_BASE}/sports/{cfg['sport_key']}/events/{event_id}/odds"
+           f"?{urllib.parse.urlencode(params)}")
     return _request(url, f"odds_event_{event_id}.json", ttl=ttl)
 
 
 # --- parsing (pure; unit-tested without network) ----------------------------
-def parse_event_lines(event_json: dict) -> dict[tuple[str, str], list[SportsbookLine]]:
+def parse_event_lines(event_json: dict,
+                      market_map: dict | None = None) -> dict[tuple[str, str], list[SportsbookLine]]:
     """Turn one event's odds payload into {(norm_player, market): [lines]}.
 
     Only the OVER outcome carries the odds we bet; we pair it with the matching
-    UNDER price (same book, line) so the de-vig has both sides.
-    """
+    UNDER price (same book, line) so the de-vig has both sides. ``market_map``
+    selects the sport's Odds-API market keys (defaults to NFL)."""
+    market_map = market_map or ODDS_TO_MARKET
     out: dict[tuple[str, str], list[SportsbookLine]] = {}
     for bm in event_json.get("bookmakers", []):
         book_key = bm.get("key", "")
         book = BOOK_TITLES.get(book_key, book_key)
         for mkt in bm.get("markets", []):
-            market = ODDS_TO_MARKET.get(mkt.get("key", ""))
+            market = market_map.get(mkt.get("key", ""))
             if not market:
                 continue
             # Index outcomes by (player, point) to pair Over/Under prices.
@@ -212,31 +250,34 @@ class OddsAttachResult:
 
 def apply_odds_to_slate(slate, api_key: str | None = None,
                         books: list[str] | None = None,
-                        ttl: int = 300) -> OddsAttachResult:
+                        ttl: int = 300, sport: str = "nfl") -> OddsAttachResult:
     """Replace each prop's proxy line with real book lines where available.
 
     Matches Odds API events to slate games by team abbreviation, then props by
-    normalized player name + market. Props with no market found keep their proxy
-    line and are reported in ``unmatched``.
+    normalized player name + market. Works for ``sport`` "nfl" or "mlb"; during
+    a live game the event-odds endpoint returns current (in-play) prices, so the
+    same call yields live lines. Props with no market found keep their proxy
+    line and are reported in ``unmatched``. ``ttl`` is short (30s) for live use.
     """
     key = get_api_key(api_key)
+    cfg = SPORT_CONFIG[sport]
     result = OddsAttachResult()
 
     # Which team pairs are in this slate?
     slate_pairs = {frozenset((g.home, g.away)) for g in slate.games}
 
-    events = list_events(key, ttl=ttl)
+    events = list_events(key, ttl=ttl, sport=sport)
     # Build a combined line index for the events that belong to this slate.
     index: dict[tuple[str, str], list[SportsbookLine]] = {}
     for ev in events:
-        home = TEAM_ABBR.get(ev.get("home_team", ""))
-        away = TEAM_ABBR.get(ev.get("away_team", ""))
+        home = cfg["teams"].get(ev.get("home_team", ""))
+        away = cfg["teams"].get(ev.get("away_team", ""))
         if not home or not away or frozenset((home, away)) not in slate_pairs:
             continue
-        payload, quota = fetch_event_odds(ev["id"], key, books=books, ttl=ttl)
+        payload, quota = fetch_event_odds(ev["id"], key, books=books, ttl=ttl, sport=sport)
         result.quota = quota
         result.events_used += 1
-        for k, lines in parse_event_lines(payload).items():
+        for k, lines in parse_event_lines(payload, cfg["markets"]).items():
             index.setdefault(k, []).extend(lines)
 
     for prop in slate.props:

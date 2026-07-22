@@ -49,7 +49,8 @@ SCHED = {"dates": [{"games": [
     {"status": {"abstractGameState": "Live", "detailedState": "In Progress"},
      "teams": {"home": {"team": {"id": 115}, "score": 5},
                "away": {"team": {"id": 147}, "score": 3}},
-     "linescore": {"currentInningOrdinal": "6th", "inningState": "Top", "outs": 1}},
+     "linescore": {"currentInningOrdinal": "6th", "inningState": "Top", "outs": 1,
+                   "offense": {"second": {"id": 99}}}},
     {"status": {"abstractGameState": "Final"},
      "teams": {"home": {"team": {"id": 112}, "score": 2},
                "away": {"team": {"id": 143}, "score": 4}},
@@ -62,7 +63,8 @@ def test_mlb_live_game():
     live = board[frozenset(("COL", "NYY"))]     # ids 115 / 147
     assert live.state == "live"
     assert live.home_score == 5 and live.away_score == 3
-    assert live.period == "Top 6th" and live.detail == "1 out"
+    assert live.period == "Top 6th"
+    assert live.outs == 1 and live.bases == [2]     # runner on 2nd
 
 
 def test_mlb_final_game():
@@ -74,8 +76,10 @@ def test_mlb_final_game():
 # --- serialization + pipeline flag ------------------------------------------
 def test_live_to_dict():
     assert live_to_dict(None) is None
-    d = live_to_dict(LiveStatus(state="live", home_score=5, away_score=3, period="Top 6th"))
+    d = live_to_dict(LiveStatus(state="live", home_score=5, away_score=3,
+                                period="Top 6th", outs=2, bases=[1, 3]))
     assert d["state"] == "live" and d["home_score"] == 5 and d["period"] == "Top 6th"
+    assert d["outs"] == 2 and d["bases"] == [1, 3]
 
 
 def test_pipeline_marks_live_props():

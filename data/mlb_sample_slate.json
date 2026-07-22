@@ -48,7 +48,7 @@
       "away": "NYY",
       "park": "coors",
       "total": 11.5,
-      "live": {"state": "live", "home_score": 5, "away_score": 3, "period": "Top 6th", "detail": "1 out, runner on 2nd"},
+      "live": {"state": "live", "home_score": 5, "away_score": 3, "period": "Top 6th", "outs": 1, "bases": [2]},
       "weather": {
         "roof_closed": false,
         "temp_f": 88,

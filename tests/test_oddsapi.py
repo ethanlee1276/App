@@ -87,11 +87,11 @@ def _mini_slate():
 
 
 def test_apply_odds_replaces_proxy(monkeypatch):
-    monkeypatch.setattr(oa, "list_events", lambda key, ttl=300: [
+    monkeypatch.setattr(oa, "list_events", lambda key, ttl=300, sport='nfl': [
         {"id": "evt123", "home_team": "Kansas City Chiefs", "away_team": "Buffalo Bills"}
     ])
     monkeypatch.setattr(oa, "fetch_event_odds",
-                        lambda eid, key, books=None, ttl=300: (EVENT, oa.Quota("491", "9")))
+                        lambda eid, key, books=None, ttl=300, sport='nfl': (EVENT, oa.Quota("491", "9")))
 
     slate = _mini_slate()
     res = oa.apply_odds_to_slate(slate, api_key="testkey")
@@ -106,12 +106,55 @@ def test_apply_odds_replaces_proxy(monkeypatch):
     assert best_over_line(prop.lines).line == 257.5  # FanDuel
 
 
+def test_mlb_market_mapping_and_parse():
+    # An MLB event payload uses batter_/pitcher_ market keys.
+    ev = {"bookmakers": [
+        {"key": "draftkings", "title": "DraftKings", "markets": [
+            {"key": "batter_total_bases", "outcomes": [
+                {"name": "Over", "description": "Aaron Judge", "price": -120, "point": 1.5},
+                {"name": "Under", "description": "Aaron Judge", "price": 100, "point": 1.5}]},
+            {"key": "pitcher_strikeouts", "outcomes": [
+                {"name": "Over", "description": "Zack Wheeler", "price": -115, "point": 7.5},
+                {"name": "Under", "description": "Zack Wheeler", "price": -105, "point": 7.5}]},
+        ]}]}
+    idx = oa.parse_event_lines(ev, oa.MLB_ODDS_TO_MARKET)
+    assert (oa.normalize_name("Aaron Judge"), "total_bases") in idx
+    assert (oa.normalize_name("Zack Wheeler"), "strikeouts") in idx
+    tb = idx[(oa.normalize_name("Aaron Judge"), "total_bases")][0]
+    assert tb.line == 1.5 and tb.over_odds == -120 and tb.under_odds == 100
+    # NFL market keys are ignored under the MLB map.
+    assert oa.parse_event_lines({"bookmakers": [{"key": "dk", "markets": [
+        {"key": "player_pass_yds", "outcomes": []}]}]}, oa.MLB_ODDS_TO_MARKET) == {}
+
+
+def test_mlb_apply_odds_end_to_end(monkeypatch):
+    from engine.mlb.models import MLBGame, MLBProp, MLBGameLog
+    from engine.mlb.data_loader import MLBSlate
+    ev = {"bookmakers": [{"key": "fanduel", "title": "FanDuel", "markets": [
+        {"key": "batter_total_bases", "outcomes": [
+            {"name": "Over", "description": "Aaron Judge", "price": -125, "point": 2.5},
+            {"name": "Under", "description": "Aaron Judge", "price": 105, "point": 2.5}]}]}]}
+    monkeypatch.setattr(oa, "list_events", lambda key, ttl=300, sport="nfl": [
+        {"id": "e1", "home_team": "Colorado Rockies", "away_team": "New York Yankees"}])
+    monkeypatch.setattr(oa, "fetch_event_odds",
+                        lambda eid, key, books=None, ttl=300, sport="nfl": (ev, oa.Quota()))
+
+    game = MLBGame(home="COL", away="NYY", park="coors")
+    prop = MLBProp("Aaron Judge", "NYY", "COL", "RF", "total_bases",
+                   [MLBGameLog(i, "X", 2) for i in range(1, 6)], 2.1, None,
+                   [SportsbookLine("proxy", 2.0)], bats="R", lineup_spot=2)
+    slate = MLBSlate(date="2024-06-20", games=[game], props=[prop])
+    res = oa.apply_odds_to_slate(slate, api_key="k", sport="mlb")
+    assert res.matched == 1
+    assert prop.lines[0].book == "FanDuel" and prop.lines[0].line == 2.5
+
+
 def test_apply_odds_reports_unmatched(monkeypatch):
-    monkeypatch.setattr(oa, "list_events", lambda key, ttl=300: [
+    monkeypatch.setattr(oa, "list_events", lambda key, ttl=300, sport='nfl': [
         {"id": "evt123", "home_team": "Kansas City Chiefs", "away_team": "Buffalo Bills"}
     ])
     monkeypatch.setattr(oa, "fetch_event_odds",
-                        lambda eid, key, books=None, ttl=300: ({"bookmakers": []}, oa.Quota()))
+                        lambda eid, key, books=None, ttl=300, sport='nfl': ({"bookmakers": []}, oa.Quota()))
     slate = _mini_slate()
     res = oa.apply_odds_to_slate(slate, api_key="testkey")
     assert res.matched == 0 and res.unmatched
