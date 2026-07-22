@@ -172,6 +172,7 @@ engine/
   backtest.py     walk-forward backtest: calibration, Brier/ECE, ROI, CLV
   db.py           historical database (SQLite): games + player_game_logs
   ingest.py       ingestion pipeline: sources -> history DB
+  ledger.py       bet-tracking ledger + bankroll (self-evaluation loop)
   linemoves.py    line-movement history + steam detection
   ml/
     features.py   shared feature extraction (train + inference)
@@ -594,6 +595,45 @@ player-log layer (and MLB) populate wherever the release/API hosts are reachable
 — each blocked feed is reported as a skip, so a partial ingest still succeeds.
 `db.entries_for_market()` turns the store back into the `entries` the backtest
 and ML trainers consume; `mlb_backtest.py --from-db` runs straight off it.
+
+## Does it actually win? (validation + ledger)
+
+Everything above is architecture; these two answer whether the model has edge.
+
+**Validation runbook** — one command runs ingest → backtest → calibration/ROI:
+
+```bash
+python3 validate.py --seasons 2021-2025
+```
+
+Each stage that needs a release-gated / API host degrades to a clear `BLOCKED`
+line with the exact command to unblock it, so it runs anywhere and tells you
+precisely what to do. On an open network it prints your model's Brier / ECE and
+ROI over real seasons — the yes/no on edge.
+
+**Bet-tracking ledger + bankroll** (`engine/ledger.py`, `ledger.py`) — the
+self-evaluation loop from the vision. It logs every recommended pick, grades it
+against the real result, and tracks running performance and bankroll:
+
+```bash
+python3 ledger.py bankroll --set 1000 --unit 1   # $1000 roll, 1%/unit
+python3 ledger.py log --sport nfl                 # record today's picks
+python3 ledger.py settle --sport nfl --actuals results.json
+python3 ledger.py report                          # record · ROI · bankroll · CLV
+python3 ledger.py demo                            # runnable end-to-end demo
+```
+
+- **Bankroll-aware sizing**: each unit is a set percent of the *current* bankroll,
+  so dollar stakes scale with the roll; the model's fractional-Kelly `stake_units`
+  sets how many units.
+- **Reporting**: record (W-L-P), win rate, ROI, net units/dollars, closing-line
+  value, and breakdowns by grade and market — so over a season you see exactly
+  where the model is strong or weak.
+
+## Continuous integration
+
+`.github/workflows/tests.yml` runs the full suite (`python3 run_tests.py`, stdlib
+only — no dependencies) on Python 3.9 / 3.11 / 3.12 for every push and PR.
 
 ## Testing the model quickly
 

@@ -24,3 +24,4 @@ data/models/
 # Historical database (populate with: python3 ingest.py)
 data/history.db
 *.db
+data/ledger.db
