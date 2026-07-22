@@ -9,6 +9,7 @@
 const state = {
   data: null, minConf: 6.0, minEdge: 2.0, showAll: false,
   view: "recommended", search: "",
+  static: new URLSearchParams(location.search).has("static"),
 };
 
 /* ---------------- formatting helpers ---------------- */
@@ -23,8 +24,33 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+/* ---------------- theme ---------------- */
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  const btn = document.getElementById("theme-toggle");
+  if (btn) btn.textContent = theme === "light" ? "☀️" : "🌙";
+  try { localStorage.setItem("ge-theme", theme); } catch (e) {}
+}
+function initTheme() {
+  const param = new URLSearchParams(location.search).get("theme");
+  let theme = param;
+  if (!theme) { try { theme = localStorage.getItem("ge-theme"); } catch (e) {} }
+  if (theme !== "light" && theme !== "dark") theme = "dark";
+  applyTheme(theme);
+}
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute("data-theme") || "dark";
+  applyTheme(cur === "dark" ? "light" : "dark");
+}
+
 /* ---------------- data ---------------- */
+function showSkeleton() {
+  const host = document.getElementById("cards");
+  if (host) host.innerHTML = Array.from({ length: 6 }, () => `<div class="skeleton-card"></div>`).join("");
+}
+
 async function load() {
+  showSkeleton();
   const params = new URLSearchParams({ min_confidence: state.minConf, min_edge: state.minEdge });
   try {
     const res = await fetch(`/api/recommendations?${params}`);
@@ -67,11 +93,12 @@ function renderStats() {
     { k: "Avg edge", to: rec.length ? avgEdge * 100 : 0, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "", cls: "pos" },
     { k: "Suggested exposure", to: exposure, dec: 2, suf: "u" },
   ];
+  const fmt = (t) => (t.pre || "") + Number(t.to).toFixed(t.dec) + (t.suf || "");
   document.getElementById("stats").innerHTML = tiles.map((t) =>
     `<div class="tile"><div class="k">${t.k}</div>
-       <div class="v ${t.cls || ""}" data-to="${t.to}" data-dec="${t.dec}" data-pre="${t.pre || ""}" data-suf="${t.suf || ""}">0</div></div>`
+       <div class="v ${t.cls || ""}" data-to="${t.to}" data-dec="${t.dec}" data-pre="${t.pre || ""}" data-suf="${t.suf || ""}">${state.static ? fmt(t) : "0"}</div></div>`
   ).join("");
-  document.querySelectorAll("#stats .v[data-to]").forEach(countUp);
+  if (!state.static) document.querySelectorAll("#stats .v[data-to]").forEach(countUp);
 }
 
 function renderGames() {
@@ -267,12 +294,15 @@ function openPlayer(name) {
 function countUp(el) {
   const to = parseFloat(el.dataset.to) || 0, dec = +el.dataset.dec || 0;
   const pre = el.dataset.pre || "", suf = el.dataset.suf || "";
+  const final = pre + to.toFixed(dec) + suf;
   const dur = 700, t0 = performance.now();
   (function tick(t) {
     const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
     el.textContent = pre + (to * e).toFixed(dec) + suf;
     if (p < 1) requestAnimationFrame(tick);
   })(t0);
+  // Safety net: guarantee the true value even if rAF is throttled/stalled.
+  setTimeout(() => { el.textContent = final; }, dur + 120);
 }
 
 /* ---------------- routing ---------------- */
@@ -321,9 +351,11 @@ function bind() {
     state.search = e.target.value; renderPlayers();
   });
   document.getElementById("refresh").addEventListener("click", load);
+  document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
   window.addEventListener("resize", moveIndicator);
 }
 
+initTheme();
 bind();
 initialView();
 requestAnimationFrame(moveIndicator);

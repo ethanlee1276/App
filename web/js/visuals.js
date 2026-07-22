@@ -186,9 +186,23 @@ function stadium(game, opts = {}) {
     <!-- end zones -->
     <rect x="52" y="50" width="18" height="60" rx="6" fill="${home.primary}"/>
     <rect x="170" y="50" width="18" height="60" rx="6" fill="${away.primary}"/>
+    <text x="61" y="80" transform="rotate(-90 61 80)" text-anchor="middle" font-size="8.5"
+          font-weight="800" fill="#ffffff" opacity="0.92" font-family="system-ui">${escapeAttr(game.home)}</text>
+    <text x="179" y="80" transform="rotate(90 179 80)" text-anchor="middle" font-size="8.5"
+          font-weight="800" fill="#ffffff" opacity="0.92" font-family="system-ui">${escapeAttr(game.away)}</text>
     ${yardLines}
+    <!-- hash marks -->
+    <g stroke="#ffffff" stroke-opacity="0.4" stroke-width="1">
+      ${Array.from({length:9},(_,i)=>{const hx=72+i*12;return `<line x1="${hx}" y1="65" x2="${hx}" y2="68"/><line x1="${hx}" y1="92" x2="${hx}" y2="95"/>`;}).join("")}
+    </g>
+    <!-- goalposts -->
+    <g stroke="#ffd24a" stroke-width="1.4" fill="none" opacity="0.95">
+      <path d="M54 75 v10 M54 80 h-3 M51 76 v8"/>
+      <path d="M186 75 v10 M186 80 h3 M189 76 v8"/>
+    </g>
     <!-- midfield badge -->
     <circle cx="120" cy="80" r="13" fill="#0c1020" opacity="0.55"/>
+    <circle cx="120" cy="80" r="13" fill="none" stroke="${shade(home.secondary,20)}" stroke-width="1.2" opacity="0.7"/>
     <text x="120" y="84" text-anchor="middle" font-size="10" font-weight="800"
           fill="#ffffff" font-family="system-ui">${escapeAttr(game.home)}</text>
     ${roofOverlay}

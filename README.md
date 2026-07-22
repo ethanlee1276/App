@@ -56,9 +56,12 @@ offline and under a strict CSP). Tabs are hash-routed, so `#trending` and
 
 Visual details:
 
+- **Light / dark themes** — a toggle in the header (persisted to `localStorage`,
+  or force one with `?theme=light`). The chrome flips to a light palette; the
+  stadium/wind SVGs stay dark on purpose, reading as broadcast-style media cards.
 - **Aerial stadiums** — a stylized top-down stadium per game whose roof (dome /
   retractable / open), surface (grass vs turf) and stands are colored from real
-  nflverse team colors.
+  nflverse team colors, with end-zone team labels, hash marks and goalposts.
 - **Animated wind gauge** — streamlines flow in the wind's direction and speed
   up with real wind speed; dome games show a climate badge.
 - **Cartoony player avatars** — a team-colored helmet avatar beside each name.
