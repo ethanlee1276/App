@@ -50,6 +50,8 @@ def main() -> None:
                     help="Attach real sportsbook lines via The Odds API (needs ODDS_API_KEY).")
     ap.add_argument("--books", default=None,
                     help="Comma-separated Odds API bookmaker keys (default: all supported).")
+    ap.add_argument("--model", default=None,
+                    help="Path to a trained model JSON (uses learned projections).")
     ap.add_argument("--min-confidence", type=float, default=6.0)
     ap.add_argument("--min-edge", type=float, default=0.02)
     ap.add_argument("--out", default=None, help="Write recommendations JSON here.")
@@ -92,8 +94,14 @@ def main() -> None:
         except oddsapi.OddsAPIError as exc:
             print(f"\n⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
 
+    model = None
+    if args.model:
+        from engine.ml.model import MultiplierModel
+        model = MultiplierModel.load(args.model)
+        print(f"\nUsing learned model: {args.model}")
+
     config = RuleConfig(min_confidence=args.min_confidence, min_edge=args.min_edge)
-    result = run_slate(slate, config)
+    result = run_slate(slate, config, model=model)
 
     c = result["counts"]
     print(f"\nAnalyzed {c['props_analyzed']} props → {c['recommended']} recommended")

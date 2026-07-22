@@ -143,6 +143,10 @@ engine/
   explain.py      human-readable reasoning
   pipeline.py     orchestrates the whole slate
   backtest.py     walk-forward backtest: calibration, Brier/ECE, ROI, CLV
+  ml/
+    features.py   shared feature extraction (train + inference)
+    model.py      pure-Python ridge regression + serialized MultiplierModel
+    train.py      walk-forward example assembly + per-market fitting
   sources/
     fetch.py      cached HTTP CSV fetch (stdlib, proxy-aware, gzip)
     nflverse.py   real nflverse → Slate (schedules, weather, stats, defenses)
@@ -268,9 +272,8 @@ Planned next phases:
 
 1. **Backtest & calibration harness** — ✅ done (`backtest.py`); measure Brier /
    ECE / ROI before tuning anything.
-2. **Learned coefficients** — replace the hand-tuned weather/matchup multipliers
-   with values fit on the historical data (gradient-boosted or ridge model),
-   using the backtest to confirm ECE and ROI improve.
+2. **Learned coefficients** — ✅ done (`train_model.py`, `engine/ml/`); ridge
+   model of the form-baseline multiplier, validated against the backtest.
 3. **Depth charts** — precise injury knock-on effects (elite vs depth CB, LT vs
    RT).
 4. **Live recalculation** — re-run projections on injury news and line moves;
@@ -312,6 +315,42 @@ Backtest over 200 settled props
 stats (same `data/cache/player_stats_<season>.csv` fallback). This harness is
 the prerequisite for the ML phase — you tune coefficients by watching ECE and
 ROI move.
+
+## Learned coefficients (ML tuning)
+
+The hand-tuned weather/matchup multipliers can be **replaced by values learned
+from history**. `engine/ml/` fits a per-market model of the log-ratio of actual
+production to the recent-form baseline:
+
+    predicted_mean = form.mean × exp(w · features)
+
+so a learned model is a drop-in for the hand-tuned multiplier — same
+multiplicative structure, but the magnitudes are learned. The rule modules still
+generate the human-readable *reasons*; the ML supplies the *number*. It's a
+small ridge regression solved in pure Python (no numpy/sklearn), serialized to
+plain JSON.
+
+```bash
+# Train on weeks 2-13, then compare rules vs learned on held-out weeks 14-17
+python3 train_model.py 2024 --weeks 2-13 --eval-weeks 14-17
+
+# Use a trained model anywhere projections are made
+python3 nfl_build.py 2024 5 --model data/models/multiplier_2024.json --odds
+python3 backtest.py 2024 --weeks 14-17 --model data/models/multiplier_2024.json
+```
+
+- **Walk-forward & leakage-free**: each week's baseline uses prior weeks only.
+- **Interpretable**: coefficients read like the assumptions they replace — e.g.
+  training on data where wind suppresses passing recovers a `wind` weight of
+  ≈ −0.30 for `pass_yds`, learned rather than assumed.
+- **Validated by the backtest**: `--eval-weeks` prints the hand-tuned vs learned
+  ECE and ROI side by side and the deltas, so you only adopt the model if
+  calibration and ROI actually improve on held-out weeks.
+- Injuries stay a separate signal applied on top (the model isn't trained on
+  them), so injury holds and knock-on effects still work.
+
+Needs weekly stats (same `data/cache/player_stats_<season>.csv` fallback).
+Models are written to `data/models/` (git-ignored).
 
 ## Testing the model quickly
 

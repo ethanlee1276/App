@@ -198,7 +198,7 @@ def settle_recommendations(recommendations: list[dict],
     return out
 
 
-def backtest_from_stats(season: int, weeks, config=None) -> BacktestReport:
+def backtest_from_stats(season: int, weeks, config=None, model=None) -> BacktestReport:
     """Walk-forward backtest over real nflverse weeks.
 
     For each week, projections are built from prior weeks only, then settled
@@ -222,7 +222,7 @@ def backtest_from_stats(season: int, weeks, config=None) -> BacktestReport:
             slate = build_slate(season, w, upto_week=w)
         except Exception:
             continue
-        result = run_slate(slate, config)
+        result = run_slate(slate, config, model=model)
 
         actuals: dict[tuple[str, str], float] = {}
         for row in stats:

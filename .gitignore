@@ -12,6 +12,9 @@ web/data/recommendations.json
 # Downloaded / cached data feeds
 data/cache/
 
+# Trained models (regenerate with: python3 train_model.py)
+data/models/
+
 # OS / editor
 .DS_Store
 .idea/

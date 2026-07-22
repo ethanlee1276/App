@@ -38,19 +38,25 @@ def main() -> None:
     ap.add_argument("--weeks", default="6-17", help="e.g. 6-17 or 8,9,10")
     ap.add_argument("--min-confidence", type=float, default=6.0)
     ap.add_argument("--min-edge", type=float, default=0.02)
+    ap.add_argument("--model", default=None, help="Path to a trained model JSON (uses learned projections).")
     args = ap.parse_args()
 
     weeks = parse_weeks(args.weeks)
     config = RuleConfig(min_confidence=args.min_confidence, min_edge=args.min_edge)
 
+    model = None
+    if args.model:
+        from engine.ml.model import MultiplierModel
+        model = MultiplierModel.load(args.model)
+
     try:
-        report = backtest_from_stats(args.season, weeks, config)
+        report = backtest_from_stats(args.season, weeks, config, model=model)
     except DataUnavailable as exc:
         print("⚠️  Backtest needs weekly stats.\n")
         print(exc)
         sys.exit(2)
 
-    print(f"\n{args.season} · weeks {weeks[0]}–{weeks[-1]}")
+    print(f"\n{args.season} · weeks {weeks[0]}–{weeks[-1]} · {'learned model' if model else 'hand-tuned rules'}")
     print(report.summary())
     if report.n == 0:
         print("\n(No settled props — check that the stats CSV covers these weeks.)")

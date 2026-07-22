@@ -52,7 +52,8 @@ def _rec_to_dict(rec, prop, decision) -> dict:
     }
 
 
-def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None) -> dict:
+def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
+              model=None) -> dict:
     if not isinstance(slate, Slate):
         slate = load_slate(slate)
     config = config or RuleConfig()
@@ -61,7 +62,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None) -> di
     for prop in slate.props:
         game = slate.game_for(prop)
         opponent = slate.team(prop.opponent)
-        proj = build_projection(prop, game, opponent)
+        proj = build_projection(prop, game, opponent, model=model)
         rec = evaluate_prop(prop, proj)
         decision = apply_rules(rec, prop, game, config)
         results.append(_rec_to_dict(rec, prop, decision))
@@ -73,6 +74,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None) -> di
     return {
         "date": slate.date,
         "generated_from": "sample-slate",
+        "model": "learned" if model is not None else "rules",
         "counts": {
             "props_analyzed": len(results),
             "recommended": len(recommended),

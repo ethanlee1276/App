@@ -40,7 +40,7 @@ class Projection:
     reasons: list[str] = field(default_factory=list)
 
 
-def build_projection(prop: Prop, game: Game, opponent_team: Team) -> Projection:
+def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None) -> Projection:
     form = compute_form(prop.logs, prop.career_avg, prop.vs_opponent_avg)
 
     matchup = evaluate_matchup(prop, opponent_team.defense, game)
@@ -49,14 +49,25 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team) -> Projection:
 
     weather_mult = weather.multipliers.get(prop.market, 1.0)
 
-    # Total multiplier is bounded so no single factor can run away with the
-    # projection — a guardrail against overfitting to one signal. Kept tight
-    # because sportsbook lines are efficient; real edges come from small,
-    # defensible adjustments, not wild swings.
-    total_mult = clamp(
+    # Hand-tuned total multiplier, bounded so no single factor runs away with
+    # the projection. Kept tight because sportsbook lines are efficient.
+    rule_mult = clamp(
         matchup.multiplier * weather_mult * injury.multiplier,
         0.85, 1.18,
     )
+
+    reasons: list[str] = []
+    if model is not None and model.has(prop.market):
+        # Learned magnitude replaces the hand-tuned matchup/weather multipliers;
+        # injuries stay on top (they're a separate, sparse signal the model
+        # isn't trained on). The rule modules still supply the reasons below.
+        from .ml.features import extract_features, vectorize
+        feat = vectorize(extract_features(prop, game, opponent_team.defense))
+        learned = model.predict_multiplier(feat, prop.market)
+        total_mult = clamp(learned * injury.multiplier, 0.70, 1.40)
+        reasons.append(f"Learned model adjustment ×{learned:.2f} (trained on historical data)")
+    else:
+        total_mult = rule_mult
 
     mean = form.mean * total_mult
 
@@ -68,7 +79,6 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team) -> Projection:
     if form.sample_games < 4:
         adj_std *= 1.20
 
-    reasons: list[str] = []
     reasons += matchup.reasons
     reasons += weather.reasons
     reasons += injury.reasons
