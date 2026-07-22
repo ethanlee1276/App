@@ -170,6 +170,8 @@ engine/
   explain.py      human-readable reasoning
   pipeline.py     orchestrates the whole slate
   backtest.py     walk-forward backtest: calibration, Brier/ECE, ROI, CLV
+  db.py           historical database (SQLite): games + player_game_logs
+  ingest.py       ingestion pipeline: sources -> history DB
   linemoves.py    line-movement history + steam detection
   ml/
     features.py   shared feature extraction (train + inference)
@@ -529,6 +531,38 @@ python3 backtest.py 2024 --weeks 14-17 --model data/models/multiplier_2024.json
 
 Needs weekly stats (same `data/cache/player_stats_<season>.csv` fallback).
 Models are written to `data/models/` (git-ignored).
+
+## Historical database
+
+A local **SQLite** store (`engine/db.py`, stdlib only) is the foundation for
+real training and backtesting — it persists the raw material so models train off
+saved history instead of re-hitting the network, and it grows every season
+(ingestion is idempotent — re-run a season to refresh it).
+
+```bash
+python3 ingest.py nfl --seasons 2020-2024        # 5 years of NFL
+python3 ingest.py mlb --dates 2024-06-18,2024-06-19
+python3 ingest.py status                         # what's in the DB
+python3 mlb_backtest.py --from-db data/history.db --market total_bases
+```
+
+Two tables: `games` (context — scores, spread, total, roof/park, surface,
+weather) and `player_game_logs` (one row per player-game-market, the atomic unit
+the projection and backtest walk over), plus an `ingest_log` audit trail.
+
+**What ingests where:**
+
+| Feed                    | Source                              | Reachable without release/API access |
+|-------------------------|-------------------------------------|--------------------------------------|
+| NFL games (5 yrs)       | nflverse `games.csv` (git tree)     | ✅ yes — **1,408 games / 2020–2024 ingest today** |
+| NFL player logs         | nflverse weekly stats (releases)    | ⚠️ release-gated                     |
+| MLB games + logs        | MLB Stats API                        | ⚠️ API host often blocked            |
+
+So the NFL **game/context layer for five seasons ingests right now**; the
+player-log layer (and MLB) populate wherever the release/API hosts are reachable
+— each blocked feed is reported as a skip, so a partial ingest still succeeds.
+`db.entries_for_market()` turns the store back into the `entries` the backtest
+and ML trainers consume; `mlb_backtest.py --from-db` runs straight off it.
 
 ## Testing the model quickly
 

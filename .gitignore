@@ -20,3 +20,7 @@ data/models/
 .DS_Store
 .idea/
 .vscode/
+
+# Historical database (populate with: python3 ingest.py)
+data/history.db
+*.db

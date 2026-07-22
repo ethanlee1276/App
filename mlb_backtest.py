@@ -70,17 +70,29 @@ def main() -> None:
                     choices=list(MARKET_LABELS))
     ap.add_argument("--synthetic", action="store_true",
                     help="use a generated season instead of the sample slate")
+    ap.add_argument("--from-db", default=None,
+                    help="read entries from the history DB (data/history.db) instead")
     ap.add_argument("--min-history", type=int, default=6)
     ap.add_argument("--min-confidence", type=float, default=6.0)
     ap.add_argument("--min-edge", type=float, default=0.02)
     ap.add_argument("--model", default=None, help="Path to a trained MLB model JSON.")
     args = ap.parse_args()
 
-    entries = (synthetic_entries(args.market) if args.synthetic
-               else entries_from_slate(args.market))
+    if args.from_db:
+        from engine import db as _db
+        conn = _db.connect(args.from_db)
+        entries = _db.entries_for_market(conn, "mlb", args.market,
+                                         min_games=args.min_history + 1)
+        source = "history DB"
+    elif args.synthetic:
+        entries = synthetic_entries(args.market)
+        source = "synthetic season"
+    else:
+        entries = entries_from_slate(args.market)
+        source = "sample slate"
     if not entries:
-        print(f"No {args.market} logs found in the sample slate — try --synthetic "
-              f"or a different --market.")
+        print(f"No {args.market} entries found ({source}) — try --synthetic, a "
+              f"different --market, or ingest data first (python3 ingest.py).")
         return
 
     model = None
@@ -92,8 +104,7 @@ def main() -> None:
     report = backtest_from_logs(entries, args.market,
                                 min_history=args.min_history, config=config, model=model)
 
-    src = "synthetic season" if args.synthetic else "sample slate"
-    print(f"\nMLB backtest · {MARKET_LABELS[args.market]} · {src}")
+    print(f"\nMLB backtest · {MARKET_LABELS[args.market]} · {source}")
     print(report.summary())
 
 

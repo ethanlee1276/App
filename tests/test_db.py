@@ -1,0 +1,126 @@
+"""Tests for the historical database + ingestion (in-memory SQLite, fixtures)."""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from engine import db, ingest
+
+
+def _conn():
+    return db.connect(":memory:")
+
+
+# --- schema + CRUD ----------------------------------------------------------
+def test_schema_and_upsert_roundtrip():
+    conn = _conn()
+    rows = [
+        {"sport": "nfl", "season": 2023, "period": "005", "game_id": "GB-005",
+         "player": "Josh Jacobs", "team": "GB", "opponent": "CHI", "position": "RB",
+         "home": 1, "market": "rush_yds", "value": 96.0},
+    ]
+    assert db.upsert_player_logs(conn, rows) == 1
+    got = list(conn.execute("SELECT * FROM player_game_logs"))
+    assert len(got) == 1 and got[0]["value"] == 96.0
+
+
+def test_upsert_is_idempotent():
+    conn = _conn()
+    row = {"sport": "nfl", "season": 2023, "period": "005", "game_id": "GB-005",
+           "player": "P", "team": "GB", "opponent": "CHI", "position": "RB",
+           "home": 1, "market": "rush_yds", "value": 50.0}
+    db.upsert_player_logs(conn, [row])
+    row["value"] = 88.0                       # same key, new value
+    db.upsert_player_logs(conn, [row])
+    rows = list(conn.execute("SELECT value FROM player_game_logs"))
+    assert len(rows) == 1 and rows[0]["value"] == 88.0   # replaced, not duplicated
+
+
+def test_entries_for_market_grouping_and_order():
+    conn = _conn()
+    logs = []
+    for wk, val in [(3, 1), (1, 3), (2, 2)]:   # inserted out of order
+        logs.append({"sport": "mlb", "season": 2024, "period": f"{wk:04d}",
+                     "game_id": f"P-{wk}", "player": "Hitter", "team": "A",
+                     "opponent": "B", "position": "1B", "home": 1,
+                     "market": "total_bases", "value": val})
+    db.upsert_player_logs(conn, logs)
+    entries = db.entries_for_market(conn, "mlb", "total_bases", min_games=3)
+    assert entries == [{"name": "Hitter", "values": [3, 2, 1]}]  # chronological
+    # min_games filter drops short histories
+    assert db.entries_for_market(conn, "mlb", "total_bases", min_games=4) == []
+
+
+# --- NFL parsers ------------------------------------------------------------
+def test_nfl_game_rows_filters_and_negates_spread():
+    sched = [
+        {"season": "2022", "week": "5", "home_team": "KC", "away_team": "NO",
+         "spread_line": "3", "total_line": "43", "roof": "outdoors",
+         "surface": "grass", "temp": "70", "wind": "5"},
+        {"season": "2019", "week": "5", "home_team": "X", "away_team": "Y"},  # filtered
+    ]
+    rows = ingest.nfl_game_rows(sched, {2020, 2021, 2022})
+    assert len(rows) == 1
+    assert rows[0]["spread"] == -3.0 and rows[0]["game_id"] == "NO@KC"
+    assert rows[0]["season"] == 2022 and rows[0]["period"] == "005"
+
+
+def test_nfl_player_log_rows_maps_markets():
+    stats = [{
+        "player_display_name": "Josh Jacobs", "position": "RB",
+        "recent_team": "GB", "opponent_team": "CHI", "week": "5", "season": "2023",
+        "season_type": "REG", "rushing_yards": "96", "receiving_yards": "0",
+        "passing_yards": "0", "receptions": "0",
+    }]
+    rows = ingest.nfl_player_log_rows(stats, 2023)
+    rush = [r for r in rows if r["market"] == "rush_yds"]
+    assert rush and rush[0]["value"] == 96.0 and rush[0]["player"] == "Josh Jacobs"
+
+
+# --- ingest orchestration (stubbed sources) ---------------------------------
+def test_ingest_nfl_offline(monkeypatch=None):
+    conn = _conn()
+    import engine.sources.nflverse as nv
+    sched = [{"season": "2023", "week": "1", "home_team": "KC", "away_team": "DET",
+              "spread_line": "-4", "total_line": "53", "roof": "outdoors",
+              "surface": "grass", "temp": "72", "wind": "6"}]
+    stats = [{"player_display_name": "Player One", "position": "WR",
+              "recent_team": "DET", "opponent_team": "KC", "week": "1",
+              "season": "2023", "season_type": "REG", "receiving_yards": "85",
+              "rushing_yards": "0", "passing_yards": "0", "receptions": "6"}]
+    saved = (nv.load_schedules, nv.load_weekly_stats)
+    nv.load_schedules = lambda: sched
+    nv.load_weekly_stats = lambda season: stats
+    try:
+        res = ingest.ingest_nfl(conn, [2023])
+        assert res["games"] == 1 and res["player_logs"] >= 1
+        s = db.summary(conn)
+        assert s["games"]["nfl"] == 1 and s["seasons"]["nfl"] == [2023]
+    finally:
+        nv.load_schedules, nv.load_weekly_stats = saved
+
+
+def test_db_feeds_backtest():
+    # Populate a DB with synthetic MLB logs, then backtest straight off it.
+    conn = _conn()
+    logs = []
+    for p in range(6):
+        for g in range(1, 16):
+            logs.append({"sport": "mlb", "season": 2024, "period": f"{g:04d}",
+                         "game_id": f"P{p}-{g}", "player": f"P{p}", "team": "A",
+                         "opponent": "B", "position": "1B", "home": 1,
+                         "market": "total_bases", "value": (p + g) % 4})
+    db.upsert_player_logs(conn, logs)
+    entries = db.entries_for_market(conn, "mlb", "total_bases", min_games=9)
+    assert len(entries) == 6
+    from engine.mlb.backtest import backtest_from_logs
+    report = backtest_from_logs(entries, "total_bases", min_history=8)
+    assert report.n > 0
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")
