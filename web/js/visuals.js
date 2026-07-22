@@ -195,6 +195,50 @@ function stadium(game, opts = {}) {
   </svg>`;
 }
 
+/* ---------------- Sparkline (game-log trend) ----------------------------- */
+function sparkline(values, opts = {}) {
+  // values come newest-first from the API; chart oldest -> newest.
+  const data = [...values].reverse();
+  const w = opts.w || 240, h = opts.h || 64, pad = 8;
+  const line = opts.line;                    // optional threshold (the prop line)
+  const stroke = opts.stroke || "var(--brand)";
+  const uid = "sp" + Math.random().toString(36).slice(2, 7);
+  if (data.length < 2) return `<svg width="${w}" height="${h}"></svg>`;
+
+  const lo = Math.min(...data, line ?? Infinity);
+  const hi = Math.max(...data, line ?? -Infinity);
+  const span = (hi - lo) || 1;
+  const x = (i) => pad + (i / (data.length - 1)) * (w - pad * 2);
+  const y = (v) => h - pad - ((v - lo) / span) * (h - pad * 2);
+
+  const pts = data.map((v, i) => `${x(i)},${y(v)}`);
+  const linePath = "M" + pts.join(" L");
+  const areaPath = `M${x(0)},${h - pad} L` + pts.join(" L") + ` L${x(data.length - 1)},${h - pad} Z`;
+  const dots = data.map((v, i) => {
+    const above = line == null ? true : v > line;
+    const c = line == null ? stroke : (above ? "var(--good)" : "var(--bad)");
+    return `<circle cx="${x(i)}" cy="${y(v)}" r="${i === data.length - 1 ? 3.2 : 2.1}" fill="${c}"/>`;
+  }).join("");
+  const thresh = line == null ? "" :
+    `<line x1="${pad}" y1="${y(line)}" x2="${w - pad}" y2="${y(line)}"
+       stroke="var(--warn)" stroke-width="1" stroke-dasharray="4 4" opacity="0.8"/>`;
+
+  return `
+  <svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <defs>
+      <linearGradient id="${uid}a" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${stroke}" stop-opacity="0.28"/>
+        <stop offset="100%" stop-color="${stroke}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path d="${areaPath}" fill="url(#${uid}a)"/>
+    ${thresh}
+    <path class="spark-line" d="${linePath}" fill="none" stroke="${stroke}"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    ${dots}
+  </svg>`;
+}
+
 /* ---------------- helpers ------------------------------------------------ */
 function shade(hex, amt) {
   const h = (hex || "#333333").replace("#", "");

@@ -17,7 +17,12 @@ from .rules import apply_rules, RuleConfig
 from .explain import headline, summary, bullet_reasons
 
 
-def _rec_to_dict(rec, prop, decision) -> dict:
+def _avg(vals: list[float]):
+    return round(sum(vals) / len(vals), 1) if vals else None
+
+
+def _rec_to_dict(rec, prop, decision, proj) -> dict:
+    vals = [g.value for g in prop.logs]
     return {
         "player": rec.player,
         "team": rec.team,
@@ -25,6 +30,7 @@ def _rec_to_dict(rec, prop, decision) -> dict:
         "market": rec.market,
         "market_label": MARKET_LABELS.get(rec.market, rec.market),
         "position": prop.position,
+        "usage_role": prop.usage_role,
         "side": rec.side,
         "book": rec.book,
         "line": rec.line,
@@ -40,6 +46,7 @@ def _rec_to_dict(rec, prop, decision) -> dict:
         "stake_units": rec.stake_units,
         "grade": rec.grade,
         "trend": rec.trend,
+        "trend_delta": round(proj.form.trend_delta, 1),
         "recommended": decision.recommend,
         "warnings": decision.warnings,
         "headline": headline(rec),
@@ -49,6 +56,20 @@ def _rec_to_dict(rec, prop, decision) -> dict:
             {"book": ln.book, "line": ln.line, "over_odds": ln.over_odds}
             for ln in prop.lines
         ],
+        # Per-player history for the Players & Trending pages.
+        "logs": [
+            {"week": g.week, "opponent": g.opponent, "value": g.value, "home": g.home}
+            for g in prop.logs
+        ],
+        "form": {
+            "last1": _avg(vals[:1]),
+            "last3": _avg(vals[:3]),
+            "last5": _avg(vals[:5]),
+            "last10": _avg(vals[:10]),
+            "season": _avg(vals),
+            "career": prop.career_avg,
+            "vs_opponent": prop.vs_opponent_avg,
+        },
     }
 
 
@@ -65,7 +86,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         proj = build_projection(prop, game, opponent, model=model)
         rec = evaluate_prop(prop, proj)
         decision = apply_rules(rec, prop, game, config)
-        results.append(_rec_to_dict(rec, prop, decision))
+        results.append(_rec_to_dict(rec, prop, decision, proj))
 
     # Rank: recommended bets first, then by confidence, then by edge.
     results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)

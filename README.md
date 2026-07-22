@@ -34,21 +34,36 @@ Tighten the model from the CLI or the UI sliders:
 python3 generate.py --min-confidence 7 --min-edge 4
 ```
 
-## Dashboard visuals
+## Dashboard
 
-The dashboard is styled to feel like a real product, with all artwork drawn as
-self-contained SVG (no external images — works offline and under a strict CSP):
+A three-tab single-page app (no build step), styled with a cohesive dark design
+system and all artwork drawn as self-contained SVG (no external images — works
+offline and under a strict CSP). Tabs are hash-routed, so `#trending` and
+`#players` are shareable links.
 
-- **This week's stadiums strip** — a stylized **aerial stadium** per game whose
-  roof (dome / retractable / open), playing surface (grass vs turf) and stands
-  are colored from real nflverse team colors.
-- **Animated wind gauge** — a compass whose streamlines flow in the wind's
-  direction and speed up with real wind speed; dome games show a climate badge.
+- **🎯 Recommended** — summary tiles (animated count-up), the "this week's
+  stadiums" strip, threshold sliders, and the ranked pick cards: projection-vs-
+  line bar, hit-prob / edge / EV metrics, an animated confidence meter,
+  line-shopping badge (`N books · best <book>`), trend, stake, and the model's
+  reasons.
+- **🔥 Trending** — three league-wide leaderboards derived from real model
+  signals (not betting handle): biggest recent-form risers, cooling-off fallers,
+  and biggest edges — each row with a color-coded sparkline. Click a row to jump
+  to that player.
+- **🔍 Players** — search any player to pull up a profile: form tiles
+  (L1/L3/L5/L10/season), a game-log **sparkline with the prop line drawn**
+  (green dots beat the line, red missed), the full game log, and the active pick.
+
+Visual details:
+
+- **Aerial stadiums** — a stylized top-down stadium per game whose roof (dome /
+  retractable / open), surface (grass vs turf) and stands are colored from real
+  nflverse team colors.
+- **Animated wind gauge** — streamlines flow in the wind's direction and speed
+  up with real wind speed; dome games show a climate badge.
 - **Cartoony player avatars** — a team-colored helmet avatar beside each name.
   These are stylized marks, not likenesses; `playerAvatar()` will use a real
   `headshot` URL (nflverse/ESPN provide them) when one is supplied.
-- **Line-shopping & form badges** on every pick (`N books · best <book>`, trend,
-  suggested stake), and the injury-hold warning when a player is dinged.
 
 > On real player likenesses: generating photoreal/cartoon faces of specific
 > players isn't done here (capability + likeness rights). The avatar system is
@@ -155,9 +170,10 @@ engine/
 data/
   sample_slate.json   illustrative slate (7 props across 3 games)
   cache/              downloaded feeds (git-ignored)
-web/                  dashboard (vanilla HTML/CSS/JS, no build step)
+web/                  3-tab dashboard (vanilla HTML/CSS/JS, no build step)
+  js/app.js           router + Recommended / Trending / Players views
   js/teams.js         NFL team colors + names (from nflverse)
-  js/visuals.js       SVG art: player avatars, wind gauge, aerial stadiums
+  js/visuals.js       SVG art: avatars, wind gauge, aerial stadiums, sparklines
 generate.py           CLI → run the model on the sample slate
 nfl_build.py          CLI → build a real nflverse slate and run the model
 server.py             stdlib web server + live /api/recommendations

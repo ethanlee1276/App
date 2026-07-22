@@ -12,40 +12,65 @@
       <span class="logo">🏈</span>
       <div>
         <h1>Gridiron Edge</h1>
-        <p class="tagline">AI-powered NFL player-prop model</p>
+        <div class="tagline">AI-powered NFL player-prop model</div>
       </div>
     </div>
+
+    <nav class="nav" id="nav">
+      <div class="nav-indicator" id="nav-indicator"></div>
+      <button class="nav-btn active" data-view="recommended">🎯 Recommended</button>
+      <button class="nav-btn" data-view="trending">🔥 Trending</button>
+      <button class="nav-btn" data-view="players">🔍 Players</button>
+    </nav>
+
     <div class="slate-meta">
       <span id="slate-date">—</span>
-      <button id="refresh" class="btn">↻ Recalculate</button>
+      <button id="refresh" class="btn ghost">↻ Refresh</button>
     </div>
   </header>
 
-  <section class="stats" id="stats">
-    <!-- summary tiles injected here -->
-  </section>
+  <main>
+    <!-- Recommended -->
+    <section class="view active" id="view-recommended">
+      <div class="stats" id="stats"></div>
 
-  <section class="slate-strip" id="slate-strip" aria-label="This week's games">
-    <div class="strip-head"><h2>This week's stadiums &amp; conditions</h2></div>
-    <div class="games-scroller" id="games"><!-- stadium cards injected here --></div>
-  </section>
+      <div class="section-title">🏟️ This week's stadiums &amp; conditions</div>
+      <div class="games-scroller" id="games"></div>
 
-  <section class="controls">
-    <div class="control">
-      <label for="min-conf">Min confidence <b id="conf-val">6.0</b></label>
-      <input type="range" id="min-conf" min="0" max="10" step="0.5" value="6" />
-    </div>
-    <div class="control">
-      <label for="min-edge">Min edge <b id="edge-val">2%</b></label>
-      <input type="range" id="min-edge" min="0" max="15" step="0.5" value="2" />
-    </div>
-    <div class="control toggle">
-      <label><input type="checkbox" id="show-all" /> Show non-recommended props</label>
-    </div>
-  </section>
+      <div class="controls" style="margin-top:20px">
+        <div class="control">
+          <label for="min-conf">Min confidence <b id="conf-val">6.0</b></label>
+          <input type="range" id="min-conf" min="0" max="10" step="0.5" value="6" />
+        </div>
+        <div class="control">
+          <label for="min-edge">Min edge <b id="edge-val">2%</b></label>
+          <input type="range" id="min-edge" min="0" max="15" step="0.5" value="2" />
+        </div>
+        <div class="control toggle">
+          <label><input type="checkbox" id="show-all" /> Show non-recommended props</label>
+        </div>
+      </div>
 
-  <main id="cards" class="cards">
-    <p class="loading">Loading model…</p>
+      <div class="cards" id="cards"><p class="loading">Loading model…</p></div>
+    </section>
+
+    <!-- Trending -->
+    <section class="view" id="view-trending">
+      <div class="section-title">🔥 Trending across the league
+        <span class="sub">— momentum &amp; value from the model, not betting handle</span>
+      </div>
+      <div class="trend-grid" id="trending"></div>
+    </section>
+
+    <!-- Players -->
+    <section class="view" id="view-players">
+      <div class="section-title">🔍 Player search <span class="sub">— pull up form, game logs and the active prop</span></div>
+      <div class="search-wrap">
+        <span class="ico">🔍</span>
+        <input id="player-search" type="text" placeholder="Search a player… (e.g. Amon-Ra, Jacobs)" autocomplete="off" />
+      </div>
+      <div class="player-grid" id="players"></div>
+    </section>
   </main>
 
   <footer class="footer">
