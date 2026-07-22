@@ -8,6 +8,7 @@ venv/
 
 # Generated output (regenerate with: python3 generate.py)
 web/data/recommendations.json
+web/data/mlb_recommendations.json
 
 # Downloaded / cached data feeds
 data/cache/
