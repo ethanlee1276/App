@@ -248,7 +248,15 @@
           "over_odds": -155,
           "under_odds": 125
         }
-      ]
+      ],
+      "statcast": {
+        "xslg": 0.56,
+        "slg": 0.505,
+        "xwoba": 0.4,
+        "woba": 0.375,
+        "barrel_pct": 0.15,
+        "hard_hit_pct": 0.52
+      }
     },
     {
       "player": "Kyle Tucker",
@@ -464,7 +472,11 @@
           "over_odds": 100,
           "under_odds": -120
         }
-      ]
+      ],
+      "statcast": {
+        "csw_pct": 0.32,
+        "whiff_pct": 0.33
+      }
     },
     {
       "player": "Aaron Judge",
@@ -587,7 +599,13 @@
           "over_odds": -115,
           "under_odds": -110
         }
-      ]
+      ],
+      "statcast": {
+        "xslg": 0.64,
+        "slg": 0.61,
+        "barrel_pct": 0.2,
+        "hard_hit_pct": 0.58
+      }
     },
     {
       "player": "Ezequiel Tovar",
@@ -767,7 +785,11 @@
           "over_odds": -105,
           "under_odds": -115
         }
-      ]
+      ],
+      "statcast": {
+        "csw_pct": 0.32,
+        "whiff_pct": 0.33
+      }
     },
     {
       "player": "Mookie Betts",
@@ -941,7 +963,12 @@
           "over_odds": 155,
           "under_odds": -190
         }
-      ]
+      ],
+      "statcast": {
+        "xslg": 0.4,
+        "slg": 0.47,
+        "barrel_pct": 0.06
+      }
     }
   ]
 }

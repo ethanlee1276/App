@@ -14,7 +14,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..models import SportsbookLine
-from .models import MLBGame, MLBProp, MLBGameLog, MLBWeather, Pitcher
+from .models import (
+    MLBGame, MLBProp, MLBGameLog, MLBWeather, Pitcher, StatcastProfile,
+)
 
 
 @dataclass
@@ -53,6 +55,7 @@ def _prop(d: dict) -> MLBProp:
         bats=d.get("bats", "R"), throws=d.get("throws", "R"),
         lineup_spot=d.get("lineup_spot", 0),
         headshot=d.get("headshot", ""),
+        statcast=StatcastProfile(**d["statcast"]) if d.get("statcast") else None,
     )
 
 

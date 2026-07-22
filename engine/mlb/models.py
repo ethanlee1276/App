@@ -96,6 +96,29 @@ class MLBGame:
 
 
 @dataclass
+class StatcastProfile:
+    """Batted-ball quality + expected stats for a player (Baseball Savant).
+
+    Hitter fields drive expected-stats regression (xSLG vs SLG = luck signal)
+    and quality-of-contact (barrel / hard-hit). Pitcher fields drive strikeout
+    props (CSW% / whiff%) and contact suppression (barrel allowed). All optional
+    — the engine uses whatever is present.
+    """
+
+    # hitter
+    xslg: Optional[float] = None
+    slg: Optional[float] = None
+    xwoba: Optional[float] = None
+    woba: Optional[float] = None
+    barrel_pct: Optional[float] = None       # 0..1
+    hard_hit_pct: Optional[float] = None
+    # pitcher
+    csw_pct: Optional[float] = None          # called strikes + whiffs
+    whiff_pct: Optional[float] = None
+    barrel_allowed_pct: Optional[float] = None
+
+
+@dataclass
 class MLBProp:
     player: str
     team: str
@@ -110,3 +133,4 @@ class MLBProp:
     throws: str = "R"                    # pitcher handedness (SP props)
     lineup_spot: int = 0                 # 1-9 confirmed; 0 = not in lineup yet
     headshot: str = ""
+    statcast: Optional["StatcastProfile"] = None

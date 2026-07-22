@@ -383,6 +383,13 @@ What's curated for baseball (`engine/mlb/`):
   rank** (bad pens give production back late), and **batting-order slot**
   (top of the order = more plate appearances). Pitcher strikeout props price
   off the opposing lineup's K rate.
+- **Statcast layer** (`statcast.py`) — batted-ball quality + **expected-stats
+  regression**: a hitter whose xSLG exceeds his SLG has been hitting the ball
+  hard without the results (buy), while SLG ahead of xSLG flags a lucky fade;
+  barrel/hard-hit rates forecast power, and pitcher **CSW%** forecasts
+  strikeouts. Small bounded multipliers — the edge is in the expected-stats
+  correction books underweight. `sources/savant.py` parses Baseball Savant's
+  expected-statistics CSV into these profiles.
 - **Betting model** (`betting.py`) — reuses the shared de-vig / best-line /
   confidence / Kelly stack, but prices **home runs with a Poisson model**
   (a 0.5 HR line is P(at least one), which a normal approximation gets wrong).
@@ -418,8 +425,18 @@ props from the probable starters, each with real game logs and a recent-form
 proxy line. The JSON **parsers** are pure and unit-tested against fixtures; the
 network wrappers cache and degrade with instructions like the other feeds.
 
-Still ahead: the deep **Statcast** layer (exit velocity, barrel %, pitch-type
-splits, umpire tendencies, pitch-by-pitch simulation) — the historical-database
+**Backtest** — the calibration harness is sport-agnostic. `engine/mlb/backtest.py`
+walks each player's game log forward (project game *i* from prior games, settle
+against the actual) and feeds the shared `evaluate()`; `mlb_backtest.py` runs it
+on the sample slate's logs or a synthetic season and prints the same
+projection-error / Brier / ECE / ROI report as the NFL side:
+
+```bash
+python3 mlb_backtest.py --synthetic --market total_bases
+```
+
+Still ahead: the **pitch-by-pitch simulation** and ML on 5+ years of Statcast,
+plus umpire tendencies and barrel/CSW leaderboards — the historical-database
 phase. The odds adapter already supports MLB player props via The Odds API
 market keys.
 

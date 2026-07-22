@@ -18,6 +18,7 @@ from .models import MLBProp, MLBGame, TOTAL_BASES, HITS, HOME_RUNS, STRIKEOUTS
 from .parks import get_park, evaluate_park, ParkEffect
 from .weather import evaluate_weather, WeatherEffect
 from .matchup import evaluate_matchup, MatchupEffect
+from .statcast import evaluate_statcast
 
 # Per-game variance floors (std/mean). A 1.8-TB-per-game hitter routinely
 # posts 0 or 5; strikeout counts are the steadiest MLB prop.
@@ -54,10 +55,19 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame) -> MLBProjection:
     park_mult = park.multipliers.get(prop.market, 1.0)
     weather_mult = weather.multipliers.get(prop.market, 1.0)
 
+    # Statcast: expected-stats regression + quality-of-contact / K stuff.
+    statcast_mult = 1.0
+    statcast_reasons: list[str] = []
+    if prop.statcast is not None:
+        eff = evaluate_statcast(prop.statcast, prop.market)
+        statcast_mult = eff.multiplier
+        statcast_reasons = eff.reasons
+
     # Tight overall clamp: books price parks and platoons in, so real edges
     # come from small compounding angles. Slightly wider than the NFL clamp
     # because park effects (Coors) genuinely run bigger.
-    total_mult = clamp(park_mult * weather_mult * matchup.multiplier, 0.80, 1.25)
+    total_mult = clamp(park_mult * weather_mult * matchup.multiplier * statcast_mult,
+                       0.78, 1.28)
     mean = form.mean * total_mult
 
     cv_floor = CV_FLOOR.get(prop.market, 0.6) * max(form.mean, 0.1)
@@ -67,6 +77,7 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame) -> MLBProjection:
         adj_std *= 1.15
 
     reasons: list[str] = []
+    reasons += statcast_reasons
     reasons += matchup.reasons
     reasons += park.reasons
     reasons += weather.reasons
