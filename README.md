@@ -408,9 +408,20 @@ north wind off the lake as *in*, matching reality. Bearings are approximate
 published orientations (the 45°/135° buckets tolerate that); refine per park as
 needed.
 
-Confirmed lineups, per-player game logs, and Statcast metrics are the next
-adapter phase; the odds adapter already supports MLB player props via The Odds
-API market keys.
+**Confirmed lineups + game logs** (`engine/mlb/sources/statslogs.py`): pulls
+posted batting orders (`game/{pk}/boxscore`), handedness (`people/{id}`) and
+per-player game-by-game hitting/pitching logs (`people/{id}/stats?stats=gameLog`)
+from the MLB Stats API. `build_live_slate(date)` (CLI: `python3 mlb_build.py
+2024-06-20`) assembles a full live slate — hitter props from confirmed lineups
+(the rules engine holds anyone not yet in a posted lineup), pitcher strikeout
+props from the probable starters, each with real game logs and a recent-form
+proxy line. The JSON **parsers** are pure and unit-tested against fixtures; the
+network wrappers cache and degrade with instructions like the other feeds.
+
+Still ahead: the deep **Statcast** layer (exit velocity, barrel %, pitch-type
+splits, umpire tendencies, pitch-by-pitch simulation) — the historical-database
+phase. The odds adapter already supports MLB player props via The Odds API
+market keys.
 
 ---
 

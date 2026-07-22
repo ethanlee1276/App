@@ -1,0 +1,154 @@
+"""Tests for the MLB live lineup / game-log adapters (offline, fixtures)."""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from engine.mlb.sources import statslogs as sl
+from engine.mlb.models import TOTAL_BASES, HITS, HOME_RUNS, STRIKEOUTS
+
+
+# --- fixtures shaped like real MLB Stats API responses ----------------------
+BOX = {
+    "teams": {
+        "home": {
+            "team": {"id": 112, "abbreviation": "CHC"},
+            "battingOrder": [1001, 1002, 1003],
+            "players": {
+                "ID1001": {"person": {"id": 1001, "fullName": "Leadoff Guy"},
+                           "position": {"abbreviation": "CF"}, "battingOrder": "100"},
+                "ID1002": {"person": {"id": 1002, "fullName": "Two Hole"},
+                           "position": {"abbreviation": "SS"}, "battingOrder": "200"},
+                "ID1003": {"person": {"id": 1003, "fullName": "Cleanup"},
+                           "position": {"abbreviation": "1B"}, "battingOrder": "300"},
+            },
+        },
+        "away": {"team": {"id": 143}, "battingOrder": [], "players": {}},
+    }
+}
+
+PERSON = {"people": [{"id": 1001, "fullName": "Leadoff Guy",
+                      "batSide": {"code": "L"}, "pitchHand": {"code": "R"},
+                      "primaryPosition": {"abbreviation": "CF"}}]}
+
+LOG = {"stats": [{"type": {"displayName": "gameLog"}, "group": {"displayName": "hitting"},
+                  "splits": [
+    {"date": "2024-04-01", "opponent": {"id": 138}, "isHome": True,
+     "stat": {"hits": 1, "totalBases": 1, "homeRuns": 0}},
+    {"date": "2024-04-02", "opponent": {"id": 138}, "isHome": True,
+     "stat": {"hits": 2, "totalBases": 5, "homeRuns": 1}},
+    {"date": "2024-04-03", "opponent": {"id": 158, "abbreviation": "MIL"}, "isHome": False,
+     "stat": {"hits": 0, "totalBases": 0, "homeRuns": 0}},
+]}]}
+
+PLOG = {"stats": [{"splits": [
+    {"opponent": {"id": 112}, "isHome": True, "stat": {"strikeOuts": 6}},
+    {"opponent": {"id": 112}, "isHome": True, "stat": {"strikeOuts": 7}},
+    {"opponent": {"id": 112}, "isHome": True, "stat": {"strikeOuts": 9}},
+]}]}
+
+
+# --- lineup -----------------------------------------------------------------
+def test_parse_lineup_order_and_positions():
+    lineup = sl.parse_lineup(BOX, "home")
+    assert [e.spot for e in lineup] == [1, 2, 3]
+    assert [e.name for e in lineup] == ["Leadoff Guy", "Two Hole", "Cleanup"]
+    assert lineup[1].position == "SS" and lineup[1].person_id == 1002
+
+
+def test_parse_lineup_empty_when_no_order():
+    assert sl.parse_lineup(BOX, "away") == []
+
+
+# --- person -----------------------------------------------------------------
+def test_parse_person_handedness():
+    p = sl.parse_person(PERSON)
+    assert p["bats"] == "L" and p["throws"] == "R" and p["position"] == "CF"
+
+
+def test_parse_person_defaults_when_empty():
+    p = sl.parse_person({"people": []})
+    assert p["bats"] == "R" and p["throws"] == "R"
+
+
+# --- game logs --------------------------------------------------------------
+def test_game_log_most_recent_first_and_market_field():
+    tb = sl.parse_game_log(LOG, TOTAL_BASES)
+    assert [g.value for g in tb] == [0, 5, 1]          # newest first
+    assert [g.game for g in tb] == [3, 2, 1]
+    assert sl.parse_game_log(LOG, HITS)[0].value == 0
+    assert sl.parse_game_log(LOG, HOME_RUNS)[1].value == 1
+
+
+def test_game_log_opponent_resolution_and_home_flag():
+    tb = sl.parse_game_log(LOG, TOTAL_BASES)
+    assert tb[0].opponent == "MIL" and tb[0].home is False   # abbreviation present
+    assert tb[1].opponent == "STL" and tb[1].home is True    # mapped from team id 138
+
+
+def test_game_log_limit_and_empty():
+    assert len(sl.parse_game_log(LOG, HITS, limit=2)) == 2
+    assert sl.parse_game_log({}, HITS) == []
+
+
+def test_pitcher_game_log_strikeouts():
+    ks = sl.parse_game_log(PLOG, STRIKEOUTS)
+    assert [g.value for g in ks] == [9, 7, 6]
+
+
+def test_market_group_and_stat_maps():
+    assert sl.MARKET_GROUP[STRIKEOUTS] == "pitching"
+    assert sl.MARKET_GROUP[HITS] == "hitting"
+    assert sl.MARKET_STAT[TOTAL_BASES] == "totalBases"
+
+
+def test_proxy_line():
+    assert sl._proxy_line(0.4, HOME_RUNS) == 0.5      # HR always 0.5
+    assert sl._proxy_line(2.4, TOTAL_BASES) == 2.0    # round to .5, step under
+
+
+# --- offline orchestrator integration ---------------------------------------
+def test_build_live_slate_offline():
+    SCHED = {"dates": [{"games": [{
+        "gamePk": 999,
+        "teams": {
+            "home": {"team": {"id": 112}},
+            "away": {"team": {"id": 143}, "probablePitcher":
+                     {"id": 5001, "fullName": "Ace", "pitchHand": {"code": "R"}}},
+        },
+        "venue": {"name": "Wrigley Field"},
+    }]}]}
+
+    saved = (sl._get_json, sl.fetch_boxscore, sl.fetch_person,
+             sl.fetch_game_log, sl.park_weather)
+    sl._get_json = lambda url, cache, ttl=600: SCHED
+    sl.fetch_boxscore = lambda pk: BOX
+    sl.fetch_person = lambda pid: PERSON
+    sl.fetch_game_log = lambda pid, group, season: (PLOG if group == "pitching" else LOG)
+    sl.park_weather = lambda key: __import__("engine.mlb.models", fromlist=["MLBWeather"]).MLBWeather()
+    try:
+        slate = sl.build_live_slate("2024-06-20", hitter_markets=(TOTAL_BASES,))
+        assert slate.games and slate.props
+        assert slate.games[0].home == "CHC" and slate.games[0].park == "wrigley"
+        assert slate.games[0].lineups_confirmed is True
+        # 3 confirmed home hitters (1 market each) + 1 probable pitcher K prop.
+        hitters = [p for p in slate.props if p.market == TOTAL_BASES]
+        pitchers = [p for p in slate.props if p.market == STRIKEOUTS]
+        assert len(hitters) == 3 and len(pitchers) == 1
+        assert hitters[0].lineup_spot == 1 and hitters[0].bats == "L"
+        assert hitters[0].lines[0].book == "proxy"
+        # And the full MLB pipeline runs on the live-shaped slate.
+        from engine.mlb.pipeline import run_mlb_slate
+        result = run_mlb_slate(slate)
+        assert result["counts"]["props_analyzed"] == len(slate.props)
+    finally:
+        (sl._get_json, sl.fetch_boxscore, sl.fetch_person,
+         sl.fetch_game_log, sl.park_weather) = saved
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")
