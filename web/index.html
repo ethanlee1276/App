@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gridiron Edge · NFL Prop Engine</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🏈</span>
+      <div>
+        <h1>Gridiron Edge</h1>
+        <p class="tagline">AI-powered NFL player-prop model</p>
+      </div>
+    </div>
+    <div class="slate-meta">
+      <span id="slate-date">—</span>
+      <button id="refresh" class="btn">↻ Recalculate</button>
+    </div>
+  </header>
+
+  <section class="stats" id="stats">
+    <!-- summary tiles injected here -->
+  </section>
+
+  <section class="controls">
+    <div class="control">
+      <label for="min-conf">Min confidence <b id="conf-val">6.0</b></label>
+      <input type="range" id="min-conf" min="0" max="10" step="0.5" value="6" />
+    </div>
+    <div class="control">
+      <label for="min-edge">Min edge <b id="edge-val">2%</b></label>
+      <input type="range" id="min-edge" min="0" max="15" step="0.5" value="2" />
+    </div>
+    <div class="control toggle">
+      <label><input type="checkbox" id="show-all" /> Show non-recommended props</label>
+    </div>
+  </section>
+
+  <main id="cards" class="cards">
+    <p class="loading">Loading model…</p>
+  </main>
+
+  <footer class="footer">
+    <p>
+      <b>Model output, not betting advice.</b> Projections run on illustrative sample data.
+      Swap in live nflverse stats, an odds feed, weather and injury APIs behind the
+      engine's data loader for production use. 21+. Please bet responsibly.
+    </p>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

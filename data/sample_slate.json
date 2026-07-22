@@ -1,0 +1,187 @@
+{
+  "date": "2026-01-04",
+  "note": "Illustrative sample slate with realistic-but-fictional numbers. Replace with live loaders (nflverse stats, odds feed, weather API, injury feed) for production use.",
+  "teams": [
+    {
+      "abbr": "GB", "name": "Green Bay Packers", "proe": 0.01, "plays_per_game": 64,
+      "defense": {"vs_qb": 1.00, "vs_wr1": 1.00, "vs_wr2": 1.00, "vs_slot": 1.00, "vs_te": 1.00, "vs_rb_rush": 1.00, "vs_rb_recv": 1.00, "pressure_rate": 0.23, "rush_rank": 15, "pass_rank": 16}
+    },
+    {
+      "abbr": "CHI", "name": "Chicago Bears", "proe": -0.02, "plays_per_game": 61,
+      "defense": {"vs_qb": 1.02, "vs_wr1": 1.03, "vs_wr2": 1.05, "vs_slot": 1.09, "vs_te": 1.02, "vs_rb_rush": 1.10, "vs_rb_recv": 1.04, "pressure_rate": 0.20, "rush_rank": 27, "pass_rank": 20}
+    },
+    {
+      "abbr": "DET", "name": "Detroit Lions", "proe": 0.02, "plays_per_game": 66,
+      "defense": {"vs_qb": 1.02, "vs_wr1": 1.02, "vs_wr2": 1.03, "vs_slot": 1.04, "vs_te": 1.01, "vs_rb_rush": 1.03, "vs_rb_recv": 1.02, "pressure_rate": 0.22, "rush_rank": 18, "pass_rank": 19}
+    },
+    {
+      "abbr": "MIN", "name": "Minnesota Vikings", "proe": 0.03, "plays_per_game": 63,
+      "defense": {"vs_qb": 1.05, "vs_wr1": 1.01, "vs_wr2": 1.04, "vs_slot": 1.12, "vs_te": 1.03, "vs_rb_rush": 0.98, "vs_rb_recv": 1.03, "pressure_rate": 0.25, "rush_rank": 13, "pass_rank": 24}
+    },
+    {
+      "abbr": "BUF", "name": "Buffalo Bills", "proe": 0.01, "plays_per_game": 65,
+      "defense": {"vs_qb": 1.00, "vs_wr1": 1.00, "vs_wr2": 1.02, "vs_slot": 1.02, "vs_te": 1.05, "vs_rb_rush": 0.99, "vs_rb_recv": 1.00, "pressure_rate": 0.24, "rush_rank": 12, "pass_rank": 15}
+    },
+    {
+      "abbr": "KC", "name": "Kansas City Chiefs", "proe": 0.00, "plays_per_game": 63,
+      "defense": {"vs_qb": 0.90, "vs_wr1": 0.98, "vs_wr2": 0.97, "vs_slot": 0.99, "vs_te": 0.95, "vs_rb_rush": 1.00, "vs_rb_recv": 0.98, "pressure_rate": 0.26, "rush_rank": 10, "pass_rank": 6}
+    }
+  ],
+  "games": [
+    {
+      "home": "CHI", "away": "GB", "spread": 6.5, "total": 43.0,
+      "weather": {"dome": false, "temp_f": 26, "wind_mph": 16, "precip_chance": 0.1, "rain": false, "snow": false},
+      "injuries": [
+        {"player": "Gervon Dexter", "team": "CHI", "position": "DT", "role": "dt", "status": "OUT"},
+        {"player": "Kyler Gordon", "team": "CHI", "position": "CB", "role": "slot_cb", "status": "OUT"}
+      ]
+    },
+    {
+      "home": "MIN", "away": "DET", "spread": 3.0, "total": 49.0,
+      "weather": {"dome": true, "temp_f": 70, "wind_mph": 0, "precip_chance": 0.0, "rain": false, "snow": false},
+      "injuries": []
+    },
+    {
+      "home": "KC", "away": "BUF", "spread": -2.5, "total": 47.0,
+      "weather": {"dome": false, "temp_f": 34, "wind_mph": 12, "precip_chance": 0.2, "rain": false, "snow": false},
+      "injuries": [
+        {"player": "Rashee Rice", "team": "KC", "position": "WR", "role": "wr1", "status": "QUESTIONABLE"}
+      ]
+    }
+  ],
+  "props": [
+    {
+      "player": "Josh Jacobs", "team": "GB", "opponent": "CHI", "position": "RB", "market": "rush_yds", "usage_role": "rb1",
+      "career_avg": 80.0, "vs_opponent_avg": 88.0,
+      "logs": [
+        {"week": 17, "opponent": "MIN", "value": 96, "home": true},
+        {"week": 16, "opponent": "NO", "value": 88, "home": false},
+        {"week": 15, "opponent": "SEA", "value": 84, "home": true},
+        {"week": 14, "opponent": "DET", "value": 79, "home": false},
+        {"week": 13, "opponent": "MIA", "value": 110, "home": true},
+        {"week": 12, "opponent": "SF", "value": 72, "home": false},
+        {"week": 11, "opponent": "CHI", "value": 88, "home": true},
+        {"week": 10, "opponent": "JAX", "value": 91, "home": false},
+        {"week": 9, "opponent": "DET", "value": 83, "home": true},
+        {"week": 8, "opponent": "ARI", "value": 77, "home": false}
+      ],
+      "lines": [
+        {"book": "DraftKings", "line": 96.5, "over_odds": -112, "under_odds": -108},
+        {"book": "FanDuel", "line": 95.5, "over_odds": -110, "under_odds": -110},
+        {"book": "BetMGM", "line": 97.5, "over_odds": -115, "under_odds": -105},
+        {"book": "Caesars", "line": 96.5, "over_odds": -108, "under_odds": -112}
+      ]
+    },
+    {
+      "player": "Jayden Reed", "team": "GB", "opponent": "CHI", "position": "WR", "market": "rec_yds", "usage_role": "slot",
+      "career_avg": 52.0, "vs_opponent_avg": 61.0,
+      "logs": [
+        {"week": 17, "opponent": "MIN", "value": 44, "home": true},
+        {"week": 16, "opponent": "NO", "value": 71, "home": false},
+        {"week": 15, "opponent": "SEA", "value": 58, "home": true},
+        {"week": 14, "opponent": "DET", "value": 39, "home": false},
+        {"week": 13, "opponent": "MIA", "value": 82, "home": true},
+        {"week": 12, "opponent": "SF", "value": 51, "home": false},
+        {"week": 11, "opponent": "CHI", "value": 66, "home": true},
+        {"week": 10, "opponent": "JAX", "value": 48, "home": false}
+      ],
+      "lines": [
+        {"book": "DraftKings", "line": 55.5, "over_odds": -110, "under_odds": -110},
+        {"book": "FanDuel", "line": 56.5, "over_odds": -114, "under_odds": -106},
+        {"book": "ESPN BET", "line": 54.5, "over_odds": -112, "under_odds": -108}
+      ]
+    },
+    {
+      "player": "Amon-Ra St. Brown", "team": "DET", "opponent": "MIN", "position": "WR", "market": "rec_yds", "usage_role": "slot",
+      "career_avg": 88.0, "vs_opponent_avg": 96.0,
+      "logs": [
+        {"week": 17, "opponent": "SF", "value": 92, "home": true},
+        {"week": 16, "opponent": "CHI", "value": 85, "home": false},
+        {"week": 15, "opponent": "BUF", "value": 79, "home": true},
+        {"week": 14, "opponent": "GB", "value": 101, "home": false},
+        {"week": 13, "opponent": "IND", "value": 88, "home": true},
+        {"week": 12, "opponent": "CHI", "value": 77, "home": false},
+        {"week": 11, "opponent": "JAX", "value": 110, "home": true},
+        {"week": 10, "opponent": "HOU", "value": 84, "home": false}
+      ],
+      "lines": [
+        {"book": "DraftKings", "line": 93.5, "over_odds": -115, "under_odds": -105},
+        {"book": "FanDuel", "line": 92.5, "over_odds": -112, "under_odds": -108},
+        {"book": "BetMGM", "line": 94.5, "over_odds": -110, "under_odds": -110}
+      ]
+    },
+    {
+      "player": "Jahmyr Gibbs", "team": "DET", "opponent": "MIN", "position": "RB", "market": "rush_yds", "usage_role": "rb1",
+      "career_avg": 74.0, "vs_opponent_avg": 68.0,
+      "logs": [
+        {"week": 17, "opponent": "SF", "value": 61, "home": true},
+        {"week": 16, "opponent": "CHI", "value": 88, "home": false},
+        {"week": 15, "opponent": "BUF", "value": 72, "home": true},
+        {"week": 14, "opponent": "GB", "value": 95, "home": false},
+        {"week": 13, "opponent": "IND", "value": 66, "home": true},
+        {"week": 12, "opponent": "CHI", "value": 104, "home": false},
+        {"week": 11, "opponent": "JAX", "value": 58, "home": true},
+        {"week": 10, "opponent": "HOU", "value": 81, "home": false}
+      ],
+      "lines": [
+        {"book": "DraftKings", "line": 74.5, "over_odds": -110, "under_odds": -110},
+        {"book": "FanDuel", "line": 73.5, "over_odds": -108, "under_odds": -112},
+        {"book": "Caesars", "line": 75.5, "over_odds": -112, "under_odds": -108}
+      ]
+    },
+    {
+      "player": "Josh Allen", "team": "BUF", "opponent": "KC", "position": "QB", "market": "pass_yds", "usage_role": "starter",
+      "career_avg": 255.0, "vs_opponent_avg": 248.0,
+      "logs": [
+        {"week": 17, "opponent": "NE", "value": 262, "home": true},
+        {"week": 16, "opponent": "MIA", "value": 238, "home": false},
+        {"week": 15, "opponent": "DET", "value": 289, "home": true},
+        {"week": 14, "opponent": "LAR", "value": 233, "home": false},
+        {"week": 13, "opponent": "SF", "value": 271, "home": true},
+        {"week": 12, "opponent": "KC", "value": 244, "home": false},
+        {"week": 11, "opponent": "IND", "value": 258, "home": true},
+        {"week": 10, "opponent": "MIA", "value": 275, "home": false}
+      ],
+      "lines": [
+        {"book": "DraftKings", "line": 258.5, "over_odds": -110, "under_odds": -110},
+        {"book": "FanDuel", "line": 259.5, "over_odds": -112, "under_odds": -108},
+        {"book": "BetMGM", "line": 257.5, "over_odds": -108, "under_odds": -112}
+      ]
+    },
+    {
+      "player": "Rashee Rice", "team": "KC", "opponent": "BUF", "position": "WR", "market": "rec_yds", "usage_role": "wr1",
+      "career_avg": 71.0, "vs_opponent_avg": 66.0,
+      "logs": [
+        {"week": 17, "opponent": "PIT", "value": 88, "home": true},
+        {"week": 16, "opponent": "HOU", "value": 74, "home": false},
+        {"week": 15, "opponent": "CLE", "value": 65, "home": true},
+        {"week": 14, "opponent": "LAC", "value": 92, "home": false},
+        {"week": 13, "opponent": "LV", "value": 58, "home": true},
+        {"week": 12, "opponent": "CAR", "value": 79, "home": false}
+      ],
+      "lines": [
+        {"book": "DraftKings", "line": 68.5, "over_odds": -110, "under_odds": -110},
+        {"book": "FanDuel", "line": 67.5, "over_odds": -112, "under_odds": -108}
+      ]
+    },
+    {
+      "player": "Travis Kelce", "team": "KC", "opponent": "BUF", "position": "TE", "market": "receptions", "usage_role": "te",
+      "career_avg": 6.2, "vs_opponent_avg": 7.0,
+      "logs": [
+        {"week": 17, "opponent": "PIT", "value": 7, "home": true},
+        {"week": 16, "opponent": "HOU", "value": 5, "home": false},
+        {"week": 15, "opponent": "CLE", "value": 8, "home": true},
+        {"week": 14, "opponent": "LAC", "value": 6, "home": false},
+        {"week": 13, "opponent": "LV", "value": 9, "home": true},
+        {"week": 12, "opponent": "CAR", "value": 6, "home": false},
+        {"week": 11, "opponent": "DEN", "value": 7, "home": true},
+        {"week": 10, "opponent": "BUF", "value": 8, "home": false}
+      ],
+      "lines": [
+        {"book": "DraftKings", "line": 6.5, "over_odds": -122, "under_odds": 100},
+        {"book": "FanDuel", "line": 6.5, "over_odds": -130, "under_odds": 105},
+        {"book": "BetMGM", "line": 6.5, "over_odds": -118, "under_odds": -102}
+      ]
+    }
+  ]
+}

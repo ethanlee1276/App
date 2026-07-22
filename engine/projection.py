@@ -1,0 +1,90 @@
+"""Projection assembly.
+
+Combines the base form mean with the multiplicative adjustments from the
+matchup, weather and injury modules to produce a final projected mean and a
+standard deviation for the prop's market. Every contributing factor is kept so
+the explanation and the UI can show the full chain of reasoning.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from .models import Prop, Game, Team
+from .form import compute_form, FormResult
+from .weather import evaluate_weather, WeatherEffect
+from .injuries import evaluate_injuries, InjuryEffect
+from .matchup import evaluate_matchup, MatchupEffect
+from .statmath import clamp
+
+# Realistic game-to-game variance floors, expressed as a coefficient of
+# variation (std / mean) per market. Player game logs are often too smooth to
+# capture true prop variance, so we never let the estimated std fall below
+# these market-typical levels — this is what keeps hit probabilities honest.
+CV_FLOOR = {
+    "pass_yds": 0.16,
+    "rush_yds": 0.42,
+    "rec_yds": 0.48,
+    "receptions": 0.34,
+}
+
+
+@dataclass
+class Projection:
+    mean: float
+    std: float
+    form: FormResult
+    matchup: MatchupEffect
+    weather: WeatherEffect
+    injury: InjuryEffect
+    reasons: list[str] = field(default_factory=list)
+
+
+def build_projection(prop: Prop, game: Game, opponent_team: Team) -> Projection:
+    form = compute_form(prop.logs, prop.career_avg, prop.vs_opponent_avg)
+
+    matchup = evaluate_matchup(prop, opponent_team.defense, game)
+    weather = evaluate_weather(game.weather)
+    injury = evaluate_injuries(prop, game.injuries)
+
+    weather_mult = weather.multipliers.get(prop.market, 1.0)
+
+    # Total multiplier is bounded so no single factor can run away with the
+    # projection — a guardrail against overfitting to one signal. Kept tight
+    # because sportsbook lines are efficient; real edges come from small,
+    # defensible adjustments, not wild swings.
+    total_mult = clamp(
+        matchup.multiplier * weather_mult * injury.multiplier,
+        0.85, 1.18,
+    )
+
+    mean = form.mean * total_mult
+
+    # Uncertainty: never below the market-typical variance floor, and it grows
+    # as we push further from the player's own baseline.
+    cv_floor = CV_FLOOR.get(prop.market, 0.35) * max(form.mean, 1.0)
+    base_std = max(form.std, cv_floor)
+    adj_std = base_std * (1.0 + 0.5 * abs(total_mult - 1.0))
+    if form.sample_games < 4:
+        adj_std *= 1.20
+
+    reasons: list[str] = []
+    reasons += matchup.reasons
+    reasons += weather.reasons
+    reasons += injury.reasons
+
+    # Recent-form narrative.
+    if form.trend == "up":
+        reasons.append(f"Trending up — last 3 games {form.trend_delta:+.0f} vs prior form")
+    elif form.trend == "down":
+        reasons.append(f"Cooling off — last 3 games {form.trend_delta:+.0f} vs prior form")
+
+    return Projection(
+        mean=mean,
+        std=adj_std,
+        form=form,
+        matchup=matchup,
+        weather=weather,
+        injury=injury,
+        reasons=reasons,
+    )

@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Generated output (regenerate with: python3 generate.py)
+web/data/recommendations.json
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
