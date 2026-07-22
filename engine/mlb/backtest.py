@@ -45,7 +45,8 @@ def _naive_line(prior_recent: list[float], market: str) -> float:
 
 
 def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
-                       limit: int = 15, config: RuleConfig | None = None) -> BacktestReport:
+                       limit: int = 15, config: RuleConfig | None = None,
+                       model=None) -> BacktestReport:
     """``entries`` = [{"name", "values": [chronological per-game values]}].
 
     Walk-forward: game i is projected from games [:i] (most recent ``limit``),
@@ -70,7 +71,7 @@ def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
                 market=market, logs=logs, career_avg=career, vs_pitcher_avg=None,
                 lines=[SportsbookLine("proxy", line, -110, -110)], lineup_spot=spot,
             )
-            proj = build_mlb_projection(prop, game)
+            proj = build_mlb_projection(prop, game, model=model)
             rec = evaluate_mlb_prop(prop, proj)
             decision = apply_mlb_rules(rec, prop, game, proj, config)
             settled.append(SettledProp(

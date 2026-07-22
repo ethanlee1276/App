@@ -22,13 +22,20 @@ OUT = ROOT / "web" / "data" / "mlb_recommendations.json"
 def main() -> None:
     ap = argparse.ArgumentParser(description="Generate MLB prop recommendations.")
     ap.add_argument("slate", nargs="?", default=str(DEFAULT_SLATE))
+    ap.add_argument("--model", default=None,
+                    help="Path to a trained MLB model JSON (uses learned projections).")
     ap.add_argument("--min-confidence", type=float, default=6.0)
     ap.add_argument("--min-edge", type=float, default=0.02)
     ap.add_argument("--out", default=str(OUT))
     args = ap.parse_args()
 
+    model = None
+    if args.model:
+        from engine.ml.model import MultiplierModel
+        model = MultiplierModel.load(args.model)
+
     config = RuleConfig(min_confidence=args.min_confidence, min_edge=args.min_edge)
-    result = run_mlb_slate(args.slate, config)
+    result = run_mlb_slate(args.slate, config, model=model)
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)

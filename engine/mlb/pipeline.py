@@ -86,7 +86,7 @@ def _game_to_dict(g) -> dict:
 
 
 def run_mlb_slate(slate: MLBSlate | str | Path,
-                  config: RuleConfig | None = None) -> dict:
+                  config: RuleConfig | None = None, model=None) -> dict:
     if not isinstance(slate, MLBSlate):
         slate = load_mlb_slate(slate)
     config = config or RuleConfig()
@@ -94,7 +94,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
     results = []
     for prop in slate.props:
         game = slate.game_for(prop)
-        proj = build_mlb_projection(prop, game)
+        proj = build_mlb_projection(prop, game, model=model)
         rec = evaluate_mlb_prop(prop, proj)
         decision = apply_mlb_rules(rec, prop, game, proj, config)
         results.append(_rec_to_dict(rec, prop, decision, proj))
@@ -106,7 +106,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "date": slate.date,
         "sport": "mlb",
         "generated_from": "mlb-sample-slate",
-        "model": "rules",
+        "model": "learned" if model is not None else "rules",
         "counts": {"props_analyzed": len(results), "recommended": len(recommended)},
         "config": {"min_confidence": config.min_confidence, "min_edge": config.min_edge},
         "games": [_game_to_dict(g) for g in slate.games],

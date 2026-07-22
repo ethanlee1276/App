@@ -42,7 +42,7 @@ class MLBProjection:
     warnings: list[str] = field(default_factory=list)
 
 
-def build_mlb_projection(prop: MLBProp, game: MLBGame) -> MLBProjection:
+def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None) -> MLBProjection:
     # Shared recent-form blend (last 1/3/5/10 + season + career + vs pitcher).
     logs = [GameLog(week=g.game, opponent=g.opponent, value=g.value, home=g.home)
             for g in prop.logs]
@@ -63,11 +63,21 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame) -> MLBProjection:
         statcast_mult = eff.multiplier
         statcast_reasons = eff.reasons
 
-    # Tight overall clamp: books price parks and platoons in, so real edges
-    # come from small compounding angles. Slightly wider than the NFL clamp
-    # because park effects (Coors) genuinely run bigger.
-    total_mult = clamp(park_mult * weather_mult * matchup.multiplier * statcast_mult,
-                       0.78, 1.28)
+    learned_reason: list[str] = []
+    if model is not None and model.has(prop.market):
+        # Learned magnitude replaces the hand-tuned park/weather/matchup/Statcast
+        # product; the modules above still supply the human-readable reasons.
+        from .ml import extract_features, vectorize
+        feat = vectorize(extract_features(prop, game))
+        total_mult = model.predict_multiplier(feat, prop.market)
+        learned_reason = [f"Learned model adjustment ×{total_mult:.2f} "
+                          f"(trained on historical data)"]
+    else:
+        # Tight overall clamp: books price parks and platoons in, so real edges
+        # come from small compounding angles. Slightly wider than the NFL clamp
+        # because park effects (Coors) genuinely run bigger.
+        total_mult = clamp(park_mult * weather_mult * matchup.multiplier * statcast_mult,
+                           0.78, 1.28)
     mean = form.mean * total_mult
 
     cv_floor = CV_FLOOR.get(prop.market, 0.6) * max(form.mean, 0.1)
@@ -77,6 +87,7 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame) -> MLBProjection:
         adj_std *= 1.15
 
     reasons: list[str] = []
+    reasons += learned_reason
     reasons += statcast_reasons
     reasons += matchup.reasons
     reasons += park.reasons

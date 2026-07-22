@@ -73,6 +73,7 @@ def main() -> None:
     ap.add_argument("--min-history", type=int, default=6)
     ap.add_argument("--min-confidence", type=float, default=6.0)
     ap.add_argument("--min-edge", type=float, default=0.02)
+    ap.add_argument("--model", default=None, help="Path to a trained MLB model JSON.")
     args = ap.parse_args()
 
     entries = (synthetic_entries(args.market) if args.synthetic
@@ -82,9 +83,14 @@ def main() -> None:
               f"or a different --market.")
         return
 
+    model = None
+    if args.model:
+        from engine.ml.model import MultiplierModel
+        model = MultiplierModel.load(args.model)
+
     config = RuleConfig(min_confidence=args.min_confidence, min_edge=args.min_edge)
     report = backtest_from_logs(entries, args.market,
-                                min_history=args.min_history, config=config)
+                                min_history=args.min_history, config=config, model=model)
 
     src = "synthetic season" if args.synthetic else "sample slate"
     print(f"\nMLB backtest · {MARKET_LABELS[args.market]} · {src}")

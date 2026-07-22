@@ -435,6 +435,25 @@ projection-error / Brier / ECE / ROI report as the NFL side:
 python3 mlb_backtest.py --synthetic --market total_bases
 ```
 
+**Learned coefficients** (`engine/mlb/ml.py`, `mlb_train.py`) — the MLB engine
+has the same ML drop-in as the NFL side, reusing the shared pure-Python ridge
+model. Features are the raw baseball levers (park factors, signed wind, platoon,
+pitcher SLG-allowed, bullpen, lineup slot, opponent K rate, and the Statcast
+xSLG-gap / barrel / CSW signals); a trained model replaces the hand-tuned
+park×weather×matchup×Statcast product with `form.mean × exp(w·features)` and
+plugs into the backtest with `--model`:
+
+```bash
+python3 mlb_train.py --synthetic --out data/models/mlb_multiplier.json
+python3 mlb_backtest.py --synthetic --market total_bases --model data/models/mlb_multiplier.json
+python3 generate_mlb.py --model data/models/mlb_multiplier.json
+```
+
+The synthetic demo confirms the learner recovers the injected signal signs
+(park HR and the xSLG gap lift total bases; opponent K rate and CSW% lift
+strikeouts). Real training assembles rows from historical game context — the
+historical-database phase.
+
 Still ahead: the **pitch-by-pitch simulation** and ML on 5+ years of Statcast,
 plus umpire tendencies and barrel/CSW leaderboards — the historical-database
 phase. The odds adapter already supports MLB player props via The Odds API
