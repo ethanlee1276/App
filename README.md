@@ -123,6 +123,7 @@ engine/
   sources/
     fetch.py      cached HTTP CSV fetch (stdlib, proxy-aware, gzip)
     nflverse.py   real nflverse → Slate (schedules, weather, stats, defenses)
+    oddsapi.py    The Odds API → real book lines (de-vig, best-line shopping)
 data/
   sample_slate.json   illustrative slate (7 props across 3 games)
   cache/              downloaded feeds (git-ignored)
@@ -143,7 +144,8 @@ file — same math, real inputs:
 ```bash
 python3 nfl_build.py 2024 5 --games-only   # real games + weather (no stats needed)
 python3 nfl_build.py 2024 5                 # full model (needs weekly stats, see below)
-python3 nfl_build.py 2024 5 --out web/data/recommendations.json
+python3 nfl_build.py 2024 5 --odds          # price against real sportsbook lines
+python3 nfl_build.py 2024 5 --odds --out web/data/recommendations.json
 ```
 
 `engine/sources/nflverse.py` is the adapter. What it pulls, and from where:
@@ -169,10 +171,32 @@ python3 nfl_build.py 2024 5 --out web/data/recommendations.json
 - **Defense profiles are computed**, not hand-entered: the loader aggregates
   what each team allows to QBs / WRs / TEs / RBs (rush & receiving) from the
   weekly box scores and expresses it relative to league average.
-- **Lines**: nflverse has no player-prop lines, so each prop currently gets a
-  *proxy* line at the player's recent-form baseline. This shows how far the
-  matchup/weather model moves the projection off baseline; swap in an odds feed
-  (below) for edges against real books.
+- **Lines**: nflverse has no player-prop lines. Without `--odds` each prop gets
+  a *proxy* line at the player's recent-form baseline (shows how far the model
+  moves off baseline); with `--odds` real book lines replace it.
+
+## Real sportsbook lines (The Odds API)
+
+`engine/sources/oddsapi.py` pulls live NFL player props (pass/rush/receiving
+yards, receptions) across DraftKings, FanDuel, BetMGM, Caesars, ESPN BET,
+Fanatics and Hard Rock, and attaches them to the slate — so the model prices
+its projections against **real books** and shops the best number.
+
+```bash
+export ODDS_API_KEY=your_key      # free key at https://the-odds-api.com
+python3 nfl_build.py 2024 5 --odds
+```
+
+- Matches Odds API events to slate games by team, then props by normalized
+  player name + market (handles `Amon-Ra St. Brown`, `… Jr.`, etc.).
+- Pairs each Over with its Under so the **de-vig** has both sides; `best_over_line`
+  then shops the lowest line across books.
+- Player props are event-scoped (one request per game), so responses are cached
+  briefly under `data/cache/` and the remaining API quota is printed each run.
+- Restrict books with `--books draftkings,fanduel,betmgm`.
+
+> Note: some managed/sandboxed environments block outbound access to
+> `api.the-odds-api.com`; run `--odds` where the host is reachable.
 
 ## The road to live data
 
@@ -183,7 +207,7 @@ sample file *or* `engine/sources/nflverse.py`). Remaining adapters to add:
 |--------------------|--------------------------------------------------------------|--------|
 | 3–5 yrs of stats   | **nflverse** (`nfl_data_py` / release CSVs)                  | ✅ integrated (release-gated) |
 | Weather            | nflverse schedules (temp/wind/roof)                          | ✅ integrated; add precip via a weather API |
-| Sportsbook lines   | **The Odds API** or a books aggregator (7-book comparison)   | ➖ next |
+| Sportsbook lines   | **The Odds API** (7-book comparison + de-vig)               | ✅ integrated (`--odds`) |
 | Injuries           | nflverse injuries release + a news feed for game-time calls  | ➖ next |
 
 Planned next phases (not yet built):

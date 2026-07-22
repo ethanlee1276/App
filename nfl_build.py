@@ -18,6 +18,7 @@ import sys
 
 from engine.sources.nflverse import build_games, build_slate, weather_from_row, load_schedules
 from engine.sources.fetch import DataUnavailable
+from engine.sources import oddsapi
 from engine.pipeline import run_slate
 from engine.rules import RuleConfig
 
@@ -42,6 +43,10 @@ def main() -> None:
     ap.add_argument("week", type=int)
     ap.add_argument("--games-only", action="store_true",
                     help="Only print real games + weather (no stats needed).")
+    ap.add_argument("--odds", action="store_true",
+                    help="Attach real sportsbook lines via The Odds API (needs ODDS_API_KEY).")
+    ap.add_argument("--books", default=None,
+                    help="Comma-separated Odds API bookmaker keys (default: all supported).")
     ap.add_argument("--min-confidence", type=float, default=6.0)
     ap.add_argument("--min-edge", type=float, default=0.02)
     ap.add_argument("--out", default=None, help="Write recommendations JSON here.")
@@ -59,12 +64,29 @@ def main() -> None:
         print("\nTip: run with --games-only to use just the live schedule/weather layer.")
         sys.exit(2)
 
+    real_odds = False
+    if args.odds:
+        try:
+            books = args.books.split(",") if args.books else None
+            res = oddsapi.apply_odds_to_slate(slate, books=books)
+            real_odds = True
+            print(f"\nOdds API: matched {res.matched} props across {res.events_used} games "
+                  f"(quota remaining {res.quota.remaining}).")
+            if res.unmatched:
+                print(f"  No line found for {len(res.unmatched)}: "
+                      f"{', '.join(res.unmatched[:6])}{' …' if len(res.unmatched) > 6 else ''}")
+        except oddsapi.OddsAPIError as exc:
+            print(f"\n⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
+
     config = RuleConfig(min_confidence=args.min_confidence, min_edge=args.min_edge)
     result = run_slate(slate, config)
 
     c = result["counts"]
     print(f"\nAnalyzed {c['props_analyzed']} props → {c['recommended']} recommended")
-    print("(lines are recent-form proxies — wire an odds feed for real book edges)\n")
+    if not real_odds:
+        print("(lines are recent-form proxies — pass --odds for real book edges)\n")
+    else:
+        print("(edges priced against real sportsbook lines)\n")
     for r in result["recommendations"][:25]:
         flag = "✅" if r["recommended"] else "  "
         print(f"  {flag} {r['grade']:>11}  conf {r['confidence']:>4}  "
