@@ -1,0 +1,947 @@
+{
+  "date": "2026-06-20",
+  "note": "Illustrative sample slate with realistic-but-fictional numbers. Replace with live loaders (MLB Stats API schedule/lineups/logs, Open-Meteo weather, odds feed) for production use.",
+  "games": [
+    {
+      "home": "CHC",
+      "away": "PHI",
+      "park": "wrigley",
+      "total": 9.5,
+      "weather": {
+        "roof_closed": false,
+        "temp_f": 82,
+        "wind_mph": 16,
+        "wind_dir_rel": "out",
+        "humidity": 0.62,
+        "precip_chance": 0.05
+      },
+      "lineups_confirmed": true,
+      "pitchers": {
+        "CHC": {
+          "name": "Javier Assad",
+          "throws": "R",
+          "slg_allowed_vs_l": 0.525,
+          "slg_allowed_vs_r": 0.41,
+          "k_rate": 0.19,
+          "xera": 4.6
+        },
+        "PHI": {
+          "name": "Zack Wheeler",
+          "throws": "R",
+          "slg_allowed_vs_l": 0.36,
+          "slg_allowed_vs_r": 0.33,
+          "k_rate": 0.29,
+          "xera": 3.05
+        }
+      },
+      "bullpen_rank": {
+        "CHC": 27,
+        "PHI": 6
+      },
+      "team_k_rate": {
+        "CHC": 0.26,
+        "PHI": 0.21
+      }
+    },
+    {
+      "home": "COL",
+      "away": "NYY",
+      "park": "coors",
+      "total": 11.5,
+      "weather": {
+        "roof_closed": false,
+        "temp_f": 88,
+        "wind_mph": 7,
+        "wind_dir_rel": "cross",
+        "humidity": 0.3,
+        "precip_chance": 0.1
+      },
+      "lineups_confirmed": true,
+      "pitchers": {
+        "COL": {
+          "name": "Kyle Freeland",
+          "throws": "L",
+          "slg_allowed_vs_l": 0.395,
+          "slg_allowed_vs_r": 0.5,
+          "k_rate": 0.17,
+          "xera": 5.1
+        },
+        "NYY": {
+          "name": "Carlos Rodon",
+          "throws": "L",
+          "slg_allowed_vs_l": 0.35,
+          "slg_allowed_vs_r": 0.43,
+          "k_rate": 0.26,
+          "xera": 3.9
+        }
+      },
+      "bullpen_rank": {
+        "COL": 29,
+        "NYY": 9
+      },
+      "team_k_rate": {
+        "COL": 0.23,
+        "NYY": 0.24
+      }
+    },
+    {
+      "home": "MIA",
+      "away": "LAD",
+      "park": "loandepot",
+      "total": 7.5,
+      "weather": {
+        "roof_closed": true,
+        "temp_f": 74,
+        "wind_mph": 0,
+        "wind_dir_rel": "cross",
+        "humidity": 0.5,
+        "precip_chance": 0.0
+      },
+      "lineups_confirmed": false,
+      "pitchers": {
+        "MIA": {
+          "name": "Sandy Alcantara",
+          "throws": "R",
+          "slg_allowed_vs_l": 0.4,
+          "slg_allowed_vs_r": 0.37,
+          "k_rate": 0.23,
+          "xera": 3.6
+        },
+        "LAD": {
+          "name": "Yoshinobu Yamamoto",
+          "throws": "R",
+          "slg_allowed_vs_l": 0.34,
+          "slg_allowed_vs_r": 0.32,
+          "k_rate": 0.28,
+          "xera": 3.1
+        }
+      },
+      "bullpen_rank": {
+        "MIA": 25,
+        "LAD": 4
+      },
+      "team_k_rate": {
+        "MIA": 0.27,
+        "LAD": 0.22
+      }
+    }
+  ],
+  "props": [
+    {
+      "player": "Bryce Harper",
+      "team": "PHI",
+      "opponent": "CHC",
+      "position": "1B",
+      "market": "total_bases",
+      "bats": "L",
+      "lineup_spot": 2,
+      "career_avg": 1.85,
+      "vs_pitcher_avg": 2.4,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "MIL",
+          "value": 3,
+          "home": true
+        },
+        {
+          "game": 14,
+          "opponent": "MIL",
+          "value": 2,
+          "home": true
+        },
+        {
+          "game": 13,
+          "opponent": "ATL",
+          "value": 4,
+          "home": false
+        },
+        {
+          "game": 12,
+          "opponent": "ATL",
+          "value": 1,
+          "home": false
+        },
+        {
+          "game": 11,
+          "opponent": "ATL",
+          "value": 2,
+          "home": false
+        },
+        {
+          "game": 10,
+          "opponent": "NYM",
+          "value": 5,
+          "home": true
+        },
+        {
+          "game": 9,
+          "opponent": "NYM",
+          "value": 2,
+          "home": true
+        },
+        {
+          "game": 8,
+          "opponent": "WSH",
+          "value": 0,
+          "home": false
+        },
+        {
+          "game": 7,
+          "opponent": "WSH",
+          "value": 3,
+          "home": false
+        },
+        {
+          "game": 6,
+          "opponent": "SF",
+          "value": 2,
+          "home": true
+        },
+        {
+          "game": 5,
+          "opponent": "SF",
+          "value": 1,
+          "home": true
+        },
+        {
+          "game": 4,
+          "opponent": "SD",
+          "value": 2,
+          "home": false
+        },
+        {
+          "game": 3,
+          "opponent": "SD",
+          "value": 4,
+          "home": false
+        },
+        {
+          "game": 2,
+          "opponent": "STL",
+          "value": 1,
+          "home": true
+        },
+        {
+          "game": 1,
+          "opponent": "STL",
+          "value": 2,
+          "home": true
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 1.5,
+          "over_odds": -150,
+          "under_odds": 120
+        },
+        {
+          "book": "FanDuel",
+          "line": 1.5,
+          "over_odds": -145,
+          "under_odds": 115
+        },
+        {
+          "book": "BetMGM",
+          "line": 1.5,
+          "over_odds": -155,
+          "under_odds": 125
+        }
+      ]
+    },
+    {
+      "player": "Kyle Tucker",
+      "team": "CHC",
+      "opponent": "PHI",
+      "position": "RF",
+      "market": "home_runs",
+      "bats": "L",
+      "lineup_spot": 3,
+      "career_avg": 0.18,
+      "vs_pitcher_avg": 0.1,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "STL",
+          "value": 1,
+          "home": true
+        },
+        {
+          "game": 14,
+          "opponent": "STL",
+          "value": 0,
+          "home": true
+        },
+        {
+          "game": 13,
+          "opponent": "PIT",
+          "value": 0,
+          "home": false
+        },
+        {
+          "game": 12,
+          "opponent": "PIT",
+          "value": 1,
+          "home": false
+        },
+        {
+          "game": 11,
+          "opponent": "PIT",
+          "value": 0,
+          "home": false
+        },
+        {
+          "game": 10,
+          "opponent": "CIN",
+          "value": 1,
+          "home": true
+        },
+        {
+          "game": 9,
+          "opponent": "CIN",
+          "value": 0,
+          "home": true
+        },
+        {
+          "game": 8,
+          "opponent": "MIL",
+          "value": 0,
+          "home": false
+        },
+        {
+          "game": 7,
+          "opponent": "MIL",
+          "value": 0,
+          "home": false
+        },
+        {
+          "game": 6,
+          "opponent": "HOU",
+          "value": 1,
+          "home": true
+        },
+        {
+          "game": 5,
+          "opponent": "HOU",
+          "value": 0,
+          "home": true
+        },
+        {
+          "game": 4,
+          "opponent": "NYM",
+          "value": 0,
+          "home": false
+        },
+        {
+          "game": 3,
+          "opponent": "NYM",
+          "value": 0,
+          "home": false
+        },
+        {
+          "game": 2,
+          "opponent": "ATL",
+          "value": 1,
+          "home": true
+        },
+        {
+          "game": 1,
+          "opponent": "ATL",
+          "value": 0,
+          "home": true
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": 240,
+          "under_odds": -310
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": 250,
+          "under_odds": -330
+        },
+        {
+          "book": "Caesars",
+          "line": 0.5,
+          "over_odds": 230,
+          "under_odds": -300
+        }
+      ]
+    },
+    {
+      "player": "Zack Wheeler",
+      "team": "PHI",
+      "opponent": "CHC",
+      "position": "SP",
+      "market": "strikeouts",
+      "throws": "R",
+      "lineup_spot": 1,
+      "career_avg": 6.4,
+      "vs_pitcher_avg": null,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "MIL",
+          "value": 8,
+          "home": true
+        },
+        {
+          "game": 14,
+          "opponent": "ATL",
+          "value": 7,
+          "home": false
+        },
+        {
+          "game": 13,
+          "opponent": "NYM",
+          "value": 9,
+          "home": true
+        },
+        {
+          "game": 12,
+          "opponent": "WSH",
+          "value": 6,
+          "home": false
+        },
+        {
+          "game": 11,
+          "opponent": "SF",
+          "value": 8,
+          "home": true
+        },
+        {
+          "game": 10,
+          "opponent": "SD",
+          "value": 5,
+          "home": false
+        },
+        {
+          "game": 9,
+          "opponent": "STL",
+          "value": 7,
+          "home": true
+        },
+        {
+          "game": 8,
+          "opponent": "MIA",
+          "value": 10,
+          "home": true
+        },
+        {
+          "game": 7,
+          "opponent": "ATL",
+          "value": 6,
+          "home": false
+        },
+        {
+          "game": 6,
+          "opponent": "CIN",
+          "value": 7,
+          "home": false
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 7.5,
+          "over_odds": -105,
+          "under_odds": -115
+        },
+        {
+          "book": "FanDuel",
+          "line": 7.5,
+          "over_odds": -110,
+          "under_odds": -110
+        },
+        {
+          "book": "BetMGM",
+          "line": 7.5,
+          "over_odds": 100,
+          "under_odds": -120
+        }
+      ]
+    },
+    {
+      "player": "Aaron Judge",
+      "team": "NYY",
+      "opponent": "COL",
+      "position": "RF",
+      "market": "total_bases",
+      "bats": "R",
+      "lineup_spot": 2,
+      "career_avg": 2.1,
+      "vs_pitcher_avg": 2.8,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "BOS",
+          "value": 4,
+          "home": true
+        },
+        {
+          "game": 14,
+          "opponent": "BOS",
+          "value": 2,
+          "home": true
+        },
+        {
+          "game": 13,
+          "opponent": "TOR",
+          "value": 5,
+          "home": false
+        },
+        {
+          "game": 12,
+          "opponent": "TOR",
+          "value": 1,
+          "home": false
+        },
+        {
+          "game": 11,
+          "opponent": "TOR",
+          "value": 3,
+          "home": false
+        },
+        {
+          "game": 10,
+          "opponent": "BAL",
+          "value": 2,
+          "home": true
+        },
+        {
+          "game": 9,
+          "opponent": "BAL",
+          "value": 6,
+          "home": true
+        },
+        {
+          "game": 8,
+          "opponent": "TBR",
+          "value": 2,
+          "home": false
+        },
+        {
+          "game": 7,
+          "opponent": "TBR",
+          "value": 0,
+          "home": false
+        },
+        {
+          "game": 6,
+          "opponent": "CLE",
+          "value": 3,
+          "home": true
+        },
+        {
+          "game": 5,
+          "opponent": "CLE",
+          "value": 2,
+          "home": true
+        },
+        {
+          "game": 4,
+          "opponent": "DET",
+          "value": 4,
+          "home": false
+        },
+        {
+          "game": 3,
+          "opponent": "DET",
+          "value": 1,
+          "home": false
+        },
+        {
+          "game": 2,
+          "opponent": "HOU",
+          "value": 2,
+          "home": true
+        },
+        {
+          "game": 1,
+          "opponent": "HOU",
+          "value": 3,
+          "home": true
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 2.5,
+          "over_odds": -125,
+          "under_odds": 100
+        },
+        {
+          "book": "FanDuel",
+          "line": 2.5,
+          "over_odds": -120,
+          "under_odds": -105
+        },
+        {
+          "book": "BetMGM",
+          "line": 2.5,
+          "over_odds": -115,
+          "under_odds": -110
+        }
+      ]
+    },
+    {
+      "player": "Ezequiel Tovar",
+      "team": "COL",
+      "opponent": "NYY",
+      "position": "SS",
+      "market": "hits",
+      "bats": "R",
+      "lineup_spot": 6,
+      "career_avg": 1.05,
+      "vs_pitcher_avg": null,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "SD",
+          "value": 2,
+          "home": true
+        },
+        {
+          "game": 14,
+          "opponent": "SD",
+          "value": 1,
+          "home": true
+        },
+        {
+          "game": 13,
+          "opponent": "LAD",
+          "value": 0,
+          "home": false
+        },
+        {
+          "game": 12,
+          "opponent": "LAD",
+          "value": 1,
+          "home": false
+        },
+        {
+          "game": 11,
+          "opponent": "ARI",
+          "value": 2,
+          "home": true
+        },
+        {
+          "game": 10,
+          "opponent": "ARI",
+          "value": 1,
+          "home": true
+        },
+        {
+          "game": 9,
+          "opponent": "SF",
+          "value": 0,
+          "home": false
+        },
+        {
+          "game": 8,
+          "opponent": "SF",
+          "value": 1,
+          "home": false
+        },
+        {
+          "game": 7,
+          "opponent": "STL",
+          "value": 3,
+          "home": true
+        },
+        {
+          "game": 6,
+          "opponent": "STL",
+          "value": 1,
+          "home": true
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 1.5,
+          "over_odds": 150,
+          "under_odds": -180
+        },
+        {
+          "book": "FanDuel",
+          "line": 1.5,
+          "over_odds": 145,
+          "under_odds": -175
+        }
+      ]
+    },
+    {
+      "player": "Yoshinobu Yamamoto",
+      "team": "LAD",
+      "opponent": "MIA",
+      "position": "SP",
+      "market": "strikeouts",
+      "throws": "R",
+      "lineup_spot": 1,
+      "career_avg": 6.8,
+      "vs_pitcher_avg": null,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "SF",
+          "value": 9,
+          "home": true
+        },
+        {
+          "game": 14,
+          "opponent": "SD",
+          "value": 7,
+          "home": false
+        },
+        {
+          "game": 13,
+          "opponent": "ARI",
+          "value": 8,
+          "home": true
+        },
+        {
+          "game": 12,
+          "opponent": "COL",
+          "value": 6,
+          "home": false
+        },
+        {
+          "game": 11,
+          "opponent": "SF",
+          "value": 8,
+          "home": false
+        },
+        {
+          "game": 10,
+          "opponent": "NYM",
+          "value": 7,
+          "home": true
+        },
+        {
+          "game": 9,
+          "opponent": "PIT",
+          "value": 10,
+          "home": true
+        },
+        {
+          "game": 8,
+          "opponent": "CIN",
+          "value": 6,
+          "home": false
+        },
+        {
+          "game": 7,
+          "opponent": "STL",
+          "value": 7,
+          "home": true
+        },
+        {
+          "game": 6,
+          "opponent": "ATL",
+          "value": 5,
+          "home": false
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 7.5,
+          "over_odds": -108,
+          "under_odds": -112
+        },
+        {
+          "book": "FanDuel",
+          "line": 7.5,
+          "over_odds": -112,
+          "under_odds": -108
+        },
+        {
+          "book": "ESPN BET",
+          "line": 7.5,
+          "over_odds": -105,
+          "under_odds": -115
+        }
+      ]
+    },
+    {
+      "player": "Mookie Betts",
+      "team": "LAD",
+      "opponent": "MIA",
+      "position": "2B",
+      "market": "total_bases",
+      "bats": "R",
+      "lineup_spot": 0,
+      "career_avg": 1.9,
+      "vs_pitcher_avg": 1.6,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "SF",
+          "value": 2,
+          "home": true
+        },
+        {
+          "game": 14,
+          "opponent": "SF",
+          "value": 3,
+          "home": true
+        },
+        {
+          "game": 13,
+          "opponent": "SD",
+          "value": 1,
+          "home": false
+        },
+        {
+          "game": 12,
+          "opponent": "SD",
+          "value": 2,
+          "home": false
+        },
+        {
+          "game": 11,
+          "opponent": "ARI",
+          "value": 4,
+          "home": true
+        },
+        {
+          "game": 10,
+          "opponent": "ARI",
+          "value": 2,
+          "home": true
+        },
+        {
+          "game": 9,
+          "opponent": "COL",
+          "value": 5,
+          "home": false
+        },
+        {
+          "game": 8,
+          "opponent": "COL",
+          "value": 2,
+          "home": false
+        },
+        {
+          "game": 7,
+          "opponent": "NYM",
+          "value": 1,
+          "home": true
+        },
+        {
+          "game": 6,
+          "opponent": "NYM",
+          "value": 2,
+          "home": true
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 1.5,
+          "over_odds": -120,
+          "under_odds": 100
+        },
+        {
+          "book": "FanDuel",
+          "line": 1.5,
+          "over_odds": -125,
+          "under_odds": 105
+        }
+      ]
+    },
+    {
+      "player": "Freddie Freeman",
+      "team": "LAD",
+      "opponent": "MIA",
+      "position": "1B",
+      "market": "hits",
+      "bats": "L",
+      "lineup_spot": 3,
+      "career_avg": 1.2,
+      "vs_pitcher_avg": 1.0,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "SF",
+          "value": 1,
+          "home": true
+        },
+        {
+          "game": 14,
+          "opponent": "SF",
+          "value": 0,
+          "home": true
+        },
+        {
+          "game": 13,
+          "opponent": "SD",
+          "value": 1,
+          "home": false
+        },
+        {
+          "game": 12,
+          "opponent": "SD",
+          "value": 2,
+          "home": false
+        },
+        {
+          "game": 11,
+          "opponent": "ARI",
+          "value": 1,
+          "home": true
+        },
+        {
+          "game": 10,
+          "opponent": "ARI",
+          "value": 0,
+          "home": true
+        },
+        {
+          "game": 9,
+          "opponent": "COL",
+          "value": 2,
+          "home": false
+        },
+        {
+          "game": 8,
+          "opponent": "COL",
+          "value": 1,
+          "home": false
+        },
+        {
+          "game": 7,
+          "opponent": "NYM",
+          "value": 1,
+          "home": true
+        },
+        {
+          "game": 6,
+          "opponent": "NYM",
+          "value": 1,
+          "home": true
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 1.5,
+          "over_odds": 160,
+          "under_odds": -195
+        },
+        {
+          "book": "FanDuel",
+          "line": 1.5,
+          "over_odds": 155,
+          "under_odds": -190
+        }
+      ]
+    }
+  ]
+}

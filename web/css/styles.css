@@ -466,3 +466,19 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   .view.active.from-right, .view.active.from-left { animation: none; }
   #refresh.loading .rfx { animation: none; }
 }
+
+/* ---------------- Sport switcher (NFL / MLB) ---------------- */
+.sport-switch {
+  display: flex; gap: 3px; margin-left: 14px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--border-soft); border-radius: 11px;
+}
+.sport-btn {
+  border: 0; background: transparent; cursor: pointer; font-family: inherit;
+  color: var(--text-dim); font-weight: 700; font-size: 12.5px;
+  padding: 7px 12px; border-radius: 8px;
+  transition: color .2s ease, background .2s ease;
+}
+.sport-btn:hover { color: var(--text); }
+.sport-btn.active { color: #fff; background: var(--grad-violet); box-shadow: 0 3px 12px rgba(138, 108, 255, 0.35); }
+:root[data-theme="light"] .sport-btn.active { color: #fff; }
+@media (max-width: 900px) { .sport-switch { margin-left: 6px; } }

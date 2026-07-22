@@ -19,11 +19,13 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 from engine.pipeline import run_slate
+from engine.mlb.pipeline import run_mlb_slate
 from engine.rules import RuleConfig
 
 ROOT = Path(__file__).parent
 WEB = ROOT / "web"
 SLATE = ROOT / "data" / "sample_slate.json"
+MLB_SLATE = ROOT / "data" / "mlb_sample_slate.json"
 
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -41,11 +43,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path in ("/api/recommendations", "/api/recommendations/"):
-            return self._api(parse_qs(parsed.query))
+            return self._api(parse_qs(parsed.query), sport="nfl")
+        if parsed.path in ("/api/mlb/recommendations", "/api/mlb/recommendations/"):
+            return self._api(parse_qs(parsed.query), sport="mlb")
         return self._static(parsed.path)
 
     # --- API ---------------------------------------------------------------
-    def _api(self, query: dict):
+    def _api(self, query: dict, sport: str = "nfl"):
         def qf(name, default):
             try:
                 return float(query.get(name, [default])[0])
@@ -57,7 +61,10 @@ class Handler(BaseHTTPRequestHandler):
             min_edge=qf("min_edge", 0.02) / (100 if qf("min_edge", 0.02) > 1 else 1),
         )
         try:
-            result = run_slate(SLATE, config)
+            if sport == "mlb":
+                result = run_mlb_slate(MLB_SLATE, config)
+            else:
+                result = run_slate(SLATE, config)
             payload = json.dumps(result).encode()
         except Exception as exc:  # surface engine errors as JSON
             self._send(500, json.dumps({"error": str(exc)}).encode(), ".json")

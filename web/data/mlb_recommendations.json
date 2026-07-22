@@ -1,0 +1,1182 @@
+{
+  "date": "2026-06-20",
+  "sport": "mlb",
+  "generated_from": "mlb-sample-slate",
+  "model": "rules",
+  "counts": {
+    "props_analyzed": 8,
+    "recommended": 6
+  },
+  "config": {
+    "min_confidence": 6.0,
+    "min_edge": 0.02
+  },
+  "games": [
+    {
+      "home": "CHC",
+      "away": "PHI",
+      "spread": 0.0,
+      "favorite": "",
+      "total": 9.5,
+      "roof": "open",
+      "surface": "grass",
+      "park_name": "Wrigley Field",
+      "factors": {
+        "hr": 1.04,
+        "run": 1.02,
+        "k": 1.0
+      },
+      "altitude_ft": 0,
+      "lineups_confirmed": true,
+      "weather": {
+        "dome": false,
+        "temp_f": 82,
+        "wind_mph": 16,
+        "wind_dir": "out",
+        "rain": false,
+        "snow": false
+      }
+    },
+    {
+      "home": "COL",
+      "away": "NYY",
+      "spread": 0.0,
+      "favorite": "",
+      "total": 11.5,
+      "roof": "open",
+      "surface": "grass",
+      "park_name": "Coors Field",
+      "factors": {
+        "hr": 1.22,
+        "run": 1.28,
+        "k": 0.92
+      },
+      "altitude_ft": 5280,
+      "lineups_confirmed": true,
+      "weather": {
+        "dome": false,
+        "temp_f": 88,
+        "wind_mph": 7,
+        "wind_dir": "cross",
+        "rain": false,
+        "snow": false
+      }
+    },
+    {
+      "home": "MIA",
+      "away": "LAD",
+      "spread": 0.0,
+      "favorite": "",
+      "total": 7.5,
+      "roof": "closed",
+      "surface": "grass",
+      "park_name": "loanDepot park",
+      "factors": {
+        "hr": 0.88,
+        "run": 0.92,
+        "k": 1.05
+      },
+      "altitude_ft": 0,
+      "lineups_confirmed": false,
+      "weather": {
+        "dome": true,
+        "temp_f": 74,
+        "wind_mph": 0,
+        "wind_dir": "cross",
+        "rain": false,
+        "snow": false
+      }
+    }
+  ],
+  "recommendations": [
+    {
+      "player": "Yoshinobu Yamamoto",
+      "team": "LAD",
+      "opponent": "MIA",
+      "market": "strikeouts",
+      "market_label": "Strikeouts",
+      "position": "SP",
+      "usage_role": "SP",
+      "headshot": "",
+      "side": "OVER",
+      "book": "ESPN BET",
+      "line": 7.5,
+      "odds": -105,
+      "projection": 9.13,
+      "proj_low": 6.8,
+      "proj_high": 11.46,
+      "hit_prob": 0.7582,
+      "fair_prob": 0.4892,
+      "edge": 0.2691,
+      "ev_per_unit": 0.4803,
+      "confidence": 9.3,
+      "stake_units": 1.0,
+      "grade": "Strong Play",
+      "trend": "up",
+      "trend_delta": 1.0,
+      "recommended": true,
+      "warnings": [],
+      "headline": "Yoshinobu Yamamoto OVER 7.5 Strikeouts",
+      "summary": "Model projects 9.13 (range 6.8\u201311.46) vs a line of 7.5, a 76% hit probability against the book's 49% \u2014 a +26.9% edge. Confidence 9.3/10 \u2192 Strong Play.",
+      "reasons": [
+        "MIA strikes out 27% of the time (+23% vs league)",
+        "Elite swing-and-miss stuff (28% K rate)",
+        "loanDepot park suppresses home runs (-12% vs average)",
+        "loanDepot park plays pitcher-friendly (-8% runs)",
+        "loanDepot park elevates strikeouts (+5%)",
+        "Roof closed \u2014 weather-neutral conditions",
+        "Hot bat \u2014 last 3 games +1.0 vs prior form"
+      ],
+      "all_lines": [
+        {
+          "book": "DraftKings",
+          "line": 7.5,
+          "over_odds": -108
+        },
+        {
+          "book": "FanDuel",
+          "line": 7.5,
+          "over_odds": -112
+        },
+        {
+          "book": "ESPN BET",
+          "line": 7.5,
+          "over_odds": -105
+        }
+      ],
+      "logs": [
+        {
+          "week": 15,
+          "opponent": "SF",
+          "value": 9,
+          "home": true
+        },
+        {
+          "week": 14,
+          "opponent": "SD",
+          "value": 7,
+          "home": false
+        },
+        {
+          "week": 13,
+          "opponent": "ARI",
+          "value": 8,
+          "home": true
+        },
+        {
+          "week": 12,
+          "opponent": "COL",
+          "value": 6,
+          "home": false
+        },
+        {
+          "week": 11,
+          "opponent": "SF",
+          "value": 8,
+          "home": false
+        },
+        {
+          "week": 10,
+          "opponent": "NYM",
+          "value": 7,
+          "home": true
+        },
+        {
+          "week": 9,
+          "opponent": "PIT",
+          "value": 10,
+          "home": true
+        },
+        {
+          "week": 8,
+          "opponent": "CIN",
+          "value": 6,
+          "home": false
+        },
+        {
+          "week": 7,
+          "opponent": "STL",
+          "value": 7,
+          "home": true
+        },
+        {
+          "week": 6,
+          "opponent": "ATL",
+          "value": 5,
+          "home": false
+        }
+      ],
+      "form": {
+        "last1": 9.0,
+        "last3": 8.0,
+        "last5": 7.6,
+        "last10": 7.3,
+        "season": 7.3,
+        "career": 6.8,
+        "vs_opponent": null
+      }
+    },
+    {
+      "player": "Bryce Harper",
+      "team": "PHI",
+      "opponent": "CHC",
+      "market": "total_bases",
+      "market_label": "Total Bases",
+      "position": "1B",
+      "usage_role": "1B",
+      "headshot": "",
+      "side": "OVER",
+      "book": "FanDuel",
+      "line": 1.5,
+      "odds": -145,
+      "projection": 3.13,
+      "proj_low": 1.03,
+      "proj_high": 5.22,
+      "hit_prob": 0.781,
+      "fair_prob": 0.5599,
+      "edge": 0.2211,
+      "ev_per_unit": 0.3196,
+      "confidence": 9.0,
+      "stake_units": 1.0,
+      "grade": "Strong Play",
+      "trend": "up",
+      "trend_delta": 0.92,
+      "recommended": true,
+      "warnings": [],
+      "headline": "Bryce Harper OVER 1.5 Total Bases",
+      "summary": "Model projects 3.13 (range 1.03\u20135.22) vs a line of 1.5, a 78% hit probability against the book's 56% \u2014 a +22.1% edge. Confidence 9.0/10 \u2192 Strong Play.",
+      "reasons": [
+        "Platoon edge \u2014 LHB vs RHP (Javier Assad)",
+        "Javier Assad allows .525 SLG to lefties",
+        "Opposing bullpen ranks 27th \u2014 late-inning upside",
+        "Batting 2nd \u2014 extra plate appearances",
+        "Wind blowing out 16 mph \u2014 HR probability up ~11%",
+        "Hot bat \u2014 last 3 games +0.9 vs prior form"
+      ],
+      "all_lines": [
+        {
+          "book": "DraftKings",
+          "line": 1.5,
+          "over_odds": -150
+        },
+        {
+          "book": "FanDuel",
+          "line": 1.5,
+          "over_odds": -145
+        },
+        {
+          "book": "BetMGM",
+          "line": 1.5,
+          "over_odds": -155
+        }
+      ],
+      "logs": [
+        {
+          "week": 15,
+          "opponent": "MIL",
+          "value": 3,
+          "home": true
+        },
+        {
+          "week": 14,
+          "opponent": "MIL",
+          "value": 2,
+          "home": true
+        },
+        {
+          "week": 13,
+          "opponent": "ATL",
+          "value": 4,
+          "home": false
+        },
+        {
+          "week": 12,
+          "opponent": "ATL",
+          "value": 1,
+          "home": false
+        },
+        {
+          "week": 11,
+          "opponent": "ATL",
+          "value": 2,
+          "home": false
+        },
+        {
+          "week": 10,
+          "opponent": "NYM",
+          "value": 5,
+          "home": true
+        },
+        {
+          "week": 9,
+          "opponent": "NYM",
+          "value": 2,
+          "home": true
+        },
+        {
+          "week": 8,
+          "opponent": "WSH",
+          "value": 0,
+          "home": false
+        },
+        {
+          "week": 7,
+          "opponent": "WSH",
+          "value": 3,
+          "home": false
+        },
+        {
+          "week": 6,
+          "opponent": "SF",
+          "value": 2,
+          "home": true
+        },
+        {
+          "week": 5,
+          "opponent": "SF",
+          "value": 1,
+          "home": true
+        },
+        {
+          "week": 4,
+          "opponent": "SD",
+          "value": 2,
+          "home": false
+        },
+        {
+          "week": 3,
+          "opponent": "SD",
+          "value": 4,
+          "home": false
+        },
+        {
+          "week": 2,
+          "opponent": "STL",
+          "value": 1,
+          "home": true
+        },
+        {
+          "week": 1,
+          "opponent": "STL",
+          "value": 2,
+          "home": true
+        }
+      ],
+      "form": {
+        "last1": 3.0,
+        "last3": 3.0,
+        "last5": 2.4,
+        "last10": 2.4,
+        "season": 2.27,
+        "career": 1.85,
+        "vs_opponent": 2.4
+      }
+    },
+    {
+      "player": "Zack Wheeler",
+      "team": "PHI",
+      "opponent": "CHC",
+      "market": "strikeouts",
+      "market_label": "Strikeouts",
+      "position": "SP",
+      "usage_role": "SP",
+      "headshot": "",
+      "side": "OVER",
+      "book": "BetMGM",
+      "line": 7.5,
+      "odds": 100,
+      "projection": 8.5,
+      "proj_low": 6.27,
+      "proj_high": 10.73,
+      "hit_prob": 0.6733,
+      "fair_prob": 0.4783,
+      "edge": 0.195,
+      "ev_per_unit": 0.3466,
+      "confidence": 8.7,
+      "stake_units": 1.0,
+      "grade": "Strong Play",
+      "trend": "up",
+      "trend_delta": 1.0,
+      "recommended": true,
+      "warnings": [],
+      "headline": "Zack Wheeler OVER 7.5 Strikeouts",
+      "summary": "Model projects 8.5 (range 6.27\u201310.73) vs a line of 7.5, a 67% hit probability against the book's 48% \u2014 a +19.5% edge. Confidence 8.7/10 \u2192 Strong Play.",
+      "reasons": [
+        "CHC strikes out 26% of the time (+18% vs league)",
+        "Elite swing-and-miss stuff (29% K rate)",
+        "Wind blowing out 16 mph \u2014 HR probability up ~11%",
+        "Hot bat \u2014 last 3 games +1.0 vs prior form"
+      ],
+      "all_lines": [
+        {
+          "book": "DraftKings",
+          "line": 7.5,
+          "over_odds": -105
+        },
+        {
+          "book": "FanDuel",
+          "line": 7.5,
+          "over_odds": -110
+        },
+        {
+          "book": "BetMGM",
+          "line": 7.5,
+          "over_odds": 100
+        }
+      ],
+      "logs": [
+        {
+          "week": 15,
+          "opponent": "MIL",
+          "value": 8,
+          "home": true
+        },
+        {
+          "week": 14,
+          "opponent": "ATL",
+          "value": 7,
+          "home": false
+        },
+        {
+          "week": 13,
+          "opponent": "NYM",
+          "value": 9,
+          "home": true
+        },
+        {
+          "week": 12,
+          "opponent": "WSH",
+          "value": 6,
+          "home": false
+        },
+        {
+          "week": 11,
+          "opponent": "SF",
+          "value": 8,
+          "home": true
+        },
+        {
+          "week": 10,
+          "opponent": "SD",
+          "value": 5,
+          "home": false
+        },
+        {
+          "week": 9,
+          "opponent": "STL",
+          "value": 7,
+          "home": true
+        },
+        {
+          "week": 8,
+          "opponent": "MIA",
+          "value": 10,
+          "home": true
+        },
+        {
+          "week": 7,
+          "opponent": "ATL",
+          "value": 6,
+          "home": false
+        },
+        {
+          "week": 6,
+          "opponent": "CIN",
+          "value": 7,
+          "home": false
+        }
+      ],
+      "form": {
+        "last1": 8.0,
+        "last3": 8.0,
+        "last5": 7.6,
+        "last10": 7.3,
+        "season": 7.3,
+        "career": 6.4,
+        "vs_opponent": null
+      }
+    },
+    {
+      "player": "Aaron Judge",
+      "team": "NYY",
+      "opponent": "COL",
+      "market": "total_bases",
+      "market_label": "Total Bases",
+      "position": "RF",
+      "usage_role": "RF",
+      "headshot": "",
+      "side": "OVER",
+      "book": "BetMGM",
+      "line": 2.5,
+      "odds": -115,
+      "projection": 3.94,
+      "proj_low": 1.34,
+      "proj_high": 6.54,
+      "hit_prob": 0.7102,
+      "fair_prob": 0.5052,
+      "edge": 0.205,
+      "ev_per_unit": 0.3278,
+      "confidence": 8.5,
+      "stake_units": 1.0,
+      "grade": "Strong Play",
+      "trend": "up",
+      "trend_delta": 1.25,
+      "recommended": true,
+      "warnings": [],
+      "headline": "Aaron Judge OVER 2.5 Total Bases",
+      "summary": "Model projects 3.94 (range 1.34\u20136.54) vs a line of 2.5, a 71% hit probability against the book's 51% \u2014 a +20.5% edge. Confidence 8.5/10 \u2192 Strong Play.",
+      "reasons": [
+        "Platoon edge \u2014 RHB vs LHP (Kyle Freeland)",
+        "Kyle Freeland allows .500 SLG to righties",
+        "Opposing bullpen ranks 29th \u2014 late-inning upside",
+        "Batting 2nd \u2014 extra plate appearances",
+        "Coors Field boosts home runs (+22% vs average)",
+        "Coors Field plays hitter-friendly (+28% runs)",
+        "Altitude 5,280 ft \u2014 thin air adds carry",
+        "Hot (88\u00b0F) \u2014 ball carries farther"
+      ],
+      "all_lines": [
+        {
+          "book": "DraftKings",
+          "line": 2.5,
+          "over_odds": -125
+        },
+        {
+          "book": "FanDuel",
+          "line": 2.5,
+          "over_odds": -120
+        },
+        {
+          "book": "BetMGM",
+          "line": 2.5,
+          "over_odds": -115
+        }
+      ],
+      "logs": [
+        {
+          "week": 15,
+          "opponent": "BOS",
+          "value": 4,
+          "home": true
+        },
+        {
+          "week": 14,
+          "opponent": "BOS",
+          "value": 2,
+          "home": true
+        },
+        {
+          "week": 13,
+          "opponent": "TOR",
+          "value": 5,
+          "home": false
+        },
+        {
+          "week": 12,
+          "opponent": "TOR",
+          "value": 1,
+          "home": false
+        },
+        {
+          "week": 11,
+          "opponent": "TOR",
+          "value": 3,
+          "home": false
+        },
+        {
+          "week": 10,
+          "opponent": "BAL",
+          "value": 2,
+          "home": true
+        },
+        {
+          "week": 9,
+          "opponent": "BAL",
+          "value": 6,
+          "home": true
+        },
+        {
+          "week": 8,
+          "opponent": "TBR",
+          "value": 2,
+          "home": false
+        },
+        {
+          "week": 7,
+          "opponent": "TBR",
+          "value": 0,
+          "home": false
+        },
+        {
+          "week": 6,
+          "opponent": "CLE",
+          "value": 3,
+          "home": true
+        },
+        {
+          "week": 5,
+          "opponent": "CLE",
+          "value": 2,
+          "home": true
+        },
+        {
+          "week": 4,
+          "opponent": "DET",
+          "value": 4,
+          "home": false
+        },
+        {
+          "week": 3,
+          "opponent": "DET",
+          "value": 1,
+          "home": false
+        },
+        {
+          "week": 2,
+          "opponent": "HOU",
+          "value": 2,
+          "home": true
+        },
+        {
+          "week": 1,
+          "opponent": "HOU",
+          "value": 3,
+          "home": true
+        }
+      ],
+      "form": {
+        "last1": 4.0,
+        "last3": 3.67,
+        "last5": 3.0,
+        "last10": 2.8,
+        "season": 2.67,
+        "career": 2.1,
+        "vs_opponent": 2.8
+      }
+    },
+    {
+      "player": "Ezequiel Tovar",
+      "team": "COL",
+      "opponent": "NYY",
+      "market": "hits",
+      "market_label": "Hits",
+      "position": "SS",
+      "usage_role": "SS",
+      "headshot": "",
+      "side": "OVER",
+      "book": "DraftKings",
+      "line": 1.5,
+      "odds": 150,
+      "projection": 1.55,
+      "proj_low": 0.55,
+      "proj_high": 2.56,
+      "hit_prob": 0.5211,
+      "fair_prob": 0.3836,
+      "edge": 0.1375,
+      "ev_per_unit": 0.3027,
+      "confidence": 7.1,
+      "stake_units": 1.0,
+      "grade": "Play",
+      "trend": "down",
+      "trend_delta": -0.29,
+      "recommended": true,
+      "warnings": [],
+      "headline": "Ezequiel Tovar OVER 1.5 Hits",
+      "summary": "Model projects 1.55 (range 0.55\u20132.56) vs a line of 1.5, a 52% hit probability against the book's 38% \u2014 a +13.8% edge. Confidence 7.1/10 \u2192 Play.",
+      "reasons": [
+        "Platoon edge \u2014 RHB vs LHP (Carlos Rodon)",
+        "Coors Field boosts home runs (+22% vs average)",
+        "Coors Field plays hitter-friendly (+28% runs)",
+        "Altitude 5,280 ft \u2014 thin air adds carry",
+        "Hot (88\u00b0F) \u2014 ball carries farther",
+        "Cooling off \u2014 last 3 games -0.3 vs prior form"
+      ],
+      "all_lines": [
+        {
+          "book": "DraftKings",
+          "line": 1.5,
+          "over_odds": 150
+        },
+        {
+          "book": "FanDuel",
+          "line": 1.5,
+          "over_odds": 145
+        }
+      ],
+      "logs": [
+        {
+          "week": 15,
+          "opponent": "SD",
+          "value": 2,
+          "home": true
+        },
+        {
+          "week": 14,
+          "opponent": "SD",
+          "value": 1,
+          "home": true
+        },
+        {
+          "week": 13,
+          "opponent": "LAD",
+          "value": 0,
+          "home": false
+        },
+        {
+          "week": 12,
+          "opponent": "LAD",
+          "value": 1,
+          "home": false
+        },
+        {
+          "week": 11,
+          "opponent": "ARI",
+          "value": 2,
+          "home": true
+        },
+        {
+          "week": 10,
+          "opponent": "ARI",
+          "value": 1,
+          "home": true
+        },
+        {
+          "week": 9,
+          "opponent": "SF",
+          "value": 0,
+          "home": false
+        },
+        {
+          "week": 8,
+          "opponent": "SF",
+          "value": 1,
+          "home": false
+        },
+        {
+          "week": 7,
+          "opponent": "STL",
+          "value": 3,
+          "home": true
+        },
+        {
+          "week": 6,
+          "opponent": "STL",
+          "value": 1,
+          "home": true
+        }
+      ],
+      "form": {
+        "last1": 2.0,
+        "last3": 1.0,
+        "last5": 1.2,
+        "last10": 1.2,
+        "season": 1.2,
+        "career": 1.05,
+        "vs_opponent": null
+      }
+    },
+    {
+      "player": "Kyle Tucker",
+      "team": "CHC",
+      "opponent": "PHI",
+      "market": "home_runs",
+      "market_label": "Home Runs",
+      "position": "RF",
+      "usage_role": "RF",
+      "headshot": "",
+      "side": "OVER",
+      "book": "FanDuel",
+      "line": 0.5,
+      "odds": 250,
+      "projection": 0.48,
+      "proj_low": 0.0,
+      "proj_high": 1.02,
+      "hit_prob": 0.3783,
+      "fair_prob": 0.2713,
+      "edge": 0.1071,
+      "ev_per_unit": 0.3242,
+      "confidence": 6.0,
+      "stake_units": 0.65,
+      "grade": "Lean",
+      "trend": "flat",
+      "trend_delta": 0.0,
+      "recommended": true,
+      "warnings": [],
+      "headline": "Kyle Tucker OVER 0.5 Home Runs",
+      "summary": "Model projects 0.48 (range 0\u20131.02) vs a line of 0.5, a 38% hit probability against the book's 27% \u2014 a +10.7% edge. Confidence 6.0/10 \u2192 Lean.",
+      "reasons": [
+        "Platoon edge \u2014 LHB vs RHP (Zack Wheeler)",
+        "Tough draw \u2014 Zack Wheeler holds lefties to .360 SLG",
+        "Opposing bullpen ranks 6th \u2014 strong late relief",
+        "Wind blowing out 16 mph \u2014 HR probability up ~11%"
+      ],
+      "all_lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": 240
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": 250
+        },
+        {
+          "book": "Caesars",
+          "line": 0.5,
+          "over_odds": 230
+        }
+      ],
+      "logs": [
+        {
+          "week": 15,
+          "opponent": "STL",
+          "value": 1,
+          "home": true
+        },
+        {
+          "week": 14,
+          "opponent": "STL",
+          "value": 0,
+          "home": true
+        },
+        {
+          "week": 13,
+          "opponent": "PIT",
+          "value": 0,
+          "home": false
+        },
+        {
+          "week": 12,
+          "opponent": "PIT",
+          "value": 1,
+          "home": false
+        },
+        {
+          "week": 11,
+          "opponent": "PIT",
+          "value": 0,
+          "home": false
+        },
+        {
+          "week": 10,
+          "opponent": "CIN",
+          "value": 1,
+          "home": true
+        },
+        {
+          "week": 9,
+          "opponent": "CIN",
+          "value": 0,
+          "home": true
+        },
+        {
+          "week": 8,
+          "opponent": "MIL",
+          "value": 0,
+          "home": false
+        },
+        {
+          "week": 7,
+          "opponent": "MIL",
+          "value": 0,
+          "home": false
+        },
+        {
+          "week": 6,
+          "opponent": "HOU",
+          "value": 1,
+          "home": true
+        },
+        {
+          "week": 5,
+          "opponent": "HOU",
+          "value": 0,
+          "home": true
+        },
+        {
+          "week": 4,
+          "opponent": "NYM",
+          "value": 0,
+          "home": false
+        },
+        {
+          "week": 3,
+          "opponent": "NYM",
+          "value": 0,
+          "home": false
+        },
+        {
+          "week": 2,
+          "opponent": "ATL",
+          "value": 1,
+          "home": true
+        },
+        {
+          "week": 1,
+          "opponent": "ATL",
+          "value": 0,
+          "home": true
+        }
+      ],
+      "form": {
+        "last1": 1.0,
+        "last3": 0.33,
+        "last5": 0.4,
+        "last10": 0.4,
+        "season": 0.33,
+        "career": 0.18,
+        "vs_opponent": 0.1
+      }
+    },
+    {
+      "player": "Mookie Betts",
+      "team": "LAD",
+      "opponent": "MIA",
+      "market": "total_bases",
+      "market_label": "Total Bases",
+      "position": "2B",
+      "usage_role": "2B",
+      "headshot": "",
+      "side": "OVER",
+      "book": "DraftKings",
+      "line": 1.5,
+      "odds": -120,
+      "projection": 1.98,
+      "proj_low": 0.29,
+      "proj_high": 3.66,
+      "hit_prob": 0.6113,
+      "fair_prob": 0.5217,
+      "edge": 0.0896,
+      "ev_per_unit": 0.1207,
+      "confidence": 5.9,
+      "stake_units": 0.72,
+      "grade": "Lean",
+      "trend": "down",
+      "trend_delta": -0.57,
+      "recommended": false,
+      "warnings": [
+        "Below confidence threshold (5.9 < 6.0)",
+        "Mookie Betts not in a confirmed lineup \u2014 hold until the card is posted"
+      ],
+      "headline": "Mookie Betts OVER 1.5 Total Bases",
+      "summary": "Model projects 1.98 (range 0.29\u20133.66) vs a line of 1.5, a 61% hit probability against the book's 52% \u2014 a +9.0% edge. Confidence 5.9/10 \u2192 Lean.",
+      "reasons": [
+        "Opposing bullpen ranks 25th \u2014 late-inning upside",
+        "loanDepot park suppresses home runs (-12% vs average)",
+        "loanDepot park plays pitcher-friendly (-8% runs)",
+        "loanDepot park elevates strikeouts (+5%)",
+        "Roof closed \u2014 weather-neutral conditions",
+        "Cooling off \u2014 last 3 games -0.6 vs prior form"
+      ],
+      "all_lines": [
+        {
+          "book": "DraftKings",
+          "line": 1.5,
+          "over_odds": -120
+        },
+        {
+          "book": "FanDuel",
+          "line": 1.5,
+          "over_odds": -125
+        }
+      ],
+      "logs": [
+        {
+          "week": 15,
+          "opponent": "SF",
+          "value": 2,
+          "home": true
+        },
+        {
+          "week": 14,
+          "opponent": "SF",
+          "value": 3,
+          "home": true
+        },
+        {
+          "week": 13,
+          "opponent": "SD",
+          "value": 1,
+          "home": false
+        },
+        {
+          "week": 12,
+          "opponent": "SD",
+          "value": 2,
+          "home": false
+        },
+        {
+          "week": 11,
+          "opponent": "ARI",
+          "value": 4,
+          "home": true
+        },
+        {
+          "week": 10,
+          "opponent": "ARI",
+          "value": 2,
+          "home": true
+        },
+        {
+          "week": 9,
+          "opponent": "COL",
+          "value": 5,
+          "home": false
+        },
+        {
+          "week": 8,
+          "opponent": "COL",
+          "value": 2,
+          "home": false
+        },
+        {
+          "week": 7,
+          "opponent": "NYM",
+          "value": 1,
+          "home": true
+        },
+        {
+          "week": 6,
+          "opponent": "NYM",
+          "value": 2,
+          "home": true
+        }
+      ],
+      "form": {
+        "last1": 2.0,
+        "last3": 2.0,
+        "last5": 2.4,
+        "last10": 2.4,
+        "season": 2.4,
+        "career": 1.9,
+        "vs_opponent": 1.6
+      }
+    },
+    {
+      "player": "Freddie Freeman",
+      "team": "LAD",
+      "opponent": "MIA",
+      "market": "hits",
+      "market_label": "Hits",
+      "position": "1B",
+      "usage_role": "1B",
+      "headshot": "",
+      "side": "OVER",
+      "book": "DraftKings",
+      "line": 1.5,
+      "odds": 160,
+      "projection": 0.97,
+      "proj_low": 0.29,
+      "proj_high": 1.65,
+      "hit_prob": 0.2167,
+      "fair_prob": 0.3678,
+      "edge": -0.1511,
+      "ev_per_unit": -0.4365,
+      "confidence": 0.9,
+      "stake_units": 0.0,
+      "grade": "Pass",
+      "trend": "down",
+      "trend_delta": -0.48,
+      "recommended": false,
+      "warnings": [
+        "Below confidence threshold (0.9 < 6.0)",
+        "Edge too small (-15.1%)"
+      ],
+      "headline": "Freddie Freeman OVER 1.5 Hits",
+      "summary": "Model projects 0.97 (range 0.29\u20131.65) vs a line of 1.5, a 22% hit probability against the book's 37% \u2014 a -15.1% edge. Confidence 0.9/10 \u2192 Pass.",
+      "reasons": [
+        "Platoon edge \u2014 LHB vs RHP (Sandy Alcantara)",
+        "Opposing bullpen ranks 25th \u2014 late-inning upside",
+        "loanDepot park suppresses home runs (-12% vs average)",
+        "loanDepot park plays pitcher-friendly (-8% runs)",
+        "loanDepot park elevates strikeouts (+5%)",
+        "Roof closed \u2014 weather-neutral conditions",
+        "Cooling off \u2014 last 3 games -0.5 vs prior form"
+      ],
+      "all_lines": [
+        {
+          "book": "DraftKings",
+          "line": 1.5,
+          "over_odds": 160
+        },
+        {
+          "book": "FanDuel",
+          "line": 1.5,
+          "over_odds": 155
+        }
+      ],
+      "logs": [
+        {
+          "week": 15,
+          "opponent": "SF",
+          "value": 1,
+          "home": true
+        },
+        {
+          "week": 14,
+          "opponent": "SF",
+          "value": 0,
+          "home": true
+        },
+        {
+          "week": 13,
+          "opponent": "SD",
+          "value": 1,
+          "home": false
+        },
+        {
+          "week": 12,
+          "opponent": "SD",
+          "value": 2,
+          "home": false
+        },
+        {
+          "week": 11,
+          "opponent": "ARI",
+          "value": 1,
+          "home": true
+        },
+        {
+          "week": 10,
+          "opponent": "ARI",
+          "value": 0,
+          "home": true
+        },
+        {
+          "week": 9,
+          "opponent": "COL",
+          "value": 2,
+          "home": false
+        },
+        {
+          "week": 8,
+          "opponent": "COL",
+          "value": 1,
+          "home": false
+        },
+        {
+          "week": 7,
+          "opponent": "NYM",
+          "value": 1,
+          "home": true
+        },
+        {
+          "week": 6,
+          "opponent": "NYM",
+          "value": 1,
+          "home": true
+        }
+      ],
+      "form": {
+        "last1": 1.0,
+        "last3": 0.67,
+        "last5": 1.0,
+        "last10": 1.0,
+        "season": 1.0,
+        "career": 1.2,
+        "vs_opponent": 1.0
+      }
+    }
+  ]
+}

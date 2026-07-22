@@ -9,10 +9,14 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="logo">🏈</span>
+      <span class="logo" id="brand-logo">🏈</span>
       <div>
         <h1>Gridiron Edge</h1>
-        <div class="tagline">AI-powered NFL player-prop model</div>
+        <div class="tagline" id="tagline">AI-powered NFL player-prop model</div>
+      </div>
+      <div class="sport-switch" id="sport-switch">
+        <button class="sport-btn active" data-sport="nfl" title="NFL">🏈 NFL</button>
+        <button class="sport-btn" data-sport="mlb" title="MLB">⚾ MLB</button>
       </div>
     </div>
 
@@ -35,7 +39,7 @@
     <section class="view active" id="view-recommended">
       <div class="stats" id="stats"></div>
 
-      <div class="section-title">🏟️ This week's stadiums &amp; conditions</div>
+      <div class="section-title" id="games-title">🏟️ This week's stadiums &amp; conditions</div>
       <div class="games-scroller" id="games"></div>
 
       <div class="controls" style="margin-top:20px">
@@ -83,6 +87,7 @@
   </footer>
 
   <script src="js/teams.js"></script>
+  <script src="js/teams_mlb.js"></script>
   <script src="js/visuals.js"></script>
   <script src="js/app.js"></script>
 </body>

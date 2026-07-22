@@ -9,8 +9,31 @@
 const state = {
   data: null, minConf: 6.0, minEdge: 2.0, showAll: false,
   view: "recommended", search: "",
+  sport: new URLSearchParams(location.search).get("sport") === "mlb" ? "mlb" : "nfl",
   static: new URLSearchParams(location.search).has("static"),
 };
+
+const SPORT_META = {
+  nfl: { logo: "🏈", tagline: "AI-powered NFL player-prop model",
+         gamesTitle: "🏟️ This week's stadiums & conditions",
+         api: "/api/recommendations", fallback: "data/recommendations.json" },
+  mlb: { logo: "⚾", tagline: "AI-powered MLB player-prop model",
+         gamesTitle: "🏟️ Today's ballparks & conditions",
+         api: "/api/mlb/recommendations", fallback: "data/mlb_recommendations.json" },
+};
+
+function applySport() {
+  const meta = SPORT_META[state.sport];
+  window.ACTIVE_TEAMS = state.sport === "mlb"
+    ? (typeof MLB_TEAMS !== "undefined" ? MLB_TEAMS : {})
+    : (typeof TEAMS !== "undefined" ? TEAMS : {});
+  document.getElementById("brand-logo").textContent = meta.logo;
+  document.getElementById("tagline").textContent = meta.tagline;
+  const gt = document.getElementById("games-title");
+  if (gt) gt.textContent = meta.gamesTitle;
+  document.querySelectorAll(".sport-btn").forEach((b) =>
+    b.classList.toggle("active", b.dataset.sport === state.sport));
+}
 
 /* ---------------- formatting helpers ---------------- */
 const gradeClass = (g) => ({ "Strong Play": "strong", "Play": "play", "Lean": "lean", "Pass": "pass" }[g] || "pass");
@@ -18,8 +41,9 @@ const gradeColor = (g) => ({ "Strong Play": "var(--good)", "Play": "var(--cyan)"
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
 const signedPct = (x) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
 const american = (o) => (o > 0 ? `+${o}` : `${o}`);
-const teamName = (a) => (typeof TEAMS !== "undefined" && TEAMS[a] && TEAMS[a].nick) || a;
-const teamPrimary = (a) => (typeof TEAMS !== "undefined" && TEAMS[a] && TEAMS[a].primary) || "var(--brand)";
+const activeTeams = () => window.ACTIVE_TEAMS || (typeof TEAMS !== "undefined" ? TEAMS : {});
+const teamName = (a) => (activeTeams()[a] && activeTeams()[a].nick) || a;
+const teamPrimary = (a) => (activeTeams()[a] && activeTeams()[a].primary) || "var(--brand)";
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -94,13 +118,14 @@ async function load() {
   showSkeleton();
   const refreshBtn = document.getElementById("refresh");
   if (refreshBtn) refreshBtn.classList.add("loading");
+  const meta = SPORT_META[state.sport];
   const params = new URLSearchParams({ min_confidence: state.minConf, min_edge: state.minEdge });
   try {
-    const res = await fetch(`/api/recommendations?${params}`);
+    const res = await fetch(`${meta.api}?${params}`);
     if (!res.ok) throw new Error("api");
     state.data = await res.json();
   } catch (e) {
-    const res = await fetch("data/recommendations.json");
+    const res = await fetch(meta.fallback);
     state.data = await res.json();
   }
   renderAll();
@@ -155,18 +180,32 @@ function renderGames() {
 }
 
 function gameCard(g) {
+  const mlb = state.sport === "mlb";
   const w = g.weather || {};
-  const cond = w.dome ? "Indoor" : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
-  const favTxt = g.favorite ? `${teamName(g.favorite)} −${Math.abs(g.spread).toFixed(1)}` : "";
+  const windTxt = mlb && w.wind_dir && !w.dome
+    ? `${Math.round(w.wind_mph)}mph ${w.wind_dir}`
+    : `${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
+  const cond = w.dome ? "Indoor" : `${Math.round(w.temp_f)}°F · ${windTxt}`;
+  let sub;
+  if (mlb) {
+    const bits = [`O/U ${g.total.toFixed(1)}`];
+    if (g.park_name) bits.unshift(g.park_name);
+    if (g.lineups_confirmed === false) bits.push("⚠ lineups pending");
+    sub = bits.join(" · ");
+  } else {
+    const favTxt = g.favorite ? `${teamName(g.favorite)} −${Math.abs(g.spread).toFixed(1)}` : "";
+    sub = `${favTxt} · O/U ${g.total.toFixed(1)}`;
+  }
+  const art = mlb ? ballpark(g) : stadium(g);
   return `
     <article class="game-card tilt">
-      <div class="stadium-wrap">${stadium(g)}</div>
+      <div class="stadium-wrap">${art}</div>
       <div class="game-info">
         <div class="matchup">
           <span class="mt away">${teamMark(g.away, 18)} ${escapeHtml(teamName(g.away))}</span>
           <span class="at">@</span>
           <span class="mt home">${teamMark(g.home, 18)} ${escapeHtml(teamName(g.home))}</span></div>
-        <div class="game-sub">${escapeHtml(favTxt)} · O/U ${g.total.toFixed(1)}</div>
+        <div class="game-sub">${escapeHtml(sub)}</div>
       </div>
       <div class="wind-wrap">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span></div>
     </article>`;
@@ -392,6 +431,20 @@ function bind() {
   document.querySelectorAll(".nav-btn").forEach((b) =>
     b.addEventListener("click", () => switchView(b.dataset.view)));
 
+  document.querySelectorAll(".sport-btn").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (state.sport === b.dataset.sport) return;
+      state.sport = b.dataset.sport;
+      state.search = "";
+      const search = document.getElementById("player-search");
+      if (search) search.value = "";
+      const url = new URL(location.href);
+      url.searchParams.set("sport", state.sport);
+      history.replaceState(null, "", url);
+      applySport();
+      load();
+    }));
+
   const conf = document.getElementById("min-conf"), edge = document.getElementById("min-edge");
   conf.addEventListener("input", () => {
     state.minConf = parseFloat(conf.value);
@@ -416,6 +469,7 @@ function bind() {
 
 initTheme();
 bind();
+applySport();
 initialView();
 requestAnimationFrame(moveIndicator);
 load();

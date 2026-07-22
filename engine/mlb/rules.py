@@ -1,0 +1,49 @@
+"""MLB betting rules.
+
+Same discipline as the NFL engine, with baseball's own holds:
+  * confidence and edge thresholds;
+  * **lineup hold** — a hitter prop is suppressed until the player is in a
+    posted lineup (the MLB analogue of the NFL injury hold);
+  * postponement-risk warnings flow through from the weather engine.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from ..rules import RuleConfig
+from ..betting import Recommendation
+from .models import MLBProp, MLBGame, HITTER_MARKETS
+from .projection import MLBProjection
+
+
+@dataclass
+class MLBRuleDecision:
+    recommend: bool
+    warnings: list[str] = field(default_factory=list)
+
+
+def apply_mlb_rules(rec: Recommendation, prop: MLBProp, game: MLBGame,
+                    proj: MLBProjection,
+                    config: RuleConfig | None = None) -> MLBRuleDecision:
+    config = config or RuleConfig()
+    warnings: list[str] = list(proj.warnings)
+    recommend = True
+
+    if rec.grade == "Pass":
+        recommend = False
+    if rec.confidence < config.min_confidence:
+        recommend = False
+        warnings.append(f"Below confidence threshold "
+                        f"({rec.confidence} < {config.min_confidence})")
+    if rec.edge < config.min_edge:
+        recommend = False
+        warnings.append(f"Edge too small ({rec.edge:+.1%})")
+
+    # Lineup hold: no bet on a hitter who isn't in a confirmed lineup.
+    if prop.market in HITTER_MARKETS and prop.lineup_spot == 0:
+        recommend = False
+        warnings.append(f"{prop.player} not in a confirmed lineup — "
+                        f"hold until the card is posted")
+
+    return MLBRuleDecision(recommend=recommend, warnings=warnings)

@@ -355,6 +355,54 @@ Planned next phases:
 
 ---
 
+## ⚾ MLB engine
+
+The same platform, curated for baseball, on the same site — flip the **NFL /
+MLB** switch in the header (or link `?sport=mlb`). The MLB pipeline emits the
+identical JSON shape, so all three tabs (Recommended / Trending / Players)
+work for both sports through the same components.
+
+![mlb dashboard](docs/mlb_dashboard.png)
+
+```bash
+python3 generate_mlb.py        # run the MLB model on the sample slate
+python3 server.py              # /api/mlb/recommendations serves it live
+```
+
+What's curated for baseball (`engine/mlb/`):
+
+- **Ballpark engine** (`parks.py`) — per-park HR / run / strikeout factors,
+  altitude (Coors: +22% HR, ⛰ 5,280 ft) and roof state; the dashboard draws an
+  **aerial ballpark** per game (team-colored stands, dirt diamond, outfield
+  wall, park badges) instead of the NFL stadium.
+- **Weather engine** (`weather.py`) — wind **in/out relative to the park**
+  (out at Wrigley boosts HR probability, in kills fly balls), heat/cold carry
+  effects, humidity, and postponement-risk warnings from rain chance.
+- **Matchup analyzer** (`matchup.py`) — platoon splits (batter vs pitcher
+  handedness), the starter's SLG allowed to that side, opposing **bullpen
+  rank** (bad pens give production back late), and **batting-order slot**
+  (top of the order = more plate appearances). Pitcher strikeout props price
+  off the opposing lineup's K rate.
+- **Betting model** (`betting.py`) — reuses the shared de-vig / best-line /
+  confidence / Kelly stack, but prices **home runs with a Poisson model**
+  (a 0.5 HR line is P(at least one), which a normal approximation gets wrong).
+- **Lineup hold** (`rules.py`) — hitter props are suppressed until the player
+  is in a posted lineup (see Mookie Betts in the sample slate: positive edge,
+  still held), the MLB analogue of the NFL injury hold.
+- **Recent form** — reuses the shared last-1/3/5/10 + season + career blend,
+  plus career-vs-this-pitcher history.
+
+**Live data** (`engine/mlb/sources/mlbstats.py`): adapters shaped for the free
+**MLB Stats API** (schedule, venues, probable pitchers — no key needed) and
+**Open-Meteo** (per-park weather by coordinates). Both hosts are blocked in
+some sandboxed environments; the adapters cache responses under `data/cache/`
+and degrade with instructions, exactly like the nflverse feeds. Confirmed
+lineups, per-player game logs, and Statcast metrics are the next adapter
+phase; the odds adapter already supports MLB player props via The Odds API
+market keys.
+
+---
+
 ## Backtesting & calibration
 
 The only real test of a betting model is whether its probabilities hold up.

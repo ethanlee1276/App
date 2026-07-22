@@ -10,7 +10,13 @@
  */
 
 const DEFAULT_TEAM = { name: "", nick: "", primary: "#3a4668", secondary: "#8893b5", tertiary: "#dfe4f5" };
-function team(abbr) { return (typeof TEAMS !== "undefined" && TEAMS[abbr]) || DEFAULT_TEAM; }
+// app.js points window.ACTIVE_TEAMS at the current sport's color dict
+// (NFL TEAMS or MLB_TEAMS) — abbreviations collide across leagues.
+function team(abbr) {
+  const src = (typeof window !== "undefined" && window.ACTIVE_TEAMS)
+    || (typeof TEAMS !== "undefined" ? TEAMS : {});
+  return src[abbr] || DEFAULT_TEAM;
+}
 
 function initials(name) {
   const parts = String(name).trim().split(/\s+/);
@@ -108,7 +114,9 @@ function teamMark(abbr, size = 20) {
 
 /* ---------------- Animated wind gauge ------------------------------------ */
 const COMPASS = { N:0, NNE:22.5, NE:45, ENE:67.5, E:90, ESE:112.5, SE:135, SSE:157.5,
-  S:180, SSW:202.5, SW:225, WSW:247.5, W:270, WNW:292.5, NW:315, NNW:337.5 };
+  S:180, SSW:202.5, SW:225, WSW:247.5, W:270, WNW:292.5, NW:315, NNW:337.5,
+  // MLB park-relative directions: "out" = blowing toward the outfield (up).
+  OUT:180, IN:0, CROSS:270 };
 
 function windGauge(weather, opts = {}) {
   const size = opts.size || 92;
@@ -236,6 +244,101 @@ function stadium(game, opts = {}) {
     <circle cx="120" cy="80" r="13" fill="none" stroke="${shade(home.secondary,20)}" stroke-width="1.2" opacity="0.7"/>
     <text x="120" y="84" text-anchor="middle" font-size="10" font-weight="800"
           fill="#ffffff" font-family="system-ui">${escapeAttr(game.home)}</text>
+    ${roofOverlay}
+  </svg>`;
+}
+
+/* ---------------- Aerial ballpark (MLB) ---------------------------------- */
+function ballpark(game, opts = {}) {
+  const w = opts.w || 240, h = opts.h || 150;
+  const home = team(game.home), away = team(game.away);
+  const roof = (game.roof || "open").toLowerCase();
+  const covered = roof === "dome" || roof === "closed";
+  const turf = /turf/.test((game.surface || "grass").toLowerCase());
+  const grass = turf ? "#1f7a46" : "#2a9d54";
+  const grassDark = turf ? "#186038" : "#1f7d41";
+  const dirt = "#b3814f";
+  const uid = "bp" + Math.random().toString(36).slice(2, 7);
+  const fx = (game.factors || {});
+  const hrPct = fx.hr ? Math.round((fx.hr - 1) * 100) : 0;
+  const hrBadge = hrPct ? `
+    <g>
+      <rect x="168" y="128" width="64" height="15" rx="7.5" fill="#0c1020" opacity="0.72"/>
+      <text x="200" y="139" text-anchor="middle" font-size="8.5" font-weight="700"
+            fill="${hrPct > 0 ? "#ffb547" : "#6fd3ff"}" font-family="system-ui">HR ${hrPct > 0 ? "+" : ""}${hrPct}%</text>
+    </g>` : "";
+  const altBadge = (game.altitude_ft || 0) >= 3000 ? `
+    <g>
+      <rect x="8" y="128" width="70" height="15" rx="7.5" fill="#0c1020" opacity="0.72"/>
+      <text x="43" y="139" text-anchor="middle" font-size="8.5" font-weight="700"
+            fill="#8a6cff" font-family="system-ui">⛰ ${(game.altitude_ft / 1000).toFixed(1)}k ft</text>
+    </g>` : "";
+  const roofOverlay = covered ? `
+    <ellipse cx="120" cy="82" rx="104" ry="64" fill="url(#${uid}roof)" opacity="0.78"/>
+    <g stroke="#ffffff" stroke-opacity="0.12" stroke-width="1">
+      <line x1="120" y1="20" x2="120" y2="144"/><line x1="28" y1="82" x2="212" y2="82"/>
+      <line x1="56" y1="34" x2="184" y2="130"/><line x1="184" y1="34" x2="56" y2="130"/>
+    </g>
+    <text x="120" y="30" text-anchor="middle" font-size="9" fill="#dfe4f5"
+          font-family="system-ui" opacity="0.85">${roof === "dome" ? "DOME" : "ROOF CLOSED"}</text>` :
+    (roof === "retractable" ? `<text x="120" y="26" text-anchor="middle" font-size="9"
+        fill="#9aa6c9" font-family="system-ui">RETRACTABLE · OPEN</text>` : "");
+
+  return `
+  <svg class="stadium" width="${w}" height="${h}" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <radialGradient id="${uid}sky" cx="50%" cy="30%" r="80%">
+        <stop offset="0%" stop-color="${covered ? "#0f1730" : "#16233f"}"/>
+        <stop offset="100%" stop-color="#0a0f22"/>
+      </radialGradient>
+      <linearGradient id="${uid}stand" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${shade(home.primary, 10)}"/>
+        <stop offset="100%" stop-color="${shade(home.primary, -30)}"/>
+      </linearGradient>
+      <radialGradient id="${uid}roof" cx="50%" cy="40%" r="70%">
+        <stop offset="0%" stop-color="${shade(home.primary, 35)}"/>
+        <stop offset="100%" stop-color="${shade(home.primary, -10)}"/>
+      </radialGradient>
+    </defs>
+    <rect x="0" y="0" width="240" height="150" fill="url(#${uid}sky)"/>
+    <!-- stands: horseshoe bowl open toward the outfield (top) -->
+    <path d="M120 152 m-116 -34 a116 96 0 1 1 232 0 l-26 12 a92 74 0 1 0 -180 0 z"
+          fill="url(#${uid}stand)" stroke="${shade(home.primary, -40)}" stroke-width="2"/>
+    <!-- field: outfield grass fan -->
+    <path d="M120 132 L34 60 A116 92 0 0 1 206 60 Z" fill="${grass}"/>
+    ${Array.from({ length: 5 }, (_, i) =>
+      `<path d="M120 132 L${44 + i * 16} ${56 - i * 2} A116 92 0 0 1 ${72 + i * 20} 34 Z"
+         fill="${grassDark}" opacity="0.18"/>`).join("")}
+    <!-- outfield wall -->
+    <path d="M34 60 A116 92 0 0 1 206 60" fill="none"
+          stroke="${shade(home.secondary, -10)}" stroke-width="4" opacity="0.9"/>
+    <!-- infield dirt diamond -->
+    <path d="M120 132 L82 96 A54 54 0 0 1 158 96 Z" fill="${dirt}"/>
+    <!-- infield grass -->
+    <path d="M120 124 L96 100 L120 76 L144 100 Z" fill="${grass}"/>
+    <!-- base paths -->
+    <g stroke="#f3e5c9" stroke-width="2" fill="none" opacity="0.9">
+      <path d="M120 124 L96 100 L120 76 L144 100 Z"/>
+    </g>
+    <!-- foul lines to the wall -->
+    <g stroke="#f3e5c9" stroke-width="1.6" opacity="0.75">
+      <line x1="120" y1="128" x2="40" y2="62"/>
+      <line x1="120" y1="128" x2="200" y2="62"/>
+    </g>
+    <!-- bases + mound + plate -->
+    <g fill="#ffffff">
+      <rect x="93" y="97" width="6" height="6" transform="rotate(45 96 100)"/>
+      <rect x="117" y="73" width="6" height="6" transform="rotate(45 120 76)"/>
+      <rect x="141" y="97" width="6" height="6" transform="rotate(45 144 100)"/>
+    </g>
+    <circle cx="120" cy="100" r="5.5" fill="${dirt}" stroke="#caa06a" stroke-width="1"/>
+    <circle cx="120" cy="100" r="1.8" fill="#ffffff"/>
+    <path d="M116 129 h8 l-1.5 4 h-5 Z" fill="#ffffff"/>
+    <!-- park name arc-ish label -->
+    <text x="120" y="52" text-anchor="middle" font-size="8.5" font-weight="700"
+          fill="#ffffff" opacity="0.85" font-family="system-ui">${escapeAttr(game.park_name || "")}</text>
+    ${hrBadge}
+    ${altBadge}
     ${roofOverlay}
   </svg>`;
 }
