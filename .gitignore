@@ -9,6 +9,9 @@ venv/
 # Generated output (regenerate with: python3 generate.py)
 web/data/recommendations.json
 
+# Downloaded / cached data feeds
+data/cache/
+
 # OS / editor
 .DS_Store
 .idea/

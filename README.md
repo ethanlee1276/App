@@ -120,27 +120,71 @@ engine/
   rules.py        recommend / hold decisions
   explain.py      human-readable reasoning
   pipeline.py     orchestrates the whole slate
+  sources/
+    fetch.py      cached HTTP CSV fetch (stdlib, proxy-aware, gzip)
+    nflverse.py   real nflverse → Slate (schedules, weather, stats, defenses)
 data/
   sample_slate.json   illustrative slate (7 props across 3 games)
+  cache/              downloaded feeds (git-ignored)
 web/                  dashboard (vanilla HTML/CSS/JS, no build step)
-generate.py           CLI → writes web/data/recommendations.json
+generate.py           CLI → run the model on the sample slate
+nfl_build.py          CLI → build a real nflverse slate and run the model
 server.py             stdlib web server + live /api/recommendations
+tests/                offline unit tests (engine math + nflverse mapping)
 ```
 
 ---
 
+## Real nflverse data
+
+The engine can build slates from **live nflverse data** instead of the sample
+file — same math, real inputs:
+
+```bash
+python3 nfl_build.py 2024 5 --games-only   # real games + weather (no stats needed)
+python3 nfl_build.py 2024 5                 # full model (needs weekly stats, see below)
+python3 nfl_build.py 2024 5 --out web/data/recommendations.json
+```
+
+`engine/sources/nflverse.py` is the adapter. What it pulls, and from where:
+
+| Feed                         | Source                                   | Reachable from a standard egress env |
+|------------------------------|------------------------------------------|--------------------------------------|
+| Games, weather, spread, total | nflverse `games.csv` (git tree)          | ✅ yes — live                        |
+| Rosters (player→team/pos)     | nflverse `rosters.csv` (git tree)        | ✅ yes — live                        |
+| Weekly player stats           | nflverse-data **GitHub releases**        | ⚠️ often blocked by egress policy    |
+| Sportsbook prop lines         | *(no free nflverse source — needs odds API)* | ➖ proxy line used for now        |
+
+- **Schedules/weather/market totals load live** and feed the game-script and
+  weather modules directly (real temp, wind, dome/roof, spread, total).
+- **Weekly stats** (per-player game logs + computed defense-vs-position
+  profiles) come from nflverse *release* assets. Where GitHub release traffic is
+  blocked, export them once and drop the CSV at
+  `data/cache/player_stats_<season>.csv` — the loader picks it up automatically:
+
+  ```python
+  import nfl_data_py as nfl
+  nfl.import_weekly_data([2024]).to_csv("data/cache/player_stats_2024.csv", index=False)
+  ```
+- **Defense profiles are computed**, not hand-entered: the loader aggregates
+  what each team allows to QBs / WRs / TEs / RBs (rush & receiving) from the
+  weekly box scores and expresses it relative to league average.
+- **Lines**: nflverse has no player-prop lines, so each prop currently gets a
+  *proxy* line at the player's recent-form baseline. This shows how far the
+  matchup/weather model moves the projection off baseline; swap in an odds feed
+  (below) for edges against real books.
+
 ## The road to live data
 
-The engine is deliberately decoupled from its data sources by one seam:
-`engine/data_loader.py` produces a `Slate`. Everything downstream is real math.
-To go live, replace the sample loader with adapters for:
+The engine is decoupled from its sources by one seam — a `Slate` (from the
+sample file *or* `engine/sources/nflverse.py`). Remaining adapters to add:
 
-| Concern            | Suggested source                                             |
-|--------------------|--------------------------------------------------------------|
-| 3–5 yrs of stats   | **nflverse** (`nfl_data_py`) — free play-by-play & weekly data |
-| Sportsbook lines   | **The Odds API** or a books aggregator (7-book comparison)   |
-| Weather            | Open-Meteo / a weather API keyed by stadium + kickoff        |
-| Injuries           | Official injury reports + a news feed for game-time decisions |
+| Concern            | Suggested source                                             | Status |
+|--------------------|--------------------------------------------------------------|--------|
+| 3–5 yrs of stats   | **nflverse** (`nfl_data_py` / release CSVs)                  | ✅ integrated (release-gated) |
+| Weather            | nflverse schedules (temp/wind/roof)                          | ✅ integrated; add precip via a weather API |
+| Sportsbook lines   | **The Odds API** or a books aggregator (7-book comparison)   | ➖ next |
+| Injuries           | nflverse injuries release + a news feed for game-time calls  | ➖ next |
 
 Planned next phases (not yet built):
 
