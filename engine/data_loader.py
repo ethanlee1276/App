@@ -82,6 +82,8 @@ def load_slate(path: str | Path) -> Slate:
             injuries=[_injury(i) for i in g.get("injuries", [])],
             spread=g.get("spread", 0.0),
             total=g.get("total", 44.0),
+            roof=g.get("roof", ""),
+            surface=g.get("surface", "grass"),
         )
         for g in data["games"]
     ]

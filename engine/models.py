@@ -71,6 +71,7 @@ class Weather:
     dome: bool = False
     temp_f: float = 65.0
     wind_mph: float = 5.0
+    wind_dir: str = ""           # compass, e.g. "NW" (not in the nflverse feed)
     precip_chance: float = 0.0   # 0..1
     rain: bool = False
     snow: bool = False
@@ -136,3 +137,5 @@ class Game:
     injuries: list[Injury] = field(default_factory=list)
     spread: float = 0.0          # home spread; negative = home favored
     total: float = 44.0
+    roof: str = ""               # dome | closed | outdoors | open (raw nflverse)
+    surface: str = "grass"       # grass | fieldturf | ... (drives stadium color)

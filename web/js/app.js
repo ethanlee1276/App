@@ -56,6 +56,7 @@ function render() {
   const recommendedCount = recs.filter((r) => r._recommended).length;
 
   renderStats(d, recs, recommendedCount);
+  renderGames(d.games || []);
 
   const visible = recs.filter((r) => (state.showAll ? true : r._recommended));
   const host = document.getElementById("cards");
@@ -80,6 +81,40 @@ function renderStats(d, recs, recommendedCount) {
   document.getElementById("stats").innerHTML = tiles
     .map(([k, v]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`)
     .join("");
+}
+
+function renderGames(games) {
+  const host = document.getElementById("games");
+  const strip = document.getElementById("slate-strip");
+  if (!host) return;
+  if (!games.length) { if (strip) strip.style.display = "none"; return; }
+  if (strip) strip.style.display = "";
+  host.innerHTML = games.map(gameCard).join("");
+}
+
+function teamName(abbr) {
+  return (typeof TEAMS !== "undefined" && TEAMS[abbr] && TEAMS[abbr].nick) || abbr;
+}
+
+function gameCard(g) {
+  const w = g.weather || {};
+  const cond = w.dome ? "Indoor" :
+    `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
+  const favTxt = g.favorite
+    ? `${teamName(g.favorite)} −${Math.abs(g.spread).toFixed(1)}` : "";
+  return `
+    <article class="game-card">
+      <div class="stadium-wrap">${stadium(g)}</div>
+      <div class="game-info">
+        <div class="matchup">
+          <span class="mt away">${escapeHtml(teamName(g.away))}</span>
+          <span class="at">@</span>
+          <span class="mt home">${escapeHtml(teamName(g.home))}</span>
+        </div>
+        <div class="game-sub">${escapeHtml(favTxt)} · O/U ${g.total.toFixed(1)}</div>
+      </div>
+      <div class="wind-wrap">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span></div>
+    </article>`;
 }
 
 function projBar(r) {
@@ -124,6 +159,12 @@ function trendChip(r) {
   return `<span class="chip">Steady form</span>`;
 }
 
+function booksChip(r) {
+  const n = (r.all_lines || []).length;
+  if (n <= 1) return "";
+  return `<span class="chip books" title="Best of ${n} books">🛒 ${n} books · best ${escapeHtml(r.book)}</span>`;
+}
+
 function cardHTML(r) {
   const reasons = (r.reasons || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
   const warnings = (r.warnings || [])
@@ -135,11 +176,14 @@ function cardHTML(r) {
   return `
     <article class="card ${r._recommended ? "" : "faded"}" style="--grade-color:${gradeColor(r.grade)}">
       <div class="card-head">
-        <div>
-          <div class="player">${escapeHtml(r.player)}</div>
-          <div class="subtitle">${escapeHtml(r.team)} vs ${escapeHtml(r.opponent)} · ${escapeHtml(r.position)}</div>
-          <div class="pick">${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}
-            <span class="book">· ${escapeHtml(r.book)} ${american(r.odds)}</span></div>
+        <div class="card-id">
+          ${typeof playerAvatar === "function" ? playerAvatar(r.player, r.team) : ""}
+          <div>
+            <div class="player">${escapeHtml(r.player)}</div>
+            <div class="subtitle">${escapeHtml(r.team)} vs ${escapeHtml(r.opponent)} · ${escapeHtml(r.position)}</div>
+            <div class="pick">${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}
+              <span class="book">· ${escapeHtml(r.book)} ${american(r.odds)}</span></div>
+          </div>
         </div>
         <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>
       </div>
@@ -154,7 +198,7 @@ function cardHTML(r) {
 
       ${confMeter(r)}
 
-      <div class="chips">${trendChip(r)}${stakeChip}</div>
+      <div class="chips">${trendChip(r)}${booksChip(r)}${stakeChip}</div>
 
       ${warnings}
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}

@@ -34,6 +34,28 @@ Tighten the model from the CLI or the UI sliders:
 python3 generate.py --min-confidence 7 --min-edge 4
 ```
 
+## Dashboard visuals
+
+The dashboard is styled to feel like a real product, with all artwork drawn as
+self-contained SVG (no external images — works offline and under a strict CSP):
+
+- **This week's stadiums strip** — a stylized **aerial stadium** per game whose
+  roof (dome / retractable / open), playing surface (grass vs turf) and stands
+  are colored from real nflverse team colors.
+- **Animated wind gauge** — a compass whose streamlines flow in the wind's
+  direction and speed up with real wind speed; dome games show a climate badge.
+- **Cartoony player avatars** — a team-colored helmet avatar beside each name.
+  These are stylized marks, not likenesses; `playerAvatar()` will use a real
+  `headshot` URL (nflverse/ESPN provide them) when one is supplied.
+- **Line-shopping & form badges** on every pick (`N books · best <book>`, trend,
+  suggested stake), and the injury-hold warning when a player is dinged.
+
+> On real player likenesses: generating photoreal/cartoon faces of specific
+> players isn't done here (capability + likeness rights). The avatar system is
+> built to accept official headshot URLs instead. Wind *direction* and
+> precipitation aren't in the nflverse feed either — wire a weather API to fill
+> those; wind *speed*, roof and surface are real.
+
 ---
 
 ## How it works
@@ -129,6 +151,8 @@ data/
   sample_slate.json   illustrative slate (7 props across 3 games)
   cache/              downloaded feeds (git-ignored)
 web/                  dashboard (vanilla HTML/CSS/JS, no build step)
+  js/teams.js         NFL team colors + names (from nflverse)
+  js/visuals.js       SVG art: player avatars, wind gauge, aerial stadiums
 generate.py           CLI → run the model on the sample slate
 nfl_build.py          CLI → build a real nflverse slate and run the model
 server.py             stdlib web server + live /api/recommendations

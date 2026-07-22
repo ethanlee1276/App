@@ -81,5 +81,29 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None) -> di
             "min_confidence": config.min_confidence,
             "min_edge": config.min_edge,
         },
+        "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,
+    }
+
+
+def _game_to_dict(g) -> dict:
+    """Per-game context for the dashboard's stadium + weather visuals."""
+    w = g.weather
+    fav = g.home if g.spread < 0 else g.away
+    return {
+        "home": g.home,
+        "away": g.away,
+        "spread": g.spread,
+        "favorite": fav,
+        "total": g.total,
+        "roof": g.roof,
+        "surface": g.surface,
+        "weather": {
+            "dome": w.dome,
+            "temp_f": w.temp_f,
+            "wind_mph": w.wind_mph,
+            "wind_dir": w.wind_dir,
+            "rain": w.rain,
+            "snow": w.snow,
+        },
     }

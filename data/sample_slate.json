@@ -29,21 +29,21 @@
   ],
   "games": [
     {
-      "home": "CHI", "away": "GB", "spread": 6.5, "total": 43.0,
-      "weather": {"dome": false, "temp_f": 26, "wind_mph": 16, "precip_chance": 0.1, "rain": false, "snow": false},
+      "home": "CHI", "away": "GB", "spread": 6.5, "total": 43.0, "roof": "outdoors", "surface": "grass",
+      "weather": {"dome": false, "temp_f": 26, "wind_mph": 16, "wind_dir": "NW", "precip_chance": 0.1, "rain": false, "snow": false},
       "injuries": [
         {"player": "Gervon Dexter", "team": "CHI", "position": "DT", "role": "dt", "status": "OUT"},
         {"player": "Kyler Gordon", "team": "CHI", "position": "CB", "role": "slot_cb", "status": "OUT"}
       ]
     },
     {
-      "home": "MIN", "away": "DET", "spread": 3.0, "total": 49.0,
-      "weather": {"dome": true, "temp_f": 70, "wind_mph": 0, "precip_chance": 0.0, "rain": false, "snow": false},
+      "home": "MIN", "away": "DET", "spread": 3.0, "total": 49.0, "roof": "dome", "surface": "fieldturf",
+      "weather": {"dome": true, "temp_f": 70, "wind_mph": 0, "wind_dir": "", "precip_chance": 0.0, "rain": false, "snow": false},
       "injuries": []
     },
     {
-      "home": "KC", "away": "BUF", "spread": -2.5, "total": 47.0,
-      "weather": {"dome": false, "temp_f": 34, "wind_mph": 12, "precip_chance": 0.2, "rain": false, "snow": false},
+      "home": "KC", "away": "BUF", "spread": -2.5, "total": 47.0, "roof": "outdoors", "surface": "grass",
+      "weather": {"dome": false, "temp_f": 34, "wind_mph": 12, "wind_dir": "SW", "precip_chance": 0.2, "rain": false, "snow": false},
       "injuries": [
         {"player": "Rashee Rice", "team": "KC", "position": "WR", "role": "wr1", "status": "QUESTIONABLE"}
       ]

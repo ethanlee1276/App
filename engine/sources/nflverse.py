@@ -105,6 +105,8 @@ def build_games(season: int, week: int) -> list[Game]:
             injuries=[],  # injury feed is a separate (release-gated) source
             spread=-_f(r, "spread_line"),
             total=_f(r, "total_line", default=44.0),
+            roof=_s(r, "roof"),
+            surface=_s(r, "surface", default="grass"),
         ))
     return games
 

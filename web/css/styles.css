@@ -165,3 +165,73 @@ input[type=range] { accent-color: var(--accent); }
   .topbar { flex-direction: column; align-items: flex-start; }
   .metrics { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* ============================================================
+   Visuals: slate strip (stadiums + wind), avatars, badges
+   ============================================================ */
+
+.slate-strip { padding: 18px 28px 4px; }
+.strip-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+.strip-head h2 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: .2px; color: var(--text); }
+
+.games-scroller {
+  display: flex; gap: 14px; overflow-x: auto; padding-bottom: 10px;
+  scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+}
+.games-scroller::-webkit-scrollbar { height: 8px; }
+.games-scroller::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+
+.game-card {
+  flex: 0 0 264px; scroll-snap-align: start;
+  background: linear-gradient(180deg, var(--card-2), var(--card));
+  border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; box-shadow: var(--shadow);
+  transition: transform .12s ease, border-color .2s ease;
+}
+.game-card:hover { transform: translateY(-3px); border-color: #33406b; }
+.stadium-wrap { line-height: 0; background: #0a0f22; }
+.stadium-wrap .stadium { width: 100%; height: auto; display: block; }
+
+.game-info { padding: 10px 14px 4px; }
+.matchup { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; }
+.matchup .at { color: var(--muted); font-weight: 500; }
+.matchup .home { color: var(--text); }
+.matchup .away { color: var(--muted); }
+.game-sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+
+.wind-wrap {
+  display: flex; align-items: center; gap: 10px; padding: 6px 14px 12px;
+}
+.wind-wrap .cond { color: var(--muted); font-size: 12px; }
+.wind { line-height: 0; }
+
+/* animated wind streamlines */
+.wind .stream {
+  animation-name: windflow; animation-timing-function: linear; animation-iteration-count: infinite;
+  opacity: .85;
+}
+.wind .s0 { animation-delay: 0s; }
+.wind .s1 { animation-delay: .25s; opacity: .6; }
+.wind .s2 { animation-delay: .1s; }
+.wind .s3 { animation-delay: .35s; opacity: .55; }
+.wind.low .stream { opacity: .5; }
+.wind.high .stream { stroke-width: 3; }
+@keyframes windflow {
+  from { stroke-dashoffset: 48; }
+  to   { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wind .stream { animation: none; }
+}
+
+/* player avatar in card head */
+.card-id { display: flex; gap: 12px; align-items: flex-start; }
+.avatar { border-radius: 50%; flex-shrink: 0; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+
+/* new chips */
+.chip.books { color: var(--play); border-color: rgba(111,211,255,.35); }
+
+/* subtle entrance for cards */
+.card { animation: rise .35s ease both; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .card { animation: none; } }
