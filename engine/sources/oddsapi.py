@@ -247,4 +247,10 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         else:
             result.unmatched.append(f"{prop.player} ({prop.market})")
 
+    # Append a timestamped snapshot so repeated runs build a line-movement
+    # history (engine.linemoves reads it; proxy lines are skipped).
+    if result.matched:
+        from ..linemoves import record_snapshots
+        record_snapshots(slate.props)
+
     return result

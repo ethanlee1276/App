@@ -64,9 +64,13 @@ Visual details:
   nflverse team colors, with end-zone team labels, hash marks and goalposts.
 - **Animated wind gauge** — streamlines flow in the wind's direction and speed
   up with real wind speed; dome games show a climate badge.
-- **Cartoony player avatars** — a team-colored helmet avatar beside each name.
-  These are stylized marks, not likenesses; `playerAvatar()` will use a real
-  `headshot` URL (nflverse/ESPN provide them) when one is supplied.
+- **Player avatars & real headshots** — a team-colored helmet avatar beside
+  each name (stylized mark, not a likeness). When a slate is built from real
+  nflverse stats, each player's official `headshot_url` flows through the
+  pipeline and the photo layers over the helmet automatically — failing images
+  remove themselves, so the helmet always shows through offline.
+- **Team logo marks** — procedural team-color monograms in game matchup lines
+  and player-profile headers.
 - **Motion** — staggered scroll-reveal (IntersectionObserver), pointer-tilt on
   the stadium cards, projection bars that draw in, a radar "ping" on each
   player's latest game, grade-colored hover glow, and a logo sheen. All honor
@@ -166,6 +170,7 @@ engine/
   explain.py      human-readable reasoning
   pipeline.py     orchestrates the whole slate
   backtest.py     walk-forward backtest: calibration, Brier/ECE, ROI, CLV
+  linemoves.py    line-movement history + steam detection
   ml/
     features.py   shared feature extraction (train + inference)
     model.py      pure-Python ridge regression + serialized MultiplierModel
@@ -175,6 +180,7 @@ engine/
     nflverse.py   real nflverse → Slate (schedules, weather, stats, defenses)
     oddsapi.py    The Odds API → real book lines (de-vig, best-line shopping)
     injuries.py   nflverse injury reports → holds + knock-on effects
+    depthcharts.py  nflverse depth charts → role refinement, backup demotion
 data/
   sample_slate.json   illustrative slate (7 props across 3 games)
   cache/              downloaded feeds (git-ignored)
@@ -276,9 +282,48 @@ python3 nfl_build.py 2024 5 --injuries
   ```
 
 > Caveat: the report gives a player's position but no depth-chart / coverage
-> detail, so knock-on effects treat a ruled-out starter generically —
-> distinguishing an *elite* CB from depth, or LT from RT, needs a depth-chart /
-> grades source (a later phase). The own-player hold needs none of that.
+> detail. Add `--depth` (below) to refine that; distinguishing an *elite* CB
+> from an average starter still needs a grades source (future work). The
+> own-player hold needs none of that.
+
+## Depth charts (`--depth`)
+
+`engine/sources/depthcharts.py` sharpens the injury knock-on effects using
+nflverse weekly depth charts:
+
+```bash
+python3 nfl_build.py 2024 5 --injuries --depth
+```
+
+- **Role refinement**: a ruled-out "T" becomes specifically the **LT** (blind
+  side) or RT; a "CB" becomes the boundary starter (`cb1`) or the
+  **nickel/slot corner** (`slot_cb`), which changes *which* receivers get the
+  boost.
+- **Backup demotion**: a ruled-out player who isn't the starter
+  (`depth_team > 1`) stops triggering knock-on adjustments entirely — a swing
+  tackle being out shouldn't move the QB's projection.
+- Same release-gated delivery, with the `data/cache/depth_charts_<season>.csv`
+  fallback (`nfl.import_depth_charts([2024])`).
+
+## Line movement & steam detection
+
+Every `--odds` run appends a timestamped snapshot of each book's lines to
+`data/cache/line_history.jsonl`. Across repeated runs, `engine/linemoves.py`
+turns that history into a movement report printed after the slate:
+
+```
+Line movement (open → current):
+  ▲ Josh Jacobs rush_yds: 70.5 → 72 (+1.5)  🔥 STEAM
+  ▼ Josh Allen pass_yds: 250.5 → 245 (-5.5)
+```
+
+- **Open vs current** per book and as a consensus (median across books).
+- **Steam detection**: several books moving the same direction by ≥0.5 within
+  an hour — the classic footprint of sharp money.
+- Consecutive identical snapshots are deduped, so cached re-runs never
+  fabricate movement.
+- Reverse line movement (line vs public %) needs public-betting data, which has
+  no free feed — future work.
 
 ## The road to live data
 
@@ -298,11 +343,14 @@ Planned next phases:
    ECE / ROI before tuning anything.
 2. **Learned coefficients** — ✅ done (`train_model.py`, `engine/ml/`); ridge
    model of the form-baseline multiplier, validated against the backtest.
-3. **Depth charts** — precise injury knock-on effects (elite vs depth CB, LT vs
-   RT).
-4. **Live recalculation** — re-run projections on injury news and line moves;
-   detect steam / reverse line movement and closing-line value.
-5. **Correlation & parlay rules**, referee tendencies, travel/rest, and
+3. **Depth charts** — ✅ done (`--depth`); LT vs RT, boundary vs slot CB, and
+   backup demotion. Elite-vs-average starter grading still needs a grades
+   source.
+4. **Line movement** — ✅ done (snapshot history + steam detection on every
+   `--odds` run). Reverse line movement needs public-betting %, no free feed.
+5. **Live recalculation** — re-run projections on injury news automatically
+   (the pieces exist; needs a scheduler/daemon around them).
+6. **Correlation & parlay rules**, referee tendencies, travel/rest, and
    market-vs-model sentiment.
 
 ---

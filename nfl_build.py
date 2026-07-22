@@ -46,6 +46,8 @@ def main() -> None:
                     help="Only print real games + weather (no stats needed).")
     ap.add_argument("--injuries", action="store_true",
                     help="Attach real nflverse injury reports (holds + knock-on effects).")
+    ap.add_argument("--depth", action="store_true",
+                    help="Refine injury knock-on roles from nflverse depth charts.")
     ap.add_argument("--odds", action="store_true",
                     help="Attach real sportsbook lines via The Odds API (needs ODDS_API_KEY).")
     ap.add_argument("--books", default=None,
@@ -80,6 +82,19 @@ def main() -> None:
         except DataUnavailable as exc:
             print(f"\n⚠️  Injury feed unavailable — projecting without it.\n   {exc}")
 
+    if args.depth:
+        try:
+            from engine.sources.depthcharts import load_depth_charts, refine_injury_roles
+            rows = load_depth_charts(args.season)
+            all_inj = [i for g in slate.games for i in g.injuries]
+            dres = refine_injury_roles(all_inj, rows, args.week)
+            print(f"\nDepth charts: refined {dres.refined} role(s), "
+                  f"demoted {dres.demoted} backup(s).")
+            for d in dres.details[:8]:
+                print(f"  · {d}")
+        except DataUnavailable as exc:
+            print(f"\n⚠️  Depth charts unavailable — keeping report-derived roles.\n   {exc}")
+
     real_odds = False
     if args.odds:
         try:
@@ -93,6 +108,14 @@ def main() -> None:
                       f"{', '.join(res.unmatched[:6])}{' …' if len(res.unmatched) > 6 else ''}")
         except oddsapi.OddsAPIError as exc:
             print(f"\n⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
+
+        if real_odds:
+            from engine.linemoves import load_history, analyze, summary_lines
+            moves = analyze(load_history())
+            if moves:
+                print("\nLine movement (open → current):")
+                for line in summary_lines(moves):
+                    print(line)
 
     model = None
     if args.model:
