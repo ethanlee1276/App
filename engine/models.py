@@ -133,6 +133,36 @@ class Prop:
 
 
 @dataclass
+class LiveStatus:
+    """Live game state, shared by both sports. ``state`` is scheduled | live |
+    final. Populated by a live-scores adapter (ESPN for NFL, MLB Stats API for
+    MLB) or provided in a slate for illustration."""
+
+    state: str = "scheduled"
+    home_score: Optional[int] = None
+    away_score: Optional[int] = None
+    period: str = ""             # "Q3", "Top 5th", "HALFTIME", "F/10"
+    clock: str = ""              # "10:32" (NFL) or "" (MLB)
+    detail: str = ""             # freeform, e.g. "2nd & 7 at DEN 45" / "2 outs"
+    start_time: str = ""         # ISO or human, for scheduled games
+
+
+def live_to_dict(live) -> Optional[dict]:
+    """Serialize a LiveStatus for the pipeline JSON (None stays None)."""
+    if live is None:
+        return None
+    return {
+        "state": live.state,
+        "home_score": live.home_score,
+        "away_score": live.away_score,
+        "period": live.period,
+        "clock": live.clock,
+        "detail": live.detail,
+        "start_time": live.start_time,
+    }
+
+
+@dataclass
 class Game:
     home: str
     away: str
@@ -142,3 +172,4 @@ class Game:
     total: float = 44.0
     roof: str = ""               # dome | closed | outdoors | open (raw nflverse)
     surface: str = "grass"       # grass | fieldturf | ... (drives stadium color)
+    live: Optional[LiveStatus] = None

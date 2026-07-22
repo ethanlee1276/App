@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .models import (
     Team, DefenseProfile, Weather, Injury, Game, Prop, GameLog, SportsbookLine,
+    LiveStatus,
 )
 
 
@@ -85,6 +86,7 @@ def load_slate(path: str | Path) -> Slate:
             total=g.get("total", 44.0),
             roof=g.get("roof", ""),
             surface=g.get("surface", "grass"),
+            live=LiveStatus(**g["live"]) if g.get("live") else None,
         )
         for g in data["games"]
     ]

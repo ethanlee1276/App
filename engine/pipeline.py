@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .data_loader import load_slate, Slate
-from .models import MARKET_LABELS
+from .models import MARKET_LABELS, live_to_dict
 from .projection import build_projection
 from .betting import evaluate_prop
 from .rules import apply_rules, RuleConfig
@@ -87,7 +87,9 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         proj = build_projection(prop, game, opponent, model=model)
         rec = evaluate_prop(prop, proj)
         decision = apply_rules(rec, prop, game, config)
-        results.append(_rec_to_dict(rec, prop, decision, proj))
+        d = _rec_to_dict(rec, prop, decision, proj)
+        d["live"] = bool(game.live and game.live.state == "live")
+        results.append(d)
 
     # Rank: recommended bets first, then by confidence, then by edge.
     results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)
@@ -122,6 +124,7 @@ def _game_to_dict(g) -> dict:
         "total": g.total,
         "roof": g.roof,
         "surface": g.surface,
+        "live": live_to_dict(g.live),
         "weather": {
             "dome": w.dome,
             "temp_f": w.temp_f,

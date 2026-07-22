@@ -532,6 +532,26 @@ python3 backtest.py 2024 --weeks 14-17 --model data/models/multiplier_2024.json
 Needs weekly stats (same `data/cache/player_stats_<season>.csv` fallback).
 Models are written to `data/models/` (git-ignored).
 
+## Live games & in-play
+
+Both sports show games as they happen: a game in progress gets a pulsing **🔴 LIVE**
+badge, the **current score**, and period/inning state (Q3 8:42 · down & distance
+for NFL; Top 6th · outs/baserunners for MLB); finals show a **FINAL** badge. Live
+games float to the front of the strip, and picks on a live game carry a
+**LIVE · in-play** ribbon so you can act on them while the market is moving.
+
+- NFL live state comes from **ESPN's public scoreboard** (`engine/sources/livescores.py`,
+  keyless); MLB from the **MLB Stats API** schedule + linescore
+  (`engine/mlb/sources/live.py`). Both parsers are pure and unit-tested; `--live`
+  overlays them onto a built slate (`nfl_build.py --live`, `mlb_build.py`).
+- The pipeline flags each pick `live: true` when its game is in progress, so the
+  UI (and any future live-odds pass) can treat in-play props specially.
+
+> On live betting: this surfaces live *analysis* — in-play games, scores and
+> live-flagged recommendations — not wager placement. Real in-play pricing plugs
+> a live-odds feed (The Odds API's in-play markets) into the same betting model;
+> actually placing bets is a regulated sportsbook function this tool doesn't perform.
+
 ## Historical database
 
 A local **SQLite** store (`engine/db.py`, stdlib only) is the foundation for

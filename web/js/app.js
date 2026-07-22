@@ -171,9 +171,12 @@ function renderStats() {
 }
 
 function renderGames() {
-  const games = state.data.games || [];
+  const games = [...(state.data.games || [])];
   const host = document.getElementById("games");
   if (!games.length) { host.innerHTML = ""; return; }
+  // Live games float to the front of the strip.
+  const rank = (g) => ((g.live || {}).state === "live" ? 0 : (g.live || {}).state === "final" ? 2 : 1);
+  games.sort((a, b) => rank(a) - rank(b));
   host.innerHTML = games.map(gameCard).join("");
   revealChildren(host);
   enableTilt(host);
@@ -197,15 +200,31 @@ function gameCard(g) {
     sub = `${favTxt} · O/U ${g.total.toFixed(1)}`;
   }
   const art = mlb ? ballpark(g) : stadium(g);
+  const live = g.live || {};
+  const isLive = live.state === "live";
+  const isFinal = live.state === "final";
+  // Score shown beside each team when the game has started.
+  const score = (side) => (live.home_score != null && (isLive || isFinal))
+    ? `<b class="score">${side === "home" ? live.home_score : live.away_score}</b>` : "";
+  let badge = "";
+  if (isLive) {
+    badge = `<div class="status-badge live"><span class="live-dot"></span>LIVE
+      <span class="per">${escapeHtml(live.period)}${live.clock ? " " + escapeHtml(live.clock) : ""}</span></div>`;
+  } else if (isFinal) {
+    badge = `<div class="status-badge final">FINAL${live.period && live.period !== "Final" ? " · " + escapeHtml(live.period) : ""}</div>`;
+  }
+  const liveDetail = isLive && live.detail
+    ? `<div class="live-detail"><span class="live-dot sm"></span>${escapeHtml(live.detail)}</div>` : "";
   return `
-    <article class="game-card tilt">
-      <div class="stadium-wrap">${art}</div>
+    <article class="game-card tilt ${isLive ? "is-live" : ""}">
+      <div class="stadium-wrap">${art}${badge}</div>
       <div class="game-info">
         <div class="matchup">
-          <span class="mt away">${teamMark(g.away, 18)} ${escapeHtml(teamName(g.away))}</span>
+          <span class="mt away">${teamMark(g.away, 18)} ${escapeHtml(teamName(g.away))} ${score("away")}</span>
           <span class="at">@</span>
-          <span class="mt home">${teamMark(g.home, 18)} ${escapeHtml(teamName(g.home))}</span></div>
+          <span class="mt home">${teamMark(g.home, 18)} ${escapeHtml(teamName(g.home))} ${score("home")}</span></div>
         <div class="game-sub">${escapeHtml(sub)}</div>
+        ${liveDetail}
       </div>
       <div class="wind-wrap">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span></div>
     </article>`;
@@ -263,6 +282,7 @@ function cardHTML(r) {
   const stakeChip = r._ok ? `<span class="chip stake">Stake ${r.stake_units.toFixed(2)}u</span>` : "";
   return `
     <article class="card ${r._ok ? "" : "faded"}" style="--grade-color:${gradeColor(r.grade)}">
+      ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
       <div class="card-head">
         <div class="card-id">${playerAvatar(r.player, r.team, { headshot: r.headshot })}
           <div>

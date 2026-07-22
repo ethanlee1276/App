@@ -16,8 +16,18 @@ from __future__ import annotations
 
 import argparse
 
+import datetime
+
 from engine import db
 from engine import ingest
+
+
+def default_seasons() -> str:
+    """The five most recent completed seasons. A season is labelled by its
+    starting year; the current calendar year's season isn't complete until the
+    following winter, so the latest *completed* season is last year."""
+    end = datetime.date.today().year - 1
+    return f"{end - 4}-{end}"
 
 
 def parse_seasons(spec: str) -> list[int]:
@@ -45,7 +55,8 @@ def print_summary(conn) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Populate the historical database.")
     ap.add_argument("sport", choices=["nfl", "mlb", "status"])
-    ap.add_argument("--seasons", default="2020-2024", help="NFL: e.g. 2020-2024")
+    ap.add_argument("--seasons", default=default_seasons(),
+                    help="NFL: e.g. 2021-2025 (default: last 5 completed seasons)")
     ap.add_argument("--dates", default="", help="MLB: comma-separated YYYY-MM-DD")
     ap.add_argument("--db", default=str(db.DEFAULT_DB))
     args = ap.parse_args()

@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..rules import RuleConfig
+from ..models import live_to_dict
 from .data_loader import load_mlb_slate, MLBSlate
 from .models import MARKET_LABELS
 from .parks import get_park
@@ -72,6 +73,7 @@ def _game_to_dict(g) -> dict:
         "spread": 0.0, "favorite": "", "total": g.total,
         "roof": park.roof if not w.roof_closed else "closed",
         "surface": park.surface,
+        "live": live_to_dict(g.live),
         "park_name": park.name,
         "factors": {"hr": park.hr_factor, "run": park.run_factor, "k": park.k_factor},
         "altitude_ft": park.altitude_ft,
@@ -97,7 +99,9 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         proj = build_mlb_projection(prop, game, model=model)
         rec = evaluate_mlb_prop(prop, proj)
         decision = apply_mlb_rules(rec, prop, game, proj, config)
-        results.append(_rec_to_dict(rec, prop, decision, proj))
+        d = _rec_to_dict(rec, prop, decision, proj)
+        d["live"] = bool(game.live and game.live.state == "live")
+        results.append(d)
 
     results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]),
                  reverse=True)

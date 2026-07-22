@@ -88,6 +88,7 @@ class MLBGame:
     total: float = 8.5                         # game run total (O/U)
     weather: MLBWeather = field(default_factory=MLBWeather)
     lineups_confirmed: bool = True
+    live: Optional["object"] = None            # engine.models.LiveStatus
     # starting pitcher and bullpen rank (1 best .. 30 worst) per team
     pitchers: dict[str, Pitcher] = field(default_factory=dict)
     bullpen_rank: dict[str, int] = field(default_factory=dict)

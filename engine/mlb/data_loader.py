@@ -13,7 +13,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..models import SportsbookLine
+from ..models import SportsbookLine, LiveStatus
 from .models import (
     MLBGame, MLBProp, MLBGameLog, MLBWeather, Pitcher, StatcastProfile,
 )
@@ -41,6 +41,7 @@ def _game(d: dict) -> MLBGame:
         pitchers={k: Pitcher(**v) for k, v in d.get("pitchers", {}).items()},
         bullpen_rank=d.get("bullpen_rank", {}),
         team_k_rate=d.get("team_k_rate", {}),
+        live=LiveStatus(**d["live"]) if d.get("live") else None,
     )
 
 

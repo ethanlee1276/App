@@ -46,6 +46,8 @@ def main() -> None:
                     help="Only print real games + weather (no stats needed).")
     ap.add_argument("--injuries", action="store_true",
                     help="Attach real nflverse injury reports (holds + knock-on effects).")
+    ap.add_argument("--live", action="store_true",
+                    help="Overlay live scores/state from ESPN's scoreboard.")
     ap.add_argument("--depth", action="store_true",
                     help="Refine injury knock-on roles from nflverse depth charts.")
     ap.add_argument("--odds", action="store_true",
@@ -116,6 +118,12 @@ def main() -> None:
                 print("\nLine movement (open → current):")
                 for line in summary_lines(moves):
                     print(line)
+
+    if args.live:
+        from engine.sources.livescores import attach_live
+        n = attach_live(slate)
+        live_now = sum(1 for g in slate.games if g.live and g.live.state == "live")
+        print(f"\nLive scores: {n} game(s) matched, {live_now} in progress.")
 
     model = None
     if args.model:

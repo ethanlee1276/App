@@ -43,6 +43,7 @@
     },
     {
       "home": "KC", "away": "BUF", "spread": -2.5, "total": 47.0, "roof": "outdoors", "surface": "grass",
+      "live": {"state": "live", "home_score": 17, "away_score": 14, "period": "Q3", "clock": "8:42", "detail": "KC ball, 2nd & 6 at BUF 38"},
       "weather": {"dome": false, "temp_f": 34, "wind_mph": 12, "wind_dir": "SW", "precip_chance": 0.2, "rain": false, "snow": false},
       "injuries": [
         {"player": "Rashee Rice", "team": "KC", "position": "WR", "role": "wr1", "status": "QUESTIONABLE"}

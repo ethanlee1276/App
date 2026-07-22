@@ -40,6 +40,13 @@ def main() -> None:
         print(exc)
         sys.exit(2)
 
+    # Overlay live scores / inning state.
+    from engine.mlb.sources.live import attach_live
+    live_n = attach_live(slate, args.date)
+    if live_n:
+        live_now = sum(1 for g in slate.games if g.live and g.live.state == "live")
+        print(f"Live scores: {live_n} game(s) matched, {live_now} in progress.")
+
     if not slate.props:
         print(f"No props built for {args.date} — lineups may not be posted yet. "
               f"Pitcher props need probable starters; hitter props need confirmed lineups.")
