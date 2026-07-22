@@ -142,6 +142,7 @@ engine/
   rules.py        recommend / hold decisions
   explain.py      human-readable reasoning
   pipeline.py     orchestrates the whole slate
+  backtest.py     walk-forward backtest: calibration, Brier/ECE, ROI, CLV
   sources/
     fetch.py      cached HTTP CSV fetch (stdlib, proxy-aware, gzip)
     nflverse.py   real nflverse → Slate (schedules, weather, stats, defenses)
@@ -263,19 +264,54 @@ sample file *or* `engine/sources/nflverse.py`). Remaining adapters to add:
 | Sportsbook lines   | **The Odds API** (7-book comparison + de-vig)               | ✅ integrated (`--odds`) |
 | Injuries           | nflverse weekly injury reports (holds + knock-on)           | ✅ integrated (`--injuries`) |
 
-Planned next phases (not yet built):
+Planned next phases:
 
-1. **Historical database** — persist the full per-player metric set (air yards,
-   time to throw, YAC, route participation, target share, red-zone usage …) and
-   team offense/defense splits described in the project vision.
+1. **Backtest & calibration harness** — ✅ done (`backtest.py`); measure Brier /
+   ECE / ROI before tuning anything.
 2. **Learned coefficients** — replace the hand-tuned weather/matchup multipliers
-   with values fit on the historical database (gradient-boosted or ridge model).
-3. **Live recalculation** — re-run projections on injury news and line moves;
+   with values fit on the historical data (gradient-boosted or ridge model),
+   using the backtest to confirm ECE and ROI improve.
+3. **Depth charts** — precise injury knock-on effects (elite vs depth CB, LT vs
+   RT).
+4. **Live recalculation** — re-run projections on injury news and line moves;
    detect steam / reverse line movement and closing-line value.
-4. **Correlation & parlay rules**, referee tendencies, travel/rest, and
+5. **Correlation & parlay rules**, referee tendencies, travel/rest, and
    market-vs-model sentiment.
 
 ---
+
+## Backtesting & calibration
+
+The only real test of a betting model is whether its probabilities hold up.
+`engine/backtest.py` runs a **walk-forward backtest** — each week's projections
+are built from prior weeks only, then settled against that week's actual box
+score — and reports:
+
+```bash
+python3 backtest.py 2024 --weeks 6-17
+```
+
+```
+Backtest over 200 settled props
+  Projection  MAE 12.64   RMSE 15.25
+  Calibration Brier 0.2404   ECE 0.072
+    p 0.4-0.6: predicted 52% → actual 43%  (n=100)
+    p 0.6-0.8: predicted 67% → actual 62%  (n=84)
+    p 0.8-1.0: predicted 85% → actual 80%  (n=15)
+  Bets        99 placed, 64 won (64.6%)  ROI +23.4%  net +11.59u
+```
+
+- **Projection accuracy** — MAE / RMSE of the projected mean vs actual.
+- **Calibration** — reliability bins (are "70%" picks really hitting ~70%?),
+  Brier score and Expected Calibration Error. This is the number to watch: if
+  the bins drift below the diagonal the model is overconfident.
+- **Betting performance** — win rate, ROI and net units on the *recommended*
+  bets, plus closing-line value when closing lines are supplied.
+
+`evaluate()` is pure and unit-tested; `backtest_from_stats()` needs the weekly
+stats (same `data/cache/player_stats_<season>.csv` fallback). This harness is
+the prerequisite for the ML phase — you tune coefficients by watching ECE and
+ROI move.
 
 ## Testing the model quickly
 
