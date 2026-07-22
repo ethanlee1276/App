@@ -27,8 +27,17 @@ function idealText(hex) {
 }
 
 /* ---------------- Player avatar (cartoony helmet headshot) --------------- */
+/* When opts.headshot is a real photo URL (nflverse/ESPN), it is layered over
+ * the SVG helmet; if the image fails to load it removes itself and the helmet
+ * shows through — so offline/sample data degrades gracefully. */
 function playerAvatar(name, abbr, opts = {}) {
   const size = opts.size || 56;
+  if (opts.headshot) {
+    const inner = playerAvatar(name, abbr, { ...opts, headshot: null });
+    return `<span class="avatar-stack" style="width:${size}px;height:${size}px">${inner}
+      <img class="avatar-photo" src="${escapeAttr(opts.headshot)}" alt="" loading="lazy"
+           onerror="this.remove()"/></span>`;
+  }
   const t = team(abbr);
   const uid = "a" + Math.random().toString(36).slice(2, 8);
   const ini = initials(name);
@@ -72,6 +81,28 @@ function playerAvatar(name, abbr, opts = {}) {
             font-size="8" font-weight="700"
             fill="${idealText(t.primary)==='#ffffff'?'#ffffff':'#10152a'}">${ini}</text>
     </g>
+  </svg>`;
+}
+
+/* ---------------- Team logo mark (procedural monogram) ------------------- */
+function teamMark(abbr, size = 20) {
+  const t = team(abbr);
+  const uid = "tm" + Math.random().toString(36).slice(2, 7);
+  return `
+  <svg class="team-mark" width="${size}" height="${size}" viewBox="0 0 24 24" role="img"
+       aria-label="${escapeAttr(abbr)}">
+    <defs>
+      <linearGradient id="${uid}" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="${shade(t.primary, 20)}"/>
+        <stop offset="100%" stop-color="${shade(t.primary, -24)}"/>
+      </linearGradient>
+    </defs>
+    <rect x="1" y="1" width="22" height="22" rx="6.5" fill="url(#${uid})"
+          stroke="${shade(t.primary, -40)}" stroke-width="1"/>
+    <path d="M1 16 L23 7 L23 10.4 L1 19.4 Z" fill="${t.secondary}" opacity="0.4"/>
+    <text x="12" y="15.8" text-anchor="middle" font-family="system-ui, sans-serif"
+          font-size="8.2" font-weight="800"
+          fill="${idealText(t.primary)}">${escapeAttr(String(abbr).slice(0, 3))}</text>
   </svg>`;
 }
 

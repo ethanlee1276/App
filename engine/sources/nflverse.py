@@ -327,6 +327,14 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
                 return _s(r, "recent_team", "team")
         return ""
 
+    # Official headshot URLs, when the stats feed carries them.
+    headshots: dict[str, str] = {}
+    for r in stats:
+        url = _s(r, "headshot_url", "headshot")
+        if url:
+            headshots.setdefault(
+                _s(r, "player_display_name", "player_name", "full_name"), url)
+
     props: list[Prop] = []
     for spec in specs:
         team = team_of(spec.player)
@@ -351,6 +359,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             vs_opponent_avg=None,
             lines=[SportsbookLine(book="proxy", line=line, over_odds=-110, under_odds=-110)],
             usage_role=spec.usage_role,
+            headshot=headshots.get(spec.player, ""),
         ))
 
     # Teams dict for every participating side, using computed or neutral defense.

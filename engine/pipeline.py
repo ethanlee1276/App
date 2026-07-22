@@ -31,6 +31,7 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "market_label": MARKET_LABELS.get(rec.market, rec.market),
         "position": prop.position,
         "usage_role": prop.usage_role,
+        "headshot": prop.headshot,
         "side": rec.side,
         "book": rec.book,
         "line": rec.line,

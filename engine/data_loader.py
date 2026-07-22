@@ -68,6 +68,7 @@ def _prop(d: dict) -> Prop:
         vs_opponent_avg=d.get("vs_opponent_avg"),
         lines=lines,
         usage_role=d.get("usage_role", "starter"),
+        headshot=d.get("headshot", ""),
     )
 
 

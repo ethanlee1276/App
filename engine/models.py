@@ -127,6 +127,9 @@ class Prop:
     lines: list[SportsbookLine]
     # role used for injury matchup reasoning (e.g. "wr1", "slot", "rb1")
     usage_role: str = "starter"
+    # official headshot URL when a data source provides one (nflverse
+    # weekly stats carry headshot_url); the UI falls back to an SVG avatar
+    headshot: str = ""
 
 
 @dataclass

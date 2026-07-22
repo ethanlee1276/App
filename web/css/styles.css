@@ -432,3 +432,37 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   .spark-pulse { animation: none; opacity: 0; }
   .logo::after { animation: none; }
 }
+
+/* ============================================================
+   Headshots, team marks, directional transitions, refresh spin
+   ============================================================ */
+
+/* real photo layered over the SVG helmet; photo removes itself on error */
+.avatar-stack { position: relative; display: inline-block; flex-shrink: 0; }
+.avatar-stack .avatar { display: block; }
+.avatar-photo {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  border-radius: 50%; object-fit: cover; object-position: top;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .4);
+}
+
+/* procedural team monogram */
+.team-mark { display: inline-block; vertical-align: -4px; }
+.matchup .mt { display: inline-flex; align-items: center; gap: 6px; }
+.profile-head .sub { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+
+/* direction-aware tab transitions */
+.view.active.from-right { animation: viewInR .32s cubic-bezier(.2, .7, .3, 1) both; }
+.view.active.from-left  { animation: viewInL .32s cubic-bezier(.2, .7, .3, 1) both; }
+@keyframes viewInR { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
+@keyframes viewInL { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: none; } }
+
+/* refresh glyph spins while the model reloads */
+.rfx { display: inline-block; }
+#refresh.loading .rfx { animation: spinGlyph .8s linear infinite; }
+@keyframes spinGlyph { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .view.active.from-right, .view.active.from-left { animation: none; }
+  #refresh.loading .rfx { animation: none; }
+}

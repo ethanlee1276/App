@@ -92,6 +92,8 @@ function showSkeleton() {
 
 async function load() {
   showSkeleton();
+  const refreshBtn = document.getElementById("refresh");
+  if (refreshBtn) refreshBtn.classList.add("loading");
   const params = new URLSearchParams({ min_confidence: state.minConf, min_edge: state.minEdge });
   try {
     const res = await fetch(`/api/recommendations?${params}`);
@@ -102,6 +104,7 @@ async function load() {
     state.data = await res.json();
   }
   renderAll();
+  if (refreshBtn) refreshBtn.classList.remove("loading");
 }
 
 function passesFilters(r) {
@@ -159,8 +162,10 @@ function gameCard(g) {
     <article class="game-card tilt">
       <div class="stadium-wrap">${stadium(g)}</div>
       <div class="game-info">
-        <div class="matchup"><span class="away">${escapeHtml(teamName(g.away))}</span>
-          <span class="at">@</span><span class="home">${escapeHtml(teamName(g.home))}</span></div>
+        <div class="matchup">
+          <span class="mt away">${teamMark(g.away, 18)} ${escapeHtml(teamName(g.away))}</span>
+          <span class="at">@</span>
+          <span class="mt home">${teamMark(g.home, 18)} ${escapeHtml(teamName(g.home))}</span></div>
         <div class="game-sub">${escapeHtml(favTxt)} · O/U ${g.total.toFixed(1)}</div>
       </div>
       <div class="wind-wrap">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span></div>
@@ -220,7 +225,7 @@ function cardHTML(r) {
   return `
     <article class="card ${r._ok ? "" : "faded"}" style="--grade-color:${gradeColor(r.grade)}">
       <div class="card-head">
-        <div class="card-id">${playerAvatar(r.player, r.team)}
+        <div class="card-id">${playerAvatar(r.player, r.team, { headshot: r.headshot })}
           <div>
             <div class="player">${escapeHtml(r.player)}</div>
             <div class="subtitle">${escapeHtml(r.team)} vs ${escapeHtml(r.opponent)} · ${escapeHtml(r.position)}</div>
@@ -311,9 +316,9 @@ function profileHTML(r) {
   return `
     <article class="profile" style="--profile-grad:${grad}">
       <div class="profile-head">
-        ${playerAvatar(r.player, r.team, { size: 60 })}
+        ${playerAvatar(r.player, r.team, { size: 60, headshot: r.headshot })}
         <div class="meta"><div class="nm">${escapeHtml(r.player)}</div>
-          <div class="sub">${escapeHtml(teamName(r.team))} · ${escapeHtml(r.position)} · vs ${escapeHtml(r.opponent)}</div></div>
+          <div class="sub">${teamMark(r.team, 16)} ${escapeHtml(teamName(r.team))} · ${escapeHtml(r.position)} · vs ${escapeHtml(r.opponent)}</div></div>
         <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>
       </div>
       <div class="form-tiles">${tiles}</div>
@@ -353,10 +358,17 @@ function countUp(el) {
 }
 
 /* ---------------- routing ---------------- */
+const VIEW_ORDER = ["recommended", "trending", "players"];
+
 function switchView(name) {
+  const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
   state.view = name;
-  document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
-  document.getElementById(`view-${name}`).classList.add("active");
+  document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
+  const target = document.getElementById(`view-${name}`);
+  // Entering view slides in from the direction of travel between tabs.
+  if (dir > 0) target.classList.add("from-right");
+  else if (dir < 0) target.classList.add("from-left");
+  target.classList.add("active");
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
   if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
   moveIndicator();
