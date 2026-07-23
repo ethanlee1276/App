@@ -147,7 +147,11 @@
       "home_ml": 190,
       "away_ml": -230,
       "home_rating": -2.0,
-      "away_rating": 2.5
+      "away_rating": 2.5,
+      "home_off": -1.0,
+      "home_def": 1.0,
+      "away_off": 2.0,
+      "away_def": -0.5
     },
     {
       "home": "MIN",
@@ -169,7 +173,11 @@
       "home_ml": 135,
       "away_ml": -155,
       "home_rating": 1.0,
-      "away_rating": 5.0
+      "away_rating": 5.0,
+      "home_off": 0.5,
+      "home_def": -0.5,
+      "away_off": 4.0,
+      "away_def": -1.0
     },
     {
       "home": "KC",
@@ -207,7 +215,11 @@
       "home_ml": -145,
       "away_ml": 125,
       "home_rating": 3.0,
-      "away_rating": 4.5
+      "away_rating": 4.5,
+      "home_off": 1.5,
+      "home_def": -1.5,
+      "away_off": 3.0,
+      "away_def": -1.5
     }
   ],
   "props": [

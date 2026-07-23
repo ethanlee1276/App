@@ -15,7 +15,10 @@ from .projection import build_projection
 from .betting import evaluate_prop
 from .rules import apply_rules, RuleConfig
 from .explain import headline, summary, bullet_reasons
-from .gamebets import nfl_win_prob, price_moneyline, moneyline_to_dict
+from .gamebets import (
+    nfl_win_prob, price_moneyline, moneyline_to_dict,
+    project_total, game_margin, price_total, price_spread,
+)
 
 
 def _avg(vals: list[float]):
@@ -75,22 +78,40 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
     }
 
 
-def _moneyline_bets(games, config: RuleConfig) -> list[dict]:
-    """Price a moneyline for every game that carries ML odds + team ratings."""
+def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
+    d["recommended"] = (d["grade"] != "Pass"
+                        and d["confidence"] >= config.min_confidence
+                        and d["edge"] >= config.min_edge)
+    d["live"] = bool(g.live and g.live.state == "live")
+    return d
+
+
+def _game_bets(games, config: RuleConfig) -> list[dict]:
+    """Price moneyline, total and spread for every game with team ratings."""
     out = []
     for g in games:
-        if not (g.home_ml and g.away_ml):
-            continue
-        wp_home = nfl_win_prob(g.home_rating, g.away_rating)
-        ctx = [f"Power rating: {g.home} {g.home_rating:+.1f} vs {g.away} "
-               f"{g.away_rating:+.1f} net pts/game (incl. home field)"]
-        rec = price_moneyline(g.home, g.away, wp_home, g.home_ml, g.away_ml, ctx)
-        d = moneyline_to_dict(rec)
-        d["recommended"] = (rec.grade != "Pass"
-                            and rec.confidence >= config.min_confidence
-                            and rec.edge >= config.min_edge)
-        d["live"] = bool(g.live and g.live.state == "live")
-        out.append(d)
+        has_rating = any((g.home_rating, g.away_rating,
+                          g.home_off, g.home_def, g.away_off, g.away_def))
+        if g.home_ml and g.away_ml:
+            wp_home = nfl_win_prob(g.home_rating, g.away_rating)
+            ctx = [f"Power rating: {g.home} {g.home_rating:+.1f} vs {g.away} "
+                   f"{g.away_rating:+.1f} net pts/game (incl. home field)"]
+            ml = moneyline_to_dict(price_moneyline(g.home, g.away, wp_home,
+                                                   g.home_ml, g.away_ml, ctx))
+            out.append(_finish_bet(ml, g, config))
+        if has_rating:
+            pt = project_total("nfl", g.home_off, g.home_def, g.away_off, g.away_def)
+            tctx = [f"Scoring form: {g.home} off {g.home_off:+.1f} / def {g.home_def:+.1f}, "
+                    f"{g.away} off {g.away_off:+.1f} / def {g.away_def:+.1f} (pts/game vs avg)"]
+            total = price_total("nfl", g.home, g.away, pt, g.total,
+                                g.total_over_odds, g.total_under_odds, "points", tctx)
+            out.append(_finish_bet(total, g, config))
+            if g.spread:
+                margin = game_margin("nfl", g.home_rating, g.away_rating)
+                sctx = [f"Projected margin {margin:+.1f} pts (home)"]
+                spread = price_spread("nfl", g.home, g.away, margin, g.spread,
+                                      g.spread_home_odds, g.spread_away_odds, sctx)
+                out.append(_finish_bet(spread, g, config))
     out.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)
     return out
 
@@ -130,7 +151,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         },
         "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,
-        "game_bets": _moneyline_bets(slate.games, config),
+        "game_bets": _game_bets(slate.games, config),
     }
 
 

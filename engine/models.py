@@ -184,3 +184,13 @@ class Game:
     away_ml: int = 0
     home_rating: float = 0.0
     away_rating: float = 0.0
+    # Offense/defense split (points scored / allowed vs league baseline) for the
+    # totals model, and the book prices for the total (O/U) and the spread.
+    home_off: float = 0.0
+    home_def: float = 0.0
+    away_off: float = 0.0
+    away_def: float = 0.0
+    total_over_odds: int = -110
+    total_under_odds: int = -110
+    spread_home_odds: int = -110
+    spread_away_odds: int = -110

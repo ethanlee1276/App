@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.db import connect, upsert_games
-from engine.teamrates import compute_team_ratings, attach_ratings
+from engine.teamrates import compute_team_ratings, attach_ratings, TeamRating
 from engine.models import Game, Weather
 
 
@@ -32,12 +32,14 @@ def _seed():
 def test_ratings_rank_teams_by_margin():
     conn = _seed()
     r = compute_team_ratings(conn, "nfl", seasons=[2026], shrink=0.0)
-    # AAA strongest, CCC weakest, BBB in the middle.
-    assert r["AAA"] > r["BBB"] > r["CCC"]
+    # AAA strongest, CCC weakest, BBB in the middle (compare net margin).
+    assert r["AAA"].net > r["BBB"].net > r["CCC"].net
     # Ratings are league-relative (margins), so the strongest is +, weakest -.
-    assert r["AAA"] > 0 > r["CCC"]
-    # AAA averaged +17 over two games (no shrink).
-    assert abs(r["AAA"] - 17.0) < 1e-6
+    assert r["AAA"].net > 0 > r["CCC"].net
+    # AAA averaged +17 margin over two games (no shrink).
+    assert abs(r["AAA"].net - 17.0) < 1e-6
+    # net == off - def by construction.
+    assert abs(r["AAA"].net - (r["AAA"].off - r["AAA"].def_)) < 1e-6
 
 
 def test_shrinkage_pulls_small_samples_toward_zero():
@@ -45,16 +47,20 @@ def test_shrinkage_pulls_small_samples_toward_zero():
     raw = compute_team_ratings(conn, "nfl", seasons=[2026], shrink=0.0)
     shrunk = compute_team_ratings(conn, "nfl", seasons=[2026], shrink=6.0)
     # AAA has only 2 games, so shrinkage should noticeably temper its rating.
-    assert abs(shrunk["AAA"]) < abs(raw["AAA"])
-    assert shrunk["AAA"] > 0        # still positive, just regressed
+    assert abs(shrunk["AAA"].net) < abs(raw["AAA"].net)
+    assert shrunk["AAA"].net > 0        # still positive, just regressed
 
 
 def test_attach_ratings_sets_game_fields():
-    ratings = {"AAA": 8.0, "CCC": -6.0}
+    ratings = {
+        "AAA": TeamRating(net=8.0, off=5.0, def_=-3.0, games=10),
+        "CCC": TeamRating(net=-6.0, off=-4.0, def_=2.0, games=10),
+    }
     g = Game(home="AAA", away="CCC", weather=Weather(dome=True))
     n = attach_ratings([g], ratings)
     assert n == 1
     assert g.home_rating == 8.0 and g.away_rating == -6.0
+    assert g.home_off == 5.0 and g.away_def == 2.0
     # A team missing from the ratings keeps the league-average default.
     g2 = Game(home="AAA", away="ZZZ", weather=Weather(dome=True))
     attach_ratings([g2], ratings)

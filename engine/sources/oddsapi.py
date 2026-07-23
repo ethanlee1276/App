@@ -264,6 +264,65 @@ def parse_event_h2h(event_json: dict, team_map: dict) -> dict[str, int]:
     return best
 
 
+def _modal_line(points: list[float]):
+    """Most common line across books (the market consensus number)."""
+    if not points:
+        return None
+    counts: dict[float, int] = {}
+    for p in points:
+        counts[p] = counts.get(p, 0) + 1
+    return max(counts, key=lambda k: (counts[k], k))
+
+
+def parse_event_totals(event_json: dict):
+    """Return ``(line, best_over_odds, best_under_odds)`` for the game total,
+    or ``None``. Uses the consensus line and the best price on each side."""
+    overs: list[tuple] = []
+    unders: list[tuple] = []
+    for bm in event_json.get("bookmakers", []):
+        for mkt in bm.get("markets", []):
+            if mkt.get("key") != "totals":
+                continue
+            for o in mkt.get("outcomes", []):
+                name = (o.get("name") or "").lower()
+                pt, pr = o.get("point"), o.get("price")
+                if pt is None or pr is None:
+                    continue
+                (overs if name == "over" else unders).append((float(pt), int(pr)))
+    line = _modal_line([p for p, _ in overs])
+    if line is None:
+        return None
+    over_odds = max((pr for p, pr in overs if p == line), default=-110)
+    under_odds = max((pr for p, pr in unders if p == line), default=-110)
+    return line, over_odds, under_odds
+
+
+def parse_event_spreads(event_json: dict, team_map: dict, home: str, away: str):
+    """Return ``(home_spread, home_odds, away_odds)`` for the spread / run line,
+    or ``None``. The home team's point is the stored spread."""
+    home_pts: list[tuple] = []
+    away_pts: list[tuple] = []
+    for bm in event_json.get("bookmakers", []):
+        for mkt in bm.get("markets", []):
+            if mkt.get("key") != "spreads":
+                continue
+            for o in mkt.get("outcomes", []):
+                abbr = team_map.get(o.get("name", ""))
+                pt, pr = o.get("point"), o.get("price")
+                if not abbr or pt is None or pr is None:
+                    continue
+                if abbr == home:
+                    home_pts.append((float(pt), int(pr)))
+                elif abbr == away:
+                    away_pts.append((float(pt), int(pr)))
+    line = _modal_line([p for p, _ in home_pts])
+    if line is None:
+        return None
+    home_odds = max((pr for p, pr in home_pts if p == line), default=-110)
+    away_odds = max((pr for p, pr in away_pts if p == -line), default=-110)
+    return line, home_odds, away_odds
+
+
 # --- slate integration ------------------------------------------------------
 @dataclass
 class OddsAttachResult:
@@ -294,8 +353,8 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
 
     events = list_events(key, ttl=ttl, sport=sport)
     games_by_pair = {frozenset((g.home, g.away)): g for g in slate.games}
-    # Player-prop markets plus the moneyline (h2h) in one request per event.
-    markets = list(cfg["markets"]) + ["h2h"]
+    # Player-prop markets plus the three game markets in one request per event.
+    markets = list(cfg["markets"]) + ["h2h", "totals", "spreads"]
     # Build a combined line index for the events that belong to this slate.
     index: dict[tuple[str, str], list[SportsbookLine]] = {}
     for ev in events:
@@ -309,7 +368,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         result.events_used += 1
         for k, lines in parse_event_lines(payload, cfg["markets"]).items():
             index.setdefault(k, []).extend(lines)
-        # Attach real moneyline prices to the matching game.
+        # Attach real game-market prices to the matching game.
         game = games_by_pair.get(frozenset((home, away)))
         if game is not None:
             mls = parse_event_h2h(payload, cfg["teams"])
@@ -317,6 +376,12 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 game.home_ml = mls[home]
                 game.away_ml = mls[away]
                 result.moneylines += 1
+            tot = parse_event_totals(payload)
+            if tot:
+                game.total, game.total_over_odds, game.total_under_odds = tot
+            sp = parse_event_spreads(payload, cfg["teams"], home, away)
+            if sp:
+                game.spread, game.spread_home_odds, game.spread_away_odds = sp
 
     for prop in slate.props:
         lines = index.get((normalize_name(prop.player), prop.market))

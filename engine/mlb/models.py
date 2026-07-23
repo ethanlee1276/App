@@ -101,6 +101,17 @@ class MLBGame:
     away_ml: int = 0
     home_rating: float = 0.0
     away_rating: float = 0.0
+    # Offense/defense split (runs scored / allowed vs league baseline) for the
+    # totals model; run-line spread + prices; and total (O/U) prices.
+    home_off: float = 0.0
+    home_def: float = 0.0
+    away_off: float = 0.0
+    away_def: float = 0.0
+    total_over_odds: int = -110
+    total_under_odds: int = -110
+    spread: float = 0.0          # home run line (e.g. -1.5); 0 = not offered
+    spread_home_odds: int = -110
+    spread_away_odds: int = -110
 
 
 @dataclass

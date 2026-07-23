@@ -35,6 +35,17 @@ NFL_HOME_FIELD = 1.6          # points
 MLB_HOME_FIELD = 0.18         # runs
 LEAGUE_AVG_XERA = 4.10
 
+# SD of a game's combined total (points/runs) around its projection.
+NFL_TOTAL_SD = 13.5
+MLB_TOTAL_SD = 4.5
+# League-average scoring per team per game — the fixed baseline that offense /
+# defense ratings are expressed against, so the totals projection stays
+# consistent with how teamrates.py computes those ratings.
+SCORING_BASELINE = {"nfl": 22.6, "mlb": 4.5}
+MARGIN_SD = {"nfl": NFL_MARGIN_SD, "mlb": MLB_MARGIN_SD}
+TOTAL_SD = {"nfl": NFL_TOTAL_SD, "mlb": MLB_TOTAL_SD}
+HOME_FIELD = {"nfl": NFL_HOME_FIELD, "mlb": MLB_HOME_FIELD}
+
 
 def nfl_win_prob(home_rating: float, away_rating: float) -> float:
     """P(home win) from net-point ratings (points/game vs league average)."""
@@ -123,8 +134,12 @@ def moneyline_to_dict(rec: MoneylineRec) -> dict:
         "market_label": "Moneyline",
         "home": rec.home,
         "away": rec.away,
+        "team": rec.pick,                 # for the team badge in the UI
         "pick": rec.pick,
         "pick_is_home": rec.pick_is_home,
+        "pick_label": f"{rec.pick} ML",
+        "side": "",
+        "line": 0.0,
         "matchup": f"{rec.away} @ {rec.home}",
         "win_prob": rec.win_prob,
         "fair_prob": rec.fair_prob,
@@ -137,3 +152,97 @@ def moneyline_to_dict(rec: MoneylineRec) -> dict:
         "headline": f"{rec.pick} Moneyline ({rec.odds:+d})",
         "reasons": rec.reasons,
     }
+
+
+# --- totals & spreads ------------------------------------------------------
+def project_total(sport: str, home_off: float, home_def: float,
+                  away_off: float, away_def: float) -> float:
+    """Projected combined score: each side's offense meets the other's defense."""
+    base = SCORING_BASELINE.get(sport, 0.0)
+    # home pts = base + home_off + away_def ; away pts = base + away_off + home_def
+    return 2 * base + home_off + away_off + home_def + away_def
+
+
+def game_margin(sport: str, home_rating: float, away_rating: float) -> float:
+    """Projected home scoring margin (points/runs), including home field."""
+    return (home_rating - away_rating) + HOME_FIELD.get(sport, 0.0)
+
+
+def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
+              pick_label, reasons, team="", side="", line=0.0, headline=""):
+    ev = expected_value(win, odds)
+    confidence = _ml_confidence(edge, win)
+    grade = _grade(confidence, edge)
+    stake = _kelly_stake(win, odds) if grade != "Pass" else 0.0
+    return {
+        "bet_type": bet_type,
+        "market": bet_type,
+        "market_label": market_label,
+        "home": home,
+        "away": away,
+        "team": team,
+        "side": side,
+        "line": line,
+        "pick_label": pick_label,
+        "matchup": f"{away} @ {home}",
+        "win_prob": round(win, 4),
+        "fair_prob": round(fair, 4),
+        "edge": round(edge, 4),
+        "odds": odds,
+        "ev_per_unit": round(ev, 4),
+        "confidence": confidence,
+        "stake_units": round(stake, 2),
+        "grade": grade,
+        "headline": headline or pick_label,
+        "reasons": reasons,
+    }
+
+
+def price_total(sport: str, home: str, away: str, proj_total: float,
+                market_total: float, over_odds: int = -110, under_odds: int = -110,
+                units: str = "points", context: list[str] | None = None) -> dict:
+    """Price the game total (over/under) from the projected combined score."""
+    fair_over, fair_under = devig_two_way(over_odds, under_odds)
+    sd = TOTAL_SD.get(sport, 10.0)
+    p_over = clamp(normal_cdf((proj_total - market_total) / sd), 0.02, 0.98)
+    over_edge = p_over - fair_over
+    under_edge = (1.0 - p_over) - fair_under
+
+    if over_edge >= under_edge:
+        side, win, odds, fair, edge = "Over", p_over, over_odds, fair_over, over_edge
+    else:
+        side, win, odds, fair, edge = "Under", 1.0 - p_over, under_odds, fair_under, under_edge
+
+    reasons = list(context or [])
+    reasons.insert(0, f"Model projects {proj_total:.1f} {units} vs the {market_total:g} "
+                      f"total — {side} ({edge:+.1%} edge)")
+    return _game_bet("total", "Total", home, away, win, fair, edge, odds,
+                     pick_label=f"{side} {market_total:g}", side=side, line=market_total,
+                     reasons=reasons, headline=f"{side} {market_total:g} {units}")
+
+
+def price_spread(sport: str, home: str, away: str, proj_margin: float,
+                 home_spread: float, home_odds: int = -110, away_odds: int = -110,
+                 context: list[str] | None = None) -> dict:
+    """Price the spread (NFL points) / run line (MLB) from the projected margin.
+
+    ``home_spread`` is the home team's number (negative = home favored). Home
+    covers when the actual margin beats it, i.e. margin + home_spread > 0.
+    """
+    fair_home, fair_away = devig_two_way(home_odds, away_odds)
+    sd = MARGIN_SD.get(sport, 13.5)
+    p_home = clamp(normal_cdf((proj_margin + home_spread) / sd), 0.02, 0.98)
+    home_edge = p_home - fair_home
+    away_edge = (1.0 - p_home) - fair_away
+
+    if home_edge >= away_edge:
+        team, spread, win, odds, fair, edge = home, home_spread, p_home, home_odds, fair_home, home_edge
+    else:
+        team, spread, win, odds, fair, edge = away, -home_spread, 1.0 - p_home, away_odds, fair_away, away_edge
+
+    reasons = list(context or [])
+    reasons.insert(0, f"Model margin {proj_margin:+.1f} vs the {home} {home_spread:+g} "
+                      f"line — {team} {spread:+g} ({edge:+.1%} edge)")
+    return _game_bet("spread", "Spread", home, away, win, fair, edge, odds,
+                     pick_label=f"{team} {spread:+g}", team=team, line=spread,
+                     reasons=reasons, headline=f"{team} {spread:+g}")

@@ -46,6 +46,15 @@ def _game(d: dict) -> MLBGame:
         away_ml=d.get("away_ml", 0),
         home_rating=d.get("home_rating", 0.0),
         away_rating=d.get("away_rating", 0.0),
+        home_off=d.get("home_off", 0.0),
+        home_def=d.get("home_def", 0.0),
+        away_off=d.get("away_off", 0.0),
+        away_def=d.get("away_def", 0.0),
+        total_over_odds=d.get("total_over_odds", -110),
+        total_under_odds=d.get("total_under_odds", -110),
+        spread=d.get("spread", 0.0),
+        spread_home_odds=d.get("spread_home_odds", -110),
+        spread_away_odds=d.get("spread_away_odds", -110),
     )
 
 

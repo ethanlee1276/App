@@ -45,7 +45,14 @@
       "home_ml": 140,
       "away_ml": -165,
       "home_rating": -0.15,
-      "away_rating": 0.35
+      "away_rating": 0.35,
+      "home_off": -0.05,
+      "home_def": 0.1,
+      "away_off": 0.15,
+      "away_def": -0.2,
+      "spread": 1.5,
+      "spread_home_odds": -150,
+      "spread_away_odds": 125
     },
     {
       "home": "COL",
@@ -100,7 +107,14 @@
       "home_ml": 120,
       "away_ml": -140,
       "home_rating": -0.5,
-      "away_rating": 0.7
+      "away_rating": 0.7,
+      "home_off": 1.5,
+      "home_def": 1.9,
+      "away_off": 0.5,
+      "away_def": -0.2,
+      "spread": 1.5,
+      "spread_home_odds": -140,
+      "spread_away_odds": 120
     },
     {
       "home": "MIA",
@@ -145,7 +159,14 @@
       "home_ml": 150,
       "away_ml": -175,
       "home_rating": -0.25,
-      "away_rating": 0.4
+      "away_rating": 0.4,
+      "home_off": -0.55,
+      "home_def": -0.3,
+      "away_off": 0.0,
+      "away_def": -0.4,
+      "spread": 1.5,
+      "spread_home_odds": -155,
+      "spread_away_odds": 130
     }
   ],
   "props": [

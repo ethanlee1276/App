@@ -11,7 +11,10 @@ from pathlib import Path
 
 from ..rules import RuleConfig
 from ..models import live_to_dict
-from ..gamebets import mlb_win_prob, price_moneyline, moneyline_to_dict, LEAGUE_AVG_XERA
+from ..gamebets import (
+    mlb_win_prob, price_moneyline, moneyline_to_dict, LEAGUE_AVG_XERA,
+    project_total, game_margin, price_total, price_spread,
+)
 from .data_loader import load_mlb_slate, MLBSlate
 from .models import MARKET_LABELS
 from .parks import get_park
@@ -24,29 +27,47 @@ def _avg(vals):
     return round(sum(vals) / len(vals), 2) if vals else None
 
 
-def _moneyline_bets(games, config: RuleConfig) -> list[dict]:
-    """Price a moneyline per game from team run-diff ratings + the two starters."""
+def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
+    d["recommended"] = (d["grade"] != "Pass"
+                        and d["confidence"] >= config.min_confidence
+                        and d["edge"] >= config.min_edge)
+    d["live"] = bool(g.live and g.live.state == "live")
+    return d
+
+
+def _game_bets(games, config: RuleConfig) -> list[dict]:
+    """Price moneyline, total (O/U) and run line from team ratings + starters."""
     out = []
     for g in games:
-        if not (g.home_ml and g.away_ml):
-            continue
+        has_rating = any((g.home_rating, g.away_rating,
+                          g.home_off, g.home_def, g.away_off, g.away_def))
         home_p = g.pitchers.get(g.home)
         away_p = g.pitchers.get(g.away)
         home_xera = home_p.xera if home_p else LEAGUE_AVG_XERA
         away_xera = away_p.xera if away_p else LEAGUE_AVG_XERA
-        wp_home = mlb_win_prob(g.home_rating, g.away_rating, home_xera, away_xera)
-        ctx = [f"Run rating: {g.home} {g.home_rating:+.2f} vs {g.away} "
-               f"{g.away_rating:+.2f} run diff/game"]
-        if home_p and away_p:
-            ctx.append(f"Starters: {home_p.name} ({home_xera:.2f} xERA) vs "
-                       f"{away_p.name} ({away_xera:.2f} xERA)")
-        rec = price_moneyline(g.home, g.away, wp_home, g.home_ml, g.away_ml, ctx)
-        d = moneyline_to_dict(rec)
-        d["recommended"] = (rec.grade != "Pass"
-                            and rec.confidence >= config.min_confidence
-                            and rec.edge >= config.min_edge)
-        d["live"] = bool(g.live and g.live.state == "live")
-        out.append(d)
+        if g.home_ml and g.away_ml:
+            wp_home = mlb_win_prob(g.home_rating, g.away_rating, home_xera, away_xera)
+            ctx = [f"Run rating: {g.home} {g.home_rating:+.2f} vs {g.away} "
+                   f"{g.away_rating:+.2f} run diff/game"]
+            if home_p and away_p:
+                ctx.append(f"Starters: {home_p.name} ({home_xera:.2f} xERA) vs "
+                           f"{away_p.name} ({away_xera:.2f} xERA)")
+            ml = moneyline_to_dict(price_moneyline(g.home, g.away, wp_home,
+                                                   g.home_ml, g.away_ml, ctx))
+            out.append(_finish_bet(ml, g, config))
+        if has_rating:
+            pt = project_total("mlb", g.home_off, g.home_def, g.away_off, g.away_def)
+            tctx = [f"Scoring form: {g.home} off {g.home_off:+.2f} / def {g.home_def:+.2f}, "
+                    f"{g.away} off {g.away_off:+.2f} / def {g.away_def:+.2f} (runs/game vs avg)"]
+            total = price_total("mlb", g.home, g.away, pt, g.total,
+                                g.total_over_odds, g.total_under_odds, "runs", tctx)
+            out.append(_finish_bet(total, g, config))
+            if g.spread:
+                margin = game_margin("mlb", g.home_rating, g.away_rating)
+                sctx = [f"Projected run margin {margin:+.2f} (home)"]
+                spread = price_spread("mlb", g.home, g.away, margin, g.spread,
+                                      g.spread_home_odds, g.spread_away_odds, sctx)
+                out.append(_finish_bet(spread, g, config))
     out.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)
     return out
 
@@ -143,5 +164,5 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "config": {"min_confidence": config.min_confidence, "min_edge": config.min_edge},
         "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,
-        "game_bets": _moneyline_bets(slate.games, config),
+        "game_bets": _game_bets(slate.games, config),
     }

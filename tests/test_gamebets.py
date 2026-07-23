@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.gamebets import (
     nfl_win_prob, mlb_win_prob, price_moneyline, moneyline_to_dict,
-    LEAGUE_AVG_XERA,
+    project_total, game_margin, price_total, price_spread, LEAGUE_AVG_XERA,
 )
 from engine.pipeline import run_slate
 from engine.mlb.pipeline import run_mlb_slate
@@ -75,6 +75,43 @@ def test_price_moneyline_passes_when_it_agrees_with_the_market():
     assert abs(rec.edge) < 0.03
 
 
+def test_project_total_combines_offense_and_defense():
+    base = 2 * 22.6
+    # All-average teams project to twice the league baseline.
+    assert approx(project_total("nfl", 0, 0, 0, 0), base)
+    # Two good offenses + two leaky defenses project higher.
+    assert project_total("nfl", 3, 2, 4, 1) > base
+
+
+def test_price_total_backs_over_when_projection_is_high():
+    # Projection well above the market number -> value on the over.
+    t = price_total("nfl", "KC", "BUF", proj_total=52.0, market_total=45.0)
+    assert t["bet_type"] == "total"
+    assert t["side"] == "Over"
+    assert t["edge"] > 0
+    # And the under when the projection is well below.
+    u = price_total("nfl", "KC", "BUF", proj_total=38.0, market_total=45.0)
+    assert u["side"] == "Under"
+    assert u["edge"] > 0
+
+
+def test_price_spread_backs_the_value_side():
+    # Home projected to win by 7 but only laying 3 -> home covers.
+    home = price_spread("nfl", "KC", "BUF", proj_margin=7.0, home_spread=-3.0)
+    assert home["bet_type"] == "spread"
+    assert home["team"] == "KC" and home["line"] == -3.0
+    assert home["edge"] > 0
+    # Home projected to lose by 7 while laying 3 -> the dog covers.
+    away = price_spread("nfl", "KC", "BUF", proj_margin=-7.0, home_spread=-3.0)
+    assert away["team"] == "BUF" and away["line"] == 3.0
+    assert away["edge"] > 0
+
+
+def test_game_margin_includes_home_field():
+    assert game_margin("nfl", 0.0, 0.0) > 0     # pick'em + home field
+    assert game_margin("nfl", 5.0, 0.0) > game_margin("nfl", 0.0, 0.0)
+
+
 def test_moneyline_to_dict_shape():
     rec = price_moneyline("KC", "BUF", 0.58, -150, 130)
     d = moneyline_to_dict(rec)
@@ -90,12 +127,15 @@ def test_pipeline_emits_game_bets():
     for slate, runner in ((NFL_SLATE, run_slate), (MLB_SLATE, run_mlb_slate)):
         result = runner(slate)
         assert "game_bets" in result
-        assert result["game_bets"], "expected at least one priced moneyline"
+        assert result["game_bets"], "expected at least one priced game bet"
         for b in result["game_bets"]:
             assert 0.0 <= b["win_prob"] <= 1.0
             assert abs(b["edge"]) < 0.35        # no runaway edges
-            assert b["headline"]
-        # The sample slates are tuned so at least one moneyline is recommended.
+            assert b["headline"] and b["pick_label"]
+        # All three game-bet types are produced.
+        types = {b["bet_type"] for b in result["game_bets"]}
+        assert types == {"moneyline", "total", "spread"}
+        # The sample slates are tuned so at least one bet is recommended.
         assert any(b["recommended"] for b in result["game_bets"])
 
 

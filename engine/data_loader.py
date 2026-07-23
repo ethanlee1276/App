@@ -91,6 +91,14 @@ def load_slate(path: str | Path) -> Slate:
             away_ml=g.get("away_ml", 0),
             home_rating=g.get("home_rating", 0.0),
             away_rating=g.get("away_rating", 0.0),
+            home_off=g.get("home_off", 0.0),
+            home_def=g.get("home_def", 0.0),
+            away_off=g.get("away_off", 0.0),
+            away_def=g.get("away_def", 0.0),
+            total_over_odds=g.get("total_over_odds", -110),
+            total_under_odds=g.get("total_under_odds", -110),
+            spread_home_odds=g.get("spread_home_odds", -110),
+            spread_away_odds=g.get("spread_away_odds", -110),
         )
         for g in data["games"]
     ]

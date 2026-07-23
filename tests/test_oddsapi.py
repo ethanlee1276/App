@@ -48,6 +48,14 @@ EVENT = {
                     {"name": "Kansas City Chiefs", "price": -145},
                     {"name": "Buffalo Bills", "price": 135},
                 ]},
+                {"key": "totals", "outcomes": [
+                    {"name": "Over", "price": -108, "point": 47.5},
+                    {"name": "Under", "price": -112, "point": 47.5},
+                ]},
+                {"key": "spreads", "outcomes": [
+                    {"name": "Kansas City Chiefs", "price": -110, "point": -2.5},
+                    {"name": "Buffalo Bills", "price": -110, "point": 2.5},
+                ]},
             ],
         },
     ],
@@ -77,6 +85,13 @@ def test_parse_event_h2h_takes_best_price():
     # Best (highest) American price per side across the two books.
     assert best["KC"] == -145      # max(-150, -145)
     assert best["BUF"] == 135      # max(130, 135)
+
+
+def test_parse_event_totals_and_spreads():
+    tot = oa.parse_event_totals(EVENT)
+    assert tot == (47.5, -108, -112)          # line, best over, best under
+    sp = oa.parse_event_spreads(EVENT, oa.TEAM_ABBR, "KC", "BUF")
+    assert sp == (-2.5, -110, -110)           # home spread, home odds, away odds
 
 
 def test_parse_ignores_unknown_markets():
@@ -123,6 +138,9 @@ def test_apply_odds_replaces_proxy(monkeypatch):
     # Real moneylines were attached to the game from the same payload.
     assert res.moneylines == 1
     assert slate.games[0].home_ml == -145 and slate.games[0].away_ml == 135
+    # Total and spread prices came in on the same request.
+    assert slate.games[0].total == 47.5
+    assert slate.games[0].spread == -2.5
 
 
 def test_mlb_market_mapping_and_parse():

@@ -233,21 +233,40 @@ function gameBetCard(r) {
     : `Stake ${r.stake_units.toFixed(2)}u`;
   const stakeChip = r._ok ? `<span class="chip stake">💰 ${stakeTxt}</span>` : "";
   const reasons = (r.reasons || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+
+  // Header (badge + title + sub) varies by bet type; the metrics are shared.
+  let mark, title, sub;
+  if (r.bet_type === "spread") {
+    const ln = `${r.line > 0 ? "+" : ""}${r.line}`;
+    mark = teamMark(r.team, 34);
+    title = `${escapeHtml(teamName(r.team))} <span class="ml-odds">${ln}</span> <span class="book">${american(r.odds)}</span>`;
+    sub = "Spread · cover the number";
+  } else if (r.bet_type === "total") {
+    const arrow = r.side === "Over" ? "▲" : "▼";
+    mark = `<span class="total-badge ${r.side === "Over" ? "over" : "under"}">${arrow}</span>`;
+    title = `${escapeHtml(r.side)} ${r.line} <span class="book">${american(r.odds)}</span>`;
+    sub = "Total · combined score";
+  } else { // moneyline
+    mark = teamMark(r.team, 34);
+    title = `${escapeHtml(teamName(r.team))} <span class="ml-odds">${american(r.odds)}</span>`;
+    sub = "Moneyline · win outright";
+  }
+
   return `
     <article class="card gamebet ${r._ok ? "" : "faded"}" style="--grade-color:${gradeColor(r.grade)}">
       ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
       <div class="card-head">
-        <div class="card-id">${teamMark(r.pick, 34)}
+        <div class="card-id">${mark}
           <div>
-            <div class="player">${escapeHtml(teamName(r.pick))} <span class="ml-odds">${american(r.odds)}</span></div>
+            <div class="player">${title}</div>
             <div class="subtitle">${escapeHtml(r.matchup)}</div>
-            <div class="pick">Moneyline · win outright</div>
+            <div class="pick">${sub}</div>
           </div>
         </div>
         <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>
       </div>
       <div class="metrics">
-        <div class="metric"><div class="k">Model win</div><div class="v">${pct(r.win_prob)}</div></div>
+        <div class="metric"><div class="k">Model</div><div class="v">${pct(r.win_prob)}</div></div>
         <div class="metric"><div class="k">Book implied</div><div class="v">${pct(r.fair_prob)}</div></div>
         <div class="metric"><div class="k">Edge</div><div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>
       </div>

@@ -88,15 +88,16 @@ python3 mlb_build.py 2026-06-20 --odds    # MLB player props across all books
 ```
 
 During a live game the same call returns **in-play** prices, so this is also how
-live lines flow in. The same `--odds` call also pulls each game's **moneyline**
-(the `h2h` market) in the same request — no extra quota.
+live lines flow in. The same `--odds` call also pulls each game's **moneyline,
+spread and total** (the `h2h`, `spreads` and `totals` markets) in the same
+request — no extra quota.
 
-### Moneyline picks need two things
+### Game bets (moneyline, spread, total) need two things
 
-The moneyline model prices a team's win probability against the book's line, so
-it needs both:
+The game-level model prices a team's win probability / margin / combined score
+against the book's line, so it needs both:
 
-1. **Real moneyline prices** — come free with `--odds` (above).
+1. **Real game-market prices** — come free with `--odds` (above).
 2. **Team strength ratings** — computed automatically from the scores already in
    your history DB, so make sure you've ingested games:
 
@@ -105,10 +106,10 @@ it needs both:
    python3 ingest.py mlb --dates 2026-06-19,2026-06-20   # MLB team ratings
    ```
 
-With both in place, the build prints `N moneyline(s) priceable` and the site's
-**Moneyline picks** section fills in. Without ingested games the ratings are
-league-average (0), so the model matches the book and shows no edge — that's
-expected, not a bug.
+With both in place the site's **Game bets** section fills in with moneyline,
+spread and total edges. Without ingested games the ratings are league-average
+(0), so the model matches the book and shows no edge — that's expected, not a
+bug.
 
 ---
 
@@ -149,4 +150,4 @@ roll (persisted in your browser; shareable via `?bankroll=1000&unit=1`).
 | MLB schedule / lineups / logs / weather | `statsapi.mlb.com` + `open-meteo` |
 | MLB Statcast                   | Baseball Savant CSV                     |
 | Real odds / live lines         | free Odds API key                       |
-| Moneyline picks (real edge)    | free Odds API key **+** ingested games  |
+| Game bets: ML / spread / total | free Odds API key **+** ingested games  |
