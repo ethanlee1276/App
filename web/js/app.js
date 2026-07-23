@@ -243,6 +243,8 @@ function renderAll() {
   renderDataSource(d);
   document.getElementById("slate-date").textContent = slateDateLabel(d);
   renderStats();
+  renderEmptySlate();
+  renderTopPlays();
   renderGames();
   renderGameBets();
   renderRecommended();
@@ -251,11 +253,87 @@ function renderAll() {
 }
 
 /* ============================================================
-   Game bets — moneyline (win-probability edge on the game)
+   Empty state — nothing on the board
+   ============================================================ */
+function renderEmptySlate() {
+  const el = document.getElementById("empty-slate");
+  const noGames = !(state.data.games || []).length;
+  const noProps = !(state.data.recommendations || []).length;
+  if (!noGames || !el) {
+    if (el) el.style.display = "none";
+    document.getElementById("games-title").style.display = "";
+    return;
+  }
+  const live = String(state.data.generated_from || "").startsWith("live");
+  el.style.display = "";
+  el.innerHTML = live
+    ? `<div class="es-icon">🗓️</div><div class="es-title">No games on the board right now</div>
+       <div class="es-sub">Nothing is scheduled or in progress for this slate yet. Check back closer to
+       game time — the board refreshes automatically.</div>`
+    : `<div class="es-icon">🏟️</div><div class="es-title">No slate loaded</div>
+       <div class="es-sub">Build a live slate (see LAUNCH.md) or run <code>python3 generate.py</code>
+       for the sample board.</div>`;
+  // Nothing else to show; clear the busier sections.
+  document.getElementById("games-title").style.display = noProps ? "none" : "";
+}
+
+/* ============================================================
+   Top plays — best bets across props AND game bets
+   ============================================================ */
+function topPlaysList() {
+  const props = (state.data.recommendations || []).filter(passesFilters).map((r) => ({
+    kind: "prop", grade: r.grade, conf: r.confidence, edge: r.edge, stake: r.stake_units,
+    team: r.team, live: r.live, headshot: r.headshot,
+    label: `${r.player} · ${r.side} ${r.line} ${r.market_label}`,
+    sub: `${teamName(r.team)} vs ${teamName(r.opponent)}`, odds: r.odds,
+  }));
+  const games = (state.data.game_bets || []).filter(passesGameBet).map((r) => ({
+    kind: "game", grade: r.grade, conf: r.confidence, edge: r.edge, stake: r.stake_units,
+    team: r.team, live: r.live,
+    label: r.pick_label, sub: `${r.matchup} · ${r.market_label}`, odds: r.odds,
+  }));
+  return [...props, ...games].sort((a, b) => b.conf - a.conf || b.edge - a.edge).slice(0, 5);
+}
+
+function renderTopPlays() {
+  const rows = topPlaysList();
+  const title = document.getElementById("topplays-title");
+  const host = document.getElementById("topplays");
+  if (!rows.length) { title.style.display = "none"; host.innerHTML = ""; return; }
+  title.style.display = "";
+  const ud = unitDollars();
+  host.innerHTML = rows.map((r, i) => {
+    const badge = r.team ? teamMark(r.team, 26)
+      : `<span class="tp-rank">${i + 1}</span>`;
+    const stake = ud > 0 ? money(stakeDollars(r.stake)) : `${r.stake.toFixed(2)}u`;
+    return `
+      <div class="tp-row" style="--grade-color:${gradeColor(r.grade)}">
+        <div class="tp-rank-n">${i + 1}</div>
+        <div class="tp-mark">${badge}</div>
+        <div class="tp-main">
+          <div class="tp-label">${escapeHtml(r.label)}${r.live ? ` <span class="tp-live">● LIVE</span>` : ""}</div>
+          <div class="tp-sub">${escapeHtml(r.sub)} · ${american(r.odds)}</div>
+        </div>
+        <div class="tp-metric"><div class="k">Edge</div><div class="v pos">${signedPct(r.edge)}</div></div>
+        <div class="tp-metric"><div class="k">Conf</div><div class="v">${r.conf.toFixed(1)}</div></div>
+        <div class="tp-metric"><div class="k">Stake</div><div class="v">${stake}</div></div>
+        <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>
+      </div>`;
+  }).join("");
+  revealChildren(host);
+}
+
+/* ============================================================
+   Game bets — grouped by market (moneyline / spread / total)
    ============================================================ */
 function passesGameBet(r) {
   return r.confidence >= state.minConf && r.edge * 100 >= state.minEdge && r.grade !== "Pass";
 }
+
+const GAMEBET_GROUPS = [
+  ["moneyline", "Moneyline"], ["spread", "Spread"],
+  ["total", "Game total"], ["team_total", "Team total"],
+];
 
 function renderGameBets() {
   const bets = (state.data.game_bets || []).map((r) => ({ ...r, _ok: passesGameBet(r) }));
@@ -268,9 +346,16 @@ function renderGameBets() {
     return;
   }
   title.style.display = "";
-  host.innerHTML = visible.map(gameBetCard).join("");
+  host.innerHTML = GAMEBET_GROUPS.map(([type, label]) => {
+    const rows = visible.filter((b) => b.bet_type === type);
+    if (!rows.length) return "";
+    return `<div class="gb-group">
+        <div class="gb-group-label">${label}<span>${rows.length}</span></div>
+        <div class="cards">${rows.map(gameBetCard).join("")}</div>
+      </div>`;
+  }).join("");
   fillMeters(host);
-  revealChildren(host);
+  host.querySelectorAll(".gb-group .cards").forEach(revealChildren);
 }
 
 function gameBetCard(r) {
@@ -439,9 +524,14 @@ function fillMeters(host) {
 }
 
 function renderRecommended() {
+  const host = document.getElementById("cards");
+  // When the whole slate is empty, the empty-slate banner already explains it.
+  if (!(state.data.games || []).length && !(state.data.recommendations || []).length) {
+    host.innerHTML = "";
+    return;
+  }
   const recs = state.data.recommendations.map((r) => ({ ...r, _ok: passesFilters(r) }));
   const visible = recs.filter((r) => (state.showAll ? true : r._ok));
-  const host = document.getElementById("cards");
   if (!visible.length) {
     host.innerHTML = `<p class="loading">No props clear the current thresholds. Loosen the sliders or enable “show non-recommended”.</p>`;
     return;
@@ -689,7 +779,7 @@ function bind() {
     load();
   });
   document.getElementById("show-all").addEventListener("change", (e) => {
-    state.showAll = e.target.checked; renderGameBets(); renderRecommended();
+    state.showAll = e.target.checked; renderTopPlays(); renderGameBets(); renderRecommended();
   });
   document.getElementById("player-search").addEventListener("input", (e) => {
     state.search = e.target.value; renderPlayers();
@@ -710,6 +800,7 @@ function bind() {
     } catch (e) {}
     updateUnitNote();
     renderStats();
+    renderTopPlays();
     renderGameBets();
     renderRecommended();
     renderPlayers();
