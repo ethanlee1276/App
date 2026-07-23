@@ -1,0 +1,168 @@
+# 🚀 Launch Guide — running the website with **live** data
+
+This is the simple, copy-paste version. If you can open a terminal and paste a
+line, you can do this. We'll test with **MLB tonight** since games are on, then
+the same steps work for NFL in the fall.
+
+> **What "live" means here:** live scores + the current inning, outs and base
+> runners (the little diamond), tonight's real lineups and probable pitchers,
+> the model's projections for each prop, and — if you add one free key — real
+> sportsbook lines including in-play prices.
+
+---
+
+## What you need first (one time)
+
+- **Python 3** — check by pasting this into a terminal:
+  ```bash
+  python3 --version
+  ```
+  If you see a version number (3.9 or higher), you're good. If it says "command
+  not found," install Python from <https://www.python.org/downloads/> and try
+  again.
+- **The code** — you already have this folder. Open a terminal **inside it**
+  (the folder that has `server.py` in it). Everything below is run from there.
+
+There is **nothing to `pip install`** for the core app. It's all built in.
+
+---
+
+## 🟢 Test it RIGHT NOW with MLB (no key, all free)
+
+Three commands. Do them in order.
+
+### Step 1 — Build tonight's live MLB slate
+
+Replace the date with **today's date** in `YYYY-MM-DD` form. Tonight that's:
+
+```bash
+python3 mlb_build.py 2026-07-23 --out web/data/mlb_recommendations.json
+```
+
+This reaches out to the free MLB Stats API and pulls **tonight's real games** —
+scores, current inning, outs, who's on base, starting lineups, probable
+pitchers — runs them through the model, and saves the result to a file the
+website reads.
+
+You'll see it print the games it found. If a game is in progress you'll see a
+score and inning; if it hasn't started yet you'll see the matchup and first
+pitch time.
+
+> **If this step errors** with something about connection/blocked host, your
+> network is blocking `statsapi.mlb.com`. Try again on a normal home/phone
+> network (not a locked-down work/school VPN). Everything else still works — the
+> site will just show the built-in sample game until the build succeeds.
+
+### Step 2 — Start the website in live mode
+
+```bash
+python3 server.py --live
+```
+
+You'll see:
+
+```
+Gridiron Edge running (LIVE data) → http://localhost:8000
+  MLB: web/data/mlb_recommendations.json (ready)
+```
+
+The `--live` flag is the important part — it tells the site to show the file you
+just built instead of the practice/sample data.
+
+### Step 3 — Open it and switch to MLB
+
+1. Open your web browser and go to **<http://localhost:8000>**
+2. Click the **⚾ MLB** button up top (next to 🏈 NFL).
+
+You should now see **tonight's real games**. On any game that's in progress
+you'll see the red **LIVE** dot, the live score, the inning, and the little
+**base diamond** lighting up which bases have runners — all updating from the
+real feed.
+
+That's it. That's the live test. 🎉
+
+---
+
+## 🔄 Keeping scores fresh during a live game
+
+The website **auto-refreshes every 30 seconds** on its own while a game is live,
+but it can only show what's in the file. To pull **new** scores from MLB, re-run
+the build. Easiest way — leave the server running in its terminal, open a
+**second** terminal in the same folder, and run this loop:
+
+```bash
+while true; do
+  python3 mlb_build.py 2026-07-23 --out web/data/mlb_recommendations.json
+  sleep 60
+done
+```
+
+That rebuilds tonight's slate every 60 seconds. The website picks up the new
+file automatically — you don't touch the browser. Press **Ctrl+C** in that
+second terminal to stop the loop. (MLB scores are free and unlimited, so
+refreshing once a minute is totally fine.)
+
+---
+
+## 💰 Size bets to YOUR bankroll (optional, no setup)
+
+On the **Recommended** tab there's a **💰 Bankroll** box. Type in your bankroll
+(say `500`) and your unit size (say `1` for 1%). Every pick then shows the exact
+dollar amount to bet, sized to your roll. It remembers it in your browser, so
+you only do this once.
+
+---
+
+## 🎰 Add real sportsbook lines (optional, one free key)
+
+The steps above use the model's own fair prices. To compare against **real**
+DraftKings / FanDuel / BetMGM / ESPN BET lines — including live in-play prices:
+
+1. Get a **free** API key at <https://the-odds-api.com> (takes a minute).
+2. Run the build with your key and the `--odds` flag:
+   ```bash
+   export ODDS_API_KEY=your_key_here
+   python3 mlb_build.py 2026-07-23 --odds --out web/data/mlb_recommendations.json
+   ```
+3. Start the server the same way (`python3 server.py --live`).
+
+Now each pick shows the real book line next to the model's number, and the
+"edge" is the genuine gap between them.
+
+> **Heads up on the free odds tier:** it allows ~500 requests/month, so do
+> **not** put the `--odds` build in the 60-second loop — you'd burn through it in
+> a few hours. Use the free score-only loop for live scores, and run the
+> `--odds` build by hand every so often when you want to refresh the lines.
+
+---
+
+## 🏈 Doing the same for NFL
+
+Identical idea, different builder. In the NFL season:
+
+```bash
+python3 nfl_build.py 2026 5 --out web/data/recommendations.json   # season 2026, week 5
+python3 server.py --live                                          # then open the site, stay on 🏈 NFL
+```
+
+Add `--odds` (with the same free key) for real NFL prop lines. Live NFL scores
+come from ESPN's free scoreboard, so the same rebuild-loop trick works.
+
+---
+
+## Cheat sheet
+
+| I want to… | Command |
+|---|---|
+| Test live MLB now (free) | `python3 mlb_build.py 2026-07-23 --out web/data/mlb_recommendations.json` then `python3 server.py --live` |
+| Just try the app, no data | `python3 generate.py && python3 server.py` |
+| Keep MLB scores live | loop the `mlb_build.py …` line every 60s in a 2nd terminal |
+| Add real book lines | free key from the-odds-api.com, add `--odds` to the build |
+| Live NFL | `python3 nfl_build.py <season> <week> --out web/data/recommendations.json` then `python3 server.py --live` |
+| Stop the server | **Ctrl+C** in its terminal |
+
+**One thing to remember:** build first (`mlb_build.py … --out …`), **then** start
+the server **with `--live`**. Without `--live`, the site shows the practice game
+instead of tonight's real one.
+
+21+. Model output, not betting advice. Please bet responsibly.

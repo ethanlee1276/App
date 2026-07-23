@@ -6,8 +6,9 @@ Serves the static dashboard in ``web/`` and exposes a live JSON API at
 threshold controls in the UI recalculate against the real model, not a cached
 file. Uses only the Python standard library.
 
-    python3 server.py           # http://localhost:8000
+    python3 server.py           # http://localhost:8000, sample data
     python3 server.py 9000      # custom port
+    python3 server.py --live    # serve pre-built live data (see LAUNCH.md)
 """
 
 from __future__ import annotations
@@ -26,6 +27,13 @@ ROOT = Path(__file__).parent
 WEB = ROOT / "web"
 SLATE = ROOT / "data" / "sample_slate.json"
 MLB_SLATE = ROOT / "data" / "mlb_sample_slate.json"
+
+# In --live mode the API serves these freshly-built files (written by
+# mlb_build.py / nfl_build.py --out ...) instead of re-running the sample slate.
+LIVE_FILES = {
+    "nfl": WEB / "data" / "recommendations.json",
+    "mlb": WEB / "data" / "mlb_recommendations.json",
+}
 
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -55,6 +63,17 @@ class Handler(BaseHTTPRequestHandler):
                 return float(query.get(name, [default])[0])
             except (TypeError, ValueError):
                 return default
+
+        # Live mode: serve the pre-built file if one exists. The frontend
+        # re-applies the confidence/edge filters client-side, so the sliders
+        # still work against this data.
+        if getattr(self.server, "live_mode", False):
+            live = LIVE_FILES.get(sport)
+            if live and live.is_file():
+                self._send(200, live.read_bytes(), ".json")
+                return
+            # No build yet → fall through to the sample pipeline below so the
+            # page still loads (with a clear note in LAUNCH.md on how to build).
 
         config = RuleConfig(
             min_confidence=qf("min_confidence", 6.0),
@@ -92,9 +111,20 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+    args = sys.argv[1:]
+    live = "--live" in args
+    ports = [a for a in args if not a.startswith("--")]
+    port = int(ports[0]) if ports else 8000
+
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
-    print(f"NFL prop engine running → http://localhost:{port}")
+    server.live_mode = live  # read by Handler._api
+
+    mode = "LIVE data" if live else "sample data"
+    print(f"Gridiron Edge running ({mode}) → http://localhost:{port}")
+    if live:
+        for sport, path in LIVE_FILES.items():
+            state = "ready" if path.is_file() else "not built yet — see LAUNCH.md"
+            print(f"  {sport.upper()}: {path.relative_to(ROOT)} ({state})")
     print("Press Ctrl+C to stop.")
     try:
         server.serve_forever()
