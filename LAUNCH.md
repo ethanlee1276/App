@@ -27,6 +27,31 @@ There is **nothing to `pip install`** for the core app. It's all built in.
 
 ---
 
+## 🔑 API keys — the complete list (spoiler: just one, and it's optional)
+
+Everything that makes the site *work* is **free and needs no key**: live scores,
+innings/outs/bases, lineups, probable pitchers, weather, NFL schedules, ESPN
+scores, and the model's own projections. So you can test tonight with **zero
+keys**.
+
+There is exactly **one** optional key:
+
+| Key | What it's for | Needed? | Where to get it |
+|-----|---------------|---------|-----------------|
+| `ODDS_API_KEY` | Real sportsbook lines (DraftKings/FanDuel/etc.) + in-play odds | **Optional** — only if you want real book lines instead of the model's fair prices | Free at <https://the-odds-api.com> (~1 min signup) |
+
+That's it. No other keys exist in this app. MLB, weather, NFL and live scores are
+all open feeds.
+
+**To add the key** (only if you want real lines) — one time:
+```bash
+cp secrets.local.example secrets.local     # make your local key file (gitignored)
+# then open secrets.local and paste your key after ODDS_API_KEY=
+```
+The app reads it automatically after that — no re-typing.
+
+---
+
 ## ⭐ The easy way — one command
 
 ```bash
