@@ -26,6 +26,7 @@ import urllib.request
 from dataclasses import dataclass, field
 
 from .fetch import CACHE_DIR, USER_AGENT
+from ..secrets import load_local_secrets
 from ..models import (
     SportsbookLine, PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS,
 )
@@ -107,6 +108,7 @@ class OddsAPIError(RuntimeError):
 
 
 def get_api_key(explicit: str | None = None) -> str:
+    load_local_secrets()  # pull ODDS_API_KEY from secrets.local if present
     key = explicit or os.environ.get("ODDS_API_KEY")
     if not key:
         raise OddsAPIError(
