@@ -65,3 +65,22 @@ def best_over_line(lines: list[SportsbookLine]) -> BestLine:
             best = cand
     assert best is not None
     return best
+
+
+def best_under_line(lines: list[SportsbookLine]) -> BestLine:
+    """Pick the most bettor-friendly UNDER line across books.
+
+    Mirror image of ``best_over_line``: for an under you want the *highest*
+    line (more cushion), breaking ties by the best (highest) under odds.
+    """
+    best: BestLine | None = None
+    for ln in lines:
+        _, fair_under = devig_two_way(ln.over_odds, ln.under_odds)
+        cand = BestLine(ln.book, ln.line, ln.under_odds, fair_under)
+        if best is None:
+            best = cand
+            continue
+        if ln.line > best.line or (ln.line == best.line and ln.under_odds > best.odds):
+            best = cand
+    assert best is not None
+    return best

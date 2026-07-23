@@ -39,7 +39,7 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "grade": rec.grade, "trend": rec.trend,
         "trend_delta": round(proj.form.trend_delta, 2),
         "recommended": decision.recommend, "warnings": decision.warnings,
-        "headline": f"{rec.player} OVER {rec.line:g} {label}",
+        "headline": f"{rec.player} {rec.side} {rec.line:g} {label}",
         "summary": (
             f"Model projects {rec.projection:g} "
             f"(range {rec.proj_low:g}–{rec.proj_high:g}) vs a line of {rec.line:g}, "

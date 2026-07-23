@@ -13,7 +13,7 @@ from .betting import Recommendation
 
 def headline(rec: Recommendation) -> str:
     label = MARKET_LABELS.get(rec.market, rec.market)
-    return f"{rec.player} OVER {rec.line:g} {label}"
+    return f"{rec.player} {rec.side} {rec.line:g} {label}"
 
 
 def summary(rec: Recommendation) -> str:

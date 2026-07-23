@@ -11,8 +11,11 @@ from __future__ import annotations
 
 import math
 
-from ..betting import Recommendation, _confidence_score, _grade, _kelly_stake
-from ..odds import best_over_line, expected_value
+from ..betting import (
+    Recommendation, _confidence_score, _grade, _kelly_stake,
+    _trend_alignment, pick_side,
+)
+from ..odds import expected_value
 from ..statmath import prob_over
 from .models import MLBProp, HOME_RUNS
 from .projection import MLBProjection
@@ -32,28 +35,31 @@ def _poisson_over(line: float, lam: float) -> float:
 
 
 def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection) -> Recommendation:
-    best = best_over_line(prop.lines)
+    def p_over_at(line: float) -> float:
+        if prop.market == HOME_RUNS:
+            return _poisson_over(line, proj.mean)
+        return prob_over(line, proj.mean, proj.std)
 
-    if prop.market == HOME_RUNS:
-        hit = _poisson_over(best.line, proj.mean)
-    else:
-        hit = prob_over(best.line, proj.mean, proj.std)
-
-    edge = hit - best.fair_prob
+    side, best, hit, fair, edge = pick_side(prop.lines, p_over_at)
     ev = expected_value(hit, best.odds)
-    confidence = _confidence_score(edge, hit, proj)
+    trend_align = _trend_alignment(side, proj.form.trend)
+    confidence = _confidence_score(edge, hit, proj, trend_align)
     grade = _grade(confidence, edge)
     stake = _kelly_stake(hit, best.odds) if grade != "Pass" else 0.0
 
+    reasons = list(proj.reasons)
+    if side == "UNDER":
+        reasons.insert(0, f"Model sides UNDER — projects {proj.mean:g} under the {best.line:g} line")
+
     return Recommendation(
         player=prop.player, team=prop.team, opponent=prop.opponent,
-        market=prop.market, side="OVER",
+        market=prop.market, side=side,
         book=best.book, line=best.line, odds=best.odds,
         projection=round(proj.mean, 2),
         proj_low=round(max(0.0, proj.mean - proj.std), 2),
         proj_high=round(proj.mean + proj.std, 2),
-        hit_prob=round(hit, 4), fair_prob=round(best.fair_prob, 4),
+        hit_prob=round(hit, 4), fair_prob=round(fair, 4),
         edge=round(edge, 4), ev_per_unit=round(ev, 4),
         confidence=confidence, stake_units=round(stake, 2), grade=grade,
-        reasons=list(proj.reasons), trend=proj.form.trend,
+        reasons=reasons, trend=proj.form.trend,
     )

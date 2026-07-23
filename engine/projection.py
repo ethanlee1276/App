@@ -69,7 +69,10 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None) ->
     else:
         total_mult = rule_mult
 
-    mean = form.mean * total_mult
+    # Recency shade: a sustained hot/cold streak pulls the projection toward
+    # recent form (bounded in form.py), so the model stops leaning on stale
+    # early-season numbers for a player who has cooled off.
+    mean = form.mean * total_mult * form.trend_mult
 
     # Uncertainty: never below the market-typical variance floor, and it grows
     # as we push further from the player's own baseline.
@@ -83,11 +86,14 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None) ->
     reasons += weather.reasons
     reasons += injury.reasons
 
-    # Recent-form narrative.
+    # Recent-form narrative — the cool-off case is tied to the actual shade.
     if form.trend == "up":
         reasons.append(f"Trending up — last 3 games {form.trend_delta:+.0f} vs prior form")
     elif form.trend == "down":
-        reasons.append(f"Cooling off — last 3 games {form.trend_delta:+.0f} vs prior form")
+        reasons.append(
+            f"Cooling off — last 3 games {form.trend_delta:+.0f} vs prior form "
+            f"(projection shaded {form.trend_mult - 1:+.0%})"
+        )
 
     return Projection(
         mean=mean,

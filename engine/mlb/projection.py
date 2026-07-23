@@ -78,7 +78,9 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None) -> MLBProject
         # because park effects (Coors) genuinely run bigger.
         total_mult = clamp(park_mult * weather_mult * matchup.multiplier * statcast_mult,
                            0.78, 1.28)
-    mean = form.mean * total_mult
+    # Recency shade toward recent form (bounded in form.py) — a cold bat's
+    # number comes down instead of riding a stale season line.
+    mean = form.mean * total_mult * form.trend_mult
 
     cv_floor = CV_FLOOR.get(prop.market, 0.6) * max(form.mean, 0.1)
     base_std = max(form.std, cv_floor)
@@ -95,7 +97,10 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None) -> MLBProject
     if form.trend == "up":
         reasons.append(f"Hot bat — last 3 games {form.trend_delta:+.1f} vs prior form")
     elif form.trend == "down":
-        reasons.append(f"Cooling off — last 3 games {form.trend_delta:+.1f} vs prior form")
+        reasons.append(
+            f"Cooling off — last 3 games {form.trend_delta:+.1f} vs prior form "
+            f"(projection shaded {form.trend_mult - 1:+.0%})"
+        )
 
     return MLBProjection(
         mean=mean, std=adj_std, form=form,

@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from .models import Prop, RECEPTIONS
 from .projection import Projection
-from .odds import best_over_line, devig_two_way, expected_value
+from .odds import best_over_line, best_under_line, devig_two_way, expected_value
 from .statmath import prob_over, prob_over_discrete, clamp
 
 
@@ -22,7 +22,7 @@ class Recommendation:
     team: str
     opponent: str
     market: str
-    side: str                 # "OVER" (this MVP surfaces overs)
+    side: str                 # "OVER" or "UNDER" — whichever side has the edge
     book: str
     line: float
     odds: int
@@ -40,9 +40,13 @@ class Recommendation:
     trend: str = "flat"
 
 
-def _confidence_score(edge: float, hit_prob: float, proj: Projection) -> float:
+def _confidence_score(edge: float, hit_prob: float, proj: Projection,
+                      trend_align: float = 0.0) -> float:
     """Blend edge, absolute hit probability, sample size and variance into a
-    0–10 score. Edge is the main driver; the rest are quality discounts."""
+    0–10 score. Edge is the main driver; the rest are quality discounts.
+
+    ``trend_align`` nudges the score for betting with (or against) the player's
+    recent-form trend — see ``_trend_alignment``."""
     edge_component = clamp(edge / 0.12, 0.0, 1.0) * 6.0          # up to 6 pts
     prob_component = clamp((hit_prob - 0.5) / 0.35, 0.0, 1.0) * 2.5  # up to 2.5
 
@@ -53,7 +57,48 @@ def _confidence_score(edge: float, hit_prob: float, proj: Projection) -> float:
     var_q = clamp(1.0 - (rel_var - 0.30), 0.4, 1.0)
     quality = 1.5 * sample_q * var_q                              # up to 1.5
 
-    return round(clamp(edge_component + prob_component + quality, 0.0, 10.0), 1)
+    total = edge_component + prob_component + quality + trend_align
+    return round(clamp(total, 0.0, 10.0), 1)
+
+
+def _trend_alignment(side: str, trend: str) -> float:
+    """Confidence nudge for betting with — or against — the player's trend.
+
+    Backing an OVER on a cooling player (or an UNDER on a heating one) fights
+    the direction of recent form and takes a real haircut; riding the trend
+    earns a small bonus. This is the piece that makes the model stop
+    recommending a name that has stopped producing."""
+    if trend == "flat":
+        return 0.0
+    with_trend = (side == "OVER" and trend == "up") or (side == "UNDER" and trend == "down")
+    against_trend = (side == "OVER" and trend == "down") or (side == "UNDER" and trend == "up")
+    if with_trend:
+        return 0.5
+    if against_trend:
+        return -1.2
+    return 0.0
+
+
+def pick_side(lines, p_over_at):
+    """Shop both sides and return the one with the larger edge.
+
+    ``p_over_at(line) -> P(stat > line)`` is supplied by the caller so each
+    sport prices with its own distribution (normal, discrete, Poisson…).
+    Returns ``(side, best_line, win_prob, fair_prob, edge)`` where ``win_prob``
+    is the probability the chosen bet cashes."""
+    over = best_over_line(lines)
+    under = best_under_line(lines)
+
+    p_over_at_over = clamp(p_over_at(over.line), 1e-6, 1.0 - 1e-6)
+    over_edge = p_over_at_over - over.fair_prob
+
+    p_over_at_under = clamp(p_over_at(under.line), 1e-6, 1.0 - 1e-6)
+    under_win = 1.0 - p_over_at_under
+    under_edge = under_win - under.fair_prob
+
+    if over_edge >= under_edge:
+        return "OVER", over, p_over_at_over, over.fair_prob, over_edge
+    return "UNDER", under, under_win, under.fair_prob, under_edge
 
 
 def _grade(confidence: float, edge: float) -> str:
@@ -78,25 +123,28 @@ def _kelly_stake(model_prob: float, odds: int, fraction: float = 0.25) -> float:
 
 
 def evaluate_prop(prop: Prop, proj: Projection) -> Recommendation:
-    best = best_over_line(prop.lines)
+    def p_over_at(line: float) -> float:
+        if prop.market == RECEPTIONS:
+            return prob_over_discrete(line, proj.mean, proj.std)
+        return prob_over(line, proj.mean, proj.std)
 
-    if prop.market == RECEPTIONS:
-        hit = prob_over_discrete(best.line, proj.mean, proj.std)
-    else:
-        hit = prob_over(best.line, proj.mean, proj.std)
-
-    edge = hit - best.fair_prob
+    side, best, hit, fair, edge = pick_side(prop.lines, p_over_at)
     ev = expected_value(hit, best.odds)
-    confidence = _confidence_score(edge, hit, proj)
+    trend_align = _trend_alignment(side, proj.form.trend)
+    confidence = _confidence_score(edge, hit, proj, trend_align)
     grade = _grade(confidence, edge)
     stake = _kelly_stake(hit, best.odds) if grade != "Pass" else 0.0
+
+    reasons = list(proj.reasons)
+    if side == "UNDER":
+        reasons.insert(0, f"Model sides UNDER — projects {proj.mean:g} under the {best.line:g} line")
 
     return Recommendation(
         player=prop.player,
         team=prop.team,
         opponent=prop.opponent,
         market=prop.market,
-        side="OVER",
+        side=side,
         book=best.book,
         line=best.line,
         odds=best.odds,
@@ -104,12 +152,12 @@ def evaluate_prop(prop: Prop, proj: Projection) -> Recommendation:
         proj_low=round(proj.mean - proj.std, 1),
         proj_high=round(proj.mean + proj.std, 1),
         hit_prob=round(hit, 4),
-        fair_prob=round(best.fair_prob, 4),
+        fair_prob=round(fair, 4),
         edge=round(edge, 4),
         ev_per_unit=round(ev, 4),
         confidence=confidence,
         stake_units=round(stake, 2),
         grade=grade,
-        reasons=proj.reasons,
+        reasons=reasons,
         trend=proj.form.trend,
     )

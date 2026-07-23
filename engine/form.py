@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .models import GameLog
-from .statmath import weighted_mean, sample_std
+from .statmath import weighted_mean, sample_std, clamp
 
 # How much each look-back window contributes. Recent games are weighted more
 # heavily than the season, but the season still anchors the estimate so one
@@ -35,6 +35,7 @@ class FormResult:
     trend: str            # "up", "down", or "flat"
     trend_delta: float    # last-3 avg minus prior-season avg, in stat units
     sample_games: int
+    trend_mult: float = 1.0   # shade the projection toward recent form
 
 
 def _avg(values: list[float]) -> Optional[float]:
@@ -78,6 +79,7 @@ def compute_form(
     prior = _avg(vals[3:]) if len(vals) > 3 else career_avg
     trend_delta = 0.0
     trend = "flat"
+    trend_mult = 1.0
     if recent is not None and prior:
         trend_delta = recent - prior
         rel = trend_delta / prior if prior else 0.0
@@ -85,6 +87,13 @@ def compute_form(
             trend = "up"
         elif rel < -0.10:
             trend = "down"
+        # Downward-only recency shade: a sustained cool-off pulls the projection
+        # toward recent form (to -10%), so the model stops leaning on stale
+        # early-season numbers for a player who's stopped producing. We do NOT
+        # inflate hot streaks — books price recent heat fast and chasing it is a
+        # classic bettor trap — so a hot bat instead earns a small *confidence*
+        # bonus (see betting._trend_alignment), not a bigger projected number.
+        trend_mult = clamp(1.0 + 0.30 * clamp(rel, -0.5, 0.0), 0.90, 1.0)
 
     return FormResult(
         mean=mean,
@@ -92,4 +101,5 @@ def compute_form(
         trend=trend,
         trend_delta=trend_delta,
         sample_games=len(vals),
+        trend_mult=trend_mult,
     )
