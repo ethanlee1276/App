@@ -17,8 +17,14 @@ from .rules import apply_rules, RuleConfig
 from .explain import headline, summary, bullet_reasons
 from .gamebets import (
     nfl_win_prob, price_moneyline, moneyline_to_dict,
-    project_total, game_margin, price_total, price_spread,
+    project_total, project_team_points, game_margin,
+    price_total, price_team_total, price_spread,
 )
+
+
+def _half(x: float) -> float:
+    """Round to the nearest half-point (how books post totals)."""
+    return round(x * 2) / 2
 
 
 def _avg(vals: list[float]):
@@ -108,6 +114,14 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
             total = price_total("nfl", g.home, g.away, pt, g.total,
                                 g.total_over_odds, g.total_under_odds, "points", tctx)
             out.append(_finish_bet(total, g, config))
+            # Team totals — each team's own points, line split from total ± spread.
+            ph = project_team_points("nfl", g.home_off, g.away_def)
+            pa = project_team_points("nfl", g.away_off, g.home_def)
+            hl, al = _half((g.total - g.spread) / 2), _half((g.total + g.spread) / 2)
+            out.append(_finish_bet(price_team_total("nfl", g.home, g.home, g.away, ph, hl,
+                                                    units="points"), g, config))
+            out.append(_finish_bet(price_team_total("nfl", g.away, g.home, g.away, pa, al,
+                                                    units="points"), g, config))
             if g.spread:
                 margin = game_margin("nfl", g.home_rating, g.away_rating)
                 sctx = [f"Projected margin {margin:+.1f} pts (home)"]

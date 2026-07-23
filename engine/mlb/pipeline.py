@@ -13,8 +13,14 @@ from ..rules import RuleConfig
 from ..models import live_to_dict
 from ..gamebets import (
     mlb_win_prob, price_moneyline, moneyline_to_dict, LEAGUE_AVG_XERA,
-    project_total, game_margin, price_total, price_spread,
+    project_total, project_team_points, game_margin,
+    price_total, price_team_total, price_spread,
 )
+
+
+def _half(x: float) -> float:
+    """Round to the nearest half-run (how books post totals)."""
+    return round(x * 2) / 2
 from .data_loader import load_mlb_slate, MLBSlate
 from .models import MARKET_LABELS
 from .parks import get_park
@@ -64,6 +70,14 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
             total = price_total("mlb", g.home, g.away, pt, g.total,
                                 g.total_over_odds, g.total_under_odds, "runs", tctx)
             out.append(_finish_bet(total, g, config))
+            # Team totals — baseball scoring is balanced, so split the total evenly.
+            ph = project_team_points("mlb", g.home_off, g.away_def)
+            pa = project_team_points("mlb", g.away_off, g.home_def)
+            tl = _half(g.total / 2)
+            out.append(_finish_bet(price_team_total("mlb", g.home, g.home, g.away, ph, tl,
+                                                    units="runs"), g, config))
+            out.append(_finish_bet(price_team_total("mlb", g.away, g.home, g.away, pa, tl,
+                                                    units="runs"), g, config))
             if g.spread:
                 margin = game_margin("mlb", g.home_rating, g.away_rating)
                 sctx = [f"Projected run margin {margin:+.2f} (home)"]

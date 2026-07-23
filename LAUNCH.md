@@ -27,6 +27,37 @@ There is **nothing to `pip install`** for the core app. It's all built in.
 
 ---
 
+## ⭐ The easy way — one command
+
+```bash
+python3 launch.py
+```
+
+That's it. On startup it grabs the **newest live data for both NFL and MLB**,
+then opens the site at <http://localhost:8000>. It keeps the data fresh in the
+background every 90 seconds while it runs, so live scores stay current during
+games. Any league that's out of season or unreachable is skipped automatically —
+the site still comes up. Press **Ctrl+C** to stop.
+
+- Want real sportsbook lines too? `export ODDS_API_KEY=your_key` first (see the
+  odds section below), then `python3 launch.py`.
+- Don't want the background polling? `python3 launch.py --refresh 0`.
+
+> **One thing to know for the game-level bets.** Player props and live scores
+> work immediately. The **moneyline / spread / total / team-total** picks also
+> need team-strength ratings, which come from past scores — so run this **once**
+> so the model has them:
+> ```bash
+> python3 ingest.py mlb --dates 2026-06-06,2026-06-13,2026-06-20   # a few recent dates
+> python3 ingest.py nfl                                            # in the fall
+> ```
+> Without it those game bets show ~0 edge (the model just matches the book) —
+> that's expected, not a bug.
+
+The step-by-step below does the same thing by hand if you'd rather see each part.
+
+---
+
 ## 🟢 Test it RIGHT NOW with MLB (no key, all free)
 
 Three commands. Do them in order.
@@ -154,15 +185,15 @@ come from ESPN's free scoreboard, so the same rebuild-loop trick works.
 
 | I want to… | Command |
 |---|---|
-| Test live MLB now (free) | `python3 mlb_build.py 2026-07-23 --out web/data/mlb_recommendations.json` then `python3 server.py --live` |
+| **Launch everything, live (easiest)** | `python3 launch.py` |
+| Real book lines too | `export ODDS_API_KEY=…` then `python3 launch.py` |
+| Team ratings for game bets (once) | `python3 ingest.py mlb --dates <recent dates>` · `python3 ingest.py nfl` |
 | Just try the app, no data | `python3 generate.py && python3 server.py` |
-| Keep MLB scores live | loop the `mlb_build.py …` line every 60s in a 2nd terminal |
-| Add real book lines | free key from the-odds-api.com, add `--odds` to the build |
-| Live NFL | `python3 nfl_build.py <season> <week> --out web/data/recommendations.json` then `python3 server.py --live` |
-| Stop the server | **Ctrl+C** in its terminal |
+| Build one sport by hand | `python3 mlb_build.py <today> --out web/data/mlb_recommendations.json` then `python3 server.py --live` |
+| Stop it | **Ctrl+C** in its terminal |
 
-**One thing to remember:** build first (`mlb_build.py … --out …`), **then** start
-the server **with `--live`**. Without `--live`, the site shows the practice game
-instead of tonight's real one.
+**Simplest path:** `python3 launch.py` refreshes both leagues and serves in one
+step. The by-hand route works too — just remember to build first, **then** start
+the server **with `--live`** (without `--live` you'd see the practice game).
 
 21+. Model output, not betting advice. Please bet responsibly.

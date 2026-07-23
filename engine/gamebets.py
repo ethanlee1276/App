@@ -38,6 +38,8 @@ LEAGUE_AVG_XERA = 4.10
 # SD of a game's combined total (points/runs) around its projection.
 NFL_TOTAL_SD = 13.5
 MLB_TOTAL_SD = 4.5
+# A single team's scoring SD is tighter than the game total's (≈ total / √2).
+TEAM_TOTAL_SD = {"nfl": 9.5, "mlb": 3.2}
 # League-average scoring per team per game — the fixed baseline that offense /
 # defense ratings are expressed against, so the totals projection stays
 # consistent with how teamrates.py computes those ratings.
@@ -155,6 +157,11 @@ def moneyline_to_dict(rec: MoneylineRec) -> dict:
 
 
 # --- totals & spreads ------------------------------------------------------
+def project_team_points(sport: str, off: float, opp_def: float) -> float:
+    """Projected points/runs for one team: its offense vs the opponent's defense."""
+    return SCORING_BASELINE.get(sport, 0.0) + off + opp_def
+
+
 def project_total(sport: str, home_off: float, home_def: float,
                   away_off: float, away_def: float) -> float:
     """Projected combined score: each side's offense meets the other's defense."""
@@ -219,6 +226,30 @@ def price_total(sport: str, home: str, away: str, proj_total: float,
     return _game_bet("total", "Total", home, away, win, fair, edge, odds,
                      pick_label=f"{side} {market_total:g}", side=side, line=market_total,
                      reasons=reasons, headline=f"{side} {market_total:g} {units}")
+
+
+def price_team_total(sport: str, team: str, home: str, away: str,
+                     proj_points: float, line: float,
+                     over_odds: int = -110, under_odds: int = -110,
+                     units: str = "points", context: list[str] | None = None) -> dict:
+    """Price a single team's total (over/under) from its projected scoring."""
+    fair_over, fair_under = devig_two_way(over_odds, under_odds)
+    sd = TEAM_TOTAL_SD.get(sport, 9.5)
+    p_over = clamp(normal_cdf((proj_points - line) / sd), 0.02, 0.98)
+    over_edge = p_over - fair_over
+    under_edge = (1.0 - p_over) - fair_under
+
+    if over_edge >= under_edge:
+        side, win, odds, fair, edge = "Over", p_over, over_odds, fair_over, over_edge
+    else:
+        side, win, odds, fair, edge = "Under", 1.0 - p_over, under_odds, fair_under, under_edge
+
+    reasons = list(context or [])
+    reasons.insert(0, f"Model projects {team} for {proj_points:.1f} {units} vs the "
+                      f"{line:g} team total — {side} ({edge:+.1%} edge)")
+    return _game_bet("team_total", "Team total", home, away, win, fair, edge, odds,
+                     pick_label=f"{team} {side} {line:g}", team=team, side=side, line=line,
+                     reasons=reasons, headline=f"{team} team {side} {line:g}")
 
 
 def price_spread(sport: str, home: str, away: str, proj_margin: float,

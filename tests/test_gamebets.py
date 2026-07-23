@@ -13,7 +13,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.gamebets import (
     nfl_win_prob, mlb_win_prob, price_moneyline, moneyline_to_dict,
-    project_total, game_margin, price_total, price_spread, LEAGUE_AVG_XERA,
+    project_total, project_team_points, game_margin,
+    price_total, price_team_total, price_spread, LEAGUE_AVG_XERA,
 )
 from engine.pipeline import run_slate
 from engine.mlb.pipeline import run_mlb_slate
@@ -95,6 +96,23 @@ def test_price_total_backs_over_when_projection_is_high():
     assert u["edge"] > 0
 
 
+def test_project_team_points_uses_offense_vs_opp_defense():
+    base = 22.6
+    assert approx(project_team_points("nfl", 0, 0), base)
+    assert project_team_points("nfl", 4, 2) > base     # good offense, leaky opp D
+
+
+def test_price_team_total_backs_the_value_side():
+    # Team projected well above its posted number -> over.
+    over = price_team_total("nfl", "KC", "KC", "BUF", proj_points=30.0, line=24.5)
+    assert over["bet_type"] == "team_total"
+    assert over["team"] == "KC" and over["side"] == "Over"
+    assert over["edge"] > 0
+    # And under when projected below.
+    under = price_team_total("nfl", "KC", "KC", "BUF", proj_points=18.0, line=24.5)
+    assert under["side"] == "Under" and under["edge"] > 0
+
+
 def test_price_spread_backs_the_value_side():
     # Home projected to win by 7 but only laying 3 -> home covers.
     home = price_spread("nfl", "KC", "BUF", proj_margin=7.0, home_spread=-3.0)
@@ -132,9 +150,9 @@ def test_pipeline_emits_game_bets():
             assert 0.0 <= b["win_prob"] <= 1.0
             assert abs(b["edge"]) < 0.35        # no runaway edges
             assert b["headline"] and b["pick_label"]
-        # All three game-bet types are produced.
+        # All four game-bet types are produced.
         types = {b["bet_type"] for b in result["game_bets"]}
-        assert types == {"moneyline", "total", "spread"}
+        assert types == {"moneyline", "total", "team_total", "spread"}
         # The sample slates are tuned so at least one bet is recommended.
         assert any(b["recommended"] for b in result["game_bets"])
 

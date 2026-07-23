@@ -280,6 +280,10 @@ function gameBetCard(r) {
     mark = `<span class="total-badge ${r.side === "Over" ? "over" : "under"}">${arrow}</span>`;
     title = `${escapeHtml(r.side)} ${r.line} <span class="book">${american(r.odds)}</span>`;
     sub = "Total · combined score";
+  } else if (r.bet_type === "team_total") {
+    mark = teamMark(r.team, 34);
+    title = `${escapeHtml(teamName(r.team))} ${escapeHtml(r.side)} ${r.line} <span class="book">${american(r.odds)}</span>`;
+    sub = "Team total · this team only";
   } else { // moneyline
     mark = teamMark(r.team, 34);
     title = `${escapeHtml(teamName(r.team))} <span class="ml-odds">${american(r.odds)}</span>`;
