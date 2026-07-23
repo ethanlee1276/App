@@ -101,8 +101,10 @@ def main() -> None:
 
     if args.out:
         import datetime as _dt
+        from pathlib import Path
         result["generated_from"] = "live-odds" if real_odds else "live"
         result["built_at"] = _dt.datetime.now().isoformat(timespec="seconds")
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         with open(args.out, "w") as fh:
             json.dump(result, fh, indent=2)
         print(f"\nWrote {args.out}")

@@ -29,8 +29,10 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 from server import Handler, LIVE_FILES  # reuse the --live server
+from engine.secrets import load_local_secrets
 
 ROOT = Path(__file__).parent
+load_local_secrets()  # pull ODDS_API_KEY from secrets.local into the environment
 
 
 def _run_build(args: list[str]) -> tuple[bool, str]:
@@ -119,11 +121,14 @@ def _background_refresher(interval: int) -> None:
 
 
 def _reachable(url: str, timeout: int = 6) -> bool:
+    import urllib.error
     import urllib.request
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "gridiron-edge/preflight"})
         urllib.request.urlopen(req, timeout=timeout).read(64)
         return True
+    except urllib.error.HTTPError:
+        return True   # got an HTTP response (e.g. 401 without a key) = host is reachable
     except Exception:
         return False
 
