@@ -172,6 +172,8 @@ class Game:
     away: str
     weather: Weather
     injuries: list[Injury] = field(default_factory=list)
+    date: str = ""               # game date, YYYY-MM-DD
+    kickoff: str = ""            # kickoff time (nflverse "HH:MM" ET, or ISO)
     spread: float = 0.0          # home spread; negative = home favored
     total: float = 44.0
     roof: str = ""               # dome | closed | outdoors | open (raw nflverse)

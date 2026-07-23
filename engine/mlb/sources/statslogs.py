@@ -187,6 +187,7 @@ def build_live_slate(date: str, season: int | None = None,
             lineups_confirmed = bool(box.get("teams", {}).get("home", {}).get("battingOrder"))
 
             game = MLBGame(home=home_ab, away=away_ab, park=park,
+                           date=day.get("date", date), kickoff=g.get("gameDate", ""),
                            pitchers=pitchers, lineups_confirmed=lineups_confirmed)
             if weather is not None:
                 game.weather = weather

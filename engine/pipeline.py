@@ -83,6 +83,8 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
                         and d["confidence"] >= config.min_confidence
                         and d["edge"] >= config.min_edge)
     d["live"] = bool(g.live and g.live.state == "live")
+    d["date"] = g.date
+    d["kickoff"] = g.kickoff
     return d
 
 
@@ -131,6 +133,8 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         decision = apply_rules(rec, prop, game, config)
         d = _rec_to_dict(rec, prop, decision, proj)
         d["live"] = bool(game.live and game.live.state == "live")
+        d["game_date"] = game.date
+        d["game_kickoff"] = game.kickoff
         results.append(d)
 
     # Rank: recommended bets first, then by confidence, then by edge.
@@ -162,6 +166,8 @@ def _game_to_dict(g) -> dict:
     return {
         "home": g.home,
         "away": g.away,
+        "date": g.date,
+        "kickoff": g.kickoff,
         "spread": g.spread,
         "favorite": fav,
         "total": g.total,

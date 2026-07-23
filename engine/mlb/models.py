@@ -85,6 +85,8 @@ class MLBGame:
     home: str
     away: str
     park: str                                  # ParkProfile.key
+    date: str = ""                             # game date, YYYY-MM-DD
+    kickoff: str = ""                          # first pitch (ISO datetime)
     total: float = 8.5                         # game run total (O/U)
     weather: MLBWeather = field(default_factory=MLBWeather)
     lineups_confirmed: bool = True

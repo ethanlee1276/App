@@ -82,6 +82,8 @@ def load_slate(path: str | Path) -> Slate:
             away=g["away"],
             weather=_weather(g["weather"]),
             injuries=[_injury(i) for i in g.get("injuries", [])],
+            date=g.get("date", ""),
+            kickoff=g.get("kickoff", ""),
             spread=g.get("spread", 0.0),
             total=g.get("total", 44.0),
             roof=g.get("roof", ""),

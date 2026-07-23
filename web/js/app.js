@@ -76,6 +76,32 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+/* ---------------- date / kickoff formatting ---------------- */
+function formatGameDate(dateStr) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr || "");
+  if (!m) return "";
+  // Build a local date (avoids the UTC-parse off-by-one on YYYY-MM-DD).
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+function formatKickoff(kick) {
+  if (!kick) return "";
+  if (kick.includes("T")) {                       // ISO datetime (MLB first pitch)
+    const d = new Date(kick);
+    return isNaN(d) ? "" : d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+  const m = /^(\d{1,2}):(\d{2})/.exec(kick);       // "HH:MM" 24h ET (NFL)
+  if (m) { let h = +m[1]; const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; return `${h}:${m[2]} ${ap} ET`; }
+  return kick;
+}
+function whenLabel(dateStr, kick) {
+  return [formatGameDate(dateStr), formatKickoff(kick)].filter(Boolean).join(" · ");
+}
+function whenChip(dateStr, kick) {
+  const w = whenLabel(dateStr, kick);
+  return w ? `<span class="chip when">🗓️ ${escapeHtml(w)}</span>` : "";
+}
+
 /* ---------------- motion ---------------- */
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -191,10 +217,18 @@ function passesFilters(r) {
   return r.recommended && r.confidence >= state.minConf && r.edge * 100 >= state.minEdge && r.grade !== "Pass";
 }
 
+function slateDateLabel(d) {
+  // Show the span of actual game dates when the slate covers more than one day.
+  const dates = [...new Set((d.games || []).map((g) => g.date).filter(Boolean))].sort();
+  if (!dates.length) return `Slate: ${d.date}`;
+  if (dates.length === 1) return formatGameDate(dates[0]);
+  return `${formatGameDate(dates[0])} – ${formatGameDate(dates[dates.length - 1])}`;
+}
+
 function renderAll() {
   const d = state.data;
   if (!d) return;
-  document.getElementById("slate-date").textContent = `Slate: ${d.date}`;
+  document.getElementById("slate-date").textContent = slateDateLabel(d);
   renderStats();
   renderGames();
   renderGameBets();
@@ -259,7 +293,7 @@ function gameBetCard(r) {
         <div class="card-id">${mark}
           <div>
             <div class="player">${title}</div>
-            <div class="subtitle">${escapeHtml(r.matchup)}</div>
+            <div class="subtitle">${escapeHtml(r.matchup)}${whenLabel(r.date, r.kickoff) ? ` · 🗓️ ${escapeHtml(whenLabel(r.date, r.kickoff))}` : ""}</div>
             <div class="pick">${sub}</div>
           </div>
         </div>
@@ -373,6 +407,7 @@ function gameCard(g) {
           <span class="at">@</span>
           <span class="mt home">${teamMark(g.home, 18)} ${escapeHtml(teamName(g.home))} ${score("home")}</span></div>
         <div class="game-sub">${escapeHtml(sub)}</div>
+        ${whenLabel(g.date, g.kickoff) ? `<div class="game-when">🗓️ ${escapeHtml(whenLabel(g.date, g.kickoff))}</div>` : ""}
         ${isLive && !mlb ? liveDetail : ""}
       </div>
       ${footer}
@@ -461,7 +496,7 @@ function cardHTML(r) {
         <div class="metric"><div class="k">EV / unit</div><div class="v ${r.ev_per_unit >= 0 ? "pos" : "neg"}">${signedPct(r.ev_per_unit)}</div></div>
       </div>
       ${confMeter(r)}
-      <div class="chips">${trendChip(r)}${booksChip(r)}${stakeChip}</div>
+      <div class="chips">${whenChip(r.game_date, r.game_kickoff)}${trendChip(r)}${booksChip(r)}${stakeChip}</div>
       ${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
 }

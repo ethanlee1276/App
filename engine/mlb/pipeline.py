@@ -32,6 +32,8 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
                         and d["confidence"] >= config.min_confidence
                         and d["edge"] >= config.min_edge)
     d["live"] = bool(g.live and g.live.state == "live")
+    d["date"] = g.date
+    d["kickoff"] = g.kickoff
     return d
 
 
@@ -119,7 +121,8 @@ def _game_to_dict(g) -> dict:
     w = g.weather
     return {
         "home": g.home, "away": g.away,
-        "spread": 0.0, "favorite": "", "total": g.total,
+        "date": g.date, "kickoff": g.kickoff,
+        "spread": g.spread, "favorite": "", "total": g.total,
         "roof": park.roof if not w.roof_closed else "closed",
         "surface": park.surface,
         "live": live_to_dict(g.live),
@@ -150,6 +153,8 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         decision = apply_mlb_rules(rec, prop, game, proj, config)
         d = _rec_to_dict(rec, prop, decision, proj)
         d["live"] = bool(game.live and game.live.state == "live")
+        d["game_date"] = game.date
+        d["game_kickoff"] = game.kickoff
         results.append(d)
 
     results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]),

@@ -103,6 +103,8 @@ def build_games(season: int, week: int) -> list[Game]:
             away=_s(r, "away_team"),
             weather=weather_from_row(r),
             injuries=[],  # injury feed is a separate (release-gated) source
+            date=_s(r, "gameday"),
+            kickoff=_s(r, "gametime"),
             spread=-_f(r, "spread_line"),
             total=_f(r, "total_line", default=44.0),
             roof=_s(r, "roof"),

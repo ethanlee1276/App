@@ -35,6 +35,7 @@ class MLBSlate:
 def _game(d: dict) -> MLBGame:
     return MLBGame(
         home=d["home"], away=d["away"], park=d["park"],
+        date=d.get("date", ""), kickoff=d.get("kickoff", ""),
         total=d.get("total", 8.5),
         weather=MLBWeather(**d.get("weather", {})),
         lineups_confirmed=d.get("lineups_confirmed", True),
