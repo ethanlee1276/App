@@ -42,6 +42,10 @@ def _game(d: dict) -> MLBGame:
         bullpen_rank=d.get("bullpen_rank", {}),
         team_k_rate=d.get("team_k_rate", {}),
         live=LiveStatus(**d["live"]) if d.get("live") else None,
+        home_ml=d.get("home_ml", 0),
+        away_ml=d.get("away_ml", 0),
+        home_rating=d.get("home_rating", 0.0),
+        away_rating=d.get("away_rating", 0.0),
     )
 
 

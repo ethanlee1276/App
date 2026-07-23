@@ -197,9 +197,64 @@ function renderAll() {
   document.getElementById("slate-date").textContent = `Slate: ${d.date}`;
   renderStats();
   renderGames();
+  renderGameBets();
   renderRecommended();
   renderTrending();
   renderPlayers();
+}
+
+/* ============================================================
+   Game bets — moneyline (win-probability edge on the game)
+   ============================================================ */
+function passesGameBet(r) {
+  return r.confidence >= state.minConf && r.edge * 100 >= state.minEdge && r.grade !== "Pass";
+}
+
+function renderGameBets() {
+  const bets = (state.data.game_bets || []).map((r) => ({ ...r, _ok: passesGameBet(r) }));
+  const visible = bets.filter((r) => (state.showAll ? true : r._ok));
+  const title = document.getElementById("gamebets-title");
+  const host = document.getElementById("gamebets");
+  if (!visible.length) {
+    title.style.display = "none";
+    host.innerHTML = "";
+    return;
+  }
+  title.style.display = "";
+  host.innerHTML = visible.map(gameBetCard).join("");
+  fillMeters(host);
+  revealChildren(host);
+}
+
+function gameBetCard(r) {
+  const ud = unitDollars();
+  const stakeTxt = ud > 0
+    ? `Stake ${money(stakeDollars(r.stake_units))} · ${r.stake_units.toFixed(2)}u`
+    : `Stake ${r.stake_units.toFixed(2)}u`;
+  const stakeChip = r._ok ? `<span class="chip stake">💰 ${stakeTxt}</span>` : "";
+  const reasons = (r.reasons || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+  return `
+    <article class="card gamebet ${r._ok ? "" : "faded"}" style="--grade-color:${gradeColor(r.grade)}">
+      ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
+      <div class="card-head">
+        <div class="card-id">${teamMark(r.pick, 34)}
+          <div>
+            <div class="player">${escapeHtml(teamName(r.pick))} <span class="ml-odds">${american(r.odds)}</span></div>
+            <div class="subtitle">${escapeHtml(r.matchup)}</div>
+            <div class="pick">Moneyline · win outright</div>
+          </div>
+        </div>
+        <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="k">Model win</div><div class="v">${pct(r.win_prob)}</div></div>
+        <div class="metric"><div class="k">Book implied</div><div class="v">${pct(r.fair_prob)}</div></div>
+        <div class="metric"><div class="k">Edge</div><div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>
+      </div>
+      ${confMeter(r)}
+      <div class="chips">${stakeChip}</div>
+      ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
+    </article>`;
 }
 
 /* ============================================================
@@ -563,7 +618,7 @@ function bind() {
     load();
   });
   document.getElementById("show-all").addEventListener("change", (e) => {
-    state.showAll = e.target.checked; renderRecommended();
+    state.showAll = e.target.checked; renderGameBets(); renderRecommended();
   });
   document.getElementById("player-search").addEventListener("input", (e) => {
     state.search = e.target.value; renderPlayers();
@@ -584,6 +639,7 @@ function bind() {
     } catch (e) {}
     updateUnitNote();
     renderStats();
+    renderGameBets();
     renderRecommended();
     renderPlayers();
   };

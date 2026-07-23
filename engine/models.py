@@ -177,3 +177,10 @@ class Game:
     roof: str = ""               # dome | closed | outdoors | open (raw nflverse)
     surface: str = "grass"       # grass | fieldturf | ... (drives stadium color)
     live: Optional[LiveStatus] = None
+    # Moneyline: American odds per side (0 = not offered) and a team strength
+    # rating in net points/game vs league average (0 = average). Drives the
+    # game-level moneyline model in engine/gamebets.py.
+    home_ml: int = 0
+    away_ml: int = 0
+    home_rating: float = 0.0
+    away_rating: float = 0.0

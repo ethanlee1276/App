@@ -41,14 +41,27 @@
       "team_k_rate": {
         "CHC": 0.26,
         "PHI": 0.21
-      }
+      },
+      "home_ml": 140,
+      "away_ml": -165,
+      "home_rating": -0.15,
+      "away_rating": 0.35
     },
     {
       "home": "COL",
       "away": "NYY",
       "park": "coors",
       "total": 11.5,
-      "live": {"state": "live", "home_score": 5, "away_score": 3, "period": "Top 6th", "outs": 1, "bases": [2]},
+      "live": {
+        "state": "live",
+        "home_score": 5,
+        "away_score": 3,
+        "period": "Top 6th",
+        "outs": 1,
+        "bases": [
+          2
+        ]
+      },
       "weather": {
         "roof_closed": false,
         "temp_f": 88,
@@ -83,7 +96,11 @@
       "team_k_rate": {
         "COL": 0.23,
         "NYY": 0.24
-      }
+      },
+      "home_ml": 120,
+      "away_ml": -140,
+      "home_rating": -0.5,
+      "away_rating": 0.7
     },
     {
       "home": "MIA",
@@ -124,7 +141,11 @@
       "team_k_rate": {
         "MIA": 0.27,
         "LAD": 0.22
-      }
+      },
+      "home_ml": 150,
+      "away_ml": -175,
+      "home_rating": -0.25,
+      "away_rating": 0.4
     }
   ],
   "props": [

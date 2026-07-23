@@ -11,6 +11,7 @@ from pathlib import Path
 
 from ..rules import RuleConfig
 from ..models import live_to_dict
+from ..gamebets import mlb_win_prob, price_moneyline, moneyline_to_dict, LEAGUE_AVG_XERA
 from .data_loader import load_mlb_slate, MLBSlate
 from .models import MARKET_LABELS
 from .parks import get_park
@@ -21,6 +22,33 @@ from .rules import apply_mlb_rules
 
 def _avg(vals):
     return round(sum(vals) / len(vals), 2) if vals else None
+
+
+def _moneyline_bets(games, config: RuleConfig) -> list[dict]:
+    """Price a moneyline per game from team run-diff ratings + the two starters."""
+    out = []
+    for g in games:
+        if not (g.home_ml and g.away_ml):
+            continue
+        home_p = g.pitchers.get(g.home)
+        away_p = g.pitchers.get(g.away)
+        home_xera = home_p.xera if home_p else LEAGUE_AVG_XERA
+        away_xera = away_p.xera if away_p else LEAGUE_AVG_XERA
+        wp_home = mlb_win_prob(g.home_rating, g.away_rating, home_xera, away_xera)
+        ctx = [f"Run rating: {g.home} {g.home_rating:+.2f} vs {g.away} "
+               f"{g.away_rating:+.2f} run diff/game"]
+        if home_p and away_p:
+            ctx.append(f"Starters: {home_p.name} ({home_xera:.2f} xERA) vs "
+                       f"{away_p.name} ({away_xera:.2f} xERA)")
+        rec = price_moneyline(g.home, g.away, wp_home, g.home_ml, g.away_ml, ctx)
+        d = moneyline_to_dict(rec)
+        d["recommended"] = (rec.grade != "Pass"
+                            and rec.confidence >= config.min_confidence
+                            and rec.edge >= config.min_edge)
+        d["live"] = bool(g.live and g.live.state == "live")
+        out.append(d)
+    out.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)
+    return out
 
 
 def _rec_to_dict(rec, prop, decision, proj) -> dict:
@@ -115,4 +143,5 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "config": {"min_confidence": config.min_confidence, "min_edge": config.min_edge},
         "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,
+        "game_bets": _moneyline_bets(slate.games, config),
     }

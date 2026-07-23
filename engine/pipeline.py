@@ -15,6 +15,7 @@ from .projection import build_projection
 from .betting import evaluate_prop
 from .rules import apply_rules, RuleConfig
 from .explain import headline, summary, bullet_reasons
+from .gamebets import nfl_win_prob, price_moneyline, moneyline_to_dict
 
 
 def _avg(vals: list[float]):
@@ -74,6 +75,26 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
     }
 
 
+def _moneyline_bets(games, config: RuleConfig) -> list[dict]:
+    """Price a moneyline for every game that carries ML odds + team ratings."""
+    out = []
+    for g in games:
+        if not (g.home_ml and g.away_ml):
+            continue
+        wp_home = nfl_win_prob(g.home_rating, g.away_rating)
+        ctx = [f"Power rating: {g.home} {g.home_rating:+.1f} vs {g.away} "
+               f"{g.away_rating:+.1f} net pts/game (incl. home field)"]
+        rec = price_moneyline(g.home, g.away, wp_home, g.home_ml, g.away_ml, ctx)
+        d = moneyline_to_dict(rec)
+        d["recommended"] = (rec.grade != "Pass"
+                            and rec.confidence >= config.min_confidence
+                            and rec.edge >= config.min_edge)
+        d["live"] = bool(g.live and g.live.state == "live")
+        out.append(d)
+    out.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)
+    return out
+
+
 def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
               model=None) -> dict:
     if not isinstance(slate, Slate):
@@ -109,6 +130,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         },
         "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,
+        "game_bets": _moneyline_bets(slate.games, config),
     }
 
 

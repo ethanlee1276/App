@@ -87,6 +87,10 @@ def load_slate(path: str | Path) -> Slate:
             roof=g.get("roof", ""),
             surface=g.get("surface", "grass"),
             live=LiveStatus(**g["live"]) if g.get("live") else None,
+            home_ml=g.get("home_ml", 0),
+            away_ml=g.get("away_ml", 0),
+            home_rating=g.get("home_rating", 0.0),
+            away_rating=g.get("away_rating", 0.0),
         )
         for g in data["games"]
     ]

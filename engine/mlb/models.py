@@ -94,6 +94,13 @@ class MLBGame:
     bullpen_rank: dict[str, int] = field(default_factory=dict)
     # opposing-team strikeout rate lookup for pitcher props
     team_k_rate: dict[str, float] = field(default_factory=dict)
+    # Moneyline: American odds per side (0 = not offered) and a team strength
+    # rating in expected run differential/game vs average. Drives the
+    # game-level moneyline model in engine/gamebets.py.
+    home_ml: int = 0
+    away_ml: int = 0
+    home_rating: float = 0.0
+    away_rating: float = 0.0
 
 
 @dataclass
