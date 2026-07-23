@@ -31,6 +31,10 @@ EVENT = {
                     {"name": "Over", "description": "Amon-Ra St. Brown", "price": -110, "point": 79.5},
                     {"name": "Under", "description": "Amon-Ra St. Brown", "price": -110, "point": 79.5},
                 ]},
+                {"key": "h2h", "outcomes": [
+                    {"name": "Kansas City Chiefs", "price": -150},
+                    {"name": "Buffalo Bills", "price": 130},
+                ]},
             ],
         },
         {
@@ -39,6 +43,10 @@ EVENT = {
                 {"key": "player_pass_yds", "outcomes": [
                     {"name": "Over", "description": "Josh Allen", "price": -108, "point": 257.5},
                     {"name": "Under", "description": "Josh Allen", "price": -112, "point": 257.5},
+                ]},
+                {"key": "h2h", "outcomes": [
+                    {"name": "Kansas City Chiefs", "price": -145},
+                    {"name": "Buffalo Bills", "price": 135},
                 ]},
             ],
         },
@@ -62,6 +70,13 @@ def test_parse_event_lines_pairs_and_maps():
     assert dk.line == 258.5 and dk.over_odds == -115 and dk.under_odds == -105
     # Receiving market maps + normalizes the hyphenated name.
     assert (oa.normalize_name("Amon-Ra St. Brown"), REC_YDS) in idx
+
+
+def test_parse_event_h2h_takes_best_price():
+    best = oa.parse_event_h2h(EVENT, oa.TEAM_ABBR)
+    # Best (highest) American price per side across the two books.
+    assert best["KC"] == -145      # max(-150, -145)
+    assert best["BUF"] == 135      # max(130, 135)
 
 
 def test_parse_ignores_unknown_markets():
@@ -91,7 +106,7 @@ def test_apply_odds_replaces_proxy(monkeypatch):
         {"id": "evt123", "home_team": "Kansas City Chiefs", "away_team": "Buffalo Bills"}
     ])
     monkeypatch.setattr(oa, "fetch_event_odds",
-                        lambda eid, key, books=None, ttl=300, sport='nfl': (EVENT, oa.Quota("491", "9")))
+                        lambda eid, key, markets=None, books=None, ttl=300, sport='nfl': (EVENT, oa.Quota("491", "9")))
 
     slate = _mini_slate()
     res = oa.apply_odds_to_slate(slate, api_key="testkey")
@@ -104,6 +119,10 @@ def test_apply_odds_replaces_proxy(monkeypatch):
     # And the model now shops the best (lowest) real line.
     from engine.odds import best_over_line
     assert best_over_line(prop.lines).line == 257.5  # FanDuel
+
+    # Real moneylines were attached to the game from the same payload.
+    assert res.moneylines == 1
+    assert slate.games[0].home_ml == -145 and slate.games[0].away_ml == 135
 
 
 def test_mlb_market_mapping_and_parse():
@@ -137,7 +156,7 @@ def test_mlb_apply_odds_end_to_end(monkeypatch):
     monkeypatch.setattr(oa, "list_events", lambda key, ttl=300, sport="nfl": [
         {"id": "e1", "home_team": "Colorado Rockies", "away_team": "New York Yankees"}])
     monkeypatch.setattr(oa, "fetch_event_odds",
-                        lambda eid, key, books=None, ttl=300, sport="nfl": (ev, oa.Quota()))
+                        lambda eid, key, markets=None, books=None, ttl=300, sport="nfl": (ev, oa.Quota()))
 
     game = MLBGame(home="COL", away="NYY", park="coors")
     prop = MLBProp("Aaron Judge", "NYY", "COL", "RF", "total_bases",
@@ -154,7 +173,7 @@ def test_apply_odds_reports_unmatched(monkeypatch):
         {"id": "evt123", "home_team": "Kansas City Chiefs", "away_team": "Buffalo Bills"}
     ])
     monkeypatch.setattr(oa, "fetch_event_odds",
-                        lambda eid, key, books=None, ttl=300, sport='nfl': ({"bookmakers": []}, oa.Quota()))
+                        lambda eid, key, markets=None, books=None, ttl=300, sport='nfl': ({"bookmakers": []}, oa.Quota()))
     slate = _mini_slate()
     res = oa.apply_odds_to_slate(slate, api_key="testkey")
     assert res.matched == 0 and res.unmatched

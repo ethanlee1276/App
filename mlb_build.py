@@ -55,8 +55,30 @@ def main() -> None:
             res = oddsapi.apply_odds_to_slate(slate, sport="mlb")
             print(f"Odds API: matched {res.matched} props across {res.events_used} games "
                   f"(quota remaining {res.quota.remaining}).")
+            if res.moneylines:
+                print(f"  Moneylines attached to {res.moneylines} game(s).")
         except oddsapi.OddsAPIError as exc:
             print(f"⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
+
+    # Team ratings for the moneyline model, from ingested historical scores.
+    try:
+        from engine.db import connect
+        from engine.teamrates import compute_team_ratings, attach_ratings
+        season = int(args.date[:4])
+        conn = connect()
+        ratings = compute_team_ratings(conn, "mlb", seasons=[season])
+        conn.close()
+        nr = attach_ratings(slate.games, ratings)
+        priceable = sum(1 for g in slate.games
+                        if g.home_ml and g.away_ml and (g.home_rating or g.away_rating))
+        if nr:
+            print(f"Team ratings: attached to {nr} game(s); {priceable} moneyline(s) priceable.")
+        else:
+            print("Team ratings: none in the DB yet — run "
+                  "`python3 ingest.py mlb --dates <recent dates>` so the moneyline "
+                  "model has team strength to find an edge.")
+    except Exception as exc:
+        print(f"⚠️  Team ratings unavailable — moneyline shows no edge.\n   {exc}")
 
     if not slate.props:
         print(f"No props built for {args.date} — lineups may not be posted yet. "

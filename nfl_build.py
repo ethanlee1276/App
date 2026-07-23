@@ -105,6 +105,8 @@ def main() -> None:
             real_odds = True
             print(f"\nOdds API: matched {res.matched} props across {res.events_used} games "
                   f"(quota remaining {res.quota.remaining}).")
+            if res.moneylines:
+                print(f"  Moneylines attached to {res.moneylines} game(s).")
             if res.unmatched:
                 print(f"  No line found for {len(res.unmatched)}: "
                       f"{', '.join(res.unmatched[:6])}{' …' if len(res.unmatched) > 6 else ''}")
@@ -124,6 +126,24 @@ def main() -> None:
         n = attach_live(slate)
         live_now = sum(1 for g in slate.games if g.live and g.live.state == "live")
         print(f"\nLive scores: {n} game(s) matched, {live_now} in progress.")
+
+    # Team ratings for the moneyline model, from ingested historical scores.
+    try:
+        from engine.db import connect
+        from engine.teamrates import compute_team_ratings, attach_ratings
+        conn = connect()
+        ratings = compute_team_ratings(conn, "nfl", seasons=[args.season])
+        conn.close()
+        nr = attach_ratings(slate.games, ratings)
+        priceable = sum(1 for g in slate.games
+                        if g.home_ml and g.away_ml and (g.home_rating or g.away_rating))
+        if nr:
+            print(f"\nTeam ratings: attached to {nr} game(s); {priceable} moneyline(s) priceable.")
+        else:
+            print("\nTeam ratings: none in the DB yet — run `python3 ingest.py nfl` so the "
+                  "moneyline model has team strength to find an edge.")
+    except Exception as exc:
+        print(f"\n⚠️  Team ratings unavailable — moneyline shows no edge.\n   {exc}")
 
     model = None
     if args.model:

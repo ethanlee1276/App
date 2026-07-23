@@ -241,6 +241,29 @@ def parse_event_lines(event_json: dict,
     return out
 
 
+def parse_event_h2h(event_json: dict, team_map: dict) -> dict[str, int]:
+    """Extract the best moneyline (American odds) per team from an event payload.
+
+    The ``h2h`` market rides in the same event-odds response as the player
+    props, so this costs no extra request. For each team we keep the most
+    bettor-friendly price across books (higher American odds = better payout,
+    which is monotonic across the sign boundary)."""
+    best: dict[str, int] = {}
+    for bm in event_json.get("bookmakers", []):
+        for mkt in bm.get("markets", []):
+            if mkt.get("key") != "h2h":
+                continue
+            for o in mkt.get("outcomes", []):
+                abbr = team_map.get(o.get("name", ""))
+                price = o.get("price")
+                if not abbr or price is None:
+                    continue
+                price = int(price)
+                if abbr not in best or price > best[abbr]:
+                    best[abbr] = price
+    return best
+
+
 # --- slate integration ------------------------------------------------------
 @dataclass
 class OddsAttachResult:
@@ -248,6 +271,7 @@ class OddsAttachResult:
     unmatched: list[str] = field(default_factory=list)
     quota: Quota = field(default_factory=Quota)
     events_used: int = 0
+    moneylines: int = 0          # games that got real h2h prices attached
 
 
 def apply_odds_to_slate(slate, api_key: str | None = None,
@@ -269,6 +293,9 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     slate_pairs = {frozenset((g.home, g.away)) for g in slate.games}
 
     events = list_events(key, ttl=ttl, sport=sport)
+    games_by_pair = {frozenset((g.home, g.away)): g for g in slate.games}
+    # Player-prop markets plus the moneyline (h2h) in one request per event.
+    markets = list(cfg["markets"]) + ["h2h"]
     # Build a combined line index for the events that belong to this slate.
     index: dict[tuple[str, str], list[SportsbookLine]] = {}
     for ev in events:
@@ -276,11 +303,20 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         away = cfg["teams"].get(ev.get("away_team", ""))
         if not home or not away or frozenset((home, away)) not in slate_pairs:
             continue
-        payload, quota = fetch_event_odds(ev["id"], key, books=books, ttl=ttl, sport=sport)
+        payload, quota = fetch_event_odds(ev["id"], key, markets=markets,
+                                          books=books, ttl=ttl, sport=sport)
         result.quota = quota
         result.events_used += 1
         for k, lines in parse_event_lines(payload, cfg["markets"]).items():
             index.setdefault(k, []).extend(lines)
+        # Attach real moneyline prices to the matching game.
+        game = games_by_pair.get(frozenset((home, away)))
+        if game is not None:
+            mls = parse_event_h2h(payload, cfg["teams"])
+            if home in mls and away in mls:
+                game.home_ml = mls[home]
+                game.away_ml = mls[away]
+                result.moneylines += 1
 
     for prop in slate.props:
         lines = index.get((normalize_name(prop.player), prop.market))
