@@ -530,7 +530,7 @@ function trendRow(r, i, col) {
     <div class="trow" onclick="openPlayer('${escapeHtml(r.player).replace(/'/g, "")}')">
       <div class="trank">${i + 1}</div>
       <div class="who"><div class="nm">${escapeHtml(r.player)}</div>
-        <div class="mk">${escapeHtml(r.team)} · ${escapeHtml(r.market_label)}</div></div>
+        <div class="mk">${escapeHtml(r.team)} · ${escapeHtml(r.market_label)}${formatGameDate(r.game_date) ? ` · 🗓️ ${escapeHtml(formatGameDate(r.game_date))}` : ""}</div></div>
       <div class="mini">${sparkline(vals, { w: 78, h: 30, stroke: col.stroke })}</div>
       ${col.metric(r)}
     </div>`;
@@ -572,7 +572,7 @@ function profileHTML(r) {
       <div class="profile-head">
         ${playerAvatar(r.player, r.team, { size: 60, headshot: r.headshot })}
         <div class="meta"><div class="nm">${escapeHtml(r.player)}</div>
-          <div class="sub">${teamMark(r.team, 16)} ${escapeHtml(teamName(r.team))} · ${escapeHtml(r.position)} · vs ${escapeHtml(r.opponent)}</div></div>
+          <div class="sub">${teamMark(r.team, 16)} ${escapeHtml(teamName(r.team))} · ${escapeHtml(r.position)} · vs ${escapeHtml(r.opponent)}${whenLabel(r.game_date, r.game_kickoff) ? ` · 🗓️ ${escapeHtml(whenLabel(r.game_date, r.game_kickoff))}` : ""}</div></div>
         <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>
       </div>
       <div class="form-tiles">${tiles}</div>
