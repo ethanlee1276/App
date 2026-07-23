@@ -568,6 +568,17 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 }
 .live-refresh .live-dot { background: #fb2c46; }
 
+.data-source {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px;
+  border: 1px solid transparent; cursor: default;
+}
+.data-source .src-dot { width: 7px; height: 7px; border-radius: 50%; }
+.data-source.live { color: var(--good); background: rgba(48, 209, 88, 0.12); border-color: rgba(48, 209, 88, 0.32); }
+.data-source.live .src-dot { background: var(--good); box-shadow: 0 0 8px var(--good); }
+.data-source.sample { color: var(--warn); background: rgba(255, 179, 64, 0.12); border-color: rgba(255, 179, 64, 0.30); }
+.data-source.sample .src-dot { background: var(--warn); }
+
 /* ---------------- Bankroll control ---------------- */
 .control.bankroll { min-width: 230px; }
 .bankroll-inputs {

@@ -49,10 +49,12 @@ def main() -> None:
         live_now = sum(1 for g in slate.games if g.live and g.live.state == "live")
         print(f"Live scores: {live_n} game(s) matched, {live_now} in progress.")
 
+    real_odds = False
     if args.odds:
         from engine.sources import oddsapi
         try:
             res = oddsapi.apply_odds_to_slate(slate, sport="mlb")
+            real_odds = True
             print(f"Odds API: matched {res.matched} props across {res.events_used} games "
                   f"(quota remaining {res.quota.remaining}).")
             if res.moneylines:
@@ -98,6 +100,9 @@ def main() -> None:
               f"edge {r['edge']:+.1%}  {r['headline']}")
 
     if args.out:
+        import datetime as _dt
+        result["generated_from"] = "live-odds" if real_odds else "live"
+        result["built_at"] = _dt.datetime.now().isoformat(timespec="seconds")
         with open(args.out, "w") as fh:
             json.dump(result, fh, indent=2)
         print(f"\nWrote {args.out}")

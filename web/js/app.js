@@ -225,9 +225,22 @@ function slateDateLabel(d) {
   return `${formatGameDate(dates[0])} – ${formatGameDate(dates[dates.length - 1])}`;
 }
 
+function renderDataSource(d) {
+  const el = document.getElementById("data-source");
+  if (!el) return;
+  const src = String(d.generated_from || "");
+  const live = src.startsWith("live");
+  el.className = `data-source ${live ? "live" : "sample"}`;
+  el.innerHTML = `<span class="src-dot"></span>${live ? "Live data" : "Sample data"}`;
+  el.title = live
+    ? (d.built_at ? `Real data · built ${d.built_at.replace("T", " ")}` : "Real live data")
+    : "Illustrative sample data — run a live build (see LAUNCH.md) for real games";
+}
+
 function renderAll() {
   const d = state.data;
   if (!d) return;
+  renderDataSource(d);
   document.getElementById("slate-date").textContent = slateDateLabel(d);
   renderStats();
   renderGames();

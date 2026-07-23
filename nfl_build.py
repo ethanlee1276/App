@@ -166,6 +166,9 @@ def main() -> None:
               f"edge {r['edge']:+.1%}  {r['headline']}")
 
     if args.out:
+        import datetime as _dt
+        result["generated_from"] = "live-odds" if real_odds else "live"
+        result["built_at"] = _dt.datetime.now().isoformat(timespec="seconds")
         with open(args.out, "w") as fh:
             json.dump(result, fh, indent=2)
         print(f"\nWrote {args.out}")

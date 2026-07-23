@@ -4,6 +4,7 @@
     python3 launch.py                 # → http://localhost:8000
     python3 launch.py 9000            # custom port
     python3 launch.py --refresh 0     # refresh once at startup, don't keep polling
+    python3 launch.py --check         # readiness checklist (no server) — run this first
 
 On startup this pulls the newest data it can reach for **both NFL and MLB**,
 writes it to ``web/data/``, and then starts the live server. While it runs it
@@ -117,8 +118,68 @@ def _background_refresher(interval: int) -> None:
         refresh_all(quiet=True)
 
 
+def _reachable(url: str, timeout: int = 6) -> bool:
+    import urllib.request
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "gridiron-edge/preflight"})
+        urllib.request.urlopen(req, timeout=timeout).read(64)
+        return True
+    except Exception:
+        return False
+
+
+def preflight() -> None:
+    """Print a readiness checklist — what's live-ready and what still needs a step."""
+    ok, warn = "  ✅", "  ⚠️ "
+    print("Gridiron Edge — preflight check\n")
+
+    v = sys.version_info
+    print(f"{ok if v >= (3, 9) else warn} Python {v.major}.{v.minor}"
+          + ("" if v >= (3, 9) else "  → need 3.9+"))
+
+    # Team ratings (needed for moneyline / spread / totals to have an edge).
+    try:
+        from engine.db import connect
+        conn = connect()
+        for sport in ("nfl", "mlb"):
+            n = conn.execute("SELECT COUNT(*) FROM games WHERE sport=?", (sport,)).fetchone()[0]
+            if n:
+                print(f"{ok} Team ratings ({sport.upper()}): {n} games ingested")
+            else:
+                print(f"{warn} Team ratings ({sport.upper()}): none — run "
+                      f"`python3 ingest.py {sport}` so game bets have an edge")
+        conn.close()
+    except Exception as exc:  # noqa: BLE001
+        print(f"{warn} Team ratings: could not read the database ({exc})")
+
+    # Odds key (optional — only needed for real book lines).
+    if os.environ.get("ODDS_API_KEY"):
+        print(f"{ok} ODDS_API_KEY: set — real sportsbook lines will be used")
+    else:
+        print(f"{warn} ODDS_API_KEY: not set — model/proxy lines only "
+              f"(optional; get a free key at the-odds-api.com)")
+
+    # Live data hosts.
+    print("\n  Live data hosts (need to be reachable from this network):")
+    hosts = [
+        ("MLB scores/lineups", "https://statsapi.mlb.com/api/v1/schedule?sportId=1"),
+        ("NFL live scores (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"),
+        ("NFL schedules (nflverse)", "https://raw.githubusercontent.com/nflverse/nflverse-data/master/README.md"),
+        ("Sportsbook odds", "https://api.the-odds-api.com/v4/sports/"),
+        ("Weather (Open-Meteo)", "https://api.open-meteo.com/v1/forecast?latitude=40&longitude=-74&hourly=temperature_2m"),
+    ]
+    for name, url in hosts:
+        up = _reachable(url)
+        print(f"{ok if up else warn} {name}: {'reachable' if up else 'blocked/unreachable here'}")
+
+    print("\n  When everything above is ✅ (or intentionally skipped), run:  python3 launch.py")
+
+
 def main() -> None:
     argv = sys.argv[1:]
+    if "--check" in argv:
+        preflight()
+        return
     interval = 90
     if "--refresh" in argv:
         i = argv.index("--refresh")
