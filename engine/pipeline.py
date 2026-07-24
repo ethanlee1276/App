@@ -87,7 +87,8 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     d["recommended"] = (d["grade"] != "Pass"
                         and d["confidence"] >= config.min_confidence
-                        and d["edge"] >= config.min_edge)
+                        and d["edge"] >= config.min_edge
+                        and d["odds"] >= config.max_juice)
     d["live"] = bool(g.live and g.live.state == "live")
     d["date"] = g.date
     d["kickoff"] = g.kickoff

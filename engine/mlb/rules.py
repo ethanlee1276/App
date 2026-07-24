@@ -40,6 +40,10 @@ def apply_mlb_rules(rec: Recommendation, prop: MLBProp, game: MLBGame,
         recommend = False
         warnings.append(f"Edge too small ({rec.edge:+.1%})")
 
+    if rec.odds < config.max_juice:
+        recommend = False
+        warnings.append(f"Too much juice ({rec.odds:+d}) — pays too little for the risk")
+
     # Lineup hold: no bet on a hitter who isn't in a confirmed lineup.
     if prop.market in HITTER_MARKETS and prop.lineup_spot == 0:
         recommend = False

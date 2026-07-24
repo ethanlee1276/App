@@ -7,7 +7,7 @@
  */
 
 const state = {
-  data: null, minConf: 6.0, minEdge: 2.0, showAll: false,
+  data: null, minConf: 6.0, minEdge: 2.0, maxJuice: -350, showAll: false,
   view: "recommended", search: "",
   sport: new URLSearchParams(location.search).get("sport") === "mlb" ? "mlb" : "nfl",
   static: new URLSearchParams(location.search).has("static"),
@@ -174,7 +174,7 @@ async function load(quiet = false) {
   const refreshBtn = document.getElementById("refresh");
   if (refreshBtn && !quiet) refreshBtn.classList.add("loading");
   const meta = SPORT_META[state.sport];
-  const params = new URLSearchParams({ min_confidence: state.minConf, min_edge: state.minEdge });
+  const params = new URLSearchParams({ min_confidence: state.minConf, min_edge: state.minEdge, max_juice: state.maxJuice });
   try {
     const res = await fetch(`${meta.api}?${params}`);
     if (!res.ok) throw new Error("api");
@@ -214,7 +214,8 @@ function updateAgo() {
 }
 
 function passesFilters(r) {
-  return r.recommended && r.confidence >= state.minConf && r.edge * 100 >= state.minEdge && r.grade !== "Pass";
+  return r.recommended && r.confidence >= state.minConf && r.edge * 100 >= state.minEdge
+    && r.odds >= state.maxJuice && r.grade !== "Pass";
 }
 
 function slateDateLabel(d) {
@@ -327,7 +328,8 @@ function renderTopPlays() {
    Game bets — grouped by market (moneyline / spread / total)
    ============================================================ */
 function passesGameBet(r) {
-  return r.confidence >= state.minConf && r.edge * 100 >= state.minEdge && r.grade !== "Pass";
+  return r.confidence >= state.minConf && r.edge * 100 >= state.minEdge
+    && r.odds >= state.maxJuice && r.grade !== "Pass";
 }
 
 const GAMEBET_GROUPS = [
@@ -776,6 +778,12 @@ function bind() {
   edge.addEventListener("input", () => {
     state.minEdge = parseFloat(edge.value);
     document.getElementById("edge-val").textContent = `${state.minEdge}%`;
+    load();
+  });
+  const juice = document.getElementById("max-juice");
+  juice.addEventListener("input", () => {
+    state.maxJuice = parseInt(juice.value, 10);
+    document.getElementById("juice-val").textContent = state.maxJuice;
     load();
   });
   document.getElementById("show-all").addEventListener("change", (e) => {

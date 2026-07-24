@@ -78,6 +78,7 @@ class Handler(BaseHTTPRequestHandler):
         config = RuleConfig(
             min_confidence=qf("min_confidence", 6.0),
             min_edge=qf("min_edge", 0.02) / (100 if qf("min_edge", 0.02) > 1 else 1),
+            max_juice=int(qf("max_juice", -350)),
         )
         try:
             if sport == "mlb":

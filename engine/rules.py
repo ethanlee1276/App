@@ -20,6 +20,10 @@ class RuleConfig:
     min_confidence: float = 6.0
     min_edge: float = 0.02
     block_injury_concern: bool = True
+    # Heaviest price worth laying, in American odds. Chalk past this pays too
+    # little for the risk, and it's also where the model is least reliable (the
+    # far tail of the distribution), so those bets are filtered out.
+    max_juice: int = -350
 
 
 @dataclass
@@ -48,6 +52,10 @@ def apply_rules(
     if rec.edge < config.min_edge:
         recommend = False
         warnings.append(f"Edge too small ({rec.edge:+.1%})")
+
+    if rec.odds < config.max_juice:
+        recommend = False
+        warnings.append(f"Too much juice ({rec.odds:+d}) — pays too little for the risk")
 
     concern = player_injury_status(prop, game.injuries)
     if concern and config.block_injury_concern:

@@ -120,6 +120,36 @@ def test_fading_player_flips_to_under():
     assert "UNDER" in headline(rec)                   # headline reflects the side
 
 
+def test_max_juice_filters_heavy_chalk():
+    """Laying -700 for a small edge pays too little for the risk (and sits in the
+    model's least reliable tail), so it must not be recommended."""
+    from engine.rules import RuleConfig, apply_rules
+    from engine.betting import Recommendation
+    from engine.models import Game, Weather
+
+    def rec_at(odds):
+        return Recommendation(
+            player="X", team="AAA", opponent="BBB", market=REC_YDS, side="OVER",
+            book="DraftKings", line=50.5, odds=odds, projection=60.0,
+            proj_low=40.0, proj_high=80.0, hit_prob=0.9, fair_prob=0.85,
+            edge=0.05, ev_per_unit=0.02, confidence=8.0, stake_units=0.5,
+            grade="Play",
+        )
+
+    prop = Prop(player="X", team="AAA", opponent="BBB", position="WR",
+                market=REC_YDS, logs=_logs([60] * 6), career_avg=60.0,
+                vs_opponent_avg=None, lines=[SportsbookLine("DK", 50.5, -700, 500)])
+    game = Game(home="AAA", away="BBB", weather=Weather(dome=True))
+    cfg = RuleConfig(min_confidence=6.0, min_edge=0.02, max_juice=-350)
+
+    heavy = apply_rules(rec_at(-700), prop, game, cfg)
+    assert heavy.recommend is False
+    assert any("juice" in w.lower() for w in heavy.warnings)
+
+    # A normal price with the same edge still gets through.
+    assert apply_rules(rec_at(-150), prop, game, cfg).recommend is True
+
+
 def test_temper_edge_shrinks_and_flags_bad_data():
     # The real Caminero case: model 0.75 vs a broken market price of 0.27.
     hit, edge, credible = temper_edge(0.75, 0.27, "Hard Rock")
