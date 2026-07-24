@@ -13,7 +13,7 @@ import math
 
 from ..betting import (
     Recommendation, _confidence_score, _grade, _kelly_stake,
-    _trend_alignment, pick_side,
+    _trend_alignment, pick_side, temper_edge,
 )
 from ..odds import expected_value
 from ..statmath import prob_over
@@ -40,15 +40,18 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection) -> Recommendation:
             return _poisson_over(line, proj.mean)
         return prob_over(line, proj.mean, proj.std)
 
-    side, best, hit, fair, edge = pick_side(prop.lines, p_over_at)
+    side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
+    hit, edge, credible = temper_edge(hit_raw, fair, best.book)
     ev = expected_value(hit, best.odds)
     trend_align = _trend_alignment(side, proj.form.trend)
     confidence = _confidence_score(edge, hit, proj, trend_align)
-    grade = _grade(confidence, edge)
+    grade = _grade(confidence, edge) if credible else "Pass"
     stake = _kelly_stake(hit, best.odds) if grade != "Pass" else 0.0
 
     reasons = list(proj.reasons)
-    if side == "UNDER":
+    if not credible:
+        reasons.insert(0, "No credible market edge — line unavailable or price looks off")
+    elif side == "UNDER":
         reasons.insert(0, f"Model sides UNDER — projects {proj.mean:g} under the {best.line:g} line")
 
     return Recommendation(

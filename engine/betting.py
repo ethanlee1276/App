@@ -15,6 +15,29 @@ from .projection import Projection
 from .odds import best_over_line, best_under_line, devig_two_way, expected_value
 from .statmath import prob_over, prob_over_discrete, clamp
 
+# --- calibration guards -----------------------------------------------------
+# The prop model is not yet calibrated to real outcomes, and live feeds
+# sometimes attach a mismatched/one-sided line. Two guards keep the output
+# honest:
+#   1. shrink the model's probability toward the market price, so a raw edge is
+#      damped to a realistic size while the model is still uncalibrated, and
+#   2. treat a raw edge beyond MAX_CREDIBLE_EDGE (or a placeholder "proxy" line)
+#      as a data error, not alpha — in an efficient prop market a 20%+ edge is
+#      always bad data. Those are graded Pass instead of shown as strong plays.
+MARKET_SHRINK = 0.5
+MAX_CREDIBLE_EDGE = 0.10
+
+
+def temper_edge(hit_raw: float, fair: float, book: str) -> tuple[float, float, bool]:
+    """Shrink the model probability toward the market and judge credibility.
+
+    Returns ``(hit, edge, credible)`` where ``hit`` is the tempered win
+    probability, ``edge = hit - fair``, and ``credible`` is False when the line
+    is a placeholder or the raw disagreement is implausibly large."""
+    hit = clamp(fair + MARKET_SHRINK * (hit_raw - fair), 1e-6, 1.0 - 1e-6)
+    credible = (book or "").lower() != "proxy" and abs(hit_raw - fair) <= MAX_CREDIBLE_EDGE
+    return hit, hit - fair, credible
+
 
 @dataclass
 class Recommendation:
@@ -47,7 +70,9 @@ def _confidence_score(edge: float, hit_prob: float, proj: Projection,
 
     ``trend_align`` nudges the score for betting with (or against) the player's
     recent-form trend — see ``_trend_alignment``."""
-    edge_component = clamp(edge / 0.12, 0.0, 1.0) * 6.0          # up to 6 pts
+    # Edges are tempered toward the market (see temper_edge), so the credible
+    # range is a few percent — a 4.5% tempered edge earns full weight here.
+    edge_component = clamp(edge / 0.045, 0.0, 1.0) * 6.0          # up to 6 pts
     prob_component = clamp((hit_prob - 0.5) / 0.35, 0.0, 1.0) * 2.5  # up to 2.5
 
     # Data-quality discount: thin samples and high relative variance cost points.
@@ -102,11 +127,12 @@ def pick_side(lines, p_over_at):
 
 
 def _grade(confidence: float, edge: float) -> str:
-    if confidence >= 8.5 and edge >= 0.06:
+    # Thresholds sized for tempered edges (a few percent is a genuine play).
+    if confidence >= 8.0 and edge >= 0.04:
         return "Strong Play"
-    if confidence >= 7.0 and edge >= 0.035:
+    if confidence >= 6.5 and edge >= 0.025:
         return "Play"
-    if confidence >= 5.5 and edge >= 0.02:
+    if confidence >= 4.5 and edge >= 0.012:
         return "Lean"
     return "Pass"
 
@@ -128,15 +154,18 @@ def evaluate_prop(prop: Prop, proj: Projection) -> Recommendation:
             return prob_over_discrete(line, proj.mean, proj.std)
         return prob_over(line, proj.mean, proj.std)
 
-    side, best, hit, fair, edge = pick_side(prop.lines, p_over_at)
+    side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
+    hit, edge, credible = temper_edge(hit_raw, fair, best.book)
     ev = expected_value(hit, best.odds)
     trend_align = _trend_alignment(side, proj.form.trend)
     confidence = _confidence_score(edge, hit, proj, trend_align)
-    grade = _grade(confidence, edge)
+    grade = _grade(confidence, edge) if credible else "Pass"
     stake = _kelly_stake(hit, best.odds) if grade != "Pass" else 0.0
 
     reasons = list(proj.reasons)
-    if side == "UNDER":
+    if not credible:
+        reasons.insert(0, "No credible market edge — line unavailable or price looks off")
+    elif side == "UNDER":
         reasons.insert(0, f"Model sides UNDER — projects {proj.mean:g} under the {best.line:g} line")
 
     return Recommendation(

@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.form import compute_form
 from engine.odds import best_under_line, best_over_line
-from engine.betting import pick_side, _trend_alignment, evaluate_prop
+from engine.betting import pick_side, _trend_alignment, evaluate_prop, temper_edge, MAX_CREDIBLE_EDGE
 from engine.projection import build_projection
 from engine.explain import headline
 from engine.models import (
@@ -118,6 +118,18 @@ def test_fading_player_flips_to_under():
     assert rec.side == "UNDER"                        # value is on the under
     assert rec.edge > 0
     assert "UNDER" in headline(rec)                   # headline reflects the side
+
+
+def test_temper_edge_shrinks_and_flags_bad_data():
+    # The real Caminero case: model 0.75 vs a broken market price of 0.27.
+    hit, edge, credible = temper_edge(0.75, 0.27, "Hard Rock")
+    assert not credible                         # a 48% raw gap is bad data, not alpha
+    assert abs(edge) < abs(0.75 - 0.27)         # probability shrunk toward the market
+    # A modest, believable edge on a real line survives (and is damped).
+    hit, edge, credible = temper_edge(0.56, 0.50, "DraftKings")
+    assert credible and 0 < edge < 0.06
+    # A placeholder line is never credible.
+    assert temper_edge(0.60, 0.50, "proxy")[2] is False
 
 
 if __name__ == "__main__":

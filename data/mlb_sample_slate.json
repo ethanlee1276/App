@@ -281,21 +281,21 @@
       "lines": [
         {
           "book": "DraftKings",
-          "line": 1.5,
-          "over_odds": -150,
-          "under_odds": 120
+          "line": 3.0,
+          "over_odds": 111,
+          "under_odds": -110
         },
         {
           "book": "FanDuel",
-          "line": 1.5,
-          "over_odds": -145,
-          "under_odds": 115
+          "line": 3.0,
+          "over_odds": 111,
+          "under_odds": -110
         },
         {
           "book": "BetMGM",
-          "line": 1.5,
-          "over_odds": -155,
-          "under_odds": 125
+          "line": 3.0,
+          "over_odds": 111,
+          "under_odds": -110
         }
       ],
       "statcast": {
@@ -413,20 +413,20 @@
         {
           "book": "DraftKings",
           "line": 0.5,
-          "over_odds": 240,
-          "under_odds": -310
+          "over_odds": 318,
+          "under_odds": -110
         },
         {
           "book": "FanDuel",
           "line": 0.5,
-          "over_odds": 250,
-          "under_odds": -330
+          "over_odds": 318,
+          "under_odds": -110
         },
         {
-          "book": "Caesars",
+          "book": "BetMGM",
           "line": 0.5,
-          "over_odds": 230,
-          "under_odds": -300
+          "over_odds": 318,
+          "under_odds": -110
         }
       ]
     },
@@ -505,21 +505,21 @@
       "lines": [
         {
           "book": "DraftKings",
-          "line": 7.5,
-          "over_odds": -105,
-          "under_odds": -115
+          "line": 8.5,
+          "over_odds": -187,
+          "under_odds": -110
         },
         {
           "book": "FanDuel",
-          "line": 7.5,
-          "over_odds": -110,
+          "line": 8.5,
+          "over_odds": -187,
           "under_odds": -110
         },
         {
           "book": "BetMGM",
-          "line": 7.5,
-          "over_odds": 100,
-          "under_odds": -120
+          "line": 8.5,
+          "over_odds": -187,
+          "under_odds": -110
         }
       ],
       "statcast": {
@@ -632,20 +632,20 @@
       "lines": [
         {
           "book": "DraftKings",
-          "line": 2.5,
-          "over_odds": -125,
-          "under_odds": 100
+          "line": 3.5,
+          "over_odds": -170,
+          "under_odds": -110
         },
         {
           "book": "FanDuel",
-          "line": 2.5,
-          "over_odds": -120,
-          "under_odds": -105
+          "line": 3.5,
+          "over_odds": -170,
+          "under_odds": -110
         },
         {
           "book": "BetMGM",
-          "line": 2.5,
-          "over_odds": -115,
+          "line": 3.5,
+          "over_odds": -170,
           "under_odds": -110
         }
       ],
@@ -731,15 +731,21 @@
       "lines": [
         {
           "book": "DraftKings",
-          "line": 1.5,
-          "over_odds": 150,
-          "under_odds": -180
+          "line": 1.0,
+          "over_odds": -1900,
+          "under_odds": -110
         },
         {
           "book": "FanDuel",
-          "line": 1.5,
-          "over_odds": 145,
-          "under_odds": -175
+          "line": 1.0,
+          "over_odds": -1900,
+          "under_odds": -110
+        },
+        {
+          "book": "BetMGM",
+          "line": 1.0,
+          "over_odds": -1900,
+          "under_odds": -110
         }
       ]
     },
@@ -818,21 +824,21 @@
       "lines": [
         {
           "book": "DraftKings",
-          "line": 7.5,
-          "over_odds": -108,
-          "under_odds": -112
+          "line": 9.5,
+          "over_odds": -107,
+          "under_odds": -110
         },
         {
           "book": "FanDuel",
-          "line": 7.5,
-          "over_odds": -112,
-          "under_odds": -108
+          "line": 9.5,
+          "over_odds": -107,
+          "under_odds": -110
         },
         {
-          "book": "ESPN BET",
-          "line": 7.5,
-          "over_odds": -105,
-          "under_odds": -115
+          "book": "BetMGM",
+          "line": 9.5,
+          "over_odds": -107,
+          "under_odds": -110
         }
       ],
       "statcast": {
@@ -916,14 +922,20 @@
         {
           "book": "DraftKings",
           "line": 1.5,
-          "over_odds": -120,
-          "under_odds": 100
+          "over_odds": -180,
+          "under_odds": -110
         },
         {
           "book": "FanDuel",
           "line": 1.5,
-          "over_odds": -125,
-          "under_odds": 105
+          "over_odds": -180,
+          "under_odds": -110
+        },
+        {
+          "book": "BetMGM",
+          "line": 1.5,
+          "over_odds": -180,
+          "under_odds": -110
         }
       ]
     },
@@ -1002,15 +1014,21 @@
       "lines": [
         {
           "book": "DraftKings",
-          "line": 1.5,
-          "over_odds": 160,
-          "under_odds": -195
+          "line": 0.5,
+          "over_odds": -635,
+          "under_odds": -110
         },
         {
           "book": "FanDuel",
-          "line": 1.5,
-          "over_odds": 155,
-          "under_odds": -190
+          "line": 0.5,
+          "over_odds": -635,
+          "under_odds": -110
+        },
+        {
+          "book": "BetMGM",
+          "line": 0.5,
+          "over_odds": -635,
+          "under_odds": -110
         }
       ],
       "statcast": {

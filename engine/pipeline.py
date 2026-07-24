@@ -64,7 +64,7 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "summary": summary(rec),
         "reasons": bullet_reasons(rec),
         "all_lines": [
-            {"book": ln.book, "line": ln.line, "over_odds": ln.over_odds}
+            {"book": ln.book, "line": ln.line, "over_odds": ln.over_odds, "under_odds": ln.under_odds}
             for ln in prop.lines
         ],
         # Per-player history for the Players & Trending pages.

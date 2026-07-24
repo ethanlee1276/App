@@ -14,8 +14,16 @@ from ...sources.fetch import DataUnavailable
 from .mlbstats import STATS_BASE, _get_json, TEAM_ID_ABBR
 
 
-def _state(abstract: str) -> str:
-    return {"Preview": "scheduled", "Live": "live", "Final": "final"}.get(abstract, "scheduled")
+# Detailed states that the API reports under abstractGameState "Live" but where
+# no pitch has been thrown yet — treat these as not-yet-started, not live.
+_PREGAME_DETAIL = {"warmup", "pre-game", "pregame", "delayed start", "scheduled"}
+
+
+def _state(abstract: str, detailed: str = "") -> str:
+    base = {"Preview": "scheduled", "Live": "live", "Final": "final"}.get(abstract, "scheduled")
+    if base == "live" and (detailed or "").strip().lower() in _PREGAME_DETAIL:
+        return "scheduled"
+    return base
 
 
 def parse_live(schedule_json: dict) -> dict[frozenset, LiveStatus]:
@@ -31,7 +39,8 @@ def parse_live(schedule_json: dict) -> dict[frozenset, LiveStatus]:
             if not home_ab or not away_ab:
                 continue
             status = g.get("status", {})
-            state = _state(status.get("abstractGameState", "Preview"))
+            state = _state(status.get("abstractGameState", "Preview"),
+                           status.get("detailedState", ""))
             ls = g.get("linescore", {}) or {}
             inning = ls.get("currentInningOrdinal", "")
             half = ls.get("inningState", "")
