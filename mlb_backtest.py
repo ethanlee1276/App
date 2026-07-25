@@ -99,8 +99,30 @@ def main() -> None:
         entries = entries_from_slate(args.market)
         source = "sample slate"
     if not entries:
-        print(f"No {args.market} entries found ({source}) — try --synthetic, a "
-              f"different --market, or ingest data first (python3 ingest.py).")
+        print(f"No {args.market} entries found ({source}).")
+        if args.from_db:
+            # Say which half is missing rather than listing every possible cause.
+            from engine import db as _dbg
+            c = _dbg.connect(args.from_db)
+            total = c.execute("SELECT COUNT(*) FROM player_game_logs "
+                              "WHERE sport='mlb'").fetchone()[0]
+            for_market = c.execute("SELECT COUNT(*) FROM player_game_logs "
+                                   "WHERE sport='mlb' AND market=?",
+                                   (args.market,)).fetchone()[0]
+            need = args.min_history + 1
+            if total == 0:
+                print("  The DB has no MLB player game logs — harvested odds have "
+                      "nothing to be replayed against.")
+                print("  Fix: python3 ingest.py mlb --from <start> --to <end>")
+            elif for_market == 0:
+                print(f"  {total:,} MLB log rows exist, but none for '{args.market}'. "
+                      f"Try --market hits / home_runs / strikeouts.")
+            else:
+                print(f"  {for_market:,} '{args.market}' rows exist, but no player "
+                      f"reaches the {need}-game minimum. Ingest a longer date range "
+                      f"or lower --min-history.")
+        else:
+            print("  Try --synthetic, a different --market, or ingest data first.")
         return
 
     model = None

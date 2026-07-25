@@ -60,6 +60,8 @@ def main() -> None:
     ap.add_argument("--dates", default="", help="MLB: comma-separated YYYY-MM-DD")
     ap.add_argument("--from", dest="start", default="",
                     help="MLB: start date YYYY-MM-DD (ingest completed results through --to)")
+    ap.add_argument("--scores-only", action="store_true",
+                    help="MLB range: game scores only, skip per-player logs")
     ap.add_argument("--to", dest="end", default="",
                     help="MLB: end date YYYY-MM-DD")
     ap.add_argument("--db", default=str(db.DEFAULT_DB))
@@ -78,9 +80,17 @@ def main() -> None:
         print(f"  games: {res['games']:,}   player-log rows: {res['player_logs']:,}")
     elif args.start and args.end:
         # Historical results: real final scores, the basis for team ratings.
-        print(f"Ingesting MLB results {args.start} → {args.end} → {args.db}")
-        res = ingest.ingest_mlb_results(conn, args.start, args.end)
-        print(f"  completed games: {res['games']:,}")
+        print(f"Ingesting MLB {args.start} → {args.end} → {args.db}")
+        if args.scores_only:
+            print("  (scores only — player logs skipped, so prop backtests "
+                  "will have nothing to replay)")
+        def _tick(day, n):
+            print(f"    {day}: {n:,} player-log rows")
+        res = ingest.ingest_mlb_results(conn, args.start, args.end,
+                                        with_logs=not args.scores_only,
+                                        progress=None if args.scores_only else _tick)
+        print(f"  completed games: {res['games']:,}   "
+              f"player-log rows: {res['player_logs']:,}")
         for skip in res["skipped"]:
             print(f"  ⚠️  {skip}")
     else:

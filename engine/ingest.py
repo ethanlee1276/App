@@ -148,12 +148,22 @@ def mlb_result_rows(results: list[dict]) -> list[dict]:
     return out
 
 
-def ingest_mlb_results(conn, start: str, end: str) -> dict:
-    """Ingest completed MLB games (with final scores) over a date range.
+def ingest_mlb_results(conn, start: str, end: str,
+                       with_logs: bool = True, progress=None) -> dict:
+    """Ingest completed MLB games over a date range.
 
-    This is what gives the team-strength model something real to learn from —
-    the per-date slate ingest below captures matchups and player form, but a
-    slate built before first pitch has no result yet."""
+    Two layers, because the backtest needs both:
+
+    * **final scores** — one cheap ranged request, and what the team-strength
+      model learns from;
+    * **player game logs** — the per-game outcomes a prop backtest replays.
+      These come from the per-date slate builder, so they cost a few requests
+      per day; ``with_logs=False`` skips them when only ratings are wanted.
+
+    Without the log layer a harvested set of odds has nothing to be replayed
+    against, which is exactly the dead end of "N book lines, 0 entries found".
+    """
+    import datetime as _dt
     from .mlb.sources.mlbstats import fetch_results
     result = {"games": 0, "player_logs": 0, "skipped": []}
     try:
@@ -163,6 +173,20 @@ def ingest_mlb_results(conn, start: str, end: str) -> dict:
         return result
     result["games"] = db.upsert_games(conn, rows)
     db.log_ingest(conn, "mlb", "results", f"{start}..{end}", result["games"])
+
+    if not with_logs:
+        return result
+
+    day = _dt.date.fromisoformat(start)
+    last = _dt.date.fromisoformat(end)
+    while day <= last:
+        iso = day.isoformat()
+        sub = ingest_mlb_date(conn, iso)
+        result["player_logs"] += sub["player_logs"]
+        result["skipped"] += sub["skipped"]
+        if progress:
+            progress(iso, sub["player_logs"])
+        day += _dt.timedelta(days=1)
     return result
 
 
