@@ -158,10 +158,22 @@ def refresh_all(quiet: bool = False) -> None:
     refresh_nfl(quiet=quiet)
 
 
+def _run_maintenance() -> None:
+    """Daily chores (results ingest, journal settle, closing-odds harvest).
+    First call of each day does the work; the rest are no-ops."""
+    try:
+        from engine.maintenance import run_if_due
+        run_if_due()
+    except Exception as exc:  # noqa: BLE001 — chores must never take the site down
+        print(f"  ⚠️  daily maintenance failed: {exc}")
+
+
 def _background_refresher(interval: int) -> None:
     """Keep the served data fresh while the server runs (quiet after startup)."""
     while True:
         time.sleep(interval)
+        # Catches the date rolling over while the server runs overnight.
+        _run_maintenance()
         refresh_all(quiet=True)
 
 
@@ -253,6 +265,12 @@ def main() -> None:
 
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     server.live_mode = True
+
+    # Daily chores run in the background so the site is up immediately; the
+    # first cycle of each day ingests yesterday's results (catching up to a
+    # week if the site wasn't opened), settles the pick journal, and harvests
+    # yesterday's closing odds when the budget clearly allows.
+    threading.Thread(target=_run_maintenance, daemon=True).start()
 
     if interval > 0:
         t = threading.Thread(target=_background_refresher, args=(interval,), daemon=True)
