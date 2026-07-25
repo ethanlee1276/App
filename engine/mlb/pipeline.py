@@ -33,6 +33,23 @@ def _avg(vals):
     return round(sum(vals) / len(vals), 2) if vals else None
 
 
+def _long_shots(slate) -> list[dict]:
+    """Home-run picks — the MLB long-shot board (see engine.mlb.homeruns)."""
+    from .homeruns import build_hr_longshots
+    from .models import HOME_RUNS
+
+    candidates = []
+    for prop in slate.props:
+        if prop.market != HOME_RUNS or not prop.lines:
+            continue
+        game = slate.game_for(prop)
+        # Shop the best (highest) price across books.
+        best = max(prop.lines, key=lambda ln: ln.over_odds)
+        candidates.append({"prop": prop, "game": game, "odds": best.over_odds,
+                           "book": best.book, "under_odds": best.under_odds})
+    return [p.to_dict() for p in build_hr_longshots(candidates)]
+
+
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     d["recommended"] = (d["grade"] != "Pass"
                         and d["confidence"] >= config.min_confidence
@@ -185,4 +202,5 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,
         "game_bets": _game_bets(slate.games, config),
+        "long_shots": _long_shots(slate),
     }

@@ -109,9 +109,18 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
 def settle(conn, actuals: dict[tuple[str, str], float], sport: str | None = None,
            date: str | None = None, closing: dict[tuple[str, str], float] | None = None) -> int:
     """Grade open bets against actual results. ``actuals`` maps (player, market)
-    -> the stat the player posted; ``closing`` optionally supplies closing lines
-    for CLV. Updates each settled bet's P&L and advances the bankroll."""
-    closing = closing or {}
+    -> the stat the player posted. Updates each settled bet's P&L and advances
+    the bankroll.
+
+    ``closing`` supplies closing lines for CLV; when omitted they're derived
+    automatically from the recorded line-move snapshots, so closing-line value
+    accrues without any manual bookkeeping."""
+    if closing is None:
+        try:
+            from .linemoves import load_history, closing_lines
+            closing = closing_lines(load_history())
+        except Exception:      # never let CLV bookkeeping block settling
+            closing = {}
     q = "SELECT * FROM bets WHERE status='open'"
     args: list = []
     if sport:

@@ -64,6 +64,40 @@ def load_history(path: str | Path | None = None) -> list[dict]:
     return rows
 
 
+def closing_lines(rows: list[dict], before_ts: float | None = None
+                  ) -> dict[tuple[str, str], float]:
+    """Latest recorded line per ``(player, market)`` — the closing number.
+
+    Beating the closing line is the industry's best available evidence that a
+    bet was actually +EV, and unlike a true edge measurement it needs no paid
+    historical odds: we simply keep snapshotting until the game starts and take
+    the last one. Where several books are quoted at the same instant we take the
+    median, so one outlier book can't define the close.
+
+    ``before_ts`` restricts to snapshots at or before a cutoff (e.g. first
+    pitch), so a stale post-game snapshot can't masquerade as the close.
+    """
+    latest: dict[tuple[str, str], float] = {}
+    grouped: dict[tuple[str, str], list[dict]] = {}
+    for r in rows:
+        try:
+            ts = float(r["ts"])
+            key = (r["player"], r["market"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if before_ts is not None and ts > before_ts:
+            continue
+        grouped.setdefault(key, []).append(r)
+
+    for key, items in grouped.items():
+        last_ts = max(float(r["ts"]) for r in items)
+        at_close = [float(r["line"]) for r in items
+                    if float(r["ts"]) == last_ts and r.get("line") is not None]
+        if at_close:
+            latest[key] = _median(at_close)
+    return latest
+
+
 # --- analysis (pure) --------------------------------------------------------
 @dataclass
 class BookMove:

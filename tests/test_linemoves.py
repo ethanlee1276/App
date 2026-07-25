@@ -80,6 +80,34 @@ def test_record_skips_proxy_and_roundtrips(tmp_path=None):
     assert len(rows) == 1 and rows[0]["book"] == "DraftKings"
 
 
+def test_closing_lines_picks_the_last_pregame_number():
+    """CLV needs the closing line: the last snapshot before the game starts,
+    medianed across books so one outlier can't define the close."""
+    import tempfile
+    from pathlib import Path
+    from engine.linemoves import record_snapshots, load_history, closing_lines
+    from engine.models import Prop, SportsbookLine, GameLog, REC_YDS
+
+    tmp = Path(tempfile.mkdtemp()) / "moves.jsonl"
+
+    def prop_at(line, book="DraftKings"):
+        return Prop(player="Ja'Marr Chase", team="CIN", opponent="PIT", position="WR",
+                    market=REC_YDS, logs=[GameLog(week=1, opponent="X", value=70)],
+                    career_avg=70, vs_opponent_avg=None,
+                    lines=[SportsbookLine(book, line, -110, -110)])
+
+    record_snapshots([prop_at(68.5)], ts=1000, path=tmp)
+    record_snapshots([prop_at(74.5, "DraftKings")], ts=3000, path=tmp)
+    record_snapshots([prop_at(75.5, "FanDuel")], ts=3000, path=tmp)
+    record_snapshots([prop_at(99.0)], ts=9999, path=tmp)      # post-game, ignore
+
+    rows = load_history(tmp)
+    close = closing_lines(rows, before_ts=5000)
+    assert close[("Ja'Marr Chase", "rec_yds")] == 75.0        # median of 74.5/75.5
+    # Without a cutoff the latest snapshot wins (documents the cutoff's purpose).
+    assert closing_lines(rows)[("Ja'Marr Chase", "rec_yds")] == 99.0
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

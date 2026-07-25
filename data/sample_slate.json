@@ -788,6 +788,406 @@
           "under_odds": -102
         }
       ]
+    },
+    {
+      "player": "Josh Jacobs",
+      "team": "GB",
+      "opponent": "CHI",
+      "position": "RB",
+      "market": "anytime_td",
+      "logs": [
+        {
+          "week": 1,
+          "opponent": "CHI",
+          "value": 1.0,
+          "home": false
+        },
+        {
+          "week": 2,
+          "opponent": "CHI",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "week": 3,
+          "opponent": "CHI",
+          "value": 1.0,
+          "home": false
+        },
+        {
+          "week": 4,
+          "opponent": "CHI",
+          "value": 1.0,
+          "home": true
+        },
+        {
+          "week": 5,
+          "opponent": "CHI",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "week": 6,
+          "opponent": "CHI",
+          "value": 1.0,
+          "home": true
+        },
+        {
+          "week": 7,
+          "opponent": "CHI",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "week": 8,
+          "opponent": "CHI",
+          "value": 1.0,
+          "home": true
+        }
+      ],
+      "career_avg": 0.625,
+      "vs_opponent_avg": null,
+      "usage_role": "rb1",
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": -147,
+          "under_odds": 115
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": -139,
+          "under_odds": 115
+        },
+        {
+          "book": "ESPN BET",
+          "line": 0.5,
+          "over_odds": -152,
+          "under_odds": 115
+        }
+      ]
+    },
+    {
+      "player": "Jahmyr Gibbs",
+      "team": "DET",
+      "opponent": "MIN",
+      "position": "RB",
+      "market": "anytime_td",
+      "logs": [
+        {
+          "week": 1,
+          "opponent": "MIN",
+          "value": 1.0,
+          "home": false
+        },
+        {
+          "week": 2,
+          "opponent": "MIN",
+          "value": 1.0,
+          "home": true
+        },
+        {
+          "week": 3,
+          "opponent": "MIN",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "week": 4,
+          "opponent": "MIN",
+          "value": 1.0,
+          "home": true
+        },
+        {
+          "week": 5,
+          "opponent": "MIN",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "week": 6,
+          "opponent": "MIN",
+          "value": 1.0,
+          "home": true
+        },
+        {
+          "week": 7,
+          "opponent": "MIN",
+          "value": 1.0,
+          "home": false
+        },
+        {
+          "week": 8,
+          "opponent": "MIN",
+          "value": 0.0,
+          "home": true
+        }
+      ],
+      "career_avg": 0.625,
+      "vs_opponent_avg": null,
+      "usage_role": "rb1",
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": -111,
+          "under_odds": -115
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": -103,
+          "under_odds": -115
+        },
+        {
+          "book": "ESPN BET",
+          "line": 0.5,
+          "over_odds": -116,
+          "under_odds": -115
+        }
+      ]
+    },
+    {
+      "player": "Amon-Ra St. Brown",
+      "team": "DET",
+      "opponent": "MIN",
+      "position": "WR",
+      "market": "anytime_td",
+      "logs": [
+        {
+          "week": 1,
+          "opponent": "MIN",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "week": 2,
+          "opponent": "MIN",
+          "value": 1.0,
+          "home": true
+        },
+        {
+          "week": 3,
+          "opponent": "MIN",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "week": 4,
+          "opponent": "MIN",
+          "value": 1.0,
+          "home": true
+        },
+        {
+          "week": 5,
+          "opponent": "MIN",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "week": 6,
+          "opponent": "MIN",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "week": 7,
+          "opponent": "MIN",
+          "value": 1.0,
+          "home": false
+        },
+        {
+          "week": 8,
+          "opponent": "MIN",
+          "value": 0.0,
+          "home": true
+        }
+      ],
+      "career_avg": 0.375,
+      "vs_opponent_avg": null,
+      "usage_role": "wr1",
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": -105,
+          "under_odds": -121
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": -97,
+          "under_odds": -121
+        },
+        {
+          "book": "ESPN BET",
+          "line": 0.5,
+          "over_odds": -110,
+          "under_odds": -121
+        }
+      ]
+    },
+    {
+      "player": "Travis Kelce",
+      "team": "KC",
+      "opponent": "BUF",
+      "position": "TE",
+      "market": "anytime_td",
+      "logs": [
+        {
+          "week": 1,
+          "opponent": "BUF",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "week": 2,
+          "opponent": "BUF",
+          "value": 1.0,
+          "home": true
+        },
+        {
+          "week": 3,
+          "opponent": "BUF",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "week": 4,
+          "opponent": "BUF",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "week": 5,
+          "opponent": "BUF",
+          "value": 1.0,
+          "home": false
+        },
+        {
+          "week": 6,
+          "opponent": "BUF",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "week": 7,
+          "opponent": "BUF",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "week": 8,
+          "opponent": "BUF",
+          "value": 1.0,
+          "home": true
+        }
+      ],
+      "career_avg": 0.375,
+      "vs_opponent_avg": null,
+      "usage_role": "te1",
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": 284,
+          "under_odds": -400
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": 292,
+          "under_odds": -400
+        },
+        {
+          "book": "ESPN BET",
+          "line": 0.5,
+          "over_odds": 279,
+          "under_odds": -400
+        }
+      ]
+    },
+    {
+      "player": "Jayden Reed",
+      "team": "GB",
+      "opponent": "CHI",
+      "position": "WR",
+      "market": "anytime_td",
+      "logs": [
+        {
+          "week": 1,
+          "opponent": "CHI",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "week": 2,
+          "opponent": "CHI",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "week": 3,
+          "opponent": "CHI",
+          "value": 1.0,
+          "home": false
+        },
+        {
+          "week": 4,
+          "opponent": "CHI",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "week": 5,
+          "opponent": "CHI",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "week": 6,
+          "opponent": "CHI",
+          "value": 1.0,
+          "home": true
+        },
+        {
+          "week": 7,
+          "opponent": "CHI",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "week": 8,
+          "opponent": "CHI",
+          "value": 0.0,
+          "home": true
+        }
+      ],
+      "career_avg": 0.25,
+      "vs_opponent_avg": null,
+      "usage_role": "wr2",
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": 171,
+          "under_odds": -224
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": 179,
+          "under_odds": -224
+        },
+        {
+          "book": "ESPN BET",
+          "line": 0.5,
+          "over_odds": 166,
+          "under_odds": -224
+        }
+      ]
     }
   ]
 }

@@ -43,6 +43,13 @@ ODDS_TO_MARKET = {
 }
 MARKET_TO_ODDS = {v: k for k, v in ODDS_TO_MARKET.items()}
 
+# "Does this player score at all" markets. These are Yes/No with no line, so
+# they need their own parser — the over/under one above requires a point and
+# deliberately skips them.
+SCORER_ODDS_TO_MARKET = {
+    "player_anytime_td": "anytime_td",
+}
+
 # MLB market keys (engine.mlb.models markets). Kept as strings to avoid an
 # import cycle with the MLB package.
 MLB_ODDS_TO_MARKET = {
@@ -262,6 +269,47 @@ def parse_event_h2h(event_json: dict, team_map: dict) -> dict[str, int]:
                 if abbr not in best or price > best[abbr]:
                     best[abbr] = price
     return best
+
+
+def parse_event_scorers(event_json: dict,
+                        market_map: dict | None = None) -> dict[tuple[str, str], list[dict]]:
+    """Parse Yes/No "to score" markets (anytime touchdown) from an event.
+
+    Returns ``{(normalised_player, market): [{book, yes_odds, no_odds}]}``.
+    The No side is usually quoted too, which lets the caller de-vig properly
+    instead of assuming a hold.
+    """
+    market_map = market_map or SCORER_ODDS_TO_MARKET
+    out: dict[tuple[str, str], list[dict]] = {}
+    for bm in event_json.get("bookmakers", []):
+        book = BOOK_TITLES.get(bm.get("key", ""), bm.get("key", ""))
+        for mkt in bm.get("markets", []):
+            market = market_map.get(mkt.get("key", ""))
+            if not market:
+                continue
+            yes: dict[str, int] = {}
+            no: dict[str, int] = {}
+            for o in mkt.get("outcomes", []):
+                player = o.get("description") or o.get("participant") or ""
+                price = o.get("price")
+                if not player or price is None:
+                    continue
+                side = (o.get("name") or "").strip().lower()
+                if side in ("yes", "over", player.strip().lower()):
+                    yes[player] = int(price)
+                elif side == "no":
+                    no[player] = int(price)
+            for player, y in yes.items():
+                out.setdefault((normalize_name(player), market), []).append(
+                    {"book": book, "yes_odds": y, "no_odds": no.get(player)})
+    return out
+
+
+def best_scorer_price(quotes: list[dict]) -> dict | None:
+    """Most bettor-friendly quote across books (highest Yes payout)."""
+    if not quotes:
+        return None
+    return max(quotes, key=lambda q: q["yes_odds"])
 
 
 def _modal_line(points: list[float]):

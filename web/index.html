@@ -23,6 +23,7 @@
     <nav class="nav" id="nav">
       <div class="nav-indicator" id="nav-indicator"></div>
       <button class="nav-btn active" data-view="recommended">🎯 Recommended</button>
+      <button class="nav-btn" data-view="longshots" id="longshots-tab">🎰 Long Shots</button>
       <button class="nav-btn" data-view="trending">🔥 Trending</button>
       <button class="nav-btn" data-view="players">🔍 Players</button>
     </nav>
@@ -84,6 +85,15 @@
       </div>
 
       <div class="cards" id="cards"><p class="loading">Loading model…</p></div>
+    </section>
+
+    <!-- Long Shots -->
+    <section class="view" id="view-longshots">
+      <div class="section-title" id="longshots-title">🎰 Long Shots
+        <span class="sub" id="longshots-sub">— anytime touchdowns, priced on opportunity not hype</span>
+      </div>
+      <div class="longshot-note" id="longshots-note"></div>
+      <div class="cards" id="longshots"></div>
     </section>
 
     <!-- Trending -->

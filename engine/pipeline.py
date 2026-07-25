@@ -84,6 +84,57 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
     }
 
 
+def _opportunity_shares(slate) -> dict:
+    """Each player's share of his team's skill-position workload.
+
+    Derived from the volume markets already on the slate (rush yards for backs,
+    receptions/receiving yards for pass catchers) — a usable stand-in for the
+    touch/target share the touchdown model wants, since play-by-play isn't
+    ingested.
+    """
+    from .models import RUSH_YDS, REC_YDS, RECEPTIONS
+
+    def _mean(prop):
+        vals = [g.value for g in prop.logs]
+        return sum(vals) / len(vals) if vals else 0.0
+
+    volume: dict[tuple[str, str], float] = {}
+    for prop in slate.props:
+        if prop.market not in (RUSH_YDS, REC_YDS, RECEPTIONS):
+            continue
+        # Receptions and receiving yards describe the same role; keep the larger
+        # signal rather than double-counting a pass catcher.
+        key = (prop.team, prop.player)
+        volume[key] = max(volume.get(key, 0.0), _mean(prop))
+
+    team_totals: dict[str, float] = {}
+    for (team, _player), v in volume.items():
+        team_totals[team] = team_totals.get(team, 0.0) + v
+    return {key: (v / team_totals[key[0]] if team_totals.get(key[0]) else 0.0)
+            for key, v in volume.items()}
+
+
+def _long_shots(slate) -> list[dict]:
+    """Anytime-touchdown picks — the NFL long-shot board (see engine.touchdowns)."""
+    from .models import ANYTIME_TD
+    from .touchdowns import build_td_longshots
+
+    shares = _opportunity_shares(slate)
+    candidates = []
+    for prop in slate.props:
+        if prop.market != ANYTIME_TD or not prop.lines:
+            continue
+        best = max(prop.lines, key=lambda ln: ln.over_odds)
+        candidates.append({
+            "prop": prop, "game": slate.game_for(prop),
+            "opponent": slate.team(prop.opponent),
+            "opportunity_share": shares.get((prop.team, prop.player), 0.15),
+            "odds": best.over_odds, "book": best.book,
+            "under_odds": best.under_odds,
+        })
+    return [p.to_dict() for p in build_td_longshots(candidates)]
+
+
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     d["recommended"] = (d["grade"] != "Pass"
                         and d["confidence"] >= config.min_confidence
@@ -173,6 +224,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,
         "game_bets": _game_bets(slate.games, config),
+        "long_shots": _long_shots(slate),
     }
 
 

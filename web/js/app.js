@@ -249,6 +249,7 @@ function renderAll() {
   renderGames();
   renderGameBets();
   renderRecommended();
+  renderLongShots();
   renderTrending();
   renderPlayers();
 }
@@ -607,6 +608,73 @@ function cardHTML(r) {
       ${confMeter(r)}
       <div class="chips">${whenChip(r.game_date, r.game_kickoff)}${trendChip(r)}${booksChip(r)}${stakeChip}</div>
       ${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
+    </article>`;
+}
+
+/* ============================================================
+   Long Shots — NFL anytime TDs / MLB home runs
+   ============================================================ */
+function renderLongShots() {
+  const mlb = state.sport === "mlb";
+  const picks = state.data.long_shots || [];
+  const host = document.getElementById("longshots");
+  const note = document.getElementById("longshots-note");
+  document.getElementById("longshots-sub").textContent = mlb
+    ? "— home runs, priced on contact quality, park & weather"
+    : "— anytime touchdowns, priced on opportunity not hype";
+
+  if (!picks.length) {
+    host.innerHTML = "";
+    note.innerHTML = `<div class="empty-slate"><div class="es-icon">🎯</div>
+      <div class="es-title">No long shots clear the bar right now</div>
+      <div class="es-sub">The model only surfaces ${mlb ? "home-run" : "touchdown"} picks that beat
+      the book's price inside a sane odds range${mlb ? " (+250 to +650)" : " (-150 to +200)"}.
+      An empty board means no edge worth taking — not a missing feature.</div></div>`;
+    return;
+  }
+  note.innerHTML = `<div class="ls-note">Ranked by <b>edge</b>, never by payout.
+    ${mlb ? "At most one per team" : "At most two per game"}, top ${picks.length} shown.</div>`;
+  host.innerHTML = picks.map(longShotCard).join("");
+  fillMeters(host);
+  revealChildren(host);
+}
+
+function longShotCard(r) {
+  const ud = unitDollars();
+  const stakeTxt = ud > 0
+    ? `Stake ${money(stakeDollars(r.stake_units))} · ${r.stake_units.toFixed(2)}u`
+    : `Stake ${r.stake_units.toFixed(2)}u`;
+  const reasons = (r.reasons || []).slice(0, 6)
+    .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+  const caveats = (r.caveats || [])
+    .map((c) => `<div class="warning">⚠️ ${escapeHtml(c)}</div>`).join("");
+  const oppLabel = state.sport === "mlb" ? "Expected PAs" : "RZ chances";
+  return `
+    <article class="card longshot" style="--grade-color:${gradeColor(r.grade)}">
+      ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
+      <div class="card-head">
+        <div class="card-id">${playerAvatar(r.player, r.team)}
+          <div>
+            <div class="player">${escapeHtml(r.player)} <span class="ml-odds">${american(r.odds)}</span></div>
+            <div class="subtitle">${escapeHtml(r.matchup)}${whenLabel(r.game_date, r.game_kickoff)
+              ? ` · 🗓️ ${escapeHtml(whenLabel(r.game_date, r.game_kickoff))}` : ""}</div>
+            <div class="pick">${escapeHtml(r.market_label)}
+              <span class="book">· ${escapeHtml(r.book)}</span></div>
+          </div>
+        </div>
+        <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="k">Model</div><div class="v">${pct(r.model_prob)}</div></div>
+        <div class="metric"><div class="k">Book implied</div><div class="v">${pct(r.implied_prob)}</div></div>
+        <div class="metric"><div class="k">Edge</div><div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>
+        <div class="metric"><div class="k">${oppLabel}</div><div class="v">${r.expected_opportunities}</div></div>
+      </div>
+      ${confMeter(r)}
+      <div class="chips"><span class="chip stake">💰 ${stakeTxt}</span></div>
+      <div class="ls-primary">🎯 ${escapeHtml(r.primary_reason)}</div>
+      ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
+      ${caveats}
     </article>`;
 }
 

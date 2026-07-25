@@ -1036,6 +1036,573 @@
         "slg": 0.47,
         "barrel_pct": 0.06
       }
+    },
+    {
+      "player": "Aaron Judge",
+      "team": "NYY",
+      "opponent": "COL",
+      "position": "RF",
+      "market": "home_runs",
+      "logs": [
+        {
+          "game": 1,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 2,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 3,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 4,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 5,
+          "opponent": "COL",
+          "value": 1.0,
+          "home": false
+        },
+        {
+          "game": 6,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 7,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 8,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 9,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 10,
+          "opponent": "COL",
+          "value": 1.0,
+          "home": true
+        },
+        {
+          "game": 11,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 12,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 13,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 14,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 15,
+          "opponent": "COL",
+          "value": 1.0,
+          "home": false
+        },
+        {
+          "game": 16,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 17,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 18,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 19,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 20,
+          "opponent": "COL",
+          "value": 1.0,
+          "home": true
+        },
+        {
+          "game": 21,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 22,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 23,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 24,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 25,
+          "opponent": "COL",
+          "value": 1.0,
+          "home": false
+        }
+      ],
+      "career_avg": 0.2,
+      "vs_pitcher_avg": null,
+      "bats": "R",
+      "lineup_spot": 2,
+      "statcast": {
+        "barrel_pct": 0.145,
+        "hard_hit_pct": 0.55,
+        "xslg": 0.64,
+        "slg": 0.6
+      },
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": 285,
+          "under_odds": -384
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": 305,
+          "under_odds": -411
+        },
+        {
+          "book": "BetMGM",
+          "line": 0.5,
+          "over_odds": 270,
+          "under_odds": -364
+        }
+      ]
+    },
+    {
+      "player": "Bryce Harper",
+      "team": "PHI",
+      "opponent": "CHC",
+      "position": "1B",
+      "market": "home_runs",
+      "logs": [
+        {
+          "game": 1,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 2,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 3,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 4,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 5,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 6,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 7,
+          "opponent": "CHC",
+          "value": 1.0,
+          "home": false
+        },
+        {
+          "game": 8,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 9,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 10,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 11,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 12,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 13,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 14,
+          "opponent": "CHC",
+          "value": 1.0,
+          "home": true
+        },
+        {
+          "game": 15,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 16,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 17,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 18,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 19,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 20,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 21,
+          "opponent": "CHC",
+          "value": 1.0,
+          "home": false
+        },
+        {
+          "game": 22,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 23,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 24,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 25,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false
+        }
+      ],
+      "career_avg": 0.143,
+      "vs_pitcher_avg": null,
+      "bats": "L",
+      "lineup_spot": 3,
+      "statcast": {
+        "barrel_pct": 0.115,
+        "hard_hit_pct": 0.48,
+        "xslg": 0.56,
+        "slg": 0.52
+      },
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": 380,
+          "under_odds": -513
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": 400,
+          "under_odds": -540
+        },
+        {
+          "book": "BetMGM",
+          "line": 0.5,
+          "over_odds": 365,
+          "under_odds": -492
+        }
+      ]
+    },
+    {
+      "player": "Ezequiel Tovar",
+      "team": "COL",
+      "opponent": "NYY",
+      "position": "SS",
+      "market": "home_runs",
+      "logs": [
+        {
+          "game": 1,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 2,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 3,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 4,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 5,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 6,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 7,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 8,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 9,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 10,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 11,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 12,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 13,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 14,
+          "opponent": "NYY",
+          "value": 1.0,
+          "home": true
+        },
+        {
+          "game": 15,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 16,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 17,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 18,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 19,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 20,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 21,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 22,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 23,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false
+        },
+        {
+          "game": 24,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true
+        },
+        {
+          "game": 25,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false
+        }
+      ],
+      "career_avg": 0.071,
+      "vs_pitcher_avg": null,
+      "bats": "R",
+      "lineup_spot": 7,
+      "statcast": {
+        "barrel_pct": 0.062,
+        "hard_hit_pct": 0.38,
+        "xslg": 0.43,
+        "slg": 0.445
+      },
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": 620,
+          "under_odds": -837
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": 640,
+          "under_odds": -864
+        },
+        {
+          "book": "BetMGM",
+          "line": 0.5,
+          "over_odds": 605,
+          "under_odds": -816
+        }
+      ]
     }
   ]
 }

@@ -22,6 +22,7 @@ PASS_YDS = "pass_yds"
 RUSH_YDS = "rush_yds"
 REC_YDS = "rec_yds"
 RECEPTIONS = "receptions"
+ANYTIME_TD = "anytime_td"        # scores a touchdown (rushing or receiving)
 
 # Human labels for the markets, used in the UI and explanations.
 MARKET_LABELS = {
@@ -29,6 +30,7 @@ MARKET_LABELS = {
     RUSH_YDS: "Rushing Yards",
     REC_YDS: "Receiving Yards",
     RECEPTIONS: "Receptions",
+    ANYTIME_TD: "Anytime TD",
 }
 
 
