@@ -43,10 +43,10 @@ function updateUnitNote() {
 
 const SPORT_META = {
   nfl: { logo: "🏈", tagline: "AI-powered NFL player-prop model",
-         gamesTitle: "🏟️ This week's stadiums & conditions",
+         gamesTitle: "This week's stadiums & conditions",
          api: "/api/recommendations", fallback: "data/recommendations.json" },
   mlb: { logo: "⚾", tagline: "AI-powered MLB player-prop model",
-         gamesTitle: "🏟️ Today's ballparks & conditions",
+         gamesTitle: "Today's ballparks & conditions",
          api: "/api/mlb/recommendations", fallback: "data/mlb_recommendations.json" },
 };
 
@@ -100,7 +100,7 @@ function whenLabel(dateStr, kick) {
 }
 function whenChip(dateStr, kick) {
   const w = whenLabel(dateStr, kick);
-  return w ? `<span class="chip when">🗓️ ${escapeHtml(w)}</span>` : "";
+  return w ? `<span class="chip when">${escapeHtml(w)}</span>` : "";
 }
 
 /* ---------------- motion ---------------- */
@@ -368,7 +368,7 @@ function gameBetCard(r) {
   const stakeTxt = ud > 0
     ? `Stake ${money(stakeDollars(r.stake_units))} · ${r.stake_units.toFixed(2)}u`
     : `Stake ${r.stake_units.toFixed(2)}u`;
-  const stakeChip = r._ok ? `<span class="chip stake">💰 ${stakeTxt}</span>` : "";
+  const stakeChip = r._ok ? `<span class="chip stake">${stakeTxt}</span>` : "";
   const reasons = (r.reasons || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
 
   // Header (badge + title + sub) varies by bet type; the metrics are shared.
@@ -620,7 +620,7 @@ function cardHTML(r) {
   const stakeTxt = ud > 0
     ? `Stake ${money(stakeDollars(r.stake_units))} · ${r.stake_units.toFixed(2)}u`
     : `Stake ${r.stake_units.toFixed(2)}u`;
-  const stakeChip = r._ok ? `<span class="chip stake">💰 ${stakeTxt}</span>` : "";
+  const stakeChip = r._ok ? `<span class="chip stake">${stakeTxt}</span>` : "";
   return `
     <article class="card ${r._ok ? "" : "faded"}" style="--grade-color:${gradeColor(r.grade)}">
       ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
@@ -646,7 +646,7 @@ function cardHTML(r) {
         ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
              ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
         : ""}
-      <div class="chips">${r.has_market === false ? `<span class="chip">📉 No book line — model projection only</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${trendChip(r)}${booksChip(r)}${stakeChip}</div>
+      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${trendChip(r)}${booksChip(r)}${stakeChip}</div>
       ${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
 }
@@ -707,7 +707,7 @@ function watchlistHTML(watch, mlb) {
     </div>`;
   }).join("");
   return `<div style="grid-column:1/-1;min-width:0">
-    <div class="section-title" style="margin-top:20px">💣 Most likely ${mlb ? "to homer" : "to score"} tonight
+    <div class="section-title" style="margin-top:20px">Most likely ${mlb ? "to homer" : "to score"} tonight
       <span class="sub">— model % vs the book's implied %. Positive EV = price worth taking;
       negative = likely but overpriced. Never a guarantee.</span></div>
     <div class="card" style="padding:0">${rows}</div></div>`;
@@ -731,7 +731,7 @@ function longShotCard(r) {
           <div>
             <div class="player">${escapeHtml(r.player)} <span class="ml-odds">${american(r.odds)}</span></div>
             <div class="subtitle">${escapeHtml(r.matchup)}${whenLabel(r.game_date, r.game_kickoff)
-              ? ` · 🗓️ ${escapeHtml(whenLabel(r.game_date, r.game_kickoff))}` : ""}</div>
+              ? ` · ${escapeHtml(whenLabel(r.game_date, r.game_kickoff))}` : ""}</div>
             <div class="pick">${escapeHtml(r.market_label)}
               <span class="book">· ${escapeHtml(r.book)}</span></div>
           </div>
@@ -749,8 +749,8 @@ function longShotCard(r) {
         ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
              ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
         : ""}
-      <div class="chips"><span class="chip stake">💰 ${stakeTxt}</span></div>
-      <div class="ls-primary">🎯 ${escapeHtml(r.primary_reason)}</div>
+      <div class="chips"><span class="chip stake">${stakeTxt}</span></div>
+      <div class="ls-primary">${escapeHtml(r.primary_reason)}</div>
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${caveats}
     </article>`;

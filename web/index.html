@@ -22,12 +22,12 @@
 
     <nav class="nav" id="nav">
       <div class="nav-indicator" id="nav-indicator"></div>
-      <button class="nav-btn active" data-view="recommended">🎯 Recommended</button>
-      <button class="nav-btn" data-view="edge">📈 Edge Board</button>
-      <button class="nav-btn" data-view="longshots" id="longshots-tab">🎰 Long Shots</button>
-      <button class="nav-btn" data-view="trending">🔥 Trending</button>
-      <button class="nav-btn" data-view="players">🔍 Players</button>
-      <button class="nav-btn" data-view="record">📒 Record</button>
+      <button class="nav-btn active" data-view="recommended">Recommended</button>
+      <button class="nav-btn" data-view="edge">Edge Board</button>
+      <button class="nav-btn" data-view="longshots" id="longshots-tab">Long Shots</button>
+      <button class="nav-btn" data-view="trending">Trending</button>
+      <button class="nav-btn" data-view="players">Players</button>
+      <button class="nav-btn" data-view="record">Record</button>
     </nav>
 
     <div class="slate-meta">
@@ -46,15 +46,15 @@
 
       <div class="empty-slate" id="empty-slate" style="display:none"></div>
 
-      <div class="section-title" id="topplays-title" style="display:none">🏆 Top plays
+      <div class="section-title" id="topplays-title" style="display:none">Top plays
         <span class="sub">— the highest-conviction bets on the board right now</span>
       </div>
       <div class="topplays" id="topplays"></div>
 
-      <div class="section-title" id="games-title">🏟️ This week's stadiums &amp; conditions</div>
+      <div class="section-title" id="games-title">This week's stadiums &amp; conditions</div>
       <div class="games-scroller" id="games"></div>
 
-      <div class="section-title" id="gamebets-title" style="display:none">💰 Game bets
+      <div class="section-title" id="gamebets-title" style="display:none">Game bets
         <span class="sub">— moneyline, spread &amp; total edges from the team model</span>
       </div>
       <div class="gamebets-wrap" id="gamebets"></div>
@@ -76,7 +76,7 @@
           <label><input type="checkbox" id="show-all" /> Show non-recommended props</label>
         </div>
         <div class="control bankroll">
-          <label>💰 Bankroll <b id="unit-note">enter to size bets</b></label>
+          <label>Bankroll <b id="unit-note">enter to size bets</b></label>
           <div class="bankroll-inputs">
             <span class="pfx">$</span>
             <input id="bankroll" type="number" min="0" step="10" placeholder="1000" inputmode="numeric" />
@@ -91,7 +91,7 @@
 
     <!-- Track Record -->
     <section class="view" id="view-record">
-      <div class="section-title">📒 Track Record
+      <div class="section-title">Track Record
         <span class="sub">— every recommended pick, journaled at its real price and graded
         against the final result. The receipts.</span>
       </div>
@@ -100,7 +100,7 @@
 
     <!-- Edge Board -->
     <section class="view" id="view-edge">
-      <div class="section-title">📈 Edge Board
+      <div class="section-title">Edge Board
         <span class="sub">— every bet priced better than the book's number, sorted by expected value.
         Wider net than Recommended: smaller edges and longer odds included, honestly labeled.</span>
       </div>
@@ -110,7 +110,7 @@
 
     <!-- Long Shots -->
     <section class="view" id="view-longshots">
-      <div class="section-title" id="longshots-title">🎰 Long Shots
+      <div class="section-title" id="longshots-title">Long Shots
         <span class="sub" id="longshots-sub">— anytime touchdowns, priced on opportunity not hype</span>
       </div>
       <div class="longshot-note" id="longshots-note"></div>
@@ -119,7 +119,7 @@
 
     <!-- Trending -->
     <section class="view" id="view-trending">
-      <div class="section-title">🔥 Trending across the league
+      <div class="section-title">Trending across the league
         <span class="sub">— momentum &amp; value from the model, not betting handle</span>
       </div>
       <div class="trend-grid" id="trending"></div>
@@ -127,7 +127,7 @@
 
     <!-- Players -->
     <section class="view" id="view-players">
-      <div class="section-title">🔍 Player search <span class="sub">— pull up form, game logs and the active prop</span></div>
+      <div class="section-title">Player search <span class="sub">— pull up form, game logs and the active prop</span></div>
       <div class="search-wrap">
         <span class="ico">🔍</span>
         <input id="player-search" type="text" placeholder="Search a player… (e.g. Amon-Ra, Jacobs)" autocomplete="off" />

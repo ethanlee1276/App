@@ -4,41 +4,44 @@
    semantic green/amber/red tuned to the same chroma family.
    ============================================================ */
 :root {
-  --bg: #0a0e1c;
-  --bg-2: #0c1226;
-  --panel: #111a30;
-  --panel-2: #152039;
-  --panel-3: #1c2848;
-  --border: #223052;
-  --border-soft: #1a2440;
+  /* Sharp & minimal: neutral near-black, hairline borders, one calm accent.
+     Gradient/glow variable names are kept but flattened so every existing
+     usage in this sheet resolves to the quiet system. */
+  --bg: #0b0c10;
+  --bg-2: #0e0f14;
+  --panel: #121318;
+  --panel-2: #16171d;
+  --panel-3: #1b1c23;
+  --border: #262832;
+  --border-soft: #1e2029;
 
-  --text: #eef2ff;
-  --text-dim: #98a4c8;
-  --text-mute: #68749b;
+  --text: #eceef2;
+  --text-dim: #9aa0ac;
+  --text-mute: #6a707c;
 
-  --brand: #4d8cff;
-  --brand-2: #8a6cff;
-  --cyan: #37cdea;
-  --good: #2fd58c;
-  --warn: #f5b13f;
-  --bad: #fb5a6a;
+  --brand: #7aa2f7;
+  --brand-2: #7aa2f7;
+  --cyan: #7dcfff;
+  --good: #34d399;
+  --warn: #d9a548;
+  --bad: #f0616d;
 
-  --grad-brand: linear-gradient(135deg, #4d8cff, #37cdea);
-  --grad-violet: linear-gradient(135deg, #8a6cff, #4d8cff);
-  --grad-hot: linear-gradient(135deg, #ff8a4d, #fb5a6a);
-  --grad-cold: linear-gradient(135deg, #37cdea, #4d8cff);
+  --grad-brand: #7aa2f7;
+  --grad-violet: #7aa2f7;
+  --grad-hot: #f0616d;
+  --grad-cold: #7dcfff;
 
-  --fill-subtle: rgba(255, 255, 255, 0.03);
-  --fill-hover: rgba(255, 255, 255, 0.055);
-  --text-body: #cdd5ef;
-  --topbar-bg: linear-gradient(180deg, rgba(12, 18, 38, 0.92), rgba(12, 18, 38, 0.6));
+  --fill-subtle: rgba(255, 255, 255, 0.025);
+  --fill-hover: rgba(255, 255, 255, 0.05);
+  --text-body: #c3c7cf;
+  --topbar-bg: rgba(11, 12, 16, 0.88);
   --skeleton: linear-gradient(100deg, var(--panel-2) 30%, var(--panel-3) 50%, var(--panel-2) 70%);
 
-  --radius: 16px;
-  --radius-sm: 11px;
-  --shadow: 0 10px 34px rgba(0, 0, 0, 0.42);
-  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
-  --ring: 0 0 0 3px rgba(77, 140, 255, 0.22);
+  --radius: 10px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --ring: 0 0 0 2px rgba(122, 162, 247, 0.35);
 }
 
 * { box-sizing: border-box; }
@@ -48,10 +51,7 @@ html { scroll-behavior: smooth; }
 body {
   margin: 0;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background:
-    radial-gradient(1100px 620px at 82% -14%, rgba(77, 140, 255, 0.14), transparent 60%),
-    radial-gradient(900px 520px at 8% -8%, rgba(138, 108, 255, 0.10), transparent 55%),
-    var(--bg);
+  background: var(--bg);
   color: var(--text);
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
@@ -377,38 +377,35 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    graphics), which reads as intentional on a light card.
    ============================================================ */
 :root[data-theme="light"] {
-  --bg: #eef1f9;
-  --bg-2: #e6ebf6;
+  --bg: #fafafa;
+  --bg-2: #f4f4f6;
   --panel: #ffffff;
-  --panel-2: #f7f9ff;
-  --panel-3: #e9eef8;
-  --border: #d6ddec;
-  --border-soft: #e6ebf5;
-  --text: #131a2e;
-  --text-dim: #55617f;
-  --text-mute: #8791ab;
-  --brand: #2f6fe6;
-  --brand-2: #7a5cf0;
-  --cyan: #0f9ec0;
-  --good: #12a866;
-  --warn: #c9820f;
-  --bad: #e5384a;
-  --grad-brand: linear-gradient(135deg, #2f6fe6, #0f9ec0);
-  --grad-violet: linear-gradient(135deg, #7a5cf0, #2f6fe6);
-  --fill-subtle: rgba(20, 30, 60, 0.035);
-  --fill-hover: rgba(20, 30, 60, 0.06);
-  --text-body: #2c3550;
-  --topbar-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.62));
-  --skeleton: linear-gradient(100deg, #eef1f9 30%, #e2e8f4 50%, #eef1f9 70%);
-  --shadow: 0 10px 30px rgba(30, 50, 90, 0.10);
-  --shadow-lg: 0 20px 50px rgba(30, 50, 90, 0.16);
-  --ring: 0 0 0 3px rgba(47, 111, 230, 0.20);
+  --panel-2: #f7f7f9;
+  --panel-3: #efeff2;
+  --border: #dcdee4;
+  --border-soft: #e8e9ee;
+  --text: #17181c;
+  --text-dim: #565b64;
+  --text-mute: #878c96;
+  --brand: #3a6fd8;
+  --brand-2: #3a6fd8;
+  --cyan: #2489c9;
+  --good: #178f5f;
+  --warn: #b07c14;
+  --bad: #d33f4c;
+  --grad-brand: #3a6fd8;
+  --grad-violet: #3a6fd8;
+  --fill-subtle: rgba(20, 24, 34, 0.03);
+  --fill-hover: rgba(20, 24, 34, 0.055);
+  --text-body: #33363e;
+  --topbar-bg: rgba(250, 250, 250, 0.9);
+  --skeleton: linear-gradient(100deg, #f4f4f6 30%, #ebebee 50%, #f4f4f6 70%);
+  --shadow: 0 1px 2px rgba(20, 30, 50, 0.08);
+  --shadow-lg: 0 4px 16px rgba(20, 30, 50, 0.10);
+  --ring: 0 0 0 2px rgba(58, 111, 216, 0.30);
 }
 :root[data-theme="light"] body {
-  background:
-    radial-gradient(1100px 620px at 82% -14%, rgba(47, 111, 230, 0.10), transparent 60%),
-    radial-gradient(900px 520px at 8% -8%, rgba(122, 92, 240, 0.08), transparent 55%),
-    var(--bg);
+  background: var(--bg);
 }
 :root[data-theme="light"] .nav-btn.active { color: #fff; }
 :root[data-theme="light"] .grade.pass { color: var(--text-dim); }
@@ -640,3 +637,62 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   font-size: 12.5px; font-weight: 600; color: var(--text);
 }
 .card.longshot .metrics { grid-template-columns: repeat(4, 1fr); }
+
+
+/* ============================================================
+   Sharp & minimal overrides — flat surfaces, hairline borders,
+   tabular numbers, quiet chrome. Appended last so it wins.
+   ============================================================ */
+body { font-size: 14.5px; }
+
+/* Numbers line up like a terminal. */
+.tile .v, .metric .v, .stat-v, .ml-odds, .book, .spark, td, .v {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Chrome: flat topbar + segmented nav. */
+.topbar { backdrop-filter: blur(10px); border-bottom: 1px solid var(--border-soft); }
+.logo { background: var(--panel-2); border: 1px solid var(--border);
+        box-shadow: none; border-radius: 8px; }
+.nav { background: var(--panel); border: 1px solid var(--border-soft); border-radius: 9px; }
+.nav-btn { font-size: 13px; letter-spacing: .01em; }
+.nav-btn.active { color: var(--text); }
+.nav-indicator { background: var(--panel-3); border: 1px solid var(--border);
+                 box-shadow: none; border-radius: 7px; }
+.btn, .btn:hover { box-shadow: none; }
+.btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+.btn:hover { border-color: var(--brand); filter: none; }
+.theme-toggle { box-shadow: none; }
+
+/* Cards: flat, hairline, tight. */
+.card, .game-card, .tile, .stat, .topplay {
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow);
+  border-radius: var(--radius);
+}
+.card:hover, .game-card:hover { box-shadow: var(--shadow-lg); border-color: var(--border); }
+
+/* Section titles read as kickers, not headlines. */
+.section-title {
+  font-size: 12.5px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--text-dim); font-weight: 700;
+}
+.section-title .sub { text-transform: none; letter-spacing: 0; font-weight: 500; }
+
+/* Grades: outline chips, color as a whisper. */
+.grade { background: transparent; border: 1px solid currentColor; box-shadow: none;
+         font-weight: 700; letter-spacing: .02em; }
+.grade.strong { color: var(--good); }
+.grade.play { color: var(--brand); }
+.grade.lean { color: var(--warn); }
+.grade.pass { color: var(--text-mute); }
+:root[data-theme="light"] .nav-btn.active { color: var(--text); }
+
+/* Chips + sliders: quiet. */
+.chip { background: var(--fill-subtle); border: 1px solid var(--border-soft); box-shadow: none; }
+input[type="range"]::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(122, 162, 247, 0.18); }
+
+/* Motion: fast + subtle. */
+.reveal { transition-duration: .25s; }
+.tilting { transition: none; }
