@@ -25,8 +25,10 @@ SAVANT_EXPECTED = (
     "https://baseballsavant.mlb.com/leaderboard/expected_statistics"
     "?type={type}&year={year}&position=&team=&filterType=bip&min=q&csv=true"
 )
+# The Exit Velocity & Barrels board lives at the /statcast slug (the
+# /exit_velocity_barrels guess 404s — confirmed live).
 SAVANT_BARRELS = (
-    "https://baseballsavant.mlb.com/leaderboard/exit_velocity_barrels"
+    "https://baseballsavant.mlb.com/leaderboard/statcast"
     "?type={type}&year={year}&position=&team=&min=50&csv=true"
 )
 
