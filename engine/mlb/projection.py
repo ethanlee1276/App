@@ -55,6 +55,15 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None) -> MLBProject
     park_mult = park.multipliers.get(prop.market, 1.0)
     weather_mult = weather.multipliers.get(prop.market, 1.0)
 
+    # Home-plate umpire: a wide zone lifts strikeouts directly; the run
+    # environment nudges hitter counting stats a little. Unknown ump = 1.0.
+    if prop.market == STRIKEOUTS:
+        ump_mult = game.ump_k_factor
+    elif prop.market in (HITS, TOTAL_BASES):
+        ump_mult = 1.0 + (game.ump_run_factor - 1.0) * 0.5
+    else:
+        ump_mult = 1.0
+
     # Statcast: expected-stats regression + quality-of-contact / K stuff.
     statcast_mult = 1.0
     statcast_reasons: list[str] = []
@@ -76,7 +85,8 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None) -> MLBProject
         # Tight overall clamp: books price parks and platoons in, so real edges
         # come from small compounding angles. Slightly wider than the NFL clamp
         # because park effects (Coors) genuinely run bigger.
-        total_mult = clamp(park_mult * weather_mult * matchup.multiplier * statcast_mult,
+        total_mult = clamp(park_mult * weather_mult * matchup.multiplier
+                           * statcast_mult * ump_mult,
                            0.78, 1.28)
     # Recency shade toward recent form (bounded in form.py) — a cold bat's
     # number comes down instead of riding a stale season line.
@@ -91,6 +101,11 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None) -> MLBProject
     reasons: list[str] = []
     reasons += learned_reason
     reasons += statcast_reasons
+    if abs(ump_mult - 1.0) >= 0.02 and game.plate_umpire:
+        direction = "elevates" if ump_mult > 1 else "suppresses"
+        what = "strikeouts" if prop.market == STRIKEOUTS else "scoring"
+        reasons.append(f"Plate ump {game.plate_umpire} {direction} {what} "
+                       f"({(ump_mult - 1) * 100:+.0f}% measured over his games)")
     reasons += matchup.reasons
     reasons += park.reasons
     reasons += weather.reasons

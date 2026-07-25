@@ -82,6 +82,18 @@ def parse_person(person_json: dict) -> dict:
     }
 
 
+def parse_officials(boxscore: dict) -> str:
+    """The home-plate umpire's name from a boxscore, or "".
+
+    Assignments are announced a few hours before first pitch — one of the
+    late-breaking inputs that move strikeout props before books fully adjust.
+    """
+    for o in boxscore.get("officials", []) or []:
+        if (o.get("officialType") or "").lower() == "home plate":
+            return (o.get("official", {}) or {}).get("fullName", "") or ""
+    return ""
+
+
 def parse_game_log(stats_json: dict, market: str, limit: int | None = 15,
                    id_to_abbr: dict | None = None) -> list[MLBGameLog]:
     """Most-recent-first game logs for one market from a ``gameLog`` response.
@@ -197,7 +209,8 @@ def build_live_slate(date: str, season: int | None = None,
 
             game = MLBGame(home=home_ab, away=away_ab, park=park,
                            date=day.get("date", date), kickoff=g.get("gameDate", ""),
-                           pitchers=pitchers, lineups_confirmed=lineups_confirmed)
+                           pitchers=pitchers, lineups_confirmed=lineups_confirmed,
+                           plate_umpire=parse_officials(box))
             if weather is not None:
                 game.weather = weather
             games.append(game)

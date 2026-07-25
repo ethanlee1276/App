@@ -145,6 +145,15 @@ def mlb_starter_rows(slate, date: str) -> list[dict]:
     return rows
 
 
+def mlb_umpire_rows(slate, date: str) -> list[dict]:
+    """Home-plate umpire rows from a slate's games (completed dates always
+    have officials in the boxscore). Feeds the umpire K/run profiles."""
+    season = int(date[:4])
+    return [{"sport": "mlb", "season": season, "period": date,
+             "game_id": f"{g.away}@{g.home}", "umpire": g.plate_umpire}
+            for g in slate.games if getattr(g, "plate_umpire", "")]
+
+
 def mlb_result_rows(results: list[dict]) -> list[dict]:
     """Game rows (with real final scores) from parsed MLB results."""
     from .mlb.parks import get_park
@@ -225,5 +234,6 @@ def ingest_mlb_date(conn, date: str) -> dict:
     result["games"] = db.upsert_games(conn, grows)
     result["player_logs"] = db.upsert_player_logs(conn, prows)
     result["starters"] = db.upsert_game_starters(conn, mlb_starter_rows(slate, date))
+    result["umpires"] = db.upsert_game_umpires(conn, mlb_umpire_rows(slate, date))
     db.log_ingest(conn, "mlb", "slate", date, result["games"] + result["player_logs"])
     return result

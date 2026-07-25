@@ -59,6 +59,13 @@ CREATE TABLE IF NOT EXISTS game_starters (
     pitcher TEXT,
     PRIMARY KEY (sport, season, period, game_id, team)
 );
+-- Home-plate umpire per game. Umpire zone size measurably moves strikeouts
+-- and the run environment; profiles are computed from this table joined to
+-- final scores and starter K logs.
+CREATE TABLE IF NOT EXISTS game_umpires (
+    sport TEXT, season INTEGER, period TEXT, game_id TEXT, umpire TEXT,
+    PRIMARY KEY (sport, season, period, game_id)
+);
 CREATE INDEX IF NOT EXISTS idx_odds_hist_lookup
     ON odds_history (sport, market, player, taken_at);
 CREATE INDEX IF NOT EXISTS idx_logs_lookup
@@ -128,10 +135,15 @@ def upsert_odds_history(conn, rows: list[dict]) -> int:
 
 
 STARTER_COLS = ["sport", "season", "period", "game_id", "team", "pitcher"]
+UMPIRE_COLS = ["sport", "season", "period", "game_id", "umpire"]
 
 
 def upsert_game_starters(conn, rows: list[dict]) -> int:
     return _upsert(conn, "game_starters", STARTER_COLS, rows)
+
+
+def upsert_game_umpires(conn, rows: list[dict]) -> int:
+    return _upsert(conn, "game_umpires", UMPIRE_COLS, rows)
 
 
 def starters_by_game(conn, sport: str) -> dict:

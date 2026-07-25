@@ -105,6 +105,13 @@ class MLBGame:
     # Moneyline: American odds per side (0 = not offered) and a team strength
     # rating in expected run differential/game vs average. Drives the
     # game-level moneyline model in engine/gamebets.py.
+    # Home-plate umpire (announced a few hours before first pitch) and his
+    # measured effect profile: >1.0 k_factor = calls a big zone, more
+    # strikeouts; run_factor scales the scoring environment. 1.0 = league
+    # average / unknown ump.
+    plate_umpire: str = ""
+    ump_k_factor: float = 1.0
+    ump_run_factor: float = 1.0
     home_ml: int = 0
     away_ml: int = 0
     # The sharp reference book's own two-sided prices (0 = not quoted).

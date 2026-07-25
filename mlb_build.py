@@ -90,6 +90,20 @@ def main() -> None:
     except Exception as exc:
         print(f"⚠️  Team ratings unavailable — moneyline shows no edge.\n   {exc}")
 
+    # Home-plate umpire profiles (announced hours before first pitch) — a
+    # measured K/run-environment adjustment from our own ingested history.
+    try:
+        from engine.db import connect as _uconn
+        from engine.mlb.umpires import umpire_profiles, attach_umpires
+        profs = umpire_profiles(_uconn())
+        announced = sum(1 for g in slate.games if g.plate_umpire)
+        n_ump = attach_umpires(slate.games, profs)
+        if announced:
+            print(f"Umpires: {announced} announced, {n_ump} with a non-neutral "
+                  f"profile ({len(profs)} umps profiled from history).")
+    except Exception as exc:
+        print(f"⚠️  Umpire profiles unavailable — neutral zones assumed.\n   {exc}")
+
     if not slate.props:
         print(f"No props built for {args.date} — lineups may not be posted yet. "
               f"Pitcher props need probable starters; hitter props need confirmed lineups.")
