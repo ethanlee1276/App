@@ -256,6 +256,29 @@ def test_resolve_market_keys_translates_engine_names():
     assert resolve_market_keys("nfl", ["rec_yds"]) == ["player_reception_yds"]
 
 
+def test_one_sided_markets_never_fabricate_the_missing_side():
+    """Home-run markets are quoted Over-only. Inventing an under at -110
+    manufactured +88% EV "bets" nobody can place — the missing side must be
+    stored as 0 (not offered) and never picked."""
+    ev = {"bookmakers": [{"key": "draftkings", "title": "DraftKings", "markets": [
+        {"key": "batter_home_runs", "outcomes": [
+            {"name": "Over", "description": "Big Bopper", "price": 320, "point": 0.5}]}]}]}
+    idx = oa.parse_event_lines(ev, oa.MLB_ODDS_TO_MARKET)
+    ln = idx[(oa.normalize_name("Big Bopper"), "home_runs")][0]
+    assert ln.over_odds == 320 and ln.under_odds == 0
+
+    # De-vig degrades gracefully: fair prob from the quoted side + assumed hold.
+    from engine.odds import devig_two_way, american_to_prob
+    fair_over, fair_under = devig_two_way(320, 0)
+    assert fair_over < american_to_prob(320)      # hold removed, not added
+    assert abs(fair_over + fair_under - 1.0) < 1e-9
+
+    # And side selection can only take the side that exists.
+    from engine.betting import pick_side
+    side, best, win, fair, edge = pick_side([ln], lambda line: 0.30)
+    assert side == "OVER" and best.odds == 320
+
+
 if __name__ == "__main__":
     class MP:
         def __init__(self): self._undo = []

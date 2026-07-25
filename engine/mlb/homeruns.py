@@ -208,6 +208,42 @@ def hr_probability(prop: MLBProp, game: MLBGame) -> tuple[float, dict]:
     }
 
 
+def hr_watchlist(candidates: list[dict], limit: int = 10) -> list[dict]:
+    """Tonight's most likely home runs — every real-priced HR over, ranked by
+    the model's probability (hitter power × pitcher × park × weather × plate
+    appearances).
+
+    This is the "who could go deep tonight" board the Long Shots page shows
+    even when no strict value pick clears the bar: the price and EV are
+    displayed honestly, so a likely homer at a fair (no-value) price reads as
+    exactly that — insight, not a guaranteed bet."""
+    from ..odds import american_to_decimal, american_to_prob
+    rows: list[dict] = []
+    for c in candidates:
+        odds = c.get("odds")
+        if not odds or int(odds) <= 100:                 # plus-money overs only
+            continue
+        if (c.get("book") or "").lower() == "proxy":     # real prices only
+            continue
+        prop, game = c["prop"], c["game"]
+        prob, info = hr_probability(prop, game)
+        odds = int(odds)
+        rows.append({
+            "player": prop.player, "team": prop.team,
+            "opponent": prop.opponent, "book": c.get("book", ""),
+            "odds": odds,
+            "model_prob": round(prob, 4),
+            "implied_prob": round(american_to_prob(odds), 4),
+            "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),
+            "primary_reason": info["primary_reason"],
+            "caveats": info["caveats"][:1],
+            "game_date": getattr(game, "date", ""),
+            "kickoff": getattr(game, "kickoff", ""),
+        })
+    rows.sort(key=lambda r: -r["model_prob"])
+    return rows[:limit]
+
+
 def build_hr_longshots(candidates: list[dict], limit: int = 3,
                        per_team: int = 1) -> list[LongShot]:
     """Rank home-run picks.

@@ -632,20 +632,48 @@ function renderLongShots() {
     ? "— home runs, priced on contact quality, park & weather"
     : "— anytime touchdowns, priced on opportunity not hype";
 
+  const watch = state.data.longshot_watch || [];
   if (!picks.length) {
-    host.innerHTML = "";
-    note.innerHTML = `<div class="empty-slate"><div class="es-icon">🎯</div>
+    host.innerHTML = watchlistHTML(watch, mlb);
+    note.innerHTML = watch.length
+      ? `<div class="ls-note">No price clears the strict <b>value</b> bar right now —
+         but the model still ranks tonight's most likely ${mlb ? "home runs" : "scorers"} below,
+         with the price shown honestly so you can see what the book charges for them.</div>`
+      : `<div class="empty-slate"><div class="es-icon">🎯</div>
       <div class="es-title">No long shots clear the bar right now</div>
       <div class="es-sub">The model only surfaces ${mlb ? "home-run" : "touchdown"} picks that beat
       the book's price inside a sane odds range${mlb ? " (+250 to +650)" : " (-150 to +200)"}.
-      An empty board means no edge worth taking — not a missing feature.</div></div>`;
+      ${mlb ? "The most-likely-tonight list appears here once real home-run prices are attached." : ""}</div></div>`;
     return;
   }
   note.innerHTML = `<div class="ls-note">Ranked by <b>edge</b>, never by payout.
     ${mlb ? "At most one per team" : "At most two per game"}, top ${picks.length} shown.</div>`;
-  host.innerHTML = picks.map(longShotCard).join("");
+  host.innerHTML = picks.map(longShotCard).join("") + watchlistHTML(watch, mlb);
   fillMeters(host);
   revealChildren(host);
+}
+
+function watchlistHTML(watch, mlb) {
+  if (!watch || !watch.length) return "";
+  const rows = watch.map((r, i) => {
+    const ev = (r.ev_per_unit * 100).toFixed(1);
+    const evColor = r.ev_per_unit > 0 ? "var(--good, #3ddc84)" : "var(--text-mute, #889)";
+    return `<div style="display:flex;align-items:center;gap:14px;padding:11px 16px;
+        border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="opacity:.5;min-width:20px">${i + 1}</span>
+      <span style="flex:1"><strong>${escapeHtml(r.player)}</strong>
+        <span style="opacity:.6"> · ${teamName(r.team)} vs ${teamName(r.opponent)}</span>
+        <span style="display:block;opacity:.55;font-size:.85em">${escapeHtml(r.primary_reason || "")}</span></span>
+      <span style="min-width:120px;text-align:right;opacity:.85">
+        model ${(r.model_prob * 100).toFixed(0)}% · book ${(r.implied_prob * 100).toFixed(0)}%</span>
+      <span style="min-width:66px;text-align:right">${american(r.odds)}</span>
+      <span style="min-width:80px;text-align:right;color:${evColor}">${r.ev_per_unit > 0 ? "+" : ""}${ev}% EV</span>
+    </div>`;
+  }).join("");
+  return `<div class="section-title" style="margin-top:22px">💣 Most likely ${mlb ? "to homer" : "to score"} tonight
+      <span class="sub">— model probability vs the book's price. Positive EV = the price is worth it;
+      negative = likely but overpriced. Never a guarantee.</span></div>
+    <div class="card" style="padding:0">${rows}</div>`;
 }
 
 function longShotCard(r) {

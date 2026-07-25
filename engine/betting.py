@@ -124,10 +124,15 @@ def pick_side(lines, p_over_at):
     Returns ``(side, best_line, win_prob, fair_prob, edge)`` where ``win_prob``
     is the probability the chosen bet cashes."""
     over = best_over_line(lines)
-    under = best_under_line(lines)
-
     p_over_at_over = clamp(p_over_at(over.line), 1e-6, 1.0 - 1e-6)
     over_edge = p_over_at_over - over.fair_prob
+
+    # A market quoted Over-only (home runs, most scorer props) has no under
+    # to bet: never price the side that doesn't exist.
+    two_sided = [ln for ln in lines if ln.under_odds]
+    if not two_sided:
+        return "OVER", over, p_over_at_over, over.fair_prob, over_edge
+    under = best_under_line(two_sided)
 
     p_over_at_under = clamp(p_over_at(under.line), 1e-6, 1.0 - 1e-6)
     under_win = 1.0 - p_over_at_under

@@ -294,7 +294,11 @@ def parse_event_lines(event_json: dict,
                 elif side == "under":
                     unders[(player, float(point))] = int(price)
             for (player, point), over_price in overs.items():
-                under_price = unders.get((player, point), -110)
+                # NO fabricated opposite side: many prop markets (home runs
+                # especially) are quoted Over-only, and inventing an under at
+                # -110 manufactured huge fake edges on bets nobody can place.
+                # 0 = "not offered".
+                under_price = unders.get((player, point), 0)
                 key = (normalize_name(player), market)
                 out.setdefault(key, []).append(SportsbookLine(
                     book=book, line=float(point),

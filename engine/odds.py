@@ -22,9 +22,26 @@ def american_to_decimal(odds: int) -> float:
     return 1.0 + odds / 100.0
 
 
+# Assumed hold when a market is quoted on one side only (books shade the
+# quoted side by roughly this much).
+ONE_SIDED_HOLD = 1.05
+
+
 def devig_two_way(over_odds: int, under_odds: int) -> tuple[float, float]:
     """Remove the vig from a two-way market, returning fair (over, under)
-    probabilities that sum to 1.0."""
+    probabilities that sum to 1.0.
+
+    A missing side (odds of 0/None — e.g. home-run markets are quoted
+    Over-only) de-vigs the quoted side with an assumed hold instead of
+    pretending a fabricated opposite price is information."""
+    if not under_odds and over_odds:
+        fair_over = min(0.99, american_to_prob(over_odds) / ONE_SIDED_HOLD)
+        return fair_over, 1.0 - fair_over
+    if not over_odds and under_odds:
+        fair_under = min(0.99, american_to_prob(under_odds) / ONE_SIDED_HOLD)
+        return 1.0 - fair_under, fair_under
+    if not over_odds and not under_odds:
+        return 0.5, 0.5
     p_over = american_to_prob(over_odds)
     p_under = american_to_prob(under_odds)
     total = p_over + p_under

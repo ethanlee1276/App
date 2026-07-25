@@ -203,6 +203,36 @@ def test_board_ranks_by_edge_not_by_payout():
     assert ranked[0].player == "BestEdge"
 
 
+def test_hr_watchlist_ranks_by_model_probability():
+    """The Long Shots page must answer "who could go deep tonight" even when
+    no price clears the value bar — ranked by model probability with the
+    price and EV shown honestly, real-priced overs only."""
+    from engine.mlb.homeruns import hr_watchlist
+    from engine.mlb.models import MLBGame, MLBProp, MLBGameLog, HOME_RUNS
+    from engine.models import SportsbookLine
+
+    game = MLBGame(home="NYY", away="BOS", park="yankee")
+
+    def cand(name, spot, hr_per_game, odds, book="DraftKings"):
+        prop = MLBProp(name, "NYY", "BOS", "RF", HOME_RUNS,
+                       [MLBGameLog(i, "X", hr_per_game) for i in range(1, 21)],
+                       hr_per_game, None,
+                       [SportsbookLine(book, 0.5, odds, 0)], lineup_spot=spot)
+        return {"prop": prop, "game": game, "odds": odds, "book": book}
+
+    rows = hr_watchlist([
+        cand("Slugger", 2, 0.35, 320),
+        cand("Slap Hitter", 8, 0.02, 800),
+        cand("Proxy Guy", 1, 0.5, 400, book="proxy"),   # excluded: no real price
+    ])
+    assert [r["player"] for r in rows][:2] == ["Slugger", "Slap Hitter"]
+    assert all(r["player"] != "Proxy Guy" for r in rows)
+    top = rows[0]
+    assert top["model_prob"] > rows[1]["model_prob"]
+    assert 0 < top["implied_prob"] < 1 and "odds" in top
+    assert "primary_reason" in top and top["ev_per_unit"] is not None
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
