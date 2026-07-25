@@ -146,6 +146,40 @@ def test_db_feeds_backtest():
     assert report.n > 0
 
 
+def test_closing_odds_by_date_keeps_each_days_close():
+    """The backtest join needs a price for EVERY harvested game-day, not just a
+    player's single most-recent snapshot — the per-player-latest view silently
+    threw away a month of purchased history (coverage 330 -> 348 after a
+    29-day harvest)."""
+    conn = _conn()
+    rows = [
+        # Two snapshots on the 10th (later one is that day's close) + the 20th.
+        {"sport": "mlb", "taken_at": "2026-06-10T18:00:00Z", "event_id": "e1",
+         "home": "NYY", "away": "BOS", "player": "aaron judge",
+         "market": "total_bases", "book": "DraftKings", "line": 1.5,
+         "over_odds": -120, "under_odds": 100},
+        {"sport": "mlb", "taken_at": "2026-06-10T22:50:00Z", "event_id": "e1",
+         "home": "NYY", "away": "BOS", "player": "aaron judge",
+         "market": "total_bases", "book": "DraftKings", "line": 1.5,
+         "over_odds": -135, "under_odds": 115},
+        {"sport": "mlb", "taken_at": "2026-06-20T22:45:00Z", "event_id": "e2",
+         "home": "NYY", "away": "TBR", "player": "aaron judge",
+         "market": "total_bases", "book": "FanDuel", "line": 2.5,
+         "over_odds": 105, "under_odds": -125},
+    ]
+    db.upsert_odds_history(conn, rows)
+
+    by_date = db.closing_odds_by_date(conn, "mlb", "total_bases")
+    assert set(by_date) == {("aaron judge", "2026-06-10"),
+                            ("aaron judge", "2026-06-20")}
+    # Within a date, the later snapshot is the close.
+    assert by_date[("aaron judge", "2026-06-10")]["over_odds"] == -135
+    assert by_date[("aaron judge", "2026-06-20")]["line"] == 2.5
+    # The latest-only view keeps just one entry — exactly why it can't be the
+    # backtest join.
+    assert len(db.closing_odds_for(conn, "mlb", "total_bases")) == 1
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

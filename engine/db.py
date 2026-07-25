@@ -112,6 +112,33 @@ def have_odds_snapshot(conn, sport: str, event_id: str, taken_at: str) -> bool:
     return row is not None
 
 
+def closing_odds_by_date(conn, sport: str, market: str) -> dict:
+    """Latest harvested price per (player, market) on EACH date.
+
+    ``closing_odds_for`` below keeps only a player's single most-recent
+    snapshot — right for "what's the close right now", but as a backtest join
+    it discards every earlier harvested day: a player with 25 harvested
+    game-days contributes exactly one matchable date, which is how a month of
+    purchased history produced almost no extra coverage.
+
+    Returns ``{(player, YYYY-MM-DD): {"line", "over_odds", "under_odds",
+    "book", "taken_at"}}`` — within each date, the last snapshot wins, which is
+    the closest thing to that day's closing number.
+    """
+    q = ("SELECT player, book, line, over_odds, under_odds, taken_at "
+         "FROM odds_history WHERE sport=? AND market=? ORDER BY taken_at")
+    out: dict = {}
+    for r in conn.execute(q, (sport, market)):
+        date = str(r["taken_at"])[:10]
+        # Ordered by taken_at, so later same-date rows overwrite earlier ones.
+        out[(r["player"], date)] = {
+            "line": r["line"], "over_odds": r["over_odds"],
+            "under_odds": r["under_odds"], "book": r["book"],
+            "taken_at": r["taken_at"],
+        }
+    return out
+
+
 def closing_odds_for(conn, sport: str, market: str,
                      player: str | None = None) -> dict:
     """Latest harvested price per (player, market) — the closing line.
