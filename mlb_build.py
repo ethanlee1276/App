@@ -118,6 +118,23 @@ def main() -> None:
             json.dump(result, fh, indent=2)
         print(f"\nWrote {args.out}")
 
+    # Learning engine: journal today's real-priced picks and settle any open
+    # ones whose results have since been ingested. Only real book prices are
+    # journaled — a proxy line isn't a bet anyone could place. Never let the
+    # journal break a build.
+    if real_odds:
+        try:
+            from engine import ledger
+            from engine.db import connect as hist_connect
+            lconn = ledger.connect()
+            logged = ledger.log_recommendations(lconn, result)
+            settled = ledger.settle_from_history(lconn, hist_connect(), sport="mlb")
+            if logged or settled:
+                print(f"Journal: {logged} new pick(s) logged, {settled} settled "
+                      f"— see `python3 ledger.py report`")
+        except Exception as exc:
+            print(f"⚠️  Bet journal skipped: {exc}")
+
 
 if __name__ == "__main__":
     main()

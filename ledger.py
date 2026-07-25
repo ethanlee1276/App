@@ -49,6 +49,15 @@ def cmd_log(conn, args):
 
 
 def cmd_settle(conn, args):
+    if args.from_db:
+        from engine.db import connect as hist_connect
+        n = ledger.settle_from_history(conn, hist_connect(), sport=args.sport)
+        print(f"Settled {n} bet(s) from the history DB.")
+        print(ledger.summary(conn, args.sport))
+        return
+    if not args.actuals:
+        print("Pass --from-db (settle from ingested results) or --actuals FILE.")
+        return
     raw = json.loads(Path(args.actuals).read_text())
     # accept {"Player|market": value} or {"player": ..., "market": ..., "value": ...}
     actuals = {tuple(k.split("|", 1)): float(v) for k, v in raw.items()} if isinstance(raw, dict) \
@@ -90,7 +99,7 @@ def main() -> None:
 
     p = sub.add_parser("bankroll"); p.add_argument("--set", type=float); p.add_argument("--unit", type=float)
     p = sub.add_parser("log"); p.add_argument("--sport", choices=["nfl", "mlb"], default="nfl")
-    p = sub.add_parser("settle"); p.add_argument("--sport", choices=["nfl", "mlb"], default="nfl"); p.add_argument("--actuals", required=True)
+    p = sub.add_parser("settle"); p.add_argument("--sport", choices=["nfl", "mlb"], default="nfl"); p.add_argument("--actuals", default=None); p.add_argument("--from-db", action="store_true", help="settle from ingested results (no actuals file needed)")
     p = sub.add_parser("report"); p.add_argument("--sport", choices=["nfl", "mlb"], default=None)
     sub.add_parser("demo")
     args = ap.parse_args()

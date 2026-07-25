@@ -86,6 +86,65 @@ def test_performance_breakdowns_and_clv():
     assert abs(p["avg_clv"] - 2.0) < 1e-9        # 72.5 - 70.5
 
 
+def test_under_bets_are_graded_side_aware():
+    """actual > line is a WIN for an under bettor's opponent, not for them —
+    the ledger must grade the side that was actually bet (the same inversion
+    once flipped the backtest's P&L)."""
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    r = _result()
+    r["recommendations"][0].update({"side": "UNDER", "odds": -110})
+    ledger.log_recommendations(conn, r)
+    # Actual 40 is UNDER the 70.5 line -> the UNDER bet WINS.
+    ledger.settle(conn, {("A", "rush_yds"): 40.0},
+                  closing={("A", "rush_yds"): 65.5})
+    p = ledger.performance(conn)
+    assert p["wins"] == 1 and p["losses"] == 0
+    assert p["net_units"] > 0
+    # CLV flips for unders: line dropped 70.5 -> 65.5 = +5 for the under.
+    assert abs(p["avg_clv"] - 5.0) < 1e-9
+    assert "UNDER" in p["by_side"]
+
+
+def test_proxy_priced_picks_are_not_journaled():
+    conn = _conn()
+    r = _result()
+    r["recommendations"][0]["has_market"] = False
+    assert ledger.log_recommendations(conn, r) == 0
+
+
+def test_settle_from_history_db():
+    """The learning loop's auto-settle: actuals come from ingested game logs,
+    closing lines from harvested odds — no hand-built files."""
+    from engine import db as hist_db
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    r = _result(sport="mlb", date="2026-07-24")
+    r["recommendations"][0].update(
+        {"player": "Aaron Judge", "market": "total_bases", "side": "UNDER",
+         "line": 2.5, "odds": -120})
+    ledger.log_recommendations(conn, r)
+
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_player_logs(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-24",
+         "game_id": "g", "player": "Aaron Judge", "team": "NYY",
+         "opponent": "BOS", "position": "RF", "home": 1,
+         "market": "total_bases", "value": 1.0}])
+    hist_db.upsert_odds_history(hist, [
+        {"sport": "mlb", "taken_at": "2026-07-24T23:00:00Z", "event_id": "e",
+         "home": "NYY", "away": "BOS", "player": "aaron judge",
+         "market": "total_bases", "book": "DK", "line": 2.0,
+         "over_odds": -110, "under_odds": -110}])
+
+    assert ledger.settle_from_history(conn, hist, sport="mlb") == 1
+    b = conn.execute("SELECT * FROM bets WHERE player='Aaron Judge'").fetchone()
+    # 1 total base is under 2.5 -> the UNDER won; the harvested close joined.
+    assert b["status"] == "won" and b["closing_line"] == 2.0
+    # Bets with no ingested result stay open (nothing to grade them with).
+    assert ledger.settle_from_history(conn, hist, sport="mlb") == 0
+
+
 def test_summary_renders():
     conn = _conn()
     ledger.log_recommendations(conn, _result())

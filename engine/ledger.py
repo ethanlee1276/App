@@ -91,6 +91,10 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
     for r in result.get("recommendations", []):
         if only_recommended and not r.get("recommended"):
             continue
+        # A proxy-priced "edge" isn't a price anyone can bet; journaling it
+        # would pollute the learning data with fictional P&L.
+        if r.get("has_market") is False:
+            continue
         stake_units = float(r.get("stake_units", 0) or 0)
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
@@ -106,6 +110,81 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
 
 
 # --- settling ---------------------------------------------------------------
+def _settle_one(conn, b, actual: float, closing_line: float | None) -> None:
+    """Grade one open bet SIDE-AWARE and advance the bankroll.
+
+    ``actual > line`` is only a win for an OVER — grading unders with the
+    over's rule inverts half the journal, the same bug that once inverted the
+    backtest's P&L."""
+    side = (b["side"] or "OVER").upper()
+    if actual > b["line"]:
+        over = 1
+    elif actual < b["line"]:
+        over = 0
+    else:
+        over = None
+    if over is None:
+        status, pnl_u = "push", 0.0
+    else:
+        won = (over == 1) if side == "OVER" else (over == 0)
+        if won:
+            status, pnl_u = "won", (american_to_decimal(b["odds"]) - 1.0) * b["stake_units"]
+        else:
+            status, pnl_u = "lost", -b["stake_units"]
+    pnl_d = round(pnl_u / b["stake_units"] * b["stake_dollars"], 2) if b["stake_units"] else 0.0
+    conn.execute(
+        "UPDATE bets SET status=?, actual=?, pnl_units=?, pnl_dollars=?, closing_line=? WHERE id=?",
+        (status, actual, round(pnl_u, 4), pnl_d, closing_line, b["id"]))
+    set_cfg(conn, "bankroll", round(bankroll(conn) + pnl_d, 2))
+
+
+def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
+    """Auto-settle open bets straight from the history database.
+
+    Actuals come from ``player_game_logs`` (each bet's slate date + market),
+    closing lines from harvested ``odds_history`` — no hand-built actuals
+    file. Run it any time after results ingest; bets whose games haven't been
+    ingested yet simply stay open.
+    """
+    from .sources.oddsapi import normalize_name
+    from . import db as hist_db
+
+    q = "SELECT * FROM bets WHERE status='open'"
+    args: list = []
+    if sport:
+        q += " AND sport=?"
+        args.append(sport)
+
+    closes_cache: dict = {}
+    settled = 0
+    for b in conn.execute(q, args).fetchall():
+        row = hist_conn.execute(
+            "SELECT value FROM player_game_logs WHERE sport=? AND period=? "
+            "AND market=? AND player=?",
+            (b["sport"], b["date"], b["market"], b["player"])).fetchone()
+        if row is None:
+            # Name-shape fallback (feeds disagree on accents/suffixes).
+            target = normalize_name(b["player"])
+            row = next(
+                (c for c in hist_conn.execute(
+                    "SELECT player, value FROM player_game_logs "
+                    "WHERE sport=? AND period=? AND market=?",
+                    (b["sport"], b["date"], b["market"]))
+                 if normalize_name(c["player"]) == target), None)
+        if row is None:
+            continue
+
+        ck = (b["sport"], b["market"])
+        if ck not in closes_cache:
+            closes_cache[ck] = hist_db.closing_odds_by_date(hist_conn, *ck)
+        close = closes_cache[ck].get((normalize_name(b["player"]), b["date"]))
+        _settle_one(conn, b, float(row["value"]),
+                    float(close["line"]) if close else None)
+        settled += 1
+    conn.commit()
+    return settled
+
+
 def settle(conn, actuals: dict[tuple[str, str], float], sport: str | None = None,
            date: str | None = None, closing: dict[tuple[str, str], float] | None = None) -> int:
     """Grade open bets against actual results. ``actuals`` maps (player, market)
@@ -133,18 +212,7 @@ def settle(conn, actuals: dict[tuple[str, str], float], sport: str | None = None
         key = (b["player"], b["market"])
         if key not in actuals:
             continue
-        actual = float(actuals[key])
-        if actual > b["line"]:
-            status, pnl_u = "won", (american_to_decimal(b["odds"]) - 1.0) * b["stake_units"]
-        elif actual < b["line"]:
-            status, pnl_u = "lost", -b["stake_units"]
-        else:
-            status, pnl_u = "push", 0.0
-        pnl_d = round(pnl_u / b["stake_units"] * b["stake_dollars"], 2) if b["stake_units"] else 0.0
-        conn.execute(
-            "UPDATE bets SET status=?, actual=?, pnl_units=?, pnl_dollars=?, closing_line=? WHERE id=?",
-            (status, actual, round(pnl_u, 4), pnl_d, closing.get(key), b["id"]))
-        set_cfg(conn, "bankroll", round(bankroll(conn) + pnl_d, 2))
+        _settle_one(conn, b, float(actuals[key]), closing.get(key))
         settled += 1
     conn.commit()
     return settled
@@ -165,7 +233,13 @@ def performance(conn, sport: str | None = None) -> dict:
     staked_u = sum(b["stake_units"] for b in bets if b["status"] != "push")
     net_u = sum(b["pnl_units"] or 0 for b in bets)
     net_d = sum(b["pnl_dollars"] or 0 for b in bets)
-    clvs = [b["closing_line"] - b["line"] for b in bets if b["closing_line"] is not None]
+    # CLV is side-aware: an over wants the line to RISE after the bet, an
+    # under wants it to fall.
+    clvs = []
+    for b in bets:
+        if b["closing_line"] is not None:
+            move = b["closing_line"] - b["line"]
+            clvs.append(move if (b["side"] or "OVER").upper() == "OVER" else -move)
 
     def bucket(field):
         out: dict[str, dict] = {}
@@ -188,6 +262,7 @@ def performance(conn, sport: str | None = None) -> dict:
         "open": conn.execute("SELECT COUNT(*) FROM bets WHERE status='open'").fetchone()[0],
         "avg_clv": (sum(clvs) / len(clvs)) if clvs else None,
         "by_grade": bucket("grade"), "by_market": bucket("market"),
+        "by_side": bucket("side"),
     }
 
 
@@ -209,4 +284,8 @@ def summary(conn, sport: str | None = None) -> str:
         lines.append("  By grade:")
         for g, d in sorted(p["by_grade"].items(), key=lambda kv: -(kv[1]["w"] + kv[1]["l"])):
             lines.append(f"    {g:>11}: {d['w']}-{d['l']}  ({d['net_u']:+.2f}u)")
+    if p["by_side"]:
+        parts = [f"{s or '?'} {d['w']}-{d['l']} ({d['net_u']:+.2f}u)"
+                 for s, d in sorted(p["by_side"].items())]
+        lines.append("  By side:  " + "   ".join(parts))
     return "\n".join(lines)
