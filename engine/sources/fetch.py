@@ -65,4 +65,6 @@ def fetch_csv(url: str, cache_name: str, **kw) -> list[dict]:
 def load_local_csv(path: str | Path) -> list[dict]:
     """Read a CSV the user has supplied locally (e.g. a stats export)."""
     text = Path(path).read_text(encoding="utf-8", errors="replace")
-    return list(csv.DictReader(io.StringIO(text)))
+    # utf-8-sig semantics: a leading BOM before a quoted first header cell
+    # otherwise breaks the quoting and shifts every column by one.
+    return list(csv.DictReader(io.StringIO(text.lstrip("\ufeff"))))

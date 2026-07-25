@@ -38,12 +38,45 @@ def _norm(name: str) -> str:
     return normalize_name(name)
 
 
+def _row_name(row: dict) -> str:
+    """Player name from a Savant CSV row, whatever shape the header took.
+
+    Real exports use a SINGLE quoted column literally headed
+    ``last_name, first_name`` (usually with a BOM in front) containing
+    "Judge, Aaron"; older/other boards use separate columns or
+    ``player_name``. Returns "First Last" or ""."""
+    first = last = joined = ""
+    for k, v in row.items():
+        if k is None or v in (None, ""):
+            continue
+        key = str(k).replace("\ufeff", "").strip().strip('"').lower()
+        val = str(v).strip()
+        if key in ("last_name, first_name", "last_name,first_name"):
+            joined = joined or val
+        elif key == "first_name":
+            first = val
+        elif key == "last_name":
+            last = val
+        elif key in ("player_name", "name"):
+            joined = joined or val
+    if not first and last and "," in last:      # joined value under last_name
+        joined, last = last, ""
+    if joined:
+        if "," in joined:
+            l, f = [s.strip() for s in joined.split(",", 1)]
+            return f"{f} {l}"
+        return joined
+    return f"{first} {last}".strip()
+
+
 def _f(row: dict, *keys):
+    cleaned = {str(k).replace("\ufeff", "").strip().lower(): v
+               for k, v in row.items() if k is not None}
     for k in keys:
-        v = row.get(k)
-        if v not in (None, "", "NA"):
+        v = cleaned.get(k)
+        if v not in (None, "", "NA", "--", "null"):
             try:
-                return float(v)
+                return float(str(v).strip())
             except ValueError:
                 pass
     return None
@@ -56,12 +89,8 @@ def parse_expected_stats(rows: list[dict]) -> dict[str, StatcastProfile]:
     ``est_slg`` and ``woba`` / ``est_woba``."""
     out: dict[str, StatcastProfile] = {}
     for r in rows:
-        first = (r.get("first_name") or r.get("﻿first_name") or "").strip()
-        last = (r.get("last_name") or r.get("﻿last_name") or "").strip()
-        # Some exports use "last_name, first_name" in a single column.
-        if not first and last and "," in last:
-            last, first = [s.strip() for s in last.split(",", 1)]
-        name = _norm(f"{first} {last}") if (first or last) else ""
+        raw = _row_name(r)
+        name = _norm(raw) if raw else ""
         if not name:
             continue
         out[name] = StatcastProfile(
@@ -87,15 +116,8 @@ def parse_barrels(rows: list[dict]) -> dict[str, dict]:
     ``ev95percent`` (share of batted balls at 95+ mph)."""
     out: dict[str, dict] = {}
     for r in rows:
-        first = (r.get("first_name") or "").strip()
-        last = (r.get("last_name") or "").strip()
-        if not first and last and "," in last:
-            last, first = [s.strip() for s in last.split(",", 1)]
-        if not (first or last):
-            joined = (r.get("last_name, first_name") or "").strip()
-            if "," in joined:
-                last, first = [s.strip() for s in joined.split(",", 1)]
-        name = _norm(f"{first} {last}") if (first or last) else ""
+        raw = _row_name(r)
+        name = _norm(raw) if raw else ""
         if not name:
             continue
         out[name] = {
@@ -116,7 +138,10 @@ def load_barrels(year: int, kind: str = "batter") -> dict[str, dict]:
 
 
 def _read_csv_text(text: str) -> list[dict]:
-    return list(csv.DictReader(io.StringIO(text)))
+    # Savant's BOM precedes the first cell's opening quote; unless stripped,
+    # csv splits the quoted "last_name, first_name" header into two broken
+    # columns and shifts EVERY data column left by one.
+    return list(csv.DictReader(io.StringIO(text.lstrip("\ufeff"))))
 
 
 def load_expected_stats(year: int, kind: str = "batter") -> dict[str, StatcastProfile]:
@@ -157,3 +182,23 @@ def attach_statcast(props, year: int) -> int:
             prop.statcast = prof
             n += 1
     return n
+
+
+if __name__ == "__main__":
+    # Ground-truth diagnostic:  python3 -m engine.mlb.sources.savant 2026
+    import sys
+    year = int(sys.argv[1]) if len(sys.argv) > 1 else 2026
+    for board, loader in (("expected_statistics", load_expected_stats),
+                          ("exit_velocity_barrels", load_barrels)):
+        try:
+            data = loader(year)
+            print(f"{board}: parsed {len(data)} player profile(s)")
+            for name in list(data)[:3]:
+                print(f"   e.g. {name!r} -> {data[name]}")
+        except DataUnavailable as exc:
+            print(f"{board}: FETCH FAILED — {exc}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"{board}: PARSE FAILED — {type(exc).__name__}: {exc}")
+    for f in sorted(CACHE_DIR.glob(f"savant_*_{year}.csv")):
+        head = f.read_text(encoding="utf-8", errors="replace").splitlines()[:1]
+        print(f"header of {f.name}: {head[0][:160] if head else '(empty)'}")

@@ -129,6 +129,30 @@ def test_attach_merges_boards_and_skips_pitchers(monkeypatch):
     assert pitcher.statcast is None                # wrong board for pitchers
 
 
+def test_real_savant_shape_bom_and_quoted_joined_name_column():
+    """Regression for the live-site 'no Statcast' bug: Savant's BOM sits
+    BEFORE the first cell's opening quote, which used to break the quoting,
+    split "last_name, first_name" into two columns, and shift every stat one
+    column left — zero names parsed, wrong numbers everywhere."""
+    from engine.mlb.sources.savant import (
+        parse_expected_stats, parse_barrels, _read_csv_text, _norm,
+    )
+    text = ('\ufeff"last_name, first_name",player_id,year,pa,ba,est_ba,'
+            'slg,est_slg,woba,est_woba\n'
+            '"Judge, Aaron",592450,2026,412,.310,.298,.665,.641,.462,.448\n')
+    out = parse_expected_stats(_read_csv_text(text))
+    p = out[_norm("Aaron Judge")]
+    assert abs(p.slg - 0.665) < 1e-9 and abs(p.xslg - 0.641) < 1e-9
+
+    btext = ('\ufeff"last_name, first_name",player_id,attempts,'
+             'avg_hit_speed,ev95percent,brl_percent\n'
+             '"Acu\u00f1a Jr., Ronald",660670,300,95.9,52.1,15.2\n')
+    b = parse_barrels(_read_csv_text(btext))
+    acuna = b[_norm("Ronald Acuna Jr")]          # accents folded on the join
+    assert abs(acuna["barrel_pct"] - 0.152) < 1e-9
+    assert abs(acuna["hard_hit_pct"] - 0.521) < 1e-9
+
+
 if __name__ == "__main__":
     class MP:
         def __init__(self): self._undo = []
