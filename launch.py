@@ -99,6 +99,12 @@ def refresh_mlb(quiet: bool = False) -> bool:
         args.append("--odds")
         if quiet:                     # background cycle: only re-price what's live/soon
             args.append("--active-odds")
+    elif _with_odds():
+        # Budget says don't SPEND — but the last paid pull's prices are cached
+        # and free. Without this, every 60s score refresh rebuilt the slate
+        # with proxy lines, silently wiping real prices off the site for all
+        # but the minute after each paid pull.
+        args.append("--cached-odds")
     ok, tail = _run_build(args)
     if not quiet:
         print(f"  MLB  {date}: {'refreshed' if ok else 'unavailable — kept existing data'}"
@@ -146,6 +152,8 @@ def refresh_nfl(quiet: bool = False) -> bool:
         args.append("--odds")
         if quiet:
             args.append("--active-odds")
+    elif _with_odds():
+        args.append("--cached-odds")   # keep last paid prices; never overwrite with proxies
     ok, tail = _run_build(args)
     if not quiet:
         print(f"  NFL  {season} wk {week}: {'refreshed' if ok else 'unavailable — kept existing data'}"

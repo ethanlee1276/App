@@ -162,13 +162,22 @@ class Quota:
 
 
 def _request(url: str, cache_name: str, ttl: int = 300,
-             timeout: int = 30) -> tuple[object, Quota]:
+             timeout: int = 30, cache_only: bool = False) -> tuple[object, Quota]:
     """GET JSON with a short cache. Returns (parsed_json, quota).
+
+    ``cache_only`` serves the cached copy at ANY age and never touches the
+    network — the zero-cost path that lets every refresh cycle keep the last
+    paid pull's real prices instead of overwriting them with proxies. Raises
+    when nothing is cached yet.
 
     The API key is only ever in the URL, never in the cache filename.
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path = CACHE_DIR / cache_name
+    if cache_only:
+        if path.exists():
+            return json.loads(path.read_text()), Quota()
+        raise OddsAPIError(f"no cached odds yet for {cache_name}")
     if path.exists() and (time.time() - path.stat().st_mtime) < ttl:
         return json.loads(path.read_text()), Quota()
 
@@ -218,18 +227,20 @@ def _request(url: str, cache_name: str, ttl: int = 300,
 
 # --- endpoints --------------------------------------------------------------
 def list_events(api_key: str | None = None, ttl: int = 300,
-                sport: str = "nfl") -> list[dict]:
+                sport: str = "nfl", cache_only: bool = False) -> list[dict]:
     key = get_api_key(api_key)
     sport_key = SPORT_CONFIG[sport]["sport_key"]
     url = f"{ODDS_BASE}/sports/{sport_key}/events?{urllib.parse.urlencode({'apiKey': key})}"
-    data, _ = _request(url, f"odds_events_{sport}.json", ttl=ttl)
+    data, _ = _request(url, f"odds_events_{sport}.json", ttl=ttl,
+                       cache_only=cache_only)
     return data
 
 
 def fetch_event_odds(event_id: str, api_key: str | None = None,
                      markets: list[str] | None = None,
                      books: list[str] | None = None,
-                     ttl: int = 300, sport: str = "nfl") -> tuple[dict, Quota]:
+                     ttl: int = 300, sport: str = "nfl",
+                     cache_only: bool = False) -> tuple[dict, Quota]:
     key = get_api_key(api_key)
     cfg = SPORT_CONFIG[sport]
     markets = markets or list(cfg["markets"])
@@ -243,7 +254,8 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
     }
     url = (f"{ODDS_BASE}/sports/{cfg['sport_key']}/events/{event_id}/odds"
            f"?{urllib.parse.urlencode(params)}")
-    return _request(url, f"odds_event_{event_id}.json", ttl=ttl)
+    return _request(url, f"odds_event_{event_id}.json", ttl=ttl,
+                    cache_only=cache_only)
 
 
 # --- parsing (pure; unit-tested without network) ----------------------------
@@ -456,6 +468,7 @@ class OddsAttachResult:
     quota: Quota = field(default_factory=Quota)
     events_used: int = 0
     moneylines: int = 0          # games that got real h2h prices attached
+    from_cache: bool = False     # prices reused from the last paid pull
 
 
 def _is_active(game, window_hours: float) -> bool:
@@ -483,7 +496,8 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                         books: list[str] | None = None,
                         ttl: int = 300, sport: str = "nfl",
                         only_active: bool = False,
-                        active_window_hours: float = 6.0) -> OddsAttachResult:
+                        active_window_hours: float = 6.0,
+                        cache_only: bool = False) -> OddsAttachResult:
     """Replace each prop's proxy line with real book lines where available.
 
     Matches Odds API events to slate games by team abbreviation, then props by
@@ -495,11 +509,12 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     key = get_api_key(api_key)
     cfg = SPORT_CONFIG[sport]
     result = OddsAttachResult()
+    result.from_cache = cache_only
 
     # Which team pairs are in this slate?
     slate_pairs = {frozenset((g.home, g.away)) for g in slate.games}
 
-    events = list_events(key, ttl=ttl, sport=sport)
+    events = list_events(key, ttl=ttl, sport=sport, cache_only=cache_only)
     games_by_pair = {frozenset((g.home, g.away)): g for g in slate.games}
 
     # Only re-price games whose number can actually still move for us: in-play
@@ -521,8 +536,14 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         away = cfg["teams"].get(ev.get("away_team", ""))
         if not home or not away or frozenset((home, away)) not in slate_pairs:
             continue
-        payload, quota = fetch_event_odds(ev["id"], key, markets=markets,
-                                          books=books, ttl=ttl, sport=sport)
+        try:
+            payload, quota = fetch_event_odds(ev["id"], key, markets=markets,
+                                              books=books, ttl=ttl, sport=sport,
+                                              cache_only=cache_only)
+        except OddsAPIError:
+            if cache_only:
+                continue         # this event was never paid for — skip, free
+            raise
         result.quota = quota
         result.events_used += 1
         for k, lines in parse_event_lines(payload, cfg["markets"]).items():
@@ -566,7 +587,9 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
 
     # Append a timestamped snapshot so repeated runs build a line-movement
     # history (engine.linemoves reads it; proxy lines are skipped).
-    if result.matched:
+    if result.matched and not cache_only:
+        # Cached prices are re-reads of an already-recorded snapshot; only a
+        # paid pull carries new line-movement information.
         from ..linemoves import record_snapshots
         record_snapshots(slate.props)
 

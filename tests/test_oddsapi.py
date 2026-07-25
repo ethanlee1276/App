@@ -121,11 +121,11 @@ def _mini_slate():
 
 
 def test_apply_odds_replaces_proxy(monkeypatch):
-    monkeypatch.setattr(oa, "list_events", lambda key, ttl=300, sport='nfl': [
+    monkeypatch.setattr(oa, "list_events", lambda key, ttl=300, sport='nfl', cache_only=False: [
         {"id": "evt123", "home_team": "Kansas City Chiefs", "away_team": "Buffalo Bills"}
     ])
     monkeypatch.setattr(oa, "fetch_event_odds",
-                        lambda eid, key, markets=None, books=None, ttl=300, sport='nfl': (EVENT, oa.Quota("491", "9")))
+                        lambda eid, key, markets=None, books=None, ttl=300, sport='nfl', cache_only=False: (EVENT, oa.Quota("491", "9")))
 
     slate = _mini_slate()
     res = oa.apply_odds_to_slate(slate, api_key="testkey")
@@ -175,10 +175,10 @@ def test_mlb_apply_odds_end_to_end(monkeypatch):
         {"key": "batter_total_bases", "outcomes": [
             {"name": "Over", "description": "Aaron Judge", "price": -125, "point": 2.5},
             {"name": "Under", "description": "Aaron Judge", "price": 105, "point": 2.5}]}]}]}
-    monkeypatch.setattr(oa, "list_events", lambda key, ttl=300, sport="nfl": [
+    monkeypatch.setattr(oa, "list_events", lambda key, ttl=300, sport="nfl", cache_only=False: [
         {"id": "e1", "home_team": "Colorado Rockies", "away_team": "New York Yankees"}])
     monkeypatch.setattr(oa, "fetch_event_odds",
-                        lambda eid, key, markets=None, books=None, ttl=300, sport="nfl": (ev, oa.Quota()))
+                        lambda eid, key, markets=None, books=None, ttl=300, sport="nfl", cache_only=False: (ev, oa.Quota()))
 
     game = MLBGame(home="COL", away="NYY", park="coors")
     prop = MLBProp("Aaron Judge", "NYY", "COL", "RF", "total_bases",
@@ -190,12 +190,55 @@ def test_mlb_apply_odds_end_to_end(monkeypatch):
     assert prop.lines[0].book == "FanDuel" and prop.lines[0].line == 2.5
 
 
+def test_cache_only_serves_stale_cache_and_never_hits_network(monkeypatch):
+    """The zero-spend path: between budgeted pulls, refresh cycles must reuse
+    the last paid pull's cached prices instead of overwriting the site with
+    proxy lines (the bug that kept the board unpriced 18 cycles out of 19)."""
+    import json as _json
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as td:
+        monkeypatch.setattr(oa, "CACHE_DIR", Path(td))
+        # No cache yet -> cache_only refuses (never touches the network:
+        # the URL is junk on purpose).
+        try:
+            oa._request("http://junk.invalid/x", "c.json", cache_only=True)
+            assert False, "expected OddsAPIError with an empty cache"
+        except oa.OddsAPIError:
+            pass
+        # A stale cached copy (older than any ttl) is served as-is.
+        (Path(td) / "c.json").write_text(_json.dumps({"ok": 1}))
+        import os as _os
+        old = 1_000_000_000                     # far in the past
+        _os.utime(Path(td) / "c.json", (old, old))
+        data, quota = oa._request("http://junk.invalid/x", "c.json",
+                                  ttl=1, cache_only=True)
+        assert data == {"ok": 1}
+
+
+def test_apply_odds_cache_only_skips_unpaid_events(monkeypatch):
+    monkeypatch.setattr(oa, "list_events", lambda key, ttl=300, sport='nfl', cache_only=False: [
+        {"id": "evt123", "home_team": "Kansas City Chiefs", "away_team": "Buffalo Bills"}
+    ])
+
+    def fake_fetch(eid, key, markets=None, books=None, ttl=300, sport='nfl',
+                   cache_only=False):
+        raise oa.OddsAPIError("no cached odds yet")
+    monkeypatch.setattr(oa, "fetch_event_odds", fake_fetch)
+
+    slate = _mini_slate()
+    res = oa.apply_odds_to_slate(slate, api_key="k", cache_only=True)
+    # Nothing cached -> nothing attached, nothing raised, nothing spent.
+    assert res.matched == 0 and res.from_cache is True
+    assert slate.props[0].lines[0].book == "proxy"
+
+
 def test_apply_odds_reports_unmatched(monkeypatch):
-    monkeypatch.setattr(oa, "list_events", lambda key, ttl=300, sport='nfl': [
+    monkeypatch.setattr(oa, "list_events", lambda key, ttl=300, sport='nfl', cache_only=False: [
         {"id": "evt123", "home_team": "Kansas City Chiefs", "away_team": "Buffalo Bills"}
     ])
     monkeypatch.setattr(oa, "fetch_event_odds",
-                        lambda eid, key, markets=None, books=None, ttl=300, sport='nfl': ({"bookmakers": []}, oa.Quota()))
+                        lambda eid, key, markets=None, books=None, ttl=300, sport='nfl', cache_only=False: ({"bookmakers": []}, oa.Quota()))
     slate = _mini_slate()
     res = oa.apply_odds_to_slate(slate, api_key="testkey")
     assert res.matched == 0 and res.unmatched

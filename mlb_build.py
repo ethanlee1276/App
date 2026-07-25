@@ -32,6 +32,9 @@ def main() -> None:
                     help="Only re-price live / soon-starting games (saves API quota).")
     ap.add_argument("--odds", action="store_true",
                     help="Attach real (live during a game) sportsbook lines via The Odds API.")
+    ap.add_argument("--cached-odds", action="store_true",
+                    help="Attach the LAST PAID pull's prices from cache — zero API "
+                         "spend. What keeps the board priced between budgeted pulls.")
     ap.add_argument("--min-confidence", type=float, default=6.0)
     ap.add_argument("--min-edge", type=float, default=0.02)
     ap.add_argument("--out", default=None, help="write recommendations JSON here")
@@ -52,18 +55,23 @@ def main() -> None:
         print(f"Live scores: {live_n} game(s) matched, {live_now} in progress.")
 
     real_odds = False
-    odds_status = {"checked": bool(args.odds), "matched": 0, "events": 0,
-                   "moneylines": 0, "error": None, "quota_remaining": None}
-    if args.odds:
+    odds_status = {"checked": bool(args.odds or args.cached_odds), "matched": 0,
+                   "events": 0, "moneylines": 0, "error": None,
+                   "quota_remaining": None, "source": None}
+    if args.odds or args.cached_odds:
         from engine.sources import oddsapi
         try:
-            res = oddsapi.apply_odds_to_slate(slate, sport="mlb", only_active=args.active_odds)
-            real_odds = True
+            res = oddsapi.apply_odds_to_slate(slate, sport="mlb",
+                                              only_active=args.active_odds and not args.cached_odds,
+                                              cache_only=args.cached_odds and not args.odds)
+            real_odds = res.matched > 0 or res.events_used > 0
             odds_status.update(matched=res.matched, events=res.events_used,
                                moneylines=res.moneylines,
-                               quota_remaining=res.quota.remaining)
-            print(f"Odds API: matched {res.matched} props across {res.events_used} games "
-                  f"(quota remaining {res.quota.remaining}).")
+                               quota_remaining=res.quota.remaining,
+                               source="cache" if res.from_cache else "fresh")
+            src_note = " (cached — no API spend)" if res.from_cache else ""
+            print(f"Odds API: matched {res.matched} props across {res.events_used} games"
+                  f"{src_note} (quota remaining {res.quota.remaining}).")
             if res.moneylines:
                 print(f"  Moneylines attached to {res.moneylines} game(s).")
         except oddsapi.OddsAPIError as exc:
