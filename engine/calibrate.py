@@ -28,8 +28,16 @@ from pathlib import Path
 
 DEFAULT_PATH = Path(__file__).parent.parent / "data" / "models" / "calibration.json"
 
-# Search grid: 0.4 (sharpen a lot) .. 2.5 (flatten a lot).
-_GRID = [round(0.40 + 0.02 * i, 2) for i in range(106)]
+# Search grid: 0.4 (sharpen hard) .. 6.0 (flatten hard).
+#
+# The upper end is deliberately generous. A badly over-confident model needs a
+# large temperature, and if the grid stops short the fit silently returns the
+# boundary — which looks like a real answer but means the correction was capped.
+# Real data hit the old 2.5 ceiling on two markets, so the range now extends far
+# enough that a boundary result genuinely signals something, and ``at_boundary``
+# reports it when it happens.
+_GRID = [round(0.40 + 0.02 * i, 2) for i in range(281)]
+GRID_MIN, GRID_MAX = _GRID[0], _GRID[-1]
 
 
 def apply_temperature(p: float, temperature: float) -> float:
@@ -77,7 +85,21 @@ class Calibration:
     sport: str = ""
 
     @property
+    def at_boundary(self) -> bool:
+        """Did the fit land on the edge of the search range?
+
+        That means the data wanted a correction larger than the search allowed,
+        so the stored temperature is a cap rather than an optimum — and it
+        usually indicates the underlying model is badly miscalibrated rather
+        than that this particular number is right.
+        """
+        return self.temperature in (GRID_MIN, GRID_MAX)
+
+    @property
     def verdict(self) -> str:
+        if self.temperature >= GRID_MAX:
+            return ("model is SEVERELY over-confident — the fit hit the search "
+                    "ceiling, so even this much flattening may not be enough")
         if self.temperature > 1.05:
             return "model was over-confident — probabilities pulled toward 50%"
         if self.temperature < 0.95:

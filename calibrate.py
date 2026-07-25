@@ -82,6 +82,9 @@ def main() -> None:
             print(f"  {'':16} (under {args.min_samples} samples — left uncorrected)")
         else:
             print(f"  {'':16} {c.verdict}")
+            if c.at_boundary:
+                print(f"  {'':16} ⚠️  fit hit the edge of the search range — treat "
+                      f"this market's model as unreliable, not merely miscalibrated")
         fitted[f"mlb:{market}"] = c
 
     if not fitted:
