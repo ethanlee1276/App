@@ -105,9 +105,14 @@ def parse_expected_stats(rows: list[dict]) -> dict[str, StatcastProfile]:
 
 
 def _pct(row: dict, *keys):
-    """A percent column (7.5 means 7.5%) as a 0..1 fraction."""
+    """A percent column as a 0..1 fraction — ALWAYS divided by 100.
+
+    These Savant columns are always percent units (brl_percent 0-30,
+    ev95percent 15-65). The old "small values are already fractions"
+    heuristic turned Luis Arraez's genuine 0.5 (= 0.5%, the lowest barrel
+    rate in baseball) into 50%."""
     v = _f(row, *keys)
-    return None if v is None else (v / 100.0 if v > 1.5 else v)
+    return None if v is None else round(v / 100.0, 4)
 
 
 def parse_barrels(rows: list[dict]) -> dict[str, dict]:
