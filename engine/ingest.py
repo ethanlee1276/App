@@ -129,7 +129,8 @@ def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
 def mlb_starter_rows(slate, date: str) -> list[dict]:
     """Starting-pitcher rows from a slate's games. For a completed date the
     schedule's "probable pitcher" is the pitcher who actually started, which
-    is what lets the game-model backtest be pitcher-aware."""
+    is what lets the game-model backtest be pitcher-aware. Handedness rides
+    along — it's what the platoon splits join on."""
     season = int(date[:4])
     rows = []
     for g in slate.games:
@@ -141,6 +142,7 @@ def mlb_starter_rows(slate, date: str) -> list[dict]:
                 "sport": "mlb", "season": season, "period": date,
                 "game_id": f"{g.away}@{g.home}", "team": team_ab,
                 "pitcher": name,
+                "throws": getattr(pitcher, "throws", "") or "",
             })
     return rows
 

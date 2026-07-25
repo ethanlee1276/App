@@ -126,7 +126,8 @@ def test_starter_ingest_rows_come_from_slate_games():
                                    "BOS": Pitcher(name="TBD", throws="R")})]
     rows = mlb_starter_rows(Slate(), "2026-06-10")
     assert rows == [{"sport": "mlb", "season": 2026, "period": "2026-06-10",
-                     "game_id": "BOS@NYY", "team": "NYY", "pitcher": "Ace Guy"}]
+                     "game_id": "BOS@NYY", "team": "NYY", "pitcher": "Ace Guy",
+                     "throws": "R"}]
 
     conn = _conn()
     assert db.upsert_game_starters(conn, rows) == 1

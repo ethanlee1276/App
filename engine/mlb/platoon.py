@@ -1,0 +1,95 @@
+"""Platoon splits — each hitter's measured performance vs LHP / RHP.
+
+The matchup layer's generic platoon bump (+4% for any favorable handedness)
+treats every hitter identically. This module replaces it with the player's
+OWN measured split, computed entirely from data we already ingest: game logs
+joined to the opposing team's starter (and his handedness) on each date.
+
+Discipline, as always:
+
+* a split needs ``MIN_PER_SIDE`` games against a hand before it counts;
+* the factor is shrunk toward 1.0 by sample size and clamped — books price
+  the famous platoon bats in, so the edge is a nudge, not a lever;
+* an unknown starter or an unmeasured hitter falls back to the generic bump.
+"""
+
+from __future__ import annotations
+
+from ..statmath import clamp
+
+MIN_PER_SIDE = 8
+SHRINK = 15.0
+FACTOR_CLAMP = (0.85, 1.18)
+
+
+def platoon_splits(conn, market: str) -> dict[str, dict]:
+    """``{normalized_player: {"L": factor, "R": factor, "nL": int, "nR": int}}``
+
+    ``factor`` = the player's mean in this market against that hand relative
+    to his overall mean, shrunk and clamped. Joins each log row to the
+    OPPONENT's starter that day (the pitcher the hitter actually faced)."""
+    from ..sources.oddsapi import normalize_name
+
+    rows = conn.execute(
+        "SELECT l.player, l.value, s.throws FROM player_game_logs l "
+        "JOIN game_starters s ON s.sport=l.sport AND s.period=l.period "
+        "  AND s.team=l.opponent "
+        "WHERE l.sport='mlb' AND l.market=? AND s.throws IN ('L','R')",
+        (market,)).fetchall()
+
+    by_player: dict[str, dict[str, list[float]]] = {}
+    for r in rows:
+        p = by_player.setdefault(normalize_name(r["player"]), {"L": [], "R": []})
+        p[r["throws"]].append(float(r["value"]))
+
+    out: dict[str, dict] = {}
+    for name, sides in by_player.items():
+        all_vals = sides["L"] + sides["R"]
+        if len(all_vals) < MIN_PER_SIDE * 2:
+            continue
+        overall = sum(all_vals) / len(all_vals)
+        if overall <= 0:
+            continue
+        entry: dict = {"nL": len(sides["L"]), "nR": len(sides["R"])}
+        for hand in ("L", "R"):
+            vals = sides[hand]
+            if len(vals) < MIN_PER_SIDE:
+                entry[hand] = 1.0
+                continue
+            raw = (sum(vals) / len(vals)) / overall
+            shrunk = 1.0 + (raw - 1.0) * (len(vals) / (len(vals) + SHRINK))
+            entry[hand] = round(clamp(shrunk, *FACTOR_CLAMP), 3)
+        out[name] = entry
+    return out
+
+
+def attach_platoon(slate, splits_by_market: dict[str, dict]) -> int:
+    """Set ``prop.platoon_factor`` / ``platoon_note`` from tonight's opposing
+    starter hand. Returns how many props got a measured (non-1.0) factor."""
+    from ..sources.oddsapi import normalize_name
+
+    attached = 0
+    for prop in slate.props:
+        if prop.position == "SP":
+            continue
+        game = slate.game_for(prop)
+        starter = (game.pitchers or {}).get(prop.opponent) if game else None
+        hand = (getattr(starter, "throws", "") or "").upper()
+        if hand not in ("L", "R"):
+            continue
+        splits = splits_by_market.get(prop.market, {})
+        s = splits.get(normalize_name(prop.player))
+        if not s:
+            continue
+        factor = s.get(hand, 1.0)
+        prop.platoon_factor = factor
+        n = s.get(f"n{hand}", 0)
+        if abs(factor - 1.0) >= 0.03:
+            verb = "hits" if factor > 1.0 else "struggles"
+            prop.platoon_note = (f"Measured split: {verb} vs "
+                                 f"{'lefties' if hand == 'L' else 'righties'} "
+                                 f"({(factor - 1) * 100:+.0f}% vs his own "
+                                 f"average, {n} games)")
+        if factor != 1.0:
+            attached += 1
+    return attached

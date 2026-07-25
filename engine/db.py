@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS odds_history (
 -- as bullpen-vs-bullpen (measured: Brier worse than the base rate).
 CREATE TABLE IF NOT EXISTS game_starters (
     sport TEXT, season INTEGER, period TEXT, game_id TEXT, team TEXT,
-    pitcher TEXT,
+    pitcher TEXT, throws TEXT,
     PRIMARY KEY (sport, season, period, game_id, team)
 );
 -- Home-plate umpire per game. Umpire zone size measurably moves strikeouts
@@ -90,6 +90,13 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    # Migrations for columns added after a table shipped (CREATE IF NOT
+    # EXISTS won't touch an existing table).
+    try:
+        conn.execute("ALTER TABLE game_starters ADD COLUMN throws TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass                              # column already there
     return conn
 
 
@@ -134,7 +141,8 @@ def upsert_odds_history(conn, rows: list[dict]) -> int:
     return _upsert(conn, "odds_history", ODDS_HIST_COLS, rows)
 
 
-STARTER_COLS = ["sport", "season", "period", "game_id", "team", "pitcher"]
+STARTER_COLS = ["sport", "season", "period", "game_id", "team", "pitcher",
+                "throws"]
 UMPIRE_COLS = ["sport", "season", "period", "game_id", "umpire"]
 
 

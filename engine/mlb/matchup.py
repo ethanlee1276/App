@@ -40,13 +40,20 @@ def _hitter_matchup(prop: MLBProp, game: MLBGame) -> MatchupEffect:
 
     starter: Pitcher | None = game.pitchers.get(prop.opponent)
     if starter:
-        # Platoon: L vs R (or R vs L) is the classic advantage; switch
-        # hitters always have it.
-        adv = (prop.bats == "S") or (prop.bats != starter.throws)
-        if adv:
-            mult *= 1.04
-            reasons.append(f"Platoon edge — {prop.bats}HB vs {starter.throws}HP "
-                           f"({starter.name})")
+        if prop.platoon_factor != 1.0:
+            # The player's OWN measured split vs this hand beats the generic
+            # rule-of-thumb bump — never stack the two.
+            mult *= prop.platoon_factor
+            if prop.platoon_note:
+                reasons.append(prop.platoon_note)
+        else:
+            # Platoon: L vs R (or R vs L) is the classic advantage; switch
+            # hitters always have it.
+            adv = (prop.bats == "S") or (prop.bats != starter.throws)
+            if adv:
+                mult *= 1.04
+                reasons.append(f"Platoon edge — {prop.bats}HB vs {starter.throws}HP "
+                               f"({starter.name})")
 
         # Starter's quality against this batter's side. Tempered (×0.35)
         # because books price obvious splits in — edges come from the sum of

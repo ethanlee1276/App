@@ -125,6 +125,29 @@ def main() -> None:
     except Exception as exc:
         print(f"⚠️  Statcast unavailable — season rates only.\n   {exc}")
 
+    # Measured platoon splits from our own game logs (each hitter vs the
+    # starter hand he actually faced) — replaces the generic +4% handedness
+    # bump wherever a real split exists.
+    try:
+        from engine.db import connect as _pconn
+        from engine.mlb.platoon import platoon_splits, attach_platoon
+        from engine.mlb.models import TOTAL_BASES, HITS, HOME_RUNS
+        conn_p = _pconn()
+        splits = {m: platoon_splits(conn_p, m)
+                  for m in (TOTAL_BASES, HITS, HOME_RUNS)}
+        conn_p.close()
+        measured = sum(len(v) for v in splits.values())
+        n_pl = attach_platoon(slate, splits)
+        if measured:
+            print(f"Platoon: measured splits on {n_pl} props "
+                  f"({len(splits[TOTAL_BASES])} hitters with 16+ games vs "
+                  f"known-hand starters).")
+        else:
+            print("Platoon: no measured splits yet — starter handedness "
+                  "backfills on the next full ingest; generic bump applies.")
+    except Exception as exc:
+        print(f"⚠️  Platoon splits unavailable — generic bump applies.\n   {exc}")
+
     if not slate.props:
         print(f"No props built for {args.date} — lineups may not be posted yet. "
               f"Pitcher props need probable starters; hitter props need confirmed lineups.")

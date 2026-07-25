@@ -179,3 +179,8 @@ class MLBProp:
     lineup_spot: int = 0                 # 1-9 confirmed; 0 = not in lineup yet
     headshot: str = ""
     statcast: Optional["StatcastProfile"] = None
+    # Measured platoon split vs tonight's starter hand (engine.mlb.platoon):
+    # 1.0 = unmeasured/neutral, in which case the matchup layer's generic
+    # handedness bump applies instead.
+    platoon_factor: float = 1.0
+    platoon_note: str = ""
