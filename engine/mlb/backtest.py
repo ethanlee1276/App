@@ -52,7 +52,7 @@ def _norm_name(name: str) -> str:
 
 
 def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
-                       limit: int = 15, config: RuleConfig | None = None,
+                       limit: int = 40, config: RuleConfig | None = None,
                        model=None, real_lines: dict | None = None) -> BacktestReport:
     """``entries`` = [{"name", "values": [chronological per-game values],
     "dates": [matching game dates]}].

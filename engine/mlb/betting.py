@@ -23,7 +23,7 @@ from .projection import MLBProjection
 
 
 def empirical_prob_over(values: list, line: float, fallback: float,
-                        min_games: int = 12) -> float:
+                        min_games: int = 8) -> float:
     """P(stat > line) from how often the player has actually done it.
 
     Baseball props are low-count discrete stats — a hitter records zero total
@@ -31,17 +31,23 @@ def empirical_prob_over(values: list, line: float, fallback: float,
     overstates a 0.5 line (81% where reality is nearer 58%). That single
     modelling error was inflating edges by 15-20 points across the board.
 
-    The player's own game log is the most direct evidence available, so it is
-    blended with the parametric estimate by sample size: Laplace smoothing keeps
-    a short log off 0%/100%, and the parametric model still carries the
-    projection's matchup/park/weather adjustments, which raw history cannot see.
+    The distribution is also right-skewed: a handful of extra-base games pull
+    the *mean* well above the median, while prop lines sit near the mean. A
+    symmetric model therefore overstates the over badly — on a realistic total
+    bases distribution it says 56% where the truth is 30%. Backtesting exposed
+    this as the dominant source of error, so the player's own history — which
+    encodes the real shape, skew and all — carries most of the weight.
+
+    The parametric estimate still contributes, because it alone carries the
+    projection's matchup/park/weather adjustments that raw history cannot see.
+    Laplace smoothing keeps a short log off 0%/100%.
     """
     n = len(values)
     if n < min_games:
         return fallback
     hits = sum(1 for v in values if v > line)
     smoothed = (hits + 1.0) / (n + 2.0)
-    weight = clamp(n / 40.0, 0.0, 0.75)
+    weight = clamp(n / 25.0, 0.0, 0.85)
     return clamp(weight * smoothed + (1.0 - weight) * fallback, 1e-4, 0.999)
 
 
