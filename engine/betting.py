@@ -14,7 +14,7 @@ from .models import Prop, RECEPTIONS
 from .projection import Projection
 from .odds import best_over_line, best_under_line, devig_two_way, expected_value
 from .statmath import prob_over, prob_over_discrete, clamp
-from .calibrate import apply_temperature, temperature_for
+from .calibrate import apply_temperature, correction_for
 
 # --- calibration guards -----------------------------------------------------
 # The prop model is not yet calibrated to real outcomes, and live feeds
@@ -162,7 +162,7 @@ def _kelly_stake(model_prob: float, odds: int, fraction: float = 0.25) -> float:
 
 def evaluate_prop(prop: Prop, proj: Projection,
                   allow_synthetic_line: bool = False) -> Recommendation:
-    temp = temperature_for("nfl", prop.market)
+    temp, bias = correction_for("nfl", prop.market)
 
     def p_over_at(line: float) -> float:
         if prop.market == RECEPTIONS:
@@ -170,7 +170,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
         else:
             raw = prob_over(line, proj.mean, proj.std)
         # Calibrate before the side is chosen — see engine/mlb/betting.py.
-        return apply_temperature(raw, temp)
+        return apply_temperature(raw, temp, bias)
 
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
     hit, edge, credible = temper_edge(hit_raw, fair, best.book, allow_synthetic_line)

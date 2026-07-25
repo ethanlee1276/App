@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 
 from .odds import american_to_prob, devig_two_way, expected_value, american_to_decimal
 from .statmath import clamp
-from .calibrate import apply_temperature, temperature_for
+from .calibrate import apply_temperature, correction_for
 from .betting import MARKET_SHRINK, MAX_CREDIBLE_EDGE
 
 # Odds windows from the strategy specs — outside these the payout doesn't
@@ -155,8 +155,8 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
                reasons: list[str], caveats: list[str], sport: str,
                data_quality: float = 1.0) -> LongShot | None:
     """Price a modelled probability against the book and grade it."""
-    raw_prob = clamp(apply_temperature(model_prob, temperature_for(sport, market)),
-                     1e-4, 0.999)
+    _t, _b = correction_for(sport, market)
+    raw_prob = clamp(apply_temperature(model_prob, _t, _b), 1e-4, 0.999)
     implied, exact = _price(raw_prob, odds, under_odds)
     if not exact:
         caveats = caveats + ["Only one side quoted — the book's true price is estimated"]

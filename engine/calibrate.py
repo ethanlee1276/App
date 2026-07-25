@@ -23,6 +23,7 @@ Standard library only.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,44 +41,83 @@ _GRID = [round(0.40 + 0.02 * i, 2) for i in range(281)]
 GRID_MIN, GRID_MAX = _GRID[0], _GRID[-1]
 
 
-def apply_temperature(p: float, temperature: float) -> float:
-    """Rescale a probability in log-odds space. Guards the 0/1 endpoints."""
+def apply_temperature(p: float, temperature: float, intercept: float = 0.0) -> float:
+    """Rescale a probability in log-odds space.
+
+    ``logit(p') = logit(p) / temperature + intercept``
+
+    The temperature controls *spread* (how far predictions sit from 50%); the
+    intercept controls *bias* (which way they lean overall). Both are needed:
+    temperature alone has 50% as a fixed point, so a model whose predictions
+    cluster near 50% while outcomes run at 42% cannot be corrected by
+    temperature at any value — real data showed exactly that, with the fit
+    running to the search ceiling while the gap survived untouched.
+    """
     if temperature <= 0:
         return p
     p = min(max(p, 1e-6), 1.0 - 1e-6)
-    if temperature == 1.0:
+    if temperature == 1.0 and intercept == 0.0:
         return p
     odds = p / (1.0 - p)
     scaled = odds ** (1.0 / temperature)
+    if intercept:
+        scaled *= math.exp(intercept)
     return scaled / (1.0 + scaled)
 
 
-def brier(pairs: list[tuple[float, int]], temperature: float = 1.0) -> float:
+def brier(pairs: list[tuple[float, int]], temperature: float = 1.0,
+          intercept: float = 0.0) -> float:
     """Mean squared error of predicted probabilities against 0/1 outcomes."""
     if not pairs:
         return 0.0
-    return sum((apply_temperature(p, temperature) - o) ** 2 for p, o in pairs) / len(pairs)
+    return sum((apply_temperature(p, temperature, intercept) - o) ** 2
+               for p, o in pairs) / len(pairs)
+
+
+# Intercept search: how far the whole distribution is shifted in log-odds.
+# ±1.2 covers roughly a 25-point swing at the centre, far more than any
+# believable model bias.
+_INTERCEPTS = [round(-1.2 + 0.02 * i, 2) for i in range(121)]
 
 
 def fit_temperature(pairs: list[tuple[float, int]], min_samples: int = 200) -> float:
-    """Find the temperature minimising Brier over ``(probability, outcome)``.
+    """Backwards-compatible: the temperature alone, ignoring any bias."""
+    return fit_correction(pairs, min_samples=min_samples)[0]
 
-    Returns 1.0 (no correction) when there isn't enough data to fit
-    responsibly — a handful of games can't tell us the model is miscalibrated.
+
+def fit_correction(pairs: list[tuple[float, int]],
+                   min_samples: int = 200) -> tuple[float, float]:
+    """Find ``(temperature, intercept)`` minimising Brier.
+
+    Fitted by coordinate descent rather than a full 2-D sweep: the two
+    parameters are close to independent (one sets spread, the other the
+    centre), so alternating passes converge in a few rounds and stay cheap in
+    pure Python.
+
+    Returns ``(1.0, 0.0)`` — no correction — below the sample floor, since a
+    handful of games can't establish either effect.
     """
     if len(pairs) < min_samples:
-        return 1.0
-    best_t, best_score = 1.0, brier(pairs, 1.0)
-    for t in _GRID:
-        score = brier(pairs, t)
-        if score < best_score:
-            best_t, best_score = t, score
-    return best_t
+        return 1.0, 0.0
+
+    t, b = 1.0, 0.0
+    best = brier(pairs, t, b)
+    for _ in range(4):
+        for cand in _GRID:                       # spread
+            score = brier(pairs, cand, b)
+            if score < best:
+                best, t = score, cand
+        for cand in _INTERCEPTS:                 # bias
+            score = brier(pairs, t, cand)
+            if score < best:
+                best, b = score, cand
+    return t, b
 
 
 @dataclass
 class Calibration:
     temperature: float = 1.0
+    intercept: float = 0.0
     samples: int = 0
     brier_before: float = 0.0
     brier_after: float = 0.0
@@ -96,6 +136,17 @@ class Calibration:
         return self.temperature in (GRID_MIN, GRID_MAX)
 
     @property
+    def bias_note(self) -> str:
+        """The systematic lean, in probability points at the centre."""
+        if abs(self.intercept) < 0.02:
+            return ""
+        centre = apply_temperature(0.5, self.temperature, self.intercept)
+        pts = (centre - 0.5) * 100
+        lean = "optimistic" if pts < 0 else "pessimistic"
+        return (f"systematic {lean} bias of {abs(pts):.0f} points corrected "
+                f"(a stated 50% becomes {centre:.0%})")
+
+    @property
     def verdict(self) -> str:
         if self.temperature >= GRID_MAX:
             return ("model is SEVERELY over-confident — the fit hit the search "
@@ -108,7 +159,8 @@ class Calibration:
 
     def to_dict(self) -> dict:
         return {
-            "temperature": self.temperature, "samples": self.samples,
+            "temperature": self.temperature, "intercept": self.intercept,
+            "samples": self.samples,
             "brier_before": round(self.brier_before, 5),
             "brier_after": round(self.brier_after, 5),
             "market": self.market, "sport": self.sport,
@@ -118,10 +170,10 @@ class Calibration:
 def fit(pairs: list[tuple[float, int]], sport: str = "", market: str = "",
         min_samples: int = 200) -> Calibration:
     """Fit a calibration from settled predictions."""
-    t = fit_temperature(pairs, min_samples=min_samples)
+    t, b = fit_correction(pairs, min_samples=min_samples)
     return Calibration(
-        temperature=t, samples=len(pairs),
-        brier_before=brier(pairs, 1.0), brier_after=brier(pairs, t),
+        temperature=t, intercept=b, samples=len(pairs),
+        brier_before=brier(pairs, 1.0), brier_after=brier(pairs, t, b),
         sport=sport, market=market,
     )
 
@@ -135,8 +187,11 @@ def save(calibrations: dict[str, Calibration], path: Path | str = DEFAULT_PATH) 
     return path
 
 
-def load(path: Path | str = DEFAULT_PATH) -> dict[str, float]:
-    """Load ``{"<sport>:<market>": temperature}``. Missing file = no correction."""
+def load(path: Path | str = DEFAULT_PATH) -> dict:
+    """Load ``{"<sport>:<market>": (temperature, intercept)}``.
+
+    Missing file = no correction. Older files stored a temperature only; those
+    still load, with a zero intercept."""
     path = Path(path)
     if not path.is_file():
         return {}
@@ -144,11 +199,11 @@ def load(path: Path | str = DEFAULT_PATH) -> dict[str, float]:
         raw = json.loads(path.read_text())
     except (ValueError, OSError):
         return {}
-    out: dict[str, float] = {}
+    out: dict = {}
     for key, val in raw.items():
         if isinstance(val, dict) and "temperature" in val:
             try:
-                out[key] = float(val["temperature"])
+                out[key] = (float(val["temperature"]), float(val.get("intercept", 0.0)))
             except (TypeError, ValueError):
                 continue
     return out
@@ -157,12 +212,18 @@ def load(path: Path | str = DEFAULT_PATH) -> dict[str, float]:
 _cache: dict | None = None
 
 
-def temperature_for(sport: str, market: str, path: Path | str = DEFAULT_PATH) -> float:
-    """Look up a fitted temperature, falling back to 1.0 (no correction)."""
+def correction_for(sport: str, market: str,
+                   path: Path | str = DEFAULT_PATH) -> tuple[float, float]:
+    """Look up ``(temperature, intercept)``, defaulting to no correction."""
     global _cache
     if _cache is None:
         _cache = load(path)
-    return _cache.get(f"{sport}:{market}", _cache.get(sport, 1.0))
+    return _cache.get(f"{sport}:{market}", _cache.get(sport, (1.0, 0.0)))
+
+
+def temperature_for(sport: str, market: str, path: Path | str = DEFAULT_PATH) -> float:
+    """The temperature alone (kept for callers that don't need the bias)."""
+    return correction_for(sport, market, path)[0]
 
 
 def reset_cache() -> None:

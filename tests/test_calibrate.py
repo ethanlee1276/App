@@ -78,13 +78,41 @@ def test_save_load_roundtrip(tmp_path=None):
     from pathlib import Path
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "calibration.json"
-        save({"mlb:hits": Calibration(temperature=0.75, samples=900)}, p)
-        assert load(p) == {"mlb:hits": 0.75}
+        save({"mlb:hits": Calibration(temperature=0.75, intercept=-0.3, samples=900)}, p)
+        assert load(p) == {"mlb:hits": (0.75, -0.3)}
         # Unknown market falls back to no correction.
         reset_cache()
         assert temperature_for("mlb", "hits", p) == 0.75
         assert temperature_for("mlb", "nope", p) == 1.0
+        from engine.calibrate import correction_for
+        assert correction_for("mlb", "hits", p) == (0.75, -0.3)
+        assert correction_for("mlb", "nope", p) == (1.0, 0.0)
         reset_cache()
+
+
+def test_temperature_alone_cannot_fix_a_centre_bias():
+    """Temperature has 50% as a fixed point, so a model whose predictions sit
+    near 50% while outcomes run at 42% needs the intercept — this is the exact
+    failure real backtests showed, with T running to the search ceiling while
+    the gap survived."""
+    from engine.calibrate import apply_temperature, fit_correction
+
+    for T in (1.0, 2.5, 6.0, 50.0):
+        assert abs(apply_temperature(0.5, T) - 0.5) < 1e-9   # never moves
+
+    rnd = random.Random(7)
+    pairs = []
+    for _ in range(4000):
+        stated = min(max(rnd.gauss(0.52, 0.05), 0.05), 0.95)
+        pairs.append((stated, 1 if rnd.random() < 0.42 else 0))
+
+    t, b = fit_correction(pairs)
+    assert b < -0.1, "must find a negative (optimistic-bias) intercept"
+    centre = apply_temperature(0.5, t, b)
+    assert centre < 0.47, "a stated 50% should be corrected downward"
+    # And the two-parameter fit must beat temperature alone.
+    from engine.calibrate import brier
+    assert brier(pairs, t, b) < brier(pairs, 6.0, 0.0)
 
 
 def test_missing_file_means_no_correction():

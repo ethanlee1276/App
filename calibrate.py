@@ -77,11 +77,14 @@ def main() -> None:
             continue
         c, report = got
         print(f"  {label:16} {c.samples:>5} settled   "
-              f"Brier {c.brier_before:.4f} → {c.brier_after:.4f}   T = {c.temperature}")
+              f"Brier {c.brier_before:.4f} → {c.brier_after:.4f}   "
+              f"T = {c.temperature}  bias = {c.intercept:+.2f}")
         if c.samples < args.min_samples:
             print(f"  {'':16} (under {args.min_samples} samples — left uncorrected)")
         else:
             print(f"  {'':16} {c.verdict}")
+            if c.bias_note:
+                print(f"  {'':16} {c.bias_note}")
             if c.at_boundary:
                 print(f"  {'':16} ⚠️  fit hit the edge of the search range — treat "
                       f"this market's model as unreliable, not merely miscalibrated")

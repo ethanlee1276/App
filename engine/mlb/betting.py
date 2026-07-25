@@ -15,7 +15,7 @@ from ..betting import (
     Recommendation, _confidence_score, _grade, _kelly_stake,
     _trend_alignment, pick_side, temper_edge,
 )
-from ..calibrate import apply_temperature, temperature_for
+from ..calibrate import apply_temperature, correction_for
 from ..odds import expected_value
 from ..statmath import prob_over, clamp
 from .models import MLBProp, HOME_RUNS
@@ -67,7 +67,7 @@ def _poisson_over(line: float, lam: float) -> float:
 def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
                       allow_synthetic_line: bool = False) -> Recommendation:
     history = [g.value for g in prop.logs] if prop.logs else []
-    temp = temperature_for("mlb", prop.market)
+    temp, bias = correction_for("mlb", prop.market)
 
     def p_over_at(line: float) -> float:
         if prop.market == HOME_RUNS:
@@ -80,7 +80,7 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         # probability would still decide OVER vs UNDER, so a model known to be
         # over-confident would keep picking the same side and the correction
         # would only ever shave the edge it had already committed to.
-        return apply_temperature(raw, temp)
+        return apply_temperature(raw, temp, bias)
 
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
     hit, edge, credible = temper_edge(hit_raw, fair, best.book, allow_synthetic_line)
