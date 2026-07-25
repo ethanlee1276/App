@@ -210,12 +210,41 @@ def load(path: Path | str = DEFAULT_PATH) -> dict:
 
 
 _cache: dict | None = None
+_enabled = True
+
+
+def set_enabled(flag: bool) -> None:
+    """Turn the stored correction on or off process-wide.
+
+    Fitting **must** see the model's raw, uncorrected probabilities. If the
+    current calibration is still applied while new parameters are being fitted,
+    each run learns a correction for already-corrected input and then applies it
+    to raw input — the corrections compound and the numbers stop meaning
+    anything. Real runs showed this directly: a fit reporting "a stated 50%
+    becomes 44%" was followed by a backtest whose predictions rose to 53%.
+    """
+    global _enabled
+    _enabled = flag
+
+
+class disabled:
+    """Context manager: evaluate with calibration switched off (for fitting)."""
+
+    def __enter__(self):
+        set_enabled(False)
+        return self
+
+    def __exit__(self, *exc):
+        set_enabled(True)
+        return False
 
 
 def correction_for(sport: str, market: str,
                    path: Path | str = DEFAULT_PATH) -> tuple[float, float]:
     """Look up ``(temperature, intercept)``, defaulting to no correction."""
     global _cache
+    if not _enabled:
+        return (1.0, 0.0)
     if _cache is None:
         _cache = load(path)
     return _cache.get(f"{sport}:{market}", _cache.get(sport, (1.0, 0.0)))

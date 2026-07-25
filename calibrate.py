@@ -35,7 +35,11 @@ def fit_market(conn, market: str, min_history: int, min_samples: int):
     entries = _db.entries_for_market(conn, "mlb", market, min_games=min_history + 2)
     if not entries:
         return None, "no player history in the DB for this market"
-    report = backtest_from_logs(entries, market, min_history=min_history)
+    # Fit on the model's RAW probabilities. With the existing calibration still
+    # applied, each run would learn a correction for already-corrected input and
+    # then apply it to raw input, compounding every time it's re-run.
+    with cal.disabled():
+        report = backtest_from_logs(entries, market, min_history=min_history)
     if not report.pairs:
         return None, "no settled predictions (need more games per player)"
     c = cal.fit(report.pairs, sport="mlb", market=market, min_samples=min_samples)

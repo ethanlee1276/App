@@ -122,6 +122,60 @@ def test_missing_file_means_no_correction():
     reset_cache()
 
 
+def test_fitting_is_idempotent_when_calibration_is_disabled():
+    """Re-fitting must converge, not compound.
+
+    The fitter reads probabilities produced by the model, so if the stored
+    correction is still applied while fitting, each run learns a correction for
+    already-corrected input and then applies it to raw input. Real runs showed
+    the damage: a fit reporting "a stated 50% becomes 44%" was followed by a
+    backtest whose predictions had risen to 53% and whose bet count went from
+    68 to 779.
+    """
+    import tempfile
+    from pathlib import Path as _P
+    from engine import calibrate as cal
+    from engine.mlb.backtest import backtest_from_logs
+
+    rnd = random.Random(4)
+    pop = [0] * 40 + [1] * 30 + [2] * 15 + [3] * 8 + [4] * 7
+    entries = [{"name": f"P{p}",
+                "values": [float(rnd.choice(pop)) for _ in range(50)],
+                "dates": [f"2026-06-{d + 1:02d}" for d in range(50)]}
+               for p in range(12)]
+
+    with tempfile.TemporaryDirectory() as d:
+        path = _P(d) / "calibration.json"
+        results = []
+        for _ in range(3):
+            cal.reset_cache()
+            with cal.disabled():                 # fit on RAW probabilities
+                rep = backtest_from_logs(entries, "total_bases", min_history=10)
+            c = cal.fit(rep.pairs, sport="mlb", market="total_bases")
+            cal.save({"mlb:total_bases": c}, path)
+            results.append((c.temperature, c.intercept))
+        cal.reset_cache()
+
+    assert results[0] == results[1] == results[2], (
+        f"refitting must converge, got {results}")
+
+
+def test_disabled_context_suppresses_the_correction():
+    import tempfile
+    from pathlib import Path as _P
+    from engine import calibrate as cal
+
+    with tempfile.TemporaryDirectory() as d:
+        path = _P(d) / "calibration.json"
+        cal.save({"mlb:hits": Calibration(temperature=3.0, intercept=-0.4)}, path)
+        cal.reset_cache()
+        assert cal.correction_for("mlb", "hits", path) == (3.0, -0.4)
+        with cal.disabled():
+            assert cal.correction_for("mlb", "hits", path) == (1.0, 0.0)
+        assert cal.correction_for("mlb", "hits", path) == (3.0, -0.4)
+        cal.reset_cache()
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
