@@ -176,6 +176,35 @@ def test_moneyline_picks_journal_and_settle_from_scores():
     assert ledger.performance(conn)["net_units"] > 0
 
 
+def test_total_picks_journal_and_settle_from_scores():
+    """Sharp-anchor totals journal by matchup key and settle on the combined
+    final score, side-aware."""
+    from engine import db as hist_db
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    result = {"sport": "mlb", "date": "2026-07-24", "recommendations": [],
+              "game_bets": [
+                  {"bet_type": "total", "recommended": True, "side": "Under",
+                   "line": 8.5, "odds": 100, "matchup": "BOS @ NYY",
+                   "win_prob": 0.55, "edge": 0.04, "confidence": 5.5,
+                   "grade": "Play", "stake_units": 1.0},
+              ]}
+    assert ledger.log_recommendations(conn, result) == 1
+
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_games(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-24",
+         "game_id": "BOS@NYY", "home": "NYY", "away": "BOS",
+         "home_score": 5, "away_score": 3, "spread": 0.0, "total": None,
+         "roof": "open", "surface": "grass", "temp": None, "wind": None,
+         "extra": "yankee"}])
+    assert ledger.settle_from_history(conn, hist, sport="mlb") == 1
+    b = conn.execute("SELECT * FROM bets WHERE market='total'").fetchone()
+    # 5+3 = 8 runs is UNDER 8.5 -> the Under won at +100.
+    assert b["status"] == "won" and b["actual"] == 8.0
+    assert ledger.performance(conn)["net_units"] == 1.0
+
+
 def test_summary_renders():
     conn = _conn()
     ledger.log_recommendations(conn, _result())

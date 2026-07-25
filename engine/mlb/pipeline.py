@@ -15,7 +15,8 @@ from ..gamebets import (
     mlb_win_prob, price_moneyline, price_moneyline_sharp, moneyline_to_dict,
     LEAGUE_AVG_XERA,
     project_total, project_team_points, game_margin,
-    price_total, price_team_total, price_spread,
+    price_total, price_total_sharp, price_team_total, price_spread,
+    price_spread_sharp,
 )
 from .data_loader import load_mlb_slate, MLBSlate
 from .models import MARKET_LABELS
@@ -79,6 +80,19 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
 MLB_ML_RECOMMENDATIONS = False
 
 
+def _info_only(d: dict, why: str) -> dict:
+    """Demote a game-bet card to market information: shown, never recommended."""
+    d["recommended"] = False
+    d["grade"] = "Pass"
+    d["stake_units"] = 0.0
+    d.setdefault("warnings", []).append(why)
+    return d
+
+
+_NO_ANCHOR = ("No sharp-anchor value at current prices, and the model alone "
+              "hasn't beaten the close — info only")
+
+
 def _game_bets(games, config: RuleConfig) -> list[dict]:
     """Price moneyline, total (O/U) and run line from team ratings + starters."""
     out = []
@@ -109,34 +123,57 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                     price_moneyline(g.home, g.away, wp_home,
                                     g.home_ml, g.away_ml, ctx)), g, config)
                 if not MLB_ML_RECOMMENDATIONS:
-                    ml["recommended"] = False
-                    ml["grade"] = "Pass"
-                    ml["stake_units"] = 0.0
-                    ml.setdefault("warnings", []).append(
-                        "No sharp-anchor value at current prices, and the "
-                        "model alone hasn't beaten the close — info only")
+                    _info_only(ml, _NO_ANCHOR)
                 out.append(ml)
         if has_rating:
             pt = project_total("mlb", g.home_off, g.home_def, g.away_off, g.away_def)
             tctx = [f"Scoring form: {g.home} off {g.home_off:+.2f} / def {g.home_def:+.2f}, "
                     f"{g.away} off {g.away_off:+.2f} / def {g.away_def:+.2f} (runs/game vs avg)"]
-            total = price_total("mlb", g.home, g.away, pt, g.total,
-                                g.total_over_odds, g.total_under_odds, "runs", tctx)
-            out.append(_finish_bet(total, g, config))
-            # Team totals — baseball scoring is balanced, so split the total evenly.
+            # Totals: sharp-anchored when the sharp book quotes the SAME line;
+            # otherwise the model card renders as information only — same
+            # policy as moneylines, for the same measured reason.
+            sharp_tot = None
+            if (g.sharp_total and g.sharp_total == g.total
+                    and g.sharp_total_over_odds and g.sharp_total_under_odds):
+                sharp_tot = price_total_sharp(
+                    g.home, g.away, g.total,
+                    g.total_over_odds, g.total_under_odds,
+                    g.sharp_total_over_odds, g.sharp_total_under_odds,
+                    units="runs", context=tctx)
+            if sharp_tot is not None:
+                out.append(_finish_bet(sharp_tot, g, config))
+            else:
+                total = price_total("mlb", g.home, g.away, pt, g.total,
+                                    g.total_over_odds, g.total_under_odds, "runs", tctx)
+                out.append(_info_only(_finish_bet(total, g, config), _NO_ANCHOR))
+            # Team totals — no sharp reference exists for them, so they are
+            # always informational.
             ph = project_team_points("mlb", g.home_off, g.away_def)
             pa = project_team_points("mlb", g.away_off, g.home_def)
             tl = _half(g.total / 2)
-            out.append(_finish_bet(price_team_total("mlb", g.home, g.home, g.away, ph, tl,
-                                                    units="runs"), g, config))
-            out.append(_finish_bet(price_team_total("mlb", g.away, g.home, g.away, pa, tl,
-                                                    units="runs"), g, config))
+            out.append(_info_only(_finish_bet(
+                price_team_total("mlb", g.home, g.home, g.away, ph, tl,
+                                 units="runs"), g, config), _NO_ANCHOR))
+            out.append(_info_only(_finish_bet(
+                price_team_total("mlb", g.away, g.home, g.away, pa, tl,
+                                 units="runs"), g, config), _NO_ANCHOR))
             if g.spread:
                 margin = game_margin("mlb", g.home_rating, g.away_rating)
                 sctx = [f"Projected run margin {margin:+.2f} (home)"]
-                spread = price_spread("mlb", g.home, g.away, margin, g.spread,
-                                      g.spread_home_odds, g.spread_away_odds, sctx)
-                out.append(_finish_bet(spread, g, config))
+                sharp_sp = None
+                if (g.sharp_spread and g.sharp_spread == g.spread
+                        and g.sharp_spread_home_odds and g.sharp_spread_away_odds):
+                    sharp_sp = price_spread_sharp(
+                        g.home, g.away, g.spread,
+                        g.spread_home_odds, g.spread_away_odds,
+                        g.sharp_spread_home_odds, g.sharp_spread_away_odds,
+                        context=sctx)
+                if sharp_sp is not None:
+                    out.append(_finish_bet(sharp_sp, g, config))
+                else:
+                    spread = price_spread("mlb", g.home, g.away, margin, g.spread,
+                                          g.spread_home_odds, g.spread_away_odds, sctx)
+                    out.append(_info_only(_finish_bet(spread, g, config), _NO_ANCHOR))
     out.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)
     return out
 

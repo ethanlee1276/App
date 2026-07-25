@@ -387,12 +387,19 @@ def _modal_line(points: list[float]):
     return max(counts, key=lambda k: (counts[k], k))
 
 
-def parse_event_totals(event_json: dict):
+def parse_event_totals(event_json: dict, only_books: set | None = None):
     """Return ``(line, best_over_odds, best_under_odds)`` for the game total,
-    or ``None``. Uses the consensus line and the best price on each side."""
+    or ``None``. Uses the consensus line and the best price on each side.
+
+    Sharp reference books are excluded from the bettable aggregate;
+    ``only_books`` (API keys) restricts to those books instead — that's how
+    the sharp book's own pair is read out as the fair-value anchor."""
     overs: list[tuple] = []
     unders: list[tuple] = []
     for bm in event_json.get("bookmakers", []):
+        bk = bm.get("key", "")
+        if (bk in SHARP_BOOKS) if only_books is None else (bk not in only_books):
+            continue
         for mkt in bm.get("markets", []):
             if mkt.get("key") != "totals":
                 continue
@@ -410,12 +417,17 @@ def parse_event_totals(event_json: dict):
     return line, over_odds, under_odds
 
 
-def parse_event_spreads(event_json: dict, team_map: dict, home: str, away: str):
+def parse_event_spreads(event_json: dict, team_map: dict, home: str, away: str,
+                        only_books: set | None = None):
     """Return ``(home_spread, home_odds, away_odds)`` for the spread / run line,
-    or ``None``. The home team's point is the stored spread."""
+    or ``None``. The home team's point is the stored spread. Sharp books are
+    excluded unless ``only_books`` selects them explicitly."""
     home_pts: list[tuple] = []
     away_pts: list[tuple] = []
     for bm in event_json.get("bookmakers", []):
+        bk = bm.get("key", "")
+        if (bk in SHARP_BOOKS) if only_books is None else (bk not in only_books):
+            continue
         for mkt in bm.get("markets", []):
             if mkt.get("key") != "spreads":
                 continue
@@ -534,6 +546,15 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             sp = parse_event_spreads(payload, cfg["teams"], home, away)
             if sp:
                 game.spread, game.spread_home_odds, game.spread_away_odds = sp
+            stot = parse_event_totals(payload, only_books=SHARP_BOOKS)
+            if stot:
+                game.sharp_total, game.sharp_total_over_odds, \
+                    game.sharp_total_under_odds = stot
+            ssp = parse_event_spreads(payload, cfg["teams"], home, away,
+                                      only_books=SHARP_BOOKS)
+            if ssp:
+                game.sharp_spread, game.sharp_spread_home_odds, \
+                    game.sharp_spread_away_odds = ssp
 
     for prop in slate.props:
         lines = index.get((normalize_name(prop.player), prop.market))

@@ -104,6 +104,85 @@ SHARP_MIN_EV = 0.02
 SHARP_MAX_EV = 0.15
 
 
+def sharp_anchor_two_way(sharp_a: int, sharp_b: int,
+                         soft_a: int, soft_b: int):
+    """Which side of a two-way market, if either, is +EV vs the sharp de-vig?
+
+    Returns ``(index, fair_prob, ev)`` — index 0 = first side — or ``None``
+    when no side clears ``SHARP_MIN_EV`` or the gap exceeds the broken-price
+    cap."""
+    fair_a, fair_b = devig_two_way(sharp_a, sharp_b)
+    best = None
+    for i, (fair, soft) in enumerate(((fair_a, soft_a), (fair_b, soft_b))):
+        ev = fair * american_to_decimal(soft) - 1.0
+        if SHARP_MIN_EV <= ev <= SHARP_MAX_EV and (best is None or ev > best[2]):
+            best = (i, fair, ev)
+    return best
+
+
+def _sharpify(card: dict, fair: float, soft_odds: int, ev: float,
+              pick_desc: str) -> dict:
+    """Rewrite a game-bet card so its numbers come from the sharp anchor:
+    probability = sharp fair, edge = fair minus the soft implied, grade by EV."""
+    implied = american_to_prob(soft_odds)
+    card["win_prob"] = round(fair, 4)
+    card["fair_prob"] = round(implied, 4)
+    card["edge"] = round(fair - implied, 4)
+    card["ev_per_unit"] = round(ev, 4)
+    card["grade"] = ("Strong Play" if ev >= 0.06 else
+                     "Play" if ev >= 0.035 else "Lean")
+    card["stake_units"] = round(_kelly_stake(fair, soft_odds), 2)
+    card["reasons"].insert(0, f"Sharp anchor: {pick_desc} implies "
+                              f"{implied:.0%} but the sharp book's fair is "
+                              f"{fair:.0%} — {ev:+.1%} EV on the price alone")
+    return card
+
+
+def price_total_sharp(home: str, away: str, line: float,
+                      over_odds: int, under_odds: int,
+                      sharp_over: int, sharp_under: int,
+                      units: str = "points",
+                      context: list[str] | None = None) -> dict | None:
+    """Game-total pick from price disagreement with the sharp book. Both
+    books must be quoting the SAME line for the comparison to mean anything —
+    the caller checks that."""
+    pick = sharp_anchor_two_way(sharp_over, sharp_under, over_odds, under_odds)
+    if pick is None:
+        return None
+    i, fair, ev = pick
+    side = "Over" if i == 0 else "Under"
+    odds = over_odds if i == 0 else under_odds
+    card = _game_bet("total", "Total", home, away, fair,
+                     american_to_prob(odds), fair - american_to_prob(odds),
+                     odds, pick_label=f"{side} {line:g}", side=side, line=line,
+                     reasons=list(context or []),
+                     headline=f"{side} {line:g} {units}")
+    return _sharpify(card, fair, odds, ev, f"{side} {line:g}")
+
+
+def price_spread_sharp(home: str, away: str, home_spread: float,
+                       home_odds: int, away_odds: int,
+                       sharp_home_odds: int, sharp_away_odds: int,
+                       context: list[str] | None = None) -> dict | None:
+    """Spread / run-line pick from price disagreement with the sharp book,
+    at a matching line (caller-checked)."""
+    pick = sharp_anchor_two_way(sharp_home_odds, sharp_away_odds,
+                                home_odds, away_odds)
+    if pick is None:
+        return None
+    i, fair, ev = pick
+    team = home if i == 0 else away
+    line = home_spread if i == 0 else -home_spread
+    odds = home_odds if i == 0 else away_odds
+    label = f"{team} {line:+g}"
+    card = _game_bet("spread", "Run Line" if abs(home_spread) == 1.5 else "Spread",
+                     home, away, fair, american_to_prob(odds),
+                     fair - american_to_prob(odds), odds,
+                     pick_label=label, team=team, line=line,
+                     reasons=list(context or []), headline=label)
+    return _sharpify(card, fair, odds, ev, label)
+
+
 def price_moneyline_sharp(home: str, away: str,
                           sharp_home: int, sharp_away: int,
                           home_ml: int, away_ml: int,

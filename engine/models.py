@@ -190,6 +190,12 @@ class Game:
     # fair-value anchor, never a price to take.
     sharp_home_ml: int = 0
     sharp_away_ml: int = 0
+    sharp_total: float = 0.0
+    sharp_total_over_odds: int = 0
+    sharp_total_under_odds: int = 0
+    sharp_spread: float = 0.0
+    sharp_spread_home_odds: int = 0
+    sharp_spread_away_odds: int = 0
     home_rating: float = 0.0
     away_rating: float = 0.0
     # Offense/defense split (points scored / allowed vs league baseline) for the

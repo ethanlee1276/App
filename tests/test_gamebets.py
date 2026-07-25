@@ -159,6 +159,31 @@ def test_price_moneyline_sharp_passes_and_filters():
     assert price_moneyline_sharp("KC", "BUF", -1200, 750, 105, -120) is None
 
 
+def test_price_total_sharp_backs_the_underpriced_side():
+    """Sharp quotes the total at -105/-115 (under is the fair-favored side);
+    a soft book still hangs +100 on the under -> ~+4% EV -> Play/Lean."""
+    from engine.gamebets import price_total_sharp
+    card = price_total_sharp("NYY", "BOS", 8.5, -120, 100, -105, -115)
+    assert card is not None
+    assert card["bet_type"] == "total" and card["side"] == "Under"
+    assert card["line"] == 8.5 and card["odds"] == 100
+    assert 0.02 <= card["ev_per_unit"] <= 0.15
+    assert card["grade"] in ("Lean", "Play", "Strong Play")
+    assert "Sharp anchor" in card["reasons"][0]
+    # No disagreement -> no pick.
+    assert price_total_sharp("NYY", "BOS", 8.5, -110, -110, -110, -110) is None
+
+
+def test_price_spread_sharp_backs_the_underpriced_team():
+    from engine.gamebets import price_spread_sharp
+    # Sharp run line: home -1.5 at -110/-110; soft pays +125 on the away +1.5.
+    card = price_spread_sharp("NYY", "BOS", -1.5, -140, 125, -110, -110)
+    assert card is not None
+    assert card["team"] == "BOS" and card["line"] == 1.5 and card["odds"] == 125
+    assert card["market_label"] == "Run Line"
+    assert 0.02 <= card["ev_per_unit"] <= 0.15
+
+
 # --- pipeline integration --------------------------------------------------
 
 def test_pipeline_emits_game_bets():
@@ -173,8 +198,12 @@ def test_pipeline_emits_game_bets():
         # All four game-bet types are produced.
         types = {b["bet_type"] for b in result["game_bets"]}
         assert types == {"moneyline", "total", "team_total", "spread"}
-        # The sample slates are tuned so at least one bet is recommended.
-        assert any(b["recommended"] for b in result["game_bets"])
+    # NFL still recommends from its (unmeasured) model; MLB game bets only
+    # recommend on sharp-anchor value, and the sample slate carries no sharp
+    # prices — so every MLB game bet must be information only.
+    assert any(b["recommended"] for b in run_slate(NFL_SLATE)["game_bets"])
+    assert not any(b["recommended"]
+                   for b in run_mlb_slate(MLB_SLATE)["game_bets"])
 
 
 def test_mlb_moneylines_are_informational_only():
