@@ -157,6 +157,20 @@ def test_pipeline_emits_game_bets():
         assert any(b["recommended"] for b in result["game_bets"])
 
 
+def test_mlb_moneylines_are_informational_only():
+    """The walk-forward vs real closes measured the MLB moneyline model at
+    -12.4% ROI with a Brier worse than the base rate — so its picks must
+    render as market info, never as recommendations, until a model beats the
+    close in moneyline_backtest.py."""
+    result = run_mlb_slate(MLB_SLATE)
+    mls = [b for b in result["game_bets"] if b["bet_type"] == "moneyline"]
+    assert mls, "expected moneyline cards to still be shown"
+    for b in mls:
+        assert b["recommended"] is False
+        assert b["grade"] == "Pass" and b["stake_units"] == 0.0
+        assert any("backtest" in w.lower() for w in b.get("warnings", []))
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

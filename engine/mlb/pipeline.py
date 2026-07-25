@@ -66,6 +66,15 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     return d
 
 
+# Measured against real closing moneylines (walk-forward over the harvested
+# June–July closes): the ratings-only game model lost -12.4% over 179 bets
+# with a Brier score worse than the home-field base rate — its disagreements
+# with the book are its own error, not edge. Until a version of the model
+# demonstrably beats the close in moneyline_backtest.py, MLB moneyline cards
+# are informational only and never recommended.
+MLB_ML_RECOMMENDATIONS = False
+
+
 def _game_bets(games, config: RuleConfig) -> list[dict]:
     """Price moneyline, total (O/U) and run line from team ratings + starters."""
     out = []
@@ -83,9 +92,17 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
             if home_p and away_p:
                 ctx.append(f"Starters: {home_p.name} ({home_xera:.2f} xERA) vs "
                            f"{away_p.name} ({away_xera:.2f} xERA)")
-            ml = moneyline_to_dict(price_moneyline(g.home, g.away, wp_home,
-                                                   g.home_ml, g.away_ml, ctx))
-            out.append(_finish_bet(ml, g, config))
+            ml = _finish_bet(moneyline_to_dict(
+                price_moneyline(g.home, g.away, wp_home,
+                                g.home_ml, g.away_ml, ctx)), g, config)
+            if not MLB_ML_RECOMMENDATIONS:
+                ml["recommended"] = False
+                ml["grade"] = "Pass"
+                ml["stake_units"] = 0.0
+                ml.setdefault("warnings", []).append(
+                    "Moneyline model hasn't beaten closing prices in "
+                    "backtesting — shown for information only")
+            out.append(ml)
         if has_rating:
             pt = project_total("mlb", g.home_off, g.home_def, g.away_off, g.away_def)
             tctx = [f"Scoring form: {g.home} off {g.home_off:+.2f} / def {g.home_def:+.2f}, "
