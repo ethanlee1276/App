@@ -536,7 +536,18 @@ function renderRecommended() {
   const recs = state.data.recommendations.map((r) => ({ ...r, _ok: passesFilters(r) }));
   const visible = recs.filter((r) => (state.showAll ? true : r._ok));
   if (!visible.length) {
-    host.innerHTML = `<p class="loading">No props clear the current thresholds. Loosen the sliders or enable “show non-recommended”.</p>`;
+    // Say WHY the board is empty. "Loosen the sliders" is bad advice when the
+    // real reason is that no prop has a real book price yet — picks are never
+    // made against placeholder lines, so the board fills when books post
+    // prices (and lineups) closer to game time.
+    const noMarket = recs.length && recs.every((r) => r.has_market === false);
+    host.innerHTML = noMarket
+      ? `<p class="loading">Waiting on real sportsbook prices — books post MLB
+         player props (and lineups land) closer to game time. Picks are never
+         recommended against placeholder lines, so check back this afternoon;
+         the board fills automatically as real prices arrive.</p>`
+      : `<p class="loading">No props clear the current thresholds. Loosen the
+         sliders or enable “show non-recommended”.</p>`;
     return;
   }
   host.innerHTML = visible.map(cardHTML).join("");
