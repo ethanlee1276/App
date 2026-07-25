@@ -42,26 +42,59 @@ def test_record_quota_tracks_the_real_account():
 
 
 def test_daily_allowance_spreads_what_is_left():
-    st = BudgetState(remaining=500)
+    st = BudgetState(remaining=5000)
     per_day = daily_allowance(st)
-    # Whatever the date, a month's worth is rationed, never spent at once.
-    assert 0 < per_day <= 500 - RESERVE
-    assert per_day * days_left_in_month() <= 500
+    # Whatever the date, a month's worth is rationed, never spent at once —
+    # and live pricing only ever plans to spend its LIVE_SHARE of the balance.
+    assert 0 < per_day <= (5000 - RESERVE)
+    assert per_day * days_left_in_month() <= (5000 - RESERVE) * 0.5 + 50
 
 
 def test_refresh_gap_widens_as_quota_shrinks():
     """The scheduler must slow down as the allowance runs down."""
-    rich = min_seconds_between(16, BudgetState(remaining=500))
-    poor = min_seconds_between(16, BudgetState(remaining=120))
-    assert poor > rich >= 60
+    from engine.oddsbudget import MIN_REFRESH_GAP
+    rich = min_seconds_between(16, BudgetState(remaining=20000))
+    poor = min_seconds_between(16, BudgetState(remaining=3000))
+    assert poor > rich >= MIN_REFRESH_GAP
 
 
 def test_cheaper_refresh_allows_more_frequent_polling():
     """Re-pricing only live/soon games costs less, so it can run more often —
     the whole point of the active-game filter."""
-    whole_slate = min_seconds_between(16, BudgetState(remaining=500))
-    live_only = min_seconds_between(4, BudgetState(remaining=500))
+    whole_slate = min_seconds_between(16, BudgetState(remaining=20000))
+    live_only = min_seconds_between(4, BudgetState(remaining=20000))
     assert live_only < whole_slate
+
+
+def test_costs_are_denominated_in_credits_not_requests():
+    """The API bills per market per region: a 16-event refresh costs
+    16 x CREDITS_PER_EVENT credits, not 16. Counting requests was the 4-8x
+    invisible overspend that burned a 20k plan in a day."""
+    from engine.oddsbudget import CREDITS_PER_EVENT, MIN_REFRESH_GAP
+    assert CREDITS_PER_EVENT >= 4
+    # With ~1.4k/day allowed at 20k remaining, a 128-credit refresh must be
+    # spaced in tens of minutes, not seconds.
+    gap = min_seconds_between(16, BudgetState(remaining=20000))
+    assert gap >= MIN_REFRESH_GAP
+
+
+def test_sparse_mode_still_seeds_the_cache_when_broke():
+    """~1k credits left: the daily allowance can't cover a single refresh,
+    but the board still needs ONE paid pull to cache today's real prices —
+    sparse mode allows it every SPARSE_INTERVAL, never below the reserve."""
+    from engine.oddsbudget import SPARSE_INTERVAL
+    p = _tmp()
+    save(BudgetState(remaining=1000, last_refresh_ts=1_000_000.0), p)
+    # Too soon -> held, with the cached-prices reassurance.
+    ok, reason = should_refresh(16, now=1_000_000.0 + 3600, path=p)
+    assert ok is False and "cached" in reason.lower()
+    # After the sparse interval -> one pull allowed.
+    ok, reason = should_refresh(16, now=1_000_000.0 + SPARSE_INTERVAL + 1, path=p)
+    assert ok is True and "sparse" in reason.lower()
+    # But never when it would eat into the reserve itself.
+    save(BudgetState(remaining=RESERVE + 10, last_refresh_ts=0.0), p)
+    ok, _ = should_refresh(16, now=SPARSE_INTERVAL * 10.0, path=p)
+    assert ok is False or "prob" in _.lower()
 
 
 def test_exhausted_quota_stops_odds_but_not_the_app():
@@ -77,7 +110,7 @@ def test_exhausted_quota_stops_odds_but_not_the_app():
 
 def test_refresh_is_rate_limited_between_calls():
     p = _tmp()
-    save(BudgetState(remaining=500), p)
+    save(BudgetState(remaining=20000), p)
     ok, _ = should_refresh(16, now=1_000_000.0, path=p)
     assert ok is True                       # nothing spent yet -> allowed
     mark_refreshed(1_000_000.0, p)

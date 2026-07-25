@@ -34,10 +34,30 @@ from pathlib import Path
 
 STATE_PATH = Path(__file__).parent.parent / "data" / "cache" / "odds_budget.json"
 
-# Never spend below this many requests — leaves room to price a slate manually.
-RESERVE = 25
+# Never spend below this many CREDITS — leaves real room for manual pricing
+# and the end of the month. (Was 25 back when a refresh cost a handful of
+# credits; a full-slate pull bills ~60-120, so 25 was no reserve at all.)
+RESERVE = 500
 # Assume a free plan until the API tells us otherwise.
 ASSUMED_MONTHLY = 500
+
+# The API bills per MARKET per region, not per request: one event-odds call
+# asking for ~7 markets costs ~7 credits, not 1. The pacer once counted
+# "requests" while the meter counted credits — an invisible 4-8x overspend
+# that burned 19k of a 20k plan in a day. Every affordability estimate now
+# multiplies the event count by this.
+CREDITS_PER_EVENT = 8
+# Live pricing may plan to spend only this share of what's left this month;
+# the rest stays for harvests, probes, and just-in-case.
+LIVE_SHARE = 0.5
+# Hard floor between paid refreshes no matter how much quota remains — with
+# cached prices persisting on the board, more frequent re-pricing buys
+# almost nothing.
+MIN_REFRESH_GAP = 15 * 60
+# Starvation mode: when the daily allowance can't cover a single refresh but
+# the month's balance still can, allow one paid pull this often to seed the
+# cache with the day's real prices.
+SPARSE_INTERVAL = 12 * 3600
 
 
 @dataclass
@@ -107,9 +127,12 @@ def days_left_in_month(today: _dt.date | None = None) -> int:
 
 def daily_allowance(state: BudgetState | None = None,
                     today: _dt.date | None = None) -> int:
-    """How many requests we can afford to spend today."""
+    """How many CREDITS live pricing may spend today.
+
+    Only ``LIVE_SHARE`` of what's left (after the reserve) is on the table —
+    "consume everything by month-end" is how a fresh plan dies in a day."""
     state = state or load()
-    spendable = max(0, state.remaining - RESERVE)
+    spendable = max(0, state.remaining - RESERVE) * LIVE_SHARE
     return int(spendable / days_left_in_month(today))
 
 
@@ -119,17 +142,20 @@ def min_seconds_between(requests_per_refresh: int,
                         active_hours: float = 14.0) -> float:
     """Smallest safe gap between odds refreshes, in seconds.
 
-    The daily allowance is spread over the hours a slate is actually live rather
-    than the full 24, so the budget isn't wasted refreshing overnight.
+    ``requests_per_refresh`` is an EVENT count (games + 1); the credit cost is
+    that times ``CREDITS_PER_EVENT``, because the meter bills per market.
+    The daily allowance is spread over the hours a slate is actually live
+    rather than the full 24, and the gap never drops below
+    ``MIN_REFRESH_GAP`` — cached prices carry the board between pulls.
     Returns ``float('inf')`` when there is nothing left to spend.
     """
     state = state or load()
-    per_refresh = max(1, int(requests_per_refresh))
+    per_refresh = max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
     allowance = daily_allowance(state, today)
     if allowance < per_refresh:
         return float("inf")
     refreshes_today = allowance / per_refresh
-    return max(60.0, (active_hours * 3600.0) / refreshes_today)
+    return max(MIN_REFRESH_GAP, (active_hours * 3600.0) / refreshes_today)
 
 
 # When the budget believes it's exhausted, still allow one probe this often.
@@ -150,13 +176,23 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
         return False, (f"odds quota nearly exhausted ({state.remaining} left) — "
                        f"holding a reserve; scores still update free")
     gap = min_seconds_between(requests_per_refresh, state, **kw)
-    if gap == float("inf"):
-        return False, f"odds budget spent for today ({state.remaining} left this month)"
     waited = now - state.last_refresh_ts
+    if gap == float("inf"):
+        # Starvation mode: the daily allowance can't cover even one refresh,
+        # but the month's spendable balance can. Allow a sparse pull so the
+        # cache still gets seeded with today's real prices — cached re-reads
+        # carry the board the rest of the day for free.
+        per_refresh = max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
+        if state.remaining - RESERVE >= per_refresh and waited >= SPARSE_INTERVAL:
+            return True, (f"quota very low ({state.remaining} credits) — sparse "
+                          f"mode: one paid pull per {SPARSE_INTERVAL // 3600}h, "
+                          f"cached prices in between")
+        return False, (f"odds budget spent for today ({state.remaining} credits "
+                       f"left this month; cached prices keep the board filled)")
     if waited < gap:
         return False, (f"next odds refresh in {int(gap - waited)}s "
-                       f"(budgeting {state.remaining} requests to month end)")
-    return True, f"refreshing odds ({state.remaining} requests left this month)"
+                       f"(budgeting {state.remaining} credits to month end)")
+    return True, f"refreshing odds ({state.remaining} credits left this month)"
 
 
 def reset(path: Path | str = STATE_PATH) -> BudgetState:
