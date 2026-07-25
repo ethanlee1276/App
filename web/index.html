@@ -23,6 +23,7 @@
     <nav class="nav" id="nav">
       <div class="nav-indicator" id="nav-indicator"></div>
       <button class="nav-btn active" data-view="recommended">🎯 Recommended</button>
+      <button class="nav-btn" data-view="edge">📈 Edge Board</button>
       <button class="nav-btn" data-view="longshots" id="longshots-tab">🎰 Long Shots</button>
       <button class="nav-btn" data-view="trending">🔥 Trending</button>
       <button class="nav-btn" data-view="players">🔍 Players</button>
@@ -85,6 +86,16 @@
       </div>
 
       <div class="cards" id="cards"><p class="loading">Loading model…</p></div>
+    </section>
+
+    <!-- Edge Board -->
+    <section class="view" id="view-edge">
+      <div class="section-title">📈 Edge Board
+        <span class="sub">— every bet priced better than the book's number, sorted by expected value.
+        Wider net than Recommended: smaller edges and longer odds included, honestly labeled.</span>
+      </div>
+      <div class="longshot-note" id="edge-note"></div>
+      <div id="edge-board"></div>
     </section>
 
     <!-- Long Shots -->

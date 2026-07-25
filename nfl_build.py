@@ -100,11 +100,16 @@ def main() -> None:
             print(f"\n⚠️  Depth charts unavailable — keeping report-derived roles.\n   {exc}")
 
     real_odds = False
+    odds_status = {"checked": bool(args.odds), "matched": 0, "events": 0,
+                   "moneylines": 0, "error": None, "quota_remaining": None}
     if args.odds:
         try:
             books = args.books.split(",") if args.books else None
             res = oddsapi.apply_odds_to_slate(slate, books=books, only_active=args.active_odds)
             real_odds = True
+            odds_status.update(matched=res.matched, events=res.events_used,
+                               moneylines=res.moneylines,
+                               quota_remaining=res.quota.remaining)
             print(f"\nOdds API: matched {res.matched} props across {res.events_used} games "
                   f"(quota remaining {res.quota.remaining}).")
             if res.moneylines:
@@ -113,6 +118,7 @@ def main() -> None:
                 print(f"  No line found for {len(res.unmatched)}: "
                       f"{', '.join(res.unmatched[:6])}{' …' if len(res.unmatched) > 6 else ''}")
         except oddsapi.OddsAPIError as exc:
+            odds_status["error"] = str(exc)
             print(f"\n⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
 
         if real_odds:
@@ -175,6 +181,8 @@ def main() -> None:
         import datetime as _dt
         from pathlib import Path
         result["generated_from"] = "live-odds" if real_odds else "live"
+        odds_status["at"] = _dt.datetime.now().strftime("%H:%M")
+        result["odds_status"] = odds_status
         result["built_at"] = _dt.datetime.now().isoformat(timespec="seconds")
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         with open(args.out, "w") as fh:

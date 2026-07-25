@@ -249,6 +249,7 @@ function renderAll() {
   renderGames();
   renderGameBets();
   renderRecommended();
+  renderEdgeBoard();
   renderLongShots();
   renderTrending();
   renderPlayers();
@@ -542,10 +543,7 @@ function renderRecommended() {
     // prices (and lineups) closer to game time.
     const noMarket = recs.length && recs.every((r) => r.has_market === false);
     host.innerHTML = noMarket
-      ? `<p class="loading">Waiting on real sportsbook prices — books post MLB
-         player props (and lineups land) closer to game time. Picks are never
-         recommended against placeholder lines, so check back this afternoon;
-         the board fills automatically as real prices arrive.</p>`
+      ? `<p class="loading">${noMarketExplainer()}</p>`
       : `<p class="loading">No props clear the current thresholds. Loosen the
          sliders or enable “show non-recommended”.</p>`;
     return;
@@ -800,7 +798,102 @@ function countUp(el) {
 }
 
 /* ---------------- routing ---------------- */
-const VIEW_ORDER = ["recommended", "trending", "players"];
+/* ============================================================
+   Odds status — say exactly why no real prices are attached
+   ============================================================ */
+function noMarketExplainer() {
+  const os = state.data.odds_status;
+  if (os && os.error)
+    return `Odds feed problem on the last pull (${os.at || ""}): ${os.error} —
+            the model keeps proxy lines and recommends nothing until real
+            prices return.`;
+  if (os && os.checked === false)
+    return `The last refresh skipped the odds pull (budget pacing). Real
+            prices attach on an upcoming cycle — no action needed.`;
+  if (os && os.checked && os.matched === 0)
+    return `The odds feed answered at ${os.at || "last refresh"} but had no
+            player-prop prices yet (checked ${os.events} game(s)) — books post
+            MLB props closer to first pitch. The board fills automatically as
+            real prices arrive.`;
+  return `Waiting on real sportsbook prices — picks are never recommended
+          against placeholder lines. The board fills automatically as real
+          prices arrive.`;
+}
+
+/* ============================================================
+   Edge Board — every positively-priced bet, banded by odds
+   ============================================================ */
+const EDGE_BANDS = [
+  ["Favorites (−105 and shorter)", (o) => o <= -105],
+  ["Near even (−104 to +150)", (o) => o > -105 && o <= 150],
+  ["Long odds (+151 and up)", (o) => o > 150],
+];
+
+function edgeBoardRows() {
+  const props = (state.data.recommendations || [])
+    .filter((r) => r.has_market !== false && (r.ev_per_unit || 0) > 0.005
+                   && r.odds >= state.maxJuice)
+    .map((r) => ({
+      label: `${r.player} · ${r.side} ${r.line} ${r.market_label}`,
+      sub: `${r.book || ""} · ${teamName(r.team)} vs ${teamName(r.opponent)}`,
+      odds: r.odds, model: r.hit_prob, implied: r.fair_prob,
+      ev: r.ev_per_unit, grade: r.grade, rec: r.recommended,
+    }));
+  const games = (state.data.game_bets || [])
+    .filter((b) => b.grade !== "Pass" && (b.ev_per_unit || 0) > 0.005)
+    .map((b) => ({
+      label: b.pick_label, sub: `${b.matchup} · ${b.market_label}`,
+      odds: b.odds, model: b.win_prob, implied: b.fair_prob,
+      ev: b.ev_per_unit, grade: b.grade, rec: b.recommended,
+    }));
+  return [...props, ...games].sort((a, b) => b.ev - a.ev);
+}
+
+function edgeRowHTML(r, i) {
+  const evPct = (r.ev * 100).toFixed(1);
+  return `<div class="ls-row" style="display:flex;align-items:center;gap:14px;
+       padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
+    <span style="opacity:.5;min-width:20px">${i + 1}</span>
+    <span style="flex:1"><strong>${escapeHtml(r.label)}</strong>
+      <span style="display:block;opacity:.6;font-size:.85em">${escapeHtml(r.sub)}</span></span>
+    <span style="min-width:64px;text-align:right">${r.odds > 0 ? "+" : ""}${r.odds}</span>
+    <span style="min-width:120px;text-align:right;opacity:.8">
+      ${(r.model * 100).toFixed(0)}% vs ${(r.implied * 100).toFixed(0)}%</span>
+    <span style="min-width:70px;text-align:right;color:var(--green,#3ddc84)">
+      +${evPct}% EV</span>
+    <span style="min-width:86px;text-align:right;opacity:.75">${r.rec ? "✅ " : ""}${escapeHtml(r.grade || "")}</span>
+  </div>`;
+}
+
+function renderEdgeBoard() {
+  const host = document.getElementById("edge-board");
+  const note = document.getElementById("edge-note");
+  if (!host) return;
+  const rows = edgeBoardRows();
+  if (!rows.length) {
+    note.innerHTML = "";
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">📈</div>
+      <h3>No positively-priced bets right now</h3>
+      <p>${noMarketExplainer()}</p>
+      <p style="opacity:.7">The Edge Board lists every bet whose real price
+      beats the model's probability — including small edges and long odds that
+      don't clear the Recommended bar. Expected value is honest math, not a
+      guarantee: a +5% EV bet still loses often; the edge shows up over
+      hundreds of bets.</p></div>`;
+    return;
+  }
+  note.innerHTML = `${rows.length} positively-priced bet(s) on the board ·
+    every number vs a real book price · ✅ = also on the Recommended page`;
+  host.innerHTML = EDGE_BANDS.map(([title, test]) => {
+    const band = rows.filter((r) => test(r.odds));
+    if (!band.length) return "";
+    return `<div class="section-title" style="margin-top:18px">${title}
+        <span class="sub">— ${band.length} bet(s)</span></div>
+      <div class="card" style="padding:0">${band.map(edgeRowHTML).join("")}</div>`;
+  }).join("") || "";
+}
+
+const VIEW_ORDER = ["recommended", "edge", "longshots", "trending", "players"];
 
 function switchView(name) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -818,7 +911,7 @@ function switchView(name) {
 
 function initialView() {
   const h = (location.hash || "").replace("#", "");
-  if (["recommended", "trending", "players"].includes(h)) switchView(h);
+  if (["recommended", "edge", "longshots", "trending", "players"].includes(h)) switchView(h);
 }
 
 function moveIndicator() {

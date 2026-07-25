@@ -52,16 +52,22 @@ def main() -> None:
         print(f"Live scores: {live_n} game(s) matched, {live_now} in progress.")
 
     real_odds = False
+    odds_status = {"checked": bool(args.odds), "matched": 0, "events": 0,
+                   "moneylines": 0, "error": None, "quota_remaining": None}
     if args.odds:
         from engine.sources import oddsapi
         try:
             res = oddsapi.apply_odds_to_slate(slate, sport="mlb", only_active=args.active_odds)
             real_odds = True
+            odds_status.update(matched=res.matched, events=res.events_used,
+                               moneylines=res.moneylines,
+                               quota_remaining=res.quota.remaining)
             print(f"Odds API: matched {res.matched} props across {res.events_used} games "
                   f"(quota remaining {res.quota.remaining}).")
             if res.moneylines:
                 print(f"  Moneylines attached to {res.moneylines} game(s).")
         except oddsapi.OddsAPIError as exc:
+            odds_status["error"] = str(exc)
             print(f"⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
 
     # Team ratings for the moneyline model, from ingested historical scores.
@@ -112,6 +118,9 @@ def main() -> None:
         import datetime as _dt
         from pathlib import Path
         result["generated_from"] = "live-odds" if real_odds else "live"
+        import datetime as _dt2
+        odds_status["at"] = _dt2.datetime.now().strftime("%H:%M")
+        result["odds_status"] = odds_status
         result["built_at"] = _dt.datetime.now().isoformat(timespec="seconds")
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         with open(args.out, "w") as fh:
