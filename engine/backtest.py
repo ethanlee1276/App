@@ -26,7 +26,7 @@ from .odds import american_to_decimal, american_to_prob
 # Display order for the per-grade P&L breakdown of the market-relative
 # segment. If Strong picks don't beat Lean picks, the model's conviction
 # carries no signal and no threshold tuning will conjure one.
-GRADE_ORDER = ("Strong", "Play", "Lean")
+GRADE_ORDER = ("Strong Play", "Strong", "Play", "Lean")
 
 
 def _norm(name: str) -> str:
