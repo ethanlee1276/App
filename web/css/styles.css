@@ -683,10 +683,12 @@ body { font-size: 14.5px; }
 /* Grades: outline chips, color as a whisper. */
 .grade { background: transparent; border: 1px solid currentColor; box-shadow: none;
          font-weight: 700; letter-spacing: .02em; }
-.grade.strong { color: var(--good); }
-.grade.play { color: var(--brand); }
-.grade.lean { color: var(--warn); }
-.grade.pass { color: var(--text-mute); }
+/* Class-specific so these outrank the legacy filled-pill rules — otherwise
+   the old solid background wins and the text goes green-on-green invisible. */
+.grade.strong { background: transparent; color: var(--good); }
+.grade.play { background: transparent; color: var(--brand); }
+.grade.lean { background: transparent; color: var(--warn); }
+.grade.pass { background: transparent; color: var(--text-mute); }
 :root[data-theme="light"] .nav-btn.active { color: var(--text); }
 
 /* Chips + sliders: quiet. */

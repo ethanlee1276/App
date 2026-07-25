@@ -430,6 +430,11 @@ function sparkline(values, opts = {}) {
   const x = (i) => pad + (i / (data.length - 1)) * (w - pad * 2);
   const y = (v) => h - pad - ((v - lo) / span) * (h - pad * 2);
 
+  // Hover labels: opts.labels comes newest-first like values; reverse to
+  // match the charted order. Falls back to the bare value.
+  const labs = opts.labels ? [...opts.labels].reverse() : null;
+  const tip = (i) => (labs && labs[i] ? labs[i] + " — " : "") + data[i];
+
   const pts = data.map((v, i) => `${x(i)},${y(v)}`);
   const linePath = "M" + pts.join(" L");
   const areaPath = `M${x(0)},${h - pad} L` + pts.join(" L") + ` L${x(data.length - 1)},${h - pad} Z`;
@@ -438,6 +443,11 @@ function sparkline(values, opts = {}) {
     const c = line == null ? stroke : (above ? "var(--good)" : "var(--bad)");
     return `<circle cx="${x(i)}" cy="${y(v)}" r="${i === data.length - 1 ? 3.2 : 2.1}" fill="${c}"/>`;
   }).join("");
+  // Invisible, generous hit targets so hovering anywhere near a dot shows
+  // the value (and its game, when the caller passed labels).
+  const hits = data.map((v, i) =>
+    `<circle cx="${x(i)}" cy="${y(v)}" r="9" fill="transparent" style="pointer-events:all">
+       <title>${escapeAttr(tip(i))}</title></circle>`).join("");
   const thresh = line == null ? "" :
     `<line x1="${pad}" y1="${y(line)}" x2="${w - pad}" y2="${y(line)}"
        stroke="var(--warn)" stroke-width="1" stroke-dasharray="4 4" opacity="0.8"/>`;
@@ -460,6 +470,7 @@ function sparkline(values, opts = {}) {
     <path class="spark-line" d="${linePath}" fill="none" stroke="${stroke}"
           stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     ${dots}
+    ${hits}
   </svg>`;
 }
 

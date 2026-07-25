@@ -834,7 +834,11 @@ function profileHTML(r) {
         <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>
       </div>
       <div class="form-tiles">${tiles}</div>
-      <div class="profile-spark">${sparkline(vals, { line: r.line, stroke: teamPrimary(r.team), h: 72 })}</div>
+      <div class="profile-spark">${sparkline(vals, {
+        line: r.line, stroke: teamPrimary(r.team), h: 72,
+        labels: (r.logs || []).map((l) =>
+          `${mlb && l.date ? formatGameDate(l.date) : "Wk " + l.week} ${l.home ? "vs" : "@"} ${l.opponent}`),
+      })}</div>
       <table class="log-table">
         <tr><th>${mlb ? "Game" : "Week"}</th><th>Opponent</th><th style="text-align:right">${escapeHtml(r.market_label)}</th></tr>
         ${rows}
