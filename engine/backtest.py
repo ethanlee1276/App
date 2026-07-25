@@ -136,6 +136,15 @@ class BacktestReport:
                         f"    {labels.get(basis, basis):18} {g['n_bets']:>4} bets, "
                         f"{g['wins']} won ({g['win_rate']:.1%})  "
                         f"ROI {g['roi']:+.1%}  net {g['net']:+.2f}u")
+                    # Side split for the market-relative subset only — the
+                    # first place a real pocket of edge would show itself.
+                    if basis == "book" and len(g.get("sides", {})) > 1:
+                        for sd_name in ("OVER", "UNDER"):
+                            sd = g["sides"].get(sd_name)
+                            if sd and sd["n_bets"]:
+                                lines.append(
+                                    f"        {sd_name:5} {sd['n_bets']:>4} bets, "
+                                    f"{sd['wins']} won  ROI {sd['roi']:+.1%}")
             if self.avg_clv is not None:
                 lines.append(f"  Closing-line value  {self.avg_clv:+.2f} pts avg")
         # Say plainly what the ROI above is measured against — an ROI beating a
@@ -204,8 +213,12 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
     for s in bets:
         g = seg.setdefault((s.basis or "naive"),
                            {"n_bets": 0, "wins": 0, "pushes": 0,
-                            "staked": 0.0, "net": 0.0})
+                            "staked": 0.0, "net": 0.0, "sides": {}})
+        side = seg[s.basis or "naive"]["sides"].setdefault(
+            (s.side or "OVER").upper(),
+            {"n_bets": 0, "wins": 0, "staked": 0.0, "net": 0.0})
         g["n_bets"] += 1
+        side["n_bets"] += 1
         oc = s.outcome
         if oc is None:
             pushes += 1
@@ -214,15 +227,19 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
         stake = s.stake_units if s.stake_units > 0 else 1.0
         staked += stake
         g["staked"] += stake
+        side["staked"] += stake
         if oc == 1:
             wins += 1
             g["wins"] += 1
+            side["wins"] += 1
             payout = (american_to_decimal(s.odds) - 1.0) * stake
             net += payout
             g["net"] += payout
+            side["net"] += payout
         else:
             net -= stake
             g["net"] -= stake
+            side["net"] -= stake
         if s.closing_line is not None:
             # On an over you want the line to rise after you bet it; on an under
             # you want it to fall. Same sign convention would score unders
@@ -242,6 +259,8 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
         g["roi"] = (g["net"] / g["staked"]) if g["staked"] else 0.0
         graded = g["n_bets"] - g["pushes"]
         g["win_rate"] = (g["wins"] / graded) if graded else 0.0
+        for sd in g["sides"].values():
+            sd["roi"] = (sd["net"] / sd["staked"]) if sd["staked"] else 0.0
     r.segments = seg
     r.avg_clv = (sum(clvs) / len(clvs)) if clvs else None
     return r

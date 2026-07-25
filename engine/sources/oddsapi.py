@@ -131,8 +131,18 @@ _SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b", re.I)
 
 def normalize_name(name: str) -> str:
     """Loose key for matching player names across sources (drops punctuation,
-    suffixes and casing so 'Amon-Ra St. Brown' == 'amon ra st brown')."""
-    s = name.lower().replace("-", " ").replace(".", " ").replace("'", "")
+    suffixes, casing and accents so 'Amon-Ra St. Brown' == 'amon ra st brown'
+    and 'Ronald Acuña Jr.' == 'ronald acuna').
+
+    Accent folding matters more than it looks: the MLB feed spells names with
+    diacritics and odds feeds often don't, so without it every Acuña, Ramírez
+    and Suárez silently fails to join — real lines that were paid for simply
+    never match their game logs.
+    """
+    import unicodedata
+    s = unicodedata.normalize("NFKD", name)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = s.lower().replace("-", " ").replace(".", " ").replace("'", "")
     s = _SUFFIX.sub("", s)
     return re.sub(r"\s+", " ", s).strip()
 

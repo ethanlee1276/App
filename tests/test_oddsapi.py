@@ -66,6 +66,10 @@ def test_normalize_name():
     assert oa.normalize_name("Amon-Ra St. Brown") == "amon ra st brown"
     assert oa.normalize_name("Michael Pittman Jr.") == "michael pittman"
     assert oa.normalize_name("Patrick Mahomes") == "patrick mahomes"
+    # Accent folding: the MLB feed uses diacritics and odds feeds often don't;
+    # without this every Acuña / Ramírez fails the backtest join.
+    assert oa.normalize_name("Ronald Acuña Jr.") == oa.normalize_name("Ronald Acuna Jr")
+    assert oa.normalize_name("José Ramírez") == "jose ramirez"
 
 
 def test_parse_event_lines_pairs_and_maps():

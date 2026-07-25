@@ -186,6 +186,32 @@ def test_pnl_is_segmented_by_pricing_basis():
     assert "vs REAL book lines" in r.summary()
 
 
+def test_book_segment_splits_by_side():
+    """An OVER edge and an UNDER leak can cancel to a flat blended ROI, so the
+    market-relative segment breaks out each side's record."""
+    from engine.backtest import SettledProp, evaluate
+
+    def sp(side, won):
+        # actual relative to the line encodes the raw over result; `outcome`
+        # flips it for unders, so build each case from the bet's own view.
+        over_hit = won if side == "OVER" else not won
+        return SettledProp(player="P", market="total_bases", line=1.5,
+                           odds=-110, hit_prob=0.6, projection=1.8,
+                           actual=2.0 if over_hit else 1.0,
+                           recommended=True, stake_units=1.0,
+                           side=side, basis="book")
+
+    r = evaluate([sp("OVER", True), sp("OVER", True), sp("OVER", False),
+                  sp("UNDER", False), sp("UNDER", False)])
+    sides = r.segments["book"]["sides"]
+    assert sides["OVER"]["n_bets"] == 3 and sides["OVER"]["wins"] == 2
+    assert sides["UNDER"]["n_bets"] == 2 and sides["UNDER"]["wins"] == 0
+    assert sides["OVER"]["roi"] > 0 > sides["UNDER"]["roi"]
+    # Both sides present -> the summary shows the split.
+    text = r.summary()
+    assert "OVER " in text and "UNDER" in text
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
