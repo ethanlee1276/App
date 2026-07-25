@@ -166,6 +166,26 @@ def test_closing_line_value_flips_sign_for_unders():
     assert evaluate([under]).avg_clv == 3.0
 
 
+def test_pnl_is_segmented_by_pricing_basis():
+    """Only book-priced props say anything about beating the market, so their
+    P&L must be reported separately instead of blended into the baseline
+    majority — a 9% real-line subset is invisible inside an overall ROI."""
+    from engine.backtest import SettledProp, evaluate
+
+    def sp(basis, won):
+        return SettledProp(player="P", market="rec_yds", line=50.0, odds=-110,
+                           hit_prob=0.6, projection=55.0,
+                           actual=60.0 if won else 40.0,
+                           recommended=True, stake_units=1.0, basis=basis)
+
+    r = evaluate([sp("book", True), sp("book", False),
+                  sp("naive", True), sp("naive", True), sp("naive", False)])
+    assert r.segments["book"]["n_bets"] == 2
+    assert r.segments["book"]["wins"] == 1
+    assert r.segments["naive"]["n_bets"] == 3
+    assert "vs REAL book lines" in r.summary()
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

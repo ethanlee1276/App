@@ -46,6 +46,10 @@ class SettledProp:
     # probability the *chosen side* wins, so scoring it against "did the over
     # hit" grades every UNDER backwards — both the calibration bins and the P&L.
     side: str = "OVER"
+    # What priced this prop: "book" (a real harvested line) or "naive" (the
+    # baseline). Only the book-priced subset says anything about beating the
+    # market, so P&L is reported per basis rather than blended out of sight.
+    basis: str = "naive"
 
     @property
     def over_hit(self) -> int | None:
@@ -101,6 +105,10 @@ class BacktestReport:
     # the extent this is high, so it's reported rather than left implicit.
     used_real_lines: int = 0
     total_priced: int = 0
+    # Betting P&L split by pricing basis ("book" vs "naive"). The blended ROI
+    # buries the only market-relative number inside the baseline noise; this
+    # keeps the subset that actually answers "did we beat the book" visible.
+    segments: dict = field(default_factory=dict)
 
     def summary(self) -> str:
         lines = [
@@ -116,6 +124,18 @@ class BacktestReport:
             lines.append(
                 f"  Bets        {self.n_bets} placed, {self.wins} won "
                 f"({self.win_rate:.1%})  ROI {self.roi:+.1%}  net {self.net_units:+.2f}u")
+            # The book-priced subset is the only market-relative P&L; break it
+            # out so it can't hide inside the baseline-priced majority.
+            if len(self.segments) > 1 or "book" in self.segments:
+                labels = {"book": "vs REAL book lines", "naive": "vs naive baseline"}
+                for basis in ("book", "naive"):
+                    g = self.segments.get(basis)
+                    if not g or not g["n_bets"]:
+                        continue
+                    lines.append(
+                        f"    {labels.get(basis, basis):18} {g['n_bets']:>4} bets, "
+                        f"{g['wins']} won ({g['win_rate']:.1%})  "
+                        f"ROI {g['roi']:+.1%}  net {g['net']:+.2f}u")
             if self.avg_clv is not None:
                 lines.append(f"  Closing-line value  {self.avg_clv:+.2f} pts avg")
         # Say plainly what the ROI above is measured against — an ROI beating a
@@ -175,23 +195,34 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
     r.bins, r.brier, r.ece = _calibration(settled, n_bins)
     r.pairs = [(s.hit_prob, s.outcome) for s in settled if s.outcome is not None]
 
-    # Betting performance on recommended bets.
+    # Betting performance on recommended bets, overall and per pricing basis.
     bets = [s for s in settled if s.recommended]
     staked = won = net = 0.0
     wins = pushes = 0
     clvs = []
+    seg: dict[str, dict] = {}
     for s in bets:
+        g = seg.setdefault((s.basis or "naive"),
+                           {"n_bets": 0, "wins": 0, "pushes": 0,
+                            "staked": 0.0, "net": 0.0})
+        g["n_bets"] += 1
         oc = s.outcome
         if oc is None:
             pushes += 1
+            g["pushes"] += 1
             continue
         stake = s.stake_units if s.stake_units > 0 else 1.0
         staked += stake
+        g["staked"] += stake
         if oc == 1:
             wins += 1
-            net += (american_to_decimal(s.odds) - 1.0) * stake
+            g["wins"] += 1
+            payout = (american_to_decimal(s.odds) - 1.0) * stake
+            net += payout
+            g["net"] += payout
         else:
             net -= stake
+            g["net"] -= stake
         if s.closing_line is not None:
             # On an over you want the line to rise after you bet it; on an under
             # you want it to fall. Same sign convention would score unders
@@ -207,6 +238,11 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
     r.units_staked = staked
     r.net_units = net
     r.roi = (net / staked) if staked else 0.0
+    for basis, g in seg.items():
+        g["roi"] = (g["net"] / g["staked"]) if g["staked"] else 0.0
+        graded = g["n_bets"] - g["pushes"]
+        g["win_rate"] = (g["wins"] / graded) if graded else 0.0
+    r.segments = seg
     r.avg_clv = (sum(clvs) / len(clvs)) if clvs else None
     return r
 

@@ -110,7 +110,7 @@ def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
                 player=e["name"], market=market, line=line, odds=rec.odds,
                 hit_prob=rec.hit_prob, projection=rec.projection, actual=actual,
                 recommended=decision.recommend, stake_units=rec.stake_units,
-                side=rec.side,
+                side=rec.side, basis="book" if quote else "naive",
             ))
 
     report = evaluate(settled)
