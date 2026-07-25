@@ -816,9 +816,12 @@ function profileHTML(r) {
   const tiles = [["L1", f.last1], ["L3", f.last3], ["L5", f.last5], ["L10", f.last10], ["Season", f.season]]
     .map(([k, v]) => `<div class="form-tile"><div class="k">${k}</div><div class="v">${v == null ? "—" : v}</div></div>`).join("");
   const vals = (r.logs || []).map((l) => l.value);
+  // MLB logs are one GAME per row (with a real date); NFL logs are weeks.
+  const mlb = state.sport === "mlb";
   const rows = (r.logs || []).map((l) => {
     const hit = l.value > r.line;
-    return `<tr><td>Wk ${l.week}</td><td>${l.home ? "vs" : "@"} ${escapeHtml(l.opponent)}</td>
+    const when = mlb && l.date ? formatGameDate(l.date) : `Wk ${l.week}`;
+    return `<tr><td>${escapeHtml(when)}</td><td>${l.home ? "vs" : "@"} ${escapeHtml(l.opponent)}</td>
       <td class="num ${hit ? "hit" : "miss"}">${l.value}</td></tr>`;
   }).join("");
   const grad = `linear-gradient(135deg, ${teamPrimary(r.team)}, transparent)`;
@@ -833,7 +836,7 @@ function profileHTML(r) {
       <div class="form-tiles">${tiles}</div>
       <div class="profile-spark">${sparkline(vals, { line: r.line, stroke: teamPrimary(r.team), h: 72 })}</div>
       <table class="log-table">
-        <tr><th>Week</th><th>Opponent</th><th style="text-align:right">${escapeHtml(r.market_label)}</th></tr>
+        <tr><th>${mlb ? "Game" : "Week"}</th><th>Opponent</th><th style="text-align:right">${escapeHtml(r.market_label)}</th></tr>
         ${rows}
       </table>
       <div class="profile-pick">

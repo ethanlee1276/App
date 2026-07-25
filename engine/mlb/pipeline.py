@@ -224,7 +224,10 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
             for ln in prop.lines
         ],
         "logs": [
-            {"week": g.game, "opponent": g.opponent, "value": g.value, "home": g.home}
+            # Each MLB log row is one GAME (not a week); carry its real date
+            # so the site can label it as such.
+            {"week": g.game, "date": g.date, "opponent": g.opponent,
+             "value": g.value, "home": g.home}
             for g in prop.logs
         ],
         "form": {
