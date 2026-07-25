@@ -245,6 +245,7 @@ class SharpAnchorReport:
     sport: str = "mlb"
     sharp: str = "Pinnacle"
     min_ev: float = 0.015
+    max_ev: float = 0.15
     games_seen: int = 0        # completed games walked over
     games_priced: int = 0      # had BOTH a sharp pair and a soft best price
     n_bets: int = 0
@@ -252,7 +253,9 @@ class SharpAnchorReport:
     staked: float = 0.0
     net: float = 0.0
     ev_sum: float = 0.0        # claimed EV at bet time, for honesty checks
+    suspicious: int = 0        # "edges" past max_ev — broken prices, not bets
     prices: dict = field(default_factory=dict)   # favorite vs underdog
+    ev_buckets: dict = field(default_factory=dict)
 
     @property
     def roi(self) -> float:
@@ -270,12 +273,22 @@ class SharpAnchorReport:
             lines.append("    python3 harvest_odds.py mlb --from <start> --to <end> "
                          "--markets h2h --books pinnacle --budget 2500")
             return "\n".join(lines)
+        if self.suspicious:
+            lines.append(
+                f"  Filtered    {self.suspicious} \"edge(s)\" above "
+                f"{self.max_ev:.0%} EV — a closing gap that size is a broken "
+                f"price (in-play or suspended market), not a bet")
         if self.n_bets:
             lines.append(
                 f"  Bets        {self.n_bets} placed, {self.wins} won "
                 f"({self.wins / self.n_bets:.1%})  ROI {self.roi:+.1%}  "
                 f"net {self.net:+.2f}u   (avg claimed EV "
                 f"{self.ev_sum / self.n_bets:+.1%})")
+            for name, g in sorted(self.ev_buckets.items()):
+                if g["n_bets"]:
+                    roi = g["net"] / g["staked"] if g["staked"] else 0.0
+                    lines.append(f"        EV {name:7} {g['n_bets']:>4} bets, "
+                                 f"{g['wins']} won  ROI {roi:+.1%}")
             for name in ("favorite", "underdog"):
                 g = self.prices.get(name)
                 if g and g["n_bets"]:
@@ -290,7 +303,8 @@ class SharpAnchorReport:
 
 
 def backtest_sharp_anchor(conn, sport: str = "mlb", sharp: str = "Pinnacle",
-                          min_ev: float = 0.015) -> SharpAnchorReport:
+                          min_ev: float = 0.015,
+                          max_ev: float = 0.15) -> SharpAnchorReport:
     """Replay the season betting ONLY price disagreements: soft-book best
     price vs the sharp book's de-vigged fair probability, settled by the
     final score. This is the strategy's honest floor — it compares closing
@@ -304,7 +318,7 @@ def backtest_sharp_anchor(conn, sport: str = "mlb", sharp: str = "Pinnacle",
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
         "ORDER BY period", (sport,)).fetchall()
 
-    r = SharpAnchorReport(sport=sport, sharp=sharp, min_ev=min_ev)
+    r = SharpAnchorReport(sport=sport, sharp=sharp, min_ev=min_ev, max_ev=max_ev)
     for row in rows:
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
@@ -325,17 +339,24 @@ def backtest_sharp_anchor(conn, sport: str = "mlb", sharp: str = "Pinnacle",
             ev = fair_p * american_to_decimal(odds) - 1.0
             if ev < min_ev:
                 continue
+            if ev > max_ev:
+                r.suspicious += 1
+                continue
+            eb = r.ev_buckets.setdefault(
+                "<4%" if ev < 0.04 else ("4-8%" if ev < 0.08 else "8-15%"),
+                {"n_bets": 0, "wins": 0, "staked": 0.0, "net": 0.0})
             gain = (american_to_decimal(odds) - 1.0) if won else -1.0
             r.n_bets += 1
             r.wins += 1 if won else 0
             r.staked += 1.0
             r.net += gain
             r.ev_sum += ev
-            b = r.prices.setdefault("favorite" if odds < 0 else "underdog",
-                                    {"n_bets": 0, "wins": 0, "staked": 0.0,
-                                     "net": 0.0})
-            b["n_bets"] += 1
-            b["wins"] += 1 if won else 0
-            b["staked"] += 1.0
-            b["net"] += gain
+            for b in (r.prices.setdefault(
+                          "favorite" if odds < 0 else "underdog",
+                          {"n_bets": 0, "wins": 0, "staked": 0.0, "net": 0.0}),
+                      eb):
+                b["n_bets"] += 1
+                b["wins"] += 1 if won else 0
+                b["staked"] += 1.0
+                b["net"] += gain
     return r

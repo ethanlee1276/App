@@ -156,8 +156,9 @@ def _ml_book(date, home, away, team, odds, book):
 
 def test_sharp_anchor_bets_only_price_disagreements():
     """No model: de-vig the sharp pair as fair, bet the soft price when it
-    pays more than fair. Here Pinnacle says home is 60%; a soft book hangs
-    +105 on home (worth +23% EV) while the away price offers nothing."""
+    pays more than fair. Pinnacle says home is ~60%; a soft book hangs -125
+    (implied 55.6%) on home — a realistic ~7% EV gap — while the away price
+    offers nothing."""
     from engine.gamebacktest import backtest_sharp_anchor
     conn = _conn()
     db.upsert_games(conn, [_game("2026-06-01", "AAA", "BBB", 4, 1),
@@ -167,18 +168,39 @@ def test_sharp_anchor_bets_only_price_disagreements():
             # Sharp pair: -155 / +135 de-vigs to ~60% / ~40%.
             _ml_book(date, "AAA", "BBB", "AAA", -155, "Pinnacle"),
             _ml_book(date, "AAA", "BBB", "BBB", 135, "Pinnacle"),
-            # Soft best prices: home +105 is way better than fair; away -120
+            # Soft best prices: home -125 beats fair by ~7% EV; away -120
             # is worse than fair (implied 54.5% vs fair ~40%).
-            _ml_book(date, "AAA", "BBB", "AAA", 105, "best"),
+            _ml_book(date, "AAA", "BBB", "AAA", -125, "best"),
             _ml_book(date, "AAA", "BBB", "BBB", -120, "best"),
         ])
     r = backtest_sharp_anchor(conn, "mlb", min_ev=0.015)
     assert r.games_seen == 2 and r.games_priced == 2
-    # Only the home side qualifies, both days; day 1 won, day 2 lost.
+    # Only the home side qualifies, both days; day 1 won (+0.8u), day 2 lost.
     assert r.n_bets == 2 and r.wins == 1
-    assert abs(r.net - (1.05 - 1.0)) < 1e-9
-    assert r.ev_sum / r.n_bets > 0.15
+    assert abs(r.net - (0.8 - 1.0)) < 1e-9
+    assert 0.015 < r.ev_sum / r.n_bets < 0.15
+    assert r.ev_buckets["4-8%"]["n_bets"] == 2
     assert "sharp-anchor" in r.summary()
+
+
+def test_sharp_anchor_filters_broken_prices():
+    """A closing "edge" of +80% EV is a stale/in-play price, not a bet — the
+    first real run averaged +85% claimed EV this way. Cap and count, never
+    bet."""
+    from engine.gamebacktest import backtest_sharp_anchor
+    conn = _conn()
+    db.upsert_games(conn, [_game("2026-06-01", "AAA", "BBB", 4, 1)])
+    db.upsert_odds_history(conn, [
+        # Sharp pair says home is a huge live favorite (~92%)...
+        _ml_book("2026-06-01", "AAA", "BBB", "AAA", -1200, "Pinnacle"),
+        _ml_book("2026-06-01", "AAA", "BBB", "BBB", 750, "Pinnacle"),
+        # ...while the soft book still shows a stale pre-game price.
+        _ml_book("2026-06-01", "AAA", "BBB", "AAA", 105, "best"),
+    ])
+    r = backtest_sharp_anchor(conn, "mlb")
+    assert r.games_priced == 1
+    assert r.n_bets == 0 and r.suspicious == 1
+    assert "broken price" in r.summary()
 
 
 def test_sharp_anchor_passes_when_prices_agree():
