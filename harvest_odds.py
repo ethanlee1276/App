@@ -57,6 +57,11 @@ def main() -> None:
                     help="Comma-separated markets to harvest (e.g. total_bases,h2h). "
                          "Credits scale with markets, so harvesting only what you "
                          "backtest cuts the cost several-fold. Default: everything.")
+    ap.add_argument("--books", default="",
+                    help="Comma-separated Odds-API book keys (e.g. pinnacle) to "
+                         "harvest INSTEAD of the defaults. Bypasses the "
+                         "already-stored skip (those rows lack these books) and "
+                         "never overwrites the stored shopped-best price.")
     ap.add_argument("--budget", type=int, default=0,
                     help="Hard stop after roughly this many credits are spent "
                          "(measured from the API's own remaining-count; 0 = no cap).")
@@ -68,6 +73,7 @@ def main() -> None:
     days = list(daterange(args.start, args.end))
     market_keys = (oh.resolve_market_keys(args.sport, args.markets.split(","))
                    if args.markets else None)
+    book_keys = [b.strip() for b in args.books.split(",") if b.strip()] or None
     market_note = (f"markets: {', '.join(market_keys)}" if market_keys
                    else "markets: ALL (costly — use --markets to harvest only "
                         "what you backtest)")
@@ -130,17 +136,22 @@ def main() -> None:
             eid = str(ev.get("id", ""))
             if not eid:
                 continue
-            if _db.have_odds_snapshot(conn, args.sport, eid, events_snap.taken):
+            # A custom-books harvest re-visits stored snapshots on purpose:
+            # the stored rows don't have these books' prices yet.
+            if book_keys is None and _db.have_odds_snapshot(
+                    conn, args.sport, eid, events_snap.taken):
                 skipped += 1
                 continue
             try:
                 snap = oh.fetch_historical_event_odds(eid, args.sport, stamp,
-                                                      markets=market_keys)
+                                                      markets=market_keys,
+                                                      books=book_keys)
                 calls += 1
             except OddsAPIError as exc:
                 print(f"    {eid}: {exc}")
                 continue
-            rows = oh.to_rows(oh.parse_snapshot(snap, args.sport))
+            rows = oh.to_rows(oh.parse_snapshot(snap, args.sport),
+                              include_best=book_keys is None)
             day_rows += _db.upsert_odds_history(conn, rows)
             if args.budget:
                 spent = spent_so_far()

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 
 from .db import starters_by_game
 from .gamebets import SCORING_BASELINE, mlb_win_prob, nfl_win_prob, price_moneyline
-from .odds import american_to_decimal
+from .odds import american_to_decimal, devig_two_way
 
 # Same shrinkage as engine.teamrates.compute_team_ratings: early-season records
 # are regressed toward league average.
@@ -32,13 +32,15 @@ SHRINK = 6.0
 PITCHER_SHRINK = 5.0
 
 
-def moneyline_closes(conn, sport: str) -> dict:
-    """``{(date, home, away): {team: best_odds}}`` — the last harvested
-    snapshot on each date is that day's close."""
+def moneyline_closes(conn, sport: str, book: str = "best") -> dict:
+    """``{(date, home, away): {team: odds}}`` for one book — the last
+    harvested snapshot on each date is that day's close. ``book="best"`` is
+    the shopped-best aggregate; a book title (e.g. ``"Pinnacle"``) selects
+    that book's own prices."""
     q = ("SELECT taken_at, home, away, player, over_odds FROM odds_history "
-         "WHERE sport=? AND market='moneyline' ORDER BY taken_at")
+         "WHERE sport=? AND market='moneyline' AND book=? ORDER BY taken_at")
     out: dict = {}
-    for r in conn.execute(q, (sport,)):
+    for r in conn.execute(q, (sport, book)):
         date = str(r["taken_at"])[:10]
         game = out.setdefault((date, r["home"], r["away"]), {})
         # Ordered by taken_at, so later same-date snapshots overwrite.
@@ -230,4 +232,110 @@ def backtest_moneylines(conn, sport: str = "mlb", min_team_games: int = 15,
         r.brier = sq_err / r.games_quoted
         r.home_rate = home_wins / r.games_quoted
         r.mean_home_prob = prob_sum / r.games_quoted
+    return r
+
+
+# --- sharp-anchor strategy ---------------------------------------------------
+@dataclass
+class SharpAnchorReport:
+    """P&L of the sharp-anchor strategy: de-vig the sharp book's two-sided
+    price as fair probability, bet the shopped soft-book price whenever it
+    pays better than fair. No model opinion involved — the "edge" is purely
+    one book disagreeing with a sharper one."""
+    sport: str = "mlb"
+    sharp: str = "Pinnacle"
+    min_ev: float = 0.015
+    games_seen: int = 0        # completed games walked over
+    games_priced: int = 0      # had BOTH a sharp pair and a soft best price
+    n_bets: int = 0
+    wins: int = 0
+    staked: float = 0.0
+    net: float = 0.0
+    ev_sum: float = 0.0        # claimed EV at bet time, for honesty checks
+    prices: dict = field(default_factory=dict)   # favorite vs underdog
+
+    @property
+    def roi(self) -> float:
+        return (self.net / self.staked) if self.staked else 0.0
+
+    def summary(self) -> str:
+        lines = [
+            f"{self.sport.upper()} sharp-anchor backtest · {self.sharp} de-vig "
+            f"vs shopped soft-book closes (min EV {self.min_ev:.1%})",
+            f"  Games       {self.games_seen} completed, "
+            f"{self.games_priced} with both a {self.sharp} pair and a soft price",
+        ]
+        if not self.games_priced:
+            lines.append(f"  No games priced — harvest {self.sharp} closes first:")
+            lines.append("    python3 harvest_odds.py mlb --from <start> --to <end> "
+                         "--markets h2h --books pinnacle --budget 2500")
+            return "\n".join(lines)
+        if self.n_bets:
+            lines.append(
+                f"  Bets        {self.n_bets} placed, {self.wins} won "
+                f"({self.wins / self.n_bets:.1%})  ROI {self.roi:+.1%}  "
+                f"net {self.net:+.2f}u   (avg claimed EV "
+                f"{self.ev_sum / self.n_bets:+.1%})")
+            for name in ("favorite", "underdog"):
+                g = self.prices.get(name)
+                if g and g["n_bets"]:
+                    roi = g["net"] / g["staked"] if g["staked"] else 0.0
+                    lines.append(f"        {name:9} {g['n_bets']:>4} bets, "
+                                 f"{g['wins']} won  ROI {roi:+.1%}")
+        else:
+            lines.append("  Bets        none cleared the EV bar — soft closes "
+                         "rarely stray this far from sharp closes; edges live "
+                         "earlier in the day")
+        return "\n".join(lines)
+
+
+def backtest_sharp_anchor(conn, sport: str = "mlb", sharp: str = "Pinnacle",
+                          min_ev: float = 0.015) -> SharpAnchorReport:
+    """Replay the season betting ONLY price disagreements: soft-book best
+    price vs the sharp book's de-vigged fair probability, settled by the
+    final score. This is the strategy's honest floor — it compares closing
+    prices to closing prices, and soft books have mostly converged to sharp
+    ones by then; a live version gets to act earlier, when gaps are wider."""
+    sharp_closes = moneyline_closes(conn, sport, book=sharp)
+    soft_closes = moneyline_closes(conn, sport, book="best")
+
+    rows = conn.execute(
+        "SELECT period, home, away, home_score, away_score FROM games "
+        "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
+        "ORDER BY period", (sport,)).fetchall()
+
+    r = SharpAnchorReport(sport=sport, sharp=sharp, min_ev=min_ev)
+    for row in rows:
+        date, home, away = row["period"], row["home"], row["away"]
+        hs, as_ = float(row["home_score"]), float(row["away_score"])
+        r.games_seen += 1
+        sp = sharp_closes.get((date, home, away)) or {}
+        soft = soft_closes.get((date, home, away)) or {}
+        if home not in sp or away not in sp or (home not in soft and away not in soft):
+            continue
+        r.games_priced += 1
+        fair_home, fair_away = devig_two_way(int(sp[home]), int(sp[away]))
+
+        for team, fair_p, won in ((home, fair_home, hs > as_),
+                                  (away, fair_away, as_ > hs)):
+            odds = soft.get(team)
+            if odds is None:
+                continue
+            odds = int(odds)
+            ev = fair_p * american_to_decimal(odds) - 1.0
+            if ev < min_ev:
+                continue
+            gain = (american_to_decimal(odds) - 1.0) if won else -1.0
+            r.n_bets += 1
+            r.wins += 1 if won else 0
+            r.staked += 1.0
+            r.net += gain
+            r.ev_sum += ev
+            b = r.prices.setdefault("favorite" if odds < 0 else "underdog",
+                                    {"n_bets": 0, "wins": 0, "staked": 0.0,
+                                     "net": 0.0})
+            b["n_bets"] += 1
+            b["wins"] += 1 if won else 0
+            b["staked"] += 1.0
+            b["net"] += gain
     return r

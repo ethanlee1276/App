@@ -60,16 +60,23 @@ MLB_ODDS_TO_MARKET = {
 }
 
 # Default books to shop, matching the project vision. Keys are The Odds API's.
+# Pinnacle rides along as the SHARP REFERENCE — its de-vigged price is the
+# best free estimate of a bet's true probability, which is what the
+# sharp-anchor strategy prices soft books against. The API bills bookmakers
+# in groups of 10 as one region, so listing 8 costs the same as 7.
 DEFAULT_BOOKS = [
     "draftkings", "fanduel", "betmgm", "williamhill_us",  # Caesars = William Hill US
-    "espnbet", "fanatics", "hardrockbet",
+    "espnbet", "fanatics", "hardrockbet", "pinnacle",
 ]
 # Pretty names for the UI / explanations.
 BOOK_TITLES = {
     "draftkings": "DraftKings", "fanduel": "FanDuel", "betmgm": "BetMGM",
     "williamhill_us": "Caesars", "espnbet": "ESPN BET", "fanatics": "Fanatics",
-    "hardrockbet": "Hard Rock",
+    "hardrockbet": "Hard Rock", "pinnacle": "Pinnacle",
 }
+# Books a user can actually bet at (Pinnacle doesn't take US action); the
+# sharp reference must never be quoted as the price to take.
+SHARP_BOOKS = {"pinnacle"}
 
 # The Odds API uses full team names; nflverse uses abbreviations.
 TEAM_ABBR = {
@@ -251,6 +258,10 @@ def parse_event_lines(event_json: dict,
     out: dict[tuple[str, str], list[SportsbookLine]] = {}
     for bm in event_json.get("bookmakers", []):
         book_key = bm.get("key", "")
+        if book_key in SHARP_BOOKS:
+            # Reference-only books: nobody here can bet them, so their lines
+            # must never be shopped as "the price to take".
+            continue
         book = BOOK_TITLES.get(book_key, book_key)
         for mkt in bm.get("markets", []):
             market = market_map.get(mkt.get("key", ""))
@@ -289,6 +300,8 @@ def parse_event_h2h(event_json: dict, team_map: dict) -> dict[str, int]:
     which is monotonic across the sign boundary)."""
     best: dict[str, int] = {}
     for bm in event_json.get("bookmakers", []):
+        if bm.get("key", "") in SHARP_BOOKS:
+            continue                    # reference-only, not a bettable price
         for mkt in bm.get("markets", []):
             if mkt.get("key") != "h2h":
                 continue
@@ -301,6 +314,26 @@ def parse_event_h2h(event_json: dict, team_map: dict) -> dict[str, int]:
                 if abbr not in best or price > best[abbr]:
                     best[abbr] = price
     return best
+
+
+def parse_event_h2h_by_book(event_json: dict, team_map: dict) -> dict[str, dict[str, int]]:
+    """Moneylines per book: ``{book_title: {team_abbr: american_odds}}``.
+
+    Unlike :func:`parse_event_h2h` this keeps EVERY book — including the
+    sharp reference — because the sharp-anchor strategy needs the sharp
+    book's two-sided price to de-vig, and the soft books' prices to shop."""
+    out: dict[str, dict[str, int]] = {}
+    for bm in event_json.get("bookmakers", []):
+        book = BOOK_TITLES.get(bm.get("key", ""), bm.get("key", ""))
+        for mkt in bm.get("markets", []):
+            if mkt.get("key") != "h2h":
+                continue
+            for o in mkt.get("outcomes", []):
+                abbr = team_map.get(o.get("name", ""))
+                price = o.get("price")
+                if abbr and price is not None:
+                    out.setdefault(book, {})[abbr] = int(price)
+    return out
 
 
 def parse_event_scorers(event_json: dict,

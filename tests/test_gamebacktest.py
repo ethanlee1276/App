@@ -148,6 +148,64 @@ def test_losing_pick_costs_the_stake():
         assert r.wins == 0 and r.net < 0
 
 
+def _ml_book(date, home, away, team, odds, book):
+    row = _ml(date, home, away, team, odds)
+    row["book"] = book
+    return row
+
+
+def test_sharp_anchor_bets_only_price_disagreements():
+    """No model: de-vig the sharp pair as fair, bet the soft price when it
+    pays more than fair. Here Pinnacle says home is 60%; a soft book hangs
+    +105 on home (worth +23% EV) while the away price offers nothing."""
+    from engine.gamebacktest import backtest_sharp_anchor
+    conn = _conn()
+    db.upsert_games(conn, [_game("2026-06-01", "AAA", "BBB", 4, 1),
+                           _game("2026-06-02", "AAA", "BBB", 1, 7)])
+    for date in ("2026-06-01", "2026-06-02"):
+        db.upsert_odds_history(conn, [
+            # Sharp pair: -155 / +135 de-vigs to ~60% / ~40%.
+            _ml_book(date, "AAA", "BBB", "AAA", -155, "Pinnacle"),
+            _ml_book(date, "AAA", "BBB", "BBB", 135, "Pinnacle"),
+            # Soft best prices: home +105 is way better than fair; away -120
+            # is worse than fair (implied 54.5% vs fair ~40%).
+            _ml_book(date, "AAA", "BBB", "AAA", 105, "best"),
+            _ml_book(date, "AAA", "BBB", "BBB", -120, "best"),
+        ])
+    r = backtest_sharp_anchor(conn, "mlb", min_ev=0.015)
+    assert r.games_seen == 2 and r.games_priced == 2
+    # Only the home side qualifies, both days; day 1 won, day 2 lost.
+    assert r.n_bets == 2 and r.wins == 1
+    assert abs(r.net - (1.05 - 1.0)) < 1e-9
+    assert r.ev_sum / r.n_bets > 0.15
+    assert "sharp-anchor" in r.summary()
+
+
+def test_sharp_anchor_passes_when_prices_agree():
+    from engine.gamebacktest import backtest_sharp_anchor
+    conn = _conn()
+    db.upsert_games(conn, [_game("2026-06-01", "AAA", "BBB", 4, 1)])
+    db.upsert_odds_history(conn, [
+        _ml_book("2026-06-01", "AAA", "BBB", "AAA", -150, "Pinnacle"),
+        _ml_book("2026-06-01", "AAA", "BBB", "BBB", 130, "Pinnacle"),
+        # Soft prices identical to sharp -> implied worse than de-vigged fair.
+        _ml_book("2026-06-01", "AAA", "BBB", "AAA", -150, "best"),
+        _ml_book("2026-06-01", "AAA", "BBB", "BBB", 130, "best"),
+    ])
+    r = backtest_sharp_anchor(conn, "mlb")
+    assert r.games_priced == 1 and r.n_bets == 0
+    assert "none cleared the EV bar" in r.summary()
+
+
+def test_sharp_anchor_reports_missing_data():
+    from engine.gamebacktest import backtest_sharp_anchor
+    conn = _conn()
+    db.upsert_games(conn, [_game("2026-06-01", "AAA", "BBB", 4, 1)])
+    r = backtest_sharp_anchor(conn, "mlb")
+    assert r.games_priced == 0
+    assert "--books pinnacle" in r.summary()
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

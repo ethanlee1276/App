@@ -34,8 +34,8 @@ from dataclasses import dataclass, field
 from .fetch import CACHE_DIR
 from .oddsapi import (
     ODDS_BASE, SPORT_CONFIG, SCORER_ODDS_TO_MARKET, OddsAPIError, _request,
-    get_api_key, parse_event_lines, parse_event_h2h, parse_event_scorers,
-    DEFAULT_BOOKS,
+    get_api_key, parse_event_lines, parse_event_h2h, parse_event_h2h_by_book,
+    parse_event_scorers, DEFAULT_BOOKS,
 )
 
 # A past price is immutable, so cache it effectively forever.
@@ -126,8 +126,9 @@ def fetch_historical_event_odds(event_id: str, sport: str, when,
     # A custom market list gets its own cache entry: a limited payload cached
     # under the full-request key would silently serve missing data forever.
     tag = ""
-    if markets is not None:
-        digest = hashlib.md5(",".join(sorted(markets)).encode()).hexdigest()[:8]
+    if markets is not None or books is not None:
+        spec = ",".join(sorted(markets or [])) + "|" + ",".join(sorted(books or []))
+        digest = hashlib.md5(spec.encode()).hexdigest()[:8]
         tag = f"{event_id}_{digest}"
     markets = markets or (list(cfg["markets"]) + ["h2h", "totals", "spreads"])
     params = {
@@ -153,6 +154,7 @@ class HistoricalOdds:
     away: str = ""
     props: dict = field(default_factory=dict)      # (player, market) -> [SportsbookLine]
     moneylines: dict = field(default_factory=dict)  # team -> american odds
+    moneylines_by_book: dict = field(default_factory=dict)  # book -> {team: odds}
     scorers: dict = field(default_factory=dict)     # (player, market) -> [quote dicts]
 
 
@@ -167,12 +169,19 @@ def parse_snapshot(snap: Snapshot, sport: str) -> HistoricalOdds:
         home=home, away=away,
         props=parse_event_lines(body, cfg["markets"]),
         moneylines=parse_event_h2h(body, cfg["teams"]),
+        moneylines_by_book=parse_event_h2h_by_book(body, cfg["teams"]),
         scorers=parse_event_scorers(body, SCORER_ODDS_TO_MARKET),
     )
 
 
-def to_rows(hist: HistoricalOdds) -> list[dict]:
-    """Flatten parsed history into ``odds_history`` rows."""
+def to_rows(hist: HistoricalOdds, include_best: bool = True) -> list[dict]:
+    """Flatten parsed history into ``odds_history`` rows.
+
+    Moneylines are stored per book (the sharp-anchor strategy needs the sharp
+    book's price and the soft books' prices separately) plus a shopped "best"
+    aggregate. ``include_best=False`` skips the aggregate — used when a
+    harvest fetched only a subset of books, where a "best" would silently
+    overwrite the real shopped-best already stored for that snapshot."""
     rows: list[dict] = []
     for (player, market), lines in hist.props.items():
         for ln in lines:
@@ -192,11 +201,20 @@ def to_rows(hist: HistoricalOdds) -> list[dict]:
                 "line": 0.5, "over_odds": q["yes_odds"],
                 "under_odds": q.get("no_odds"),
             })
-    for team, price in hist.moneylines.items():
-        rows.append({
-            "sport": hist.sport, "taken_at": hist.taken,
-            "event_id": hist.event_id, "home": hist.home, "away": hist.away,
-            "player": team, "market": "moneyline", "book": "best",
-            "line": 0.0, "over_odds": price, "under_odds": None,
-        })
+    if include_best:
+        for team, price in hist.moneylines.items():
+            rows.append({
+                "sport": hist.sport, "taken_at": hist.taken,
+                "event_id": hist.event_id, "home": hist.home, "away": hist.away,
+                "player": team, "market": "moneyline", "book": "best",
+                "line": 0.0, "over_odds": price, "under_odds": None,
+            })
+    for book, prices in hist.moneylines_by_book.items():
+        for team, price in prices.items():
+            rows.append({
+                "sport": hist.sport, "taken_at": hist.taken,
+                "event_id": hist.event_id, "home": hist.home, "away": hist.away,
+                "player": team, "market": "moneyline", "book": book,
+                "line": 0.0, "over_odds": price, "under_odds": None,
+            })
     return rows

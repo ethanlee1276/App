@@ -44,6 +44,12 @@ def main() -> None:
                   "`python3 ingest.py mlb --from <start> --to <end>` to add "
                   "them, then this prints a pitcher-aware A/B)")
 
+    # Sharp anchor: no model at all — just soft books disagreeing with the
+    # sharp book's de-vigged fair price.
+    from engine.gamebacktest import backtest_sharp_anchor
+    print()
+    print(backtest_sharp_anchor(conn, args.sport).summary())
+
 
 if __name__ == "__main__":
     main()
