@@ -92,6 +92,20 @@ def test_game_log_limit_and_empty():
     assert sl.parse_game_log({}, HITS) == []
 
 
+def test_game_log_no_limit_keeps_the_full_season():
+    """limit=None is what ingestion uses: the API returns season-to-date, and
+    capping at 15 meant every historical backfill day re-stored the same 15
+    most-recent games instead of the season being backfilled."""
+    season = {"stats": [{"splits": [
+        {"date": f"2024-04-{d:02d}", "opponent": {"id": 138}, "isHome": True,
+         "stat": {"hits": 1, "totalBases": 2, "homeRuns": 0}}
+        for d in range(1, 21)]}]}                      # 20 games
+    assert len(sl.parse_game_log(season, HITS)) == 15  # live default: capped
+    full = sl.parse_game_log(season, HITS, limit=None)
+    assert len(full) == 20
+    assert full[0].date == "2024-04-20" and full[-1].date == "2024-04-01"
+
+
 def test_pitcher_game_log_strikeouts():
     ks = sl.parse_game_log(PLOG, STRIKEOUTS)
     assert [g.value for g in ks] == [9, 7, 6]

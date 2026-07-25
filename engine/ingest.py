@@ -194,7 +194,11 @@ def ingest_mlb_date(conn, date: str) -> dict:
     from .mlb.sources.statslogs import build_live_slate
     result = {"games": 0, "player_logs": 0, "skipped": []}
     try:
-        slate = build_live_slate(date)
+        # limit=None: keep each player's FULL season log. The live default (15
+        # most-recent games) is a form window — through an ingest it meant
+        # every historical date re-stored the same 15 games as of today, so an
+        # 82-day backfill grew the store by almost nothing.
+        slate = build_live_slate(date, limit=None)
     except DataUnavailable as exc:
         result["skipped"].append(f"mlb {date}: {exc}")
         return result

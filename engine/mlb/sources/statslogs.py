@@ -82,17 +82,21 @@ def parse_person(person_json: dict) -> dict:
     }
 
 
-def parse_game_log(stats_json: dict, market: str, limit: int = 15,
+def parse_game_log(stats_json: dict, market: str, limit: int | None = 15,
                    id_to_abbr: dict | None = None) -> list[MLBGameLog]:
     """Most-recent-first game logs for one market from a ``gameLog`` response.
 
     gameLog splits are chronological (oldest first); we reverse and take the
-    most recent ``limit`` games."""
+    most recent ``limit`` games. ``limit=None`` keeps the whole season — the
+    API always returns season-to-date, so a capped window here is why a
+    day-by-day historical ingest kept re-storing the same 15 games."""
     id_to_abbr = id_to_abbr or TEAM_ID_ABBR
     field = MARKET_STAT[market]
     stat_blocks = stats_json.get("stats") or []
     splits = stat_blocks[0].get("splits", []) if stat_blocks else []
-    recent = list(reversed(splits))[:limit]
+    recent = list(reversed(splits))
+    if limit is not None:
+        recent = recent[:limit]
 
     logs: list[MLBGameLog] = []
     n = len(recent)
@@ -144,12 +148,16 @@ def _proxy_line(mean: float, market: str) -> float:
 def build_live_slate(date: str, season: int | None = None,
                      hitter_markets=(TOTAL_BASES, HITS),
                      include_pitchers: bool = True,
-                     limit: int = 15) -> MLBSlate:
+                     limit: int | None = 15) -> MLBSlate:
     """Assemble a live MLB slate for ``date`` (YYYY-MM-DD).
 
     Hitter props come from confirmed lineups (held by the rules engine if a
     lineup isn't posted yet); pitcher strikeout props come from the probable
     starters. Every prop carries real game logs and a recent-form proxy line.
+
+    ``limit`` caps each player's game log at the most recent N games — right
+    for a live slate (recent form), wrong for ingestion: pass ``None`` to keep
+    the full season so a backtest can replay every game.
     """
     season = season or int(date[:4])
     sched = _get_json(
@@ -205,7 +213,8 @@ def build_live_slate(date: str, season: int | None = None,
                     for market in hitter_markets:
                         _add_prop(props, entry.person_id, entry.name, team_ab,
                                   opp_ab, entry.position or person.get("position", ""),
-                                  market, season, entry.spot, person.get("bats", "R"))
+                                  market, season, entry.spot, person.get("bats", "R"),
+                                  log_limit=limit)
 
             # Pitcher strikeout props from probable starters.
             if include_pitchers:
@@ -216,18 +225,20 @@ def build_live_slate(date: str, season: int | None = None,
                     _add_prop(props, pp.get("id"), pp.get("fullName", "TBD"),
                               team_ab, opp_ab, "SP", STRIKEOUTS, season,
                               lineup_spot=1, bats="R",
-                              throws=pp.get("pitchHand", {}).get("code", "R"))
+                              throws=pp.get("pitchHand", {}).get("code", "R"),
+                              log_limit=limit)
 
     return MLBSlate(date=date, games=games, props=props)
 
 
 def _add_prop(props, person_id, name, team, opp, position, market, season,
-              lineup_spot, bats, throws="R"):
+              lineup_spot, bats, throws="R", log_limit: int | None = 15):
     if not person_id:
         return
     group = MARKET_GROUP[market]
     try:
-        logs = parse_game_log(fetch_game_log(person_id, group, season), market)
+        logs = parse_game_log(fetch_game_log(person_id, group, season), market,
+                              limit=log_limit)
     except DataUnavailable:
         return
     if len(logs) < 3:
