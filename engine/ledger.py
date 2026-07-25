@@ -345,3 +345,33 @@ def summary(conn, sport: str | None = None) -> str:
                  for s, d in sorted(p["by_side"].items())]
         lines.append("  By side:  " + "   ".join(parts))
     return "\n".join(lines)
+
+
+def recent_settled(conn, limit: int = 30) -> list[dict]:
+    """The last settled picks, newest first — the site's receipts."""
+    rows = conn.execute(
+        "SELECT date, sport, player, market, side, line, odds, grade, status, "
+        "pnl_units, closing_line FROM bets "
+        "WHERE status IN ('won','lost','push') "
+        "ORDER BY date DESC, id DESC LIMIT ?", (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def export_json(conn, path) -> None:
+    """Write the journal's performance to a JSON file the website renders.
+
+    Called after every settle, so the Track Record page always reflects the
+    latest graded picks without anyone touching a terminal."""
+    import datetime as _dt
+    import json as _json
+    from pathlib import Path as _Path
+    out = {
+        "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
+        "overall": performance(conn),
+        "mlb": performance(conn, "mlb"),
+        "nfl": performance(conn, "nfl"),
+        "recent": recent_settled(conn),
+    }
+    p = _Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(_json.dumps(out, indent=2))

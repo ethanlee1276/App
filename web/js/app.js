@@ -868,6 +868,96 @@ function countUp(el) {
 
 /* ---------------- routing ---------------- */
 /* ============================================================
+   Track Record — the journal, on the site
+   ============================================================ */
+function recTile(label, value, sub) {
+  return `<div class="stat"><div class="stat-k">${label}</div>
+    <div class="stat-v">${value}</div>${sub ? `<div class="stat-sub" style="opacity:.6;font-size:.8em">${sub}</div>` : ""}</div>`;
+}
+
+function recBucketTable(title, bucket) {
+  const keys = Object.keys(bucket || {});
+  if (!keys.length) return "";
+  const rows = keys
+    .sort((a, b) => (bucket[b].w + bucket[b].l) - (bucket[a].w + bucket[a].l))
+    .map((k) => {
+      const d = bucket[k];
+      const net = d.net_u || 0;
+      return `<div style="display:flex;gap:12px;padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.05)">
+        <span style="flex:1">${escapeHtml(k)}</span>
+        <span style="min-width:70px;text-align:right">${d.w}-${d.l}</span>
+        <span style="min-width:80px;text-align:right;color:${net >= 0 ? "var(--good,#3ddc84)" : "var(--bad,#ff6b7a)"}">
+          ${net >= 0 ? "+" : ""}${net.toFixed(2)}u</span></div>`;
+    }).join("");
+  return `<div style="min-width:0"><div class="section-title" style="margin-top:16px">${title}</div>
+    <div class="card" style="padding:0">${rows}</div></div>`;
+}
+
+async function renderRecord() {
+  const host = document.getElementById("record-body");
+  if (!host) return;
+  let d = null;
+  try {
+    const res = await fetch("data/record.json?t=" + Date.now());
+    if (res.ok) d = await res.json();
+  } catch (e) {}
+  if (!d || !d.overall || (!d.overall.settled && !d.overall.open)) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">📒</div>
+      <div class="es-title">No graded picks yet</div>
+      <div class="es-sub">Every recommended pick is journaled automatically at its real
+      price and grades itself once results are ingested (nightly, automatic).
+      Check back after tonight's games settle — this page becomes the honest
+      scoreboard for everything the model recommends.</div></div>`;
+    return;
+  }
+  const o = d.overall;
+  const roll = o.bankroll - o.starting_bankroll;
+  const small = o.settled < 100
+    ? `<p class="loading" style="margin-top:10px">⚠️ ${o.settled} settled pick(s) —
+       results this small are mostly luck. Judge the model after 100+, and judge
+       the process by CLV before that.</p>` : "";
+  host.innerHTML = `
+    <div class="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+      ${recTile("Record", `${o.wins}-${o.losses}-${o.pushes}`, `${o.open} open`)}
+      ${recTile("Win rate", (o.win_rate * 100).toFixed(1) + "%", "")}
+      ${recTile("ROI", (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
+                `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u net`)}
+      ${recTile("Bankroll", "$" + o.bankroll.toFixed(2),
+                `${roll >= 0 ? "+" : ""}$${roll.toFixed(2)} vs start`)}
+      ${recTile("Avg CLV", o.avg_clv == null ? "—" : (o.avg_clv >= 0 ? "+" : "") + o.avg_clv.toFixed(2) + " pts",
+                "beat the close = sharp process")}
+    </div>
+    ${small}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+      ${recBucketTable("By market", o.by_market)}
+      ${recBucketTable("By side", o.by_side)}
+      ${recBucketTable("By grade", o.by_grade)}
+    </div>
+    <div class="section-title" style="margin-top:18px">Recent settled picks</div>
+    <div class="card" style="padding:0">
+      ${(d.recent || []).map((b) => {
+        const won = b.status === "won";
+        const push = b.status === "push";
+        const icon = push ? "➖" : (won ? "✅" : "❌");
+        const pnl = b.pnl_units || 0;
+        return `<div style="display:flex;gap:12px;padding:8px 14px;align-items:center;
+            border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden">
+          <span>${icon}</span>
+          <span style="opacity:.55;min-width:82px;font-size:.85em">${escapeHtml(b.date || "")}</span>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">
+            <strong>${escapeHtml(b.player)}</strong>
+            <span style="opacity:.6"> ${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
+          <span style="min-width:56px;text-align:right">${american(b.odds)}</span>
+          <span style="min-width:70px;text-align:right;color:${pnl >= 0 ? "var(--good,#3ddc84)" : "var(--bad,#ff6b7a)"}">
+            ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
+        </div>`;
+      }).join("") || `<p class="loading" style="padding:12px">Nothing settled yet.</p>`}
+    </div>
+    <p style="opacity:.55;margin-top:10px;font-size:.85em">Updated ${escapeHtml(d.generated_at || "")}
+      · settles automatically as results are ingested each day.</p>`;
+}
+
+/* ============================================================
    Odds status — say exactly why no real prices are attached
    ============================================================ */
 function noMarketExplainer() {
@@ -962,7 +1052,7 @@ function renderEdgeBoard() {
   }).join("") || "";
 }
 
-const VIEW_ORDER = ["recommended", "edge", "longshots", "trending", "players"];
+const VIEW_ORDER = ["recommended", "edge", "longshots", "trending", "players", "record"];
 
 function switchView(name) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -974,13 +1064,14 @@ function switchView(name) {
   else if (dir < 0) target.classList.add("from-left");
   target.classList.add("active");
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
+  if (name === "record") renderRecord();
   if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
   moveIndicator();
 }
 
 function initialView() {
   const h = (location.hash || "").replace("#", "");
-  if (["recommended", "edge", "longshots", "trending", "players"].includes(h)) switchView(h);
+  if (["recommended", "edge", "longshots", "trending", "players", "record"].includes(h)) switchView(h);
 }
 
 function moveIndicator() {

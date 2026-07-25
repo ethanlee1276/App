@@ -160,9 +160,10 @@ def main() -> None:
             lconn = ledger.connect()
             logged = ledger.log_recommendations(lconn, result)
             settled = ledger.settle_from_history(lconn, hist_connect(), sport="mlb")
+            ledger.export_json(lconn, "web/data/record.json")
             if logged or settled:
                 print(f"Journal: {logged} new pick(s) logged, {settled} settled "
-                      f"— see `python3 ledger.py report`")
+                      f"— see the Record tab or `python3 ledger.py report`")
         except Exception as exc:
             print(f"⚠️  Bet journal skipped: {exc}")
 

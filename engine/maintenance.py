@@ -124,7 +124,9 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
 
     try:
         from . import db, ledger
-        n = ledger.settle_from_history(ledger.connect(), db.connect())
+        lconn = ledger.connect()
+        n = ledger.settle_from_history(lconn, db.connect())
+        ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
         log(f"  journal: settled {n} pick(s)" if n else "  journal: nothing to settle")
     except Exception as exc:  # noqa: BLE001
         log(f"  ⚠️  journal settle failed: {exc}")

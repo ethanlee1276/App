@@ -205,6 +205,24 @@ def test_total_picks_journal_and_settle_from_scores():
     assert ledger.performance(conn)["net_units"] == 1.0
 
 
+def test_export_json_writes_the_site_record():
+    import json, tempfile, os
+    from pathlib import Path
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    ledger.log_recommendations(conn, _result())
+    ledger.settle(conn, {("A", "rush_yds"): 85.0})
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "web" / "data" / "record.json"
+        ledger.export_json(conn, p)
+        d = json.loads(p.read_text())
+        assert d["overall"]["wins"] == 1
+        assert d["nfl"]["settled"] == 1 and d["mlb"]["settled"] == 0
+        assert d["recent"][0]["player"] == "A"
+        assert d["recent"][0]["status"] == "won"
+        assert "generated_at" in d
+
+
 def test_summary_renders():
     conn = _conn()
     ledger.log_recommendations(conn, _result())
