@@ -58,6 +58,13 @@ def print_summary(conn) -> None:
                       f"moneyline backtest are running on nothing. Restore "
                       f"them with: python3 ingest.py mlb --from {lo} "
                       f"--to {hi} --scores-only")
+    n_ump = conn.execute(
+        "SELECT COUNT(*) FROM game_umpires WHERE sport='mlb'").fetchone()[0]
+    n_sp = conn.execute(
+        "SELECT COUNT(*) FROM game_starters WHERE sport='mlb'").fetchone()[0]
+    if n_ump or n_sp:
+        print(f"  MLB context rows: {n_sp:,} starting pitchers, "
+              f"{n_ump:,} plate umpires")
     r = db.date_ranges(conn)
     lo, hi = r["mlb_logs"]
     if lo:
