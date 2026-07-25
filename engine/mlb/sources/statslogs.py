@@ -146,7 +146,7 @@ def _proxy_line(mean: float, market: str) -> float:
 
 
 def build_live_slate(date: str, season: int | None = None,
-                     hitter_markets=(TOTAL_BASES, HITS),
+                     hitter_markets=(TOTAL_BASES, HITS, HOME_RUNS),
                      include_pitchers: bool = True,
                      limit: int | None = 15) -> MLBSlate:
     """Assemble a live MLB slate for ``date`` (YYYY-MM-DD).

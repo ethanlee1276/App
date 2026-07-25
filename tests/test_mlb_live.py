@@ -92,6 +92,41 @@ def test_game_log_limit_and_empty():
     assert sl.parse_game_log({}, HITS) == []
 
 
+def test_all_thirty_parks_are_wired_end_to_end():
+    """Every MLB park must resolve from its venue name to a real profile with
+    weather coords and a wind orientation — 'Generic Park' on a live slate
+    means a stadium fell through this wiring."""
+    from engine.mlb.parks import PARKS
+    from engine.mlb.sources.mlbstats import (
+        VENUE_PARK, PARK_COORDS, PARK_ORIENTATION,
+    )
+    assert len(PARKS) == 30
+    teams = [p.team for p in PARKS.values()]
+    assert len(set(teams)) == 30            # one park per club, no dupes
+    for frag, key in VENUE_PARK.items():
+        assert key in PARKS, f"venue fragment {frag!r} maps to unknown {key!r}"
+    for key in PARKS:
+        assert key in PARK_COORDS, f"{key} missing weather coordinates"
+        assert key in PARK_ORIENTATION, f"{key} missing wind orientation"
+    # A few real venue strings resolve to the right park.
+    def resolve(venue):
+        v = venue.lower()
+        return next((k for frag, k in VENUE_PARK.items() if frag in v), "generic")
+    assert resolve("Daikin Park") == "daikin"
+    assert resolve("Rate Field") == "rate"
+    assert resolve("Sutter Health Park") == "sutter"
+    assert resolve("Oriole Park at Camden Yards") == "camden"
+    assert resolve("T-Mobile Park") == "tmobile"
+
+
+def test_live_slate_builds_home_run_props_by_default():
+    """The Long Shots board prices HOME_RUNS props — a live slate that never
+    builds them means the board is empty forever, silently."""
+    import inspect
+    sig = inspect.signature(sl.build_live_slate)
+    assert HOME_RUNS in sig.parameters["hitter_markets"].default
+
+
 def test_game_log_no_limit_keeps_the_full_season():
     """limit=None is what ingestion uses: the API returns season-to-date, and
     capping at 15 meant every historical backfill day re-stored the same 15

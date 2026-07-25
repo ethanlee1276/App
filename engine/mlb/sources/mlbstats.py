@@ -44,6 +44,17 @@ VENUE_PARK = {
     "yankee": "yankee", "fenway": "fenway", "oracle": "oracle",
     "petco": "petco", "great american": "gabp", "tropicana": "tropicana",
     "chase": "chase",
+    "rate field": "rate", "guaranteed rate": "rate",
+    "progressive": "progressive", "comerica": "comerica",
+    "kauffman": "kauffman", "target field": "target",
+    "daikin": "daikin", "minute maid": "daikin",
+    "angel stadium": "angel", "sutter": "sutter",
+    "t-mobile": "tmobile", "globe life": "globelife",
+    "rogers centre": "rogers", "truist": "truist",
+    "citi field": "citi", "citizens bank": "cbp",
+    "nationals park": "nationals", "american family": "amfam",
+    "busch": "busch", "pnc": "pnc", "dodger": "dodger",
+    "camden": "camden", "oriole park": "camden",
 }
 
 # Park coordinates for the weather lookup (starter set).
@@ -53,6 +64,16 @@ PARK_COORDS = {
     "fenway": (42.346, -71.097), "oracle": (37.778, -122.389),
     "petco": (32.707, -117.157), "gabp": (39.097, -84.507),
     "tropicana": (27.768, -82.653), "chase": (33.445, -112.067),
+    "rate": (41.830, -87.634), "progressive": (41.496, -81.685),
+    "comerica": (42.339, -83.049), "kauffman": (39.051, -94.480),
+    "target": (44.982, -93.278), "daikin": (29.757, -95.356),
+    "angel": (33.800, -117.883), "sutter": (38.580, -121.513),
+    "tmobile": (47.591, -122.332), "globelife": (32.747, -97.084),
+    "rogers": (43.641, -79.389), "truist": (33.891, -84.468),
+    "citi": (40.757, -73.846), "cbp": (39.906, -75.166),
+    "nationals": (38.873, -77.007), "amfam": (43.028, -87.971),
+    "busch": (38.623, -90.193), "pnc": (40.447, -80.006),
+    "dodger": (34.074, -118.240), "camden": (39.284, -76.622),
 }
 
 # Park orientation = compass bearing (degrees from true north) from home plate
@@ -72,6 +93,26 @@ PARK_ORIENTATION = {
     "gabp": 115,       # CF to the ESE, toward the river
     "tropicana": 45,   # dome
     "chase": 22,       # retractable
+    "rate": 127,       # CF to the SE
+    "progressive": 20,
+    "comerica": 150,
+    "kauffman": 45,
+    "target": 90,
+    "daikin": 345,     # retractable (usually closed in summer)
+    "angel": 65,
+    "sutter": 60,
+    "tmobile": 45,     # retractable
+    "globelife": 5,    # retractable (usually closed in summer)
+    "rogers": 0,       # retractable
+    "truist": 45,
+    "citi": 30,
+    "cbp": 10,
+    "nationals": 30,
+    "amfam": 120,      # retractable
+    "busch": 60,
+    "pnc": 115,
+    "dodger": 25,
+    "camden": 30,
 }
 
 

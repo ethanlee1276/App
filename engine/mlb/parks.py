@@ -13,7 +13,9 @@ from dataclasses import dataclass, field
 
 from .models import ParkProfile, TOTAL_BASES, HITS, HOME_RUNS, STRIKEOUTS
 
-# A starter set of well-known parks (extend toward all 30 with the live layer).
+# All 30 parks. Factors are directional approximations of published
+# multi-year park factors (1.0 = league average); the ML phase can refit them
+# from the historical database.
 PARKS: dict[str, ParkProfile] = {
     "wrigley": ParkProfile("wrigley", "Wrigley Field", "CHC",
                            hr_factor=1.04, run_factor=1.02, k_factor=1.00),
@@ -39,6 +41,50 @@ PARKS: dict[str, ParkProfile] = {
     "chase": ParkProfile("chase", "Chase Field", "ARI",
                          hr_factor=1.06, run_factor=1.05, k_factor=0.99,
                          roof="retractable"),
+    "rate": ParkProfile("rate", "Rate Field", "CWS",
+                        hr_factor=1.10, run_factor=1.02, k_factor=1.00),
+    "progressive": ParkProfile("progressive", "Progressive Field", "CLE",
+                               hr_factor=0.95, run_factor=0.97, k_factor=1.03),
+    "comerica": ParkProfile("comerica", "Comerica Park", "DET",
+                            hr_factor=0.92, run_factor=0.96, k_factor=1.01),
+    "kauffman": ParkProfile("kauffman", "Kauffman Stadium", "KC",
+                            hr_factor=0.87, run_factor=1.00, k_factor=0.98),
+    "target": ParkProfile("target", "Target Field", "MIN",
+                          hr_factor=0.98, run_factor=0.99, k_factor=1.00),
+    "daikin": ParkProfile("daikin", "Daikin Park", "HOU",
+                          hr_factor=1.08, run_factor=1.02, k_factor=1.00,
+                          roof="retractable"),
+    "angel": ParkProfile("angel", "Angel Stadium", "LAA",
+                         hr_factor=1.02, run_factor=0.98, k_factor=1.00),
+    "sutter": ParkProfile("sutter", "Sutter Health Park", "OAK",
+                          hr_factor=1.02, run_factor=1.04, k_factor=0.98),
+    "tmobile": ParkProfile("tmobile", "T-Mobile Park", "SEA",
+                           hr_factor=0.98, run_factor=0.90, k_factor=1.08),
+    "globelife": ParkProfile("globelife", "Globe Life Field", "TEX",
+                             hr_factor=0.98, run_factor=0.98, k_factor=1.00,
+                             roof="retractable"),
+    "rogers": ParkProfile("rogers", "Rogers Centre", "TOR",
+                          hr_factor=1.06, run_factor=1.02, k_factor=0.99,
+                          roof="retractable"),
+    "truist": ParkProfile("truist", "Truist Park", "ATL",
+                          hr_factor=1.04, run_factor=1.02, k_factor=1.00),
+    "citi": ParkProfile("citi", "Citi Field", "NYM",
+                        hr_factor=0.97, run_factor=0.94, k_factor=1.03),
+    "cbp": ParkProfile("cbp", "Citizens Bank Park", "PHI",
+                       hr_factor=1.12, run_factor=1.04, k_factor=1.00),
+    "nationals": ParkProfile("nationals", "Nationals Park", "WSH",
+                             hr_factor=1.02, run_factor=1.00, k_factor=1.00),
+    "amfam": ParkProfile("amfam", "American Family Field", "MIL",
+                         hr_factor=1.08, run_factor=1.00, k_factor=1.01,
+                         roof="retractable"),
+    "busch": ParkProfile("busch", "Busch Stadium", "STL",
+                         hr_factor=0.90, run_factor=0.96, k_factor=1.00),
+    "pnc": ParkProfile("pnc", "PNC Park", "PIT",
+                       hr_factor=0.88, run_factor=0.96, k_factor=1.00),
+    "dodger": ParkProfile("dodger", "Dodger Stadium", "LAD",
+                          hr_factor=1.05, run_factor=0.96, k_factor=1.03),
+    "camden": ParkProfile("camden", "Oriole Park at Camden Yards", "BAL",
+                          hr_factor=1.00, run_factor=0.98, k_factor=1.00),
 }
 
 GENERIC_PARK = ParkProfile("generic", "Generic Park", "")
