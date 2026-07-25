@@ -553,7 +553,29 @@ function renderRecommended() {
          sliders or enable “show non-recommended”.</p>`;
     return;
   }
-  host.innerHTML = visible.map(cardHTML).join("");
+  // Group by market so all Total Bases props sit together, all Hits
+  // together, and so on — full cards, just organized.
+  const groups = new Map();
+  visible.forEach((r) => {
+    const k = r.market_label || r.market || "Other";
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  });
+  const MARKET_ORDER = ["total bases", "hits", "home runs", "strikeouts",
+                        "passing yards", "rushing yards", "receiving yards",
+                        "receptions"];
+  const keys = [...groups.keys()].sort((a, b) => {
+    const ia = MARKET_ORDER.indexOf(a.toLowerCase());
+    const ib = MARKET_ORDER.indexOf(b.toLowerCase());
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+  });
+  host.innerHTML = keys.map((k) => {
+    const rows = groups.get(k);
+    const nRec = rows.filter((r) => r._ok).length;
+    return `<div class="section-title" style="grid-column:1/-1;margin:14px 0 0">
+        ${escapeHtml(k)} <span class="sub">— ${rows.length} prop(s)${nRec ? `, ${nRec} recommended` : ""}</span>
+      </div>` + rows.map(cardHTML).join("");
+  }).join("");
   fillMeters(host);
   revealChildren(host);
 }
