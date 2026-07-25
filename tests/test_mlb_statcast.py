@@ -86,8 +86,64 @@ def test_projection_uses_statcast():
     assert any("regression" in r for r in hot.reasons)
 
 
+def test_parse_barrels_scales_percents_and_folds_accents():
+    """brl_percent/ev95percent arrive as 7.5-style percents; the HR model's
+    thresholds expect 0..1 fractions. And Savant prints accents (Acuña) that
+    other feeds drop — the join must fold them."""
+    from engine.mlb.sources.savant import parse_barrels, _norm
+    rows = [
+        {"last_name": "Acuña Jr., Ronald", "brl_percent": "15.2",
+         "ev95percent": "52.1"},
+        {"first_name": "Soft", "last_name": "Contact", "brl_percent": "3.1",
+         "ev95percent": "31.0"},
+    ]
+    out = parse_barrels(rows)
+    acuna = out[_norm("Ronald Acuna Jr")]
+    assert abs(acuna["barrel_pct"] - 0.152) < 1e-9
+    assert abs(acuna["hard_hit_pct"] - 0.521) < 1e-9
+    assert out[_norm("Soft Contact")]["barrel_pct"] < 0.05
+
+
+def test_attach_merges_boards_and_skips_pitchers(monkeypatch):
+    from engine.mlb.sources import savant
+    from engine.mlb.models import MLBProp, MLBGameLog, TOTAL_BASES, STRIKEOUTS
+    from engine.models import SportsbookLine
+    from engine.mlb.sources.savant import _norm
+
+    monkeypatch.setattr(savant, "load_expected_stats", lambda y, k="batter": {
+        _norm("Big Bopper"): savant.StatcastProfile(xslg=0.520, slg=0.450)})
+    monkeypatch.setattr(savant, "load_barrels", lambda y, k="batter": {
+        _norm("Big Bopper"): {"barrel_pct": 0.14, "hard_hit_pct": 0.50}})
+
+    def prop(name, pos):
+        return MLBProp(name, "NYY", "BOS", pos,
+                       STRIKEOUTS if pos == "SP" else TOTAL_BASES,
+                       [MLBGameLog(i, "X", 1) for i in range(1, 6)], 1.5, None,
+                       [SportsbookLine("proxy", 1.5)])
+
+    hitter, pitcher = prop("Big Bopper", "RF"), prop("Big Bopper", "SP")
+    n = savant.attach_statcast([hitter, pitcher], 2026)
+    assert n == 1
+    assert hitter.statcast.barrel_pct == 0.14      # merged from barrels board
+    assert hitter.statcast.xslg == 0.520           # and expected stats
+    assert pitcher.statcast is None                # wrong board for pitchers
+
+
 if __name__ == "__main__":
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn(); print(f"  ok  {fn.__name__}")
+    class MP:
+        def __init__(self): self._undo = []
+        def setattr(self, obj, name, val):
+            self._undo.append((obj, name, getattr(obj, name))); setattr(obj, name, val)
+        def undo(self):
+            for obj, name, val in reversed(self._undo): setattr(obj, name, val)
+
+    fns = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for name, fn in fns:
+        needs_mp = fn.__code__.co_argcount == 1
+        mp = MP() if needs_mp else None
+        try:
+            fn(mp) if needs_mp else fn()
+            print(f"  ok  {name}")
+        finally:
+            if mp: mp.undo()
     print(f"\n{len(fns)} tests passed.")

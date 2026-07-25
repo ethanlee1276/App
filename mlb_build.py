@@ -112,6 +112,19 @@ def main() -> None:
     except Exception as exc:
         print(f"⚠️  Umpire profiles unavailable — neutral zones assumed.\n   {exc}")
 
+    # Statcast (Baseball Savant): xSLG/xwOBA regression + barrel / hard-hit
+    # power profiles — turns "season home-run rate only" into process-based
+    # contact quality on props and the HR board.
+    try:
+        from engine.mlb.sources.savant import attach_statcast
+        n_sc = attach_statcast(slate.props, int(args.date[:4]))
+        hitters = sum(1 for p in slate.props if p.position != "SP")
+        if hitters:
+            print(f"Statcast: contact-quality profiles on {n_sc}/{hitters} "
+                  f"hitter props.")
+    except Exception as exc:
+        print(f"⚠️  Statcast unavailable — season rates only.\n   {exc}")
+
     if not slate.props:
         print(f"No props built for {args.date} — lineups may not be posted yet. "
               f"Pitcher props need probable starters; hitter props need confirmed lineups.")
