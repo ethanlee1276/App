@@ -212,27 +212,30 @@ def test_book_segment_splits_by_side():
     assert "OVER " in text and "UNDER" in text
 
 
-def test_book_segment_buckets_by_claimed_edge():
-    """If bets the model liked more don't win more, threshold tuning is
-    pointless — the buckets make that testable."""
+def test_book_segment_splits_by_grade():
+    """If Strong picks don't beat Lean picks, the model's conviction carries
+    no signal and tightening thresholds is pointless — the grade split makes
+    that testable in the product's own vocabulary."""
     from engine.backtest import SettledProp, evaluate
 
-    def sp(hit_prob, won):
-        # At -110 the break-even probability is ~52.4%.
+    def sp(grade, won):
         return SettledProp(player="P", market="total_bases", line=1.5,
-                           odds=-110, hit_prob=hit_prob, projection=1.8,
+                           odds=-110, hit_prob=0.58, projection=1.8,
                            actual=2.0 if won else 1.0,
                            recommended=True, stake_units=1.0,
-                           side="OVER", basis="book")
+                           side="OVER", basis="book", grade=grade)
 
-    r = evaluate([sp(0.55, False),   # claimed ~2.6%  -> "<5%"
-                  sp(0.60, True),    # claimed ~7.6%  -> "5-10%"
-                  sp(0.70, True)])   # claimed ~17.6% -> "10%+"
-    edges = r.segments["book"]["edges"]
-    assert edges["<5%"]["n_bets"] == 1 and edges["<5%"]["wins"] == 0
-    assert edges["5-10%"]["n_bets"] == 1 and edges["5-10%"]["wins"] == 1
-    assert edges["10%+"]["n_bets"] == 1 and edges["10%+"]["wins"] == 1
-    assert "claimed" in r.summary()
+    r = evaluate([sp("Strong", True), sp("Strong", True),
+                  sp("Play", True), sp("Play", False),
+                  sp("Lean", False)])
+    grades = r.segments["book"]["grades"]
+    assert grades["Strong"]["n_bets"] == 2 and grades["Strong"]["wins"] == 2
+    assert grades["Play"]["n_bets"] == 2 and grades["Play"]["wins"] == 1
+    assert grades["Lean"]["n_bets"] == 1 and grades["Lean"]["wins"] == 0
+    assert grades["Strong"]["roi"] > grades["Play"]["roi"] > grades["Lean"]["roi"]
+    # Strong is printed before Play before Lean in the summary.
+    text = r.summary()
+    assert 0 < text.find("Strong") < text.find("Play ") < text.find("Lean")
 
 
 if __name__ == "__main__":

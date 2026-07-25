@@ -111,6 +111,7 @@ def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
                 hit_prob=rec.hit_prob, projection=rec.projection, actual=actual,
                 recommended=decision.recommend, stake_units=rec.stake_units,
                 side=rec.side, basis="book" if quote else "naive",
+                grade=rec.grade,
             ))
 
     report = evaluate(settled)

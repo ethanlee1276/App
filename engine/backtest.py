@@ -23,17 +23,10 @@ from dataclasses import dataclass, field
 
 from .odds import american_to_decimal, american_to_prob
 
-# Claimed-edge buckets for the market-relative P&L breakdown. If realized ROI
-# doesn't rise across these, the model's edge estimate is noise.
-EDGE_BUCKETS = ("<5%", "5-10%", "10%+")
-
-
-def _edge_bucket(edge: float) -> str:
-    if edge < 0.05:
-        return EDGE_BUCKETS[0]
-    if edge < 0.10:
-        return EDGE_BUCKETS[1]
-    return EDGE_BUCKETS[2]
+# Display order for the per-grade P&L breakdown of the market-relative
+# segment. If Strong picks don't beat Lean picks, the model's conviction
+# carries no signal and no threshold tuning will conjure one.
+GRADE_ORDER = ("Strong", "Play", "Lean")
 
 
 def _norm(name: str) -> str:
@@ -62,6 +55,10 @@ class SettledProp:
     # baseline). Only the book-priced subset says anything about beating the
     # market, so P&L is reported per basis rather than blended out of sight.
     basis: str = "naive"
+    # The grade the pipeline attached at bet time (Strong/Play/Lean). Lets the
+    # market-relative P&L answer "do higher-conviction picks actually win
+    # more?" in the product's own vocabulary.
+    grade: str = ""
 
     @property
     def over_hit(self) -> int | None:
@@ -157,16 +154,17 @@ class BacktestReport:
                                 lines.append(
                                     f"        {sd_name:5} {sd['n_bets']:>4} bets, "
                                     f"{sd['wins']} won  ROI {sd['roi']:+.1%}")
-                    # Claimed-edge buckets: if bets the model liked more don't
-                    # do better, the edge estimate carries no signal and no
-                    # threshold tuning will conjure one.
-                    if basis == "book" and g.get("edges"):
-                        for eb_name in EDGE_BUCKETS:
-                            eb = g["edges"].get(eb_name)
-                            if eb and eb["n_bets"]:
+                    # Grade split: does the model's own conviction (what the
+                    # site labels Strong/Play/Lean) predict realized ROI?
+                    if basis == "book" and len(g.get("grades", {})) > 1:
+                        names = [n for n in GRADE_ORDER if n in g["grades"]]
+                        names += sorted(set(g["grades"]) - set(GRADE_ORDER))
+                        for gr_name in names:
+                            gr = g["grades"][gr_name]
+                            if gr["n_bets"]:
                                 lines.append(
-                                    f"        claimed {eb_name:8} {eb['n_bets']:>4} bets, "
-                                    f"{eb['wins']} won  ROI {eb['roi']:+.1%}")
+                                    f"        {gr_name:6} {gr['n_bets']:>4} bets, "
+                                    f"{gr['wins']} won  ROI {gr['roi']:+.1%}")
             if self.avg_clv is not None:
                 lines.append(f"  Closing-line value  {self.avg_clv:+.2f} pts avg")
         # Say plainly what the ROI above is measured against — an ROI beating a
@@ -236,19 +234,16 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
         g = seg.setdefault((s.basis or "naive"),
                            {"n_bets": 0, "wins": 0, "pushes": 0,
                             "staked": 0.0, "net": 0.0, "sides": {},
-                            "edges": {}})
+                            "grades": {}})
         side = seg[s.basis or "naive"]["sides"].setdefault(
             (s.side or "OVER").upper(),
             {"n_bets": 0, "wins": 0, "staked": 0.0, "net": 0.0})
-        # The edge the model CLAIMED at bet time: its probability for the taken
-        # side minus the break-even probability at the taken odds.
-        claimed = s.hit_prob - american_to_prob(s.odds)
-        ebucket = g["edges"].setdefault(
-            _edge_bucket(claimed),
+        gbucket = g["grades"].setdefault(
+            s.grade or "ungraded",
             {"n_bets": 0, "wins": 0, "staked": 0.0, "net": 0.0})
         g["n_bets"] += 1
         side["n_bets"] += 1
-        ebucket["n_bets"] += 1
+        gbucket["n_bets"] += 1
         oc = s.outcome
         if oc is None:
             pushes += 1
@@ -258,22 +253,22 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
         staked += stake
         g["staked"] += stake
         side["staked"] += stake
-        ebucket["staked"] += stake
+        gbucket["staked"] += stake
         if oc == 1:
             wins += 1
             g["wins"] += 1
             side["wins"] += 1
-            ebucket["wins"] += 1
+            gbucket["wins"] += 1
             payout = (american_to_decimal(s.odds) - 1.0) * stake
             net += payout
             g["net"] += payout
             side["net"] += payout
-            ebucket["net"] += payout
+            gbucket["net"] += payout
         else:
             net -= stake
             g["net"] -= stake
             side["net"] -= stake
-            ebucket["net"] -= stake
+            gbucket["net"] -= stake
         if s.closing_line is not None:
             # On an over you want the line to rise after you bet it; on an under
             # you want it to fall. Same sign convention would score unders
@@ -295,8 +290,8 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
         g["win_rate"] = (g["wins"] / graded) if graded else 0.0
         for sd in g["sides"].values():
             sd["roi"] = (sd["net"] / sd["staked"]) if sd["staked"] else 0.0
-        for eb in g["edges"].values():
-            eb["roi"] = (eb["net"] / eb["staked"]) if eb["staked"] else 0.0
+        for gr in g["grades"].values():
+            gr["roi"] = (gr["net"] / gr["staked"]) if gr["staked"] else 0.0
     r.segments = seg
     r.avg_clv = (sum(clvs) / len(clvs)) if clvs else None
     return r
@@ -325,6 +320,7 @@ def settle_recommendations(recommendations: list[dict],
             recommended=rec["recommended"],
             stake_units=rec.get("stake_units", 1.0),
             side=rec.get("side", "OVER"),
+            grade=rec.get("grade", ""),
         ))
     return out
 
