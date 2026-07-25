@@ -99,6 +99,38 @@ def test_mlb_results_parse_only_completed_games():
     assert rows[0]["extra"] == "yankee"        # venue mapped to a park profile
 
 
+def test_player_log_ingest_is_idempotent_across_dates():
+    """A game log's recency index shifts as newer games arrive, so history must
+    be keyed on the real game date — otherwise re-ingesting files the same game
+    under a new key and corrupts the record the backtest learns from."""
+    from engine.db import upsert_player_logs, entries_for_market
+    from engine.ingest import mlb_rows_from_slate
+    from engine.mlb.data_loader import MLBSlate
+    from engine.mlb.models import MLBProp, MLBGameLog, MLBGame
+    from engine.models import SportsbookLine
+
+    def slate(extra):
+        dates = ["2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04"][:3 + extra]
+        n = len(dates)
+        logs = [MLBGameLog(game=n - i, opponent="X", value=float(len(dates) - i), date=d)
+                for i, d in enumerate(reversed(dates))]
+        prop = MLBProp("Aaron Judge", "NYY", "BOS", "RF", "total_bases", logs, 2.0,
+                       None, [SportsbookLine("proxy", 1.5)], bats="R", lineup_spot=2)
+        return MLBSlate(date=dates[-1], games=[MLBGame(home="NYY", away="BOS", park="yankee")],
+                        props=[prop])
+
+    conn = connect(":memory:")
+    for extra in (0, 1):        # ingest on two consecutive days
+        _, prows = mlb_rows_from_slate(slate(extra), f"2026-06-0{3 + extra}")
+        upsert_player_logs(conn, prows)
+
+    rows = conn.execute("SELECT period FROM player_game_logs").fetchall()
+    assert len(rows) == 4, "overlapping ingests must not duplicate games"
+    entries = entries_for_market(conn, "mlb", "total_bases", min_games=1)
+    # Chronological order, oldest first — what the walk-forward backtest needs.
+    assert entries[0]["values"] == [1.0, 2.0, 3.0, 4.0]
+
+
 def test_ingested_mlb_results_produce_ratings():
     """End to end: real finals in the DB must yield ranked team ratings."""
     from engine.ingest import mlb_result_rows

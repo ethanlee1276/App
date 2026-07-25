@@ -108,7 +108,8 @@ def parse_game_log(stats_json: dict, market: str, limit: int = 15,
                   or id_to_abbr.get(opp.get("id"))
                   or opp.get("name", ""))
         logs.append(MLBGameLog(game=n - i, opponent=opp_ab, value=value,
-                               home=bool(sp.get("isHome", True))))
+                               home=bool(sp.get("isHome", True)),
+                               date=(sp.get("date") or "")[:10]))
     return logs
 
 

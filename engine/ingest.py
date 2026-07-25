@@ -111,9 +111,15 @@ def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
     prows = []
     for p in slate.props:
         for gl in p.logs:
+            # Key on the game's real date. ``gl.game`` is only a recency index —
+            # it shifts as newer games arrive, so using it would file the same
+            # real game under a new key on every ingest and duplicate history.
+            # Fall back to the index only when the source gave us no date.
+            period = gl.date or f"idx-{gl.game:04d}"
+            log_season = int(gl.date[:4]) if gl.date else season
             prows.append({
-                "sport": "mlb", "season": season, "period": f"{gl.game:04d}",
-                "game_id": f"{p.player}-{gl.game:04d}", "player": p.player,
+                "sport": "mlb", "season": log_season, "period": period,
+                "game_id": f"{p.player}-{period}", "player": p.player,
                 "team": p.team, "opponent": gl.opponent, "position": p.position,
                 "home": 1 if gl.home else 0, "market": p.market, "value": gl.value,
             })

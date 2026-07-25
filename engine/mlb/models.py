@@ -30,12 +30,18 @@ PITCHER_MARKETS = {STRIKEOUTS}
 @dataclass
 class MLBGameLog:
     """One past game for a player (most recent first). ``game`` is a simple
-    recency index; ``opponent`` a team abbreviation."""
+    recency index; ``opponent`` a team abbreviation.
+
+    ``date`` (YYYY-MM-DD) is the game's real calendar date when the source
+    provides it. The recency index shifts every time a newer game arrives, so
+    persisting history keys on the date instead — otherwise the same real game
+    lands under a different key on each ingest and the record duplicates."""
 
     game: int
     opponent: str
     value: float
     home: bool = True
+    date: str = ""
 
 
 @dataclass
