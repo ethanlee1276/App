@@ -21,12 +21,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .db import starters_by_game
 from .gamebets import SCORING_BASELINE, mlb_win_prob, nfl_win_prob, price_moneyline
 from .odds import american_to_decimal
 
 # Same shrinkage as engine.teamrates.compute_team_ratings: early-season records
 # are regressed toward league average.
 SHRINK = 6.0
+# A starter's record firms up over this many starts before it's fully trusted.
+PITCHER_SHRINK = 5.0
 
 
 def moneyline_closes(conn, sport: str) -> dict:
@@ -46,6 +49,8 @@ def moneyline_closes(conn, sport: str) -> dict:
 @dataclass
 class MoneylineBacktest:
     sport: str = "mlb"
+    use_pitchers: bool = False
+    starters_known: int = 0    # quoted games where both starters were stored
     games_seen: int = 0        # completed games walked over
     games_quoted: int = 0      # had a harvested price AND enough team history
     n_bets: int = 0
@@ -63,11 +68,15 @@ class MoneylineBacktest:
         return (self.net / self.staked) if self.staked else 0.0
 
     def summary(self) -> str:
+        flavor = "pitcher-aware" if self.use_pitchers else "ratings only"
         lines = [
-            f"{self.sport.upper()} moneyline backtest · real harvested closes",
+            f"{self.sport.upper()} moneyline backtest · real harvested closes · {flavor}",
             f"  Games       {self.games_seen} completed, "
             f"{self.games_quoted} with a book price + team history",
         ]
+        if self.use_pitchers and self.games_quoted:
+            lines.append(f"  Starters    known for {self.starters_known}"
+                         f"/{self.games_quoted} quoted games")
         if self.games_quoted:
             lines.append(
                 f"  Model       Brier {self.brier:.4f}   mean P(home) "
@@ -101,6 +110,19 @@ class MoneylineBacktest:
         return "\n".join(lines)
 
 
+def _pitcher_quality(p_agg: dict, name: str | None, baseline: float) -> float:
+    """A starter's quality as runs allowed by his team per start, shrunk
+    toward the league baseline. Passed into ``mlb_win_prob`` in place of xERA
+    — only the home/away DIFFERENCE matters there, so the centering constant
+    cancels and an unknown starter is exactly neutral."""
+    if not name or name not in p_agg:
+        return baseline
+    runs, n = p_agg[name]
+    if not n:
+        return baseline
+    return baseline + (runs / n - baseline) * (n / (n + PITCHER_SHRINK))
+
+
 def _rating(agg: dict, team: str, baseline: float) -> float | None:
     """Net rating from running (points-for, points-against, games) sums —
     identical math to teamrates.compute_team_ratings."""
@@ -113,21 +135,30 @@ def _rating(agg: dict, team: str, baseline: float) -> float | None:
     return off - def_
 
 
-def backtest_moneylines(conn, sport: str = "mlb",
-                        min_team_games: int = 15) -> MoneylineBacktest:
+def backtest_moneylines(conn, sport: str = "mlb", min_team_games: int = 15,
+                        use_pitchers: bool = False) -> MoneylineBacktest:
     """Replay every completed game in the DB, betting only where a harvested
-    moneyline exists and both teams have ``min_team_games`` of prior history."""
+    moneyline exists and both teams have ``min_team_games`` of prior history.
+
+    ``use_pitchers`` (MLB) adds each starter's walk-forward quality — runs
+    allowed by his team per start, shrunk over ``PITCHER_SHRINK`` starts — via
+    the same pitcher term the live model uses, so a single run A/Bs the
+    ratings-only floor against the pitcher-aware model on identical games.
+    """
     closes = moneyline_closes(conn, sport)
     baseline = SCORING_BASELINE.get(sport, 0.0)
     win_prob = mlb_win_prob if sport == "mlb" else nfl_win_prob
+    use_pitchers = use_pitchers and sport == "mlb"
+    starters = starters_by_game(conn, sport) if use_pitchers else {}
 
     rows = conn.execute(
         "SELECT period, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
         "ORDER BY period", (sport,)).fetchall()
 
-    r = MoneylineBacktest(sport=sport)
+    r = MoneylineBacktest(sport=sport, use_pitchers=use_pitchers)
     agg: dict[str, tuple[float, float, int]] = {}
+    p_agg: dict[str, tuple[float, int]] = {}   # pitcher -> (runs allowed, starts)
     sq_err = 0.0
     home_wins = 0
     prob_sum = 0.0
@@ -136,6 +167,7 @@ def backtest_moneylines(conn, sport: str = "mlb",
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
         r.games_seen += 1
+        sp = starters.get((date, f"{away}@{home}"), {})
 
         quote = closes.get((date, home, away))
         h_net = _rating(agg, home, baseline)
@@ -146,7 +178,15 @@ def backtest_moneylines(conn, sport: str = "mlb",
         away_ml = quote.get(away) if quote else None
 
         if enough and home_ml is not None and away_ml is not None:
-            wp_home = win_prob(h_net, a_net)
+            if use_pitchers:
+                if sp.get(home) and sp.get(away):
+                    r.starters_known += 1
+                wp_home = mlb_win_prob(
+                    h_net, a_net,
+                    _pitcher_quality(p_agg, sp.get(home), baseline),
+                    _pitcher_quality(p_agg, sp.get(away), baseline))
+            else:
+                wp_home = win_prob(h_net, a_net)
             home_won = hs > as_
             r.games_quoted += 1
             sq_err += (wp_home - (1.0 if home_won else 0.0)) ** 2
@@ -174,11 +214,17 @@ def backtest_moneylines(conn, sport: str = "mlb",
                     b["staked"] += stake
                     b["net"] += gain
 
-        # Only after any bet: today's result joins each team's history.
+        # Only after any bet: today's result joins each team's — and each
+        # starter's — history.
         pf, pa, n = agg.get(home, (0.0, 0.0, 0))
         agg[home] = (pf + hs, pa + as_, n + 1)
         pf, pa, n = agg.get(away, (0.0, 0.0, 0))
         agg[away] = (pf + as_, pa + hs, n + 1)
+        if use_pitchers:
+            for starter, allowed in ((sp.get(home), as_), (sp.get(away), hs)):
+                if starter:
+                    runs, n = p_agg.get(starter, (0.0, 0))
+                    p_agg[starter] = (runs + allowed, n + 1)
 
     if r.games_quoted:
         r.brier = sq_err / r.games_quoted

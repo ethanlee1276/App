@@ -126,6 +126,25 @@ def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
     return grows, prows
 
 
+def mlb_starter_rows(slate, date: str) -> list[dict]:
+    """Starting-pitcher rows from a slate's games. For a completed date the
+    schedule's "probable pitcher" is the pitcher who actually started, which
+    is what lets the game-model backtest be pitcher-aware."""
+    season = int(date[:4])
+    rows = []
+    for g in slate.games:
+        for team_ab, pitcher in (g.pitchers or {}).items():
+            name = getattr(pitcher, "name", "") or ""
+            if not name or name == "TBD":
+                continue
+            rows.append({
+                "sport": "mlb", "season": season, "period": date,
+                "game_id": f"{g.away}@{g.home}", "team": team_ab,
+                "pitcher": name,
+            })
+    return rows
+
+
 def mlb_result_rows(results: list[dict]) -> list[dict]:
     """Game rows (with real final scores) from parsed MLB results."""
     from .mlb.parks import get_park
@@ -205,5 +224,6 @@ def ingest_mlb_date(conn, date: str) -> dict:
     grows, prows = mlb_rows_from_slate(slate, date)
     result["games"] = db.upsert_games(conn, grows)
     result["player_logs"] = db.upsert_player_logs(conn, prows)
+    result["starters"] = db.upsert_game_starters(conn, mlb_starter_rows(slate, date))
     db.log_ingest(conn, "mlb", "slate", date, result["games"] + result["player_logs"])
     return result

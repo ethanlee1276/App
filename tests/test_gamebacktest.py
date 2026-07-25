@@ -80,6 +80,60 @@ def test_needs_history_before_pricing():
     assert "harvest h2h odds first" in r.summary()
 
 
+def test_pitcher_aware_shifts_win_probability():
+    """Same seeded games, same prices — adding each starter's walk-forward
+    runs-allowed record must move P(home win) through the pitcher term, and
+    the ace's team must look stronger than the ratings-only floor says."""
+    conn = _conn()
+    _seed_history(conn)
+    starters = []
+    for d in range(1, 21):
+        date = f"2026-05-{d:02d}"
+        starters.append({"sport": "mlb", "season": 2026, "period": date,
+                         "game_id": "BBB@AAA", "team": "AAA", "pitcher": "Ace Guy"})
+        starters.append({"sport": "mlb", "season": 2026, "period": date,
+                         "game_id": "BBB@AAA", "team": "BBB", "pitcher": "Bat Practice"})
+    db.upsert_game_starters(conn, starters)
+    db.upsert_games(conn, [_game("2026-06-01", "AAA", "BBB", 4, 1)])
+    db.upsert_game_starters(conn, [
+        {"sport": "mlb", "season": 2026, "period": "2026-06-01",
+         "game_id": "BBB@AAA", "team": "AAA", "pitcher": "Ace Guy"},
+        {"sport": "mlb", "season": 2026, "period": "2026-06-01",
+         "game_id": "BBB@AAA", "team": "BBB", "pitcher": "Bat Practice"},
+    ])
+    db.upsert_odds_history(conn, [
+        _ml("2026-06-01", "AAA", "BBB", "AAA", -110),
+        _ml("2026-06-01", "AAA", "BBB", "BBB", -110),
+    ])
+    base = backtest_moneylines(conn, "mlb", min_team_games=15)
+    pa = backtest_moneylines(conn, "mlb", min_team_games=15, use_pitchers=True)
+    # Identical game set either way; the pitcher variant knows both starters.
+    assert pa.games_quoted == base.games_quoted == 1
+    assert pa.starters_known == 1 and base.starters_known == 0
+    # Ace Guy's team allowed 2/game with him up; Bat Practice bled 5/game —
+    # the pitcher term must push the home probability above the ratings floor.
+    assert pa.mean_home_prob > base.mean_home_prob
+    assert "pitcher-aware" in pa.summary() and "ratings only" in base.summary()
+
+
+def test_starter_ingest_rows_come_from_slate_games():
+    from engine.ingest import mlb_starter_rows
+    from engine.mlb.models import MLBGame, Pitcher
+
+    class Slate:
+        games = [MLBGame(home="NYY", away="BOS", park="yankee",
+                         pitchers={"NYY": Pitcher(name="Ace Guy", throws="R"),
+                                   "BOS": Pitcher(name="TBD", throws="R")})]
+    rows = mlb_starter_rows(Slate(), "2026-06-10")
+    assert rows == [{"sport": "mlb", "season": 2026, "period": "2026-06-10",
+                     "game_id": "BOS@NYY", "team": "NYY", "pitcher": "Ace Guy"}]
+
+    conn = _conn()
+    assert db.upsert_game_starters(conn, rows) == 1
+    assert db.starters_by_game(conn, "mlb") == {
+        ("2026-06-10", "BOS@NYY"): {"NYY": "Ace Guy"}}
+
+
 def test_losing_pick_costs_the_stake():
     conn = _conn()
     _seed_history(conn)

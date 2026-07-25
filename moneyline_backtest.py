@@ -33,6 +33,17 @@ def main() -> None:
     report = backtest_moneylines(conn, args.sport, min_team_games=args.min_games)
     print(report.summary())
 
+    # A/B: same games, same prices, plus each starter's walk-forward quality.
+    if args.sport == "mlb":
+        if db.starters_by_game(conn, "mlb"):
+            print()
+            print(backtest_moneylines(conn, "mlb", min_team_games=args.min_games,
+                                      use_pitchers=True).summary())
+        else:
+            print("\n  (no starting pitchers stored — re-run "
+                  "`python3 ingest.py mlb --from <start> --to <end>` to add "
+                  "them, then this prints a pitcher-aware A/B)")
+
 
 if __name__ == "__main__":
     main()

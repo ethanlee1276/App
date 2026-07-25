@@ -51,6 +51,14 @@ CREATE TABLE IF NOT EXISTS odds_history (
     line REAL, over_odds INTEGER, under_odds INTEGER,
     PRIMARY KEY (sport, taken_at, event_id, player, market, book)
 );
+-- Who started each game. The game-level models are dominated by starting
+-- pitchers in MLB; without this the moneyline backtest replays every game
+-- as bullpen-vs-bullpen (measured: Brier worse than the base rate).
+CREATE TABLE IF NOT EXISTS game_starters (
+    sport TEXT, season INTEGER, period TEXT, game_id TEXT, team TEXT,
+    pitcher TEXT,
+    PRIMARY KEY (sport, season, period, game_id, team)
+);
 CREATE INDEX IF NOT EXISTS idx_odds_hist_lookup
     ON odds_history (sport, market, player, taken_at);
 CREATE INDEX IF NOT EXISTS idx_logs_lookup
@@ -117,6 +125,23 @@ def upsert_player_logs(conn, rows: list[dict]) -> int:
 
 def upsert_odds_history(conn, rows: list[dict]) -> int:
     return _upsert(conn, "odds_history", ODDS_HIST_COLS, rows)
+
+
+STARTER_COLS = ["sport", "season", "period", "game_id", "team", "pitcher"]
+
+
+def upsert_game_starters(conn, rows: list[dict]) -> int:
+    return _upsert(conn, "game_starters", STARTER_COLS, rows)
+
+
+def starters_by_game(conn, sport: str) -> dict:
+    """``{(period, game_id): {team: pitcher}}`` for every stored starter."""
+    out: dict = {}
+    for r in conn.execute(
+            "SELECT period, game_id, team, pitcher FROM game_starters "
+            "WHERE sport=?", (sport,)):
+        out.setdefault((r["period"], r["game_id"]), {})[r["team"]] = r["pitcher"]
+    return out
 
 
 def have_odds_snapshot(conn, sport: str, event_id: str, taken_at: str) -> bool:
