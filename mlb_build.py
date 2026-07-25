@@ -95,11 +95,18 @@ def main() -> None:
     confirmed = sum(1 for g in slate.games if g.lineups_confirmed)
     print(f"\n{args.date}: {len(slate.games)} games ({confirmed} with confirmed lineups)")
     print(f"Analyzed {c['props_analyzed']} props → {c['recommended']} recommended")
-    print("(lines are recent-form proxies — attach an odds feed for real book edges)\n")
+    if real_odds:
+        print("(edges priced against real sportsbook lines)\n")
+    else:
+        print("(lines are recent-form proxies — pass --odds for real book edges)\n")
     for r in result["recommendations"][:30]:
         flag = "✅" if r["recommended"] else "  "
+        # A good grade with no tick is confusing unless we say what blocked it.
+        held = ""
+        if not r["recommended"] and r["grade"] != "Pass" and r.get("warnings"):
+            held = f"   ← held: {r['warnings'][0].split('—')[0].strip()}"
         print(f"  {flag} {r['grade']:>11}  conf {r['confidence']:>4}  "
-              f"edge {r['edge']:+.1%}  {r['headline']}")
+              f"edge {r['edge']:+.1%}  {r['headline']}{held}")
 
     if args.out:
         import datetime as _dt

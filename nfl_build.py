@@ -164,8 +164,12 @@ def main() -> None:
         print("(edges priced against real sportsbook lines)\n")
     for r in result["recommendations"][:25]:
         flag = "✅" if r["recommended"] else "  "
+        # A good grade with no tick is confusing unless we say what blocked it.
+        held = ""
+        if not r["recommended"] and r["grade"] != "Pass" and r.get("warnings"):
+            held = f"   ← held: {r['warnings'][0].split('—')[0].strip()}"
         print(f"  {flag} {r['grade']:>11}  conf {r['confidence']:>4}  "
-              f"edge {r['edge']:+.1%}  {r['headline']}")
+              f"edge {r['edge']:+.1%}  {r['headline']}{held}")
 
     if args.out:
         import datetime as _dt
