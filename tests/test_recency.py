@@ -162,6 +162,57 @@ def test_temper_edge_shrinks_and_flags_bad_data():
     assert temper_edge(0.60, 0.50, "proxy")[2] is False
 
 
+def test_live_games_are_never_recommended():
+    """A pre-game model cannot price an in-play market. Backing a team down
+    three in the bottom of the ninth at +1400 because the pre-game model still
+    thinks they're live is exactly the failure this guard exists to stop."""
+    from engine.rules import RuleConfig, apply_rules, game_has_started
+    from engine.betting import Recommendation
+    from engine.models import Game, Weather, LiveStatus
+
+    rec = Recommendation(
+        player="X", team="AAA", opponent="BBB", market=REC_YDS, side="OVER",
+        book="DraftKings", line=50.5, odds=-110, projection=60.0,
+        proj_low=40.0, proj_high=80.0, hit_prob=0.62, fair_prob=0.52,
+        edge=0.10, ev_per_unit=0.05, confidence=9.0, stake_units=1.0,
+        grade="Strong Play")
+    prop = Prop(player="X", team="AAA", opponent="BBB", position="WR",
+                market=REC_YDS, logs=_logs([60] * 6), career_avg=60.0,
+                vs_opponent_avg=None, lines=[SportsbookLine("DK", 50.5, -110, -110)])
+    cfg = RuleConfig(min_confidence=6.0, min_edge=0.02)
+
+    pre = Game(home="AAA", away="BBB", weather=Weather(dome=True))
+    assert apply_rules(rec, prop, pre, cfg).recommend is True
+
+    for state in ("live", "final"):
+        g = Game(home="AAA", away="BBB", weather=Weather(dome=True),
+                 live=LiveStatus(state=state, home_score=1, away_score=4))
+        assert game_has_started(g)
+        d = apply_rules(rec, prop, g, cfg)
+        assert d.recommend is False
+        assert any("already started" in w for w in d.warnings)
+
+
+def test_empirical_model_corrects_discrete_props():
+    """A normal curve badly overstates a 0.5 line on a low-count stat, which was
+    inflating every MLB edge. Blending the player's own log fixes it."""
+    from engine.mlb.betting import empirical_prob_over
+    from engine.statmath import prob_over
+
+    hist = [0] * 16 + [1] * 12 + [2] * 8 + [4] * 4      # 40 games, mean 1.5
+    true_rate = sum(1 for v in hist if v > 0.5) / len(hist)
+    parametric = prob_over(0.5, 1.5, 1.125)
+    blended = empirical_prob_over(hist, 0.5, parametric)
+
+    assert parametric > 0.78                       # the old, overstated number
+    assert abs(blended - true_rate) < abs(parametric - true_rate)
+    assert blended < parametric
+
+    # Too short a log can't outvote the model — it falls straight through.
+    assert empirical_prob_over([1, 0, 2], 0.5, parametric) == parametric
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

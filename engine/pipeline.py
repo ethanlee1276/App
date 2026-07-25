@@ -13,7 +13,7 @@ from .data_loader import load_slate, Slate
 from .models import MARKET_LABELS, live_to_dict
 from .projection import build_projection
 from .betting import evaluate_prop
-from .rules import apply_rules, RuleConfig
+from .rules import apply_rules, RuleConfig, game_has_started
 from .explain import headline, summary, bullet_reasons
 from .gamebets import (
     nfl_win_prob, price_moneyline, moneyline_to_dict,
@@ -136,10 +136,15 @@ def _long_shots(slate) -> list[dict]:
 
 
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
+    started = game_has_started(g)
     d["recommended"] = (d["grade"] != "Pass"
                         and d["confidence"] >= config.min_confidence
                         and d["edge"] >= config.min_edge
-                        and d["odds"] >= config.max_juice)
+                        and d["odds"] >= config.max_juice
+                        and not (config.block_live_games and started))
+    if started:
+        d.setdefault("warnings", []).append(
+            "Game already started — pre-game model cannot price an in-play market")
     d["live"] = bool(g.live and g.live.state == "live")
     d["date"] = g.date
     d["kickoff"] = g.kickoff

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..rules import RuleConfig
+from ..rules import RuleConfig, game_has_started
 from ..betting import Recommendation
 from .models import MLBProp, MLBGame, HITTER_MARKETS
 from .projection import MLBProjection
@@ -32,6 +32,10 @@ def apply_mlb_rules(rec: Recommendation, prop: MLBProp, game: MLBGame,
 
     if rec.grade == "Pass":
         recommend = False
+    if config.block_live_games and game_has_started(game):
+        recommend = False
+        warnings.append("Game already started — this is a pre-game model and "
+                        "cannot price an in-play market")
     if rec.confidence < config.min_confidence:
         recommend = False
         warnings.append(f"Below confidence threshold "

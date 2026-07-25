@@ -9,24 +9,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..rules import RuleConfig
+from ..rules import RuleConfig, game_has_started
 from ..models import live_to_dict
 from ..gamebets import (
     mlb_win_prob, price_moneyline, moneyline_to_dict, LEAGUE_AVG_XERA,
     project_total, project_team_points, game_margin,
     price_total, price_team_total, price_spread,
 )
-
-
-def _half(x: float) -> float:
-    """Round to the nearest half-run (how books post totals)."""
-    return round(x * 2) / 2
 from .data_loader import load_mlb_slate, MLBSlate
 from .models import MARKET_LABELS
 from .parks import get_park
 from .projection import build_mlb_projection
 from .betting import evaluate_mlb_prop
 from .rules import apply_mlb_rules
+
+
+def _half(x: float) -> float:
+    """Round to the nearest half-run (how books post totals)."""
+    return round(x * 2) / 2
 
 
 def _avg(vals):
@@ -51,10 +51,15 @@ def _long_shots(slate) -> list[dict]:
 
 
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
+    started = game_has_started(g)
     d["recommended"] = (d["grade"] != "Pass"
                         and d["confidence"] >= config.min_confidence
                         and d["edge"] >= config.min_edge
-                        and d["odds"] >= config.max_juice)
+                        and d["odds"] >= config.max_juice
+                        and not (config.block_live_games and started))
+    if started:
+        d.setdefault("warnings", []).append(
+            "Game already started — pre-game model cannot price an in-play market")
     d["live"] = bool(g.live and g.live.state == "live")
     d["date"] = g.date
     d["kickoff"] = g.kickoff

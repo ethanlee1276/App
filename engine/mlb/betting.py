@@ -17,9 +17,32 @@ from ..betting import (
 )
 from ..calibrate import apply_temperature, temperature_for
 from ..odds import expected_value
-from ..statmath import prob_over
+from ..statmath import prob_over, clamp
 from .models import MLBProp, HOME_RUNS
 from .projection import MLBProjection
+
+
+def empirical_prob_over(values: list, line: float, fallback: float,
+                        min_games: int = 12) -> float:
+    """P(stat > line) from how often the player has actually done it.
+
+    Baseball props are low-count discrete stats — a hitter records zero total
+    bases in roughly 40% of games — so a normal curve around the mean badly
+    overstates a 0.5 line (81% where reality is nearer 58%). That single
+    modelling error was inflating edges by 15-20 points across the board.
+
+    The player's own game log is the most direct evidence available, so it is
+    blended with the parametric estimate by sample size: Laplace smoothing keeps
+    a short log off 0%/100%, and the parametric model still carries the
+    projection's matchup/park/weather adjustments, which raw history cannot see.
+    """
+    n = len(values)
+    if n < min_games:
+        return fallback
+    hits = sum(1 for v in values if v > line)
+    smoothed = (hits + 1.0) / (n + 2.0)
+    weight = clamp(n / 40.0, 0.0, 0.75)
+    return clamp(weight * smoothed + (1.0 - weight) * fallback, 1e-4, 0.999)
 
 
 def _poisson_over(line: float, lam: float) -> float:
@@ -37,10 +60,14 @@ def _poisson_over(line: float, lam: float) -> float:
 
 def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
                       allow_synthetic_line: bool = False) -> Recommendation:
+    history = [g.value for g in prop.logs] if prop.logs else []
+
     def p_over_at(line: float) -> float:
         if prop.market == HOME_RUNS:
+            # Home runs are already priced with a discrete (Poisson) model.
             return _poisson_over(line, proj.mean)
-        return prob_over(line, proj.mean, proj.std)
+        parametric = prob_over(line, proj.mean, proj.std)
+        return empirical_prob_over(history, line, parametric)
 
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
     # Correct the stated probability with whatever calibration was fitted from
