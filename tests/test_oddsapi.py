@@ -197,6 +197,18 @@ def test_apply_odds_reports_unmatched(monkeypatch):
     assert res.matched == 0 and res.unmatched
 
 
+def test_resolve_market_keys_translates_engine_names():
+    """Historical credits scale with markets requested, so the harvester lets
+    you name just the market being backtested — in either naming scheme."""
+    from engine.sources.oddshistory import resolve_market_keys
+    assert resolve_market_keys("mlb", ["total_bases", "h2h"]) == \
+        ["batter_total_bases", "h2h"]
+    # API keys pass through; whitespace and empties are dropped.
+    assert resolve_market_keys("mlb", ["batter_home_runs", " hits ", ""]) == \
+        ["batter_home_runs", "batter_hits"]
+    assert resolve_market_keys("nfl", ["rec_yds"]) == ["player_reception_yds"]
+
+
 if __name__ == "__main__":
     class MP:
         def __init__(self): self._undo = []

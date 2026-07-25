@@ -26,6 +26,7 @@ requested time, or a "closing line" may silently be an hour stale.
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import json
 import urllib.parse
 from dataclasses import dataclass, field
@@ -101,6 +102,19 @@ def fetch_historical_events(sport: str, when, api_key: str | None = None) -> Sna
     return _unwrap(payload, stamp)
 
 
+def resolve_market_keys(sport: str, names: list[str]) -> list[str]:
+    """Translate engine market names to Odds API keys.
+
+    Historical credits scale with the number of markets requested, so
+    harvesting only the market being backtested is the difference between an
+    affordable run and one that outspends the plan. Accepts either form —
+    ``total_bases`` becomes ``batter_total_bases``; API keys and game markets
+    (``h2h``, ``totals``, ``spreads``) pass through untouched.
+    """
+    to_api = {v: k for k, v in SPORT_CONFIG[sport]["markets"].items()}
+    return [to_api.get(n.strip(), n.strip()) for n in names if n.strip()]
+
+
 def fetch_historical_event_odds(event_id: str, sport: str, when,
                                 markets: list[str] | None = None,
                                 books: list[str] | None = None,
@@ -109,6 +123,12 @@ def fetch_historical_event_odds(event_id: str, sport: str, when,
     key = get_api_key(api_key)
     stamp = iso_utc(when)
     cfg = SPORT_CONFIG[sport]
+    # A custom market list gets its own cache entry: a limited payload cached
+    # under the full-request key would silently serve missing data forever.
+    tag = ""
+    if markets is not None:
+        digest = hashlib.md5(",".join(sorted(markets)).encode()).hexdigest()[:8]
+        tag = f"{event_id}_{digest}"
     markets = markets or (list(cfg["markets"]) + ["h2h", "totals", "spreads"])
     params = {
         "apiKey": key, "date": stamp, "regions": "us",
@@ -117,7 +137,8 @@ def fetch_historical_event_odds(event_id: str, sport: str, when,
     }
     url = (f"{ODDS_BASE}/historical/sports/{cfg['sport_key']}/events/{event_id}/odds"
            f"?{urllib.parse.urlencode(params)}")
-    payload, _ = _request(url, _cache_key("event", sport, stamp, event_id), ttl=FOREVER)
+    payload, _ = _request(url, _cache_key("event", sport, stamp, tag or event_id),
+                          ttl=FOREVER)
     return _unwrap(payload, stamp)
 
 

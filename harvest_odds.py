@@ -53,20 +53,34 @@ def main() -> None:
                     help="UTC hour to snapshot each day (default 23 ≈ evening slate)")
     ap.add_argument("--max-events", type=int, default=0,
                     help="Cap events per day (0 = no cap) to control spend")
+    ap.add_argument("--markets", default="",
+                    help="Comma-separated markets to harvest (e.g. total_bases,h2h). "
+                         "Credits scale with markets, so harvesting only what you "
+                         "backtest cuts the cost several-fold. Default: everything.")
+    ap.add_argument("--budget", type=int, default=0,
+                    help="Hard stop after roughly this many credits are spent "
+                         "(measured from the API's own remaining-count; 0 = no cap).")
     ap.add_argument("--db", default=str(_db.DEFAULT_DB))
     ap.add_argument("--dry-run", action="store_true", help="Plan only; spend nothing")
     ap.add_argument("--yes", action="store_true", help="Skip the confirmation prompt")
     args = ap.parse_args()
 
     days = list(daterange(args.start, args.end))
+    market_keys = (oh.resolve_market_keys(args.sport, args.markets.split(","))
+                   if args.markets else None)
+    market_note = (f"markets: {', '.join(market_keys)}" if market_keys
+                   else "markets: ALL (costly — use --markets to harvest only "
+                        "what you backtest)")
     print(f"Harvesting {args.sport.upper()} odds for {len(days)} day(s) "
-          f"({args.start} → {args.end}), snapshot at {args.hour:02d}:00 UTC.\n")
+          f"({args.start} → {args.end}), snapshot at {args.hour:02d}:00 UTC.")
+    print(f"  {market_note}\n")
 
     if args.dry_run:
         print("Dry run — no requests will be made.")
         print(f"  Plan: 1 events call per day, then 1 call per event.")
-        print(f"  Rough cost: {len(days)} + (events × {len(days)}) historical credits.")
-        print("  Historical calls are billed above live ones; check your plan's rate.")
+        print(f"  Credits scale with markets requested — a full-market event call "
+              f"has measured ~35-40 credits; a 2-market call is several times cheaper.")
+        print("  Add --budget N for a hard spend cap measured from the API's counter.")
         return
 
     if not args.yes:
@@ -79,7 +93,23 @@ def main() -> None:
     conn = _db.connect(args.db)
     total_rows = calls = skipped = 0
 
+    # Spend is measured from the API's own remaining-count (recorded on every
+    # response), so the cap reflects what the account is actually being billed
+    # rather than a guess at per-call cost.
+    from engine.oddsbudget import load as _budget_load
+    start_state = _budget_load()
+    start_remaining = start_state.remaining if start_state.last_seen_iso else None
+
+    def spent_so_far():
+        if start_remaining is None:
+            return None
+        cur = _budget_load()
+        return (start_remaining - cur.remaining) if cur.last_seen_iso else None
+
+    over_budget = False
     for day in days:
+        if over_budget:
+            break
         stamp = oh.iso_utc(_dt.datetime(day.year, day.month, day.day, args.hour))
         try:
             events_snap = oh.fetch_historical_events(args.sport, stamp)
@@ -104,13 +134,21 @@ def main() -> None:
                 skipped += 1
                 continue
             try:
-                snap = oh.fetch_historical_event_odds(eid, args.sport, stamp)
+                snap = oh.fetch_historical_event_odds(eid, args.sport, stamp,
+                                                      markets=market_keys)
                 calls += 1
             except OddsAPIError as exc:
                 print(f"    {eid}: {exc}")
                 continue
             rows = oh.to_rows(oh.parse_snapshot(snap, args.sport))
             day_rows += _db.upsert_odds_history(conn, rows)
+            if args.budget:
+                spent = spent_so_far()
+                if spent is not None and spent >= args.budget:
+                    print(f"    ⏹  budget reached (~{spent} credits) — stopping; "
+                          f"everything harvested so far is kept")
+                    over_budget = True
+                    break
 
         total_rows += day_rows
         drift = events_snap.drift_minutes
@@ -121,6 +159,10 @@ def main() -> None:
                    f"{args.start}..{args.end}", total_rows)
     print(f"\nHarvested {total_rows:,} price rows in {calls} API call(s)"
           + (f", skipped {skipped} already stored" if skipped else "") + ".")
+    spent = spent_so_far()
+    if spent is not None and spent > 0:
+        print(f"Credits spent this run: ~{spent} "
+              f"(~{spent / max(calls, 1):.0f} per call at these markets)")
     print("Now run the backtest to price the model against these real lines:")
     print(f"  python3 mlb_backtest.py --from-db {args.db} --real-lines"
           if args.sport == "mlb" else "  (NFL backtest: see engine/backtest.py)")
