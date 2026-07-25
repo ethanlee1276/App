@@ -72,6 +72,9 @@ def main() -> None:
                     help="use a generated season instead of the sample slate")
     ap.add_argument("--from-db", default=None,
                     help="read entries from the history DB (data/history.db) instead")
+    ap.add_argument("--real-lines", action="store_true",
+                    help="Price against harvested historical book lines "
+                         "(see harvest_odds.py) instead of a naive baseline.")
     ap.add_argument("--min-history", type=int, default=6)
     ap.add_argument("--min-confidence", type=float, default=6.0)
     ap.add_argument("--min-edge", type=float, default=0.02)
@@ -81,6 +84,11 @@ def main() -> None:
     if args.from_db:
         from engine import db as _db
         conn = _db.connect(args.from_db)
+        real_lines = {}
+        if args.real_lines:
+            for (player, _m), q in _db.closing_odds_for(conn, "mlb", args.market).items():
+                real_lines[(player, str(q["taken_at"])[:10])] = q
+            print(f"Using {len(real_lines)} harvested book line(s).")
         entries = _db.entries_for_market(conn, "mlb", args.market,
                                          min_games=args.min_history + 1)
         source = "history DB"
@@ -102,7 +110,8 @@ def main() -> None:
 
     config = RuleConfig(min_confidence=args.min_confidence, min_edge=args.min_edge)
     report = backtest_from_logs(entries, args.market,
-                                min_history=args.min_history, config=config, model=model)
+                                min_history=args.min_history, config=config, model=model,
+                                real_lines=locals().get("real_lines"))
 
     print(f"\nMLB backtest · {MARKET_LABELS[args.market]} · {source}")
     print(report.summary())

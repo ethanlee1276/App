@@ -41,6 +41,18 @@ CREATE TABLE IF NOT EXISTS ingest_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sport TEXT, kind TEXT, detail TEXT, rows INTEGER, ts TEXT
 );
+-- Point-in-time sportsbook prices. This is what lets a backtest measure the
+-- model against the number a bettor could actually have taken, rather than a
+-- naive baseline. Historical API calls cost extra credits and a past price
+-- never changes, so rows are keyed to be written once and reused forever.
+CREATE TABLE IF NOT EXISTS odds_history (
+    sport TEXT, taken_at TEXT, event_id TEXT, home TEXT, away TEXT,
+    player TEXT, market TEXT, book TEXT,
+    line REAL, over_odds INTEGER, under_odds INTEGER,
+    PRIMARY KEY (sport, taken_at, event_id, player, market, book)
+);
+CREATE INDEX IF NOT EXISTS idx_odds_hist_lookup
+    ON odds_history (sport, market, player, taken_at);
 CREATE INDEX IF NOT EXISTS idx_logs_lookup
     ON player_game_logs (sport, market, player, season, period);
 CREATE INDEX IF NOT EXISTS idx_games_lookup
@@ -52,6 +64,8 @@ GAME_COLS = ["sport", "season", "period", "game_id", "home", "away",
              "temp", "wind", "extra"]
 LOG_COLS = ["sport", "season", "period", "game_id", "player", "team",
             "opponent", "position", "home", "market", "value"]
+ODDS_HIST_COLS = ["sport", "taken_at", "event_id", "home", "away", "player",
+                  "market", "book", "line", "over_odds", "under_odds"]
 
 
 def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
@@ -82,6 +96,48 @@ def upsert_player_logs(conn, rows: list[dict]) -> int:
     return _upsert(conn, "player_game_logs", LOG_COLS, rows)
 
 
+def upsert_odds_history(conn, rows: list[dict]) -> int:
+    return _upsert(conn, "odds_history", ODDS_HIST_COLS, rows)
+
+
+def have_odds_snapshot(conn, sport: str, event_id: str, taken_at: str) -> bool:
+    """Has this exact snapshot already been harvested?
+
+    Historical calls are billed at a premium and a past price is immutable, so
+    the harvester checks here before spending a credit re-fetching one.
+    """
+    row = conn.execute(
+        "SELECT 1 FROM odds_history WHERE sport=? AND event_id=? AND taken_at=? LIMIT 1",
+        (sport, event_id, taken_at)).fetchone()
+    return row is not None
+
+
+def closing_odds_for(conn, sport: str, market: str,
+                     player: str | None = None) -> dict:
+    """Latest harvested price per (player, market) — the closing line.
+
+    Returns ``{(player, market): {"line", "over_odds", "under_odds", "book",
+    "taken_at"}}``, taking the most recent snapshot for each.
+    """
+    q = ("SELECT player, market, book, line, over_odds, under_odds, taken_at "
+         "FROM odds_history WHERE sport=? AND market=?")
+    args: list = [sport, market]
+    if player:
+        q += " AND player=?"
+        args.append(player)
+    q += " ORDER BY taken_at"
+
+    out: dict = {}
+    for r in conn.execute(q, args):
+        # Later rows overwrite earlier ones, so the last seen is the close.
+        out[(r["player"], r["market"])] = {
+            "line": r["line"], "over_odds": r["over_odds"],
+            "under_odds": r["under_odds"], "book": r["book"],
+            "taken_at": r["taken_at"],
+        }
+    return out
+
+
 def log_ingest(conn, sport: str, kind: str, detail: str, rows: int) -> None:
     import datetime
     conn.execute(
@@ -103,7 +159,7 @@ def entries_for_market(conn, sport: str, market: str,
                        min_games: int = 8, seasons: list[int] | None = None) -> list[dict]:
     """Chronological per-player values for a market, as the backtest's
     ``entries`` shape: ``[{"name", "values": [...]}, ...]``."""
-    q = ("SELECT player, value FROM player_game_logs "
+    q = ("SELECT player, value, period FROM player_game_logs "
          "WHERE sport=? AND market=?")
     args: list = [sport, market]
     if seasons:
@@ -112,9 +168,13 @@ def entries_for_market(conn, sport: str, market: str,
     q += " ORDER BY player, season, period, game_id"
 
     grouped: dict[str, list[float]] = {}
+    dates: dict[str, list[str]] = {}
     for row in conn.execute(q, args):
         grouped.setdefault(row["player"], []).append(float(row["value"]))
-    return [{"name": name, "values": vals}
+        # ``period`` is the game's real date (see engine.ingest), which is what
+        # lets a backtest line each game up with the price offered that day.
+        dates.setdefault(row["player"], []).append(str(row["period"]))
+    return [{"name": name, "values": vals, "dates": dates.get(name, [])}
             for name, vals in grouped.items() if len(vals) >= min_games]
 
 

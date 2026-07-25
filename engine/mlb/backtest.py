@@ -46,18 +46,29 @@ def _naive_line(prior_recent: list[float], market: str) -> float:
 
 def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
                        limit: int = 15, config: RuleConfig | None = None,
-                       model=None) -> BacktestReport:
-    """``entries`` = [{"name", "values": [chronological per-game values]}].
+                       model=None, real_lines: dict | None = None) -> BacktestReport:
+    """``entries`` = [{"name", "values": [chronological per-game values],
+    "dates": [matching game dates]}].
 
     Walk-forward: game i is projected from games [:i] (most recent ``limit``),
     then settled against ``values[i]``.
+
+    ``real_lines`` maps ``(player, date)`` to a harvested book price. When a
+    game has one, the model is priced against **the number a bettor could
+    actually have taken** — which is the difference between "does this beat a
+    trailing average?" and "would this have beaten the book?". Games without a
+    harvested price fall back to the naive baseline, and ``used_real_lines`` on
+    the report says how much of the result rests on real market data.
     """
     config = config or RuleConfig()
     game = _neutral_game()
     settled: list[SettledProp] = []
+    real_lines = real_lines or {}
+    real_used = 0
 
     for e in entries:
         vals = e.get("values", [])
+        dates = e.get("dates", [])
         spot = e.get("spot", 3)
         for i in range(min_history, len(vals)):
             prior = vals[:i][::-1][:limit]          # most-recent-first, capped
@@ -65,11 +76,23 @@ def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
             logs = [MLBGameLog(game=len(prior) - j, opponent="", value=float(v))
                     for j, v in enumerate(prior)]
             career = sum(vals[:i]) / i
-            line = _naive_line(prior[:10], market)
+
+            date = dates[i] if i < len(dates) else ""
+            quote = real_lines.get((e["name"], date))
+            if quote:
+                line = float(quote["line"])
+                book_line = SportsbookLine(quote.get("book", "book"), line,
+                                           int(quote.get("over_odds") or -110),
+                                           int(quote.get("under_odds") or -110))
+                real_used += 1
+            else:
+                line = _naive_line(prior[:10], market)
+                book_line = SportsbookLine("proxy", line, -110, -110)
+
             prop = MLBProp(
                 player=e["name"], team="HOME", opponent="AWAY", position="",
                 market=market, logs=logs, career_avg=career, vs_pitcher_avg=None,
-                lines=[SportsbookLine("proxy", line, -110, -110)], lineup_spot=spot,
+                lines=[book_line], lineup_spot=spot,
             )
             proj = build_mlb_projection(prop, game, model=model)
             # The naive line above IS the baseline we're measuring against, so
@@ -82,4 +105,7 @@ def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
                 recommended=decision.recommend, stake_units=rec.stake_units,
             ))
 
-    return evaluate(settled)
+    report = evaluate(settled)
+    report.used_real_lines = real_used
+    report.total_priced = len(settled)
+    return report

@@ -47,9 +47,36 @@ def test_entries_for_market_grouping_and_order():
                      "market": "total_bases", "value": val})
     db.upsert_player_logs(conn, logs)
     entries = db.entries_for_market(conn, "mlb", "total_bases", min_games=3)
-    assert entries == [{"name": "Hitter", "values": [3, 2, 1]}]  # chronological
+    assert len(entries) == 1
+    assert entries[0]["name"] == "Hitter"
+    assert entries[0]["values"] == [3, 2, 1]          # chronological
+    # Each value carries its game's period, so a backtest can line the game up
+    # with the book price offered that day.
+    assert entries[0]["dates"] == ["0001", "0002", "0003"]
     # min_games filter drops short histories
     assert db.entries_for_market(conn, "mlb", "total_bases", min_games=4) == []
+
+
+def test_odds_history_stores_and_finds_the_closing_price():
+    """Harvested book prices are what make a backtest market-relative."""
+    conn = _conn()
+    rows = [
+        {"sport": "mlb", "taken_at": "2026-07-20T18:00:00Z", "event_id": "e1",
+         "home": "NYY", "away": "BOS", "player": "aaron judge",
+         "market": "home_runs", "book": "DraftKings", "line": 0.5,
+         "over_odds": 340, "under_odds": -450},
+        {"sport": "mlb", "taken_at": "2026-07-20T22:45:00Z", "event_id": "e1",
+         "home": "NYY", "away": "BOS", "player": "aaron judge",
+         "market": "home_runs", "book": "DraftKings", "line": 0.5,
+         "over_odds": 300, "under_odds": -400},      # later = the close
+    ]
+    assert db.upsert_odds_history(conn, rows) == 2
+    # Already-harvested snapshots are detectable, so they're never paid for twice.
+    assert db.have_odds_snapshot(conn, "mlb", "e1", "2026-07-20T18:00:00Z") is True
+    assert db.have_odds_snapshot(conn, "mlb", "e1", "2026-07-19T18:00:00Z") is False
+
+    close = db.closing_odds_for(conn, "mlb", "home_runs")
+    assert close[("aaron judge", "home_runs")]["over_odds"] == 300   # the latest
 
 
 # --- NFL parsers ------------------------------------------------------------

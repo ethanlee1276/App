@@ -84,6 +84,11 @@ class BacktestReport:
     # (predicted probability, 0/1 outcome) for every decided prop — the input
     # the calibration fitter needs (pushes excluded).
     pairs: list = field(default_factory=list)
+    # How many props were priced against a real harvested book line rather than
+    # the naive baseline. ROI only means "would this have beaten the book" to
+    # the extent this is high, so it's reported rather than left implicit.
+    used_real_lines: int = 0
+    total_priced: int = 0
 
     def summary(self) -> str:
         lines = [
@@ -101,6 +106,20 @@ class BacktestReport:
                 f"({self.win_rate:.1%})  ROI {self.roi:+.1%}  net {self.net_units:+.2f}u")
             if self.avg_clv is not None:
                 lines.append(f"  Closing-line value  {self.avg_clv:+.2f} pts avg")
+        # Say plainly what the ROI above is measured against — an ROI beating a
+        # naive baseline is a far weaker claim than one beating real book prices.
+        if self.total_priced:
+            share = self.used_real_lines / self.total_priced
+            if self.used_real_lines == 0:
+                lines.append("  Priced vs a NAIVE baseline line — this shows predictive "
+                             "skill, NOT an edge over the market")
+            elif share < 0.999:
+                lines.append(f"  Priced vs real book lines on {self.used_real_lines}"
+                             f"/{self.total_priced} ({share:.0%}); the rest used the "
+                             f"naive baseline")
+            else:
+                lines.append("  Priced vs REAL book lines — this ROI is a genuine "
+                             "market-relative result")
         return "\n".join(lines)
 
 
