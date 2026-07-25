@@ -180,6 +180,38 @@ def test_closing_odds_by_date_keeps_each_days_close():
     assert len(db.closing_odds_for(conn, "mlb", "total_bases")) == 1
 
 
+def test_upsert_games_merges_instead_of_clobbering():
+    """Results rows carry scores, slate rows carry weather — whichever lands
+    second must not NULL out the other's columns. A blind REPLACE here is how
+    every final score in a 1,565-game table silently vanished."""
+    conn = _conn()
+    result_row = {"sport": "mlb", "season": 2026, "period": "2026-06-10",
+                  "game_id": "BOS@NYY", "home": "NYY", "away": "BOS",
+                  "home_score": 5, "away_score": 3, "spread": 0.0,
+                  "total": None, "roof": "open", "surface": "grass",
+                  "temp": None, "wind": None, "extra": "yankee"}
+    slate_row = {"sport": "mlb", "season": 2026, "period": "2026-06-10",
+                 "game_id": "BOS@NYY", "home": "NYY", "away": "BOS",
+                 "home_score": None, "away_score": None, "spread": 0.0,
+                 "total": 8.5, "roof": "open", "surface": "grass",
+                 "temp": 78.0, "wind": 9.0, "extra": "yankee"}
+    db.upsert_games(conn, [result_row])
+    db.upsert_games(conn, [slate_row])       # the layer that used to clobber
+    g = conn.execute("SELECT * FROM games").fetchone()
+    assert g["home_score"] == 5 and g["away_score"] == 3   # scores survived
+    assert g["temp"] == 78.0 and g["total"] == 8.5         # context merged in
+
+    # Same key arriving the other way round also merges.
+    conn2 = _conn()
+    db.upsert_games(conn2, [slate_row])
+    db.upsert_games(conn2, [result_row])
+    g2 = conn2.execute("SELECT * FROM games").fetchone()
+    assert g2["home_score"] == 5 and g2["temp"] == 78.0
+
+    s = db.summary(conn)
+    assert s["games"]["mlb"] == 1 and s["scored_games"]["mlb"] == 1
+
+
 def test_date_ranges_exposes_logs_vs_odds_coverage_gap():
     """Purchased odds are useless without settled games to join to; the spans
     make that gap visible (June 1-12 odds bought while logs started June 13

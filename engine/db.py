@@ -89,7 +89,26 @@ def _upsert(conn, table: str, cols: list[str], rows: list[dict]) -> int:
 
 
 def upsert_games(conn, rows: list[dict]) -> int:
-    return _upsert(conn, "games", GAME_COLS, rows)
+    """Merge game rows: a NULL in the new row never erases a known value.
+
+    Two ingest layers write the same (sport, season, period, game_id) keys —
+    ranged results carry final scores but no weather, per-day slates carry
+    park/weather context but NULL scores. A plain INSERT OR REPLACE meant
+    whichever ran second wiped the other's columns; the slate loop runs after
+    results, which silently blanked every final score in the table (and with
+    them team ratings and the moneyline backtest).
+    """
+    if not rows:
+        return 0
+    keys = ("sport", "season", "period", "game_id")
+    placeholders = ", ".join(f":{c}" for c in GAME_COLS)
+    updates = ", ".join(f"{c}=COALESCE(excluded.{c}, games.{c})"
+                        for c in GAME_COLS if c not in keys)
+    sql = (f"INSERT INTO games ({', '.join(GAME_COLS)}) VALUES ({placeholders}) "
+           f"ON CONFLICT({', '.join(keys)}) DO UPDATE SET {updates}")
+    conn.executemany(sql, [{c: r.get(c) for c in GAME_COLS} for r in rows])
+    conn.commit()
+    return len(rows)
 
 
 def upsert_player_logs(conn, rows: list[dict]) -> int:
@@ -226,10 +245,16 @@ def date_ranges(conn) -> dict:
 
 
 def summary(conn) -> dict:
-    out: dict = {"games": {}, "player_logs": {}, "seasons": {}}
+    out: dict = {"games": {}, "scored_games": {}, "player_logs": {}, "seasons": {}}
     for sport in ("nfl", "mlb"):
         out["games"][sport] = conn.execute(
             "SELECT COUNT(*) FROM games WHERE sport=?", (sport,)).fetchone()[0]
+        # Games with a final score — what team ratings and the moneyline
+        # backtest actually run on. A big gap vs the raw count means an ingest
+        # layer erased results.
+        out["scored_games"][sport] = conn.execute(
+            "SELECT COUNT(*) FROM games WHERE sport=? AND home_score IS NOT NULL "
+            "AND away_score IS NOT NULL", (sport,)).fetchone()[0]
         out["player_logs"][sport] = conn.execute(
             "SELECT COUNT(*) FROM player_game_logs WHERE sport=?", (sport,)).fetchone()[0]
         out["seasons"][sport] = seasons_present(conn, sport)

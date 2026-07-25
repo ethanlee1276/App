@@ -48,8 +48,16 @@ def print_summary(conn) -> None:
     for sport in ("nfl", "mlb"):
         seasons = s["seasons"][sport]
         span = f"{seasons[0]}-{seasons[-1]}" if seasons else "—"
-        print(f"  {sport.upper()}: {s['games'][sport]:,} games, "
+        print(f"  {sport.upper()}: {s['games'][sport]:,} games "
+              f"({s['scored_games'][sport]:,} with final scores), "
               f"{s['player_logs'][sport]:,} player-log rows  (seasons {span})")
+        if s["games"][sport] and not s["scored_games"][sport]:
+            lo, hi = db.date_ranges(conn).get(f"{sport}_logs", (None, None))
+            if sport == "mlb" and lo:
+                print(f"  ⚠️  no game has a final score — team ratings and the "
+                      f"moneyline backtest are running on nothing. Restore "
+                      f"them with: python3 ingest.py mlb --from {lo} "
+                      f"--to {hi} --scores-only")
     r = db.date_ranges(conn)
     lo, hi = r["mlb_logs"]
     if lo:
