@@ -180,6 +180,32 @@ def test_closing_odds_by_date_keeps_each_days_close():
     assert len(db.closing_odds_for(conn, "mlb", "total_bases")) == 1
 
 
+def test_date_ranges_exposes_logs_vs_odds_coverage_gap():
+    """Purchased odds are useless without settled games to join to; the spans
+    make that gap visible (June 1-12 odds bought while logs started June 13
+    yielded almost nothing — invisible until the ranges sat side by side)."""
+    conn = _conn()
+    db.upsert_player_logs(conn, [
+        {"sport": "mlb", "season": 2026, "period": "2026-06-13",
+         "game_id": "g1", "player": "P", "team": "A", "opponent": "B",
+         "position": "1B", "home": 1, "market": "total_bases", "value": 2},
+        {"sport": "mlb", "season": 2026, "period": "2026-07-20",
+         "game_id": "g2", "player": "P", "team": "A", "opponent": "B",
+         "position": "1B", "home": 1, "market": "total_bases", "value": 1},
+    ])
+    db.upsert_odds_history(conn, [
+        {"sport": "mlb", "taken_at": "2026-06-01T23:00:00Z", "event_id": "e1",
+         "home": "A", "away": "B", "player": "p", "market": "total_bases",
+         "book": "DK", "line": 1.5, "over_odds": -110, "under_odds": -110},
+    ])
+    r = db.date_ranges(conn)
+    assert r["mlb_logs"] == ("2026-06-13", "2026-07-20")
+    lo, hi, n = r["mlb_odds"]
+    assert (lo, hi, n) == ("2026-06-01", "2026-06-01", 1)
+    # The gap: odds begin before logs do.
+    assert lo < r["mlb_logs"][0]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

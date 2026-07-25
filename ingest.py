@@ -50,6 +50,19 @@ def print_summary(conn) -> None:
         span = f"{seasons[0]}-{seasons[-1]}" if seasons else "—"
         print(f"  {sport.upper()}: {s['games'][sport]:,} games, "
               f"{s['player_logs'][sport]:,} player-log rows  (seasons {span})")
+    r = db.date_ranges(conn)
+    lo, hi = r["mlb_logs"]
+    if lo:
+        print(f"  MLB player logs span   {lo} → {hi}")
+    lo, hi, n = r["mlb_odds"]
+    if n:
+        print(f"  MLB harvested odds span {lo} → {hi}  ({n:,} rows)")
+        # Odds only pay off where a settled game exists to join them to.
+        logs_lo = r["mlb_logs"][0]
+        if logs_lo and lo < logs_lo:
+            print(f"  ⚠️  odds start {lo} but player logs start {logs_lo} — "
+                  f"run: python3 ingest.py mlb --from {lo} --to {logs_lo} "
+                  f"(free) so those purchased lines join to settled games")
 
 
 def main() -> None:

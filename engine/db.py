@@ -205,6 +205,26 @@ def entries_for_market(conn, sport: str, market: str,
             for name, vals in grouped.items() if len(vals) >= min_games]
 
 
+def date_ranges(conn) -> dict:
+    """First/last dates present in each store, so coverage gaps are visible.
+
+    The results store (free) and odds store (metered) grow independently; a
+    backtest is only market-relative where they OVERLAP. Seeing the two spans
+    side by side is how you spot purchased odds with no settled games to join
+    to — or vice versa."""
+    out: dict = {}
+    for sport in ("nfl", "mlb"):
+        lo, hi = conn.execute(
+            "SELECT MIN(period), MAX(period) FROM player_game_logs WHERE sport=?",
+            (sport,)).fetchone()
+        out[f"{sport}_logs"] = (lo, hi)
+        lo, hi, n = conn.execute(
+            "SELECT MIN(substr(taken_at,1,10)), MAX(substr(taken_at,1,10)), "
+            "COUNT(*) FROM odds_history WHERE sport=?", (sport,)).fetchone()
+        out[f"{sport}_odds"] = (lo, hi, n)
+    return out
+
+
 def summary(conn) -> dict:
     out: dict = {"games": {}, "player_logs": {}, "seasons": {}}
     for sport in ("nfl", "mlb"):
