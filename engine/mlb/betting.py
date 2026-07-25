@@ -67,18 +67,22 @@ def _poisson_over(line: float, lam: float) -> float:
 def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
                       allow_synthetic_line: bool = False) -> Recommendation:
     history = [g.value for g in prop.logs] if prop.logs else []
+    temp = temperature_for("mlb", prop.market)
 
     def p_over_at(line: float) -> float:
         if prop.market == HOME_RUNS:
             # Home runs are already priced with a discrete (Poisson) model.
-            return _poisson_over(line, proj.mean)
-        parametric = prob_over(line, proj.mean, proj.std)
-        return empirical_prob_over(history, line, parametric)
+            raw = _poisson_over(line, proj.mean)
+        else:
+            parametric = prob_over(line, proj.mean, proj.std)
+            raw = empirical_prob_over(history, line, parametric)
+        # Calibrate here, not after the side is chosen: an uncalibrated
+        # probability would still decide OVER vs UNDER, so a model known to be
+        # over-confident would keep picking the same side and the correction
+        # would only ever shave the edge it had already committed to.
+        return apply_temperature(raw, temp)
 
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
-    # Correct the stated probability with whatever calibration was fitted from
-    # real settled outcomes (1.0 = none fitted yet, so this is a no-op).
-    hit_raw = apply_temperature(hit_raw, temperature_for("mlb", prop.market))
     hit, edge, credible = temper_edge(hit_raw, fair, best.book, allow_synthetic_line)
     has_market = allow_synthetic_line or (best.book or "").lower() != "proxy"
     if not has_market:

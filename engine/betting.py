@@ -162,15 +162,17 @@ def _kelly_stake(model_prob: float, odds: int, fraction: float = 0.25) -> float:
 
 def evaluate_prop(prop: Prop, proj: Projection,
                   allow_synthetic_line: bool = False) -> Recommendation:
+    temp = temperature_for("nfl", prop.market)
+
     def p_over_at(line: float) -> float:
         if prop.market == RECEPTIONS:
-            return prob_over_discrete(line, proj.mean, proj.std)
-        return prob_over(line, proj.mean, proj.std)
+            raw = prob_over_discrete(line, proj.mean, proj.std)
+        else:
+            raw = prob_over(line, proj.mean, proj.std)
+        # Calibrate before the side is chosen — see engine/mlb/betting.py.
+        return apply_temperature(raw, temp)
 
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
-    # Correct the stated probability with whatever calibration was fitted from
-    # real settled outcomes (1.0 = none fitted yet, so this is a no-op).
-    hit_raw = apply_temperature(hit_raw, temperature_for("nfl", prop.market))
     hit, edge, credible = temper_edge(hit_raw, fair, best.book, allow_synthetic_line)
     has_market = allow_synthetic_line or (best.book or "").lower() != "proxy"
     if not has_market:
