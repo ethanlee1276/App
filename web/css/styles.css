@@ -698,3 +698,14 @@ input[type="range"]::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(122, 162,
 /* Motion: fast + subtle. */
 .reveal { transition-duration: .25s; }
 .tilting { transition: none; }
+
+
+/* Floating tooltip for graph dots. */
+.graph-tip {
+  position: fixed; z-index: 1000; pointer-events: none;
+  background: var(--panel-3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 7px;
+  padding: 5px 9px; font-size: 12px; font-weight: 600;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+  box-shadow: var(--shadow-lg);
+}

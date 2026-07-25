@@ -443,11 +443,12 @@ function sparkline(values, opts = {}) {
     const c = line == null ? stroke : (above ? "var(--good)" : "var(--bad)");
     return `<circle cx="${x(i)}" cy="${y(v)}" r="${i === data.length - 1 ? 3.2 : 2.1}" fill="${c}"/>`;
   }).join("");
-  // Invisible, generous hit targets so hovering anywhere near a dot shows
-  // the value (and its game, when the caller passed labels).
+  // Invisible, generous hit targets. data-tip feeds the instant floating
+  // tooltip below — native SVG <title> needs a second of frozen hover and
+  // reads as "nothing happens", so it isn't used.
   const hits = data.map((v, i) =>
-    `<circle cx="${x(i)}" cy="${y(v)}" r="9" fill="transparent" style="pointer-events:all">
-       <title>${escapeAttr(tip(i))}</title></circle>`).join("");
+    `<circle cx="${x(i)}" cy="${y(v)}" r="9" fill="transparent"
+       style="pointer-events:all;cursor:pointer" data-tip="${escapeAttr(tip(i))}"/>`).join("");
   const thresh = line == null ? "" :
     `<line x1="${pad}" y1="${y(line)}" x2="${w - pad}" y2="${y(line)}"
        stroke="var(--warn)" stroke-width="1" stroke-dasharray="4 4" opacity="0.8"/>`;
@@ -486,3 +487,45 @@ function shade(hex, amt) {
 function escapeAttr(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
+
+
+/* ---------------- instant graph tooltip ----------------
+   One floating label for every sparkline dot: appears the moment the
+   pointer touches a hit target, follows the cursor, vanishes on leave. */
+(function () {
+  let tipEl = null;
+  function ensure() {
+    if (tipEl) return tipEl;
+    tipEl = document.createElement("div");
+    tipEl.className = "graph-tip";
+    tipEl.style.display = "none";
+    document.body.appendChild(tipEl);
+    return tipEl;
+  }
+  function place(e) {
+    const el = ensure();
+    const pad = 14;
+    let lx = e.clientX + pad, ly = e.clientY - 30;
+    const w = el.offsetWidth || 80;
+    if (lx + w > window.innerWidth - 8) lx = e.clientX - w - pad;
+    if (ly < 8) ly = e.clientY + pad;
+    el.style.left = lx + "px";
+    el.style.top = ly + "px";
+  }
+  document.addEventListener("pointerover", (e) => {
+    const t = e.target && e.target.closest ? e.target.closest("[data-tip]") : null;
+    const el = ensure();
+    if (!t) { el.style.display = "none"; return; }
+    el.textContent = t.getAttribute("data-tip");
+    el.style.display = "block";
+    place(e);
+  });
+  document.addEventListener("pointermove", (e) => {
+    if (tipEl && tipEl.style.display === "block") place(e);
+  });
+  document.addEventListener("pointerout", (e) => {
+    if (!tipEl) return;
+    const t = e.target && e.target.closest ? e.target.closest("[data-tip]") : null;
+    if (t) tipEl.style.display = "none";
+  });
+})();
