@@ -8,8 +8,15 @@
 
 On startup this pulls the newest data it can reach for **both NFL and MLB**,
 writes it to ``web/data/``, and then starts the live server. While it runs it
-keeps that data fresh in the background (default every 90s) so live scores — and
-book lines, if you've set ``ODDS_API_KEY`` — stay current during games.
+keeps that data fresh in the background (default every 60s).
+
+Scores and odds refresh on **separate cadences on purpose**. Live scores come
+from free, unlimited feeds, so they update every cycle. Sportsbook odds are
+metered — a full MLB slate costs about one request per game, and the free plan
+allows 500 a *month* — so they only re-pull when the budget in
+``engine.oddsbudget`` says it's affordable. Without that, an evening of live
+tracking would silently exhaust a month's quota in under an hour and the board
+would go stale with no explanation.
 
 Anything unreachable (blocked network, a league in its offseason, no odds key)
 is skipped with a clear message and the last-known data is kept, so the site
@@ -20,6 +27,7 @@ always comes up. Player props and live scores need no key; the game-level bets
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import os
 import subprocess
 import sys
@@ -51,12 +59,45 @@ def _with_odds() -> bool:
     return bool(os.environ.get("ODDS_API_KEY"))
 
 
+def _games_on_slate(path: str) -> int:
+    """How many games the last build found — the per-refresh odds cost."""
+    try:
+        with open(path) as fh:
+            return max(1, len(json.load(fh).get("games", [])))
+    except Exception:
+        return 10
+
+
+def _odds_affordable(out_path: str, quiet: bool) -> bool:
+    """Decide whether this refresh can afford to re-pull odds.
+
+    Scores are free and always refresh; odds are metered, so they only ride
+    along when the budget allows. This is what keeps live tracking from
+    silently burning a month's quota in an evening.
+    """
+    if not _with_odds():
+        return False
+    try:
+        from engine.oddsbudget import should_refresh, mark_refreshed
+    except Exception:
+        return True
+    ok, reason = should_refresh(_games_on_slate(out_path) + 1)
+    if not quiet:
+        print(f"       {reason}")
+    if ok:
+        mark_refreshed()
+    return ok
+
+
 def refresh_mlb(quiet: bool = False) -> bool:
     """Build today's MLB slate into web/data/mlb_recommendations.json."""
     date = _dt.date.today().isoformat()
-    args = ["mlb_build.py", date, "--out", "web/data/mlb_recommendations.json"]
-    if _with_odds():
+    out = "web/data/mlb_recommendations.json"
+    args = ["mlb_build.py", date, "--out", out]
+    if _odds_affordable(out, quiet):
         args.append("--odds")
+        if quiet:                     # background cycle: only re-price what's live/soon
+            args.append("--active-odds")
     ok, tail = _run_build(args)
     if not quiet:
         print(f"  MLB  {date}: {'refreshed' if ok else 'unavailable — kept existing data'}"
@@ -98,9 +139,12 @@ def refresh_nfl(quiet: bool = False) -> bool:
             print("  NFL  no current slate (offseason / schedule unavailable) — kept existing data")
         return False
     season, week = wk
-    args = ["nfl_build.py", str(season), str(week), "--out", "web/data/recommendations.json"]
-    if _with_odds():
+    out = "web/data/recommendations.json"
+    args = ["nfl_build.py", str(season), str(week), "--out", out]
+    if _odds_affordable(out, quiet):
         args.append("--odds")
+        if quiet:
+            args.append("--active-odds")
     ok, tail = _run_build(args)
     if not quiet:
         print(f"  NFL  {season} wk {week}: {'refreshed' if ok else 'unavailable — kept existing data'}"
@@ -185,7 +229,7 @@ def main() -> None:
     if "--check" in argv:
         preflight()
         return
-    interval = 90
+    interval = 60      # scores are free; odds are budgeted separately
     if "--refresh" in argv:
         i = argv.index("--refresh")
         try:
@@ -206,7 +250,13 @@ def main() -> None:
     if interval > 0:
         t = threading.Thread(target=_background_refresher, args=(interval,), daemon=True)
         t.start()
-        print(f"Auto-refresh every {interval}s (set --refresh 0 to disable).")
+        print(f"Auto-refresh every {interval}s (scores free; odds budgeted).")
+        try:
+            from engine.oddsbudget import summary as _bsum
+            if _with_odds():
+                print("  " + _bsum())
+        except Exception:
+            pass
 
     print(f"\nGridiron Edge running (LIVE data) → http://localhost:{port}")
     print("Press Ctrl+C to stop.")

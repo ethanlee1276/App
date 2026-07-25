@@ -174,6 +174,13 @@ def _request(url: str, cache_name: str, ttl: int = 300,
         raise OddsAPIError(f"Odds API request failed: {exc}") from exc
 
     path.write_text(body)
+    # Record what the API says is left so the budgeter schedules against the
+    # real account rather than an assumption.
+    try:
+        from ..oddsbudget import record_quota
+        record_quota(quota.remaining, quota.used)
+    except Exception:      # budgeting must never break a fetch
+        pass
     return json.loads(body), quota
 
 
@@ -381,9 +388,32 @@ class OddsAttachResult:
     moneylines: int = 0          # games that got real h2h prices attached
 
 
+def _is_active(game, window_hours: float) -> bool:
+    """Is this game live, or starting soon enough that its price still matters?"""
+    live = getattr(game, "live", None)
+    if live is not None and getattr(live, "state", "") == "live":
+        return True
+    if live is not None and getattr(live, "state", "") == "final":
+        return False
+    kickoff = (getattr(game, "kickoff", "") or "")
+    if not kickoff:
+        return True          # unknown start time — assume it still matters
+    try:
+        import datetime as _dt
+        stamp = kickoff.replace("Z", "+00:00")
+        start = _dt.datetime.fromisoformat(stamp)
+        now = _dt.datetime.now(start.tzinfo) if start.tzinfo else _dt.datetime.now()
+        hours = (start - now).total_seconds() / 3600.0
+        return hours <= window_hours
+    except (ValueError, TypeError):
+        return True
+
+
 def apply_odds_to_slate(slate, api_key: str | None = None,
                         books: list[str] | None = None,
-                        ttl: int = 300, sport: str = "nfl") -> OddsAttachResult:
+                        ttl: int = 300, sport: str = "nfl",
+                        only_active: bool = False,
+                        active_window_hours: float = 6.0) -> OddsAttachResult:
     """Replace each prop's proxy line with real book lines where available.
 
     Matches Odds API events to slate games by team abbreviation, then props by
@@ -401,6 +431,17 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
 
     events = list_events(key, ttl=ttl, sport=sport)
     games_by_pair = {frozenset((g.home, g.away)): g for g in slate.games}
+
+    # Only re-price games whose number can actually still move for us: in-play
+    # and about-to-start games. A game tomorrow doesn't need a fresh quote every
+    # cycle, and skipping it multiplies how often the ones that matter can be
+    # refreshed within the same request budget.
+    if only_active:
+        active = {frozenset((g.home, g.away)) for g in slate.games
+                  if _is_active(g, active_window_hours)}
+        if active:
+            games_by_pair = {k: v for k, v in games_by_pair.items() if k in active}
+            slate_pairs = slate_pairs & active
     # Player-prop markets plus the three game markets in one request per event.
     markets = list(cfg["markets"]) + ["h2h", "totals", "spreads"]
     # Build a combined line index for the events that belong to this slate.

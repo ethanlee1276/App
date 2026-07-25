@@ -50,6 +50,8 @@ def main() -> None:
                     help="Overlay live scores/state from ESPN's scoreboard.")
     ap.add_argument("--depth", action="store_true",
                     help="Refine injury knock-on roles from nflverse depth charts.")
+    ap.add_argument("--active-odds", action="store_true",
+                    help="Only re-price live / soon-starting games (saves API quota).")
     ap.add_argument("--odds", action="store_true",
                     help="Attach real sportsbook lines via The Odds API (needs ODDS_API_KEY).")
     ap.add_argument("--books", default=None,
@@ -101,7 +103,7 @@ def main() -> None:
     if args.odds:
         try:
             books = args.books.split(",") if args.books else None
-            res = oddsapi.apply_odds_to_slate(slate, books=books)
+            res = oddsapi.apply_odds_to_slate(slate, books=books, only_active=args.active_odds)
             real_odds = True
             print(f"\nOdds API: matched {res.matched} props across {res.events_used} games "
                   f"(quota remaining {res.quota.remaining}).")

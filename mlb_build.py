@@ -28,6 +28,8 @@ from engine.rules import RuleConfig
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build a live MLB slate and run the model.")
     ap.add_argument("date", help="slate date, YYYY-MM-DD")
+    ap.add_argument("--active-odds", action="store_true",
+                    help="Only re-price live / soon-starting games (saves API quota).")
     ap.add_argument("--odds", action="store_true",
                     help="Attach real (live during a game) sportsbook lines via The Odds API.")
     ap.add_argument("--min-confidence", type=float, default=6.0)
@@ -53,7 +55,7 @@ def main() -> None:
     if args.odds:
         from engine.sources import oddsapi
         try:
-            res = oddsapi.apply_odds_to_slate(slate, sport="mlb")
+            res = oddsapi.apply_odds_to_slate(slate, sport="mlb", only_active=args.active_odds)
             real_odds = True
             print(f"Odds API: matched {res.matched} props across {res.events_used} games "
                   f"(quota remaining {res.quota.remaining}).")
