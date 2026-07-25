@@ -132,12 +132,21 @@ def min_seconds_between(requests_per_refresh: int,
     return max(60.0, (active_hours * 3600.0) / refreshes_today)
 
 
+# When the budget believes it's exhausted, still allow one probe this often.
+# A monthly reset or a replacement key both restore the quota silently, and
+# without a probe the budgeter would refuse to call and so never find out.
+PROBE_INTERVAL = 6 * 3600
+
+
 def should_refresh(requests_per_refresh: int, now: float | None = None,
                    path: Path | str = STATE_PATH, **kw) -> tuple[bool, str]:
     """Is an odds refresh affordable right now? Returns ``(ok, reason)``."""
     now = now if now is not None else time.time()
     state = load(path)
     if state.remaining <= RESERVE:
+        if now - state.last_refresh_ts >= PROBE_INTERVAL:
+            return True, ("odds quota looked exhausted — probing once in case the "
+                          "plan reset or the key changed")
         return False, (f"odds quota nearly exhausted ({state.remaining} left) — "
                        f"holding a reserve; scores still update free")
     gap = min_seconds_between(requests_per_refresh, state, **kw)
@@ -148,6 +157,18 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
         return False, (f"next odds refresh in {int(gap - waited)}s "
                        f"(budgeting {state.remaining} requests to month end)")
     return True, f"refreshing odds ({state.remaining} requests left this month)"
+
+
+def reset(path: Path | str = STATE_PATH) -> BudgetState:
+    """Forget the recorded quota — use after swapping in a new key.
+
+    The stored balance belongs to whichever key produced it, so a replacement
+    key starts from a clean slate and re-learns its real allowance on the next
+    call rather than inheriting the old key's exhausted state.
+    """
+    state = BudgetState()
+    save(state, path)
+    return state
 
 
 def is_measured(state: BudgetState | None = None) -> bool:

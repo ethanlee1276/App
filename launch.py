@@ -5,6 +5,7 @@
     python3 launch.py 9000            # custom port
     python3 launch.py --refresh 0     # refresh once at startup, don't keep polling
     python3 launch.py --check         # readiness checklist (no server) — run this first
+    python3 launch.py --reset-budget  # after swapping in a new ODDS_API_KEY
 
 On startup this pulls the newest data it can reach for **both NFL and MLB**,
 writes it to ``web/data/``, and then starts the live server. While it runs it
@@ -226,6 +227,12 @@ def preflight() -> None:
 
 def main() -> None:
     argv = sys.argv[1:]
+    if "--reset-budget" in argv:
+        from engine.oddsbudget import reset, summary
+        reset()
+        print("Odds budget reset — the next call will read the new key's real quota.")
+        print("  " + summary())
+        return
     if "--check" in argv:
         preflight()
         return

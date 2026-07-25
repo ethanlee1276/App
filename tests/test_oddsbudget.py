@@ -66,8 +66,9 @@ def test_cheaper_refresh_allows_more_frequent_polling():
 
 def test_exhausted_quota_stops_odds_but_not_the_app():
     p = _tmp()
-    save(BudgetState(remaining=RESERVE), p)
-    ok, reason = should_refresh(16, path=p)
+    # A recent refresh, so this isn't due for the periodic recovery probe.
+    save(BudgetState(remaining=RESERVE, last_refresh_ts=1_000_000.0), p)
+    ok, reason = should_refresh(16, now=1_000_060.0, path=p)
     assert ok is False
     assert "quota" in reason.lower()
     # A reserve is deliberately preserved rather than spent to zero.
@@ -117,6 +118,30 @@ def test_assumed_quota_is_labelled_as_assumed():
     assert is_measured(load(p)) is True
     text = summary(p)
     assert "412 left" in text and "not yet measured" not in text
+
+
+def test_new_key_recovers_from_an_exhausted_budget():
+    """A replacement key must not inherit the dead key's zero balance."""
+    from engine.oddsbudget import reset, is_measured
+    p = _tmp()
+    record_quota(0, None, p)                       # old key ran out
+    mark_refreshed(1_000_000.0, p)                 # ...and we just tried
+    assert should_refresh(16, now=1_000_060.0, path=p)[0] is False
+    reset(p)
+    assert is_measured(load(p)) is False            # clean slate, re-learns on next call
+    assert should_refresh(16, now=1_000_000.0, path=p)[0] is True
+
+
+def test_exhausted_budget_probes_occasionally():
+    """Plans reset monthly; without an occasional probe the budgeter would
+    refuse to call and so never discover the quota came back."""
+    from engine.oddsbudget import PROBE_INTERVAL
+    p = _tmp()
+    save(BudgetState(remaining=0, last_refresh_ts=1_000_000.0), p)
+    soon, _ = should_refresh(16, now=1_000_000.0 + 60, path=p)
+    assert soon is False
+    later, reason = should_refresh(16, now=1_000_000.0 + PROBE_INTERVAL + 1, path=p)
+    assert later is True and "probing" in reason
 
 
 if __name__ == "__main__":
