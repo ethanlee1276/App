@@ -51,6 +51,29 @@ def test_empty_entries():
     assert r.n == 0
 
 
+def test_real_lines_join_across_name_formats():
+    """Odds are stored normalised ("aaron judge"), game logs keep the display
+    name ("Aaron Judge"). If the join isn't normalised it matches nothing and
+    the backtest silently reports a naive-baseline result as if it were real."""
+    from engine.mlb.backtest import backtest_from_logs
+
+    entries = [{"name": "Aaron Judge",
+                "values": [float(i % 4) for i in range(30)],
+                "dates": [f"2026-07-{d + 1:02d}" for d in range(30)]}]
+    real = {("aaron judge", f"2026-07-{d + 1:02d}"):
+            {"line": 1.5, "over_odds": -115, "under_odds": -105, "book": "DraftKings"}
+            for d in range(30)}
+
+    r = backtest_from_logs(entries, "total_bases", min_history=10, real_lines=real)
+    assert r.used_real_lines == r.total_priced > 0
+    assert "REAL book lines" in r.summary()
+
+    # With no harvested prices the report must say so rather than imply an edge.
+    naive = backtest_from_logs(entries, "total_bases", min_history=10)
+    assert naive.used_real_lines == 0
+    assert "NAIVE baseline" in naive.summary()
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

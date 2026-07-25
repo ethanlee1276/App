@@ -86,8 +86,12 @@ def main() -> None:
         conn = _db.connect(args.from_db)
         real_lines = {}
         if args.real_lines:
+            # Odds are stored under normalised names ("aaron judge") while game
+            # logs keep the display name ("Aaron Judge"), so both sides have to
+            # be normalised or the join silently matches nothing.
+            from engine.sources.oddsapi import normalize_name
             for (player, _m), q in _db.closing_odds_for(conn, "mlb", args.market).items():
-                real_lines[(player, str(q["taken_at"])[:10])] = q
+                real_lines[(normalize_name(player), str(q["taken_at"])[:10])] = q
             print(f"Using {len(real_lines)} harvested book line(s).")
         entries = _db.entries_for_market(conn, "mlb", args.market,
                                          min_games=args.min_history + 1)

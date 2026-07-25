@@ -44,6 +44,13 @@ def _naive_line(prior_recent: list[float], market: str) -> float:
     return max(0.5, _round_half(base) - 0.5)
 
 
+def _norm_name(name: str) -> str:
+    """Match the normalisation the odds feed uses, so harvested prices join to
+    game logs (odds store "aaron judge"; logs keep "Aaron Judge")."""
+    from ..sources.oddsapi import normalize_name
+    return normalize_name(name)
+
+
 def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
                        limit: int = 15, config: RuleConfig | None = None,
                        model=None, real_lines: dict | None = None) -> BacktestReport:
@@ -78,7 +85,7 @@ def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
             career = sum(vals[:i]) / i
 
             date = dates[i] if i < len(dates) else ""
-            quote = real_lines.get((e["name"], date))
+            quote = real_lines.get((_norm_name(e["name"]), date))
             if quote:
                 line = float(quote["line"])
                 book_line = SportsbookLine(quote.get("book", "book"), line,
