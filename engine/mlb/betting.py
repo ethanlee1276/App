@@ -15,6 +15,7 @@ from ..betting import (
     Recommendation, _confidence_score, _grade, _kelly_stake,
     _trend_alignment, pick_side, temper_edge,
 )
+from ..calibrate import apply_temperature, temperature_for
 from ..odds import expected_value
 from ..statmath import prob_over
 from .models import MLBProp, HOME_RUNS
@@ -42,6 +43,9 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         return prob_over(line, proj.mean, proj.std)
 
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
+    # Correct the stated probability with whatever calibration was fitted from
+    # real settled outcomes (1.0 = none fitted yet, so this is a no-op).
+    hit_raw = apply_temperature(hit_raw, temperature_for("mlb", prop.market))
     hit, edge, credible = temper_edge(hit_raw, fair, best.book, allow_synthetic_line)
     ev = expected_value(hit, best.odds)
     trend_align = _trend_alignment(side, proj.form.trend)

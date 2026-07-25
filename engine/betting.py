@@ -14,6 +14,7 @@ from .models import Prop, RECEPTIONS
 from .projection import Projection
 from .odds import best_over_line, best_under_line, devig_two_way, expected_value
 from .statmath import prob_over, prob_over_discrete, clamp
+from .calibrate import apply_temperature, temperature_for
 
 # --- calibration guards -----------------------------------------------------
 # The prop model is not yet calibrated to real outcomes, and live feeds
@@ -163,6 +164,9 @@ def evaluate_prop(prop: Prop, proj: Projection,
         return prob_over(line, proj.mean, proj.std)
 
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
+    # Correct the stated probability with whatever calibration was fitted from
+    # real settled outcomes (1.0 = none fitted yet, so this is a no-op).
+    hit_raw = apply_temperature(hit_raw, temperature_for("nfl", prop.market))
     hit, edge, credible = temper_edge(hit_raw, fair, best.book, allow_synthetic_line)
     ev = expected_value(hit, best.odds)
     trend_align = _trend_alignment(side, proj.form.trend)

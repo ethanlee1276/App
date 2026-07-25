@@ -81,6 +81,9 @@ class BacktestReport:
     net_units: float = 0.0
     roi: float = 0.0
     avg_clv: float | None = None
+    # (predicted probability, 0/1 outcome) for every decided prop — the input
+    # the calibration fitter needs (pushes excluded).
+    pairs: list = field(default_factory=list)
 
     def summary(self) -> str:
         lines = [
@@ -139,6 +142,7 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
 
     # Calibration.
     r.bins, r.brier, r.ece = _calibration(settled, n_bins)
+    r.pairs = [(s.hit_prob, s.outcome) for s in settled if s.outcome is not None]
 
     # Betting performance on recommended bets.
     bets = [s for s in settled if s.recommended]
