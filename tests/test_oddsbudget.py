@@ -107,6 +107,18 @@ def test_active_game_filter_targets_what_still_matters():
     assert _is_active(MLBGame(home="A", away="B", park="x"), 6.0) is True
 
 
+def test_assumed_quota_is_labelled_as_assumed():
+    """An assumed 500 looks identical to a confirmed 500 — say which it is."""
+    from engine.oddsbudget import summary, is_measured
+    p = _tmp()
+    assert is_measured(load(p)) is False
+    assert "not yet measured" in summary(p)
+    record_quota("412", "88", p)
+    assert is_measured(load(p)) is True
+    text = summary(p)
+    assert "412 left" in text and "not yet measured" not in text
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

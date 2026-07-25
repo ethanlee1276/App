@@ -150,8 +150,23 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     return True, f"refreshing odds ({state.remaining} requests left this month)"
 
 
+def is_measured(state: BudgetState | None = None) -> bool:
+    """Have we ever seen a real quota figure from the API?
+
+    Until an actual request comes back, the numbers here are an assumed free
+    plan — worth saying out loud, because an assumed 500 looks identical to a
+    confirmed 500 and would be trusted the same way.
+    """
+    state = state or load()
+    return bool(state.last_seen_iso)
+
+
 def summary(path: Path | str = STATE_PATH) -> str:
     state = load(path)
-    return (f"Odds quota: {state.remaining} left, {state.used} used"
-            + (f" (as of {state.last_seen_iso})" if state.last_seen_iso else "")
-            + f" · ~{daily_allowance(state)} affordable today")
+    if not is_measured(state):
+        return (f"Odds quota: not yet measured — assuming a free plan "
+                f"({ASSUMED_MONTHLY}/month, ~{daily_allowance(state)} today). "
+                f"The real figure is read from the API on the next odds call.")
+    return (f"Odds quota: {state.remaining} left, {state.used} used "
+            f"(as of {state.last_seen_iso}) "
+            f"· ~{daily_allowance(state)} affordable today")
