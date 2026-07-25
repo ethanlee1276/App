@@ -222,7 +222,7 @@ def backtest_from_stats(season: int, weeks, config=None, model=None) -> Backtest
             slate = build_slate(season, w, upto_week=w)
         except Exception:
             continue
-        result = run_slate(slate, config, model=model)
+        result = run_slate(slate, config, model=model, allow_synthetic_line=True)
 
         actuals: dict[tuple[str, str], float] = {}
         for row in stats:

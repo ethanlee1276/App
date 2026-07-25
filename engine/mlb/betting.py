@@ -34,14 +34,15 @@ def _poisson_over(line: float, lam: float) -> float:
     return max(0.0, 1.0 - cdf)
 
 
-def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection) -> Recommendation:
+def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
+                      allow_synthetic_line: bool = False) -> Recommendation:
     def p_over_at(line: float) -> float:
         if prop.market == HOME_RUNS:
             return _poisson_over(line, proj.mean)
         return prob_over(line, proj.mean, proj.std)
 
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
-    hit, edge, credible = temper_edge(hit_raw, fair, best.book)
+    hit, edge, credible = temper_edge(hit_raw, fair, best.book, allow_synthetic_line)
     ev = expected_value(hit, best.odds)
     trend_align = _trend_alignment(side, proj.form.trend)
     confidence = _confidence_score(edge, hit, proj, trend_align)

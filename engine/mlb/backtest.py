@@ -72,7 +72,9 @@ def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
                 lines=[SportsbookLine("proxy", line, -110, -110)], lineup_spot=spot,
             )
             proj = build_mlb_projection(prop, game, model=model)
-            rec = evaluate_mlb_prop(prop, proj)
+            # The naive line above IS the baseline we're measuring against, so
+            # the live "placeholder line" guard doesn't apply here.
+            rec = evaluate_mlb_prop(prop, proj, allow_synthetic_line=True)
             decision = apply_mlb_rules(rec, prop, game, proj, config)
             settled.append(SettledProp(
                 player=e["name"], market=market, line=line, odds=rec.odds,

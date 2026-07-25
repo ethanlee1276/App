@@ -120,6 +120,46 @@ def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
     return grows, prows
 
 
+def mlb_result_rows(results: list[dict]) -> list[dict]:
+    """Game rows (with real final scores) from parsed MLB results."""
+    from .mlb.parks import get_park
+    from .mlb.sources.mlbstats import VENUE_PARK
+    out = []
+    for r in results:
+        venue = (r.get("venue") or "").lower()
+        park_key = next((k for frag, k in VENUE_PARK.items() if frag in venue), "generic")
+        park = get_park(park_key)
+        date = r["date"]
+        out.append({
+            "sport": "mlb", "season": int(date[:4]), "period": date,
+            "game_id": f"{r['away']}@{r['home']}",
+            "home": r["home"], "away": r["away"],
+            "home_score": r["home_score"], "away_score": r["away_score"],
+            "spread": 0.0, "total": None,
+            "roof": park.roof, "surface": park.surface,
+            "temp": None, "wind": None, "extra": park_key,
+        })
+    return out
+
+
+def ingest_mlb_results(conn, start: str, end: str) -> dict:
+    """Ingest completed MLB games (with final scores) over a date range.
+
+    This is what gives the team-strength model something real to learn from —
+    the per-date slate ingest below captures matchups and player form, but a
+    slate built before first pitch has no result yet."""
+    from .mlb.sources.mlbstats import fetch_results
+    result = {"games": 0, "player_logs": 0, "skipped": []}
+    try:
+        rows = mlb_result_rows(fetch_results(start, end))
+    except DataUnavailable as exc:
+        result["skipped"].append(f"mlb results {start}..{end}: {exc}")
+        return result
+    result["games"] = db.upsert_games(conn, rows)
+    db.log_ingest(conn, "mlb", "results", f"{start}..{end}", result["games"])
+    return result
+
+
 def ingest_mlb_date(conn, date: str) -> dict:
     from .mlb.sources.statslogs import build_live_slate
     result = {"games": 0, "player_logs": 0, "skipped": []}

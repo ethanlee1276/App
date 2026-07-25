@@ -134,7 +134,9 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
 
 
 def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
-              model=None) -> dict:
+              model=None, allow_synthetic_line: bool = False) -> dict:
+    """``allow_synthetic_line`` is for the backtest harness, which prices
+    against a naive baseline line on purpose (see engine.betting.temper_edge)."""
     if not isinstance(slate, Slate):
         slate = load_slate(slate)
     config = config or RuleConfig()
@@ -144,7 +146,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         game = slate.game_for(prop)
         opponent = slate.team(prop.opponent)
         proj = build_projection(prop, game, opponent, model=model)
-        rec = evaluate_prop(prop, proj)
+        rec = evaluate_prop(prop, proj, allow_synthetic_line=allow_synthetic_line)
         decision = apply_rules(rec, prop, game, config)
         d = _rec_to_dict(rec, prop, decision, proj)
         d["live"] = bool(game.live and game.live.state == "live")

@@ -58,6 +58,10 @@ def main() -> None:
     ap.add_argument("--seasons", default=default_seasons(),
                     help="NFL: e.g. 2021-2025 (default: last 5 completed seasons)")
     ap.add_argument("--dates", default="", help="MLB: comma-separated YYYY-MM-DD")
+    ap.add_argument("--from", dest="start", default="",
+                    help="MLB: start date YYYY-MM-DD (ingest completed results through --to)")
+    ap.add_argument("--to", dest="end", default="",
+                    help="MLB: end date YYYY-MM-DD")
     ap.add_argument("--db", default=str(db.DEFAULT_DB))
     args = ap.parse_args()
 
@@ -72,10 +76,17 @@ def main() -> None:
         print(f"Ingesting NFL seasons {seasons[0]}-{seasons[-1]} → {args.db}")
         res = ingest.ingest_nfl(conn, seasons)
         print(f"  games: {res['games']:,}   player-log rows: {res['player_logs']:,}")
+    elif args.start and args.end:
+        # Historical results: real final scores, the basis for team ratings.
+        print(f"Ingesting MLB results {args.start} → {args.end} → {args.db}")
+        res = ingest.ingest_mlb_results(conn, args.start, args.end)
+        print(f"  completed games: {res['games']:,}")
+        for skip in res["skipped"]:
+            print(f"  ⚠️  {skip}")
     else:
         dates = [d.strip() for d in args.dates.split(",") if d.strip()]
         if not dates:
-            print("Provide --dates YYYY-MM-DD[,YYYY-MM-DD ...] for MLB.")
+            print("Provide --dates YYYY-MM-DD[,...] or --from/--to YYYY-MM-DD for MLB.")
             return
         total_g = total_p = 0
         for d in dates:

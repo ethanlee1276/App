@@ -154,6 +154,51 @@ def park_weather(park_key: str) -> MLBWeather:
     )
 
 
+def parse_results(schedule_json: dict) -> list[dict]:
+    """Final scores from a schedule payload — pure, so it unit-tests offline.
+
+    Only completed games are returned; anything still scheduled/in-progress (or
+    missing a score) is skipped, so the history DB never learns from a partial
+    game. Each row is ``{date, home, away, home_score, away_score, venue}``.
+    """
+    out: list[dict] = []
+    for day in schedule_json.get("dates", []):
+        for g in day.get("games", []):
+            status = g.get("status", {}) or {}
+            if status.get("abstractGameState") != "Final":
+                continue
+            # Suspended/cancelled games can be "Final" with no real result.
+            if (status.get("codedGameState") or "") in {"C", "D", "T"}:
+                continue
+            teams = g.get("teams", {}) or {}
+            home_t, away_t = teams.get("home", {}) or {}, teams.get("away", {}) or {}
+            home = TEAM_ID_ABBR.get((home_t.get("team") or {}).get("id"),
+                                    (home_t.get("team") or {}).get("abbreviation", ""))
+            away = TEAM_ID_ABBR.get((away_t.get("team") or {}).get("id"),
+                                    (away_t.get("team") or {}).get("abbreviation", ""))
+            hs, as_ = home_t.get("score"), away_t.get("score")
+            if not home or not away or hs is None or as_ is None:
+                continue
+            out.append({
+                "date": (g.get("officialDate") or g.get("gameDate", ""))[:10],
+                "home": home, "away": away,
+                "home_score": float(hs), "away_score": float(as_),
+                "venue": (g.get("venue", {}) or {}).get("name", ""),
+            })
+    return out
+
+
+def fetch_results(start: str, end: str) -> list[dict]:
+    """Final scores for every completed game between two dates (inclusive).
+
+    One request covers the whole range, so ingesting a full season is a handful
+    of calls rather than one per day."""
+    url = (f"{STATS_BASE}/schedule?sportId=1"
+           f"&startDate={start}&endDate={end}")
+    data = _get_json(url, f"mlb_results_{start}_{end}.json", ttl=86400)
+    return parse_results(data)
+
+
 def build_games(date: str, with_weather: bool = True) -> list[MLBGame]:
     """Real games for a date (YYYY-MM-DD) with probable pitchers and, where
     the park is mapped, live weather."""

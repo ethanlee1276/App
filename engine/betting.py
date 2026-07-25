@@ -28,14 +28,21 @@ MARKET_SHRINK = 0.5
 MAX_CREDIBLE_EDGE = 0.10
 
 
-def temper_edge(hit_raw: float, fair: float, book: str) -> tuple[float, float, bool]:
+def temper_edge(hit_raw: float, fair: float, book: str,
+                allow_synthetic_line: bool = False) -> tuple[float, float, bool]:
     """Shrink the model probability toward the market and judge credibility.
 
     Returns ``(hit, edge, credible)`` where ``hit`` is the tempered win
     probability, ``edge = hit - fair``, and ``credible`` is False when the line
-    is a placeholder or the raw disagreement is implausibly large."""
+    is a placeholder or the raw disagreement is implausibly large.
+
+    ``allow_synthetic_line`` is for the backtest harness, which deliberately
+    prices against a naive baseline line rather than a real book — there a
+    "proxy" line is the point of the exercise, not a data error.
+    """
     hit = clamp(fair + MARKET_SHRINK * (hit_raw - fair), 1e-6, 1.0 - 1e-6)
-    credible = (book or "").lower() != "proxy" and abs(hit_raw - fair) <= MAX_CREDIBLE_EDGE
+    real_line = allow_synthetic_line or (book or "").lower() != "proxy"
+    credible = real_line and abs(hit_raw - fair) <= MAX_CREDIBLE_EDGE
     return hit, hit - fair, credible
 
 
@@ -148,14 +155,15 @@ def _kelly_stake(model_prob: float, odds: int, fraction: float = 0.25) -> float:
     return round(clamp(kelly * fraction, 0.0, 0.05) * 100, 2) / 100 * 20  # -> ~0..1 unit
 
 
-def evaluate_prop(prop: Prop, proj: Projection) -> Recommendation:
+def evaluate_prop(prop: Prop, proj: Projection,
+                  allow_synthetic_line: bool = False) -> Recommendation:
     def p_over_at(line: float) -> float:
         if prop.market == RECEPTIONS:
             return prob_over_discrete(line, proj.mean, proj.std)
         return prob_over(line, proj.mean, proj.std)
 
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
-    hit, edge, credible = temper_edge(hit_raw, fair, best.book)
+    hit, edge, credible = temper_edge(hit_raw, fair, best.book, allow_synthetic_line)
     ev = expected_value(hit, best.odds)
     trend_align = _trend_alignment(side, proj.form.trend)
     confidence = _confidence_score(edge, hit, proj, trend_align)
