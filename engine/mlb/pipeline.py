@@ -60,10 +60,11 @@ def _long_shots(slate) -> tuple[list[dict], list[dict]]:
         recent_by_player[prop.player] = [g.value for g in prop.logs][:12]
         candidates.append({"prop": prop, "game": game, "odds": best.over_odds,
                            "book": best.book, "under_odds": best.under_odds})
-    picks = [p.to_dict() for p in build_hr_longshots(candidates)]
+    picks = [p.to_dict() for p in build_hr_longshots(candidates, limit=6,
+                                                     per_team=2)]
     for d in picks:
         d["recent_values"] = recent_by_player.get(d.get("player", ""), [])
-    return picks, hr_watchlist(candidates)
+    return picks, hr_watchlist(candidates, limit=25)
 
 
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:

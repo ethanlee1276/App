@@ -52,6 +52,7 @@ const SPORT_META = {
 
 function applySport() {
   const meta = SPORT_META[state.sport];
+  window.ACTIVE_SPORT = state.sport;
   window.ACTIVE_TEAMS = state.sport === "mlb"
     ? (typeof MLB_TEAMS !== "undefined" ? MLB_TEAMS : {})
     : (typeof TEAMS !== "undefined" ? TEAMS : {});

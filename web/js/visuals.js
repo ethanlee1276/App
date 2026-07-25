@@ -49,6 +49,48 @@ function playerAvatar(name, abbr, opts = {}) {
   const ini = initials(name);
   const stripe = t.secondary;
   const mask = "#c9d2e8";
+  if ((window.ACTIVE_SPORT || "nfl") === "mlb") {
+    // A stylized baseball cap in team colors — avatar, not a likeness.
+    return `
+  <svg class="avatar" width="${size}" height="${size}" viewBox="0 0 64 64" role="img"
+       aria-label="${escapeAttr(name)}">
+    <defs>
+      <radialGradient id="${uid}bg" cx="50%" cy="35%" r="75%">
+        <stop offset="0%" stop-color="${t.primary}"/>
+        <stop offset="100%" stop-color="${shade(t.primary, -28)}"/>
+      </radialGradient>
+      <linearGradient id="${uid}cp" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${shade(t.primary, 26)}"/>
+        <stop offset="100%" stop-color="${shade(t.primary, -14)}"/>
+      </linearGradient>
+    </defs>
+    <circle cx="32" cy="32" r="32" fill="url(#${uid}bg)"/>
+    <!-- cap crown -->
+    <path d="M15 33 a17 15 0 0 1 34 0 l0 3 -34 0 z"
+          fill="url(#${uid}cp)" stroke="${shade(t.primary,-38)}" stroke-width="1"/>
+    <!-- panel seams -->
+    <g fill="none" stroke="${shade(t.primary,-30)}" stroke-width="1" opacity="0.8">
+      <path d="M32 18 v18"/>
+      <path d="M23 21 q-2 7 -1 15"/>
+      <path d="M41 21 q2 7 1 15"/>
+    </g>
+    <!-- button -->
+    <circle cx="32" cy="18" r="1.8" fill="${stripe}"/>
+    <!-- brim -->
+    <path d="M14 36 q18 8 37 1 q1 3 -1 4 q-18 8 -37 -1 q0 -3 1 -4 z"
+          fill="${shade(t.primary, -20)}" stroke="${shade(t.primary,-40)}" stroke-width="1"/>
+    <!-- team letter on the crown -->
+    <text x="32" y="33" text-anchor="middle" font-family="system-ui, sans-serif"
+          font-size="10" font-weight="800" fill="${stripe}">${escapeAttr((abbr || "?")[0])}</text>
+    <!-- initials nameplate -->
+    <g>
+      <rect x="17" y="52" width="30" height="11" rx="5.5" fill="${idealText(t.primary)==='#ffffff'?'#0c1020':'#ffffffcc'}" opacity="0.85"/>
+      <text x="32" y="60.3" text-anchor="middle" font-family="system-ui, sans-serif"
+            font-size="8" font-weight="700"
+            fill="${idealText(t.primary)==='#ffffff'?'#ffffff':'#10152a'}">${ini}</text>
+    </g>
+  </svg>`;
+  }
   // A stylized football helmet in team colors — avatar, not a likeness.
   return `
   <svg class="avatar" width="${size}" height="${size}" viewBox="0 0 64 64" role="img"
