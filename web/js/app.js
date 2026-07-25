@@ -602,11 +602,11 @@ function cardHTML(r) {
       ${projBar(r)}
       <div class="metrics">
         <div class="metric"><div class="k">Hit prob</div><div class="v">${pct(r.hit_prob)}</div></div>
-        <div class="metric"><div class="k">Edge</div><div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>
+        <div class="metric"><div class="k">Edge</div><div class="v ${r.has_market === false ? "" : (r.edge >= 0 ? "pos" : "neg")}">${r.has_market === false ? "—" : signedPct(r.edge)}</div></div>
         <div class="metric"><div class="k">EV / unit</div><div class="v ${r.ev_per_unit >= 0 ? "pos" : "neg"}">${signedPct(r.ev_per_unit)}</div></div>
       </div>
       ${confMeter(r)}
-      <div class="chips">${whenChip(r.game_date, r.game_kickoff)}${trendChip(r)}${booksChip(r)}${stakeChip}</div>
+      <div class="chips">${r.has_market === false ? `<span class="chip">📉 No book line — model projection only</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${trendChip(r)}${booksChip(r)}${stakeChip}</div>
       ${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
 }

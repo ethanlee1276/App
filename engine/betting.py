@@ -69,6 +69,10 @@ class Recommendation:
     grade: str                # "Strong Play" / "Play" / "Lean" / "Pass"
     reasons: list[str] = field(default_factory=list)
     trend: str = "flat"
+    # False when no real book line was available and the "line" is the engine's
+    # own proxy. There is nothing to have an edge *against* in that case, so the
+    # edge is reported as zero rather than as a number that looks like alpha.
+    has_market: bool = True
 
 
 def _confidence_score(edge: float, hit_prob: float, proj: Projection,
@@ -168,6 +172,10 @@ def evaluate_prop(prop: Prop, proj: Projection,
     # real settled outcomes (1.0 = none fitted yet, so this is a no-op).
     hit_raw = apply_temperature(hit_raw, temperature_for("nfl", prop.market))
     hit, edge, credible = temper_edge(hit_raw, fair, best.book, allow_synthetic_line)
+    has_market = allow_synthetic_line or (best.book or "").lower() != "proxy"
+    if not has_market:
+        # No real price to beat — don't report a number that reads as an edge.
+        edge = 0.0
     ev = expected_value(hit, best.odds)
     trend_align = _trend_alignment(side, proj.form.trend)
     confidence = _confidence_score(edge, hit, proj, trend_align)
@@ -201,4 +209,5 @@ def evaluate_prop(prop: Prop, proj: Projection,
         grade=grade,
         reasons=reasons,
         trend=proj.form.trend,
+        has_market=has_market,
     )

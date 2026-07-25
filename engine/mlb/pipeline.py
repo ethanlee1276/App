@@ -124,7 +124,7 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "hit_prob": rec.hit_prob, "fair_prob": rec.fair_prob,
         "edge": rec.edge, "ev_per_unit": rec.ev_per_unit,
         "confidence": rec.confidence, "stake_units": rec.stake_units,
-        "grade": rec.grade, "trend": rec.trend,
+        "grade": rec.grade, "has_market": rec.has_market, "trend": rec.trend,
         "trend_delta": round(proj.form.trend_delta, 2),
         "recommended": decision.recommend, "warnings": decision.warnings,
         "headline": f"{rec.player} {rec.side} {rec.line:g} {label}",

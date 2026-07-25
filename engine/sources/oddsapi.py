@@ -166,6 +166,21 @@ def _request(url: str, cache_name: str, ttl: int = 300,
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:300]
         if exc.code in (401, 403):
+            # A spent quota comes back as a 401 with no remaining-header, so
+            # record it explicitly — otherwise the budgeter keeps believing the
+            # assumed balance and retries a call that cannot succeed.
+            if "OUT_OF_USAGE_CREDITS" in detail or "quota has been reached" in detail:
+                try:
+                    from ..oddsbudget import record_quota
+                    record_quota(0, None)
+                except Exception:
+                    pass
+                raise OddsAPIError(
+                    "Odds API monthly quota is exhausted. Real book lines are "
+                    "unavailable until the plan resets; scores, projections and "
+                    "the rest of the app keep working. See the-odds-api.com for "
+                    "your reset date or a larger plan."
+                ) from exc
             raise OddsAPIError(f"Odds API auth/quota error {exc.code}: {detail}") from exc
         raise OddsAPIError(f"Odds API HTTP {exc.code}: {detail}") from exc
     except Exception as exc:
