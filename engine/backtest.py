@@ -23,6 +23,18 @@ from dataclasses import dataclass, field
 
 from .odds import american_to_decimal, american_to_prob
 
+# Claimed-edge buckets for the market-relative P&L breakdown. If realized ROI
+# doesn't rise across these, the model's edge estimate is noise.
+EDGE_BUCKETS = ("<5%", "5-10%", "10%+")
+
+
+def _edge_bucket(edge: float) -> str:
+    if edge < 0.05:
+        return EDGE_BUCKETS[0]
+    if edge < 0.10:
+        return EDGE_BUCKETS[1]
+    return EDGE_BUCKETS[2]
+
 
 def _norm(name: str) -> str:
     s = name.lower().replace("-", " ").replace(".", " ").replace("'", "")
@@ -145,6 +157,16 @@ class BacktestReport:
                                 lines.append(
                                     f"        {sd_name:5} {sd['n_bets']:>4} bets, "
                                     f"{sd['wins']} won  ROI {sd['roi']:+.1%}")
+                    # Claimed-edge buckets: if bets the model liked more don't
+                    # do better, the edge estimate carries no signal and no
+                    # threshold tuning will conjure one.
+                    if basis == "book" and g.get("edges"):
+                        for eb_name in EDGE_BUCKETS:
+                            eb = g["edges"].get(eb_name)
+                            if eb and eb["n_bets"]:
+                                lines.append(
+                                    f"        claimed {eb_name:8} {eb['n_bets']:>4} bets, "
+                                    f"{eb['wins']} won  ROI {eb['roi']:+.1%}")
             if self.avg_clv is not None:
                 lines.append(f"  Closing-line value  {self.avg_clv:+.2f} pts avg")
         # Say plainly what the ROI above is measured against — an ROI beating a
@@ -213,12 +235,20 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
     for s in bets:
         g = seg.setdefault((s.basis or "naive"),
                            {"n_bets": 0, "wins": 0, "pushes": 0,
-                            "staked": 0.0, "net": 0.0, "sides": {}})
+                            "staked": 0.0, "net": 0.0, "sides": {},
+                            "edges": {}})
         side = seg[s.basis or "naive"]["sides"].setdefault(
             (s.side or "OVER").upper(),
             {"n_bets": 0, "wins": 0, "staked": 0.0, "net": 0.0})
+        # The edge the model CLAIMED at bet time: its probability for the taken
+        # side minus the break-even probability at the taken odds.
+        claimed = s.hit_prob - american_to_prob(s.odds)
+        ebucket = g["edges"].setdefault(
+            _edge_bucket(claimed),
+            {"n_bets": 0, "wins": 0, "staked": 0.0, "net": 0.0})
         g["n_bets"] += 1
         side["n_bets"] += 1
+        ebucket["n_bets"] += 1
         oc = s.outcome
         if oc is None:
             pushes += 1
@@ -228,18 +258,22 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
         staked += stake
         g["staked"] += stake
         side["staked"] += stake
+        ebucket["staked"] += stake
         if oc == 1:
             wins += 1
             g["wins"] += 1
             side["wins"] += 1
+            ebucket["wins"] += 1
             payout = (american_to_decimal(s.odds) - 1.0) * stake
             net += payout
             g["net"] += payout
             side["net"] += payout
+            ebucket["net"] += payout
         else:
             net -= stake
             g["net"] -= stake
             side["net"] -= stake
+            ebucket["net"] -= stake
         if s.closing_line is not None:
             # On an over you want the line to rise after you bet it; on an under
             # you want it to fall. Same sign convention would score unders
@@ -261,6 +295,8 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
         g["win_rate"] = (g["wins"] / graded) if graded else 0.0
         for sd in g["sides"].values():
             sd["roi"] = (sd["net"] / sd["staked"]) if sd["staked"] else 0.0
+        for eb in g["edges"].values():
+            eb["roi"] = (eb["net"] / eb["staked"]) if eb["staked"] else 0.0
     r.segments = seg
     r.avg_clv = (sum(clvs) / len(clvs)) if clvs else None
     return r

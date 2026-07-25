@@ -212,6 +212,29 @@ def test_book_segment_splits_by_side():
     assert "OVER " in text and "UNDER" in text
 
 
+def test_book_segment_buckets_by_claimed_edge():
+    """If bets the model liked more don't win more, threshold tuning is
+    pointless — the buckets make that testable."""
+    from engine.backtest import SettledProp, evaluate
+
+    def sp(hit_prob, won):
+        # At -110 the break-even probability is ~52.4%.
+        return SettledProp(player="P", market="total_bases", line=1.5,
+                           odds=-110, hit_prob=hit_prob, projection=1.8,
+                           actual=2.0 if won else 1.0,
+                           recommended=True, stake_units=1.0,
+                           side="OVER", basis="book")
+
+    r = evaluate([sp(0.55, False),   # claimed ~2.6%  -> "<5%"
+                  sp(0.60, True),    # claimed ~7.6%  -> "5-10%"
+                  sp(0.70, True)])   # claimed ~17.6% -> "10%+"
+    edges = r.segments["book"]["edges"]
+    assert edges["<5%"]["n_bets"] == 1 and edges["<5%"]["wins"] == 0
+    assert edges["5-10%"]["n_bets"] == 1 and edges["5-10%"]["wins"] == 1
+    assert edges["10%+"]["n_bets"] == 1 and edges["10%+"]["wins"] == 1
+    assert "claimed" in r.summary()
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
