@@ -36,21 +36,33 @@ class SettledProp:
     market: str
     line: float
     odds: int
-    hit_prob: float          # model's P(over)
+    hit_prob: float          # model's probability that THE BET IT MADE wins
     projection: float        # model's projected mean
     actual: float            # what actually happened
     recommended: bool = False
     stake_units: float = 1.0
     closing_line: float | None = None
+    # Which side the model backed. This matters everywhere: ``hit_prob`` is the
+    # probability the *chosen side* wins, so scoring it against "did the over
+    # hit" grades every UNDER backwards — both the calibration bins and the P&L.
+    side: str = "OVER"
 
     @property
-    def outcome(self) -> int | None:
+    def over_hit(self) -> int | None:
         """1 if the Over hit, 0 if it missed, None on a push (actual == line)."""
         if self.actual > self.line:
             return 1
         if self.actual < self.line:
             return 0
         return None
+
+    @property
+    def outcome(self) -> int | None:
+        """1 if **the bet** won, 0 if it lost, None on a push."""
+        over = self.over_hit
+        if over is None:
+            return None
+        return over if (self.side or "OVER").upper() == "OVER" else 1 - over
 
 
 @dataclass
@@ -181,7 +193,11 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
         else:
             net -= stake
         if s.closing_line is not None:
-            clvs.append(s.closing_line - s.line)  # over: beating a lower line is +CLV
+            # On an over you want the line to rise after you bet it; on an under
+            # you want it to fall. Same sign convention would score unders
+            # backwards, exactly as the outcome bug did.
+            move = s.closing_line - s.line
+            clvs.append(move if (s.side or "OVER").upper() == "OVER" else -move)
 
     graded_bets = len(bets) - pushes
     r.n_bets = len(bets)
@@ -217,6 +233,7 @@ def settle_recommendations(recommendations: list[dict],
             actual=actuals[key],
             recommended=rec["recommended"],
             stake_units=rec.get("stake_units", 1.0),
+            side=rec.get("side", "OVER"),
         ))
     return out
 

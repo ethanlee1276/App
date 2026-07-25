@@ -121,6 +121,51 @@ def test_backtest_driver_walk_forward():
         nv.load_weekly_stats, nv.build_slate, pl.run_slate = saved
 
 
+def test_under_bets_are_graded_on_the_side_actually_bet():
+    """``hit_prob`` is the probability the CHOSEN side wins, so scoring it
+    against "did the over hit" grades every UNDER backwards — in the calibration
+    bins and in the P&L. Real backtests hid this until calibration made the
+    model start taking unders in volume."""
+    from engine.backtest import SettledProp, evaluate
+
+    # Player recorded 0 against a 1.5 line: the under won outright.
+    under = SettledProp(player="X", market="total_bases", line=1.5, odds=-110,
+                        hit_prob=0.70, projection=0.9, actual=0.0,
+                        recommended=True, stake_units=1.0, side="UNDER")
+    assert under.over_hit == 0          # the over lost...
+    assert under.outcome == 1           # ...so our bet won
+
+    over = SettledProp(player="Y", market="total_bases", line=1.5, odds=-110,
+                       hit_prob=0.70, projection=2.1, actual=0.0,
+                       recommended=True, stake_units=1.0, side="OVER")
+    assert over.outcome == 0
+
+    r = evaluate([under, over])
+    assert r.wins == 1                  # exactly one of the two won
+
+    # A push is a push whichever side was taken.
+    push = SettledProp(player="Z", market="hits", line=1.0, odds=-110,
+                       hit_prob=0.6, projection=1.0, actual=1.0,
+                       recommended=True, side="UNDER")
+    assert push.outcome is None
+
+
+def test_closing_line_value_flips_sign_for_unders():
+    """On an over you want the line to rise afterwards; on an under you want it
+    to fall. One shared sign convention scores unders backwards."""
+    from engine.backtest import SettledProp, evaluate
+
+    over = SettledProp(player="A", market="rec_yds", line=50.0, odds=-110,
+                       hit_prob=0.6, projection=60.0, actual=61.0,
+                       recommended=True, closing_line=53.0, side="OVER")
+    under = SettledProp(player="B", market="rec_yds", line=50.0, odds=-110,
+                        hit_prob=0.6, projection=40.0, actual=39.0,
+                        recommended=True, closing_line=47.0, side="UNDER")
+    # Both beat the close by 3 points in their own direction.
+    assert evaluate([over]).avg_clv == 3.0
+    assert evaluate([under]).avg_clv == 3.0
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
