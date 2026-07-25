@@ -523,6 +523,11 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 game.home_ml = mls[home]
                 game.away_ml = mls[away]
                 result.moneylines += 1
+            # The sharp book's own pair rides along as the fair-value anchor.
+            for bk, prices in parse_event_h2h_by_book(payload, cfg["teams"]).items():
+                if bk == BOOK_TITLES.get("pinnacle") and home in prices and away in prices:
+                    game.sharp_home_ml = prices[home]
+                    game.sharp_away_ml = prices[away]
             tot = parse_event_totals(payload)
             if tot:
                 game.total, game.total_over_odds, game.total_under_odds = tot

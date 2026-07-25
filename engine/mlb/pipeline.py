@@ -12,7 +12,8 @@ from pathlib import Path
 from ..rules import RuleConfig, game_has_started
 from ..models import live_to_dict
 from ..gamebets import (
-    mlb_win_prob, price_moneyline, moneyline_to_dict, LEAGUE_AVG_XERA,
+    mlb_win_prob, price_moneyline, price_moneyline_sharp, moneyline_to_dict,
+    LEAGUE_AVG_XERA,
     project_total, project_team_points, game_margin,
     price_total, price_team_total, price_spread,
 )
@@ -68,10 +69,13 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
 
 # Measured against real closing moneylines (walk-forward over the harvested
 # June–July closes): the ratings-only game model lost -12.4% over 179 bets
-# with a Brier score worse than the home-field base rate — its disagreements
-# with the book are its own error, not edge. Until a version of the model
-# demonstrably beats the close in moneyline_backtest.py, MLB moneyline cards
-# are informational only and never recommended.
+# (pitcher-aware -7.5%) with a Brier score worse than the home-field base
+# rate — its disagreements with the book are its own error, not edge. So
+# MODEL-driven moneyline picks are informational only and never recommended.
+# The SHARP-ANCHOR path is different: when the sharp book's pair is quoted,
+# a soft price beating its de-vigged fair value is +EV on the price alone
+# (backtested +13.5% on the filtered close-vs-close sample) — those picks
+# ARE recommendable, and the bet journal validates them forward.
 MLB_ML_RECOMMENDATIONS = False
 
 
@@ -92,17 +96,26 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
             if home_p and away_p:
                 ctx.append(f"Starters: {home_p.name} ({home_xera:.2f} xERA) vs "
                            f"{away_p.name} ({away_xera:.2f} xERA)")
-            ml = _finish_bet(moneyline_to_dict(
-                price_moneyline(g.home, g.away, wp_home,
-                                g.home_ml, g.away_ml, ctx)), g, config)
-            if not MLB_ML_RECOMMENDATIONS:
-                ml["recommended"] = False
-                ml["grade"] = "Pass"
-                ml["stake_units"] = 0.0
-                ml.setdefault("warnings", []).append(
-                    "Moneyline model hasn't beaten closing prices in "
-                    "backtesting — shown for information only")
-            out.append(ml)
+            sharp_rec = None
+            if g.sharp_home_ml and g.sharp_away_ml:
+                sharp_rec = price_moneyline_sharp(
+                    g.home, g.away, g.sharp_home_ml, g.sharp_away_ml,
+                    g.home_ml, g.away_ml, win_prob_home=wp_home, context=ctx)
+            if sharp_rec is not None:
+                # Price disagreement vs the sharp book — recommendable.
+                out.append(_finish_bet(moneyline_to_dict(sharp_rec), g, config))
+            else:
+                ml = _finish_bet(moneyline_to_dict(
+                    price_moneyline(g.home, g.away, wp_home,
+                                    g.home_ml, g.away_ml, ctx)), g, config)
+                if not MLB_ML_RECOMMENDATIONS:
+                    ml["recommended"] = False
+                    ml["grade"] = "Pass"
+                    ml["stake_units"] = 0.0
+                    ml.setdefault("warnings", []).append(
+                        "No sharp-anchor value at current prices, and the "
+                        "model alone hasn't beaten the close — info only")
+                out.append(ml)
         if has_rating:
             pt = project_total("mlb", g.home_off, g.home_def, g.away_off, g.away_def)
             tctx = [f"Scoring form: {g.home} off {g.home_off:+.2f} / def {g.home_def:+.2f}, "

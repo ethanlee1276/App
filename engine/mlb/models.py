@@ -107,6 +107,11 @@ class MLBGame:
     # game-level moneyline model in engine/gamebets.py.
     home_ml: int = 0
     away_ml: int = 0
+    # The sharp reference book's own two-sided prices (0 = not quoted).
+    # De-vigged they are the fair-value anchor the soft prices are judged
+    # against; never themselves a price to take.
+    sharp_home_ml: int = 0
+    sharp_away_ml: int = 0
     home_rating: float = 0.0
     away_rating: float = 0.0
     # Offense/defense split (runs scored / allowed vs league baseline) for the

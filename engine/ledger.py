@@ -105,6 +105,22 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
              stake_units, round(stake_units * unit_dollars, 2)))
         n += cur.rowcount
+    # Recommended moneyline game bets journal too (sharp-anchor picks live or
+    # die by forward results). Stored as: player = the team picked, line 0.5,
+    # side OVER, actual 1/0 for won/lost — so the standard grader applies.
+    for r in result.get("game_bets", []):
+        if r.get("bet_type") != "moneyline" or not r.get("recommended"):
+            continue
+        stake_units = float(r.get("stake_units", 0) or 0)
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
+            "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
+            "stake_dollars, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open')",
+            (now, sport, date, r.get("pick", ""), "moneyline", "OVER", 0.5,
+             r.get("book", "best"), r.get("odds", -110), None,
+             r.get("win_prob"), r.get("edge"), r.get("confidence"),
+             r.get("grade"), stake_units, round(stake_units * unit_dollars, 2)))
+        n += cur.rowcount
     conn.commit()
     return n
 
@@ -158,6 +174,21 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     closes_cache: dict = {}
     settled = 0
     for b in conn.execute(q, args).fetchall():
+        if b["market"] == "moneyline":
+            # player = the team picked; the game's final score settles it.
+            g = hist_conn.execute(
+                "SELECT home, away, home_score, away_score FROM games "
+                "WHERE sport=? AND period=? AND (home=? OR away=?) "
+                "AND home_score IS NOT NULL AND away_score IS NOT NULL",
+                (b["sport"], b["date"], b["player"], b["player"])).fetchone()
+            if g is None:
+                continue
+            pick_home = g["home"] == b["player"]
+            won = (g["home_score"] > g["away_score"]) == pick_home
+            # Stored as line 0.5 / side OVER: actual 1.0 = pick won.
+            _settle_one(conn, b, 1.0 if won else 0.0, None)
+            settled += 1
+            continue
         row = hist_conn.execute(
             "SELECT value FROM player_game_logs WHERE sport=? AND period=? "
             "AND market=? AND player=?",

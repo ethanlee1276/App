@@ -25,7 +25,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .statmath import normal_cdf, clamp
-from .odds import devig_two_way, expected_value
+from .odds import (american_to_decimal, american_to_prob, devig_two_way,
+                   expected_value)
 from .betting import _grade, _kelly_stake
 
 # NFL: SD of a game's final margin. MLB: SD of the run margin used for win prob.
@@ -93,6 +94,59 @@ def _ml_confidence(edge: float, win_prob: float) -> float:
     edge_component = clamp(edge / 0.07, 0.0, 1.0) * 6.5
     prob_component = clamp((win_prob - 0.5) / 0.35, 0.0, 1.0) * 2.0
     return round(clamp(edge_component + prob_component, 0.0, 10.0), 1)
+
+
+# Sharp-anchor thresholds: bet only when the soft price beats the sharp
+# book's de-vigged fair value by at least MIN, and treat gaps beyond MAX as
+# broken prices (in-play or suspended market) rather than edges — the same
+# too-good-to-be-true guard the backtest needed.
+SHARP_MIN_EV = 0.02
+SHARP_MAX_EV = 0.15
+
+
+def price_moneyline_sharp(home: str, away: str,
+                          sharp_home: int, sharp_away: int,
+                          home_ml: int, away_ml: int,
+                          win_prob_home: float | None = None,
+                          context: list[str] | None = None) -> MoneylineRec | None:
+    """Price a moneyline from price DISAGREEMENT, not model opinion.
+
+    The sharp pair de-vigs to fair probabilities; a soft price paying more
+    than fair is +EV regardless of what our model thinks. Returns ``None``
+    when no side clears ``SHARP_MIN_EV`` or the gap smells broken — the
+    caller falls back to an informational (never recommended) card."""
+    fair_home, fair_away = devig_two_way(sharp_home, sharp_away)
+    best = None
+    for pick, is_home, fair, ml in ((home, True, fair_home, home_ml),
+                                    (away, False, fair_away, away_ml)):
+        ev = fair * american_to_decimal(ml) - 1.0
+        if SHARP_MIN_EV <= ev <= SHARP_MAX_EV and (best is None or ev > best[4]):
+            best = (pick, is_home, fair, ml, ev)
+    if best is None:
+        return None
+    pick, is_home, fair, ml, ev = best
+    soft_implied = american_to_prob(ml)
+    edge = fair - soft_implied            # probability points of value
+    confidence = _ml_confidence(edge, fair)
+    grade = ("Strong Play" if ev >= 0.06 else
+             "Play" if ev >= 0.035 else "Lean")
+    stake = _kelly_stake(fair, ml)
+
+    reasons = [f"Sharp anchor: this price implies {soft_implied:.0%} but the "
+               f"sharp book prices {pick} at {fair:.0%} fair — {ev:+.1%} EV "
+               f"on the price alone"]
+    if win_prob_home is not None:
+        wp_pick = win_prob_home if is_home else 1.0 - win_prob_home
+        reasons.append(f"Model context: rates {pick} at {wp_pick:.0%} to win")
+    reasons += list(context or [])
+
+    return MoneylineRec(
+        home=home, away=away, pick=pick, pick_is_home=is_home,
+        win_prob=round(fair, 4), fair_prob=round(soft_implied, 4),
+        edge=round(edge, 4), odds=ml,
+        ev_per_unit=round(ev, 4), confidence=confidence,
+        stake_units=round(stake, 2), grade=grade, reasons=reasons,
+    )
 
 
 def price_moneyline(home: str, away: str, win_prob_home: float,

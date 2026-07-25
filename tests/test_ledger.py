@@ -145,6 +145,37 @@ def test_settle_from_history_db():
     assert ledger.settle_from_history(conn, hist, sport="mlb") == 0
 
 
+def test_moneyline_picks_journal_and_settle_from_scores():
+    """Sharp-anchor moneyline picks are validated FORWARD: journaled from
+    game_bets, settled by the real final score."""
+    from engine import db as hist_db
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    result = {"sport": "mlb", "date": "2026-07-24", "recommendations": [],
+              "game_bets": [
+                  {"bet_type": "moneyline", "recommended": True, "pick": "NYY",
+                   "odds": -125, "win_prob": 0.60, "edge": 0.045,
+                   "confidence": 6.0, "grade": "Play", "stake_units": 1.0},
+                  {"bet_type": "moneyline", "recommended": False, "pick": "COL",
+                   "odds": 240, "grade": "Pass", "stake_units": 0.0},
+                  {"bet_type": "total", "recommended": True, "pick": "OVER",
+                   "odds": -110, "grade": "Play", "stake_units": 1.0},
+              ]}
+    assert ledger.log_recommendations(conn, result) == 1   # only the ML pick
+
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_games(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-24",
+         "game_id": "BOS@NYY", "home": "NYY", "away": "BOS",
+         "home_score": 5, "away_score": 3, "spread": 0.0, "total": None,
+         "roof": "open", "surface": "grass", "temp": None, "wind": None,
+         "extra": "yankee"}])
+    assert ledger.settle_from_history(conn, hist, sport="mlb") == 1
+    b = conn.execute("SELECT * FROM bets WHERE market='moneyline'").fetchone()
+    assert b["status"] == "won"
+    assert ledger.performance(conn)["net_units"] > 0
+
+
 def test_summary_renders():
     conn = _conn()
     ledger.log_recommendations(conn, _result())

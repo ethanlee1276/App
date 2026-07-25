@@ -186,6 +186,10 @@ class Game:
     # game-level moneyline model in engine/gamebets.py.
     home_ml: int = 0
     away_ml: int = 0
+    # The sharp reference book's own two-sided prices (0 = not quoted) — the
+    # fair-value anchor, never a price to take.
+    sharp_home_ml: int = 0
+    sharp_away_ml: int = 0
     home_rating: float = 0.0
     away_rating: float = 0.0
     # Offense/defense split (points scored / allowed vs league baseline) for the

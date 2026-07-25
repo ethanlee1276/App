@@ -139,6 +139,26 @@ def test_moneyline_to_dict_shape():
     assert d["bet_type"] == "moneyline"
 
 
+def test_price_moneyline_sharp_finds_price_value():
+    """Sharp pair -155/+135 de-vigs home to ~60%; a soft -125 implies 55.6%
+    -> ~+7% EV on the price alone, graded Play, no model needed."""
+    from engine.gamebets import price_moneyline_sharp
+    rec = price_moneyline_sharp("KC", "BUF", -155, 135, -125, -120)
+    assert rec is not None
+    assert rec.pick == "KC" and rec.pick_is_home
+    assert 0.05 < rec.ev_per_unit < 0.10
+    assert rec.grade == "Play" and rec.stake_units > 0
+    assert "Sharp anchor" in rec.reasons[0]
+
+
+def test_price_moneyline_sharp_passes_and_filters():
+    from engine.gamebets import price_moneyline_sharp
+    # Soft prices identical to sharp -> implied worse than de-vigged fair.
+    assert price_moneyline_sharp("KC", "BUF", -155, 135, -155, 135) is None
+    # A live/stale gap (+88% EV) is a broken price, not a bet.
+    assert price_moneyline_sharp("KC", "BUF", -1200, 750, 105, -120) is None
+
+
 # --- pipeline integration --------------------------------------------------
 
 def test_pipeline_emits_game_bets():
@@ -165,10 +185,12 @@ def test_mlb_moneylines_are_informational_only():
     result = run_mlb_slate(MLB_SLATE)
     mls = [b for b in result["game_bets"] if b["bet_type"] == "moneyline"]
     assert mls, "expected moneyline cards to still be shown"
+    # The sample slate carries no sharp reference prices, so every card takes
+    # the model-only path — which must never recommend.
     for b in mls:
         assert b["recommended"] is False
         assert b["grade"] == "Pass" and b["stake_units"] == 0.0
-        assert any("backtest" in w.lower() for w in b.get("warnings", []))
+        assert any("hasn't beaten the close" in w for w in b.get("warnings", []))
 
 
 if __name__ == "__main__":
