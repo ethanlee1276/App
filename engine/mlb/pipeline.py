@@ -45,15 +45,24 @@ def _long_shots(slate) -> tuple[list[dict], list[dict]]:
     from .models import HOME_RUNS
 
     candidates = []
+    recent_by_player: dict[str, list] = {}
     for prop in slate.props:
         if prop.market != HOME_RUNS or not prop.lines:
             continue
         game = slate.game_for(prop)
-        # Shop the best (highest) price across books.
-        best = max(prop.lines, key=lambda ln: ln.over_odds)
+        # ONLY the 0.5 line — "hits a homer". Mixing in 1.5-line prices
+        # (2+ HR, e.g. +2000) against a 1+ HR probability manufactured
+        # 400%+ fake EV.
+        overs = [ln for ln in prop.lines if ln.line == 0.5 and ln.over_odds]
+        if not overs:
+            continue
+        best = max(overs, key=lambda ln: ln.over_odds)
+        recent_by_player[prop.player] = [g.value for g in prop.logs][:12]
         candidates.append({"prop": prop, "game": game, "odds": best.over_odds,
                            "book": best.book, "under_odds": best.under_odds})
     picks = [p.to_dict() for p in build_hr_longshots(candidates)]
+    for d in picks:
+        d["recent_values"] = recent_by_player.get(d.get("player", ""), [])
     return picks, hr_watchlist(candidates)
 
 
@@ -197,6 +206,7 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "edge": rec.edge, "ev_per_unit": rec.ev_per_unit,
         "confidence": rec.confidence, "stake_units": rec.stake_units,
         "grade": rec.grade, "has_market": rec.has_market, "trend": rec.trend,
+        "recent_values": vals[:12],
         "trend_delta": round(proj.form.trend_delta, 2),
         "recommended": decision.recommend, "warnings": decision.warnings,
         "headline": f"{rec.player} {rec.side} {rec.line:g} {label}",

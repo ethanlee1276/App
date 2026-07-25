@@ -221,13 +221,20 @@ def hr_watchlist(candidates: list[dict], limit: int = 10) -> list[dict]:
     rows: list[dict] = []
     for c in candidates:
         odds = c.get("odds")
-        if not odds or int(odds) <= 100:                 # plus-money overs only
+        # Plus-money, real, plausible 1+ HR prices only: nobody is +1500 to
+        # homer, so anything longer is a stale or mis-lined quote.
+        if not odds or not (100 < int(odds) <= 1500):
             continue
         if (c.get("book") or "").lower() == "proxy":     # real prices only
             continue
         prop, game = c["prop"], c["game"]
         prob, info = hr_probability(prop, game)
         odds = int(odds)
+        from ..odds import american_to_decimal as _atd
+        if prob * _atd(odds) - 1.0 > 0.60:
+            # A claimed +60% EV on a homer market is a broken price, not an
+            # edge — same too-good-to-be-true guard as the sharp anchor.
+            continue
         rows.append({
             "player": prop.player, "team": prop.team,
             "opponent": prop.opponent, "book": c.get("book", ""),
@@ -236,6 +243,7 @@ def hr_watchlist(candidates: list[dict], limit: int = 10) -> list[dict]:
             "implied_prob": round(american_to_prob(odds), 4),
             "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),
             "primary_reason": info["primary_reason"],
+            "recent_values": [g.value for g in prop.logs][:12],
             "caveats": info["caveats"][:1],
             "game_date": getattr(game, "date", ""),
             "kickoff": getattr(game, "kickoff", ""),

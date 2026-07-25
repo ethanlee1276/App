@@ -56,6 +56,7 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "confidence": rec.confidence,
         "stake_units": rec.stake_units,
         "grade": rec.grade, "has_market": rec.has_market,
+        "recent_values": vals[:12],
         "trend": rec.trend,
         "trend_delta": round(proj.form.trend_delta, 1),
         "recommended": decision.recommend,

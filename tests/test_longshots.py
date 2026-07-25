@@ -233,6 +233,27 @@ def test_hr_watchlist_ranks_by_model_probability():
     assert "primary_reason" in top and top["ev_per_unit"] is not None
 
 
+def test_hr_watchlist_rejects_mislined_and_broken_prices():
+    """+2000 is a '2+ homers' price, not a 'hits a homer' price — comparing
+    it to a 1+ HR probability manufactured 400%+ fake EV on the board."""
+    from engine.mlb.homeruns import hr_watchlist
+    from engine.mlb.models import MLBGame, MLBProp, MLBGameLog, HOME_RUNS
+    from engine.models import SportsbookLine
+
+    game = MLBGame(home="NYY", away="BOS", park="yankee")
+    def cand(name, odds):
+        prop = MLBProp(name, "NYY", "BOS", "RF", HOME_RUNS,
+                       [MLBGameLog(i, "X", 0.3) for i in range(1, 21)], 0.3,
+                       None, [SportsbookLine("DraftKings", 0.5, odds, 0)],
+                       lineup_spot=3)
+        return {"prop": prop, "game": game, "odds": odds, "book": "DraftKings"}
+
+    rows = hr_watchlist([cand("Sane Price", 380), cand("Mislined", 2000)])
+    assert [r["player"] for r in rows] == ["Sane Price"]
+    assert all(r["ev_per_unit"] <= 0.60 for r in rows)
+    assert "recent_values" in rows[0]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

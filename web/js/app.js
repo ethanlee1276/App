@@ -411,6 +411,10 @@ function gameBetCard(r) {
         <div class="metric"><div class="k">Edge</div><div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>
       </div>
       ${confMeter(r)}
+      ${(r.recent_values || []).length > 2
+        ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
+             ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
+        : ""}
       <div class="chips">${stakeChip}</div>
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
@@ -615,6 +619,10 @@ function cardHTML(r) {
         <div class="metric"><div class="k">EV / unit</div><div class="v ${r.ev_per_unit >= 0 ? "pos" : "neg"}">${signedPct(r.ev_per_unit)}</div></div>
       </div>
       ${confMeter(r)}
+      ${(r.recent_values || []).length > 2
+        ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
+             ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
+        : ""}
       <div class="chips">${r.has_market === false ? `<span class="chip">📉 No book line — model projection only</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${trendChip(r)}${booksChip(r)}${stakeChip}</div>
       ${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
@@ -656,24 +664,30 @@ function renderLongShots() {
 function watchlistHTML(watch, mlb) {
   if (!watch || !watch.length) return "";
   const rows = watch.map((r, i) => {
-    const ev = (r.ev_per_unit * 100).toFixed(1);
+    const ev = (r.ev_per_unit * 100).toFixed(0);
     const evColor = r.ev_per_unit > 0 ? "var(--good, #3ddc84)" : "var(--text-mute, #889)";
-    return `<div style="display:flex;align-items:center;gap:14px;padding:11px 16px;
-        border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="opacity:.5;min-width:20px">${i + 1}</span>
-      <span style="flex:1"><strong>${escapeHtml(r.player)}</strong>
-        <span style="opacity:.6"> · ${teamName(r.team)} vs ${teamName(r.opponent)}</span>
-        <span style="display:block;opacity:.55;font-size:.85em">${escapeHtml(r.primary_reason || "")}</span></span>
-      <span style="min-width:120px;text-align:right;opacity:.85">
-        model ${(r.model_prob * 100).toFixed(0)}% · book ${(r.implied_prob * 100).toFixed(0)}%</span>
-      <span style="min-width:66px;text-align:right">${american(r.odds)}</span>
-      <span style="min-width:80px;text-align:right;color:${evColor}">${r.ev_per_unit > 0 ? "+" : ""}${ev}% EV</span>
+    const spark = (r.recent_values || []).length > 2
+      ? sparkline(r.recent_values, { line: 0.5, stroke: teamPrimary(r.team), w: 64, h: 22 })
+      : "";
+    return `<div style="display:flex;align-items:center;gap:12px;padding:7px 14px;
+        border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden">
+      <span style="opacity:.5;min-width:18px;font-size:.85em">${i + 1}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">
+        <strong>${escapeHtml(r.player)}</strong>
+        <span style="opacity:.55;font-size:.85em"> ${teamName(r.team)} vs ${teamName(r.opponent)}
+          · ${escapeHtml(r.primary_reason || "")}</span></span>
+      <span class="mini" style="flex:0 0 auto" title="Home runs, last ${(r.recent_values || []).length} games">${spark}</span>
+      <span style="min-width:96px;text-align:right;opacity:.85;font-size:.9em">
+        ${(r.model_prob * 100).toFixed(0)}% vs ${(r.implied_prob * 100).toFixed(0)}%</span>
+      <span style="min-width:56px;text-align:right">${american(r.odds)}</span>
+      <span style="min-width:64px;text-align:right;color:${evColor};font-size:.9em">${r.ev_per_unit > 0 ? "+" : ""}${ev}% EV</span>
     </div>`;
   }).join("");
-  return `<div class="section-title" style="margin-top:22px">💣 Most likely ${mlb ? "to homer" : "to score"} tonight
-      <span class="sub">— model probability vs the book's price. Positive EV = the price is worth it;
+  return `<div style="grid-column:1/-1;min-width:0">
+    <div class="section-title" style="margin-top:20px">💣 Most likely ${mlb ? "to homer" : "to score"} tonight
+      <span class="sub">— model % vs the book's implied %. Positive EV = price worth taking;
       negative = likely but overpriced. Never a guarantee.</span></div>
-    <div class="card" style="padding:0">${rows}</div>`;
+    <div class="card" style="padding:0">${rows}</div></div>`;
 }
 
 function longShotCard(r) {
@@ -708,6 +722,10 @@ function longShotCard(r) {
         <div class="metric"><div class="k">${oppLabel}</div><div class="v">${r.expected_opportunities}</div></div>
       </div>
       ${confMeter(r)}
+      ${(r.recent_values || []).length > 2
+        ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
+             ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
+        : ""}
       <div class="chips"><span class="chip stake">💰 ${stakeTxt}</span></div>
       <div class="ls-primary">🎯 ${escapeHtml(r.primary_reason)}</div>
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
