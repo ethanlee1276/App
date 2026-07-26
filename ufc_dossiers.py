@@ -90,8 +90,13 @@ def main() -> None:
     drafted, kept, missing = [], [], []
     for name in names:
         existing = book.get(name)
-        if existing and isinstance(existing, dict) and not (
-                args.refresh and str(existing.get("source", "")).endswith("-auto")):
+        auto = (isinstance(existing, dict)
+                and str(existing.get("source", "")).endswith("-auto"))
+        # Auto drafts from an older schema (no career_fights marker) are
+        # re-drafted automatically — their rates predate the coverage fix.
+        stale = auto and "career_fights" not in existing
+        if existing and isinstance(existing, dict) \
+                and not ((args.refresh and auto) or stale):
             kept.append(name)
             continue
         print(f"  fetching {name} … (a fighter takes ~30s the first time)")
@@ -117,16 +122,25 @@ def main() -> None:
     if missing:
         print("  Not found on ESPN (debutants/spelling): " + ", ".join(missing)
               + "\n  Those fights stay on the pass list — which is correct.")
+    def num(v):
+        return "—" if v is None else v
+
+    def pct(v):
+        return "—" if v is None else f"{int(v * 100)}%"
+
     for name in drafted:
         d = book[name]
         flags = " · ".join(d.get("red_flags") or []) or "none"
         print(f"\n  {name}  ({d.get('division') or '?'}, age {d.get('age') or '?'}, "
-              f"{d.get('ufc_fights')} UFC fights, {d.get('fights')} pro)")
-        print(f"    striking {d.get('slpm')}/{d.get('sapm')} SLpM/SApM · "
-              f"TD {d.get('td_per15')}/15 at "
-              f"{int((d.get('td_acc') or 0) * 100)}% · TDD "
-              f"{int((d.get('tdd') or 0) * 100)}% · subs {d.get('sub_att_per15')}/15")
+              f"record {d.get('record', '?')}, stats for {d.get('ufc_fights', 0)} "
+              f"of {d.get('career_fights', '?')} fights)")
+        print(f"    striking {num(d.get('slpm'))}/{num(d.get('sapm'))} SLpM/SApM · "
+              f"TD {num(d.get('td_per15'))}/15 at {pct(d.get('td_acc'))} · "
+              f"TDD {pct(d.get('tdd'))} · subs {num(d.get('sub_att_per15'))}/15")
         print(f"    archetype {d.get('archetype')} · red flags: {flags}")
+        if d.get("ufc_fights", 0) == 0:
+            print("    ⚠️  no stat coverage — the model treats this fighter "
+                  "as unmodelable (correct for regional records)")
     if drafted:
         print("\nReview: open data/ufc_dossiers.json — check each 'review' "
               "note, fix archetypes you know better, and delete red flags "

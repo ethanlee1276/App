@@ -172,7 +172,9 @@ def test_build_dossier_measures_rates_and_flags():
     assert any("chin damage" in f for f in d["red_flags"])
     assert not any("layoff" in f for f in d["red_flags"])
     assert d["division"] == "lightweight"
-    assert d["record"] == "20-5-0" and d["ufc_fights"] == 12
+    assert d["record"] == "20-5-0"
+    # Experience = stat-covered fights; the tracked career total rides along.
+    assert d["ufc_fights"] == 3 and d["career_fights"] == 12
     # Windowed counts are disclosed to the reviewer.
     assert any("last 3 fights" in n for n in d["review"])
 
@@ -183,11 +185,41 @@ def test_build_dossier_thin_data_defaults_are_flagged():
         "Thin Data", bio={"age": 38, "weight_lbs": 135, "gender": "MALE"},
         record=(10, 2, 0), own_rows={"e1": {"ssl": 40, "ssa": 90}},
         fights=fights, total_ufc_fights=1, today=TODAY)
-    assert d["tdd"] is None and d["sapm"] is None
+    # Unmeasured fields are ABSENT (never null — null crashes the model's
+    # arithmetic; a missing key falls back to the .get() default).
+    assert "tdd" not in d and "sapm" not in d
     assert any("takedown defense unmeasured" in n for n in d["review"])
     assert any("layoff" in f for f in d["red_flags"])       # 25 months ago
     assert any("age 38" in f for f in d["red_flags"])
     assert d["kd_per100"] == 1.0                # <100 strikes → default
+
+
+def test_uncovered_fights_do_not_dilute_rates():
+    """Regional bouts appear in the eventlog with no stat rows; their
+    minutes must not drag SLpM toward zero (the first live run bug)."""
+    own_rows = {"e1": {"ssl": 90, "ssa": 150, "kd": 1, "tdl": 1, "tda": 2,
+                       "sm": 0}}
+    fights = [
+        _fight("e1", dt.date(2026, 5, 1), True, "DEC", dur=900),
+        # Two regional fights ESPN tracked but has no stats for.
+        _fight("regional1", dt.date(2025, 11, 1), True, "KO/TKO", dur=300),
+        _fight("regional2", dt.date(2025, 5, 1), True, "SUB", dur=600),
+    ]
+    d = espnmma.build_dossier(
+        "Regional Riser", bio={"age": 27, "weight_lbs": 155, "gender": "MALE"},
+        record=(12, 0, 0), own_rows=own_rows, fights=fights,
+        total_ufc_fights=12, today=TODAY)
+    assert d["slpm"] == 6.0                     # 90 over 15 min, NOT 90/30
+    assert d["ufc_fights"] == 1 and d["career_fights"] == 12
+    assert any("1 of the last 3" in n for n in d["review"])
+
+    # Zero coverage → rates absent entirely, loudly noted.
+    d0 = espnmma.build_dossier(
+        "Pure Regional", bio={"age": 25, "weight_lbs": 145, "gender": "MALE"},
+        record=(8, 1, 0), own_rows={}, fights=fights[1:],
+        total_ufc_fights=8, today=TODAY)
+    assert "slpm" not in d0 and d0["ufc_fights"] == 0
+    assert any("unmeasured" in n for n in d0["review"])
 
 
 def test_archetype_style_hint_beats_stats():

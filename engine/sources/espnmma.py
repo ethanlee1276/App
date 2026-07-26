@@ -79,7 +79,7 @@ def _get_json(url: str, cache_name: str, ttl: int = _TTL) -> dict:
 # (ł is its own letter, not l + diacritic), so map them by hand.
 _STROKES = str.maketrans({"ł": "l", "Ł": "L", "ø": "o", "Ø": "O",
                           "đ": "d", "Đ": "D", "ð": "d", "þ": "th",
-                          "æ": "ae", "œ": "oe", "ß": "ss"})
+                          "æ": "ae", "œ": "oe", "ß": "ss", "’": "'"})
 
 
 def _norm(s: str) -> str:
@@ -88,11 +88,11 @@ def _norm(s: str) -> str:
 
 
 # --- athlete lookup ---------------------------------------------------------
-def find_athlete_id(name: str) -> str | None:
-    """Odds-feed name → ESPN athlete id, via the search API's player hits."""
-    data = _get_json(SEARCH.format(q=urllib.parse.quote(name)),
-                     f"espn_mma_search_{_norm(name).replace(' ', '_')}.json")
-    players: list[tuple[str, str]] = []       # (display name, id)
+def _search_players(query: str) -> list[tuple[str, str]]:
+    """Search hits typed 'player' → [(display name, athlete id)]."""
+    data = _get_json(SEARCH.format(q=urllib.parse.quote(query)),
+                     f"espn_mma_search_{_norm(query).replace(' ', '_')}.json")
+    players: list[tuple[str, str]] = []
     for rt in data.get("results", []) or []:
         if rt.get("type") != "player":
             continue
@@ -102,6 +102,10 @@ def find_athlete_id(name: str) -> str | None:
             m = re.search(r"/id/(\d+)", json.dumps(item.get("link", {})))
             if m:
                 players.append((item.get("displayName", ""), m.group(1)))
+    return players
+
+
+def _match_player(players: list[tuple[str, str]], name: str) -> str | None:
     target = _norm(name)
     for disp, pid in players:
         if _norm(disp) == target:
@@ -111,6 +115,21 @@ def find_athlete_id(name: str) -> str | None:
     parts = set(target.split())
     loose = [pid for disp, pid in players if parts <= set(_norm(disp).split())]
     return loose[0] if len(loose) == 1 else None
+
+
+def find_athlete_id(name: str) -> str | None:
+    """Odds-feed name → ESPN athlete id.
+
+    Full-name search first; when that finds nothing (apostrophes and
+    local spellings trip exact search — "L'udovit" vs ESPN's "Ludovit"),
+    retry on the last name alone and match loosely."""
+    pid = _match_player(_search_players(name), name)
+    if pid:
+        return pid
+    last = name.strip().split()[-1] if name.strip() else ""
+    if last and last.lower() != name.strip().lower():
+        return _match_player(_search_players(last), name)
+    return None
 
 
 # --- per-fight stat rows (own and opponents') -------------------------------
@@ -310,13 +329,25 @@ def build_dossier(name: str, *, bio: dict, record: tuple[int, int, int],
     today = today or _dt.date.today()
     review: list[str] = []
 
-    minutes = sum(f["duration_s"] for f in fights) / 60.0
-    ssl_w = sum((own_rows.get(f["event_id"]) or {}).get("ssl", 0) for f in fights)
-    tdl_w = sum((own_rows.get(f["event_id"]) or {}).get("tdl", 0) for f in fights)
-    sm_w = sum((own_rows.get(f["event_id"]) or {}).get("sm", 0) for f in fights)
+    # Rates only over fights ESPN has stat rows for — regional-circuit
+    # bouts appear in the eventlog with no stats, and counting their
+    # minutes against zero recorded strikes once made strikers read as
+    # 0.0 SLpM. Coverage is disclosed; no coverage → rates unmeasured.
+    covered = [f for f in fights if own_rows.get(f["event_id"])]
+    minutes = sum(f["duration_s"] for f in covered) / 60.0
+    ssl_w = sum(own_rows[f["event_id"]].get("ssl", 0) for f in covered)
+    tdl_w = sum(own_rows[f["event_id"]].get("tdl", 0) for f in covered)
+    sm_w = sum(own_rows[f["event_id"]].get("sm", 0) for f in covered)
     slpm = round(ssl_w / minutes, 2) if minutes else None
     td_per15 = round(tdl_w / minutes * 15, 2) if minutes else None
     sub_per15 = round(sm_w / minutes * 15, 2) if minutes else None
+    if not covered:
+        review.append("no per-fight stats in ESPN's data (regional-circuit "
+                      "career) — striking/grappling rates unmeasured, the "
+                      "model falls back to neutral defaults")
+    elif len(covered) < len(fights):
+        review.append(f"per-fight stats exist for {len(covered)} of the last "
+                      f"{len(fights)} fights — rates measured on those only")
 
     # Opponent rows in the SAME fights → absorbed strikes + both defenses.
     opp_ssl = opp_ssa = opp_tdl = opp_tda = 0
@@ -398,12 +429,16 @@ def build_dossier(name: str, *, bio: dict, record: tuple[int, int, int],
                       "delete them — that's the review")
 
     w, l, d = record
-    return {
+    out = {
         "name": name,
         "age": age,
         "division": div,
         "archetype": arch,
-        "ufc_fights": total_ufc_fights,
+        # Experience the clamp can trust = fights with recorded stats
+        # (≈ UFC-level bouts). A 20-fight regional record with zero
+        # covered fights is still a debutant to the model — correctly.
+        "ufc_fights": len(own_rows),
+        "career_fights": total_ufc_fights,
         "fights": len(fights),           # denominator for windowed counts
         "record": f"{w}-{l}-{d}",
         "slpm": slpm,
@@ -425,6 +460,9 @@ def build_dossier(name: str, *, bio: dict, record: tuple[int, int, int],
         "fetched": today.isoformat(),
         "review": review,
     }
+    # Unmeasured fields are OMITTED, never stored as null — the model's
+    # .get() defaults handle absent keys; a null would crash arithmetic.
+    return {k: v for k, v in out.items() if v is not None}
 
 
 def fetch_dossier(name: str, today: _dt.date | None = None,
