@@ -2441,6 +2441,10 @@ function whyCalcKelly() {
       the engines here stake fractional Kelly for exactly that reason. If the number feels big, your probability is too confident.</p>`;
 }
 
+// A -110/-110 market prices to 104.76%; stripping that leaves the fair
+// number a leg is actually worth.
+const TYPICAL_OVERROUND = 1.0476;
+
 function whyCalcParlay() {
   const out = document.getElementById("pl-out");
   if (!out) return;
@@ -2449,7 +2453,15 @@ function whyCalcParlay() {
     const o = parseFloat(document.getElementById(`pl-o${i}`)?.value);
     if (!isFinite(o) || Math.abs(o) < 100) continue;
     const pv = parseFloat(document.getElementById(`pl-p${i}`)?.value);
-    legs.push({ odds: o, p: isFinite(pv) && pv > 0 && pv < 100 ? pv / 100 : amToProb(o) });
+    // A blank win% must NOT default to the book's implied probability:
+    // that makes EV exactly zero by construction, so the comparison shows
+    // "+0.0% vs +0.0%" and the verdict beneath it is arbitrary noise.
+    // Strip a standard two-way overround instead, which is what the leg
+    // is really worth — then the numbers show the vig compounding, which
+    // is the entire lesson.
+    legs.push({ odds: o, assumed: !(isFinite(pv) && pv > 0 && pv < 100),
+                p: isFinite(pv) && pv > 0 && pv < 100
+                   ? pv / 100 : amToProb(o) / TYPICAL_OVERROUND });
   }
   if (legs.length < 2) {
     out.innerHTML = `<p class="loading" style="padding:8px 0">Enter odds for at least two legs (win % optional — blank assumes the book's implied).</p>`;
@@ -2459,6 +2471,7 @@ function whyCalcParlay() {
   const prob = legs.reduce((a, l) => a * l.p, 1);
   const evParlay = prob * dec - 1;
   const evSingles = legs.reduce((a, l) => a + (l.p * amToDec(l.odds) - 1), 0) / legs.length;
+  const assumed = legs.some((l) => l.assumed);
   const verdict = evParlay > evSingles + 1e-9
     ? "the parlay compounds it — only because every leg you entered is +EV"
     : "the singles are the better bet — the parlay multiplies the book's margin into every leg";
@@ -2468,6 +2481,10 @@ function whyCalcParlay() {
     <p>EV: parlay <strong style="color:${evParlay >= 0 ? "var(--good)" : "var(--bad)"}">${signedPct(evParlay)}</strong>
       vs the same money on singles <strong style="color:${evSingles >= 0 ? "var(--good)" : "var(--bad)"}">${signedPct(evSingles)}</strong>
       <span style="color:var(--text-mute)">— ${verdict}.</span></p>
+    ${assumed ? `<p style="font-size:.82em;color:var(--text-mute);margin-top:6px">
+      Win % left blank, so each leg is valued at its price with a standard
+      ${((TYPICAL_OVERROUND - 1) * 100).toFixed(1)}% overround removed — what the leg is
+      really worth. Enter your own probabilities to test a specific edge.</p>` : ""}
     <p style="font-size:.82em;color:var(--text-mute);margin-top:6px">This is why books push parlays:
       at standard −110 juice each leg keeps ~4.5% hold, and a parlay charges it on every leg at once.
       Correlated same-game legs can flip this — but the books price those separately for exactly that reason.</p>`;
