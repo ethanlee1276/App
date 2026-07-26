@@ -77,24 +77,35 @@ class Recommendation:
 
 def _confidence_score(edge: float, hit_prob: float, proj: Projection,
                       trend_align: float = 0.0) -> float:
-    """Blend edge, absolute hit probability, sample size and variance into a
-    0–10 score. Edge is the main driver; the rest are quality discounts.
+    """How much do we trust THIS EDGE ESTIMATE, on a 0–10 scale?
 
-    ``trend_align`` nudges the score for betting with (or against) the player's
-    recent-form trend — see ``_trend_alignment``."""
+    Note what is deliberately absent: the absolute win probability. An
+    earlier version paid up to 2.5 points simply for a high hit
+    probability, which no plus-money bet can ever earn — a ~2.5-point
+    handicap applied to every underdog before a shred of evidence was
+    weighed. That is a category error (confidence in an estimate is not
+    the same thing as the estimate being large), and it pointed exactly
+    the wrong way: this journal measured favourites at 45.7% against a
+    66.9% break-even while underdogs came in ahead of theirs.
+
+    So the score is now built only from things that actually bear on
+    whether the edge is real: its size, the sample and variance behind
+    the projection, and whether it runs with or against recent form.
+    ``hit_prob`` is kept in the signature for callers and future use.
+
+    PROVISIONAL weighting — the August backtest should re-fit it."""
     # Edges are tempered toward the market (see temper_edge), so the credible
     # range is a few percent — a 4.5% tempered edge earns full weight here.
-    edge_component = clamp(edge / 0.045, 0.0, 1.0) * 6.0          # up to 6 pts
-    prob_component = clamp((hit_prob - 0.5) / 0.35, 0.0, 1.0) * 2.5  # up to 2.5
+    edge_component = clamp(edge / 0.045, 0.0, 1.0) * 6.5          # up to 6.5
 
     # Data-quality discount: thin samples and high relative variance cost points.
     games = proj.form.sample_games
     sample_q = clamp(games / 8.0, 0.3, 1.0)
     rel_var = proj.std / proj.mean if proj.mean > 0 else 1.0
     var_q = clamp(1.0 - (rel_var - 0.30), 0.4, 1.0)
-    quality = 1.5 * sample_q * var_q                              # up to 1.5
+    quality = 2.5 * sample_q * var_q                              # up to 2.5
 
-    total = edge_component + prob_component + quality + trend_align
+    total = edge_component + quality + trend_align
     return round(clamp(total, 0.0, 10.0), 1)
 
 

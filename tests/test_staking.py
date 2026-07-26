@@ -110,6 +110,31 @@ def test_heavy_chalk_is_unreachable_even_at_a_maximum_edge():
         assert _grade(10.0, best_possible_net(o, u), o) != "Pass", o
 
 
+def test_confidence_does_not_penalise_underdogs():
+    """A +650 shot and a −110 shot with the SAME edge and the SAME data
+    quality must score the same confidence. The old scorer paid up to 2.5
+    points for a high win probability, handicapping every plus-money bet
+    before any evidence was weighed — and favourites are the band this
+    journal measured as unprofitable."""
+    from engine.betting import _confidence_score
+
+    class _Form:
+        sample_games = 20
+
+    class _Proj:
+        form = _Form()
+        mean, std = 1.0, 0.3
+
+    proj = _Proj()
+    dog = _confidence_score(0.0341, 0.161, proj)
+    fav = _confidence_score(0.0341, 0.535, proj)
+    assert dog == fav, (dog, fav)
+    # And a real edge on a longshot must be able to clear the board's bar.
+    assert dog >= 6.0, dog
+    # Bigger edge still scores higher; the ordering that matters survives.
+    assert _confidence_score(0.045, 0.161, proj) > dog
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
