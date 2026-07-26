@@ -388,6 +388,108 @@ def test_summary_renders():
     assert "Bankroll" in s and "Win rate" in s and "ROI" in s
 
 
+def _insert_settled(conn, player, *, status, line=50.5, side="OVER", odds=-110,
+                    hit_prob=None, edge=None, closing=None, book="FanDuel",
+                    market="rush_yds", stake_dollars=10.0, date="2026-07-20"):
+    conn.execute(
+        "INSERT INTO bets (ts, sport, date, player, market, side, line, book, "
+        "odds, hit_prob, edge, stake_units, stake_dollars, status, "
+        "pnl_units, closing_line, category) "
+        "VALUES ('t','mlb',?,?,?,?,?,?,?,?,?,1.0,?,?,0,?, 'main')",
+        (date, player, market, side, line, book, odds, hit_prob, edge,
+         stake_dollars, status, closing))
+    conn.commit()
+
+
+def test_process_grading_judges_the_decision_not_the_result():
+    conn = _conn()
+    # Won, but the line closed BELOW our over — got lucky.
+    _insert_settled(conn, "Lucky", status="won", line=50.5, closing=49.5)
+    # Lost, but the close moved our way — good bet, bad night.
+    _insert_settled(conn, "Unlucky", status="lost", line=50.5, closing=52.0)
+    # An UNDER whose line fell: side-aware, that's a good process bet.
+    _insert_settled(conn, "UnderGood", status="won", side="UNDER",
+                    line=50.5, closing=49.0)
+    # No close known -> ungraded process.
+    _insert_settled(conn, "NoClose", status="won", closing=None)
+
+    p = ledger.performance(conn)
+    assert p["process"]["good"] == 2 and p["process"]["bad"] == 1
+    assert p["process"]["lucky_wins"] == 1
+    assert p["process"]["unlucky_losses"] == 1
+
+    recent = {r["player"]: r for r in ledger.recent_settled(conn)}
+    assert recent["Lucky"]["process"] == "bad" and recent["Lucky"]["clv"] == -1.0
+    assert recent["Unlucky"]["process"] == "good" and recent["Unlucky"]["clv"] == 1.5
+    assert recent["UnderGood"]["clv"] == 1.5
+    assert recent["NoClose"]["process"] is None and recent["NoClose"]["clv"] is None
+
+
+def test_calibration_buckets_and_brier_vs_market():
+    conn = _conn()
+    # Four bets the model called 60%, market fair was 55% (edge stored 0.05).
+    # Three hit: realized 75% in the 60–65 bucket.
+    for i, st in enumerate(["won", "won", "won", "lost"]):
+        _insert_settled(conn, f"P{i}", status=st, hit_prob=0.60, edge=0.05)
+    c = ledger.calibration(conn)
+    assert c["n"] == 4
+    b = next(x for x in c["buckets"] if x["lo"] == 60)
+    assert b["n"] == 4 and b["predicted"] == 0.6 and b["actual"] == 0.75
+    assert b["ci"] > 0
+    # Brier by hand: model mean((0.6-w)^2) = (3*0.16 + 0.36)/4 = 0.21;
+    # market fair 0.55 -> (3*0.2025 + 0.3025)/4 = 0.2275. Model wins.
+    assert abs(c["brier_model"] - 0.21) < 1e-6
+    assert abs(c["brier_market"] - 0.2275) < 1e-6
+    assert c["brier_edge"] > 0
+
+    # Pushes and prob-less rows never contaminate the curve.
+    _insert_settled(conn, "Pushy", status="push", hit_prob=0.6, edge=0.05)
+    _insert_settled(conn, "NoProb", status="won")
+    assert ledger.calibration(conn)["n"] == 4
+
+
+def test_account_health_scores_books_from_own_patterns():
+    conn = _conn()
+    # SharpBook: 6 bets, always beat the close, all one market, odd stakes.
+    for i in range(6):
+        _insert_settled(conn, f"S{i}", status="won", book="SharpBook",
+                        closing=52.0, stake_dollars=13.37)
+    # SoftBook: 6 bets, never beat the close, two markets, round stakes.
+    for i in range(6):
+        _insert_settled(conn, f"R{i}", status="lost", book="SoftBook",
+                        closing=49.0, stake_dollars=25.0,
+                        market="rush_yds" if i % 2 else "rec_yds")
+    # TinyBook: below the minimum sample — must not be scored at all.
+    _insert_settled(conn, "T0", status="won", book="TinyBook")
+
+    h = ledger.account_health(conn)
+    assert "disclaimer" in h and "not" in h["disclaimer"]
+    books = {b["book"]: b for b in h["books"]}
+    assert "TinyBook" not in books
+    sharp, soft = books["SharpBook"], books["SoftBook"]
+    assert sharp["beat_close_rate"] == 1.0 and soft["beat_close_rate"] == 0.0
+    assert sharp["score"] > soft["score"]
+    assert sharp["band"] in ("moderate", "elevated") and soft["band"] == "low"
+    assert sharp["actions"]          # something concrete to do about it
+    # Riskiest book leads the list.
+    assert h["books"][0]["book"] == "SharpBook"
+
+
+def test_export_json_carries_calibration_and_health():
+    import json, tempfile
+    from pathlib import Path
+    conn = _conn()
+    _insert_settled(conn, "A", status="won", hit_prob=0.6, edge=0.05,
+                    closing=52.0)
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "record.json"
+        ledger.export_json(conn, p)
+        d = json.loads(p.read_text())
+        assert d["calibration"]["n"] == 1
+        assert "books" in d["account_health"]
+        assert d["overall"]["process"]["good"] == 1
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

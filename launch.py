@@ -312,17 +312,33 @@ def preflight() -> None:
         ("NBA (Scalpy)", "web/data/nba.json"),
         ("UFC (Scalpy MMA)", "web/data/ufc.json"),
     ]
+    # Products that are legitimately dark part of the year — a missing or
+    # old file then is the calendar working, not a fault to chase.
+    import datetime as _dtm
+    _month = _dtm.date.today().month
+    seasonal = {}
+    if 3 <= _month <= 8:
+        seasonal["NFL board"] = "offseason — sample fallback active, live board returns in September"
+    if 7 <= _month <= 9:
+        seasonal["NBA (Scalpy)"] = "offseason — live board returns when the schedule posts in October"
     for name, rel in products:
         p = ROOT / rel
+        note = seasonal.get(name)
         if not p.is_file():
-            print(f"{warn} {name}: never built — appears on the first launch")
+            if note:
+                print(f"{ok} {name}: not built — {note}")
+            else:
+                print(f"{warn} {name}: never built — appears on the first launch")
             continue
         age_min = (_time.time() - p.stat().st_mtime) / 60
         age = (f"{age_min:.0f} min ago" if age_min < 120
                else f"{age_min / 60:.1f} h ago")
         stale = age_min > 180
-        print(f"{ok if not stale else warn} {name}: built {age}"
-              + ("  → stale; is the launcher running?" if stale else ""))
+        if stale and note:
+            print(f"{ok} {name}: built {age} — {note}")
+        else:
+            print(f"{ok if not stale else warn} {name}: built {age}"
+                  + ("  → stale; is the launcher running?" if stale else ""))
 
     # Database inventory — the raw truth every model reads.
     print("\n  Databases:")

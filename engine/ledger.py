@@ -370,6 +370,32 @@ def settle(conn, actuals: dict[tuple[str, str], float], sport: str | None = None
 
 
 # --- reporting --------------------------------------------------------------
+def _bet_clv(b) -> float | None:
+    """Side-aware closing-line value for one settled bet, in line points.
+
+    An over wants the line to RISE after the bet, an under wants it to fall;
+    positive always means the market moved our way."""
+    if b["closing_line"] is None:
+        return None
+    move = b["closing_line"] - b["line"]
+    return move if (b["side"] or "OVER").upper() == "OVER" else -move
+
+
+def process_grade(b) -> str | None:
+    """Grade the DECISION, not the outcome.
+
+    A won bet that closed worse than we took it got lucky; a lost bet that
+    beat the close was a good bet that didn't land. Judging bets by result
+    alone is how people talk themselves into bad process — this column is
+    the antidote. None when no closing line is known."""
+    clv = _bet_clv(b)
+    if clv is None:
+        return None
+    if clv > 0:
+        return "good"
+    return "flat" if clv == 0 else "bad"
+
+
 def performance(conn, sport: str | None = None, category: str = "main") -> dict:
     q = "SELECT * FROM bets WHERE status IN ('won','lost','push') AND category=?"
     args: list = [category]
@@ -384,13 +410,21 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
     staked_u = sum(b["stake_units"] for b in bets if b["status"] != "push")
     net_u = sum(b["pnl_units"] or 0 for b in bets)
     net_d = sum(b["pnl_dollars"] or 0 for b in bets)
-    # CLV is side-aware: an over wants the line to RISE after the bet, an
-    # under wants it to fall.
-    clvs = []
+    clvs = [c for c in (_bet_clv(b) for b in bets) if c is not None]
+    # Process record: of the bets where we know the close, how many were
+    # good decisions regardless of result — plus the two honesty counters
+    # (wins that got lucky, losses that were still good bets).
+    process = {"good": 0, "flat": 0, "bad": 0,
+               "lucky_wins": 0, "unlucky_losses": 0}
     for b in bets:
-        if b["closing_line"] is not None:
-            move = b["closing_line"] - b["line"]
-            clvs.append(move if (b["side"] or "OVER").upper() == "OVER" else -move)
+        g = process_grade(b)
+        if g is None:
+            continue
+        process[g] += 1
+        if b["status"] == "won" and g == "bad":
+            process["lucky_wins"] += 1
+        elif b["status"] == "lost" and g == "good":
+            process["unlucky_losses"] += 1
 
     def bucket(field):
         out: dict[str, dict] = {}
@@ -401,10 +435,9 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
             if b["status"] == "won": d["w"] += 1
             elif b["status"] == "lost": d["l"] += 1
             d["net_u"] += b["pnl_units"] or 0
-            if b["closing_line"] is not None:
-                move = b["closing_line"] - b["line"]
-                clv_lists.setdefault(k, []).append(
-                    move if (b["side"] or "OVER").upper() == "OVER" else -move)
+            c = _bet_clv(b)
+            if c is not None:
+                clv_lists.setdefault(k, []).append(c)
         # CLV per bucket — the spec's "which module is actually earning"
         # readout, available long before the win-loss record means anything.
         for k, moves in clv_lists.items():
@@ -423,6 +456,7 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
             "SELECT COUNT(*) FROM bets WHERE status='open' AND category=?",
             (category,)).fetchone()[0],
         "avg_clv": (sum(clvs) / len(clvs)) if clvs else None,
+        "process": process,
         "by_grade": bucket("grade"), "by_market": bucket("market"),
         "by_side": bucket("side"), "by_book": bucket("book"),
     }
@@ -474,13 +508,168 @@ def pnl_curve(conn, sport: str | None = None) -> list[dict]:
 
 
 def recent_settled(conn, limit: int = 30, category: str = "main") -> list[dict]:
-    """The last settled picks, newest first — the site's receipts."""
+    """The last settled picks, newest first — the site's receipts.
+
+    Each row carries its side-aware CLV and process grade so the page can
+    show "won but got lucky" / "lost but beat the close" honestly."""
     rows = conn.execute(
         "SELECT date, sport, player, market, side, line, odds, grade, status, "
         "pnl_units, hit_prob, closing_line FROM bets "
         "WHERE status IN ('won','lost','push') AND category=? "
         "ORDER BY date DESC, id DESC LIMIT ?", (category, limit)).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        c = _bet_clv(r)
+        d["clv"] = round(c, 3) if c is not None else None
+        d["process"] = process_grade(r)
+        out.append(d)
+    return out
+
+
+def calibration(conn, category: str = "main", bucket_pts: int = 5) -> dict:
+    """Predicted vs realized, in probability buckets — the public honesty page.
+
+    Groups every settled won/lost bet by the model's claimed hit probability
+    (5-point buckets by default) and reports what actually happened in each,
+    with a ±1.96·√(p(1−p)/n) band so small samples read as "too early", not
+    as verdicts. Also scores the model's Brier against the market's own fair
+    probability ON THE SAME BETS (fair = hit_prob − edge, since edge was
+    stored as model-minus-fair at bet time): if we can't out-forecast the
+    de-vigged close on our own selections, the edge story is fiction."""
+    from math import sqrt
+    rows = conn.execute(
+        "SELECT hit_prob, edge, status FROM bets "
+        "WHERE status IN ('won','lost') AND category=? AND hit_prob IS NOT NULL",
+        (category,)).fetchall()
+    nb = max(1, 100 // bucket_pts)
+    buckets: list[dict] = [{"lo": i * bucket_pts, "hi": (i + 1) * bucket_pts,
+                            "n": 0, "_p": 0.0, "_w": 0} for i in range(nb)]
+    se_model = 0.0
+    se_market = 0.0
+    n_market = 0
+    for r in rows:
+        p = min(max(float(r["hit_prob"]), 0.0), 1.0)
+        won = 1.0 if r["status"] == "won" else 0.0
+        b = buckets[min(int(p * 100) // bucket_pts, nb - 1)]
+        b["n"] += 1
+        b["_p"] += p
+        b["_w"] += won
+        se_model += (p - won) ** 2
+        if r["edge"] is not None:
+            fair = min(max(p - float(r["edge"]), 0.01), 0.99)
+            se_market += (fair - won) ** 2
+            n_market += 1
+    out_buckets = []
+    for b in buckets:
+        if not b["n"]:
+            continue
+        pred = b["_p"] / b["n"]
+        act = b["_w"] / b["n"]
+        ci = 1.96 * sqrt(pred * (1.0 - pred) / b["n"])
+        out_buckets.append({
+            "lo": b["lo"], "hi": b["hi"], "n": b["n"],
+            "predicted": round(pred, 4), "actual": round(act, 4),
+            "ci": round(ci, 4), "in_band": abs(act - pred) <= ci})
+    n = len(rows)
+    return {
+        "n": n, "bucket_pts": bucket_pts, "buckets": out_buckets,
+        "brier_model": round(se_model / n, 4) if n else None,
+        "brier_market": round(se_market / n_market, 4) if n_market else None,
+        # Positive = the model out-forecasts the de-vigged market prices on
+        # its own picks; negative = the market knew better.
+        "brier_edge": (round(se_market / n_market - se_model / n, 4)
+                       if n and n_market else None),
+    }
+
+
+# Account-health scoring weights — how much each behavior pattern
+# contributes to a book's 0–100 limit-risk estimate.
+HEALTH_MIN_BETS = 5
+HEALTH_W_CLV = 45          # books limit closing-line beaters first
+HEALTH_W_CONCENTRATION = 25  # living in one low-limit prop market
+HEALTH_W_STAKES = 15       # precise, model-sized stakes read sharp
+HEALTH_W_VOLUME = 15       # sheer graded volume at one shop
+
+
+def account_health(conn) -> dict:
+    """Estimate, per book, how 'sharp' this journal looks to a risk desk.
+
+    Books don't publish limit criteria, but the patterns they act on are
+    well known: consistently beating the close, hammering one prop market,
+    and precise non-round stakes. This scores OUR OWN journaled behavior
+    against those patterns — 0 (recreational-looking) to 100 (walking
+    limit-risk) — with the drivers and the concrete actions that would
+    lower it. It is inference from our own betting record, nothing more:
+    no insider knowledge of any book's actual risk rules."""
+    bets = conn.execute(
+        "SELECT * FROM bets WHERE status IN ('won','lost','push') "
+        "AND category='main'").fetchall()
+    by_book: dict[str, list] = {}
+    for b in bets:
+        by_book.setdefault(b["book"] or "?", []).append(b)
+
+    books = []
+    for book, rows in by_book.items():
+        if len(rows) < HEALTH_MIN_BETS:
+            continue
+        # CLV beat rate — the strongest limit signal a book can see.
+        clvs = [c for c in (_bet_clv(b) for b in rows) if c is not None]
+        beat_rate = (sum(1 for c in clvs if c > 0) / len(clvs)) if clvs else None
+        clv_pts = (beat_rate if beat_rate is not None else 0.5) * HEALTH_W_CLV
+        # Market concentration — share of volume in the single busiest market.
+        mkts: dict[str, int] = {}
+        for b in rows:
+            mkts[b["market"] or "?"] = mkts.get(b["market"] or "?", 0) + 1
+        top_market, top_n = max(mkts.items(), key=lambda kv: kv[1])
+        conc = top_n / len(rows)
+        conc_pts = conc * HEALTH_W_CONCENTRATION
+        # Stake pattern — fraction of dollar stakes that aren't round $5s.
+        staked = [b["stake_dollars"] for b in rows if b["stake_dollars"]]
+        sharp_stakes = (sum(1 for s in staked if abs(s / 5.0 - round(s / 5.0)) > 1e-9)
+                        / len(staked)) if staked else 0.0
+        stake_pts = sharp_stakes * HEALTH_W_STAKES
+        # Volume exposure — graded bets at this one shop, saturating at 100.
+        vol_pts = min(len(rows) / 100.0, 1.0) * HEALTH_W_VOLUME
+
+        score = round(clv_pts + conc_pts + stake_pts + vol_pts)
+        band = "low" if score < 35 else ("moderate" if score <= 65 else "elevated")
+
+        drivers = []
+        if beat_rate is not None:
+            drivers.append(f"beats the close on {beat_rate:.0%} of tracked bets"
+                           + (" — the #1 pattern risk desks act on"
+                              if beat_rate >= 0.55 else ""))
+        drivers.append(f"{conc:.0%} of volume is {top_market}")
+        if sharp_stakes > 0.5:
+            drivers.append("stakes are precise model-sized amounts, not round numbers")
+        actions = []
+        if conc >= 0.5:
+            actions.append(f"mix in main-line bets (sides/totals) so {top_market} "
+                           f"isn't {conc:.0%} of your volume here")
+        if sharp_stakes > 0.5:
+            actions.append("round stakes to the nearest $5 — precision costs "
+                           "almost nothing in EV and reads recreational")
+        if len(by_book) == 1:
+            actions.append("open a second book and split volume — one outlet "
+                           "is a single point of failure")
+        if score > 65:
+            actions.append("route your most limit-prone plays (props with big "
+                           "CLV) to the book you care least about keeping")
+        books.append({
+            "book": book, "bets": len(rows), "score": score, "band": band,
+            "beat_close_rate": round(beat_rate, 3) if beat_rate is not None else None,
+            "avg_clv": round(sum(clvs) / len(clvs), 3) if clvs else None,
+            "top_market": top_market, "concentration": round(conc, 3),
+            "sharp_stake_rate": round(sharp_stakes, 3),
+            "drivers": drivers, "actions": actions})
+    books.sort(key=lambda d: -d["score"])
+    return {
+        "books": books,
+        "disclaimer": ("Inferred from your own journaled betting patterns — "
+                       "an estimate of how sharp your action looks, not "
+                       "knowledge of any sportsbook's actual risk rules."),
+    }
 
 
 def longshot_report(conn) -> dict:
@@ -517,6 +706,8 @@ def export_json(conn, path) -> None:
         "curve": pnl_curve(conn),
         "recent": recent_settled(conn),
         "longshots": longshot_report(conn),
+        "calibration": calibration(conn),
+        "account_health": account_health(conn),
     }
     p = _Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)

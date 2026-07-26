@@ -1050,6 +1050,68 @@ function recLongshotSection(ls) {
       `<p class="loading" style="padding:12px">Nothing settled yet — accrues from tonight's board.</p>`}</div>`;
 }
 
+/* Calibration: when the model said X%, how often did it actually happen.
+   Rendered as honest rows with a sample-size band — small buckets read as
+   "too early", never as verdicts. */
+function recCalibrationSection(cal) {
+  if (!cal || !cal.n || !(cal.buckets || []).length) return "";
+  const rows = cal.buckets.map((b) => {
+    const off = Math.abs(b.actual - b.predicted);
+    const flag = b.n < 20 ? `<span style="opacity:.5">n=${b.n} — too early</span>`
+      : b.in_band ? `<span style="color:var(--good)">✓ within noise (n=${b.n})</span>`
+      : `<span style="color:var(--warn)">⚠️ off by ${(off * 100).toFixed(0)} pts (n=${b.n})</span>`;
+    const bar = (v, color) => `<span style="display:inline-block;height:8px;border-radius:4px;
+        width:${Math.max(2, v * 100)}px;background:${color};vertical-align:middle"></span>`;
+    return `<div style="display:flex;gap:12px;align-items:center;padding:7px 14px;
+        border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:wrap">
+      <span style="min-width:78px;opacity:.7">${b.lo}–${b.hi}%</span>
+      <span style="flex:1;min-width:220px">
+        ${bar(b.predicted, "var(--brand)")} <span style="font-size:.8em;opacity:.65">said ${(b.predicted * 100).toFixed(0)}%</span>
+        &nbsp; ${bar(b.actual, b.in_band ? "var(--good)" : "var(--warn)")} <span style="font-size:.8em;opacity:.65">hit ${(b.actual * 100).toFixed(0)}%</span>
+      </span>
+      <span style="min-width:150px;text-align:right;font-size:.85em">${flag}</span>
+    </div>`;
+  }).join("");
+  const brier = cal.brier_edge == null ? "" : cal.brier_edge > 0
+    ? `<p style="padding:10px 14px;margin:0;font-size:.88em;color:var(--good)">Forecast test: the model's Brier score
+       (${cal.brier_model}) beats the de-vigged market's (${cal.brier_market}) on the same bets — lower is better.
+       That's the whole claim of this site in one number.</p>`
+    : `<p style="padding:10px 14px;margin:0;font-size:.88em;color:var(--warn)">Forecast test: the de-vigged market's Brier score
+       (${cal.brier_market}) still beats the model's (${cal.brier_model}) on our own picks. Shown anyway —
+       a site that hides this number is a tout with a website.</p>`;
+  return `<div class="section-title" style="margin-top:18px">Calibration — did "60%" mean 60%?
+      <span class="sub">— every settled pick, bucketed by the model's claimed probability.</span></div>
+    <div class="card" style="padding:0">${rows}${brier}</div>`;
+}
+
+/* Account health: how sharp our own journaled action looks per book —
+   inference from our patterns, clearly labeled as such. */
+function recHealthSection(h) {
+  if (!h || !(h.books || []).length) return "";
+  const bandColor = { low: "var(--good)", moderate: "var(--warn)", elevated: "var(--bad)" };
+  const cards = h.books.map((b) => `
+    <div class="card" style="padding:14px 16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <strong style="flex:1">${escapeHtml(b.book)}</strong>
+        <span style="font-weight:800;color:${bandColor[b.band] || "var(--brand)"}">${b.score}</span>
+        <span class="chip" style="color:${bandColor[b.band] || "var(--brand)"}">${b.band} limit risk</span>
+      </div>
+      <div style="font-size:.85em;color:var(--text-mute);margin-top:6px">
+        ${b.bets} graded bets · beats the close ${b.beat_close_rate == null ? "—" : (b.beat_close_rate * 100).toFixed(0) + "%"}
+        · ${(b.concentration * 100).toFixed(0)}% in ${escapeHtml(b.top_market)}</div>
+      ${(b.drivers || []).length ? `<ul style="margin:8px 0 0;padding-left:18px;font-size:.85em;color:var(--text-body)">
+        ${b.drivers.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : ""}
+      ${(b.actions || []).length ? `<div style="margin-top:8px;font-size:.85em">
+        <span style="color:var(--brand);font-weight:700">To stay welcome:</span>
+        <ul style="margin:4px 0 0;padding-left:18px;color:var(--text-body)">
+        ${b.actions.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : ""}
+    </div>`).join("");
+  return `<div class="section-title" style="margin-top:18px">Account health
+      <span class="sub">— books quietly limit winners; this estimates how limit-prone your action looks, per book.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">${cards}</div>
+    <p style="opacity:.55;font-size:.82em;margin-top:8px">${escapeHtml(h.disclaimer || "")}</p>`;
+}
+
 async function renderRecord() {
   const host = document.getElementById("record-body");
   if (!host) return;
@@ -1080,6 +1142,13 @@ async function renderRecord() {
                 `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`)}
       ${recTile("Avg CLV", o.avg_clv == null ? "—" : (o.avg_clv >= 0 ? "+" : "") + o.avg_clv.toFixed(2) + " pts",
                 o.avg_clv == null ? "accrues as daily closes are captured" : "beat the close = sharp process")}
+      ${(() => {
+        const pr = o.process || {};
+        const n = (pr.good || 0) + (pr.bad || 0) + (pr.flat || 0);
+        return recTile("Process", n ? `${pr.good || 0}✓ ${pr.bad || 0}✗` : "—",
+          n ? `${pr.lucky_wins || 0} lucky win(s) · ${pr.unlucky_losses || 0} good-bet loss(es)`
+            : "grades the decision vs the close, not the result");
+      })()}
     </div>
     <p style="opacity:.6;font-size:.85em;margin-top:10px">Journals every
       <strong>Recommended</strong> pick — player props and sharp-anchor game bets
@@ -1102,6 +1171,15 @@ async function renderRecord() {
         const push = b.status === "push";
         const icon = push ? "➖" : (won ? "✅" : "❌");
         const pnl = b.pnl_units || 0;
+        // Process chip: judge the decision against the close, out loud.
+        let procChip = `<span style="opacity:.35;font-size:.8em">no close</span>`;
+        if (b.process === "bad" && won)
+          procChip = `<span style="color:var(--warn);font-size:.8em" title="Won, but the market closed against us — a bad bet that got lucky">🍀 lucky</span>`;
+        else if (b.process === "good" && b.status === "lost")
+          procChip = `<span style="color:var(--good);font-size:.8em" title="Lost, but we beat the closing line — good bet, bad night">📐 beat close</span>`;
+        else if (b.clv != null)
+          procChip = `<span style="color:${b.clv >= 0 ? "var(--good)" : "var(--bad)"};font-size:.8em"
+            title="Closing-line value — how far the market moved our way after the bet">${b.clv >= 0 ? "+" : ""}${b.clv.toFixed(1)} CLV</span>`;
         return `<div style="display:flex;gap:12px;padding:8px 14px;align-items:center;
             border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden">
           <span>${icon}</span>
@@ -1109,12 +1187,15 @@ async function renderRecord() {
           <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">
             <strong>${escapeHtml(b.player)}</strong>
             <span style="opacity:.6"> ${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
+          <span style="min-width:82px;text-align:right">${procChip}</span>
           <span style="min-width:56px;text-align:right">${american(b.odds)}</span>
           <span style="min-width:70px;text-align:right;color:${pnl >= 0 ? "var(--good,#3ddc84)" : "var(--bad,#ff6b7a)"}">
             ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
         </div>`;
       }).join("") || `<p class="loading" style="padding:12px">Nothing settled yet.</p>`}
     </div>
+    ${recCalibrationSection(d.calibration)}
+    ${recHealthSection(d.account_health)}
     ${recLongshotSection(d.longshots)}
     <p style="opacity:.55;margin-top:10px;font-size:.85em">Updated ${escapeHtml(d.generated_at || "")}
       · settles automatically as results are ingested each day.</p>`;
@@ -1272,7 +1353,7 @@ function renderScanner() {
   </div>`;
 
   host.innerHTML = freshness + stakeInput
-    + scanSection("Arbitrage", "opposite sides whose prices GUARANTEE profit — rare across US books and gone in minutes; grab or forget",
+    + scanSection("Arbitrage", "opposite sides priced so a margin is locked whichever way it lands — IF both legs fill at the shown prices before they move. Rare across US books and gone in minutes",
       arbs, (a) => {
         const so = stake * a.stake_over_pct, su = stake * (1 - a.stake_over_pct);
         const ret = stake * a.profit_pct;
@@ -1282,7 +1363,7 @@ function renderScanner() {
           `<span style="color:var(--good,#3ddc84);font-weight:700">+${(a.profit_pct * 100).toFixed(2)}% · $${ret.toFixed(2)} locked</span>
            <span style="display:block;opacity:.7;font-size:.85em">$${so.toFixed(0)} Over / $${su.toFixed(0)} Under</span>${suspect}`);
       },
-      "No risk-free pairs right now. Real arbs across legal US books appear a few times a week and last minutes — this scanner checks every refresh.")
+      "No arbitrage pairs right now. Real arbs across legal US books appear a few times a week and last minutes — this scanner checks every refresh.")
     + scanSection("Middles", "Over at a low line + Under at a higher one: land between them and BOTH win; miss and you only pay the vig. Ranked by EV from the sport's real outcome distribution — never by window width",
       middles, (m) => {
         const evLine = m.ev_per_unit != null
@@ -1391,7 +1472,7 @@ function pmAgo(ts) {
 
 /* Polymarket and Fantasy are top-level modes next to NFL/MLB, not tabs
    inside a sport — entering one hides the sport nav; leaving restores it. */
-const STANDALONE_MODES = ["intel", "fantasy", "nba", "ufc"];
+const STANDALONE_MODES = ["intel", "fantasy", "nba", "ufc", "why"];
 
 function enterStandaloneMode(name) {
   document.querySelectorAll(".sport-btn").forEach((x) =>
@@ -2103,7 +2184,317 @@ async function renderUFC() {
       Updated ${escapeHtml(d.generated_at || "")}.</p>`;
 }
 
-const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy", "nba", "ufc"];
+/* ============================================================
+   Why Us — positioning with receipts, plus the open math layer.
+   Every formula here is the same math the engines run; showing it
+   is the point. Nothing on this page needs a data feed.
+   ============================================================ */
+const amToDec = (o) => (o > 0 ? 1 + o / 100 : 1 + 100 / Math.abs(o));
+const amToProb = (o) => (o > 0 ? 100 / (o + 100) : Math.abs(o) / (Math.abs(o) + 100));
+const probToAm = (p) => (p >= 0.5 ? -Math.round((p / (1 - p)) * 100) : Math.round(((1 - p) / p) * 100));
+
+function devigMult(ps) {
+  const s = ps.reduce((a, b) => a + b, 0);
+  return ps.map((p) => p / s);
+}
+
+/* Power de-vig: raise each implied prob to the k that makes them sum to 1.
+   Shades more of the vig onto favorites than plain division does. */
+function devigPower(ps) {
+  let lo = 0.5, hi = 8;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (ps.reduce((a, p) => a + Math.pow(p, mid), 0) > 1) lo = mid; else hi = mid;
+  }
+  const k = (lo + hi) / 2;
+  const raw = ps.map((p) => Math.pow(p, k));
+  const s = raw.reduce((a, b) => a + b, 0);
+  return raw.map((p) => p / s);
+}
+
+/* Shin de-vig: models the overround as the book defending against a share z
+   of insider money, which loads vig onto longshots (the favorite–longshot
+   bias). Solve z by bisection so the fair probs sum to 1. */
+function devigShin(ps) {
+  const S = ps.reduce((a, b) => a + b, 0);
+  if (S <= 1) return devigMult(ps);
+  const at = (z) => ps.map((p) =>
+    (Math.sqrt(z * z + 4 * (1 - z) * (p * p) / S) - z) / (2 * (1 - z)));
+  let lo = 0, hi = 0.5;
+  for (let i = 0; i < 80; i++) {
+    const mid = (lo + hi) / 2;
+    if (at(mid).reduce((a, b) => a + b, 0) > 1) lo = mid; else hi = mid;
+  }
+  return at((lo + hi) / 2);
+}
+
+/* Kelly criterion: f* = (b·p − q)/b at decimal payout b = dec − 1. */
+const kellyFraction = (p, odds) => {
+  const b = amToDec(odds) - 1;
+  return (b * p - (1 - p)) / b;
+};
+
+function whyCalcDevig() {
+  const a = parseFloat(document.getElementById("dv-a")?.value);
+  const b = parseFloat(document.getElementById("dv-b")?.value);
+  const out = document.getElementById("dv-out");
+  if (!out) return;
+  if (!isFinite(a) || !isFinite(b) || Math.abs(a) < 100 || Math.abs(b) < 100) {
+    out.innerHTML = `<p class="loading" style="padding:8px 0">Enter both sides as American odds (±100 or longer).</p>`;
+    return;
+  }
+  const ps = [amToProb(a), amToProb(b)];
+  const hold = ps[0] + ps[1] - 1;
+  const methods = [
+    ["Multiplicative", devigMult(ps), "divide out the vig equally — quick, slightly kind to longshots"],
+    ["Power", devigPower(ps), "loads more vig onto the favorite — closer to how props are priced"],
+    ["Shin", devigShin(ps), "models insider risk — best for lopsided favorite/longshot prices"],
+  ];
+  const row = (name, f, note) => `<tr>
+    <td style="padding:6px 10px"><strong>${name}</strong>
+      <span style="display:block;font-size:.78em;color:var(--text-mute)">${note}</span></td>
+    <td style="padding:6px 10px;text-align:right">${(f[0] * 100).toFixed(1)}% <span style="opacity:.6">(${american(probToAm(f[0]))})</span></td>
+    <td style="padding:6px 10px;text-align:right">${(f[1] * 100).toFixed(1)}% <span style="opacity:.6">(${american(probToAm(f[1]))})</span></td>
+  </tr>`;
+  const bench = hold <= 0 ? "an ARBITRAGE — the books disagree enough to lock a margin"
+    : hold <= 0.02 ? "a low-hold market — cheap to bet, hard to find"
+    : hold <= 0.05 ? "typical main-line juice"
+    : "prop-level juice — you need a real edge just to break even";
+  out.innerHTML = `
+    <p style="margin:8px 0 4px">Book implied: <strong>${(ps[0] * 100).toFixed(1)}%</strong> + <strong>${(ps[1] * 100).toFixed(1)}%</strong>
+      = ${( (hold + 1) * 100).toFixed(1)}% → hold <strong style="color:${hold > 0.05 ? "var(--bad)" : hold > 0.02 ? "var(--warn)" : "var(--good)"}">${(hold * 100).toFixed(2)}%</strong>
+      <span style="color:var(--text-mute)">— ${bench}.</span></p>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.92em">
+      <tr style="color:var(--text-mute);text-align:right">
+        <td style="padding:4px 10px;text-align:left">Fair (vig removed)</td><td>Side A</td><td>Side B</td></tr>
+      ${methods.map((m) => row(...m)).join("")}
+    </table></div>
+    <p style="font-size:.82em;color:var(--text-mute);margin-top:6px">Where the three agree, trust the number.
+      Where they split, the truth is in the range — that honesty is the feature.
+      Every board on this site prices edges against de-vigged probabilities, never raw juice.</p>`;
+}
+
+function whyCalcKelly() {
+  const p = parseFloat(document.getElementById("ky-p")?.value) / 100;
+  const odds = parseFloat(document.getElementById("ky-odds")?.value);
+  const roll = parseFloat(document.getElementById("ky-roll")?.value);
+  const frac = parseFloat(document.getElementById("ky-frac")?.value || "0.25");
+  const out = document.getElementById("ky-out");
+  if (!out) return;
+  if (!isFinite(p) || p <= 0 || p >= 1 || !isFinite(odds) || Math.abs(odds) < 100) {
+    out.innerHTML = `<p class="loading" style="padding:8px 0">Enter a win probability (1–99%) and American odds.</p>`;
+    return;
+  }
+  const full = kellyFraction(p, odds);
+  const edge = p * amToDec(odds) - 1;
+  if (full <= 0) {
+    out.innerHTML = `<p style="margin-top:8px"><strong style="color:var(--bad)">No bet.</strong>
+      At ${american(odds)} you need ${(amToProb(odds) * 100).toFixed(1)}% to break even and you estimate ${(p * 100).toFixed(1)}% —
+      EV ${signedPct(edge)}. Kelly's answer for a negative edge is a stake of zero, and it's the only honest one.</p>`;
+    return;
+  }
+  const stakePct = full * frac;
+  const dollars = isFinite(roll) && roll > 0 ? ` = <strong>$${(roll * stakePct).toFixed(2)}</strong> of your $${roll.toFixed(0)}` : "";
+  out.innerHTML = `
+    <p style="margin-top:8px">EV <strong style="color:var(--good)">${signedPct(edge)}</strong> per unit ·
+      full Kelly <strong>${(full * 100).toFixed(1)}%</strong> of bankroll ·
+      at your fraction: <strong style="color:var(--brand)">${(stakePct * 100).toFixed(2)}%</strong>${dollars}</p>
+    <p style="font-size:.82em;color:var(--text-mute);margin-top:6px">Full Kelly assumes your probability is exactly right — it never is.
+      Betting a quarter to a fifth of Kelly gives up little growth and cuts drawdowns enormously;
+      the engines here stake fractional Kelly for exactly that reason. If the number feels big, your probability is too confident.</p>`;
+}
+
+function whyCalcParlay() {
+  const out = document.getElementById("pl-out");
+  if (!out) return;
+  const legs = [];
+  for (let i = 1; i <= 3; i++) {
+    const o = parseFloat(document.getElementById(`pl-o${i}`)?.value);
+    if (!isFinite(o) || Math.abs(o) < 100) continue;
+    const pv = parseFloat(document.getElementById(`pl-p${i}`)?.value);
+    legs.push({ odds: o, p: isFinite(pv) && pv > 0 && pv < 100 ? pv / 100 : amToProb(o) });
+  }
+  if (legs.length < 2) {
+    out.innerHTML = `<p class="loading" style="padding:8px 0">Enter odds for at least two legs (win % optional — blank assumes the book's implied).</p>`;
+    return;
+  }
+  const dec = legs.reduce((a, l) => a * amToDec(l.odds), 1);
+  const prob = legs.reduce((a, l) => a * l.p, 1);
+  const evParlay = prob * dec - 1;
+  const evSingles = legs.reduce((a, l) => a + (l.p * amToDec(l.odds) - 1), 0) / legs.length;
+  const verdict = evParlay > evSingles + 1e-9
+    ? "the parlay compounds it — only because every leg you entered is +EV"
+    : "the singles are the better bet — the parlay multiplies the book's margin into every leg";
+  out.innerHTML = `
+    <p style="margin-top:8px">${legs.length}-leg parlay pays <strong>${american(probToAm(1 / dec))}</strong>
+      (decimal ${dec.toFixed(2)}) · combined win probability <strong>${(prob * 100).toFixed(1)}%</strong></p>
+    <p>EV: parlay <strong style="color:${evParlay >= 0 ? "var(--good)" : "var(--bad)"}">${signedPct(evParlay)}</strong>
+      vs the same money on singles <strong style="color:${evSingles >= 0 ? "var(--good)" : "var(--bad)"}">${signedPct(evSingles)}</strong>
+      <span style="color:var(--text-mute)">— ${verdict}.</span></p>
+    <p style="font-size:.82em;color:var(--text-mute);margin-top:6px">This is why books push parlays:
+      at standard −110 juice each leg keeps ~4.5% hold, and a parlay charges it on every leg at once.
+      Correlated same-game legs can flip this — but the books price those separately for exactly that reason.</p>`;
+}
+
+async function renderWhy() {
+  const host = document.getElementById("why-body");
+  if (!host) return;
+  const src = document.getElementById("data-source");
+  if (src) {
+    src.className = "data-source";
+    src.textContent = "Reference";
+    src.title = "Explainer + calculators — no data feed involved";
+  }
+  const dt = document.getElementById("slate-date");
+  if (dt) dt.textContent = "Why us · the open math";
+
+  // Live receipts — the claims below link to real, current numbers.
+  let rec = null;
+  try {
+    const res = await fetch("data/record.json?t=" + Date.now());
+    if (res.ok) rec = await res.json();
+  } catch (e) {}
+  const o = rec && rec.overall;
+  const proc = (o && o.process) || {};
+  const procN = (proc.good || 0) + (proc.bad || 0) + (proc.flat || 0);
+  const cal = rec && rec.calibration;
+  const brierLine = cal && cal.brier_edge != null
+    ? (cal.brier_edge > 0
+      ? `model out-forecasts the de-vigged market on its own picks (Brier ${cal.brier_model} vs ${cal.brier_market})`
+      : `the market still forecasts our picks better (Brier ${cal.brier_model} vs ${cal.brier_market}) — shown anyway, because hiding it would make us a tout`)
+    : "accrues as picks settle";
+  const tile = (k, v, sub) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div>
+    ${sub ? `<div style="color:var(--text-mute);font-size:12px;margin-top:2px">${sub}</div>` : ""}</div>`;
+  const proof = o && (o.settled || o.open)
+    ? `<div class="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+        ${tile("Journaled record", `${o.wins}-${o.losses}-${o.pushes}`, `${o.open} open · every pick, no deletions`)}
+        ${tile("Avg CLV", o.avg_clv == null ? "—" : (o.avg_clv >= 0 ? "+" : "") + o.avg_clv.toFixed(2) + " pts",
+               "did the market move our way after we bet")}
+        ${tile("Process record", procN ? `${proc.good || 0} good · ${proc.bad || 0} bad` : "—",
+               procN ? `${proc.lucky_wins || 0} lucky win(s) admitted` : "grades vs the closing line")}
+        ${tile("Forecast test", cal && cal.brier_edge != null ? (cal.brier_edge > 0 ? "beating the close" : "not yet") : "—", brierLine)}
+      </div>
+      <p style="margin-top:8px"><button class="btn ghost" id="why-see-record">See the full record →</button></p>`
+    : `<p class="loading">The journal is young — every pick logs automatically and this strip fills with real, ungroomed numbers.</p>`;
+
+  const pillar = (icon, title, body) => `<div class="card" style="padding:16px">
+    <div style="font-size:1.6em">${icon}</div>
+    <h3 style="margin:6px 0 6px">${title}</h3>
+    <p style="color:var(--text-body);font-size:.92em;margin:0">${body}</p></div>`;
+
+  const vsRow = (them, us) => `<tr>
+    <td style="padding:8px 12px;color:var(--text-mute);border-bottom:1px solid rgba(255,255,255,.05)">${them}</td>
+    <td style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.05)">${us}</td></tr>`;
+
+  host.innerHTML = `
+    <p style="font-size:1.05em;max-width:70ch"><strong>See the math. Know if it's working. Stay in the game.</strong>
+      Most betting sites sell certainty. This one sells measurement — every probability is computed
+      from data you can name, every pick is graded in public, and the math is on this page for you to check by hand.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:14px">
+      ${pillar("🔍", "Transparent math", `Park factors, umpire tendencies, lineup-slot plate appearances, bullpen fatigue,
+        minutes engines — every factor on a card is measured from real data, and negative factors get a red ✗, not a hidden footnote.
+        The de-vig, Kelly and EV formulas the engines run are open below.`)}
+      ${pillar("📒", "Graded in public", `Every recommended pick journals at its real book price the moment it appears and grades
+        itself against the final result — wins, losses, closing-line value, and a calibration curve that says whether "60%" meant 60%.
+        Long shots are tracked in a separate bucket, never blended into the headline record.`)}
+      ${pillar("🚫", "Built to pass", `Approval gates, humility clamps toward the market, hard pick caps, and pass lists that
+        say why each game was skipped. "No qualifying plays tonight" is a correct output here — a service that must sell picks
+        every night can never say it.`)}
+    </div>
+
+    <div class="section-title" style="margin-top:24px">The receipts, live
+      <span class="sub">— these numbers come from the actual journal, right now, losses included.</span></div>
+    ${proof}
+
+    <div class="section-title" style="margin-top:24px">What picks services sell vs what this is</div>
+    <div class="card" style="padding:0;overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:.92em">
+        <tr style="color:var(--text-mute)"><td style="padding:8px 12px">The usual pitch</td><td style="padding:8px 12px">Here</td></tr>
+        ${vsRow("\"Locks\" and \"guaranteed winners\"", "Probabilities with uncertainty attached. A 60% play loses 4 times in 10 — we say so on the card.")}
+        ${vsRow("A record you have to take on faith", "A journal that logs every pick automatically at its real price — it cannot be groomed after the fact.")}
+        ${vsRow("Graded on wins and losses only", "Graded on process too: a win that closed worse than we bet is flagged as lucky; a loss that beat the close was a good bet.")}
+        ${vsRow("A black-box \"algorithm\"", "Named factors on every card, red marks on the negatives, and the pricing math open on this page.")}
+        ${vsRow("More picks when business is slow", "Hard caps and pass lists. The NBA engine maxes at 4 picks a slate; UFC passes on most of every card, with reasons.")}
+      </table>
+    </div>
+
+    <div class="section-title" style="margin-top:24px">What we deliberately don't do</div>
+    <div class="card" style="padding:14px 18px">
+      <ul style="margin:0;padding-left:18px;line-height:1.9;color:var(--text-body)">
+        <li>No guarantees, locks, or "can't-miss" anything — that language is how touts talk, and it's always false.</li>
+        <li>No parlay pushing — the calculator below shows exactly what parlays cost, which is why books advertise them.</li>
+        <li>No hiding losses — the Record page keeps every settled pick, and the lucky wins are labeled as lucky.</li>
+        <li>No placing bets and no handling money — this recommends, journals, and grades. The decisions stay yours.</li>
+        <li>No "premium tier" where the real picks supposedly live — everything the models produce is on these pages.</li>
+      </ul>
+    </div>
+
+    <div class="section-title" style="margin-top:24px">The open math layer
+      <span class="sub">— the same formulas the engines run, interactive. Punch in any real price and check our work.</span></div>
+
+    <div class="card" style="padding:16px;margin-bottom:14px">
+      <h3 style="margin:0 0 4px">Remove the vig — three ways</h3>
+      <p style="color:var(--text-mute);font-size:.85em;margin:0 0 10px">A −110/−110 line isn't 50/50 — it's 52.4% + 52.4% = 104.8%.
+        The extra 4.8% is the book's hold. Enter both sides of any market:</p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+        <label>Side A <input id="dv-a" type="number" value="-115" step="5" class="calc-in"></label>
+        <label>Side B <input id="dv-b" type="number" value="-105" step="5" class="calc-in"></label>
+      </div>
+      <div id="dv-out"></div>
+    </div>
+
+    <div class="card" style="padding:16px;margin-bottom:14px">
+      <h3 style="margin:0 0 4px">Kelly stake sizer</h3>
+      <p style="color:var(--text-mute);font-size:.85em;margin:0 0 10px">Given your edge, how much should the bet be?
+        The answer is usually "less than you think" and sometimes "zero".</p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+        <label>Win prob % <input id="ky-p" type="number" value="55" min="1" max="99" step="0.5" class="calc-in"></label>
+        <label>Odds <input id="ky-odds" type="number" value="-110" step="5" class="calc-in"></label>
+        <label>Bankroll $ <input id="ky-roll" type="number" value="${state.bankroll || 1000}" min="0" step="50" class="calc-in"></label>
+        <label>Fraction <select id="ky-frac" class="calc-in">
+          <option value="1">Full Kelly</option><option value="0.5">Half</option>
+          <option value="0.25" selected>Quarter</option><option value="0.2">Fifth</option>
+        </select></label>
+      </div>
+      <div id="ky-out"></div>
+    </div>
+
+    <div class="card" style="padding:16px;margin-bottom:14px">
+      <h3 style="margin:0 0 4px">Parlay vs singles</h3>
+      <p style="color:var(--text-mute);font-size:.85em;margin:0 0 10px">Enter 2–3 legs. Win % is optional —
+        left blank, each leg is assumed to hit exactly as often as the book's price implies.</p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+        ${[1, 2, 3].map((i) => `<span style="display:inline-flex;gap:6px;align-items:center">
+          <label>Leg ${i} <input id="pl-o${i}" type="number" ${i < 3 ? `value="-110"` : ""} step="5" class="calc-in"></label>
+          <label>win % <input id="pl-p${i}" type="number" min="1" max="99" step="0.5" class="calc-in" style="width:70px"></label>
+        </span>`).join("")}
+      </div>
+      <div id="pl-out"></div>
+    </div>
+
+    <div class="card" style="padding:14px 18px;margin-top:20px;border-left:3px solid var(--warn)">
+      <h3 style="margin:0 0 6px">Play the long game</h3>
+      <p style="color:var(--text-body);font-size:.92em;margin:0">Even a real edge loses often — that's variance, not failure,
+        and it's why stakes here are fractions of bankroll, never "bet big to catch up." 21+ only. Never bet money you
+        can't afford to lose. If it stops feeling like a decision, call or text <strong>1-800-GAMBLER</strong> or the National
+        Problem Gambling Helpline at <strong>1-800-522-4700</strong> — free, confidential, 24/7.</p>
+    </div>`;
+
+  const seeRec = document.getElementById("why-see-record");
+  if (seeRec) seeRec.addEventListener("click", () => { exitStandaloneMode(); switchView("record"); });
+  [["dv-a", whyCalcDevig], ["dv-b", whyCalcDevig],
+   ["ky-p", whyCalcKelly], ["ky-odds", whyCalcKelly], ["ky-roll", whyCalcKelly], ["ky-frac", whyCalcKelly],
+   ["pl-o1", whyCalcParlay], ["pl-p1", whyCalcParlay], ["pl-o2", whyCalcParlay],
+   ["pl-p2", whyCalcParlay], ["pl-o3", whyCalcParlay], ["pl-p3", whyCalcParlay],
+  ].forEach(([id, fn]) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", fn);
+  });
+  whyCalcDevig(); whyCalcKelly(); whyCalcParlay();
+}
+
+const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy", "nba", "ufc", "why"];
 
 function switchView(name) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -2120,6 +2511,7 @@ function switchView(name) {
   if (name === "fantasy") renderFantasy();
   if (name === "nba") renderNBA();
   if (name === "ufc") renderUFC();
+  if (name === "why") renderWhy();
   if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
   moveIndicator();
 }
