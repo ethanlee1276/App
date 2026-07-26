@@ -141,6 +141,9 @@ SPORT_CONFIG = {
             "markets": MLB_ODDS_TO_MARKET, "teams": MLB_TEAM_ABBR},
     "nba": {"sport_key": "basketball_nba",
             "markets": NBA_ODDS_TO_MARKET, "teams": NBA_TEAM_ABBR},
+    # MMA events are one bout each; "teams" are fighter names, so the map is
+    # identity (ufc_build reads the h2h payload directly).
+    "ufc": {"sport_key": "mma_mixed_martial_arts", "markets": {}, "teams": {}},
 }
 
 

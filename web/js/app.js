@@ -1391,7 +1391,7 @@ function pmAgo(ts) {
 
 /* Polymarket and Fantasy are top-level modes next to NFL/MLB, not tabs
    inside a sport — entering one hides the sport nav; leaving restores it. */
-const STANDALONE_MODES = ["intel", "fantasy", "nba"];
+const STANDALONE_MODES = ["intel", "fantasy", "nba", "ufc"];
 
 function enterStandaloneMode(name) {
   document.querySelectorAll(".sport-btn").forEach((x) =>
@@ -1996,7 +1996,114 @@ async function renderNBA() {
       closing line value over 200+ bets is the only honest measure. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
 }
 
-const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy", "nba"];
+/* ============================================================
+   UFC — Scalpy MMA engine
+   ============================================================ */
+async function renderUFC() {
+  const host = document.getElementById("ufc-body");
+  if (!host) return;
+  let d = null;
+  try {
+    const res = await fetch("data/ufc.json?t=" + Date.now());
+    if (res.ok) d = await res.json();
+  } catch (e) {}
+  if (!d) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🥊</div>
+      <div class="es-title">No UFC data yet</div>
+      <div class="es-sub">The launcher builds the card each refresh once you pull and relaunch.</div></div>`;
+    return;
+  }
+  setStandaloneSource("The Odds API MMA events + our fighter dossiers",
+                      `UFC · ${escapeHtml(d.event_date || d.status || "")}`);
+  const pctv = (x) => x == null ? "—" : `${(x * 100).toFixed(1)}%`;
+
+  if (d.status !== "card") {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🥊</div>
+      <div class="es-title">No card in the window</div>
+      <div class="es-sub">${escapeHtml(d.note || "")}</div></div>
+      <div class="ls-note" style="margin-top:14px">The Scalpy MMA doctrine, ready:
+        style beats talent (highest-weight input) · win probability hard-capped at 88% —
+        four-ounce gloves mean nobody is safer · method of victory is a JOINT distribution
+        that must sum to 100% · durability weighs 1.5× finishing ability · the humility
+        clamp kills any 15-point market disagreement · never worse than −300 · max 3 bets
+        a card, and a 13-fight card with zero bets is a valid output.</div>`;
+    return;
+  }
+
+  const methodBar = (m) => {
+    const segs = [["a_ko", "var(--bad)"], ["a_sub", "var(--violet,#a78bfa)"],
+                  ["a_dec", "var(--brand)"], ["b_dec", "var(--cyan)"],
+                  ["b_sub", "var(--warn)"], ["b_ko", "var(--good)"]];
+    return `<div style="display:flex;height:10px;border-radius:6px;overflow:hidden;margin-top:8px"
+        title="method distribution — left: pick's KO/SUB/DEC, right: opponent's DEC/SUB/KO">
+      ${segs.map(([k, c]) => `<span style="width:${(m[k] || 0) * 100}%;background:${c}"></span>`).join("")}
+    </div>
+    <div style="display:flex;justify-content:space-between;color:var(--text-mute);font-size:11px;margin-top:3px">
+      <span>KO ${pctv(m.a_ko)} · SUB ${pctv(m.a_sub)} · DEC ${pctv(m.a_dec)}</span>
+      <span>distance ${pctv(m.distance)}</span></div>`;
+  };
+
+  const pickCard = (p) => `
+    <article class="card" style="--grade-color:var(--good)">
+      <div class="card-head">
+        <div><div class="player">${escapeHtml(p.pick)} ML</div>
+          <div class="subtitle">${escapeHtml(p.fight)}${p.division ? ` · ${escapeHtml(p.division)}` : ""} ·
+            ${escapeHtml(p.book)} ${american(p.odds)}</div></div>
+        <span class="pm-status" style="color:var(--good)">TIER ${p.edge >= 0.08 ? "A" : p.edge >= 0.05 ? "B" : "C"}</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="k">p_model</div><div class="v">${pctv(p.p_model)}</div></div>
+        <div class="metric"><div class="k">p_market</div><div class="v">${pctv(p.p_market)}</div></div>
+        <div class="metric"><div class="k">p_final (w=${p.w})</div><div class="v" style="color:var(--brand)">${pctv(p.p_final)}</div></div>
+      </div>
+      <div class="metrics" style="margin-top:6px">
+        <div class="metric"><div class="k">Break-even</div><div class="v">${pctv(p.break_even)}</div></div>
+        <div class="metric"><div class="k">Edge</div><div class="v pos">+${(p.edge * 100).toFixed(1)}pts</div></div>
+        <div class="metric"><div class="k">EV</div><div class="v pos">+${(p.ev * 100).toFixed(1)}%</div></div>
+      </div>
+      ${methodBar(p.method || {})}
+      <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">
+        ${(p.style_notes || []).map(escapeHtml).join(" · ")} · hold ${(p.hold * 100).toFixed(1)}%
+        · stake ${p.stake_units}u (one-fifth Kelly)</div>
+      <div class="warning" style="margin-top:8px">KILL IF: ${escapeHtml(p.kill_if)}</div>
+    </article>`;
+
+  const passRow = (m) => `
+    <div style="display:flex;gap:12px;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="flex:1;min-width:0"><strong>${escapeHtml(m.fight)}</strong>
+        <span style="display:block;color:var(--text-mute);font-size:.85em">${escapeHtml(m.why || "")}</span></span>
+      ${m.p_final != null ? `<span style="min-width:80px;text-align:right;opacity:.75">${pctv(m.p_final)} final</span>` : ""}
+      ${m.near_miss ? `<span class="chip" style="align-self:center">near miss</span>` : ""}
+    </div>`;
+
+  const c = d.counts || {};
+  host.innerHTML = `
+    <div class="stats">
+      <div class="tile"><div class="k">Card</div><div class="v">${escapeHtml(d.event_date || "")}</div></div>
+      <div class="tile"><div class="k">Bouts</div><div class="v">${c.fights || 0}</div></div>
+      <div class="tile"><div class="k">Dossiers loaded</div><div class="v">${d.dossiers_loaded || 0}</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">no dossier, no bet</div></div>
+      <div class="tile"><div class="k">Picks</div><div class="v">${c.picks || 0}</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">max 3 per card by design</div></div>
+    </div>
+    ${d.no_qualifying ? `<div class="card"><div class="player">No qualifying plays on this card.</div>
+        <div style="color:var(--text-body);font-size:13px;margin-top:6px">Most fights on any card
+        have no exploitable edge — the pass list below says why, fight by fight. Re-check after
+        Friday weigh-ins: missed weight and visible cut damage aren't fully priced for hours.</div></div>`
+      : `<div class="section-title">Picks
+          <span class="sub">— cleared the clamp AND the gate · one-fifth Kelly stakes</span></div>
+        <div class="cards">${(d.picks || []).map(pickCard).join("")}</div>`}
+    <div class="section-title" style="margin-top:22px">Pass list
+      <span class="sub">— every unbet fight and why. The record that proves the model is
+      selective, not lazy.</span></div>
+    <div class="card" style="padding:0">${(d.pass_list || []).map(passRow).join("") ||
+      `<p class="loading" style="padding:12px">Nothing to pass on.</p>`}</div>
+    <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Dossiers live in
+      data/ufc_dossiers.json (copy the sample file) — the model refuses any fight missing one.
+      Updated ${escapeHtml(d.generated_at || "")}.</p>`;
+}
+
+const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy", "nba", "ufc"];
 
 function switchView(name) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -2012,6 +2119,7 @@ function switchView(name) {
   if (name === "intel") renderIntel();
   if (name === "fantasy") renderFantasy();
   if (name === "nba") renderNBA();
+  if (name === "ufc") renderUFC();
   if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
   moveIndicator();
 }

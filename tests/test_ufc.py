@@ -1,0 +1,155 @@
+"""Tests for the Scalpy MMA engine — cap, joint, clamp, gate, pass list."""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from engine.ufc.model import (
+    win_probability, method_conditionals, joint_method, clamp_weight,
+    humility_clamp, approval_gate, stake_units, evaluate_fight, run_card,
+    age_mult, style_read, WIN_CAP,
+)
+
+
+def _fighter(name="A", **over):
+    d = {"name": name, "age": 29, "division": "lightweight",
+         "archetype": "pressure", "ufc_fights": 8, "fights": 14,
+         "slpm": 4.5, "sapm": 3.5, "kd_per100": 1.2, "td_per15": 1.0,
+         "td_acc": 0.40, "tdd": 0.65, "ctrl_per15": 2.0,
+         "sub_att_per15": 0.4, "ko_losses": 1, "ko_losses_last3": 0,
+         "times_finished": 2, "r3_decay": 0.12, "red_flags": []}
+    d.update(over)
+    return d
+
+
+def test_win_probability_is_hard_capped():
+    # A style edge on top of a stats wipeout — the only road to the cap.
+    monster = _fighter(archetype="wrestler", slpm=8.0, sapm=1.5, tdd=0.95,
+                       td_per15=4.0, td_acc=0.6, ctrl_per15=8.0, kd_per100=4.0)
+    tomato = _fighter("B", archetype="striker_poor_tdd", slpm=2.0, sapm=6.0,
+                      tdd=0.2, ko_losses=6, ko_losses_last3=2, r3_decay=0.5,
+                      age=38)
+    p, _ = win_probability(monster, tomato)
+    # Four-ounce gloves: nobody is safer than 88%.
+    assert p <= WIN_CAP
+    assert p >= 0.75                                  # still a huge favorite
+    p_even, _ = win_probability(_fighter(), _fighter("B"))
+    assert abs(p_even - 0.5) < 0.03
+
+
+def test_age_curve():
+    assert age_mult(29) == 1.0 and age_mult(33) == 0.97
+    assert age_mult(36) == 0.85 and age_mult(40) == 0.85
+
+
+def test_style_matrix_mirrors():
+    s, lean, _ = style_read("counter", "wild_aggressor")
+    assert s > 0 and lean == "ko"                     # highest KO matchup
+    s2, lean2, _ = style_read("wild_aggressor", "counter")
+    assert s2 == -s and lean2 == "ko"                 # mirrored
+    assert style_read("pressure", "pressure")[1] is None
+
+
+def test_method_joint_sums_to_one():
+    a, b = _fighter(), _fighter("B", ko_losses_last3=2, tdd=0.4)
+    ca = method_conditionals(a, b, "lightweight")
+    cb = method_conditionals(b, a, "lightweight")
+    assert abs(sum(ca.values()) - 1.0) < 1e-6
+    joint = joint_method(0.60, ca, cb)
+    total = sum(v for k, v in joint.items() if k != "distance")
+    assert abs(total - 1.0) < 0.005                   # the whole discipline
+    # Chin damage pushes the opponent's KO conditional up.
+    ca_soft = method_conditionals(a, _fighter("B"), "lightweight")
+    assert ca["ko"] > ca_soft["ko"]
+
+
+def test_wrestlers_win_decisions_not_subs():
+    wrestler = _fighter(archetype="wrestler", sub_att_per15=0.2)
+    c = method_conditionals(wrestler, _fighter("B", tdd=0.3), "welterweight")
+    assert c["dec"] > c["sub"]
+    hunter = _fighter(archetype="submission", sub_att_per15=1.8)
+    c2 = method_conditionals(hunter, _fighter("B", tdd=0.3), "welterweight")
+    assert c2["sub"] > c["sub"]
+
+
+def test_durable_opponents_drag_to_decision():
+    a = _fighter()
+    iron = _fighter("B", times_finished=0, fights=20)
+    glass = _fighter("B", times_finished=8, fights=12)
+    assert method_conditionals(a, iron, "lightweight")["dec"] > \
+        method_conditionals(a, glass, "lightweight")["dec"]
+
+
+def test_clamp_weights_and_debutant_no_bet():
+    assert clamp_weight(_fighter(), _fighter("B")) == 0.35       # both 5+
+    assert clamp_weight(_fighter(ufc_fights=3), _fighter("B")) == 0.25
+    assert clamp_weight(_fighter(ufc_fights=2), _fighter("B")) == 0.12
+    assert clamp_weight(_fighter(short_notice=True), _fighter("B")) == 0.12
+    assert clamp_weight(_fighter(ufc_fights=0), _fighter("B")) is None
+    p, _ = humility_clamp(0.60, 0.52, 0.35)
+    assert abs(p - (0.35 * 0.60 + 0.65 * 0.52)) < 1e-9
+    killed, why = humility_clamp(0.75, 0.55, 0.35)
+    assert killed is None and "not that soft" in why
+
+
+def test_gate_mma_rules():
+    assert approval_gate(0.62, -120, "moneyline", [], 0) == []
+    assert any("−300" in f for f in approval_gate(0.85, -400, "moneyline", [], 0))
+    assert any("red flag" in f for f in
+               approval_gate(0.62, -120, "moneyline", ["missed weight"], 0))
+    assert any("card cap" in f for f in approval_gate(0.62, -120, "moneyline", [], 3))
+    # Props need 6 points, not 4.
+    assert any("edge" in f for f in approval_gate(0.575, -110, "method", [], 0))
+    # One-fifth Kelly, capped at 2.5% of roll.
+    assert 0 < stake_units(0.62, -120) <= 0.5
+
+
+def test_evaluate_fight_paths():
+    a, b = _fighter(), _fighter("B", age=36, ko_losses_last3=2, sapm=4.8,
+                                r3_decay=0.3)
+    prices = {"fighter_a": "A", "fighter_b": "B", "a_odds": -105,
+              "b_odds": -115, "book": "DK"}
+    r = evaluate_fight(a, b, prices, "lightweight", 0)
+    assert r["kind"] in ("pick", "pass")
+    if r["kind"] == "pick":
+        assert r["pick"] == "A" and r["stake_units"] > 0
+        assert abs(sum(v for k, v in r["method"].items() if k != "distance")
+                   - 1.0) < 0.005
+    # No dossier, no bet — the spec's rule, verbatim.
+    r2 = evaluate_fight(None, b, prices, "lightweight", 0)
+    assert r2["kind"] == "pass" and "no dossier" in r2["why"]
+    # Debutants are unmodelable.
+    r3 = evaluate_fight(_fighter(ufc_fights=0), b, prices, "lightweight", 0)
+    assert r3["kind"] == "pass" and "debutant" in r3["why"]
+
+
+def test_run_card_discipline_and_pass_list():
+    chin = dict(age=37, ko_losses_last3=2, ko_losses=4, sapm=5.2,
+                r3_decay=0.35, times_finished=6, tdd=0.4)
+    fights = []
+    for i in range(6):
+        fights.append({"a": _fighter(f"A{i}"),
+                       "b": _fighter(f"B{i}", **chin),
+                       "prices": {"fighter_a": f"A{i}", "fighter_b": f"B{i}",
+                                  "a_odds": 100, "b_odds": -120, "book": "DK"},
+                       "division": "lightweight"})
+    # Two unmodelable bouts pad the card.
+    fights.append({"a": None, "b": None,
+                   "prices": {"fighter_a": "X", "fighter_b": "Y"},
+                   "division": ""})
+    fights.append({"a": _fighter("Deb", ufc_fights=0), "b": _fighter("Vet"),
+                   "prices": {"fighter_a": "Deb", "fighter_b": "Vet",
+                              "a_odds": -110, "b_odds": -110}, "division": ""})
+    r = run_card(fights)
+    assert r["counts"]["picks"] <= 3                  # max 3 bets per card
+    # EVERY unbet fight is on the pass list with a reason.
+    assert r["counts"]["picks"] + len(r["pass_list"]) == len(fights)
+    assert all(p.get("why") for p in r["pass_list"])
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")

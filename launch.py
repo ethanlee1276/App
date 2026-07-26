@@ -196,12 +196,25 @@ def refresh_nba(quiet: bool = False) -> bool:
     return ok
 
 
+def refresh_ufc(quiet: bool = False) -> bool:
+    """UFC card (Scalpy MMA). Cached odds between budgeted pulls."""
+    args = ["ufc_build.py", "--out", "web/data/ufc.json"]
+    if _with_odds():
+        args.append("--cached-odds")
+    ok, tail = _run_build(args)
+    if not quiet:
+        print(f"  UFC  card: {'refreshed' if ok else 'unavailable'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
 def refresh_all(quiet: bool = False) -> None:
     refresh_mlb(quiet=quiet)
     refresh_nfl(quiet=quiet)
     refresh_predmarkets(quiet=quiet)
     refresh_fantasy(quiet=quiet)
     refresh_nba(quiet=quiet)
+    refresh_ufc(quiet=quiet)
 
 
 def _run_maintenance() -> None:
