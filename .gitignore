@@ -28,3 +28,4 @@ secrets.local
 data/history.db
 *.db
 data/ledger.db
+data/backups/

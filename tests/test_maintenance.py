@@ -79,6 +79,48 @@ def test_failed_ingest_retries_next_cycle(monkeypatch):
         assert any("failed" in l for l in logs)
 
 
+
+def test_weekly_backup_zips_and_prunes(monkeypatch):
+    """Weekly backup: sqlite-safe copies, irreplaceable files included,
+    old archives pruned, and a same-week rerun is a no-op."""
+    import sqlite3
+    import zipfile
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "data" / "cache").mkdir(parents=True)
+    db = sqlite3.connect(str(tmp / "data" / "history.db"))
+    db.execute("CREATE TABLE t (x)"); db.execute("INSERT INTO t VALUES (42)")
+    db.commit(); db.close()
+    (tmp / "data" / "cache" / "line_history.jsonl").write_text('{"ts": 1}\n')
+
+    backups = tmp / "data" / "backups"
+    state: dict = {}
+    logs: list = []
+    today = dt.date(2026, 7, 26)
+    maintenance._maybe_backup(state, today, logs.append, root=tmp,
+                              backup_dir=backups)
+    zips = list(backups.glob("backup_*.zip"))
+    assert len(zips) == 1 and state["last_backup"] == "2026-07-26"
+    names = zipfile.ZipFile(zips[0]).namelist()
+    assert "data/history.db" in names
+    assert "data/cache/line_history.jsonl" in names
+    # The zipped DB is a valid sqlite copy, not a torn file.
+    import io
+    raw = zipfile.ZipFile(zips[0]).read("data/history.db")
+    probe = tmp / "probe.db"; probe.write_bytes(raw)
+    assert sqlite3.connect(str(probe)).execute("SELECT x FROM t").fetchone()[0] == 42
+
+    # Three days later: still inside the week, nothing new.
+    maintenance._maybe_backup(state, dt.date(2026, 7, 29), logs.append,
+                              root=tmp, backup_dir=backups)
+    assert len(list(backups.glob("backup_*.zip"))) == 1
+
+    # Simulate months of weekly backups: only the newest 6 survive.
+    for wk in range(8):
+        state.pop("last_backup", None)
+        maintenance._maybe_backup(state, dt.date(2026, 8, 1) + dt.timedelta(days=7 * wk),
+                                  logs.append, root=tmp, backup_dir=backups)
+    assert len(list(backups.glob("backup_*.zip"))) == maintenance.BACKUP_KEEP
+
 if __name__ == "__main__":
     class MP:
         def __init__(self): self._undo = []

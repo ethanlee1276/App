@@ -280,18 +280,96 @@ def preflight() -> None:
         print(f"{warn} ODDS_API_KEY: not set — model/proxy lines only "
               f"(optional; get a free key at the-odds-api.com)")
 
-    # Live data hosts.
+    # Live data hosts — every feed all six products depend on.
     print("\n  Live data hosts (need to be reachable from this network):")
     hosts = [
         ("MLB scores/lineups", "https://statsapi.mlb.com/api/v1/schedule?sportId=1"),
+        ("MLB Statcast (Savant)", "https://baseballsavant.mlb.com/"),
         ("NFL live scores (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"),
         ("NFL schedules (nflverse)", "https://raw.githubusercontent.com/nflverse/nflverse-data/master/README.md"),
-        ("Sportsbook odds", "https://api.the-odds-api.com/v4/sports/"),
+        ("NFL weekly stats/pbp (releases)", "https://github.com/nflverse/nflverse-data/releases"),
+        ("NBA schedule/boxscores (CDN)", "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"),
+        ("Polymarket markets (Gamma)", "https://gamma-api.polymarket.com/markets?limit=1"),
+        ("Polymarket tape (Data API)", "https://data-api.polymarket.com/trades?limit=1"),
+        ("Polymarket leaderboard", "https://lb-api.polymarket.com/leaderboard?window=all&limit=1"),
+        ("Sleeper (fantasy sync)", "https://api.sleeper.app/v1/state/nfl"),
+        ("Sportsbook odds (all sports)", "https://api.the-odds-api.com/v4/sports/"),
         ("Weather (Open-Meteo)", "https://api.open-meteo.com/v1/forecast?latitude=40&longitude=-74&hourly=temperature_2m"),
     ]
     for name, url in hosts:
         up = _reachable(url)
         print(f"{ok if up else warn} {name}: {'reachable' if up else 'blocked/unreachable here'}")
+
+    # Per-product data freshness — what each page is actually serving.
+    print("\n  Product data (web/data/*.json — age since last build):")
+    import time as _time
+    products = [
+        ("MLB board", "web/data/mlb_recommendations.json"),
+        ("NFL board", "web/data/recommendations.json"),
+        ("Record / journal", "web/data/record.json"),
+        ("Polymarket intel", "web/data/predmarkets.json"),
+        ("Fantasy football", "web/data/fantasy.json"),
+        ("NBA (Scalpy)", "web/data/nba.json"),
+        ("UFC (Scalpy MMA)", "web/data/ufc.json"),
+    ]
+    for name, rel in products:
+        p = ROOT / rel
+        if not p.is_file():
+            print(f"{warn} {name}: never built — appears on the first launch")
+            continue
+        age_min = (_time.time() - p.stat().st_mtime) / 60
+        age = (f"{age_min:.0f} min ago" if age_min < 120
+               else f"{age_min / 60:.1f} h ago")
+        stale = age_min > 180
+        print(f"{ok if not stale else warn} {name}: built {age}"
+              + ("  → stale; is the launcher running?" if stale else ""))
+
+    # Database inventory — the raw truth every model reads.
+    print("\n  Databases:")
+    try:
+        from engine.db import connect
+        conn = connect()
+        def _n(sql, args=()):
+            try:
+                return conn.execute(sql, args).fetchone()[0]
+            except Exception:
+                return 0
+        rows = [
+            ("MLB player-game logs", _n("SELECT COUNT(*) FROM player_game_logs WHERE sport='mlb'")),
+            ("MLB plate-appearance logs", _n("SELECT COUNT(*) FROM player_game_logs WHERE sport='mlb' AND market='pa'")),
+            ("NFL player-game logs", _n("SELECT COUNT(*) FROM player_game_logs WHERE sport='nfl'")),
+            ("NFL xFP rows (play-by-play)", _n("SELECT COUNT(*) FROM player_game_logs WHERE sport='nfl' AND market='xfp'")),
+            ("NBA player-game logs", _n("SELECT COUNT(*) FROM player_game_logs WHERE sport='nba'")),
+            ("Polymarket trades on tape", _n("SELECT COUNT(*) FROM pm_trades")),
+            ("Polymarket flags stored", _n("SELECT COUNT(*) FROM pm_flags")),
+        ]
+        for name, n in rows:
+            print(f"{ok if n else warn} {name}: {n:,}"
+                  + ("" if n else "  → run the matching ingest (see GUIDE.md)"))
+        conn.close()
+    except Exception as exc:  # noqa: BLE001
+        print(f"{warn} history DB unreadable: {exc}")
+    try:
+        from engine import ledger
+        lconn = ledger.connect()
+        open_n = lconn.execute("SELECT COUNT(*) FROM bets WHERE status='open'").fetchone()[0]
+        settled = lconn.execute("SELECT COUNT(*) FROM bets WHERE status!='open'").fetchone()[0]
+        print(f"{ok} Bet journal: {settled:,} settled, {open_n:,} open")
+        lconn.close()
+    except Exception as exc:  # noqa: BLE001
+        print(f"{warn} ledger unreadable: {exc}")
+
+    # UFC dossiers + backups.
+    doss = ROOT / "data" / "ufc_dossiers.json"
+    print(f"{ok if doss.is_file() else warn} UFC dossiers: "
+          + ("present" if doss.is_file()
+             else "not created — copy data/ufc_dossiers.sample.json (no dossier, no bet)"))
+    backups = sorted((ROOT / "data" / "backups").glob("backup_*.zip"))
+    if backups:
+        print(f"{ok} Backups: {len(backups)} kept, newest {backups[-1].name}")
+    else:
+        print(f"{warn} Backups: none yet — the first weekly backup runs with "
+              f"daily maintenance")
 
     print("\n  When everything above is ✅ (or intentionally skipped), run:  python3 launch.py")
 

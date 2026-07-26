@@ -49,6 +49,63 @@ def _save_state(path: Path, state: dict) -> None:
     path.write_text(json.dumps(state))
 
 
+BACKUP_DIR = ROOT / "data" / "backups"
+BACKUP_EVERY_DAYS = 7
+BACKUP_KEEP = 6
+# What a backup protects: the databases (history + ledger — months of
+# ingested truth and the bet journal) and the append-only files that can
+# NEVER be rebuilt if lost (the line-move snapshots; the UFC dossiers you
+# typed by hand). Secrets are deliberately excluded.
+BACKUP_FILES = ("data/history.db", "data/ledger.db",
+                "data/cache/line_history.jsonl", "data/ufc_dossiers.json")
+
+
+def _maybe_backup(state: dict, today: _dt.date, log,
+                  root: Path | None = None,
+                  backup_dir: Path | None = None) -> None:
+    """Weekly zip of everything irreplaceable. Live SQLite files are copied
+    through the sqlite backup API so a mid-write snapshot can't corrupt."""
+    last = state.get("last_backup")
+    if last:
+        try:
+            if (today - _dt.date.fromisoformat(last)).days < BACKUP_EVERY_DAYS:
+                return
+        except ValueError:
+            pass
+    import sqlite3
+    import tempfile
+    import zipfile
+    root = root or ROOT
+    backup_dir = backup_dir or BACKUP_DIR
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    out = backup_dir / f"backup_{today.isoformat()}.zip"
+    wrote = 0
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        for rel in BACKUP_FILES:
+            src = root / rel
+            if not src.exists():
+                continue
+            if src.suffix == ".db":
+                with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+                    tmp_path = Path(tmp.name)
+                s = sqlite3.connect(str(src))
+                d = sqlite3.connect(str(tmp_path))
+                s.backup(d)
+                d.close(); s.close()
+                zf.write(tmp_path, arcname=rel)
+                tmp_path.unlink(missing_ok=True)
+            else:
+                zf.write(src, arcname=rel)
+            wrote += 1
+    # Prune: keep the newest BACKUP_KEEP.
+    zips = sorted(backup_dir.glob("backup_*.zip"))
+    for old in zips[:-BACKUP_KEEP]:
+        old.unlink(missing_ok=True)
+    state["last_backup"] = today.isoformat()
+    log(f"  backup: {wrote} file(s) → {out.name} "
+        f"({len(list(backup_dir.glob('backup_*.zip')))} kept)")
+
+
 def _maybe_harvest(day: _dt.date, log) -> None:
     """Harvest yesterday's closing odds — only when clearly affordable."""
     if not os.environ.get("ODDS_API_KEY"):
@@ -134,6 +191,17 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
     if harvest:
         _maybe_harvest(yesterday, log)
 
+    if state_path == STATE_PATH:
+        # Real runs only — an injected state path means a test harness, and
+        # tests must never write archives into the working tree.
+        try:
+            _maybe_backup(state, today, log)
+        except Exception as exc:  # noqa: BLE001 — never block the chores
+            log(f"  ⚠️  backup failed: {exc}")
+
     if ingest_ok:
-        _save_state(state_path, {"last_done": today.isoformat()})
+        state["last_done"] = today.isoformat()
+    # On ingest failure the day stays unmarked (so the next cycle retries)
+    # but the rest of the state — e.g. the backup timestamp — persists.
+    _save_state(state_path, state)
     return True
