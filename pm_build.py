@@ -33,16 +33,25 @@ def main() -> None:
     except DataUnavailable as exc:
         print(f"⚠️  Polymarket unreachable — keeping last data.\n   {exc}")
         raise SystemExit(2)
+    # Dedicated big-trade pull: the general feed is nearly all retail-sized
+    # fills, so without this a 500-row slice can contain zero whales.
+    try:
+        trades += pm.parse_trades(pm.fetch_big_trades())
+    except DataUnavailable:
+        pass
 
     conn = connect()
     new_trades = pm.store_trades(conn, trades)
     pm.store_snapshot(conn, markets)
     history = pm.wallet_history(conn)
+    names = pm.wallet_names(conn)
     total_trades = conn.execute("SELECT COUNT(*) FROM pm_trades").fetchone()[0]
 
     # Score the last 24h of RECORDED tape, not just this pull's thin slice —
-    # $10K+ trades are a few per hour, and the tape accumulates them.
+    # big trades are a few per hour, and the tape accumulates them.
     feed = pm.build_flow_feed(pm.recent_tape(conn), markets, history)
+    for f in feed:
+        f["name"] = names.get(f["wallet"], "")
     conn.close()
 
     # Top traders by realized P&L (Polymarket's own leaderboard), each with
@@ -81,14 +90,19 @@ def main() -> None:
     except (DataUnavailable, ValueError) as exc:
         ranked = sorted(history.items(), key=lambda kv: -kv[1]["usd"])[:10]
         top_traders = pm.build_top_traders(
-            [{"wallet": w, "name": "", "pnl": 0.0} for w, _ in ranked], {})
+            [{"wallet": w, "name": names.get(w, ""), "pnl": 0.0}
+             for w, _ in ranked], {})
         traders_note = (f"leaderboard unreachable ({exc}) — showing our "
                         f"tape's most-active wallets instead")
+
+    # Display board: live prices only — a settled market pinned at 0/100¢
+    # (finished esports series etc.) is clutter, not information.
+    display_markets = [m for m in markets if 0.02 <= m["yes"] <= 0.98]
 
     out = {
         "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
         "venue": "polymarket",
-        "markets": markets[:50],
+        "markets": display_markets[:50],
         "flow": feed,
         "top_traders": top_traders,
         "traders_note": traders_note,

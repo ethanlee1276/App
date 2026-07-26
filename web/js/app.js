@@ -1437,7 +1437,7 @@ async function renderIntel() {
       <span class="term-main">
         <span class="term-title">${escapeHtml(f.market)}</span>
         <span class="term-sub">
-          <a href="https://polymarket.com/profile/${escapeHtml(f.wallet)}" target="_blank" rel="noopener">${shortWallet(f.wallet)}</a>
+          <a href="https://polymarket.com/profile/${escapeHtml(f.wallet)}" target="_blank" rel="noopener">${escapeHtml(f.name || shortWallet(f.wallet))}</a>
           · ${escapeHtml(f.side)} ${escapeHtml(f.outcome)} · ${pmAgo(f.ts)} · ${f.wallet_trades} on tape</span>
         <span>${sigs}</span>
       </span>

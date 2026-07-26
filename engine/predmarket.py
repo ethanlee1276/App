@@ -47,10 +47,11 @@ from .sources.fetch import fetch_text, DataUnavailable
 GAMMA = "https://gamma-api.polymarket.com"
 DATA_API = "https://data-api.polymarket.com"
 
-FEED_FLOOR_USD = 10_000
+FEED_FLOOR_USD = 5_000
 TIERS = ((500_000, "$500K+ position", 40),
          (100_000, "$100K+ position", 30),
-         (10_000, "$10K+ position", 15))
+         (10_000, "$10K+ position", 15),
+         (5_000, "$5K+ position", 8))
 IMPACT_MIN = 0.05             # ≥5% of the market's 24h volume
 NICHE_VOL = 100_000           # a "thin" market in 24h dollar volume
 FRESH_HOURS = 24
@@ -71,14 +72,25 @@ def fetch_trades(limit: int = 500, ttl: int = 60) -> list[dict]:
     return json.loads(fetch_text(url, "pm_trades.json", ttl=ttl))
 
 
+def fetch_big_trades(min_cash: int = 5000, limit: int = 300,
+                     ttl: int = 120) -> list[dict]:
+    """The tape FILTERED to large cash trades. The general feed is almost
+    all retail-sized fills, so a 500-row slice can easily contain zero
+    whales — this dedicated pull is how the flow feed never misses them."""
+    url = (f"{DATA_API}/trades?limit={limit}&takerOnly=true"
+           f"&filterType=CASH&filterAmount={min_cash}")
+    return json.loads(fetch_text(url, "pm_big_trades.json", ttl=ttl))
+
+
 LEADERBOARD = "https://lb-api.polymarket.com"
-# Prefer a YEAR of results; a hot week proves nothing about skill. The
-# endpoint is undocumented, so fall through window names until one answers.
-LEADERBOARD_WINDOWS = (("365d", "the past year"), ("all", "all time"),
-                       ("30d", "the past 30 days"))
+# Polymarket's leaderboard supports day / week / month / all-time only —
+# there is no year window. All-time is the closest thing to long-term
+# skill, so prefer it; fall through until a window answers.
+LEADERBOARD_WINDOWS = (("all", "all time"), ("1m", "the past month"),
+                       ("1w", "the past week"))
 
 
-def fetch_leaderboard(window: str = "365d", limit: int = 10,
+def fetch_leaderboard(window: str = "all", limit: int = 10,
                       ttl: int = 3600) -> list[dict]:
     """Polymarket's own P&L leaderboard (the one behind polymarket.com's
     leaderboard page). Public, keyless. Ranked by realized profit — skill
@@ -187,6 +199,9 @@ def parse_trades(raw: list[dict]) -> list[dict]:
             "side": (t.get("side") or "").upper(),
             "price": price, "size": size,
             "usd": round(price * size, 2),
+            # The tape carries each trader's Polymarket display name — the
+            # page shows people, not hex strings.
+            "trader": t.get("name") or t.get("pseudonym") or "",
         })
     return out
 
@@ -246,6 +261,9 @@ CREATE TABLE IF NOT EXISTS pm_snaps (
     PRIMARY KEY (venue, ts, slug)
 );
 CREATE INDEX IF NOT EXISTS idx_pm_trades_wallet ON pm_trades (wallet, ts);
+CREATE TABLE IF NOT EXISTS pm_wallets (
+    wallet TEXT PRIMARY KEY, name TEXT
+);
 """
 
 
@@ -264,8 +282,18 @@ def store_trades(conn, trades: list[dict]) -> int:
             (t["venue"], t["tx"], t["ts"], t["wallet"], t["slug"], t["title"],
              t["outcome"], t["side"], t["price"], t["size"], t["usd"]))
         n += cur.rowcount
+        if t.get("trader"):
+            conn.execute("INSERT OR REPLACE INTO pm_wallets (wallet, name) "
+                         "VALUES (?, ?)", (t["wallet"], t["trader"]))
     conn.commit()
     return n
+
+
+def wallet_names(conn) -> dict[str, str]:
+    """Display names harvested from the tape — people, not hex strings."""
+    ensure_tables(conn)
+    return {r["wallet"]: r["name"]
+            for r in conn.execute("SELECT wallet, name FROM pm_wallets")}
 
 
 def store_snapshot(conn, markets: list[dict], now: float | None = None) -> int:

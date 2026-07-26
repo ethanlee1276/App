@@ -22,10 +22,23 @@ GAMMA = [
 NOW = 1_800_000_000
 
 
-def _tape(wallet, slug, usd_price, size, ts, outcome="Yes", side="BUY"):
+def _tape(wallet, slug, usd_price, size, ts, outcome="Yes", side="BUY",
+          name=""):
     return {"proxyWallet": wallet, "slug": slug, "title": slug,
             "price": usd_price, "size": size, "timestamp": ts,
-            "outcome": outcome, "side": side, "transactionHash": f"0x{ts}"}
+            "outcome": outcome, "side": side, "transactionHash": f"0x{ts}",
+            "name": name}
+
+
+def test_display_names_harvested_from_the_tape():
+    from engine import db
+    conn = db.connect(":memory:")
+    pm.store_trades(conn, pm.parse_trades([
+        _tape("0xking", "fed-cut-march", 0.62, 40_000, NOW, name="TheKing"),
+        _tape("0xanon", "fed-cut-march", 0.62, 30_000, NOW),      # no name
+    ]))
+    names = pm.wallet_names(conn)
+    assert names == {"0xking": "TheKing"}
 
 
 def test_parse_markets_handles_json_string_fields():
