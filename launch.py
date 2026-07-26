@@ -183,11 +183,25 @@ def refresh_fantasy(quiet: bool = False) -> bool:
     return ok
 
 
+def refresh_nba(quiet: bool = False) -> bool:
+    """NBA slate (Scalpy). Cached odds between budgeted pulls, like MLB."""
+    args = ["nba_build.py", _dt.date.today().isoformat(),
+            "--out", "web/data/nba.json"]
+    if _with_odds():
+        args.append("--cached-odds")
+    ok, tail = _run_build(args)
+    if not quiet:
+        print(f"  NBA  slate: {'refreshed' if ok else 'unavailable'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
 def refresh_all(quiet: bool = False) -> None:
     refresh_mlb(quiet=quiet)
     refresh_nfl(quiet=quiet)
     refresh_predmarkets(quiet=quiet)
     refresh_fantasy(quiet=quiet)
+    refresh_nba(quiet=quiet)
 
 
 def _run_maintenance() -> None:

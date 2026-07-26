@@ -1391,7 +1391,7 @@ function pmAgo(ts) {
 
 /* Polymarket and Fantasy are top-level modes next to NFL/MLB, not tabs
    inside a sport — entering one hides the sport nav; leaving restores it. */
-const STANDALONE_MODES = ["intel", "fantasy"];
+const STANDALONE_MODES = ["intel", "fantasy", "nba"];
 
 function enterStandaloneMode(name) {
   document.querySelectorAll(".sport-btn").forEach((x) =>
@@ -1897,7 +1897,106 @@ function renderSleeperPanel(d, ctx) {
   });
 }
 
-const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy"];
+/* ============================================================
+   NBA — Scalpy probability engine
+   ============================================================ */
+async function renderNBA() {
+  const host = document.getElementById("nba-body");
+  if (!host) return;
+  let d = null;
+  try {
+    const res = await fetch("data/nba.json?t=" + Date.now());
+    if (res.ok) d = await res.json();
+  } catch (e) {}
+  if (!d) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🏀</div>
+      <div class="es-title">No NBA data yet</div>
+      <div class="es-sub">The launcher builds the NBA slate each refresh once you pull
+      and relaunch.</div></div>`;
+    return;
+  }
+  setStandaloneSource("NBA CDN schedule + ingested boxscores + The Odds API",
+                      `NBA · ${escapeHtml(d.date || "")}`);
+  if (d.status !== "slate") {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🏀</div>
+      <div class="es-title">${d.status === "offseason" ? "NBA offseason" : "NBA data unreachable"}</div>
+      <div class="es-sub">${escapeHtml(d.note || "")}</div></div>
+      <div class="ls-note" style="margin-top:14px">The Scalpy doctrine, ready and waiting:
+        minutes are modeled first (~70% of prop variance is minutes) · every stat gets a real
+        distribution (negative binomial for rebounds/assists — Poisson understates the tails)
+        · the humility clamp shrinks every model number toward the de-vigged market and kills
+        any 12-point disagreement · the approval gate demands edge ≥3 points over break-even,
+        EV ≥3.5%, hold ≤10%, price ≥ −250 · max 4 picks a slate · CLV is the scoreboard.</div>`;
+    return;
+  }
+  const c = d.counts || {};
+  const pctv = (x) => x == null ? "—" : `${(x * 100).toFixed(1)}%`;
+  const meta = d.meta || {};
+  const gradeColorNBA = { A: "var(--good)", B: "var(--cyan)", C: "var(--warn)", D: "var(--bad)" };
+
+  const pickCard = (p) => `
+    <article class="card" style="--grade-color:${gradeColorNBA[p.minutes_grade] || "var(--brand)"}">
+      <div class="card-head">
+        <div><div class="player">${escapeHtml(p.player)} ${escapeHtml(p.side)} ${p.line} ${escapeHtml(p.market_label)}</div>
+          <div class="subtitle">${escapeHtml(p.team)} vs ${escapeHtml(p.opponent)} ·
+            ${escapeHtml(p.book)} ${american(p.odds)}</div></div>
+        <span class="pm-status" style="color:${gradeColorNBA[p.minutes_grade]}"
+          title="Minutes confidence grade — gates the stake">MIN ${escapeHtml(p.minutes_grade)}</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="k">p_model</div><div class="v">${pctv(p.p_model)}</div></div>
+        <div class="metric"><div class="k">p_market</div><div class="v">${pctv(p.p_market)}</div></div>
+        <div class="metric"><div class="k">p_final (w=${p.w})</div><div class="v" style="color:var(--brand)">${pctv(p.p_final)}</div></div>
+      </div>
+      <div class="metrics" style="margin-top:6px">
+        <div class="metric"><div class="k">Break-even</div><div class="v">${pctv(p.break_even)}</div></div>
+        <div class="metric"><div class="k">Edge</div><div class="v pos">+${(p.edge * 100).toFixed(1)}pts</div></div>
+        <div class="metric"><div class="k">EV</div><div class="v pos">+${(p.ev * 100).toFixed(1)}%</div></div>
+      </div>
+      <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">
+        Projection <b>${p.projection}</b> ± ${p.sd} · minutes ${p.base_minutes} → <b>${p.proj_minutes}</b>
+        projected · blowout risk ${(p.blowout_prob * 100).toFixed(0)}% · hold ${(p.hold * 100).toFixed(1)}%
+        · stake ${p.stake_units}u</div>
+      <div class="warning" style="margin-top:8px">KILL IF: ${escapeHtml(p.kill_if)}</div>
+    </article>`;
+
+  const missRow = (m) => `
+    <div style="display:flex;gap:12px;padding:9px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="flex:1;min-width:0"><strong>${escapeHtml(m.player)} ${escapeHtml(m.side)} ${m.line}
+        ${escapeHtml(m.market_label)}</strong>
+        <span style="display:block;color:var(--text-mute);font-size:.85em">needs: ${escapeHtml(m.what_would_change)}</span></span>
+      <span style="min-width:90px;text-align:right;opacity:.8">${pctv(m.p_final)} final</span>
+      <span style="min-width:70px;text-align:right;color:${m.ev >= 0 ? "var(--good)" : "var(--text-mute)"}">${(m.ev * 100).toFixed(1)}% EV</span>
+    </div>`;
+
+  host.innerHTML = `
+    <div class="stats">
+      <div class="tile"><div class="k">Games</div><div class="v">${meta.games || 0}</div></div>
+      <div class="tile"><div class="k">Props analyzed</div><div class="v">${c.props_analyzed || 0}</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">${escapeHtml(meta.odds || "")}</div></div>
+      <div class="tile"><div class="k">Qualifying picks</div><div class="v">${c.picks || 0}</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">max 4 per slate by design</div></div>
+      <div class="tile"><div class="k">Near misses</div><div class="v">${c.near_misses || 0}</div></div>
+    </div>
+    ${(meta.teams_on_b2b || []).length ? `<div class="ls-note">Back-to-backs tonight:
+      ${meta.teams_on_b2b.map(escapeHtml).join(", ")} — minutes multipliers applied.</div>` : ""}
+    ${d.no_qualifying ? `<div class="card" style="margin-top:14px"><div class="player">No qualifying plays at current lines.</div>
+        <div style="color:var(--text-body);font-size:13px;margin-top:6px">A no-bet night is a
+        correct output, not a failure — forcing a play on a dead slate costs more than a week's
+        edge. The near-miss report below shows what came closest and what would need to change.</div></div>`
+      : `<div class="section-title" style="margin-top:14px">Qualifying picks
+          <span class="sub">— cleared the humility clamp AND the approval gate</span></div>
+        <div class="cards">${(d.picks || []).map(pickCard).join("")}</div>`}
+    <div class="section-title" style="margin-top:22px">Near-miss report
+      <span class="sub">— the closest edges and exactly what would need to change</span></div>
+    <div class="card" style="padding:0">${(d.near_misses || []).map(missRow).join("") ||
+      `<p class="loading" style="padding:12px">Nothing close.</p>`}</div>
+    <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Every pick journals to
+      the Record page at its real price and grades on CLV — win/loss over a week is noise;
+      closing line value over 200+ bets is the only honest measure. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
+}
+
+const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy", "nba"];
 
 function switchView(name) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -1912,6 +2011,7 @@ function switchView(name) {
   if (name === "record") renderRecord();
   if (name === "intel") renderIntel();
   if (name === "fantasy") renderFantasy();
+  if (name === "nba") renderNBA();
   if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
   moveIndicator();
 }

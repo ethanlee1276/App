@@ -82,7 +82,7 @@ def print_summary(conn) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Populate the historical database.")
-    ap.add_argument("sport", choices=["nfl", "mlb", "status"])
+    ap.add_argument("sport", choices=["nfl", "mlb", "nba", "status"])
     ap.add_argument("--seasons", default=default_seasons(),
                     help="NFL: e.g. 2021-2025 (default: last 5 completed seasons)")
     ap.add_argument("--dates", default="", help="MLB: comma-separated YYYY-MM-DD")
@@ -106,6 +106,29 @@ def main() -> None:
         print(f"Ingesting NFL seasons {seasons[0]}-{seasons[-1]} → {args.db}")
         res = ingest.ingest_nfl(conn, seasons)
         print(f"  games: {res['games']:,}   player-log rows: {res['player_logs']:,}")
+    elif args.sport == "nba":
+        import datetime as _dt
+        from engine.sources.nbadata import ingest_nba_date
+        if args.start and args.end:
+            day = _dt.date.fromisoformat(args.start)
+            last = _dt.date.fromisoformat(args.end)
+            dates = []
+            while day <= last:
+                dates.append(day.isoformat())
+                day += _dt.timedelta(days=1)
+        else:
+            dates = [d.strip() for d in args.dates.split(",") if d.strip()]
+        if not dates:
+            print("Provide --dates or --from/--to YYYY-MM-DD for NBA.")
+            return
+        total_g = total_p = 0
+        for d in dates:
+            res = ingest_nba_date(conn, d)
+            total_g += res["games"]
+            total_p += res["player_logs"]
+            for skip in res["skipped"]:
+                print(f"  skipped {skip}")
+        print(f"  games: {total_g:,}   player-log rows: {total_p:,}")
     elif args.start and args.end:
         # Historical results: real final scores, the basis for team ratings.
         print(f"Ingesting MLB {args.start} → {args.end} → {args.db}")

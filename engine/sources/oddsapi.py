@@ -108,12 +108,39 @@ MLB_TEAM_ABBR = {
     "Washington Nationals": "WSH",
 }
 
+# NBA market keys (engine.nba stat names) and team-name map.
+NBA_ODDS_TO_MARKET = {
+    "player_points": "pts",
+    "player_rebounds": "reb",
+    "player_assists": "ast",
+    "player_threes": "fg3m",
+}
+NBA_TEAM_ABBR = {
+    "Atlanta Hawks": "ATL", "Boston Celtics": "BOS", "Brooklyn Nets": "BKN",
+    "Charlotte Hornets": "CHA", "Chicago Bulls": "CHI",
+    "Cleveland Cavaliers": "CLE", "Dallas Mavericks": "DAL",
+    "Denver Nuggets": "DEN", "Detroit Pistons": "DET",
+    "Golden State Warriors": "GSW", "Houston Rockets": "HOU",
+    "Indiana Pacers": "IND", "LA Clippers": "LAC",
+    "Los Angeles Clippers": "LAC", "Los Angeles Lakers": "LAL",
+    "Memphis Grizzlies": "MEM", "Miami Heat": "MIA",
+    "Milwaukee Bucks": "MIL", "Minnesota Timberwolves": "MIN",
+    "New Orleans Pelicans": "NOP", "New York Knicks": "NYK",
+    "Oklahoma City Thunder": "OKC", "Orlando Magic": "ORL",
+    "Philadelphia 76ers": "PHI", "Phoenix Suns": "PHX",
+    "Portland Trail Blazers": "POR", "Sacramento Kings": "SAC",
+    "San Antonio Spurs": "SAS", "Toronto Raptors": "TOR",
+    "Utah Jazz": "UTA", "Washington Wizards": "WAS",
+}
+
 # Per-sport wiring: The Odds API sport key, market map, and team-name map.
 SPORT_CONFIG = {
     "nfl": {"sport_key": "americanfootball_nfl",
             "markets": ODDS_TO_MARKET, "teams": TEAM_ABBR},
     "mlb": {"sport_key": "baseball_mlb",
             "markets": MLB_ODDS_TO_MARKET, "teams": MLB_TEAM_ABBR},
+    "nba": {"sport_key": "basketball_nba",
+            "markets": NBA_ODDS_TO_MARKET, "teams": NBA_TEAM_ABBR},
 }
 
 
