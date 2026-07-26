@@ -1034,18 +1034,32 @@ function recLongshotSection(ls) {
     </div>`;
   }).join("");
   return `
-    <div class="section-title" style="margin-top:22px">Long Shots — tracked separately</div>
-    <p style="opacity:.6;font-size:.85em;margin:4px 0 10px">Every home-run pick and
-      watchlist entry, graded at a flat 0.1u nominal stake with zero bankroll impact.
-      This bucket measures whether the HR board finds value — it is never mixed into
-      the record above. Long shots lose most nights by design; judge the ROI and
+    <div class="section-title" style="margin-top:22px">Long Shots — tracked separately
+      <span class="sub">— home runs &amp; anytime TDs, with their own ROI. Never mixed
+      into the record above.</span></div>
+    <p style="opacity:.6;font-size:.85em;margin:4px 0 10px">Every home-run and
+      anytime-TD pick and watchlist entry, graded at a flat 0.1u nominal stake with zero
+      bankroll impact. These markets are long shots by nature, so they are quarantined
+      here even when they clear the main board's bar — a night of +650 darts would
+      otherwise make the headline record describe the dart board instead of the picks
+      the model stands behind. Long shots lose most nights by design; judge the ROI and
       calibration over weeks, not the hit column.</p>
     <div class="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
-      ${recTile("HR record", `${ls.wins}-${ls.losses}`, `${ls.open} open`)}
-      ${recTile("Hit rate", hitRate.toFixed(1) + "%", "plus-money — low is normal")}
+      ${recTile("Long-shot record", `${ls.wins}-${ls.losses}`, `${ls.open} open`)}
+      ${recTile("Hit rate", hitRate.toFixed(1) + "%",
+                ls.avg_implied_prob != null
+                  ? `books implied ${(ls.avg_implied_prob * 100).toFixed(1)}%`
+                  : "plus-money — low is normal")}
       ${recTile("Flat-stake ROI", (ls.roi >= 0 ? "+" : "") + (ls.roi * 100).toFixed(1) + "%",
-                `${ls.net_units >= 0 ? "+" : ""}${(ls.net_units || 0).toFixed(2)}u at 0.1u each`)}
+                `${ls.net_units >= 0 ? "+" : ""}${(ls.net_units || 0).toFixed(2)}u on ${(ls.units_staked || 0).toFixed(1)}u staked`)}
+      ${recTile("Avg price", ls.avg_odds == null ? "—" : american(ls.avg_odds),
+                ls.odds_range ? `range ${american(ls.odds_range[0])} to ${american(ls.odds_range[1])}`
+                              : "accrues as picks settle")}
     </div>
+    ${Object.keys(ls.by_sport || {}).length > 1 ? `<div style="margin-top:8px">
+      ${Object.entries(ls.by_sport).map(([s, d]) =>
+        `<span class="chip">${escapeHtml(s.toUpperCase())} ${d.w}/${d.n}
+           (${d.net_u >= 0 ? "+" : ""}${d.net_u.toFixed(2)}u)</span>`).join(" ")}</div>` : ""}
     <div class="card" style="padding:0;margin-top:12px">${calib}${rows ||
       `<p class="loading" style="padding:12px">Nothing settled yet — accrues from tonight's board.</p>`}</div>`;
 }

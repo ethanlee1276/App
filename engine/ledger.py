@@ -109,6 +109,15 @@ def bankroll(conn) -> float:
 
 
 # --- logging ----------------------------------------------------------------
+# Markets that are long shots by nature — plus-money, low-probability
+# swings. They are measured in their own bucket at a flat nominal stake
+# and must NEVER enter the headline record: a board of +650 home-run
+# darts loses most nights by design, and mixing that into the main W-L
+# and ROI makes the record describe the dart board instead of the picks
+# the model actually stands behind. ``log_longshots`` journals them.
+LONGSHOT_MARKETS = {"home_runs", "anytime_td"}
+
+
 def log_recommendations(conn, result: dict, only_recommended: bool = True) -> int:
     """Insert open bets from a pipeline result dict. Stake dollars are sized
     from the current bankroll: stake_units × unit_pct% × bankroll."""
@@ -123,6 +132,10 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         # A proxy-priced "edge" isn't a price anyone can bet; journaling it
         # would pollute the learning data with fictional P&L.
         if r.get("has_market") is False:
+            continue
+        # Long shots live in their own bucket, even when they clear the
+        # main board's bar — see LONGSHOT_MARKETS.
+        if r.get("market") in LONGSHOT_MARKETS:
             continue
         stake_units = float(r.get("stake_units", 0) or 0)
         # A zero-stake "pick" is not a bet — journaling it would pad the
@@ -709,6 +722,23 @@ def longshot_report(conn) -> dict:
     p["avg_implied_prob"] = round(row["implied_p"], 4) if row["implied_p"] is not None else None
     p["actual_hit_rate"] = round(row["actual_p"], 4) if row["actual_p"] is not None else None
     p["recent"] = recent_settled(conn, limit=15, category="longshot")
+    # Which long-shot markets carry the bucket, and at what price. Average
+    # odds matter here in a way they don't for the main record: a +250
+    # board and a +900 board that both hit 12% are wildly different bets.
+    row = conn.execute(
+        "SELECT COUNT(*) n, AVG(odds) avg_odds, MIN(odds) min_odds, "
+        "MAX(odds) max_odds FROM bets WHERE category='longshot' "
+        "AND status IN ('won','lost')").fetchone()
+    p["avg_odds"] = round(row["avg_odds"]) if row["avg_odds"] is not None else None
+    p["odds_range"] = ([row["min_odds"], row["max_odds"]]
+                       if row["n"] else None)
+    p["by_sport"] = {}
+    for r in conn.execute(
+            "SELECT sport, COUNT(*) n, SUM(status='won') w, "
+            "COALESCE(SUM(pnl_units),0) u FROM bets WHERE category='longshot' "
+            "AND status IN ('won','lost') GROUP BY sport"):
+        p["by_sport"][r["sport"]] = {"n": r["n"], "w": r["w"],
+                                     "net_u": round(r["u"], 2)}
     return p
 
 
@@ -765,6 +795,61 @@ def resize_unstaked(conn, stake_units: float = 0.1) -> int:
         n += 1
     conn.commit()
     return n
+
+
+def recompute_bankroll(conn) -> float:
+    """Rebuild the bankroll from the main journal's realized dollars.
+
+    The running value is advanced bet-by-bet as things settle, so any
+    repair that moves or re-sizes rows leaves it stale. This restates it
+    from what the record actually says."""
+    start = float(get_cfg(conn, "starting_bankroll"))
+    total = conn.execute(
+        "SELECT COALESCE(SUM(pnl_dollars), 0) FROM bets WHERE category='main' "
+        "AND status IN ('won','lost','push')").fetchone()[0] or 0.0
+    val = round(start + total, 2)
+    set_cfg(conn, "bankroll", val)
+    return val
+
+
+def move_longshots_out_of_main(conn, stake_units: float = 0.1) -> int:
+    """Relocate already-journaled long-shot markets into their own bucket.
+
+    Home-run and anytime-TD props that cleared the main board were being
+    journaled twice — once in the headline record, once in the long-shot
+    bucket. The headline record is supposed to describe the picks the
+    model stands behind, not a board of plus-money darts, so the main
+    copies are moved out (or dropped when the long-shot copy already
+    exists) and the bankroll is restated."""
+    marks = ",".join("?" for _ in LONGSHOT_MARKETS)
+    rows = conn.execute(
+        f"SELECT * FROM bets WHERE category='main' AND market IN ({marks})",
+        tuple(LONGSHOT_MARKETS)).fetchall()
+    moved = 0
+    for r in rows:
+        dup = conn.execute(
+            "SELECT id FROM bets WHERE sport=? AND date=? AND player=? "
+            "AND market=? AND category='longshot'",
+            (r["sport"], r["date"], r["player"], r["market"])).fetchone()
+        if dup:
+            conn.execute("DELETE FROM bets WHERE id=?", (r["id"],))
+        else:
+            if r["status"] == "won":
+                pnl = round((american_to_decimal(r["odds"]) - 1.0) * stake_units, 4)
+            elif r["status"] == "lost":
+                pnl = -stake_units
+            elif r["status"] == "push":
+                pnl = 0.0
+            else:
+                pnl = None                    # still open
+            conn.execute(
+                "UPDATE bets SET category='longshot', stake_units=?, "
+                "stake_dollars=0, pnl_units=?, pnl_dollars=0 WHERE id=?",
+                (stake_units, pnl, r["id"]))
+        moved += 1
+    conn.commit()
+    recompute_bankroll(conn)
+    return moved
 
 
 def export_json(conn, path) -> None:

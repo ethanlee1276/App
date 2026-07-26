@@ -584,6 +584,26 @@ def main() -> None:
         sport = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else "mlb"
         why_empty(sport)
         return
+    if "--repair-journal" in argv:
+        from engine import ledger
+        conn = ledger.connect()
+        before, before_ls = ledger.performance(conn), ledger.longshot_report(conn)
+        moved = ledger.move_longshots_out_of_main(conn)
+        after, after_ls = ledger.performance(conn), ledger.longshot_report(conn)
+        ledger.export_json(conn, ROOT / "web" / "data" / "record.json")
+        print(f"Moved {moved} long-shot row(s) out of the headline record "
+              f"(markets: {', '.join(sorted(ledger.LONGSHOT_MARKETS))}).\n")
+        print(f"  MAIN record   {before['wins']}-{before['losses']}-{before['pushes']}"
+              f" → {after['wins']}-{after['losses']}-{after['pushes']}")
+        print(f"    net  {before['net_units']:+.2f}u → {after['net_units']:+.2f}u"
+              f"    ROI {before['roi']:+.1%} → {after['roi']:+.1%}")
+        print(f"  LONG SHOTS    {before_ls['wins']}-{before_ls['losses']}"
+              f" → {after_ls['wins']}-{after_ls['losses']}")
+        print(f"    net  {before_ls['net_units']:+.2f}u → {after_ls['net_units']:+.2f}u"
+              f"    ROI {before_ls['roi']:+.1%} → {after_ls['roi']:+.1%}")
+        print(f"  bankroll restated to ${ledger.bankroll(conn):,.2f}")
+        print("\nRecord page updated — the two buckets are now fully separate.")
+        return
     if "--resize-unstaked" in argv:
         from engine import ledger
         conn = ledger.connect()

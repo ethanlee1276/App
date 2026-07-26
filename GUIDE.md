@@ -89,6 +89,8 @@ While `launch.py` is running, with no input from you:
 | Health check | `python3 launch.py --check` |
 | Grade tonight's picks now (don't wait for morning) | `python3 launch.py --settle` |
 | Fold old 0.00-unit picks back into the record (once) | `python3 launch.py --resize-unstaked` |
+| Separate long shots from the main record (once) | `python3 launch.py --repair-journal` |
+| Why is the board empty? | `python3 launch.py --why-empty` |
 
 **About `--settle`:** the journal normally grades itself on the launcher's
 first cycle of the *next* day, so tonight's picks show as "open" until

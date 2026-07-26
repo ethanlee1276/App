@@ -337,14 +337,33 @@ def test_longshots_journal_separately_with_no_bankroll_impact():
     assert ledger.pnl_curve(conn) == []
 
 
-def test_same_player_can_be_pick_and_longshot_same_day():
+def test_home_run_pick_lands_only_in_the_longshot_bucket():
+    """Previously a recommended HR prop was journaled twice — once in the
+    headline record and once as a long shot. The record is meant to
+    describe the picks the model stands behind, so the main copy is gone
+    and only the long-shot row remains."""
     conn = _conn()
     r = _result(sport="mlb", date="2026-07-26")
     r["recommendations"][0].update(player="Slugger", market="home_runs",
                                    line=0.5, odds=320)
-    ledger.log_recommendations(conn, r)
-    assert ledger.log_longshots(conn, _ls_result()) == 2    # dupe key allowed
-    assert conn.execute("SELECT COUNT(*) FROM bets WHERE player='Slugger'").fetchone()[0] == 2
+    assert ledger.log_recommendations(conn, r) == 0
+    assert ledger.log_longshots(conn, _ls_result()) == 2
+    rows = conn.execute("SELECT category FROM bets WHERE player='Slugger'").fetchall()
+    assert [r["category"] for r in rows] == ["longshot"]
+
+
+def test_category_key_still_admits_both_buckets_for_other_markets():
+    """The (…, category) unique key must keep working — a non-long-shot
+    market can legitimately appear in both buckets."""
+    conn = _conn()
+    for cat in ("main", "longshot"):
+        conn.execute(
+            "INSERT INTO bets (sport,date,player,market,side,line,odds,"
+            "stake_units,stake_dollars,status,category) VALUES "
+            "('mlb','2026-07-26','Dual','total_bases','OVER',1.5,-110,"
+            "1.0,10,'open',?)", (cat,))
+    conn.commit()
+    assert conn.execute("SELECT COUNT(*) FROM bets WHERE player='Dual'").fetchone()[0] == 2
 
 
 def test_migration_adds_category_and_keeps_rows():
@@ -548,6 +567,65 @@ def test_zero_stake_picks_are_never_journaled():
     r["recommendations"][0]["stake_units"] = 0.0     # Kelly says don't bet
     assert ledger.log_recommendations(conn, r) == 0
     assert conn.execute("SELECT COUNT(*) FROM bets").fetchone()[0] == 0
+
+
+def test_longshot_markets_never_enter_the_main_record():
+    """A home-run prop that clears the main board's bar still belongs in
+    the long-shot bucket — otherwise a night of +650 darts rewrites the
+    headline W-L and ROI."""
+    conn = _conn()
+    res = _result(sport="mlb", date="2026-07-26", recommendations=[
+        {"player": "Slugger", "market": "home_runs", "side": "OVER", "line": 0.5,
+         "book": "FanDuel", "odds": 650, "hit_prob": 0.16, "edge": 0.034,
+         "confidence": 6.9, "grade": "Lean", "stake_units": 0.2,
+         "recommended": True},
+        {"player": "Contact", "market": "hits", "side": "OVER", "line": 0.5,
+         "book": "FanDuel", "odds": -110, "hit_prob": 0.54, "edge": 0.035,
+         "confidence": 6.4, "grade": "Play", "stake_units": 0.2,
+         "recommended": True},
+    ])
+    assert ledger.log_recommendations(conn, res) == 1        # only the hits prop
+    row = conn.execute("SELECT player, category FROM bets").fetchone()
+    assert row["player"] == "Contact" and row["category"] == "main"
+
+
+def test_repair_moves_legacy_longshots_and_restates_bankroll():
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    # Legacy state: an HR prop journaled into main, plus a real main pick.
+    _insert_settled(conn, "HRGuy", status="won", market="home_runs", odds=650,
+                    stake_dollars=10.0)
+    _insert_settled(conn, "RealPick", status="lost", market="hits", odds=-110,
+                    stake_dollars=10.0)
+    conn.execute("UPDATE bets SET pnl_units=6.5, pnl_dollars=65 WHERE player='HRGuy'")
+    conn.execute("UPDATE bets SET pnl_units=-1.0, pnl_dollars=-10 WHERE player='RealPick'")
+    conn.commit()
+    assert ledger.performance(conn)["settled"] == 2
+
+    assert ledger.move_longshots_out_of_main(conn) == 1
+    main, ls = ledger.performance(conn), ledger.longshot_report(conn)
+    assert main["settled"] == 1 and main["wins"] == 0     # the HR win is gone
+    assert ls["settled"] == 1 and ls["wins"] == 1
+    # Re-graded at the flat 0.1u stake: +650 → +0.65u, no dollars.
+    assert abs(ls["net_units"] - 0.65) < 1e-6
+    # Bankroll restated from the main journal only: 1000 − 10.
+    assert ledger.bankroll(conn) == 990.0
+    assert ls["avg_odds"] == 650 and ls["by_sport"]["mlb"]["n"] == 1
+
+
+def test_repair_drops_duplicates_already_in_the_longshot_bucket():
+    conn = _conn()
+    _insert_settled(conn, "Dup", status="won", market="home_runs", odds=400)
+    conn.execute("INSERT INTO bets (sport,date,player,market,side,line,odds,"
+                 "stake_units,stake_dollars,status,pnl_units,category) VALUES "
+                 "('mlb','2026-07-20','Dup','home_runs','OVER',0.5,400,"
+                 "0.1,0,'won',0.4,'longshot')")
+    conn.commit()
+    assert ledger.move_longshots_out_of_main(conn) == 1
+    # One row survives, in the long-shot bucket — no double count.
+    assert conn.execute("SELECT COUNT(*) FROM bets").fetchone()[0] == 1
+    assert ledger.longshot_report(conn)["settled"] == 1
+    assert ledger.performance(conn)["settled"] == 0
 
 
 def test_export_json_carries_calibration_and_health():
