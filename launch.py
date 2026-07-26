@@ -295,14 +295,10 @@ def preflight() -> None:
         ("Sleeper (fantasy sync)", "https://api.sleeper.app/v1/state/nfl"),
         ("Sportsbook odds (all sports)", "https://api.the-odds-api.com/v4/sports/"),
         ("Weather (Open-Meteo)", "https://api.open-meteo.com/v1/forecast?latitude=40&longitude=-74&hourly=temperature_2m"),
-        ("UFC fighter stats (UFCStats)", "http://www.ufcstats.com/statistics/events/completed"),
+        ("UFC fighter data (ESPN MMA)", "https://site.web.api.espn.com/apis/search/v2?query=jones&limit=1"),
     ]
     for name, url in hosts:
-        if "ufcstats" in url:
-            from engine.sources.ufcstats import UA as _ufc_ua
-            up = _reachable(url, ua=_ufc_ua)   # their CDN rejects bot agents
-        else:
-            up = _reachable(url)
+        up = _reachable(url)
         print(f"{ok if up else warn} {name}: {'reachable' if up else 'blocked/unreachable here'}")
 
     # Per-product data freshness — what each page is actually serving.

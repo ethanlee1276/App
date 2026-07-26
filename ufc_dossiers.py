@@ -5,15 +5,16 @@
     python3 ufc_dossiers.py --refresh    # re-fetch auto entries too
     python3 ufc_dossiers.py "Jon Jones"  # draft specific fighters by name
 
-Reads the upcoming card from the cached odds feed (no credits spent),
-looks each fighter up on UFCStats.com, and writes drafted dossiers into
-``data/ufc_dossiers.json`` — keyed by the odds feed's spelling so the
-model matches them automatically.
+Reads the upcoming card from the odds feed (the events list is free),
+looks each fighter up on ESPN's public MMA API, and writes drafted
+dossiers into ``data/ufc_dossiers.json`` — keyed by the odds feed's
+spelling so the model matches them automatically. Rates are measured
+from per-fight data (strikes over real fight minutes, opponents' rows
+for the defensive numbers), not copied from a stats label.
 
 What it will NOT do: overwrite anything a human wrote. Hand-made entries
 and previously drafted entries are left alone unless ``--refresh`` is
-passed (and even then, only entries marked ``source: ufcstats-auto`` are
-re-fetched).
+passed (and even then, only auto-drafted entries are re-fetched).
 
 The two-minute review this leaves you: each drafted entry carries a
 ``review`` list of every estimated number, and auto red flags (chin
@@ -84,16 +85,19 @@ def main() -> None:
     book = json.loads(DOSSIERS.read_text()) if DOSSIERS.exists() else {}
     book.setdefault("_readme", README)
 
-    from engine.sources.ufcstats import fetch_dossier
+    from engine.sources.espnmma import fetch_dossier, octagon_styles
+    styles = octagon_styles()      # one request; style hints for ranked names
     drafted, kept, missing = [], [], []
     for name in names:
         existing = book.get(name)
-        if existing and not (args.refresh
-                             and existing.get("source") == "ufcstats-auto"):
+        if existing and isinstance(existing, dict) and not (
+                args.refresh and str(existing.get("source", "")).endswith("-auto")):
             kept.append(name)
             continue
+        print(f"  fetching {name} … (a fighter takes ~30s the first time)")
         try:
-            d = fetch_dossier(name)
+            from engine.sources.espnmma import _norm
+            d = fetch_dossier(name, style_hint=styles.get(_norm(name)))
         except DataUnavailable as exc:
             print(f"  ⚠️  {name}: {exc}")
             missing.append(name)
@@ -103,6 +107,7 @@ def main() -> None:
             continue
         book[name] = d
         drafted.append(name)
+        DOSSIERS.write_text(json.dumps(book, indent=2))   # save as we go
 
     DOSSIERS.write_text(json.dumps(book, indent=2))
 
@@ -110,7 +115,7 @@ def main() -> None:
           f"{len(kept)} kept (hand-made or already drafted), "
           f"{len(missing)} not found → {DOSSIERS}")
     if missing:
-        print("  Not on UFCStats (debutants/spelling): " + ", ".join(missing)
+        print("  Not found on ESPN (debutants/spelling): " + ", ".join(missing)
               + "\n  Those fights stay on the pass list — which is correct.")
     for name in drafted:
         d = book[name]

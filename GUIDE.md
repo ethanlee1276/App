@@ -97,10 +97,11 @@ themselves. Before a card you care about, run:
 python3 ufc_dossiers.py
 ```
 
-It reads the upcoming card from the odds cache (no credits spent), pulls
-every fighter's real career stats from UFCStats.com, and writes drafted
-dossiers into `data/ufc_dossiers.json`. Your job is the two-minute review
-it prints at the end:
+It reads the upcoming card from the odds feed (free), pulls every
+fighter's real fight-by-fight stats from ESPN's public MMA data, and
+writes drafted dossiers into `data/ufc_dossiers.json`. First run takes a
+few minutes for a full card (~30s per fighter, then cached). Your job is
+the two-minute review it prints at the end:
 
 1. Open `data/ufc_dossiers.json` and check each entry's `review` notes —
    the archetype is guessed from stats, so fix any style you know better.
