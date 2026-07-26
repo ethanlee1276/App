@@ -236,9 +236,11 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
 
 
 def _market_scan(results: list[dict]) -> dict:
-    """Cross-book arbitrage / middle / low-hold scan (engine.marketscan)."""
-    from .marketscan import scan_recommendations
-    return scan_recommendations(results)
+    """Cross-book arbitrage / middle / low-hold / stale-line scan."""
+    from .marketscan import scan_recommendations, stale_quotes
+    out = scan_recommendations(results)
+    out["stale"] = stale_quotes(results)
+    return out
 
 
 def _game_to_dict(g) -> dict:

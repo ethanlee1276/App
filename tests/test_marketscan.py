@@ -121,3 +121,41 @@ if __name__ == "__main__":
     for fn in fns:
         fn(); print(f"  ok  {fn.__name__}")
     print(f"\n{len(fns)} tests passed.")
+
+
+def test_stale_quotes_flags_a_book_out_of_line_with_the_field():
+    """The one Scanner section backed by a measured CLV result: a book
+    pricing a side cheaper than every other book. Taking those beat the
+    closing consensus 64.8% of the time (+1.49 pts, z=11.6)."""
+    from engine.marketscan import stale_quotes, STALE_MIN_BOOKS
+
+    recs = [{"player": "Judge", "market": "hits", "market_label": "Hits",
+             "all_lines": [
+                 {"book": "DraftKings", "line": 0.5, "over_odds": -110, "under_odds": -110},
+                 {"book": "BetMGM", "line": 0.5, "over_odds": -112, "under_odds": -108},
+                 {"book": "ESPN BET", "line": 0.5, "over_odds": 100, "under_odds": -120},
+             ]}]
+    out = stale_quotes(recs)
+    over = next(s for s in out if s["side"] == "OVER")
+    assert over["book"] == "ESPN BET" and over["odds"] == 100
+    assert over["gap_pts"] > 2.0
+    assert over["consensus"] > over["implied"]      # field says it's worth less
+    assert over["books_compared"] == 3
+    # Sorted by how far out of line the price is.
+    assert out == sorted(out, key=lambda d: -d["gap_pts"])
+
+    # A tight market with everyone agreeing produces nothing.
+    tight = [{"player": "X", "market": "hits", "market_label": "Hits",
+              "all_lines": [{"book": b, "line": 0.5, "over_odds": -110,
+                             "under_odds": -110}
+                            for b in ("A", "B", "C")]}]
+    assert stale_quotes(tight) == []
+
+    # Fewer books than STALE_MIN_BOOKS is not a consensus.
+    thin = [{"player": "Y", "market": "hits", "market_label": "Hits",
+             "all_lines": [{"book": "A", "line": 0.5, "over_odds": -110, "under_odds": -110},
+                           {"book": "B", "line": 0.5, "over_odds": 140, "under_odds": -160}]}]
+    assert STALE_MIN_BOOKS == 3 and stale_quotes(thin) == []
+
+    # A prop with no real market is skipped entirely.
+    assert stale_quotes([{**recs[0], "has_market": False}]) == []

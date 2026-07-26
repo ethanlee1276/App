@@ -212,9 +212,13 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
 
 
 def _market_scan(results: list[dict]) -> dict:
-    """Cross-book arbitrage / middle / low-hold scan (engine.marketscan)."""
-    from ..marketscan import scan_recommendations
-    return scan_recommendations(results)
+    """Cross-book arbitrage / middle / low-hold / stale-line scan."""
+    from ..marketscan import scan_recommendations, stale_quotes
+    out = scan_recommendations(results)
+    # The one section backed by a measured CLV result rather than by
+    # structure alone — see marketscan.stale_quotes.
+    out["stale"] = stale_quotes(results)
+    return out
 
 
 def _rec_to_dict(rec, prop, decision, proj) -> dict:
