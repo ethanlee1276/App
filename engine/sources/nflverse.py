@@ -33,6 +33,9 @@ ROSTERS_URL = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/ro
 def _weekly_stats_urls(season: int) -> list[str]:
     base = "https://github.com/nflverse/nflverse-data/releases/download"
     return [
+        # nflverse restructured releases: current seasons (2025+) live under
+        # the stats_player tag with the new file naming. Verified live.
+        f"{base}/stats_player/stats_player_week_{season}.csv",
         f"{base}/player_stats/stats_player_week_{season}.csv",
         f"{base}/player_stats/player_stats_{season}.csv",
         f"{base}/player_stats/player_stats_{season}.csv.gz",
