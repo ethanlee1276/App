@@ -51,16 +51,32 @@ def main() -> None:
         print(f"No harvested odds rows for {args.sport} in {args.db}.")
         return
 
-    # Same prop, same number, same day → the books are quoting a
-    # comparable thing and the price difference is pure shopping value.
+    # Prices are only shoppable if you could have taken them AT THE SAME
+    # TIME. Grouping by day instead of by moment compares a 10am quote at
+    # one book against a 7pm quote at another and calls the gap an edge —
+    # it is line movement, and it manufactured an 11.7% "arbitrage" rate
+    # (reality is well under 1%) plus a 38-point "shopping gain".
+    #
+    # Quotes are bucketed to the harvest timestamp, truncated to the hour
+    # so that snapshots written a few seconds apart still pair up.
     groups: dict[tuple, list] = defaultdict(list)
+    skipped_books = 0
     for r in rows:
-        day = (r["taken_at"] or "")[:10]
-        groups[(day, r["player"], r["market"], r["line"])].append(r)
+        book = (r["book"] or "").strip().lower()
+        # "best" and "proxy" are pipeline placeholders, not sportsbooks.
+        if book in ("", "best", "proxy", "consensus"):
+            skipped_books += 1
+            continue
+        stamp = (r["taken_at"] or "")[:13]        # YYYY-MM-DDTHH
+        groups[(stamp, r["player"], r["market"], r["line"])].append(r)
+    if skipped_books:
+        print(f"  (ignored {skipped_books:,} rows from placeholder "
+              f"'best'/'proxy' entries — not real books)")
 
     multi = {k: v for k, v in groups.items() if len({x["book"] for x in v}) > 1}
-    print(f"\n{len(rows):,} harvested quotes · {len(groups):,} prop-days · "
-          f"{len(multi):,} with 2+ books quoting the same number\n")
+    print(f"\n{len(rows):,} harvested quotes · {len(groups):,} prop-moments · "
+          f"{len(multi):,} with 2+ books quoting the same number "
+          f"at the same time\n")
     if not multi:
         print("Not enough multi-book coverage to measure shopping value.")
         return
