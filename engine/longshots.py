@@ -149,6 +149,23 @@ def _price(model_prob: float, over_odds: int, under_odds: int | None):
     return implied, exact
 
 
+def calibrated_prob(sport: str, market: str, model_prob: float,
+                    over_odds: int, under_odds: int | None = None
+                    ) -> tuple[float, float]:
+    """``(shrunk model prob, de-vigged implied)`` — the exact tempering and
+    market shrink :func:`build_pick` applies, for callers that only display.
+
+    The watchlist once used the RAW model probability here; on a hot board
+    (projected lineups, barrel-heavy profiles) raw probs inflated EV past
+    the broken-price guard and silently emptied the whole list while the
+    shrunk picks survived. Every displayed probability goes through this
+    one path now."""
+    _t, _b = correction_for(sport, market)
+    raw = clamp(apply_temperature(model_prob, _t, _b), 1e-4, 0.999)
+    implied, _ = _price(raw, over_odds, under_odds)
+    return clamp(implied + MARKET_SHRINK * (raw - implied), 1e-4, 0.999), implied
+
+
 def build_pick(player: str, team: str, opponent: str, market: str, label: str,
                book: str, odds: int, model_prob: float, under_odds: int | None,
                opportunities: float, opp_target: float, primary_reason: str,

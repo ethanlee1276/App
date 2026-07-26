@@ -220,7 +220,8 @@ def hr_watchlist(candidates: list[dict], limit: int | None = 10) -> list[dict]:
     even when no strict value pick clears the bar: the price and EV are
     displayed honestly, so a likely homer at a fair (no-value) price reads as
     exactly that — insight, not a guaranteed bet."""
-    from ..odds import american_to_decimal, american_to_prob
+    from ..odds import american_to_decimal
+    from ..longshots import calibrated_prob
     rows: list[dict] = []
     for c in candidates:
         odds = c.get("odds")
@@ -231,10 +232,14 @@ def hr_watchlist(candidates: list[dict], limit: int | None = 10) -> list[dict]:
         if (c.get("book") or "").lower() == "proxy":     # real prices only
             continue
         prop, game = c["prop"], c["game"]
-        prob, info = hr_probability(prop, game)
+        raw_prob, info = hr_probability(prop, game)
         odds = int(odds)
-        from ..odds import american_to_decimal as _atd
-        if prob * _atd(odds) - 1.0 > 0.60:
+        # The SAME tempering + market shrink the value picks get — a raw
+        # probability here once inflated EV past the broken-price guard and
+        # silently emptied the entire watchlist.
+        under = c.get("under_odds") or None
+        prob, implied = calibrated_prob("mlb", HOME_RUNS, raw_prob, odds, under)
+        if prob * american_to_decimal(odds) - 1.0 > 0.60:
             # A claimed +60% EV on a homer market is a broken price, not an
             # edge — same too-good-to-be-true guard as the sharp anchor.
             continue
@@ -243,7 +248,7 @@ def hr_watchlist(candidates: list[dict], limit: int | None = 10) -> list[dict]:
             "opponent": prop.opponent, "book": c.get("book", ""),
             "odds": odds,
             "model_prob": round(prob, 4),
-            "implied_prob": round(american_to_prob(odds), 4),
+            "implied_prob": round(implied, 4),
             "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),
             "primary_reason": info["primary_reason"],
             "recent_values": [g.value for g in prop.logs][:12],

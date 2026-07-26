@@ -596,6 +596,16 @@ function renderRecommended() {
         ${escapeHtml(k)} <span class="sub">— ${rows.length} prop(s)${nRec ? `, ${nRec} recommended` : ""}${hrNote}</span>
       </div>` + rows.map(cardHTML).join("");
   }).join("");
+  // "Analyzed 1030 → showing 3" is alarming unless the page says where the
+  // rest went: most are analyzed-but-held (lineups not confirmed, edge too
+  // small, or no real price) and non-featured home runs live on Long Shots.
+  const hidden = recs.length - visible.length;
+  if (hidden > 0) {
+    host.innerHTML += `<p class="loading" style="grid-column:1/-1;margin-top:14px">
+      ${hidden} more analyzed prop(s) not shown — ${state.showAll
+        ? "non-featured home runs live on the Long Shots page"
+        : "held (unconfirmed lineup, edge below the bar, or no real price yet) or featured elsewhere. Toggle “show non-recommended” to browse everything"}.</p>`;
+  }
   fillMeters(host);
   revealChildren(host);
 }
