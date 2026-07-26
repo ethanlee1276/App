@@ -120,11 +120,14 @@ def main() -> None:
             shopped = american_to_prob(best_over) + american_to_prob(best_under)
             holds_shopped.append((shopped - 1.0) * 100)
             # Best hold available inside any single book.
-            per_book = {}
-            for q in quotes:
-                if q["over_odds"] is not None and q["under_odds"] is not None:
-                    per_book[q["book"]] = (american_to_prob(int(q["over_odds"]))
-                                           + american_to_prob(int(q["under_odds"])))
+            # Must be computed over the SAME sane quotes as the shopped
+            # hold. Including corrupt pairs here dragged the single-book
+            # average down to +2.30% while the shopped figure (already
+            # filtered) read +5.35% — implying shopping made you worse
+            # off, which is arithmetically impossible.
+            per_book = {q["book"]: (american_to_prob(int(q["over_odds"]))
+                                    + american_to_prob(int(q["under_odds"])))
+                        for q in sane}
             if per_book:
                 holds_single.append((min(per_book.values()) - 1.0) * 100)
             bu_book = max(unders, key=lambda t: _payout(t[0]))[1]
