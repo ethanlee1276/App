@@ -712,6 +712,30 @@ def longshot_report(conn) -> dict:
     return p
 
 
+def unstaked_scorecard(conn) -> dict:
+    """Were the 0.00-unit picks actually profitable? Measure, don't argue.
+
+    They win often — that's not the question. The question is whether they
+    won often enough to beat the prices they were offered at. This reports
+    the realized hit rate against the average break-even those odds imply,
+    plus the flat-stake P&L they would have produced."""
+    rows = conn.execute(
+        "SELECT odds, status FROM bets WHERE category='main' "
+        "AND (stake_units IS NULL OR stake_units <= 0) "
+        "AND status IN ('won','lost')").fetchall()
+    if not rows:
+        return {"n": 0}
+    wins = sum(1 for r in rows if r["status"] == "won")
+    be = sum(1.0 / american_to_decimal(r["odds"]) for r in rows) / len(rows)
+    net = sum((american_to_decimal(r["odds"]) - 1.0) if r["status"] == "won"
+              else -1.0 for r in rows)
+    hit = wins / len(rows)
+    return {"n": len(rows), "wins": wins, "losses": len(rows) - wins,
+            "hit_rate": round(hit, 4), "break_even": round(be, 4),
+            "edge_pts": round((hit - be) * 100, 2),
+            "roi": round(net / len(rows), 4)}
+
+
 def resize_unstaked(conn, stake_units: float = 0.1) -> int:
     """Give already-journaled zero-stake picks a flat stake and real P&L.
 

@@ -456,6 +456,17 @@ def main() -> None:
         from engine import ledger
         conn = ledger.connect()
         before = ledger.performance(conn)
+        card = ledger.unstaked_scorecard(conn)
+        if card.get("n"):
+            print(f"The 0.00-unit picks, graded: {card['wins']}-{card['losses']} "
+                  f"({card['hit_rate']:.1%} hit rate)")
+            print(f"  they needed {card['break_even']:.1%} to break even at the "
+                  f"prices offered → {card['edge_pts']:+.2f} points "
+                  f"{'ABOVE' if card['edge_pts'] > 0 else 'below'} the line")
+            print(f"  flat-stake ROI: {card['roi']:+.1%}"
+                  + ("  ← they were genuinely profitable; tell me and I'll "
+                     "loosen the thresholds" if card["roi"] > 0 else
+                     "  ← they won often but still lost money to the juice"))
         n = ledger.resize_unstaked(conn)
         ledger.export_json(conn, ROOT / "web" / "data" / "record.json")
         after = ledger.performance(conn)
