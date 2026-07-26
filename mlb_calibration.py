@@ -105,6 +105,36 @@ def main() -> None:
         print(f"{label:<14}{n:>8,}{brier:>9.4f}{ece:>8.3f}"
               f"{bets:>7}{winpct:>6.1f}%{roi:>+8.1%}{used:>12,}")
 
+    # The distinction that decides whether any of this is real: bets priced
+    # against a harvested BOOK line are the only ones that answer "would
+    # this have beaten the market?". Baseline-priced bets only show the
+    # model beats a trailing average, which no sportsbook offers.
+    print("\nBets priced against a REAL book line vs a naive baseline:")
+    hdr2 = (f"{'market':<14}{'basis':<10}{'bets':>7}{'win%':>7}{'ROI':>9}"
+            f"{'net u':>9}")
+    print(hdr2)
+    print("-" * len(hdr2))
+    any_book = False
+    for d in rows:
+        segs = _get(d, "segments", default=None) or {}
+        for basis in ("book", "naive"):
+            g = segs.get(basis)
+            if not g or not g.get("n_bets"):
+                continue
+            if basis == "book":
+                any_book = True
+            label = MARKET_LABELS.get(d["market"], d["market"])[:13]
+            n = g["n_bets"]
+            wr = g.get("wins", 0) / n * 100 if n else 0.0
+            staked = g.get("staked", 0.0)
+            net = g.get("net", 0.0)
+            roi = (net / staked) if staked else 0.0
+            tag = "vs BOOK" if basis == "book" else "baseline"
+            print(f"{label:<14}{tag:<10}{n:>7}{wr:>6.1f}%{roi:>+8.1%}{net:>+9.2f}")
+    if not any_book:
+        print("  (no harvested book lines matched — the ROI column above is "
+              "predictive skill only, NOT an edge over the market)")
+
     print("\nReliability — what the model said vs what happened:")
     for d in rows:
         bins = _get(d, "bins", default=None)
