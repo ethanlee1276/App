@@ -125,6 +125,11 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         if r.get("has_market") is False:
             continue
         stake_units = float(r.get("stake_units", 0) or 0)
+        # A zero-stake "pick" is not a bet — journaling it would pad the
+        # record with rows that can never win or lose a unit, making the
+        # W-L column describe something nobody wagered on.
+        if stake_units <= 0:
+            continue
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
@@ -154,6 +159,8 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         if not player:
             continue
         stake_units = float(r.get("stake_units", 0) or 0)
+        if stake_units <= 0:
+            continue                     # not a bet — see above
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
@@ -397,11 +404,23 @@ def process_grade(b) -> str | None:
 
 
 def performance(conn, sport: str | None = None, category: str = "main") -> dict:
-    q = "SELECT * FROM bets WHERE status IN ('won','lost','push') AND category=?"
+    # ``stake_units > 0`` everywhere below: rows staked at zero were never
+    # bets (an old grading bug shipped picks the vig had already eaten).
+    # Counting them would inflate the W-L column with wagers nobody could
+    # have won a unit on. They're reported separately as ``unstaked``.
+    q = ("SELECT * FROM bets WHERE status IN ('won','lost','push') "
+         "AND category=? AND stake_units > 0")
     args: list = [category]
     if sport:
         q += " AND sport=?"; args.append(sport)
     bets = conn.execute(q, args).fetchall()
+
+    uq = ("SELECT COUNT(*) FROM bets WHERE status IN ('won','lost','push') "
+          "AND category=? AND (stake_units IS NULL OR stake_units <= 0)")
+    uargs: list = [category]
+    if sport:
+        uq += " AND sport=?"; uargs.append(sport)
+    unstaked = conn.execute(uq, uargs).fetchone()[0]
 
     wins = sum(1 for b in bets if b["status"] == "won")
     losses = sum(1 for b in bets if b["status"] == "lost")
@@ -453,8 +472,9 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
         "starting_bankroll": float(get_cfg(conn, "starting_bankroll")),
         "bankroll": bankroll(conn),
         "open": conn.execute(
-            "SELECT COUNT(*) FROM bets WHERE status='open' AND category=?",
-            (category,)).fetchone()[0],
+            "SELECT COUNT(*) FROM bets WHERE status='open' AND category=? "
+            "AND stake_units > 0", (category,)).fetchone()[0],
+        "unstaked": unstaked,
         "avg_clv": (sum(clvs) / len(clvs)) if clvs else None,
         "process": process,
         "by_grade": bucket("grade"), "by_market": bucket("market"),
@@ -493,7 +513,8 @@ def pnl_curve(conn, sport: str | None = None) -> list[dict]:
     One point per date with anything settled: that day's net units, the
     running total, and how many bets graded."""
     q = ("SELECT date, SUM(pnl_units) AS day_u, COUNT(*) AS n FROM bets "
-         "WHERE status IN ('won','lost','push') AND category='main'")
+         "WHERE status IN ('won','lost','push') AND category='main' "
+         "AND stake_units > 0")
     args: list = []
     if sport:
         q += " AND sport=?"
@@ -514,8 +535,9 @@ def recent_settled(conn, limit: int = 30, category: str = "main") -> list[dict]:
     show "won but got lucky" / "lost but beat the close" honestly."""
     rows = conn.execute(
         "SELECT date, sport, player, market, side, line, odds, grade, status, "
-        "pnl_units, hit_prob, closing_line FROM bets "
+        "pnl_units, hit_prob, closing_line, stake_units FROM bets "
         "WHERE status IN ('won','lost','push') AND category=? "
+        "AND stake_units > 0 "
         "ORDER BY date DESC, id DESC LIMIT ?", (category, limit)).fetchall()
     out = []
     for r in rows:
@@ -688,6 +710,37 @@ def longshot_report(conn) -> dict:
     p["actual_hit_rate"] = round(row["actual_p"], 4) if row["actual_p"] is not None else None
     p["recent"] = recent_settled(conn, limit=15, category="longshot")
     return p
+
+
+def resize_unstaked(conn, stake_units: float = 0.1) -> int:
+    """Give already-journaled zero-stake picks a flat stake and real P&L.
+
+    A grading bug once shipped picks the vig had already eaten, and Kelly
+    sized them at 0.00 units — so they sat in the journal as wins and
+    losses worth nothing, and the profit (or loss) they actually produced
+    never showed on the record. This sizes every one of them at a flat
+    ``stake_units`` and recomputes P&L from the price and result, exactly
+    like the long-shot bucket: units only, no dollars, measurement not
+    a claim that money was placed."""
+    rows = conn.execute(
+        "SELECT id, odds, status FROM bets "
+        "WHERE category='main' AND (stake_units IS NULL OR stake_units <= 0)"
+    ).fetchall()
+    n = 0
+    for r in rows:
+        if r["status"] == "won":
+            pnl = round((american_to_decimal(r["odds"]) - 1.0) * stake_units, 4)
+        elif r["status"] == "lost":
+            pnl = -stake_units
+        else:
+            pnl = 0.0            # push, or still open
+        conn.execute(
+            "UPDATE bets SET stake_units=?, pnl_units=? WHERE id=?",
+            (stake_units, pnl if r["status"] in ("won", "lost", "push") else None,
+             r["id"]))
+        n += 1
+    conn.commit()
+    return n
 
 
 def export_json(conn, path) -> None:

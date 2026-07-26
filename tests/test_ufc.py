@@ -119,9 +119,21 @@ def test_evaluate_fight_paths():
     # No dossier, no bet — the spec's rule, verbatim.
     r2 = evaluate_fight(None, b, prices, "lightweight", 0)
     assert r2["kind"] == "pass" and "no dossier" in r2["why"]
-    # Debutants are unmodelable.
+    assert r2["reason_code"] == "no_dossier" and "A" in r2["why"]
+    # Fighters with no stat coverage are unmodelable — and the reason says
+    # WHY honestly: a 19-3 regional veteran is not a "debutant".
     r3 = evaluate_fight(_fighter(ufc_fights=0), b, prices, "lightweight", 0)
-    assert r3["kind"] == "pass" and "debutant" in r3["why"]
+    assert r3["kind"] == "pass" and r3["reason_code"] == "no_data"
+    assert "no fight-by-fight stats for A" in r3["why"]
+    assert "debutant" not in r3["why"]
+    # Every result carries both corners' briefs so the page can show the
+    # matchup even when the model passes.
+    assert [f["name"] for f in r3["fighters"]] == ["A", "B"]
+    assert r3["fighters"][1]["has_dossier"] and r3["fighters"][1]["record"] is None
+    # Missing prices are their own reason code, not lumped with "no data".
+    r4 = evaluate_fight(a, b, {"fighter_a": "A", "fighter_b": "B"},
+                        "lightweight", 0)
+    assert r4["reason_code"] == "no_price"
 
 
 def test_run_card_discipline_and_pass_list():

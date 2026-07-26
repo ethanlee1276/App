@@ -258,22 +258,53 @@ def stake_units(p: float, odds: int) -> float:
 
 
 # --- card runner ------------------------------------------------------------
+def fighter_brief(d: dict | None, name: str) -> dict:
+    """The at-a-glance card the site shows for each corner — enough to
+    eyeball whether the model's read is sane, even on passed fights."""
+    if not d:
+        return {"name": name, "has_dossier": False, "covered": 0}
+    return {
+        "name": d.get("name", name), "has_dossier": True,
+        "record": d.get("record"), "age": d.get("age"),
+        "archetype": d.get("archetype"), "division": d.get("division"),
+        "covered": d.get("ufc_fights", 0),
+        "career": d.get("career_fights", d.get("fights")),
+        "slpm": d.get("slpm"), "sapm": d.get("sapm"), "tdd": d.get("tdd"),
+        "td_per15": d.get("td_per15"), "sub_att_per15": d.get("sub_att_per15"),
+        "red_flags": list(d.get("red_flags") or []),
+    }
+
+
 def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
                    division: str, bets_so_far: int) -> dict:
     """One fight → a pick, or a pass-list line with the reason."""
     name_a = prices.get("fighter_a", (a or {}).get("name", "A"))
     name_b = prices.get("fighter_b", (b or {}).get("name", "B"))
-    base = {"fight": f"{name_a} vs {name_b}", "division": division}
+    briefs = [fighter_brief(a, name_a), fighter_brief(b, name_b)]
+    base = {"fight": f"{name_a} vs {name_b}", "division": division,
+            "fighters": briefs}
     if not a or not b:
-        return {**base, "kind": "pass", "why": "no dossier — no bet (build "
-                "both dossiers before any modeling)"}
+        missing = [br["name"] for br in briefs if not br["has_dossier"]]
+        return {**base, "kind": "pass", "reason_code": "no_dossier",
+                "why": f"no dossier for {' and '.join(missing)} — no bet "
+                       f"(run python3 ufc_dossiers.py)"}
     w = clamp_weight(a, b)
     if w is None:
-        return {**base, "kind": "pass",
-                "why": "debutant / regional record — unmodelable, no bet"}
+        # Distinguish "we have no data" from "this fighter is new". A
+        # 19-3 regional veteran isn't a debutant — the honest statement
+        # is that nobody tracks his fights stat-by-stat, so we can't
+        # model him. Same verdict, accurate reason.
+        thin = [br["name"] for br in briefs if not br["covered"]]
+        why = ("no fight-by-fight stats for " + " or ".join(thin)
+               + " — record is regional/uncovered, so the model has nothing "
+                 "measured to work with") if thin else \
+              "too few tracked fights to model — no bet"
+        return {**base, "kind": "pass", "reason_code": "no_data", "why": why}
     odds_a, odds_b = prices.get("a_odds"), prices.get("b_odds")
     if not odds_a or not odds_b:
-        return {**base, "kind": "pass", "why": "no two-sided price posted yet"}
+        return {**base, "kind": "pass", "reason_code": "no_price",
+                "why": "no two-sided price posted yet — books open MMA "
+                       "lines closer to the card"}
 
     from ..nba.prob import devig, market_hold
     p_model, notes = win_probability(a, b)
@@ -289,7 +320,8 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
 
     p_final, clamp_note = humility_clamp(p_m, p_mkt, w)
     if p_final is None:
-        return {**base, "kind": "pass", "why": clamp_note}
+        return {**base, "kind": "pass", "reason_code": "clamp_kill",
+                "why": clamp_note}
 
     cond_a = method_conditionals(a, b, division)
     cond_b = method_conditionals(b, a, division)
@@ -311,7 +343,7 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
                     "at weigh-ins → automatic void"),
     }
     if fails:
-        return {**card, "kind": "pass",
+        return {**card, "kind": "pass", "reason_code": "gate",
                 "why": "; ".join(fails[:2]), "near_miss": True}
     card["stake_units"] = stake_units(p_final, odds)
     return {**card, "kind": "pick"}

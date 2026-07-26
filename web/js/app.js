@@ -1130,6 +1130,11 @@ async function renderRecord() {
     return;
   }
   const o = d.overall;
+  const unstaked = o.unstaked
+    ? `<p class="loading" style="margin-top:10px">ℹ️ ${o.unstaked} older settled pick(s)
+       are held out of this record: a grading bug sized them at 0.00 units, so they were
+       never really bets. Run <code>python3 launch.py --resize-unstaked</code> to stake
+       them at a flat 0.1u and fold the profit (or loss) they produced back in.</p>` : "";
   const small = o.settled < 100
     ? `<p class="loading" style="margin-top:10px">⚠️ ${o.settled} settled pick(s) —
        results this small are mostly luck. Judge the model after 100+, and judge
@@ -1156,6 +1161,7 @@ async function renderRecord() {
       recommended. One entry per player &amp; market per day. Long Shots are
       tracked in their own bucket below — never mixed into this record — and
       the Edge Board is a watchlist, not tracked bets.</p>
+    ${unstaked}
     ${small}
     ${recCurveChart(d.curve)}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
@@ -2149,21 +2155,75 @@ async function renderUFC() {
       <div class="warning" style="margin-top:8px">KILL IF: ${escapeHtml(p.kill_if)}</div>
     </article>`;
 
-  const passRow = (m) => `
-    <div style="display:flex;gap:12px;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="flex:1;min-width:0"><strong>${escapeHtml(m.fight)}</strong>
-        <span style="display:block;color:var(--text-mute);font-size:.85em">${escapeHtml(m.why || "")}</span></span>
-      ${m.p_final != null ? `<span style="min-width:80px;text-align:right;opacity:.75">${pctv(m.p_final)} final</span>` : ""}
-      ${m.near_miss ? `<span class="chip" style="align-self:center">near miss</span>` : ""}
+  // A passed fight still shows both corners — the matchup is the whole
+  // point of the page, and an unbet fight you can read is far more useful
+  // than a one-line "no bet".
+  const fmt = (v, suffix = "") => v == null ? "—" : `${v}${suffix}`;
+  const fighterCol = (f) => {
+    const flags = (f.red_flags || []).map((x) =>
+      `<span class="chip" style="color:var(--bad);border-color:currentColor"
+         title="${escapeHtml(x)}">⚑ ${escapeHtml(x.split("—")[0].trim())}</span>`).join("");
+    const stats = f.covered
+      ? `${fmt(f.slpm)}/${fmt(f.sapm)} strikes · TDD ${f.tdd == null ? "—" : (f.tdd * 100).toFixed(0) + "%"}
+         · TD ${fmt(f.td_per15)}/15`
+      : `<span style="color:var(--warn)">no tracked fight stats</span>`;
+    return `<div style="flex:1;min-width:190px">
+      <div style="font-weight:700">${escapeHtml(f.name)}</div>
+      <div style="color:var(--text-mute);font-size:12px;margin-top:2px">
+        ${f.record ? escapeHtml(f.record) : "—"}${f.age ? ` · ${f.age}y` : ""}
+        ${f.archetype ? ` · ${escapeHtml(f.archetype.replace(/_/g, " "))}` : ""}</div>
+      <div style="color:var(--text-body);font-size:12px;margin-top:3px">${stats}</div>
+      <div style="color:var(--text-mute);font-size:11.5px;margin-top:2px">
+        stats for ${f.covered || 0}${f.career ? ` of ${f.career}` : ""} fights</div>
+      ${flags ? `<div style="margin-top:5px">${flags}</div>` : ""}
     </div>`;
+  };
+
+  const REASON_STYLE = {
+    no_data: ["var(--warn)", "No data"],
+    no_dossier: ["var(--warn)", "No dossier"],
+    no_price: ["var(--text-mute)", "Awaiting price"],
+    clamp_kill: ["var(--bad)", "Clamp kill"],
+    gate: ["var(--cyan)", "No edge"],
+  };
+
+  const passCard = (m) => {
+    const [color, label] = REASON_STYLE[m.reason_code] || ["var(--text-mute)", "Pass"];
+    const fs = m.fighters || [];
+    return `<article class="card" style="--grade-color:${color};padding:14px 16px">
+      <div class="card-head" style="align-items:flex-start">
+        <div><div class="player" style="font-size:15px">${escapeHtml(m.fight)}</div>
+          <div class="subtitle">${escapeHtml((m.division || "").replace(/_/g, " ") || "division n/a")}
+            ${m.odds ? ` · ${escapeHtml(m.book || "")} ${american(m.odds)}` : ""}</div></div>
+        <span class="pm-status" style="color:${color}">${m.near_miss ? "NEAR MISS" : label}</span>
+      </div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px">
+        ${fs.map(fighterCol).join(`<div style="align-self:center;color:var(--text-mute);
+            font-size:12px;font-weight:700">vs</div>`)}
+      </div>
+      ${m.p_final != null ? `<div class="metrics" style="margin-top:10px">
+        <div class="metric"><div class="k">p_model</div><div class="v">${pctv(m.p_model)}</div></div>
+        <div class="metric"><div class="k">p_market</div><div class="v">${pctv(m.p_market)}</div></div>
+        <div class="metric"><div class="k">p_final</div><div class="v">${pctv(m.p_final)}</div></div>
+      </div>` : ""}
+      <div style="margin-top:10px;color:var(--text-body);font-size:12.5px">
+        <span style="color:${color};font-weight:700">Passed:</span> ${escapeHtml(m.why || "")}</div>
+    </article>`;
+  };
 
   const c = d.counts || {};
+  const pl = d.pass_list || [];
+  const nModeled = pl.filter((m) => ["gate", "clamp_kill"].includes(m.reason_code)).length
+    + (d.picks || []).length;
+  const nWaiting = pl.filter((m) => m.reason_code === "no_price").length;
   host.innerHTML = `
     <div class="stats">
-      <div class="tile"><div class="k">Card</div><div class="v">${escapeHtml(d.event_date || "")}</div></div>
-      <div class="tile"><div class="k">Bouts</div><div class="v">${c.fights || 0}</div></div>
-      <div class="tile"><div class="k">Dossiers loaded</div><div class="v">${d.dossiers_loaded || 0}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">no dossier, no bet</div></div>
+      <div class="tile"><div class="k">Card</div><div class="v">${escapeHtml(d.event_date || "")}</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">${c.fights || 0} bouts</div></div>
+      <div class="tile"><div class="k">Modeled</div><div class="v">${nModeled}</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">priced &amp; run through the model</div></div>
+      <div class="tile"><div class="k">Awaiting prices</div><div class="v">${nWaiting}</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">books post MMA lines late</div></div>
       <div class="tile"><div class="k">Picks</div><div class="v">${c.picks || 0}</div>
         <div style="color:var(--text-mute);font-size:12px;margin-top:2px">max 3 per card by design</div></div>
     </div>
@@ -2174,11 +2234,36 @@ async function renderUFC() {
       : `<div class="section-title">Picks
           <span class="sub">— cleared the clamp AND the gate · one-fifth Kelly stakes</span></div>
         <div class="cards">${(d.picks || []).map(pickCard).join("")}</div>`}
-    <div class="section-title" style="margin-top:22px">Pass list
-      <span class="sub">— every unbet fight and why. The record that proves the model is
-      selective, not lazy.</span></div>
-    <div class="card" style="padding:0">${(d.pass_list || []).map(passRow).join("") ||
-      `<p class="loading" style="padding:12px">Nothing to pass on.</p>`}</div>
+    ${(() => {
+      // Grouped so the page reads as a card, not a wall: fights we
+      // actually priced first, then the ones waiting on books, then the
+      // ones no data source covers.
+      const groups = [
+        ["Modeled — no edge at this price", ["gate", "clamp_kill"],
+         "priced, run through the model, and rejected by the clamp or the gate"],
+        ["Waiting on prices", ["no_price"],
+         "books open MMA lines closer to the card — these re-evaluate every refresh"],
+        ["Unmodelable — no tracked stats", ["no_data", "no_dossier"],
+         "regional or uncovered records: no fight-by-fight data exists, so the model refuses"],
+      ];
+      const list = d.pass_list || [];
+      const seen = new Set();
+      let html = "";
+      for (const [title, codes, sub] of groups) {
+        const rows = list.filter((m) => codes.includes(m.reason_code));
+        rows.forEach((m) => seen.add(m));
+        if (!rows.length) continue;
+        html += `<div class="section-title" style="margin-top:22px">${title}
+            <span class="sub">— ${rows.length} fight(s) · ${sub}</span></div>
+          <div class="cards">${rows.map(passCard).join("")}</div>`;
+      }
+      const rest = list.filter((m) => !seen.has(m));
+      if (rest.length)
+        html += `<div class="section-title" style="margin-top:22px">Other passes</div>
+          <div class="cards">${rest.map(passCard).join("")}</div>`;
+      return html || `<div class="section-title" style="margin-top:22px">Pass list</div>
+        <p class="loading" style="padding:12px">Nothing to pass on.</p>`;
+    })()}
     <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Dossiers draft themselves:
       run <code>python3 ufc_dossiers.py</code> before a card, then review the numbers it prints
       (red flags block bets until you confirm or delete them). The model refuses any fight

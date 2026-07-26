@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 
 from ..betting import (
-    Recommendation, _confidence_score, _grade, _kelly_stake,
+    Recommendation, _confidence_score, _grade, _kelly_stake, net_edge,
     _trend_alignment, pick_side, temper_edge,
 )
 from ..calibrate import apply_temperature, correction_for
@@ -91,7 +91,10 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     ev = expected_value(hit, best.odds)
     trend_align = _trend_alignment(side, proj.form.trend)
     confidence = _confidence_score(edge, hit, proj, trend_align)
-    grade = _grade(confidence, edge) if credible else "Pass"
+    # Grade on net edge (vs the real price), not edge-vs-fair — see
+    # engine/betting.py._grade. This is what keeps every graded bet
+    # sizeable instead of shipping 0.00-unit "recommendations".
+    grade = _grade(confidence, net_edge(hit, best.odds)) if credible else "Pass"
     stake = _kelly_stake(hit, best.odds) if grade != "Pass" else 0.0
 
     reasons = list(proj.reasons)

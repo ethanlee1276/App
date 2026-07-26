@@ -475,6 +475,81 @@ def test_account_health_scores_books_from_own_patterns():
     assert h["books"][0]["book"] == "SharpBook"
 
 
+def test_longshot_home_runs_settle_from_ingested_logs():
+    """The HR board's whole point is measurement, which needs it to grade.
+    A journaled home_runs longshot must settle off the same player_game_logs
+    the nightly MLB ingest writes — win when he went deep, loss when he
+    didn't — without touching the main record's bankroll."""
+    from engine import db
+    conn = ledger.connect(":memory:")
+    hist = db.connect(":memory:")
+    result = {
+        "sport": "mlb", "date": "2026-07-26",
+        "long_shots": [{"player": "Aaron Judge", "market": "home_runs",
+                        "odds": 320, "book": "FanDuel", "model_prob": 0.28}],
+        "longshot_watch": [{"player": "Mike Trout", "market": "home_runs",
+                            "odds": 450, "book": "DraftKings",
+                            "model_prob": 0.19}],
+    }
+    assert ledger.log_longshots(conn, result) == 2
+    start_roll = ledger.bankroll(conn)
+
+    # What the nightly ingest writes after the games finish.
+    db.upsert_player_logs(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-26",
+         "player": "Aaron Judge", "team": "NYY", "opponent": "BOS",
+         "market": "home_runs", "value": 1.0},
+        {"sport": "mlb", "season": 2026, "period": "2026-07-26",
+         "player": "Mike Trout", "team": "LAA", "opponent": "SEA",
+         "market": "home_runs", "value": 0.0},
+    ])
+    assert ledger.settle_from_history(conn, hist) == 2
+
+    rows = {r["player"]: r for r in ledger.recent_settled(conn, category="longshot")}
+    assert rows["Aaron Judge"]["status"] == "won"
+    assert rows["Mike Trout"]["status"] == "lost"
+    # Flat 0.1u at +320 → +0.32u; measurement only, zero dollars at risk.
+    assert abs(rows["Aaron Judge"]["pnl_units"] - 0.32) < 1e-6
+    assert ledger.bankroll(conn) == start_roll
+    lr = ledger.longshot_report(conn)
+    assert lr["settled"] == 2 and lr["open"] == 0 and lr["wins"] == 1
+    assert lr["actual_hit_rate"] == 0.5
+    # And none of it leaks into the headline record.
+    assert ledger.performance(conn)["settled"] == 0
+
+
+def test_resize_unstaked_gives_zero_stake_picks_real_pnl():
+    """The old grading bug left settled picks staked at 0.00u — wins that
+    earned nothing on the record. Resizing them at a flat stake makes the
+    profit they produced visible, without pretending dollars were risked."""
+    conn = _conn()
+    _insert_settled(conn, "ZeroWin", status="won", odds=150, stake_dollars=0)
+    _insert_settled(conn, "ZeroLoss", status="lost", odds=-110, stake_dollars=0)
+    conn.execute("UPDATE bets SET stake_units=0, pnl_units=0")
+    conn.commit()
+    # Unstaked rows stay out of the headline record until they're sized.
+    p0 = ledger.performance(conn)
+    assert p0["settled"] == 0 and p0["unstaked"] == 2
+
+    assert ledger.resize_unstaked(conn, stake_units=0.1) == 2
+    p = ledger.performance(conn)
+    assert p["settled"] == 2 and p["wins"] == 1 and p["losses"] == 1
+    assert p["unstaked"] == 0
+    # +150 winner at 0.1u = +0.15u; −110 loser = −0.10u.
+    assert abs(p["net_units"] - 0.05) < 1e-6
+    assert abs(p["units_staked"] - 0.2) < 1e-6
+    # Units only — no dollars were ever at risk, so the bankroll is untouched.
+    assert ledger.bankroll(conn) == float(ledger.get_cfg(conn, "starting_bankroll"))
+
+
+def test_zero_stake_picks_are_never_journaled():
+    conn = _conn()
+    r = _result()
+    r["recommendations"][0]["stake_units"] = 0.0     # Kelly says don't bet
+    assert ledger.log_recommendations(conn, r) == 0
+    assert conn.execute("SELECT COUNT(*) FROM bets").fetchone()[0] == 0
+
+
 def test_export_json_carries_calibration_and_health():
     import json, tempfile
     from pathlib import Path

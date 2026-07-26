@@ -87,6 +87,16 @@ While `launch.py` is running, with no input from you:
 | NBA history (from October, occasionally) | `python3 ingest.py nba --from <start> --to <today>` |
 | New Odds API key | put it in `secrets.local`, then `python3 launch.py --reset-budget` |
 | Health check | `python3 launch.py --check` |
+| Grade tonight's picks now (don't wait for morning) | `python3 launch.py --settle` |
+| Fold old 0.00-unit picks back into the record (once) | `python3 launch.py --resize-unstaked` |
+
+**About `--settle`:** the journal normally grades itself on the launcher's
+first cycle of the *next* day, so tonight's picks show as "open" until
+tomorrow morning. That's not a bug — but if you'd rather see them graded
+tonight after the games end, run `python3 launch.py --settle` (add a date
+like `--settle 2026-07-25` for an older day). It ingests that day's
+results, grades every open pick against them, and prints the open →
+settled counts for both buckets so you can see exactly what moved.
 
 ## UFC dossiers (a two-minute review before each card)
 

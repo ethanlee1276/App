@@ -143,26 +143,56 @@ def pick_side(lines, p_over_at):
     return "UNDER", under, under_win, under.fair_prob, under_edge
 
 
-def _grade(confidence: float, edge: float) -> str:
-    # Thresholds sized for tempered edges (a few percent is a genuine play).
-    if confidence >= 8.0 and edge >= 0.04:
+def net_edge(hit: float, odds: int) -> float:
+    """Model probability minus the break-even implied by the REAL price.
+
+    This is the number that decides whether a bet makes money. Beating
+    the de-vigged "fair" probability is not the same thing: at standard
+    −110/−110 prop juice, break-even sits ~2.4 points ABOVE fair, so a
+    +1.2-point edge over fair is a 1.2-point LOSS against the price."""
+    from .odds import american_to_prob
+    return hit - american_to_prob(odds)
+
+
+def _grade(confidence: float, net: float) -> str:
+    """Grade on net edge — what's left after the vig, not before it.
+
+    The old thresholds compared edge-vs-fair (1.2 / 2.5 / 4.0 points) and
+    so graded bets the juice had already eaten: every "Lean" was −1.2
+    points at the price, and a threshold "Play" was +0.1 — which is why
+    Kelly sized them at 0.00 units. Grading on what actually clears the
+    price means every graded bet is one Kelly will size for real."""
+    if confidence >= 8.0 and net >= 0.020:
         return "Strong Play"
-    if confidence >= 6.5 and edge >= 0.025:
+    if confidence >= 6.5 and net >= 0.010:
         return "Play"
-    if confidence >= 4.5 and edge >= 0.012:
+    if confidence >= 4.5 and net >= 0.003:
         return "Lean"
     return "Pass"
 
 
+# The smallest stake worth showing. Below this, Kelly is telling us the
+# edge is indistinguishable from noise — and a "bet 0.00 units"
+# recommendation is not a recommendation, it's a rounding artifact.
+MIN_STAKE_UNITS = 0.1
+
+
 def _kelly_stake(model_prob: float, odds: int, fraction: float = 0.25) -> float:
-    """Fractional Kelly stake in units, capped for safety."""
+    """Quarter-Kelly stake in units (0 = no bet), capped at 1u.
+
+    Zero has one meaning here: Kelly says this price is not beatable at
+    our estimated probability. Anything positive is floored at
+    ``MIN_STAKE_UNITS`` so a real edge never renders as 0.00u."""
     from .odds import american_to_decimal
     b = american_to_decimal(odds) - 1.0
     if b <= 0:
         return 0.0
     q = 1.0 - model_prob
     kelly = (b * model_prob - q) / b
-    return round(clamp(kelly * fraction, 0.0, 0.05) * 100, 2) / 100 * 20  # -> ~0..1 unit
+    if kelly <= 0:
+        return 0.0                      # below break-even AT THIS PRICE
+    stake = clamp(kelly * fraction, 0.0, 0.05) * 20      # 5% Kelly → 1.0u cap
+    return round(max(stake, MIN_STAKE_UNITS), 2)
 
 
 def evaluate_prop(prop: Prop, proj: Projection,
@@ -186,7 +216,8 @@ def evaluate_prop(prop: Prop, proj: Projection,
     ev = expected_value(hit, best.odds)
     trend_align = _trend_alignment(side, proj.form.trend)
     confidence = _confidence_score(edge, hit, proj, trend_align)
-    grade = _grade(confidence, edge) if credible else "Pass"
+    net = net_edge(hit, best.odds)
+    grade = _grade(confidence, net) if credible else "Pass"
     stake = _kelly_stake(hit, best.odds) if grade != "Pass" else 0.0
 
     reasons = list(proj.reasons)

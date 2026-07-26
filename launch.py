@@ -391,6 +391,56 @@ def preflight() -> None:
     print("\n  When everything above is ✅ (or intentionally skipped), run:  python3 launch.py")
 
 
+def settle_now(day: str | None = None) -> None:
+    """Ingest a day's results and grade the journal against them, now.
+
+    The daily chores only run on the first refresh cycle of a new day, so
+    a night's picks normally grade tomorrow morning. This does it on
+    demand — run it after the games end to see tonight's board settle,
+    and it prints the open/settled counts per bucket either side of the
+    run so nothing has to be taken on faith."""
+    import datetime as _dt
+    day = day or _dt.date.today().isoformat()
+    try:
+        _dt.date.fromisoformat(day)
+    except ValueError:
+        print(f"--settle takes a date like 2026-07-26 (got {day!r}).")
+        return
+    from engine import db, ingest, ledger
+
+    def counts(conn):
+        rows = conn.execute(
+            "SELECT category, status, COUNT(*) FROM bets GROUP BY category, status")
+        return {(r[0], r[1]): r[2] for r in rows}
+
+    lconn = ledger.connect()
+    before = counts(lconn)
+    print(f"Settling {day} …")
+    hconn = db.connect()
+    try:
+        res = ingest.ingest_mlb_results(hconn, day, day, with_logs=True)
+        print(f"  results: {res['games']} game(s), "
+              f"{res['player_logs']:,} player log rows")
+        for s in res.get("skipped", []):
+            print(f"  ⚠️  {s}")
+        if not res["games"]:
+            print("  (no finished games ingested for that date yet — if "
+                  "tonight's games are still in progress, run this again "
+                  "after they end)")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  results ingest failed: {exc}")
+    n = ledger.settle_from_history(lconn, hconn)
+    ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+    after = counts(lconn)
+    print(f"  journal: settled {n} pick(s)")
+    for cat in ("main", "longshot"):
+        b_open, a_open = before.get((cat, "open"), 0), after.get((cat, "open"), 0)
+        graded = sum(v for (c, s), v in after.items()
+                     if c == cat and s in ("won", "lost", "push"))
+        print(f"  {cat:>8}: open {b_open} → {a_open}   ({graded} graded total)")
+    print("Record page updated.")
+
+
 def main() -> None:
     argv = sys.argv[1:]
     if "--reset-budget" in argv:
@@ -401,6 +451,26 @@ def main() -> None:
         return
     if "--check" in argv:
         preflight()
+        return
+    if "--resize-unstaked" in argv:
+        from engine import ledger
+        conn = ledger.connect()
+        before = ledger.performance(conn)
+        n = ledger.resize_unstaked(conn)
+        ledger.export_json(conn, ROOT / "web" / "data" / "record.json")
+        after = ledger.performance(conn)
+        print(f"Sized {n} previously-unstaked pick(s) at 0.1u (units only, "
+              f"no dollars).")
+        print(f"  record  {before['wins']}-{before['losses']}-{before['pushes']} "
+              f"→ {after['wins']}-{after['losses']}-{after['pushes']}")
+        print(f"  net     {before['net_units']:+.2f}u → {after['net_units']:+.2f}u"
+              f"   ROI {before['roi']:+.1%} → {after['roi']:+.1%}")
+        print("Record page updated.")
+        return
+    if "--settle" in argv:
+        i = argv.index("--settle")
+        day = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else None
+        settle_now(day)
         return
     interval = 60      # scores are free; odds are budgeted separately
     if "--refresh" in argv:
