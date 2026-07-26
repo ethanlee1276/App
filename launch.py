@@ -487,8 +487,15 @@ def preflight() -> None:
             recs = data.get("recommendations")
             if isinstance(recs, list):
                 scan = data.get("market_scan") or {}
-                extra = (f" · {len(recs)} props, "
-                         f"{len(scan.get('stale') or [])} stale-line flag(s)")
+                st = scan.get("stale") or []
+                total = (st[0].get("total_found") if st else 0) or len(st)
+                extra = f" · {len(recs)} props"
+                if st:
+                    extra += (f", {len(st)} stale-line flag(s)"
+                              + (f" shown of {total} found" if total > len(st)
+                                 else ""))
+                    if len(st) == total and total > 50:
+                        extra += "  ← rebuild: pre-dedupe board"
             print(f"{ok} {name}: valid{extra}")
 
     _browser_sweep(ok, warn, bad)
