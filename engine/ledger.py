@@ -167,6 +167,18 @@ def _settle_one(conn, b, actual: float, closing_line: float | None) -> None:
     set_cfg(conn, "bankroll", round(bankroll(conn) + pnl_d, 2))
 
 
+def _snapshot_closes() -> dict:
+    """``{(normalized player, market, date): closing line}`` from the free
+    line-move snapshots. The fallback CLV source: harvested odds_history
+    closes cost credits and only exist for backtested dates, while these
+    snapshots accrue on every paid live pull anyway."""
+    try:
+        from .linemoves import load_history, closing_lines_by_date
+        return closing_lines_by_date(load_history())
+    except Exception:            # never let CLV bookkeeping block settling
+        return {}
+
+
 def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     """Auto-settle open bets straight from the history database.
 
@@ -234,8 +246,15 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         if ck not in closes_cache:
             closes_cache[ck] = hist_db.closing_odds_by_date(hist_conn, *ck)
         close = closes_cache[ck].get((normalize_name(b["player"]), b["date"]))
-        _settle_one(conn, b, float(row["value"]),
-                    float(close["line"]) if close else None)
+        close_line = float(close["line"]) if close else None
+        if close_line is None:
+            # No harvested close for this date — fall back to our own
+            # recorded snapshots, so CLV accrues without spending credits.
+            if "_snapshots" not in closes_cache:
+                closes_cache["_snapshots"] = _snapshot_closes()
+            close_line = closes_cache["_snapshots"].get(
+                (normalize_name(b["player"]), b["market"], b["date"]))
+        _settle_one(conn, b, float(row["value"]), close_line)
         settled += 1
     conn.commit()
     return settled
@@ -347,6 +366,26 @@ def summary(conn, sport: str | None = None) -> str:
     return "\n".join(lines)
 
 
+def pnl_curve(conn, sport: str | None = None) -> list[dict]:
+    """Cumulative settled P&L by slate date — the Record page's equity curve.
+
+    One point per date with anything settled: that day's net units, the
+    running total, and how many bets graded."""
+    q = ("SELECT date, SUM(pnl_units) AS day_u, COUNT(*) AS n FROM bets "
+         "WHERE status IN ('won','lost','push')")
+    args: list = []
+    if sport:
+        q += " AND sport=?"
+        args.append(sport)
+    q += " GROUP BY date ORDER BY date"
+    out, cum = [], 0.0
+    for r in conn.execute(q, args):
+        cum += r["day_u"] or 0.0
+        out.append({"date": r["date"], "day_u": round(r["day_u"] or 0.0, 2),
+                    "cum_u": round(cum, 2), "n": r["n"]})
+    return out
+
+
 def recent_settled(conn, limit: int = 30) -> list[dict]:
     """The last settled picks, newest first — the site's receipts."""
     rows = conn.execute(
@@ -370,6 +409,7 @@ def export_json(conn, path) -> None:
         "overall": performance(conn),
         "mlb": performance(conn, "mlb"),
         "nfl": performance(conn, "nfl"),
+        "curve": pnl_curve(conn),
         "recent": recent_settled(conn),
     }
     p = _Path(path)

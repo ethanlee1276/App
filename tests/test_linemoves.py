@@ -175,6 +175,21 @@ def test_todays_rows_drops_yesterdays_board():
     assert analyze(kept, now=noon) == []                   # today never moved
 
 
+def test_closing_lines_by_date_takes_each_days_last_snapshot():
+    """The journal's free CLV source: each day gets ITS OWN close (the last
+    snapshot that day), keyed by normalized player name."""
+    import datetime as dt
+    from engine.linemoves import closing_lines_by_date
+    d1 = dt.datetime(2026, 7, 24, 12, 0).timestamp()
+    d2 = dt.datetime(2026, 7, 25, 12, 0).timestamp()
+    rows = [_snap(d1, "DraftKings", 70.5, player="RB Oné"),
+            _snap(d1 + 7 * 3600, "DraftKings", 72.0, player="RB Oné"),   # day-1 close
+            _snap(d2, "DraftKings", 68.5, player="RB Oné")]              # day 2 restarts
+    closes = closing_lines_by_date(rows)
+    assert closes[("rb one", "rush_yds", "2026-07-24")] == 72.0
+    assert closes[("rb one", "rush_yds", "2026-07-25")] == 68.5
+
+
 def test_annotate_price_move_reads_as_odds():
     from engine.linemoves import annotate_recommendations
     rows = [_psnap(NOW - 3000, "DraftKings", +150),

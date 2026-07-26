@@ -64,6 +64,34 @@ def load_history(path: str | Path | None = None) -> list[dict]:
     return rows
 
 
+def closing_lines_by_date(rows: list[dict]) -> dict:
+    """``{(normalized player, market, YYYY-MM-DD): closing line}`` — the last
+    snapshot of each local day, medianed across the books quoted at that
+    final instant.
+
+    This is the free CLV source for the journal: each day's last recorded
+    snapshot is the nearest thing to that night's close, and it accrues on
+    every paid pull with no extra spend. (On fixed-line markets like 0.5 HR
+    the line never moves, so CLV there reads 0 — honest, if unexciting.)"""
+    import datetime as _dt
+    from .sources.oddsapi import normalize_name
+
+    grouped: dict[tuple, list[tuple[float, float]]] = {}
+    for r in rows:
+        try:
+            ts = float(r["ts"])
+            date = _dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+            key = (normalize_name(r["player"]), r["market"], date)
+            grouped.setdefault(key, []).append((ts, float(r["line"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    out: dict = {}
+    for key, pts in grouped.items():
+        last = max(p[0] for p in pts)
+        out[key] = _median([ln for t, ln in pts if t == last])
+    return out
+
+
 def todays_rows(rows: list[dict], now: float | None = None) -> list[dict]:
     """Only snapshots taken since local midnight.
 

@@ -910,6 +910,43 @@ function recBucketTable(title, bucket) {
     <div class="card" style="padding:0">${rows}</div></div>`;
 }
 
+function recCurveChart(curve) {
+  if (!curve || curve.length < 2) return "";
+  const w = 640, h = 190, padL = 46, padR = 14, padT = 16, padB = 28;
+  const cums = curve.map((p) => p.cum_u);
+  let lo = Math.min(0, ...cums), hi = Math.max(0, ...cums);
+  if (hi - lo < 0.5) { hi += 0.25; lo -= 0.25; }
+  const x = (i) => padL + (i / (curve.length - 1)) * (w - padL - padR);
+  const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * (h - padT - padB);
+  const path = curve.map((p, i) => `${x(i).toFixed(1)},${y(p.cum_u).toFixed(1)}`).join(" L");
+  const last = curve[curve.length - 1];
+  const color = last.cum_u >= 0 ? "var(--good,#3ddc84)" : "var(--bad,#ff6b7a)";
+  const dots = curve.map((p, i) => {
+    const tip = `${p.date} · day ${p.day_u >= 0 ? "+" : ""}${p.day_u.toFixed(2)}u (${p.n} bet${p.n === 1 ? "" : "s"}) · running ${p.cum_u >= 0 ? "+" : ""}${p.cum_u.toFixed(2)}u`;
+    return `<circle cx="${x(i).toFixed(1)}" cy="${y(p.cum_u).toFixed(1)}" r="${i === curve.length - 1 ? 3.4 : 2.4}" fill="${color}"/>
+      <circle cx="${x(i).toFixed(1)}" cy="${y(p.cum_u).toFixed(1)}" r="10" fill="transparent"
+        style="pointer-events:all;cursor:pointer" data-tip="${escapeHtml(tip)}"/>`;
+  }).join("");
+  const yLabel = (v) => `<text x="${padL - 6}" y="${y(v) + 3.5}" text-anchor="end" font-size="10"
+      fill="currentColor" opacity="0.5">${v >= 0 ? "+" : ""}${v.toFixed(1)}u</text>`;
+  return `
+    <div class="section-title" style="margin-top:18px">Running P&amp;L — every settled pick, by slate date</div>
+    <div class="card" style="padding:12px 8px 6px">
+      <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block" role="img"
+           aria-label="Cumulative units won or lost over time">
+        <line x1="${padL}" y1="${y(0)}" x2="${w - padR}" y2="${y(0)}"
+              stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" opacity="0.25"/>
+        ${yLabel(hi)}${yLabel(0)}${lo < 0 ? yLabel(lo) : ""}
+        <text x="${padL}" y="${h - 8}" font-size="10" fill="currentColor" opacity="0.5">${escapeHtml(curve[0].date)}</text>
+        <text x="${w - padR}" y="${h - 8}" text-anchor="end" font-size="10" fill="currentColor" opacity="0.5">${escapeHtml(last.date)}</text>
+        <path d="M${path}" fill="none" stroke="${color}" stroke-width="2"
+              stroke-linejoin="round" stroke-linecap="round"/>
+        ${dots}
+      </svg>
+      <div style="opacity:.55;font-size:.8em;padding:2px 8px 6px">Hover a dot for that day's bets. Flat units — every pick weighted by its stake, no bankroll compounding.</div>
+    </div>`;
+}
+
 async function renderRecord() {
   const host = document.getElementById("record-body");
   if (!host) return;
@@ -928,7 +965,6 @@ async function renderRecord() {
     return;
   }
   const o = d.overall;
-  const roll = o.bankroll - o.starting_bankroll;
   const small = o.settled < 100
     ? `<p class="loading" style="margin-top:10px">⚠️ ${o.settled} settled pick(s) —
        results this small are mostly luck. Judge the model after 100+, and judge
@@ -936,15 +972,19 @@ async function renderRecord() {
   host.innerHTML = `
     <div class="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
       ${recTile("Record", `${o.wins}-${o.losses}-${o.pushes}`, `${o.open} open`)}
-      ${recTile("Win rate", (o.win_rate * 100).toFixed(1) + "%", "")}
+      ${recTile("Win rate", (o.win_rate * 100).toFixed(1) + "%", "break-even ≈ 52.4% at −110")}
       ${recTile("ROI", (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
-                `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u net`)}
-      ${recTile("Bankroll", "$" + o.bankroll.toFixed(2),
-                `${roll >= 0 ? "+" : ""}$${roll.toFixed(2)} vs start`)}
+                `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`)}
       ${recTile("Avg CLV", o.avg_clv == null ? "—" : (o.avg_clv >= 0 ? "+" : "") + o.avg_clv.toFixed(2) + " pts",
-                "beat the close = sharp process")}
+                o.avg_clv == null ? "accrues as daily closes are captured" : "beat the close = sharp process")}
     </div>
+    <p style="opacity:.6;font-size:.85em;margin-top:10px">Journals every
+      <strong>Recommended</strong> pick — player props and sharp-anchor game bets
+      (moneylines &amp; totals) — at the real book price shown when it was
+      recommended. Long Shots and Edge Board entries are watchlists, not tracked
+      bets. One entry per player &amp; market per day.</p>
     ${small}
+    ${recCurveChart(d.curve)}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
       ${recBucketTable("By market", o.by_market)}
       ${recBucketTable("By side", o.by_side)}

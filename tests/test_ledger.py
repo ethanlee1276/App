@@ -223,6 +223,72 @@ def test_export_json_writes_the_site_record():
         assert "generated_at" in d
 
 
+def test_pnl_curve_runs_cumulative_by_date():
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    # Day 1: a +100 winner. Day 2: a loser.
+    ledger.log_recommendations(conn, _result(date="2026-07-24"))
+    ledger.settle(conn, {("A", "rush_yds"): 85.0})
+    r2 = _result(date="2026-07-25")
+    r2["recommendations"][0]["player"] = "C"
+    ledger.log_recommendations(conn, r2)
+    ledger.settle(conn, {("C", "rush_yds"): 40.0})
+
+    curve = ledger.pnl_curve(conn)
+    assert [p["date"] for p in curve] == ["2026-07-24", "2026-07-25"]
+    assert curve[0] == {"date": "2026-07-24", "day_u": 1.0, "cum_u": 1.0, "n": 1}
+    # Running total nets the loss against day 1's win.
+    assert curve[1]["day_u"] == -1.0 and curve[1]["cum_u"] == 0.0
+
+    # The curve rides along in the site export.
+    import json, tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "record.json"
+        ledger.export_json(conn, p)
+        assert json.loads(p.read_text())["curve"][-1]["cum_u"] == 0.0
+
+
+def test_settle_falls_back_to_snapshot_closes_for_clv():
+    """No harvested odds_history close for a live date — the journal must
+    fall back to our own recorded line snapshots so CLV still accrues."""
+    import datetime as dt
+    import tempfile
+    from pathlib import Path
+    import engine.linemoves as lm
+    from engine import db as hist_db
+    from engine.models import Prop, GameLog, SportsbookLine, RUSH_YDS
+
+    old_path = lm.HISTORY_PATH
+    lm.HISTORY_PATH = Path(tempfile.mkdtemp()) / "hist.jsonl"
+    try:
+        conn = _conn()
+        ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+        ledger.log_recommendations(conn, _result(sport="nfl", date="2026-07-25"))
+
+        # Snapshot the board twice ON the bet date: open 70.5, close 73.5.
+        def prop_at(line):
+            return Prop("A", "GB", "CHI", "RB", RUSH_YDS, [GameLog(1, "X", 80)],
+                        80, None, [SportsbookLine("DraftKings", line, -110, -110)])
+        day = dt.datetime(2026, 7, 25, 12, 0).timestamp()
+        lm.record_snapshots([prop_at(70.5)], ts=day)
+        lm.record_snapshots([prop_at(73.5)], ts=day + 8 * 3600)
+
+        hist = hist_db.connect(":memory:")
+        hist_db.upsert_player_logs(hist, [
+            {"sport": "nfl", "season": 2026, "period": "2026-07-25",
+             "game_id": "A-2026-07-25", "player": "A", "team": "GB",
+             "opponent": "CHI", "position": "RB", "home": 1,
+             "market": "rush_yds", "value": 85.0}])
+        assert ledger.settle_from_history(conn, hist, sport="nfl") == 1
+        b = conn.execute("SELECT * FROM bets WHERE player='A'").fetchone()
+        # Closing line came from the snapshots; the Over beat the close by 3.
+        assert b["closing_line"] == 73.5
+        assert abs(ledger.performance(conn)["avg_clv"] - 3.0) < 1e-9
+    finally:
+        lm.HISTORY_PATH = old_path
+
+
 def test_summary_renders():
     conn = _conn()
     ledger.log_recommendations(conn, _result())
