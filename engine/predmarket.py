@@ -71,6 +71,23 @@ def fetch_trades(limit: int = 500, ttl: int = 60) -> list[dict]:
     return json.loads(fetch_text(url, "pm_trades.json", ttl=ttl))
 
 
+LEADERBOARD = "https://lb-api.polymarket.com"
+
+
+def fetch_leaderboard(window: str = "30d", limit: int = 10,
+                      ttl: int = 1800) -> list[dict]:
+    """Polymarket's own P&L leaderboard (the one behind polymarket.com's
+    leaderboard page). Public, keyless. Ranked by realized profit — skill
+    by outcome, not by notional size."""
+    url = f"{LEADERBOARD}/leaderboard?window={window}&rankType=pnl&limit={limit}"
+    return json.loads(fetch_text(url, f"pm_leaderboard_{window}.json", ttl=ttl))
+
+
+def fetch_wallet_trades(wallet: str, limit: int = 20, ttl: int = 900) -> list[dict]:
+    url = f"{DATA_API}/trades?user={wallet}&limit={limit}"
+    return json.loads(fetch_text(url, f"pm_wtrades_{wallet[:16]}.json", ttl=ttl))
+
+
 # --- pure parsers -----------------------------------------------------------
 def _jlist(v):
     """Gamma encodes list fields as JSON strings ('["Yes","No"]')."""
@@ -146,6 +163,44 @@ def parse_trades(raw: list[dict]) -> list[dict]:
     return out
 
 
+def parse_leaderboard(raw: list[dict]) -> list[dict]:
+    """Normalize leaderboard rows; field names vary, so probe defensively."""
+    out = []
+    for r in raw or []:
+        wallet = r.get("proxyWallet") or r.get("wallet") or r.get("address") or ""
+        if not wallet:
+            continue
+        try:
+            pnl = float(r.get("amount") or r.get("pnl") or 0)
+        except (TypeError, ValueError):
+            pnl = 0.0
+        out.append({"wallet": wallet,
+                    "name": r.get("name") or r.get("userName")
+                            or r.get("pseudonym") or "",
+                    "pnl": round(pnl, 2)})
+    return out
+
+
+def build_top_traders(leaders: list[dict],
+                      trades_by_wallet: dict[str, list[dict]],
+                      per_trader: int = 5) -> list[dict]:
+    """The top-P&L wallets with their most recent trades attached — "what
+    are the best traders doing right now", straight from public data."""
+    out = []
+    for rank, ld in enumerate(leaders, start=1):
+        recent = sorted(trades_by_wallet.get(ld["wallet"], []),
+                        key=lambda t: -t["ts"])[:per_trader]
+        out.append({
+            "rank": rank, "wallet": ld["wallet"], "name": ld["name"],
+            "pnl": ld["pnl"],
+            "recent": [{"market": t["title"], "slug": t["slug"],
+                        "outcome": t["outcome"], "side": t["side"],
+                        "usd": t["usd"], "price": t["price"], "ts": t["ts"]}
+                       for t in recent],
+        })
+    return out
+
+
 # --- storage (record from day one) ------------------------------------------
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS pm_trades (
@@ -196,6 +251,21 @@ def store_snapshot(conn, markets: list[dict], now: float | None = None) -> int:
         n += cur.rowcount
     conn.commit()
     return n
+
+
+def recent_tape(conn, hours: int = 24, now: float | None = None) -> list[dict]:
+    """The last N hours of OUR recorded tape — what the flow feed scores.
+
+    Scoring only the latest API pull (~500 trades) left the feed empty most
+    cycles: $10K+ trades are a few per hour, and each pull is a thin slice.
+    The recorded tape accumulates them across pulls, which is the point of
+    recording in the first place."""
+    ensure_tables(conn)
+    cutoff = int((now if now is not None else time.time()) - hours * 3600)
+    rows = conn.execute(
+        "SELECT venue, tx, ts, wallet, slug, title, outcome, side, price, "
+        "size, usd FROM pm_trades WHERE ts >= ? ORDER BY ts DESC", (cutoff,))
+    return [dict(r) for r in rows]
 
 
 def wallet_history(conn) -> dict[str, dict]:

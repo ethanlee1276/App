@@ -1358,6 +1358,31 @@ function shortWallet(w) {
   return w && w.length > 12 ? `${w.slice(0, 6)}…${w.slice(-4)}` : (w || "");
 }
 
+function pmAgo(ts) {
+  const s = Date.now() / 1000 - ts;
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
+
+/* Intel is a top-level mode next to NFL/MLB, not a tab inside a sport —
+   entering it hides the sport nav; leaving restores it. */
+function enterIntelMode() {
+  document.querySelectorAll(".sport-btn").forEach((x) =>
+    x.classList.toggle("active", x.dataset.sport === "intel"));
+  const nav = document.getElementById("nav");
+  if (nav) nav.style.display = "none";
+  switchView("intel");
+}
+
+function exitIntelMode() {
+  const nav = document.getElementById("nav");
+  if (nav) nav.style.display = "";
+  document.querySelectorAll(".sport-btn").forEach((x) =>
+    x.classList.toggle("active", x.dataset.sport === state.sport));
+  if (state.view === "intel") switchView("recommended");
+}
+
 async function renderIntel() {
   const host = document.getElementById("intel-body");
   if (!host) return;
@@ -1423,6 +1448,28 @@ async function renderIntel() {
     <div class="card" style="padding:0">${flowRows ||
       `<p class="loading" style="padding:12px">No flagged flow in the latest tape pull —
        the feed re-scores on every refresh.</p>`}</div>
+    <div class="section-title" style="margin-top:20px">Top 10 traders
+      <span class="sub">— ${escapeHtml(d.traders_note || "by realized profit")} · their latest trades, straight from the public tape</span></div>
+    <div class="card" style="padding:0">
+      ${(d.top_traders || []).map((t) => {
+        const recent = (t.recent || []).slice(0, 3).map((r) => `
+          <span style="display:block;opacity:.75;font-size:.85em;padding-left:2px">
+            ${escapeHtml(r.side)} ${escapeHtml(r.outcome)} · $${Number(r.usd).toLocaleString()}
+            @ ${(r.price * 100).toFixed(0)}¢ · ${escapeHtml(r.market)} · ${pmAgo(r.ts)}</span>`).join("");
+        return `<div style="display:flex;gap:12px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
+          <span style="opacity:.5;min-width:22px;font-weight:700">${t.rank}</span>
+          <span style="flex:1;min-width:0">
+            <strong><a href="https://polymarket.com/profile/${escapeHtml(t.wallet)}" target="_blank"
+              rel="noopener" style="color:inherit">${escapeHtml(t.name || shortWallet(t.wallet))}</a></strong>
+            ${t.name ? `<span style="opacity:.5;font-size:.85em"> · ${shortWallet(t.wallet)}</span>` : ""}
+            ${recent || `<span style="display:block;opacity:.5;font-size:.85em">no recent public trades pulled</span>`}
+          </span>
+          <span style="min-width:110px;text-align:right;font-weight:700;
+            color:${t.pnl >= 0 ? "var(--good,#3ddc84)" : "var(--bad,#ff6b7a)"}">
+            ${t.pnl ? `${t.pnl >= 0 ? "+" : "−"}$${Math.abs(t.pnl).toLocaleString()}` : "—"}</span>
+        </div>`;
+      }).join("") || `<p class="loading" style="padding:12px">No trader data yet — fills on the next refresh.</p>`}
+    </div>
     <div class="section-title" style="margin-top:20px">Top markets by 24h volume
       <span class="sub">— YES price · dollar volume · resolution date</span></div>
     <div class="card" style="padding:0">${marketRows}</div>
@@ -1452,6 +1499,7 @@ function switchView(name) {
 
 function initialView() {
   const h = (location.hash || "").replace("#", "");
+  if (h === "intel") { enterIntelMode(); return; }
   if (VIEW_ORDER.includes(h)) switchView(h);
 }
 
@@ -1470,6 +1518,8 @@ function bind() {
 
   document.querySelectorAll(".sport-btn").forEach((b) =>
     b.addEventListener("click", () => {
+      if (b.dataset.sport === "intel") { enterIntelMode(); return; }
+      exitIntelMode();
       if (state.sport === b.dataset.sport) return;
       state.sport = b.dataset.sport;
       state.search = "";

@@ -120,6 +120,44 @@ def test_actionability_live_chasing_historical():
     assert old["status"] == "Historical"
 
 
+def test_recent_tape_scores_across_pulls():
+    """The flow feed scores the last 24h of RECORDED tape, not one pull's
+    thin slice — big trades are rare per pull but accumulate on tape."""
+    from engine import db
+    conn = db.connect(":memory:")
+    pm.store_trades(conn, pm.parse_trades([
+        _tape("0xa", "fed-cut-march", 0.62, 40_000, NOW - 5 * 3600),   # older pull
+        _tape("0xb", "fed-cut-march", 0.62, 30_000, NOW - 600),        # this pull
+        _tape("0xc", "fed-cut-march", 0.62, 50_000, NOW - 40 * 3600),  # too old
+    ]))
+    tape = pm.recent_tape(conn, hours=24, now=NOW)
+    assert [t["wallet"] for t in tape] == ["0xb", "0xa"]
+    feed = pm.build_flow_feed(tape, pm.parse_markets(GAMMA),
+                              pm.wallet_history(conn), now=NOW)
+    assert len(feed) == 2
+
+
+def test_leaderboard_parse_and_top_traders():
+    leaders = pm.parse_leaderboard([
+        {"proxyWallet": "0xking", "name": "TheKing", "amount": "1250000.5"},
+        {"wallet": "0xquiet", "pnl": 400000},
+        {"name": "no wallet — dropped"},
+    ])
+    assert leaders[0] == {"wallet": "0xking", "name": "TheKing", "pnl": 1250000.5}
+    assert leaders[1]["wallet"] == "0xquiet" and leaders[1]["name"] == ""
+
+    trades = {"0xking": pm.parse_trades([
+        _tape("0xking", "fed-cut-march", 0.62, 100_000, NOW - 300),
+        _tape("0xking", "thin-market", 0.07, 10_000, NOW - 9000),
+    ])}
+    top = pm.build_top_traders(leaders, trades, per_trader=5)
+    assert top[0]["rank"] == 1 and top[0]["name"] == "TheKing"
+    # Newest trade first, carrying the fields the page shows.
+    assert top[0]["recent"][0]["market"] == "fed-cut-march"
+    assert top[0]["recent"][0]["usd"] == 62_000.0
+    assert top[1]["recent"] == []            # no trades pulled — still listed
+
+
 def test_feed_ranks_by_score_then_size():
     markets = pm.parse_markets(GAMMA)
     hist = {"0xfresh": {"first_ts": NOW - 3600, "n": 1, "usd": 250_000}}

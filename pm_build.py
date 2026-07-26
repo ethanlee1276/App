@@ -40,14 +40,40 @@ def main() -> None:
     history = pm.wallet_history(conn)
     total_trades = conn.execute("SELECT COUNT(*) FROM pm_trades").fetchone()[0]
 
-    feed = pm.build_flow_feed(trades, markets, history)
+    # Score the last 24h of RECORDED tape, not just this pull's thin slice —
+    # $10K+ trades are a few per hour, and the tape accumulates them.
+    feed = pm.build_flow_feed(pm.recent_tape(conn), markets, history)
     conn.close()
+
+    # Top traders by realized P&L (Polymarket's own leaderboard), each with
+    # their latest trades. Falls back to our tape's most-active wallets if
+    # the leaderboard endpoint is unreachable.
+    top_traders, traders_note = [], ""
+    try:
+        leaders = pm.parse_leaderboard(pm.fetch_leaderboard())[:10]
+        by_wallet = {}
+        for ld in leaders:
+            try:
+                by_wallet[ld["wallet"]] = pm.parse_trades(
+                    pm.fetch_wallet_trades(ld["wallet"]))
+            except DataUnavailable:
+                by_wallet[ld["wallet"]] = []
+        top_traders = pm.build_top_traders(leaders, by_wallet)
+        traders_note = "ranked by 30-day realized profit (Polymarket leaderboard)"
+    except (DataUnavailable, ValueError) as exc:
+        ranked = sorted(history.items(), key=lambda kv: -kv[1]["usd"])[:10]
+        top_traders = pm.build_top_traders(
+            [{"wallet": w, "name": "", "pnl": 0.0} for w, _ in ranked], {})
+        traders_note = (f"leaderboard unreachable ({exc}) — showing our "
+                        f"tape's most-active wallets instead")
 
     out = {
         "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
         "venue": "polymarket",
         "markets": markets[:50],
         "flow": feed,
+        "top_traders": top_traders,
+        "traders_note": traders_note,
         "tape": {"stored_total": total_trades, "new_this_pull": new_trades,
                  "wallets_seen": len(history)},
     }
