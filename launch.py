@@ -391,6 +391,89 @@ def preflight() -> None:
     print("\n  When everything above is ✅ (or intentionally skipped), run:  python3 launch.py")
 
 
+def why_empty(sport: str = "mlb", min_conf: float = 6.0,
+              min_edge: float = 0.02, max_juice: int = -350) -> None:
+    """Explain an empty board: which gate is actually filtering everything.
+
+    Reads the board the site is already serving and walks every prop
+    through the four independent gates a recommendation must clear, so
+    "0 recommended" stops being a mystery and becomes a number you can
+    point at."""
+    import json as _json
+    from engine.betting import favourite_surcharge, net_edge
+    rel = ("web/data/mlb_recommendations.json" if sport == "mlb"
+           else "web/data/recommendations.json")
+    p = ROOT / rel
+    if not p.is_file():
+        print(f"No board built yet at {rel} — start the launcher first.")
+        return
+    recs = _json.loads(p.read_text()).get("recommendations", [])
+    if not recs:
+        print(f"{rel} has no analyzed props at all.")
+        return
+
+    real = [r for r in recs if r.get("has_market") is not False]
+    print(f"{sport.upper()} board: {len(recs)} analyzed, {len(real)} with a real price\n")
+
+    rows = []
+    for r in real:
+        odds = int(r.get("odds") or -110)
+        hit = float(r.get("hit_prob") or 0)
+        rows.append({
+            "label": f"{r.get('player','?')} {r.get('side','')} {r.get('line','')} "
+                     f"{r.get('market','')}",
+            "odds": odds, "net": net_edge(hit, odds),
+            "need": 0.003 + favourite_surcharge(odds),
+            "edge": float(r.get("edge") or 0),
+            "conf": float(r.get("confidence") or 0),
+            "grade": r.get("grade", "Pass"),
+            "stake": float(r.get("stake_units") or 0),
+        })
+
+    gates = [
+        ("beats the price at all (net edge > 0)", lambda x: x["net"] > 0),
+        ("clears the graded bar (net ≥ 0.3pt + chalk surcharge)",
+         lambda x: x["net"] >= x["need"]),
+        (f"confidence ≥ {min_conf}", lambda x: x["conf"] >= min_conf),
+        (f"edge-vs-fair ≥ {min_edge:.0%} (slider)", lambda x: x["edge"] >= min_edge),
+        (f"price ≥ {max_juice} (slider)", lambda x: x["odds"] >= max_juice),
+    ]
+    print("Each gate on its own:")
+    for name, fn in gates:
+        print(f"  {sum(1 for x in rows if fn(x)):>5} / {len(rows)}   {name}")
+    print("\nCumulative (a pick must clear every one):")
+    surviving = rows
+    for name, fn in gates:
+        surviving = [x for x in surviving if fn(x)]
+        print(f"  {len(surviving):>5} left after: {name}")
+
+    if surviving:
+        print(f"\n{len(surviving)} prop(s) SHOULD be recommended — if the board "
+              f"shows none, that's a bug worth reporting.")
+    else:
+        # Name the gate that eliminated the most survivors — the real cause.
+        worst, worst_n = None, -1
+        for name, fn in gates:
+            pool = rows
+            for n2, f2 in gates:
+                if n2 == name:
+                    continue
+                pool = [x for x in pool if f2(x)]
+            killed = len(pool)
+            if killed > worst_n:
+                worst, worst_n = name, killed
+        print(f"\nBinding gate: “{worst}” — {worst_n} prop(s) clear everything "
+              f"else and die there.")
+
+    top = sorted(rows, key=lambda x: x["net"] - x["need"], reverse=True)[:10]
+    print("\nClosest 10 to qualifying (net edge vs what that price demands):")
+    for x in top:
+        short = (x["label"][:46] + "…") if len(x["label"]) > 47 else x["label"]
+        print(f"  {short:<48} {x['odds']:>5}  net {x['net']*100:+6.2f}pt  "
+              f"need {x['need']*100:5.2f}pt  conf {x['conf']:4.1f}  "
+              f"edge {x['edge']*100:5.2f}%  {x['grade']}")
+
+
 def settle_now(day: str | None = None) -> None:
     """Ingest a day's results and grade the journal against them, now.
 
@@ -451,6 +534,11 @@ def main() -> None:
         return
     if "--check" in argv:
         preflight()
+        return
+    if "--why-empty" in argv:
+        i = argv.index("--why-empty")
+        sport = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else "mlb"
+        why_empty(sport)
         return
     if "--resize-unstaked" in argv:
         from engine import ledger
