@@ -72,10 +72,14 @@ def fetch_trades(limit: int = 500, ttl: int = 60) -> list[dict]:
 
 
 LEADERBOARD = "https://lb-api.polymarket.com"
+# Prefer a YEAR of results; a hot week proves nothing about skill. The
+# endpoint is undocumented, so fall through window names until one answers.
+LEADERBOARD_WINDOWS = (("365d", "the past year"), ("all", "all time"),
+                       ("30d", "the past 30 days"))
 
 
-def fetch_leaderboard(window: str = "30d", limit: int = 10,
-                      ttl: int = 1800) -> list[dict]:
+def fetch_leaderboard(window: str = "365d", limit: int = 10,
+                      ttl: int = 3600) -> list[dict]:
     """Polymarket's own P&L leaderboard (the one behind polymarket.com's
     leaderboard page). Public, keyless. Ranked by realized profit — skill
     by outcome, not by notional size."""

@@ -50,7 +50,17 @@ def main() -> None:
     # the leaderboard endpoint is unreachable.
     top_traders, traders_note = [], ""
     try:
-        leaders = pm.parse_leaderboard(pm.fetch_leaderboard())[:10]
+        leaders, window_label = [], ""
+        for window, label in pm.LEADERBOARD_WINDOWS:
+            try:
+                leaders = pm.parse_leaderboard(pm.fetch_leaderboard(window))[:10]
+            except (DataUnavailable, ValueError):
+                continue
+            if leaders:
+                window_label = label
+                break
+        if not leaders:
+            raise DataUnavailable("no leaderboard window answered")
         by_wallet = {}
         for ld in leaders:
             try:
@@ -59,7 +69,8 @@ def main() -> None:
             except DataUnavailable:
                 by_wallet[ld["wallet"]] = []
         top_traders = pm.build_top_traders(leaders, by_wallet)
-        traders_note = "ranked by 30-day realized profit (Polymarket leaderboard)"
+        traders_note = (f"ranked by realized profit over {window_label} "
+                        f"(Polymarket leaderboard)")
     except (DataUnavailable, ValueError) as exc:
         ranked = sorted(history.items(), key=lambda kv: -kv[1]["usd"])[:10]
         top_traders = pm.build_top_traders(
