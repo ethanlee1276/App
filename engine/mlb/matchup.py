@@ -80,6 +80,17 @@ def _hitter_matchup(prop: MLBProp, game: MLBGame) -> MatchupEffect:
             mult *= 0.98
             reasons.append(f"Opposing bullpen ranks {pen}{_ord(pen)} — strong late relief")
 
+    # Measured pen WORKLOAD (quality is priced in; day-to-day tiredness is
+    # slower to be): an overworked opposing pen gives late innings back.
+    fat = (game.bullpen_fatigue or {}).get(prop.opponent)
+    if fat is not None:
+        from .bullpen import fatigue_factor
+        f = fatigue_factor(fat)
+        if f > 1.0:
+            mult *= f
+            reasons.append(f"Opposing bullpen worked {fat:.1f} weighted relief "
+                           f"innings over the last two days — tired arms late")
+
     # Lineup slot → PA volume. Prefer the measured opportunity factor
     # (tonight's expected PA vs the player's OWN average) over the static
     # slot-vs-league bump — never stack the two.

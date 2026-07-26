@@ -1,0 +1,125 @@
+"""Bullpen fatigue — measured relief workload over the last two days.
+
+A bullpen that covered nine innings across yesterday's doubleheader is not
+the same bullpen tonight: the high-leverage arms are unavailable or gassed,
+and the innings 6-9 that decide totals and late hitter production go to the
+mop-up end of the pen. Books price bullpen QUALITY well; day-to-day
+WORKLOAD is a situational input they're slower to fully price.
+
+Everything comes from the free MLB Stats API boxscores we already fetch for
+lineup projection: each team's last two completed games, relief innings =
+everyone after the starter. Yesterday's innings count in full, the day
+before at half weight (arms mostly bounce back after one rest day).
+
+Discipline: the multiplier is a nudge (max +6% to opposing hitters),
+applied only when the measured workload is clearly above normal, with a
+readable reason on the card.
+"""
+
+from __future__ import annotations
+
+from ..statmath import clamp
+
+# A normal pen throws ~3-3.5 relief innings a night; the weighted two-day
+# score therefore centers near 5. Below TIRED_MIN nothing fires.
+YESTERDAY_WEIGHT = 1.0
+DAY_BEFORE_WEIGHT = 0.5
+TIRED_MIN = 6.0
+PER_INNING = 0.012
+FACTOR_MAX = 1.06
+
+
+def ip_to_float(ip) -> float:
+    """Baseball innings notation → real innings ("5.2" = 5 and 2 outs)."""
+    try:
+        s = str(ip)
+        if "." in s:
+            whole, outs = s.split(".", 1)
+            return int(whole or 0) + int(outs or 0) / 3.0
+        return float(s)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def parse_relief_innings(box: dict, side: str) -> float:
+    """Relief innings for one side of a boxscore: every pitcher after the
+    starter (the boxscore's ``pitchers`` list is in appearance order)."""
+    team = (box.get("teams") or {}).get(side, {}) or {}
+    order = team.get("pitchers", []) or []
+    players = team.get("players", {}) or {}
+    total = 0.0
+    for pid in order[1:]:
+        st = ((players.get(f"ID{pid}", {}) or {}).get("stats", {}) or {}) \
+            .get("pitching", {}) or {}
+        total += ip_to_float(st.get("inningsPitched", 0))
+    return round(total, 1)
+
+
+def fatigue_factor(score: float) -> float:
+    """Workload score → multiplier on OPPOSING hitter production. 1.0 until
+    the pen is clearly overworked, then ~1.2% per extra relief inning,
+    capped — a nudge, not a lever."""
+    if score < TIRED_MIN:
+        return 1.0
+    return round(clamp(1.0 + (score - TIRED_MIN) * PER_INNING, 1.0, FACTOR_MAX), 3)
+
+
+def fatigue_score(team_id: int, date: str) -> float | None:
+    """Weighted relief innings for a team over the two days before ``date``.
+
+    ``None`` when nothing could be measured (API unreachable / no recent
+    games) — distinct from a measured 0.0 (fresh pen after an off day)."""
+    import datetime as _dt
+    from ..sources.fetch import DataUnavailable
+    from .sources.statslogs import fetch_boxscore
+    from .sources.mlbstats import STATS_BASE, _get_json
+
+    try:
+        d = _dt.date.fromisoformat(date)
+    except ValueError:
+        return None
+    day1 = (d - _dt.timedelta(days=1)).isoformat()
+    day2 = (d - _dt.timedelta(days=2)).isoformat()
+    try:
+        sched = _get_json(
+            f"{STATS_BASE}/schedule?sportId=1&teamId={team_id}"
+            f"&startDate={day2}&endDate={day1}",
+            f"mlb_pensched_{team_id}_{date}.json", ttl=21600)
+    except DataUnavailable:
+        return None
+
+    score, measured = 0.0, False
+    for day in sched.get("dates", []) or []:
+        weight = YESTERDAY_WEIGHT if day.get("date") == day1 else DAY_BEFORE_WEIGHT
+        for g in day.get("games", []) or []:
+            state = ((g.get("status") or {}).get("abstractGameState") or "")
+            pk = g.get("gamePk")
+            if state != "Final" or not pk:
+                continue
+            home_id = (((g.get("teams") or {}).get("home") or {})
+                       .get("team") or {}).get("id")
+            side = "home" if home_id == team_id else "away"
+            try:
+                box = fetch_boxscore(pk)
+            except DataUnavailable:
+                continue
+            score += weight * parse_relief_innings(box, side)
+            measured = True
+    return round(score, 1) if measured or sched.get("dates") is not None else None
+
+
+def attach_fatigue(slate, team_ids: dict[str, int]) -> int:
+    """Measure and attach each team's pen workload. Returns how many teams
+    got a score. ``team_ids`` maps team abbreviation → MLB Stats team id."""
+    n = 0
+    for game in slate.games:
+        for ab in (game.home, game.away):
+            tid = team_ids.get(ab)
+            if not tid:
+                continue
+            score = fatigue_score(tid, game.date or slate.date)
+            if score is None:
+                continue
+            game.bullpen_fatigue[ab] = score
+            n += 1
+    return n

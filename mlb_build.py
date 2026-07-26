@@ -129,6 +129,21 @@ def main() -> None:
     except Exception as exc:
         print(f"⚠️  Umpire profiles unavailable — neutral zones assumed.\n   {exc}")
 
+    # Bullpen fatigue: measured relief workload per pen over the last two
+    # days (free MLB Stats boxscores) — tired arms give the late innings
+    # back to opposing hitters.
+    try:
+        from engine.mlb.bullpen import attach_fatigue, TIRED_MIN
+        from engine.mlb.sources.mlbstats import TEAM_ID_ABBR
+        n_fat = attach_fatigue(slate, {ab: tid for tid, ab in TEAM_ID_ABBR.items()})
+        if n_fat:
+            tired = sum(1 for g in slate.games
+                        for s in g.bullpen_fatigue.values() if s >= TIRED_MIN)
+            print(f"Bullpen fatigue: workload measured for {n_fat} pens — "
+                  f"{tired} clearly overworked ({TIRED_MIN:g}+ weighted relief IP).")
+    except Exception as exc:
+        print(f"⚠️  Bullpen fatigue unavailable — rested pens assumed.\n   {exc}")
+
     # Statcast (Baseball Savant): xSLG/xwOBA regression + barrel / hard-hit
     # power profiles — turns "season home-run rate only" into process-based
     # contact quality on props and the HR board.

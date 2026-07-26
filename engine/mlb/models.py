@@ -100,6 +100,9 @@ class MLBGame:
     # starting pitcher and bullpen rank (1 best .. 30 worst) per team
     pitchers: dict[str, Pitcher] = field(default_factory=dict)
     bullpen_rank: dict[str, int] = field(default_factory=dict)
+    # Measured relief workload per team (engine.mlb.bullpen): weighted relief
+    # innings over the last two days. High = tired arms tonight.
+    bullpen_fatigue: dict[str, float] = field(default_factory=dict)
     # opposing-team strikeout rate lookup for pitcher props
     team_k_rate: dict[str, float] = field(default_factory=dict)
     # Moneyline: American odds per side (0 = not offered) and a team strength
