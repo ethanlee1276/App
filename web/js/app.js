@@ -81,7 +81,7 @@ const NEG_REASON = new RegExp(
    "strong late relief", "fewer ", "struggles", "knocks balls down",
    "kills carry", "cold", "underdog", "passing risk", "regression risk",
    "soft contact", "\\boverperforming", "reduced exit", "tight zone",
-   "small zone", "moving against"].join("|"), "i");
+   "small zone", "moving against", "give back", "gives back"].join("|"), "i");
 
 function reasonLI(x) {
   return `<li class="${NEG_REASON.test(x) ? "neg" : ""}">${escapeHtml(x)}</li>`;

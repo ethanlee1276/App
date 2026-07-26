@@ -199,6 +199,28 @@ def main() -> None:
     except Exception as exc:
         print(f"⚠️  Opportunity model unavailable — static slot bump applies.\n   {exc}")
 
+    # Streak reversion: measured from our own logs, league-wide — what the
+    # game AFTER a hot/cold 5-game stretch actually looks like. Never a
+    # hunch: if the data shows no reversion, no factor is applied.
+    try:
+        from engine.db import connect as _sconn
+        from engine.mlb.streaks import (measure_reversion, attach_streaks,
+                                        STREAK_MARKETS)
+        conn_s = _sconn()
+        streak_factors = {m: measure_reversion(conn_s, m) for m in STREAK_MARKETS}
+        conn_s.close()
+        measured_mkts = [m for m, v in streak_factors.items() if v]
+        n_st = attach_streaks(slate, streak_factors)
+        if measured_mkts:
+            print(f"Streaks: reversion measured for {len(measured_mkts)} "
+                  f"market(s) from own history; {n_st} prop(s) in a hot/cold "
+                  f"stretch tonight.")
+        else:
+            print("Streaks: not enough ingested history to measure reversion "
+                  "yet — no streak factors applied.")
+    except Exception as exc:
+        print(f"⚠️  Streak analysis unavailable.\n   {exc}")
+
     if not slate.props:
         print(f"No props built for {args.date} — lineups may not be posted yet. "
               f"Pitcher props need probable starters; hitter props need confirmed lineups.")

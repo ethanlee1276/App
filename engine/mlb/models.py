@@ -192,3 +192,7 @@ class MLBProp:
     # unmeasured, in which case the static lineup-spot bump applies instead.
     pa_factor: float = 1.0
     pa_note: str = ""
+    # Measured streak reversion (engine.mlb.streaks): league-wide next-game
+    # factor when the player's current 5-game stretch is hot or cold.
+    streak_factor: float = 1.0
+    streak_note: str = ""

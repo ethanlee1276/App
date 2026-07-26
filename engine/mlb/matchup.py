@@ -105,6 +105,13 @@ def _hitter_matchup(prop: MLBProp, game: MLBGame) -> MatchupEffect:
             reasons.append(f"Batting {prop.lineup_spot}{_ord(prop.lineup_spot)} — "
                            f"extra plate appearances")
 
+    # Measured streak reversion: hot stretches give a little back, cold
+    # stretches bounce — only ever by the league-wide measured amount.
+    if prop.streak_factor != 1.0:
+        mult *= prop.streak_factor
+        if prop.streak_note:
+            reasons.append(prop.streak_note)
+
     return MatchupEffect(clamp(mult, 0.88, 1.15), reasons)
 
 
@@ -125,6 +132,12 @@ def _pitcher_matchup(prop: MLBProp, game: MLBGame) -> MatchupEffect:
     if me and me.k_rate >= 0.27:
         mult *= 1.03
         reasons.append(f"Elite swing-and-miss stuff ({me.k_rate:.0%} K rate)")
+
+    # Measured streak reversion applies to K stretches too.
+    if prop.streak_factor != 1.0:
+        mult *= prop.streak_factor
+        if prop.streak_note:
+            reasons.append(prop.streak_note)
 
     return MatchupEffect(clamp(mult, 0.88, 1.12), reasons)
 
