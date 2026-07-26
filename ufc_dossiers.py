@@ -37,11 +37,18 @@ README = ("Drafted by ufc_dossiers.py from UFCStats.com + your own edits. "
 
 
 def card_fighters() -> tuple[str, list[str]]:
-    """(event_date, fighter names) for the next card, from cached odds."""
+    """(event_date, fighter names) for the next card.
+
+    Cached events first; on a cold cache, a LIVE events pull — that
+    endpoint is free on The Odds API (event lists don't count against
+    the credit quota), so drafting dossiers never waits on the budget."""
     from engine.sources import oddsapi
     from ufc_build import select_card
     key = oddsapi.get_api_key()
-    events = oddsapi.list_events(key, sport="ufc", cache_only=True)
+    try:
+        events = oddsapi.list_events(key, sport="ufc", cache_only=True)
+    except oddsapi.OddsAPIError:
+        events = oddsapi.list_events(key, sport="ufc")
     label, card = select_card(events)
     names: list[str] = []
     for ev in card:
