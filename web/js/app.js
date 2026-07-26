@@ -73,6 +73,20 @@ const american = (o) => (o > 0 ? `+${o}` : `${o}`);
 const activeTeams = () => window.ACTIVE_TEAMS || (typeof TEAMS !== "undefined" ? TEAMS : {});
 const teamName = (a) => (activeTeams()[a] && activeTeams()[a].nick) || a;
 const teamPrimary = (a) => (activeTeams()[a] && activeTeams()[a].primary) || "var(--brand)";
+/* A reason that WORKS AGAINST the bet must not wear a green check. The
+   engine phrases negative factors consistently; match those phrasings and
+   render them with a red ✗ instead. */
+const NEG_REASON = new RegExp(
+  ["suppress", "tough ", "holds (lefties|righties)", "capped",
+   "strong late relief", "fewer ", "struggles", "knocks balls down",
+   "kills carry", "cold", "underdog", "passing risk", "regression risk",
+   "soft contact", "\\boverperforming", "reduced exit", "tight zone",
+   "small zone", "moving against"].join("|"), "i");
+
+function reasonLI(x) {
+  return `<li class="${NEG_REASON.test(x) ? "neg" : ""}">${escapeHtml(x)}</li>`;
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -369,7 +383,7 @@ function gameBetCard(r) {
     ? `Stake ${money(stakeDollars(r.stake_units))} · ${r.stake_units.toFixed(2)}u`
     : `Stake ${r.stake_units.toFixed(2)}u`;
   const stakeChip = r._ok ? `<span class="chip stake">${stakeTxt}</span>` : "";
-  const reasons = (r.reasons || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+  const reasons = (r.reasons || []).map(reasonLI).join("");
 
   // Header (badge + title + sub) varies by bet type; the metrics are shared.
   let mark, title, sub;
@@ -630,7 +644,7 @@ function moveChip(r) {
 }
 
 function cardHTML(r) {
-  const reasons = (r.reasons || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+  const reasons = (r.reasons || []).map(reasonLI).join("");
   const warnings = (r.warnings || []).map((w) => `<div class="warning">⚠️ ${escapeHtml(w)}</div>`).join("");
   const ud = unitDollars();
   const stakeTxt = ud > 0
@@ -761,7 +775,7 @@ function longShotCard(r) {
     ? `Stake ${money(stakeDollars(r.stake_units))} · ${r.stake_units.toFixed(2)}u`
     : `Stake ${r.stake_units.toFixed(2)}u`;
   const reasons = (r.reasons || []).slice(0, 6)
-    .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+    .map(reasonLI).join("");
   const caveats = (r.caveats || [])
     .map((c) => `<div class="warning">⚠️ ${escapeHtml(c)}</div>`).join("");
   const oppLabel = state.sport === "mlb" ? "Expected PAs" : "RZ chances";
