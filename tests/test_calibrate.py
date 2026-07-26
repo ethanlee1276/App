@@ -217,3 +217,32 @@ def test_calibration_pairs_are_stated_on_the_over_side():
     over = [SettledProp(player="O", market="hits", line=0.5, odds=-110,
                         hit_prob=0.62, projection=1.0, actual=1.0, side="OVER")]
     assert evaluate(over).pairs == [(0.62, 1)]
+
+
+def test_unreliable_market_is_not_bettable():
+    """A fit that ran to the edge of the search range is the fitter saying
+    'this model is unreliable here', not 'here is your correction'. The
+    engine must refuse to bet such a market rather than trust a capped
+    temperature — home runs printed exactly that warning while still
+    claiming ~25% on props the market priced near 12%."""
+    import json, tempfile
+    from pathlib import Path
+    from engine import calibrate as cal
+
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "calibration.json"
+        p.write_text(json.dumps({
+            "mlb:home_runs": {"temperature": cal.GRID_MIN, "intercept": -0.1},
+            "mlb:hits": {"temperature": 0.76, "intercept": 0.04},
+        }))
+        cal.reset_cache()
+        assert cal.is_reliable("mlb", "hits", p) is True
+        assert cal.is_reliable("mlb", "home_runs", p) is False
+        # The upper bound counts too.
+        p.write_text(json.dumps(
+            {"mlb:home_runs": {"temperature": cal.GRID_MAX, "intercept": 0.0}}))
+        cal.reset_cache()
+        assert cal.is_reliable("mlb", "home_runs", p) is False
+        # An unfitted market is not "unreliable", just uncorrected.
+        assert cal.is_reliable("mlb", "strikeouts", p) is True
+    cal.reset_cache()

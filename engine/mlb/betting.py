@@ -15,7 +15,7 @@ from ..betting import (
     Recommendation, _confidence_score, _grade, _kelly_stake, net_edge,
     _trend_alignment, pick_side, temper_edge,
 )
-from ..calibrate import apply_temperature, correction_for
+from ..calibrate import apply_temperature, correction_for, is_reliable
 from ..odds import expected_value
 from ..statmath import prob_over, clamp
 from .models import MLBProp, HOME_RUNS
@@ -94,10 +94,19 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     # Grade on net edge (vs the real price), not edge-vs-fair — see
     # engine/betting.py._grade. This is what keeps every graded bet
     # sizeable instead of shipping 0.00-unit "recommendations".
-    grade = _grade(confidence, net_edge(hit, best.odds), best.odds) if credible else "Pass"
+    # A market whose own calibration fit ran to the edge of the search
+    # range is one we cannot price — the stored temperature is a cap, not
+    # a correction. Bet nothing there until the model is fixed.
+    calibration_ok = is_reliable("mlb", prop.market)
+    grade = (_grade(confidence, net_edge(hit, best.odds), best.odds)
+             if credible and calibration_ok else "Pass")
     stake = _kelly_stake(hit, best.odds) if grade != "Pass" else 0.0
 
     reasons = list(proj.reasons)
+    if not calibration_ok:
+        reasons.insert(0, "This market's calibration fit hit the edge of its "
+                          "search range — the model can't price it reliably, "
+                          "so nothing here is bettable until it's fixed")
     if not credible:
         reasons.insert(0, "No credible market edge — line unavailable or price looks off")
     elif side == "UNDER":

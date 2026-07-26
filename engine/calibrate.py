@@ -250,6 +250,24 @@ def correction_for(sport: str, market: str,
     return _cache.get(f"{sport}:{market}", _cache.get(sport, (1.0, 0.0)))
 
 
+def is_reliable(sport: str, market: str,
+                path: Path | str = DEFAULT_PATH) -> bool:
+    """False when this market's fit ran to the edge of the search range.
+
+    A boundary fit means the data wanted a bigger correction than the
+    search allowed, so the stored temperature is a cap, not an optimum —
+    the fitter's own way of saying "this model is unreliable here, not
+    merely miscalibrated". Home runs printed exactly that warning while
+    still claiming ~25% on props the market prices near 12%.
+
+    Betting a market whose calibration is capped is betting a number
+    nobody can vouch for, so the engines treat this as a hard pass."""
+    if not _enabled:
+        return True
+    temp, _ = correction_for(sport, market, path)
+    return temp not in (GRID_MIN, GRID_MAX)
+
+
 def temperature_for(sport: str, market: str, path: Path | str = DEFAULT_PATH) -> float:
     """The temperature alone (kept for callers that don't need the bias)."""
     return correction_for(sport, market, path)[0]
