@@ -48,8 +48,13 @@ def apply_mlb_rules(rec: Recommendation, prop: MLBProp, game: MLBGame,
         recommend = False
         warnings.append(f"Too much juice ({rec.odds:+d}) — pays too little for the risk")
 
-    # Lineup hold: no bet on a hitter who isn't in a confirmed lineup.
-    if prop.market in HITTER_MARKETS and prop.lineup_spot == 0:
+    # Lineup hold: no bet on a hitter who isn't in a confirmed lineup. A
+    # PROJECTED lineup (last game's order, used so the board can price the
+    # morning board) gives a hitter a real spot — the game-level flag is what
+    # says nothing official has posted, so check it too or projected players
+    # would sail through to the journal.
+    if prop.market in HITTER_MARKETS and (
+            prop.lineup_spot == 0 or not game.lineups_confirmed):
         recommend = False
         warnings.append(f"{prop.player} not in a confirmed lineup — "
                         f"hold until the card is posted")

@@ -98,6 +98,26 @@ def parse_officials(boxscore: dict) -> str:
     return ""
 
 
+def last_final_game(sched_json: dict, team_id: int) -> tuple[int, str] | None:
+    """From a team-scoped schedule response, the most recent FINAL game as
+    ``(gamePk, side)`` where side is which bench this team occupied — or
+    ``None`` if nothing has gone final in the window."""
+    best: tuple[str, int, str] | None = None
+    for day in sched_json.get("dates", []) or []:
+        for g in day.get("games", []) or []:
+            state = ((g.get("status") or {}).get("abstractGameState") or "")
+            pk = g.get("gamePk")
+            if state != "Final" or not pk:
+                continue
+            home_id = (((g.get("teams") or {}).get("home") or {})
+                       .get("team") or {}).get("id")
+            side = "home" if home_id == team_id else "away"
+            key = (day.get("date") or "", int(pk), side)
+            if best is None or key > best:
+                best = key
+    return (best[1], best[2]) if best else None
+
+
 def parse_game_log(stats_json: dict, market: str, limit: int | None = 15,
                    id_to_abbr: dict | None = None) -> list[MLBGameLog]:
     """Most-recent-first game logs for one market from a ``gameLog`` response.
@@ -148,6 +168,32 @@ def fetch_game_log(person_id: int, group: str, season: int) -> dict:
     url = (f"{STATS_BASE}/people/{person_id}/stats"
            f"?stats=gameLog&group={group}&season={season}")
     return _get_json(url, f"mlb_log_{group}_{person_id}_{season}.json", ttl=1800)
+
+
+def projected_lineup(team_id: int, date: str) -> list[LineupEntry]:
+    """The team's batting order from its last completed game — tonight's best
+    guess until the official lineup posts.
+
+    Books hang home-run prices hours before lineups are announced; gating
+    every hitter prop on the official card left the board empty all morning
+    while FanDuel had a full HR menu. A projected order is right far more
+    often than not (regulars play), and everything built from it carries a
+    "not confirmed yet" caveat while the rules engine holds recommendations.
+    """
+    import datetime as _dt
+    try:
+        d = _dt.date.fromisoformat(date)
+        sched = _get_json(
+            f"{STATS_BASE}/schedule?sportId=1&teamId={team_id}"
+            f"&startDate={(d - _dt.timedelta(days=3)).isoformat()}"
+            f"&endDate={(d - _dt.timedelta(days=1)).isoformat()}",
+            f"mlb_teamsched_{team_id}_{date}.json", ttl=21600)
+        last = last_final_game(sched, team_id)
+        if not last:
+            return []
+        return parse_lineup(fetch_boxscore(last[0]), last[1])
+    except (DataUnavailable, ValueError):
+        return []
 
 
 # --- orchestrator -----------------------------------------------------------
@@ -219,10 +265,17 @@ def build_live_slate(date: str, season: int | None = None,
                 game.weather = weather
             games.append(game)
 
-            # Hitter props from confirmed lineups.
+            # Hitter props from confirmed lineups — or, before lineups post,
+            # from each team's LAST batting order (projected; flagged via
+            # game.lineups_confirmed=False, which holds recommendations and
+            # caveats the HR board).
             for side, team_ab, opp_ab in (("home", home_ab, away_ab),
                                           ("away", away_ab, home_ab)):
-                for entry in parse_lineup(box, side):
+                entries = parse_lineup(box, side)
+                if not entries:
+                    tid = (home if side == "home" else away).get("id")
+                    entries = projected_lineup(tid, date) if tid else []
+                for entry in entries:
                     try:
                         person = parse_person(fetch_person(entry.person_id))
                     except DataUnavailable:

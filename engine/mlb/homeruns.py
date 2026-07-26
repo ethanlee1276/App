@@ -197,7 +197,10 @@ def hr_probability(prop: MLBProp, game: MLBGame) -> tuple[float, dict]:
     caveats = list(env_caveats)
     if not has_statcast:
         caveats.append("No Statcast contact data — power profile is inferred from results only")
-    if prop.lineup_spot in (0, None):
+    if not getattr(game, "lineups_confirmed", True):
+        caveats.append("Projected from the team's last lineup — not confirmed yet; "
+                       "verify he's starting before betting")
+    elif prop.lineup_spot in (0, None):
         caveats.append("Lineup spot unconfirmed — plate appearances estimated")
 
     primary = (contact_r or env_r or pitch_r or reasons)[0]

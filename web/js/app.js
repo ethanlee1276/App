@@ -696,9 +696,10 @@ function longshotEmptyReason(mlb) {
   const dg = state.data.longshot_diag;
   if (mlb && dg) {
     if (!dg.hr_props)
-      return "No hitter props are built yet — home-run props come from confirmed " +
-             "lineups, which post a few hours before first pitch. The board fills " +
-             "automatically once lineups are in.";
+      return "No hitter props are built yet. Lineups aren't posted AND no recent " +
+             "batting order could be projected — if games are on today, the next " +
+             "refresh usually fixes this (the projector needs the free MLB Stats " +
+             "API to be reachable).";
     if (!dg.real_priced)
       return `Lineups are in (${dg.hr_props} hitters) but no real home-run prices ` +
              "are attached yet — books post HR props close to game time, and the " +

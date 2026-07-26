@@ -61,6 +61,54 @@ def test_parse_lineup_empty_when_no_order():
     assert sl.parse_lineup(BOX, "away") == []
 
 
+def test_last_final_game_picks_most_recent_final():
+    """The projected-lineup source: from a team-scoped schedule, the newest
+    FINAL game and which side the team occupied."""
+    sched = {"dates": [
+        {"date": "2026-07-23", "games": [
+            {"gamePk": 111, "status": {"abstractGameState": "Final"},
+             "teams": {"home": {"team": {"id": 112}}, "away": {"team": {"id": 143}}}}]},
+        {"date": "2026-07-25", "games": [
+            {"gamePk": 333, "status": {"abstractGameState": "Final"},
+             "teams": {"home": {"team": {"id": 143}}, "away": {"team": {"id": 112}}}},
+            # A postponed/scheduled game the same window must never win.
+            {"gamePk": 444, "status": {"abstractGameState": "Preview"},
+             "teams": {"home": {"team": {"id": 112}}, "away": {"team": {"id": 143}}}}]},
+    ]}
+    assert sl.last_final_game(sched, 112) == (333, "away")
+    assert sl.last_final_game(sched, 143) == (333, "home")
+    assert sl.last_final_game({"dates": []}, 112) is None
+
+
+def test_projected_lineup_holds_recommendations():
+    """A hitter from a PROJECTED lineup has a real batting spot — only the
+    game-level lineups_confirmed flag stops him being recommended (and
+    journaled) before the card is official."""
+    from engine.betting import Recommendation
+    from engine.mlb.rules import apply_mlb_rules
+    from engine.mlb.models import MLBProp, MLBGame, MLBGameLog
+    from engine.mlb.projection import build_mlb_projection
+
+    prop = MLBProp("Projected Guy", "CHC", "MIL", "CF", TOTAL_BASES,
+                   [MLBGameLog(i, "MIL", 1) for i in range(1, 6)], 1.0, None,
+                   [], lineup_spot=2)
+    game = MLBGame(home="CHC", away="MIL", park="wrigley",
+                   lineups_confirmed=False)
+    rec = Recommendation(player="Projected Guy", team="CHC", opponent="MIL",
+                         market=TOTAL_BASES, side="OVER", book="FanDuel",
+                         line=1.5, odds=-110, projection=1.9, proj_low=1.0,
+                         proj_high=2.8, hit_prob=0.6, fair_prob=0.52,
+                         edge=0.08, ev_per_unit=0.1, confidence=8.0,
+                         stake_units=0.2, grade="Play")
+    proj = build_mlb_projection(prop, game)
+    d = apply_mlb_rules(rec, prop, game, proj)
+    assert d.recommend is False
+    assert any("confirmed lineup" in w for w in d.warnings)
+    # Same prop with the lineup confirmed sails through.
+    game.lineups_confirmed = True
+    assert apply_mlb_rules(rec, prop, game, proj).recommend is True
+
+
 # --- person -----------------------------------------------------------------
 def test_parse_person_handedness():
     p = sl.parse_person(PERSON)
