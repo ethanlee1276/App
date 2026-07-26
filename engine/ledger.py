@@ -26,7 +26,12 @@ from .odds import american_to_decimal
 
 DEFAULT_DB = Path(__file__).resolve().parents[1] / "data" / "ledger.db"
 
-SCHEMA = """
+# ``category`` separates the headline record ('main' — picks we stand
+# behind) from measurement-only buckets ('longshot' — the HR board, tracked
+# to learn whether it finds value, never mixed into the record). It is part
+# of the unique key so a player recommended AND watchlisted the same night
+# journals in both buckets.
+_BETS_TABLE = """
 CREATE TABLE IF NOT EXISTS bets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT, sport TEXT, date TEXT, player TEXT, market TEXT,
@@ -35,12 +40,35 @@ CREATE TABLE IF NOT EXISTS bets (
     stake_units REAL, stake_dollars REAL,
     status TEXT DEFAULT 'open', actual REAL,
     pnl_units REAL, pnl_dollars REAL, closing_line REAL,
-    UNIQUE (sport, date, player, market)
+    category TEXT DEFAULT 'main',
+    UNIQUE (sport, date, player, market, category)
 );
+"""
+
+SCHEMA = _BETS_TABLE + """
 CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
 """
 
 DEFAULTS = {"starting_bankroll": "1000", "unit_pct": "1.0", "bankroll": "1000"}
+
+
+def _migrate(conn) -> None:
+    """Rebuild a pre-category bets table in place, preserving every row.
+
+    SQLite can't alter a UNIQUE constraint, so the one-time upgrade renames,
+    recreates with ``category`` in the key, copies, and drops."""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(bets)").fetchall()]
+    if not cols or "category" in cols:
+        return
+    keep = ("id, ts, sport, date, player, market, side, line, book, odds, "
+            "projection, hit_prob, edge, confidence, grade, stake_units, "
+            "stake_dollars, status, actual, pnl_units, pnl_dollars, closing_line")
+    conn.executescript(
+        "ALTER TABLE bets RENAME TO bets_v1;\n"
+        + _BETS_TABLE +
+        f"INSERT INTO bets ({keep}, category) "
+        f"SELECT {keep}, 'main' FROM bets_v1;\n"
+        "DROP TABLE bets_v1;")
 
 
 def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
@@ -49,6 +77,7 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
         path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
+    _migrate(conn)
     conn.executescript(SCHEMA)
     for k, v in DEFAULTS.items():
         conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
@@ -133,6 +162,53 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              r.get("book", "best"), r.get("odds", -110), None,
              r.get("win_prob"), r.get("edge"), r.get("confidence"),
              r.get("grade"), stake_units, round(stake_units * unit_dollars, 2)))
+        n += cur.rowcount
+    conn.commit()
+    return n
+
+
+# Long-shot markets we can actually settle from ingested game logs. NFL
+# anytime-TD boards join here once a TD market exists in the NFL logs —
+# journaling unsettleable bets would just accumulate rows stuck open forever.
+SETTLEABLE_LONGSHOTS = {"home_runs"}
+
+
+def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
+    """Journal the Long Shots board — separately from the main record.
+
+    Everything the board shows (strict value picks AND the watchlist) is
+    tracked at a small flat stake with ZERO dollar exposure: the point is
+    measurement — does the model's HR probability beat the market's implied
+    one? — not a claim these are bets worth placing. ``category='longshot'``
+    keeps them out of the headline record entirely.
+    """
+    sport = result.get("sport", "mlb")
+    date = result.get("date", "")
+    now = datetime.datetime.utcnow().isoformat(timespec="seconds")
+    rows = (list(result.get("long_shots") or [])
+            + list(result.get("longshot_watch") or []))
+    n = 0
+    for r in rows:
+        market = r.get("market", "home_runs")
+        if market not in SETTLEABLE_LONGSHOTS:
+            continue
+        try:
+            odds = int(r.get("odds") or 0)
+        except (TypeError, ValueError):
+            continue
+        # Plus-money and real: the boards already filter, but the journal is
+        # the last line of defense against a proxy or mis-lined price.
+        if not r.get("player") or odds <= 100 or (r.get("book") or "").lower() == "proxy":
+            continue
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
+            "line, book, odds, projection, hit_prob, edge, confidence, grade, "
+            "stake_units, stake_dollars, status, category) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'longshot')",
+            (now, sport, date, r["player"], market, "OVER", 0.5,
+             r.get("book", ""), odds, None, r.get("model_prob"),
+             r.get("edge", r.get("ev_per_unit")), r.get("confidence"),
+             r.get("grade", "Watch"), flat_stake, 0.0))
         n += cur.rowcount
     conn.commit()
     return n
@@ -294,9 +370,9 @@ def settle(conn, actuals: dict[tuple[str, str], float], sport: str | None = None
 
 
 # --- reporting --------------------------------------------------------------
-def performance(conn, sport: str | None = None) -> dict:
-    q = "SELECT * FROM bets WHERE status IN ('won','lost','push')"
-    args: list = []
+def performance(conn, sport: str | None = None, category: str = "main") -> dict:
+    q = "SELECT * FROM bets WHERE status IN ('won','lost','push') AND category=?"
+    args: list = [category]
     if sport:
         q += " AND sport=?"; args.append(sport)
     bets = conn.execute(q, args).fetchall()
@@ -334,7 +410,9 @@ def performance(conn, sport: str | None = None) -> dict:
         "net_dollars": round(net_d, 2),
         "starting_bankroll": float(get_cfg(conn, "starting_bankroll")),
         "bankroll": bankroll(conn),
-        "open": conn.execute("SELECT COUNT(*) FROM bets WHERE status='open'").fetchone()[0],
+        "open": conn.execute(
+            "SELECT COUNT(*) FROM bets WHERE status='open' AND category=?",
+            (category,)).fetchone()[0],
         "avg_clv": (sum(clvs) / len(clvs)) if clvs else None,
         "by_grade": bucket("grade"), "by_market": bucket("market"),
         "by_side": bucket("side"),
@@ -372,7 +450,7 @@ def pnl_curve(conn, sport: str | None = None) -> list[dict]:
     One point per date with anything settled: that day's net units, the
     running total, and how many bets graded."""
     q = ("SELECT date, SUM(pnl_units) AS day_u, COUNT(*) AS n FROM bets "
-         "WHERE status IN ('won','lost','push')")
+         "WHERE status IN ('won','lost','push') AND category='main'")
     args: list = []
     if sport:
         q += " AND sport=?"
@@ -386,14 +464,32 @@ def pnl_curve(conn, sport: str | None = None) -> list[dict]:
     return out
 
 
-def recent_settled(conn, limit: int = 30) -> list[dict]:
+def recent_settled(conn, limit: int = 30, category: str = "main") -> list[dict]:
     """The last settled picks, newest first — the site's receipts."""
     rows = conn.execute(
         "SELECT date, sport, player, market, side, line, odds, grade, status, "
-        "pnl_units, closing_line FROM bets "
-        "WHERE status IN ('won','lost','push') "
-        "ORDER BY date DESC, id DESC LIMIT ?", (limit,)).fetchall()
+        "pnl_units, hit_prob, closing_line FROM bets "
+        "WHERE status IN ('won','lost','push') AND category=? "
+        "ORDER BY date DESC, id DESC LIMIT ?", (category, limit)).fetchall()
     return [dict(r) for r in rows]
+
+
+def longshot_report(conn) -> dict:
+    """The Long Shots scoreboard: flat-stake record plus the calibration
+    readout that actually answers "is the board finding value" — the model's
+    average claimed probability vs the books' implied vs what really hit."""
+    p = performance(conn, category="longshot")
+    row = conn.execute(
+        "SELECT AVG(hit_prob) AS model_p, "
+        "AVG(100.0 / (odds + 100.0)) AS implied_p, "
+        "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) AS actual_p "
+        "FROM bets WHERE category='longshot' AND status IN ('won','lost') "
+        "AND odds > 0").fetchone()
+    p["avg_model_prob"] = round(row["model_p"], 4) if row["model_p"] is not None else None
+    p["avg_implied_prob"] = round(row["implied_p"], 4) if row["implied_p"] is not None else None
+    p["actual_hit_rate"] = round(row["actual_p"], 4) if row["actual_p"] is not None else None
+    p["recent"] = recent_settled(conn, limit=15, category="longshot")
+    return p
 
 
 def export_json(conn, path) -> None:
@@ -411,6 +507,7 @@ def export_json(conn, path) -> None:
         "nfl": performance(conn, "nfl"),
         "curve": pnl_curve(conn),
         "recent": recent_settled(conn),
+        "longshots": longshot_report(conn),
     }
     p = _Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)

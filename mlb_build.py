@@ -230,11 +230,13 @@ def main() -> None:
             from engine.db import connect as hist_connect
             lconn = ledger.connect()
             logged = ledger.log_recommendations(lconn, result)
+            ls_logged = ledger.log_longshots(lconn, result)
             settled = ledger.settle_from_history(lconn, hist_connect(), sport="mlb")
             ledger.export_json(lconn, "web/data/record.json")
-            if logged or settled:
-                print(f"Journal: {logged} new pick(s) logged, {settled} settled "
-                      f"— see the Record tab or `python3 ledger.py report`")
+            if logged or ls_logged or settled:
+                print(f"Journal: {logged} new pick(s) + {ls_logged} long shot(s) "
+                      f"logged, {settled} settled — see the Record tab or "
+                      f"`python3 ledger.py report`")
         except Exception as exc:
             print(f"⚠️  Bet journal skipped: {exc}")
 

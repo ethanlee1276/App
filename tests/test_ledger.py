@@ -289,6 +289,97 @@ def test_settle_falls_back_to_snapshot_closes_for_clv():
         lm.HISTORY_PATH = old_path
 
 
+def _ls_result(**over):
+    base = {
+        "sport": "mlb", "date": "2026-07-26",
+        "recommendations": [],
+        "long_shots": [
+            {"player": "Slugger", "market": "home_runs", "book": "FanDuel",
+             "odds": 320, "model_prob": 0.24, "ev_per_unit": 0.05,
+             "confidence": 5.0, "grade": "Lean"},
+        ],
+        "longshot_watch": [
+            {"player": "Watch Guy", "book": "DraftKings", "odds": 450,
+             "model_prob": 0.15, "ev_per_unit": -0.02},
+            {"player": "Slugger", "book": "FanDuel", "odds": 320,     # dupe of the pick
+             "model_prob": 0.24, "ev_per_unit": 0.05},
+            {"player": "Proxy Guy", "book": "proxy", "odds": 400,
+             "model_prob": 0.2},                                      # never journaled
+        ],
+    }
+    base.update(over)
+    return base
+
+
+def test_longshots_journal_separately_with_no_bankroll_impact():
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    # Picks + watchlist, deduped; proxy prices refused.
+    assert ledger.log_longshots(conn, _ls_result()) == 2
+    assert ledger.log_longshots(conn, _ls_result()) == 0    # idempotent
+    # The main record does not see them at all.
+    assert ledger.performance(conn)["open"] == 0
+    assert ledger.performance(conn, category="longshot")["open"] == 2
+
+    # Slugger homers (+320 at 0.1u = +0.32u); Watch Guy doesn't (-0.1u).
+    ledger.settle(conn, {("Slugger", "home_runs"): 1.0,
+                         ("Watch Guy", "home_runs"): 0.0})
+    assert ledger.bankroll(conn) == 1000.0                  # zero dollar exposure
+    ls = ledger.longshot_report(conn)
+    assert ls["wins"] == 1 and ls["losses"] == 1
+    assert abs(ls["net_units"] - 0.22) < 1e-9
+    # Calibration readout: model avg vs implied vs actual.
+    assert abs(ls["avg_model_prob"] - 0.195) < 1e-9
+    assert ls["actual_hit_rate"] == 0.5
+    assert ls["recent"][0]["player"] in ("Slugger", "Watch Guy")
+    # Main performance and curve stay untouched.
+    assert ledger.performance(conn)["settled"] == 0
+    assert ledger.pnl_curve(conn) == []
+
+
+def test_same_player_can_be_pick_and_longshot_same_day():
+    conn = _conn()
+    r = _result(sport="mlb", date="2026-07-26")
+    r["recommendations"][0].update(player="Slugger", market="home_runs",
+                                   line=0.5, odds=320)
+    ledger.log_recommendations(conn, r)
+    assert ledger.log_longshots(conn, _ls_result()) == 2    # dupe key allowed
+    assert conn.execute("SELECT COUNT(*) FROM bets WHERE player='Slugger'").fetchone()[0] == 2
+
+
+def test_migration_adds_category_and_keeps_rows():
+    """A pre-category ledger.db upgrades in place: old rows become 'main',
+    and the new (…, category) unique key admits longshot rows."""
+    import sqlite3, tempfile
+    from pathlib import Path
+    path = Path(tempfile.mkdtemp()) / "ledger.db"
+    old = sqlite3.connect(str(path))
+    old.executescript("""
+        CREATE TABLE bets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT, sport TEXT, date TEXT, player TEXT, market TEXT,
+            side TEXT, line REAL, book TEXT, odds INTEGER,
+            projection REAL, hit_prob REAL, edge REAL, confidence REAL, grade TEXT,
+            stake_units REAL, stake_dollars REAL,
+            status TEXT DEFAULT 'open', actual REAL,
+            pnl_units REAL, pnl_dollars REAL, closing_line REAL,
+            UNIQUE (sport, date, player, market)
+        );""")
+    old.execute(
+        "INSERT INTO bets (ts, sport, date, player, market, side, line, book, "
+        "odds, stake_units, stake_dollars, status, pnl_units) "
+        "VALUES ('t', 'mlb', '2026-07-25', 'Slugger', 'home_runs', 'OVER', 0.5, "
+        "'FanDuel', -110, 1.0, 10.0, 'won', 0.909)")
+    old.commit(); old.close()
+
+    conn = ledger.connect(path)
+    row = conn.execute("SELECT category, status FROM bets").fetchone()
+    assert row["category"] == "main" and row["status"] == "won"
+    assert ledger.performance(conn)["wins"] == 1
+    # Same player/market/date now journals in the longshot bucket too.
+    assert ledger.log_longshots(conn, _ls_result(date="2026-07-25")) == 2
+
+
 def test_summary_renders():
     conn = _conn()
     ledger.log_recommendations(conn, _result())

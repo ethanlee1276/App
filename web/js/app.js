@@ -947,6 +947,48 @@ function recCurveChart(curve) {
     </div>`;
 }
 
+function recLongshotSection(ls) {
+  if (!ls || (!ls.settled && !ls.open)) return "";
+  const graded = ls.wins + ls.losses;
+  const hitRate = graded ? (ls.wins / graded) * 100 : 0;
+  const calib = ls.avg_model_prob != null
+    ? `<div style="opacity:.7;font-size:.9em;padding:8px 14px">
+         Calibration: model claimed <strong>${(ls.avg_model_prob * 100).toFixed(1)}%</strong>
+         on average · books implied <strong>${(ls.avg_implied_prob * 100).toFixed(1)}%</strong>
+         · actually hit <strong>${(ls.actual_hit_rate * 100).toFixed(1)}%</strong>.
+         Model above books AND actual above implied = the board finds real value.</div>` : "";
+  const rows = (ls.recent || []).map((b) => {
+    const won = b.status === "won";
+    const pnl = b.pnl_units || 0;
+    return `<div style="display:flex;gap:12px;padding:7px 14px;align-items:center;
+        border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden">
+      <span>${won ? "💣" : "▫️"}</span>
+      <span style="opacity:.55;min-width:82px;font-size:.85em">${escapeHtml(b.date || "")}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">
+        <strong>${escapeHtml(b.player)}</strong>
+        <span style="opacity:.6"> HR ${b.hit_prob != null ? `· model ${(b.hit_prob * 100).toFixed(0)}%` : ""}</span></span>
+      <span style="min-width:56px;text-align:right">${american(b.odds)}</span>
+      <span style="min-width:70px;text-align:right;color:${pnl >= 0 ? "var(--good,#3ddc84)" : "var(--bad,#ff6b7a)"}">
+        ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
+    </div>`;
+  }).join("");
+  return `
+    <div class="section-title" style="margin-top:22px">Long Shots — tracked separately</div>
+    <p style="opacity:.6;font-size:.85em;margin:4px 0 10px">Every home-run pick and
+      watchlist entry, graded at a flat 0.1u nominal stake with zero bankroll impact.
+      This bucket measures whether the HR board finds value — it is never mixed into
+      the record above. Long shots lose most nights by design; judge the ROI and
+      calibration over weeks, not the hit column.</p>
+    <div class="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+      ${recTile("HR record", `${ls.wins}-${ls.losses}`, `${ls.open} open`)}
+      ${recTile("Hit rate", hitRate.toFixed(1) + "%", "plus-money — low is normal")}
+      ${recTile("Flat-stake ROI", (ls.roi >= 0 ? "+" : "") + (ls.roi * 100).toFixed(1) + "%",
+                `${ls.net_units >= 0 ? "+" : ""}${(ls.net_units || 0).toFixed(2)}u at 0.1u each`)}
+    </div>
+    <div class="card" style="padding:0;margin-top:12px">${calib}${rows ||
+      `<p class="loading" style="padding:12px">Nothing settled yet — accrues from tonight's board.</p>`}</div>`;
+}
+
 async function renderRecord() {
   const host = document.getElementById("record-body");
   if (!host) return;
@@ -981,8 +1023,9 @@ async function renderRecord() {
     <p style="opacity:.6;font-size:.85em;margin-top:10px">Journals every
       <strong>Recommended</strong> pick — player props and sharp-anchor game bets
       (moneylines &amp; totals) — at the real book price shown when it was
-      recommended. Long Shots and Edge Board entries are watchlists, not tracked
-      bets. One entry per player &amp; market per day.</p>
+      recommended. One entry per player &amp; market per day. Long Shots are
+      tracked in their own bucket below — never mixed into this record — and
+      the Edge Board is a watchlist, not tracked bets.</p>
     ${small}
     ${recCurveChart(d.curve)}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
@@ -1010,6 +1053,7 @@ async function renderRecord() {
         </div>`;
       }).join("") || `<p class="loading" style="padding:12px">Nothing settled yet.</p>`}
     </div>
+    ${recLongshotSection(d.longshots)}
     <p style="opacity:.55;margin-top:10px;font-size:.85em">Updated ${escapeHtml(d.generated_at || "")}
       · settles automatically as results are ingested each day.</p>`;
 }
