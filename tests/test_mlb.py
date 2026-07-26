@@ -148,6 +148,21 @@ def test_pipeline_runs_and_holds_lineup():
     assert "factors" in result["games"][0]
 
 
+def test_longshot_diag_counts_the_funnel():
+    """An empty HR board must explain itself: the diag counts survivors at
+    each gate (props → 0.5-line quote → real book → plus-money window)."""
+    result = run_mlb_slate(SLATE)
+    dg = result["longshot_diag"]
+    assert set(dg) == {"hr_props", "posted_half", "real_priced", "plus_money"}
+    # The funnel only narrows.
+    assert (dg["hr_props"] >= dg["posted_half"] >= dg["real_priced"]
+            >= dg["plus_money"] >= 0)
+    # The sample slate carries real plus-money HR quotes, so the far end of
+    # the funnel is populated and the board renders.
+    assert dg["plus_money"] > 0
+    assert result["long_shots"] or result["longshot_watch"]
+
+
 def test_pipeline_edges_are_sane():
     result = run_mlb_slate(SLATE)
     for r in result["recommendations"]:

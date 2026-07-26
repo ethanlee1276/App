@@ -190,6 +190,14 @@ def main() -> None:
         except Exception as exc:
             print(f"⚠️  Line-movement stamps skipped: {exc}")
 
+    # HR board funnel — when the Long Shots page is empty, this line says why.
+    dg = result.get("longshot_diag") or {}
+    if dg:
+        print(f"HR board: {dg['hr_props']} HR props → {dg['posted_half']} with a "
+              f"0.5 line → {dg['real_priced']} real-priced → {dg['plus_money']} "
+              f"plus-money in window → {len(result.get('long_shots') or [])} picks, "
+              f"{len(result.get('longshot_watch') or [])} watchlist.")
+
     c = result["counts"]
     confirmed = sum(1 for g in slate.games if g.lineups_confirmed)
     print(f"\n{args.date}: {len(slate.games)} games ({confirmed} with confirmed lineups)")

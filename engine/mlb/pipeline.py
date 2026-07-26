@@ -35,19 +35,29 @@ def _avg(vals):
     return round(sum(vals) / len(vals), 2) if vals else None
 
 
-def _long_shots(slate) -> tuple[list[dict], list[dict]]:
-    """Home-run board: (strict value picks, most-likely-tonight watchlist).
+def _long_shots(slate) -> tuple[list[dict], list[dict], dict]:
+    """Home-run board: (strict value picks, most-likely-tonight watchlist,
+    diagnosis).
 
     Picks apply the odds window + edge bar; the watchlist ranks every
     real-priced HR over by model probability so the page always answers
-    "who could go deep tonight" even when no price clears the value bar."""
+    "who could go deep tonight" even when no price clears the value bar.
+
+    The diagnosis counts survivors at each gate of the funnel — lineups →
+    0.5-line quote → real book → believable plus-money price — so an empty
+    board can say exactly WHY it's empty instead of leaving a blank page to
+    be debugged by screenshot."""
     from .homeruns import build_hr_longshots, hr_watchlist
     from .models import HOME_RUNS
 
+    diag = {"hr_props": 0, "posted_half": 0, "real_priced": 0, "plus_money": 0}
     candidates = []
     recent_by_player: dict[str, list] = {}
     for prop in slate.props:
-        if prop.market != HOME_RUNS or not prop.lines:
+        if prop.market != HOME_RUNS:
+            continue
+        diag["hr_props"] += 1
+        if not prop.lines:
             continue
         game = slate.game_for(prop)
         # ONLY the 0.5 line — "hits a homer". Mixing in 1.5-line prices
@@ -56,7 +66,12 @@ def _long_shots(slate) -> tuple[list[dict], list[dict]]:
         overs = [ln for ln in prop.lines if ln.line == 0.5 and ln.over_odds]
         if not overs:
             continue
+        diag["posted_half"] += 1
         best = max(overs, key=lambda ln: ln.over_odds)
+        if (best.book or "").lower() != "proxy":
+            diag["real_priced"] += 1
+            if 100 < int(best.over_odds) <= 1500:
+                diag["plus_money"] += 1
         recent_by_player[prop.player] = [g.value for g in prop.logs][:12]
         candidates.append({"prop": prop, "game": game, "odds": best.over_odds,
                            "book": best.book, "under_odds": best.under_odds})
@@ -64,7 +79,7 @@ def _long_shots(slate) -> tuple[list[dict], list[dict]]:
                                                      per_team=2)]
     for d in picks:
         d["recent_values"] = recent_by_player.get(d.get("player", ""), [])
-    return picks, hr_watchlist(candidates, limit=25)
+    return picks, hr_watchlist(candidates, limit=25), diag
 
 
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
@@ -295,4 +310,5 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "game_bets": _game_bets(slate.games, config),
         "long_shots": (_ls := _long_shots(slate))[0],
         "longshot_watch": _ls[1],
+        "longshot_diag": _ls[2],
     }

@@ -681,10 +681,8 @@ function renderLongShots() {
          but the model still ranks tonight's most likely ${mlb ? "home runs" : "scorers"} below,
          with the price shown honestly so you can see what the book charges for them.</div>`
       : `<div class="empty-slate"><div class="es-icon">🎯</div>
-      <div class="es-title">No long shots clear the bar right now</div>
-      <div class="es-sub">The model only surfaces ${mlb ? "home-run" : "touchdown"} picks that beat
-      the book's price inside a sane odds range${mlb ? " (+250 to +650)" : " (-150 to +200)"}.
-      ${mlb ? "The most-likely-tonight list appears here once real home-run prices are attached." : ""}</div></div>`;
+      <div class="es-title">No ${mlb ? "home-run" : "touchdown"} board right now</div>
+      <div class="es-sub">${escapeHtml(longshotEmptyReason(mlb))}</div></div>`;
     return;
   }
   note.innerHTML = `<div class="ls-note">Ranked by <b>edge</b>, never by payout.
@@ -692,6 +690,31 @@ function renderLongShots() {
   host.innerHTML = picks.map(longShotCard).join("") + watchlistHTML(watch, mlb);
   fillMeters(host);
   revealChildren(host);
+}
+
+function longshotEmptyReason(mlb) {
+  const dg = state.data.longshot_diag;
+  if (mlb && dg) {
+    if (!dg.hr_props)
+      return "No hitter props are built yet — home-run props come from confirmed " +
+             "lineups, which post a few hours before first pitch. The board fills " +
+             "automatically once lineups are in.";
+    if (!dg.real_priced)
+      return `Lineups are in (${dg.hr_props} hitters) but no real home-run prices ` +
+             "are attached yet — books post HR props close to game time, and the " +
+             "board fills on the next odds refresh.";
+    if (!dg.plus_money)
+      return `${dg.real_priced} home-run price(s) are attached but none are ` +
+             "plus-money in a believable range right now. This usually means " +
+             "games are in progress (in-play prices) — tomorrow's board resets " +
+             "with fresh pre-game quotes.";
+    return `${dg.plus_money} real plus-money price(s) exist but every one failed ` +
+           "a sanity guard (edge cap or odds window). If this persists on a " +
+           "pre-game board, something is wrong — worth reporting.";
+  }
+  return "The model only surfaces " + (mlb ? "home-run" : "touchdown") +
+         " picks that beat the book's price inside a sane odds range" +
+         (mlb ? " (+250 to +650)." : " (-150 to +200).");
 }
 
 function watchlistHTML(watch, mlb) {
