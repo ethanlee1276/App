@@ -430,10 +430,27 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
             "stake": float(r.get("stake_units") or 0),
         })
 
+    from engine.betting import MARKET_SHRINK, MAX_CREDIBLE_EDGE
+    # A prop whose TEMPERED edge exceeds this was, before tempering, a
+    # disagreement bigger than MAX_CREDIBLE_EDGE — treated as bad data,
+    # not alpha, and graded Pass regardless of everything else.
+    ceiling = MAX_CREDIBLE_EDGE * MARKET_SHRINK
+    grades: dict[str, int] = {}
+    for x in rows:
+        grades[x["grade"]] = grades.get(x["grade"], 0) + 1
+    print("Grades the engine actually assigned:")
+    for g, n in sorted(grades.items(), key=lambda kv: -kv[1]):
+        print(f"  {n:>5}  {g}")
+    print(f"\nCredibility ceiling: any edge above {ceiling:.1%} is graded Pass "
+          f"as bad data\n  {sum(1 for x in rows if x['edge'] > ceiling)} / "
+          f"{len(rows)} props exceed it\n")
+
     gates = [
+        ("engine graded it (grade ≠ Pass)", lambda x: x["grade"] != "Pass"),
         ("beats the price at all (net edge > 0)", lambda x: x["net"] > 0),
         ("clears the graded bar (net ≥ 0.3pt + chalk surcharge)",
          lambda x: x["net"] >= x["need"]),
+        (f"credible (edge ≤ {ceiling:.0%})", lambda x: x["edge"] <= ceiling),
         (f"confidence ≥ {min_conf}", lambda x: x["conf"] >= min_conf),
         (f"edge-vs-fair ≥ {min_edge:.0%} (slider)", lambda x: x["edge"] >= min_edge),
         (f"price ≥ {max_juice} (slider)", lambda x: x["odds"] >= max_juice),
@@ -465,13 +482,29 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
         print(f"\nBinding gate: “{worst}” — {worst_n} prop(s) clear everything "
               f"else and die there.")
 
-    top = sorted(rows, key=lambda x: x["net"] - x["need"], reverse=True)[:10]
-    print("\nClosest 10 to qualifying (net edge vs what that price demands):")
-    for x in top:
-        short = (x["label"][:46] + "…") if len(x["label"]) > 47 else x["label"]
-        print(f"  {short:<48} {x['odds']:>5}  net {x['net']*100:+6.2f}pt  "
-              f"need {x['need']*100:5.2f}pt  conf {x['conf']:4.1f}  "
-              f"edge {x['edge']*100:5.2f}%  {x['grade']}")
+    def show(title, items):
+        print(f"\n{title}")
+        if not items:
+            print("  (none)")
+            return
+        for x in items:
+            short = (x["label"][:44] + "…") if len(x["label"]) > 45 else x["label"]
+            why = "" if x["edge"] <= ceiling else "  ← edge too big to believe"
+            print(f"  {short:<46} {x['odds']:>5}  net {x['net']*100:+6.2f}pt  "
+                  f"need {x['need']*100:5.2f}pt  conf {x['conf']:4.1f}  "
+                  f"edge {x['edge']*100:5.2f}%  {x['grade']}{why}")
+
+    # The band that matters: beats its price AND is believable. If this is
+    # empty the board is empty for a real reason, not a filter accident.
+    window = [x for x in rows if x["net"] >= x["need"] and x["edge"] <= ceiling]
+    window.sort(key=lambda x: -(x["net"] - x["need"]))
+    show(f"In the recommendable window — beats the price and stays under the "
+         f"{ceiling:.0%} credibility ceiling ({len(window)} total):", window[:10])
+    show("Biggest net edges overall (mostly rejected as bad data):",
+         sorted(rows, key=lambda x: -(x["net"] - x["need"]))[:5])
+    near = [x for x in rows if x["edge"] <= ceiling and x["net"] < x["need"]]
+    show("Just missed the price bar (credible, but not enough edge):",
+         sorted(near, key=lambda x: -(x["net"] - x["need"]))[:5])
 
 
 def settle_now(day: str | None = None) -> None:
