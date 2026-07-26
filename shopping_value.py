@@ -82,7 +82,7 @@ def main() -> None:
         return
 
     gains, holds_shopped, holds_single, books_won = [], [], [], defaultdict(int)
-    arbs = lowholds = 0
+    arbs = lowholds = same_book_bad = 0
     arb_sizes: list[float] = []
     arb_books: dict[str, int] = defaultdict(int)
     for key, quotes in multi.items():
@@ -110,10 +110,18 @@ def main() -> None:
                                            + american_to_prob(int(q["under_odds"])))
             if per_book:
                 holds_single.append((min(per_book.values()) - 1.0) * 100)
+            bu_book = max(unders, key=lambda t: _payout(t[0]))[1]
             if shopped < 1.0:
+                # A "negative hold" inside ONE book is impossible — no book
+                # prices both sides of its own market at a loss. When the
+                # best over and best under come from the same book, the
+                # stored pair is wrong (alternate lines crossed, or a
+                # one-sided prop given a bogus under), not an opportunity.
+                if bu_book == best_book:
+                    same_book_bad += 1
+                    continue
                 arbs += 1
                 arb_sizes.append((1.0 - shopped) * 100)
-                bu_book = max(unders, key=lambda t: _payout(t[0]))[1]
                 arb_books[f"{best_book} / {bu_book}"] += 1
             elif shopped <= 1.02:
                 lowholds += 1
@@ -142,6 +150,8 @@ def main() -> None:
               f"({arbs / len(holds_shopped):.2%} of pairs)")
         print(f"  low-hold pairs (0-2%)              {lowholds:,} "
               f"({lowholds / len(holds_shopped):.2%})")
+        if same_book_bad:
+            print(f"  ⚠️  {same_book_bad:,} pair(s) showed a negative hold INSIDE a single\n      book — impossible, so those rows have crossed/one-sided odds stored.\n      Excluded from the arbitrage count as data errors, not opportunities.")
 
     if arb_sizes:
         # Size is what separates a real, bettable arb from a stale quote.
