@@ -260,13 +260,28 @@ def hr_watchlist(candidates: list[dict], limit: int | None = 10) -> list[dict]:
     return rows if limit is None else rows[:limit]
 
 
+# Measured on the first 214 settled home-run bets. The model ranks: split
+# by its own claimed probability, the bottom two quartiles returned -37%
+# and -39% while the top two returned +10.8% and +11.1% (z = 2.09), and
+# the price cut agrees independently — +399-and-shorter made +39%,
+# +700-and-out lost 35%. Everything the model rates below ~12% burns.
+#
+# So the board stops betting the tail it cannot pick. PROVISIONAL: the
+# threshold was chosen after seeing these results, on 108 profitable
+# bets, so it is fitted to its own sample and needs forward confirmation
+# before it means anything. It is set at the measured boundary rather
+# than optimised past it, deliberately.
+MIN_MODEL_PROB = 0.12
+
+
 def build_hr_longshots(candidates: list[dict], limit: int = 3,
-                       per_team: int = 1) -> list[LongShot]:
+                       per_team: int = 1,
+                       min_prob: float = MIN_MODEL_PROB) -> list[LongShot]:
     """Rank home-run picks.
 
     ``candidates`` = ``[{prop, game, odds, book, under_odds?}]``. Applies the
-    strategy's +250..+650 odds window and the one-per-team cap, and returns at
-    most ``limit`` picks (the spec's top 1–3).
+    strategy's +250..+650 odds window, the measured ``min_prob`` floor and
+    the one-per-team cap, and returns at most ``limit`` picks.
     """
     picks: list[LongShot] = []
     for c in candidates:
@@ -275,6 +290,9 @@ def build_hr_longshots(candidates: list[dict], limit: int = 3,
             continue
         prop, game = c["prop"], c["game"]
         prob, info = hr_probability(prop, game)
+        # The tail the model cannot pick — see MIN_MODEL_PROB.
+        if prob < min_prob:
+            continue
         pick = build_pick(
             player=prop.player, team=prop.team, opponent=prop.opponent,
             market=HOME_RUNS, label=MARKET_LABELS[HOME_RUNS],

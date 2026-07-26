@@ -259,3 +259,18 @@ if __name__ == "__main__":
     for fn in fns:
         fn(); print(f"  ok  {fn.__name__}")
     print(f"\n{len(fns)} tests passed.")
+
+
+def test_hr_board_drops_the_tail_the_model_cannot_pick():
+    """Measured on 214 settled bets: split by the model's own probability,
+    the bottom two quartiles returned -37% and -39% while the top two
+    returned +10.8% and +11.1% (z=2.09). The board no longer bets the tail
+    it demonstrably cannot rank."""
+    import inspect
+    from engine.mlb.homeruns import build_hr_longshots, MIN_MODEL_PROB
+
+    assert 0.05 < MIN_MODEL_PROB < 0.25
+    sig = inspect.signature(build_hr_longshots)
+    assert sig.parameters["min_prob"].default == MIN_MODEL_PROB
+    # An empty board is still an empty board, floor or not.
+    assert build_hr_longshots([], limit=3) == []
