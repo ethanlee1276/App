@@ -52,6 +52,17 @@ def main() -> None:
     feed = pm.build_flow_feed(pm.recent_tape(conn), markets, history)
     for f in feed:
         f["name"] = names.get(f["wallet"], "")
+
+    # Validation loop: persist every flag, settle the ones whose markets
+    # resolved, and publish the report card. An ungraded flag is decoration.
+    new_flags = pm.store_flags(conn, feed)
+    try:
+        settled = pm.resolve_flags(conn)
+    except Exception:
+        settled = 0
+    validation = pm.flag_report(conn)
+    for w in validation.get("wallets", []):
+        w["name"] = names.get(w["wallet"], "")
     conn.close()
 
     # Top traders by realized P&L (Polymarket's own leaderboard), each with
@@ -104,6 +115,7 @@ def main() -> None:
         "venue": "polymarket",
         "markets": display_markets[:50],
         "flow": feed,
+        "validation": validation,
         "top_traders": top_traders,
         "traders_note": traders_note,
         "tape": {"stored_total": total_trades, "new_this_pull": new_trades,
@@ -114,7 +126,9 @@ def main() -> None:
     p.write_text(json.dumps(out, indent=2))
     print(f"Polymarket: {len(markets)} markets, {new_trades} new trade(s) "
           f"recorded ({total_trades:,} on tape, {len(history):,} wallets), "
-          f"{len(feed)} flow flag(s) ≥ ${pm.FEED_FLOOR_USD:,}. Wrote {args.out}")
+          f"{len(feed)} flow flag(s) ≥ ${pm.FEED_FLOOR_USD:,}; "
+          f"{new_flags} flag(s) stored, {settled} settled, "
+          f"{validation.get('graded', 0)} graded all-time. Wrote {args.out}")
 
 
 if __name__ == "__main__":

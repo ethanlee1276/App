@@ -1547,6 +1547,7 @@ async function renderIntel() {
         <div class="es-title">No flagged flow yet</div>
         <div class="es-sub">The feed scores the last 24h of recorded tape and accumulates
         across refreshes — big trades are a few per hour.</div></div>`}</div>
+    ${intelReportCard(d.validation)}
     <div class="section-title" style="margin-top:26px">Top traders
       <span class="sub">— ${escapeHtml(d.traders_note || "by realized profit")}</span></div>
     <div class="cards">${traderCards ||
@@ -1686,6 +1687,47 @@ async function renderFantasy() {
       volume-based, so a player can legitimately sustain a positive gap; only gaps beyond
       ~${bs.band || 1.5} PPG are flagged. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
   renderSleeperZone(d);
+}
+
+function intelReportCard(v) {
+  const head = `<div class="section-title" style="margin-top:26px">Flag report card
+      <span class="sub">— do our flags actually win? Every flag is stored and graded when
+      its market resolves. Published, not promised.</span></div>`;
+  if (!v || !v.graded) {
+    return `${head}<div class="card"><p class="loading" style="margin:0">No graded flags yet —
+      flags settle when their markets resolve, so this fills as resolutions land.
+      The recording started the moment the flow feed first ran.</p></div>`;
+  }
+  const pctv = (x) => `${(x * 100).toFixed(1)}%`;
+  const zColor = v.z >= 1 ? "var(--good)" : v.z <= -1 ? "var(--bad)" : "var(--text)";
+  const bands = (v.by_score || []).map((b) => `
+    <div style="display:flex;gap:12px;padding:7px 14px;border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="flex:1">Score ${escapeHtml(b.band)}</span>
+      <span style="min-width:60px;text-align:right">${b.wins}-${b.n - b.wins}</span>
+      <span style="min-width:120px;text-align:right;opacity:.8">${pctv(b.hit_rate)} vs ${pctv(b.avg_implied)} implied</span>
+      <span style="min-width:80px;text-align:right;color:${b.roi >= 0 ? "var(--good)" : "var(--bad)"}">${b.roi >= 0 ? "+" : ""}${pctv(b.roi)} ROI</span>
+    </div>`).join("");
+  const wallets = (v.wallets || []).map((w) => `
+    <div style="display:flex;gap:12px;padding:7px 14px;border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="flex:1"><a href="https://polymarket.com/profile/${escapeHtml(w.wallet)}" target="_blank"
+        rel="noopener" style="color:inherit">${escapeHtml(w.name || shortWallet(w.wallet))}</a></span>
+      <span style="min-width:60px;text-align:right">${w.wins}-${w.n - w.wins}</span>
+      <span style="min-width:120px;text-align:right;opacity:.8">${pctv(w.hit_rate)} vs ${pctv(w.avg_implied)}</span>
+      <span style="min-width:70px;text-align:right;font-weight:700" title="calibration z — higher = less like luck">z ${w.z}</span>
+    </div>`).join("");
+  return `${head}
+    <div class="stats">
+      <div class="tile"><div class="k">Flags graded</div><div class="v">${v.graded}</div></div>
+      <div class="tile"><div class="k">Hit rate</div><div class="v">${pctv(v.hit_rate)}</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">prices implied ${pctv(v.avg_implied)}</div></div>
+      <div class="tile"><div class="k">Flat-stake ROI</div><div class="v ${v.roi >= 0 ? "pos" : ""}">${v.roi >= 0 ? "+" : ""}${pctv(v.roi)}</div></div>
+      <div class="tile"><div class="k">Calibration z</div><div class="v" style="color:${zColor}">${v.z}</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">above 0 = flags beat their price</div></div>
+    </div>
+    ${bands ? `<div class="card" style="padding:0">${bands}</div>` : ""}
+    ${wallets ? `<div class="section-title" style="margin-top:14px">Wallets least like luck
+        <span class="sub">— graded flags only, min 3, ranked by calibration z</span></div>
+      <div class="card" style="padding:0">${wallets}</div>` : ""}`;
 }
 
 /* ---------------- Sleeper league sync (free, read-only, no key) ---------- */

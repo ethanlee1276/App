@@ -264,6 +264,16 @@ CREATE INDEX IF NOT EXISTS idx_pm_trades_wallet ON pm_trades (wallet, ts);
 CREATE TABLE IF NOT EXISTS pm_wallets (
     wallet TEXT PRIMARY KEY, name TEXT
 );
+-- Every flag the feed ever showed, graded when its market resolves. The
+-- report card this builds is the difference between a score that MEANS
+-- something and a decorative number.
+CREATE TABLE IF NOT EXISTS pm_flags (
+    venue TEXT, tx TEXT, ts INTEGER, wallet TEXT, slug TEXT, market TEXT,
+    outcome TEXT, side TEXT, price REAL, usd REAL, score INTEGER,
+    status TEXT DEFAULT 'open',
+    won INTEGER, roi REAL, resolved_ts INTEGER,
+    PRIMARY KEY (venue, tx, wallet, outcome, ts)
+);
 """
 
 
@@ -398,12 +408,136 @@ def score_trade(trade: dict, market: dict | None, history: dict | None,
     return {
         "wallet": trade["wallet"], "market": trade["title"],
         "slug": trade["slug"], "outcome": trade["outcome"],
+        "tx": trade.get("tx", ""),
         "side": trade["side"], "usd": usd, "ts": trade["ts"],
         "entry_price": entry,
         "current_price": current,
         "score": score, "signals": signals, "status": status,
         "wallet_trades": (h or {}).get("n", 0),
     }
+
+
+# --- flag validation: grade ourselves against resolutions -------------------
+def store_flags(conn, feed: list[dict]) -> int:
+    """Persist every flag the feed shows — a flag that isn't recorded can
+    never be graded, and an ungraded flag is just decoration."""
+    ensure_tables(conn)
+    n = 0
+    for f in feed:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO pm_flags (venue, tx, ts, wallet, slug, "
+            "market, outcome, side, price, usd, score) "
+            "VALUES ('polymarket',?,?,?,?,?,?,?,?,?,?)",
+            (f.get("tx", ""), f["ts"], f["wallet"], f["slug"], f["market"],
+             f["outcome"], f["side"], f["entry_price"], f["usd"], f["score"]))
+        n += cur.rowcount
+    conn.commit()
+    return n
+
+
+def fetch_market_by_slug(slug: str, ttl: int = 21600) -> list[dict]:
+    import re as _re
+    safe = _re.sub(r"[^A-Za-z0-9_-]+", "_", slug)[:60]
+    return json.loads(fetch_text(f"{GAMMA}/markets?slug={slug}",
+                                 f"pm_mkt_{safe}.json", ttl=ttl))
+
+
+def market_resolution(market: dict | None) -> str | None:
+    """The winning outcome name of a CLOSED market, or ``None``. Resolved
+    Polymarket prices pin to ~1/0; anything ambiguous stays unresolved."""
+    if not market or not market.get("closed"):
+        return None
+    outcomes = [str(o) for o in _jlist(market.get("outcomes"))]
+    prices = []
+    for p in _jlist(market.get("outcomePrices")):
+        try:
+            prices.append(float(p))
+        except (TypeError, ValueError):
+            return None
+    if len(outcomes) != len(prices) or not outcomes:
+        return None
+    for o, p in zip(outcomes, prices):
+        if p >= 0.95:
+            return o
+    return None
+
+
+def resolve_flags(conn, max_slugs: int = 25, fetch=None) -> int:
+    """Settle open flags whose markets have resolved. A BUY of the winning
+    outcome at price p returns 1/p per dollar; a SELL is a bet on the other
+    side at (1-p). Bounded slug fetches per run; results cache anyway."""
+    ensure_tables(conn)
+    fetch = fetch or fetch_market_by_slug
+    slugs = [r["slug"] for r in conn.execute(
+        "SELECT DISTINCT slug FROM pm_flags WHERE status='open' "
+        "ORDER BY ts LIMIT ?", (max_slugs,))]
+    settled = 0
+    now = int(time.time())
+    for slug in slugs:
+        try:
+            raw = fetch(slug)
+        except DataUnavailable:
+            continue
+        winner = market_resolution(raw[0] if isinstance(raw, list) and raw else None)
+        if winner is None:
+            continue
+        for f in conn.execute("SELECT rowid, * FROM pm_flags WHERE slug=? "
+                              "AND status='open'", (slug,)).fetchall():
+            if f["side"] == "SELL":
+                won = f["outcome"] != winner
+                stake_price = max(1e-6, 1.0 - f["price"])
+            else:
+                won = f["outcome"] == winner
+                stake_price = max(1e-6, f["price"])
+            roi = (1.0 / stake_price - 1.0) if won else -1.0
+            conn.execute(
+                "UPDATE pm_flags SET status='settled', won=?, roi=?, "
+                "resolved_ts=? WHERE rowid=?",
+                (1 if won else 0, round(roi, 4), now, f["rowid"]))
+            settled += 1
+    conn.commit()
+    return settled
+
+
+def flag_report(conn, min_wallet_flags: int = 3) -> dict:
+    """The honest report card: hit rate vs the entry prices' implied rate,
+    flat-stake ROI, a calibration z-score (above 0 = flagged flow beat its
+    price; chance says ~0), split by score band — plus the wallets whose
+    graded record looks least like luck."""
+    import math
+    ensure_tables(conn)
+    rows = conn.execute("SELECT * FROM pm_flags WHERE status='settled'").fetchall()
+    if not rows:
+        return {"graded": 0}
+
+    def implied(f) -> float:
+        p = f["price"] if f["side"] != "SELL" else 1.0 - f["price"]
+        return min(0.999, max(0.001, p))
+
+    def agg(sub):
+        n = len(sub)
+        wins = sum(f["won"] for f in sub)
+        exp = sum(implied(f) for f in sub)
+        var = sum(implied(f) * (1 - implied(f)) for f in sub)
+        return {"n": n, "wins": wins,
+                "hit_rate": round(wins / n, 4),
+                "avg_implied": round(exp / n, 4),
+                "roi": round(sum(f["roi"] for f in sub) / n, 4),
+                "z": round((wins - exp) / math.sqrt(var), 2) if var > 0 else 0.0}
+
+    report = {"graded": len(rows), **agg(rows), "by_score": [], "wallets": []}
+    for label, lo, hi in (("70+", 70, 101), ("40–69", 40, 70), ("<40", 0, 40)):
+        sub = [f for f in rows if lo <= f["score"] < hi]
+        if sub:
+            report["by_score"].append({"band": label, **agg(sub)})
+    by_wallet: dict[str, list] = {}
+    for f in rows:
+        by_wallet.setdefault(f["wallet"], []).append(f)
+    skilled = [{"wallet": w, **agg(fs)} for w, fs in by_wallet.items()
+               if len(fs) >= min_wallet_flags]
+    skilled.sort(key=lambda s: -s["z"])
+    report["wallets"] = skilled[:5]
+    return report
 
 
 def build_flow_feed(trades: list[dict], markets: list[dict],

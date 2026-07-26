@@ -190,6 +190,53 @@ def test_pnl_series_parses_sorts_and_attaches():
     assert top2[0]["pnl_series"] == []
 
 
+def test_market_resolution_reads_pinned_prices():
+    resolved = {"closed": True, "outcomes": '["Yes","No"]',
+                "outcomePrices": '["1","0"]'}
+    assert pm.market_resolution(resolved) == "Yes"
+    assert pm.market_resolution({**resolved, "outcomePrices": '["0","1"]'}) == "No"
+    assert pm.market_resolution({**resolved, "closed": False}) is None
+    assert pm.market_resolution({**resolved, "outcomePrices": '["0.6","0.4"]'}) is None
+    assert pm.market_resolution(None) is None
+
+
+def test_flags_store_settle_and_report():
+    from engine import db
+    conn = db.connect(":memory:")
+    markets = {m["slug"]: m for m in pm.parse_markets(GAMMA)}
+    hist = {}
+    trades = pm.parse_trades([
+        _tape("0xbuyer", "fed-cut-march", 0.60, 40_000, NOW - 600),          # BUY Yes
+        _tape("0xseller", "fed-cut-march", 0.60, 30_000, NOW - 600,
+              outcome="Yes", side="SELL"),                                    # SELL Yes
+        _tape("0xother", "thin-market", 0.07, 200_000, NOW - 600),           # unresolved
+    ])
+    feed = pm.build_flow_feed(trades, list(markets.values()), hist, now=NOW)
+    assert pm.store_flags(conn, feed) == 3
+    assert pm.store_flags(conn, feed) == 0          # idempotent
+
+    def fake_fetch(slug):
+        if slug == "fed-cut-march":
+            return [{"closed": True, "outcomes": '["Yes","No"]',
+                     "outcomePrices": '["1","0"]'}]
+        return [{"closed": False}]
+
+    assert pm.resolve_flags(conn, fetch=fake_fetch) == 2
+    rows = {r["wallet"]: r for r in conn.execute("SELECT * FROM pm_flags")}
+    # Yes won: the buyer at 60c returns 1/0.6-1; the seller loses his stake.
+    assert rows["0xbuyer"]["won"] == 1 and abs(rows["0xbuyer"]["roi"] - (1 / 0.6 - 1)) < 1e-3
+    assert rows["0xseller"]["won"] == 0 and rows["0xseller"]["roi"] == -1.0
+    assert rows["0xother"]["status"] == "open"       # its market hasn't resolved
+
+    rep = pm.flag_report(conn, min_wallet_flags=1)
+    assert rep["graded"] == 2 and rep["wins"] == 1
+    assert rep["hit_rate"] == 0.5
+    # Buyer implied 0.60, seller implied 0.40 — avg 0.50, so z ~ 0 here.
+    assert abs(rep["avg_implied"] - 0.5) < 1e-9
+    assert rep["by_score"] and sum(b["n"] for b in rep["by_score"]) == 2
+    assert rep["wallets"][0]["z"] >= rep["wallets"][-1]["z"]
+
+
 def test_feed_ranks_by_score_then_size():
     markets = pm.parse_markets(GAMMA)
     hist = {"0xfresh": {"first_ts": NOW - 3600, "n": 1, "usd": 250_000}}
