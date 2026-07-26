@@ -211,6 +211,12 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
     return out
 
 
+def _market_scan(results: list[dict]) -> dict:
+    """Cross-book arbitrage / middle / low-hold scan (engine.marketscan)."""
+    from ..marketscan import scan_recommendations
+    return scan_recommendations(results)
+
+
 def _rec_to_dict(rec, prop, decision, proj) -> dict:
     vals = [g.value for g in prop.logs]
     label = MARKET_LABELS.get(rec.market, rec.market)
@@ -331,4 +337,5 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "long_shots": ls_picks,
         "longshot_watch": ls_watch,
         "longshot_diag": ls_diag,
+        "market_scan": _market_scan(results),
     }

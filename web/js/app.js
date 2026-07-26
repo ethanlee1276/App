@@ -265,6 +265,7 @@ function renderAll() {
   renderGameBets();
   renderRecommended();
   renderEdgeBoard();
+  renderScanner();
   renderLongShots();
   renderTrending();
   renderPlayers();
@@ -1209,7 +1210,88 @@ function renderEdgeBoard() {
   }).join("") || "";
 }
 
-const VIEW_ORDER = ["recommended", "edge", "longshots", "trending", "players", "record"];
+/* ============================================================
+   Market Scanner — arbitrage / middles / low holds / sharp money
+   ============================================================ */
+function scanPairRow(p, extra) {
+  const leg = (side, l) =>
+    `<span style="display:block"><strong>${side} ${l.line}</strong>
+       <span style="opacity:.65">@ ${escapeHtml(l.book)} ${american(l.odds)}</span></span>`;
+  return `<div style="display:flex;align-items:center;gap:14px;padding:11px 16px;
+      border-bottom:1px solid rgba(255,255,255,.05)">
+    <span style="flex:1"><strong>${escapeHtml(p.bet)}</strong></span>
+    <span style="min-width:170px">${leg("Over", p.over)}${leg("Under", p.under)}</span>
+    <span style="min-width:150px;text-align:right">${extra}</span>
+  </div>`;
+}
+
+function scanSection(title, sub, rows, rowFn, emptyText) {
+  return `<div class="section-title" style="margin-top:20px">${title}
+      <span class="sub">— ${sub}</span></div>
+    <div class="card" style="padding:0">
+      ${rows.length ? rows.map(rowFn).join("")
+        : `<p class="loading" style="padding:12px">${emptyText}</p>`}
+    </div>`;
+}
+
+function renderScanner() {
+  const host = document.getElementById("scanner-body");
+  if (!host) return;
+  const scan = state.data.market_scan || {};
+  const arbs = scan.arbs || [], middles = scan.middles || [], lows = scan.low_holds || [];
+
+  // Sharp money: anchor picks (priced off the sharp book's fair value) and
+  // steam moves (several books re-pricing together = pro money footprint).
+  const anchors = (state.data.game_bets || []).filter((b) =>
+    (b.reasons || []).join(" ").toLowerCase().includes("sharp"));
+  const steam = (state.data.recommendations || [])
+    .filter((r) => r.line_move && r.line_move.steam)
+    .map((r) => ({ r, m: r.line_move }));
+
+  host.innerHTML =
+    scanSection("Arbitrage", "opposite sides whose prices GUARANTEE profit — rare across US books and gone in minutes; grab or forget",
+      arbs, (a) => scanPairRow(a,
+        `<span style="color:var(--good,#3ddc84);font-weight:700">+${(a.profit_pct * 100).toFixed(2)}% locked</span>
+         <span style="display:block;opacity:.6;font-size:.85em">${(a.stake_over_pct * 100).toFixed(0)}% of stake on the Over</span>`),
+      "No risk-free pairs right now. Real arbs across legal US books appear a few times a week and last minutes — this scanner checks every refresh.")
+    + scanSection("Middles", "Over at a low line + Under at a higher one: land between them and BOTH win; miss and you only pay the vig",
+      middles, (m) => scanPairRow(m,
+        `<span style="font-weight:700">${m.gap} gap</span>
+         <span style="display:block;opacity:.7;font-size:.85em">both win +${(m.both_win_return * 100).toFixed(0)}% · worst ${(m.worst_case * 100).toFixed(0)}%</span>`),
+      "No middle windows open — books currently agree on every line. Gaps open when one book moves before the others.")
+    + scanSection("Low holds", "two-sided quotes with almost no juice — the cheapest markets to bet through, and a sign the market is sharp",
+      lows, (h) => scanPairRow(h,
+        `<span style="font-weight:700">${(h.hold_pct * 100).toFixed(1)}% hold</span>
+         <span style="display:block;opacity:.6;font-size:.85em">vs ~4.5% typical</span>`),
+      "No low-hold pairs on the current board.")
+    + `<div class="section-title" style="margin-top:20px">Sharp money
+        <span class="sub">— where the professional side of the market is</span></div>
+      <div class="card" style="padding:0">
+        ${anchors.map((b) => `<div style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
+            <span style="flex:1"><strong>${escapeHtml(b.pick_label || "")}</strong>
+              <span style="display:block;opacity:.6;font-size:.85em">${escapeHtml(b.matchup || "")} · priced off the sharp book's fair value</span></span>
+            <span style="min-width:64px;text-align:right">${american(b.odds)}</span>
+            <span style="min-width:80px;text-align:right;color:var(--good,#3ddc84)">+${((b.ev_per_unit || 0) * 100).toFixed(1)}% EV</span>
+          </div>`).join("")}
+        ${steam.map(({ r, m }) => `<div style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
+            <span>🔥</span>
+            <span style="flex:1"><strong>${escapeHtml(r.player)} ${escapeHtml(r.market_label || "")}</strong>
+              <span style="display:block;opacity:.6;font-size:.85em">steam — several books moved together, ${m.verdict === "with" ? "toward" : "against"} our ${escapeHtml(r.side || "")}</span></span>
+            <span style="min-width:120px;text-align:right;opacity:.8">${Math.abs(m.delta || 0) > 1e-9 ? `${m.open} → ${m.current}` : `${m.open_odds != null ? american(m.open_odds) : "?"} → ${m.current_odds != null ? american(m.current_odds) : "?"}`}</span>
+          </div>`).join("")}
+        ${!anchors.length && !steam.length ? `<p class="loading" style="padding:12px">
+          Nothing sharp-flagged right now. Sharp-anchor picks appear when a soft book's
+          price beats the sharp book's fair value; steam appears when several books
+          re-price together inside an hour.</p>` : ""}
+      </div>
+      <p style="opacity:.55;font-size:.85em;margin-top:12px">Positive-EV bets live on the
+      <b>Recommended</b> and <b>Edge Board</b> pages — that's the model's job. This page
+      needs no model: it's the books disagreeing with each other. Arbitrage and middle
+      prices move fast; verify at the book before betting. Books limit accounts that
+      only arb — mix it into normal betting.</p>`;
+}
+
+const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record"];
 
 function switchView(name) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -1228,7 +1310,7 @@ function switchView(name) {
 
 function initialView() {
   const h = (location.hash || "").replace("#", "");
-  if (["recommended", "edge", "longshots", "trending", "players", "record"].includes(h)) switchView(h);
+  if (VIEW_ORDER.includes(h)) switchView(h);
 }
 
 function moveIndicator() {
