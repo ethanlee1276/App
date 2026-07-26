@@ -103,7 +103,49 @@ def main() -> None:
                     else:
                         checked -= 1          # unchanged: no information
 
+    # THE decisive test. Convergence alone is not evidence of an edge:
+    # if prices are a true number plus noise, the most off-consensus book
+    # is simply the biggest noise draw, and it regresses next snapshot
+    # whether or not anyone was slow. Money only exists if the price you
+    # could have TAKEN beat where the market ended up. So: for every
+    # off-consensus quote, compare it to that prop's FINAL consensus.
+    clv_pts: list[float] = []
+    for key, snaps in series.items():
+        stamps = sorted(snaps)
+        if len(stamps) < 2:
+            continue
+        last = snaps[stamps[-1]]
+        if len(last) < MIN_BOOKS:
+            continue
+        close = sum(last.values()) / len(last)
+        for stamp in stamps[:-1]:
+            quotes = snaps[stamp]
+            if len(quotes) < MIN_BOOKS:
+                continue
+            for book, p in quotes.items():
+                others = [v for b, v in quotes.items() if b != book]
+                gap = (p - sum(others) / len(others)) * 100
+                # Back the side the outlier prices CHEAPLY (gap < 0 means
+                # its implied prob for the over is low = a good over price).
+                if gap <= -GAP_PT:
+                    clv_pts.append((close - p) * 100)
+
     print(f"\n{len(rows):,} quotes · {len(series):,} prop lines tracked over time\n")
+    if clv_pts:
+        clv_pts.sort()
+        m = len(clv_pts)
+        avg = sum(clv_pts) / m
+        beat = sum(1 for x in clv_pts if x > 0) / m
+        print("DID TAKING THE OUTLIER PRICE BEAT THE CLOSE?")
+        print(f"  {m:,} chances to back a book pricing 1+ pts cheap")
+        print(f"  average CLV   {avg:+.2f} points   median {clv_pts[m // 2]:+.2f}")
+        print(f"  beat the close {beat:.1%} of the time")
+        import math as _m
+        z2 = (sum(1 for x in clv_pts if x > 0) - m / 2) / _m.sqrt(m * 0.25)
+        print(f"  z = {z2:.1f} vs a coin flip")
+        print("  ↑ THIS is the number that matters. Convergence can be pure"
+              "\n    regression to the mean; beating the close cannot.\n")
+
     print("HOW EACH BOOK PRICES vs THE CONSENSUS OF THE OTHERS")
     print("  (positive = prices the over HIGHER than the field, i.e. a worse "
           "price to back)\n")
