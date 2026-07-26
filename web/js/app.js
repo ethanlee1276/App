@@ -1398,6 +1398,8 @@ function enterStandaloneMode(name) {
     x.classList.toggle("active", x.dataset.sport === name));
   const nav = document.getElementById("nav");
   if (nav) nav.style.display = "none";
+  // Fantasy is NFL — avatars must draw helmets even if MLB was selected.
+  if (name === "fantasy") window.ACTIVE_SPORT = "nfl";
   switchView(name);
 }
 
@@ -1406,7 +1408,30 @@ function exitStandaloneMode() {
   if (nav) nav.style.display = "";
   document.querySelectorAll(".sport-btn").forEach((x) =>
     x.classList.toggle("active", x.dataset.sport === state.sport));
-  if (STANDALONE_MODES.includes(state.view)) switchView("recommended");
+  window.ACTIVE_SPORT = state.sport;
+  if (STANDALONE_MODES.includes(state.view)) {
+    switchView("recommended");
+    // Restore the sports slate's own data-source badge and date label.
+    if (state.data) {
+      renderDataSource(state.data);
+      const el = document.getElementById("slate-date");
+      if (el) el.textContent = slateDateLabel(state.data);
+    }
+  }
+}
+
+/* The header badge reflects the ACTIVE page. The sports slate may be on
+   sample data (offseason) while Polymarket/Fantasy run on real feeds —
+   showing "Sample data" over live pages was a lie of scope. */
+function setStandaloneSource(label, dateLabel) {
+  const el = document.getElementById("data-source");
+  if (el) {
+    el.className = "data-source live";
+    el.innerHTML = `<span class="src-dot"></span>Live data`;
+    el.title = label;
+  }
+  const dt = document.getElementById("slate-date");
+  if (dt && dateLabel) dt.textContent = dateLabel;
 }
 
 async function renderIntel() {
@@ -1425,6 +1450,7 @@ async function renderIntel() {
       be able to reach gamma-api.polymarket.com.</div></div>`;
     return;
   }
+  setStandaloneSource("Polymarket public market + tape feeds", "Polymarket · live venue data");
   const tape = d.tape || {};
   const cents = (p) => p == null ? "—" : `${(p * 100).toFixed(0)}¢`;
   const usd = (v) => `$${Number(v || 0).toLocaleString()}`;
@@ -1551,6 +1577,8 @@ async function renderFantasy() {
       <div class="es-sub">${escapeHtml((d && d.note) || "Run `python3 ingest.py nfl` once — usage rows (targets, carries, air yards, PPR points) ride along with the normal player-log ingest, then this page fills automatically.")}</div></div>`;
     return;
   }
+  setStandaloneSource(`Ingested NFL ${d.season} weekly stats (nflverse)`,
+                      `NFL ${d.season} · ingested history`);
   const pct = (v) => v == null ? "—" : `${(v * 100).toFixed(0)}%`;
   const deltaChip = (dv) => {
     if (dv == null || Math.abs(dv) < 0.03) return `<span class="chip">steady</span>`;
@@ -1559,27 +1587,31 @@ async function renderFantasy() {
       : `<span class="chip down">▼ ${(dv * 100).toFixed(0)}pt vs 4wk</span>`;
   };
 
-  const usageRows = (d.usage || []).slice(0, 40).map((u) => `
-    <div style="display:flex;align-items:center;gap:12px;padding:9px 16px;
+  const usageRow = (u) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;
         border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="flex:0 0 auto">${playerAvatar(u.player, u.team)}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
         <strong>${escapeHtml(u.player)}</strong>
-        <span style="color:var(--text-mute)"> ${escapeHtml(u.position)} · ${escapeHtml(u.team)} · ${escapeHtml(u.metric)}</span></span>
+        <span style="color:var(--text-mute)"> ${escapeHtml(u.position)} · ${teamName(u.team)} · ${escapeHtml(u.metric)}</span></span>
       <span style="min-width:64px;text-align:right" title="season average">${pct(u.season)}</span>
       <span style="min-width:64px;text-align:right;color:var(--text-dim)" title="4-week average">${pct(u.l4)}</span>
       <span style="min-width:64px;text-align:right;font-weight:700" title="most recent week">${pct(u.last)}</span>
       <span style="min-width:120px;text-align:right">${deltaChip(u.delta)}</span>
       <span style="min-width:70px;text-align:right;color:var(--text-mute)">${u.fp_pg} ppg</span>
-    </div>`).join("");
+    </div>`;
+  const usageRows = (d.usage || []).slice(0, 40).map(usageRow).join("");
 
   const bs = d.buy_sell || {};
   const tradeCard = (r, kind) => {
     const buy = kind === "buy";
     return `<article class="card" style="--grade-color:${buy ? "var(--good)" : "var(--warn)"}">
       <div class="card-head">
-        <div><div class="player">${escapeHtml(r.player)}</div>
-          <div class="subtitle">${escapeHtml(r.position)} · ${escapeHtml(r.team)} ·
-            ${r.targets_pg} tgt/g · ${r.carries_pg} car/g</div></div>
+        <div class="card-id">${playerAvatar(r.player, r.team)}
+          <div><div class="player">${escapeHtml(r.player)}</div>
+            <div class="subtitle">${escapeHtml(r.position)} · ${teamName(r.team)} ·
+              ${r.targets_pg} tgt/g · ${r.carries_pg} car/g</div></div>
+        </div>
         <span class="pm-status" style="color:${buy ? "var(--good)" : "var(--warn)"}">${buy ? "BUY LOW" : "SELL HIGH"}</span>
       </div>
       <div class="metrics">
@@ -1608,11 +1640,22 @@ async function renderFantasy() {
       <div style="margin-top:6px;color:var(--text-mute);font-size:12px">Script confidence: ${escapeHtml(s.confidence)}</div>
     </article>`).join("");
 
+  const bsCount = (bs.buy_low || []).length + (bs.sell_high || []).length;
   host.innerHTML = `
-    <div class="ls-note">Season <b>${d.season}</b> data${d.season < new Date().getFullYear()
-      ? " (last completed season — live weekly updates resume when the season starts)" : ""}.
-      Shares are of TEAM volume: targets for WR/TE/QB, carries for RB. The delta column is
-      the money — a riser at 42% beats a flat 60%.</div>
+    <div class="stats">
+      <div class="tile"><div class="k">Season</div><div class="v">${d.season}</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">${d.season < new Date().getFullYear()
+          ? "last completed — live weekly in Sept" : "updating weekly"}</div></div>
+      <div class="tile"><div class="k">Usage movers</div><div class="v">${(d.usage || []).length}</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">biggest role changes tracked</div></div>
+      <div class="tile"><div class="k">Trade flags</div><div class="v">${bsCount}</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">outside the sustainable band</div></div>
+      <div class="tile"><div class="k">Game scripts</div><div class="v">${(d.scripts || []).length}</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">games with posted lines</div></div>
+    </div>
+    <div id="sleeper-zone"></div>
+    <div class="ls-note">Shares are of TEAM volume: targets for WR/TE/QB, carries for RB.
+      The delta column is the money — a riser at 42% beats a flat 60%.</div>
     <div class="section-title" style="margin-top:16px">Usage movers
       <span class="sub">— season vs 4-week vs last week, biggest role changes first</span></div>
     <div class="card" style="padding:0">
@@ -1642,6 +1685,165 @@ async function renderFantasy() {
       fit from this season's own data (league value per target and per carry by position) —
       volume-based, so a player can legitimately sustain a positive gap; only gaps beyond
       ~${bs.band || 1.5} PPG are flagged. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
+  renderSleeperZone(d);
+}
+
+/* ---------------- Sleeper league sync (free, read-only, no key) ---------- */
+function ffNorm(s) {
+  return String(s || "").toLowerCase().normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "").replace(/[.'’`-]/g, " ")
+    .replace(/\b(jr|sr|ii|iii|iv|v)\b/g, "").replace(/\s+/g, " ").trim();
+}
+
+async function sleeperGet(path) {
+  const r = await fetch("/api/sleeper/" + path);
+  const body = await r.json().catch(() => null);
+  if (!r.ok) throw new Error((body && body.error) || `Sleeper request failed (${r.status})`);
+  return body;
+}
+
+function sleeperConnectHTML(msg) {
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-head"><div><div class="player">My league — Sleeper sync</div>
+      <div class="subtitle">Free and read-only: see YOUR roster's usage trends, trade flags,
+        and who's unrostered in YOUR league. No password — just your Sleeper username.</div></div></div>
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+      <input id="sleeper-username" type="text" placeholder="Sleeper username"
+        style="flex:1;min-width:180px;background:var(--panel-2);color:inherit;
+        border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:inherit"/>
+      <button class="btn" id="sleeper-connect">Connect</button>
+    </div>
+    ${msg ? `<div class="warning" style="margin-top:10px">⚠️ ${escapeHtml(msg)}</div>` : ""}
+  </div>`;
+}
+
+async function renderSleeperZone(d, errMsg) {
+  const zone = document.getElementById("sleeper-zone");
+  if (!zone) return;
+  const username = localStorage.getItem("ff_user");
+  if (!username) {
+    zone.innerHTML = sleeperConnectHTML(errMsg);
+    const btn = document.getElementById("sleeper-connect");
+    if (btn) btn.addEventListener("click", () => {
+      const v = (document.getElementById("sleeper-username").value || "").trim();
+      if (!v) return;
+      localStorage.setItem("ff_user", v);
+      renderSleeperZone(d);
+    });
+    return;
+  }
+  zone.innerHTML = `<p class="loading">Syncing ${escapeHtml(username)}'s Sleeper leagues…</p>`;
+  try {
+    const user = await sleeperGet(`user/${encodeURIComponent(username)}`);
+    if (!user || !user.user_id) throw new Error(`No Sleeper user named “${username}”`);
+    let seasonTried = new Date().getFullYear();
+    let leagues = await sleeperGet(`user/${user.user_id}/leagues/nfl/${seasonTried}`) || [];
+    if (!leagues.length) {
+      seasonTried -= 1;
+      leagues = await sleeperGet(`user/${user.user_id}/leagues/nfl/${seasonTried}`) || [];
+    }
+    if (!leagues.length) throw new Error("No NFL leagues found on that account");
+    let leagueId = localStorage.getItem("ff_league");
+    if (!leagues.some((l) => l.league_id === leagueId)) leagueId = leagues[0].league_id;
+    const [rosters, lgUsers] = await Promise.all([
+      sleeperGet(`league/${leagueId}/rosters`),
+      sleeperGet(`league/${leagueId}/users`),
+    ]);
+    if (!window._slPlayers) window._slPlayers = await sleeperGet("players/nfl");
+    renderSleeperPanel(d, { username, user, leagues, leagueId, rosters,
+                            lgUsers, seasonTried });
+  } catch (e) {
+    localStorage.removeItem("ff_user");
+    renderSleeperZone(d, String(e.message || e));
+  }
+}
+
+function renderSleeperPanel(d, ctx) {
+  const zone = document.getElementById("sleeper-zone");
+  const players = window._slPlayers || {};
+  const usageByName = {};
+  (d.usage || []).forEach((u) => { usageByName[ffNorm(u.player)] = u; });
+  const flagByName = {};
+  ((d.buy_sell || {}).buy_low || []).forEach((r) => { flagByName[ffNorm(r.player)] = "BUY LOW"; });
+  ((d.buy_sell || {}).sell_high || []).forEach((r) => { flagByName[ffNorm(r.player)] = "SELL HIGH"; });
+
+  const mine = (ctx.rosters || []).find((r) => r.owner_id === ctx.user.user_id
+    || (r.co_owners || []).includes(ctx.user.user_id));
+  const takenNames = new Set();
+  (ctx.rosters || []).forEach((r) => (r.players || []).forEach((pid) => {
+    const p = players[pid];
+    if (p) takenNames.add(ffNorm(`${p.first_name} ${p.last_name}`));
+  }));
+
+  const pct = (v) => v == null ? "—" : `${(v * 100).toFixed(0)}%`;
+  const POS_ORDER = { QB: 0, RB: 1, WR: 2, TE: 3, K: 4, DEF: 5 };
+  const myRows = (mine ? (mine.players || []) : []).map((pid) => {
+    const p = players[pid];
+    if (!p || !["QB", "RB", "WR", "TE"].includes(p.position)) return null;
+    const name = `${p.first_name} ${p.last_name}`;
+    const u = usageByName[ffNorm(name)];
+    const flag = flagByName[ffNorm(name)];
+    return { name, pos: p.position, team: p.team || "", u, flag,
+             starter: (mine.starters || []).includes(pid) };
+  }).filter(Boolean).sort((a, b) =>
+    (POS_ORDER[a.pos] ?? 9) - (POS_ORDER[b.pos] ?? 9)
+    || (b.u ? b.u.fp_pg : 0) - (a.u ? a.u.fp_pg : 0));
+
+  const rowHTML = (r) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;
+        border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="flex:0 0 auto">${playerAvatar(r.name, r.team)}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        <strong>${escapeHtml(r.name)}</strong>
+        <span style="color:var(--text-mute)"> ${escapeHtml(r.pos)} · ${escapeHtml(r.team || "FA")}${r.starter ? " · starter" : ""}</span>
+        ${r.flag ? `<span class="chip ${r.flag === "BUY LOW" ? "up" : "down"}" style="margin-left:6px">${r.flag}</span>` : ""}</span>
+      ${r.u ? `<span style="min-width:150px;text-align:right;color:var(--text-dim)"
+          title="season · 4-week · last week ${r.u.metric}">${pct(r.u.season)} → ${pct(r.u.l4)} → <b>${pct(r.u.last)}</b></span>
+        <span style="min-width:70px;text-align:right;color:var(--text-mute)">${r.u.fp_pg} ppg</span>`
+      : `<span style="min-width:220px;text-align:right;color:var(--text-mute)">not among the top usage movers</span>`}
+    </div>`;
+
+  const waivers = (d.usage || []).filter((u) =>
+    (u.delta || 0) >= 0.03 && !takenNames.has(ffNorm(u.player))).slice(0, 8);
+
+  const leagueOpts = ctx.leagues.map((l) =>
+    `<option value="${escapeHtml(l.league_id)}" ${l.league_id === ctx.leagueId ? "selected" : ""}>
+       ${escapeHtml(l.name || l.league_id)}</option>`).join("");
+
+  zone.innerHTML = `<div class="card" style="margin-bottom:16px;padding-bottom:6px">
+    <div class="card-head">
+      <div><div class="player">My league — ${escapeHtml(ctx.username)}</div>
+        <div class="subtitle">Sleeper · season ${ctx.seasonTried} · roster read-only</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="sleeper-league" style="background:var(--panel-2);color:inherit;
+          border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-family:inherit">${leagueOpts}</select>
+        <button class="btn ghost" id="sleeper-disconnect">Disconnect</button>
+      </div>
+    </div>
+    <div class="section-title" style="margin-top:12px">My roster
+      <span class="sub">— usage trend (season → 4wk → last) and trade flags for YOUR players</span></div>
+    <div style="margin:0 -18px">${myRows.map(rowHTML).join("") ||
+      `<p class="loading" style="padding:12px 16px">Couldn't match a roster you own in this league.</p>`}</div>
+    <div class="section-title" style="margin-top:14px">Waiver watch
+      <span class="sub">— usage RISERS nobody in this league rosters</span></div>
+    <div style="margin:0 -18px">${waivers.map((u) => rowHTML({
+        name: u.player, pos: u.position, team: u.team, u, flag: flagByName[ffNorm(u.player)] })).join("") ||
+      `<p class="loading" style="padding:12px 16px">Every notable riser is already rostered here.</p>`}</div>
+    <p style="color:var(--text-mute);font-size:12px;margin:10px 2px 8px">Boards use PPR scoring;
+      custom-scoring recompute lands with the in-season update.</p>
+  </div>`;
+
+  const sel = document.getElementById("sleeper-league");
+  if (sel) sel.addEventListener("change", () => {
+    localStorage.setItem("ff_league", sel.value);
+    renderSleeperZone(d);
+  });
+  const dis = document.getElementById("sleeper-disconnect");
+  if (dis) dis.addEventListener("click", () => {
+    localStorage.removeItem("ff_user");
+    localStorage.removeItem("ff_league");
+    renderSleeperZone(d);
+  });
 }
 
 const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy"];

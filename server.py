@@ -14,6 +14,7 @@ file. Uses only the Python standard library.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -35,6 +36,21 @@ LIVE_FILES = {
     "mlb": WEB / "data" / "mlb_recommendations.json",
 }
 
+# Sleeper league-sync proxy: the browser can't always call api.sleeper.app
+# directly (CORS), so the site talks to us and we forward READ-ONLY requests.
+# Allowlisted paths only — this must never become an open proxy.
+SLEEPER_BASE = "https://api.sleeper.app/v1/"
+_SLEEPER_OK = re.compile(
+    r"^(user/[A-Za-z0-9_]{1,40}"
+    r"|user/\d{1,25}/leagues/nfl/\d{4}"
+    r"|league/\d{1,25}(/rosters|/users)?"
+    r"|players/nfl)$")
+
+
+def sleeper_path_ok(path: str) -> bool:
+    return bool(_SLEEPER_OK.match(path))
+
+
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
@@ -54,7 +70,23 @@ class Handler(BaseHTTPRequestHandler):
             return self._api(parse_qs(parsed.query), sport="nfl")
         if parsed.path in ("/api/mlb/recommendations", "/api/mlb/recommendations/"):
             return self._api(parse_qs(parsed.query), sport="mlb")
+        if parsed.path.startswith("/api/sleeper/"):
+            return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
         return self._static(parsed.path)
+
+    def _sleeper(self, path: str):
+        """Forward an allowlisted read to Sleeper's free public API. The big
+        players file gets a day-long disk cache; everything else 5 minutes."""
+        if not sleeper_path_ok(path):
+            return self._send(404, b'{"error":"unsupported sleeper path"}', ".json")
+        from engine.sources.fetch import fetch_text, DataUnavailable
+        ttl = 86400 if path == "players/nfl" else 300
+        cache = "sleeper_" + re.sub(r"[^A-Za-z0-9]+", "_", path) + ".json"
+        try:
+            body = fetch_text(SLEEPER_BASE + path, cache, ttl=ttl)
+        except DataUnavailable as exc:
+            return self._send(502, json.dumps({"error": str(exc)}).encode(), ".json")
+        self._send(200, body.encode(), ".json")
 
     # --- API ---------------------------------------------------------------
     def _api(self, query: dict, sport: str = "nfl"):
