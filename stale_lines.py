@@ -90,10 +90,18 @@ def main() -> None:
                     new_gap = (nxt[book] - sum(
                         v for b, v in nxt.items() if b != book)
                         / max(1, len(nxt) - 1)) * 100
-                    if abs(new_gap) < abs(gap) * 0.5:
+                    # Binary and exhaustive: either the gap shrank (the
+                    # laggard came to the field — it was stale) or it grew
+                    # (the field left, or the book doubled down — it was
+                    # early). Requiring a HALVING to count as convergence
+                    # dumped every partial catch-up into a third bucket
+                    # and then divided by it, which understated the signal.
+                    if abs(new_gap) < abs(gap):
                         converged += 1
                     elif abs(new_gap) > abs(gap):
                         market_moved_to_them += 1
+                    else:
+                        checked -= 1          # unchanged: no information
 
     print(f"\n{len(rows):,} quotes · {len(series):,} prop lines tracked over time\n")
     print("HOW EACH BOOK PRICES vs THE CONSENSUS OF THE OTHERS")
@@ -108,12 +116,19 @@ def main() -> None:
     if checked:
         print(f"\nWHEN A BOOK IS {GAP_PT:.0f}+ POINTS OFF CONSENSUS "
               f"({stale_events:,} occurrences)")
+        resolved = converged + market_moved_to_them
+        print(f"  (of {resolved:,} that actually resolved)")
         print(f"  it moved back toward the field   {converged:,} "
-              f"({converged / checked:.1%})  ← was stale, gap was takeable")
+              f"({converged / max(1, resolved):.1%})  ← was stale, gap was takeable")
         print(f"  the field moved toward IT        {market_moved_to_them:,} "
-              f"({market_moved_to_them / checked:.1%})  ← it was early, not slow")
-        edge = converged / checked
+              f"({market_moved_to_them / max(1, resolved):.1%})  ← it was early, not slow")
+        edge = converged / resolved if resolved else 0.0
         print("\n  A stale-line strategy needs the first number to dominate.")
+        import math as _m
+        if resolved:
+            z = (converged - resolved / 2) / _m.sqrt(resolved * 0.25)
+            print(f"\n  z = {z:.1f} against a coin flip"
+                  f"{'  — not chance' if abs(z) > 3 else ''}")
         if edge > 0.55:
             print("  It does — laggards mostly catch up, so the gap was real "
                   "and takeable.")
