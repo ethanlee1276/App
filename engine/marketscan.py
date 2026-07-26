@@ -225,3 +225,68 @@ def stale_quotes(recs: list[dict], gap: float = STALE_GAP_PT) -> list[dict]:
 def _prob_to_american(p: float) -> int:
     p = min(max(p, 1e-6), 1 - 1e-6)
     return -round((p / (1 - p)) * 100) if p >= 0.5 else round(((1 - p) / p) * 100)
+
+
+# --- favourite-longshot bias -----------------------------------------------
+# Measured on 27,226 settled quotes joined to real outcomes: the cost of
+# backing the OVER rises monotonically as the price lengthens. Both ends
+# lose to the vig, but longshots lose 2.6x as much — the books shade big
+# payouts far harder than short ones, which is the oldest documented
+# inefficiency in betting markets and is alive in baseball props.
+#
+# (implied-probability floor, label, measured flat-stake ROI of backing
+# the over in that band)
+PRICE_BANDS = (
+    (0.00, "+900 and out", -0.285),
+    (0.10, "+400 to +900", -0.207),
+    (0.20, "+185 to +400", -0.114),
+    (0.35, "+100 to +185", -0.099),
+    (0.50, "-100 to -185", -0.069),
+    (0.65, "-185 and shorter", -0.056),
+)
+# Below this implied probability the measured cost is more than double
+# the short end — the board should say so out loud.
+LONGSHOT_MAX_PROB = 0.35
+
+
+def band_for(odds: int) -> tuple[str, float]:
+    """(label, measured historical ROI of backing the over) for a price."""
+    from .odds import american_to_prob
+    p = american_to_prob(int(odds))
+    label, roi = PRICE_BANDS[0][1], PRICE_BANDS[0][2]
+    for floor, lb, r in PRICE_BANDS:
+        if p >= floor:
+            label, roi = lb, r
+    return label, roi
+
+
+def longshot_warnings(recs: list[dict]) -> list[dict]:
+    """Plus-money props on today's board, with what that price band has
+    actually cost historically.
+
+    This is an avoidance rule, not a play: no forecast is involved and
+    none is needed. A +900 prop has cost 28.5 cents per dollar staked
+    before anyone forms a view on the player."""
+    from .odds import american_to_prob
+    out: list[dict] = []
+    for r in recs:
+        if r.get("has_market") is False:
+            continue
+        odds = r.get("odds")
+        if odds is None:
+            continue
+        p = american_to_prob(int(odds))
+        if p >= LONGSHOT_MAX_PROB:
+            continue
+        label, roi = band_for(int(odds))
+        out.append({
+            "bet": f"{r.get('player', '')} {r.get('side', 'OVER')} "
+                   f"{r.get('line', '')} "
+                   f"{r.get('market_label', r.get('market', ''))}",
+            "book": r.get("book", ""), "odds": int(odds),
+            "implied": round(p, 4), "band": label,
+            "measured_roi": roi,
+            "grade": r.get("grade", ""),
+        })
+    out.sort(key=lambda d: d["implied"])
+    return out

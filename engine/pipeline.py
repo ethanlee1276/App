@@ -237,9 +237,11 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
 
 def _market_scan(results: list[dict]) -> dict:
     """Cross-book arbitrage / middle / low-hold / stale-line scan."""
-    from .marketscan import scan_recommendations, stale_quotes
+    from .marketscan import scan_recommendations, stale_quotes, longshot_warnings
     out = scan_recommendations(results)
     out["stale"] = stale_quotes(results)
+    # Avoidance rule, measured not assumed — see longshot_warnings.
+    out["longshots"] = longshot_warnings(results)
     return out
 
 

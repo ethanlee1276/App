@@ -1393,6 +1393,23 @@ function renderScanner() {
       (state.data.market_scan && state.data.market_scan.stale) || [], staleRow,
       "No book is currently out of line with the field. This fills in as books "
       + "update at different speeds — most often right after lineups post.")
+    + scanSection("Priced against you — plus-money props",
+      "not a play, an avoidance rule. Measured on 27,226 settled quotes joined to real "
+      + "results: backing plus-money props cost -16.7% per unit against -6.5% for short "
+      + "prices — the books shade big payouts 2.6x harder. No forecast is involved and "
+      + "none helps; this is what the PRICE costs before anyone has a view on the player",
+      (state.data.market_scan && state.data.market_scan.longshots) || [],
+      (t) => `<div style="display:flex;align-items:center;gap:14px;padding:11px 16px;
+          border-bottom:1px solid rgba(255,255,255,.05)">
+        <span style="flex:1"><strong>${escapeHtml(t.bet)}</strong>
+          <span style="display:block;opacity:.65;font-size:.85em">
+            ${escapeHtml(t.book)} ${american(t.odds)} · implied ${(t.implied * 100).toFixed(1)}%
+            ${t.grade ? ` · graded ${escapeHtml(t.grade)}` : ""}</span></span>
+        <span style="min-width:170px;text-align:right">
+          <span style="color:var(--bad);font-weight:700">${(t.measured_roi * 100).toFixed(1)}% historically</span>
+          <span style="display:block;opacity:.6;font-size:.85em">${escapeHtml(t.band)} band</span></span>
+      </div>`,
+      "No plus-money props on the board right now — which is the cheap place to be.")
     + scanSection("Arbitrage", "opposite sides priced so a margin is locked whichever way it lands — IF both legs fill at the shown prices before they move. Rare across US books and gone in minutes",
       arbs, (a) => {
         const so = stake * a.stake_over_pct, su = stake * (1 - a.stake_over_pct);

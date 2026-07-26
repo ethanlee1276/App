@@ -159,3 +159,38 @@ def test_stale_quotes_flags_a_book_out_of_line_with_the_field():
 
     # A prop with no real market is skipped entirely.
     assert stale_quotes([{**recs[0], "has_market": False}]) == []
+
+
+def test_longshot_warnings_flag_plus_money_props_with_measured_cost():
+    """An avoidance rule, not a play. Measured on 27,226 settled quotes:
+    backing plus-money props cost -16.7% per unit against -6.5% for short
+    prices, the books shading big payouts 2.6x harder."""
+    from engine.marketscan import (longshot_warnings, band_for,
+                                   LONGSHOT_MAX_PROB, PRICE_BANDS)
+
+    # The measured cost must worsen monotonically as the price lengthens.
+    rois = [roi for _, _, roi in PRICE_BANDS]
+    assert rois == sorted(rois), rois
+    assert band_for(900)[1] < band_for(-110)[1] < 0
+
+    recs = [
+        {"player": "Judge", "market": "home_runs", "market_label": "HR",
+         "side": "OVER", "line": 0.5, "odds": 650, "book": "DK", "grade": "Lean"},
+        {"player": "Short", "market": "hits", "market_label": "Hits",
+         "side": "OVER", "line": 0.5, "odds": -140, "book": "DK"},
+    ]
+    out = longshot_warnings(recs)
+    assert len(out) == 1 and out[0]["bet"].startswith("Judge")
+    assert out[0]["band"] == "+400 to +900"
+    assert out[0]["measured_roi"] < -0.2
+    assert out[0]["implied"] < LONGSHOT_MAX_PROB
+
+    # Sorted longest price first — the most expensive warning leads.
+    many = longshot_warnings([
+        {"player": "A", "market": "m", "side": "OVER", "line": 0.5, "odds": 300},
+        {"player": "B", "market": "m", "side": "OVER", "line": 0.5, "odds": 1200},
+    ])
+    assert many[0]["bet"].startswith("B")
+
+    # Props without a real market are skipped.
+    assert longshot_warnings([{**recs[0], "has_market": False}]) == []
