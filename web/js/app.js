@@ -1341,7 +1341,98 @@ function renderScanner() {
   });
 }
 
-const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record"];
+/* ============================================================
+   Prediction Market Intel — informed-flow detection (Polymarket)
+   ============================================================ */
+function intelStatus(status) {
+  const map = {
+    Live: ["var(--good,#3ddc84)", "value still available near the flagged entry"],
+    Chasing: ["var(--warn,#e8b33e)", "price has already run — the edge is mostly gone"],
+    Historical: ["var(--text-mute,#889)", "old flag, informational only"],
+  };
+  const [color, tip] = map[status] || ["inherit", ""];
+  return `<span style="min-width:78px;text-align:right;font-weight:700;color:${color}" title="${tip}">${status}</span>`;
+}
+
+function shortWallet(w) {
+  return w && w.length > 12 ? `${w.slice(0, 6)}…${w.slice(-4)}` : (w || "");
+}
+
+async function renderIntel() {
+  const host = document.getElementById("intel-body");
+  if (!host) return;
+  let d = null;
+  try {
+    const res = await fetch("data/predmarkets.json?t=" + Date.now());
+    if (res.ok) d = await res.json();
+  } catch (e) {}
+  if (!d || (!(d.flow || []).length && !(d.markets || []).length)) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🛰️</div>
+      <div class="es-title">No prediction-market data yet</div>
+      <div class="es-sub">The launcher pulls Polymarket's public market list and trade
+      tape on every refresh (free, no key needed). If this persists, the machine may not
+      be able to reach gamma-api.polymarket.com.</div></div>`;
+    return;
+  }
+  const tape = d.tape || {};
+  const cents = (p) => p == null ? "—" : `${(p * 100).toFixed(0)}¢`;
+
+  const flowRows = (d.flow || []).map((f) => {
+    const sigs = (f.signals || []).map((s) =>
+      `<span class="chip" title="${escapeHtml(s.value)}">${escapeHtml(s.name)}</span>`).join("");
+    const priceTxt = `${cents(f.entry_price)} → ${cents(f.current_price)}`;
+    return `<div style="display:flex;align-items:center;gap:12px;padding:11px 16px;
+        border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="min-width:44px;text-align:center;font-weight:800;border-radius:8px;padding:4px 0;
+        background:rgba(77,140,255,.12)" title="Composite informed-flow score (0–100)">${f.score}</span>
+      <span style="flex:1;min-width:0">
+        <strong>${escapeHtml(f.market)}</strong>
+        <span style="display:block;opacity:.65;font-size:.85em">
+          <a href="https://polymarket.com/profile/${escapeHtml(f.wallet)}" target="_blank" rel="noopener"
+             style="color:inherit">${shortWallet(f.wallet)}</a>
+          · ${escapeHtml(f.side)} ${escapeHtml(f.outcome)} · $${Number(f.usd).toLocaleString()}
+          · ${f.wallet_trades} trade(s) on our tape</span>
+        <span class="chips" style="margin-top:4px">${sigs}</span>
+      </span>
+      <span style="min-width:100px;text-align:right;opacity:.85" title="flagged entry → price now">${priceTxt}</span>
+      ${intelStatus(f.status)}
+    </div>`;
+  }).join("");
+
+  const marketRows = (d.markets || []).slice(0, 25).map((m, i) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:9px 16px;
+        border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="opacity:.5;min-width:20px">${i + 1}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        <a href="https://polymarket.com/market/${escapeHtml(m.slug)}" target="_blank" rel="noopener"
+           style="color:inherit"><strong>${escapeHtml(m.question)}</strong></a></span>
+      <span style="min-width:56px;text-align:right;font-weight:700">${cents(m.yes)}</span>
+      <span style="min-width:110px;text-align:right;opacity:.7">$${Number(m.vol24).toLocaleString()} / 24h</span>
+      <span style="min-width:80px;text-align:right;opacity:.55;font-size:.85em">${escapeHtml(m.end_date || "")}</span>
+    </div>`).join("");
+
+  host.innerHTML = `
+    <div class="ls-note">Recording since day one: <b>${Number(tape.stored_total || 0).toLocaleString()}</b>
+      trades on our tape from <b>${Number(tape.wallets_seen || 0).toLocaleString()}</b> wallets
+      (+${tape.new_this_pull || 0} this pull). The tape can't be backfilled — signal quality
+      (especially wallet age) matures as it accrues. Polymarket only for now: its wallets are
+      public on-chain; Kalshi publishes no trader identity.</div>
+    <div class="section-title" style="margin-top:16px">Informed-flow flags
+      <span class="sub">— $${(10000).toLocaleString()}+ trades scored for anomaly signals, with receipts.
+      A flag is a probability, not a verdict: a winning trade can be research, luck, or information.</span></div>
+    <div class="card" style="padding:0">${flowRows ||
+      `<p class="loading" style="padding:12px">No flagged flow in the latest tape pull —
+       the feed re-scores on every refresh.</p>`}</div>
+    <div class="section-title" style="margin-top:20px">Top markets by 24h volume
+      <span class="sub">— YES price · dollar volume · resolution date</span></div>
+    <div class="card" style="padding:0">${marketRows}</div>
+    <p style="opacity:.55;font-size:.85em;margin-top:12px">Public blockchain data,
+    statistically scored — following flagged flow is legitimate market research.
+    What's prosecuted (CFTC, 2026) is trading on information <i>you</i> hold a duty
+    to keep confidential. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
+}
+
+const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel"];
 
 function switchView(name) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -1354,6 +1445,7 @@ function switchView(name) {
   target.classList.add("active");
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
   if (name === "record") renderRecord();
+  if (name === "intel") renderIntel();
   if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
   moveIndicator();
 }

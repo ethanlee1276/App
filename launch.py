@@ -161,9 +161,23 @@ def refresh_nfl(quiet: bool = False) -> bool:
     return ok
 
 
+def refresh_predmarkets(quiet: bool = False) -> bool:
+    """Polymarket markets + trade tape → web/data/predmarkets.json.
+
+    Free keyless endpoints with short-TTL caching, so riding the normal
+    refresh cycle costs nothing metered. Recording runs on every build —
+    the tape cannot be backfilled."""
+    ok, tail = _run_build(["pm_build.py", "--out", "web/data/predmarkets.json"])
+    if not quiet:
+        print(f"  PM   markets: {'refreshed' if ok else 'unavailable — kept existing data'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
 def refresh_all(quiet: bool = False) -> None:
     refresh_mlb(quiet=quiet)
     refresh_nfl(quiet=quiet)
+    refresh_predmarkets(quiet=quiet)
 
 
 def _run_maintenance() -> None:
