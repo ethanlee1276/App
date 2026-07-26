@@ -1372,6 +1372,15 @@ function renderScanner() {
       style="width:90px;background:transparent;color:inherit;border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:4px 8px" />
   </div>`;
 
+  // With seven books on every prop, hundreds of quotes sit a point below
+  // consensus. The board shows the biggest gaps and says how many exist.
+  const staleNote = () => {
+    const st = (state.data.market_scan && state.data.market_scan.stale) || [];
+    const total = st.length ? (st[0].total_found || st.length) : 0;
+    return total > st.length
+      ? `showing the ${st.length} biggest gaps of ${total} found · ` : "";
+  };
+
   const staleRow = (t) => `<div style="display:flex;align-items:center;gap:14px;
       padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
     <span style="flex:1"><strong>${escapeHtml(t.bet)}</strong>
@@ -1386,7 +1395,8 @@ function renderScanner() {
 
   host.innerHTML = freshness + stakeInput
     + scanSection("Stale lines",
-      "a book pricing a side cheaper than every other book. No forecast involved — "
+      staleNote()
+      + "a book pricing a side cheaper than every other book. No forecast involved — "
       + "measured on 30,448 harvested quotes, taking these beat the closing consensus "
       + "64.8% of the time for +1.49 points of CLV (z=11.6). Verify the price is still "
       + "up before betting; that is the whole game here",

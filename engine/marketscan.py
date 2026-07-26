@@ -195,7 +195,11 @@ STALE_GAP_PT = 0.01        # 1 probability point
 STALE_MIN_BOOKS = 3        # a consensus needs a crowd
 
 
-def stale_quotes(recs: list[dict], gap: float = STALE_GAP_PT) -> list[dict]:
+STALE_LIMIT = 25           # a board, not a database dump
+
+
+def stale_quotes(recs: list[dict], gap: float = STALE_GAP_PT,
+                 limit: int = STALE_LIMIT) -> list[dict]:
     """Books currently pricing a side cheaper than the rest of the field.
 
     No forecast is involved: the claim is only that this book disagrees
@@ -234,8 +238,20 @@ def stale_quotes(recs: list[dict], gap: float = STALE_GAP_PT) -> list[dict]:
                         "books_compared": len(quotes),
                         "fair_odds": _prob_to_american(consensus),
                     })
-    out.sort(key=lambda d: -d["gap_pts"])
-    return out
+    # One flag per prop-side, keeping the biggest gap. With seven books
+    # quoting every prop, flagging each cheap book separately produced 911
+    # rows on a 1,016-prop board — technically all above threshold, and
+    # useless as something to act on. The measured CLV came from taking
+    # THE best price available, not from every quote below consensus.
+    best: dict[tuple, dict] = {}
+    for d in out:
+        k = (d["bet"], d["side"])
+        if k not in best or d["gap_pts"] > best[k]["gap_pts"]:
+            best[k] = d
+    ranked = sorted(best.values(), key=lambda d: -d["gap_pts"])
+    for d in ranked:
+        d["total_found"] = len(ranked)
+    return ranked[:limit] if limit else ranked
 
 
 def _prob_to_american(p: float) -> int:

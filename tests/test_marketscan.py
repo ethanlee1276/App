@@ -194,3 +194,30 @@ def test_longshot_warnings_flag_plus_money_props_with_measured_cost():
 
     # Props without a real market are skipped.
     assert longshot_warnings([{**recs[0], "has_market": False}]) == []
+
+
+def test_stale_quotes_dedupes_and_caps_the_board():
+    """On a real 1,016-prop board this emitted 911 rows — every quote below
+    consensus across seven books. All technically above threshold, and
+    useless to act on. The measured CLV came from taking THE best price,
+    so one flag per prop-side is what belongs on the page."""
+    from engine.marketscan import stale_quotes, STALE_LIMIT
+
+    recs = [{"player": f"P{i}", "market": "hits", "market_label": "Hits",
+             "all_lines": [
+                 {"book": "A", "line": 0.5, "over_odds": -110, "under_odds": -110},
+                 {"book": "B", "line": 0.5, "over_odds": -112, "under_odds": -108},
+                 {"book": "C", "line": 0.5, "over_odds": 100 + i, "under_odds": -120},
+             ]} for i in range(60)]
+    out = stale_quotes(recs)
+    assert len(out) == STALE_LIMIT                 # capped
+    assert out[0]["total_found"] > STALE_LIMIT     # but reports the real count
+    gaps = [d["gap_pts"] for d in out]
+    assert gaps == sorted(gaps, reverse=True)      # biggest gap first
+
+    # One row per prop-side, never one per book.
+    keys = [(d["bet"], d["side"]) for d in out]
+    assert len(keys) == len(set(keys))
+
+    # limit=0 returns everything, for callers that want the full set.
+    assert len(stale_quotes(recs, limit=0)) == out[0]["total_found"]

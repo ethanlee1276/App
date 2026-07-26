@@ -288,10 +288,16 @@ def _browser_sweep(ok: str, warn: str, bad: str) -> None:
     with instructions when they aren't installed."""
     import json as _json
     import tempfile
-    have = subprocess.run(
-        ["node", "-e", "import('playwright').then(()=>0,()=>process.exit(1))"],
-        capture_output=True, cwd=str(ROOT))
-    if have.returncode != 0:
+    try:
+        have = subprocess.run(
+            ["node", "-e", "import('playwright').then(()=>0,()=>process.exit(1))"],
+            capture_output=True, cwd=str(ROOT), timeout=30)
+        missing = have.returncode != 0
+    except (FileNotFoundError, OSError, subprocess.SubprocessError):
+        # Node isn't installed at all — the common case, and it must not
+        # take the whole checklist down with it.
+        missing = True
+    if missing:
         print("\n  Page render sweep: skipped (optional).")
         print("    Catches JavaScript errors no data check can see. To enable:")
         print("      npm install playwright && npx playwright install chromium")
