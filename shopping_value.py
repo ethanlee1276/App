@@ -105,6 +105,16 @@ def main() -> None:
         gains.append((avg_imp - american_to_prob(best_over)) * 100)
         books_won[best_book] += 1
 
+        # Drop quotes whose own two sides are arithmetically impossible —
+        # a fabricated under (over +850 / under -110) is not a price.
+        from engine.odds import pair_is_sane
+        sane = [q for q in quotes if q["over_odds"] and q["under_odds"]
+                and pair_is_sane(int(q["over_odds"]), int(q["under_odds"]))]
+        unders = [(int(q["under_odds"]), q["book"]) for q in sane]
+        corrupt_pairs_local = len([q for q in quotes if q["over_odds"]
+                                   and q["under_odds"]]) - len(sane)
+        if corrupt_pairs_local:
+            globals()["_corrupt_total"] = globals().get("_corrupt_total", 0) + corrupt_pairs_local
         if unders:
             best_under, _ = max(unders, key=lambda t: _payout(t[0]))
             shopped = american_to_prob(best_over) + american_to_prob(best_under)
@@ -162,6 +172,11 @@ def main() -> None:
               f"({arbs / len(holds_shopped):.2%} of pairs)")
         print(f"  low-hold pairs (0-2%)              {lowholds:,} "
               f"({lowholds / len(holds_shopped):.2%})")
+        ct = globals().get("_corrupt_total", 0)
+        if ct:
+            print(f"  ⚠️  {ct:,} quote(s) had an impossible over/under pair "
+                  f"(e.g. over +850 / under -110\n      on a home run — a "
+                  f"fabricated side, not a price) and were excluded.")
         if same_book_bad:
             print(f"  ⚠️  {same_book_bad:,} pair(s) showed a negative hold INSIDE a single\n      book — impossible, so those rows have crossed/one-sided odds stored.\n      Excluded from the arbitrage count as data errors, not opportunities.")
 

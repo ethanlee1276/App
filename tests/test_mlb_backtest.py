@@ -79,3 +79,30 @@ if __name__ == "__main__":
     for fn in fns:
         fn(); print(f"  ok  {fn.__name__}")
     print(f"\n{len(fns)} tests passed.")
+
+
+def test_corrupt_book_pair_is_not_treated_as_a_price():
+    """Harvested rows carry fabricated unders: Caesars quoting a home run
+    at over +850 / under -110 implies 10.5% + 52.4% = 63%, i.e. the book
+    arbitraging itself by 37%. Feeding that to the model invents a 52%
+    price on 'no home run' and a phantom edge with it."""
+    from engine.mlb.backtest import backtest_from_logs
+    from engine.odds import pair_is_sane
+
+    assert pair_is_sane(850, -110) is False        # fabricated
+    assert pair_is_sane(1200, -4000) is True       # a real over-only quote
+    assert pair_is_sane(-110, -110) is True
+
+    vals = [0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0]
+    dates = [f"2026-07-{d:02d}" for d in range(1, len(vals) + 1)]
+    entries = [{"name": "A J Ewing", "values": vals, "dates": dates}]
+    corrupt = {("a j ewing", d): {"line": 0.5, "book": "Caesars",
+                                  "over_odds": 850, "under_odds": -110}
+               for d in dates}
+    rep = backtest_from_logs(entries, "home_runs", min_history=6,
+                             real_lines=corrupt)
+    # The over is real, so the prop is still counted as book-priced…
+    assert rep.used_real_lines > 0
+    # …and with the fabricated under discarded the market is one-sided,
+    # so the model cannot manufacture a 37% edge out of it.
+    assert rep.n > 0

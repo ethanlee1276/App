@@ -101,3 +101,28 @@ def best_under_line(lines: list[SportsbookLine]) -> BestLine:
             best = cand
     assert best is not None
     return best
+
+
+# A book's two sides must sum to MORE than 100% — that sum minus one is
+# its margin, which is how it makes money. A pair summing meaningfully
+# below 100% is not a gift, it is corrupt data: most often an over-only
+# prop (home runs) whose absent under got filled with a placeholder.
+# Measured on harvested rows: Caesars showing "over +850 / under -110"
+# on a home run, which implies 10.5% + 52.4% = 63% and reads as a 37%
+# arbitrage against itself.
+#
+# Genuine cross-book arbitrage exists but is small — a 5% cushion admits
+# every real one while rejecting fabrications.
+PAIR_SANITY_FLOOR = 0.95
+
+
+def pair_is_sane(over_odds, under_odds) -> bool:
+    """False when a single book's over/under pair is arithmetically
+    impossible, i.e. the two sides imply less than PAIR_SANITY_FLOOR."""
+    try:
+        o, u = int(over_odds), int(under_odds)
+    except (TypeError, ValueError):
+        return False
+    if not o or not u:          # 0 = side not offered
+        return False
+    return (american_to_prob(o) + american_to_prob(u)) >= PAIR_SANITY_FLOOR

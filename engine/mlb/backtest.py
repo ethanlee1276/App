@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from ..backtest import SettledProp, evaluate, BacktestReport
 from ..models import SportsbookLine
+from ..odds import pair_is_sane
 from ..rules import RuleConfig
 from .models import (
     MLBGame, MLBProp, MLBGameLog, HOME_RUNS,
@@ -88,10 +89,24 @@ def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
             quote = real_lines.get((_norm_name(e["name"]), date))
             if quote:
                 line = float(quote["line"])
-                book_line = SportsbookLine(quote.get("book", "book"), line,
-                                           int(quote.get("over_odds") or -110),
-                                           int(quote.get("under_odds") or -110))
-                real_used += 1
+                # Never fabricate a missing side. Defaulting an absent
+                # under to -110 invents a 52% price on the "no home run"
+                # side of a +850 prop, which is both unbettable and a
+                # phantom edge — 0 means "not offered", as the parser
+                # intends. A pair that fails the sanity floor is corrupt
+                # harvested data and its under is discarded too.
+                over_odds = int(quote.get("over_odds") or 0)
+                under_odds = int(quote.get("under_odds") or 0)
+                if under_odds and not pair_is_sane(over_odds, under_odds):
+                    under_odds = 0
+                if not over_odds:
+                    line = _naive_line(prior[:10], market)
+                    book_line = SportsbookLine("proxy", line, -110, -110)
+                    quote = None
+                else:
+                    book_line = SportsbookLine(quote.get("book", "book"), line,
+                                               over_odds, under_odds)
+                    real_used += 1
             else:
                 line = _naive_line(prior[:10], market)
                 book_line = SportsbookLine("proxy", line, -110, -110)
