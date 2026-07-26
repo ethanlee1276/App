@@ -1358,6 +1358,30 @@ function shortWallet(w) {
   return w && w.length > 12 ? `${w.slice(0, 6)}…${w.slice(-4)}` : (w || "");
 }
 
+function pmSpark(series) {
+  // 30-day cumulative P&L mini-curve for a trader row. Zero line dashed;
+  // color by where the month ended.
+  if (!series || series.length < 2) return "";
+  const w = 96, h = 30, pad = 2;
+  const vals = series.map((p) => p[1]);
+  let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  if (hi - lo < 1e-9) { hi += 1; lo -= 1; }
+  const x = (i) => pad + (i / (series.length - 1)) * (w - 2 * pad);
+  const y = (v) => pad + (1 - (v - lo) / (hi - lo)) * (h - 2 * pad);
+  const pts = series.map((p, i) => `${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" L");
+  const last = vals[vals.length - 1];
+  const color = last >= 0 ? "var(--good)" : "var(--bad)";
+  const fmt = (v) => `${v < 0 ? "−" : "+"}$${Math.abs(Math.round(v)).toLocaleString()}`;
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block"
+      data-tip="past month: ${fmt(vals[0])} → ${fmt(last)} (low ${fmt(Math.min(...vals))}, high ${fmt(Math.max(...vals))})">
+    <line x1="${pad}" y1="${y(0).toFixed(1)}" x2="${w - pad}" y2="${y(0).toFixed(1)}"
+      stroke="currentColor" stroke-width="0.7" stroke-dasharray="3 3" opacity="0.25"/>
+    <path d="M${pts}" fill="none" stroke="${color}" stroke-width="1.6"
+      stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${x(series.length - 1).toFixed(1)}" cy="${y(last).toFixed(1)}" r="2" fill="${color}"/>
+  </svg>`;
+}
+
 function pmAgo(ts) {
   const s = Date.now() / 1000 - ts;
   if (s < 3600) return `${Math.max(1, Math.round(s / 60))}m ago`;
@@ -1437,6 +1461,7 @@ async function renderIntel() {
           target="_blank" rel="noopener" style="color:inherit">${escapeHtml(t.name || shortWallet(t.wallet))}</a></span>
         <span class="term-sub">${lastTxt}</span>
       </span>
+      <span style="flex:0 0 auto" title="cumulative P&L, past month">${pmSpark(t.pnl_series)}</span>
       <span class="term-num" style="min-width:96px;font-weight:800;
         color:${t.pnl >= 0 ? "var(--good)" : "var(--bad)"}">${t.pnl ? `${t.pnl >= 0 ? "+" : "−"}${usd(Math.abs(t.pnl)).slice(0)}` : "—"}</span>
     </div>`;

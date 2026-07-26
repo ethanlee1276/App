@@ -92,6 +92,30 @@ def fetch_wallet_trades(wallet: str, limit: int = 20, ttl: int = 900) -> list[di
     return json.loads(fetch_text(url, f"pm_wtrades_{wallet[:16]}.json", ttl=ttl))
 
 
+PNL_API = "https://user-pnl-api.polymarket.com"
+
+
+def fetch_pnl_series(wallet: str, interval: str = "1m", fidelity: str = "1d",
+                     ttl: int = 3600) -> list[dict]:
+    """A wallet's cumulative P&L curve — the same series Polymarket's own
+    profile page charts. Public, keyless."""
+    url = (f"{PNL_API}/user-pnl?user_address={wallet}"
+           f"&interval={interval}&fidelity={fidelity}")
+    return json.loads(fetch_text(url, f"pm_pnl_{wallet[:16]}.json", ttl=ttl))
+
+
+def parse_pnl_series(raw) -> list[list[float]]:
+    """Normalize to ``[[ts, pnl], ...]`` sorted by time; junk rows dropped."""
+    out = []
+    for r in raw or []:
+        try:
+            out.append([int(r["t"]), round(float(r["p"]), 2)])
+        except (KeyError, TypeError, ValueError):
+            continue
+    out.sort(key=lambda x: x[0])
+    return out
+
+
 # --- pure parsers -----------------------------------------------------------
 def _jlist(v):
     """Gamma encodes list fields as JSON strings ('["Yes","No"]')."""
@@ -187,9 +211,12 @@ def parse_leaderboard(raw: list[dict]) -> list[dict]:
 
 def build_top_traders(leaders: list[dict],
                       trades_by_wallet: dict[str, list[dict]],
+                      pnl_by_wallet: dict[str, list] | None = None,
                       per_trader: int = 5) -> list[dict]:
     """The top-P&L wallets with their most recent trades attached — "what
-    are the best traders doing right now", straight from public data."""
+    are the best traders doing right now", straight from public data.
+    ``pnl_by_wallet`` optionally carries each wallet's one-month cumulative
+    P&L curve for the row's equity sparkline."""
     out = []
     for rank, ld in enumerate(leaders, start=1):
         recent = sorted(trades_by_wallet.get(ld["wallet"], []),
@@ -197,6 +224,7 @@ def build_top_traders(leaders: list[dict],
         out.append({
             "rank": rank, "wallet": ld["wallet"], "name": ld["name"],
             "pnl": ld["pnl"],
+            "pnl_series": (pnl_by_wallet or {}).get(ld["wallet"], []),
             "recent": [{"market": t["title"], "slug": t["slug"],
                         "outcome": t["outcome"], "side": t["side"],
                         "usd": t["usd"], "price": t["price"], "ts": t["ts"]}

@@ -61,14 +61,21 @@ def main() -> None:
                 break
         if not leaders:
             raise DataUnavailable("no leaderboard window answered")
-        by_wallet = {}
+        by_wallet, pnl_by_wallet = {}, {}
         for ld in leaders:
             try:
                 by_wallet[ld["wallet"]] = pm.parse_trades(
                     pm.fetch_wallet_trades(ld["wallet"]))
             except DataUnavailable:
                 by_wallet[ld["wallet"]] = []
-        top_traders = pm.build_top_traders(leaders, by_wallet)
+            try:
+                # One-month cumulative P&L curve, straight from the same
+                # endpoint Polymarket's own profile chart uses.
+                pnl_by_wallet[ld["wallet"]] = pm.parse_pnl_series(
+                    pm.fetch_pnl_series(ld["wallet"]))
+            except (DataUnavailable, ValueError):
+                pnl_by_wallet[ld["wallet"]] = []
+        top_traders = pm.build_top_traders(leaders, by_wallet, pnl_by_wallet)
         traders_note = (f"ranked by realized profit over {window_label} "
                         f"(Polymarket leaderboard)")
     except (DataUnavailable, ValueError) as exc:

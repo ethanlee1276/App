@@ -158,6 +158,25 @@ def test_leaderboard_parse_and_top_traders():
     assert top[1]["recent"] == []            # no trades pulled — still listed
 
 
+def test_pnl_series_parses_sorts_and_attaches():
+    series = pm.parse_pnl_series([
+        {"t": NOW - 86400, "p": "1200.5"},
+        {"t": NOW - 30 * 86400, "p": 0},
+        {"t": NOW, "p": 5400.129},
+        {"p": 99},                                   # junk row dropped
+    ])
+    assert series == [[NOW - 30 * 86400, 0.0], [NOW - 86400, 1200.5],
+                      [NOW, 5400.13]]
+
+    top = pm.build_top_traders(
+        [{"wallet": "0xking", "name": "TheKing", "pnl": 9.9e5}],
+        {}, {"0xking": series})
+    assert top[0]["pnl_series"] == series
+    # No series pulled -> empty list, never a crash.
+    top2 = pm.build_top_traders([{"wallet": "0xq", "name": "", "pnl": 1.0}], {})
+    assert top2[0]["pnl_series"] == []
+
+
 def test_feed_ranks_by_score_then_size():
     markets = pm.parse_markets(GAMMA)
     hist = {"0xfresh": {"first_ts": NOW - 3600, "n": 1, "usd": 250_000}}
