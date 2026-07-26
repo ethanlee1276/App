@@ -428,7 +428,16 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
             "conf": float(r.get("confidence") or 0),
             "grade": r.get("grade", "Pass"),
             "stake": float(r.get("stake_units") or 0),
+            # A pre-game model cannot price a game already in progress —
+            # every prop on a started game is blocked no matter how good
+            # the number looks.
+            "started": any("already started" in w
+                           for w in (r.get("warnings") or [])),
         })
+    started_n = sum(1 for x in rows if x["started"])
+    if started_n:
+        print(f"⏱  {started_n} / {len(rows)} props are on games that have "
+              f"ALREADY STARTED — blocked regardless of edge.\n")
 
     from engine.betting import MARKET_SHRINK, MAX_CREDIBLE_EDGE
     # A prop whose TEMPERED edge exceeds this was, before tempering, a
@@ -446,6 +455,7 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
           f"{len(rows)} props exceed it\n")
 
     gates = [
+        ("game hasn't started yet", lambda x: not x["started"]),
         ("engine graded it (grade ≠ Pass)", lambda x: x["grade"] != "Pass"),
         ("beats the price at all (net edge > 0)", lambda x: x["net"] > 0),
         ("clears the graded bar (net ≥ 0.3pt + chalk surcharge)",
@@ -496,7 +506,8 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
 
     # The band that matters: beats its price AND is believable. If this is
     # empty the board is empty for a real reason, not a filter accident.
-    window = [x for x in rows if x["net"] >= x["need"] and x["edge"] <= ceiling]
+    window = [x for x in rows if x["net"] >= x["need"] and x["edge"] <= ceiling
+              and not x["started"]]
     window.sort(key=lambda x: -(x["net"] - x["need"]))
     show(f"In the recommendable window — beats the price and stays under the "
          f"{ceiling:.0%} credibility ceiling ({len(window)} total):", window[:10])
