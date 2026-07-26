@@ -211,7 +211,7 @@ def hr_probability(prop: MLBProp, game: MLBGame) -> tuple[float, dict]:
     }
 
 
-def hr_watchlist(candidates: list[dict], limit: int = 10) -> list[dict]:
+def hr_watchlist(candidates: list[dict], limit: int | None = 10) -> list[dict]:
     """Tonight's most likely home runs — every real-priced HR over, ranked by
     the model's probability (hitter power × pitcher × park × weather × plate
     appearances).
@@ -252,7 +252,7 @@ def hr_watchlist(candidates: list[dict], limit: int = 10) -> list[dict]:
             "kickoff": getattr(game, "kickoff", ""),
         })
     rows.sort(key=lambda r: -r["model_prob"])
-    return rows[:limit]
+    return rows if limit is None else rows[:limit]
 
 
 def build_hr_longshots(candidates: list[dict], limit: int = 3,

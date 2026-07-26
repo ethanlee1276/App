@@ -75,11 +75,14 @@ def _long_shots(slate) -> tuple[list[dict], list[dict], dict]:
         recent_by_player[prop.player] = [g.value for g in prop.logs][:12]
         candidates.append({"prop": prop, "game": game, "odds": best.over_odds,
                            "book": best.book, "under_odds": best.under_odds})
-    picks = [p.to_dict() for p in build_hr_longshots(candidates, limit=6,
+    # Top THREE picks — the same three the Recommended page features. The
+    # watchlist is unlimited: every real-priced home run belongs on the
+    # Long Shots page, ranked by the model's probability.
+    picks = [p.to_dict() for p in build_hr_longshots(candidates, limit=3,
                                                      per_team=2)]
     for d in picks:
         d["recent_values"] = recent_by_player.get(d.get("player", ""), [])
-    return picks, hr_watchlist(candidates, limit=25), diag
+    return picks, hr_watchlist(candidates, limit=None), diag
 
 
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
@@ -298,6 +301,23 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
     results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]),
                  reverse=True)
     recommended = [r for r in results if r["recommended"]]
+
+    ls_picks, ls_watch, ls_diag = _long_shots(slate)
+    # Home runs are long shots by nature, so the full HR board lives on the
+    # Long Shots page. The Recommended page features only the TOP THREE —
+    # the value picks first, topped up from the watchlist's most-likely
+    # ranking — stamped here so both pages agree on which three.
+    from .models import HOME_RUNS as _HR
+    featured = [d.get("player") for d in ls_picks][:3]
+    for w in ls_watch:
+        if len(featured) >= 3:
+            break
+        if w["player"] not in featured:
+            featured.append(w["player"])
+    for r in results:
+        if r["market"] == _HR:
+            r["hr_featured"] = r["player"] in featured
+
     return {
         "date": slate.date,
         "sport": "mlb",
@@ -308,7 +328,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,
         "game_bets": _game_bets(slate.games, config),
-        "long_shots": (_ls := _long_shots(slate))[0],
-        "longshot_watch": _ls[1],
-        "longshot_diag": _ls[2],
+        "long_shots": ls_picks,
+        "longshot_watch": ls_watch,
+        "longshot_diag": ls_diag,
     }

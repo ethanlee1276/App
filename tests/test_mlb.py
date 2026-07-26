@@ -163,6 +163,29 @@ def test_longshot_diag_counts_the_funnel():
     assert result["long_shots"] or result["longshot_watch"]
 
 
+def test_hr_props_feature_top_three_on_recommended():
+    """Home runs live on the Long Shots page; the Recommended page features
+    only the top three — and both pages agree on which three."""
+    result = run_mlb_slate(SLATE)
+    hr = [r for r in result["recommendations"] if r["market"] == "home_runs"]
+    # Every HR rec carries the stamp, and at most three are featured.
+    assert all("hr_featured" in r for r in hr)
+    featured = [r["player"] for r in hr if r["hr_featured"]]
+    assert len(featured) <= 3
+    # The featured names are exactly the head of the Long Shots page: value
+    # picks first, topped up from the watchlist ranking.
+    board = [d["player"] for d in result["long_shots"]]
+    for w in result["longshot_watch"]:
+        if len(board) >= 3:
+            break
+        if w["player"] not in board:
+            board.append(w["player"])
+    assert set(featured) == set(board[:3]) & {r["player"] for r in hr}
+    # Non-HR markets are never stamped.
+    assert all("hr_featured" not in r for r in result["recommendations"]
+               if r["market"] != "home_runs")
+
+
 def test_pipeline_edges_are_sane():
     result = run_mlb_slate(SLATE)
     for r in result["recommendations"]:

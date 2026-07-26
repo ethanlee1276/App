@@ -540,7 +540,11 @@ function renderRecommended() {
     return;
   }
   const recs = state.data.recommendations.map((r) => ({ ...r, _ok: passesFilters(r) }));
-  const visible = recs.filter((r) => (state.showAll ? true : r._ok));
+  // Home runs are long shots by nature: this page features only the top
+  // three (hr_featured, stamped by the pipeline) — the same three that lead
+  // the Long Shots page, where the FULL home-run board lives.
+  const visible = recs.filter((r) => (state.showAll ? true : r._ok))
+    .filter((r) => r.hr_featured !== false);
   if (!visible.length) {
     // Say WHY the board is empty. "Loosen the sliders" is bad advice when the
     // real reason is that no prop has a real book price yet — picks are never
@@ -572,8 +576,10 @@ function renderRecommended() {
   host.innerHTML = keys.map((k) => {
     const rows = groups.get(k);
     const nRec = rows.filter((r) => r._ok).length;
+    const hrNote = k.toLowerCase() === "home runs"
+      ? ` · top 3 only — the full board is on the Long Shots page` : "";
     return `<div class="section-title" style="grid-column:1/-1;margin:14px 0 0">
-        ${escapeHtml(k)} <span class="sub">— ${rows.length} prop(s)${nRec ? `, ${nRec} recommended` : ""}</span>
+        ${escapeHtml(k)} <span class="sub">— ${rows.length} prop(s)${nRec ? `, ${nRec} recommended` : ""}${hrNote}</span>
       </div>` + rows.map(cardHTML).join("");
   }).join("");
   fillMeters(host);
@@ -685,8 +691,10 @@ function renderLongShots() {
       <div class="es-sub">${escapeHtml(longshotEmptyReason(mlb))}</div></div>`;
     return;
   }
-  note.innerHTML = `<div class="ls-note">Ranked by <b>edge</b>, never by payout.
-    ${mlb ? "At most one per team" : "At most two per game"}, top ${picks.length} shown.</div>`;
+  note.innerHTML = `<div class="ls-note">Top ${picks.length} pick(s), ranked by
+    <b>edge</b>, never by payout — the same ${picks.length === 1 ? "one" : picks.length}
+    featured on the Recommended page. Every other real-priced
+    ${mlb ? "home run" : "scorer"} is ranked below.</div>`;
   host.innerHTML = picks.map(longShotCard).join("") + watchlistHTML(watch, mlb);
   fillMeters(host);
   revealChildren(host);
