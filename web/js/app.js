@@ -1240,6 +1240,17 @@ function renderScanner() {
   const scan = state.data.market_scan || {};
   const arbs = scan.arbs || [], middles = scan.middles || [], lows = scan.low_holds || [];
 
+  // The scanner feeds on price DISAGREEMENT, which mostly appears when one
+  // book moves before the others. On cached prices (one frozen frame per
+  // budget pull) empty sections are the norm, not a bug — say so up front.
+  const os = state.data.odds_status || {};
+  const freshness = os.source === "cache"
+    ? `<div class="ls-note">Prices are from the last budgeted pull (cached — no
+       API spend). Arbs and middles come from catching books mid-move, so a
+       single frozen snapshot rarely shows them; scanning sharpens when pulls
+       resume normal frequency after the credit reset.</div>`
+    : "";
+
   // Sharp money: anchor picks (priced off the sharp book's fair value) and
   // steam moves (several books re-pricing together = pro money footprint).
   const anchors = (state.data.game_bets || []).filter((b) =>
@@ -1248,8 +1259,8 @@ function renderScanner() {
     .filter((r) => r.line_move && r.line_move.steam)
     .map((r) => ({ r, m: r.line_move }));
 
-  host.innerHTML =
-    scanSection("Arbitrage", "opposite sides whose prices GUARANTEE profit — rare across US books and gone in minutes; grab or forget",
+  host.innerHTML = freshness
+    + scanSection("Arbitrage", "opposite sides whose prices GUARANTEE profit — rare across US books and gone in minutes; grab or forget",
       arbs, (a) => scanPairRow(a,
         `<span style="color:var(--good,#3ddc84);font-weight:700">+${(a.profit_pct * 100).toFixed(2)}% locked</span>
          <span style="display:block;opacity:.6;font-size:.85em">${(a.stake_over_pct * 100).toFixed(0)}% of stake on the Over</span>`),
