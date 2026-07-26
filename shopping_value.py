@@ -83,6 +83,8 @@ def main() -> None:
 
     gains, holds_shopped, holds_single, books_won = [], [], [], defaultdict(int)
     arbs = lowholds = 0
+    arb_sizes: list[float] = []
+    arb_books: dict[str, int] = defaultdict(int)
     for key, quotes in multi.items():
         overs = [(int(q["over_odds"]), q["book"]) for q in quotes
                  if q["over_odds"] is not None]
@@ -110,6 +112,9 @@ def main() -> None:
                 holds_single.append((min(per_book.values()) - 1.0) * 100)
             if shopped < 1.0:
                 arbs += 1
+                arb_sizes.append((1.0 - shopped) * 100)
+                bu_book = max(unders, key=lambda t: _payout(t[0]))[1]
+                arb_books[f"{best_book} / {bu_book}"] += 1
             elif shopped <= 1.02:
                 lowholds += 1
 
@@ -137,6 +142,30 @@ def main() -> None:
               f"({arbs / len(holds_shopped):.2%} of pairs)")
         print(f"  low-hold pairs (0-2%)              {lowholds:,} "
               f"({lowholds / len(holds_shopped):.2%})")
+
+    if arb_sizes:
+        # Size is what separates a real, bettable arb from a stale quote.
+        # Books do disagree on soft player props, but a 3%+ "arbitrage"
+        # across US books is nearly always one side that stopped updating
+        # — bet it and that leg is voided or already gone.
+        arb_sizes.sort()
+        m = len(arb_sizes)
+        bands = [("under 0.5% (noise — limits/timing eat it)", 0, 0.5),
+                 ("0.5-1.5% (plausible, thin but real)", 0.5, 1.5),
+                 ("1.5-3% (rare if genuine)", 1.5, 3.0),
+                 ("over 3% (almost certainly a stale line)", 3.0, 1e9)]
+        print("\n  How big are those 'arbitrage' pairs?")
+        for label, lo, hi in bands:
+            k = sum(1 for x in arb_sizes if lo <= x < hi)
+            print(f"    {label:<44} {k:>5}  ({k / m:6.1%})")
+        print(f"    median {arb_sizes[m // 2]:.2f}%   p90 {arb_sizes[m * 9 // 10]:.2f}%"
+              f"   max {arb_sizes[-1]:.2f}%")
+        real = sum(1 for x in arb_sizes if 0.5 <= x < 3.0)
+        print(f"\n  Plausibly bettable (0.5-3%): {real:,} of {m:,} — "
+              f"{real / len(holds_shopped):.2%} of all pairs")
+        print("  Most common book pairing:")
+        for pair, k in sorted(arb_books.items(), key=lambda kv: -kv[1])[:3]:
+            print(f"    {pair:<40} {k:>5}")
 
     print("\nWHERE THE BEST NUMBER LIVES")
     total = sum(books_won.values())
