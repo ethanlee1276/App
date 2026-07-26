@@ -1599,6 +1599,8 @@ async function renderFantasy() {
       <span style="min-width:64px;text-align:right;color:var(--text-dim)" title="4-week average">${pct(u.l4)}</span>
       <span style="min-width:64px;text-align:right;font-weight:700" title="most recent week">${pct(u.last)}</span>
       <span style="min-width:120px;text-align:right">${deltaChip(u.delta)}</span>
+      <span style="min-width:78px;text-align:right;color:var(--text-dim)"
+        title="TD equity from play-by-play">${u.rz_pg != null ? `${u.rz_pg} ${escapeHtml(u.rz_label || "RZ/g")}` : "—"}</span>
       <span style="min-width:70px;text-align:right;color:var(--text-mute)">${u.fp_pg} ppg</span>
     </div>`;
   const usageRows = (d.usage || []).slice(0, 40).map(usageRow).join("");
@@ -1617,12 +1619,15 @@ async function renderFantasy() {
       </div>
       <div class="metrics">
         <div class="metric"><div class="k">Actual</div><div class="v">${r.actual_ppg}</div></div>
-        <div class="metric"><div class="k">Volume says</div><div class="v">${r.expected_ppg}</div></div>
+        <div class="metric"><div class="k">${r.basis === "xfp" ? "xFP says" : "Volume says"}</div><div class="v">${r.expected_ppg}</div></div>
         <div class="metric"><div class="k">Gap</div><div class="v ${r.gap < 0 ? "pos" : "neg"}">${r.gap > 0 ? "+" : ""}${r.gap}</div></div>
       </div>
       <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">
-        ${buy ? "Usage says the production is coming — the volume is already there."
-              : "Producing above what the opportunity supports — beyond the ~" + (bs.band || 1.5) + " PPG a good player sustains."}</div>
+        ${r.basis === "xfp"
+          ? (buy ? "Expected points value every opportunity by WHERE it happened — his say the production is coming."
+                 : "Scoring above what his situations support — beyond the ~" + (bs.band || 1.5) + " PPG a good player sustains.")
+          : (buy ? "Usage says the production is coming — the volume is already there."
+                 : "Producing above what the opportunity supports — beyond the ~" + (bs.band || 1.5) + " PPG a good player sustains.")}</div>
     </article>`;
   };
 
@@ -1638,6 +1643,10 @@ async function renderFantasy() {
         <div class="metric"><div class="k">${escapeHtml(s.away)} implied</div><div class="v">${s.away_implied}</div></div>
       </div>
       <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">${escapeHtml(s.read)}</div>
+      ${s.home_proe != null || s.away_proe != null
+        ? `<div style="margin-top:6px;color:var(--text-dim);font-size:12px" title="Pass rate over expectation — intent vs situation, the stable half of game script">
+            PROE: ${escapeHtml(s.home)} ${s.home_proe != null ? `${s.home_proe >= 0 ? "+" : ""}${(s.home_proe * 100).toFixed(1)}%` : "—"}
+            · ${escapeHtml(s.away)} ${s.away_proe != null ? `${s.away_proe >= 0 ? "+" : ""}${(s.away_proe * 100).toFixed(1)}%` : "—"}</div>` : ""}
       <div style="margin-top:6px;color:var(--text-mute);font-size:12px">Script confidence: ${escapeHtml(s.confidence)}</div>
     </article>`).join("");
 

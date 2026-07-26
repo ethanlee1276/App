@@ -73,10 +73,34 @@ def _share(part: float, whole: float) -> float | None:
     return part / whole if whole > 0 else None
 
 
+def _short_key(name: str, team: str) -> tuple:
+    """Join key across name styles: pbp says "P.Mahomes", weekly stats say
+    "Patrick Mahomes" — (first initial, last name, team) matches both."""
+    parts = [p for p in str(name).replace(".", " ").lower().split() if p]
+    if not parts:
+        return ("", "", team)
+    return (parts[0][0], parts[-1], team)
+
+
+def _pbp_weekly(conn, season: int) -> dict:
+    """{short_key: {week: {"xfp"|"rz_tgt"|"i5_car": value}}} from ingested
+    play-by-play aggregates (empty dict when pbp was never ingested)."""
+    out: dict = {}
+    for r in conn.execute(
+            "SELECT player, team, period, market, value FROM player_game_logs "
+            "WHERE sport='nfl' AND season=? AND market IN "
+            "('xfp','rz_tgt','i5_car')", (season,)):
+        key = _short_key(r["player"], r["team"])
+        out.setdefault(key, {}).setdefault(r["period"], {})[r["market"]] = \
+            float(r["value"])
+    return out
+
+
 def usage_board(conn, season: int, limit: int = BOARD_LIMIT) -> list[dict]:
     """Target/carry shares with the trend framing: last week vs 4-week
     average vs season, sorted so the biggest movers surface first."""
     data = _weekly(conn, season)
+    pbp = _pbp_weekly(conn, season)
     out = []
     for player, p in data["players"].items():
         weeks = sorted(p["weeks"])
@@ -98,6 +122,11 @@ def usage_board(conn, season: int, limit: int = BOARD_LIMIT) -> list[dict]:
         season_avg = sum(shares) / len(shares)
         delta = (last - l4) if (last is not None and l4 is not None) else 0.0
         fp = [p["weeks"][w].get("fp_ppr", 0.0) for w in weeks]
+        # TD equity from play-by-play: inside-5 carries for RBs, red-zone
+        # targets for pass-catchers, per game.
+        pw = pbp.get(_short_key(player, p["team"]), {})
+        rz_key = "i5_car" if share_key == "carries" else "rz_tgt"
+        rz_vals = [m.get(rz_key, 0.0) for m in pw.values()]
         out.append({
             "player": player, "team": p["team"], "position": p["position"],
             "metric": "carry share" if share_key == "carries" else "target share",
@@ -106,6 +135,8 @@ def usage_board(conn, season: int, limit: int = BOARD_LIMIT) -> list[dict]:
             "last": round(last, 3) if last is not None else None,
             "delta": round(delta, 3),
             "fp_pg": round(sum(fp) / len(fp), 1),
+            "rz_pg": round(sum(rz_vals) / len(rz_vals), 1) if rz_vals else None,
+            "rz_label": "i5 car/g" if rz_key == "i5_car" else "RZ tgt/g",
             "weeks": len(weeks),
         })
     # Real usage first, biggest movement on top of it.
@@ -163,6 +194,7 @@ def buy_sell_board(conn, season: int, limit: int = 12,
     legitimately beat volume by ~1.5 PPG, and calling that luck is wrong."""
     data = _weekly(conn, season)
     rates = league_rates(conn, season, min_rows=min_fit_rows)
+    pbp = _pbp_weekly(conn, season)
     rows = []
     for player, p in data["players"].items():
         rate = rates.get(p["position"])
@@ -175,7 +207,17 @@ def buy_sell_board(conn, season: int, limit: int = 12,
         if tgt + car < 5:                 # bench noise — not a decision anyone faces
             continue
         actual = sum(m.get("fp_ppr", 0.0) for m in p["weeks"].values()) / n
-        expected = rate[0] * tgt + rate[1] * car
+        # Real xFP when play-by-play was ingested: each opportunity valued
+        # by WHERE it happened, not just that it happened. Falls back to
+        # the flat volume fit otherwise.
+        xfp_vals = [m["xfp"] for m in pbp.get(_short_key(player, p["team"]),
+                                              {}).values() if "xfp" in m]
+        if len(xfp_vals) >= USAGE_MIN_WEEKS:
+            expected = sum(xfp_vals) / len(xfp_vals)
+            basis = "xfp"
+        else:
+            expected = rate[0] * tgt + rate[1] * car
+            basis = "volume"
         gap = actual - expected
         if abs(gap) <= SUSTAINABLE_PPG:
             continue
@@ -183,12 +225,30 @@ def buy_sell_board(conn, season: int, limit: int = 12,
                      "position": p["position"],
                      "actual_ppg": round(actual, 1),
                      "expected_ppg": round(expected, 1),
-                     "gap": round(gap, 1),
+                     "gap": round(gap, 1), "basis": basis,
                      "targets_pg": round(tgt, 1), "carries_pg": round(car, 1)})
     rows.sort(key=lambda r: r["gap"])
     return {"buy_low": rows[:limit],
             "sell_high": list(reversed(rows[-limit:])),
             "band": SUSTAINABLE_PPG}
+
+
+def team_proe(conn) -> dict[str, float]:
+    """Season-average pass rate over expectation per team, from the latest
+    ingested play-by-play season. Intent, not circumstance — the stable
+    half of predicting how a team will actually call the game."""
+    row = conn.execute("SELECT MAX(season) FROM team_weeks "
+                       "WHERE sport='nfl'").fetchone()
+    if not row or row[0] is None:
+        return {}
+    sums: dict[str, list] = {}
+    for r in conn.execute(
+            "SELECT team, proe FROM team_weeks WHERE sport='nfl' AND season=? "
+            "AND proe IS NOT NULL", (int(row[0]),)):
+        s = sums.setdefault(r["team"], [0.0, 0])
+        s[0] += float(r["proe"])
+        s[1] += 1
+    return {t: round(v / n, 4) for t, (v, n) in sums.items() if n >= 4}
 
 
 def game_scripts(conn) -> list[dict]:
@@ -197,6 +257,7 @@ def game_scripts(conn) -> list[dict]:
     spread — a 7+ favorite is a genuine script prediction, a 2-point spread
     is a coin flip and says so."""
     out = []
+    proe = team_proe(conn)
     for g in conn.execute(
             "SELECT season, period, home, away, spread, total FROM games "
             "WHERE sport='nfl' AND total IS NOT NULL AND spread IS NOT NULL "
@@ -220,6 +281,8 @@ def game_scripts(conn) -> list[dict]:
             "total": total, "spread": spread,
             "home_implied": round(home_imp, 1),
             "away_implied": round(away_imp, 1),
+            "home_proe": proe.get(g["home"]),
+            "away_proe": proe.get(g["away"]),
             "favorite": g["home"] if spread < 0 else g["away"],
             "confidence": conf, "archetype": name, "read": desc,
         })

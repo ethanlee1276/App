@@ -66,6 +66,13 @@ CREATE TABLE IF NOT EXISTS game_umpires (
     sport TEXT, season INTEGER, period TEXT, game_id TEXT, umpire TEXT,
     PRIMARY KEY (sport, season, period, game_id)
 );
+-- Team-week aggregates from play-by-play (plays run + PROE — pass rate
+-- over expectation). PROE is the stable half of the game-script engine.
+CREATE TABLE IF NOT EXISTS team_weeks (
+    sport TEXT, season INTEGER, period TEXT, team TEXT,
+    plays INTEGER, proe REAL,
+    PRIMARY KEY (sport, season, period, team)
+);
 CREATE INDEX IF NOT EXISTS idx_odds_hist_lookup
     ON odds_history (sport, market, player, taken_at);
 CREATE INDEX IF NOT EXISTS idx_logs_lookup
@@ -144,6 +151,11 @@ def upsert_odds_history(conn, rows: list[dict]) -> int:
 STARTER_COLS = ["sport", "season", "period", "game_id", "team", "pitcher",
                 "throws"]
 UMPIRE_COLS = ["sport", "season", "period", "game_id", "umpire"]
+TEAM_WEEK_COLS = ["sport", "season", "period", "team", "plays", "proe"]
+
+
+def upsert_team_weeks(conn, rows: list[dict]) -> int:
+    return _upsert(conn, "team_weeks", TEAM_WEEK_COLS, rows)
 
 
 def upsert_game_starters(conn, rows: list[dict]) -> int:

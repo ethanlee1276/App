@@ -132,6 +132,20 @@ def ingest_nfl(conn, seasons: list[int]) -> dict:
         n = db.upsert_player_logs(conn, rows)
         result["player_logs"] += n
         db.log_ingest(conn, "nfl", "player_logs", str(season), n)
+
+    # Play-by-play for the LATEST season only (the file is ~100MB): real
+    # xFP situation values, red-zone/inside-5 usage, and team PROE.
+    try:
+        from .sources.nflpbp import (load_pbp_rows, aggregate_pbp,
+                                     xfp_player_rows, team_week_rows)
+        season = max(seasons)
+        agg = aggregate_pbp(load_pbp_rows(season))
+        n_x = db.upsert_player_logs(conn, xfp_player_rows(agg, season))
+        n_t = db.upsert_team_weeks(conn, team_week_rows(agg, season))
+        result["pbp_rows"] = n_x + n_t
+        db.log_ingest(conn, "nfl", "pbp", str(season), n_x + n_t)
+    except DataUnavailable as exc:
+        result["skipped"].append(f"nfl pbp: {exc}")
     return result
 
 
