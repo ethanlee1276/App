@@ -198,3 +198,44 @@ if __name__ == "__main__":
     for fn in fns:
         fn(); print(f"  ok  {fn.__name__}")
     print(f"\n{len(fns)} tests passed.")
+
+
+def test_home_run_projection_ignores_when_the_homers_happened():
+    """Regression: recency blending on a rare 0/1 event turned WHEN a
+    hitter homered into a ~43x projection swing (0.344 HR/game if it was
+    yesterday, 0.008 if eleven games ago — same 2-in-15 hitter). That
+    manufactured the 20%+ 'edges' on plus-money home-run props, and no
+    calibration temperature can fix it because the error is dispersion,
+    not level."""
+    from engine.mlb.backtest import _neutral_game
+    from engine.mlb.projection import build_mlb_projection
+    from engine.mlb.models import MLBGameLog, MLBProp, HOME_RUNS
+
+    game = _neutral_game()
+
+    def mean_for(prior, career=0.13):
+        logs = [MLBGameLog(game=len(prior) - j, opponent="", value=float(v))
+                for j, v in enumerate(prior)]
+        prop = MLBProp(player="X", team="H", opponent="A", position="",
+                       market=HOME_RUNS, logs=logs, career_avg=career,
+                       vs_pitcher_avg=None, lines=[], lineup_spot=3)
+        return build_mlb_projection(prop, game).mean
+
+    same_rate = [
+        [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],   # homered yesterday
+        [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],   # five games ago
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],   # eleven games ago
+    ]
+    means = [mean_for(p) for p in same_rate]
+    # Identical underlying rate → identical projection, whatever the order.
+    assert max(means) / min(means) < 1.05, means
+    # And it lands near the hitter's real rate, not multiples of it.
+    assert 0.10 < means[0] < 0.20, means[0]
+
+    # Skill must still come through: a genuine slugger projects far higher.
+    slugger = mean_for([1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0],
+                       career=0.40)
+    assert slugger > 2.5 * means[0], (slugger, means[0])
+
+    # A hitter with no homers at all sits below the 2-in-15 hitter.
+    assert mean_for([0] * 15) < means[0]

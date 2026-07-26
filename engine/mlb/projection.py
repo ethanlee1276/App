@@ -42,6 +42,40 @@ class MLBProjection:
     warnings: list[str] = field(default_factory=list)
 
 
+# Markets where the per-game outcome is a rare 0/1 event rather than a
+# quantity. Recency blending is built for quantities: averaging the last
+# 1/3/5 games smooths a noisy total-bases line toward current form. Do
+# the same to a home run and "last1" is literally 0 or 1, so the blend
+# turns *when* a hitter homered into a projection swing of ~43x —
+# measured: an identical 2-HR-in-15 hitter projects 0.344 HR/game if the
+# homer was yesterday and 0.008 if it was eleven games ago, against a
+# true rate of 0.133. That single defect produced the model's "23% edge"
+# on +450 home-run props, and no calibration temperature can repair it:
+# the error is dispersion, not level, and a temperature only shifts the
+# level.
+RARE_EVENT_MARKETS = {HOME_RUNS}
+# Strength of the prior, in games. A season's worth of shrinkage: with
+# ~30 games of prior weight, one recent homer moves the estimate a
+# little, which is roughly what one homer is actually worth.
+RARE_EVENT_PRIOR_GAMES = 30.0
+
+
+def _rare_event_rate(prop: MLBProp, form: FormResult) -> float:
+    """Empirical-Bayes rate for a rare binary market.
+
+    Shrinks the observed per-game rate toward the player's career rate in
+    proportion to how little evidence there is, instead of amplifying the
+    most recent game."""
+    vals = [g.value for g in prop.logs]
+    n = len(vals)
+    if not n:
+        return form.mean
+    observed = float(sum(vals))
+    prior = prop.career_avg if prop.career_avg else observed / n
+    k = RARE_EVENT_PRIOR_GAMES
+    return (k * prior + observed) / (k + n)
+
+
 def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None) -> MLBProjection:
     # Shared recent-form blend (last 1/3/5/10 + season + career + vs pitcher).
     logs = [GameLog(week=g.game, opponent=g.opponent, value=g.value, home=g.home)
@@ -90,9 +124,17 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None) -> MLBProject
                            0.78, 1.28)
     # Recency shade toward recent form (bounded in form.py) — a cold bat's
     # number comes down instead of riding a stale season line.
-    mean = form.mean * total_mult * form.trend_mult
+    base_mean = form.mean
+    trend_mult = form.trend_mult
+    if prop.market in RARE_EVENT_MARKETS:
+        # …except for rare binary events, where recency blending is actively
+        # harmful (see _rare_event_rate). Trend is dropped too: a "hot"
+        # streak of one homer in three games is noise, not form.
+        base_mean = _rare_event_rate(prop, form)
+        trend_mult = 1.0
+    mean = base_mean * total_mult * trend_mult
 
-    cv_floor = CV_FLOOR.get(prop.market, 0.6) * max(form.mean, 0.1)
+    cv_floor = CV_FLOOR.get(prop.market, 0.6) * max(base_mean, 0.1)
     base_std = max(form.std, cv_floor)
     adj_std = base_std * (1.0 + 0.4 * abs(total_mult - 1.0))
     if form.sample_games < 5:
