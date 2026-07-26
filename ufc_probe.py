@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-"""One-shot probe: which UFC fighter-data sources actually answer, and
-with what shape? Run it and paste the whole output back — it fetches a
-handful of pages for one known fighter (Jan Blachowicz) and prints a
-compact fingerprint of each response. Nothing is stored; ~10 requests.
+"""Probe round 2: pin down the exact ESPN athlete id + endpoint shapes,
+and measure Octagon API coverage. Run and paste the whole output.
 
     python3 ufc_probe.py
 """
@@ -10,42 +8,11 @@ compact fingerprint of each response. Nothing is stored; ~10 requests.
 from __future__ import annotations
 
 import json
+import re
 import urllib.request
 
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
       "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36")
-
-CANDIDATES = [
-    ("espn-search-v3",
-     "https://site.web.api.espn.com/apis/common/v3/search?query=blachowicz&limit=5"),
-    ("espn-search-v2",
-     "https://site.web.api.espn.com/apis/search/v2?query=blachowicz&limit=5"),
-    ("espn-mma-scoreboard",
-     "https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard"),
-    ("espn-core-athletes",
-     "https://sports.core.api.espn.com/v3/sports/mma/ufc/athletes?limit=3"),
-    ("octagon-fighters",
-     "https://api.octagon-api.com/fighters"),
-    ("octagon-rankings",
-     "https://api.octagon-api.com/rankings"),
-]
-
-# Filled in after the search probes above tell us Blachowicz's ESPN id —
-# but try a likely known id shape anyway so we learn the endpoint format.
-ESPN_ID_PROBES = [
-    ("espn-athlete-overview",
-     "https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{id}/overview"),
-    ("espn-athlete-stats",
-     "https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{id}/stats"),
-    ("espn-athlete-fights",
-     "https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{id}/fights"),
-    ("espn-core-athlete",
-     "https://sports.core.api.espn.com/v2/sports/mma/athletes/{id}"),
-    ("espn-core-records",
-     "https://sports.core.api.espn.com/v2/sports/mma/athletes/{id}/records"),
-    ("espn-core-stats",
-     "https://sports.core.api.espn.com/v2/sports/mma/athletes/{id}/statistics"),
-]
 
 
 def get(url: str, timeout: int = 20) -> tuple[int, bytes]:
@@ -54,57 +21,81 @@ def get(url: str, timeout: int = 20) -> tuple[int, bytes]:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, r.read()
     except urllib.error.HTTPError as e:
-        return e.code, e.read()[:200]
+        return e.code, e.read()[:300]
     except Exception as e:  # noqa: BLE001
         return 0, str(e).encode()
 
 
-def fingerprint(body: bytes) -> str:
-    text = body.decode("utf-8", errors="replace").strip()
-    if not text:
-        return "(empty)"
-    if text[:1] in "[{":
-        try:
-            d = json.loads(text)
-        except ValueError:
-            return "json-ish but unparsable: " + text[:150]
-        if isinstance(d, dict):
-            keys = list(d.keys())[:10]
-            return f"JSON dict, {len(text):,}B, keys={keys}"
-        return (f"JSON list, {len(text):,}B, {len(d)} items, "
-                f"first={json.dumps(d[0])[:180] if d else '[]'}")
-    first = " ".join(text[:200].split())
-    return f"HTML/text, {len(text):,}B: {first}"
-
-
-def show(name: str, url: str) -> bytes:
+def jget(url: str):
     status, body = get(url)
-    print(f"\n[{name}] {status}\n  {url}\n  {fingerprint(body)}")
-    return body if status == 200 else b""
+    if status != 200:
+        return status, None
+    try:
+        return status, json.loads(body.decode("utf-8", errors="replace"))
+    except ValueError:
+        return status, None
 
 
 def main() -> None:
+    # 1) Find Blachowicz the RIGHT way: walk search-v2's player results.
+    status, d = jget("https://site.web.api.espn.com/apis/search/v2"
+                     "?query=jan%20blachowicz&limit=10")
     espn_id = None
-    for name, url in CANDIDATES:
-        body = show(name, url)
-        # Pull a Blachowicz athlete id out of whichever search answers.
-        if espn_id is None and body and b"lachowicz" in body:
-            import re
-            m = (re.search(rb'"id"\s*:\s*"?(\d{6,8})"?[^}]{0,300}?lachowicz', body)
-                 or re.search(rb'lachowicz[^}]{0,300}?"id"\s*:\s*"?(\d{6,8})"?', body)
-                 or re.search(rb'/id/(\d{6,8})', body))
-            if m:
-                espn_id = m.group(1).decode()
-                print(f"  → found ESPN athlete id: {espn_id}")
-
-    if espn_id:
-        for name, tmpl in ESPN_ID_PROBES:
-            show(name, tmpl.format(id=espn_id))
+    print(f"[search-v2] {status}")
+    for rt in (d or {}).get("results", []):
+        if rt.get("type") != "player":
+            continue
+        for item in rt.get("contents", []):
+            print("  player item:", json.dumps(item)[:400])
+            m = re.search(r"/id/(\d+)", json.dumps(item))
+            if m and espn_id is None:
+                espn_id = m.group(1)
+    if not espn_id:
+        espn_id = "3949584"          # widely-cited Blachowicz id — verify below
+        print(f"  no player hit parsed — trying fallback id {espn_id}")
     else:
-        print("\n(no ESPN athlete id found in the search responses — "
-              "the id-based probes were skipped; paste the output anyway)")
+        print(f"  → athlete id {espn_id}")
 
-    # Octagon API detail probe: their /fighters payload keys fighters by slug.
+    # 2) ESPN endpoint battery with a real id.
+    probes = [
+        ("v3-base", f"https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{espn_id}"),
+        ("v3-overview", f"https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{espn_id}/overview"),
+        ("v3-stats", f"https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{espn_id}/stats"),
+        ("v3-gamelog", f"https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{espn_id}/gamelog"),
+        ("v3-eventlog", f"https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{espn_id}/eventlog"),
+        ("core-league-athlete", f"https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes/{espn_id}"),
+        ("core-league-records", f"https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes/{espn_id}/records"),
+        ("core-league-eventlog", f"https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes/{espn_id}/eventlog"),
+        ("core-league-stats", f"https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes/{espn_id}/statistics"),
+    ]
+    for name, url in probes:
+        status, body = get(url)
+        text = body.decode("utf-8", errors="replace")
+        print(f"\n[{name}] {status}  {url}")
+        print("  " + " ".join(text[:500].split()))
+
+    # 3) The fighter web page's embedded JSON (fallback source).
+    status, body = get(f"https://www.espn.com/mma/fighter/stats/_/id/{espn_id}")
+    text = body.decode("utf-8", errors="replace")
+    print(f"\n[espn-fighter-page] {status}  {len(text):,}B")
+    if status == 200:
+        print("  has __espnfitt__:", "__espnfitt__" in text)
+        for token in ("sigStrikes", "takedown", "SLpM", "strikeAccuracy",
+                      "fighterHistory", "statistics"):
+            print(f"  contains '{token}':", token.lower() in text.lower())
+
+    # 4) Octagon API: coverage + one detail record.
+    status, d = jget("https://api.octagon-api.com/fighters")
+    if d:
+        keys = list(d.keys())
+        print(f"\n[octagon-fighters] {status}  {len(keys)} fighters total")
+        for probe_name in ("jan-blachowicz", "aleksandar-rakic", "marcin-tybura",
+                           "hailey-cowan", "carlos-ulberg"):
+            print(f"  has {probe_name}:", probe_name in d)
+        sample = keys[0]
+        print(f"  sample record [{sample}]:",
+              json.dumps(d[sample])[:500])
+
     print("\nDone — paste everything above back into the chat.")
 
 
