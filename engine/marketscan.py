@@ -22,7 +22,7 @@ never enter: a pair needs both real sides.
 
 from __future__ import annotations
 
-from .odds import american_to_decimal
+from .odds import american_to_decimal, PAIR_SANITY_FLOOR
 
 MAX_ROWS = 20
 LOW_HOLD_MAX = 0.02           # ≤2% combined juice counts as "low hold" (spec)
@@ -107,6 +107,22 @@ def scan_recommendations(recs: list[dict]) -> dict:
             for lu, (du, uo, ub) in unders.items():
                 if lu == lo:
                     inv = 1.0 / do + 1.0 / du
+                    # A pair implying far below 100% is not a windfall, it
+                    # is corrupt data when BOTH sides come from the same
+                    # book: no book prices its own market at a guaranteed
+                    # loss. Sample data surfaced "Kyle Tucker over +318 /
+                    # under -110, both DraftKings" as a 31% arbitrage.
+                    # Cross-book pairs are left alone even when large —
+                    # those are stale lines, which ARB_SUSPECT flags and
+                    # still shows so the user can judge.
+                    # No book prices its own market at a guaranteed loss,
+                    # at ANY size — so a same-book pair implying under 100%
+                    # is corrupt regardless of how small the "profit" looks.
+                    # Cross-book pairs are left alone even when large: those
+                    # are stale lines, which ARB_SUSPECT flags and still
+                    # shows so the user can judge for themselves.
+                    if ob == ub and inv < 1.0:
+                        continue
                     base = {
                         "bet": label,
                         "over": {"line": lo, "odds": oo, "book": ob},
