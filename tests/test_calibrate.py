@@ -181,3 +181,39 @@ if __name__ == "__main__":
     for fn in fns:
         fn(); print(f"  ok  {fn.__name__}")
     print(f"\n{len(fns)} tests passed.")
+
+
+def test_calibration_pairs_are_stated_on_the_over_side():
+    """Regression: the fitted correction is applied to P(over the line),
+    so the pairs it is fitted from must describe the same quantity.
+
+    Home runs exposed this — the model backs the UNDER on nearly every
+    prop, so fitting on the chosen side taught the fitter about the
+    under-probability while the engine corrected the over-probability,
+    and P(home run) stayed 2.8x too high."""
+    from engine.backtest import SettledProp, evaluate
+
+    # Ten HR props: model says 29% chance of a homer (so it backs the
+    # UNDER at 71%), and exactly one homer actually lands.
+    settled = []
+    for i in range(10):
+        settled.append(SettledProp(
+            player=f"P{i}", market="home_runs", line=0.5, odds=-400,
+            hit_prob=0.71, projection=0.29,
+            actual=1.0 if i == 0 else 0.0, side="UNDER"))
+    pairs = evaluate(settled).pairs
+    assert len(pairs) == 10
+    # Every pair must state the OVER probability (0.29), not the 0.71 the
+    # model backed — and the outcome must be "did the over hit".
+    assert all(abs(p - 0.29) < 1e-9 for p, _ in pairs), pairs[:3]
+    assert sum(o for _, o in pairs) == 1
+    # Fitting on those pairs must push the over-probability DOWN toward
+    # the realised 10%, which is the whole point.
+    from engine.calibrate import apply_temperature, fit_correction
+    t, b = fit_correction(pairs * 40, min_samples=100)
+    assert apply_temperature(0.29, t, b) < 0.29
+
+    # An OVER-sided prop is passed through unchanged.
+    over = [SettledProp(player="O", market="hits", line=0.5, odds=-110,
+                        hit_prob=0.62, projection=1.0, actual=1.0, side="OVER")]
+    assert evaluate(over).pairs == [(0.62, 1)]

@@ -222,7 +222,21 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
 
     # Calibration.
     r.bins, r.brier, r.ece = _calibration(settled, n_bins)
-    r.pairs = [(s.hit_prob, s.outcome) for s in settled if s.outcome is not None]
+    # Calibration pairs are stated on the OVER side, always.
+    #
+    # ``hit_prob`` is the probability of whichever side the model backed,
+    # but the fitted correction is applied to P(over the line) inside
+    # each evaluator. On a two-sided market the model picks both sides
+    # roughly evenly and the mismatch washes out; on a one-sided market
+    # it does not. Home runs are the pathological case: the model backs
+    # the under on essentially every prop, so the fit learned "the UNDER
+    # probability is understated" and then applied that to the OVER —
+    # leaving P(home run) 2.8× too high and the fitted ECE stuck at 0.16.
+    # Restating both sides as "did the over hit" makes the thing fitted
+    # and the thing corrected the same quantity.
+    r.pairs = [(s.hit_prob if (s.side or "OVER").upper() == "OVER"
+                else 1.0 - s.hit_prob, s.over_hit)
+               for s in settled if s.over_hit is not None]
 
     # Betting performance on recommended bets, overall and per pricing basis.
     bets = [s for s in settled if s.recommended]
