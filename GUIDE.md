@@ -24,8 +24,18 @@ python3 launch.py --check
 ```
 
 That prints a full checklist: which data feeds are reachable, how fresh
-each page's data is, how many rows are in each database, journal status,
-and backups. When something seems broken, run this first and paste me the
+each page's data is, whether every page's JSON is valid, how many rows
+are in each database, journal status, and backups.
+
+It can also **render all 13 pages in a headless browser** and report any
+JavaScript error — the class of bug no data check can see (it is how a
+phantom arbitrage on the Scanner and a broken parlay calculator were both
+caught). That part is optional and skips with instructions unless you run
+once:
+
+```
+npm install playwright && npx playwright install chromium
+``` When something seems broken, run this first and paste me the
 output.
 
 ---

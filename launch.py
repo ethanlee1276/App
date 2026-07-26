@@ -236,6 +236,111 @@ def _background_refresher(interval: int) -> None:
         refresh_all(quiet=True)
 
 
+# Every page the site serves, and the container whose text proves it
+# actually rendered. A page can fetch its data fine and still throw while
+# drawing it — the failure that leaves a blank panel and no clue anywhere.
+SWEEP_VIEWS = [
+    ("MLB Recommended", "?sport=mlb#recommended", "#view-recommended"),
+    ("MLB Edge Board", "?sport=mlb#edge", "#edge-board"),
+    ("MLB Scanner", "?sport=mlb#scanner", "#scanner-body"),
+    ("MLB Long Shots", "?sport=mlb#longshots", "#view-longshots"),
+    ("MLB Trending", "?sport=mlb#trending", "#trending"),
+    ("MLB Players", "?sport=mlb#players", "#players"),
+    ("Record", "?sport=mlb#record", "#record-body"),
+    ("NFL Recommended", "?sport=nfl#recommended", "#view-recommended"),
+    ("Polymarket", "?sport=mlb#intel", "#intel-body"),
+    ("Fantasy", "?sport=mlb#fantasy", "#fantasy-body"),
+    ("NBA", "?sport=mlb#nba", "#nba-body"),
+    ("UFC", "?sport=mlb#ufc", "#ufc-body"),
+    ("Why Us", "?sport=mlb#why", "#why-body"),
+]
+
+_SWEEP_JS = r"""
+import { chromium } from 'playwright';
+const VIEWS = %s;
+const PORT = process.argv[2];
+const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+for (const [name, hash, sel] of VIEWS) {
+  const p = await b.newPage({ viewport: { width: 1280, height: 1000 } });
+  const errs = [];
+  p.on('pageerror', e => errs.push('crash: ' + e.message));
+  p.on('console', m => { const t = m.text();
+    if (m.type() === 'error' && !/404|Failed to load resource/.test(t)) errs.push('console: ' + t.slice(0,110)); });
+  let txt = '';
+  try {
+    await p.goto(`http://127.0.0.1:${PORT}/${hash}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await p.waitForTimeout(1200);
+    txt = (await p.locator(sel).first().innerText()).replace(/\s+/g, ' ').trim();
+  } catch (e) { errs.push('render: ' + String(e).slice(0, 90)); }
+  console.log(JSON.stringify({ name, chars: txt.length, errs }));
+  await p.close();
+}
+await b.close();
+"""
+
+
+def _browser_sweep(ok: str, warn: str, bad: str) -> None:
+    """Render every page in a headless browser and report JS errors.
+
+    Reading the code has repeatedly missed what looking at the page found
+    — a phantom arbitrage on the Scanner, a parlay calculator reporting
+    zero cost. This is optional: it needs Node and Playwright, and skips
+    with instructions when they aren't installed."""
+    import json as _json
+    import tempfile
+    have = subprocess.run(
+        ["node", "-e", "import('playwright').then(()=>0,()=>process.exit(1))"],
+        capture_output=True, cwd=str(ROOT))
+    if have.returncode != 0:
+        print("\n  Page render sweep: skipped (optional).")
+        print("    Catches JavaScript errors no data check can see. To enable:")
+        print("      npm install playwright && npx playwright install chromium")
+        return
+
+    print("\n  Page render sweep (headless browser):")
+    port = 8973
+    server = None
+    try:
+        # The sweep's own server must not narrate every asset fetch into
+        # the middle of the checklist.
+        class _Quiet(Handler):
+            def log_message(self, *a, **kw):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", port), _Quiet)
+        server.live_mode = True
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False,
+                                         dir=str(ROOT)) as fh:
+            fh.write(_SWEEP_JS % _json.dumps(SWEEP_VIEWS))
+            script = fh.name
+        proc = subprocess.run(["node", script, str(port)], cwd=str(ROOT),
+                              capture_output=True, text=True, timeout=180)
+        Path(script).unlink(missing_ok=True)
+        seen = 0
+        for line in proc.stdout.splitlines():
+            try:
+                r = _json.loads(line)
+            except ValueError:
+                continue
+            seen += 1
+            if r["errs"]:
+                print(f"{bad} {r['name']}: {r['errs'][0]}")
+            elif r["chars"] < 25:
+                print(f"{warn} {r['name']}: rendered almost nothing "
+                      f"({r['chars']} chars) — check the page")
+            else:
+                print(f"{ok} {r['name']}: rendered ({r['chars']:,} chars)")
+        if not seen:
+            print(f"{warn} sweep produced no output: "
+                  f"{(proc.stderr or '').strip().splitlines()[-1:] or ''}")
+    except Exception as exc:  # noqa: BLE001 — a check must never crash
+        print(f"{warn} Page render sweep failed: {exc}")
+    finally:
+        if server is not None:
+            server.shutdown()
+
+
 def _reachable(url: str, timeout: int = 6, ua: str = "gridiron-edge/preflight") -> bool:
     import urllib.error
     import urllib.request
@@ -251,7 +356,7 @@ def _reachable(url: str, timeout: int = 6, ua: str = "gridiron-edge/preflight") 
 
 def preflight() -> None:
     """Print a readiness checklist — what's live-ready and what still needs a step."""
-    ok, warn = "  ✅", "  ⚠️ "
+    ok, warn, bad = "  ✅", "  ⚠️ ", "  ❌"
     print("Gridiron Edge — preflight check\n")
 
     v = sys.version_info
@@ -340,6 +445,47 @@ def preflight() -> None:
         else:
             print(f"{ok if not stale else warn} {name}: built {age}"
                   + ("  → stale; is the launcher running?" if stale else ""))
+
+    # Every board the site serves must be parseable and carry the keys the
+    # page reads. A truncated or half-written JSON renders as a blank panel
+    # with no error anywhere — the failure mode hardest to notice by eye.
+    print("\n  Page data contracts:")
+    import json as _json
+    contracts = [
+        ("MLB board", "web/data/mlb_recommendations.json",
+         ("recommendations", "counts")),
+        ("NFL board", "web/data/recommendations.json",
+         ("recommendations", "counts")),
+        ("Record", "web/data/record.json", ("overall", "recent")),
+        ("Polymarket", "web/data/predmarkets.json", ()),
+        ("Fantasy", "web/data/fantasy.json", ()),
+        ("NBA", "web/data/nba.json", ()),
+        ("UFC", "web/data/ufc.json", ()),
+    ]
+    for name, rel, keys in contracts:
+        p = ROOT / rel
+        if not p.is_file():
+            continue                      # freshness section already said so
+        try:
+            data = _json.loads(p.read_text())
+        except Exception as exc:  # noqa: BLE001
+            print(f"{bad} {name}: JSON is corrupt ({exc}) — the page will "
+                  f"render blank. Delete it and let the launcher rebuild.")
+            continue
+        missing = [k for k in keys if k not in data]
+        if missing:
+            print(f"{warn} {name}: missing key(s) {', '.join(missing)} — "
+                  f"the page may render empty")
+        else:
+            extra = ""
+            recs = data.get("recommendations")
+            if isinstance(recs, list):
+                scan = data.get("market_scan") or {}
+                extra = (f" · {len(recs)} props, "
+                         f"{len(scan.get('stale') or [])} stale-line flag(s)")
+            print(f"{ok} {name}: valid{extra}")
+
+    _browser_sweep(ok, warn, bad)
 
     # Database inventory — the raw truth every model reads.
     print("\n  Databases:")
