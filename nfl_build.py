@@ -130,8 +130,8 @@ def main() -> None:
             print(f"\n⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
 
         if real_odds:
-            from engine.linemoves import load_history, analyze, summary_lines
-            moves = analyze(load_history())
+            from engine.linemoves import load_history, analyze, summary_lines, todays_rows
+            moves = analyze(todays_rows(load_history()))
             if moves:
                 print("\nLine movement (open → current):")
                 for line in summary_lines(moves):
@@ -169,6 +169,17 @@ def main() -> None:
 
     config = RuleConfig(min_confidence=args.min_confidence, min_edge=args.min_edge)
     result = run_slate(slate, config, model=model)
+
+    # Stamp each pick with how the market has moved relative to OUR side
+    # (informational — never changes a grade).
+    if real_odds:
+        try:
+            from engine.linemoves import (load_history, analyze, todays_rows,
+                                          annotate_recommendations)
+            annotate_recommendations(result["recommendations"],
+                                     analyze(todays_rows(load_history())))
+        except Exception as exc:
+            print(f"⚠️  Line-movement stamps skipped: {exc}")
 
     c = result["counts"]
     print(f"\nAnalyzed {c['props_analyzed']} props → {c['recommended']} recommended")

@@ -174,6 +174,22 @@ def main() -> None:
     config = RuleConfig(min_confidence=args.min_confidence, min_edge=args.min_edge)
     result = run_mlb_slate(slate, config)
 
+    # Line movement: what the market has done since our first snapshot, and
+    # whether it agrees with each pick (informational — never changes a grade).
+    if real_odds:
+        try:
+            from engine.linemoves import (load_history, analyze, summary_lines,
+                                          todays_rows, annotate_recommendations)
+            moves = analyze(todays_rows(load_history()))
+            n_mv = annotate_recommendations(result["recommendations"], moves)
+            if moves:
+                print(f"Line movement: {len(moves)} prop(s) re-priced since "
+                      f"open; verdict stamped on {n_mv} pick(s).")
+                for line in summary_lines(moves, limit=6):
+                    print(line)
+        except Exception as exc:
+            print(f"⚠️  Line-movement stamps skipped: {exc}")
+
     c = result["counts"]
     confirmed = sum(1 for g in slate.games if g.lineups_confirmed)
     print(f"\n{args.date}: {len(slate.games)} games ({confirmed} with confirmed lineups)")

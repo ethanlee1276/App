@@ -612,6 +612,16 @@ function booksChip(r) {
   const n = (r.all_lines || []).length;
   return n <= 1 ? "" : `<span class="chip books">🛒 ${n} books · best ${escapeHtml(r.book)}</span>`;
 }
+function moveChip(r) {
+  const m = r.line_move;
+  if (!m) return "";
+  const what = Math.abs(m.delta || 0) > 1e-9
+    ? `${m.open} → ${m.current}`
+    : `${m.open_odds != null ? american(m.open_odds) : "?"} → ${m.current_odds != null ? american(m.current_odds) : "?"}`;
+  const withUs = m.verdict === "with";
+  const icon = m.steam ? "🔥" : withUs ? "📈" : "📉";
+  return `<span class="chip ${withUs ? "up" : "down"}" title="${withUs ? "Books have re-priced toward our side since our first snapshot" : "Books have re-priced away from our side since our first snapshot"}">${icon} Market ${withUs ? "with" : "against"} pick · ${what}</span>`;
+}
 
 function cardHTML(r) {
   const reasons = (r.reasons || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
@@ -646,7 +656,7 @@ function cardHTML(r) {
         ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
              ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
         : ""}
-      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${trendChip(r)}${booksChip(r)}${stakeChip}</div>
+      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${trendChip(r)}${moveChip(r)}${booksChip(r)}${stakeChip}</div>
       ${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
 }

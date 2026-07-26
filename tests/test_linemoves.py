@@ -108,6 +108,86 @@ def test_closing_lines_picks_the_last_pregame_number():
     assert closing_lines(rows)[("Ja'Marr Chase", "rec_yds")] == 99.0
 
 
+def _psnap(ts, book, odds, line=0.5, player="Slugger", market="home_runs"):
+    return {"ts": ts, "player": player, "market": market, "book": book,
+            "line": line, "over_odds": odds}
+
+
+def test_price_movement_on_a_static_line():
+    """MLB props often sit on a fixed 0.5/1.5 line and move through the
+    JUICE — the line never budges, the odds do. That must count as
+    movement (it's the only kind HR props ever show)."""
+    rows = []
+    for book in ("DraftKings", "FanDuel"):
+        rows.append(_psnap(NOW - 3000, book, +150))
+        rows.append(_psnap(NOW - 600, book, +115))    # over shortening hard
+    r = analyze(rows, now=NOW)[0]
+    assert r.delta == 0 and r.direction == "up" and r.steam is True
+    assert r.open_odds == 150 and r.current_odds == 115
+    assert r.prob_delta > 0.05
+
+
+def test_static_price_and_line_stay_silent():
+    rows = [_psnap(NOW - i * 600, "DraftKings", +150) for i in range(5)]
+    assert analyze(rows, now=NOW) == []
+
+
+def test_annotate_stamps_verdict_for_our_side():
+    from engine.linemoves import annotate_recommendations
+
+    rows = []
+    for book in ("DraftKings", "FanDuel", "BetMGM"):
+        rows.append(_snap(NOW - 3000, book, 70.5))
+        rows.append(_snap(NOW - 600, book, 72.0))     # line up = toward Over
+    reports = analyze(rows, now=NOW)
+
+    over = {"player": "RB One", "market": "rush_yds", "side": "OVER",
+            "has_market": True, "reasons": [], "warnings": []}
+    under = {"player": "RB One", "market": "rush_yds", "side": "UNDER",
+             "has_market": True, "reasons": [], "warnings": []}
+    proxy = {"player": "RB One", "market": "rush_yds", "side": "OVER",
+             "has_market": False, "reasons": [], "warnings": []}
+    unmoved = {"player": "Nobody", "market": "rush_yds", "side": "OVER",
+               "has_market": True, "reasons": [], "warnings": []}
+
+    n = annotate_recommendations([over, under, proxy, unmoved], reports)
+    assert n == 2
+    # Same move, opposite meanings: agreement is a reason, a fade is a warning.
+    assert over["line_move"]["verdict"] == "with" and over["line_move"]["steam"]
+    assert any("Market moving toward the Over" in r for r in over["reasons"])
+    assert under["line_move"]["verdict"] == "against"
+    assert any("Market moving against the Under" in w for w in under["warnings"])
+    # Proxy lines and unmoved props get no stamp — nothing is fabricated.
+    assert "line_move" not in proxy and "line_move" not in unmoved
+
+
+def test_todays_rows_drops_yesterdays_board():
+    """MLB plays daily — yesterday's snapshot of the same player/market must
+    never chain onto today's and fabricate movement between two games."""
+    from engine.linemoves import todays_rows
+    import datetime as dt
+    noon = dt.datetime(2026, 7, 26, 12, 0).timestamp()
+    rows = [_snap(noon - 20 * 3600, "DraftKings", 70.5),   # yesterday evening
+            _snap(noon - 3600, "DraftKings", 72.0),
+            _snap(noon - 600, "DraftKings", 72.0)]
+    kept = todays_rows(rows, now=noon)
+    assert len(kept) == 2
+    assert analyze(kept, now=noon) == []                   # today never moved
+
+
+def test_annotate_price_move_reads_as_odds():
+    from engine.linemoves import annotate_recommendations
+    rows = [_psnap(NOW - 3000, "DraftKings", +150),
+            _psnap(NOW - 600, "DraftKings", +115),
+            _psnap(NOW - 3000, "FanDuel", +150),
+            _psnap(NOW - 600, "FanDuel", +115)]
+    rec = {"player": "Slugger", "market": "home_runs", "side": "OVER",
+           "has_market": True, "reasons": [], "warnings": []}
+    assert annotate_recommendations([rec], analyze(rows, now=NOW)) == 1
+    assert rec["line_move"]["verdict"] == "with"
+    assert any("Over price +150 → +115" in r for r in rec["reasons"])
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
