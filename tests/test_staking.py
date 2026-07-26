@@ -13,7 +13,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from engine.betting import (MIN_STAKE_UNITS, _grade, _kelly_stake, net_edge)
+from engine.betting import (MARKET_SHRINK, MAX_CREDIBLE_EDGE, MIN_STAKE_UNITS,
+                            _grade, _kelly_stake, favourite_surcharge, net_edge)
 from engine.odds import american_to_prob, devig_two_way, expected_value
 
 PRICES = (-200, -140, -120, -115, -110, -105, 100, 120, 150, 250, 400)
@@ -35,7 +36,7 @@ def test_no_graded_bet_is_ever_unsizeable():
     """Every bet the board grades must be one Kelly will stake."""
     offenders = [(p, o) for o in PRICES for p in PROBS
                  for conf in (4.5, 6.5, 8.0, 10.0)
-                 if _grade(conf, net_edge(p, o)) != "Pass"
+                 if _grade(conf, net_edge(p, o), o) != "Pass"
                  and _kelly_stake(p, o) <= 0]
     assert not offenders, f"graded but unsizeable: {offenders[:5]}"
 
@@ -43,7 +44,7 @@ def test_no_graded_bet_is_ever_unsizeable():
 def test_no_graded_bet_is_ever_negative_ev():
     offenders = [(p, o) for o in PRICES for p in PROBS
                  for conf in (4.5, 6.5, 8.0, 10.0)
-                 if _grade(conf, net_edge(p, o)) != "Pass"
+                 if _grade(conf, net_edge(p, o), o) != "Pass"
                  and expected_value(p, o) <= 0]
     assert not offenders, f"graded but −EV: {offenders[:5]}"
 
@@ -74,12 +75,39 @@ def test_stake_scales_with_edge_and_stays_capped():
 def test_grade_ladder_requires_real_net_edge():
     # Thresholds are net of the vig now: at −110 these are the model
     # probabilities each tier demands.
-    assert _grade(10.0, net_edge(0.520, -110)) == "Pass"        # below the price
-    assert _grade(10.0, net_edge(0.528, -110)) == "Lean"
-    assert _grade(10.0, net_edge(0.535, -110)) == "Play"
-    assert _grade(10.0, net_edge(0.546, -110)) == "Strong Play"
+    assert _grade(10.0, net_edge(0.520, -110), -110) == "Pass"   # below the price
+    assert _grade(10.0, net_edge(0.528, -110), -110) == "Lean"
+    assert _grade(10.0, net_edge(0.535, -110), -110) == "Play"
+    assert _grade(10.0, net_edge(0.546, -110), -110) == "Strong Play"
     # Confidence still gates independently of price edge.
-    assert _grade(3.0, net_edge(0.600, -110)) == "Pass"
+    assert _grade(3.0, net_edge(0.600, -110), -110) == "Pass"
+
+
+def test_favourite_surcharge_targets_the_measured_failure():
+    """The journal showed favourites hitting 45.7% against a 66.9%
+    break-even (p=0.001) while underdogs held up. The surcharge must
+    therefore bite on chalk and leave everything else alone."""
+    # Underdogs and near-even prices: untouched.
+    for o in (250, 150, 120, 100, -105, -110, -120):
+        assert favourite_surcharge(o) == 0.0 or favourite_surcharge(o) < 0.001, o
+    # Requirement climbs monotonically as the price shortens.
+    sur = [favourite_surcharge(o) for o in (-140, -170, -200, -235, -300)]
+    assert sur == sorted(sur) and sur[0] > 0 and sur[-1] > sur[0]
+
+
+def test_heavy_chalk_is_unreachable_even_at_a_maximum_edge():
+    """−235 and shorter is the band that produced a −40% ROI. Even the
+    largest edge the model is allowed to claim must not grade there."""
+    def best_possible_net(o, u):
+        fair, _ = devig_two_way(o, u)
+        best_hit = fair + MARKET_SHRINK * MAX_CREDIBLE_EDGE
+        return best_hit - american_to_prob(o)
+    for o, u in ((-235, 195), (-300, 250), (-400, 320)):
+        net = best_possible_net(o, u)
+        assert _grade(10.0, net, o) == "Pass", (o, net)
+    # Moderate favourites stay reachable — this is a surcharge, not a ban.
+    for o, u in ((-140, 120), (-170, 145), (-200, 170)):
+        assert _grade(10.0, best_possible_net(o, u), o) != "Pass", o
 
 
 if __name__ == "__main__":

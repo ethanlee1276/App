@@ -154,20 +154,49 @@ def net_edge(hit: float, odds: int) -> float:
     return hit - american_to_prob(odds)
 
 
-def _grade(confidence: float, net: float) -> str:
+# --- the favourite-overconfidence surcharge --------------------------------
+# Measured, not assumed: the journal's first 46 favourite bets hit 45.7%
+# against a 66.9% break-even (z = −3.07, one-tailed p = 0.001), while
+# underdogs came in slightly ahead. The model's probabilities inflate as
+# the price shortens — a known failure mode, since selecting the biggest
+# edges out of noisy estimates preferentially selects the overestimates,
+# and that bias bites hardest where the true probability is already high.
+#
+# So: demand progressively more proven edge the shorter the price. Below
+# a 55% break-even nothing changes; from there the requirement climbs,
+# which makes heavy chalk effectively unreachable (at −235 even a maximum
+# credible edge falls short) without banning any price outright.
+# PROVISIONAL — the August backtest recalibrates the tail on thousands of
+# samples instead of 46, and this surcharge should be re-fit then.
+FAV_GUARD_FROM = 0.55
+FAV_GUARD_SLOPE = 0.18
+
+BASE_THRESHOLDS = (("Strong Play", 8.0, 0.020),
+                   ("Play", 6.5, 0.010),
+                   ("Lean", 4.5, 0.003))
+
+
+def favourite_surcharge(odds: int) -> float:
+    """Extra net edge required at this price, in probability points."""
+    from .odds import american_to_prob
+    return FAV_GUARD_SLOPE * max(0.0, american_to_prob(odds) - FAV_GUARD_FROM)
+
+
+def _grade(confidence: float, net: float, odds: int | None = None) -> str:
     """Grade on net edge — what's left after the vig, not before it.
 
     The old thresholds compared edge-vs-fair (1.2 / 2.5 / 4.0 points) and
     so graded bets the juice had already eaten: every "Lean" was −1.2
     points at the price, and a threshold "Play" was +0.1 — which is why
     Kelly sized them at 0.00 units. Grading on what actually clears the
-    price means every graded bet is one Kelly will size for real."""
-    if confidence >= 8.0 and net >= 0.020:
-        return "Strong Play"
-    if confidence >= 6.5 and net >= 0.010:
-        return "Play"
-    if confidence >= 4.5 and net >= 0.003:
-        return "Lean"
+    price means every graded bet is one Kelly will size for real.
+
+    ``odds`` adds the favourite surcharge above; omit it only where the
+    price isn't known (nothing in the live path does)."""
+    extra = favourite_surcharge(odds) if odds is not None else 0.0
+    for name, conf_min, net_min in BASE_THRESHOLDS:
+        if confidence >= conf_min and net >= net_min + extra:
+            return name
     return "Pass"
 
 
@@ -217,7 +246,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
     trend_align = _trend_alignment(side, proj.form.trend)
     confidence = _confidence_score(edge, hit, proj, trend_align)
     net = net_edge(hit, best.odds)
-    grade = _grade(confidence, net) if credible else "Pass"
+    grade = _grade(confidence, net, best.odds) if credible else "Pass"
     stake = _kelly_stake(hit, best.odds) if grade != "Pass" else 0.0
 
     reasons = list(proj.reasons)

@@ -94,7 +94,7 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     # Grade on net edge (vs the real price), not edge-vs-fair — see
     # engine/betting.py._grade. This is what keeps every graded bet
     # sizeable instead of shipping 0.00-unit "recommendations".
-    grade = _grade(confidence, net_edge(hit, best.odds)) if credible else "Pass"
+    grade = _grade(confidence, net_edge(hit, best.odds), best.odds) if credible else "Pass"
     stake = _kelly_stake(hit, best.odds) if grade != "Pass" else 0.0
 
     reasons = list(proj.reasons)
