@@ -105,24 +105,35 @@ def main() -> None:
     print("\nGap = actual minus implied. NEGATIVE means that side hit LESS "
           "often than\nits price claimed — i.e. it was overpriced, and the "
           "other side was the value.")
-    longs = [x for lo, hi, lb in BANDS if hi <= 0.35
-             for x in (buckets.get(lb) or [])]
-    favs = [x for lo, hi, lb in BANDS if lo >= 0.5
-            for x in (buckets.get(lb) or [])]
-    if len(longs) >= 30 and len(favs) >= 30:
-        lg = (sum(h for _, h in longs) / len(longs)
-              - sum(p for p, _ in longs) / len(longs)) * 100
-        fg = (sum(h for _, h in favs) / len(favs)
-              - sum(p for p, _ in favs) / len(favs)) * 100
-        print(f"\n  longshots (under 35%): {lg:+.1f} pts vs price  (n={len(longs):,})")
-        print(f"  favourites (over 50%): {fg:+.1f} pts vs price  (n={len(favs):,})")
-        if lg < -1.0 and lg < fg:
-            print("\n  → The classic favourite-longshot bias IS present. Backing "
-                  "longshot overs\n    is a losing proposition here; the value "
-                  "sits on the under side of\n    those same markets.")
+    # The verdict must be read in RELATIVE terms, not absolute points.
+    # Every band comes back negative because every quoted price carries
+    # the book's margin — that is the vig, not a bias. The bias shows up
+    # as the margin being far heavier on longshots than on favourites,
+    # which is exactly what flat-stake ROI measures.
+    def band_roi(pred):
+        rows = [x for lo, hi, lb in BANDS if pred(lo, hi)
+                for x in (buckets.get(lb) or [])]
+        if len(rows) < 30:
+            return None, 0
+        return (sum((1 / p - 1) if h else -1 for p, h in rows) / len(rows),
+                len(rows))
+
+    lroi, ln = band_roi(lambda lo, hi: hi <= 0.35)
+    froi, fn = band_roi(lambda lo, hi: lo >= 0.5)
+    if lroi is not None and froi is not None:
+        print(f"\n  backing longshot overs (under 35%): {lroi:+.1%} "
+              f"(n={ln:,})")
+        print(f"  backing favourite overs (over 50%): {froi:+.1%} "
+              f"(n={fn:,})")
+        print(f"  longshots cost {lroi / froi:.1f}x as much per unit staked")
+        if lroi < froi - 0.03:
+            print("\n  → The favourite-longshot bias IS present. Both sides lose"
+                  " to the vig,\n    but longshots lose far more: the books "
+                  "shade big payouts heavily.\n    Never back plus-money overs; "
+                  "the value is on the other side of\n    those markets.")
         else:
-            print("\n  → No clear favourite-longshot bias in this sample. The "
-                  "books are not\n    obviously shading longshots, so there is "
+            print("\n  → No clear favourite-longshot bias: the cost of backing "
+                  "the over is\n    about the same at every price, so there is "
                   "no free side to take.")
 
 
