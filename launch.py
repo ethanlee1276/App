@@ -174,10 +174,20 @@ def refresh_predmarkets(quiet: bool = False) -> bool:
     return ok
 
 
+def refresh_fantasy(quiet: bool = False) -> bool:
+    """Fantasy usage boards from the local DB — zero network."""
+    ok, tail = _run_build(["fantasy_build.py", "--out", "web/data/fantasy.json"])
+    if not quiet:
+        print(f"  FF   fantasy: {'refreshed' if ok else 'unavailable'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
 def refresh_all(quiet: bool = False) -> None:
     refresh_mlb(quiet=quiet)
     refresh_nfl(quiet=quiet)
     refresh_predmarkets(quiet=quiet)
+    refresh_fantasy(quiet=quiet)
 
 
 def _run_maintenance() -> None:

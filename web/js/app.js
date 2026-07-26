@@ -1389,22 +1389,24 @@ function pmAgo(ts) {
   return `${Math.round(s / 86400)}d ago`;
 }
 
-/* Intel is a top-level mode next to NFL/MLB, not a tab inside a sport —
-   entering it hides the sport nav; leaving restores it. */
-function enterIntelMode() {
+/* Polymarket and Fantasy are top-level modes next to NFL/MLB, not tabs
+   inside a sport — entering one hides the sport nav; leaving restores it. */
+const STANDALONE_MODES = ["intel", "fantasy"];
+
+function enterStandaloneMode(name) {
   document.querySelectorAll(".sport-btn").forEach((x) =>
-    x.classList.toggle("active", x.dataset.sport === "intel"));
+    x.classList.toggle("active", x.dataset.sport === name));
   const nav = document.getElementById("nav");
   if (nav) nav.style.display = "none";
-  switchView("intel");
+  switchView(name);
 }
 
-function exitIntelMode() {
+function exitStandaloneMode() {
   const nav = document.getElementById("nav");
   if (nav) nav.style.display = "";
   document.querySelectorAll(".sport-btn").forEach((x) =>
     x.classList.toggle("active", x.dataset.sport === state.sport));
-  if (state.view === "intel") switchView("recommended");
+  if (STANDALONE_MODES.includes(state.view)) switchView("recommended");
 }
 
 async function renderIntel() {
@@ -1532,7 +1534,117 @@ async function renderIntel() {
       (2026) is trading on information <i>you</i> hold a duty to keep confidential.</p>`;
 }
 
-const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel"];
+/* ============================================================
+   Fantasy Football — usage trends, buy-low/sell-high, game scripts
+   ============================================================ */
+async function renderFantasy() {
+  const host = document.getElementById("fantasy-body");
+  if (!host) return;
+  let d = null;
+  try {
+    const res = await fetch("data/fantasy.json?t=" + Date.now());
+    if (res.ok) d = await res.json();
+  } catch (e) {}
+  if (!d || !d.season) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🏆</div>
+      <div class="es-title">No NFL usage data yet</div>
+      <div class="es-sub">${escapeHtml((d && d.note) || "Run `python3 ingest.py nfl` once — usage rows (targets, carries, air yards, PPR points) ride along with the normal player-log ingest, then this page fills automatically.")}</div></div>`;
+    return;
+  }
+  const pct = (v) => v == null ? "—" : `${(v * 100).toFixed(0)}%`;
+  const deltaChip = (dv) => {
+    if (dv == null || Math.abs(dv) < 0.03) return `<span class="chip">steady</span>`;
+    return dv > 0
+      ? `<span class="chip up">▲ +${(dv * 100).toFixed(0)}pt vs 4wk</span>`
+      : `<span class="chip down">▼ ${(dv * 100).toFixed(0)}pt vs 4wk</span>`;
+  };
+
+  const usageRows = (d.usage || []).slice(0, 40).map((u) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:9px 16px;
+        border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        <strong>${escapeHtml(u.player)}</strong>
+        <span style="color:var(--text-mute)"> ${escapeHtml(u.position)} · ${escapeHtml(u.team)} · ${escapeHtml(u.metric)}</span></span>
+      <span style="min-width:64px;text-align:right" title="season average">${pct(u.season)}</span>
+      <span style="min-width:64px;text-align:right;color:var(--text-dim)" title="4-week average">${pct(u.l4)}</span>
+      <span style="min-width:64px;text-align:right;font-weight:700" title="most recent week">${pct(u.last)}</span>
+      <span style="min-width:120px;text-align:right">${deltaChip(u.delta)}</span>
+      <span style="min-width:70px;text-align:right;color:var(--text-mute)">${u.fp_pg} ppg</span>
+    </div>`).join("");
+
+  const bs = d.buy_sell || {};
+  const tradeCard = (r, kind) => {
+    const buy = kind === "buy";
+    return `<article class="card" style="--grade-color:${buy ? "var(--good)" : "var(--warn)"}">
+      <div class="card-head">
+        <div><div class="player">${escapeHtml(r.player)}</div>
+          <div class="subtitle">${escapeHtml(r.position)} · ${escapeHtml(r.team)} ·
+            ${r.targets_pg} tgt/g · ${r.carries_pg} car/g</div></div>
+        <span class="pm-status" style="color:${buy ? "var(--good)" : "var(--warn)"}">${buy ? "BUY LOW" : "SELL HIGH"}</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="k">Actual</div><div class="v">${r.actual_ppg}</div></div>
+        <div class="metric"><div class="k">Volume says</div><div class="v">${r.expected_ppg}</div></div>
+        <div class="metric"><div class="k">Gap</div><div class="v ${r.gap < 0 ? "pos" : "neg"}">${r.gap > 0 ? "+" : ""}${r.gap}</div></div>
+      </div>
+      <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">
+        ${buy ? "Usage says the production is coming — the volume is already there."
+              : "Producing above what the opportunity supports — beyond the ~" + (bs.band || 1.5) + " PPG a good player sustains."}</div>
+    </article>`;
+  };
+
+  const scriptCards = (d.scripts || []).slice(0, 16).map((s) => `
+    <article class="card">
+      <div class="card-head">
+        <div><div class="player">${escapeHtml(s.away)} @ ${escapeHtml(s.home)}</div>
+          <div class="subtitle">Week ${parseInt(s.week, 10) || escapeHtml(s.week)} · total ${s.total} · ${escapeHtml(s.favorite)} −${Math.abs(s.spread)}</div></div>
+        <span class="chip">${escapeHtml(s.archetype)}</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="k">${escapeHtml(s.home)} implied</div><div class="v">${s.home_implied}</div></div>
+        <div class="metric"><div class="k">${escapeHtml(s.away)} implied</div><div class="v">${s.away_implied}</div></div>
+      </div>
+      <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">${escapeHtml(s.read)}</div>
+      <div style="margin-top:6px;color:var(--text-mute);font-size:12px">Script confidence: ${escapeHtml(s.confidence)}</div>
+    </article>`).join("");
+
+  host.innerHTML = `
+    <div class="ls-note">Season <b>${d.season}</b> data${d.season < new Date().getFullYear()
+      ? " (last completed season — live weekly updates resume when the season starts)" : ""}.
+      Shares are of TEAM volume: targets for WR/TE/QB, carries for RB. The delta column is
+      the money — a riser at 42% beats a flat 60%.</div>
+    <div class="section-title" style="margin-top:16px">Usage movers
+      <span class="sub">— season vs 4-week vs last week, biggest role changes first</span></div>
+    <div class="card" style="padding:0">
+      <div style="display:flex;gap:12px;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,.08);
+          color:var(--text-mute);font-size:11.5px;text-transform:uppercase;letter-spacing:.06em">
+        <span style="flex:1">Player</span><span style="min-width:64px;text-align:right">Season</span>
+        <span style="min-width:64px;text-align:right">4-week</span><span style="min-width:64px;text-align:right">Last</span>
+        <span style="min-width:120px;text-align:right">Trend</span><span style="min-width:70px;text-align:right">PPR</span>
+      </div>
+      ${usageRows || `<p class="loading" style="padding:12px">No usage rows for this season yet.</p>`}
+    </div>
+    <div class="section-title" style="margin-top:26px">Buy low
+      <span class="sub">— volume-expected points say the production is coming</span></div>
+    <div class="cards">${(bs.buy_low || []).map((r) => tradeCard(r, "buy")).join("") ||
+      `<p class="loading" style="grid-column:1/-1">Nobody outside the sustainable band right now.</p>`}</div>
+    <div class="section-title" style="margin-top:26px">Sell high
+      <span class="sub">— outrunning their opportunity; regression risk</span></div>
+    <div class="cards">${(bs.sell_high || []).map((r) => tradeCard(r, "sell")).join("") ||
+      `<p class="loading" style="grid-column:1/-1">Nobody outside the sustainable band right now.</p>`}</div>
+    <div class="section-title" style="margin-top:26px">Game scripts
+      <span class="sub">— Vegas is the input: implied totals, archetypes, and confidence that
+      scales with the spread</span></div>
+    <div class="cards">${scriptCards ||
+      `<p class="loading" style="grid-column:1/-1">No upcoming NFL games with posted spreads and
+       totals in the DB yet — fills when next season's lines are ingested.</p>`}</div>
+    <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Expected points are
+      fit from this season's own data (league value per target and per carry by position) —
+      volume-based, so a player can legitimately sustain a positive gap; only gaps beyond
+      ~${bs.band || 1.5} PPG are flagged. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
+}
+
+const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy"];
 
 function switchView(name) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -1546,13 +1658,14 @@ function switchView(name) {
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
   if (name === "record") renderRecord();
   if (name === "intel") renderIntel();
+  if (name === "fantasy") renderFantasy();
   if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
   moveIndicator();
 }
 
 function initialView() {
   const h = (location.hash || "").replace("#", "");
-  if (h === "intel") { enterIntelMode(); return; }
+  if (STANDALONE_MODES.includes(h)) { enterStandaloneMode(h); return; }
   if (VIEW_ORDER.includes(h)) switchView(h);
 }
 
@@ -1571,8 +1684,8 @@ function bind() {
 
   document.querySelectorAll(".sport-btn").forEach((b) =>
     b.addEventListener("click", () => {
-      if (b.dataset.sport === "intel") { enterIntelMode(); return; }
-      exitIntelMode();
+      if (STANDALONE_MODES.includes(b.dataset.sport)) { enterStandaloneMode(b.dataset.sport); return; }
+      exitStandaloneMode();
       if (state.sport === b.dataset.sport) return;
       state.sport = b.dataset.sport;
       state.search = "";

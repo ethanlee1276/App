@@ -67,6 +67,46 @@ def nfl_player_log_rows(stats_rows: list[dict], season: int) -> list[dict]:
     return out
 
 
+# Fantasy usage metrics — the INPUTS (opportunity), not the outputs (points).
+# Volume is predictive; efficiency is noise. Stored per player-week so shares
+# and trends can be computed against team totals.
+NFL_USAGE_MARKETS = {
+    "targets": ("targets",),
+    "carries": ("carries",),
+    "receptions": ("receptions",),
+    "air_yards": ("receiving_air_yards", "air_yards"),
+    "fp_ppr": ("fantasy_points_ppr",),
+    "pass_att": ("attempts", "passing_attempts"),
+}
+
+
+def nfl_usage_rows(stats_rows: list[dict], season: int) -> list[dict]:
+    from .sources.nflverse import _s, _f, POSITION_MARKETS
+    out = []
+    for r in stats_rows:
+        pos = _s(r, "position", "position_group").upper()
+        if pos not in POSITION_MARKETS:
+            continue
+        wk = int(_f(r, "week", default=0))
+        if wk <= 0:
+            continue
+        name = _s(r, "player_display_name", "player_name", "full_name")
+        team = _s(r, "recent_team", "team")
+        opp = _s(r, "opponent_team", "opponent")
+        if not name:
+            continue
+        for market, cols in NFL_USAGE_MARKETS.items():
+            if market == "pass_att" and pos != "QB":
+                continue
+            out.append({
+                "sport": "nfl", "season": season, "period": f"{wk:03d}",
+                "game_id": f"{team}-{wk:03d}", "player": name, "team": team,
+                "opponent": opp, "position": pos, "home": 1,
+                "market": market, "value": _f(r, *cols),
+            })
+    return out
+
+
 def ingest_nfl(conn, seasons: list[int]) -> dict:
     from .sources.nflverse import load_schedules, load_weekly_stats
     result = {"games": 0, "player_logs": 0, "skipped": []}
@@ -79,13 +119,16 @@ def ingest_nfl(conn, seasons: list[int]) -> dict:
     except DataUnavailable as exc:
         result["skipped"].append(f"nfl games: {exc}")
 
-    # Player logs (release-gated).
+    # Player logs (release-gated). Usage rows ride along on the same fetch —
+    # the fantasy engine's raw material (targets, carries, air yards, PPR).
     for season in seasons:
         try:
-            rows = nfl_player_log_rows(load_weekly_stats(season), season)
+            weekly = load_weekly_stats(season)
         except DataUnavailable:
             result["skipped"].append(f"nfl player logs {season}: release access needed")
             continue
+        rows = nfl_player_log_rows(weekly, season)
+        rows += nfl_usage_rows(weekly, season)
         n = db.upsert_player_logs(conn, rows)
         result["player_logs"] += n
         db.log_ingest(conn, "nfl", "player_logs", str(season), n)
