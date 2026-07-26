@@ -418,12 +418,37 @@ def score_trade(trade: dict, market: dict | None, history: dict | None,
 
 
 # --- flag validation: grade ourselves against resolutions -------------------
+# A market trading outside this band is effectively decided, and flow in
+# it carries no information either way. Measured on the first 131 stored
+# flags: 40 of them (31%, $753K) sat at 0.95+, scoring 71-73 on average —
+# a buy at 96c has four cents of upside, and a sell at 0.999 is somebody
+# closing a position, not entering one. Every one of those would grade as
+# "correct" when its market resolved and make the report card look
+# brilliant while measuring nothing. The healthy signal was the 0.35-0.65
+# band: 62 buys, $863K, the highest average score of any band.
+FLAG_MIN_PRICE = 0.05
+FLAG_MAX_PRICE = 0.95
+
+
+def is_actionable_price(price) -> bool:
+    """False when the market has already made up its mind."""
+    try:
+        p = float(price)
+    except (TypeError, ValueError):
+        return False
+    return FLAG_MIN_PRICE <= p <= FLAG_MAX_PRICE
+
+
 def store_flags(conn, feed: list[dict]) -> int:
     """Persist every flag the feed shows — a flag that isn't recorded can
-    never be graded, and an ungraded flag is just decoration."""
+    never be graded, and an ungraded flag is just decoration.
+
+    Trades in near-settled markets are skipped: see FLAG_MIN_PRICE."""
     ensure_tables(conn)
     n = 0
     for f in feed:
+        if not is_actionable_price(f.get("entry_price")):
+            continue
         cur = conn.execute(
             "INSERT OR IGNORE INTO pm_flags (venue, tx, ts, wallet, slug, "
             "market, outcome, side, price, usd, score) "

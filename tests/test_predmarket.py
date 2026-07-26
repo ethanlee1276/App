@@ -254,3 +254,36 @@ if __name__ == "__main__":
     for fn in fns:
         fn(); print(f"  ok  {fn.__name__}")
     print(f"\n{len(fns)} tests passed.")
+
+
+def test_near_settled_markets_are_not_flagged_as_informed_flow():
+    """Measured on the first 131 stored flags: 40 of them (31%, $753K) sat
+    at 0.95+ scoring 71-73. A buy at 96c has four cents of upside and a
+    sell at 0.999 is somebody closing out — neither is an information
+    trade, and both would grade as 'correct' on resolution and make the
+    report card look brilliant while measuring nothing."""
+    import sqlite3
+    from engine import predmarket as pm
+
+    assert pm.is_actionable_price(0.55) is True
+    assert pm.is_actionable_price(0.05) is True     # longshots ARE informative
+    assert pm.is_actionable_price(0.999) is False   # an exit, not an entry
+    assert pm.is_actionable_price(0.01) is False    # already decided
+    assert pm.is_actionable_price(None) is False
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    feed = [
+        {"tx": "a", "ts": 1, "wallet": "w1", "slug": "s", "market": "M",
+         "outcome": "Yes", "side": "BUY", "entry_price": 0.55, "usd": 9000,
+         "score": 80},
+        {"tx": "b", "ts": 2, "wallet": "w2", "slug": "s", "market": "M",
+         "outcome": "Yes", "side": "SELL", "entry_price": 0.999, "usd": 26000,
+         "score": 98},
+        {"tx": "c", "ts": 3, "wallet": "w3", "slug": "s", "market": "M",
+         "outcome": "Yes", "side": "BUY", "entry_price": 0.97, "usd": 12000,
+         "score": 95},
+    ]
+    assert pm.store_flags(conn, feed) == 1          # only the live one
+    kept = conn.execute("SELECT tx, price FROM pm_flags").fetchall()
+    assert [r["tx"] for r in kept] == ["a"]
