@@ -31,11 +31,15 @@ from .mlbstats import (
 # Which stat group + per-game stat field feeds each market.
 MARKET_GROUP = {
     TOTAL_BASES: "hitting", HITS: "hitting", HOME_RUNS: "hitting",
+    "pa": "hitting",
     STRIKEOUTS: "pitching",
 }
 MARKET_STAT = {
     TOTAL_BASES: "totalBases", HITS: "hits", HOME_RUNS: "homeRuns",
     STRIKEOUTS: "strikeOuts",
+    # Plate appearances: not a prop market — ingested so the opportunity
+    # model can learn each hitter's real volume per game.
+    "pa": "plateAppearances",
 }
 
 

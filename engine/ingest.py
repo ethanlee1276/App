@@ -228,7 +228,10 @@ def ingest_mlb_date(conn, date: str) -> dict:
         # most-recent games) is a form window — through an ingest it meant
         # every historical date re-stored the same 15 games as of today, so an
         # 82-day backfill grew the store by almost nothing.
-        slate = build_live_slate(date, limit=None)
+        from .mlb.models import TOTAL_BASES, HITS, HOME_RUNS
+        slate = build_live_slate(date, limit=None,
+                                 hitter_markets=(TOTAL_BASES, HITS,
+                                                 HOME_RUNS, "pa"))
     except DataUnavailable as exc:
         result["skipped"].append(f"mlb {date}: {exc}")
         return result

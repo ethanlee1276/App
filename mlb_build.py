@@ -148,6 +148,25 @@ def main() -> None:
     except Exception as exc:
         print(f"⚠️  Platoon splits unavailable — generic bump applies.\n   {exc}")
 
+    # Opportunity model: tonight's expected plate appearances (batting slot +
+    # run environment) vs each hitter's OWN measured PA average — volume is
+    # the most predictable half of any counting prop.
+    try:
+        from engine.db import connect as _oconn
+        from engine.mlb.opportunity import avg_pa_by_player, attach_opportunity
+        conn_o = _oconn()
+        pa_hist = avg_pa_by_player(conn_o)
+        conn_o.close()
+        n_pa = attach_opportunity(slate, pa_hist)
+        if pa_hist:
+            print(f"Opportunity: PA volume measured for {len(pa_hist)} hitters "
+                  f"— factor applied to {n_pa} props.")
+        else:
+            print("Opportunity: no PA history yet — accrues from tonight's "
+                  "ingest; static lineup-slot bump applies.")
+    except Exception as exc:
+        print(f"⚠️  Opportunity model unavailable — static slot bump applies.\n   {exc}")
+
     if not slate.props:
         print(f"No props built for {args.date} — lineups may not be posted yet. "
               f"Pitcher props need probable starters; hitter props need confirmed lineups.")

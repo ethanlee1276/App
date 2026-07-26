@@ -184,3 +184,8 @@ class MLBProp:
     # handedness bump applies instead.
     platoon_factor: float = 1.0
     platoon_note: str = ""
+    # Measured opportunity (engine.mlb.opportunity): tonight's expected PA
+    # from slot + run environment vs the player's OWN average. 1.0 =
+    # unmeasured, in which case the static lineup-spot bump applies instead.
+    pa_factor: float = 1.0
+    pa_note: str = ""

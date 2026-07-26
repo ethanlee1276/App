@@ -80,8 +80,14 @@ def _hitter_matchup(prop: MLBProp, game: MLBGame) -> MatchupEffect:
             mult *= 0.98
             reasons.append(f"Opposing bullpen ranks {pen}{_ord(pen)} — strong late relief")
 
-    # Lineup slot → PA volume.
-    if prop.lineup_spot:
+    # Lineup slot → PA volume. Prefer the measured opportunity factor
+    # (tonight's expected PA vs the player's OWN average) over the static
+    # slot-vs-league bump — never stack the two.
+    if prop.pa_factor != 1.0:
+        mult *= prop.pa_factor
+        if prop.pa_note:
+            reasons.append(prop.pa_note)
+    elif prop.lineup_spot:
         pa = LINEUP_SPOT_PA.get(prop.lineup_spot, 1.0)
         mult *= pa
         if prop.lineup_spot <= 2:
