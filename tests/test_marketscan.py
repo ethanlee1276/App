@@ -45,14 +45,14 @@ def test_middle_window_between_different_lines():
 
 
 def test_low_hold_and_no_false_arbs():
-    # -105 / -105: 2.4% hold — cheap, but NOT an arb.
+    # Best -102 / -102 across books: ~1% hold — cheap, but NOT an arb.
     scan = scan_recommendations([_rec("Cheap Guy", [
-        ("DraftKings", 5.5, -105, -110),
-        ("FanDuel", 5.5, -110, -105),
+        ("DraftKings", 5.5, -102, -110),
+        ("FanDuel", 5.5, -110, -102),
     ], market="strikeouts", label="Strikeouts")])
     assert scan["arbs"] == []
     assert len(scan["low_holds"]) == 1
-    assert scan["low_holds"][0]["hold_pct"] <= 0.025
+    assert scan["low_holds"][0]["hold_pct"] <= 0.02
 
 
 def test_one_sided_and_proxy_markets_never_pair():
@@ -66,6 +66,45 @@ def test_one_sided_and_proxy_markets_never_pair():
         _rec("Lonely Guy", [("DraftKings", 1.5, -110, -110)]),
     ])
     assert scan["arbs"] == [] and scan["middles"] == [] and scan["low_holds"] == []
+
+
+def test_middles_ranked_by_ev_from_real_distributions():
+    """A narrow window on a DENSE number must outrank a wide window in dead
+    space — the spec's core middles requirement."""
+    # League outcome distribution via logs: strikeouts cluster at 5-6.
+    logs_dense = [{"value": v} for v in ([5] * 120, [6] * 120, [2] * 30, [10] * 30)
+                  for v in v]
+    recs = [
+        {**_rec("Dense Window", [("DraftKings", 4.5, -105, -110),
+                                 ("FanDuel", 6.5, -110, -105)],
+                market="strikeouts", label="Strikeouts"), "logs": logs_dense},
+        {**_rec("Dead Space", [("DraftKings", 8.5, -105, -110),
+                               ("FanDuel", 11.5, -110, -105)],
+                market="strikeouts", label="Strikeouts"), "logs": logs_dense},
+    ]
+    scan = scan_recommendations(recs)
+    assert len(scan["middles"]) == 2
+    first, second = scan["middles"]
+    # 4.5/6.5 straddles the 5-6 cluster (80% mass); 8.5/11.5 catches ~10%.
+    assert first["bet"].startswith("Dense Window")
+    assert first["middle_prob"] > 0.7 > second["middle_prob"]
+    assert first["ev_per_unit"] > second["ev_per_unit"]
+    assert first["ev_per_unit"] > 0                # dense middle is +EV
+
+
+def test_arb_suspect_flag_and_low_hold_cost():
+    scan = scan_recommendations([
+        # A "9% arb" is a stale line, not free money — flagged, still shown.
+        _rec("Too Good", [("DraftKings", 1.5, 145, -125),
+                          ("FanDuel", 1.5, -125, 145)]),
+        _rec("Cheap", [("DraftKings", 5.5, -102, -110),
+                       ("FanDuel", 5.5, -110, -102)],
+             market="strikeouts", label="Strikeouts"),
+    ])
+    assert scan["arbs"][0]["suspect"] is True
+    lh = scan["low_holds"][0]
+    # 2.4% hold ≈ $24 per $1,000 bet through — the number that matters.
+    assert abs(lh["cost_per_1k"] - lh["hold_pct"] * 1000) < 0.01
 
 
 def test_expensive_middles_are_rejected():

@@ -957,9 +957,13 @@ function recBucketTable(title, bucket) {
     .map((k) => {
       const d = bucket[k];
       const net = d.net_u || 0;
+      const clv = d.avg_clv != null
+        ? `<span style="min-width:78px;text-align:right;opacity:.7;font-size:.9em"
+             title="Average closing-line value — beating the close is the earliest sign a module earns">
+             CLV ${d.avg_clv >= 0 ? "+" : ""}${d.avg_clv.toFixed(2)}</span>` : "";
       return `<div style="display:flex;gap:12px;padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.05)">
         <span style="flex:1">${escapeHtml(k)}</span>
-        <span style="min-width:70px;text-align:right">${d.w}-${d.l}</span>
+        <span style="min-width:70px;text-align:right">${d.w}-${d.l}</span>${clv}
         <span style="min-width:80px;text-align:right;color:${net >= 0 ? "var(--good,#3ddc84)" : "var(--bad,#ff6b7a)"}">
           ${net >= 0 ? "+" : ""}${net.toFixed(2)}u</span></div>`;
     }).join("");
@@ -1089,6 +1093,7 @@ async function renderRecord() {
       ${recBucketTable("By market", o.by_market)}
       ${recBucketTable("By side", o.by_side)}
       ${recBucketTable("By grade", o.by_grade)}
+      ${recBucketTable("By book", o.by_book)}
     </div>
     <div class="section-title" style="margin-top:18px">Recent settled picks</div>
     <div class="card" style="padding:0">
@@ -1259,21 +1264,39 @@ function renderScanner() {
     .filter((r) => r.line_move && r.line_move.steam)
     .map((r) => ({ r, m: r.line_move }));
 
-  host.innerHTML = freshness
+  const stake = state.scanStake || 100;
+  const stakeInput = `<div class="ls-note" style="display:flex;align-items:center;gap:8px">
+    Total stake for the splits below: $
+    <input id="scan-stake" type="number" min="10" step="10" value="${stake}"
+      style="width:90px;background:transparent;color:inherit;border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:4px 8px" />
+  </div>`;
+
+  host.innerHTML = freshness + stakeInput
     + scanSection("Arbitrage", "opposite sides whose prices GUARANTEE profit — rare across US books and gone in minutes; grab or forget",
-      arbs, (a) => scanPairRow(a,
-        `<span style="color:var(--good,#3ddc84);font-weight:700">+${(a.profit_pct * 100).toFixed(2)}% locked</span>
-         <span style="display:block;opacity:.6;font-size:.85em">${(a.stake_over_pct * 100).toFixed(0)}% of stake on the Over</span>`),
+      arbs, (a) => {
+        const so = stake * a.stake_over_pct, su = stake * (1 - a.stake_over_pct);
+        const ret = stake * a.profit_pct;
+        const suspect = a.suspect
+          ? `<span style="display:block;color:var(--warn,#e8b33e);font-size:.85em">⚠️ 5%+ edge — likely a stale line or void risk; verify at both books</span>` : "";
+        return scanPairRow(a,
+          `<span style="color:var(--good,#3ddc84);font-weight:700">+${(a.profit_pct * 100).toFixed(2)}% · $${ret.toFixed(2)} locked</span>
+           <span style="display:block;opacity:.7;font-size:.85em">$${so.toFixed(0)} Over / $${su.toFixed(0)} Under</span>${suspect}`);
+      },
       "No risk-free pairs right now. Real arbs across legal US books appear a few times a week and last minutes — this scanner checks every refresh.")
-    + scanSection("Middles", "Over at a low line + Under at a higher one: land between them and BOTH win; miss and you only pay the vig",
-      middles, (m) => scanPairRow(m,
-        `<span style="font-weight:700">${m.gap} gap</span>
-         <span style="display:block;opacity:.7;font-size:.85em">both win +${(m.both_win_return * 100).toFixed(0)}% · worst ${(m.worst_case * 100).toFixed(0)}%</span>`),
+    + scanSection("Middles", "Over at a low line + Under at a higher one: land between them and BOTH win; miss and you only pay the vig. Ranked by EV from the sport's real outcome distribution — never by window width",
+      middles, (m) => {
+        const evLine = m.ev_per_unit != null
+          ? `<span style="font-weight:700;color:${m.ev_per_unit >= 0 ? "var(--good,#3ddc84)" : "var(--text-mute,#889)"}">${m.ev_per_unit >= 0 ? "+" : ""}${(m.ev_per_unit * 100).toFixed(1)}% EV</span>
+             <span style="display:block;opacity:.7;font-size:.85em">hits ${(m.middle_prob * 100).toFixed(0)}% of the time · both win +${(m.both_win_return * 100).toFixed(0)}% · worst ${(m.worst_case * 100).toFixed(0)}%</span>`
+          : `<span style="font-weight:700">${m.gap} gap</span>
+             <span style="display:block;opacity:.7;font-size:.85em">both win +${(m.both_win_return * 100).toFixed(0)}% · worst ${(m.worst_case * 100).toFixed(0)}%</span>`;
+        return scanPairRow(m, evLine);
+      },
       "No middle windows open — books currently agree on every line. Gaps open when one book moves before the others.")
-    + scanSection("Low holds", "two-sided quotes with almost no juice — the cheapest markets to bet through, and a sign the market is sharp",
+    + scanSection("Low holds", "two-sided quotes under 2% combined juice — a turnover feature, not a profit feature: the cheapest way to churn promo/rollover volume or keep an account looking recreational",
       lows, (h) => scanPairRow(h,
         `<span style="font-weight:700">${(h.hold_pct * 100).toFixed(1)}% hold</span>
-         <span style="display:block;opacity:.6;font-size:.85em">vs ~4.5% typical</span>`),
+         <span style="display:block;opacity:.7;font-size:.85em">≈ $${(h.cost_per_1k != null ? h.cost_per_1k : h.hold_pct * 1000).toFixed(0)} per $1,000 bet through</span>`),
       "No low-hold pairs on the current board.")
     + `<div class="section-title" style="margin-top:20px">Sharp money
         <span class="sub">— where the professional side of the market is</span></div>
@@ -1284,12 +1307,22 @@ function renderScanner() {
             <span style="min-width:64px;text-align:right">${american(b.odds)}</span>
             <span style="min-width:80px;text-align:right;color:var(--good,#3ddc84)">+${((b.ev_per_unit || 0) * 100).toFixed(1)}% EV</span>
           </div>`).join("")}
-        ${steam.map(({ r, m }) => `<div style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
+        ${steam.map(({ r, m }) => {
+          // Every alert answers: is this still bettable, or already missed?
+          const age = m.moved_ago_min;
+          const cls = (age != null && age > 180)
+            ? ["Stale", "var(--text-mute,#889)", "old move — informational only"]
+            : ((r.ev_per_unit || 0) > 0
+               ? ["Live", "var(--good,#3ddc84)", "value still available near the sharp number"]
+               : ["Chase", "var(--warn,#e8b33e)", "line already moved past it — do not follow"]);
+          return `<div style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
             <span>🔥</span>
             <span style="flex:1"><strong>${escapeHtml(r.player)} ${escapeHtml(r.market_label || "")}</strong>
-              <span style="display:block;opacity:.6;font-size:.85em">steam — several books moved together, ${m.verdict === "with" ? "toward" : "against"} our ${escapeHtml(r.side || "")}</span></span>
+              <span style="display:block;opacity:.6;font-size:.85em">steam — several books moved together, ${m.verdict === "with" ? "toward" : "against"} our ${escapeHtml(r.side || "")}${age != null ? ` · ${age < 60 ? age + "m" : Math.round(age / 60) + "h"} ago` : ""} · ${cls[2]}</span></span>
+            <span style="min-width:56px;text-align:right;font-weight:700;color:${cls[1]}">${cls[0]}</span>
             <span style="min-width:120px;text-align:right;opacity:.8">${Math.abs(m.delta || 0) > 1e-9 ? `${m.open} → ${m.current}` : `${m.open_odds != null ? american(m.open_odds) : "?"} → ${m.current_odds != null ? american(m.current_odds) : "?"}`}</span>
-          </div>`).join("")}
+          </div>`;
+        }).join("")}
         ${!anchors.length && !steam.length ? `<p class="loading" style="padding:12px">
           Nothing sharp-flagged right now. Sharp-anchor picks appear when a soft book's
           price beats the sharp book's fair value; steam appears when several books
@@ -1300,6 +1333,12 @@ function renderScanner() {
       needs no model: it's the books disagreeing with each other. Arbitrage and middle
       prices move fast; verify at the book before betting. Books limit accounts that
       only arb — mix it into normal betting.</p>`;
+
+  const inp = document.getElementById("scan-stake");
+  if (inp) inp.addEventListener("change", () => {
+    state.scanStake = Math.max(10, parseFloat(inp.value) || 100);
+    renderScanner();
+  });
 }
 
 const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record"];

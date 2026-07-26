@@ -311,11 +311,16 @@ def annotate_recommendations(recs: list[dict], reports: list[MoveReport]) -> int
         if not rep:
             continue
         with_us = (rep.direction == "up") == (side == "OVER")
+        last_move = max((b.last_move_ts for b in rep.books), default=0.0)
         rec["line_move"] = {
             "open": rep.open, "current": rep.current, "delta": rep.delta,
             "open_odds": rep.open_odds, "current_odds": rep.current_odds,
             "prob_delta": rep.prob_delta, "direction": rep.direction,
             "steam": rep.steam, "verdict": "with" if with_us else "against",
+            # Age of the newest book move, so an alert can be classified
+            # Live / Chase / Stale instead of showing a move already missed.
+            "moved_ago_min": round((time.time() - last_move) / 60.0)
+                             if last_move else None,
         }
         what = _describe(rep)
         steam_txt = " (steam — several books moved together)" if rep.steam else ""

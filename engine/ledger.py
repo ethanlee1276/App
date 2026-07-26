@@ -394,12 +394,21 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
 
     def bucket(field):
         out: dict[str, dict] = {}
+        clv_lists: dict[str, list] = {}
         for b in bets:
             k = b[field] or "?"
             d = out.setdefault(k, {"w": 0, "l": 0, "net_u": 0.0})
             if b["status"] == "won": d["w"] += 1
             elif b["status"] == "lost": d["l"] += 1
             d["net_u"] += b["pnl_units"] or 0
+            if b["closing_line"] is not None:
+                move = b["closing_line"] - b["line"]
+                clv_lists.setdefault(k, []).append(
+                    move if (b["side"] or "OVER").upper() == "OVER" else -move)
+        # CLV per bucket — the spec's "which module is actually earning"
+        # readout, available long before the win-loss record means anything.
+        for k, moves in clv_lists.items():
+            out[k]["avg_clv"] = round(sum(moves) / len(moves), 3)
         return out
 
     return {
@@ -415,7 +424,7 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
             (category,)).fetchone()[0],
         "avg_clv": (sum(clvs) / len(clvs)) if clvs else None,
         "by_grade": bucket("grade"), "by_market": bucket("market"),
-        "by_side": bucket("side"),
+        "by_side": bucket("side"), "by_book": bucket("book"),
     }
 
 
