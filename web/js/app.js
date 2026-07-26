@@ -1358,11 +1358,11 @@ function shortWallet(w) {
   return w && w.length > 12 ? `${w.slice(0, 6)}…${w.slice(-4)}` : (w || "");
 }
 
-function pmSpark(series) {
-  // 30-day cumulative P&L mini-curve for a trader row. Zero line dashed;
-  // color by where the month ended.
+function pmSpark(series, w = 96, h = 30) {
+  // 30-day cumulative P&L curve. Zero line dashed; color by where the
+  // month ended.
   if (!series || series.length < 2) return "";
-  const w = 96, h = 30, pad = 2;
+  const pad = 2;
   const vals = series.map((p) => p[1]);
   let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
   if (hi - lo < 1e-9) { hi += 1; lo -= 1; }
@@ -1426,94 +1426,110 @@ async function renderIntel() {
   const tape = d.tape || {};
   const cents = (p) => p == null ? "—" : `${(p * 100).toFixed(0)}¢`;
   const usd = (v) => `$${Number(v || 0).toLocaleString()}`;
-  const scoreClass = (s) => s >= 70 ? "score-hot" : s >= 40 ? "score-warm" : "score-cool";
   const statusColor = { Live: "var(--good)", Chasing: "var(--warn)", Historical: "var(--text-mute)" };
+  const heat = (s) => s >= 70 ? "var(--bad)" : s >= 40 ? "var(--warn)" : "var(--brand)";
+  const tile = (k, v, sub) => `<div class="tile"><div class="k">${k}</div>
+    <div class="v">${v}</div>${sub ? `<div style="color:var(--text-mute);font-size:12px;margin-top:2px">${sub}</div>` : ""}</div>`;
 
-  const flowRows = (d.flow || []).map((f) => {
+  const flagCards = (d.flow || []).slice(0, 12).map((f) => {
+    const color = statusColor[f.status] || "var(--brand)";
     const sigs = (f.signals || []).map((s) =>
-      `<span class="term-chip" title="${escapeHtml(s.value)}">${escapeHtml(s.name)}</span>`).join("");
-    return `<div class="term-row">
-      <span class="term-score ${scoreClass(f.score)}" title="Composite informed-flow score (0–100)">${f.score}</span>
-      <span class="term-main">
-        <span class="term-title">${escapeHtml(f.market)}</span>
-        <span class="term-sub">
-          <a href="https://polymarket.com/profile/${escapeHtml(f.wallet)}" target="_blank" rel="noopener">${escapeHtml(f.name || shortWallet(f.wallet))}</a>
-          · ${escapeHtml(f.side)} ${escapeHtml(f.outcome)} · ${pmAgo(f.ts)} · ${f.wallet_trades} on tape</span>
-        <span>${sigs}</span>
-      </span>
-      <span class="term-num" style="min-width:86px;font-weight:700">${usd(f.usd)}</span>
-      <span class="term-num" style="min-width:92px;opacity:.85" title="flagged entry → price now">${cents(f.entry_price)}→${cents(f.current_price)}</span>
-      <span class="term-status" style="color:${statusColor[f.status] || "inherit"}">${f.status.toUpperCase()}</span>
-    </div>`;
+      `<span class="chip" title="${escapeHtml(s.value)}">${escapeHtml(s.name)}</span>`).join("");
+    return `<article class="card" style="--grade-color:${color}">
+      <div class="card-head">
+        <div class="card-id">
+          <div class="score-ring" title="Composite informed-flow score (0–100)"
+            style="background:conic-gradient(${heat(f.score)} ${f.score * 3.6}deg, rgba(255,255,255,.08) 0)">
+            <span>${f.score}</span></div>
+          <div>
+            <div class="player"><a href="https://polymarket.com/profile/${escapeHtml(f.wallet)}"
+              target="_blank" rel="noopener" style="color:inherit">${escapeHtml(f.name || shortWallet(f.wallet))}</a></div>
+            <div class="subtitle">${pmAgo(f.ts)} · ${f.wallet_trades} trade(s) on our tape</div>
+            <div class="pick">${escapeHtml(f.side)} ${escapeHtml(f.outcome)}
+              <span class="book">· ${usd(f.usd)}</span></div>
+          </div>
+        </div>
+        <span class="pm-status" style="color:${color}">${f.status.toUpperCase()}</span>
+      </div>
+      <div style="margin:8px 0 10px;font-weight:600;line-height:1.35">
+        <a href="https://polymarket.com/market/${escapeHtml(f.slug)}" target="_blank"
+           rel="noopener" style="color:inherit">${escapeHtml(f.market)}</a></div>
+      <div class="metrics">
+        <div class="metric"><div class="k">Position</div><div class="v">${usd(f.usd)}</div></div>
+        <div class="metric"><div class="k">Entry</div><div class="v">${cents(f.entry_price)}</div></div>
+        <div class="metric"><div class="k">Now</div><div class="v" style="color:${color}">${cents(f.current_price)}</div></div>
+      </div>
+      <div class="chips" style="margin-top:10px">${sigs}</div>
+    </article>`;
   }).join("");
 
-  const traderRows = (d.top_traders || []).map((t) => {
+  const traderCards = (d.top_traders || []).map((t) => {
+    const label = t.name || shortWallet(t.wallet);
+    const initials = (t.name ? t.name.replace(/[^a-zA-Z0-9 ]/g, "").split(/\s+/)
+      .map((w) => w[0]).slice(0, 2).join("") : t.wallet.slice(2, 4)) || "?";
     const last = (t.recent || [])[0];
     const lastTxt = last
-      ? `${escapeHtml(last.side)} ${escapeHtml(last.outcome)} ${usd(last.usd)} @ ${cents(last.price)} · ${escapeHtml(last.market)} · ${pmAgo(last.ts)}`
+      ? `${escapeHtml(last.side)} ${escapeHtml(last.outcome)} · ${usd(last.usd)} @ ${cents(last.price)} · ${escapeHtml(last.market)} · ${pmAgo(last.ts)}`
       : "no recent public trades pulled";
-    const more = (t.recent || []).slice(1, 3).map((r) =>
-      `${r.side} ${r.outcome} ${usd(r.usd)} @ ${cents(r.price)} · ${r.market} · ${pmAgo(r.ts)}`).join("\n");
-    return `<div class="term-row" ${more ? `title="${escapeHtml(more)}"` : ""}>
-      <span style="opacity:.5;min-width:18px;font-weight:700">${t.rank}</span>
-      <span class="term-main">
-        <span class="term-title"><a href="https://polymarket.com/profile/${escapeHtml(t.wallet)}"
-          target="_blank" rel="noopener" style="color:inherit">${escapeHtml(t.name || shortWallet(t.wallet))}</a></span>
-        <span class="term-sub">${lastTxt}</span>
-      </span>
-      <span style="flex:0 0 auto" title="cumulative P&L, past month">${pmSpark(t.pnl_series)}</span>
-      <span class="term-num" style="min-width:96px;font-weight:800;
-        color:${t.pnl >= 0 ? "var(--good)" : "var(--bad)"}">${t.pnl ? `${t.pnl >= 0 ? "+" : "−"}${usd(Math.abs(t.pnl)).slice(0)}` : "—"}</span>
-    </div>`;
+    return `<article class="card">
+      <div class="card-head">
+        <div class="card-id">
+          <div class="pm-avatar">${escapeHtml(initials)}</div>
+          <div>
+            <div class="player">#${t.rank} <a href="https://polymarket.com/profile/${escapeHtml(t.wallet)}"
+              target="_blank" rel="noopener" style="color:inherit">${escapeHtml(label)}</a></div>
+            <div class="subtitle">${shortWallet(t.wallet)}</div>
+          </div>
+        </div>
+        <span style="font-weight:800;font-size:19px;color:${t.pnl >= 0 ? "var(--good)" : "var(--bad)"}">
+          ${t.pnl ? `${t.pnl >= 0 ? "+" : "−"}${usd(Math.abs(t.pnl))}` : "—"}</span>
+      </div>
+      ${t.pnl_series && t.pnl_series.length > 1
+        ? `<div style="margin-top:10px">${pmSpark(t.pnl_series, 300, 62)}
+           <div style="color:var(--text-mute);font-size:11.5px;margin-top:3px">Cumulative P&amp;L — past month (hover for numbers)</div></div>` : ""}
+      <div style="margin-top:10px;color:var(--text-body);font-size:12.5px">
+        <span style="color:var(--text-mute)">Latest:</span> ${lastTxt}</div>
+    </article>`;
   }).join("");
 
   const marketRows = (d.markets || []).slice(0, 20).map((m, i) => `
-    <div class="term-row">
-      <span style="opacity:.4;min-width:18px">${i + 1}</span>
-      <span class="term-main"><span class="term-title">
+    <div style="display:flex;align-items:center;gap:12px;padding:9px 16px;
+        border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="opacity:.4;min-width:20px">${i + 1}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
         <a href="https://polymarket.com/market/${escapeHtml(m.slug)}" target="_blank" rel="noopener"
-           style="color:inherit">${escapeHtml(m.question)}</a></span>
-        <span class="term-sub">${escapeHtml(m.end_date || "")}</span></span>
-      <span class="term-num" style="min-width:48px;font-weight:800">${cents(m.yes)}</span>
-      <span class="term-num" style="min-width:92px;opacity:.65">${usd(m.vol24)}</span>
+           style="color:inherit;font-weight:600">${escapeHtml(m.question)}</a></span>
+      <span style="min-width:52px;text-align:right;font-weight:800">${cents(m.yes)}</span>
+      <span style="min-width:110px;text-align:right;color:var(--text-mute)">${usd(m.vol24)} / 24h</span>
+      <span style="min-width:80px;text-align:right;color:var(--text-mute);font-size:.85em">${escapeHtml(m.end_date || "")}</span>
     </div>`).join("");
 
-  host.innerHTML = `<div class="term">
-    <div class="term-ticker">
-      <span>TAPE <b>${Number(tape.stored_total || 0).toLocaleString()}</b></span><span class="sep">│</span>
-      <span>WALLETS <b>${Number(tape.wallets_seen || 0).toLocaleString()}</b></span><span class="sep">│</span>
-      <span>+${tape.new_this_pull || 0} THIS PULL</span><span class="sep">│</span>
-      <span>FLAGS 24H <b>${(d.flow || []).length}</b></span><span class="sep">│</span>
-      <span>POLYMARKET · PUBLIC DATA</span><span class="sep">│</span>
-      <span>UPD ${escapeHtml((d.generated_at || "").slice(11, 16))}</span>
+  host.innerHTML = `
+    <div class="stats">
+      ${tile("Trades on tape", Number(tape.stored_total || 0).toLocaleString(), `+${tape.new_this_pull || 0} this pull`)}
+      ${tile("Wallets seen", Number(tape.wallets_seen || 0).toLocaleString(), "recording since day one")}
+      ${tile("Flow flags · 24h", (d.flow || []).length, "$5K+ scored trades")}
+      ${tile("Updated", escapeHtml((d.generated_at || "").slice(11, 16)), "refreshes with the site")}
     </div>
-    <div class="term-grid">
-      <div>
-        <div class="term-panel">
-          <div class="term-head"><span>Informed flow — $10K+ · last 24h</span><span>ENTRY→NOW · STATUS</span></div>
-          ${flowRows || `<div class="term-foot">No flagged flow on the recorded tape yet —
-            accumulates across refreshes; big trades are a few per hour.</div>`}
-          <div class="term-foot">Flags are probabilities, not verdicts — a winning trade can be
-            research, luck, or information. Receipts on hover over each signal chip.</div>
-        </div>
-      </div>
-      <div>
-        <div class="term-panel">
-          <div class="term-head"><span>Top traders</span><span>P&amp;L</span></div>
-          ${traderRows || `<div class="term-foot">No trader data yet — fills on the next refresh.</div>`}
-          <div class="term-foot">${escapeHtml(d.traders_note || "")} · hover a row for more trades</div>
-        </div>
-        <div class="term-panel">
-          <div class="term-head"><span>Markets — 24h volume</span><span>YES · VOL</span></div>
-          ${marketRows}
-        </div>
-      </div>
-    </div>
-    <div class="term-foot" style="padding:12px 2px 0">Wallet-age signal matures as the tape
-      accrues (cannot be backfilled). Kalshi omitted: no public trader identity. Analyzing
-      public flow is market research; what the CFTC prosecutes (2026) is trading on
-      information YOU hold a duty to keep confidential.</div>
-  </div>`;
+    <div class="section-title">Informed flow
+      <span class="sub">— large trades scored for anomaly signals, with receipts on every chip
+      (hover). Probabilities, never verdicts.</span></div>
+    <div class="cards">${flagCards ||
+      `<div class="empty-slate" style="grid-column:1/-1"><div class="es-icon">📡</div>
+        <div class="es-title">No flagged flow yet</div>
+        <div class="es-sub">The feed scores the last 24h of recorded tape and accumulates
+        across refreshes — big trades are a few per hour.</div></div>`}</div>
+    <div class="section-title" style="margin-top:26px">Top traders
+      <span class="sub">— ${escapeHtml(d.traders_note || "by realized profit")}</span></div>
+    <div class="cards">${traderCards ||
+      `<p class="loading" style="grid-column:1/-1">No trader data yet — fills on the next refresh.</p>`}</div>
+    <div class="section-title" style="margin-top:26px">Top markets
+      <span class="sub">— live markets by 24h volume · YES price · resolution date</span></div>
+    <div class="card" style="padding:0">${marketRows}</div>
+    <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Wallet-age signal
+      matures as the tape accrues (it cannot be backfilled). Kalshi omitted: no public
+      trader identity. Analyzing public flow is market research; what the CFTC prosecutes
+      (2026) is trading on information <i>you</i> hold a duty to keep confidential.</p>`;
 }
 
 const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel"];

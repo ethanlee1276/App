@@ -756,3 +756,21 @@ input[type="range"]::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(122, 162,
 .term-num { text-align: right; white-space: nowrap; }
 .term-status { min-width: 66px; text-align: right; font-weight: 800; font-size: 11.5px; letter-spacing: .04em; }
 .term-foot { font-size: 11px; opacity: .5; padding: 10px 14px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+/* ---------------- Polymarket — polished cards ---------------- */
+.score-ring {
+  width: 48px; height: 48px; border-radius: 50%; flex: 0 0 auto;
+  display: grid; place-items: center;
+}
+.score-ring span {
+  width: 38px; height: 38px; border-radius: 50%; background: var(--panel);
+  display: grid; place-items: center; font-weight: 800; font-size: 13.5px;
+}
+.pm-avatar {
+  width: 44px; height: 44px; border-radius: 50%; flex: 0 0 auto;
+  background: var(--panel-3); border: 1px solid var(--border);
+  display: grid; place-items: center; font-weight: 800; font-size: 15px;
+  color: var(--brand); text-transform: uppercase;
+}
+.pm-status { font-size: 11.5px; font-weight: 800; letter-spacing: .06em;
+  border: 1px solid currentColor; border-radius: 999px; padding: 3px 10px; }
