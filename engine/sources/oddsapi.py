@@ -307,6 +307,30 @@ def parse_event_lines(event_json: dict,
     return out
 
 
+def parse_event_players(event_json: dict,
+                        market_map: dict | None = None) -> dict[tuple[str, str], str]:
+    """Every player the books have priced in this event:
+    ``{(norm_player, market): display_name}``.
+
+    The book's posted menu is the market's own statement of who is expected
+    to play tonight — the roster source that never waits for an official
+    lineup card."""
+    market_map = market_map or ODDS_TO_MARKET
+    out: dict[tuple[str, str], str] = {}
+    for bm in event_json.get("bookmakers", []):
+        if bm.get("key", "") in SHARP_BOOKS:
+            continue
+        for mkt in bm.get("markets", []):
+            market = market_map.get(mkt.get("key", ""))
+            if not market:
+                continue
+            for o in mkt.get("outcomes", []):
+                player = o.get("description")
+                if player:
+                    out.setdefault((normalize_name(player), market), player)
+    return out
+
+
 def parse_event_h2h(event_json: dict, team_map: dict) -> dict[str, int]:
     """Extract the best moneyline (American odds) per team from an event payload.
 
@@ -473,6 +497,10 @@ class OddsAttachResult:
     events_used: int = 0
     moneylines: int = 0          # games that got real h2h prices attached
     from_cache: bool = False     # prices reused from the last paid pull
+    # Players the books have priced who matched NO slate prop — the book's
+    # menu knows who's playing before the official lineup does. Each entry:
+    # {player, market, home, away, lines}.
+    book_only: list = field(default_factory=list)
 
 
 def _is_active(game, window_hours: float) -> bool:
@@ -535,6 +563,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     markets = list(cfg["markets"]) + ["h2h", "totals", "spreads"]
     # Build a combined line index for the events that belong to this slate.
     index: dict[tuple[str, str], list[SportsbookLine]] = {}
+    menu: dict[tuple[str, str], dict] = {}
     for ev in events:
         home = cfg["teams"].get(ev.get("home_team", ""))
         away = cfg["teams"].get(ev.get("away_team", ""))
@@ -552,6 +581,8 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         result.events_used += 1
         for k, lines in parse_event_lines(payload, cfg["markets"]).items():
             index.setdefault(k, []).extend(lines)
+        for k, disp in parse_event_players(payload, cfg["markets"]).items():
+            menu.setdefault(k, {"player": disp, "home": home, "away": away})
         # Attach real game-market prices to the matching game.
         game = games_by_pair.get(frozenset((home, away)))
         if game is not None:
@@ -588,6 +619,18 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             result.matched += 1
         else:
             result.unmatched.append(f"{prop.player} ({prop.market})")
+
+    # The reverse gap: book-priced players with NO slate prop to land on
+    # (not in a posted or projected lineup). Surface them so the caller can
+    # build props straight from the book's menu — the lines exist, they're
+    # real, and dropping them was leaving the board behind the books.
+    matched_keys = {(normalize_name(p.player), p.market) for p in slate.props}
+    for k, info in menu.items():
+        if k in matched_keys:
+            continue
+        result.book_only.append({"player": info["player"], "market": k[1],
+                                 "home": info["home"], "away": info["away"],
+                                 "lines": index.get(k, [])})
 
     # Append a timestamped snapshot so repeated runs build a line-movement
     # history (engine.linemoves reads it; proxy lines are skipped).

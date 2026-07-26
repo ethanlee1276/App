@@ -84,6 +84,58 @@ def test_parse_event_lines_pairs_and_maps():
     assert (oa.normalize_name("Amon-Ra St. Brown"), REC_YDS) in idx
 
 
+def test_parse_event_players_lists_the_menu():
+    """The book's menu is a roster source: every priced player, with the
+    display name preserved for building props."""
+    menu = oa.parse_event_players(EVENT)
+    assert menu[(oa.normalize_name("Josh Allen"), PASS_YDS)] == "Josh Allen"
+    assert menu[(oa.normalize_name("Amon-Ra St. Brown"), REC_YDS)] == "Amon-Ra St. Brown"
+    # Game markets (h2h/totals/spreads) never produce "players".
+    assert all(m in (PASS_YDS, REC_YDS) for _, m in menu)
+
+
+def test_book_menu_props_built_from_real_lines_and_own_logs():
+    """A book-priced player with no slate prop gets one built from the
+    books' REAL lines + his own ingested logs — held from recommendation
+    (spot 0) until the lineup confirms."""
+    from engine import db
+    from engine.mlb.bookmenu import add_book_listed_props
+    from engine.mlb.models import MLBGame, TOTAL_BASES
+    from engine.mlb.data_loader import MLBSlate
+
+    conn = db.connect(":memory:")
+    logs = [{"sport": "mlb", "season": 2026, "period": f"2026-07-{d:02d}",
+             "game_id": f"MG-{d}", "player": "Menu Guy", "team": "NYY",
+             "opponent": "BOS", "position": "RF", "home": 1,
+             "market": "total_bases", "value": float(d % 3)}
+            for d in range(1, 11)]
+    db.upsert_player_logs(conn, logs)
+
+    game = MLBGame(home="NYY", away="TOR", park="yankee",
+                   lineups_confirmed=False)
+    slate = MLBSlate(date="2026-07-26", games=[game], props=[])
+    book_only = [
+        {"player": "Menu Guy", "market": TOTAL_BASES, "home": "NYY",
+         "away": "TOR",
+         "lines": [SportsbookLine("DraftKings", 1.5, -115, -105)]},
+        {"player": "No History", "market": TOTAL_BASES, "home": "NYY",
+         "away": "TOR", "lines": [SportsbookLine("FanDuel", 1.5, -110, -110)]},
+        {"player": "Menu Guy", "market": "strikeouts", "home": "NYY",
+         "away": "TOR", "lines": [SportsbookLine("FanDuel", 5.5, -110, -110)]},
+    ]
+    assert add_book_listed_props(slate, book_only, conn) == 1
+
+    p = slate.props[0]
+    assert p.player == "Menu Guy" and p.team == "NYY" and p.opponent == "TOR"
+    assert p.lines[0].book == "DraftKings" and p.lines[0].line == 1.5
+    assert p.lineup_spot == 0                      # held until the card posts
+    # Logs are newest-first with real dates, like a live game log.
+    assert p.logs[0].date == "2026-07-10" and p.logs[-1].date == "2026-07-01"
+    assert len(p.logs) == 10
+    # Running it again adds nothing (already on the slate).
+    assert add_book_listed_props(slate, book_only, conn) == 0
+
+
 def test_parse_event_h2h_takes_best_price():
     best = oa.parse_event_h2h(EVENT, oa.TEAM_ABBR)
     # Best (highest) American price per side across the two books.

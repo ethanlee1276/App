@@ -55,6 +55,7 @@ def main() -> None:
         print(f"Live scores: {live_n} game(s) matched, {live_now} in progress.")
 
     real_odds = False
+    res = None
     odds_status = {"checked": bool(args.odds or args.cached_odds), "matched": 0,
                    "events": 0, "moneylines": 0, "error": None,
                    "quota_remaining": None, "source": None}
@@ -77,6 +78,22 @@ def main() -> None:
         except oddsapi.OddsAPIError as exc:
             odds_status["error"] = str(exc)
             print(f"⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
+
+    # Book-menu props: players the books have priced who aren't on the slate
+    # (lineup not posted, nothing to project). The books' menu says they're
+    # playing — build their props from real prices + our own ingested logs.
+    if res is not None and res.book_only:
+        try:
+            from engine.db import connect as _bconn
+            from engine.mlb.bookmenu import add_book_listed_props
+            conn_b = _bconn()
+            n_menu = add_book_listed_props(slate, res.book_only, conn_b)
+            conn_b.close()
+            if n_menu:
+                print(f"Book menu: built {n_menu} prop(s) for book-priced "
+                      f"players not in a posted lineup yet.")
+        except Exception as exc:
+            print(f"⚠️  Book-menu props skipped: {exc}")
 
     # Team ratings for the moneyline model, from ingested historical scores.
     try:
