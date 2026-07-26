@@ -236,11 +236,11 @@ def _background_refresher(interval: int) -> None:
         refresh_all(quiet=True)
 
 
-def _reachable(url: str, timeout: int = 6) -> bool:
+def _reachable(url: str, timeout: int = 6, ua: str = "gridiron-edge/preflight") -> bool:
     import urllib.error
     import urllib.request
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "gridiron-edge/preflight"})
+        req = urllib.request.Request(url, headers={"User-Agent": ua})
         urllib.request.urlopen(req, timeout=timeout).read(64)
         return True
     except urllib.error.HTTPError:
@@ -295,9 +295,14 @@ def preflight() -> None:
         ("Sleeper (fantasy sync)", "https://api.sleeper.app/v1/state/nfl"),
         ("Sportsbook odds (all sports)", "https://api.the-odds-api.com/v4/sports/"),
         ("Weather (Open-Meteo)", "https://api.open-meteo.com/v1/forecast?latitude=40&longitude=-74&hourly=temperature_2m"),
+        ("UFC fighter stats (UFCStats)", "http://www.ufcstats.com/statistics/events/completed"),
     ]
     for name, url in hosts:
-        up = _reachable(url)
+        if "ufcstats" in url:
+            from engine.sources.ufcstats import UA as _ufc_ua
+            up = _reachable(url, ua=_ufc_ua)   # their CDN rejects bot agents
+        else:
+            up = _reachable(url)
         print(f"{ok if up else warn} {name}: {'reachable' if up else 'blocked/unreachable here'}")
 
     # Per-product data freshness — what each page is actually serving.

@@ -2179,9 +2179,10 @@ async function renderUFC() {
       selective, not lazy.</span></div>
     <div class="card" style="padding:0">${(d.pass_list || []).map(passRow).join("") ||
       `<p class="loading" style="padding:12px">Nothing to pass on.</p>`}</div>
-    <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Dossiers live in
-      data/ufc_dossiers.json (copy the sample file) — the model refuses any fight missing one.
-      Updated ${escapeHtml(d.generated_at || "")}.</p>`;
+    <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Dossiers draft themselves:
+      run <code>python3 ufc_dossiers.py</code> before a card, then review the numbers it prints
+      (red flags block bets until you confirm or delete them). The model refuses any fight
+      missing a dossier. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
 }
 
 /* ============================================================

@@ -88,15 +88,27 @@ While `launch.py` is running, with no input from you:
 | New Odds API key | put it in `secrets.local`, then `python3 launch.py --reset-budget` |
 | Health check | `python3 launch.py --check` |
 
-## UFC dossiers (the one hands-on workflow)
+## UFC dossiers (a two-minute review before each card)
 
-The UFC model follows "no dossier, no bet." Before a card you care about:
+The UFC model follows "no dossier, no bet" — and dossiers now draft
+themselves. Before a card you care about, run:
 
-1. Copy `data/ufc_dossiers.sample.json` → `data/ufc_dossiers.json`
-2. Fill in the two fighters for the 2–3 fights worth modeling (stats from
-   UFCStats.com; the sample shows every field)
-3. The page picks them up on the next refresh; every fight without a
-   dossier goes on the pass list automatically — which is correct.
+```
+python3 ufc_dossiers.py
+```
+
+It reads the upcoming card from the odds cache (no credits spent), pulls
+every fighter's real career stats from UFCStats.com, and writes drafted
+dossiers into `data/ufc_dossiers.json`. Your job is the two-minute review
+it prints at the end:
+
+1. Open `data/ufc_dossiers.json` and check each entry's `review` notes —
+   the archetype is guessed from stats, so fix any style you know better.
+2. **Red flags block bets on purpose** (chin damage, long layoffs, age).
+   Delete a red flag only once you've checked it; leave it and the fight
+   stays on the pass list.
+3. Anything you edit by hand is never overwritten by the tool. Fighters
+   it can't find (debutants) stay on the pass list — which is correct.
 
 ---
 

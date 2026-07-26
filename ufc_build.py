@@ -28,7 +28,32 @@ def load_dossiers() -> dict:
     if not DOSSIERS.exists():
         return {}
     raw = json.loads(DOSSIERS.read_text())
-    return {normalize_name(k): v for k, v in raw.items()}
+    # Skip the _readme note and anything that isn't a dossier dict.
+    return {normalize_name(k): v for k, v in raw.items()
+            if isinstance(v, dict) and not k.startswith("_")}
+
+
+def select_card(events: list[dict],
+                now: datetime.datetime | None = None) -> tuple[str, list[dict]]:
+    """The nearest card from an events list: bouts within 8 days, grouped
+    to the earliest event date (+1 day for late-night main cards).
+    Returns (event_date_iso, bouts) — ("", []) when nothing is upcoming."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    upcoming = []
+    for ev in events:
+        try:
+            t = datetime.datetime.fromisoformat(
+                (ev.get("commence_time") or "").replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if now - datetime.timedelta(hours=12) <= t <= now + datetime.timedelta(days=8):
+            upcoming.append((t, ev))
+    upcoming.sort(key=lambda x: x[0])
+    if not upcoming:
+        return "", []
+    first_day = upcoming[0][0].date()
+    card = [ev for t, ev in upcoming if (t.date() - first_day).days <= 1]
+    return first_day.isoformat(), card
 
 
 def best_h2h(payload: dict, name_a: str, name_b: str) -> dict:
@@ -73,25 +98,9 @@ def main() -> None:
             key = oddsapi.get_api_key()
             events = oddsapi.list_events(key, sport="ufc",
                                          cache_only=args.cached_odds and not args.odds)
-            # The nearest card: bouts within 8 days, grouped to the earliest
-            # event date.
-            now = datetime.datetime.now(datetime.timezone.utc)
-            upcoming = []
-            for ev in events:
-                try:
-                    t = datetime.datetime.fromisoformat(
-                        (ev.get("commence_time") or "").replace("Z", "+00:00"))
-                except ValueError:
-                    continue
-                if now - datetime.timedelta(hours=12) <= t <= now + datetime.timedelta(days=8):
-                    upcoming.append((t, ev))
-            upcoming.sort(key=lambda x: x[0])
-            if upcoming:
-                first_day = upcoming[0][0].date()
-                card = [(t, ev) for t, ev in upcoming
-                        if (t.date() - first_day).days <= 1]
-                event_label = first_day.isoformat()
-                for t, ev in card:
+            event_label, card = select_card(events)
+            if card:
+                for ev in card:
                     a, b = ev.get("home_team", ""), ev.get("away_team", "")
                     try:
                         payload, _q = oddsapi.fetch_event_odds(
