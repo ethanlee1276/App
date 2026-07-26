@@ -246,3 +246,32 @@ def test_unreliable_market_is_not_bettable():
         # An unfitted market is not "unreliable", just uncorrected.
         assert cal.is_reliable("mlb", "strikeouts", p) is True
     cal.reset_cache()
+
+
+def test_boundary_fit_is_flagged_but_never_applied():
+    """A fit that ran to the edge of the grid is a failed search, and
+    applying it does measurable damage: on 21,271 home-run player-games
+    the raw model said 10.2% against a realised 10.5% — essentially
+    perfect — and the stored boundary temperature dragged that to 1.1%.
+
+    So: keep it on disk, report it as unreliable, apply nothing."""
+    import json, tempfile
+    from pathlib import Path
+    from engine import calibrate as cal
+
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "calibration.json"
+        p.write_text(json.dumps({
+            "mlb:home_runs": {"temperature": cal.GRID_MIN, "intercept": -0.1},
+            "mlb:hits": {"temperature": 0.76, "intercept": 0.04},
+        }))
+        cal.reset_cache()
+        # Boundary market: neutral correction, still flagged unreliable.
+        assert cal.correction_for("mlb", "home_runs", p) == (1.0, 0.0)
+        assert cal.is_reliable("mlb", "home_runs", p) is False
+        raw = 0.102
+        assert cal.apply_temperature(raw, *cal.correction_for("mlb", "home_runs", p)) == raw
+        # A normal fit is applied as before.
+        assert cal.correction_for("mlb", "hits", p) == (0.76, 0.04)
+        assert cal.is_reliable("mlb", "hits", p) is True
+    cal.reset_cache()

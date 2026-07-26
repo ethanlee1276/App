@@ -247,7 +247,16 @@ def correction_for(sport: str, market: str,
         return (1.0, 0.0)
     if _cache is None:
         _cache = load(path)
-    return _cache.get(f"{sport}:{market}", _cache.get(sport, (1.0, 0.0)))
+    temp, bias = _cache.get(f"{sport}:{market}", _cache.get(sport, (1.0, 0.0)))
+    if temp in (GRID_MIN, GRID_MAX):
+        # A boundary fit is the search failing, not a correction. Applying
+        # it does real damage: measured on 21,271 home-run player-games,
+        # the raw model said 10.2% against a realised 10.5% — essentially
+        # perfect — and the stored boundary temperature dragged that to
+        # 1.1%. The fit is kept on disk so is_reliable() can still flag
+        # the market as unbettable, but it is never applied.
+        return (1.0, 0.0)
+    return (temp, bias)
 
 
 def is_reliable(sport: str, market: str,
@@ -264,7 +273,13 @@ def is_reliable(sport: str, market: str,
     nobody can vouch for, so the engines treat this as a hard pass."""
     if not _enabled:
         return True
-    temp, _ = correction_for(sport, market, path)
+    global _cache
+    if _cache is None:
+        _cache = load(path)
+    # Read the STORED value, not correction_for() — that neutralises a
+    # boundary fit before returning it, which would hide exactly the
+    # condition this function exists to report.
+    temp, _ = _cache.get(f"{sport}:{market}", _cache.get(sport, (1.0, 0.0)))
     return temp not in (GRID_MIN, GRID_MAX)
 
 
