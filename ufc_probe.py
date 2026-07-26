@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Probe round 2: pin down the exact ESPN athlete id + endpoint shapes,
-and measure Octagon API coverage. Run and paste the whole output.
+"""Probe round 3 (final): the exact row shapes inside ESPN's stats and
+eventlog payloads — the last unknowns before the adapter is built.
 
     python3 ufc_probe.py
 """
@@ -8,93 +8,95 @@ and measure Octagon API coverage. Run and paste the whole output.
 from __future__ import annotations
 
 import json
-import re
 import urllib.request
 
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
       "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36")
+ID = "2506250"      # Jan Blachowicz, verified in round 2
 
 
-def get(url: str, timeout: int = 20) -> tuple[int, bytes]:
+def jget(url: str, timeout: int = 20):
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, r.read()
+            return r.status, json.loads(r.read().decode("utf-8", "replace"))
     except urllib.error.HTTPError as e:
-        return e.code, e.read()[:300]
+        return e.code, None
     except Exception as e:  # noqa: BLE001
-        return 0, str(e).encode()
+        print("  fetch error:", e)
+        return 0, None
 
 
-def jget(url: str):
-    status, body = get(url)
-    if status != 200:
-        return status, None
-    try:
-        return status, json.loads(body.decode("utf-8", errors="replace"))
-    except ValueError:
-        return status, None
+def trim(obj, n=700) -> str:
+    return json.dumps(obj)[:n]
 
 
 def main() -> None:
-    # 1) Find Blachowicz the RIGHT way: walk search-v2's player results.
-    status, d = jget("https://site.web.api.espn.com/apis/search/v2"
-                     "?query=jan%20blachowicz&limit=10")
-    espn_id = None
-    print(f"[search-v2] {status}")
-    for rt in (d or {}).get("results", []):
-        if rt.get("type") != "player":
-            continue
-        for item in rt.get("contents", []):
-            print("  player item:", json.dumps(item)[:400])
-            m = re.search(r"/id/(\d+)", json.dumps(item))
-            if m and espn_id is None:
-                espn_id = m.group(1)
-    if not espn_id:
-        espn_id = "3949584"          # widely-cited Blachowicz id — verify below
-        print(f"  no player hit parsed — trying fallback id {espn_id}")
-    else:
-        print(f"  → athlete id {espn_id}")
+    # 1) v3-stats: category names, labels, and ONE full row from each.
+    st, d = jget(f"https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{ID}/stats")
+    print(f"[v3-stats] {st}  top keys: {list((d or {}).keys())}")
+    for cat in (d or {}).get("categories", []):
+        keys = list(cat.keys())
+        print(f"\n  category '{cat.get('displayName') or cat.get('name')}' keys={keys}")
+        print(f"    labels: {cat.get('labels')}")
+        for rowkey in ("events", "statistics", "totals"):
+            rows = cat.get(rowkey)
+            if isinstance(rows, list) and rows:
+                print(f"    {rowkey}: {len(rows)} rows; first row FULL:")
+                print(f"      {trim(rows[0])}")
+            elif rows is not None:
+                print(f"    {rowkey}: {trim(rows, 300)}")
+    # Any top-level event metadata map (dates/opponents/results)?
+    for k in (d or {}):
+        if k not in ("categories", "filters", "glossary"):
+            v = d[k]
+            sample = v
+            if isinstance(v, dict) and v:
+                fk = next(iter(v))
+                sample = {fk: v[fk]}
+            print(f"\n  top-level '{k}': {trim(sample, 600)}")
 
-    # 2) ESPN endpoint battery with a real id.
-    probes = [
-        ("v3-base", f"https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{espn_id}"),
-        ("v3-overview", f"https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{espn_id}/overview"),
-        ("v3-stats", f"https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{espn_id}/stats"),
-        ("v3-gamelog", f"https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{espn_id}/gamelog"),
-        ("v3-eventlog", f"https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{espn_id}/eventlog"),
-        ("core-league-athlete", f"https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes/{espn_id}"),
-        ("core-league-records", f"https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes/{espn_id}/records"),
-        ("core-league-eventlog", f"https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes/{espn_id}/eventlog"),
-        ("core-league-stats", f"https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes/{espn_id}/statistics"),
-    ]
-    for name, url in probes:
-        status, body = get(url)
-        text = body.decode("utf-8", errors="replace")
-        print(f"\n[{name}] {status}  {url}")
-        print("  " + " ".join(text[:500].split()))
+    # 2) v3-eventlog: one full item.
+    st, d = jget(f"https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{ID}/eventlog")
+    print(f"\n[v3-eventlog] {st}  top keys: {list((d or {}).keys())}")
+    evs = (d or {}).get("events")
+    if isinstance(evs, dict):
+        print("  events keys:", list(evs.keys())[:6])
+        items = evs.get("items") or []
+        if items:
+            print("  first item FULL:", trim(items[0], 900))
+    elif isinstance(evs, list) and evs:
+        print("  first item FULL:", trim(evs[0], 900))
 
-    # 3) The fighter web page's embedded JSON (fallback source).
-    status, body = get(f"https://www.espn.com/mma/fighter/stats/_/id/{espn_id}")
-    text = body.decode("utf-8", errors="replace")
-    print(f"\n[espn-fighter-page] {status}  {len(text):,}B")
-    if status == 200:
-        print("  has __espnfitt__:", "__espnfitt__" in text)
-        for token in ("sigStrikes", "takedown", "SLpM", "strikeAccuracy",
-                      "fighterHistory", "statistics"):
-            print(f"  contains '{token}':", token.lower() in text.lower())
+    # 3) fight history candidates.
+    for path in ("fighthistory", "history", "results"):
+        st, d = jget(f"https://site.web.api.espn.com/apis/common/v3/sports/mma/athletes/{ID}/{path}")
+        print(f"\n[v3-{path}] {st}", end="")
+        if d:
+            print(f"  keys={list(d.keys())}")
+            print("  sample:", trim(d, 500))
+        else:
+            print()
 
-    # 4) Octagon API: coverage + one detail record.
-    status, d = jget("https://api.octagon-api.com/fighters")
-    if d:
-        keys = list(d.keys())
-        print(f"\n[octagon-fighters] {status}  {len(keys)} fighters total")
-        for probe_name in ("jan-blachowicz", "aleksandar-rakic", "marcin-tybura",
-                           "hailey-cowan", "carlos-ulberg"):
-            print(f"  has {probe_name}:", probe_name in d)
-        sample = keys[0]
-        print(f"  sample record [{sample}]:",
-              json.dumps(d[sample])[:500])
+    # 4) core eventlog → follow one competition ref for result/method shape.
+    st, d = jget(f"https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes/{ID}/eventlog")
+    items = (((d or {}).get("events") or {}).get("items") or [])
+    print(f"\n[core-eventlog] {st}  {len(items)} items on page 1")
+    if items:
+        comp_ref = (items[0].get("competition") or {}).get("$ref", "")
+        comp_ref = comp_ref.replace("http://", "https://")
+        print("  following competition ref:", comp_ref)
+        st, c = jget(comp_ref)
+        if c:
+            print(f"  competition keys: {list(c.keys())}")
+            print("  status:", trim(c.get("status"), 400))
+            print("  type:", trim(c.get("type"), 300))
+            comps = c.get("competitors") or []
+            if comps:
+                print("  competitor[0]:", trim(comps[0], 400))
+            for k in ("details", "notes", "format"):
+                if k in c:
+                    print(f"  {k}:", trim(c[k], 300))
 
     print("\nDone — paste everything above back into the chat.")
 
