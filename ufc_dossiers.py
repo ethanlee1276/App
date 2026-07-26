@@ -59,14 +59,82 @@ def card_fighters() -> tuple[str, list[str]]:
     return label, names
 
 
+def _fighters(book: dict):
+    return [(k, v) for k, v in book.items()
+            if isinstance(v, dict) and not k.startswith("_")]
+
+
+def _review(args) -> None:
+    """The two-minute job the drafting tool leaves behind.
+
+    Red flags exist to BLOCK bets until a human confirms them, so they
+    have to be reviewable without hand-editing JSON — one fat-fingered
+    comma silently unbets a whole card."""
+    if not DOSSIERS.exists():
+        print("No dossiers yet — run python3 ufc_dossiers.py first.")
+        return
+    book = json.loads(DOSSIERS.read_text())
+
+    if args.clear:
+        target = args.clear.strip().lower()
+        hit = [k for k, _ in _fighters(book) if k.strip().lower() == target]
+        if not hit:
+            close = [k for k, _ in _fighters(book) if target in k.lower()]
+            print(f"No dossier named {args.clear!r}."
+                  + (f" Did you mean: {', '.join(close)}?" if close else ""))
+            return
+        name = hit[0]
+        had = book[name].get("red_flags") or []
+        if not had:
+            print(f"{name} has no red flags — nothing to clear.")
+            return
+        book[name]["red_flags"] = []
+        book[name]["flags_cleared_by_hand"] = True
+        DOSSIERS.write_text(json.dumps(book, indent=2))
+        print(f"Cleared {len(had)} red flag(s) on {name}:")
+        for f in had:
+            print(f"    - {f}")
+        print("\nThat fight is now bettable if it also clears the model's "
+              "clamp and gate.\nThe tool will not re-add these unless you "
+              "re-draft with --refresh.")
+        return
+
+    flagged = [(k, v) for k, v in _fighters(book) if v.get("red_flags")]
+    total = len(_fighters(book))
+    if not flagged:
+        print(f"{total} dossier(s), no red flags. Nothing blocking a bet.")
+        return
+    print(f"{len(flagged)} of {total} fighter(s) carry a red flag. Each one "
+          f"BLOCKS\nevery bet on that fight until you clear it.\n")
+    for name, d in flagged:
+        print(f"  {name}  ({d.get('division') or '?'}, age {d.get('age') or '?'}, "
+              f"record {d.get('record', '?')})")
+        for f in d.get("red_flags") or []:
+            print(f"      ⚑ {f}")
+        print(f"      clear with:  python3 ufc_dossiers.py --clear \"{name}\"")
+        print()
+    print("Leaving a flag in place is a decision, not a delay — it means the "
+          "model\npasses that fight. Clear one only when you have actually "
+          "checked it.")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("names", nargs="*",
                     help="specific fighters (default: everyone on the next card)")
     ap.add_argument("--refresh", action="store_true",
                     help="re-fetch entries previously drafted by this tool")
+    ap.add_argument("--review", action="store_true",
+                    help="list every red flag blocking a bet, with context")
+    ap.add_argument("--clear", metavar="FIGHTER",
+                    help="clear the red flags on one fighter — say you have "
+                         "checked them and accept the risk")
     args = ap.parse_args()
     load_local_secrets()
+
+    if args.review or args.clear:
+        _review(args)
+        return
 
     if args.names:
         label, names = "requested", list(args.names)

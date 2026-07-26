@@ -130,7 +130,11 @@ the two-minute review it prints at the end:
 2. **Red flags block bets on purpose** (chin damage, long layoffs, age).
    Delete a red flag only once you've checked it; leave it and the fight
    stays on the pass list.
-3. Anything you edit by hand is never overwritten by the tool. Fighters
+3. Or skip the JSON entirely: `python3 ufc_dossiers.py --review` lists
+   every flag with context, and
+   `python3 ufc_dossiers.py --clear "Fighter Name"` clears one once
+   you've checked it.
+4. Anything you edit by hand is never overwritten by the tool. Fighters
    it can't find (debutants) stay on the pass list — which is correct.
 
 ---
