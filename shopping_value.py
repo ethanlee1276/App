@@ -43,6 +43,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default="data/history.db")
     ap.add_argument("--sport", default="mlb")
+    ap.add_argument("--show-arbs", type=int, default=0,
+                    help="dump N raw arb pairs — the only way to tell a\n                          real opportunity from a data defect")
     args = ap.parse_args()
 
     conn = _db.connect(args.db)
@@ -84,12 +86,17 @@ def main() -> None:
     gains, holds_shopped, holds_single, books_won = [], [], [], defaultdict(int)
     arbs = lowholds = same_book_bad = 0
     arb_sizes: list[float] = []
+    arb_rows: list = []
     arb_books: dict[str, int] = defaultdict(int)
     for key, quotes in multi.items():
+        # 0 is the parser's "this book doesn't offer that side" sentinel
+        # (home-run props are over-only). Treating it as a price makes
+        # american_to_prob return 1.0 and _payout divide by zero, so it
+        # must be filtered here exactly as engine/marketscan._dec does.
         overs = [(int(q["over_odds"]), q["book"]) for q in quotes
-                 if q["over_odds"] is not None]
+                 if q["over_odds"]]
         unders = [(int(q["under_odds"]), q["book"]) for q in quotes
-                  if q["under_odds"] is not None]
+                  if q["under_odds"]]
         if len(overs) < 2:
             continue
         # Best price = highest American odds = lowest implied probability.
@@ -123,6 +130,11 @@ def main() -> None:
                 arbs += 1
                 arb_sizes.append((1.0 - shopped) * 100)
                 arb_books[f"{best_book} / {bu_book}"] += 1
+                if len(arb_rows) < args.show_arbs:
+                    arb_rows.append((key, (1.0 - shopped) * 100,
+                                     sorted((q["book"], q["line"],
+                                             q["over_odds"], q["under_odds"])
+                                            for q in quotes)))
             elif shopped <= 1.02:
                 lowholds += 1
 
@@ -177,6 +189,13 @@ def main() -> None:
         for pair, k in sorted(arb_books.items(), key=lambda kv: -kv[1])[:3]:
             print(f"    {pair:<40} {k:>5}")
 
+    if arb_rows:
+        print("\nRAW ROWS behind the flagged pairs — read these before\n  believing any of it:")
+        for key, size, qs in arb_rows:
+            print(f"\n  {key[1]} · {key[2]} · line {key[3]} · {key[0]} "
+                  f"→ {size:.1f}% \"arb\"")
+            for book, line, oo, uo in qs:
+                print(f"      {book:<14} line {line:<6} over {oo!s:<7} under {uo!s}")
     print("\nWHERE THE BEST NUMBER LIVES")
     total = sum(books_won.values())
     for book, wins in sorted(books_won.items(), key=lambda kv: -kv[1])[:10]:
