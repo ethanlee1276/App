@@ -43,10 +43,14 @@ function updateUnitNote() {
 
 const SPORT_META = {
   nfl: { logo: "🏈", tagline: "AI-powered NFL player-prop model",
-         gamesTitle: "This week's stadiums & conditions",
+         gamesTitle: "This week's stadiums",
+         gamesSub: "real stadium shapes, roof state, live wind and the passing "
+                   + "conditions each one is playing to right now",
          api: "/api/recommendations", fallback: "data/recommendations.json" },
   mlb: { logo: "⚾", tagline: "AI-powered MLB player-prop model",
-         gamesTitle: "Today's ballparks & conditions",
+         gamesTitle: "Tonight's ballparks",
+         gamesSub: "real park shapes, roof state, live wind and the home-run "
+                   + "factor each one is playing to right now",
          api: "/api/mlb/recommendations", fallback: "data/mlb_recommendations.json" },
 };
 
@@ -59,7 +63,10 @@ function applySport() {
   document.getElementById("brand-logo").textContent = meta.logo;
   document.getElementById("tagline").textContent = meta.tagline;
   const gt = document.getElementById("games-title");
-  if (gt) gt.textContent = meta.gamesTitle;
+  // innerHTML, not textContent: this is the page's hero and it carries a
+  // subtitle. Assigning textContent silently deleted the .sub span.
+  if (gt) gt.innerHTML = `${escapeHtml(meta.gamesTitle)}`
+    + (meta.gamesSub ? ` <span class="sub">— ${escapeHtml(meta.gamesSub)}</span>` : "");
   document.querySelectorAll(".sport-btn").forEach((b) =>
     b.classList.toggle("active", b.dataset.sport === state.sport));
 }
