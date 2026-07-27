@@ -613,15 +613,28 @@ function renderRecommended() {
   const visible = recs.filter((r) => (state.showAll ? true : r._ok))
     .filter((r) => r.hr_featured !== false);
   if (!visible.length) {
-    // Say WHY the board is empty. "Loosen the sliders" is bad advice when the
-    // real reason is that no prop has a real book price yet — picks are never
-    // made against placeholder lines, so the board fills when books post
-    // prices (and lineups) closer to game time.
-    const noMarket = recs.length && recs.every((r) => r.has_market === false);
-    host.innerHTML = noMarket
-      ? `<p class="loading">${noMarketExplainer()}</p>`
-      : `<p class="loading">No props clear the current thresholds. Loosen the
-         sliders or enable “show non-recommended”.</p>`;
+    // Say WHY the board is empty. "Loosen the sliders" is bad advice when
+    // the real reason is upstream of every slider: no real book price yet,
+    // or the only priced games have already started. The owner moved every
+    // slider to its loosest and still saw nothing — the message has to
+    // name the actual blocker, not suggest a knob that cannot help.
+    const real = recs.filter((r) => r.has_market !== false);
+    const started = real.filter((r) => r.live
+      || (r.warnings || []).some((w) => /already started/i.test(w)));
+    let msg;
+    if (recs.length && !real.length) {
+      msg = noMarketExplainer();
+    } else if (real.length && started.length === real.length) {
+      msg = `${real.length} prop(s) carry real prices, but every one is on a
+        game that has already started — pre-game picks are never made against
+        in-play lines. The other ${recs.length - real.length} prop(s) are
+        waiting on real book prices, which books post close to first pitch.
+        The board fills as tonight's prices arrive; no slider changes that.`;
+    } else {
+      msg = `No props clear the current thresholds. Loosen the sliders or
+        enable “show non-recommended”.`;
+    }
+    host.innerHTML = `<p class="loading">${msg}</p>`;
     return;
   }
   // Group by market so all Total Bases props sit together, all Hits

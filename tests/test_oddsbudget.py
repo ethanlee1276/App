@@ -177,6 +177,69 @@ def test_exhausted_budget_probes_occasionally():
     assert later is True and "probing" in reason
 
 
+
+
+def test_sparse_pull_waits_for_the_pregame_window():
+    """With ~1.3k credits and a slate, the day's ONE affordable pull must
+    land where the prices are — near first pitch — not on a 12h timer that
+    fires at noon against proxy lines."""
+    from engine.oddsbudget import SPARSE_INTERVAL, PRIME_BEFORE_S
+    p = _tmp()
+    save(BudgetState(remaining=1327, last_refresh_ts=1_000_000.0), p)
+    first_pitch = 1_000_000.0 + SPARSE_INTERVAL + 6 * 3600      # this evening
+    kicks = [first_pitch, first_pitch + 3 * 3600]
+
+    # Sparse interval elapsed, but it's noon: held, and the reason says when.
+    noon = 1_000_000.0 + SPARSE_INTERVAL + 60
+    ok, reason = should_refresh(16, now=noon, path=p, kickoffs=kicks)
+    assert ok is False and "pre-game window" in reason
+
+    # Inside the window: the pull fires.
+    ok, reason = should_refresh(16, now=first_pitch - PRIME_BEFORE_S + 60,
+                                path=p, kickoffs=kicks)
+    assert ok is True and "sparse" in reason.lower()
+
+    # Long after the last game: held for tomorrow, not burned at 2am.
+    ok, reason = should_refresh(16, now=kicks[-1] + 6 * 3600, path=p,
+                                kickoffs=kicks)
+    assert ok is False and "closed for tonight" in reason
+
+
+def test_offpeak_stretches_ordinary_pacing():
+    """A healthy budget still leans its refreshes toward the window: the
+    off-peak gap is OFFPEAK_STRETCH times wider."""
+    from engine.oddsbudget import OFFPEAK_STRETCH
+    p = _tmp()
+    save(BudgetState(remaining=20000, last_refresh_ts=1_000_000.0), p)
+    first_pitch = 1_000_000.0 + 10 * 3600
+    kicks = [first_pitch]
+    # Find the gap the ordinary path quotes with and without the window.
+    ok_in, r_in = should_refresh(16, now=1_000_000.0 + 1,
+                                 path=p, kickoffs=[1_000_000.0 - 3600])
+    ok_out, r_out = should_refresh(16, now=1_000_000.0 + 1,
+                                   path=p, kickoffs=kicks)
+    def gap(reason):
+        import re
+        m = re.search(r"in (\d+)s", reason)
+        return int(m.group(1)) if m else None
+    g_in, g_out = gap(r_in), gap(r_out)
+    if g_in is not None and g_out is not None:
+        assert g_out > g_in * (OFFPEAK_STRETCH - 1)
+    assert "pre-game window" in r_out or "off-peak" in r_out
+
+
+def test_unknown_kickoffs_change_nothing():
+    """No kickoff info (NFL "HH:MM" strings, empty slates) must behave
+    exactly like the pre-time-aware pacer."""
+    p = _tmp()
+    save(BudgetState(remaining=1000, last_refresh_ts=1_000_000.0), p)
+    from engine.oddsbudget import SPARSE_INTERVAL
+    t = 1_000_000.0 + SPARSE_INTERVAL + 1
+    a = should_refresh(16, now=t, path=p, kickoffs=None)
+    b = should_refresh(16, now=t, path=p, kickoffs=[])
+    assert a == b and a[0] is True
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

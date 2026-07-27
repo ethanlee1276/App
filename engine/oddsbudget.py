@@ -163,12 +163,42 @@ def min_seconds_between(requests_per_refresh: int,
 # without a probe the budgeter would refuse to call and so never find out.
 PROBE_INTERVAL = 6 * 3600
 
+# --- Time-aware pacing -------------------------------------------------
+# A credit is not worth the same all day. Books post MLB props close to
+# first pitch, lineups confirm in the same stretch, and stale-line windows
+# open as books re-price at different speeds — so a pull at 5:45pm buys a
+# real board while a pull at noon buys proxy lines and silence. When the
+# slate's kickoff times are known, off-peak spending is stretched and the
+# low-quota sparse pull is HELD for the window instead of firing on a
+# 12-hour timer that knows nothing about baseball.
+PRIME_BEFORE_S = 2.5 * 3600      # window opens this long before first pitch
+PRIME_AFTER_LAST_S = 4 * 3600    # and covers the last game into play
+OFFPEAK_STRETCH = 4              # off-peak refresh gaps widen by this factor
+
+
+def prime_window(kickoffs, now: float):
+    """Where ``now`` sits relative to the slate's high-value window.
+
+    Returns True inside the window, False outside it, None when kickoff
+    times are unknown (callers then behave exactly as before)."""
+    ks = [k for k in (kickoffs or [])
+          if isinstance(k, (int, float)) and now - 12 * 3600 < k < now + 36 * 3600]
+    if not ks:
+        return None
+    return min(ks) - PRIME_BEFORE_S <= now <= max(ks) + PRIME_AFTER_LAST_S
+
+
+def _fmt_clock(ts: float) -> str:
+    return _dt.datetime.fromtimestamp(ts).strftime("%H:%M")
+
 
 def should_refresh(requests_per_refresh: int, now: float | None = None,
-                   path: Path | str = STATE_PATH, **kw) -> tuple[bool, str]:
+                   path: Path | str = STATE_PATH,
+                   kickoffs=None, **kw) -> tuple[bool, str]:
     """Is an odds refresh affordable right now? Returns ``(ok, reason)``."""
     now = now if now is not None else time.time()
     state = load(path)
+    window = prime_window(kickoffs, now)
     if state.remaining <= RESERVE:
         if now - state.last_refresh_ts >= PROBE_INTERVAL:
             return True, ("odds quota looked exhausted — probing once in case the "
@@ -184,14 +214,30 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
         # carry the board the rest of the day for free.
         per_refresh = max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
         if state.remaining - RESERVE >= per_refresh and waited >= SPARSE_INTERVAL:
+            if window is False:
+                # The day's one affordable pull is too precious to fire at
+                # noon: real prices post near first pitch, so wait for them.
+                opens = min(k for k in kickoffs
+                            if now - 12 * 3600 < k < now + 36 * 3600) - PRIME_BEFORE_S
+                when = (f"opens ~{_fmt_clock(opens)}" if opens > now
+                        else "closed for tonight — resumes with tomorrow's slate")
+                return False, (f"quota very low ({state.remaining} credits) — "
+                               f"holding today's one paid pull for the pre-game "
+                               f"window ({when})")
             return True, (f"quota very low ({state.remaining} credits) — sparse "
                           f"mode: one paid pull per {SPARSE_INTERVAL // 3600}h, "
                           f"cached prices in between")
         return False, (f"odds budget spent for today ({state.remaining} credits "
                        f"left this month; cached prices keep the board filled)")
+    if window is False:
+        # Ordinary pacing, off-peak: stretch the gap so most of the day's
+        # refreshes land where the prices are.
+        gap = gap * OFFPEAK_STRETCH
     if waited < gap:
-        return False, (f"next odds refresh in {int(gap - waited)}s "
-                       f"(budgeting {state.remaining} credits to month end)")
+        why = ("off-peak — saving the odds budget for the pre-game window"
+               if window is False else
+               f"budgeting {state.remaining} credits to month end")
+        return False, f"next odds refresh in {int(gap - waited)}s ({why})"
     return True, f"refreshing odds ({state.remaining} credits left this month)"
 
 

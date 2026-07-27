@@ -69,6 +69,28 @@ def _games_on_slate(path: str) -> int:
         return 10
 
 
+def _slate_kickoffs(path: str) -> list:
+    """Kickoff epochs from the last build — what tells the pacer WHEN the
+    day's credits are worth spending. Unparseable or absent times simply
+    drop out; an empty list means the pacer behaves time-blind, as before."""
+    out = []
+    try:
+        with open(path) as fh:
+            games = json.load(fh).get("games", [])
+        for g in games:
+            k = g.get("kickoff") or ""
+            if "T" not in k:
+                continue                     # "HH:MM" NFL style — no date, skip
+            try:
+                out.append(_dt.datetime.fromisoformat(
+                    k.replace("Z", "+00:00")).timestamp())
+            except ValueError:
+                continue
+    except Exception:
+        return []
+    return out
+
+
 def _odds_affordable(out_path: str, quiet: bool) -> bool:
     """Decide whether this refresh can afford to re-pull odds.
 
@@ -82,7 +104,8 @@ def _odds_affordable(out_path: str, quiet: bool) -> bool:
         from engine.oddsbudget import should_refresh, mark_refreshed
     except Exception:
         return True
-    ok, reason = should_refresh(_games_on_slate(out_path) + 1)
+    ok, reason = should_refresh(_games_on_slate(out_path) + 1,
+                                kickoffs=_slate_kickoffs(out_path))
     if not quiet:
         print(f"       {reason}")
     if ok:
