@@ -121,6 +121,136 @@ def test_weekly_backup_zips_and_prunes(monkeypatch):
                                   logs.append, root=tmp, backup_dir=backups)
     assert len(list(backups.glob("backup_*.zip"))) == maintenance.BACKUP_KEEP
 
+
+# --- Intraday auto-settle ---------------------------------------------------
+def _ledger_with(open_days, settled=3):
+    """An in-memory journal holding one open pick per given slate date."""
+    from engine import ledger
+    conn = ledger.connect(":memory:")
+    for d in open_days:
+        conn.execute(
+            "INSERT INTO bets (sport, date, player, market, status, category) "
+            "VALUES ('mlb', ?, ?, 'total_bases', 'open', 'main')", (d, "P" + d))
+    conn.commit()
+    return conn
+
+
+def _stub_settle(monkeypatch, calls, lconn, settled=3):
+    from engine import ingest, ledger, db
+    monkeypatch.setattr(ledger, "connect", lambda path=None: lconn)
+    monkeypatch.setattr(db, "connect", lambda path=None: None)
+
+    def fake_ingest(conn, start, end, with_logs=True, progress=None):
+        calls.append(("ingest", start, end))
+        return {"games": 4, "player_logs": 90, "skipped": []}
+
+    def fake_settle(conn, hist_conn, sport=None):
+        calls.append(("settle",))
+        return settled
+
+    monkeypatch.setattr(ingest, "ingest_mlb_results", fake_ingest)
+    monkeypatch.setattr(ledger, "settle_from_history", fake_settle)
+    monkeypatch.setattr(ledger, "export_json", lambda c, p: calls.append(("export",)))
+
+
+def test_autosettle_grades_tonights_open_picks(monkeypatch):
+    """The whole point: a pick placed today gets graded today, without
+    anyone running --settle."""
+    calls, logs = [], []
+    today = dt.date(2026, 7, 27)
+    lconn = _ledger_with([today.isoformat()])
+    _stub_settle(monkeypatch, calls, lconn)
+    with tempfile.TemporaryDirectory() as td:
+        n = maintenance.settle_open(log=logs.append, state_path=Path(td) / "m.json",
+                                    today=today, now=1000.0)
+    assert n == 3
+    # It ingests TODAY, which the daily chores never do.
+    assert ("ingest", "2026-07-27", "2026-07-27") in calls
+    assert ("settle",) in calls and ("export",) in calls
+
+
+def test_autosettle_throttles_between_passes(monkeypatch):
+    calls, logs = [], []
+    today = dt.date(2026, 7, 27)
+    lconn = _ledger_with([today.isoformat()])
+    _stub_settle(monkeypatch, calls, lconn)
+    with tempfile.TemporaryDirectory() as td:
+        state = Path(td) / "m.json"
+        maintenance.settle_open(log=logs.append, state_path=state,
+                                today=today, now=1000.0)
+        before = len(calls)
+        # A minute later — inside the window, so nothing happens.
+        assert maintenance.settle_open(log=logs.append, state_path=state,
+                                       today=today, now=1060.0) == 0
+        assert len(calls) == before
+        # Past the window, it runs again.
+        maintenance.settle_open(log=logs.append, state_path=state, today=today,
+                                now=1000.0 + maintenance.SETTLE_EVERY_S + 1)
+        assert len(calls) > before
+
+
+def test_autosettle_startup_ignores_the_throttle(monkeypatch):
+    """Launching the site is an explicit 'catch me up'."""
+    calls, logs = [], []
+    today = dt.date(2026, 7, 27)
+    lconn = _ledger_with([today.isoformat()])
+    _stub_settle(monkeypatch, calls, lconn)
+    with tempfile.TemporaryDirectory() as td:
+        state = Path(td) / "m.json"
+        maintenance.settle_open(log=logs.append, state_path=state,
+                                today=today, now=1000.0)
+        before = len(calls)
+        maintenance.settle_open(log=logs.append, state_path=state, today=today,
+                                now=1001.0, force=True)
+        assert len(calls) > before
+
+
+def test_autosettle_does_nothing_when_nothing_is_open(monkeypatch):
+    calls, logs = [], []
+    today = dt.date(2026, 7, 27)
+    _stub_settle(monkeypatch, calls, _ledger_with([]))
+    with tempfile.TemporaryDirectory() as td:
+        assert maintenance.settle_open(log=logs.append,
+                                       state_path=Path(td) / "m.json",
+                                       today=today, now=1000.0) == 0
+    assert not [c for c in calls if c[0] == "ingest"]
+
+
+def test_autosettle_ignores_picks_older_than_the_lookback(monkeypatch):
+    """Stale open picks are the daily job's problem — an intraday pass must
+    not quietly re-ingest a month of history on every cycle."""
+    calls, logs = [], []
+    today = dt.date(2026, 7, 27)
+    lconn = _ledger_with(["2026-06-01", today.isoformat()])
+    _stub_settle(monkeypatch, calls, lconn)
+    with tempfile.TemporaryDirectory() as td:
+        maintenance.settle_open(log=logs.append, state_path=Path(td) / "m.json",
+                                today=today, now=1000.0)
+    start, end = [c for c in calls if c[0] == "ingest"][0][1:]
+    floor = (today - dt.timedelta(days=maintenance.SETTLE_LOOKBACK_DAYS - 1)).isoformat()
+    assert start >= floor, f"reached back to {start}, past the {floor} floor"
+    assert end == today.isoformat()
+    # And it spans only days that actually hold open picks — the June entry
+    # is excluded outright rather than dragging the range back with it.
+    assert start == today.isoformat()
+
+
+def test_autosettle_never_raises(monkeypatch):
+    """A chore that can crash the launcher is worse than one that skips."""
+    calls, logs = [], []
+    from engine import ledger
+
+    def boom(path=None):
+        raise RuntimeError("journal is locked")
+
+    monkeypatch.setattr(ledger, "connect", boom)
+    with tempfile.TemporaryDirectory() as td:
+        assert maintenance.settle_open(log=logs.append,
+                                       state_path=Path(td) / "m.json",
+                                       today=dt.date(2026, 7, 27), now=1.0) == 0
+    assert any("auto-settle failed" in m for m in logs)
+
+
 if __name__ == "__main__":
     class MP:
         def __init__(self): self._undo = []

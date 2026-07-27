@@ -102,12 +102,24 @@ While `launch.py` is running, with no input from you:
 
 - every ~60s: all six pages rebuild (scores free, odds only when the
   budget allows — cached prices in between, never placeholder lines)
-- first cycle each day: ingest yesterday's MLB results, settle the bet
-  journal, update the Record page, harvest closing odds when affordable
+- **every ~15 min: tonight's finished games are graded automatically.**
+  Picks settle within about a quarter hour of the final out, and the
+  Record page updates itself. You should never need `--settle` again.
+- **at launch:** the same settle runs immediately, ignoring the timer —
+  so opening the site the morning after a slate catches everything up.
+- first cycle each day: ingest yesterday's MLB results, re-settle,
+  update the Record page, harvest closing odds when affordable
 - Polymarket: records the trade tape every cycle (it can't be rebuilt if
   missed — this is why the launcher should run daily)
 - weekly: an automatic **backup** of both databases, the line-history
   file, and your UFC dossiers → `data/backups/` (newest 6 kept)
+
+**"Why are my picks still open?"** Tonight's picks stay open until the
+games actually end — that's correct, not a bug. `python3 launch.py
+--check` now tells you which kind you have: it flags anything older than
+yesterday as a real problem and says so, and confirms when the open ones
+are just tonight's board waiting on results. It also prints when the
+auto-settle last ran, so you can see the loop is alive.
 
 ## The few manual commands (rare)
 
@@ -119,18 +131,22 @@ While `launch.py` is running, with no input from you:
 | NBA history (from October, occasionally) | `python3 ingest.py nba --from <start> --to <today>` |
 | New Odds API key | put it in `secrets.local`, then `python3 launch.py --reset-budget` |
 | Health check | `python3 launch.py --check` |
-| Grade tonight's picks now (don't wait for morning) | `python3 launch.py --settle` |
+| Force a settle right now (rarely needed — it's automatic) | `python3 launch.py --settle` |
 | Fold old 0.00-unit picks back into the record (once) | `python3 launch.py --resize-unstaked` |
 | Separate long shots from the main record (once) | `python3 launch.py --repair-journal` |
 | Why is the board empty? | `python3 launch.py --why-empty` |
 
-**About `--settle`:** the journal normally grades itself on the launcher's
-first cycle of the *next* day, so tonight's picks show as "open" until
-tomorrow morning. That's not a bug — but if you'd rather see them graded
-tonight after the games end, run `python3 launch.py --settle` (add a date
-like `--settle 2026-07-25` for an older day). It ingests that day's
-results, grades every open pick against them, and prints the open →
-settled counts for both buckets so you can see exactly what moved.
+**About `--settle`:** this used to be a nightly chore, because the journal
+only graded itself on the first cycle of the *next* day. It doesn't work
+that way any more — the launcher settles finished games every ~15 minutes
+and again the moment you start it, so picks close out on their own within
+about a quarter hour of the last out.
+
+`--settle` is still there for two cases: grading an **older** date
+(`python3 launch.py --settle 2026-07-25`), and forcing a run when you want
+to watch it happen. It ingests that day's results, grades every open pick
+against them, and prints the open → settled counts for both buckets so
+nothing has to be taken on faith.
 
 ## UFC dossiers (a two-minute review before each card)
 

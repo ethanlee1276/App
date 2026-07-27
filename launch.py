@@ -227,12 +227,28 @@ def _run_maintenance() -> None:
         print(f"  ⚠️  daily maintenance failed: {exc}")
 
 
+def _run_autosettle() -> None:
+    """Grade tonight's picks as the games finish, without being asked.
+
+    The daily chores only reach yesterday and only fire once per calendar
+    day, so before this every night's board stayed "open" until the next
+    morning. This throttles itself to every 15 minutes and is a no-op when
+    nothing recent is open, so it is cheap to call on every cycle."""
+    try:
+        from engine.maintenance import settle_open
+        settle_open()
+    except Exception as exc:  # noqa: BLE001 — chores must never take the site down
+        print(f"  ⚠️  auto-settle failed: {exc}")
+
+
 def _background_refresher(interval: int) -> None:
     """Keep the served data fresh while the server runs (quiet after startup)."""
     while True:
         time.sleep(interval)
         # Catches the date rolling over while the server runs overnight.
         _run_maintenance()
+        # Closes out tonight's games as they end, rather than tomorrow.
+        _run_autosettle()
         refresh_all(quiet=True)
 
 
@@ -526,14 +542,44 @@ def preflight() -> None:
     except Exception as exc:  # noqa: BLE001
         print(f"{warn} history DB unreadable: {exc}")
     try:
+        import datetime as _dt
         from engine import ledger
         lconn = ledger.connect()
         open_n = lconn.execute("SELECT COUNT(*) FROM bets WHERE status='open'").fetchone()[0]
         settled = lconn.execute("SELECT COUNT(*) FROM bets WHERE status!='open'").fetchone()[0]
         print(f"{ok} Bet journal: {settled:,} settled, {open_n:,} open")
+        # Open picks are normal for tonight's board and a symptom for
+        # anything older, so say which kind these are.
+        today = _dt.date.today()
+        cutoff = (today - _dt.timedelta(days=1)).isoformat()
+        stale = lconn.execute(
+            "SELECT COUNT(*) FROM bets WHERE status='open' AND date < ?",
+            (cutoff,)).fetchone()[0]
+        if stale:
+            print(f"{warn}   {stale:,} of them are older than yesterday — the "
+                  f"games may not have been ingested. Run: python3 launch.py --settle")
+        elif open_n:
+            print(f"{ok}   all recent — they grade themselves within ~15 min "
+                  f"of the games ending while the launcher runs")
         lconn.close()
     except Exception as exc:  # noqa: BLE001
         print(f"{warn} ledger unreadable: {exc}")
+
+    # Auto-settle heartbeat: proves the loop is actually running.
+    try:
+        import datetime as _dt
+        import json as _json
+        st = _json.loads((ROOT / "data" / "cache" / "maintenance.json").read_text())
+        ts = st.get("last_settle_ts")
+        if ts:
+            mins = (_dt.datetime.now().timestamp() - float(ts)) / 60
+            print(f"{ok} Auto-settle: last ran {mins:.0f} min ago "
+                  f"(every 15 min while the launcher is up)")
+        else:
+            print(f"{warn} Auto-settle: hasn't run yet — starts with the next "
+                  f"launch of the site")
+    except Exception:
+        print(f"{warn} Auto-settle: no record yet — starts with the next launch")
 
     # UFC dossiers + backups.
     doss = ROOT / "data" / "ufc_dossiers.json"
@@ -816,7 +862,19 @@ def main() -> None:
     # first cycle of each day ingests yesterday's results (catching up to a
     # week if the site wasn't opened), settles the pick journal, and harvests
     # yesterday's closing odds when the budget clearly allows.
-    threading.Thread(target=_run_maintenance, daemon=True).start()
+    #
+    # The startup settle ignores the 15-minute throttle on purpose: opening
+    # the site is an explicit "catch me up", and the most common way to
+    # arrive here is the morning after a slate, wanting last night graded.
+    def _startup_chores() -> None:
+        _run_maintenance()
+        try:
+            from engine.maintenance import settle_open
+            settle_open(force=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  ⚠️  auto-settle failed: {exc}")
+
+    threading.Thread(target=_startup_chores, daemon=True).start()
 
     if interval > 0:
         t = threading.Thread(target=_background_refresher, args=(interval,), daemon=True)

@@ -14,6 +14,13 @@ its background cycle: the first cycle of each calendar day runs the chores
 (catching up as far as ``CATCH_UP_DAYS`` if the site wasn't opened for a
 while), every other cycle is a no-op. Ingestion is idempotent, so overlap
 with manual runs is harmless.
+
+Those chores reach *yesterday*, which is right for ingest and closing odds
+but wrong for the journal: it meant tonight's picks stayed "open" until
+the next morning even though the games had ended hours earlier, and the
+only fix was running ``--settle`` by hand. :func:`settle_open` closes that
+gap. It runs on the ordinary refresh cycle, throttled, and grades games as
+they finish — so the Record page keeps up with the night on its own.
 """
 
 from __future__ import annotations
@@ -134,6 +141,79 @@ def _maybe_harvest(day: _dt.date, log) -> None:
         log(f"  closes: {harvested}")
     except Exception as exc:  # noqa: BLE001 — maintenance must never crash the site
         log(f"  ⚠️  closes: auto-harvest failed ({exc})")
+
+
+# --- Intraday settle --------------------------------------------------------
+# The daily chores above only reach *yesterday*, and only fire on the first
+# cycle of a new calendar day. That left every night's picks sitting open
+# until the following morning: games end at 11pm, the journal still says
+# "open", and the Record page is a day behind until someone runs --settle
+# by hand. This pass closes that gap — it runs on the ordinary refresh
+# cycle and grades games as they finish.
+#
+# MLB's results API is free and keyless, so the only cost is politeness;
+# the throttle exists for that reason, not for a budget.
+SETTLE_EVERY_S = 900             # 15 minutes between intraday passes
+# How far back an intraday pass will reach for still-open picks. The daily
+# chores handle anything older (and reach CATCH_UP_DAYS), so this only has
+# to cover "tonight, and last night if the launcher was closed".
+SETTLE_LOOKBACK_DAYS = 3
+
+
+def _open_bet_days(lconn, today: _dt.date, lookback: int) -> list[str]:
+    """Distinct slate dates that still have open picks, newest-relevant
+    first. Anything older than the lookback is the daily job's problem."""
+    floor = (today - _dt.timedelta(days=lookback - 1)).isoformat()
+    rows = lconn.execute(
+        "SELECT DISTINCT date FROM bets WHERE status='open' AND date >= ? "
+        "AND date <= ? ORDER BY date", (floor, today.isoformat())).fetchall()
+    return [r[0] for r in rows if r[0]]
+
+
+def settle_open(log=print, state_path: Path | None = None,
+                today: _dt.date | None = None, now: float | None = None,
+                force: bool = False) -> int:
+    """Grade any open pick whose game has finished. Returns picks settled.
+
+    Safe to call on every refresh cycle: it throttles itself, does nothing
+    when the journal has no recent open picks, and never raises — a
+    maintenance chore must not be able to take the site down.
+    """
+    import time as _time
+    state_path = state_path or STATE_PATH
+    today = today or _dt.date.today()
+    now = now if now is not None else _time.time()
+    state = _load_state(state_path)
+    last = state.get("last_settle_ts")
+    if not force and isinstance(last, (int, float)) and now - last < SETTLE_EVERY_S:
+        return 0
+
+    settled = 0
+    try:
+        from . import db, ingest, ledger
+        lconn = ledger.connect()
+        days = _open_bet_days(lconn, today, SETTLE_LOOKBACK_DAYS)
+        if not days:
+            # Nothing to do — still stamp the clock so we don't re-check
+            # the journal every single cycle.
+            state["last_settle_ts"] = now
+            _save_state(state_path, state)
+            return 0
+        hconn = db.connect()
+        # One ingest spanning the open days; it is idempotent, and games
+        # still in progress simply aren't returned as finished yet.
+        res = ingest.ingest_mlb_results(hconn, days[0], days[-1], with_logs=True)
+        settled = ledger.settle_from_history(lconn, hconn)
+        if settled:
+            ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+            log(f"  settled {settled} pick(s) from {res['games']} finished "
+                f"game(s) ({days[0]}"
+                + (f" → {days[-1]}" if days[-1] != days[0] else "") + ")")
+    except Exception as exc:  # noqa: BLE001 — never take the site down
+        log(f"  ⚠️  auto-settle failed: {exc}")
+    state["last_settle_ts"] = now
+    _save_state(state_path, state)
+    return settled
 
 
 def run_if_due(force: bool = False, harvest: bool = True, log=print,
