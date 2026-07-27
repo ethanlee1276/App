@@ -52,10 +52,18 @@ def _norm_name(name: str) -> str:
     return normalize_name(name)
 
 
-def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
-                       limit: int = 40, config: RuleConfig | None = None,
-                       model=None, real_lines: dict | None = None) -> BacktestReport:
-    """``entries`` = [{"name", "values": [chronological per-game values],
+def settled_props_from_logs(entries: list[dict], market: str,
+                            min_history: int = 8, limit: int = 40,
+                            config: RuleConfig | None = None, model=None,
+                            real_lines: dict | None = None
+                            ) -> tuple[list[SettledProp], int]:
+    """The walk-forward itself, returning the per-prop settled rows.
+
+    ``backtest_from_logs`` aggregates these into a report; the edge audit
+    reads them raw, because "what did each edge band actually return?" needs
+    every row, not a summary. Returns ``(settled, real_lines_used)``.
+
+    ``entries`` = [{"name", "values": [chronological per-game values],
     "dates": [matching game dates]}].
 
     Walk-forward: game i is projected from games [:i] (most recent ``limit``),
@@ -65,8 +73,7 @@ def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
     game has one, the model is priced against **the number a bettor could
     actually have taken** — which is the difference between "does this beat a
     trailing average?" and "would this have beaten the book?". Games without a
-    harvested price fall back to the naive baseline, and ``used_real_lines`` on
-    the report says how much of the result rests on real market data.
+    harvested price fall back to the naive baseline.
     """
     config = config or RuleConfig()
     game = _neutral_game()
@@ -129,6 +136,16 @@ def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
                 grade=rec.grade,
             ))
 
+    return settled, real_used
+
+
+def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
+                       limit: int = 40, config: RuleConfig | None = None,
+                       model=None, real_lines: dict | None = None) -> BacktestReport:
+    """Walk forward and aggregate — see ``settled_props_from_logs``."""
+    settled, real_used = settled_props_from_logs(
+        entries, market, min_history=min_history, limit=limit,
+        config=config, model=model, real_lines=real_lines)
     report = evaluate(settled)
     report.used_real_lines = real_used
     report.total_priced = len(settled)
