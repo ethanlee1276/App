@@ -43,7 +43,8 @@ SLEEPER_BASE = "https://api.sleeper.app/v1/"
 _SLEEPER_OK = re.compile(
     r"^(user/[A-Za-z0-9_]{1,40}"
     r"|user/\d{1,25}/leagues/nfl/\d{4}"
-    r"|league/\d{1,25}(/rosters|/users)?"
+    r"|league/\d{1,25}(/rosters|/users|/drafts)?"
+    r"|draft/\d{1,25}(/picks)?"
     r"|players/nfl)$")
 
 
@@ -80,7 +81,11 @@ class Handler(BaseHTTPRequestHandler):
         if not sleeper_path_ok(path):
             return self._send(404, b'{"error":"unsupported sleeper path"}', ".json")
         from engine.sources.fetch import fetch_text, DataUnavailable
-        ttl = 86400 if path == "players/nfl" else 300
+        # players/nfl is ~5MB and changes daily; draft picks are polled DURING
+        # a live draft, where five minutes of cache would show a board three
+        # rounds stale. Everything else can sit for five minutes.
+        ttl = (86400 if path == "players/nfl"
+               else 10 if path.endswith("/picks") else 300)
         cache = "sleeper_" + re.sub(r"[^A-Za-z0-9]+", "_", path) + ".json"
         try:
             body = fetch_text(SLEEPER_BASE + path, cache, ttl=ttl)

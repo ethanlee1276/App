@@ -16,7 +16,7 @@ import datetime
 import json
 from pathlib import Path
 
-from engine import fantasy
+from engine import fantasy, fantasy_draft
 from engine.db import connect
 
 
@@ -40,6 +40,7 @@ def main() -> None:
             "rates": fantasy.league_rates(conn, season),
             "buy_sell": fantasy.buy_sell_board(conn, season),
             "scripts": fantasy.game_scripts(conn),
+            "draft_kit": fantasy_draft.build_draft_kit(conn, season),
         }
     conn.close()
 

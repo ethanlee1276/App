@@ -2105,6 +2105,8 @@ async function renderFantasy() {
          <button class="ff-more" id="usage-more" aria-expanded="false" aria-controls="usage-rest">
            Show ${allUsage.length - USAGE_SHOWN} more movers ▾</button>` : "");
 
+  const draftKit = draftKitHTML(d.draft_kit);
+
   const bs = d.buy_sell || {};
   const tradeCard = (r, kind) => {
     const buy = kind === "buy";
@@ -2164,6 +2166,7 @@ async function renderFantasy() {
         <div style="color:var(--text-mute);font-size:12px;margin-top:2px">games with posted lines</div></div>
     </div>
     <div id="sleeper-zone"></div>
+    ${draftKit}
     <div class="ls-note">Shares are of TEAM volume: targets for WR/TE/QB, carries for RB.
       The delta column is the money — a riser at 42% beats a flat 60%.</div>
     <div class="section-title" style="margin-top:16px">Usage movers
@@ -2202,7 +2205,184 @@ async function renderFantasy() {
     more.textContent = open ? "Show fewer ▴"
       : `Show ${allUsage.length - USAGE_SHOWN} more movers ▾`;
   });
+  initDraftKit(d.draft_kit);
   renderSleeperZone(d);
+}
+
+/* ============================================================
+   Draft kit — VORP board, tiers, and live Sleeper draft sync.
+   ============================================================ */
+const TIER_COLORS = ["var(--good)", "var(--cyan)", "var(--brand)",
+                     "var(--warn)", "var(--text-mute)"];
+const tierColor = (t) => TIER_COLORS[Math.min(t - 1, TIER_COLORS.length - 1)];
+
+function draftKitHTML(kit) {
+  if (!kit || !(kit.board || []).length) return "";
+  const BOARD_SHOWN = 15;
+  const boardRow = (r, i) => `
+    <div class="dl-row dk-row" data-ffp="${escapeHtml(ffNorm(r.player))}">
+      <span class="dl-rank">${i + 1}</span>
+      <span class="dl-main"><strong>${escapeHtml(r.player)}</strong>
+        <span class="dl-sub">${escapeHtml(r.position)}${r.pos_rank} · ${teamName(r.team)}
+          · ${r.games} gm${r.small_sample ? " ⚠ small sample" : ""}</span></span>
+      <span class="dk-tier" style="color:${tierColor(r.tier)}">T${r.tier}</span>
+      <span class="dl-num" title="projected PPR points per game">${r.proj}</span>
+      <span class="dl-num strong pos" title="points per game over the best freely-available ${escapeHtml(r.position)}">+${r.vorp}</span>
+    </div>`;
+  const board = kit.board.slice(0, BOARD_SHOWN).map(boardRow).join("")
+    + (kit.board.length > BOARD_SHOWN
+      ? `<div id="dk-rest" class="ff-hidden">${kit.board.slice(BOARD_SHOWN)
+           .map((r, i) => boardRow(r, i + BOARD_SHOWN)).join("")}</div>
+         <button class="ff-more" id="dk-more" aria-expanded="false" aria-controls="dk-rest">
+           Show the full board (${kit.board.length}) ▾</button>` : "");
+
+  const posCard = (pos) => {
+    const rows = (kit.tiers[pos] || []).slice(0, 15);
+    if (!rows.length) return "";
+    let lastTier = 0;
+    const body = rows.map((r) => {
+      const brk = r.tier !== lastTier
+        ? `<div class="dk-tierlabel" style="color:${tierColor(r.tier)}">Tier ${r.tier}</div>` : "";
+      lastTier = r.tier;
+      return `${brk}<div class="dk-posrow" data-ffp="${escapeHtml(ffNorm(r.player))}">
+        <span class="dk-pr">${r.pos_rank}</span>
+        <span class="dk-pn">${escapeHtml(r.player)}
+          <span class="dk-pt">${teamName(r.team)}</span></span>
+        <span class="dk-pp">${r.proj}</span>
+      </div>`;
+    }).join("");
+    return `<article class="card dk-poscard">
+      <div class="card-head"><div><div class="player">${escapeHtml(pos)}</div>
+        <div class="subtitle">replacement ≈ ${kit.replacement[pos] ?? "—"} PPG</div></div></div>
+      <div class="dk-posbody">${body}</div>
+    </article>`;
+  };
+
+  const sleepers = (kit.sleepers || []).map((r) => `
+    <div class="dl-row dk-slrow" data-ffp="${escapeHtml(ffNorm(r.player))}">
+      <span class="dl-main"><strong>${escapeHtml(r.player)}</strong>
+        <span class="dl-sub">${escapeHtml(r.position)} · ${teamName(r.team)}</span></span>
+      <span class="dl-num">${r.ppg} actual</span>
+      <span class="dl-num strong pos">${r.xppg} expected</span>
+    </div>`).join("");
+
+  return `
+    <div class="section-title" style="margin-top:22px">Draft kit
+      <span class="sub">— last season's volume turned into value over replacement.
+      Draft by tier, not rank; rookies are not on this board and it says so.</span></div>
+    <div class="card dk-draftday">
+      <div class="card-head"><div><div class="player">Draft day — live Sleeper sync</div>
+        <div class="subtitle">Paste your Sleeper draft link (or its ID) once the draft room
+          opens. Taken players cross off everywhere on this page and the best-available
+          list stays current.</div></div>
+        <span class="pm-status" id="dk-status" style="color:var(--text-mute)">NOT CONNECTED</span></div>
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <input id="dk-draft-id" type="text" placeholder="https://sleeper.com/draft/nfl/…  or draft ID"
+          style="flex:1;min-width:220px;background:var(--panel-2);color:inherit;
+          border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:inherit"/>
+        <button class="btn" id="dk-connect">Connect</button>
+        <button class="btn ghost ff-hidden" id="dk-disconnect">Stop</button>
+      </div>
+      <div id="dk-best" class="ff-hidden" style="margin-top:12px"></div>
+    </div>
+    <div class="section-title" style="margin-top:18px">Overall board
+      <span class="sub">— ordered by VORP, not points: value over the best player
+      still on the wire at the same position</span></div>
+    <div class="card" style="padding:0">${board}</div>
+    <div class="section-title" style="margin-top:18px">Position tiers
+      <span class="sub">— the gaps are the information: inside a tier the differences
+      are noise</span></div>
+    <div class="cards wide">${["QB", "RB", "WR", "TE"].map(posCard).join("")}</div>
+    ${sleepers ? `<div class="section-title" style="margin-top:18px">Usage says buy
+        <span class="sub">— expected points clearly above what they actually scored;
+        the draft-day version of buy-low</span></div>
+      <div class="card" style="padding:0">${sleepers}</div>` : ""}
+    <p style="color:var(--text-mute);font-size:12.5px;margin-top:10px">
+      ${(kit.notes || []).map(escapeHtml).join(" ")}</p>`;
+}
+
+/* Live draft sync. One poll loop, keyed off the fantasy view being open —
+   navigating away stops it, reconnecting resumes it. */
+const dkState = { timer: null, kit: null };
+
+function dkStop(msg) {
+  if (dkState.timer) { clearInterval(dkState.timer); dkState.timer = null; }
+  const st = document.getElementById("dk-status");
+  if (st) { st.textContent = msg || "NOT CONNECTED"; st.style.color = "var(--text-mute)"; }
+  const dis = document.getElementById("dk-disconnect");
+  if (dis) dis.classList.add("ff-hidden");
+}
+
+function initDraftKit(kit) {
+  const btn = document.getElementById("dk-connect");
+  if (!btn || !kit) return;
+  dkState.kit = kit;
+  const more = document.getElementById("dk-more");
+  if (more) more.addEventListener("click", () => {
+    const rest = document.getElementById("dk-rest");
+    const open = rest.classList.toggle("ff-hidden") === false;
+    more.setAttribute("aria-expanded", String(open));
+    more.textContent = open ? "Show fewer ▴" : `Show the full board (${kit.board.length}) ▾`;
+  });
+  const input = document.getElementById("dk-draft-id");
+  const saved = localStorage.getItem("ff_draft_id");
+  if (saved) input.value = saved;
+  btn.addEventListener("click", () => {
+    // Accept a full draft-room URL or a bare numeric ID.
+    const m = String(input.value).match(/(\d{10,25})/);
+    if (!m) {
+      document.getElementById("dk-status").textContent = "NEED A DRAFT LINK OR ID";
+      return;
+    }
+    localStorage.setItem("ff_draft_id", m[1]);
+    dkStart(m[1]);
+  });
+  document.getElementById("dk-disconnect")
+    .addEventListener("click", () => dkStop());
+}
+
+function dkStart(draftId) {
+  dkStop();
+  const st = document.getElementById("dk-status");
+  st.textContent = "CONNECTING…"; st.style.color = "var(--warn)";
+  document.getElementById("dk-disconnect").classList.remove("ff-hidden");
+  const tick = async () => {
+    // The page owns the loop, so leaving the view must end it.
+    if (state.view !== "fantasy") { dkStop(); return; }
+    let picks;
+    try {
+      picks = await sleeperGet("draft/" + draftId + "/picks");
+    } catch (e) {
+      st.textContent = "DRAFT UNREACHABLE"; st.style.color = "var(--bad)";
+      return;                            // transient — next tick retries
+    }
+    const taken = new Set((picks || []).map((p) =>
+      ffNorm(`${(p.metadata || {}).first_name || ""} ${(p.metadata || {}).last_name || ""}`))
+      .filter((n) => n));
+    st.textContent = `LIVE · ${taken.size} PICKED`; st.style.color = "var(--good)";
+    document.querySelectorAll("[data-ffp]").forEach((el) =>
+      el.classList.toggle("dk-taken", taken.has(el.dataset.ffp)));
+    dkBestAvailable(taken);
+  };
+  tick();
+  dkState.timer = setInterval(tick, 12000);
+}
+
+function dkBestAvailable(taken) {
+  const host = document.getElementById("dk-best");
+  if (!host || !dkState.kit) return;
+  host.classList.remove("ff-hidden");
+  const avail = dkState.kit.board.filter((r) => !taken.has(ffNorm(r.player)));
+  const top = avail.slice(0, 5);
+  const byPos = {};
+  for (const r of avail) if (!byPos[r.position]) byPos[r.position] = r;
+  host.innerHTML = `
+    <div class="dk-bestrow"><span class="dk-bl">Best available</span>
+      ${top.map((r) => `<span class="chip up">${escapeHtml(r.player)} · +${r.vorp}</span>`).join("")}</div>
+    <div class="dk-bestrow"><span class="dk-bl">By position</span>
+      ${["QB", "RB", "WR", "TE"].map((p) => byPos[p]
+        ? `<span class="chip">${p}: ${escapeHtml(byPos[p].player)} (+${byPos[p].vorp})</span>` : "")
+        .join("")}</div>`;
 }
 
 function intelReportCard(v) {

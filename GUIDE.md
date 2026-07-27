@@ -47,7 +47,7 @@ output.
 | **⚾ MLB** | The betting model: player props, sharp-anchor game bets, Edge Board, Long Shots (home-run board), Record | Now (daily in season) |
 | **🏈 NFL** | Same engine for football | September |
 | **🛰️ Polymarket** | Informed-flow detection on prediction markets: whale flags with scores, top traders by profit, our flag report card | Now |
-| **🏆 Fantasy** | Usage trends, buy-low/sell-high (xFP), game scripts, Sleeper league sync | Now (2025 data until September) |
+| **🏆 Fantasy** | Usage trends, buy-low/sell-high (xFP), game scripts, Sleeper league sync, **draft kit** (VORP board, tiers, live draft sync) | Now (2025 data until September) |
 | **🏀 NBA** | Scalpy: minutes engine, probability distributions, humility clamp, max 4 picks a slate | October |
 | **🥊 UFC** | Scalpy MMA: fighter dossiers, joint method-of-victory model, pass list | Fight weeks (needs dossiers — see below) |
 | **🧭 Why Us** | The positioning page: what makes this different from picks services, live receipts from the journal, and an open math toolbox (de-vig, Kelly sizing, parlay-vs-singles calculators) | Always (no data feed needed) |
@@ -147,6 +147,27 @@ about a quarter hour of the last out.
 to watch it happen. It ingests that day's results, grades every open pick
 against them, and prints the open → settled counts for both buckets so
 nothing has to be taken on faith.
+
+## Draft day (Fantasy page, before your Sleeper draft)
+
+The Fantasy page carries a **draft kit** built from last season's usage:
+
+- **Overall board** ranked by VORP — value over the best freely-available
+  player at the same position. This is why the 4th-best QB sits below the
+  15th-best WR: the QB you can get ten rounds later scores nearly as much.
+- **Position tiers** — draft by tier, not rank. Inside a tier the
+  differences are noise; the gaps between tiers are the real information.
+- **Usage says buy** — players whose opportunity outran their scoring
+  last year; the draft-day version of buy-low.
+- **Live draft sync** — when your Sleeper draft room opens, paste the
+  draft link into the "Draft day" box and hit Connect. Taken players
+  cross off everywhere on the page as picks come in, and a best-available
+  strip (overall + per position) stays current. Read-only, no password.
+
+Honest limits, because they matter at the table: the board is last
+season's volume run forward. **Rookies are not on it**, and it knows
+nothing about coaching changes or free agency — use the tiers to
+structure the draft and your own news-reading to pick within a tier.
 
 ## UFC dossiers (a two-minute review before each card)
 
