@@ -216,9 +216,8 @@ def main() -> None:
             from engine.db import connect as hist_connect
             lconn = ledger.connect()
             logged = ledger.log_recommendations(lconn, result)
-            # Yardage markets aren't in STALE_SETTLEABLE yet (NFL results
-            # don't auto-ingest), so this journals 0 until that lands —
-            # wired now so the sampler lights up with the September work.
+            # Yardage-market flags settle from the weekly stats that
+            # maintenance ingests daily in season (Aug–Feb).
             st_logged = ledger.log_stale_flags(lconn, result)
             settled = ledger.settle_from_history(lconn, hist_connect(), sport="nfl")
             ledger.export_json(lconn, "web/data/record.json")

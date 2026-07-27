@@ -284,6 +284,24 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
     except Exception as exc:  # noqa: BLE001
         log(f"  ⚠️  nfl schedule refresh failed: {exc}")
 
+    # NFL weekly results — the layer that settles NFL props and TDs. The
+    # nflverse weekly-stats file updates within a day of games, so a daily
+    # pull keeps the journal graded all season. Skipped March–July: no new
+    # stats exist and the download is pure waste.
+    if today.month >= 8 or today.month <= 2:
+        try:
+            from . import db as _rdb
+            from .ingest import ingest_nfl_results
+            season = today.year if today.month >= 8 else today.year - 1
+            res = ingest_nfl_results(_rdb.connect(), season)
+            if res["player_logs"]:
+                log(f"  nfl results: {res['player_logs']:,} weekly stat rows "
+                    f"(season {season})")
+            for s in res.get("skipped", []):
+                log(f"  ⚠️  {s}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  nfl results ingest failed: {exc}")
+
     if harvest:
         _maybe_harvest(yesterday, log)
 

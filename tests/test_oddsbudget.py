@@ -276,6 +276,47 @@ def test_landed_paid_pull_stamps_the_clock():
     assert ok is False                     # spent — normal pacing applies
 
 
+def test_per_sport_clocks_end_the_nfl_starvation():
+    """One global clock let MLB (checked first every cycle) reset the
+    stamp and starve NFL of paid pulls forever. Each sport now paces on
+    its own clock against the shared credit pot: MLB's landed pull must
+    rate-limit MLB but leave NFL's sparse pull available."""
+    from engine.oddsbudget import SPARSE_INTERVAL, paid_pull_result
+    p = _tmp()
+    t0 = 1_000_000.0
+    save(BudgetState(remaining=1327, last_seen_iso="old"), p)
+    record_quota("1191", "18809", p)                 # MLB's pull landed
+    assert paid_pull_result("old", path=p, now=t0, sport="mlb") is True
+
+    ok, _ = should_refresh(16, now=t0 + 60, path=p, sport="mlb")
+    assert ok is False                               # MLB just spent
+    ok, reason = should_refresh(16, now=t0 + 60, path=p, sport="nfl")
+    assert ok is True, reason                        # NFL is NOT starved
+
+
+def test_legacy_state_seeds_the_mlb_clock():
+    """Upgrading a pre-split state file must not let MLB double-pull: every
+    legacy paid pull was MLB's, so its clock inherits the old stamp."""
+    import json as _json
+    p = _tmp()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(_json.dumps({"remaining": 1327, "used": 18673,
+                              "last_refresh_ts": 555.0,
+                              "last_seen_iso": "2026-07-27T17:59:14"}))
+    st = load(p)
+    assert st.sport_last_refresh == {"mlb": 555.0}
+    assert st.sport_ts("mlb") == 555.0 and st.sport_ts("nfl") == 0.0
+
+
+def test_budget_share_splits_the_daily_allowance():
+    """Two live slates each get half the day's spend, so September can't
+    plan to burn the month twice over."""
+    st = BudgetState(remaining=20000)
+    full = min_seconds_between(10, st, share=1.0)
+    half = min_seconds_between(10, st, share=0.5)
+    assert half >= full * 2 or half == float("inf")
+
+
 def test_junk_kickoff_entries_never_crash_the_held_pull():
     """A stray None or string in the kickoff list must not raise inside the
     hold-for-the-window branch — that code runs on the refresh thread, and

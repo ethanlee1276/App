@@ -105,6 +105,20 @@ def test_nfl_player_log_rows_maps_markets():
     assert rush and rush[0]["value"] == 96.0 and rush[0]["player"] == "Josh Jacobs"
 
 
+def test_nfl_td_rows_sum_rushing_and_receiving_only():
+    """anytime_td = TDs SCORED: rushing + receiving, never passing — a QB's
+    3 passing TDs don't cash his anytime-scorer prop."""
+    stats = [{
+        "player_display_name": "Jalen Hurts", "position": "QB",
+        "recent_team": "PHI", "opponent_team": "DAL", "week": "5",
+        "passing_tds": "3", "rushing_tds": "1", "receiving_tds": "0",
+    }]
+    rows = ingest.nfl_td_rows(stats, 2025)
+    assert len(rows) == 1
+    r = rows[0]
+    assert (r["market"], r["value"], r["period"]) == ("anytime_td", 1.0, "005")
+
+
 # --- ingest orchestration (stubbed sources) ---------------------------------
 def test_ingest_nfl_offline(monkeypatch=None):
     conn = _conn()

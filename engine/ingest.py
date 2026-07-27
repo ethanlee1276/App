@@ -107,6 +107,58 @@ def nfl_usage_rows(stats_rows: list[dict], season: int) -> list[dict]:
     return out
 
 
+def nfl_td_rows(stats_rows: list[dict], season: int) -> list[dict]:
+    """``anytime_td`` result rows: rushing + receiving touchdowns per game.
+
+    This is what settles the NFL long-shot board. Passing TDs are
+    deliberately excluded — an anytime-scorer prop pays the player who
+    SCORES the touchdown, not the one who throws it."""
+    from .sources.nflverse import _s, _f, POSITION_MARKETS
+    out = []
+    for r in stats_rows:
+        pos = _s(r, "position", "position_group").upper()
+        if pos not in POSITION_MARKETS:
+            continue
+        wk = int(_f(r, "week", default=0))
+        if wk <= 0:
+            continue
+        name = _s(r, "player_display_name", "player_name", "full_name")
+        team = _s(r, "recent_team", "team")
+        if not name:
+            continue
+        tds = (_f(r, "rushing_tds", default=0.0)
+               + _f(r, "receiving_tds", default=0.0))
+        out.append({
+            "sport": "nfl", "season": season, "period": f"{wk:03d}",
+            "game_id": f"{team}-{wk:03d}", "player": name, "team": team,
+            "opponent": _s(r, "opponent_team", "opponent"), "position": pos,
+            "home": 1, "market": "anytime_td", "value": tds,
+        })
+    return out
+
+
+def ingest_nfl_results(conn, season: int) -> dict:
+    """The light, season-time results pull that keeps the NFL journal
+    grading itself: weekly player stats (prop actuals + usage + touchdown
+    rows) WITHOUT the ~100MB play-by-play download. Schedules — and with
+    them final scores for moneyline/total settling — already refresh daily
+    in maintenance."""
+    from .sources.nflverse import load_weekly_stats
+    result = {"player_logs": 0, "skipped": []}
+    try:
+        weekly = load_weekly_stats(season)
+    except DataUnavailable as exc:
+        result["skipped"].append(f"nfl weekly stats {season}: {exc}")
+        return result
+    rows = nfl_player_log_rows(weekly, season)
+    rows += nfl_usage_rows(weekly, season)
+    rows += nfl_td_rows(weekly, season)
+    result["player_logs"] = db.upsert_player_logs(conn, rows)
+    db.log_ingest(conn, "nfl", "weekly_results", str(season),
+                  result["player_logs"])
+    return result
+
+
 def ingest_nfl(conn, seasons: list[int]) -> dict:
     from .sources.nflverse import load_schedules, load_weekly_stats
     result = {"games": 0, "player_logs": 0, "skipped": []}
@@ -138,6 +190,7 @@ def ingest_nfl(conn, seasons: list[int]) -> dict:
             continue
         rows = nfl_player_log_rows(weekly, season)
         rows += nfl_usage_rows(weekly, season)
+        rows += nfl_td_rows(weekly, season)
         n = db.upsert_player_logs(conn, rows)
         result["player_logs"] += n
         db.log_ingest(conn, "nfl", "player_logs", str(season), n)

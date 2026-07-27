@@ -748,6 +748,81 @@ def test_log_longshots_skips_projected_lineups():
     assert players == {"Confirmed Guy", "Legacy Row No Flag"}
 
 
+def test_nfl_week_bets_settle_from_weekly_logs():
+    """An NFL slate journals as '2025-W05'; results land as period '005'
+    within a season. The mapping must join BOTH keys — a bare week number
+    repeats every season, and joining period alone would grade a 2025 bet
+    against a 2024 stat line."""
+    from engine import db as hist_db
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    r = _result(sport="nfl", date="2025-W05")
+    r["recommendations"][0].update(
+        {"player": "Bijan Robinson", "market": "rush_yds", "side": "OVER",
+         "line": 70.5, "odds": 100})
+    ledger.log_recommendations(conn, r)
+
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_player_logs(hist, [
+        # The season that must NOT settle this bet: same week, huge total.
+        {"sport": "nfl", "season": 2024, "period": "005", "game_id": "x",
+         "player": "Bijan Robinson", "team": "ATL", "opponent": "TB",
+         "position": "RB", "home": 1, "market": "rush_yds", "value": 150.0},
+        # The right season: 62 rushing yards — the OVER 70.5 loses.
+        {"sport": "nfl", "season": 2025, "period": "005", "game_id": "y",
+         "player": "Bijan Robinson", "team": "ATL", "opponent": "TB",
+         "position": "RB", "home": 1, "market": "rush_yds", "value": 62.0}])
+
+    assert ledger.settle_from_history(conn, hist, sport="nfl") == 1
+    b = conn.execute("SELECT * FROM bets WHERE player='Bijan Robinson'").fetchone()
+    assert b["status"] == "lost" and b["actual"] == 62.0
+
+
+def test_nfl_anytime_td_longshots_settle_from_td_rows():
+    """The NFL long-shot board journals now that anytime_td rows ingest;
+    a settled 1-TD game grades the 0.5-line OVER as a win."""
+    from engine import db as hist_db
+    conn = _conn()
+    result = {"sport": "nfl", "date": "2025-W03", "long_shots": [
+        {"player": "Jahmyr Gibbs", "market": "anytime_td", "odds": 150,
+         "book": "FanDuel", "model_prob": 0.45}], "longshot_watch": []}
+    assert ledger.log_longshots(conn, result) == 1
+
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_player_logs(hist, [
+        {"sport": "nfl", "season": 2025, "period": "003", "game_id": "g",
+         "player": "Jahmyr Gibbs", "team": "DET", "opponent": "GB",
+         "position": "RB", "home": 1, "market": "anytime_td", "value": 1.0}])
+    assert ledger.settle_from_history(conn, hist, sport="nfl") == 1
+    b = conn.execute("SELECT * FROM bets").fetchone()
+    assert b["status"] == "won" and b["category"] == "longshot"
+
+
+def test_nfl_no_show_voids_only_when_the_week_is_final():
+    """A projected player who never appeared in a FULLY final NFL week
+    voids, mapped through the same season+period keys."""
+    from engine import db as hist_db
+    conn = _conn()
+    r = _result(sport="nfl", date="2025-W05")
+    r["recommendations"][0].update({"player": "Scratched Guy",
+                                    "market": "rush_yds"})
+    ledger.log_recommendations(conn, r)
+
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_games(hist, [
+        {"sport": "nfl", "season": 2025, "period": "005", "game_id": "A@B",
+         "home": "B", "away": "A", "home_score": 24, "away_score": 20,
+         "spread": -3.0, "total": 44.0, "roof": "", "surface": "",
+         "temp": None, "wind": None, "extra": None}])
+    hist_db.upsert_player_logs(hist, [
+        {"sport": "nfl", "season": 2025, "period": "005", "game_id": "A@B",
+         "player": "Someone Else", "team": "B", "opponent": "A",
+         "position": "RB", "home": 1, "market": "rush_yds", "value": 80.0}])
+    ledger.settle_from_history(conn, hist, sport="nfl")
+    b = conn.execute("SELECT status FROM bets WHERE player='Scratched Guy'").fetchone()
+    assert b["status"] == "void"
+
+
 def _stale_result(**over):
     base = {"sport": "mlb", "date": "2026-07-27", "market_scan": {"stale": [
         # Pre-game, settleable: journals.

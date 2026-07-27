@@ -19,6 +19,7 @@ is idempotent per (sport, date, player, market).
 from __future__ import annotations
 
 import datetime
+import re
 import sqlite3
 from pathlib import Path
 
@@ -187,10 +188,11 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
     return n
 
 
-# Long-shot markets we can actually settle from ingested game logs. NFL
-# anytime-TD boards join here once a TD market exists in the NFL logs —
-# journaling unsettleable bets would just accumulate rows stuck open forever.
-SETTLEABLE_LONGSHOTS = {"home_runs"}
+# Long-shot markets we can actually settle from ingested game logs —
+# journaling unsettleable bets would just accumulate rows stuck open
+# forever. anytime_td settles from the weekly-stats TD rows
+# (engine.ingest.nfl_td_rows) that maintenance ingests all season.
+SETTLEABLE_LONGSHOTS = {"home_runs", "anytime_td"}
 
 
 def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
@@ -241,8 +243,10 @@ def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
 
 
 # Stale-line flags journal only on markets whose results we actually ingest;
-# anything else would sit open forever and eventually void wrongly.
-STALE_SETTLEABLE = {"total_bases", "hits", "home_runs"}
+# anything else would sit open forever and eventually void wrongly. The NFL
+# yardage markets settle from the weekly stats maintenance ingests Aug–Feb.
+STALE_SETTLEABLE = {"total_bases", "hits", "home_runs",
+                    "pass_yds", "rush_yds", "rec_yds", "receptions"}
 
 
 def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
@@ -282,7 +286,9 @@ def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'stale')",
-            (now, sport, r.get("date") or slate_date, r["player"], market,
+            # Slate-level date first: it's the key settling maps to the
+            # history DB (NFL journals '2025-W05', not the game's ISO day).
+            (now, sport, slate_date or r.get("date"), r["player"], market,
              (r.get("side") or "OVER").upper(), line, r.get("book", ""), odds,
              None,
              # hit_prob = the field's consensus implied — what the flag
@@ -357,6 +363,25 @@ def _snapshot_closes() -> dict:
         return {}
 
 
+# NFL slates journal under the week label the site shows ('2025-W05');
+# results land in the history DB as period '005' within a season.
+_NFL_WEEK_DATE = re.compile(r"^(\d{4})-W(\d{1,2})$")
+
+
+def _hist_where(b) -> tuple[str, list]:
+    """SQL fragment + args locating this bet's results in the history DB.
+
+    MLB journals ISO dates that ARE the log period, so sport+period is
+    enough. An NFL bet's '2025-W05' maps to period '005' — and a bare
+    week number repeats every season, so the season must join too or a
+    2026 bet could settle against a 2025 stat line."""
+    m = _NFL_WEEK_DATE.match(b["date"] or "")
+    if b["sport"] == "nfl" and m:
+        return ("sport=? AND season=? AND period=?",
+                [b["sport"], int(m.group(1)), f"{int(m.group(2)):03d}"])
+    return "sport=? AND period=?", [b["sport"], b["date"]]
+
+
 def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     """Auto-settle open bets straight from the history database.
 
@@ -377,13 +402,14 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     closes_cache: dict = {}
     settled = 0
     for b in conn.execute(q, args).fetchall():
+        where, wargs = _hist_where(b)
         if b["market"] == "moneyline":
             # player = the team picked; the game's final score settles it.
             g = hist_conn.execute(
-                "SELECT home, away, home_score, away_score FROM games "
-                "WHERE sport=? AND period=? AND (home=? OR away=?) "
-                "AND home_score IS NOT NULL AND away_score IS NOT NULL",
-                (b["sport"], b["date"], b["player"], b["player"])).fetchone()
+                f"SELECT home, away, home_score, away_score FROM games "
+                f"WHERE {where} AND (home=? OR away=?) "
+                f"AND home_score IS NOT NULL AND away_score IS NOT NULL",
+                (*wargs, b["player"], b["player"])).fetchone()
             if g is None:
                 continue
             pick_home = g["home"] == b["player"]
@@ -395,27 +421,27 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         if b["market"] == "total":
             # player = the matchup key (AWAY@HOME); actual = combined runs.
             g = hist_conn.execute(
-                "SELECT home_score, away_score FROM games "
-                "WHERE sport=? AND period=? AND game_id=? "
-                "AND home_score IS NOT NULL AND away_score IS NOT NULL",
-                (b["sport"], b["date"], b["player"])).fetchone()
+                f"SELECT home_score, away_score FROM games "
+                f"WHERE {where} AND game_id=? "
+                f"AND home_score IS NOT NULL AND away_score IS NOT NULL",
+                (*wargs, b["player"])).fetchone()
             if g is None:
                 continue
             _settle_one(conn, b, float(g["home_score"]) + float(g["away_score"]), None)
             settled += 1
             continue
         row = hist_conn.execute(
-            "SELECT value FROM player_game_logs WHERE sport=? AND period=? "
-            "AND market=? AND player=?",
-            (b["sport"], b["date"], b["market"], b["player"])).fetchone()
+            f"SELECT value FROM player_game_logs WHERE {where} "
+            f"AND market=? AND player=?",
+            (*wargs, b["market"], b["player"])).fetchone()
         if row is None:
             # Name-shape fallback (feeds disagree on accents/suffixes).
             target = normalize_name(b["player"])
             row = next(
                 (c for c in hist_conn.execute(
-                    "SELECT player, value FROM player_game_logs "
-                    "WHERE sport=? AND period=? AND market=?",
-                    (b["sport"], b["date"], b["market"]))
+                    f"SELECT player, value FROM player_game_logs "
+                    f"WHERE {where} AND market=?",
+                    (*wargs, b["market"]))
                  if normalize_name(c["player"]) == target), None)
         if row is None:
             continue
@@ -449,19 +475,20 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         if b["market"] in ("moneyline", "total") or not b["date"]:
             continue
         key = (b["sport"], b["date"])
+        where, wargs = _hist_where(b)
         if key not in day_state:
             r = hist_conn.execute(
-                "SELECT COUNT(*), SUM(CASE WHEN home_score IS NOT NULL "
-                "THEN 1 ELSE 0 END) FROM games WHERE sport=? AND period=?",
-                key).fetchone()
+                f"SELECT COUNT(*), SUM(CASE WHEN home_score IS NOT NULL "
+                f"THEN 1 ELSE 0 END) FROM games WHERE {where}",
+                wargs).fetchone()
             day_state[key] = (int(r[0] or 0), int(r[1] or 0))
         tot, fin = day_state[key]
         if not tot or fin < tot:
             continue
         if key not in day_players:
             day_players[key] = {normalize_name(p["player"]) for p in hist_conn.execute(
-                "SELECT DISTINCT player FROM player_game_logs "
-                "WHERE sport=? AND period=?", key)}
+                f"SELECT DISTINCT player FROM player_game_logs "
+                f"WHERE {where}", wargs)}
         if normalize_name(b["player"]) in day_players[key]:
             continue            # he played — the normal settle path owns him
         conn.execute("UPDATE bets SET status='void', pnl_units=0, pnl_dollars=0 "

@@ -60,6 +60,19 @@ def _with_odds() -> bool:
     return bool(os.environ.get("ODDS_API_KEY"))
 
 
+MLB_OUT = "web/data/mlb_recommendations.json"
+NFL_OUT = "web/data/recommendations.json"
+
+
+def _slate_games(path: str) -> int:
+    """Real game count on a built board (0 when missing/unreadable)."""
+    try:
+        with open(path) as fh:
+            return len(json.load(fh).get("games", []))
+    except Exception:
+        return 0
+
+
 def _games_on_slate(path: str) -> int:
     """How many games the last build found — the per-refresh odds cost."""
     try:
@@ -67,6 +80,13 @@ def _games_on_slate(path: str) -> int:
             return max(1, len(json.load(fh).get("games", [])))
     except Exception:
         return 10
+
+
+def _budget_share() -> float:
+    """This sport's slice of the daily odds allowance. When both slates are
+    live at once (September–October), each gets half — otherwise the two
+    would jointly plan to spend the whole month's budget twice over."""
+    return 0.5 if (_slate_games(MLB_OUT) > 0 and _slate_games(NFL_OUT) > 0) else 1.0
 
 
 def _slate_kickoffs(path: str) -> list:
@@ -91,7 +111,7 @@ def _slate_kickoffs(path: str) -> list:
     return out
 
 
-def _odds_affordable(out_path: str, quiet: bool) -> bool:
+def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None) -> bool:
     """Decide whether this refresh can afford to re-pull odds.
 
     Scores are free and always refresh; odds are metered, so they only ride
@@ -105,7 +125,8 @@ def _odds_affordable(out_path: str, quiet: bool) -> bool:
     except Exception:
         return True
     ok, reason = should_refresh(_games_on_slate(out_path) + 1,
-                                kickoffs=_slate_kickoffs(out_path))
+                                kickoffs=_slate_kickoffs(out_path),
+                                sport=sport, share=_budget_share())
     if not quiet:
         print(f"       {reason}")
     # NOTE: the refresh clock is NOT stamped here. Authorization is not a
@@ -125,7 +146,7 @@ def _paid_pull_baseline() -> str:
 
 
 def _finish_paid_pull(spend: bool, before_seen: str, ok: bool, tail: str,
-                      label: str) -> None:
+                      label: str, sport: str | None = None) -> None:
     """Confirm (or defer) an authorized paid pull after the build ran.
 
     Landed → the refresh clock stamps now. Didn't land → a short retry
@@ -136,7 +157,7 @@ def _finish_paid_pull(spend: bool, before_seen: str, ok: bool, tail: str,
         return
     try:
         from engine.oddsbudget import paid_pull_result, FAILED_PULL_RETRY_S
-        landed = paid_pull_result(before_seen)
+        landed = paid_pull_result(before_seen, sport=sport)
     except Exception:
         return
     if not landed:
@@ -149,9 +170,9 @@ def _finish_paid_pull(spend: bool, before_seen: str, ok: bool, tail: str,
 def refresh_mlb(quiet: bool = False) -> bool:
     """Build today's MLB slate into web/data/mlb_recommendations.json."""
     date = _dt.date.today().isoformat()
-    out = "web/data/mlb_recommendations.json"
+    out = MLB_OUT
     args = ["mlb_build.py", date, "--out", out]
-    spend = _odds_affordable(out, quiet)
+    spend = _odds_affordable(out, quiet, sport="mlb")
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:
         args.append("--odds")
@@ -164,7 +185,7 @@ def refresh_mlb(quiet: bool = False) -> bool:
         # but the minute after each paid pull.
         args.append("--cached-odds")
     ok, tail = _run_build(args)
-    _finish_paid_pull(spend, before_seen, ok, tail, "MLB")
+    _finish_paid_pull(spend, before_seen, ok, tail, "MLB", sport="mlb")
     if not quiet:
         print(f"  MLB  {date}: {'refreshed' if ok else 'unavailable — kept existing data'}"
               + (f"  ({tail})" if not ok and tail else ""))
@@ -205,9 +226,9 @@ def refresh_nfl(quiet: bool = False) -> bool:
             print("  NFL  no current slate (offseason / schedule unavailable) — kept existing data")
         return False
     season, week = wk
-    out = "web/data/recommendations.json"
+    out = NFL_OUT
     args = ["nfl_build.py", str(season), str(week), "--out", out]
-    spend = _odds_affordable(out, quiet)
+    spend = _odds_affordable(out, quiet, sport="nfl")
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:
         args.append("--odds")
@@ -216,7 +237,7 @@ def refresh_nfl(quiet: bool = False) -> bool:
     elif _with_odds():
         args.append("--cached-odds")   # keep last paid prices; never overwrite with proxies
     ok, tail = _run_build(args)
-    _finish_paid_pull(spend, before_seen, ok, tail, "NFL")
+    _finish_paid_pull(spend, before_seen, ok, tail, "NFL", sport="nfl")
     if not quiet:
         print(f"  NFL  {season} wk {week}: {'refreshed' if ok else 'unavailable — kept existing data'}"
               + (f"  ({tail})" if not ok and tail else ""))
@@ -642,6 +663,13 @@ def preflight() -> None:
 
         for day in ledger.open_by_day(lconn, today)[:8]:
             parts = ", ".join(f"{n} {c}" for c, n in sorted(day["counts"].items()))
+            if "-W" in (day["date"] or ""):
+                # NFL journals under week labels, not ISO days — the MLB
+                # per-date ingest queries below would misread them as
+                # "results never ingested".
+                print(f"{ok}   {day['date']}: {parts} — NFL week; grades "
+                      f"daily in season as the weekly stats post")
+                continue
             if not day["stale"]:
                 # "Settles as games end" is only reassuring if you know
                 # whether the games have ended. Say it outright, so an

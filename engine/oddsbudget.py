@@ -29,7 +29,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 
 STATE_PATH = Path(__file__).parent.parent / "data" / "cache" / "odds_budget.json"
@@ -70,9 +70,21 @@ class BudgetState:
     # blip, host down): a short cooldown before retrying, instead of
     # counting a pull that spent nothing as the day's spend.
     retry_after_ts: float = 0.0
+    # Per-sport refresh stamps. The single global clock starved NFL: the
+    # launcher checks MLB first each cycle, MLB's pull reset the clock, and
+    # NFL's "waited" never grew past a cycle — so once football starts, the
+    # NFL board would never get a paid pull of its own. The credit BUDGET
+    # stays shared (it's one API plan); only the pacing clock splits.
+    sport_last_refresh: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+    def sport_ts(self, sport: str | None) -> float:
+        """The pacing stamp for one sport (global clock when sport unknown)."""
+        if sport is None:
+            return self.last_refresh_ts
+        return float(self.sport_last_refresh.get(sport, 0.0))
 
 
 def load(path: Path | str = STATE_PATH) -> BudgetState:
@@ -81,12 +93,26 @@ def load(path: Path | str = STATE_PATH) -> BudgetState:
         return BudgetState()
     try:
         raw = json.loads(path.read_text())
+        per_sport = {}
+        for k, v in (raw.get("sport_last_refresh") or {}).items():
+            try:
+                per_sport[str(k)] = float(v)
+            except (TypeError, ValueError):
+                continue
+        legacy = float(raw.get("last_refresh_ts", 0.0))
+        if not per_sport and legacy > 0:
+            # Upgrading a pre-split state file: every paid pull to date was
+            # MLB's (NFL was the starved sport — that's why this exists), so
+            # the legacy clock is MLB's clock. Without this seed MLB would
+            # double-pull the moment the upgrade lands.
+            per_sport = {"mlb": legacy}
         return BudgetState(
             remaining=int(raw.get("remaining", ASSUMED_MONTHLY)),
             used=int(raw.get("used", 0)),
-            last_refresh_ts=float(raw.get("last_refresh_ts", 0.0)),
+            last_refresh_ts=legacy,
             last_seen_iso=str(raw.get("last_seen_iso", "")),
             retry_after_ts=float(raw.get("retry_after_ts", 0.0)),
+            sport_last_refresh=per_sport,
         )
     except (ValueError, OSError, TypeError):
         return BudgetState()
@@ -114,9 +140,13 @@ def record_quota(remaining, used=None, path: Path | str = STATE_PATH) -> BudgetS
     return state
 
 
-def mark_refreshed(ts: float | None = None, path: Path | str = STATE_PATH) -> None:
+def mark_refreshed(ts: float | None = None, path: Path | str = STATE_PATH,
+                   sport: str | None = None) -> None:
     state = load(path)
-    state.last_refresh_ts = ts if ts is not None else time.time()
+    t = ts if ts is not None else time.time()
+    state.last_refresh_ts = t
+    if sport:
+        state.sport_last_refresh[sport] = t
     save(state, path)
 
 
@@ -127,7 +157,8 @@ FAILED_PULL_RETRY_S = 5 * 60
 
 
 def paid_pull_result(before_seen_iso: str, path: Path | str = STATE_PATH,
-                     now: float | None = None) -> bool:
+                     now: float | None = None,
+                     sport: str | None = None) -> bool:
     """Called after a paid pull ATTEMPT; returns whether it actually landed.
 
     "Landed" means the API answered — the quota stamp advanced past what it
@@ -145,6 +176,8 @@ def paid_pull_result(before_seen_iso: str, path: Path | str = STATE_PATH,
     landed = bool(state.last_seen_iso) and state.last_seen_iso != before_seen_iso
     if landed:
         state.last_refresh_ts = now
+        if sport:
+            state.sport_last_refresh[sport] = now
         state.retry_after_ts = 0.0
     else:
         state.retry_after_ts = now + FAILED_PULL_RETRY_S
@@ -176,7 +209,8 @@ def daily_allowance(state: BudgetState | None = None,
 def min_seconds_between(requests_per_refresh: int,
                         state: BudgetState | None = None,
                         today: _dt.date | None = None,
-                        active_hours: float = 14.0) -> float:
+                        active_hours: float = 14.0,
+                        share: float = 1.0) -> float:
     """Smallest safe gap between odds refreshes, in seconds.
 
     ``requests_per_refresh`` is an EVENT count (games + 1); the credit cost is
@@ -188,7 +222,10 @@ def min_seconds_between(requests_per_refresh: int,
     """
     state = state or load()
     per_refresh = max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
-    allowance = daily_allowance(state, today)
+    # ``share`` is this sport's slice of the day's allowance — 0.5 when two
+    # slates are live at once (Sep/Oct), so the sports can't jointly spend
+    # double what the month can afford.
+    allowance = int(daily_allowance(state, today) * share)
     if allowance < per_refresh:
         return float("inf")
     refreshes_today = allowance / per_refresh
@@ -231,8 +268,14 @@ def _fmt_clock(ts: float) -> str:
 
 def should_refresh(requests_per_refresh: int, now: float | None = None,
                    path: Path | str = STATE_PATH,
-                   kickoffs=None, **kw) -> tuple[bool, str]:
-    """Is an odds refresh affordable right now? Returns ``(ok, reason)``."""
+                   kickoffs=None, sport: str | None = None,
+                   share: float = 1.0, **kw) -> tuple[bool, str]:
+    """Is an odds refresh affordable right now? Returns ``(ok, reason)``.
+
+    ``sport`` selects that sport's own pacing clock (each slate holds its
+    pull for its own pre-game window); ``share`` is its slice of the daily
+    allowance when several slates are live. Omitting both keeps the legacy
+    single-clock behaviour."""
     now = now if now is not None else time.time()
     state = load(path)
     if state.retry_after_ts and now < state.retry_after_ts:
@@ -245,8 +288,8 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
                           "plan reset or the key changed")
         return False, (f"odds quota nearly exhausted ({state.remaining} left) — "
                        f"holding a reserve; scores still update free")
-    gap = min_seconds_between(requests_per_refresh, state, **kw)
-    waited = now - state.last_refresh_ts
+    gap = min_seconds_between(requests_per_refresh, state, share=share, **kw)
+    waited = now - state.sport_ts(sport)
     if gap == float("inf"):
         # Starvation mode: the daily allowance can't cover even one refresh,
         # but the month's spendable balance can. Allow a sparse pull so the
