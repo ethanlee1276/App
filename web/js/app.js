@@ -2665,6 +2665,54 @@ async function renderWhy() {
   whyCalcDevig(); whyCalcKelly(); whyCalcParlay();
 }
 
+
+/* ============================================================
+   Progressive disclosure for the explanatory prose.
+
+   Nearly every section here carries a paragraph explaining what the
+   numbers mean and why they can be trusted. That honesty is the point of
+   the product, but shipped all at once it buries the data under
+   documentation — the eye hits three lines of grey text before reaching
+   anything it came for. So the explanations collapse behind a "why?"
+   toggle: the reasoning stays one click away and never has to be
+   deleted, while the numbers lead.
+
+   Sections re-render constantly (innerHTML on every refresh), so this
+   runs off a MutationObserver rather than once at load, and marks what
+   it has already handled.
+   ============================================================ */
+const SUB_COLLAPSE_CHARS = 90;   // one line is fine; a paragraph is not
+
+function enhanceSectionSubs(root) {
+  (root || document).querySelectorAll(".section-title .sub").forEach((sub) => {
+    const title = sub.parentElement;
+    if (!title || title.dataset.subEnhanced) return;
+    const text = (sub.textContent || "").trim();
+    if (text.length <= SUB_COLLAPSE_CHARS) return;
+    title.dataset.subEnhanced = "1";
+    sub.classList.add("sub-collapsed");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "why-toggle";
+    btn.textContent = "why?";
+    btn.setAttribute("aria-expanded", "false");
+    btn.addEventListener("click", () => {
+      const open = sub.classList.toggle("sub-collapsed");
+      btn.setAttribute("aria-expanded", String(!open));
+      btn.textContent = open ? "why?" : "hide";
+    });
+    sub.before(btn);
+  });
+}
+
+function watchSectionSubs() {
+  enhanceSectionSubs();
+  const main = document.querySelector("main");
+  if (!main || typeof MutationObserver === "undefined") return;
+  const obs = new MutationObserver(() => enhanceSectionSubs());
+  obs.observe(main, { childList: true, subtree: true });
+}
+
 const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy", "nba", "ufc", "why"];
 
 function switchView(name) {
@@ -2779,5 +2827,6 @@ bind();
 applySport();
 updateUnitNote();
 initialView();
+watchSectionSubs();
 requestAnimationFrame(moveIndicator);
 load();

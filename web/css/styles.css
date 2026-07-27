@@ -827,3 +827,21 @@ select.calc-in { width: auto; font-weight: 600; }
 /* The hero keeps its own rhythm — it is the first thing on the page. */
 .hero-title { font-size: 15px; color: var(--text); margin-top: 4px; }
 .hero-title .sub { color: var(--text-dim); }
+
+
+/* --- Progressive disclosure on section explanations -------------------
+   The reasoning stays available and is never deleted; it just stops
+   being the first thing on every section. See enhanceSectionSubs(). */
+.section-title .sub.sub-collapsed { display: none; }
+.why-toggle {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-mute); border-radius: 999px;
+  font: inherit; font-size: 10.5px; font-weight: 600; letter-spacing: .04em;
+  text-transform: none; padding: 1px 9px; cursor: pointer;
+  line-height: 1.6; opacity: .75;
+}
+.why-toggle:hover { color: var(--text); border-color: var(--text-mute); opacity: 1; }
+.why-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+/* Expanded copy drops onto its own line so it never squeezes the title. */
+.section-title { flex-wrap: wrap; }
+.section-title .sub { flex-basis: 100%; }
