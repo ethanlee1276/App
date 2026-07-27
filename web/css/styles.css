@@ -74,8 +74,9 @@ h1, h2, h3 { margin: 0; }
   display: grid; place-items: center; font-size: 22px;
   background: var(--grad-brand); box-shadow: 0 6px 18px rgba(77, 140, 255, 0.4);
 }
-.brand h1 { font-size: 19px; letter-spacing: 0.2px; font-weight: 800; }
-.tagline { color: var(--text-dim); font-size: 12px; margin-top: 1px; }
+.brand h1 { font-size: 19px; letter-spacing: 0.2px; font-weight: 800; white-space: nowrap; }
+.tagline { color: var(--text-dim); font-size: 12px; margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 26ch; }
 
 .nav { display: flex; gap: 4px; position: relative; background: var(--panel); padding: 5px; border-radius: 13px; border: 1px solid var(--border-soft); }
 .nav-btn {
@@ -182,7 +183,12 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 @keyframes windflow { from { stroke-dashoffset: 48; } to { stroke-dashoffset: 0; } }
 
 /* ---------------- Pick cards ---------------- */
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(346px, 1fr)); gap: 18px; }
+/* Capped column width + centred tracks. A board with one pick used to
+   hug the left edge with two-thirds of the screen empty beside it, which
+   reads as broken rather than selective — and sparse IS this product's
+   normal state, since the models are built to pass on most things. */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(346px, 440px));
+  gap: 18px; justify-content: center; }
 .loading { color: var(--text-dim); grid-column: 1 / -1; text-align: center; padding: 60px; }
 .card {
   position: relative; overflow: hidden;

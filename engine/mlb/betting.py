@@ -110,7 +110,7 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     if not credible:
         reasons.insert(0, "No credible market edge — line unavailable or price looks off")
     elif side == "UNDER":
-        reasons.insert(0, f"Model sides UNDER — projects {proj.mean:g} under the {best.line:g} line")
+        reasons.insert(0, f"Model sides UNDER — projects {proj.mean:.2f} under the {best.line:g} line")
 
     return Recommendation(
         player=prop.player, team=prop.team, opponent=prop.opponent,
