@@ -862,3 +862,37 @@ select.calc-in { width: auto; font-weight: 600; }
 @supports not (background: color-mix(in srgb, red 10%, transparent)) {
   .metric.primary { background: rgba(90, 140, 255, .09); border-color: rgba(90, 140, 255, .34); }
 }
+
+
+/* --- Phones ------------------------------------------------------------
+   Measured, not guessed: at a 390px viewport .brand rendered 687px wide,
+   which forced the layout viewport to 714 and made phones shrink-to-fit
+   the whole desktop — roughly 9pt text. The sport switch (451px of it)
+   is a CHILD of .brand, and .brand is a non-wrapping flex row, so the
+   switch could never shrink: a flex item defaults to min-width:auto and
+   refuses to go below its content.
+
+   Two things are therefore required together, and neither works alone:
+   .brand must be allowed to wrap so the switch can drop to its own line,
+   and the switch needs min-width:0 so it may shrink and scroll. */
+@media (max-width: 760px) {
+  .topbar { flex-wrap: wrap; gap: 10px; padding: 10px 12px; }
+  .brand { flex: 1 1 100%; flex-wrap: wrap; gap: 10px; min-width: 0; }
+  .brand .tagline { display: none; }
+  .sport-switch, .nav {
+    flex: 1 1 100%; min-width: 0; flex-wrap: nowrap;
+    overflow-x: auto; overflow-y: hidden;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .sport-switch::-webkit-scrollbar, .nav::-webkit-scrollbar { display: none; }
+  .sport-btn, .nav-btn { flex: 0 0 auto; white-space: nowrap; }
+  .nav-indicator { display: none; }     /* meaningless once the row scrolls */
+  .slate-meta { flex: 1 1 100%; justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+  .view { padding: 14px 12px 48px; }
+  .hero-games .game-card { min-width: 262px; }
+  .stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .tile .v { font-size: 24px; }
+  .cards { grid-template-columns: 1fr; }
+  .controls { gap: 16px; padding: 14px; }
+  .control { min-width: 100%; }
+}
