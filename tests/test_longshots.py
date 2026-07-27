@@ -254,11 +254,6 @@ def test_hr_watchlist_rejects_mislined_and_broken_prices():
     assert "recent_values" in rows[0]
 
 
-if __name__ == "__main__":
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn(); print(f"  ok  {fn.__name__}")
-    print(f"\n{len(fns)} tests passed.")
 
 
 def test_hr_board_drops_the_tail_the_model_cannot_pick():
@@ -274,3 +269,28 @@ def test_hr_board_drops_the_tail_the_model_cannot_pick():
     assert sig.parameters["min_prob"].default == MIN_MODEL_PROB
     # An empty board is still an empty board, floor or not.
     assert build_hr_longshots([], limit=3) == []
+
+
+def test_impossible_under_never_inflates_the_devig():
+    """A fabricated or stale under (-110 against a +318 over sums to 76% —
+    a book that pays out more than it takes) once made the "de-vigged"
+    implied HIGHER than the raw price's own 23.9%, and the market-shrunk
+    model probability and EV rode up with it. An impossible pair must be
+    priced as one-sided."""
+    from engine.longshots import _price
+    from engine.odds import american_to_prob
+
+    implied_bad, exact_bad = _price(0.25, 318, -110)
+    assert exact_bad is False                       # treated as one-sided
+    assert implied_bad < american_to_prob(318)      # 6% hold stripped, never added
+    # A sane pair still de-vigs exactly.
+    implied_ok, exact_ok = _price(0.25, 318, -430)
+    assert exact_ok is True
+    assert implied_ok < american_to_prob(-430)
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")

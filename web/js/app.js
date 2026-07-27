@@ -333,8 +333,12 @@ function renderTopPlays() {
   title.style.display = "";
   const ud = unitDollars();
   host.innerHTML = rows.map((r, i) => {
+    // A teamless row (a game total) used to fall back to the rank number,
+    // which then rendered twice — "4  4" — since the rank column already
+    // shows it. A total gets the same ▲/▼ badge its card uses.
     const badge = r.team ? teamMark(r.team, 26)
-      : `<span class="tp-rank">${i + 1}</span>`;
+      : `<span class="total-badge ${/under/i.test(r.label) ? "under" : "over"}"
+           style="width:26px;height:26px;font-size:13px">${/under/i.test(r.label) ? "▼" : "▲"}</span>`;
     const stake = ud > 0 ? money(stakeDollars(r.stake)) : `${r.stake.toFixed(2)}u`;
     return `
       <div class="tp-row" style="--grade-color:${gradeColor(r.grade)}">
@@ -833,8 +837,10 @@ function longShotCard(r) {
   const stakeTxt = ud > 0
     ? `Stake ${money(stakeDollars(r.stake_units))} · ${r.stake_units.toFixed(2)}u`
     : `Stake ${r.stake_units.toFixed(2)}u`;
-  const reasons = (r.reasons || []).slice(0, 6)
-    .map(reasonLI).join("");
+  // The primary reason already headlines the card in its own box —
+  // repeating it as the first bullet read as a copy-paste mistake.
+  const reasons = (r.reasons || []).filter((x) => x !== r.primary_reason)
+    .slice(0, 6).map(reasonLI).join("");
   const caveats = (r.caveats || [])
     .map((c) => `<div class="warning">⚠️ ${escapeHtml(c)}</div>`).join("");
   const oppLabel = state.sport === "mlb" ? "Expected PAs" : "RZ chances";
@@ -1083,8 +1089,9 @@ function renderGamePage() {
       : `<div class="empty-slate"><div class="es-icon">🎯</div>
           <div class="es-title">No player props clear the filters in this game</div>
           <div class="es-sub">Either the model passes on everything here, or books haven't
-          posted prices for it yet. Turn on “show non-recommended” back on the board to
-          browse everything analyzed.</div></div>`}
+          posted prices for it yet.</div>
+          ${props.length ? `<button class="btn ghost" id="gp-showall" style="margin-top:12px">
+            Show all ${props.length} analyzed prop(s) anyway</button>` : ""}</div>`}
 
     ${shots.length ? `<div class="section-title" style="margin-top:20px">Long shots
         <span class="sub">— tracked in their own bucket, never in the headline record</span></div>
@@ -1097,6 +1104,15 @@ function renderGamePage() {
 
   const back = document.getElementById("gp-back");
   if (back) back.addEventListener("click", () => switchView("recommended"));
+  // "Go back to the board, find the toggle, come back" was three steps for
+  // one intention. The button flips the same global toggle in place.
+  const showAll = document.getElementById("gp-showall");
+  if (showAll) showAll.addEventListener("click", () => {
+    state.showAll = true;
+    const c = document.getElementById("show-all");
+    if (c) c.checked = true;
+    renderGamePage();
+  });
   fillMeters(host);
   host.querySelectorAll(".cards").forEach(revealChildren);
 }
@@ -1111,8 +1127,8 @@ function renderTrending() {
   const edges = [...recs].sort((a, b) => b.edge - a.edge).slice(0, 6);
 
   const cols = [
-    { title: "🔥 Trending Up", sub: "Biggest recent-form risers", rows: risers, metric: (r) => `<span class="val pos">+${r.trend_delta}</span>`, stroke: "var(--good)" },
-    { title: "❄️ Cooling Off", sub: "Production sliding vs prior form", rows: fallers, metric: (r) => `<span class="val neg">${r.trend_delta}</span>`, stroke: "var(--bad)" },
+    { title: "🔥 Trending Up", sub: "Biggest recent-form risers", rows: risers, metric: (r) => `<span class="val pos">+${r.trend_delta.toFixed(2)}</span>`, stroke: "var(--good)" },
+    { title: "❄️ Cooling Off", sub: "Production sliding vs prior form", rows: fallers, metric: (r) => `<span class="val neg">${r.trend_delta.toFixed(2)}</span>`, stroke: "var(--bad)" },
     { title: "💎 Biggest Edges", sub: "Model vs the sportsbook line", rows: edges, metric: (r) => `<span class="val cyan">${signedPct(r.edge)}</span>`, stroke: "var(--cyan)" },
   ];
   const host = document.getElementById("trending");
@@ -1165,7 +1181,9 @@ function profileHTML(r) {
   const mlb = state.sport === "mlb";
   const rows = (r.logs || []).map((l) => {
     const hit = l.value > r.line;
-    const when = mlb && l.date ? formatGameDate(l.date) : `Wk ${l.week}`;
+    // "Wk" is football vocabulary — an MLB log without a stored date is
+    // still a GAME index, not a week.
+    const when = mlb ? (l.date ? formatGameDate(l.date) : `G ${l.week}`) : `Wk ${l.week}`;
     return `<tr><td>${escapeHtml(when)}</td><td>${l.home ? "vs" : "@"} ${escapeHtml(l.opponent)}</td>
       <td class="num ${hit ? "hit" : "miss"}">${l.value}</td></tr>`;
   }).join("");
@@ -1182,7 +1200,7 @@ function profileHTML(r) {
       <div class="profile-spark">${sparkline(vals, {
         line: r.line, stroke: teamPrimary(r.team), h: 72,
         labels: (r.logs || []).map((l) =>
-          `${mlb && l.date ? formatGameDate(l.date) : "Wk " + l.week} ${l.home ? "vs" : "@"} ${l.opponent}`),
+          `${mlb ? (l.date ? formatGameDate(l.date) : "G " + l.week) : "Wk " + l.week} ${l.home ? "vs" : "@"} ${l.opponent}`),
       })}</div>
       <table class="log-table">
         <tr><th>${mlb ? "Game" : "Week"}</th><th>Opponent</th><th style="text-align:right">${escapeHtml(r.market_label)}</th></tr>
@@ -1190,7 +1208,9 @@ function profileHTML(r) {
       </table>
       <div class="profile-pick">
         <div class="lbl">${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}
-          <small>${escapeHtml(r.book)} ${american(r.odds)} · proj ${r.projection} · edge ${signedPct(r.edge)}</small></div>
+          <small>${escapeHtml(r.book)} ${american(r.odds)} · proj ${r.projection}
+            · <span title="Probability the ${escapeHtml(r.side)} hits. Can side against the raw projection: baseball stats are right-skewed, so a few big games pull the AVERAGE above the line while MOST games still land under it.">${pct(r.hit_prob)} to hit</span>
+            · edge ${signedPct(r.edge)}</small></div>
         <div style="min-width:120px">${confMeter(r)}</div>
       </div>
     </article>`;
@@ -1750,7 +1770,7 @@ function renderScanner() {
           <span style="color:var(--bad);font-weight:700">${(t.measured_roi * 100).toFixed(1)}% historically</span>
           <span style="display:block;opacity:.6;font-size:.85em">${escapeHtml(t.band)} band</span></span>
       </div>`,
-      "No plus-money props on the board right now — which is the cheap place to be.")
+      "No plus-money quotes on today's board — main props or long shots. That's the cheap place to be.")
     + scanSection("Arbitrage", "opposite sides priced so a margin is locked whichever way it lands — IF both legs fill at the shown prices before they move. Rare across US books and gone in minutes",
       arbs, (a) => {
         const so = stake * a.stake_over_pct, su = stake * (1 - a.stake_over_pct);

@@ -211,15 +211,28 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
     return out
 
 
-def _market_scan(results: list[dict]) -> dict:
+def _market_scan(results: list[dict], long_shots: list[dict] | None = None) -> dict:
     """Cross-book arbitrage / middle / low-hold / stale-line scan."""
     from ..marketscan import scan_recommendations, stale_quotes, longshot_warnings
     out = scan_recommendations(results)
     # The one section backed by a measured CLV result rather than by
     # structure alone — see marketscan.stale_quotes.
     out["stale"] = stale_quotes(results)
-    # Avoidance rule, measured not assumed — see longshot_warnings.
-    out["longshots"] = longshot_warnings(results)
+    # Avoidance rule, measured not assumed — see longshot_warnings. The
+    # home-run board is exactly the population the rule exists for, so it
+    # feeds in alongside the main props — a scanner that said "no
+    # plus-money props" while the Long Shots page carried +400s was
+    # contradicting its own site.
+    quotes = list(results)
+    seen = set()          # a pick can also sit on the watchlist — one row each
+    for r in long_shots or []:
+        key = (r.get("player"), r.get("odds"))
+        if key in seen:
+            continue
+        seen.add(key)
+        quotes.append({**r, "market_label": r.get("market_label", "Home Runs"),
+                       "line": r.get("line", 0.5)})
+    out["longshots"] = longshot_warnings(quotes)
     return out
 
 
@@ -354,5 +367,5 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "long_shots": ls_picks,
         "longshot_watch": ls_watch,
         "longshot_diag": ls_diag,
-        "market_scan": _market_scan(results),
+        "market_scan": _market_scan(results, ls_picks + ls_watch),
     }

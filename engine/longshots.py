@@ -138,8 +138,16 @@ def _stake(model_prob: float, odds: int, fraction: float = 0.2) -> float:
 def _price(model_prob: float, over_odds: int, under_odds: int | None):
     """De-vig the book's price. With only one side quoted (common for TD/HR
     markets) we strip an assumed hold instead, which is less precise — the
-    caller flags that as a caveat."""
-    if under_odds is not None:
+    caller flags that as a caveat.
+
+    The pair is sanity-checked first. A fabricated or stale under (the
+    classic: -110 recorded against a +318 over, summing to 76% — a book
+    that pays out more than it takes in) makes the "de-vigged" number
+    HIGHER than the raw price's implied, which then drags the market-shrunk
+    model probability and EV up with it. An impossible pair is treated as
+    one-sided, exactly like the scanner's arb guard treats it."""
+    from .odds import pair_is_sane
+    if under_odds is not None and pair_is_sane(over_odds, under_odds):
         implied, _ = devig_two_way(over_odds, under_odds)
         exact = True
     else:

@@ -216,6 +216,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)
 
     recommended = [r for r in results if r["recommended"]]
+    ls = _long_shots(slate)
     return {
         "date": slate.date,
         "generated_from": "sample-slate",
@@ -231,18 +232,29 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,
         "game_bets": _game_bets(slate.games, config),
-        "long_shots": _long_shots(slate),
-        "market_scan": _market_scan(results),
+        "long_shots": ls,
+        "market_scan": _market_scan(results, ls),
     }
 
 
-def _market_scan(results: list[dict]) -> dict:
+def _market_scan(results: list[dict], long_shots: list[dict] | None = None) -> dict:
     """Cross-book arbitrage / middle / low-hold / stale-line scan."""
     from .marketscan import scan_recommendations, stale_quotes, longshot_warnings
     out = scan_recommendations(results)
     out["stale"] = stale_quotes(results)
-    # Avoidance rule, measured not assumed — see longshot_warnings.
-    out["longshots"] = longshot_warnings(results)
+    # Avoidance rule, measured not assumed — see longshot_warnings. The
+    # anytime-TD board feeds in alongside the main props: it is exactly
+    # the plus-money population the rule was measured on.
+    quotes = list(results)
+    seen = set()          # a pick can also sit on the watchlist — one row each
+    for r in long_shots or []:
+        key = (r.get("player"), r.get("odds"))
+        if key in seen:
+            continue
+        seen.add(key)
+        quotes.append({**r, "market_label": r.get("market_label", "Anytime TD"),
+                       "line": r.get("line", 0.5)})
+    out["longshots"] = longshot_warnings(quotes)
     return out
 
 
