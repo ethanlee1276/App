@@ -53,6 +53,31 @@ def test_the_landmark_walls_are_recorded():
     assert PARKS["pnc"].rf_wall_ft > 15         # Clemente Wall
 
 
+def test_wall_heights_are_whole_feet_or_close_to_it():
+    """The page rounds wall heights to whole feet, because that is how they
+    are quoted. A value that rounds badly (37.2 reading as a surveyed
+    figure rather than "37 feet 2 inches") is the thing to catch."""
+    for key, p in PARKS.items():
+        for side, v in (("left", p.lf_wall_ft), ("right", p.rf_wall_ft)):
+            assert abs(v - round(v)) in (0.0, 0.5), \
+                f"{key} {side} wall {v} — use whole feet or a clean half"
+
+
+def test_park_names_keep_their_real_spelling():
+    """Rogers Centre is Canadian and spelled that way. An over-eager
+    find-and-replace on 'centre' renamed the building once already."""
+    assert PARKS["rogers"].name == "Rogers Centre"
+
+
+def test_no_british_spellings_in_reader_facing_text():
+    """These strings go straight onto the page for a US audience."""
+    british = ("favour", "colour", "centre field", "metre", "behaviour")
+    for key, p in PARKS.items():
+        low = p.plays.lower()
+        for w in british:
+            assert w not in low, f"{key} note contains {w!r}"
+
+
 def test_coors_is_the_only_high_altitude_park():
     high = {k for k, p in PARKS.items() if p.altitude_ft >= 3000}
     assert high == {"coors"}

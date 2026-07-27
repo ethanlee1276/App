@@ -55,7 +55,7 @@ PARKS: dict[str, ParkProfile] = {
     "fenway": ParkProfile("fenway", "Fenway Park", "BOS",
                           hr_factor=0.96, run_factor=1.08, k_factor=0.97,
                           lf_ft=310, cf_ft=420, rf_ft=302,
-                          lf_wall_ft=37.2, rf_wall_ft=5,
+                          lf_wall_ft=37, rf_wall_ft=5,
                           capacity=37755, opened=1912,
                           plays="The Green Monster is 310 feet away and 37 feet tall, so it "
                                 "converts home runs into doubles rather than allowing them. "
@@ -181,7 +181,7 @@ PARKS: dict[str, ParkProfile] = {
                                    "plays much closer to neutral than the old ballpark in "
                                    "Arlington ever did. Deep right-center is the one real "
                                    "obstacle."),
-    "rogers": ParkProfile("rogers", "Rogers Center", "TOR",
+    "rogers": ParkProfile("rogers", "Rogers Centre", "TOR",
                           hr_factor=1.06, run_factor=1.02, k_factor=0.99,
                           roof="retractable", surface="turf",
                           lf_ft=328, cf_ft=400, rf_ft=328,
@@ -217,7 +217,7 @@ PARKS: dict[str, ParkProfile] = {
                              capacity=41339, opened=2008,
                              plays="About as close to a league-average park as exists. "
                                    "Humid DC summers add a little carry; nothing about the "
-                                   "shape favours either hand."),
+                                   "shape favors either hand."),
     "amfam": ParkProfile("amfam", "American Family Field", "MIL",
                          hr_factor=1.08, run_factor=1.00, k_factor=1.01,
                          roof="retractable",

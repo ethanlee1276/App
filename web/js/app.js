@@ -919,7 +919,16 @@ function parkPanel(g) {
   if (!p) return "";
   const f = g.factors || {};
   const dim = (v) => v ? `${v}'` : "—";
-  const wall = (v) => (v && v !== 8) ? ` · ${v}' wall` : "";
+  // Whole feet: walls are quoted that way ("the 37-foot Green Monster"),
+  // and a decimal reads as false precision — 37.2' looks like a surveyed
+  // figure rather than "37 feet 2 inches, rounded".
+  //
+  // Only walls that change how the park plays are worth the line. Standard
+  // is 8 feet; PNC's 6-foot left field and Daikin's 7-foot right are noise
+  // dressed up as a fact. A wall has to be genuinely low (Fenway's 5-foot
+  // right field, 302 away) or genuinely tall to earn the mention.
+  const notable = (v) => v && (Math.round(v) >= 12 || Math.round(v) <= 5);
+  const wall = (v) => notable(v) ? ` · ${Math.round(v)}' wall` : "";
   const facts = [
     p.opened ? `Opened ${p.opened}` : "",
     p.capacity ? `${p.capacity.toLocaleString()} seats` : "",
