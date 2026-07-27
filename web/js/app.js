@@ -1973,11 +1973,28 @@ function pmAgo(ts) {
    inside a sport — entering one hides the sport nav; leaving restores it. */
 const STANDALONE_MODES = ["intel", "fantasy", "nba", "ufc", "why"];
 
+// Header identity per standalone page — the brand logo/tagline follow the
+// ACTIVE page, exactly like the tab emojis. Before this, opening
+// Polymarket from the MLB tab left a baseball in the corner of a page
+// that has nothing to do with baseball.
+const STANDALONE_BRAND = {
+  intel: { logo: "🛰️", tagline: "Polymarket informed-flow intelligence" },
+  fantasy: { logo: "🏆", tagline: "Fantasy football — usage, scripts, draft kit" },
+  nba: { logo: "🏀", tagline: "Scalpy — NBA probability engine" },
+  ufc: { logo: "🥊", tagline: "Scalpy MMA — dossier-gated fight model" },
+  why: { logo: "🧭", tagline: "See the math. Know if it's working." },
+};
+
 function enterStandaloneMode(name) {
   document.querySelectorAll(".sport-btn").forEach((x) =>
     x.classList.toggle("active", x.dataset.sport === name));
   const nav = document.getElementById("nav");
   if (nav) nav.style.display = "none";
+  const brand = STANDALONE_BRAND[name];
+  if (brand) {
+    document.getElementById("brand-logo").textContent = brand.logo;
+    document.getElementById("tagline").textContent = brand.tagline;
+  }
   // Fantasy is NFL — avatars must draw helmets even if MLB was selected.
   if (name === "fantasy") window.ACTIVE_SPORT = "nfl";
   switchView(name);
@@ -1988,6 +2005,12 @@ function exitStandaloneMode() {
   if (nav) nav.style.display = "";
   document.querySelectorAll(".sport-btn").forEach((x) =>
     x.classList.toggle("active", x.dataset.sport === state.sport));
+  // Restore the sport's own brand (logo + tagline) along with its nav.
+  const meta = SPORT_META[state.sport];
+  if (meta) {
+    document.getElementById("brand-logo").textContent = meta.logo;
+    document.getElementById("tagline").textContent = meta.tagline;
+  }
   window.ACTIVE_SPORT = state.sport;
   if (STANDALONE_MODES.includes(state.view)) {
     switchView("recommended");
