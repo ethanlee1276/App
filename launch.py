@@ -62,6 +62,7 @@ def _with_odds() -> bool:
 
 MLB_OUT = "web/data/mlb_recommendations.json"
 NFL_OUT = "web/data/recommendations.json"
+NBA_OUT = "web/data/nba.json"
 
 
 def _slate_games(path: str) -> int:
@@ -83,10 +84,11 @@ def _games_on_slate(path: str) -> int:
 
 
 def _budget_share() -> float:
-    """This sport's slice of the daily odds allowance. When both slates are
-    live at once (September–October), each gets half — otherwise the two
-    would jointly plan to spend the whole month's budget twice over."""
-    return 0.5 if (_slate_games(MLB_OUT) > 0 and _slate_games(NFL_OUT) > 0) else 1.0
+    """This sport's slice of the daily odds allowance: one share per LIVE
+    slate. October runs three at once (MLB playoffs, NFL, NBA) — without
+    the split they'd jointly plan to spend the month several times over."""
+    live = sum(1 for p in (MLB_OUT, NFL_OUT, NBA_OUT) if _slate_games(p) > 0)
+    return 1.0 / max(1, live)
 
 
 def _slate_kickoffs(path: str) -> list:
@@ -172,7 +174,10 @@ def refresh_mlb(quiet: bool = False) -> bool:
     date = _dt.date.today().isoformat()
     out = MLB_OUT
     args = ["mlb_build.py", date, "--out", out]
-    spend = _odds_affordable(out, quiet, sport="mlb")
+    # games>0: an empty offseason slate never spends a paid pull. The first
+    # build of a season runs cached, writes the games, and the next cycle
+    # (60s later) is eligible — a one-cycle bootstrap, not a gap.
+    spend = _slate_games(out) > 0 and _odds_affordable(out, quiet, sport="mlb")
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:
         args.append("--odds")
@@ -228,7 +233,7 @@ def refresh_nfl(quiet: bool = False) -> bool:
     season, week = wk
     out = NFL_OUT
     args = ["nfl_build.py", str(season), str(week), "--out", out]
-    spend = _odds_affordable(out, quiet, sport="nfl")
+    spend = _slate_games(out) > 0 and _odds_affordable(out, quiet, sport="nfl")
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:
         args.append("--odds")
@@ -267,12 +272,22 @@ def refresh_fantasy(quiet: bool = False) -> bool:
 
 
 def refresh_nba(quiet: bool = False) -> bool:
-    """NBA slate (Scalpy). Cached odds between budgeted pulls, like MLB."""
-    args = ["nba_build.py", _dt.date.today().isoformat(),
-            "--out", "web/data/nba.json"]
-    if _with_odds():
+    """NBA slate (Scalpy) — a full member of the paid-pull rotation.
+
+    It was cached-only for its first season scaffold, which meant the
+    board could never see a real price: nothing ever seeded the cache.
+    Now it paces on its own clock like MLB/NFL, holding its pull for its
+    own pre-game window. The games>0 gate keeps the offseason free."""
+    args = ["nba_build.py", _dt.date.today().isoformat(), "--out", NBA_OUT]
+    spend = _slate_games(NBA_OUT) > 0 and _odds_affordable(NBA_OUT, quiet,
+                                                           sport="nba")
+    before_seen = _paid_pull_baseline() if spend else ""
+    if spend:
+        args.append("--odds")
+    elif _with_odds():
         args.append("--cached-odds")
     ok, tail = _run_build(args)
+    _finish_paid_pull(spend, before_seen, ok, tail, "NBA", sport="nba")
     if not quiet:
         print(f"  NBA  slate: {'refreshed' if ok else 'unavailable'}"
               + (f"  ({tail})" if not ok and tail else ""))

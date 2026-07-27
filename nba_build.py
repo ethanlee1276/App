@@ -102,6 +102,12 @@ def main() -> None:
         out.update(status="unreachable", note=str(exc))
         games, yesterday = [], []
 
+    # The slate's games ride in the JSON like every other board's: it's how
+    # the launcher's pacer knows the slate is live, what a refresh costs,
+    # and when the pre-game window opens (kickoffs are UTC ISO stamps).
+    out["games"] = [{"home": g["home"], "away": g["away"], "date": args.date,
+                     "kickoff": g.get("kickoff", "")} for g in games]
+
     if not games and "status" not in out:
         out.update(status="offseason",
                    note="No NBA games on this date. The engine (minutes model, "
@@ -136,6 +142,37 @@ def main() -> None:
             except oddsapi.OddsAPIError as exc:
                 odds_note = f"odds unavailable: {exc}"
 
+        # Stale-line scan across every book's quotes — the sampler signal
+        # MLB and NFL already journal. It must run HERE: the pipeline only
+        # ever sees the best two-way quote, and the scanner needs the field.
+        try:
+            from engine.marketscan import stale_quotes
+            from engine.nba.pipeline import MARKET_LABELS as _ML
+            started_teams: set = set()
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            for g in games:
+                k = (g.get("kickoff") or "").replace("Z", "+00:00")
+                try:
+                    if datetime.datetime.fromisoformat(k) <= now_utc:
+                        started_teams |= {g["home"], g["away"]}
+                except ValueError:
+                    pass
+            scan_rows = [{
+                "player": pr.player, "market": pr.market,
+                "market_label": _ML.get(pr.market, pr.market),
+                "game_date": args.date, "live": False,
+                "warnings": (["Game already started"]
+                             if hist.get(pr.player, {}).get("team")
+                             in started_teams else []),
+                "all_lines": [{"book": ln.book, "line": ln.line,
+                               "over_odds": ln.over_odds,
+                               "under_odds": ln.under_odds}
+                              for ln in pr.lines],
+            } for pr in slate.props if pr.lines]
+            out["market_scan"] = {"stale": stale_quotes(scan_rows)}
+        except Exception:
+            out["market_scan"] = {"stale": []}
+
         spread_by_team: dict = {}
         for g in slate.games:
             if g.spread is not None:
@@ -169,11 +206,14 @@ def main() -> None:
         })
         out.update(status="slate", **picks_result)
 
-        # Journal picks (sport='nba') so the Record page and CLV grade them
-        # like every other module. Settles from our own ingested boxscores.
-        if picks_result["picks"]:
-            try:
-                from engine import ledger
+        # Journal picks + stale flags (sport='nba') so the Record page and
+        # the sampler grade them like every other module. Settles from our
+        # own ingested boxscores — flags journal even on a no-pick night.
+        try:
+            from engine import ledger
+            lconn = ledger.connect()
+            n = 0
+            if picks_result["picks"]:
                 recs = [{"player": p["player"], "market": p["market"],
                          "side": p["side"], "line": p["line"],
                          "book": p["book"], "odds": p["odds"],
@@ -183,15 +223,19 @@ def main() -> None:
                          "grade": "Play", "stake_units": p["stake_units"],
                          "recommended": True}
                         for p in picks_result["picks"]]
-                lconn = ledger.connect()
                 n = ledger.log_recommendations(
                     lconn, {"sport": "nba", "date": args.date,
                             "recommendations": recs})
-                ledger.settle_from_history(lconn, connect(), sport="nba")
+            st = ledger.log_stale_flags(
+                lconn, {"sport": "nba", "date": args.date,
+                        "market_scan": out.get("market_scan") or {}})
+            settled = ledger.settle_from_history(lconn, connect(), sport="nba")
+            if n or st or settled:
                 ledger.export_json(lconn, "web/data/record.json")
-                print(f"Journal: {n} NBA pick(s) logged.")
-            except Exception as exc:
-                print(f"⚠️  NBA journal skipped: {exc}")
+                print(f"Journal: {n} NBA pick(s) + {st} stale flag(s) "
+                      f"logged, {settled} settled.")
+        except Exception as exc:
+            print(f"⚠️  NBA journal skipped: {exc}")
         conn.close()
 
     p = Path(args.out)

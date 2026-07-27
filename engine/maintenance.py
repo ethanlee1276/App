@@ -203,6 +203,17 @@ def settle_open(log=print, state_path: Path | None = None,
         # One ingest spanning the open days; it is idempotent, and games
         # still in progress simply aren't returned as finished yet.
         res = ingest.ingest_mlb_results(hconn, days[0], days[-1], with_logs=True)
+        # NBA nights grade intraday too — CDN boxscores go final within
+        # minutes of the buzzer. Only dates with open NBA picks are pulled.
+        try:
+            from .sources.nbadata import ingest_nba_date
+            for d in days:
+                if lconn.execute(
+                        "SELECT 1 FROM bets WHERE status='open' AND "
+                        "sport='nba' AND date=? LIMIT 1", (d,)).fetchone():
+                    ingest_nba_date(hconn, d)
+        except Exception:  # noqa: BLE001 — free-feed hiccup; daily pass catches up
+            pass
         settled = ledger.settle_from_history(lconn, hconn)
         if settled:
             ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
@@ -283,6 +294,31 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
             log(f"  nfl schedule: {n} row(s) refreshed (seasons {yr}-{yr + 1})")
     except Exception as exc:  # noqa: BLE001
         log(f"  ⚠️  nfl schedule refresh failed: {exc}")
+
+    # NBA results — final boxscores from the free CDN, one date at a time
+    # over the same catch-up window. This is what settles NBA picks and the
+    # NBA stale-line flags. Skipped July–September: no games exist.
+    if (today.month >= 10 or today.month <= 6) and start <= yesterday:
+        try:
+            from . import db as _ndb
+            from .sources.nbadata import ingest_nba_date
+            nconn = _ndb.connect()
+            tot_g = tot_l = 0
+            d = start
+            while d <= yesterday:
+                res = ingest_nba_date(nconn, d.isoformat())
+                tot_g += res["games"]
+                tot_l += res["player_logs"]
+                if any("schedule" in s for s in res.get("skipped", [])):
+                    # The schedule host is down — every later date would
+                    # fail identically, so say it once and stop.
+                    log(f"  ⚠️  {res['skipped'][0]}")
+                    break
+                d += _dt.timedelta(days=1)
+            if tot_g or tot_l:
+                log(f"  nba results: {tot_g} game(s), {tot_l:,} log rows")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  nba results ingest failed: {exc}")
 
     # NFL weekly results — the layer that settles NFL props and TDs. The
     # nflverse weekly-stats file updates within a day of games, so a daily

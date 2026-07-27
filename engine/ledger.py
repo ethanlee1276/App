@@ -243,10 +243,12 @@ def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
 
 
 # Stale-line flags journal only on markets whose results we actually ingest;
-# anything else would sit open forever and eventually void wrongly. The NFL
-# yardage markets settle from the weekly stats maintenance ingests Aug–Feb.
+# anything else would sit open forever and eventually void wrongly. NFL
+# yardage markets settle from the weekly stats maintenance ingests Aug–Feb;
+# NBA stat markets from the CDN boxscores it ingests Oct–Jun.
 STALE_SETTLEABLE = {"total_bases", "hits", "home_runs",
-                    "pass_yds", "rush_yds", "rec_yds", "receptions"}
+                    "pass_yds", "rush_yds", "rec_yds", "receptions",
+                    "pts", "reb", "ast", "fg3m"}
 
 
 def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:

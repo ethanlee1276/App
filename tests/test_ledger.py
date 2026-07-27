@@ -870,6 +870,28 @@ def test_stale_flags_settle_side_aware_and_stay_out_of_the_record():
     assert ledger.performance(conn)["settled"] == 0
 
 
+def test_nba_stale_flags_journal_and_settle_from_boxscores():
+    """NBA joins the sampler: an ISO-dated flag settles straight against
+    the ingested boxscore log for that date."""
+    from engine import db as hist_db
+    conn = _conn()
+    result = {"sport": "nba", "date": "2026-01-15", "market_scan": {"stale": [
+        {"player": "Nikola Jokic", "market": "reb", "side": "OVER",
+         "line": 12.5, "book": "FanDuel", "odds": 105, "consensus": 0.55,
+         "gap_pts": 3.0, "live": False, "started": False}]}}
+    assert ledger.log_stale_flags(conn, result) == 1
+
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_player_logs(hist, [
+        {"sport": "nba", "season": 2026, "period": "2026-01-15",
+         "game_id": "g", "player": "Nikola Jokic", "team": "DEN",
+         "opponent": "LAL", "position": "S", "home": 1,
+         "market": "reb", "value": 14.0}])
+    assert ledger.settle_from_history(conn, hist, sport="nba") == 1
+    b = conn.execute("SELECT * FROM bets").fetchone()
+    assert b["status"] == "won" and b["category"] == "stale"
+
+
 def test_export_json_carries_the_stale_sampler(tmp_path=None):
     import json as _json
     import tempfile
