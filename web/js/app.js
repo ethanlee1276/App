@@ -431,7 +431,7 @@ function gameBetCard(r) {
       <div class="metrics">
         <div class="metric"><div class="k">Model</div><div class="v">${pct(r.win_prob)}</div></div>
         <div class="metric"><div class="k">Book implied</div><div class="v">${pct(r.fair_prob)}</div></div>
-        <div class="metric"><div class="k">Edge</div><div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>
+        <div class="metric primary"><div class="k">Edge</div><div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>
       </div>
       ${confMeter(r)}
       ${(r.recent_values || []).length > 2
@@ -686,7 +686,7 @@ function cardHTML(r) {
       ${projBar(r)}
       <div class="metrics">
         <div class="metric"><div class="k">Hit prob</div><div class="v">${pct(r.hit_prob)}</div></div>
-        <div class="metric"><div class="k">Edge</div><div class="v ${r.has_market === false ? "" : (r.edge >= 0 ? "pos" : "neg")}">${r.has_market === false ? "—" : signedPct(r.edge)}</div></div>
+        <div class="metric primary"><div class="k">Edge</div><div class="v ${r.has_market === false ? "" : (r.edge >= 0 ? "pos" : "neg")}">${r.has_market === false ? "—" : signedPct(r.edge)}</div></div>
         <div class="metric"><div class="k">EV / unit</div><div class="v ${r.ev_per_unit >= 0 ? "pos" : "neg"}">${signedPct(r.ev_per_unit)}</div></div>
       </div>
       ${confMeter(r)}

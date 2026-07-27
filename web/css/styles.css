@@ -845,3 +845,20 @@ select.calc-in { width: auto; font-weight: 600; }
 /* Expanded copy drops onto its own line so it never squeezes the title. */
 .section-title { flex-wrap: wrap; }
 .section-title .sub { flex-basis: 100%; }
+
+
+/* --- One number leads on a card --------------------------------------
+   Hit prob, edge and EV sat in three identical grey boxes, so a card
+   presented three equally-weighted numbers and left the eye to pick.
+   Edge is the one the whole site is organised around — the AVG EDGE
+   tile, the min-edge slider, the Edge Board — so it gets the emphasis
+   and the other two become the context they actually are. */
+.metric.primary {
+  background: color-mix(in srgb, var(--brand) 9%, transparent);
+  border-color: color-mix(in srgb, var(--brand) 34%, transparent);
+}
+.metric.primary .k { color: var(--text-dim); }
+.metric.primary .v { font-size: 1.24em; letter-spacing: -0.2px; }
+@supports not (background: color-mix(in srgb, red 10%, transparent)) {
+  .metric.primary { background: rgba(90, 140, 255, .09); border-color: rgba(90, 140, 255, .34); }
+}
