@@ -263,8 +263,16 @@ function renderDataSource(d) {
 function renderAll() {
   const d = state.data;
   if (!d) return;
-  renderDataSource(d);
-  document.getElementById("slate-date").textContent = slateDateLabel(d);
+  // The header badge describes the ACTIVE page. While a standalone page
+  // (Fantasy, Polymarket, NBA, UFC) is up, the sports slate finishing a
+  // background load must not stamp its own source over it — that's how the
+  // Fantasy page opened saying "Live data" and flipped to "Sample data"
+  // (the offseason NFL slate's badge) about a feed that never stopped
+  // being live. exitStandaloneMode() restores the slate's badge on return.
+  if (!STANDALONE_MODES.includes(state.view)) {
+    renderDataSource(d);
+    document.getElementById("slate-date").textContent = slateDateLabel(d);
+  }
   renderStats();
   renderEmptySlate();
   renderTopPlays();
