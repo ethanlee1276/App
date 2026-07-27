@@ -1581,8 +1581,67 @@ async function renderRecord() {
     ${recCalibrationSection(d.calibration)}
     ${recHealthSection(d.account_health)}
     ${recLongshotSection(d.longshots)}
+    ${recStaleSection(d.stale_flags)}
     <p class="rec-stamp">Updated ${escapeHtml(d.generated_at || "")}
       · settles automatically as results are ingested each day.</p>`;
+}
+
+/* The stale-line sampler: every pre-game scanner flag, journaled at a flat
+   nominal stake and settled like any bet. The signal's CLV was measured on
+   30k harvested quotes; this bucket measures whether TAKING the flagged
+   price actually cashes — the difference between a statistic and a bet. */
+function recStaleSection(st) {
+  if (!st || (!st.settled && !st.open)) return "";
+  const graded = st.wins + st.losses;
+  const hitRate = graded ? (st.wins / graded) * 100 : 0;
+  const calib = st.avg_taken_implied != null
+    ? `<div style="opacity:.7;font-size:.9em;padding:8px 14px">
+         The flagged prices implied <strong>${(st.avg_taken_implied * 100).toFixed(1)}%</strong>
+         · the field's consensus said <strong>${(st.avg_consensus_implied * 100).toFixed(1)}%</strong>
+         · they actually hit <strong>${(st.actual_hit_rate * 100).toFixed(1)}%</strong>.
+         Hitting above the taken price's implied = the cheap price was real value.</div>` : "";
+  const rows = (st.recent || []).map((b) => {
+    const won = b.status === "won";
+    const push = b.status === "push";
+    const pnl = b.pnl_units || 0;
+    return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
+      <span class="rl-icon">${push ? "➖" : won ? "🏷️" : "▫️"}</span>
+      <span class="rl-date">${escapeHtml(b.date || "")}</span>
+      <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
+        <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
+      <span class="rl-proc">${b.hit_prob != null ? `field said ${(b.hit_prob * 100).toFixed(0)}%` : ""}</span>
+      <span class="rl-odds">${american(b.odds)}</span>
+      <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
+    </div>`;
+  }).join("");
+  return `
+    <div class="section-title" style="margin-top:22px">Stale-line sampler — measurement in progress
+      <span class="sub">— every pre-game stale-line flag, taken at the flagged price. Flat 0.1u,
+      zero bankroll impact, never in the record above.</span></div>
+    ${recDisclosure("What this is testing", `The scanner flags a book pricing
+      a side at least a point cheaper than every other book's consensus. On 30,448
+      harvested quotes, taking that price beat the eventual close 64.8% of the time —
+      but closing-line value is a statistic, not money. This bucket journals every
+      pre-game flag automatically and settles it against the real result. If the hit
+      rate clears the taken price's break-even over a real sample, the signal graduates
+      from "interesting" to "bettable" — and if it doesn't, this table is how we find
+      out cheaply.`)}
+    <div class="stats rec-kpis">
+      ${recTile("Flat-stake ROI", (st.roi >= 0 ? "+" : "") + (st.roi * 100).toFixed(1) + "%",
+                `${st.net_units >= 0 ? "+" : ""}${(st.net_units || 0).toFixed(2)}u on ${(st.units_staked || 0).toFixed(1)}u staked`,
+                { lead: true, tone: toneOf(st.roi) })}
+      ${recTile("Sampler record", `${st.wins}-${st.losses}${st.pushes ? "-" + st.pushes : ""}`,
+                `${st.open} open`)}
+      ${recTile("Hit rate", graded ? hitRate.toFixed(1) + "%" : "—",
+                st.avg_taken_implied != null
+                  ? `needs ${(st.avg_taken_implied * 100).toFixed(1)}% to break even`
+                  : "accrues as flags settle")}
+      ${recTile("Avg gap", st.avg_gap_pts != null ? st.avg_gap_pts.toFixed(1) + " pts" : "—",
+                "flagged price vs field consensus")}
+    </div>
+    <div class="card" style="padding:0;margin-top:12px">${calib}${rows ||
+      `<p class="loading" style="padding:12px">Nothing settled yet — flags journal on every
+       paid pull and grade as results ingest.</p>`}</div>`;
 }
 
 /* Long explanatory prose is the right thing to have and the wrong thing to

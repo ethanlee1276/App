@@ -231,6 +231,14 @@ def stale_quotes(recs: list[dict], gap: float = STALE_GAP_PT,
                     out.append({
                         "bet": f"{r.get('player', '')} {side} {pt} "
                                f"{r.get('market_label', r.get('market', ''))}",
+                        # Machine keys ride along so the flag can be
+                        # JOURNALED and settled, not just displayed.
+                        "player": r.get("player", ""),
+                        "market": r.get("market", ""),
+                        "date": r.get("game_date", ""),
+                        "live": bool(r.get("live")),
+                        "started": any("already started" in w
+                                       for w in (r.get("warnings") or [])),
                         "book": book, "odds": o, "side": side, "line": pt,
                         "implied": round(probs[book], 4),
                         "consensus": round(consensus, 4),

@@ -240,6 +240,82 @@ def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
     return n
 
 
+# Stale-line flags journal only on markets whose results we actually ingest;
+# anything else would sit open forever and eventually void wrongly.
+STALE_SETTLEABLE = {"total_bases", "hits", "home_runs"}
+
+
+def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
+    """Journal the scanner's stale-line flags — the sampler for our best-
+    measured signal.
+
+    A book pricing a side ≥1pt cheaper than the field's consensus beat the
+    eventual close 64.8% of the time (+1.49pt CLV, z=11.6) on 30k harvested
+    quotes. That was measured on CLOSES; this bucket measures the thing
+    that matters — does TAKING the flagged price make money at settlement?
+    Flat stake, zero dollars, category='stale', never in the headline
+    record. Pre-game flags only: an in-play price is stale for reasons the
+    scanner can't see.
+
+    The journal key has no side column, so if both sides of one prop are
+    flagged the same day, only the larger gap (rows arrive gap-sorted)
+    journals — fine for a measurement bucket.
+    """
+    sport = result.get("sport", "mlb")
+    slate_date = result.get("date", "")
+    now = datetime.datetime.utcnow().isoformat(timespec="seconds")
+    rows = ((result.get("market_scan") or {}).get("stale")) or []
+    n = 0
+    for r in rows:
+        if r.get("live") or r.get("started"):
+            continue
+        market = r.get("market") or ""
+        if market not in STALE_SETTLEABLE or not r.get("player"):
+            continue
+        try:
+            odds = int(r.get("odds"))
+            line = float(r.get("line"))
+        except (TypeError, ValueError):
+            continue
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
+            "line, book, odds, projection, hit_prob, edge, confidence, grade, "
+            "stake_units, stake_dollars, status, category) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'stale')",
+            (now, sport, r.get("date") or slate_date, r["player"], market,
+             (r.get("side") or "OVER").upper(), line, r.get("book", ""), odds,
+             None,
+             # hit_prob = the field's consensus implied — what the flag
+             # claims the true price is; edge = the gap being sampled.
+             r.get("consensus"), (r.get("gap_pts") or 0) / 100.0,
+             None, "Stale", flat_stake, 0.0))
+        n += cur.rowcount
+    conn.commit()
+    return n
+
+
+def stale_report(conn) -> dict:
+    """The stale-line sampler's scoreboard: flat-stake record, hit rate vs
+    the break-even the taken prices implied, and the consensus the flags
+    claimed. If hit rate can't beat the taken price's break-even, the
+    measured CLV never cashes and the signal stays display-only."""
+    p = performance(conn, category="stale")
+    row = conn.execute(
+        "SELECT AVG(CASE WHEN odds > 0 THEN 100.0 / (odds + 100.0) "
+        "            ELSE -odds / (100.0 - odds) END) AS taken_p, "
+        "AVG(hit_prob) AS consensus_p, AVG(edge) AS avg_gap, "
+        "SUM(status='won') AS w, COUNT(*) AS n "
+        "FROM bets WHERE category='stale' AND status IN ('won','lost')"
+    ).fetchone()
+    p["avg_taken_implied"] = round(row["taken_p"], 4) if row["taken_p"] is not None else None
+    p["avg_consensus_implied"] = (round(row["consensus_p"], 4)
+                                  if row["consensus_p"] is not None else None)
+    p["avg_gap_pts"] = round(row["avg_gap"] * 100, 2) if row["avg_gap"] is not None else None
+    p["actual_hit_rate"] = round(row["w"] / row["n"], 4) if row["n"] else None
+    p["recent"] = recent_settled(conn, limit=15, category="stale")
+    return p
+
+
 # --- settling ---------------------------------------------------------------
 def _settle_one(conn, b, actual: float, closing_line: float | None) -> None:
     """Grade one open bet SIDE-AWARE and advance the bankroll.
@@ -929,6 +1005,7 @@ def export_json(conn, path) -> None:
         "curve": pnl_curve(conn),
         "recent": recent_settled(conn),
         "longshots": longshot_report(conn),
+        "stale_flags": stale_report(conn),
         "calibration": calibration(conn),
         "account_health": account_health(conn),
     }

@@ -216,11 +216,16 @@ def main() -> None:
             from engine.db import connect as hist_connect
             lconn = ledger.connect()
             logged = ledger.log_recommendations(lconn, result)
+            # Yardage markets aren't in STALE_SETTLEABLE yet (NFL results
+            # don't auto-ingest), so this journals 0 until that lands —
+            # wired now so the sampler lights up with the September work.
+            st_logged = ledger.log_stale_flags(lconn, result)
             settled = ledger.settle_from_history(lconn, hist_connect(), sport="nfl")
             ledger.export_json(lconn, "web/data/record.json")
-            if logged or settled:
-                print(f"Journal: {logged} new pick(s) logged, {settled} settled "
-                      f"— see the Record tab or `python3 ledger.py report`")
+            if logged or st_logged or settled:
+                print(f"Journal: {logged} new pick(s) + {st_logged} stale "
+                      f"flag(s) logged, {settled} settled — see the Record "
+                      f"tab or `python3 ledger.py report`")
         except Exception as exc:
             print(f"⚠️  Bet journal skipped: {exc}")
 

@@ -748,6 +748,65 @@ def test_log_longshots_skips_projected_lineups():
     assert players == {"Confirmed Guy", "Legacy Row No Flag"}
 
 
+def _stale_result(**over):
+    base = {"sport": "mlb", "date": "2026-07-27", "market_scan": {"stale": [
+        # Pre-game, settleable: journals.
+        {"player": "Cheap Price Guy", "market": "total_bases", "side": "UNDER",
+         "line": 1.5, "book": "Caesars", "odds": 110, "date": "2026-07-27",
+         "implied": 0.4762, "consensus": 0.531, "gap_pts": 5.48,
+         "live": False, "started": False},
+        # Started game: an in-play price is stale for invisible reasons.
+        {"player": "Started Guy", "market": "hits", "side": "OVER",
+         "line": 0.5, "book": "FanDuel", "odds": -140, "date": "2026-07-27",
+         "consensus": 0.62, "gap_pts": 1.2, "live": False, "started": True},
+        # Un-settleable market: would sit open forever, then void wrongly.
+        {"player": "Pitcher Guy", "market": "strikeouts", "side": "OVER",
+         "line": 5.5, "book": "BetMGM", "odds": -105, "date": "2026-07-27",
+         "consensus": 0.55, "gap_pts": 3.1, "live": False, "started": False},
+    ]}}
+    base.update(over)
+    return base
+
+
+def test_stale_flags_journal_pregame_settleable_only():
+    conn = _conn()
+    assert ledger.log_stale_flags(conn, _stale_result()) == 1
+    assert ledger.log_stale_flags(conn, _stale_result()) == 0   # idempotent
+    rows = conn.execute("SELECT * FROM bets").fetchall()
+    assert len(rows) == 1
+    b = rows[0]
+    assert (b["player"], b["category"], b["side"]) == \
+        ("Cheap Price Guy", "stale", "UNDER")
+    assert b["stake_dollars"] == 0.0 and b["grade"] == "Stale"
+
+
+def test_stale_flags_settle_side_aware_and_stay_out_of_the_record():
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    ledger.log_stale_flags(conn, _stale_result())
+    # UNDER 1.5 total bases; the player posts 1 — the sampler bet wins.
+    n = ledger.settle(conn, {("Cheap Price Guy", "total_bases"): 1.0})
+    assert n == 1
+    st = ledger.stale_report(conn)
+    assert st["wins"] == 1 and st["actual_hit_rate"] == 1.0
+    assert st["avg_gap_pts"] is not None and st["avg_gap_pts"] > 5
+    # Zero dollar stakes: the bankroll and headline record are untouched.
+    assert ledger.bankroll(conn) == 1000.0
+    assert ledger.performance(conn)["settled"] == 0
+
+
+def test_export_json_carries_the_stale_sampler(tmp_path=None):
+    import json as _json
+    import tempfile
+    from pathlib import Path
+    conn = _conn()
+    ledger.log_stale_flags(conn, _stale_result())
+    out = Path(tempfile.mkdtemp()) / "record.json"
+    ledger.export_json(conn, out)
+    data = _json.loads(out.read_text())
+    assert data["stale_flags"]["open"] == 1
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
