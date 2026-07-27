@@ -276,6 +276,10 @@ function renderAll() {
   renderLongShots();
   renderTrending();
   renderPlayers();
+  // A deep link into a game lands before the slate has loaded, and the
+  // 60s refresh replaces the data under an open game page — both need the
+  // view redrawn once the new data is actually here.
+  if (state.view === "game") renderGamePage();
 }
 
 /* ============================================================
@@ -481,7 +485,19 @@ function renderGames() {
   host.innerHTML = games.map(gameCard).join("");
   revealChildren(host);
   enableTilt(host);
+  host.querySelectorAll(".game-card[data-gid]").forEach((el) => {
+    const open = () => openGame(el.dataset.gid);
+    el.addEventListener("click", open);
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+    });
+  });
 }
+
+/* A stable handle for one game, safe in a URL hash. Two teams and a date
+   identify a slate game uniquely — there is no id in the feed. */
+const gameId = (g) => `${g.date || ""}_${g.away}@${g.home}`;
+const findGame = (gid) => (((state.data || {}).games) || []).find((g) => gameId(g) === gid);
 
 function gameCard(g) {
   const mlb = state.sport === "mlb";
@@ -531,8 +547,14 @@ function gameCard(g) {
   const footer = isLive && mlb
     ? `<div class="wind-wrap live-footer">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span>${liveDetail}</div>`
     : `<div class="wind-wrap">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span></div>`;
+  // The strip is the hero of the page, so each card is also the door into
+  // that game: role/tabindex make it a real control for keyboard and screen
+  // readers, not just a div that happens to listen for clicks.
+  const n = gameBetCount(g);
   return `
-    <article class="game-card tilt ${isLive ? "is-live" : ""}">
+    <article class="game-card tilt ${isLive ? "is-live" : ""}" data-gid="${escapeHtml(gameId(g))}"
+             role="button" tabindex="0"
+             aria-label="Open picks for ${escapeHtml(teamName(g.away))} at ${escapeHtml(teamName(g.home))}">
       <div class="stadium-wrap">${art}${badge}</div>
       <div class="game-info">
         <div class="matchup">
@@ -544,7 +566,26 @@ function gameCard(g) {
         ${isLive && !mlb ? liveDetail : ""}
       </div>
       ${footer}
+      <div class="game-cta">${n ? `${n} pick${n === 1 ? "" : "s"} for this game` : "See this game's board"}
+        <span class="gc-arrow">→</span></div>
     </article>`;
+}
+
+/* How many things we'd actually recommend in this game — the number that
+   makes the card worth tapping. Counts recommended props and game bets;
+   the game page itself shows everything analyzed. */
+function gameBetCount(g) {
+  const props = (state.data.recommendations || []).filter(
+    (r) => propInGame(r, g) && passesFilters(r)).length;
+  const gbs = (state.data.game_bets || []).filter(
+    (b) => b.home === g.home && b.away === g.away && passesGameBet(b)).length;
+  return props + gbs;
+}
+
+function propInGame(r, g) {
+  const pair = new Set([r.team, r.opponent]);
+  return pair.has(g.home) && pair.has(g.away)
+    && (!r.game_date || !g.date || r.game_date === g.date);
 }
 
 function fillMeters(host) {
@@ -831,6 +872,141 @@ function longShotCard(r) {
 }
 
 /* ============================================================
+   Single game — everything the model has on one matchup.
+
+   The stadium strip is the hero of the Recommended page, but until now
+   the cards were decoration: you could look at Wrigley and the wind, then
+   had to go hunt the board for the props that play in it. Each card is now
+   the door into that game, and this view is the room behind it.
+   ============================================================ */
+function openGame(gid) {
+  state.gameId = gid;
+  switchView("game");
+}
+
+function renderGamePage() {
+  const host = document.getElementById("game-body");
+  if (!host) return;
+  // A deep link renders before the slate arrives; renderAll calls back.
+  if (!state.data) { host.innerHTML = `<p class="loading">Loading the slate…</p>`; return; }
+  const g = findGame(state.gameId);
+  if (!g) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🏟️</div>
+      <div class="es-title">That game isn't on the current slate</div>
+      <div class="es-sub">Slates roll over each day. Head back to the board for
+      today's games.</div></div>
+      <button class="btn ghost gp-back" id="gp-back" style="margin-top:14px">← Back to the board</button>`;
+    const b = document.getElementById("gp-back");
+    if (b) b.addEventListener("click", () => switchView("recommended"));
+    return;
+  }
+  const mlb = state.sport === "mlb";
+  const w = g.weather || {};
+  const live = g.live || {};
+  const isLive = live.state === "live";
+  const isFinal = live.state === "final";
+
+  const props = (state.data.recommendations || [])
+    .map((r) => ({ ...r, _ok: passesFilters(r) }))
+    .filter((r) => propInGame(r, g));
+  const shown = props.filter((r) => (state.showAll ? true : r._ok));
+  const bets = (state.data.game_bets || [])
+    .map((b) => ({ ...b, _ok: passesGameBet(b) }))
+    .filter((b) => b.home === g.home && b.away === g.away);
+  const betsShown = bets.filter((b) => (state.showAll ? true : b._ok));
+  const shots = (state.data.long_shots || []).filter((r) => propInGame(r, g));
+
+  // The header re-uses the same art the strip card draws, at full width.
+  const art = mlb ? ballpark(g) : stadium(g);
+  const cond = w.dome ? "Indoor" : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
+  const f = g.factors || {};
+  const factorChip = (k, label, hint) => f[k] == null ? "" :
+    `<span class="chip ${f[k] > 1.02 ? "up" : f[k] < 0.98 ? "down" : ""}" title="${escapeHtml(hint)}">
+       ${label} ${f[k].toFixed(2)}×</span>`;
+  const score = (side) => (live.home_score != null && (isLive || isFinal))
+    ? `<b class="score">${side === "home" ? live.home_score : live.away_score}</b>` : "";
+
+  // Grouping by market earns its keep on a full board. Inside one game it
+  // often means four headings above four single cards, which reads as
+  // clutter — so below a handful of props they stay one section.
+  const byMarket = new Map();
+  const GROUP_FROM = 6;
+  shown.forEach((r) => {
+    const k = shown.length >= GROUP_FROM ? (r.market_label || r.market || "Other") : "Player props";
+    if (!byMarket.has(k)) byMarket.set(k, []);
+    byMarket.get(k).push(r);
+  });
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+  host.innerHTML = `
+    <button class="btn ghost gp-back" id="gp-back">← Back to the board</button>
+    <div class="gp-hero">
+      <div class="gp-art">${art}
+        ${isLive ? `<div class="status-badge live"><span class="live-dot"></span>LIVE
+          <span class="per">${escapeHtml(live.period || "")}</span></div>` : ""}
+        ${isFinal ? `<div class="status-badge final">FINAL</div>` : ""}</div>
+      <div class="gp-meta">
+        <div class="gp-teams">
+          <span>${teamMark(g.away, 26)} ${escapeHtml(teamName(g.away))} ${score("away")}</span>
+          <span class="gp-at">@</span>
+          <span>${teamMark(g.home, 26)} ${escapeHtml(teamName(g.home))} ${score("home")}</span>
+        </div>
+        <div class="gp-sub">${escapeHtml([g.park_name, whenLabel(g.date, g.kickoff)]
+          .filter(Boolean).join(" · "))}</div>
+        <div class="chips gp-chips">
+          <span class="chip">O/U ${g.total != null ? g.total.toFixed(1) : "—"}</span>
+          ${g.favorite ? `<span class="chip">${escapeHtml(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}</span>` : ""}
+          <span class="chip">${escapeHtml(cond)}</span>
+          ${g.roof ? `<span class="chip">roof ${escapeHtml(g.roof)}</span>` : ""}
+          ${factorChip("hr", "HR park", "Park home-run factor — above 1.00 helps hitters")}
+          ${factorChip("run", "Runs", "Park run factor")}
+          ${factorChip("k", "Ks", "Park strikeout factor")}
+          ${g.lineups_confirmed === false ? `<span class="chip down">⚠ lineups pending</span>` : ""}
+        </div>
+      </div>
+    </div>
+
+    <div class="stats gp-stats">
+      <div class="tile"><div class="k">Props analyzed</div><div class="v">${props.length}</div>
+        <div class="tile-sub">in this game</div></div>
+      <div class="tile"><div class="k">Recommended</div><div class="v">${props.filter((r) => r._ok).length + bets.filter((b) => b._ok).length}</div>
+        <div class="tile-sub">props &amp; game bets</div></div>
+      <div class="tile"><div class="k">Game bets</div><div class="v">${bets.filter((b) => b._ok).length}</div>
+        <div class="tile-sub">moneyline, spread, totals</div></div>
+      <div class="tile"><div class="k">Long shots</div><div class="v">${shots.length}</div>
+        <div class="tile-sub">${mlb ? "home runs" : "anytime TDs"} · tracked separately</div></div>
+    </div>
+
+    ${betsShown.length ? `<div class="section-title">Game bets
+        <span class="sub">— moneyline, spread and totals from the team model</span></div>
+      <div class="cards gp-cards">${betsShown.map(gameBetCard).join("")}</div>` : ""}
+
+    ${shown.length ? [...byMarket.keys()].map((k) => `
+        <div class="section-title" style="margin-top:20px">${escapeHtml(k)}
+          <span class="sub">— ${plural(byMarket.get(k).length, "prop", "props")}</span></div>
+        <div class="cards gp-cards">${byMarket.get(k).map(cardHTML).join("")}</div>`).join("")
+      : `<div class="empty-slate"><div class="es-icon">🎯</div>
+          <div class="es-title">No player props clear the filters in this game</div>
+          <div class="es-sub">Either the model passes on everything here, or books haven't
+          posted prices for it yet. Turn on “show non-recommended” back on the board to
+          browse everything analyzed.</div></div>`}
+
+    ${shots.length ? `<div class="section-title" style="margin-top:20px">Long shots
+        <span class="sub">— tracked in their own bucket, never in the headline record</span></div>
+      <div class="cards gp-cards">${shots.map(longShotCard).join("")}</div>` : ""}
+
+    ${props.length > shown.length ? `<p class="loading" style="margin-top:14px">
+      ${plural(props.length - shown.length, "more analyzed prop", "more analyzed props")}
+      in this game ${props.length - shown.length === 1 ? "is" : "are"} held
+      (edge below the bar, no real price, or lineup unconfirmed).</p>` : ""}`;
+
+  const back = document.getElementById("gp-back");
+  if (back) back.addEventListener("click", () => switchView("recommended"));
+  fillMeters(host);
+  host.querySelectorAll(".cards").forEach(revealChildren);
+}
+
+/* ============================================================
    Trending view — momentum & value from the model
    ============================================================ */
 function renderTrending() {
@@ -951,31 +1127,54 @@ function countUp(el) {
 /* ============================================================
    Track Record — the journal, on the site
    ============================================================ */
-function recTile(label, value, sub) {
-  return `<div class="stat"><div class="stat-k">${label}</div>
-    <div class="stat-v">${value}</div>${sub ? `<div class="stat-sub" style="opacity:.6;font-size:.8em">${sub}</div>` : ""}</div>`;
+/* The record page used its own bare `.stat` divs, which had almost no CSS —
+   that alone is why it read as a spreadsheet bolted to a designed site. It
+   now speaks the same component vocabulary as everything else: `.tile`, with
+   a `lead` variant for the two numbers that actually decide whether the
+   process is working (ROI and CLV). */
+function recTile(label, value, sub, opts) {
+  const o = opts || {};
+  return `<div class="tile${o.lead ? " lead" : ""}">
+    <div class="k">${label}</div>
+    <div class="v${o.tone ? " " + o.tone : ""}">${value}</div>
+    ${sub ? `<div class="tile-sub">${sub}</div>` : ""}</div>`;
 }
 
+const toneOf = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "");
+
+/* A four-up grid of flex rows with five fixed-width columns each was clipping
+   its own numbers — the net-units column ran off the right edge of every
+   table. Fixed columns in a grid that is allowed to be narrow is the bug;
+   these rows are a real grid whose label column is the one that gives. */
 function recBucketTable(title, bucket) {
   const keys = Object.keys(bucket || {});
   if (!keys.length) return "";
+  const anyClv = keys.some((k) => bucket[k].avg_clv != null);
   const rows = keys
     .sort((a, b) => (bucket[b].w + bucket[b].l) - (bucket[a].w + bucket[a].l))
     .map((k) => {
       const d = bucket[k];
       const net = d.net_u || 0;
-      const clv = d.avg_clv != null
-        ? `<span style="min-width:78px;text-align:right;opacity:.7;font-size:.9em"
-             title="Average closing-line value — beating the close is the earliest sign a module earns">
-             CLV ${d.avg_clv >= 0 ? "+" : ""}${d.avg_clv.toFixed(2)}</span>` : "";
-      return `<div style="display:flex;gap:12px;padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.05)">
-        <span style="flex:1">${escapeHtml(k)}</span>
-        <span style="min-width:70px;text-align:right">${d.w}-${d.l}</span>${clv}
-        <span style="min-width:80px;text-align:right;color:${net >= 0 ? "var(--good,#3ddc84)" : "var(--bad,#ff6b7a)"}">
-          ${net >= 0 ? "+" : ""}${net.toFixed(2)}u</span></div>`;
+      const n = d.w + d.l;
+      const rate = n ? d.w / n : 0;
+      const clv = anyClv
+        ? `<span class="rb-clv" title="Average closing-line value — beating the close is the earliest sign a module earns">${
+            d.avg_clv == null ? "—"
+              : `${d.avg_clv >= 0 ? "+" : ""}${d.avg_clv.toFixed(2)}`}</span>` : "";
+      return `<div class="rb-row">
+        <span class="rb-name" title="${escapeHtml(k)}">${escapeHtml(k)}</span>
+        <span class="rb-bar" aria-hidden="true"><i style="width:${(rate * 100).toFixed(1)}%"></i></span>
+        <span class="rb-wl">${d.w}-${d.l}</span>${clv}
+        <span class="rb-net ${toneOf(net)}">${net >= 0 ? "+" : ""}${net.toFixed(2)}u</span></div>`;
     }).join("");
-  return `<div style="min-width:0"><div class="section-title" style="margin-top:16px">${title}</div>
-    <div class="card" style="padding:0">${rows}</div></div>`;
+  return `<div class="rec-bucket">
+    <div class="rb-head">${escapeHtml(title)}</div>
+    <div class="rb-rows${anyClv ? " has-clv" : ""}">
+      <div class="rb-row rb-labels">
+        <span class="rb-name">&nbsp;</span><span class="rb-bar"></span>
+        <span class="rb-wl">W-L</span>${anyClv ? `<span class="rb-clv">CLV</span>` : ""}
+        <span class="rb-net">Net</span></div>
+      ${rows}</div></div>`;
 }
 
 function recCurveChart(curve) {
@@ -995,23 +1194,44 @@ function recCurveChart(curve) {
       <circle cx="${x(i).toFixed(1)}" cy="${y(p.cum_u).toFixed(1)}" r="10" fill="transparent"
         style="pointer-events:all;cursor:pointer" data-tip="${escapeHtml(tip)}"/>`;
   }).join("");
-  const yLabel = (v) => `<text x="${padL - 6}" y="${y(v) + 3.5}" text-anchor="end" font-size="10"
-      fill="currentColor" opacity="0.5">${v >= 0 ? "+" : ""}${v.toFixed(1)}u</text>`;
+  const yLabel = (v) => `<text x="${padL - 8}" y="${y(v) + 3.5}" text-anchor="end" font-size="10"
+      fill="currentColor" opacity="0.45">${v >= 0 ? "+" : ""}${v.toFixed(1)}u</text>`;
+  const grid = (v) => `<line x1="${padL}" y1="${y(v)}" x2="${w - padR}" y2="${y(v)}"
+      stroke="currentColor" stroke-width="1" opacity="0.07"/>`;
+  // The line alone floated in an empty box. Filling the area under it toward
+  // the break-even axis is what makes a P&L curve read as a P&L curve at a
+  // glance — above the dashed line is profit, below it is not.
+  const area = `M${padL},${y(0)} L${path} L${x(curve.length - 1).toFixed(1)},${y(0)} Z`;
+  const gid = `pnlfill${Math.random().toString(36).slice(2, 8)}`;
+  const net = last.cum_u;
   return `
-    <div class="section-title" style="margin-top:18px">Running P&amp;L — every settled pick, by slate date</div>
-    <div class="card" style="padding:12px 8px 6px">
+    <div class="section-title" style="margin-top:18px">Running P&amp;L
+      <span class="sub">— every settled pick, by slate date</span></div>
+    <div class="card rec-chart">
+      <div class="rc-head">
+        <div class="rc-net ${toneOf(net)}">${net >= 0 ? "+" : ""}${net.toFixed(2)}u</div>
+        <div class="rc-span">${escapeHtml(curve[0].date)} → ${escapeHtml(last.date)}
+          · ${curve.length} slate${curve.length === 1 ? "" : "s"}</div>
+      </div>
       <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block" role="img"
            aria-label="Cumulative units won or lost over time">
+        <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${color}" stop-opacity="0.32"/>
+          <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+        </linearGradient></defs>
+        ${grid(hi)}${lo < 0 ? grid(lo) : ""}
+        <path d="${area}" fill="url(#${gid})" stroke="none"/>
         <line x1="${padL}" y1="${y(0)}" x2="${w - padR}" y2="${y(0)}"
-              stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" opacity="0.25"/>
+              stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" opacity="0.3"/>
         ${yLabel(hi)}${yLabel(0)}${lo < 0 ? yLabel(lo) : ""}
-        <text x="${padL}" y="${h - 8}" font-size="10" fill="currentColor" opacity="0.5">${escapeHtml(curve[0].date)}</text>
-        <text x="${w - padR}" y="${h - 8}" text-anchor="end" font-size="10" fill="currentColor" opacity="0.5">${escapeHtml(last.date)}</text>
-        <path d="M${path}" fill="none" stroke="${color}" stroke-width="2"
+        <text x="${padL}" y="${h - 8}" font-size="10" fill="currentColor" opacity="0.45">${escapeHtml(curve[0].date)}</text>
+        <text x="${w - padR}" y="${h - 8}" text-anchor="end" font-size="10" fill="currentColor" opacity="0.45">${escapeHtml(last.date)}</text>
+        <path d="M${path}" fill="none" stroke="${color}" stroke-width="2.2"
               stroke-linejoin="round" stroke-linecap="round"/>
         ${dots}
       </svg>
-      <div style="opacity:.55;font-size:.8em;padding:2px 8px 6px">Hover a dot for that day's bets. Flat units — every pick weighted by its stake, no bankroll compounding.</div>
+      <div class="rc-foot">Hover a dot for that day's bets. Flat units — every pick
+        weighted by its stake, no bankroll compounding.</div>
     </div>`;
 }
 
@@ -1025,40 +1245,41 @@ function recLongshotSection(ls) {
          on average · books implied <strong>${(ls.avg_implied_prob * 100).toFixed(1)}%</strong>
          · actually hit <strong>${(ls.actual_hit_rate * 100).toFixed(1)}%</strong>.
          Model above books AND actual above implied = the board finds real value.</div>` : "";
+  // Same row component as the main settled list, so it inherits the same
+  // alignment and the same phone treatment instead of clipping mid-word.
   const rows = (ls.recent || []).map((b) => {
     const won = b.status === "won";
     const pnl = b.pnl_units || 0;
-    return `<div style="display:flex;gap:12px;padding:7px 14px;align-items:center;
-        border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden">
-      <span>${won ? "💣" : "▫️"}</span>
-      <span style="opacity:.55;min-width:82px;font-size:.85em">${escapeHtml(b.date || "")}</span>
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">
-        <strong>${escapeHtml(b.player)}</strong>
-        <span style="opacity:.6"> HR ${b.hit_prob != null ? `· model ${(b.hit_prob * 100).toFixed(0)}%` : ""}</span></span>
-      <span style="min-width:56px;text-align:right">${american(b.odds)}</span>
-      <span style="min-width:70px;text-align:right;color:${pnl >= 0 ? "var(--good,#3ddc84)" : "var(--bad,#ff6b7a)"}">
-        ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
+    return `<div class="rl-row ${won ? "won" : "lost"}">
+      <span class="rl-icon">${won ? "💣" : "▫️"}</span>
+      <span class="rl-date">${escapeHtml(b.date || "")}</span>
+      <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
+        <span class="rl-bet">${escapeHtml(b.market_label || "HR")}</span></span>
+      <span class="rl-proc">${b.hit_prob != null ? `model ${(b.hit_prob * 100).toFixed(0)}%` : ""}</span>
+      <span class="rl-odds">${american(b.odds)}</span>
+      <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
     </div>`;
   }).join("");
   return `
     <div class="section-title" style="margin-top:22px">Long Shots — tracked separately
       <span class="sub">— home runs &amp; anytime TDs, with their own ROI. Never mixed
       into the record above.</span></div>
-    <p style="opacity:.6;font-size:.85em;margin:4px 0 10px">Every home-run and
+    ${recDisclosure("Why these are quarantined", `Every home-run and
       anytime-TD pick and watchlist entry, graded at a flat 0.1u nominal stake with zero
       bankroll impact. These markets are long shots by nature, so they are quarantined
       here even when they clear the main board's bar — a night of +650 darts would
       otherwise make the headline record describe the dart board instead of the picks
       the model stands behind. Long shots lose most nights by design; judge the ROI and
-      calibration over weeks, not the hit column.</p>
-    <div class="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+      calibration over weeks, not the hit column.`)}
+    <div class="stats rec-kpis">
+      ${recTile("Flat-stake ROI", (ls.roi >= 0 ? "+" : "") + (ls.roi * 100).toFixed(1) + "%",
+                `${ls.net_units >= 0 ? "+" : ""}${(ls.net_units || 0).toFixed(2)}u on ${(ls.units_staked || 0).toFixed(1)}u staked`,
+                { lead: true, tone: toneOf(ls.roi) })}
       ${recTile("Long-shot record", `${ls.wins}-${ls.losses}`, `${ls.open} open`)}
       ${recTile("Hit rate", hitRate.toFixed(1) + "%",
                 ls.avg_implied_prob != null
                   ? `books implied ${(ls.avg_implied_prob * 100).toFixed(1)}%`
                   : "plus-money — low is normal")}
-      ${recTile("Flat-stake ROI", (ls.roi >= 0 ? "+" : "") + (ls.roi * 100).toFixed(1) + "%",
-                `${ls.net_units >= 0 ? "+" : ""}${(ls.net_units || 0).toFixed(2)}u on ${(ls.units_staked || 0).toFixed(1)}u staked`)}
       ${recTile("Avg price", ls.avg_odds == null ? "—" : american(ls.avg_odds),
                 ls.odds_range ? `range ${american(ls.odds_range[0])} to ${american(ls.odds_range[1])}`
                               : "accrues as picks settle")}
@@ -1160,72 +1381,80 @@ async function renderRecord() {
     ? `<p class="loading" style="margin-top:10px">⚠️ ${o.settled} settled pick(s) —
        results this small are mostly luck. Judge the model after 100+, and judge
        the process by CLV before that.</p>` : "";
+  const pr = o.process || {};
+  const nProc = (pr.good || 0) + (pr.bad || 0) + (pr.flat || 0);
   host.innerHTML = `
-    <div class="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
-      ${recTile("Record", `${o.wins}-${o.losses}-${o.pushes}`, `${o.open} open`)}
-      ${recTile("Win rate", (o.win_rate * 100).toFixed(1) + "%", "break-even ≈ 52.4% at −110")}
+    <div class="stats rec-kpis">
       ${recTile("ROI", (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
-                `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`)}
+                `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`,
+                { lead: true, tone: toneOf(o.roi) })}
       ${recTile("Avg CLV", o.avg_clv == null ? "—" : (o.avg_clv >= 0 ? "+" : "") + o.avg_clv.toFixed(2) + " pts",
-                o.avg_clv == null ? "accrues as daily closes are captured" : "beat the close = sharp process")}
-      ${(() => {
-        const pr = o.process || {};
-        const n = (pr.good || 0) + (pr.bad || 0) + (pr.flat || 0);
-        return recTile("Process", n ? `${pr.good || 0}✓ ${pr.bad || 0}✗` : "—",
-          n ? `${pr.lucky_wins || 0} lucky win(s) · ${pr.unlucky_losses || 0} good-bet loss(es)`
-            : "grades the decision vs the close, not the result");
-      })()}
+                o.avg_clv == null ? "accrues as daily closes are captured" : "beat the close = sharp process",
+                { lead: true, tone: o.avg_clv == null ? "" : toneOf(o.avg_clv) })}
+      ${recTile("Record", `${o.wins}-${o.losses}-${o.pushes}`, `${o.open} open · ${o.settled} settled`)}
+      ${recTile("Win rate", (o.win_rate * 100).toFixed(1) + "%", "break-even ≈ 52.4% at −110")}
+      ${recTile("Process", nProc ? `${pr.good || 0}✓ ${pr.bad || 0}✗` : "—",
+                nProc ? `${pr.lucky_wins || 0} lucky win(s) · ${pr.unlucky_losses || 0} good-bet loss(es)`
+                      : "grades the decision vs the close, not the result")}
     </div>
-    <p style="opacity:.6;font-size:.85em;margin-top:10px">Journals every
+    ${recDisclosure("What counts as a tracked bet", `Journals every
       <strong>Recommended</strong> pick — player props and sharp-anchor game bets
       (moneylines &amp; totals) — at the real book price shown when it was
       recommended. One entry per player &amp; market per day. Long Shots are
       tracked in their own bucket below — never mixed into this record — and
-      the Edge Board is a watchlist, not tracked bets.</p>
+      the Edge Board is a watchlist, not tracked bets.`)}
     ${unstaked}
     ${small}
     ${recCurveChart(d.curve)}
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+    <div class="section-title" style="margin-top:20px">Splits
+      <span class="sub">— where the units actually came from. The bar is win rate;
+      the number that matters is net.</span></div>
+    <div class="rec-buckets">
       ${recBucketTable("By market", o.by_market)}
       ${recBucketTable("By side", o.by_side)}
       ${recBucketTable("By grade", o.by_grade)}
       ${recBucketTable("By book", o.by_book)}
     </div>
-    <div class="section-title" style="margin-top:18px">Recent settled picks</div>
-    <div class="card" style="padding:0">
+    <div class="section-title" style="margin-top:22px">Recent settled picks
+      <span class="sub">— newest first, at the price we actually got</span></div>
+    <div class="card rec-list">
       ${(d.recent || []).map((b) => {
         const won = b.status === "won";
         const push = b.status === "push";
-        const icon = push ? "➖" : (won ? "✅" : "❌");
         const pnl = b.pnl_units || 0;
         // Process chip: judge the decision against the close, out loud.
-        let procChip = `<span style="opacity:.35;font-size:.8em">no close</span>`;
+        let procChip = `<span class="rl-proc none">no close</span>`;
         if (b.process === "bad" && won)
-          procChip = `<span style="color:var(--warn);font-size:.8em" title="Won, but the market closed against us — a bad bet that got lucky">🍀 lucky</span>`;
+          procChip = `<span class="rl-proc warn" title="Won, but the market closed against us — a bad bet that got lucky">🍀 lucky</span>`;
         else if (b.process === "good" && b.status === "lost")
-          procChip = `<span style="color:var(--good);font-size:.8em" title="Lost, but we beat the closing line — good bet, bad night">📐 beat close</span>`;
+          procChip = `<span class="rl-proc good" title="Lost, but we beat the closing line — good bet, bad night">📐 beat close</span>`;
         else if (b.clv != null)
-          procChip = `<span style="color:${b.clv >= 0 ? "var(--good)" : "var(--bad)"};font-size:.8em"
+          procChip = `<span class="rl-proc ${b.clv >= 0 ? "good" : "bad"}"
             title="Closing-line value — how far the market moved our way after the bet">${b.clv >= 0 ? "+" : ""}${b.clv.toFixed(1)} CLV</span>`;
-        return `<div style="display:flex;gap:12px;padding:8px 14px;align-items:center;
-            border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden">
-          <span>${icon}</span>
-          <span style="opacity:.55;min-width:82px;font-size:.85em">${escapeHtml(b.date || "")}</span>
-          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">
-            <strong>${escapeHtml(b.player)}</strong>
-            <span style="opacity:.6"> ${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
-          <span style="min-width:82px;text-align:right">${procChip}</span>
-          <span style="min-width:56px;text-align:right">${american(b.odds)}</span>
-          <span style="min-width:70px;text-align:right;color:${pnl >= 0 ? "var(--good,#3ddc84)" : "var(--bad,#ff6b7a)"}">
-            ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
+        return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
+          <span class="rl-icon">${push ? "➖" : won ? "✓" : "✕"}</span>
+          <span class="rl-date">${escapeHtml(b.date || "")}</span>
+          <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
+            <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
+          ${procChip}
+          <span class="rl-odds">${american(b.odds)}</span>
+          <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
         </div>`;
       }).join("") || `<p class="loading" style="padding:12px">Nothing settled yet.</p>`}
     </div>
     ${recCalibrationSection(d.calibration)}
     ${recHealthSection(d.account_health)}
     ${recLongshotSection(d.longshots)}
-    <p style="opacity:.55;margin-top:10px;font-size:.85em">Updated ${escapeHtml(d.generated_at || "")}
+    <p class="rec-stamp">Updated ${escapeHtml(d.generated_at || "")}
       · settles automatically as results are ingested each day.</p>`;
+}
+
+/* Long explanatory prose is the right thing to have and the wrong thing to
+   lead with — same progressive-disclosure pattern the section subtitles use.
+   Open by default is wrong here: the numbers above it are the page. */
+function recDisclosure(label, html) {
+  return `<details class="rec-disclose"><summary>${escapeHtml(label)}</summary>
+    <div>${html}</div></details>`;
 }
 
 /* ============================================================
@@ -2726,7 +2955,17 @@ function switchView(name) {
   if (dir > 0) target.classList.add("from-right");
   else if (dir < 0) target.classList.add("from-left");
   target.classList.add("active");
-  document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
+  // The game view has no tab of its own — it belongs to the board it came
+  // from, so Recommended stays lit while you're inside a game.
+  const lit = name === "game" ? "recommended" : name;
+  document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === lit));
+  if (name === "game") {
+    renderGamePage();
+    if (state.gameId) history.replaceState(null, "", `#game/${encodeURIComponent(state.gameId)}`);
+    moveIndicator();
+    window.scrollTo({ top: 0, behavior: state.quiet ? "auto" : "smooth" });
+    return;
+  }
   if (name === "record") renderRecord();
   if (name === "intel") renderIntel();
   if (name === "fantasy") renderFantasy();
@@ -2739,6 +2978,7 @@ function switchView(name) {
 
 function initialView() {
   const h = (location.hash || "").replace("#", "");
+  if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
   if (STANDALONE_MODES.includes(h)) { enterStandaloneMode(h); return; }
   if (VIEW_ORDER.includes(h)) switchView(h);
 }

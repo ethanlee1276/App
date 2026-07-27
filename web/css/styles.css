@@ -863,6 +863,179 @@ select.calc-in { width: auto; font-weight: 600; }
   .metric.primary { background: rgba(90, 140, 255, .09); border-color: rgba(90, 140, 255, .34); }
 }
 
+/* ======================================================================
+   Record page
+   The receipts page was built out of bare `.stat` divs and inline styles
+   that shared nothing with the rest of the site — no gradient, no accent,
+   no type scale — so the page that carries the whole credibility claim
+   looked like a spreadsheet someone pasted in. It now uses the same
+   `.tile` / `.card` vocabulary as every other page, with two additions:
+   a `lead` tile for the numbers that decide whether the process works,
+   and real grid rows for the splits (the old flex rows with five fixed
+   columns clipped their own net-units figure off the right edge).
+   ====================================================================== */
+.tile .v.neg { color: var(--bad); }
+
+.rec-kpis .tile.lead {
+  border-color: color-mix(in srgb, var(--brand) 30%, var(--border-soft));
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--brand) 7%, var(--panel-2)), var(--panel));
+}
+.rec-kpis .tile.lead::after { opacity: .16; }
+.rec-kpis .tile.lead .v { font-size: 34px; }
+@supports not (background: color-mix(in srgb, red 10%, transparent)) {
+  .rec-kpis .tile.lead { border-color: rgba(90, 140, 255, .35); }
+}
+
+/* Progressive disclosure for the page's explanatory prose: right to have,
+   wrong to lead with. */
+.rec-disclose { margin: 12px 0 4px; }
+.rec-disclose > summary {
+  cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px;
+  color: var(--text-mute); font-size: 12.5px; font-weight: 600;
+  border: 1px solid var(--border-soft); border-radius: 999px; padding: 5px 12px;
+}
+.rec-disclose > summary::-webkit-details-marker { display: none; }
+.rec-disclose > summary::before { content: "?"; opacity: .75; font-weight: 800; }
+.rec-disclose > summary:hover { color: var(--text-dim); border-color: var(--border); }
+.rec-disclose[open] > summary::before { content: "×"; }
+.rec-disclose > div {
+  color: var(--text-dim); font-size: 13px; line-height: 1.55;
+  max-width: 78ch; margin-top: 8px; padding-left: 12px;
+  border-left: 2px solid var(--border-soft);
+}
+
+/* P&L chart */
+.rec-chart { padding: 14px 10px 8px; gap: 0; }
+.rec-chart .rc-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 0 8px 8px;
+}
+.rec-chart .rc-net { font-size: 26px; font-weight: 800; letter-spacing: -.5px; }
+.rec-chart .rc-net.pos { color: var(--good); }
+.rec-chart .rc-net.neg { color: var(--bad); }
+.rec-chart .rc-span { color: var(--text-mute); font-size: 12px; }
+.rec-chart .rc-foot { color: var(--text-mute); font-size: 11.5px; padding: 4px 8px 4px; }
+
+/* Splits */
+/* Explicitly two columns, not auto-fit. Four buckets across a 1440 laptop
+   gave each track 336px, of which 278 is fixed number columns — the market
+   names ellipsed down to "t." and "s.". Two columns fits all four in a
+   clean 2x2 with room for the labels they exist to show. */
+.rec-buckets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 700px) { .rec-buckets { grid-template-columns: 1fr; } }
+.rec-bucket {
+  min-width: 0; background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--border-soft); border-radius: var(--radius); overflow: hidden;
+}
+.rb-head {
+  font-size: 11px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase;
+  color: var(--text-mute); padding: 11px 14px 8px;
+}
+/* The label column is the one that gives; every number column is fixed so
+   the columns line up down the table and nothing runs off the edge. */
+.rb-row {
+  display: grid; align-items: center; gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 60px 58px 70px;
+  padding: 7px 14px; border-top: 1px solid var(--border-soft);
+}
+.rb-rows.has-clv .rb-row { grid-template-columns: minmax(0, 1fr) 60px 58px 50px 70px; }
+.rb-labels {
+  border-top: none; color: var(--text-mute); font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: .5px; padding-bottom: 4px;
+}
+.rb-labels .rb-net, .rb-labels .rb-wl, .rb-labels .rb-clv { color: var(--text-mute); font-weight: 600; }
+.rb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.rb-bar { display: block; height: 6px; border-radius: 3px; background: var(--fill-subtle);
+  overflow: hidden; border: 1px solid var(--border-soft); }
+.rb-bar > i { display: block; height: 100%; background: var(--brand); opacity: .8; border-radius: 3px; }
+.rb-wl { text-align: right; font-size: 12.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.rb-clv { text-align: right; font-size: 12px; color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.rb-net { text-align: right; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+.rb-net.pos { color: var(--good); } .rb-net.neg { color: var(--bad); }
+
+/* Recent settled picks */
+.rec-list { padding: 0; gap: 0; }
+.rl-row {
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: 20px 86px minmax(0, 1fr) 90px 56px 72px;
+  padding: 9px 16px 9px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  border-left: 3px solid transparent;
+}
+.rl-row:last-child { border-bottom: none; }
+.rl-row.won { border-left-color: color-mix(in srgb, var(--good) 65%, transparent); }
+.rl-row.lost { border-left-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.rl-row.push { border-left-color: var(--border); }
+@supports not (background: color-mix(in srgb, red 10%, transparent)) {
+  .rl-row.won { border-left-color: rgba(47, 213, 140, .65); }
+  .rl-row.lost { border-left-color: rgba(251, 90, 106, .45); }
+}
+.rl-icon { font-weight: 800; font-size: 13px; text-align: center; }
+.rl-row.won .rl-icon { color: var(--good); }
+.rl-row.lost .rl-icon { color: var(--bad); }
+.rl-date { color: var(--text-mute); font-size: 12px; font-variant-numeric: tabular-nums; }
+.rl-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.rl-bet { color: var(--text-mute); }
+.rl-proc { text-align: right; font-size: 11.5px; white-space: nowrap; }
+.rl-proc.good { color: var(--good); } .rl-proc.bad { color: var(--bad); }
+.rl-proc.warn { color: var(--warn); } .rl-proc.none { color: var(--text-mute); opacity: .55; }
+.rl-odds { text-align: right; font-size: 12.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.rl-pnl { text-align: right; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+.rl-pnl.pos { color: var(--good); } .rl-pnl.neg { color: var(--bad); }
+.rec-stamp { color: var(--text-mute); font-size: 12px; margin-top: 14px; }
+
+
+/* ======================================================================
+   Single-game page — reached by clicking a card in the stadium strip.
+   ====================================================================== */
+.game-card[data-gid] { cursor: pointer; }
+.game-card[data-gid]:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.game-cta {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 14px; border-top: 1px solid var(--border-soft);
+  color: var(--text-mute); font-size: 12px; font-weight: 600;
+  transition: color .2s ease, background .2s ease;
+}
+.game-card:hover .game-cta { color: var(--brand); background: var(--fill-subtle); }
+.gc-arrow { transition: transform .2s ease; }
+.game-card:hover .gc-arrow { transform: translateX(3px); }
+
+.gp-back { margin-bottom: 14px; }
+.gp-hero {
+  display: grid; grid-template-columns: minmax(220px, 380px) minmax(0, 1fr);
+  gap: 22px; align-items: center; margin-bottom: 20px;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--border-soft); border-radius: var(--radius);
+  padding: 18px; overflow: hidden;
+}
+/* The stadium art is drawn for a card slot; given a half-page column it
+   grows to ~370px and pushes the hero taller than the content beside it.
+   Capped, so the header stays a header. */
+.gp-art {
+  position: relative; min-width: 0; border-radius: var(--radius-sm); overflow: hidden;
+  max-height: 260px; display: flex; align-items: center; justify-content: center;
+}
+.gp-art svg { width: 100%; height: auto; max-height: 260px; display: block; }
+
+/* auto-FILL keeps empty tracks, so a section holding one card leaves it
+   parked in the first track well left of centre. auto-FIT collapses them
+   and the lone card centres — which matters here, where a game often has
+   exactly one prop in a market. */
+.gp-cards { grid-template-columns: repeat(auto-fit, minmax(346px, 440px)); }
+.gp-teams {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  font-size: 22px; font-weight: 800; letter-spacing: -.3px;
+}
+.gp-teams > span { display: inline-flex; align-items: center; gap: 8px; }
+.gp-at { color: var(--text-mute); font-weight: 600; font-size: 15px; }
+.gp-sub { color: var(--text-dim); font-size: 13px; margin-top: 6px; }
+.gp-chips { margin-top: 12px; }
+.gp-stats { margin-bottom: 22px; }
+@media (max-width: 860px) {
+  .gp-hero { grid-template-columns: 1fr; }
+}
+
 
 /* --- Phones ------------------------------------------------------------
    Measured, not guessed: at a 390px viewport .brand rendered 687px wide,
@@ -878,16 +1051,23 @@ select.calc-in { width: auto; font-weight: 600; }
 /* The menu button is phone-only; desktop keeps both button rows. */
 .menu-toggle { display: none; }
 
-/* --- Tablets and small laptops ----------------------------------------
+/* --- Tablets and laptops ----------------------------------------------
    Measured: a 768px iPad rendered at innerWidth 1731 — a 2.3x
    shrink-to-fit, worse than phones were before the mobile pass, because
    the phone breakpoint stopped at 760 and everything above it kept the
    full desktop topbar on ONE non-wrapping row (brand 687 + both button
    rows + the status strip).
+
+   That single row measures 1745px, so it does not fit a laptop either:
+   1180, 1280, 1366, 1440, 1512 and 1728 all scrolled sideways, which is
+   every common MacBook width. The one-row bar only fits from ~1800px up,
+   so it stays a large-monitor layout and everything below stacks. Costs
+   about 60px of vertical space on a laptop; horizontal scroll costs the
+   whole page.
    Here the bar stacks and each row wraps onto as many lines as it needs.
    The menu stays OFF: at this width there is room to show every
    destination at once, and hiding them behind a tap would be worse. */
-@media (max-width: 1100px) {
+@media (max-width: 1799px) {
   .topbar { flex-wrap: wrap; gap: 10px; padding: 12px 16px; }
   .brand { flex: 1 1 100%; flex-wrap: wrap; gap: 12px; min-width: 0; }
   .sport-switch, .nav {
@@ -896,6 +1076,18 @@ select.calc-in { width: auto; font-weight: 600; }
   .sport-btn, .nav-btn { flex: 0 0 auto; white-space: nowrap; }
   .nav-indicator { display: none; }   /* it cannot track a wrapped row */
   .slate-meta { flex: 1 1 100%; justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+}
+
+/* Four stacked rows is the right answer on a tablet and a waste on a
+   wide laptop. Letting the brand block keep its natural width and pushing
+   the status strip beside it lets flex pair them whenever they fit —
+   measured, that is 1512 and up (brand 866 + strip 576 + gap), which
+   takes a 16" MacBook from 227px of header to 177px. Below that they
+   still stack, which is correct: they genuinely do not fit. */
+@media (min-width: 1200px) and (max-width: 1799px) {
+  .brand { flex: 0 1 auto; order: 1; }
+  .slate-meta { flex: 0 0 auto; order: 2; margin-left: auto; justify-content: flex-end; }
+  .nav { order: 3; }
 }
 
 @media (max-width: 760px) {
@@ -941,6 +1133,26 @@ select.calc-in { width: auto; font-weight: 600; }
   .menu-open .nav { order: 3; }
   .slate-meta { flex: 1 1 100%; order: 4; justify-content: flex-start;
     flex-wrap: wrap; gap: 8px; }
+  /* Record page. The settled-pick row needs 414px of fixed columns before
+     the label gets a pixel, so on a phone it clips its own P&L figure
+     inside the card's overflow:hidden. Split into two lines: what the bet
+     was, then how it did. The splits drop their CLV column for the same
+     reason — the market name is what the table is for. */
+  .rl-row {
+    grid-template-columns: 20px minmax(0, 1fr) 72px;
+    grid-template-areas: "icon main pnl" ". meta meta";
+    row-gap: 3px; padding: 10px 12px 10px 11px;
+  }
+  .rl-icon { grid-area: icon; }
+  .rl-main { grid-area: main; white-space: normal; }
+  .rl-pnl { grid-area: pnl; }
+  .rl-date, .rl-proc, .rl-odds { grid-area: meta; display: inline; text-align: left; }
+  .rl-date::after { content: " · "; opacity: .4; }
+  .rl-odds::before { content: " · "; opacity: .4; }
+  .rb-rows.has-clv .rb-row { grid-template-columns: minmax(0, 1fr) 46px 54px 66px; }
+  .rb-clv { display: none; }
+  .rec-chart .rc-net { font-size: 22px; }
+
   .view { padding: 14px 12px 48px; }
   .hero-games .game-card { min-width: 262px; }
   .stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }

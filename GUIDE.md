@@ -58,6 +58,13 @@ against a placeholder line), **every pick is journaled and graded**
 nothing, read the message; it says exactly why and it's usually "working
 as designed," not broken.
 
+**Click any stadium.** The ballpark/stadium strip at the top of the MLB
+and NFL boards is now clickable — each card says how many picks that game
+has, and tapping it opens a page for just that matchup: the park and
+weather, the game bets, every player prop in it, and any long shots. The
+back button returns you to the board, and the page has its own link you
+can bookmark or share.
+
 ## How to read the numbers (the honest version)
 
 - **Edge / EV** — how much better the model thinks a price is than fair.
