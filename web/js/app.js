@@ -2546,7 +2546,9 @@ async function renderWhy() {
         ${tile("Forecast test", cal && cal.brier_edge != null ? (cal.brier_edge > 0 ? "beating the close" : "not yet") : "—", brierLine)}
       </div>
       <p style="margin-top:8px"><button class="btn ghost" id="why-see-record">See the full record →</button></p>`
-    : `<p class="loading">The journal is young — every pick logs automatically and this strip fills with real, ungroomed numbers.</p>`;
+    : `<p style="color:var(--text-mute);font-size:.92em;margin:0 0 4px">The journal is
+        young — every pick logs automatically and this strip fills with real,
+        ungroomed numbers.</p>`;
 
   const pillar = (icon, title, body) => `<div class="card" style="padding:16px">
     <div style="font-size:1.6em">${icon}</div>
@@ -2558,7 +2560,7 @@ async function renderWhy() {
     <td style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.05)">${us}</td></tr>`;
 
   host.innerHTML = `
-    <p style="font-size:1.05em;max-width:70ch"><strong>See the math. Know if it's working. Stay in the game.</strong>
+    <p style="font-size:1.06em;max-width:none;line-height:1.6;margin:0 0 4px"><strong>See the math. Know if it's working. Stay in the game.</strong>
       Most betting sites sell certainty. This one sells measurement — every probability is computed
       from data you can name, every pick is graded in public, and the math is on this page for you to check by hand.</p>
 
