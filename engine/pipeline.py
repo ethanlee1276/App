@@ -15,6 +15,7 @@ from .projection import build_projection
 from .betting import evaluate_prop
 from .rules import apply_rules, RuleConfig, game_has_started
 from .explain import headline, summary, bullet_reasons
+from .stadiums import stadium_to_dict
 from .gamebets import (
     nfl_win_prob, price_moneyline, moneyline_to_dict,
     project_total, project_team_points, game_margin,
@@ -259,6 +260,9 @@ def _game_to_dict(g) -> dict:
         "total": g.total,
         "roof": g.roof,
         "surface": g.surface,
+        # Venue reference for the game page. Unlike MLB parks this is
+        # context, not an input — see engine/stadiums.py for why.
+        "stadium": stadium_to_dict(g.home),
         "live": live_to_dict(g.live),
         "weather": {
             "dome": w.dome,

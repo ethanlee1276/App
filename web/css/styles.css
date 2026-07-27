@@ -1155,6 +1155,42 @@ select.calc-in { width: auto; font-weight: 600; }
 .gp-sub { color: var(--text-dim); font-size: 13px; margin-top: 6px; }
 .gp-chips { margin-top: 12px; }
 .gp-stats { margin-bottom: 22px; }
+
+/* Venue panel — fills the column beside the stadium art with the reason
+   the park carries the factors it does. */
+.pk-panel { margin-top: 14px; border-top: 1px solid var(--border-soft); padding-top: 12px; }
+.pk-head { font-size: 13.5px; font-weight: 700; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.pk-facts { color: var(--text-mute); font-size: 11.5px; font-weight: 500; }
+/* Capped, not 1fr: three numbers stretched across a half-page column read
+   as three empty boxes with a digit lost in each. */
+.pk-dims { display: grid; grid-template-columns: repeat(3, minmax(0, 108px));
+  gap: 8px; margin-top: 10px; }
+.pk-dim {
+  background: var(--fill-subtle); border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm); padding: 7px 10px; min-width: 0;
+}
+.pk-dim .k { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--text-mute); font-weight: 600; }
+.pk-dim .v { display: block; font-size: 18px; font-weight: 800; letter-spacing: -.3px; margin-top: 2px;
+  font-variant-numeric: tabular-nums; }
+.pk-dim .s { display: block; font-size: 10.5px; color: var(--text-mute); min-height: 13px; }
+
+.pk-factors { margin-top: 10px; display: grid; gap: 6px; }
+.pk-factor { display: grid; grid-template-columns: 74px minmax(60px, 240px) 44px;
+  gap: 10px; align-items: center; }
+.pk-fk { font-size: 11.5px; color: var(--text-dim); }
+/* Bar is centred on league average, so the eye reads direction before it
+   reads the number: right of the tick is above average, left is below. */
+.pk-fbar { position: relative; display: block; height: 7px; border-radius: 4px;
+  background: var(--fill-subtle); border: 1px solid var(--border-soft); }
+.pk-fbar > i { position: absolute; top: 0; bottom: 0; background: var(--brand); opacity: .85; }
+.pk-fbar > b { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px;
+  background: var(--text); opacity: .35; }
+.pk-fv { font-size: 11.5px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.pk-fv.up { color: var(--good); } .pk-fv.down { color: var(--bad); }
+
+.pk-plays { color: var(--text-body); font-size: 12.5px; line-height: 1.5; margin: 10px 0 0; }
+.pk-note { color: var(--text-mute); font-size: 11.5px; line-height: 1.5; margin: 8px 0 0; }
 @media (max-width: 860px) {
   .gp-hero { grid-template-columns: 1fr; }
 }

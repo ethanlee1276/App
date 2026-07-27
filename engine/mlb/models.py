@@ -47,7 +47,20 @@ class MLBGameLog:
 @dataclass
 class ParkProfile:
     """A ballpark's scoring personality, expressed as multipliers relative to
-    a league-average park (1.0). ``altitude_ft`` drives the thin-air bonus."""
+    a league-average park (1.0). ``altitude_ft`` drives the thin-air bonus.
+
+    Everything from ``lf_ft`` down is reference detail for the site, not
+    model input: the factors above already encode how the park plays, and
+    feeding the dimensions in as well would double-count them. They exist
+    so a game page can show *why* a park carries the factor it does —
+    Fenway's below-average home-run factor makes sense the moment you see
+    a 310-foot line in front of a 37-foot wall.
+
+    Distances are the published foul-line and center-field measurements;
+    a handful of parks move fences between seasons, and where the current
+    number is contested ``plays`` says so rather than the field asserting
+    false precision.
+    """
 
     key: str
     name: str
@@ -58,6 +71,15 @@ class ParkProfile:
     altitude_ft: int = 0
     roof: str = "open"           # open | retractable | dome
     surface: str = "grass"
+    # --- reference only, never fed to the model ---
+    lf_ft: int = 0               # left-field line
+    cf_ft: int = 0               # straightaway center
+    rf_ft: int = 0               # right-field line
+    lf_wall_ft: float = 8.0      # wall height down the left-field line
+    rf_wall_ft: float = 8.0      # wall height down the right-field line
+    capacity: int = 0
+    opened: int = 0
+    plays: str = ""              # one line on the park's character
 
 
 @dataclass

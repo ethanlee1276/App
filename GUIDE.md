@@ -65,6 +65,21 @@ weather, the game bets, every player prop in it, and any long shots. The
 back button returns you to the board, and the page has its own link you
 can bookmark or share.
 
+That page also carries a **venue panel**. For all 30 ballparks it shows
+the dimensions (left / center / right, plus any wall worth knowing about
+— Fenway's 37-foot Monster, the 21-foot Clemente Wall at PNC), the three
+park factors the model actually prices with, drawn as bars centered on
+the league-average park, and a line on what the park is known for. The
+dimensions are there to explain the factors, not to double-count them:
+they're display only and never reach the model.
+
+NFL stadiums get a shorter version — roof, altitude, surface — and say
+so. A ballpark changes what identical contact produces, which is why MLB
+park factors are large and worth modelling; a football field is 100 yards
+everywhere, so the venue effect is almost entirely indoors-vs-outdoors
+and then Denver's altitude. Live weather is the number that moves an NFL
+total, and the game card already shows it.
+
 ## How to read the numbers (the honest version)
 
 - **Edge / EV** — how much better the model thinks a price is than fair.

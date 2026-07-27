@@ -282,6 +282,17 @@ def _game_to_dict(g) -> dict:
         "park_name": park.name,
         "factors": {"hr": park.hr_factor, "run": park.run_factor, "k": park.k_factor},
         "altitude_ft": park.altitude_ft,
+        # Reference detail for the game page — dimensions, walls, and what
+        # the park is known for. Display only; the factors above are what
+        # the model actually prices with.
+        "park": {
+            "key": park.key, "name": park.name, "team": park.team,
+            "lf_ft": park.lf_ft, "cf_ft": park.cf_ft, "rf_ft": park.rf_ft,
+            "lf_wall_ft": park.lf_wall_ft, "rf_wall_ft": park.rf_wall_ft,
+            "capacity": park.capacity, "opened": park.opened,
+            "altitude_ft": park.altitude_ft, "roof": park.roof,
+            "surface": park.surface, "plays": park.plays,
+        },
         "lineups_confirmed": g.lineups_confirmed,
         "weather": {
             "dome": w.roof_closed or park.roof == "dome",

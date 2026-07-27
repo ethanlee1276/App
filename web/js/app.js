@@ -884,6 +884,94 @@ function openGame(gid) {
   switchView("game");
 }
 
+/* ---------------- Venue panels ----------------
+   A ballpark changes what identical contact produces — 310 feet in front
+   of a 37-foot wall is a different game from 420 to center — so MLB gets
+   the full treatment: the three factors the model actually prices with,
+   the dimensions that explain them, and what the park is known for.
+   An NFL field is 100 yards everywhere, so that page gets the far shorter
+   list of things that genuinely vary: roof, altitude, surface. */
+/* One accent color for every bar, deliberately. Coloring these green and
+   red would have to answer "good for whom" — a park that adds 8% to
+   strikeouts is good news on the over and bad news on the under, and the
+   same holds for all three factors. Direction is carried by which side of
+   the league-average tick the bar sits on, which is a fact rather than a
+   judgement. */
+function factorRow(label, v, hint) {
+  if (v == null) return "";
+  const pctOff = (v - 1) * 100;
+  // The bar is centered on 1.00: right of the tick is above the average
+  // park, left is below. Clamped at ±30% so Coors doesn't set a scale
+  // nothing else on the board can use.
+  const frac = Math.max(-1, Math.min(1, pctOff / 30));
+  const w = Math.abs(frac) * 50;
+  return `<div class="pk-factor" title="${escapeHtml(hint)}">
+    <span class="pk-fk">${escapeHtml(label)}</span>
+    <span class="pk-fbar"><i style="${frac >= 0
+      ? `left:50%;width:${w}%` : `left:${50 - w}%;width:${w}%`}"></i>
+      <b></b></span>
+    <span class="pk-fv">${pctOff >= 0 ? "+" : ""}${pctOff.toFixed(0)}%</span>
+  </div>`;
+}
+
+function parkPanel(g) {
+  const p = g.park;
+  if (!p) return "";
+  const f = g.factors || {};
+  const dim = (v) => v ? `${v}'` : "—";
+  const wall = (v) => (v && v !== 8) ? ` · ${v}' wall` : "";
+  const facts = [
+    p.opened ? `Opened ${p.opened}` : "",
+    p.capacity ? `${p.capacity.toLocaleString()} seats` : "",
+    p.altitude_ft ? `${p.altitude_ft.toLocaleString()} ft elevation` : "",
+    p.roof && p.roof !== "open" ? `${p.roof} roof` : "",
+    p.surface === "turf" ? "turf" : "",
+  ].filter(Boolean).join(" · ");
+  return `<div class="pk-panel">
+    <div class="pk-head">${escapeHtml(p.name)}<span class="pk-facts">${escapeHtml(facts)}</span></div>
+    <div class="pk-dims">
+      <div class="pk-dim"><span class="k">Left</span><span class="v">${dim(p.lf_ft)}</span>
+        <span class="s">${escapeHtml(wall(p.lf_wall_ft).replace(" · ", ""))}</span></div>
+      <div class="pk-dim"><span class="k">Center</span><span class="v">${dim(p.cf_ft)}</span><span class="s"></span></div>
+      <div class="pk-dim"><span class="k">Right</span><span class="v">${dim(p.rf_ft)}</span>
+        <span class="s">${escapeHtml(wall(p.rf_wall_ft).replace(" · ", ""))}</span></div>
+    </div>
+    <div class="pk-factors">
+      ${factorRow("Home runs", f.hr, "Park home-run factor vs the league-average park. This is a model input.")}
+      ${factorRow("Runs", f.run, "Park run factor vs the league-average park. This is a model input.")}
+      ${factorRow("Strikeouts", f.k, "Park strikeout factor. Above average favors pitchers.")}
+    </div>
+    ${p.plays ? `<p class="pk-plays">${escapeHtml(p.plays)}</p>` : ""}
+  </div>`;
+}
+
+function stadiumPanel(g) {
+  const s = g.stadium;
+  if (!s || !s.name) return "";
+  const indoors = s.roof === "dome" || s.roof === "retractable";
+  const facts = [
+    s.opened ? `Opened ${s.opened}` : "",
+    s.capacity ? `${s.capacity.toLocaleString()} seats` : "",
+    s.surface === "turf" ? "turf" : "grass",
+  ].filter(Boolean).join(" · ");
+  return `<div class="pk-panel">
+    <div class="pk-head">${escapeHtml(s.name)}<span class="pk-facts">${escapeHtml(facts)}</span></div>
+    <div class="chips" style="margin-top:8px">
+      <span class="chip ${indoors ? "books" : ""}">${indoors
+        ? (s.roof === "dome" ? "🏟️ Fixed dome" : "🏟️ Retractable roof")
+        : "☁️ Open air"}</span>
+      ${s.altitude_ft >= 2000
+        ? `<span class="chip up" title="Thin air adds kicking range and lets the ball carry">⛰️ ${s.altitude_ft.toLocaleString()} ft</span>`
+        : ""}
+      <span class="chip">${s.surface === "turf" ? "Turf" : "Grass"}</span>
+    </div>
+    ${s.plays ? `<p class="pk-plays">${escapeHtml(s.plays)}</p>` : ""}
+    <p class="pk-note">Football fields are the same size everywhere, so a venue's
+      effect is almost entirely its environment — indoors vs outdoors first,
+      then altitude. The live weather above is the number that moves a total.</p>
+  </div>`;
+}
+
 function renderGamePage() {
   const host = document.getElementById("game-body");
   if (!host) return;
@@ -958,11 +1046,9 @@ function renderGamePage() {
           ${g.favorite ? `<span class="chip">${escapeHtml(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}</span>` : ""}
           <span class="chip">${escapeHtml(cond)}</span>
           ${g.roof ? `<span class="chip">roof ${escapeHtml(g.roof)}</span>` : ""}
-          ${factorChip("hr", "HR park", "Park home-run factor — above 1.00 helps hitters")}
-          ${factorChip("run", "Runs", "Park run factor")}
-          ${factorChip("k", "Ks", "Park strikeout factor")}
           ${g.lineups_confirmed === false ? `<span class="chip down">⚠ lineups pending</span>` : ""}
         </div>
+        ${mlb ? parkPanel(g) : stadiumPanel(g)}
       </div>
     </div>
 
