@@ -421,9 +421,15 @@ function baseDiamond(bases, outs, opts = {}) {
 
 /* ---------------- Sparkline (game-log trend) ----------------------------- */
 function sparkline(values, opts = {}) {
-  // values come newest-first from the API; chart oldest -> newest.
-  const data = [...values].reverse();
   const w = opts.w || 240, h = opts.h || 64, pad = 8;
+  // A row-sized chart can't legibly hold a full season: cap the window to
+  // ~6px per step and keep the NEWEST games — recent form is the story a
+  // sparkline tells. (values arrive newest-first; chart oldest -> newest.)
+  const maxPts = Math.max(2, Math.floor((w - pad * 2) / 6));
+  const data = [...values].slice(0, maxPts).reverse();
+  // Mini mode (tight row charts): one thin line and one endpoint marker.
+  // Per-point dots at this size render as noise, not data.
+  const mini = opts.mini != null ? opts.mini : (w < 120 || h < 36);
   const line = opts.line;                    // optional threshold (the prop line)
   const stroke = opts.stroke || "var(--brand)";
   const uid = "sp" + Math.random().toString(36).slice(2, 7);
@@ -435,38 +441,43 @@ function sparkline(values, opts = {}) {
   const x = (i) => pad + (i / (data.length - 1)) * (w - pad * 2);
   const y = (v) => h - pad - ((v - lo) / span) * (h - pad * 2);
 
-  // Hover labels: opts.labels comes newest-first like values; reverse to
-  // match the charted order. Falls back to the bare value.
-  const labs = opts.labels ? [...opts.labels].reverse() : null;
+  // Hover labels: opts.labels comes newest-first like values; slice to the
+  // same window, reverse to match the charted order.
+  const labs = opts.labels ? [...opts.labels].slice(0, maxPts).reverse() : null;
   const tip = (i) => (labs && labs[i] ? labs[i] + " — " : "") + data[i];
 
   const pts = data.map((v, i) => `${x(i)},${y(v)}`);
   const linePath = "M" + pts.join(" L");
   const areaPath = `M${x(0)},${h - pad} L` + pts.join(" L") + ` L${x(data.length - 1)},${h - pad} Z`;
-  const dots = data.map((v, i) => {
+  const dots = mini ? "" : data.map((v, i) => {
     const above = line == null ? true : v > line;
     const c = line == null ? stroke : (above ? "var(--good)" : "var(--bad)");
     return `<circle cx="${x(i)}" cy="${y(v)}" r="${i === data.length - 1 ? 3.2 : 2.1}" fill="${c}"/>`;
   }).join("");
   // Invisible, generous hit targets. data-tip feeds the instant floating
   // tooltip below — native SVG <title> needs a second of frozen hover and
-  // reads as "nothing happens", so it isn't used.
-  const hits = data.map((v, i) =>
+  // reads as "nothing happens", so it isn't used. Mini charts skip them:
+  // 6px-apart targets just fight each other, and the row itself is the
+  // clickable thing.
+  const hits = mini ? "" : data.map((v, i) =>
     `<circle cx="${x(i)}" cy="${y(v)}" r="9" fill="transparent"
        style="pointer-events:all;cursor:pointer" data-tip="${escapeAttr(tip(i))}"/>`).join("");
   const thresh = line == null ? "" :
     `<line x1="${pad}" y1="${y(line)}" x2="${w - pad}" y2="${y(line)}"
        stroke="var(--warn)" stroke-width="1" stroke-dasharray="4 4" opacity="0.8"/>`;
-  // radar "ping" behind the most recent game
+  // radar "ping" behind the most recent game (the one selective marker a
+  // mini chart keeps — endpoint only, per standard sparkline practice)
   const li = data.length - 1;
   const lastC = line == null ? stroke : (data[li] > line ? "var(--good)" : "var(--bad)");
   const ping = `<circle class="spark-pulse" cx="${x(li)}" cy="${y(data[li])}" r="3" fill="${lastC}"/>`;
+  const endDot = mini
+    ? `<circle cx="${x(li)}" cy="${y(data[li])}" r="2.4" fill="${lastC}"/>` : "";
 
   return `
   <svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
     <defs>
       <linearGradient id="${uid}a" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${stroke}" stop-opacity="0.28"/>
+        <stop offset="0%" stop-color="${stroke}" stop-opacity="${mini ? 0.16 : 0.28}"/>
         <stop offset="100%" stop-color="${stroke}" stop-opacity="0"/>
       </linearGradient>
     </defs>
@@ -474,8 +485,8 @@ function sparkline(values, opts = {}) {
     ${thresh}
     ${ping}
     <path class="spark-line" d="${linePath}" fill="none" stroke="${stroke}"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    ${dots}
+          stroke-width="${mini ? 1.6 : 2}" stroke-linecap="round" stroke-linejoin="round"/>
+    ${dots}${endDot}
     ${hits}
   </svg>`;
 }
