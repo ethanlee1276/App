@@ -122,8 +122,13 @@ main { max-width: 1360px; margin: 0 auto; }
   border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 16px 18px;
 }
 .tile::after {
-  content: ""; position: absolute; right: -20px; top: -20px; width: 90px; height: 90px;
-  background: var(--grad-brand); opacity: 0.08; border-radius: 50%;
+  /* A hard-edged 90px circle at 8% opacity read as a rendering glitch
+     rather than decoration — you could see exactly where it stopped.
+     A radial falloff has no edge to notice. */
+  content: ""; position: absolute; right: -50px; top: -60px;
+  width: 180px; height: 180px; pointer-events: none;
+  background: radial-gradient(circle, var(--brand) 0%, transparent 68%);
+  opacity: 0.09;
 }
 .tile .k { color: var(--text-mute); font-size: 11px; text-transform: uppercase; letter-spacing: .7px; font-weight: 600; }
 .tile .v { font-size: 30px; font-weight: 800; margin-top: 5px; letter-spacing: -0.5px; }
@@ -804,3 +809,21 @@ select.calc-in { width: auto; font-weight: 600; }
 .hero-games { padding-bottom: 6px; }
 .hero-games .game-card { min-width: 380px; }
 @media (max-width: 900px) { .hero-games .game-card { min-width: 300px; } }
+
+
+/* --- Typographic hierarchy -------------------------------------------
+   Section titles, their subtitles and body copy all sat within a couple
+   of points and one weight of each other, so nothing told the eye where
+   a section began or which text was the point. Titles step up in size
+   and brightness; subtitles step down and lose their bold. */
+.section-title {
+  font-size: 13.5px; color: var(--text-dim); letter-spacing: .1em;
+  margin-top: 26px; margin-bottom: 14px;
+}
+.section-title .sub {
+  font-size: 12px; color: var(--text-mute); font-weight: 400;
+  line-height: 1.5; max-width: 92ch;
+}
+/* The hero keeps its own rhythm — it is the first thing on the page. */
+.hero-title { font-size: 15px; color: var(--text); margin-top: 4px; }
+.hero-title .sub { color: var(--text-dim); }
