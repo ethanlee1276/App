@@ -66,6 +66,10 @@ class BudgetState:
     used: int = 0
     last_refresh_ts: float = 0.0
     last_seen_iso: str = ""
+    # Set when an AUTHORIZED paid pull never got an API response (network
+    # blip, host down): a short cooldown before retrying, instead of
+    # counting a pull that spent nothing as the day's spend.
+    retry_after_ts: float = 0.0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -82,6 +86,7 @@ def load(path: Path | str = STATE_PATH) -> BudgetState:
             used=int(raw.get("used", 0)),
             last_refresh_ts=float(raw.get("last_refresh_ts", 0.0)),
             last_seen_iso=str(raw.get("last_seen_iso", "")),
+            retry_after_ts=float(raw.get("retry_after_ts", 0.0)),
         )
     except (ValueError, OSError, TypeError):
         return BudgetState()
@@ -113,6 +118,38 @@ def mark_refreshed(ts: float | None = None, path: Path | str = STATE_PATH) -> No
     state = load(path)
     state.last_refresh_ts = ts if ts is not None else time.time()
     save(state, path)
+
+
+# How soon a paid pull that never reached the API may be retried. Short,
+# because nothing was spent — but not every 60s cycle, so a dead host
+# isn't hammered with 30s-timeout requests.
+FAILED_PULL_RETRY_S = 5 * 60
+
+
+def paid_pull_result(before_seen_iso: str, path: Path | str = STATE_PATH,
+                     now: float | None = None) -> bool:
+    """Called after a paid pull ATTEMPT; returns whether it actually landed.
+
+    "Landed" means the API answered — the quota stamp advanced past what it
+    was before the attempt. Only then does the refresh clock stamp: a pull
+    that never reached the API spent nothing, and counting it (the old
+    behaviour stamped at authorization time) burned the day's one sparse
+    pull on a network blip and stranded the board on stale prices for
+    12 hours. Measured live on 2026-07-27: the 4:29pm window pull was
+    authorized and stamped, no credits moved, and the next attempt was
+    scheduled for 4:29am. A failed attempt now sets a short retry cooldown
+    instead.
+    """
+    now = now if now is not None else time.time()
+    state = load(path)
+    landed = bool(state.last_seen_iso) and state.last_seen_iso != before_seen_iso
+    if landed:
+        state.last_refresh_ts = now
+        state.retry_after_ts = 0.0
+    else:
+        state.retry_after_ts = now + FAILED_PULL_RETRY_S
+    save(state, path)
+    return landed
 
 
 def days_left_in_month(today: _dt.date | None = None) -> int:
@@ -198,6 +235,9 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     """Is an odds refresh affordable right now? Returns ``(ok, reason)``."""
     now = now if now is not None else time.time()
     state = load(path)
+    if state.retry_after_ts and now < state.retry_after_ts:
+        return False, (f"last paid pull never reached the odds API — "
+                       f"retrying ~{_fmt_clock(state.retry_after_ts)}")
     window = prime_window(kickoffs, now)
     if state.remaining <= RESERVE:
         if now - state.last_refresh_ts >= PROBE_INTERVAL:

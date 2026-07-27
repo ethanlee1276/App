@@ -101,16 +101,49 @@ def _odds_affordable(out_path: str, quiet: bool) -> bool:
     if not _with_odds():
         return False
     try:
-        from engine.oddsbudget import should_refresh, mark_refreshed
+        from engine.oddsbudget import should_refresh
     except Exception:
         return True
     ok, reason = should_refresh(_games_on_slate(out_path) + 1,
                                 kickoffs=_slate_kickoffs(out_path))
     if not quiet:
         print(f"       {reason}")
-    if ok:
-        mark_refreshed()
+    # NOTE: the refresh clock is NOT stamped here. Authorization is not a
+    # pull — _finish_paid_pull stamps it only once the API actually
+    # answered, so a network blip can't burn the day's one sparse pull.
     return ok
+
+
+def _paid_pull_baseline() -> str:
+    """The quota timestamp before a paid attempt — advancing past this is
+    the proof the API answered."""
+    try:
+        from engine.oddsbudget import load as _bload
+        return _bload().last_seen_iso
+    except Exception:
+        return ""
+
+
+def _finish_paid_pull(spend: bool, before_seen: str, ok: bool, tail: str,
+                      label: str) -> None:
+    """Confirm (or defer) an authorized paid pull after the build ran.
+
+    Landed → the refresh clock stamps now. Didn't land → a short retry
+    cooldown, and the failure is printed EVEN IN QUIET MODE: the old flow
+    stamped the clock at authorization time and said nothing, so a failed
+    window pull silently stranded the board on stale prices for 12h."""
+    if not spend:
+        return
+    try:
+        from engine.oddsbudget import paid_pull_result, FAILED_PULL_RETRY_S
+        landed = paid_pull_result(before_seen)
+    except Exception:
+        return
+    if not landed:
+        print(f"  ⚠️  {label}: paid odds pull authorized but the API never "
+              f"answered (build {'ok' if ok else 'failed'}"
+              + (f": {tail}" if tail else "")
+              + f") — retrying in ~{FAILED_PULL_RETRY_S // 60} min")
 
 
 def refresh_mlb(quiet: bool = False) -> bool:
@@ -118,7 +151,9 @@ def refresh_mlb(quiet: bool = False) -> bool:
     date = _dt.date.today().isoformat()
     out = "web/data/mlb_recommendations.json"
     args = ["mlb_build.py", date, "--out", out]
-    if _odds_affordable(out, quiet):
+    spend = _odds_affordable(out, quiet)
+    before_seen = _paid_pull_baseline() if spend else ""
+    if spend:
         args.append("--odds")
         if quiet:                     # background cycle: only re-price what's live/soon
             args.append("--active-odds")
@@ -129,6 +164,7 @@ def refresh_mlb(quiet: bool = False) -> bool:
         # but the minute after each paid pull.
         args.append("--cached-odds")
     ok, tail = _run_build(args)
+    _finish_paid_pull(spend, before_seen, ok, tail, "MLB")
     if not quiet:
         print(f"  MLB  {date}: {'refreshed' if ok else 'unavailable — kept existing data'}"
               + (f"  ({tail})" if not ok and tail else ""))
@@ -171,13 +207,16 @@ def refresh_nfl(quiet: bool = False) -> bool:
     season, week = wk
     out = "web/data/recommendations.json"
     args = ["nfl_build.py", str(season), str(week), "--out", out]
-    if _odds_affordable(out, quiet):
+    spend = _odds_affordable(out, quiet)
+    before_seen = _paid_pull_baseline() if spend else ""
+    if spend:
         args.append("--odds")
         if quiet:
             args.append("--active-odds")
     elif _with_odds():
         args.append("--cached-odds")   # keep last paid prices; never overwrite with proxies
     ok, tail = _run_build(args)
+    _finish_paid_pull(spend, before_seen, ok, tail, "NFL")
     if not quiet:
         print(f"  NFL  {season} wk {week}: {'refreshed' if ok else 'unavailable — kept existing data'}"
               + (f"  ({tail})" if not ok and tail else ""))

@@ -228,6 +228,54 @@ def test_offpeak_stretches_ordinary_pacing():
     assert "pre-game window" in r_out or "off-peak" in r_out
 
 
+def test_failed_paid_pull_does_not_burn_the_sparse_slot():
+    """Authorization is not a pull. On 2026-07-27 the 4:29pm window pull
+    was authorized, stamped, and never reached the API — no credits moved,
+    and the board sat on stale prices until 4:29am. A failed attempt must
+    set a short cooldown and then allow the SAME sparse pull again."""
+    from engine.oddsbudget import (SPARSE_INTERVAL, FAILED_PULL_RETRY_S,
+                                   paid_pull_result)
+    p = _tmp()
+    t0 = 1_000_000.0
+    save(BudgetState(remaining=1327, last_refresh_ts=t0,
+                     last_seen_iso="2026-07-26T12:39:29"), p)
+    first_pitch = t0 + SPARSE_INTERVAL + 6 * 3600
+    kicks = [first_pitch]
+    in_window = first_pitch - 3600
+
+    ok, _ = should_refresh(16, now=in_window, path=p, kickoffs=kicks)
+    assert ok is True                      # the window pull is authorized
+
+    # The build ran, the API never answered: quota stamp did not advance.
+    assert paid_pull_result("2026-07-26T12:39:29", path=p,
+                            now=in_window) is False
+    st = load(p)
+    assert st.last_refresh_ts == t0        # the slot was NOT consumed
+    ok, reason = should_refresh(16, now=in_window + 60, path=p, kickoffs=kicks)
+    assert ok is False and "never reached" in reason
+    # After the cooldown the same sparse pull is offered again.
+    ok, _ = should_refresh(16, now=in_window + FAILED_PULL_RETRY_S + 1,
+                           path=p, kickoffs=kicks)
+    assert ok is True
+
+
+def test_landed_paid_pull_stamps_the_clock():
+    """When the quota stamp advanced, the pull really happened — the clock
+    stamps and ordinary rate limiting resumes."""
+    from engine.oddsbudget import SPARSE_INTERVAL, paid_pull_result
+    p = _tmp()
+    t0 = 1_000_000.0
+    save(BudgetState(remaining=1327, last_refresh_ts=t0,
+                     last_seen_iso="old"), p)
+    record_quota("1191", "18809", p)       # the API answered: stamp advanced
+    now = t0 + SPARSE_INTERVAL + 3600
+    assert paid_pull_result("old", path=p, now=now) is True
+    st = load(p)
+    assert st.last_refresh_ts == now and st.retry_after_ts == 0.0
+    ok, _ = should_refresh(16, now=now + 60, path=p)
+    assert ok is False                     # spent — normal pacing applies
+
+
 def test_junk_kickoff_entries_never_crash_the_held_pull():
     """A stray None or string in the kickoff list must not raise inside the
     hold-for-the-window branch — that code runs on the refresh thread, and
