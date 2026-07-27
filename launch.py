@@ -595,6 +595,12 @@ def preflight() -> None:
                     print(f"{ok}   {day['date']}: {parts} — today's board, "
                           f"settles as games end")
                 continue
+            # A stale day can be in three states, and the first two used to
+            # be conflated: SOME log rows existed (an evening settle caught
+            # the early games), so the check said "ingested, the rest are
+            # harmless scratches" about a night the launcher simply wasn't
+            # up to finish. Count final GAMES, not log rows — partial is
+            # the common case and it is not harmless, just unfinished.
             logs = 0
             if hconn is not None:
                 try:
@@ -603,12 +609,20 @@ def preflight() -> None:
                         (day["date"],)).fetchone()[0]
                 except Exception:
                     logs = -1
-            if logs == 0:
+            fin, tot = _games(day["date"])
+            if logs == 0 and tot == 0:
                 print(f"{warn}   {day['date']}: {parts} — no results ingested "
                       f"for that date. Run: python3 launch.py --settle {day['date']}")
+            elif not tot or fin < tot:
+                have = f"{fin}/{tot} game(s) final in the DB" if tot else \
+                       f"only {logs:,} log rows stored"
+                print(f"{warn}   {day['date']}: {parts} — results only PARTIALLY "
+                      f"ingested ({have}). Start the launcher (auto-settle "
+                      f"catches up on launch) or run: "
+                      f"python3 launch.py --settle {day['date']}")
             else:
-                print(f"{warn}   {day['date']}: {parts} — results ARE ingested "
-                      f"({logs:,} log rows) but these didn't match. Usually a "
+                print(f"{warn}   {day['date']}: {parts} — all {tot} game(s) are "
+                      f"final and ingested but these didn't match. Usually a "
                       f"player who never appeared (late scratch, or a reliever "
                       f"who didn't pitch); those can't settle and are harmless.")
         if hconn is not None:
