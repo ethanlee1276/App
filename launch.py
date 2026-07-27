@@ -546,8 +546,11 @@ def preflight() -> None:
         from engine import ledger
         lconn = ledger.connect()
         open_n = lconn.execute("SELECT COUNT(*) FROM bets WHERE status='open'").fetchone()[0]
-        settled = lconn.execute("SELECT COUNT(*) FROM bets WHERE status!='open'").fetchone()[0]
-        print(f"{ok} Bet journal: {settled:,} settled, {open_n:,} open")
+        settled = lconn.execute("SELECT COUNT(*) FROM bets "
+                                "WHERE status IN ('won','lost','push')").fetchone()[0]
+        void_n = lconn.execute("SELECT COUNT(*) FROM bets WHERE status='void'").fetchone()[0]
+        print(f"{ok} Bet journal: {settled:,} settled, {open_n:,} open"
+              + (f", {void_n:,} void (player never appeared — zero P&L)" if void_n else ""))
         # "70 open" is never the useful sentence. Tonight's picks are
         # supposed to be open; anything from a finished day is a symptom,
         # and the two look identical in a single total. Break it down by
@@ -622,9 +625,9 @@ def preflight() -> None:
                       f"python3 launch.py --settle {day['date']}")
             else:
                 print(f"{warn}   {day['date']}: {parts} — all {tot} game(s) are "
-                      f"final and ingested but these didn't match. Usually a "
-                      f"player who never appeared (late scratch, or a reliever "
-                      f"who didn't pitch); those can't settle and are harmless.")
+                      f"final but these players never appeared (projected "
+                      f"lineup that sat, late scratch). The next settle pass "
+                      f"VOIDS them — the book voids these bets too.")
         if hconn is not None:
             hconn.close()
         lconn.close()

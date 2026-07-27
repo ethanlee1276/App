@@ -671,6 +671,83 @@ def test_open_by_day_is_empty_when_nothing_is_open():
     assert ledger.open_by_day(_conn(), "2026-07-27") == []
 
 
+def _hist_day(hconn, date, n_games=2, n_final=2, players=()):
+    """Seed a slate day: games (some final) plus stat rows for players."""
+    for i in range(n_games):
+        hconn.execute(
+            "INSERT OR REPLACE INTO games (sport, season, period, game_id, home, away, "
+            "home_score, away_score) VALUES ('mlb', 2026, ?, ?, 'H', 'A', ?, ?)",
+            (date, f"g{i}", 5 if i < n_final else None, 3 if i < n_final else None))
+    for p in players:
+        hconn.execute(
+            "INSERT OR REPLACE INTO player_game_logs (sport, season, period, game_id, "
+            "player, market, value) VALUES ('mlb', 2026, ?, ?, ?, 'total_bases', 2)",
+            (date, f"{p}-{date}", p))
+    hconn.commit()
+
+
+def test_no_show_on_a_fully_final_day_is_voided():
+    """A projected-lineup hitter who never played can never settle. Once
+    the day's slate is fully final, the journal mirrors the book: void,
+    zero P&L, excluded from every aggregate."""
+    from engine import db as hist_db
+    conn, hconn = _conn(), hist_db.connect(":memory:")
+    _hist_day(hconn, "2026-07-26", n_games=2, n_final=2, players=["Played Guy"])
+    for player, cat in (("Sat Out", "longshot"), ("Played Guy", "main")):
+        conn.execute(
+            "INSERT INTO bets (sport, date, player, market, side, line, odds, "
+            "stake_units, stake_dollars, status, category) VALUES ('mlb', "
+            "'2026-07-26', ?, 'total_bases', 'OVER', 1.5, -110, 0.1, 1.0, "
+            "'open', ?)", (player, cat))
+    conn.commit()
+
+    n = ledger.settle_from_history(conn, hconn)
+    rows = {r["player"]: r["status"] for r in conn.execute("SELECT player, status FROM bets")}
+    assert rows["Sat Out"] == "void"
+    assert rows["Played Guy"] == "won"        # 2 > 1.5, settled normally
+    assert n == 2                             # one settled + one voided
+    void_row = conn.execute("SELECT pnl_units FROM bets WHERE player='Sat Out'").fetchone()
+    assert (void_row["pnl_units"] or 0) == 0
+    # Voids never reach the record aggregates or the open list.
+    assert ledger.performance(conn)["wins"] == 1
+    assert ledger.performance(conn)["losses"] == 0
+    assert ledger.open_by_day(conn, "2026-07-27") == []
+
+
+def test_no_show_stays_open_until_the_whole_slate_is_final():
+    """One game still in progress = the player might yet appear in the
+    ingest (results land per game). Nothing voids early."""
+    from engine import db as hist_db
+    conn, hconn = _conn(), hist_db.connect(":memory:")
+    _hist_day(hconn, "2026-07-26", n_games=2, n_final=1, players=[])
+    conn.execute(
+        "INSERT INTO bets (sport, date, player, market, side, line, odds, "
+        "stake_units, stake_dollars, status, category) VALUES ('mlb', "
+        "'2026-07-26', 'Sat Out', 'total_bases', 'OVER', 1.5, -110, 0.1, 1.0, "
+        "'open', 'longshot')")
+    conn.commit()
+    ledger.settle_from_history(conn, hconn)
+    assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "open"
+
+
+def test_log_longshots_skips_projected_lineups():
+    """A projected hitter is a guess about who plays, not a bet. The board
+    shows him with the caveat; the journal waits for confirmation."""
+    conn = _conn()
+    result = {"sport": "mlb", "date": "2026-07-27", "long_shots": [], "longshot_watch": [
+        {"player": "Confirmed Guy", "odds": 400, "book": "FanDuel",
+         "model_prob": 0.2, "lineup_confirmed": True},
+        {"player": "Projected Guy", "odds": 400, "book": "FanDuel",
+         "model_prob": 0.2, "lineup_confirmed": False},
+        {"player": "Legacy Row No Flag", "odds": 400, "book": "FanDuel",
+         "model_prob": 0.2},
+    ]}
+    n = ledger.log_longshots(conn, result)
+    players = {r["player"] for r in conn.execute("SELECT player FROM bets")}
+    assert n == 2
+    assert players == {"Confirmed Guy", "Legacy Row No Flag"}
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

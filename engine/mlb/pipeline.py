@@ -82,7 +82,17 @@ def _long_shots(slate) -> tuple[list[dict], list[dict], dict]:
                                                      per_team=2)]
     for d in picks:
         d["recent_values"] = recent_by_player.get(d.get("player", ""), [])
-    return picks, hr_watchlist(candidates, limit=None), diag
+    watch = hr_watchlist(candidates, limit=None)
+    # Stamp lineup state on every row. The board may SHOW a projected
+    # hitter (with the caveat), but the journal must not BET him: on rest
+    # days a third of projected names never start, and each one becomes a
+    # permanently unsettleable row. Measured on 2026-07-26: 31 of 58
+    # journaled long shots were projected players who sat.
+    confirmed = {c["prop"].player: bool(getattr(c["game"], "lineups_confirmed", True))
+                 for c in candidates}
+    for d in picks + watch:
+        d["lineup_confirmed"] = confirmed.get(d.get("player", ""), True)
+    return picks, watch, diag
 
 
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:

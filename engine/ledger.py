@@ -220,6 +220,12 @@ def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
         # the last line of defense against a proxy or mis-lined price.
         if not r.get("player") or odds <= 100 or (r.get("book") or "").lower() == "proxy":
             continue
+        # A projected-lineup hitter is a guess about who plays, not a bet.
+        # The board still shows him (caveated); the journal waits for the
+        # confirmed lineup — otherwise every rest day strands a third of
+        # the night's rows as no-shows that can never settle.
+        if r.get("lineup_confirmed") is False:
+            continue
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
@@ -352,8 +358,42 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
                 (normalize_name(b["player"]), b["market"], b["date"]))
         _settle_one(conn, b, float(row["value"]), close_line)
         settled += 1
+
+    # --- Void the no-shows ---------------------------------------------
+    # A pick journaled from a projected lineup whose player never took the
+    # field has no result and never will — the book voids that bet, and the
+    # journal mirrors the book. Strictly gated: only on a day whose slate
+    # is FULLY final and ingested (anything less is "not settled yet"), and
+    # only when the player has no stat row of any kind that day. Voids
+    # carry zero P&L and are excluded from every record aggregate.
+    day_state: dict = {}
+    day_players: dict = {}
+    voided = 0
+    for b in conn.execute(q, args).fetchall():
+        if b["market"] in ("moneyline", "total") or not b["date"]:
+            continue
+        key = (b["sport"], b["date"])
+        if key not in day_state:
+            r = hist_conn.execute(
+                "SELECT COUNT(*), SUM(CASE WHEN home_score IS NOT NULL "
+                "THEN 1 ELSE 0 END) FROM games WHERE sport=? AND period=?",
+                key).fetchone()
+            day_state[key] = (int(r[0] or 0), int(r[1] or 0))
+        tot, fin = day_state[key]
+        if not tot or fin < tot:
+            continue
+        if key not in day_players:
+            day_players[key] = {normalize_name(p["player"]) for p in hist_conn.execute(
+                "SELECT DISTINCT player FROM player_game_logs "
+                "WHERE sport=? AND period=?", key)}
+        if normalize_name(b["player"]) in day_players[key]:
+            continue            # he played — the normal settle path owns him
+        conn.execute("UPDATE bets SET status='void', pnl_units=0, pnl_dollars=0 "
+                     "WHERE id=?", (b["id"],))
+        voided += 1
+
     conn.commit()
-    return settled
+    return settled + voided
 
 
 def settle(conn, actuals: dict[tuple[str, str], float], sport: str | None = None,
