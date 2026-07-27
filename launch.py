@@ -562,11 +562,38 @@ def preflight() -> None:
             hconn = _hdb.connect()
         except Exception:
             pass
+        def _games(d: str) -> tuple[int, int]:
+            """(final, total) games ingested for a slate date."""
+            if hconn is None:
+                return (0, 0)
+            try:
+                r = hconn.execute(
+                    "SELECT COUNT(*), SUM(CASE WHEN home_score IS NOT NULL "
+                    "THEN 1 ELSE 0 END) FROM games WHERE sport='mlb' AND period=?",
+                    (d,)).fetchone()
+                return (int(r[1] or 0), int(r[0] or 0))
+            except Exception:
+                return (0, 0)
+
         for day in ledger.open_by_day(lconn, today)[:8]:
             parts = ", ".join(f"{n} {c}" for c, n in sorted(day["counts"].items()))
             if not day["stale"]:
-                print(f"{ok}   {day['date']}: {parts} — tonight's board, "
-                      f"settles as games end")
+                # "Settles as games end" is only reassuring if you know
+                # whether the games have ended. Say it outright, so an
+                # evening with picks still open is obviously normal and a
+                # finished slate with picks still open obviously isn't.
+                fin, tot = _games(day["date"])
+                if tot and fin >= tot:
+                    print(f"{warn}   {day['date']}: {parts} — all {tot} game(s) "
+                          f"are final but these are still open. Run: "
+                          f"python3 launch.py --settle {day['date']}")
+                elif tot:
+                    print(f"{ok}   {day['date']}: {parts} — today's board, "
+                          f"{fin}/{tot} game(s) final so far; the rest settle "
+                          f"as they end")
+                else:
+                    print(f"{ok}   {day['date']}: {parts} — today's board, "
+                          f"settles as games end")
                 continue
             logs = 0
             if hconn is not None:
