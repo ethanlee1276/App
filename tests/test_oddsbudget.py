@@ -228,6 +228,20 @@ def test_offpeak_stretches_ordinary_pacing():
     assert "pre-game window" in r_out or "off-peak" in r_out
 
 
+def test_junk_kickoff_entries_never_crash_the_held_pull():
+    """A stray None or string in the kickoff list must not raise inside the
+    hold-for-the-window branch — that code runs on the refresh thread, and
+    an exception there kills auto-refresh for the rest of the session."""
+    from engine.oddsbudget import SPARSE_INTERVAL
+    p = _tmp()
+    save(BudgetState(remaining=1327, last_refresh_ts=1_000_000.0), p)
+    first_pitch = 1_000_000.0 + SPARSE_INTERVAL + 6 * 3600
+    noon = 1_000_000.0 + SPARSE_INTERVAL + 60
+    ok, reason = should_refresh(16, now=noon, path=p,
+                                kickoffs=[None, "19:05", first_pitch])
+    assert ok is False and "pre-game window" in reason
+
+
 def test_unknown_kickoffs_change_nothing():
     """No kickoff info (NFL "HH:MM" strings, empty slates) must behave
     exactly like the pre-time-aware pacer."""

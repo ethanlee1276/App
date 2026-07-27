@@ -217,8 +217,11 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
             if window is False:
                 # The day's one affordable pull is too precious to fire at
                 # noon: real prices post near first pitch, so wait for them.
+                # Same numeric filter as prime_window: a stray non-numeric
+                # kickoff must not crash the refresh cycle's thread.
                 opens = min(k for k in kickoffs
-                            if now - 12 * 3600 < k < now + 36 * 3600) - PRIME_BEFORE_S
+                            if isinstance(k, (int, float))
+                            and now - 12 * 3600 < k < now + 36 * 3600) - PRIME_BEFORE_S
                 when = (f"opens ~{_fmt_clock(opens)}" if opens > now
                         else "closed for tonight — resumes with tomorrow's slate")
                 return False, (f"quota very low ({state.remaining} credits) — "

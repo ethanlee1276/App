@@ -112,9 +112,14 @@ class Handler(BaseHTTPRequestHandler):
             # No build yet → fall through to the sample pipeline below so the
             # page still loads (with a clear note in LAUNCH.md on how to build).
 
+        # The site's slider sends min_edge in PERCENT (0, 0.5, 1, 2, …). The
+        # old ">1 means percent" guess turned a 1% or 0.5% setting into a
+        # 100%/50% edge floor that filtered every prop. No real edge floor
+        # exceeds 20%, so anything above that is percent; below is a fraction.
+        raw_edge = qf("min_edge", 2.0)
         config = RuleConfig(
             min_confidence=qf("min_confidence", 6.0),
-            min_edge=qf("min_edge", 0.02) / (100 if qf("min_edge", 0.02) > 1 else 1),
+            min_edge=raw_edge / 100.0 if raw_edge >= 0.2 else raw_edge,
             max_juice=int(qf("max_juice", -350)),
         )
         try:
@@ -133,8 +138,9 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/", ""):
             path = "/index.html"
         target = (WEB / path.lstrip("/")).resolve()
-        # Prevent path traversal outside the web root.
-        if not str(target).startswith(str(WEB.resolve())) or not target.is_file():
+        # Prevent path traversal outside the web root. is_relative_to (not a
+        # string prefix) so a sibling like web2/ could never slip through.
+        if not target.is_relative_to(WEB.resolve()) or not target.is_file():
             self._send(404, b"Not found", ".html")
             return
         self._send(200, target.read_bytes(), target.suffix)
