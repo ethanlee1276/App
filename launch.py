@@ -548,19 +548,44 @@ def preflight() -> None:
         open_n = lconn.execute("SELECT COUNT(*) FROM bets WHERE status='open'").fetchone()[0]
         settled = lconn.execute("SELECT COUNT(*) FROM bets WHERE status!='open'").fetchone()[0]
         print(f"{ok} Bet journal: {settled:,} settled, {open_n:,} open")
-        # Open picks are normal for tonight's board and a symptom for
-        # anything older, so say which kind these are.
-        today = _dt.date.today()
-        cutoff = (today - _dt.timedelta(days=1)).isoformat()
-        stale = lconn.execute(
-            "SELECT COUNT(*) FROM bets WHERE status='open' AND date < ?",
-            (cutoff,)).fetchone()[0]
-        if stale:
-            print(f"{warn}   {stale:,} of them are older than yesterday — the "
-                  f"games may not have been ingested. Run: python3 launch.py --settle")
-        elif open_n:
-            print(f"{ok}   all recent — they grade themselves within ~15 min "
-                  f"of the games ending while the launcher runs")
+        # "70 open" is never the useful sentence. Tonight's picks are
+        # supposed to be open; anything from a finished day is a symptom,
+        # and the two look identical in a single total. Break it down by
+        # slate date, and for each stale day say whether the results are
+        # even in the history DB — that separates "the games were never
+        # ingested" from "they were, but nothing matched", which are
+        # completely different problems with different fixes.
+        today = _dt.date.today().isoformat()
+        hconn = None
+        try:
+            from engine import db as _hdb
+            hconn = _hdb.connect()
+        except Exception:
+            pass
+        for day in ledger.open_by_day(lconn, today)[:8]:
+            parts = ", ".join(f"{n} {c}" for c, n in sorted(day["counts"].items()))
+            if not day["stale"]:
+                print(f"{ok}   {day['date']}: {parts} — tonight's board, "
+                      f"settles as games end")
+                continue
+            logs = 0
+            if hconn is not None:
+                try:
+                    logs = hconn.execute(
+                        "SELECT COUNT(*) FROM player_game_logs WHERE period=?",
+                        (day["date"],)).fetchone()[0]
+                except Exception:
+                    logs = -1
+            if logs == 0:
+                print(f"{warn}   {day['date']}: {parts} — no results ingested "
+                      f"for that date. Run: python3 launch.py --settle {day['date']}")
+            else:
+                print(f"{warn}   {day['date']}: {parts} — results ARE ingested "
+                      f"({logs:,} log rows) but these didn't match. Usually a "
+                      f"player who never appeared (late scratch, or a reliever "
+                      f"who didn't pitch); those can't settle and are harmless.")
+        if hconn is not None:
+            hconn.close()
         lconn.close()
     except Exception as exc:  # noqa: BLE001
         print(f"{warn} ledger unreadable: {exc}")
@@ -576,10 +601,11 @@ def preflight() -> None:
             print(f"{ok} Auto-settle: last ran {mins:.0f} min ago "
                   f"(every 15 min while the launcher is up)")
         else:
-            print(f"{warn} Auto-settle: hasn't run yet — starts with the next "
-                  f"launch of the site")
+            print(f"{warn} Auto-settle: hasn't run yet — it starts the next "
+                  f"time you run `python3 launch.py`")
     except Exception:
-        print(f"{warn} Auto-settle: no record yet — starts with the next launch")
+        print(f"{warn} Auto-settle: no record yet — it starts the next time "
+              f"you run `python3 launch.py`")
 
     # UFC dossiers + backups.
     doss = ROOT / "data" / "ufc_dossiers.json"

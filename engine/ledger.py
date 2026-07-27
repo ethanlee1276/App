@@ -742,6 +742,27 @@ def longshot_report(conn) -> dict:
     return p
 
 
+def open_by_day(conn, today: str) -> list[dict]:
+    """Open picks grouped by slate date, newest first.
+
+    "70 open" is never a useful number on its own: tonight's picks are
+    supposed to be open, picks from a finished day are a symptom, and the
+    two are indistinguishable in a total. Each entry carries ``stale``
+    (the day is over, so these should already have graded) so a caller can
+    say which kind it is looking at.
+    """
+    rows = conn.execute(
+        "SELECT date, category, COUNT(*) FROM bets WHERE status='open' "
+        "GROUP BY date, category ORDER BY date DESC").fetchall()
+    by_day: dict = {}
+    for r in rows:
+        d, cat, n = r[0], r[1], r[2]
+        by_day.setdefault(d or "", {})[cat or "main"] = n
+    return [{"date": d, "counts": by_day[d], "total": sum(by_day[d].values()),
+             "stale": bool(d) and d < today}
+            for d in sorted(by_day, reverse=True)]
+
+
 def unstaked_scorecard(conn) -> dict:
     """Were the 0.00-unit picks actually profitable? Measure, don't argue.
 

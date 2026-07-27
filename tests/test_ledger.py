@@ -643,6 +643,34 @@ def test_export_json_carries_calibration_and_health():
         assert d["overall"]["process"]["good"] == 1
 
 
+def test_open_by_day_separates_tonight_from_a_backlog():
+    """A single "70 open" hides the only distinction that matters: picks
+    from tonight are supposed to be open, picks from a finished day are a
+    symptom."""
+    conn = _conn()
+    for date, cat, n in (("2026-07-27", "main", 12), ("2026-07-27", "longshot", 58),
+                         ("2026-07-26", "main", 2), ("2026-07-20", "longshot", 3)):
+        for i in range(n):
+            conn.execute(
+                "INSERT INTO bets (sport, date, player, market, status, category) "
+                "VALUES ('mlb', ?, ?, 'total_bases', 'open', ?)",
+                (date, f"{date}-{cat}-{i}", cat))
+    conn.commit()
+
+    days = ledger.open_by_day(conn, "2026-07-27")
+    assert [d["date"] for d in days] == ["2026-07-27", "2026-07-26", "2026-07-20"]
+    tonight = days[0]
+    assert tonight["stale"] is False
+    assert tonight["total"] == 70
+    assert tonight["counts"] == {"main": 12, "longshot": 58}
+    assert all(d["stale"] for d in days[1:])
+    assert sum(d["total"] for d in days if d["stale"]) == 5
+
+
+def test_open_by_day_is_empty_when_nothing_is_open():
+    assert ledger.open_by_day(_conn(), "2026-07-27") == []
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
