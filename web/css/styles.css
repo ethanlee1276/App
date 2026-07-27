@@ -1023,6 +1023,129 @@ select.calc-in { width: auto; font-weight: 600; }
    and the lone card centres — which matters here, where a game often has
    exactly one prop in a market. */
 .gp-cards { grid-template-columns: repeat(auto-fit, minmax(346px, 440px)); }
+
+
+/* ======================================================================
+   Data-heavy pages: Polymarket, Fantasy, NBA, UFC
+   ====================================================================== */
+
+/* `.cards` caps each track at 440px, which is right for a prop card you
+   read one at a time. auto-fill counts repetitions off that MAX, so at a
+   1440 laptop it resolves to exactly two 440px columns and leaves 410px —
+   31% of the row — empty on pages that are lists of comparable things.
+   Counting off the MIN instead gives three columns that share the width.
+
+   auto-FILL rather than auto-fit on purpose: auto-fit collapses the
+   tracks it doesn't use, so a section holding two cards stretched them to
+   660px each — a card twice the width of the same card one section down.
+   auto-fill keeps the column width fixed and lets a short row end early,
+   which is what a grid of comparable things should do. */
+.cards.wide {
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  justify-content: stretch;
+}
+
+/* Fighter comparison. Two flex columns with min-width:190px inside a
+   ~430px card cannot sit side by side, so they wrapped and left the "vs"
+   divider stranded at the end of the first line. A grid states the
+   intent: two corners with the divider between them, stacking only when
+   the card is genuinely too narrow. */
+.ufc-vs { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: start; margin-top: 10px; }
+.ufc-vs > .vs-sep {
+  align-self: center; color: var(--text-mute); font-size: 11px; font-weight: 800;
+  letter-spacing: .5px; text-transform: uppercase;
+}
+.ufc-corner { min-width: 0; }
+.ufc-corner .fc-name { font-weight: 700; font-size: 13.5px; }
+.ufc-corner .fc-meta { color: var(--text-mute); font-size: 11.5px; margin-top: 2px; }
+.ufc-corner .fc-stats { color: var(--text-body); font-size: 11.5px; margin-top: 3px; line-height: 1.4; }
+.ufc-corner .fc-cover { color: var(--text-mute); font-size: 11px; margin-top: 2px; }
+@media (max-width: 520px) {
+  .ufc-vs { grid-template-columns: 1fr; }
+  .ufc-vs > .vs-sep { justify-self: start; }
+}
+
+/* Shared list-row grid for the plain tables these pages render: the
+   near-miss report, the flag report card, and the top-markets list.
+   Same alignment rules as the Record page's rows. */
+.dl-row {
+  display: grid; align-items: center; gap: 12px;
+  padding: 9px 16px; border-bottom: 1px solid var(--border-soft);
+}
+.dl-row:last-child { border-bottom: none; }
+.dl-rank { color: var(--text-mute); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.dl-main { min-width: 0; }
+.dl-main > strong { font-size: 13.5px; }
+.dl-sub { display: block; color: var(--text-mute); font-size: 11.5px; margin-top: 2px; }
+.dl-num { text-align: right; font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--text-dim); }
+.dl-num.strong { font-weight: 700; font-size: 13px; color: var(--text); }
+.dl-num.pos { color: var(--good); } .dl-num.neg { color: var(--bad); }
+
+.nba-miss { grid-template-columns: minmax(0, 1fr) 92px 78px; }
+.pm-market { grid-template-columns: 26px minmax(0, 1fr) 56px 118px 92px; }
+.pm-band { grid-template-columns: minmax(0, 1fr) 64px 150px 96px; }
+.pm-wallet { grid-template-columns: minmax(0, 1fr) 64px 130px 62px; }
+@media (max-width: 700px) {
+  .nba-miss { grid-template-columns: minmax(0, 1fr) 70px; }
+  .nba-miss .dl-num.final { display: none; }
+  .pm-market { grid-template-columns: 22px minmax(0, 1fr) 52px; }
+  .pm-market .dl-num.vol, .pm-market .dl-num.end { display: none; }
+  .pm-band, .pm-wallet { grid-template-columns: minmax(0, 1fr) 56px 90px; }
+  .pm-band .dl-num.implied, .pm-wallet .dl-num.implied { display: none; }
+}
+
+/* Usage movers is the Fantasy page's lead content and it ran 36 rows
+   deep — about 3400px of near-identical lines before anything else was
+   reachable. Capped, with the rest one click away. */
+.ff-more {
+  display: block; width: 100%; text-align: center; cursor: pointer;
+  background: var(--fill-subtle); border: none; border-top: 1px solid var(--border-soft);
+  color: var(--text-dim); font-family: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 11px; letter-spacing: .2px;
+}
+.ff-more:hover { color: var(--brand); }
+.ff-hidden { display: none; }
+
+.ff-table { padding: 0; gap: 0; }
+.ff-row {
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(70px, 210px) 58px 58px 58px 118px 76px 68px;
+  padding: 8px 16px; border-bottom: 1px solid var(--border-soft);
+}
+.ff-row:last-child { border-bottom: none; }
+.ff-head {
+  color: var(--text-mute); font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: .06em; font-weight: 600; padding: 9px 16px;
+}
+.ff-head .ff-n, .ff-head .ff-bar-h { text-align: right; }
+.ff-head .ff-bar-h { text-align: left; }
+.ff-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ff-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.ff-pos { color: var(--text-mute); }
+.ff-n { text-align: right; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.ff-n.lead { font-weight: 700; font-size: 13.5px; }
+.ff-n.dim { color: var(--text-dim); }
+.ff-n.mute { color: var(--text-mute); }
+/* Last week's share as a bar; the tick marks the season average, so the
+   gap between them IS the trend the delta chip states in words. */
+.ff-bar {
+  position: relative; display: block; height: 7px; border-radius: 4px;
+  background: var(--fill-subtle); border: 1px solid var(--border-soft); overflow: hidden;
+}
+.ff-bar > i { display: block; height: 100%; border-radius: 4px; opacity: .85; }
+.ff-bar > b {
+  position: absolute; top: -2px; bottom: -2px; width: 2px;
+  background: var(--text); opacity: .5; border-radius: 1px;
+}
+@media (max-width: 1100px) {
+  .ff-row { grid-template-columns: minmax(0, 1fr) 56px 56px 56px 110px 66px; }
+  .ff-bar, .ff-bar-h, .ff-n.rz { display: none; }
+}
+@media (max-width: 700px) {
+  .ff-row { grid-template-columns: minmax(0, 1fr) 56px 100px; }
+  .ff-row > .ff-n:not(.lead):not(.trend) { display: none; }
+  .ff-head .ff-n:not(.lead):not(.trend) { display: none; }
+}
 .gp-teams {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   font-size: 22px; font-weight: 800; letter-spacing: -.3px;

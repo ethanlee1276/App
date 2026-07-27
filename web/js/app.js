@@ -1869,7 +1869,7 @@ async function renderIntel() {
       <div class="metrics">
         <div class="metric"><div class="k">Position</div><div class="v">${usd(f.usd)}</div></div>
         <div class="metric"><div class="k">Entry</div><div class="v">${cents(f.entry_price)}</div></div>
-        <div class="metric"><div class="k">Now</div><div class="v" style="color:${color}">${cents(f.current_price)}</div></div>
+        <div class="metric primary"><div class="k">Now</div><div class="v" style="color:${color}">${cents(f.current_price)}</div></div>
       </div>
       <div class="chips" style="margin-top:10px">${sigs}</div>
     </article>`;
@@ -1905,15 +1905,14 @@ async function renderIntel() {
   }).join("");
 
   const marketRows = (d.markets || []).slice(0, 20).map((m, i) => `
-    <div style="display:flex;align-items:center;gap:12px;padding:9px 16px;
-        border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="opacity:.4;min-width:20px">${i + 1}</span>
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+    <div class="dl-row pm-market">
+      <span class="dl-rank">${i + 1}</span>
+      <span class="dl-main" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
         <a href="https://polymarket.com/market/${escapeHtml(m.slug)}" target="_blank" rel="noopener"
            style="color:inherit;font-weight:600">${escapeHtml(m.question)}</a></span>
-      <span style="min-width:52px;text-align:right;font-weight:800">${cents(m.yes)}</span>
-      <span style="min-width:110px;text-align:right;color:var(--text-mute)">${usd(m.vol24)} / 24h</span>
-      <span style="min-width:80px;text-align:right;color:var(--text-mute);font-size:.85em">${escapeHtml(m.end_date || "")}</span>
+      <span class="dl-num strong">${cents(m.yes)}</span>
+      <span class="dl-num vol">${usd(m.vol24)} / 24h</span>
+      <span class="dl-num end">${escapeHtml(m.end_date || "")}</span>
     </div>`).join("");
 
   host.innerHTML = `
@@ -1926,7 +1925,7 @@ async function renderIntel() {
     <div class="section-title">Informed flow
       <span class="sub">— large trades scored for anomaly signals, with receipts on every chip
       (hover). Probabilities, never verdicts.</span></div>
-    <div class="cards">${flagCards ||
+    <div class="cards wide">${flagCards ||
       `<div class="empty-slate" style="grid-column:1/-1"><div class="es-icon">📡</div>
         <div class="es-title">No flagged flow yet</div>
         <div class="es-sub">The feed scores the last 24h of recorded tape and accumulates
@@ -1934,7 +1933,7 @@ async function renderIntel() {
     ${intelReportCard(d.validation)}
     <div class="section-title" style="margin-top:26px">Top traders
       <span class="sub">— ${escapeHtml(d.traders_note || "by realized profit")}</span></div>
-    <div class="cards">${traderCards ||
+    <div class="cards wide">${traderCards ||
       `<p class="loading" style="grid-column:1/-1">No trader data yet — fills on the next refresh.</p>`}</div>
     <div class="section-title" style="margin-top:26px">Top markets
       <span class="sub">— live markets by 24h volume · YES price · resolution date</span></div>
@@ -1972,22 +1971,44 @@ async function renderFantasy() {
       : `<span class="chip down">▼ ${(dv * 100).toFixed(0)}pt vs 4wk</span>`;
   };
 
+  // A flex row with one greedy name column left ~600px of empty table
+  // between the player and the numbers on a laptop. It is now a grid, and
+  // the space that opened up carries the thing this page says matters
+  // most: last week's share as a bar, with a tick where the season
+  // average sits — so a riser at 42% is visibly a riser, not just three
+  // percentages you have to diff in your head.
+  const shareBar = (u) => {
+    const scale = 0.5;                              // 50% of team volume = full bar
+    const w = (v) => `${Math.min(100, ((v || 0) / scale) * 100).toFixed(1)}%`;
+    const up = (u.delta || 0) > 0.03, down = (u.delta || 0) < -0.03;
+    const color = up ? "var(--good)" : down ? "var(--bad)" : "var(--brand)";
+    return `<span class="ff-bar" title="Last week ${pct(u.last)} of team volume · season average ${pct(u.season)}">
+      <i style="width:${w(u.last)};background:${color}"></i>
+      ${u.season != null ? `<b style="left:${w(u.season)}"></b>` : ""}</span>`;
+  };
   const usageRow = (u) => `
-    <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;
-        border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="flex:0 0 auto">${playerAvatar(u.player, u.team)}</span>
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-        <strong>${escapeHtml(u.player)}</strong>
-        <span style="color:var(--text-mute)"> ${escapeHtml(u.position)} · ${teamName(u.team)} · ${escapeHtml(u.metric)}</span></span>
-      <span style="min-width:64px;text-align:right" title="season average">${pct(u.season)}</span>
-      <span style="min-width:64px;text-align:right;color:var(--text-dim)" title="4-week average">${pct(u.l4)}</span>
-      <span style="min-width:64px;text-align:right;font-weight:700" title="most recent week">${pct(u.last)}</span>
-      <span style="min-width:120px;text-align:right">${deltaChip(u.delta)}</span>
-      <span style="min-width:78px;text-align:right;color:var(--text-dim)"
-        title="TD equity from play-by-play">${u.rz_pg != null ? `${u.rz_pg} ${escapeHtml(u.rz_label || "RZ/g")}` : "—"}</span>
-      <span style="min-width:70px;text-align:right;color:var(--text-mute)">${u.fp_pg} ppg</span>
+    <div class="ff-row">
+      <span class="ff-who">${playerAvatar(u.player, u.team)}
+        <span class="ff-name"><strong>${escapeHtml(u.player)}</strong>
+          <span class="ff-pos">${escapeHtml(u.position)} · ${teamName(u.team)} · ${escapeHtml(u.metric)}</span></span></span>
+      ${shareBar(u)}
+      <span class="ff-n" title="season average">${pct(u.season)}</span>
+      <span class="ff-n dim" title="4-week average">${pct(u.l4)}</span>
+      <span class="ff-n lead" title="most recent week">${pct(u.last)}</span>
+      <span class="ff-n trend">${deltaChip(u.delta)}</span>
+      <span class="ff-n dim rz" title="TD equity from play-by-play">${u.rz_pg != null ? `${u.rz_pg} ${escapeHtml(u.rz_label || "RZ/g")}` : "—"}</span>
+      <span class="ff-n mute">${u.fp_pg} ppg</span>
     </div>`;
-  const usageRows = (d.usage || []).slice(0, 40).map(usageRow).join("");
+  // The table is ranked by how big the role change is, so the top of it is
+  // the point and the tail is reference. Showing all 40 at once buried
+  // every other section on the page under ~3400px of near-identical rows.
+  const USAGE_SHOWN = 12;
+  const allUsage = (d.usage || []).slice(0, 40);
+  const usageRows = allUsage.slice(0, USAGE_SHOWN).map(usageRow).join("")
+    + (allUsage.length > USAGE_SHOWN
+      ? `<div id="usage-rest" class="ff-hidden">${allUsage.slice(USAGE_SHOWN).map(usageRow).join("")}</div>
+         <button class="ff-more" id="usage-more" aria-expanded="false" aria-controls="usage-rest">
+           Show ${allUsage.length - USAGE_SHOWN} more movers ▾</button>` : "");
 
   const bs = d.buy_sell || {};
   const tradeCard = (r, kind) => {
@@ -2052,33 +2073,40 @@ async function renderFantasy() {
       The delta column is the money — a riser at 42% beats a flat 60%.</div>
     <div class="section-title" style="margin-top:16px">Usage movers
       <span class="sub">— season vs 4-week vs last week, biggest role changes first</span></div>
-    <div class="card" style="padding:0">
-      <div style="display:flex;gap:12px;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,.08);
-          color:var(--text-mute);font-size:11.5px;text-transform:uppercase;letter-spacing:.06em">
-        <span style="flex:1">Player</span><span style="min-width:64px;text-align:right">Season</span>
-        <span style="min-width:64px;text-align:right">4-week</span><span style="min-width:64px;text-align:right">Last</span>
-        <span style="min-width:120px;text-align:right">Trend</span><span style="min-width:70px;text-align:right">PPR</span>
+    <div class="card ff-table">
+      <div class="ff-row ff-head">
+        <span class="ff-who">Player</span><span class="ff-bar-h">Last week's share</span>
+        <span class="ff-n">Season</span><span class="ff-n">4-week</span><span class="ff-n">Last</span>
+        <span class="ff-n trend">Trend</span><span class="ff-n rz">RZ/g</span><span class="ff-n">PPR</span>
       </div>
       ${usageRows || `<p class="loading" style="padding:12px">No usage rows for this season yet.</p>`}
     </div>
     <div class="section-title" style="margin-top:26px">Buy low
       <span class="sub">— volume-expected points say the production is coming</span></div>
-    <div class="cards">${(bs.buy_low || []).map((r) => tradeCard(r, "buy")).join("") ||
+    <div class="cards wide">${(bs.buy_low || []).map((r) => tradeCard(r, "buy")).join("") ||
       `<p class="loading" style="grid-column:1/-1">Nobody outside the sustainable band right now.</p>`}</div>
     <div class="section-title" style="margin-top:26px">Sell high
       <span class="sub">— outrunning their opportunity; regression risk</span></div>
-    <div class="cards">${(bs.sell_high || []).map((r) => tradeCard(r, "sell")).join("") ||
+    <div class="cards wide">${(bs.sell_high || []).map((r) => tradeCard(r, "sell")).join("") ||
       `<p class="loading" style="grid-column:1/-1">Nobody outside the sustainable band right now.</p>`}</div>
     <div class="section-title" style="margin-top:26px">Game scripts
       <span class="sub">— Vegas is the input: implied totals, archetypes, and confidence that
       scales with the spread</span></div>
-    <div class="cards">${scriptCards ||
+    <div class="cards wide">${scriptCards ||
       `<p class="loading" style="grid-column:1/-1">No upcoming NFL games with posted spreads and
        totals in the DB yet — fills when next season's lines are ingested.</p>`}</div>
     <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Expected points are
       fit from this season's own data (league value per target and per carry by position) —
       volume-based, so a player can legitimately sustain a positive gap; only gaps beyond
       ~${bs.band || 1.5} PPG are flagged. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
+  const more = document.getElementById("usage-more");
+  if (more) more.addEventListener("click", () => {
+    const rest = document.getElementById("usage-rest");
+    const open = rest.classList.toggle("ff-hidden") === false;
+    more.setAttribute("aria-expanded", String(open));
+    more.textContent = open ? "Show fewer ▴"
+      : `Show ${allUsage.length - USAGE_SHOWN} more movers ▾`;
+  });
   renderSleeperZone(d);
 }
 
@@ -2094,19 +2122,19 @@ function intelReportCard(v) {
   const pctv = (x) => `${(x * 100).toFixed(1)}%`;
   const zColor = v.z >= 1 ? "var(--good)" : v.z <= -1 ? "var(--bad)" : "var(--text)";
   const bands = (v.by_score || []).map((b) => `
-    <div style="display:flex;gap:12px;padding:7px 14px;border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="flex:1">Score ${escapeHtml(b.band)}</span>
-      <span style="min-width:60px;text-align:right">${b.wins}-${b.n - b.wins}</span>
-      <span style="min-width:120px;text-align:right;opacity:.8">${pctv(b.hit_rate)} vs ${pctv(b.avg_implied)} implied</span>
-      <span style="min-width:80px;text-align:right;color:${b.roi >= 0 ? "var(--good)" : "var(--bad)"}">${b.roi >= 0 ? "+" : ""}${pctv(b.roi)} ROI</span>
+    <div class="dl-row pm-band">
+      <span class="dl-main"><strong>Score ${escapeHtml(b.band)}</strong></span>
+      <span class="dl-num">${b.wins}-${b.n - b.wins}</span>
+      <span class="dl-num implied">${pctv(b.hit_rate)} vs ${pctv(b.avg_implied)} implied</span>
+      <span class="dl-num strong ${b.roi >= 0 ? "pos" : "neg"}">${b.roi >= 0 ? "+" : ""}${pctv(b.roi)} ROI</span>
     </div>`).join("");
   const wallets = (v.wallets || []).map((w) => `
-    <div style="display:flex;gap:12px;padding:7px 14px;border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="flex:1"><a href="https://polymarket.com/profile/${escapeHtml(w.wallet)}" target="_blank"
-        rel="noopener" style="color:inherit">${escapeHtml(w.name || shortWallet(w.wallet))}</a></span>
-      <span style="min-width:60px;text-align:right">${w.wins}-${w.n - w.wins}</span>
-      <span style="min-width:120px;text-align:right;opacity:.8">${pctv(w.hit_rate)} vs ${pctv(w.avg_implied)}</span>
-      <span style="min-width:70px;text-align:right;font-weight:700" title="calibration z — higher = less like luck">z ${w.z}</span>
+    <div class="dl-row pm-wallet">
+      <span class="dl-main"><a href="https://polymarket.com/profile/${escapeHtml(w.wallet)}" target="_blank"
+        rel="noopener" style="color:inherit;font-weight:600">${escapeHtml(w.name || shortWallet(w.wallet))}</a></span>
+      <span class="dl-num">${w.wins}-${w.n - w.wins}</span>
+      <span class="dl-num implied">${pctv(w.hit_rate)} vs ${pctv(w.avg_implied)}</span>
+      <span class="dl-num strong" title="calibration z — higher = less like luck">z ${w.z}</span>
     </div>`).join("");
   return `${head}
     <div class="stats">
@@ -2330,12 +2358,12 @@ async function renderNBA() {
       <div class="metrics">
         <div class="metric"><div class="k">p_model</div><div class="v">${pctv(p.p_model)}</div></div>
         <div class="metric"><div class="k">p_market</div><div class="v">${pctv(p.p_market)}</div></div>
-        <div class="metric"><div class="k">p_final (w=${p.w})</div><div class="v" style="color:var(--brand)">${pctv(p.p_final)}</div></div>
+        <div class="metric primary"><div class="k">p_final (w=${p.w})</div><div class="v">${pctv(p.p_final)}</div></div>
       </div>
       <div class="metrics" style="margin-top:6px">
         <div class="metric"><div class="k">Break-even</div><div class="v">${pctv(p.break_even)}</div></div>
         <div class="metric"><div class="k">Edge</div><div class="v pos">+${(p.edge * 100).toFixed(1)}pts</div></div>
-        <div class="metric"><div class="k">EV</div><div class="v pos">+${(p.ev * 100).toFixed(1)}%</div></div>
+        <div class="metric primary"><div class="k">EV</div><div class="v pos">+${(p.ev * 100).toFixed(1)}%</div></div>
       </div>
       <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">
         Projection <b>${p.projection}</b> ± ${p.sd} · minutes ${p.base_minutes} → <b>${p.proj_minutes}</b>
@@ -2345,12 +2373,12 @@ async function renderNBA() {
     </article>`;
 
   const missRow = (m) => `
-    <div style="display:flex;gap:12px;padding:9px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="flex:1;min-width:0"><strong>${escapeHtml(m.player)} ${escapeHtml(m.side)} ${m.line}
+    <div class="dl-row nba-miss">
+      <span class="dl-main"><strong>${escapeHtml(m.player)} ${escapeHtml(m.side)} ${m.line}
         ${escapeHtml(m.market_label)}</strong>
-        <span style="display:block;color:var(--text-mute);font-size:.85em">needs: ${escapeHtml(m.what_would_change)}</span></span>
-      <span style="min-width:90px;text-align:right;opacity:.8">${pctv(m.p_final)} final</span>
-      <span style="min-width:70px;text-align:right;color:${m.ev >= 0 ? "var(--good)" : "var(--text-mute)"}">${(m.ev * 100).toFixed(1)}% EV</span>
+        <span class="dl-sub">needs: ${escapeHtml(m.what_would_change)}</span></span>
+      <span class="dl-num final">${pctv(m.p_final)} final</span>
+      <span class="dl-num strong ${m.ev >= 0 ? "pos" : ""}">${(m.ev * 100).toFixed(1)}% EV</span>
     </div>`;
 
   host.innerHTML = `
@@ -2370,7 +2398,7 @@ async function renderNBA() {
         edge. The near-miss report below shows what came closest and what would need to change.</div></div>`
       : `<div class="section-title" style="margin-top:14px">Qualifying picks
           <span class="sub">— cleared the humility clamp AND the approval gate</span></div>
-        <div class="cards">${(d.picks || []).map(pickCard).join("")}</div>`}
+        <div class="cards wide">${(d.picks || []).map(pickCard).join("")}</div>`}
     <div class="section-title" style="margin-top:22px">Near-miss report
       <span class="sub">— the closest edges and exactly what would need to change</span></div>
     <div class="card" style="padding:0">${(d.near_misses || []).map(missRow).join("") ||
@@ -2438,12 +2466,12 @@ async function renderUFC() {
       <div class="metrics">
         <div class="metric"><div class="k">p_model</div><div class="v">${pctv(p.p_model)}</div></div>
         <div class="metric"><div class="k">p_market</div><div class="v">${pctv(p.p_market)}</div></div>
-        <div class="metric"><div class="k">p_final (w=${p.w})</div><div class="v" style="color:var(--brand)">${pctv(p.p_final)}</div></div>
+        <div class="metric primary"><div class="k">p_final (w=${p.w})</div><div class="v">${pctv(p.p_final)}</div></div>
       </div>
       <div class="metrics" style="margin-top:6px">
         <div class="metric"><div class="k">Break-even</div><div class="v">${pctv(p.break_even)}</div></div>
         <div class="metric"><div class="k">Edge</div><div class="v pos">+${(p.edge * 100).toFixed(1)}pts</div></div>
-        <div class="metric"><div class="k">EV</div><div class="v pos">+${(p.ev * 100).toFixed(1)}%</div></div>
+        <div class="metric primary"><div class="k">EV</div><div class="v pos">+${(p.ev * 100).toFixed(1)}%</div></div>
       </div>
       ${methodBar(p.method || {})}
       <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">
@@ -2464,14 +2492,12 @@ async function renderUFC() {
       ? `${fmt(f.slpm)}/${fmt(f.sapm)} strikes · TDD ${f.tdd == null ? "—" : (f.tdd * 100).toFixed(0) + "%"}
          · TD ${fmt(f.td_per15)}/15`
       : `<span style="color:var(--warn)">no tracked fight stats</span>`;
-    return `<div style="flex:1;min-width:190px">
-      <div style="font-weight:700">${escapeHtml(f.name)}</div>
-      <div style="color:var(--text-mute);font-size:12px;margin-top:2px">
-        ${f.record ? escapeHtml(f.record) : "—"}${f.age ? ` · ${f.age}y` : ""}
+    return `<div class="ufc-corner">
+      <div class="fc-name">${escapeHtml(f.name)}</div>
+      <div class="fc-meta">${f.record ? escapeHtml(f.record) : "—"}${f.age ? ` · ${f.age}y` : ""}
         ${f.archetype ? ` · ${escapeHtml(f.archetype.replace(/_/g, " "))}` : ""}</div>
-      <div style="color:var(--text-body);font-size:12px;margin-top:3px">${stats}</div>
-      <div style="color:var(--text-mute);font-size:11.5px;margin-top:2px">
-        stats for ${f.covered || 0}${f.career ? ` of ${f.career}` : ""} fights</div>
+      <div class="fc-stats">${stats}</div>
+      <div class="fc-cover">stats for ${f.covered || 0}${f.career ? ` of ${f.career}` : ""} fights</div>
       ${flags ? `<div style="margin-top:5px">${flags}</div>` : ""}
     </div>`;
   };
@@ -2494,14 +2520,13 @@ async function renderUFC() {
             ${m.odds ? ` · ${escapeHtml(m.book || "")} ${american(m.odds)}` : ""}</div></div>
         <span class="pm-status" style="color:${color}">${m.near_miss ? "NEAR MISS" : label}</span>
       </div>
-      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px">
-        ${fs.map(fighterCol).join(`<div style="align-self:center;color:var(--text-mute);
-            font-size:12px;font-weight:700">vs</div>`)}
+      <div class="ufc-vs">
+        ${fs.map(fighterCol).join(`<span class="vs-sep">vs</span>`)}
       </div>
       ${m.p_final != null ? `<div class="metrics" style="margin-top:10px">
         <div class="metric"><div class="k">p_model</div><div class="v">${pctv(m.p_model)}</div></div>
         <div class="metric"><div class="k">p_market</div><div class="v">${pctv(m.p_market)}</div></div>
-        <div class="metric"><div class="k">p_final</div><div class="v">${pctv(m.p_final)}</div></div>
+        <div class="metric primary"><div class="k">p_final</div><div class="v">${pctv(m.p_final)}</div></div>
       </div>` : ""}
       <div style="margin-top:10px;color:var(--text-body);font-size:12.5px">
         <span style="color:${color};font-weight:700">Passed:</span> ${escapeHtml(m.why || "")}</div>
@@ -2530,7 +2555,7 @@ async function renderUFC() {
         Friday weigh-ins: missed weight and visible cut damage aren't fully priced for hours.</div></div>`
       : `<div class="section-title">Picks
           <span class="sub">— cleared the clamp AND the gate · one-fifth Kelly stakes</span></div>
-        <div class="cards">${(d.picks || []).map(pickCard).join("")}</div>`}
+        <div class="cards wide">${(d.picks || []).map(pickCard).join("")}</div>`}
     ${(() => {
       // Grouped so the page reads as a card, not a wall: fights we
       // actually priced first, then the ones waiting on books, then the
@@ -2552,12 +2577,12 @@ async function renderUFC() {
         if (!rows.length) continue;
         html += `<div class="section-title" style="margin-top:22px">${title}
             <span class="sub">— ${rows.length} fight(s) · ${sub}</span></div>
-          <div class="cards">${rows.map(passCard).join("")}</div>`;
+          <div class="cards wide">${rows.map(passCard).join("")}</div>`;
       }
       const rest = list.filter((m) => !seen.has(m));
       if (rest.length)
         html += `<div class="section-title" style="margin-top:22px">Other passes</div>
-          <div class="cards">${rest.map(passCard).join("")}</div>`;
+          <div class="cards wide">${rest.map(passCard).join("")}</div>`;
       return html || `<div class="section-title" style="margin-top:22px">Pass list</div>
         <p class="loading" style="padding:12px">Nothing to pass on.</p>`;
     })()}
