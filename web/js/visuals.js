@@ -11,11 +11,16 @@
 
 const DEFAULT_TEAM = { name: "", nick: "", primary: "#3a4668", secondary: "#8893b5", tertiary: "#dfe4f5" };
 // app.js points window.ACTIVE_TEAMS at the current sport's color dict
-// (NFL TEAMS or MLB_TEAMS) — abbreviations collide across leagues.
-function team(abbr) {
-  const src = (typeof window !== "undefined" && window.ACTIVE_TEAMS)
+// (NFL TEAMS or MLB_TEAMS) — abbreviations collide across leagues, so a
+// page whose sport NEVER changes (Fantasy is always football) must pass
+// its own map instead of inheriting whichever tab the user came from:
+// arriving at Fantasy from the MLB board once rendered the Vikings as
+// the Twins and the Ravens as the Orioles.
+function team(abbr, src = null) {
+  const dict = src
+    || (typeof window !== "undefined" && window.ACTIVE_TEAMS)
     || (typeof TEAMS !== "undefined" ? TEAMS : {});
-  return src[abbr] || DEFAULT_TEAM;
+  return dict[abbr] || DEFAULT_TEAM;
 }
 
 function initials(name) {
@@ -44,7 +49,7 @@ function playerAvatar(name, abbr, opts = {}) {
       <img class="avatar-photo" src="${escapeAttr(opts.headshot)}" alt="" loading="lazy"
            onerror="this.remove()"/></span>`;
   }
-  const t = team(abbr);
+  const t = team(abbr, opts.map);
   const uid = "a" + Math.random().toString(36).slice(2, 8);
   const ini = initials(name);
   const stripe = t.secondary;
@@ -133,8 +138,8 @@ function playerAvatar(name, abbr, opts = {}) {
 }
 
 /* ---------------- Team logo mark (procedural monogram) ------------------- */
-function teamMark(abbr, size = 20) {
-  const t = team(abbr);
+function teamMark(abbr, size = 20, src = null) {
+  const t = team(abbr, src);
   const uid = "tm" + Math.random().toString(36).slice(2, 7);
   return `
   <svg class="team-mark" width="${size}" height="${size}" viewBox="0 0 24 24" role="img"

@@ -861,7 +861,7 @@ function longShotCard(r) {
     <article class="card longshot" style="--grade-color:${gradeColor(r.grade)}">
       ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
       <div class="card-head">
-        <div class="card-id">${playerAvatar(r.player, r.team)}
+        <div class="card-id">${playerAvatar(r.player, r.team, { map: nflMap() })}
           <div>
             <div class="player">${escapeHtml(r.player)} <span class="ml-odds">${american(r.odds)}</span></div>
             <div class="subtitle">${escapeHtml(r.matchup)}${whenLabel(r.game_date, r.game_kickoff)
@@ -2116,9 +2116,9 @@ async function renderFantasy() {
   };
   const usageRow = (u) => `
     <div class="ff-row">
-      <span class="ff-who">${playerAvatar(u.player, u.team)}
+      <span class="ff-who">${playerAvatar(u.player, u.team, { map: nflMap() })}
         <span class="ff-name"><strong>${escapeHtml(u.player)}</strong>
-          <span class="ff-pos">${escapeHtml(u.position)} · ${teamName(u.team)} · ${escapeHtml(u.metric)}</span></span></span>
+          <span class="ff-pos">${escapeHtml(u.position)} · ${nflName(u.team)} · ${escapeHtml(u.metric)}</span></span></span>
       ${shareBar(u)}
       <span class="ff-n" title="season average">${pct(u.season)}</span>
       <span class="ff-n dim" title="4-week average">${pct(u.l4)}</span>
@@ -2148,9 +2148,9 @@ async function renderFantasy() {
     const buy = kind === "buy";
     return `<article class="card" style="--grade-color:${buy ? "var(--good)" : "var(--warn)"}">
       <div class="card-head">
-        <div class="card-id">${playerAvatar(r.player, r.team)}
+        <div class="card-id">${playerAvatar(r.player, r.team, { map: nflMap() })}
           <div><div class="player">${escapeHtml(r.player)}</div>
-            <div class="subtitle">${escapeHtml(r.position)} · ${teamName(r.team)} ·
+            <div class="subtitle">${escapeHtml(r.position)} · ${nflName(r.team)} ·
               ${r.targets_pg} tgt/g · ${r.carries_pg} car/g</div></div>
         </div>
         <span class="pm-status" style="color:${buy ? "var(--good)" : "var(--warn)"}">${buy ? "BUY LOW" : "SELL HIGH"}</span>
@@ -2249,6 +2249,13 @@ async function renderFantasy() {
   renderSleeperZone(d);
 }
 
+/* The Fantasy page is ALWAYS football, whatever sport tab the user
+   arrived from — resolving its abbreviations through the active sport's
+   map once rendered the Vikings as the Twins and the Ravens as the
+   Orioles (both leagues use MIN and BAL). These helpers pin the map. */
+const nflMap = () => (typeof TEAMS !== "undefined" ? TEAMS : {});
+const nflName = (a) => (nflMap()[a] && nflMap()[a].nick) || a;
+
 /* ============================================================
    Offseason panel — what changed since the stats were recorded.
    Coaching changes come from the schedule file itself (each game
@@ -2259,19 +2266,19 @@ function offseasonHTML(off) {
   if (!off || (!off.upcoming_season && !(off.coach_changes || []).length
                && !off.rosters_live)) return "";
   const pair = (c) => `
-    <div class="os-row"><span class="os-team">${teamMark(c.team, 20)} ${escapeHtml(teamName(c.team))}</span>
+    <div class="os-row"><span class="os-team">${teamMark(c.team, 20, nflMap())} ${escapeHtml(nflName(c.team))}</span>
       <span class="os-before">${escapeHtml(c.before)}</span>
       <span class="os-arrow">→</span>
       <span class="os-now">${escapeHtml(c.now)}</span></div>`;
   const move = (m) => `
     <div class="os-row"><span class="os-team">${escapeHtml(m.player)}
         <span class="dk-pt">${escapeHtml(m.position)}</span></span>
-      <span class="os-before">${escapeHtml(teamName(m.from))}</span>
+      <span class="os-before">${escapeHtml(nflName(m.from))}</span>
       <span class="os-arrow">→</span>
-      <span class="os-now">${escapeHtml(teamName(m.to))}</span></div>`;
+      <span class="os-now">${escapeHtml(nflName(m.to))}</span></div>`;
   const rookie = (r) => `
     <div class="os-row"><span class="os-team">${escapeHtml(r.player)}
-        <span class="dk-pt">${escapeHtml(r.position)} · ${teamName(r.team)}</span></span>
+        <span class="dk-pt">${escapeHtml(r.position)} · ${nflName(r.team)}</span></span>
       <span class="os-now">${escapeHtml(r.depth_pos)}${r.depth_order < 99 ? r.depth_order : ""} on depth chart</span></div>`;
   const box = (title, sub, rows, empty) => `
     <article class="card os-card">
@@ -2318,14 +2325,14 @@ function draftKitHTML(kit) {
   if (!kit || !(kit.board || []).length) return "";
   const BOARD_SHOWN = 15;
   const moveNote = (r) => r.moved_from
-    ? ` · <span class="dk-moved" title="Traded or signed since these stats — the volume behind this projection came in ${escapeHtml(teamName(r.moved_from))}'s offense">NEW TEAM, was ${escapeHtml(r.moved_from)}</span>`
+    ? ` · <span class="dk-moved" title="Traded or signed since these stats — the volume behind this projection came in ${escapeHtml(nflName(r.moved_from))}'s offense">NEW TEAM, was ${escapeHtml(r.moved_from)}</span>`
     : r.roster_flag
       ? ` · <span class="dk-moved">${escapeHtml(r.roster_flag)}</span>` : "";
   const boardRow = (r, i) => `
     <div class="dl-row dk-row" data-ffp="${escapeHtml(ffNorm(r.player))}">
       <span class="dl-rank">${i + 1}</span>
       <span class="dl-main"><strong>${escapeHtml(r.player)}</strong>
-        <span class="dl-sub">${escapeHtml(r.position)}${r.pos_rank} · ${teamName(r.team)}
+        <span class="dl-sub">${escapeHtml(r.position)}${r.pos_rank} · ${nflName(r.team)}
           · ${r.games} gm${r.small_sample ? " ⚠ small sample" : ""}${moveNote(r)}</span></span>
       <span class="dk-tier" style="color:${tierColor(r.tier)}">T${r.tier}</span>
       <span class="dl-num" title="projected PPR points per game">${r.proj}</span>
@@ -2349,7 +2356,7 @@ function draftKitHTML(kit) {
       return `${brk}<div class="dk-posrow" data-ffp="${escapeHtml(ffNorm(r.player))}">
         <span class="dk-pr">${r.pos_rank}</span>
         <span class="dk-pn">${escapeHtml(r.player)}
-          <span class="dk-pt">${teamName(r.team)}</span></span>
+          <span class="dk-pt">${nflName(r.team)}</span></span>
         <span class="dk-pp">${r.proj}</span>
       </div>`;
     }).join("");
@@ -2363,7 +2370,7 @@ function draftKitHTML(kit) {
   const sleepers = (kit.sleepers || []).map((r) => `
     <div class="dl-row dk-slrow" data-ffp="${escapeHtml(ffNorm(r.player))}">
       <span class="dl-main"><strong>${escapeHtml(r.player)}</strong>
-        <span class="dl-sub">${escapeHtml(r.position)} · ${teamName(r.team)}</span></span>
+        <span class="dl-sub">${escapeHtml(r.position)} · ${nflName(r.team)}</span></span>
       <span class="dl-num">${r.ppg} actual</span>
       <span class="dl-num strong pos">${r.xppg} expected</span>
     </div>`).join("");
@@ -2632,7 +2639,7 @@ function renderSleeperPanel(d, ctx) {
   const rowHTML = (r) => `
     <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;
         border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="flex:0 0 auto">${playerAvatar(r.name, r.team)}</span>
+      <span style="flex:0 0 auto">${playerAvatar(r.name, r.team, { map: nflMap() })}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
         <strong>${escapeHtml(r.name)}</strong>
         <span style="color:var(--text-mute)"> ${escapeHtml(r.pos)} · ${escapeHtml(r.team || "FA")}${r.starter ? " · starter" : ""}</span>
