@@ -111,6 +111,44 @@ def test_team_alias_canonicalizes_sleeper_spellings():
     assert rec["team"] == "LA"
 
 
+def test_short_key_collisions_do_not_cross_players():
+    """A.J. Brown and Amon-Ra St. Brown both collapse to ("a", "brown")
+    and both play WR — the first live run reported Amon-Ra following
+    A.J. to New England. Full names must win before the short key is
+    ever consulted."""
+    blob = {
+        "1": {"full_name": "A.J. Brown", "team": "NE", "position": "WR",
+              "years_exp": 7, "depth_chart_order": 1, "active": True,
+              "status": "Active"},
+        "2": {"full_name": "Amon-Ra St. Brown", "team": "DET", "position": "WR",
+              "years_exp": 5, "depth_chart_order": 1, "active": True,
+              "status": "Active"},
+    }
+    idx = offseason.index_players(blob)
+    assert offseason._lookup(idx, "Amon-Ra St. Brown", "WR")["team"] == "DET"
+    assert offseason._lookup(idx, "A.J. Brown", "WR")["team"] == "NE"
+
+    kit = {"board": [
+        {"player": "Amon-Ra St. Brown", "team": "DET", "position": "WR", "proj": 18.3},
+        {"player": "A.J. Brown", "team": "PHI", "position": "WR", "proj": 17.0},
+    ], "tiers": {}, "sleepers": []}
+    moves = offseason.apply_current_rosters(kit, idx)
+    assert moves == [{"player": "A.J. Brown", "position": "WR",
+                      "from": "PHI", "to": "NE"}]
+    assert kit["board"][0]["team"] == "DET"          # Amon-Ra stays home
+    assert "moved_from" not in kit["board"][0]
+
+
+def test_abbreviated_names_still_match_via_the_short_key():
+    """The short key exists for abbreviated feeds — "P. Mahomes" has no
+    full-name entry but must still resolve."""
+    blob = {"1": {"full_name": "Patrick Mahomes", "team": "KC", "position": "QB",
+                  "years_exp": 9, "depth_chart_order": 1, "active": True,
+                  "status": "Active"}}
+    idx = offseason.index_players(blob)
+    assert offseason._lookup(idx, "P. Mahomes", "QB")["team"] == "KC"
+
+
 def test_build_offseason_without_sleeper_says_so():
     out = offseason.build_offseason(_sched(), None, kit=None)
     assert out["rosters_live"] is False

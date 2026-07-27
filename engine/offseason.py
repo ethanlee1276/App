@@ -147,10 +147,17 @@ def load_sleeper_players(max_age_s: int = 86400) -> dict | None:
 
 
 def index_players(blob: dict) -> dict:
-    """Normalized-name index of fantasy-relevant players:
-    {(initial, lastname): [{name, team, position, years_exp, depth_pos,
-    depth_order, status}]}. A list per key because names collide."""
-    idx: dict = {}
+    """Two-tier name index of fantasy-relevant players.
+
+    The short key (first initial, last name) exists for abbreviated feeds
+    ("P.Mahomes"), but on its own it is a trap: A.J. Brown and Amon-Ra
+    St. Brown BOTH collapse to ("a", "brown"), both play WR, and the first
+    live run of this module duly reported Amon-Ra following A.J. to New
+    England. Both sides of THIS join carry full names, so the full
+    normalized name is the primary key and the short key only a fallback.
+    """
+    from .sources.oddsapi import normalize_name
+    idx: dict = {"full": {}, "short": {}}
     for p in (blob or {}).values():
         if not isinstance(p, dict):
             continue
@@ -170,18 +177,27 @@ def index_players(blob: dict) -> dict:
             "status": (p.get("status") or "").strip(),
             "active": bool(p.get("active", True)),
         }
-        idx.setdefault(_short_key(name, ""), []).append(rec)
+        idx["full"].setdefault(normalize_name(name), []).append(rec)
+        idx["short"].setdefault(_short_key(name, ""), []).append(rec)
     return idx
 
 
-def _lookup(idx: dict, name: str, position: str | None = None) -> dict | None:
-    cands = idx.get(_short_key(name, ""), [])
+def _pick_candidate(cands: list, position: str | None) -> dict | None:
     if position:
         pos_match = [c for c in cands if c["position"] == position.upper()]
         if pos_match:
             cands = pos_match
     active = [c for c in cands if c["active"] and c["team"]]
     return (active or cands or [None])[0]
+
+
+def _lookup(idx: dict, name: str, position: str | None = None) -> dict | None:
+    from .sources.oddsapi import normalize_name
+    full = idx.get("full", {}).get(normalize_name(name), [])
+    if full:
+        return _pick_candidate(full, position)
+    return _pick_candidate(idx.get("short", {}).get(_short_key(name, ""), []),
+                           position)
 
 
 def rookie_board(blob: dict, limit: int = 36) -> list[dict]:
@@ -244,12 +260,13 @@ def apply_current_rosters(kit: dict, idx: dict) -> list[dict]:
 def qb_changes(schedule_rows: list[dict], idx: dict) -> list[dict]:
     """Teams whose current depth-chart QB1 differs from the QB who took
     most of their snaps late last season."""
+    from .sources.oddsapi import normalize_name
     last, _ = seasons_in(schedule_rows)
     if last is None or not idx:
         return []
     before = _final_qbs(schedule_rows, last)
     qb1: dict[str, str] = {}
-    for cands in idx.values():
+    for cands in idx.get("full", {}).values():
         for c in cands:
             if (c["position"] == "QB" and c["active"] and c["team"]
                     and c["depth_order"] == 1):
@@ -257,7 +274,14 @@ def qb_changes(schedule_rows: list[dict], idx: dict) -> list[dict]:
     out = []
     for team, now in sorted(qb1.items()):
         was = before.get(team, "")
-        if was and _short_key(was, "") != _short_key(now, ""):
+        if not was:
+            continue
+        # Same man if EITHER name form agrees — the schedule and Sleeper
+        # write names differently ("Gardner Minshew II" vs "Gardner
+        # Minshew"), and a false "new QB" is worse than a missed one.
+        same = (normalize_name(was) == normalize_name(now)
+                or _short_key(was, "") == _short_key(now, ""))
+        if not same:
             out.append({"team": team, "before": was, "now": now})
     return out
 
