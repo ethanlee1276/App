@@ -2751,6 +2751,50 @@ function moveIndicator() {
   ind.style.width = active.offsetWidth + "px";
 }
 
+/* ============================================================
+   Mobile menu. Fourteen destinations (seven products, seven tabs) as a
+   horizontally scrolling strip technically reaches everything, but it
+   hides where you can go behind a gesture nobody is told about. On a
+   phone they collapse into one menu that shows the current page and
+   opens the full list.
+   ============================================================ */
+function closeMobileMenu() {
+  document.body.classList.remove("menu-open");
+  const btn = document.getElementById("menu-toggle");
+  if (btn) btn.setAttribute("aria-expanded", "false");
+}
+
+function syncMenuLabel() {
+  const el = document.getElementById("menu-label");
+  if (!el) return;
+  // Whatever is highlighted right now IS where you are — read it back
+  // rather than keeping a second copy of the routing state in sync.
+  const active = document.querySelector(".sport-btn.active");
+  const tab = document.querySelector(".nav-btn.active");
+  const sport = active ? active.textContent.trim() : "";
+  const inStandalone = STANDALONE_MODES.includes(state.view);
+  el.textContent = inStandalone || !tab
+    ? (sport || "Menu")
+    : `${sport} · ${tab.textContent.trim()}`;
+}
+
+function initMobileMenu() {
+  const btn = document.getElementById("menu-toggle");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const open = document.body.classList.toggle("menu-open");
+    btn.setAttribute("aria-expanded", String(open));
+  });
+  // Picking a destination is the end of the interaction — never leave
+  // the panel covering the thing the tap just navigated to.
+  document.querySelectorAll(".sport-btn, .nav-btn").forEach((b) =>
+    b.addEventListener("click", () => { closeMobileMenu(); syncMenuLabel(); }));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMobileMenu();
+  });
+  syncMenuLabel();
+}
+
 /* ---------------- wiring ---------------- */
 function bind() {
   document.querySelectorAll(".nav-btn").forEach((b) =>
@@ -2830,5 +2874,6 @@ applySport();
 updateUnitNote();
 initialView();
 watchSectionSubs();
+initMobileMenu();
 requestAnimationFrame(moveIndicator);
 load();

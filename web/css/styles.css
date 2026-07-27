@@ -875,19 +875,52 @@ select.calc-in { width: auto; font-weight: 600; }
    Two things are therefore required together, and neither works alone:
    .brand must be allowed to wrap so the switch can drop to its own line,
    and the switch needs min-width:0 so it may shrink and scroll. */
+/* The menu button is phone-only; desktop keeps both button rows. */
+.menu-toggle { display: none; }
+
 @media (max-width: 760px) {
   .topbar { flex-wrap: wrap; gap: 10px; padding: 10px 12px; }
   .brand { flex: 1 1 100%; flex-wrap: wrap; gap: 10px; min-width: 0; }
   .brand .tagline { display: none; }
-  .sport-switch, .nav {
-    flex: 1 1 100%; min-width: 0; flex-wrap: nowrap;
-    overflow-x: auto; overflow-y: hidden;
-    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+
+  .menu-toggle {
+    display: flex; align-items: center; gap: 10px; order: -1;
+    flex: 1 1 100%; min-width: 0;
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    font: inherit; font-size: 13.5px; font-weight: 700;
+    padding: 9px 13px; cursor: pointer; text-align: left;
   }
-  .sport-switch::-webkit-scrollbar, .nav::-webkit-scrollbar { display: none; }
-  .sport-btn, .nav-btn { flex: 0 0 auto; white-space: nowrap; }
-  .nav-indicator { display: none; }     /* meaningless once the row scrolls */
-  .slate-meta { flex: 1 1 100%; justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+  .mt-bars { position: relative; width: 16px; height: 2px; flex: 0 0 auto;
+    background: currentColor; border-radius: 2px; }
+  .mt-bars::before, .mt-bars::after {
+    content: ""; position: absolute; left: 0; width: 16px; height: 2px;
+    background: currentColor; border-radius: 2px; transition: transform .18s ease;
+  }
+  .mt-bars::before { top: -5px; } .mt-bars::after { top: 5px; }
+  .menu-open .mt-bars { background: transparent; }
+  .menu-open .mt-bars::before { transform: translateY(5px) rotate(45deg); }
+  .menu-open .mt-bars::after  { transform: translateY(-5px) rotate(-45deg); }
+  .mt-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--text-dim); font-weight: 600; }
+
+  /* Both destination rows live behind the menu on a phone. */
+  .sport-switch, .nav { display: none; }
+  .menu-open .sport-switch, .menu-open .nav {
+    display: flex; flex: 1 1 100%; min-width: 0;
+    flex-wrap: wrap; gap: 6px; background: transparent; padding: 0;
+  }
+  .menu-open .sport-btn, .menu-open .nav-btn {
+    flex: 1 1 calc(50% - 3px); white-space: nowrap; text-align: center;
+    padding: 10px 8px;
+  }
+  .nav-indicator { display: none; }     /* the panel marks the active tab */
+  /* Keep the two destination grids together; status chips come last so
+     they never split the menu in half. */
+  .menu-open .sport-switch { order: 2; }
+  .menu-open .nav { order: 3; }
+  .slate-meta { flex: 1 1 100%; order: 4; justify-content: flex-start;
+    flex-wrap: wrap; gap: 8px; }
   .view { padding: 14px 12px 48px; }
   .hero-games .game-card { min-width: 262px; }
   .stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
