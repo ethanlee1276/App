@@ -878,6 +878,26 @@ select.calc-in { width: auto; font-weight: 600; }
 /* The menu button is phone-only; desktop keeps both button rows. */
 .menu-toggle { display: none; }
 
+/* --- Tablets and small laptops ----------------------------------------
+   Measured: a 768px iPad rendered at innerWidth 1731 — a 2.3x
+   shrink-to-fit, worse than phones were before the mobile pass, because
+   the phone breakpoint stopped at 760 and everything above it kept the
+   full desktop topbar on ONE non-wrapping row (brand 687 + both button
+   rows + the status strip).
+   Here the bar stacks and each row wraps onto as many lines as it needs.
+   The menu stays OFF: at this width there is room to show every
+   destination at once, and hiding them behind a tap would be worse. */
+@media (max-width: 1100px) {
+  .topbar { flex-wrap: wrap; gap: 10px; padding: 12px 16px; }
+  .brand { flex: 1 1 100%; flex-wrap: wrap; gap: 12px; min-width: 0; }
+  .sport-switch, .nav {
+    flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 6px;
+  }
+  .sport-btn, .nav-btn { flex: 0 0 auto; white-space: nowrap; }
+  .nav-indicator { display: none; }   /* it cannot track a wrapped row */
+  .slate-meta { flex: 1 1 100%; justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+}
+
 @media (max-width: 760px) {
   .topbar { flex-wrap: wrap; gap: 10px; padding: 10px 12px; }
   .brand { flex: 1 1 100%; flex-wrap: wrap; gap: 10px; min-width: 0; }
