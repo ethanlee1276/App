@@ -1178,6 +1178,33 @@ select.calc-in { width: auto; font-weight: 600; }
   .dk-row { grid-template-columns: 22px minmax(0, 1fr) 34px 50px; }
   .dk-row .dl-num:not(.strong) { display: none; }
 }
+.dk-moved { color: var(--warn); font-weight: 700; }
+
+/* Offseason panel */
+.os-card { padding: 14px 16px; gap: 8px; }
+.os-body { display: grid; gap: 4px; }
+.os-row {
+  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 16px minmax(0, 1fr);
+  gap: 8px; align-items: center; font-size: 12.5px; padding: 3px 0;
+}
+.os-team { display: flex; align-items: center; gap: 6px; font-weight: 600;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.os-before { color: var(--text-mute); text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--bad) 55%, transparent);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@supports not (background: color-mix(in srgb, red 10%, transparent)) {
+  .os-before { text-decoration-color: rgba(251, 90, 106, .55); }
+}
+.os-arrow { color: var(--text-mute); text-align: center; }
+.os-now { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Rookie rows have no before/arrow — two columns. */
+.os-rookies { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 2px 22px; }
+.os-rookies .os-row { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+.os-rookies .os-now { color: var(--text-dim); font-weight: 500; text-align: right; }
+@media (max-width: 700px) {
+  .os-row { grid-template-columns: minmax(0, 1.1fr) 16px minmax(0, 1fr); }
+  .os-before { display: none; }
+}
 .gp-teams {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   font-size: 22px; font-weight: 800; letter-spacing: -.3px;

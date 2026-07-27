@@ -165,9 +165,32 @@ The Fantasy page carries a **draft kit** built from last season's usage:
   strip (overall + per position) stays current. Read-only, no password.
 
 Honest limits, because they matter at the table: the board is last
-season's volume run forward. **Rookies are not on it**, and it knows
-nothing about coaching changes or free agency — use the tiers to
-structure the draft and your own news-reading to pick within a tier.
+season's volume run forward. Rookies carry no projection (none exists),
+and a moved player's numbers came from his old offense — but the page
+now TELLS you all of that instead of leaving you to remember it.
+
+## The offseason panel (Fantasy page)
+
+Above the draft kit, the page shows **what the league changed under last
+season's numbers** — refreshed automatically on every build, derived
+from data rather than from a news list that goes stale:
+
+- **Coaching changes** come from the nflverse schedule file itself:
+  every game row is stamped with both head coaches, so "new coach" is a
+  diff between a team's last game of last season and next season's rows.
+- **Current teams & rookies** come from Sleeper's public players feed
+  (the same one league sync uses, cached daily). Board players who
+  changed teams get a NEW TEAM flag — their projection is deliberately
+  NOT adjusted, because nobody knows what the new offense does to their
+  volume, and flagging honestly beats inventing a number.
+- **New starting QBs**: current depth-chart QB1 vs the QB who actually
+  started late last season.
+- **Rookies** are listed with their current depth-chart slot and no
+  projection — no NFL volume exists, and the site doesn't fake numbers.
+
+The launcher's daily maintenance also re-pulls the NFL schedule, so as
+books post next season's lines over the summer, the **game scripts**
+section fills in on its own.
 
 ## UFC dossiers (a two-minute review before each card)
 

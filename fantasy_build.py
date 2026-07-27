@@ -3,10 +3,13 @@
 
     python3 fantasy_build.py --out web/data/fantasy.json
 
-Reads only the local DB — usage rows land during the normal NFL ingest, so
-this build costs zero network. Offseason: shows the last completed season,
-labeled as such; game scripts appear as soon as next season's schedule
-carries real spreads and totals.
+Stats come from the local DB (usage rows land during the normal NFL
+ingest). Two cache-first, once-a-day fetches keep the page current with
+the league rather than with last season: the nflverse schedule (coaching
+changes, and next season's lines for game scripts) and Sleeper's public
+players feed (current teams, rookies, depth charts). Both fall back to
+stale caches, then to nothing — the page labels what it couldn't refresh
+instead of guessing.
 """
 
 from __future__ import annotations
@@ -16,8 +19,9 @@ import datetime
 import json
 from pathlib import Path
 
-from engine import fantasy, fantasy_draft
+from engine import fantasy, fantasy_draft, offseason
 from engine.db import connect
+from engine.sources.fetch import DataUnavailable
 
 
 def main() -> None:
@@ -33,6 +37,16 @@ def main() -> None:
                "note": "No NFL usage data ingested yet — run "
                        "`python3 ingest.py nfl` once."}
     else:
+        kit = fantasy_draft.build_draft_kit(conn, season)
+        try:
+            from engine.sources.nflverse import load_schedules
+            sched = load_schedules()
+        except DataUnavailable:
+            sched = []
+        # build_offseason stamps the kit's rows with current teams, so it
+        # must run before the kit is serialized.
+        off = offseason.build_offseason(sched, offseason.load_sleeper_players(),
+                                        kit=kit)
         out = {
             "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "season": season,
@@ -40,7 +54,8 @@ def main() -> None:
             "rates": fantasy.league_rates(conn, season),
             "buy_sell": fantasy.buy_sell_board(conn, season),
             "scripts": fantasy.game_scripts(conn),
-            "draft_kit": fantasy_draft.build_draft_kit(conn, season),
+            "draft_kit": kit,
+            "offseason": off,
         }
     conn.close()
 

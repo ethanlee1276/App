@@ -2106,6 +2106,9 @@ async function renderFantasy() {
            Show ${allUsage.length - USAGE_SHOWN} more movers ▾</button>` : "");
 
   const draftKit = draftKitHTML(d.draft_kit);
+  const off = d.offseason || {};
+  const coachChanged = {};
+  (off.coach_changes || []).forEach((c) => { coachChanged[c.team] = c.now; });
 
   const bs = d.buy_sell || {};
   const tradeCard = (r, kind) => {
@@ -2140,6 +2143,9 @@ async function renderFantasy() {
           <div class="subtitle">Week ${parseInt(s.week, 10) || escapeHtml(s.week)} · total ${s.total} · ${escapeHtml(s.favorite)} −${Math.abs(s.spread)}</div></div>
         <span class="chip">${escapeHtml(s.archetype)}</span>
       </div>
+      ${[s.home, s.away].filter((t) => coachChanged[t]).map((t) =>
+        `<div class="warning" style="margin-top:8px">🔄 ${escapeHtml(t)} has a new head coach
+           (${escapeHtml(coachChanged[t])}) — last season's tendencies (PROE included) may not carry</div>`).join("")}
       <div class="metrics">
         <div class="metric"><div class="k">${escapeHtml(s.home)} implied</div><div class="v">${s.home_implied}</div></div>
         <div class="metric"><div class="k">${escapeHtml(s.away)} implied</div><div class="v">${s.away_implied}</div></div>
@@ -2166,6 +2172,7 @@ async function renderFantasy() {
         <div style="color:var(--text-mute);font-size:12px;margin-top:2px">games with posted lines</div></div>
     </div>
     <div id="sleeper-zone"></div>
+    ${offseasonHTML(off)}
     ${draftKit}
     <div class="ls-note">Shares are of TEAM volume: targets for WR/TE/QB, carries for RB.
       The delta column is the money — a riser at 42% beats a flat 60%.</div>
@@ -2210,6 +2217,64 @@ async function renderFantasy() {
 }
 
 /* ============================================================
+   Offseason panel — what changed since the stats were recorded.
+   Coaching changes come from the schedule file itself (each game
+   row is stamped with both head coaches); rosters and rookies
+   from Sleeper's players feed. All data, no news-cycle memory.
+   ============================================================ */
+function offseasonHTML(off) {
+  if (!off || (!off.upcoming_season && !(off.coach_changes || []).length
+               && !off.rosters_live)) return "";
+  const pair = (c) => `
+    <div class="os-row"><span class="os-team">${teamMark(c.team, 20)} ${escapeHtml(teamName(c.team))}</span>
+      <span class="os-before">${escapeHtml(c.before)}</span>
+      <span class="os-arrow">→</span>
+      <span class="os-now">${escapeHtml(c.now)}</span></div>`;
+  const move = (m) => `
+    <div class="os-row"><span class="os-team">${escapeHtml(m.player)}
+        <span class="dk-pt">${escapeHtml(m.position)}</span></span>
+      <span class="os-before">${escapeHtml(teamName(m.from))}</span>
+      <span class="os-arrow">→</span>
+      <span class="os-now">${escapeHtml(teamName(m.to))}</span></div>`;
+  const rookie = (r) => `
+    <div class="os-row"><span class="os-team">${escapeHtml(r.player)}
+        <span class="dk-pt">${escapeHtml(r.position)} · ${teamName(r.team)}</span></span>
+      <span class="os-now">${escapeHtml(r.depth_pos)}${r.depth_order < 99 ? r.depth_order : ""} on depth chart</span></div>`;
+  const box = (title, sub, rows, empty) => `
+    <article class="card os-card">
+      <div class="card-head"><div><div class="player">${title}</div>
+        <div class="subtitle">${sub}</div></div></div>
+      <div class="os-body">${rows || `<p class="loading" style="padding:8px 0">${empty}</p>`}</div>
+    </article>`;
+  const rosterNote = off.rosters_live ? "" : `
+    <div class="warning" style="margin-bottom:12px">⚠️ Roster feed unreachable on the last
+      build — team moves and rookies may be missing here until the next refresh.
+      Coaching changes still current (they come from the schedule file).</div>`;
+  return `
+    <div class="section-title" style="margin-top:22px">The ${off.upcoming_season || "upcoming"} offseason
+      <span class="sub">— what the league changed under last season's numbers. Derived from
+      the schedule and roster feeds on every build, not from a news list that goes stale.</span></div>
+    ${rosterNote}
+    <div class="cards wide">
+      ${box("Coaching changes", "new head coach — last season's tendencies may not carry",
+            (off.coach_changes || []).map(pair).join(""), "No changes detected.")}
+      ${box("New starting QBs", "depth-chart QB1 now vs who actually started late last season",
+            (off.qb_changes || []).map(pair).join(""), off.rosters_live
+              ? "No changes detected." : "Needs the roster feed.")}
+      ${box("Board players who moved", "their stats came from a different offense — flagged, never re-projected",
+            (off.moves || []).map(move).join(""), off.rosters_live
+              ? "Nobody on the board has changed teams." : "Needs the roster feed.")}
+    </div>
+    ${(off.rookies || []).length ? `
+      <div class="section-title" style="margin-top:16px">Rookies
+        <span class="sub">— on rosters now, deliberately unranked: no NFL volume exists,
+        and projecting them would be invention. Depth-chart slot is the honest signal.</span></div>
+      <div class="card" style="padding:8px 16px">
+        <div class="os-rookies">${off.rookies.map(rookie).join("")}</div>
+      </div>` : ""}`;
+}
+
+/* ============================================================
    Draft kit — VORP board, tiers, and live Sleeper draft sync.
    ============================================================ */
 const TIER_COLORS = ["var(--good)", "var(--cyan)", "var(--brand)",
@@ -2219,12 +2284,16 @@ const tierColor = (t) => TIER_COLORS[Math.min(t - 1, TIER_COLORS.length - 1)];
 function draftKitHTML(kit) {
   if (!kit || !(kit.board || []).length) return "";
   const BOARD_SHOWN = 15;
+  const moveNote = (r) => r.moved_from
+    ? ` · <span class="dk-moved" title="Traded or signed since these stats — the volume behind this projection came in ${escapeHtml(teamName(r.moved_from))}'s offense">NEW TEAM, was ${escapeHtml(r.moved_from)}</span>`
+    : r.roster_flag
+      ? ` · <span class="dk-moved">${escapeHtml(r.roster_flag)}</span>` : "";
   const boardRow = (r, i) => `
     <div class="dl-row dk-row" data-ffp="${escapeHtml(ffNorm(r.player))}">
       <span class="dl-rank">${i + 1}</span>
       <span class="dl-main"><strong>${escapeHtml(r.player)}</strong>
         <span class="dl-sub">${escapeHtml(r.position)}${r.pos_rank} · ${teamName(r.team)}
-          · ${r.games} gm${r.small_sample ? " ⚠ small sample" : ""}</span></span>
+          · ${r.games} gm${r.small_sample ? " ⚠ small sample" : ""}${moveNote(r)}</span></span>
       <span class="dk-tier" style="color:${tierColor(r.tier)}">T${r.tier}</span>
       <span class="dl-num" title="projected PPR points per game">${r.proj}</span>
       <span class="dl-num strong pos" title="points per game over the best freely-available ${escapeHtml(r.position)}">+${r.vorp}</span>

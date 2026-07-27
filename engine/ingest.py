@@ -112,10 +112,19 @@ def ingest_nfl(conn, seasons: list[int]) -> dict:
     result = {"games": 0, "player_logs": 0, "skipped": []}
 
     # Games (reachable from the git tree even without release access).
+    # The UPCOMING season rides along even though nobody asked for it:
+    # nflverse publishes next season's schedule in spring and books post
+    # week-1 lines all summer, so pulling it now is what lets the game
+    # scripts (and the schedule's own coach stamps) go live months before
+    # any stats exist. Scores are null, so nothing downstream mistakes the
+    # rows for played games.
+    sched_seasons = set(seasons) | {max(seasons) + 1}
     try:
-        grows = nfl_game_rows(load_schedules(), set(seasons))
+        grows = nfl_game_rows(load_schedules(), sched_seasons)
         result["games"] = db.upsert_games(conn, grows)
-        db.log_ingest(conn, "nfl", "games", f"seasons {min(seasons)}-{max(seasons)}", result["games"])
+        db.log_ingest(conn, "nfl", "games",
+                      f"seasons {min(sched_seasons)}-{max(sched_seasons)}",
+                      result["games"])
     except DataUnavailable as exc:
         result["skipped"].append(f"nfl games: {exc}")
 

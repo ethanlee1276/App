@@ -268,6 +268,22 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
     except Exception as exc:  # noqa: BLE001
         log(f"  ⚠️  journal settle failed: {exc}")
 
+    # NFL schedule refresh: one cached CSV, once a day. Books post next
+    # season's lines all summer and nflverse updates the coach stamps as
+    # staffs change — this is what keeps the game scripts and the
+    # offseason panel current without anyone re-running ingest by hand.
+    try:
+        from . import db as _db
+        from .ingest import nfl_game_rows
+        from .sources.nflverse import load_schedules
+        yr = today.year if today.month >= 3 else today.year - 1
+        rows = nfl_game_rows(load_schedules(), {yr, yr + 1})
+        if rows:
+            n = _db.upsert_games(_db.connect(), rows)
+            log(f"  nfl schedule: {n} row(s) refreshed (seasons {yr}-{yr + 1})")
+    except Exception as exc:  # noqa: BLE001
+        log(f"  ⚠️  nfl schedule refresh failed: {exc}")
+
     if harvest:
         _maybe_harvest(yesterday, log)
 
