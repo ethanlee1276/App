@@ -1385,9 +1385,10 @@ function recLongshotSection(ls) {
   // alignment and the same phone treatment instead of clipping mid-word.
   const rows = (ls.recent || []).map((b) => {
     const won = b.status === "won";
+    const push = b.status === "push";
     const pnl = b.pnl_units || 0;
-    return `<div class="rl-row ${won ? "won" : "lost"}">
-      <span class="rl-icon">${won ? "💣" : "▫️"}</span>
+    return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
+      <span class="rl-icon">${push ? "➖" : won ? "✓" : "✕"}</span>
       <span class="rl-date">${escapeHtml(b.date || "")}</span>
       <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
         <span class="rl-bet">${escapeHtml(b.market_label || "HR")}</span></span>
@@ -1605,7 +1606,7 @@ function recStaleSection(st) {
     const push = b.status === "push";
     const pnl = b.pnl_units || 0;
     return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
-      <span class="rl-icon">${push ? "➖" : won ? "🏷️" : "▫️"}</span>
+      <span class="rl-icon">${push ? "➖" : won ? "✓" : "✕"}</span>
       <span class="rl-date">${escapeHtml(b.date || "")}</span>
       <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
         <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
