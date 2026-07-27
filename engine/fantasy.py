@@ -197,6 +197,13 @@ def buy_sell_board(conn, season: int, limit: int = 12,
     pbp = _pbp_weekly(conn, season)
     rows = []
     for player, p in data["players"].items():
+        # No QBs on this board, on purpose: their scoring is passing-driven
+        # and both expectation models here (xFP and the target/carry fit)
+        # only see targets and carries. A mobile QB reads "actual 18,
+        # volume says 5, SELL HIGH" — which is the model confessing it
+        # can't price the position, not a trade signal.
+        if (p["position"] or "").upper() == "QB":
+            continue
         rate = rates.get(p["position"])
         weeks = sorted(p["weeks"])
         if not rate or len(weeks) < USAGE_MIN_WEEKS:

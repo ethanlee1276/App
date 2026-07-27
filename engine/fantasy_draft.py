@@ -67,15 +67,19 @@ def _players(conn, season: int) -> list[dict]:
         xfp_vals = [m["xfp"] for m in pbp.get(_short_key(player, p["team"]),
                                               {}).values() if "xfp" in m]
         rate = rates.get(pos)
-        if len(xfp_vals) >= USAGE_MIN_WEEKS:
+        # QBs never take the volume paths. xFP values targets and carries —
+        # for a quarterback that is his SCRAMBLES and nothing else, so the
+        # blend rated Josh Allen (24 PPG in the DB) at a 12.6 projection
+        # while a thin-sample rookie with no xFP rows "led" the position.
+        # Passing production has no volume model here; for QBs the honest
+        # projection is their scoring itself, labeled as such.
+        if pos != "QB" and len(xfp_vals) >= USAGE_MIN_WEEKS:
             xppg = sum(xfp_vals) / len(xfp_vals)
             basis = "xfp"
         elif pos != "QB" and rate and (tgt + car) > 0:
             xppg = rate[0] * tgt + rate[1] * car
             basis = "volume"
         else:
-            # QBs (and anyone with no volume signal): production is all we
-            # have. Labeled so the page can say so.
             xppg = ppg
             basis = "points"
         proj = XFP_WEIGHT * xppg + (1.0 - XFP_WEIGHT) * ppg

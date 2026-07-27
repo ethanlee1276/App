@@ -96,6 +96,45 @@ def test_qb_basis_is_labeled_points():
     assert by["WR One"]["basis"] == "volume"
 
 
+def test_qb_projection_ignores_xfp_scramble_value():
+    """xFP sees a QB's carries and nothing of his passing. On live data the
+    blend rated a 24-PPG QB at 12.6 while a thin-sample rookie with no xFP
+    rows led the position. A QB with xFP rows present must still project
+    at his scoring, basis 'points'."""
+    conn = db.connect(":memory:")
+    _seed(conn)
+    rows = []
+    for wk in range(1, 11):
+        # Play-by-play xFP rows for the star QB: scramble value only.
+        rows.append({"sport": "nfl", "season": 2025, "period": f"{wk:03d}",
+                     "game_id": f"AAA-x-{wk:03d}", "player": "Q.Star",
+                     "team": "AAA", "opponent": "OPP", "position": "QB",
+                     "home": 1, "market": "xfp", "value": 5.0})
+    db.upsert_player_logs(conn, rows)
+    kit = build_draft_kit(conn, 2025)
+    star = next(r for r in kit["board"] if r["player"] == "QB Star")
+    assert star["basis"] == "points"
+    assert star["proj"] == star["ppg"] == 22.0
+
+
+def test_buy_sell_board_never_flags_quarterbacks():
+    """The expectation models only see targets and carries; for a QB the
+    gap is the model's blindness, not a trade signal."""
+    from engine.fantasy import buy_sell_board
+    conn = db.connect(":memory:")
+    _seed(conn)
+    rows = []
+    for wk in range(1, 11):
+        # A running QB: enough carries to clear the volume floor, scoring
+        # far above what carries alone support.
+        rows += [_row("Mobile QB", "AAA", "QB", wk, "carries", 9),
+                 _row("Mobile QB", "AAA", "QB", wk, "fp_ppr", 24.0)]
+    db.upsert_player_logs(conn, rows)
+    bs = buy_sell_board(conn, 2025, min_fit_rows=5)
+    names = {r["player"] for r in bs["buy_low"] + bs["sell_high"]}
+    assert "Mobile QB" not in names
+
+
 def test_league_size_moves_the_baseline():
     """A deeper league drafts further down the position, so replacement
     falls and everyone above it gains value."""
