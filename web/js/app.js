@@ -349,21 +349,18 @@ async function loadRecordOnce() {
 async function renderBestBets() {
   const host = document.getElementById("best-bets");
   if (!host) return;
-  const d = state.data || {};
   const rec = await loadRecordOnce();
-  const scan = d.market_scan || {};
+  const sig = tonightSignals();
   const rows = [];
 
-  for (const a of (scan.arbs || []).filter((x) => !x.suspect).slice(0, 2)) {
+  for (const a of sig.arbs.slice(0, 2)) {
     rows.push({ type: "ARB", color: "var(--good)",
       label: `${a.bet}: Over ${a.over.line} ${american(a.over.odds)} (${a.over.book}) + Under ${a.under.line} ${american(a.under.odds)} (${a.under.book})`,
       metric: `+${(a.profit_pct * 100).toFixed(1)}%`,
       why: "locked profit whichever way it lands — price math, no forecast · "
          + "not journaled: with both sides held there is nothing to grade" });
   }
-  const gameBets = (d.game_bets || []).filter((x) => x.recommended);
-  for (const b of gameBets.filter((x) =>
-        (x.reasons || []).some((r) => r.includes("Sharp anchor"))).slice(0, 3)) {
+  for (const b of sig.sharpBets.slice(0, 3)) {
     rows.push({ type: "SHARP", color: "var(--cyan)",
       label: `${b.headline} · ${b.matchup}`,
       metric: `${signedPct(b.ev_per_unit)} EV`,
@@ -371,16 +368,27 @@ async function renderBestBets() {
       why: "soft book pays more than the sharp book's fair price — backtested "
          + "+13.5% against real closes · journaled in the main record" });
   }
+  // A prop the model recommends can ALSO be the one a slow book left cheap.
+  // That's one bet with two reasons, not two bets — it gets a single merged
+  // row here so the list never shows the same prop twice at two prices.
+  const propKey = (p, m) => `${String(p || "").toLowerCase()}|${String(m || "").toLowerCase()}`;
+  const modelByKey = new Map(sig.props.map((r) => [propKey(r.player, r.market), r]));
   const st = rec.stale_flags || {};
   const sampler = (st.wins || 0) + (st.losses || 0) > 0
     ? ` · sampler so far ${st.wins}-${st.losses} (${signedPct(st.roi || 0)})` : "";
-  for (const s of (scan.stale || []).filter((x) => !x.live && !x.started).slice(0, 3)) {
+  const staleShown = sig.stale.slice(0, 3);
+  for (const s of staleShown) {
+    const twin = s.player && modelByKey.get(propKey(s.player, s.market));
     rows.push({ type: "STALE", color: "var(--warn)",
       label: `${s.bet} ${american(s.odds)} (${s.book}) — the field prices it ${american(s.fair_odds)}`,
       metric: `+${(s.gap_pts || 0).toFixed(1)}pt`,
-      why: `one book lagging the field — beat the close 64.8% of 30k measured quotes${sampler} · sampler-journaled at a flat 0.1u` });
+      stake: twin ? twin.stake_units : 0,
+      why: twin
+        ? `one bet, two reasons: the model recommends this side too (${signedPct(twin.edge)} edge, `
+          + `journaled at full stake) AND ${s.book} is lagging the field — take this cheaper price`
+        : `one book lagging the field — beat the close 64.8% of 30k measured quotes${sampler} · sampler-journaled at a flat 0.1u` });
   }
-  for (const p of (d.long_shots || []).filter((x) => !x.live).slice(0, 2)) {
+  for (const p of sig.hr.slice(0, 2)) {
     rows.push({ type: "HR", color: "var(--brand)",
       label: `${p.player} — ${p.market_label} ${american(p.odds)} (${p.book})`,
       metric: pct(p.model_prob),
@@ -392,27 +400,47 @@ async function renderBestBets() {
     ? `model pick that cleared every gate · journal: ${perf.wins}-${perf.losses} (${signedPct(perf.roi || 0)} ROI)`
     : "model pick that cleared every gate — graded nightly on the Record page";
   // Model-driven game bets (non-sharp) and props share the MODEL tier.
-  // Props honor YOUR sliders — this list and the boards below can never
-  // disagree about what qualifies.
-  for (const b of gameBets.filter((x) =>
-        !(x.reasons || []).some((r) => r.includes("Sharp anchor"))).slice(0, 2)) {
+  // Both honor YOUR sliders via tonightSignals, so this list, the tiles
+  // and the boards below can never disagree about what qualifies.
+  const modelBetsShown = sig.modelBets.slice(0, 2);
+  for (const b of modelBetsShown) {
     rows.push({ type: "MODEL", color: "var(--text-mute)",
       label: `${b.headline} · ${b.matchup} ${american(b.odds)}`,
       metric: signedPct(b.edge), stake: b.stake_units, why: propWhy });
   }
-  for (const r of (d.recommendations || []).filter(passesFilters).slice(0, 3)) {
+  const staleKeys = new Set(staleShown.filter((s) => s.player)
+    .map((s) => propKey(s.player, s.market)));
+  const propsNotMerged = sig.props.filter((r) => !staleKeys.has(propKey(r.player, r.market)));
+  const propsShown = propsNotMerged.slice(0, 3);
+  for (const r of propsShown) {
     rows.push({ type: "MODEL", color: "var(--text-mute)",
       label: `${r.player} ${r.side} ${r.line} ${r.market_label} ${american(r.odds)} (${r.book})`,
       metric: signedPct(r.edge), stake: r.stake_units, why: propWhy });
   }
 
   if (!rows.length) { host.innerHTML = ""; return; }
+  // Reconcile with the tiles OUT LOUD: this list previews the recommended
+  // bets and adds the untracked signal families, so its row count and the
+  // "Recommended bets" tile measure different things — say exactly how.
+  const nBets = sig.props.length + sig.sharpBets.length + sig.modelBets.length;
+  const heldBack = (propsNotMerged.length - propsShown.length)
+    + (sig.modelBets.length - modelBetsShown.length)
+    + Math.max(0, sig.sharpBets.length - 3);
+  const extras = [];
+  if (staleShown.length || sig.hr.length) extras.push(
+    `${Math.min(3, staleShown.length) + Math.min(2, sig.hr.length)} sampler signal(s) tracked separately at a flat 0.1u (never in the headline record)`);
+  if (sig.arbs.length) extras.push(`${Math.min(2, sig.arbs.length)} arb(s) — pure price math, not journaled`);
+  const ledger = `<p style="padding:9px 14px 0;margin:0;font-size:12px;color:var(--text-mute)">
+    <b>${nBets} recommended bet${nBets === 1 ? "" : "s"} tonight</b> (the tile above)${
+      heldBack > 0 ? ` — top ${nBets - heldBack} here, all ${nBets} in the cards and Game bets sections below` : ", all shown here"}${
+      extras.length ? " · plus " + extras.join(" · ") : ""}.</p>`;
   host.innerHTML = `
     <div class="section-title" style="margin-top:8px">Best bets tonight
       <span class="sub">— every signal ranked by what it has MEASURABLY returned, strongest
       evidence first. Each row says where its number comes from; the Record page grades
       all of it nightly.</span></div>
     <div class="card" style="padding:0">
+      ${ledger}
       ${rows.slice(0, 10).map((r) => `
         <div style="display:flex;gap:12px;align-items:flex-start;padding:11px 14px;
                     border-bottom:1px solid rgba(255,255,255,.05)">
@@ -527,19 +555,48 @@ function gameBetCard(r) {
 /* ============================================================
    Recommended view
    ============================================================ */
+/* ============================================================
+   ONE definition of "what are we betting tonight."
+   The stats tiles, Best Bets, the game cards and the boards all read
+   from this — never from their own filters — so no two places on the
+   site can show different counts for the same question. Props and game
+   bets honor the user's sliders; stale flags, long shots and arbs are
+   price-structure signals the sliders don't apply to, and they are
+   never counted as recommended bets.
+   ============================================================ */
+function sharpBet(b) {
+  return (b.reasons || []).some((r) => r.includes("Sharp anchor"));
+}
+
+function tonightSignals() {
+  const d = state.data || {};
+  const scan = d.market_scan || {};
+  const bets = (d.game_bets || []).filter(passesGameBet);
+  return {
+    props: (d.recommendations || []).filter(passesFilters),
+    sharpBets: bets.filter(sharpBet),
+    modelBets: bets.filter((b) => !sharpBet(b)),
+    arbs: (scan.arbs || []).filter((x) => !x.suspect),
+    stale: (scan.stale || []).filter((x) => !x.live && !x.started),
+    hr: (d.long_shots || []).filter((x) => !x.live),
+  };
+}
+
 function renderStats() {
   const d = state.data;
-  const recs = d.recommendations.map((r) => ({ ...r, _ok: passesFilters(r) }));
-  const rec = recs.filter((r) => r._ok);
-  const avgEdge = rec.reduce((s, r) => s + r.edge, 0) / (rec.length || 1);
-  const exposure = rec.reduce((s, r) => s + r.stake_units, 0);
+  const sig = tonightSignals();
+  const staked = [...sig.props, ...sig.sharpBets, ...sig.modelBets];
+  const avgEdge = staked.reduce((s, r) => s + (r.edge || 0), 0) / (staked.length || 1);
+  const exposure = staked.reduce((s, r) => s + (r.stake_units || 0), 0);
   const ud = unitDollars();
+  const nb = sig.sharpBets.length + sig.modelBets.length;
   const tiles = [
     { k: "Props analyzed", to: d.counts.props_analyzed, dec: 0 },
-    { k: "Recommended", to: rec.length, dec: 0 },
-    { k: "Avg edge", to: rec.length ? avgEdge * 100 : 0, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "", cls: "pos" },
+    { k: "Recommended bets", to: staked.length, dec: 0,
+      sub: `${sig.props.length} prop${sig.props.length === 1 ? "" : "s"} · ${nb} game bet${nb === 1 ? "" : "s"} — all journaled` },
+    { k: "Avg edge", to: staked.length ? avgEdge * 100 : 0, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "", cls: "pos" },
     ud > 0
-      ? { k: "Suggested exposure", to: exposure * ud, dec: 2, pre: "$", sub: `${exposure.toFixed(2)}u` }
+      ? { k: "Suggested exposure", to: exposure * ud, dec: 2, pre: "$", sub: `${exposure.toFixed(2)}u across all ${staked.length} bet(s)` }
       : { k: "Suggested exposure", to: exposure, dec: 2, suf: "u" },
   ];
   const fmt = (t) => (t.pre || "") + Number(t.to).toFixed(t.dec) + (t.suf || "");
@@ -1228,7 +1285,12 @@ function renderTrending() {
   const cols = [
     { title: "🔥 Trending Up", sub: "Biggest recent-form risers", rows: risers, metric: (r) => `<span class="val pos">+${r.trend_delta.toFixed(2)}</span>`, stroke: "var(--good)" },
     { title: "❄️ Cooling Off", sub: "Production sliding vs prior form", rows: fallers, metric: (r) => `<span class="val neg">${r.trend_delta.toFixed(2)}</span>`, stroke: "var(--bad)" },
-    { title: "💎 Biggest Edges", sub: "Model vs the sportsbook line", rows: edges, metric: (r) => `<span class="val cyan">${signedPct(r.edge)}</span>`, stroke: "var(--cyan)" },
+    { title: "💎 Biggest Edges", sub: "Model vs the sportsbook line — a big edge is not automatically a play; the approval gates decide", rows: edges, metric: (r) => `<span class="val cyan">${signedPct(r.edge)}</span>`, stroke: "var(--cyan)",
+      // Say whether each edge actually IS a bet, so this column can never
+      // contradict the Recommended page.
+      tag: (r) => passesFilters(r)
+        ? `<span style="color:var(--good)">✓ recommended</span>`
+        : `<span style="opacity:.55">pass — didn't clear the gates</span>` },
   ];
   const host = document.getElementById("trending");
   host.innerHTML = cols.map((c) => `
@@ -1245,7 +1307,7 @@ function trendRow(r, i, col) {
     <div class="trow" onclick="openPlayer('${escapeHtml(r.player).replace(/'/g, "")}')">
       <div class="trank">${i + 1}</div>
       <div class="who"><div class="nm">${escapeHtml(r.player)}</div>
-        <div class="mk">${escapeHtml(r.team)} · ${escapeHtml(r.market_label)}</div></div>
+        <div class="mk">${escapeHtml(r.team)} · ${escapeHtml(r.market_label)}${col.tag ? ` · ${col.tag(r)}` : ""}</div></div>
       <div class="mini">${sparkline(vals, { w: 78, h: 30, stroke: col.stroke })}</div>
       ${col.metric(r)}
     </div>`;
@@ -1614,11 +1676,13 @@ async function renderRecord() {
                       : "grades the decision vs the close, not the result")}
     </div>
     ${recDisclosure("What counts as a tracked bet", `Journals every
-      <strong>Recommended</strong> pick — player props and sharp-anchor game bets
-      (moneylines &amp; totals) — at the real book price shown when it was
-      recommended. One entry per player &amp; market per day. Long Shots are
-      tracked in their own bucket below — never mixed into this record — and
-      the Edge Board is a watchlist, not tracked bets.`)}
+      <strong>Recommended</strong> bet — the same count the "Recommended bets"
+      tile shows on each sport's board: player props plus game bets (moneyline,
+      spread &amp; totals, sharp-anchor and model alike) — at the real book price
+      shown when it was recommended. One entry per player &amp; market per day.
+      Long Shots and stale-line flags are tracked in their own buckets at a flat
+      0.1u — never mixed into this record — and the Edge Board is a watchlist,
+      not tracked bets.`)}
     ${unstaked}
     ${small}
     ${recCurveChart(d.curve)}
@@ -1771,14 +1835,16 @@ function edgeBoardRows() {
       label: `${r.player} · ${r.side} ${r.line} ${r.market_label}`,
       sub: `${r.book || ""} · ${teamName(r.team)} vs ${teamName(r.opponent)}`,
       odds: r.odds, model: r.hit_prob, implied: r.fair_prob,
-      ev: r.ev_per_unit, grade: r.grade, rec: r.recommended,
+      // ✅ means "on the Recommended page RIGHT NOW", so it must apply the
+      // user's sliders — the build-time flag can disagree with them.
+      ev: r.ev_per_unit, grade: r.grade, rec: passesFilters(r),
     }));
   const games = (state.data.game_bets || [])
     .filter((b) => b.grade !== "Pass" && (b.ev_per_unit || 0) > 0.005)
     .map((b) => ({
       label: b.pick_label, sub: `${b.matchup} · ${b.market_label}`,
       odds: b.odds, model: b.win_prob, implied: b.fair_prob,
-      ev: b.ev_per_unit, grade: b.grade, rec: b.recommended,
+      ev: b.ev_per_unit, grade: b.grade, rec: passesGameBet(b),
     }));
   return [...props, ...games].sort((a, b) => b.ev - a.ev);
 }
@@ -1817,7 +1883,8 @@ function renderEdgeBoard() {
     return;
   }
   note.innerHTML = `${rows.length} positively-priced bet(s) on the board ·
-    every number vs a real book price · ✅ = also on the Recommended page`;
+    every number vs a real book price · ✅ = clears your current sliders on the
+    Recommended page; everything else is a watchlist, not a tracked bet`;
   host.innerHTML = EDGE_BANDS.map(([title, test]) => {
     const band = rows.filter((r) => test(r.odds));
     if (!band.length) return "";
