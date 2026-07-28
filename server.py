@@ -132,8 +132,15 @@ class Handler(BaseHTTPRequestHandler):
             if live.is_file():
                 self._send(200, live.read_bytes(), ".json")
             else:
-                self._send(200, json.dumps({"date": "", "status": "not built",
-                                            "games": [], "recommendations": []}).encode(), ".json")
+                # Full shared-schema shape even when nothing is built — a
+                # stub missing keys crashed the frontend renderers once.
+                self._send(200, json.dumps({
+                    "date": "", "status": "not built", "sport": "nba",
+                    "games": [], "recommendations": [], "game_bets": [],
+                    "long_shots": [], "longshot_watch": [],
+                    "market_scan": {}, "counts": {"props_analyzed": 0,
+                                                  "recommended": 0},
+                }).encode(), ".json")
             return
         try:
             if sport == "mlb":

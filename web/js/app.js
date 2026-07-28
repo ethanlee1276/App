@@ -203,6 +203,23 @@ function showSkeleton() {
   if (host) host.innerHTML = Array.from({ length: 6 }, () => `<div class="skeleton-card"></div>`).join("");
 }
 
+/* Whatever a feed forgot to send must not crash the renderers — a slate
+   missing `counts` used to throw mid-renderAll and leave the PREVIOUS
+   sport's page on screen under the new sport's branding. Every slate
+   passes through here so each renderer can trust the shared keys. */
+function normalizeSlate(d) {
+  d = (d && typeof d === "object") ? d : {};
+  d.games = d.games || [];
+  d.recommendations = d.recommendations || [];
+  d.game_bets = d.game_bets || [];
+  d.long_shots = d.long_shots || [];
+  d.longshot_watch = d.longshot_watch || [];
+  d.market_scan = d.market_scan || {};
+  d.counts = d.counts || {};
+  if (d.counts.props_analyzed == null) d.counts.props_analyzed = d.recommendations.length;
+  return d;
+}
+
 async function load(quiet = false) {
   state.quiet = quiet;                       // silent re-render (no entrance anim)
   if (!quiet) showSkeleton();
@@ -213,10 +230,18 @@ async function load(quiet = false) {
   try {
     const res = await fetch(`${meta.api}?${params}`);
     if (!res.ok) throw new Error("api");
-    state.data = await res.json();
+    state.data = normalizeSlate(await res.json());
   } catch (e) {
-    const res = await fetch(meta.fallback);
-    state.data = await res.json();
+    // The fallback file can be missing too (a sport that has never been
+    // built). An honest empty slate beats an unhandled rejection that
+    // strands the old sport's page on screen.
+    try {
+      const res = await fetch(meta.fallback);
+      if (!res.ok) throw new Error("fallback");
+      state.data = normalizeSlate(await res.json());
+    } catch (e2) {
+      state.data = normalizeSlate({ date: "", status: "not built" });
+    }
   }
   renderAll();
   state.lastLoad = Date.now();
@@ -317,7 +342,11 @@ function renderEmptySlate() {
   }
   const live = String(state.data.generated_from || "").startsWith("live");
   el.style.display = "";
-  el.innerHTML = live
+  el.innerHTML = state.data.status === "not built"
+    ? `<div class="es-icon">⏳</div><div class="es-title">This slate hasn't been built yet</div>
+       <div class="es-sub">If <code>launch.py</code> is running, it builds every sport on its next
+       refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.</div>`
+    : live
     ? `<div class="es-icon">🗓️</div><div class="es-title">No games on the board right now</div>
        <div class="es-sub">Nothing is scheduled or in progress for this slate yet. Check back closer to
        game time — the board refreshes automatically.</div>`
