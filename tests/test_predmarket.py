@@ -249,13 +249,6 @@ def test_feed_ranks_by_score_then_size():
     assert feed[0]["signals"] and feed[0]["score"] > feed[1]["score"]
 
 
-if __name__ == "__main__":
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn(); print(f"  ok  {fn.__name__}")
-    print(f"\n{len(fns)} tests passed.")
-
-
 def test_near_settled_markets_are_not_flagged_as_informed_flow():
     """Measured on the first 131 stored flags: 40 of them (31%, $753K) sat
     at 0.95+ scoring 71-73. A buy at 96c has four cents of upside and a
@@ -287,3 +280,44 @@ def test_near_settled_markets_are_not_flagged_as_informed_flow():
     assert pm.store_flags(conn, feed) == 1          # only the live one
     kept = conn.execute("SELECT tx, price FROM pm_flags").fetchall()
     assert [r["tx"] for r in kept] == ["a"]
+
+
+def test_resolution_rotation_never_starves_new_slugs():
+    """Oldest-first checking let long-horizon markets ("…by end of 2026")
+    hold every resolution slot forever while last night's sports markets
+    were never looked at. The random rotation must reach a resolvable slug
+    parked behind a wall of older unresolvables within a few cycles."""
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    pm.ensure_tables(conn)
+    feed = [{"tx": f"t{i}", "ts": i, "wallet": f"w{i}", "slug": f"forever-{i}",
+             "market": "M", "outcome": "Yes", "side": "BUY",
+             "entry_price": 0.5, "usd": 9000, "score": 50}
+            for i in range(30)]
+    feed.append({"tx": "new", "ts": 999, "wallet": "wn", "slug": "tonight",
+                 "market": "M", "outcome": "Yes", "side": "BUY",
+                 "entry_price": 0.5, "usd": 9000, "score": 50})
+    assert pm.store_flags(conn, feed) == 31
+
+    def fake_fetch(slug):
+        if slug == "tonight":
+            return [{"closed": True, "outcomes": '["Yes","No"]',
+                     "outcomePrices": '["1","0"]'}]
+        return [{"closed": False}]
+
+    settled = 0
+    for _ in range(25):                 # miss odds ≈ 0.19^25 — effectively 0
+        settled += pm.resolve_flags(conn, max_slugs=25, fetch=fake_fetch)
+        if settled:
+            break
+    assert settled == 1
+    row = conn.execute("SELECT status FROM pm_flags WHERE tx='new'").fetchone()
+    assert row["status"] == "settled"
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")

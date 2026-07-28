@@ -493,9 +493,15 @@ def resolve_flags(conn, max_slugs: int = 25, fetch=None) -> int:
     side at (1-p). Bounded slug fetches per run; results cache anyway."""
     ensure_tables(conn)
     fetch = fetch or fetch_market_by_slug
+    # RANDOM, not oldest-first. Oldest-first starved the loop: the oldest
+    # open flags are exactly the long-horizon markets ("…by end of 2026")
+    # that won't resolve for months, and they held every slot forever
+    # while last night's sports markets — the ones that DO resolve — were
+    # never checked. A random rotation reaches every open slug within a
+    # few cycles, and the per-slug fetch cache keeps the cost identical.
     slugs = [r["slug"] for r in conn.execute(
         "SELECT DISTINCT slug FROM pm_flags WHERE status='open' "
-        "ORDER BY ts LIMIT ?", (max_slugs,))]
+        "ORDER BY RANDOM() LIMIT ?", (max_slugs,))]
     settled = 0
     now = int(time.time())
     for slug in slugs:
