@@ -276,7 +276,6 @@ function renderAll() {
   renderStats();
   renderEmptySlate();
   renderBestBets();
-  renderTopPlays();
   renderGames();
   renderGameBets();
   renderRecommended();
@@ -346,14 +345,18 @@ async function renderBestBets() {
     rows.push({ type: "ARB", color: "var(--good)",
       label: `${a.bet}: Over ${a.over.line} ${american(a.over.odds)} (${a.over.book}) + Under ${a.under.line} ${american(a.under.odds)} (${a.under.book})`,
       metric: `+${(a.profit_pct * 100).toFixed(1)}%`,
-      why: "locked profit whichever way it lands — price math, no forecast involved" });
+      why: "locked profit whichever way it lands — price math, no forecast · "
+         + "not journaled: with both sides held there is nothing to grade" });
   }
-  for (const b of (d.game_bets || []).filter((x) => x.recommended &&
+  const gameBets = (d.game_bets || []).filter((x) => x.recommended);
+  for (const b of gameBets.filter((x) =>
         (x.reasons || []).some((r) => r.includes("Sharp anchor"))).slice(0, 3)) {
     rows.push({ type: "SHARP", color: "var(--cyan)",
       label: `${b.headline} · ${b.matchup}`,
       metric: `${signedPct(b.ev_per_unit)} EV`,
-      why: "soft book pays more than the sharp book's fair price — backtested +13.5% against real closes" });
+      stake: b.stake_units,
+      why: "soft book pays more than the sharp book's fair price — backtested "
+         + "+13.5% against real closes · journaled in the main record" });
   }
   const st = rec.stale_flags || {};
   const sampler = (st.wins || 0) + (st.losses || 0) > 0
@@ -362,22 +365,32 @@ async function renderBestBets() {
     rows.push({ type: "STALE", color: "var(--warn)",
       label: `${s.bet} ${american(s.odds)} (${s.book}) — the field prices it ${american(s.fair_odds)}`,
       metric: `+${(s.gap_pts || 0).toFixed(1)}pt`,
-      why: `one book lagging the field — taking the lag beat the close 64.8% of 30k measured quotes${sampler}` });
+      why: `one book lagging the field — beat the close 64.8% of 30k measured quotes${sampler} · sampler-journaled at a flat 0.1u` });
   }
   for (const p of (d.long_shots || []).filter((x) => !x.live).slice(0, 2)) {
     rows.push({ type: "HR", color: "var(--brand)",
       label: `${p.player} — ${p.market_label} ${american(p.odds)} (${p.book})`,
       metric: pct(p.model_prob),
-      why: "the strict HR tier — measured +11% ROI over its first 214 graded picks" });
+      why: "the strict HR tier — measured +11% ROI over its first 214 graded "
+         + "picks · tracked in the long-shot bucket (flat 0.1u)" });
   }
   const perf = rec.overall || {};
   const propWhy = perf.settled
     ? `model pick that cleared every gate · journal: ${perf.wins}-${perf.losses} (${signedPct(perf.roi || 0)} ROI)`
     : "model pick that cleared every gate — graded nightly on the Record page";
-  for (const r of (d.recommendations || []).filter((x) => x.recommended).slice(0, 2)) {
+  // Model-driven game bets (non-sharp) and props share the MODEL tier.
+  // Props honor YOUR sliders — this list and the boards below can never
+  // disagree about what qualifies.
+  for (const b of gameBets.filter((x) =>
+        !(x.reasons || []).some((r) => r.includes("Sharp anchor"))).slice(0, 2)) {
+    rows.push({ type: "MODEL", color: "var(--text-mute)",
+      label: `${b.headline} · ${b.matchup} ${american(b.odds)}`,
+      metric: signedPct(b.edge), stake: b.stake_units, why: propWhy });
+  }
+  for (const r of (d.recommendations || []).filter(passesFilters).slice(0, 3)) {
     rows.push({ type: "MODEL", color: "var(--text-mute)",
       label: `${r.player} ${r.side} ${r.line} ${r.market_label} ${american(r.odds)} (${r.book})`,
-      metric: signedPct(r.edge), why: propWhy });
+      metric: signedPct(r.edge), stake: r.stake_units, why: propWhy });
   }
 
   if (!rows.length) { host.innerHTML = ""; return; }
@@ -394,59 +407,14 @@ async function renderBestBets() {
                 font-weight:800;flex-shrink:0">${r.type}</span>
           <span style="flex:1;min-width:0"><strong>${escapeHtml(r.label)}</strong>
             <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">${escapeHtml(r.why)}</span></span>
-          <span style="font-weight:800;white-space:nowrap">${escapeHtml(r.metric)}</span>
+          <span style="text-align:right;white-space:nowrap"><span style="font-weight:800">${escapeHtml(r.metric)}</span>
+            ${r.stake > 0 ? `<span style="display:block;color:var(--text-mute);font-size:11.5px">${r.stake.toFixed(2)}u</span>` : ""}</span>
         </div>`).join("")}
+      <p style="padding:9px 14px;margin:0;font-size:12px;color:var(--text-mute)">
+        Full lists: Edge Board (every prop) · Scanner (every price gap) ·
+        Long Shots (the whole HR board) · Record (how every bucket above has
+        actually graded).</p>
     </div>`;
-}
-
-/* ============================================================
-   Top plays — best bets across props AND game bets
-   ============================================================ */
-function topPlaysList() {
-  const props = (state.data.recommendations || []).filter(passesFilters).map((r) => ({
-    kind: "prop", grade: r.grade, conf: r.confidence, edge: r.edge, stake: r.stake_units,
-    team: r.team, live: r.live, headshot: r.headshot,
-    label: `${r.player} · ${r.side} ${r.line} ${r.market_label}`,
-    sub: `${teamName(r.team)} vs ${teamName(r.opponent)}`, odds: r.odds,
-  }));
-  const games = (state.data.game_bets || []).filter(passesGameBet).map((r) => ({
-    kind: "game", grade: r.grade, conf: r.confidence, edge: r.edge, stake: r.stake_units,
-    team: r.team, live: r.live,
-    label: r.pick_label, sub: `${r.matchup} · ${r.market_label}`, odds: r.odds,
-  }));
-  return [...props, ...games].sort((a, b) => b.conf - a.conf || b.edge - a.edge).slice(0, 5);
-}
-
-function renderTopPlays() {
-  const rows = topPlaysList();
-  const title = document.getElementById("topplays-title");
-  const host = document.getElementById("topplays");
-  if (!rows.length) { title.style.display = "none"; host.innerHTML = ""; return; }
-  title.style.display = "";
-  const ud = unitDollars();
-  host.innerHTML = rows.map((r, i) => {
-    // A teamless row (a game total) used to fall back to the rank number,
-    // which then rendered twice — "4  4" — since the rank column already
-    // shows it. A total gets the same ▲/▼ badge its card uses.
-    const badge = r.team ? teamMark(r.team, 26)
-      : `<span class="total-badge ${/under/i.test(r.label) ? "under" : "over"}"
-           style="width:26px;height:26px;font-size:13px">${/under/i.test(r.label) ? "▼" : "▲"}</span>`;
-    const stake = ud > 0 ? money(stakeDollars(r.stake)) : `${r.stake.toFixed(2)}u`;
-    return `
-      <div class="tp-row" style="--grade-color:${gradeColor(r.grade)}">
-        <div class="tp-rank-n">${i + 1}</div>
-        <div class="tp-mark">${badge}</div>
-        <div class="tp-main">
-          <div class="tp-label">${escapeHtml(r.label)}${r.live ? ` <span class="tp-live">● LIVE</span>` : ""}</div>
-          <div class="tp-sub">${escapeHtml(r.sub)} · ${american(r.odds)}</div>
-        </div>
-        <div class="tp-metric"><div class="k">Edge</div><div class="v pos">${signedPct(r.edge)}</div></div>
-        <div class="tp-metric"><div class="k">Conf</div><div class="v">${r.conf.toFixed(1)}</div></div>
-        <div class="tp-metric"><div class="k">Stake</div><div class="v">${stake}</div></div>
-        <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>
-      </div>`;
-  }).join("");
-  revealChildren(host);
 }
 
 /* ============================================================
@@ -3689,7 +3657,7 @@ function bind() {
     load();
   });
   document.getElementById("show-all").addEventListener("change", (e) => {
-    state.showAll = e.target.checked; renderTopPlays(); renderGameBets(); renderRecommended();
+    state.showAll = e.target.checked; renderGameBets(); renderRecommended();
   });
   document.getElementById("player-search").addEventListener("input", (e) => {
     state.search = e.target.value; renderPlayers();
@@ -3710,7 +3678,7 @@ function bind() {
     } catch (e) {}
     updateUnitNote();
     renderStats();
-    renderTopPlays();
+    renderBestBets();
     renderGameBets();
     renderRecommended();
     renderPlayers();

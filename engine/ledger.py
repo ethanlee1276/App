@@ -168,8 +168,20 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
             player = (r.get("matchup") or "").replace(" ", "")
             market = "total"
             side, line = (r.get("side") or "OVER").upper(), float(r.get("line") or 0)
+        elif bt == "spread":
+            # player = the team laid. The line is stored NEGATED so the
+            # standard side-aware grader applies unchanged: a spread bet
+            # covers when the team's margin beats the number, i.e.
+            # margin > -spread — so actual = margin, line = -spread,
+            # side = OVER, and margin == -spread grades as the push it is.
+            player, market = r.get("team", ""), "spread"
+            side, line = "OVER", -float(r.get("line") or 0)
+        elif bt == "team_total":
+            player = r.get("team", "")
+            market = "team_total"
+            side, line = (r.get("side") or "OVER").upper(), float(r.get("line") or 0)
         else:
-            continue                     # run-line journaling: future work
+            continue
         if not player:
             continue
         stake_units = float(r.get("stake_units", 0) or 0)
@@ -432,6 +444,25 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             _settle_one(conn, b, float(g["home_score"]) + float(g["away_score"]), None)
             settled += 1
             continue
+        if b["market"] in ("spread", "team_total"):
+            # player = the team; its own margin (spread) or score (team
+            # total) is the actual the grader compares to the stored line.
+            g = hist_conn.execute(
+                f"SELECT home, away, home_score, away_score FROM games "
+                f"WHERE {where} AND (home=? OR away=?) "
+                f"AND home_score IS NOT NULL AND away_score IS NOT NULL",
+                (*wargs, b["player"], b["player"])).fetchone()
+            if g is None:
+                continue
+            home_side = g["home"] == b["player"]
+            if b["market"] == "spread":
+                actual = (g["home_score"] - g["away_score"]) if home_side \
+                    else (g["away_score"] - g["home_score"])
+            else:
+                actual = g["home_score"] if home_side else g["away_score"]
+            _settle_one(conn, b, float(actual), None)
+            settled += 1
+            continue
         row = hist_conn.execute(
             f"SELECT value FROM player_game_logs WHERE {where} "
             f"AND market=? AND player=?",
@@ -474,7 +505,9 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     day_players: dict = {}
     voided = 0
     for b in conn.execute(q, args).fetchall():
-        if b["market"] in ("moneyline", "total") or not b["date"]:
+        # Team-level markets never void via the no-show rule — teams play.
+        if b["market"] in ("moneyline", "total", "spread", "team_total") \
+                or not b["date"]:
             continue
         key = (b["sport"], b["date"])
         where, wargs = _hist_where(b)

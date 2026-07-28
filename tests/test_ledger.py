@@ -823,6 +823,63 @@ def test_nfl_no_show_voids_only_when_the_week_is_final():
     assert b["status"] == "void"
 
 
+def test_spread_and_team_total_picks_journal_and_settle():
+    """The last unjournaled game-bet types. A -3.5 favorite covering by 4
+    wins, covering by exactly the number would push, and a team total
+    grades against the team's own score."""
+    from engine import db as hist_db
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    result = {"sport": "mlb", "date": "2026-07-28", "game_bets": [
+        {"bet_type": "spread", "team": "NYY", "line": -1.5, "odds": 120,
+         "matchup": "BOS @ NYY", "recommended": True, "grade": "Play",
+         "stake_units": 0.5, "win_prob": 0.55, "edge": 0.04,
+         "confidence": 6.5, "book": "DK"},
+        {"bet_type": "team_total", "team": "BOS", "side": "Under",
+         "line": 4.5, "odds": -110, "matchup": "BOS @ NYY",
+         "recommended": True, "grade": "Lean", "stake_units": 0.3,
+         "win_prob": 0.54, "edge": 0.03, "confidence": 6.0, "book": "FD"},
+    ]}
+    assert ledger.log_recommendations(conn, result) == 2
+
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_games(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-28",
+         "game_id": "BOS@NYY", "home": "NYY", "away": "BOS",
+         "home_score": 6, "away_score": 3, "spread": -1.5, "total": 8.5,
+         "roof": "", "surface": "", "temp": None, "wind": None,
+         "extra": None}])
+    assert ledger.settle_from_history(conn, hist, sport="mlb") == 2
+    spread = conn.execute(
+        "SELECT * FROM bets WHERE market='spread'").fetchone()
+    # NYY won by 3 laying 1.5 — covers (actual margin 3 > stored line 1.5).
+    assert spread["status"] == "won" and spread["actual"] == 3.0
+    tt = conn.execute(
+        "SELECT * FROM bets WHERE market='team_total'").fetchone()
+    # BOS scored 3; Under 4.5 wins.
+    assert tt["status"] == "won" and tt["actual"] == 3.0
+
+
+def test_spread_lands_exactly_on_the_number_pushes():
+    from engine import db as hist_db
+    conn = _conn()
+    result = {"sport": "mlb", "date": "2026-07-28", "game_bets": [
+        {"bet_type": "spread", "team": "SD", "line": -2.0, "odds": -105,
+         "matchup": "SD @ LAD", "recommended": True, "grade": "Play",
+         "stake_units": 0.5, "confidence": 6.5, "edge": 0.03}]}
+    ledger.log_recommendations(conn, result)
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_games(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-28",
+         "game_id": "SD@LAD", "home": "LAD", "away": "SD",
+         "home_score": 3, "away_score": 5, "spread": 2.0, "total": 8.0,
+         "roof": "", "surface": "", "temp": None, "wind": None,
+         "extra": None}])
+    ledger.settle_from_history(conn, hist, sport="mlb")
+    b = conn.execute("SELECT * FROM bets").fetchone()
+    assert b["status"] == "push" and b["pnl_units"] == 0.0
+
+
 def _stale_result(**over):
     base = {"sport": "mlb", "date": "2026-07-27", "market_scan": {"stale": [
         # Pre-game, settleable: journals.
