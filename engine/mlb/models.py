@@ -199,6 +199,7 @@ class MLBProp:
     career_avg: float
     vs_pitcher_avg: Optional[float]      # career average vs today's starter
     lines: list                          # engine.models.SportsbookLine
+    person_id: int = 0                   # MLB Stats API id (splits lookups)
     bats: str = "R"                      # hitter handedness ("L"/"R"/"S")
     throws: str = "R"                    # pitcher handedness (SP props)
     lineup_spot: int = 0                 # 1-9 confirmed; 0 = not in lineup yet
@@ -209,6 +210,11 @@ class MLBProp:
     # handedness bump applies instead.
     platoon_factor: float = 1.0
     platoon_note: str = ""
+    # Official season splits vs LHP/RHP from the MLB Stats API
+    # ({"vl": {"pa", "slg", "hr"}, "vr": {...}}); None = not fetched. The
+    # HR model reads the power split; the matchup layer uses the SLG split
+    # as a fallback when our own logs can't measure the player.
+    platoon_official: Optional[dict] = None
     # Measured opportunity (engine.mlb.opportunity): tonight's expected PA
     # from slot + run environment vs the player's OWN average. 1.0 =
     # unmeasured, in which case the static lineup-spot bump applies instead.

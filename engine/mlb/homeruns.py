@@ -99,13 +99,34 @@ def pitcher_multiplier(prop: MLBProp, game: MLBGame) -> tuple[float, list[str]]:
         reasons.append(f"{pitcher.name} suppresses power to {bats}HB "
                        f"({slg_allowed:.3f} SLG allowed)")
 
-    # Platoon advantage.
-    if bats != throws and bats in ("L", "R"):
-        mult *= 1.06
-        reasons.append(f"Platoon edge — {bats}HB vs {throws}HP")
-    elif bats == throws:
-        mult *= 0.95
-        reasons.append(f"Same-side matchup — {bats}HB vs {throws}HP")
+    # Platoon advantage — the player's OWN measured power split when the
+    # official season numbers carry a real sample; the flat ±6%/5% guess
+    # only when they don't. Some hitters genuinely can't touch lefties and
+    # some have no split at all — a flat bump treats them identically.
+    platoon_applied = False
+    off = getattr(prop, "platoon_official", None)
+    side = (off or {}).get("vl" if throws == "L" else "vr")
+    other = (off or {}).get("vr" if throws == "L" else "vl")
+    if side and other:
+        pa_s, pa_o = side.get("pa", 0), other.get("pa", 0)
+        rate_all = ((side.get("hr", 0) + other.get("hr", 0)) / (pa_s + pa_o)
+                    if pa_s + pa_o else 0.0)
+        if pa_s >= 40 and pa_s + pa_o >= 150 and rate_all > 0:
+            raw = (side.get("hr", 0) / pa_s) / rate_all
+            w = pa_s / (pa_s + 130.0)         # shrink thin sides hard
+            pm = clamp(1.0 + (raw - 1.0) * w, 0.75, 1.30)
+            mult *= pm
+            platoon_applied = True
+            reasons.append(
+                f"Measured power split: {side.get('hr', 0)} HR in {pa_s} PA "
+                f"vs {throws}HP ({(pm - 1) * 100:+.0f}% vs his overall rate)")
+    if not platoon_applied:
+        if bats != throws and bats in ("L", "R"):
+            mult *= 1.06
+            reasons.append(f"Platoon edge — {bats}HB vs {throws}HP")
+        elif bats == throws:
+            mult *= 0.95
+            reasons.append(f"Same-side matchup — {bats}HB vs {throws}HP")
 
     # An elite strikeout pitcher removes contact chances entirely.
     if pitcher.k_rate >= 0.28:

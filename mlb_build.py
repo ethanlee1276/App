@@ -180,6 +180,26 @@ def main() -> None:
     except Exception as exc:
         print(f"⚠️  Platoon splits unavailable — generic bump applies.\n   {exc}")
 
+    # Official season splits (vs LHP / vs RHP) from the MLB Stats API —
+    # a few batched, cached-daily requests. The HR model reads the power
+    # split; hitters our own logs can't measure get an official SLG-split
+    # platoon factor instead of the generic bump.
+    try:
+        import datetime as _spdt
+        from engine.mlb.sources.mlbstats import fetch_batting_splits
+        from engine.mlb.platoon import attach_official_splits
+        pids = {p.person_id for p in slate.props
+                if getattr(p, "person_id", 0) and p.position != "SP"}
+        if pids:
+            season = _spdt.date.fromisoformat(args.date).year
+            n_off = attach_official_splits(
+                slate, fetch_batting_splits(pids, season))
+            print(f"Official splits: attached to {n_off} props "
+                  f"({len(pids)} hitters queried).")
+    except Exception as exc:
+        print(f"⚠️  Official splits unavailable — flat platoon bump where "
+              f"unmeasured.\n   {exc}")
+
     # Opportunity model: tonight's expected plate appearances (batting slot +
     # run environment) vs each hitter's OWN measured PA average — volume is
     # the most predictable half of any counting prop.

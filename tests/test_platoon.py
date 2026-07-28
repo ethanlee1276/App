@@ -66,6 +66,105 @@ def test_attach_uses_tonights_starter_hand():
     assert not any("Platoon edge —" in r for r in eff.reasons)
 
 
+def test_parse_official_splits():
+    from engine.mlb.sources.mlbstats import parse_batting_splits
+    payload = {"people": [{"id": 545361, "stats": [{"splits": [
+        {"split": {"code": "vl"},
+         "stat": {"plateAppearances": "150", "slg": ".620", "homeRuns": "12"}},
+        {"split": {"code": "vr"},
+         "stat": {"plateAppearances": "310", "slg": ".540", "homeRuns": "18"}},
+        {"split": {"code": "h"}, "stat": {"slg": ".700"}},   # home split — ignored
+    ]}]}, {"id": 0}]}
+    sp = parse_batting_splits(payload)
+    assert sp == {545361: {"vl": {"pa": 150, "slg": 0.62, "hr": 12},
+                           "vr": {"pa": 310, "slg": 0.54, "hr": 18}}}
+
+
+class _G:
+    def __init__(self, throws):
+        class _P:  # noqa: N801 — tiny stand-in
+            pass
+        p = _P(); p.throws = throws; p.name = "Starter"
+        self.pitchers = {"BOS": p}
+
+
+class _Slate:
+    def __init__(self, props, throws="L"):
+        self.props = props
+        self._g = _G(throws)
+
+    def game_for(self, prop):
+        return self._g
+
+
+def _official_prop(person_id=545361, factor=1.0):
+    from engine.mlb.models import MLBProp
+    p = MLBProp(player="Lefty Masher", team="NYY", opponent="BOS",
+                position="RF", market="total_bases", logs=[], career_avg=1.0,
+                vs_pitcher_avg=None, lines=[], person_id=person_id)
+    p.platoon_factor = factor
+    return p
+
+
+def test_official_split_fills_only_unmeasured_players():
+    from engine.mlb.platoon import attach_official_splits
+    splits = {545361: {"vl": {"pa": 150, "slg": 0.620, "hr": 12},
+                       "vr": {"pa": 310, "slg": 0.440, "hr": 10}}}
+    fresh = _official_prop()                      # our logs: unmeasured
+    already = _official_prop(factor=1.12)         # our logs: measured
+    slate = _Slate([fresh, already], throws="L")
+    n = attach_official_splits(slate, splits)
+    assert n == 2                                 # both carry the raw split
+    assert fresh.platoon_official and already.platoon_official
+    # The unmeasured player gains an official SLG-split factor (>1: he
+    # slugs .620 vs LHP against a .497 blend), shrunk and clamped.
+    assert 1.0 < fresh.platoon_factor <= 1.18
+    assert "Official season split" in fresh.platoon_note
+    # The measured player keeps his our-log factor untouched.
+    assert already.platoon_factor == 1.12
+
+
+def test_official_split_needs_a_real_sample():
+    from engine.mlb.platoon import attach_official_splits
+    thin = {545361: {"vl": {"pa": 20, "slg": 0.900, "hr": 4},
+                     "vr": {"pa": 300, "slg": 0.450, "hr": 12}}}
+    p = _official_prop()
+    attach_official_splits(_Slate([p], throws="L"), thin)
+    assert p.platoon_factor == 1.0               # 20 PA is an anecdote
+
+
+def test_hr_model_uses_measured_power_split_both_directions():
+    """A reverse-split hitter gets SUPPRESSED against the hand a flat bump
+    would have boosted — the exact failure the flat model can't see."""
+    from engine.mlb.models import MLBProp, MLBGame, Pitcher
+    from engine.mlb.homeruns import pitcher_multiplier
+
+    def prop(official):
+        p = MLBProp(player="X", team="NYY", opponent="BOS", position="RF",
+                    market="home_runs", logs=[], career_avg=0.2,
+                    vs_pitcher_avg=None, lines=[], bats="R")
+        p.platoon_official = official
+        return p
+
+    game = MLBGame(home="NYY", away="BOS", park="yankee",
+                   pitchers={"BOS": Pitcher(name="Lefty", throws="L")})
+    # Righty who CRUSHES lefties: 12 HR in 160 PA vs L, 6 in 340 vs R.
+    masher = prop({"vl": {"pa": 160, "slg": 0.62, "hr": 12},
+                   "vr": {"pa": 340, "slg": 0.45, "hr": 6}})
+    # Righty with a REVERSE split: 1 HR in 160 PA vs L, 17 in 340 vs R.
+    reverse = prop({"vl": {"pa": 160, "slg": 0.40, "hr": 1},
+                    "vr": {"pa": 340, "slg": 0.52, "hr": 17}})
+    flat = prop(None)                            # no data → flat bump
+
+    m_mash, r_mash = pitcher_multiplier(masher, game)
+    m_rev, r_rev = pitcher_multiplier(reverse, game)
+    m_flat, r_flat = pitcher_multiplier(flat, game)
+
+    assert m_mash > m_flat > m_rev
+    assert any("Measured power split" in r for r in r_mash + r_rev)
+    assert any("Platoon edge" in r for r in r_flat)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

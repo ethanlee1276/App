@@ -21,6 +21,11 @@ MIN_PER_SIDE = 8
 SHRINK = 15.0
 FACTOR_CLAMP = (0.85, 1.18)
 
+# Official-split fallback: shrink by plate appearances (a half season vs
+# one hand is ~200 PA) and demand a real sample before it speaks.
+OFFICIAL_SHRINK_PA = 130.0
+OFFICIAL_MIN_PA = 60
+
 
 def platoon_splits(conn, market: str) -> dict[str, dict]:
     """``{normalized_player: {"L": factor, "R": factor, "nL": int, "nR": int}}``
@@ -92,4 +97,51 @@ def attach_platoon(slate, splits_by_market: dict[str, dict]) -> int:
                                  f"average, {n} games)")
         if factor != 1.0:
             attached += 1
+    return attached
+
+
+def attach_official_splits(slate, splits: dict[int, dict]) -> int:
+    """Attach the MLB Stats API's own season splits (vs LHP / vs RHP).
+
+    Two jobs: store the raw split on every hitter prop (the HR model reads
+    the power side), and — ONLY where our own game-log split couldn't
+    measure the player — derive ``platoon_factor`` from the official SLG
+    split, so the generic ±4% handedness bump almost never has to fire.
+    Our-log splits keep priority: they're market-specific and park-aware
+    in a way a season-wide SLG line isn't."""
+    attached = 0
+    for prop in slate.props:
+        if prop.position == "SP" or not getattr(prop, "person_id", 0):
+            continue
+        sp = splits.get(prop.person_id)
+        if not sp:
+            continue
+        prop.platoon_official = sp
+        attached += 1
+        if prop.platoon_factor != 1.0:
+            continue                      # measured from our logs — keep it
+        game = slate.game_for(prop)
+        starter = (game.pitchers or {}).get(prop.opponent) if game else None
+        hand = (getattr(starter, "throws", "") or "").upper()
+        side = sp.get("vl" if hand == "L" else "vr")
+        other = sp.get("vr" if hand == "L" else "vl")
+        if hand not in ("L", "R") or not side or not other:
+            continue
+        pa_s, pa_o = side.get("pa", 0), other.get("pa", 0)
+        if pa_s < OFFICIAL_MIN_PA or pa_s + pa_o < 2 * OFFICIAL_MIN_PA:
+            continue
+        blended = (side["slg"] * pa_s + other["slg"] * pa_o) / (pa_s + pa_o)
+        if blended <= 0:
+            continue
+        raw = side["slg"] / blended
+        w = pa_s / (pa_s + OFFICIAL_SHRINK_PA)
+        factor = round(clamp(1.0 + (raw - 1.0) * w, *FACTOR_CLAMP), 3)
+        if factor == 1.0:
+            continue
+        prop.platoon_factor = factor
+        verb = "slugs" if factor > 1.0 else "fades"
+        prop.platoon_note = (f"Official season split: {verb} "
+                             f"{'lefties' if hand == 'L' else 'righties'} "
+                             f"(.{side['slg'] * 1000:03.0f} SLG in {pa_s} PA, "
+                             f"{(factor - 1) * 100:+.0f}% vs his blend)")
     return attached

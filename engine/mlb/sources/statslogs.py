@@ -322,4 +322,5 @@ def _add_prop(props, person_id, name, team, opp, position, market, season,
         lines=[SportsbookLine(book="proxy", line=_proxy_line(baseline, market),
                               over_odds=-110, under_odds=-110)],
         bats=bats, throws=throws, lineup_spot=lineup_spot,
+        person_id=int(person_id),
     ))

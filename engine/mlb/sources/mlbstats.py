@@ -305,3 +305,52 @@ def fetch_transactions(start: str, end: str, ttl: int = 21600) -> list[dict]:
     url = f"{STATS_BASE}/transactions?startDate={start}&endDate={end}"
     return parse_transactions(
         _get_json(url, f"mlb_tx_{start}_{end}.json", ttl=ttl))
+
+
+# --- official batting splits (vs LHP / vs RHP) ------------------------------
+def parse_batting_splits(payload: dict) -> dict[int, dict]:
+    """``{person_id: {"vl": {"pa", "slg", "hr"}, "vr": {...}}}`` — pure."""
+    out: dict[int, dict] = {}
+    for p in (payload or {}).get("people", []) or []:
+        pid = p.get("id")
+        if not pid:
+            continue
+        for st in p.get("stats", []) or []:
+            for sp in st.get("splits", []) or []:
+                code = ((sp.get("split") or {}).get("code") or "").lower()
+                if code not in ("vl", "vr"):
+                    continue
+                s = sp.get("stat", {}) or {}
+
+                def _num(key):
+                    try:
+                        return float(s.get(key) or 0)
+                    except (TypeError, ValueError):
+                        return 0.0
+                out.setdefault(int(pid), {})[code] = {
+                    "pa": int(_num("plateAppearances")),
+                    "slg": _num("slg"),
+                    "hr": int(_num("homeRuns")),
+                }
+    return out
+
+
+def fetch_batting_splits(person_ids, season: int, ttl: int = 86400,
+                         chunk: int = 40) -> dict[int, dict]:
+    """Official season splits for many hitters in a few batched requests —
+    the ``people`` endpoint hydrates stats for up to dozens of ids per
+    call, so a full slate costs a handful of cached-daily fetches."""
+    ids = sorted({int(i) for i in person_ids if i})
+    out: dict[int, dict] = {}
+    for i in range(0, len(ids), chunk):
+        part = ids[i:i + chunk]
+        idstr = ",".join(str(x) for x in part)
+        url = (f"{STATS_BASE}/people?personIds={idstr}"
+               f"&hydrate=stats(group=[hitting],type=[statSplits],"
+               f"sitCodes=[vl,vr],season={season})")
+        cache = f"mlb_splits_{season}_{part[0]}_{part[-1]}_{len(part)}.json"
+        try:
+            out.update(parse_batting_splits(_get_json(url, cache, ttl=ttl)))
+        except DataUnavailable:
+            continue          # a missing chunk degrades, never blocks
+    return out
