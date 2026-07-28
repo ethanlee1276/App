@@ -282,6 +282,42 @@ def test_near_settled_markets_are_not_flagged_as_informed_flow():
     assert [r["tx"] for r in kept] == ["a"]
 
 
+def test_event_grouped_markets_resolve_via_the_event_fallback():
+    """Sports slugs return NOTHING on /markets?slug= — the tape slug names
+    a sub-market nested under /events?slug=. Measured live: 100 open
+    flagged markets including days-old decided tennis, all invisible to
+    the plain lookup, report card stuck at 0 graded."""
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    pm.ensure_tables(conn)
+    pm.store_flags(conn, [
+        {"tx": "t1", "ts": 1, "wallet": "w1",
+         "slug": "atp-assche-blockx-2026-07-26", "market": "ATP",
+         "outcome": "Assche", "side": "BUY", "entry_price": 0.55,
+         "usd": 9000, "score": 60}])
+
+    def markets_fetch(slug):
+        return []                       # what Gamma really says for sports
+
+    def events_fetch(slug):
+        return [{"closed": True, "markets": [
+            {"slug": "atp-assche-blockx-2026-07-26-first-set-winner",
+             "closed": True, "outcomes": '["Assche","Blockx"]',
+             "outcomePrices": '["1","0"]'},
+            {"slug": "atp-assche-blockx-2026-07-26", "closed": True,
+             "outcomes": '["Assche","Blockx"]',
+             "outcomePrices": '["1","0"]'},
+        ]}]
+
+    assert pm.resolve_flags(conn, fetch=markets_fetch,
+                            fetch_event=events_fetch) == 1
+    row = conn.execute("SELECT * FROM pm_flags").fetchone()
+    # The exact-slug sub-market (not its first-set sibling) settled it.
+    assert row["status"] == "settled" and row["won"] == 1
+    assert abs(row["roi"] - (1 / 0.55 - 1)) < 1e-3
+
+
 def test_resolution_rotation_never_starves_new_slugs():
     """Oldest-first checking let long-horizon markets ("…by end of 2026")
     hold every resolution slot forever while last night's sports markets

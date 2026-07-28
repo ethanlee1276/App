@@ -467,6 +467,43 @@ def fetch_market_by_slug(slug: str, ttl: int = 21600) -> list[dict]:
                                  f"pm_mkt_{safe}.json", ttl=ttl))
 
 
+def fetch_event_by_slug(slug: str, ttl: int = 21600) -> list[dict]:
+    import re as _re
+    safe = _re.sub(r"[^A-Za-z0-9_-]+", "_", slug)[:60]
+    return json.loads(fetch_text(f"{GAMMA}/events?slug={slug}",
+                                 f"pm_evt_{safe}.json", ttl=ttl))
+
+
+def _market_for_slug(slug: str, fetch=None, fetch_event=None) -> dict | None:
+    """The market object behind a tape slug, whichever Gamma dialect it
+    speaks.
+
+    Classic markets answer on ``/markets?slug=``. Sports markets — the
+    bulk of what actually RESOLVES day to day — return nothing there: the
+    tape's slug names a sub-market nested under ``/events?slug=``.
+    Measured live: 100 open flagged markets, three days of decided tennis
+    and soccer among them, and every one invisible to the plain-markets
+    lookup — the report card sat at 0 graded while the answers existed
+    one endpoint over."""
+    fetch = fetch or fetch_market_by_slug
+    fetch_event = fetch_event or fetch_event_by_slug
+    try:
+        raw = fetch(slug)
+    except DataUnavailable:
+        return None
+    if isinstance(raw, list) and raw:
+        return raw[0]
+    try:
+        evs = fetch_event(slug)
+    except DataUnavailable:
+        return None
+    for ev in evs or []:
+        for sub in ev.get("markets") or []:
+            if sub.get("slug") == slug:
+                return sub
+    return None
+
+
 def market_resolution(market: dict | None) -> str | None:
     """The winning outcome name of a CLOSED market, or ``None``. Resolved
     Polymarket prices pin to ~1/0; anything ambiguous stays unresolved."""
@@ -487,12 +524,12 @@ def market_resolution(market: dict | None) -> str | None:
     return None
 
 
-def resolve_flags(conn, max_slugs: int = 25, fetch=None) -> int:
+def resolve_flags(conn, max_slugs: int = 25, fetch=None,
+                  fetch_event=None) -> int:
     """Settle open flags whose markets have resolved. A BUY of the winning
     outcome at price p returns 1/p per dollar; a SELL is a bet on the other
     side at (1-p). Bounded slug fetches per run; results cache anyway."""
     ensure_tables(conn)
-    fetch = fetch or fetch_market_by_slug
     # RANDOM, not oldest-first. Oldest-first starved the loop: the oldest
     # open flags are exactly the long-horizon markets ("…by end of 2026")
     # that won't resolve for months, and they held every slot forever
@@ -505,11 +542,8 @@ def resolve_flags(conn, max_slugs: int = 25, fetch=None) -> int:
     settled = 0
     now = int(time.time())
     for slug in slugs:
-        try:
-            raw = fetch(slug)
-        except DataUnavailable:
-            continue
-        winner = market_resolution(raw[0] if isinstance(raw, list) and raw else None)
+        winner = market_resolution(
+            _market_for_slug(slug, fetch=fetch, fetch_event=fetch_event))
         if winner is None:
             continue
         for f in conn.execute("SELECT rowid, * FROM pm_flags WHERE slug=? "
