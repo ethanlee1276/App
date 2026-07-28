@@ -156,6 +156,32 @@ def test_build_offseason_without_sleeper_says_so():
     assert out["rookies"] == [] and out["moves"] == []
 
 
+def test_resolve_trending_joins_names_and_canonicalizes():
+    """Trending ids join to real names (unknown ids skipped, never shown
+    as numbers), Sleeper spellings canonicalize, and teamless players
+    read FA instead of a blank."""
+    blob = {"4034": {"full_name": "Puka Nacua", "team": "LAR",
+                     "position": "WR"},
+            "9999": {"first_name": "Cut", "last_name": "Yesterday",
+                     "team": None, "position": "RB"}}
+    raw = [{"player_id": "4034", "count": 18321},
+           {"player_id": "404", "count": 5},          # not in the blob
+           {"player_id": "9999", "count": 900}]
+    out = offseason.resolve_trending(raw, blob)
+    assert out == [
+        {"player": "Puka Nacua", "team": "LA", "position": "WR",
+         "count": 18321},
+        {"player": "Cut Yesterday", "team": "FA", "position": "RB",
+         "count": 900}]
+    assert offseason.resolve_trending(raw, blob, limit=1) == out[:1]
+
+
+def test_trending_without_a_players_blob_is_none():
+    """No blob = no roster layer: the page must see 'unreachable', never
+    an empty list that reads as 'a quiet day'."""
+    assert offseason.load_trending("add", None) is None
+
+
 def test_real_schedule_smoke():
     """Against the actual cached nflverse file when present: parse, find
     the seasons, and demand structurally sane output — every change has

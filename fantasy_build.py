@@ -45,8 +45,15 @@ def main() -> None:
             sched = []
         # build_offseason stamps the kit's rows with current teams, so it
         # must run before the kit is serialized.
-        off = offseason.build_offseason(sched, offseason.load_sleeper_players(),
-                                        kit=kit)
+        blob = offseason.load_sleeper_players()
+        off = offseason.build_offseason(sched, blob, kit=kit)
+        # Waiver-wire pulse: what every Sleeper league grabbed/dumped in
+        # the last 24h. None (unreachable) simply omits the section.
+        adds = offseason.load_trending("add", blob)
+        drops = offseason.load_trending("drop", blob)
+        trending = ({"adds": adds or [], "drops": drops or [],
+                     "lookback_hours": 24}
+                    if adds is not None or drops is not None else None)
         out = {
             "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "season": season,
@@ -56,6 +63,7 @@ def main() -> None:
             "scripts": fantasy.game_scripts(conn),
             "draft_kit": kit,
             "offseason": off,
+            "trending": trending,
         }
     conn.close()
 

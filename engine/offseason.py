@@ -146,6 +146,51 @@ def load_sleeper_players(max_age_s: int = 86400) -> dict | None:
             return None
 
 
+SLEEPER_TRENDING_URL = "https://api.sleeper.app/v1/players/nfl/trending"
+
+
+def resolve_trending(raw: list, blob: dict, limit: int = 12) -> list[dict]:
+    """Join Sleeper's trending player_ids to the players blob. Pure.
+
+    Rows keep Sleeper's order (most added/dropped first); ids with no
+    resolvable name are skipped rather than shown as numbers."""
+    out = []
+    for r in raw or []:
+        p = (blob or {}).get(str(r.get("player_id"))) or {}
+        name = p.get("full_name") or " ".join(
+            x for x in (p.get("first_name"), p.get("last_name")) if x)
+        if not name:
+            continue
+        out.append({
+            "player": name,
+            "team": _canon_team(p.get("team")) or "FA",
+            "position": (p.get("position") or "").upper(),
+            "count": int(r.get("count") or 0),
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
+def load_trending(kind: str, blob: dict | None,
+                  ttl: int = 1800, limit: int = 12) -> list[dict] | None:
+    """The 24h waiver-wire pulse: ``kind`` is "add" or "drop".
+
+    Market attention across every Sleeper league — not a model signal,
+    which is exactly why it's worth showing next to ours. ``None`` when
+    the feed (or the players blob) is unreachable, so the page can tell
+    "no data" apart from "a quiet day"."""
+    if not blob:
+        return None
+    try:
+        body = fetch_text(
+            f"{SLEEPER_TRENDING_URL}/{kind}?lookback_hours=24&limit=25",
+            f"sleeper_trend_{kind}.json", ttl=ttl)
+        return resolve_trending(json.loads(body), blob, limit=limit)
+    except (DataUnavailable, ValueError):
+        return None
+
+
 def index_players(blob: dict) -> dict:
     """Two-tier name index of fantasy-relevant players.
 

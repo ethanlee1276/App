@@ -2296,6 +2296,7 @@ async function renderFantasy() {
         <div style="color:var(--text-mute);font-size:12px;margin-top:2px">games with posted lines</div></div>
     </div>
     <div id="sleeper-zone"></div>
+    ${waiverPulseHTML(d.trending)}
     ${offseasonHTML(off)}
     ${draftKit}
     <div class="ls-note">Shares are of TEAM volume: targets for WR/TE/QB, carries for RB.
@@ -2353,6 +2354,36 @@ const nflName = (a) => (nflMap()[a] && nflMap()[a].nick) || a;
    row is stamped with both head coaches); rosters and rookies
    from Sleeper's players feed. All data, no news-cycle memory.
    ============================================================ */
+/* The 24h waiver-wire pulse — what every Sleeper league is grabbing and
+   dumping RIGHT NOW. Market attention, not our model: the two disagreeing
+   is the interesting case, so it sits beside the usage boards. Always
+   NFL-labeled via nflMap, whatever sport tab the visitor came from. */
+function waiverPulseHTML(t) {
+  if (!t || (!(t.adds || []).length && !(t.drops || []).length)) return "";
+  const fmt = (n) => n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(n);
+  const col = (title, rows, tone, verb) => `
+    <div class="card" style="padding:14px 16px">
+      <div style="font-weight:800;margin-bottom:8px">${title}</div>
+      ${rows.slice(0, 8).map((r) => `
+        <div class="dl-row">
+          <span class="dl-main">${playerAvatar(r.player, r.team, { size: 26, map: nflMap() })}
+            <span><strong>${escapeHtml(r.player)}</strong>
+              <span class="dl-sub">${escapeHtml(r.position || "")} · ${escapeHtml(nflName(r.team))}</span></span></span>
+          <span class="dl-num strong" style="color:${tone}"
+                title="${verb} in ${fmt(t.lookback_hours || 24)}h across all Sleeper leagues">${fmt(r.count)}</span>
+        </div>`).join("")}
+    </div>`;
+  return `
+    <div class="section-title" style="margin-top:26px">Waiver-wire pulse
+      <span class="sub">— who the fantasy world grabbed and dumped in the last
+      ${t.lookback_hours || 24}h (every Sleeper league). Market attention, not our model —
+      check the movers against the usage boards below before following the crowd.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
+      ${(t.adds || []).length ? col("🔥 Most added", t.adds, "var(--good)", "adds") : ""}
+      ${(t.drops || []).length ? col("🧊 Most dropped", t.drops, "var(--bad)", "drops") : ""}
+    </div>`;
+}
+
 function offseasonHTML(off) {
   if (!off || (!off.upcoming_season && !(off.coach_changes || []).length
                && !off.rosters_live)) return "";
