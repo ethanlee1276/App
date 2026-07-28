@@ -139,7 +139,7 @@ Each prop flows through a pipeline of small, independently testable stages:
   `P(hit) = P(X > L) = 1 − Φ((L − μ)/σ)`, computed with `math.erf` (no numpy needed).
 - **Edge** — the book's two-way price is **de-vigged** so the implied
   probabilities sum to 1.0; `edge = P(model) − P(book)`.
-- **Line shopping** — across DraftKings, FanDuel, BetMGM, Caesars and ESPN BET
+- **Line shopping** — across DraftKings, FanDuel, BetMGM, Caesars and theScore Bet
   the engine picks the most bettor-friendly number, breaking ties on price.
 - **Confidence (0–10)** — driven by edge, discounted for thin samples and high
   variance, so a big edge on two games of data does **not** score like a big
@@ -244,7 +244,7 @@ python3 nfl_build.py 2024 5 --injuries --odds --out web/data/recommendations.jso
 ## Real sportsbook lines (The Odds API)
 
 `engine/sources/oddsapi.py` pulls live NFL player props (pass/rush/receiving
-yards, receptions) across DraftKings, FanDuel, BetMGM, Caesars, ESPN BET,
+yards, receptions) across DraftKings, FanDuel, BetMGM, Caesars, theScore Bet,
 Fanatics and Hard Rock, and attaches them to the slate — so the model prices
 its projections against **real books** and shops the best number.
 
@@ -548,7 +548,7 @@ can act on them while the market is moving.
   re-renders silently (no entrance re-animation), with an "Auto · updated Ns ago"
   indicator in the header. Stops automatically when nothing is live.
 - **Live lines**: `--odds` pulls current prices across **DraftKings, FanDuel,
-  BetMGM, Caesars, ESPN BET, Fanatics and Hard Rock** for both NFL
+  BetMGM, Caesars, theScore Bet, Fanatics and Hard Rock** for both NFL
   (`player_*` markets) and MLB (`batter_*` / `pitcher_strikeouts`). During a
   game the Odds API event-odds endpoint returns **in-play** prices, so the same
   call yields live lines; the model re-shops the best number and re-prices the

@@ -63,15 +63,23 @@ MLB_ODDS_TO_MARKET = {
 # Pinnacle rides along as the SHARP REFERENCE — its de-vigged price is the
 # best free estimate of a bet's true probability, which is what the
 # sharp-anchor strategy prices soft books against. The API bills bookmakers
-# in groups of 10 as one region, so listing 8 costs the same as 7.
+# in groups of 10 as one region, so listing 10 costs the same as 8.
+#
+# ESPN BET became theScore Bet (PENN ended the ESPN deal; the rebrand
+# completed December 2025). The API's key for the renamed book couldn't be
+# confirmed from docs, so all three plausible keys are requested — unknown
+# bookmaker keys are ignored, and whichever answers gets the right title.
 DEFAULT_BOOKS = [
     "draftkings", "fanduel", "betmgm", "williamhill_us",  # Caesars = William Hill US
-    "espnbet", "fanatics", "hardrockbet", "pinnacle",
+    "espnbet", "thescorebet", "thescore",
+    "fanatics", "hardrockbet", "pinnacle",
 ]
 # Pretty names for the UI / explanations.
 BOOK_TITLES = {
     "draftkings": "DraftKings", "fanduel": "FanDuel", "betmgm": "BetMGM",
-    "williamhill_us": "Caesars", "espnbet": "ESPN BET", "fanatics": "Fanatics",
+    "williamhill_us": "Caesars", "fanatics": "Fanatics",
+    "espnbet": "theScore Bet", "thescorebet": "theScore Bet",
+    "thescore": "theScore Bet",
     "hardrockbet": "Hard Rock", "pinnacle": "Pinnacle",
 }
 # Books a user can actually bet at (Pinnacle doesn't take US action); the

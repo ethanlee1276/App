@@ -133,11 +133,11 @@ def test_stale_quotes_flags_a_book_out_of_line_with_the_field():
              "all_lines": [
                  {"book": "DraftKings", "line": 0.5, "over_odds": -110, "under_odds": -110},
                  {"book": "BetMGM", "line": 0.5, "over_odds": -112, "under_odds": -108},
-                 {"book": "ESPN BET", "line": 0.5, "over_odds": 100, "under_odds": -120},
+                 {"book": "theScore Bet", "line": 0.5, "over_odds": 100, "under_odds": -120},
              ]}]
     out = stale_quotes(recs)
     over = next(s for s in out if s["side"] == "OVER")
-    assert over["book"] == "ESPN BET" and over["odds"] == 100
+    assert over["book"] == "theScore Bet" and over["odds"] == 100
     assert over["gap_pts"] > 2.0
     assert over["consensus"] > over["implied"]      # field says it's worth less
     assert over["books_compared"] == 3

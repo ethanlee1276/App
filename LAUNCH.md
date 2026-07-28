@@ -172,7 +172,7 @@ you only do this once.
 ## 🎰 Add real sportsbook lines (optional, one free key)
 
 The steps above use the model's own fair prices. To compare against **real**
-DraftKings / FanDuel / BetMGM / ESPN BET lines — including live in-play prices:
+DraftKings / FanDuel / BetMGM / theScore Bet lines — including live in-play prices:
 
 1. Get a **free** API key at <https://the-odds-api.com> (takes a minute).
 2. Run the build with your key and the `--odds` flag:
