@@ -226,7 +226,22 @@ def main() -> None:
               f"Pitcher props need probable starters; hitter props need confirmed lineups.")
 
     config = RuleConfig(min_confidence=args.min_confidence, min_edge=args.min_edge)
-    result = run_mlb_slate(slate, config)
+    # IL awareness: one free transactions request marks who's on the
+    # injured list (never a pick) and who just came back (form caveat).
+    # Unreachable wire → None → the board behaves exactly as before.
+    il_map = None
+    try:
+        import datetime as _ildt
+        from engine.mlb.sources.mlbstats import fetch_transactions
+        from engine.mlb.transactions import il_status
+        _end = args.date
+        _start = (_ildt.date.fromisoformat(args.date)
+                  - _ildt.timedelta(days=60)).isoformat()
+        il_map = il_status(fetch_transactions(_start, _end), args.date)
+    except Exception:
+        il_map = None
+
+    result = run_mlb_slate(slate, config, il_map=il_map)
 
     # Line movement: what the market has done since our first snapshot, and
     # whether it agrees with each pick (informational — never changes a grade).

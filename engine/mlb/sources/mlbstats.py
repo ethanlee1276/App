@@ -277,3 +277,31 @@ def build_games(date: str, with_weather: bool = True) -> list[MLBGame]:
                                  weather=weather, pitchers=pitchers,
                                  lineups_confirmed=False))
     return games
+
+
+# --- transactions (the IL wire) ---------------------------------------------
+def parse_transactions(data: dict) -> list[dict]:
+    """Normalize the Stats API transactions payload. Pure, fixture-tested."""
+    out = []
+    for t in (data or {}).get("transactions", []) or []:
+        person = ((t.get("person") or {}).get("fullName")) or ""
+        if not person:
+            continue
+        team_id = ((t.get("toTeam") or {}).get("id")) \
+            or ((t.get("fromTeam") or {}).get("id")) or 0
+        out.append({
+            "date": t.get("date") or t.get("effectiveDate") or "",
+            "player": person,
+            "team": TEAM_ID_ABBR.get(team_id, ""),
+            "type": t.get("typeDesc") or t.get("typeCode") or "",
+            "desc": t.get("description") or "",
+        })
+    return out
+
+
+def fetch_transactions(start: str, end: str, ttl: int = 21600) -> list[dict]:
+    """Roster transactions over a date range — one free request covers all
+    30 teams' IL placements/activations, trades, recalls and options."""
+    url = f"{STATS_BASE}/transactions?startDate={start}&endDate={end}"
+    return parse_transactions(
+        _get_json(url, f"mlb_tx_{start}_{end}.json", ttl=ttl))

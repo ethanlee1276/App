@@ -327,11 +327,19 @@ def _game_to_dict(g) -> dict:
 
 
 def run_mlb_slate(slate: MLBSlate | str | Path,
-                  config: RuleConfig | None = None, model=None) -> dict:
+                  config: RuleConfig | None = None, model=None,
+                  il_map: dict | None = None) -> dict:
+    """``il_map`` (engine.mlb.transactions.il_status) marks players on the
+    injured list — never a pick, whatever the projected lineup says — and
+    recent activations, whose form window predates the injury."""
+    from ..sources.oddsapi import normalize_name
+    from .transactions import just_returned
     if not isinstance(slate, MLBSlate):
         slate = load_mlb_slate(slate)
     config = config or RuleConfig()
+    il_map = il_map or {}
 
+    il_on_slate: set = set()
     results = []
     for prop in slate.props:
         game = slate.game_for(prop)
@@ -339,6 +347,18 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         rec = evaluate_mlb_prop(prop, proj)
         decision = apply_mlb_rules(rec, prop, game, proj, config)
         d = _rec_to_dict(rec, prop, decision, proj)
+        il = il_map.get(normalize_name(prop.player))
+        if il and il.get("on_il"):
+            # A projected lineup can't know he's hurt; the wire does.
+            d["recommended"] = False
+            d["warnings"] = list(d.get("warnings") or []) + [
+                f"On the injured list (since {il.get('date', '?')}) — "
+                f"never a pick until activated"]
+            il_on_slate.add(prop.player)
+        elif il and just_returned(il, slate.date):
+            d["warnings"] = list(d.get("warnings") or []) + [
+                f"Activated from the IL on {il.get('date', '?')} — recent "
+                f"form predates the injury; treat the sample with care"]
         d["live"] = bool(game.live and game.live.state == "live")
         d["game_date"] = game.date
         d["game_kickoff"] = game.kickoff
@@ -349,6 +369,11 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
     recommended = [r for r in results if r["recommended"]]
 
     ls_picks, ls_watch, ls_diag = _long_shots(slate)
+    if il_on_slate:
+        # The HR board runs on the same projected lineups — an IL'd hitter
+        # must not sit on a "most likely tonight" list.
+        ls_picks = [p for p in ls_picks if p.get("player") not in il_on_slate]
+        ls_watch = [w for w in ls_watch if w.get("player") not in il_on_slate]
     # Home runs are long shots by nature, so the full HR board lives on the
     # Long Shots page. The Recommended page features only the TOP THREE —
     # the value picks first, topped up from the watchlist's most-likely
@@ -377,5 +402,8 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "long_shots": ls_picks,
         "longshot_watch": ls_watch,
         "longshot_diag": ls_diag,
+        # Who on this slate is on the IL right now — the site's receipts
+        # for why a familiar name is missing from every list tonight.
+        "injured_list": sorted(il_on_slate),
         "market_scan": _market_scan(results, ls_picks + ls_watch),
     }
