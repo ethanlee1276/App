@@ -275,6 +275,7 @@ function renderAll() {
   }
   renderStats();
   renderEmptySlate();
+  renderBestBets();
   renderTopPlays();
   renderGames();
   renderGameBets();
@@ -313,6 +314,89 @@ function renderEmptySlate() {
        for the sample board.</div>`;
   // Nothing else to show; clear the busier sections.
   document.getElementById("games-title").style.display = noProps ? "none" : "";
+}
+
+/* ============================================================
+   Best Bets Tonight — every measured signal, one ranked list.
+   The ORDER is the point: structural certainties first (arbs), then the
+   signals with measured or backtested records (sharp anchors, stale
+   lines, the HR board's proven tier), model opinion last — because the
+   edge audit showed the model's opinion ALONE doesn't beat the close.
+   Every row says where its number comes from.
+   ============================================================ */
+let _recordCache = null;
+async function loadRecordOnce() {
+  if (_recordCache !== null) return _recordCache;
+  try {
+    const res = await fetch("data/record.json?t=" + (Date.now() / 60000 | 0));
+    _recordCache = res.ok ? await res.json() : {};
+  } catch (e) { _recordCache = {}; }
+  return _recordCache;
+}
+
+async function renderBestBets() {
+  const host = document.getElementById("best-bets");
+  if (!host) return;
+  const d = state.data || {};
+  const rec = await loadRecordOnce();
+  const scan = d.market_scan || {};
+  const rows = [];
+
+  for (const a of (scan.arbs || []).filter((x) => !x.suspect).slice(0, 2)) {
+    rows.push({ type: "ARB", color: "var(--good)",
+      label: `${a.bet}: Over ${a.over.line} ${american(a.over.odds)} (${a.over.book}) + Under ${a.under.line} ${american(a.under.odds)} (${a.under.book})`,
+      metric: `+${(a.profit_pct * 100).toFixed(1)}%`,
+      why: "locked profit whichever way it lands — price math, no forecast involved" });
+  }
+  for (const b of (d.game_bets || []).filter((x) => x.recommended &&
+        (x.reasons || []).some((r) => r.includes("Sharp anchor"))).slice(0, 3)) {
+    rows.push({ type: "SHARP", color: "var(--cyan)",
+      label: `${b.headline} · ${b.matchup}`,
+      metric: `${signedPct(b.ev_per_unit)} EV`,
+      why: "soft book pays more than the sharp book's fair price — backtested +13.5% against real closes" });
+  }
+  const st = rec.stale_flags || {};
+  const sampler = (st.wins || 0) + (st.losses || 0) > 0
+    ? ` · sampler so far ${st.wins}-${st.losses} (${signedPct(st.roi || 0)})` : "";
+  for (const s of (scan.stale || []).filter((x) => !x.live && !x.started).slice(0, 3)) {
+    rows.push({ type: "STALE", color: "var(--warn)",
+      label: `${s.bet} ${american(s.odds)} (${s.book}) — the field prices it ${american(s.fair_odds)}`,
+      metric: `+${(s.gap_pts || 0).toFixed(1)}pt`,
+      why: `one book lagging the field — taking the lag beat the close 64.8% of 30k measured quotes${sampler}` });
+  }
+  for (const p of (d.long_shots || []).filter((x) => !x.live).slice(0, 2)) {
+    rows.push({ type: "HR", color: "var(--brand)",
+      label: `${p.player} — ${p.market_label} ${american(p.odds)} (${p.book})`,
+      metric: pct(p.model_prob),
+      why: "the strict HR tier — measured +11% ROI over its first 214 graded picks" });
+  }
+  const perf = rec.overall || {};
+  const propWhy = perf.settled
+    ? `model pick that cleared every gate · journal: ${perf.wins}-${perf.losses} (${signedPct(perf.roi || 0)} ROI)`
+    : "model pick that cleared every gate — graded nightly on the Record page";
+  for (const r of (d.recommendations || []).filter((x) => x.recommended).slice(0, 2)) {
+    rows.push({ type: "MODEL", color: "var(--text-mute)",
+      label: `${r.player} ${r.side} ${r.line} ${r.market_label} ${american(r.odds)} (${r.book})`,
+      metric: signedPct(r.edge), why: propWhy });
+  }
+
+  if (!rows.length) { host.innerHTML = ""; return; }
+  host.innerHTML = `
+    <div class="section-title" style="margin-top:8px">Best bets tonight
+      <span class="sub">— every signal ranked by what it has MEASURABLY returned, strongest
+      evidence first. Each row says where its number comes from; the Record page grades
+      all of it nightly.</span></div>
+    <div class="card" style="padding:0">
+      ${rows.slice(0, 10).map((r) => `
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:11px 14px;
+                    border-bottom:1px solid rgba(255,255,255,.05)">
+          <span class="chip" style="color:${r.color};min-width:56px;text-align:center;
+                font-weight:800;flex-shrink:0">${r.type}</span>
+          <span style="flex:1;min-width:0"><strong>${escapeHtml(r.label)}</strong>
+            <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">${escapeHtml(r.why)}</span></span>
+          <span style="font-weight:800;white-space:nowrap">${escapeHtml(r.metric)}</span>
+        </div>`).join("")}
+    </div>`;
 }
 
 /* ============================================================
