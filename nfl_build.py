@@ -168,7 +168,18 @@ def main() -> None:
         print(f"\nUsing learned model: {args.model}")
 
     config = RuleConfig(min_confidence=args.min_confidence, min_edge=args.min_edge)
-    result = run_slate(slate, config, model=model)
+    # Measured roles from ingested logs: red-zone usage (the TD model's
+    # best predictor, finally read instead of inferred) and snap shares.
+    # Missing ingests leave the maps empty and the model exactly as before.
+    nfl_usage = None
+    try:
+        from engine.db import connect as _usage_connect
+        from engine.nflusage import build_usage_maps
+        nfl_usage = build_usage_maps(_usage_connect())
+    except Exception:
+        nfl_usage = None
+
+    result = run_slate(slate, config, model=model, nfl_usage=nfl_usage)
 
     # Stamp each pick with how the market has moved relative to OUR side
     # (informational — never changes a grade).

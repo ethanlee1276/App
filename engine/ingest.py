@@ -137,6 +137,36 @@ def nfl_td_rows(stats_rows: list[dict], season: int) -> list[dict]:
     return out
 
 
+def snap_count_rows(rows: list[dict], season: int) -> list[dict]:
+    """``snap_pct`` result rows (offensive snap share, 0–1) per player-week.
+
+    Snap share is the measured ROLE the volume stats can't see; it feeds
+    the touchdown board's reasoning and the fantasy usage layer."""
+    from .sources.nflverse import _s, _f
+    out = []
+    for r in rows:
+        pos = _s(r, "position").upper()
+        if pos not in ("QB", "RB", "WR", "TE"):
+            continue
+        wk = int(_f(r, "week", default=0))
+        if wk <= 0:
+            continue
+        name = _s(r, "player", "player_name")
+        team = _s(r, "team", "recent_team")
+        if not name:
+            continue
+        pct = _f(r, "offense_pct", default=0.0)
+        if pct > 1.0:                     # some vintages publish 0–100
+            pct /= 100.0
+        out.append({
+            "sport": "nfl", "season": season, "period": f"{wk:03d}",
+            "game_id": f"{team}-{wk:03d}", "player": name, "team": team,
+            "opponent": _s(r, "opponent", "opponent_team"), "position": pos,
+            "home": 1, "market": "snap_pct", "value": round(pct, 4),
+        })
+    return out
+
+
 def ingest_nfl_results(conn, season: int) -> dict:
     """The light, season-time results pull that keeps the NFL journal
     grading itself: weekly player stats (prop actuals + usage + touchdown
@@ -154,6 +184,15 @@ def ingest_nfl_results(conn, season: int) -> dict:
     rows += nfl_usage_rows(weekly, season)
     rows += nfl_td_rows(weekly, season)
     result["player_logs"] = db.upsert_player_logs(conn, rows)
+    # Snap counts ride along (separate release file, so its absence never
+    # blocks the stats that settle bets).
+    try:
+        from .sources.nflverse import load_snap_counts
+        n = db.upsert_player_logs(conn, snap_count_rows(load_snap_counts(season),
+                                                        season))
+        result["player_logs"] += n
+    except DataUnavailable as exc:
+        result["skipped"].append(f"nfl snap counts {season}: {exc}")
     db.log_ingest(conn, "nfl", "weekly_results", str(season),
                   result["player_logs"])
     return result

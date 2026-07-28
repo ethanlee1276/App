@@ -154,6 +154,11 @@ def xfp_player_rows(agg: dict, season: int) -> list[dict]:
                     "value": float(buckets.get("tgt_rz", 0))})
         out.append({**base, "market": "i5_car",
                     "value": float(buckets.get("car_i5", 0))})
+        # ALL red-zone carries (inside-20, the inside-5s included) — the
+        # touchdown model's measured-role input alongside rz_tgt/i5_car.
+        out.append({**base, "market": "rz_car",
+                    "value": float(buckets.get("car_i5", 0)
+                                   + buckets.get("car_rz", 0))})
     return out
 
 

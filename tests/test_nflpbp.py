@@ -65,7 +65,19 @@ def test_unpriced_bucket_blocks_xfp_but_not_usage():
     rows = xfp_player_rows(agg, 2025)
     markets = {r["market"] for r in rows if r["player"] == "W.Out"}
     assert "xfp" not in markets
-    assert {"rz_tgt", "i5_car"} <= markets
+    assert {"rz_tgt", "i5_car", "rz_car"} <= markets
+
+
+def test_rz_car_counts_every_red_zone_carry():
+    """rz_car = all carries inside the 20, the inside-5s included — the
+    measured-role feed for the touchdown model."""
+    rows = [_run("4", "KC", "A.Back", 3, 2),      # inside 5
+            _run("4", "KC", "A.Back", 15, 4),     # red zone
+            _run("4", "KC", "A.Back", 55, 6)]     # open field
+    prow = {(r["player"], r["market"]): r["value"]
+            for r in xfp_player_rows(aggregate_pbp(rows), 2025)}
+    assert prow[("A.Back", "rz_car")] == 2.0
+    assert prow[("A.Back", "i5_car")] == 1.0
 
 
 def test_fantasy_prefers_xfp_and_attaches_proe():

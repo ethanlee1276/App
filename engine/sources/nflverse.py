@@ -116,6 +116,29 @@ def build_games(season: int, week: int) -> list[Game]:
     return games
 
 
+# --- snap counts ------------------------------------------------------------
+def _snap_urls(season: int) -> list[str]:
+    base = "https://github.com/nflverse/nflverse-data/releases/download/snap_counts"
+    return [f"{base}/snap_counts_{season}.csv.gz",
+            f"{base}/snap_counts_{season}.csv"]
+
+
+def load_snap_counts(season: int) -> list[dict]:
+    """Per-player offensive snap shares — the cleanest measured-role signal
+    the volume stats can't provide (a back can have 8 carries on 70% of
+    snaps or on 20%, and those are different players to bet on)."""
+    local = CACHE_DIR / f"snap_counts_{season}.csv"
+    if local.exists():
+        return load_local_csv(local)
+    last_err = None
+    for url in _snap_urls(season):
+        try:
+            return fetch_csv(url, f"snap_counts_{season}.csv")
+        except DataUnavailable as exc:
+            last_err = exc
+    raise last_err or DataUnavailable(f"snap counts {season} unavailable")
+
+
 # --- weekly player stats ----------------------------------------------------
 def load_weekly_stats(season: int) -> list[dict]:
     """Weekly player stats for a season, from release URLs or a local CSV."""

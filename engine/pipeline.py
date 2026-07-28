@@ -116,23 +116,35 @@ def _opportunity_shares(slate) -> dict:
             for key, v in volume.items()}
 
 
-def _long_shots(slate) -> list[dict]:
-    """Anytime-touchdown picks — the NFL long-shot board (see engine.touchdowns)."""
+def _long_shots(slate, usage: dict | None = None) -> list[dict]:
+    """Anytime-touchdown picks — the NFL long-shot board (see engine.touchdowns).
+
+    ``usage`` optionally carries MEASURED roles from ingested logs
+    (engine.nflusage): per-player red-zone usage — the model's own docs
+    call it the single best TD predictor it couldn't see — and snap
+    shares. Without it the model infers from volume, exactly as before."""
     from .models import ANYTIME_TD
     from .touchdowns import build_td_longshots
+    from .fantasy import _short_key
 
+    usage = usage or {}
+    rz_map = usage.get("red_zone") or {}
+    snap_map = usage.get("snap") or {}
     shares = _opportunity_shares(slate)
     candidates = []
     for prop in slate.props:
         if prop.market != ANYTIME_TD or not prop.lines:
             continue
         best = max(prop.lines, key=lambda ln: ln.over_odds)
+        key = _short_key(prop.player, prop.team)
         candidates.append({
             "prop": prop, "game": slate.game_for(prop),
             "opponent": slate.team(prop.opponent),
             "opportunity_share": shares.get((prop.team, prop.player), 0.15),
             "odds": best.over_odds, "book": best.book,
             "under_odds": best.under_odds,
+            "red_zone": rz_map.get(key),
+            "snap_share": snap_map.get(key),
         })
     return [p.to_dict() for p in build_td_longshots(candidates)]
 
@@ -192,9 +204,11 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
 
 
 def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
-              model=None, allow_synthetic_line: bool = False) -> dict:
+              model=None, allow_synthetic_line: bool = False,
+              nfl_usage: dict | None = None) -> dict:
     """``allow_synthetic_line`` is for the backtest harness, which prices
-    against a naive baseline line on purpose (see engine.betting.temper_edge)."""
+    against a naive baseline line on purpose (see engine.betting.temper_edge).
+    ``nfl_usage`` carries measured red-zone/snap roles (engine.nflusage)."""
     if not isinstance(slate, Slate):
         slate = load_slate(slate)
     config = config or RuleConfig()
@@ -216,7 +230,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)
 
     recommended = [r for r in results if r["recommended"]]
-    ls = _long_shots(slate)
+    ls = _long_shots(slate, nfl_usage)
     return {
         "date": slate.date,
         "generated_from": "sample-slate",

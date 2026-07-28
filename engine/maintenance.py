@@ -338,6 +338,23 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  nfl results ingest failed: {exc}")
 
+        # Play-by-play refresh — the measured red-zone roles. The file is
+        # ~100MB, so once a week (Tuesdays, after Monday night) is the
+        # right cadence, not daily.
+        if today.weekday() == 1:
+            try:
+                from . import db as _pdb
+                from .sources.nflpbp import (load_pbp_rows, aggregate_pbp,
+                                             xfp_player_rows)
+                season = today.year if today.month >= 8 else today.year - 1
+                agg = aggregate_pbp(load_pbp_rows(season))
+                n = _pdb.upsert_player_logs(_pdb.connect(),
+                                            xfp_player_rows(agg, season))
+                if n:
+                    log(f"  nfl pbp: {n:,} xFP/red-zone rows refreshed")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  nfl pbp refresh failed: {exc}")
+
     if harvest:
         _maybe_harvest(yesterday, log)
 

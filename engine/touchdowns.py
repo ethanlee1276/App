@@ -268,6 +268,11 @@ def build_td_longshots(candidates: list[dict], limit: int = 6,
             pick.game_date = getattr(game, "date", "")
             pick.game_kickoff = getattr(game, "kickoff", "")
             pick.live = bool(getattr(game, "live", None) and game.live.state == "live")
+            snap = c.get("snap_share")
+            if snap is not None:
+                pick.reasons.append(
+                    f"On the field for {snap:.0%} of offensive snaps "
+                    f"(measured, recent weeks)")
             picks.append(pick)
 
     return select(picks, per_key_cap=per_game,
