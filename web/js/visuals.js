@@ -96,6 +96,39 @@ function playerAvatar(name, abbr, opts = {}) {
     </g>
   </svg>`;
   }
+  if ((window.ACTIVE_SPORT || "nfl") === "nba") {
+    // A stylized basketball in team colors — avatar, not a likeness.
+    return `
+  <svg class="avatar" width="${size}" height="${size}" viewBox="0 0 64 64" role="img"
+       aria-label="${escapeAttr(name)}">
+    <defs>
+      <radialGradient id="${uid}bg" cx="50%" cy="35%" r="75%">
+        <stop offset="0%" stop-color="${t.primary}"/>
+        <stop offset="100%" stop-color="${shade(t.primary, -30)}"/>
+      </radialGradient>
+      <radialGradient id="${uid}ball" cx="42%" cy="34%" r="72%">
+        <stop offset="0%" stop-color="${shade(t.primary, 34)}"/>
+        <stop offset="100%" stop-color="${shade(t.primary, -8)}"/>
+      </radialGradient>
+    </defs>
+    <circle cx="32" cy="32" r="32" fill="url(#${uid}bg)"/>
+    <circle cx="32" cy="28" r="16" fill="url(#${uid}ball)"
+            stroke="${shade(t.primary, -36)}" stroke-width="1.4"/>
+    <g fill="none" stroke="${stripe}" stroke-width="1.5" opacity="0.9">
+      <line x1="32" y1="12" x2="32" y2="44"/>
+      <line x1="16" y1="28" x2="48" y2="28"/>
+      <path d="M20 16 q6 12 0 24"/>
+      <path d="M44 16 q-6 12 0 24"/>
+    </g>
+    <g>
+      <rect x="17" y="50" width="30" height="11" rx="5.5"
+            fill="${idealText(t.primary)==='#ffffff'?'#0c1020':'#ffffffcc'}" opacity="0.85"/>
+      <text x="32" y="58.3" text-anchor="middle" font-family="system-ui, sans-serif"
+            font-size="8" font-weight="700"
+            fill="${idealText(t.primary)==='#ffffff'?'#ffffff':'#10152a'}">${ini}</text>
+    </g>
+  </svg>`;
+  }
   // A stylized football helmet in team colors — avatar, not a likeness.
   return `
   <svg class="avatar" width="${size}" height="${size}" viewBox="0 0 64 64" role="img"
@@ -296,6 +329,50 @@ function stadium(game, opts = {}) {
 }
 
 /* ---------------- Aerial ballpark (MLB) ---------------------------------- */
+/* A stylized NBA court for the hero strip — hardwood, arcs, and each
+   team's paint in its own colors. Same 240x150 card art contract as
+   stadium()/ballpark(). */
+function court(game, opts = {}) {
+  const w = opts.w || 240, h = opts.h || 150;
+  const home = team(game.home), away = team(game.away);
+  const uid = "c" + Math.random().toString(36).slice(2, 7);
+  return `
+  <svg class="field" viewBox="0 0 ${w} ${h}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img"
+       aria-label="${escapeAttr(game.away)} at ${escapeAttr(game.home)}">
+    <defs>
+      <linearGradient id="${uid}wood" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#c89b6a"/>
+        <stop offset="100%" stop-color="#a97c4f"/>
+      </linearGradient>
+    </defs>
+    <rect x="18" y="30" width="204" height="100" rx="8" fill="url(#${uid}wood)"
+          stroke="#7c5a37" stroke-width="2"/>
+    ${Array.from({ length: 10 }, (_, i) =>
+      `<line x1="${28 + i * 19}" y1="32" x2="${24 + i * 19}" y2="128"
+             stroke="#8f6a41" stroke-width="1" opacity="0.35"/>`).join("")}
+    <line x1="120" y1="30" x2="120" y2="130" stroke="#f4e9d8" stroke-width="2" opacity="0.85"/>
+    <circle cx="120" cy="80" r="16" fill="none" stroke="#f4e9d8" stroke-width="2" opacity="0.85"/>
+    <circle cx="120" cy="80" r="6" fill="${shade(home.primary, 6)}" opacity="0.9"/>
+    <!-- away paint (left) / home paint (right), team-colored -->
+    <rect x="18" y="62" width="34" height="36" fill="${away.primary}" opacity="0.85"
+          stroke="#f4e9d8" stroke-width="1.5"/>
+    <rect x="188" y="62" width="34" height="36" fill="${home.primary}" opacity="0.85"
+          stroke="#f4e9d8" stroke-width="1.5"/>
+    <path d="M52 62 a18 18 0 0 1 0 36" fill="none" stroke="#f4e9d8" stroke-width="1.5" opacity="0.85"/>
+    <path d="M188 62 a18 18 0 0 0 0 36" fill="none" stroke="#f4e9d8" stroke-width="1.5" opacity="0.85"/>
+    <!-- three-point arcs -->
+    <path d="M18 38 q52 42 0 84" fill="none" stroke="#f4e9d8" stroke-width="1.7" opacity="0.8"/>
+    <path d="M222 38 q-52 42 0 84" fill="none" stroke="#f4e9d8" stroke-width="1.7" opacity="0.8"/>
+    <text x="35" y="84" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10"
+          font-weight="800" fill="${idealText(away.primary)}" transform="rotate(-90 35 84)">${escapeAttr(game.away)}</text>
+    <text x="205" y="84" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10"
+          font-weight="800" fill="${idealText(home.primary)}" transform="rotate(90 205 84)">${escapeAttr(game.home)}</text>
+    <text x="120" y="24" text-anchor="middle" font-family="system-ui, sans-serif"
+          font-size="10" font-weight="700" fill="#c9d2e8" opacity="0.9">${escapeAttr(team(game.home).nick || game.home)} home court</text>
+  </svg>`;
+}
+
+
 function ballpark(game, opts = {}) {
   const w = opts.w || 240, h = opts.h || 150;
   const home = team(game.home), away = team(game.away);

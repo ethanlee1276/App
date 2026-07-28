@@ -9,7 +9,8 @@
 const state = {
   data: null, minConf: 6.0, minEdge: 2.0, maxJuice: -350, showAll: false,
   view: "recommended", search: "",
-  sport: new URLSearchParams(location.search).get("sport") === "mlb" ? "mlb" : "nfl",
+  sport: (["mlb", "nba"].includes(new URLSearchParams(location.search).get("sport"))
+    ? new URLSearchParams(location.search).get("sport") : "nfl"),
   static: new URLSearchParams(location.search).has("static"),
   bankroll: null, unitPct: 1.0,      // per-user bankroll sizing (localStorage)
 };
@@ -52,6 +53,11 @@ const SPORT_META = {
          gamesSub: "real park shapes, roof state, live wind and the home-run "
                    + "factor each one is playing to right now",
          api: "/api/mlb/recommendations", fallback: "data/mlb_recommendations.json" },
+  nba: { logo: "🏀", tagline: "Scalpy — NBA probability engine",
+         gamesTitle: "Tonight's slate",
+         gamesSub: "minutes first, distributions not point estimates, every "
+                   + "number clamped toward the de-vigged market",
+         api: "/api/nba/recommendations", fallback: "data/nba.json" },
 };
 
 function applySport() {
@@ -59,7 +65,14 @@ function applySport() {
   window.ACTIVE_SPORT = state.sport;
   window.ACTIVE_TEAMS = state.sport === "mlb"
     ? (typeof MLB_TEAMS !== "undefined" ? MLB_TEAMS : {})
-    : (typeof TEAMS !== "undefined" ? TEAMS : {});
+    : state.sport === "nba"
+      ? (typeof NBA_TEAMS !== "undefined" ? NBA_TEAMS : {})
+      : (typeof TEAMS !== "undefined" ? TEAMS : {});
+  // No NBA long-shot engine exists (nothing like HR/anytime-TD markets),
+  // so the tab hides rather than faking an empty page.
+  const lsBtn = document.querySelector('.nav-btn[data-view="longshots"]');
+  if (lsBtn) lsBtn.style.display = state.sport === "nba" ? "none" : "";
+  if (state.sport === "nba" && state.view === "longshots") switchView("recommended");
   document.getElementById("brand-logo").textContent = meta.logo;
   document.getElementById("tagline").textContent = meta.tagline;
   const gt = document.getElementById("games-title");
@@ -565,13 +578,20 @@ const findGame = (gid) => (((state.data || {}).games) || []).find((g) => gameId(
 
 function gameCard(g) {
   const mlb = state.sport === "mlb";
+  const nba = state.sport === "nba";
   const w = g.weather || {};
   const windTxt = mlb && w.wind_dir && !w.dome
     ? `${Math.round(w.wind_mph)}mph ${w.wind_dir}`
     : `${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
-  const cond = w.dome ? "Indoor" : `${Math.round(w.temp_f)}°F · ${windTxt}`;
+  const cond = nba ? "Indoor hardwood"
+    : w.dome ? "Indoor" : `${Math.round(w.temp_f)}°F · ${windTxt}`;
   let sub;
-  if (mlb) {
+  if (nba) {
+    const bits = [];
+    if (g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
+    if (g.spread) bits.push(`${teamName(g.spread < 0 ? g.home : g.away)} ${-Math.abs(g.spread)}`);
+    sub = bits.join(" · ") || "lines post closer to tip-off";
+  } else if (mlb) {
     const bits = [`O/U ${g.total.toFixed(1)}`];
     if (g.park_name) bits.unshift(g.park_name);
     if (g.lineups_confirmed === false) bits.push("⚠ lineups pending");
@@ -580,7 +600,7 @@ function gameCard(g) {
     const favTxt = g.favorite ? `${teamName(g.favorite)} −${Math.abs(g.spread).toFixed(1)}` : "";
     sub = `${favTxt} · O/U ${g.total.toFixed(1)}`;
   }
-  const art = mlb ? ballpark(g) : stadium(g);
+  const art = mlb ? ballpark(g) : nba ? court(g) : stadium(g);
   const live = g.live || {};
   const isLive = live.state === "live";
   const isFinal = live.state === "final";
@@ -608,7 +628,9 @@ function gameCard(g) {
     liveDetail = `<div class="live-detail"><span class="live-dot sm"></span>${escapeHtml(live.detail)}</div>`;
   }
   // The wind gauge and (for MLB live) the base diamond share the footer row.
-  const footer = isLive && mlb
+  const footer = nba
+    ? `<div class="wind-wrap"><span class="cond">${escapeHtml(cond)}</span>${liveDetail}</div>`
+    : isLive && mlb
     ? `<div class="wind-wrap live-footer">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span>${liveDetail}</div>`
     : `<div class="wind-wrap">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span></div>`;
   // The strip is the hero of the page, so each card is also the door into
@@ -794,7 +816,7 @@ function cardHTML(r) {
         <div class="card-id">${playerAvatar(r.player, r.team, { headshot: r.headshot })}
           <div>
             <div class="player">${escapeHtml(r.player)}</div>
-            <div class="subtitle">${escapeHtml(r.team)} vs ${escapeHtml(r.opponent)} · ${escapeHtml(r.position)}</div>
+            <div class="subtitle">${escapeHtml(r.team)} vs ${escapeHtml(r.opponent)}${r.position ? ` · ${escapeHtml(r.position)}` : ""}</div>
             <div class="pick">${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}
               <span class="book">· ${escapeHtml(r.book)} ${american(r.odds)}</span></div>
           </div>
@@ -1077,6 +1099,7 @@ function renderGamePage() {
     return;
   }
   const mlb = state.sport === "mlb";
+  const nba = state.sport === "nba";
   const w = g.weather || {};
   const live = g.live || {};
   const isLive = live.state === "live";
@@ -1093,8 +1116,10 @@ function renderGamePage() {
   const shots = (state.data.long_shots || []).filter((r) => propInGame(r, g));
 
   // The header re-uses the same art the strip card draws, at full width.
-  const art = mlb ? ballpark(g) : stadium(g);
-  const cond = w.dome ? "Indoor" : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
+  const art = mlb ? ballpark(g) : nba ? court(g) : stadium(g);
+  const cond = nba ? "Indoor hardwood"
+    : w.dome ? "Indoor"
+    : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
   const f = g.factors || {};
   const factorChip = (k, label, hint) => f[k] == null ? "" :
     `<span class="chip ${f[k] > 1.02 ? "up" : f[k] < 0.98 ? "down" : ""}" title="${escapeHtml(hint)}">
@@ -1131,12 +1156,13 @@ function renderGamePage() {
           .filter(Boolean).join(" · "))}</div>
         <div class="chips gp-chips">
           <span class="chip">O/U ${g.total != null ? g.total.toFixed(1) : "—"}</span>
-          ${g.favorite ? `<span class="chip">${escapeHtml(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}</span>` : ""}
+          ${g.favorite ? `<span class="chip">${escapeHtml(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}</span>`
+            : nba && g.spread ? `<span class="chip">${escapeHtml(teamName(g.spread < 0 ? g.home : g.away))} −${Math.abs(g.spread).toFixed(1)}</span>` : ""}
           <span class="chip">${escapeHtml(cond)}</span>
           ${g.roof ? `<span class="chip">roof ${escapeHtml(g.roof)}</span>` : ""}
           ${g.lineups_confirmed === false ? `<span class="chip down">⚠ lineups pending</span>` : ""}
         </div>
-        ${mlb ? parkPanel(g) : stadiumPanel(g)}
+        ${mlb ? parkPanel(g) : nba ? "" : stadiumPanel(g)}
       </div>
     </div>
 
@@ -1148,7 +1174,7 @@ function renderGamePage() {
       <div class="tile"><div class="k">Game bets</div><div class="v">${bets.filter((b) => b._ok).length}</div>
         <div class="tile-sub">moneyline, spread, totals</div></div>
       <div class="tile"><div class="k">Long shots</div><div class="v">${shots.length}</div>
-        <div class="tile-sub">${mlb ? "home runs" : "anytime TDs"} · tracked separately</div></div>
+        <div class="tile-sub">${mlb ? "home runs" : nba ? "none for NBA" : "anytime TDs"} · tracked separately</div></div>
     </div>
 
     ${betsShown.length ? `<div class="section-title">Game bets
@@ -1250,8 +1276,8 @@ function profileHTML(r) {
   const tiles = [["L1", f.last1], ["L3", f.last3], ["L5", f.last5], ["L10", f.last10], ["Season", f.season]]
     .map(([k, v]) => `<div class="form-tile"><div class="k">${k}</div><div class="v">${v == null ? "—" : v}</div></div>`).join("");
   const vals = (r.logs || []).map((l) => l.value);
-  // MLB logs are one GAME per row (with a real date); NFL logs are weeks.
-  const mlb = state.sport === "mlb";
+  // MLB/NBA logs are one GAME per row (with a real date); NFL logs are weeks.
+  const mlb = state.sport !== "nfl";
   const rows = (r.logs || []).map((l) => {
     const hit = l.value > r.line;
     // "Wk" is football vocabulary — an MLB log without a stored date is
@@ -1266,7 +1292,8 @@ function profileHTML(r) {
       <div class="profile-head">
         ${playerAvatar(r.player, r.team, { size: 60, headshot: r.headshot })}
         <div class="meta"><div class="nm">${escapeHtml(r.player)}</div>
-          <div class="sub">${teamMark(r.team, 16)} ${escapeHtml(teamName(r.team))} · ${escapeHtml(r.position)} · vs ${escapeHtml(r.opponent)}</div></div>
+          <div class="sub">${teamMark(r.team, 16)} ${[teamName(r.team), r.position, "vs " + teamName(r.opponent)]
+            .filter((x) => x && x !== "vs ").map(escapeHtml).join(" · ")}</div></div>
         <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>
       </div>
       <div class="form-tiles">${tiles}</div>
@@ -2023,7 +2050,7 @@ function pmAgo(ts) {
 
 /* Polymarket and Fantasy are top-level modes next to NFL/MLB, not tabs
    inside a sport — entering one hides the sport nav; leaving restores it. */
-const STANDALONE_MODES = ["intel", "fantasy", "nba", "ufc", "why"];
+const STANDALONE_MODES = ["intel", "fantasy", "ufc", "why"];
 
 // Header identity per standalone page — the brand logo/tagline follow the
 // ACTIVE page, exactly like the tab emojis. Before this, opening
@@ -2032,7 +2059,6 @@ const STANDALONE_MODES = ["intel", "fantasy", "nba", "ufc", "why"];
 const STANDALONE_BRAND = {
   intel: { logo: "🛰️", tagline: "Polymarket informed-flow intelligence" },
   fantasy: { logo: "🏆", tagline: "Fantasy football — usage, scripts, draft kit" },
-  nba: { logo: "🏀", tagline: "Scalpy — NBA probability engine" },
   ufc: { logo: "🥊", tagline: "Scalpy MMA — dossier-gated fight model" },
   why: { logo: "🧭", tagline: "See the math. Know if it's working." },
 };
@@ -2870,105 +2896,6 @@ function renderSleeperPanel(d, ctx) {
 /* ============================================================
    NBA — Scalpy probability engine
    ============================================================ */
-async function renderNBA() {
-  const host = document.getElementById("nba-body");
-  if (!host) return;
-  let d = null;
-  try {
-    const res = await fetch("data/nba.json?t=" + Date.now());
-    if (res.ok) d = await res.json();
-  } catch (e) {}
-  if (!d) {
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🏀</div>
-      <div class="es-title">No NBA data yet</div>
-      <div class="es-sub">The launcher builds the NBA slate each refresh once you pull
-      and relaunch.</div></div>`;
-    return;
-  }
-  setStandaloneSource("NBA CDN schedule + ingested boxscores + The Odds API",
-                      `NBA · ${escapeHtml(d.date || "")}`);
-  if (d.status !== "slate") {
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🏀</div>
-      <div class="es-title">${d.status === "offseason" ? "NBA offseason" : "NBA data unreachable"}</div>
-      <div class="es-sub">${escapeHtml(d.note || "")}</div></div>
-      <div class="ls-note" style="margin-top:14px">The Scalpy doctrine, ready and waiting:
-        minutes are modeled first (~70% of prop variance is minutes) · every stat gets a real
-        distribution (negative binomial for rebounds/assists — Poisson understates the tails)
-        · the humility clamp shrinks every model number toward the de-vigged market and kills
-        any 12-point disagreement · the approval gate demands edge ≥3 points over break-even,
-        EV ≥3.5%, hold ≤10%, price ≥ −250 · max 4 picks a slate · CLV is the scoreboard.</div>`;
-    return;
-  }
-  const c = d.counts || {};
-  const pctv = (x) => x == null ? "—" : `${(x * 100).toFixed(1)}%`;
-  const meta = d.meta || {};
-  const gradeColorNBA = { A: "var(--good)", B: "var(--cyan)", C: "var(--warn)", D: "var(--bad)" };
-
-  const pickCard = (p) => `
-    <article class="card" style="--grade-color:${gradeColorNBA[p.minutes_grade] || "var(--brand)"}">
-      <div class="card-head">
-        <div><div class="player">${escapeHtml(p.player)} ${escapeHtml(p.side)} ${p.line} ${escapeHtml(p.market_label)}</div>
-          <div class="subtitle">${escapeHtml(p.team)} vs ${escapeHtml(p.opponent)} ·
-            ${escapeHtml(p.book)} ${american(p.odds)}</div></div>
-        <span class="pm-status" style="color:${gradeColorNBA[p.minutes_grade]}"
-          title="Minutes confidence grade — gates the stake">MIN ${escapeHtml(p.minutes_grade)}</span>
-      </div>
-      <div class="metrics">
-        <div class="metric"><div class="k">p_model</div><div class="v">${pctv(p.p_model)}</div></div>
-        <div class="metric"><div class="k">p_market</div><div class="v">${pctv(p.p_market)}</div></div>
-        <div class="metric primary"><div class="k">p_final (w=${p.w})</div><div class="v">${pctv(p.p_final)}</div></div>
-      </div>
-      <div class="metrics" style="margin-top:6px">
-        <div class="metric"><div class="k">Break-even</div><div class="v">${pctv(p.break_even)}</div></div>
-        <div class="metric"><div class="k">Edge</div><div class="v pos">+${(p.edge * 100).toFixed(1)}pts</div></div>
-        <div class="metric primary"><div class="k">EV</div><div class="v pos">+${(p.ev * 100).toFixed(1)}%</div></div>
-      </div>
-      <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">
-        Projection <b>${p.projection}</b> ± ${p.sd} · minutes ${p.base_minutes} → <b>${p.proj_minutes}</b>
-        projected · blowout risk ${(p.blowout_prob * 100).toFixed(0)}% · hold ${(p.hold * 100).toFixed(1)}%
-        · stake ${p.stake_units}u</div>
-      <div class="warning" style="margin-top:8px">KILL IF: ${escapeHtml(p.kill_if)}</div>
-    </article>`;
-
-  const missRow = (m) => `
-    <div class="dl-row nba-miss">
-      <span class="dl-main"><strong>${escapeHtml(m.player)} ${escapeHtml(m.side)} ${m.line}
-        ${escapeHtml(m.market_label)}</strong>
-        <span class="dl-sub">needs: ${escapeHtml(m.what_would_change)}</span></span>
-      <span class="dl-num final">${pctv(m.p_final)} final</span>
-      <span class="dl-num strong ${m.ev >= 0 ? "pos" : ""}">${(m.ev * 100).toFixed(1)}% EV</span>
-    </div>`;
-
-  host.innerHTML = `
-    <div class="stats">
-      <div class="tile"><div class="k">Games</div><div class="v">${meta.games || 0}</div></div>
-      <div class="tile"><div class="k">Props analyzed</div><div class="v">${c.props_analyzed || 0}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">${escapeHtml(meta.odds || "")}</div></div>
-      <div class="tile"><div class="k">Qualifying picks</div><div class="v">${c.picks || 0}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">max 4 per slate by design</div></div>
-      <div class="tile"><div class="k">Near misses</div><div class="v">${c.near_misses || 0}</div></div>
-    </div>
-    ${(meta.teams_on_b2b || []).length ? `<div class="ls-note">Back-to-backs tonight:
-      ${meta.teams_on_b2b.map(escapeHtml).join(", ")} — minutes multipliers applied.</div>` : ""}
-    ${d.no_qualifying ? `<div class="card" style="margin-top:14px"><div class="player">No qualifying plays at current lines.</div>
-        <div style="color:var(--text-body);font-size:13px;margin-top:6px">A no-bet night is a
-        correct output, not a failure — forcing a play on a dead slate costs more than a week's
-        edge. The near-miss report below shows what came closest and what would need to change.</div></div>`
-      : `<div class="section-title" style="margin-top:14px">Qualifying picks
-          <span class="sub">— cleared the humility clamp AND the approval gate</span></div>
-        <div class="cards wide">${(d.picks || []).map(pickCard).join("")}</div>`}
-    <div class="section-title" style="margin-top:22px">Near-miss report
-      <span class="sub">— the closest edges and exactly what would need to change</span></div>
-    <div class="card" style="padding:0">${(d.near_misses || []).map(missRow).join("") ||
-      `<p class="loading" style="padding:12px">Nothing close.</p>`}</div>
-    <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Every pick journals to
-      the Record page at its real price and grades on CLV — win/loss over a week is noise;
-      closing line value over 200+ bets is the only honest measure. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
-}
-
-/* ============================================================
-   UFC — Scalpy MMA engine
-   ============================================================ */
 async function renderUFC() {
   const host = document.getElementById("ufc-body");
   if (!host) return;
@@ -3527,7 +3454,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy", "nba", "ufc", "why"];
+const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy", "ufc", "why"];
 
 function switchView(name) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -3552,7 +3479,6 @@ function switchView(name) {
   if (name === "record") renderRecord();
   if (name === "intel") renderIntel();
   if (name === "fantasy") renderFantasy();
-  if (name === "nba") renderNBA();
   if (name === "ufc") renderUFC();
   if (name === "why") renderWhy();
   if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
@@ -3562,6 +3488,9 @@ function switchView(name) {
 function initialView() {
   const h = (location.hash || "").replace("#", "");
   if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
+  if (h === "nba") {           // legacy hash from when NBA was standalone
+    state.sport = "nba"; applySport(); load(); switchView("recommended"); return;
+  }
   if (STANDALONE_MODES.includes(h)) { enterStandaloneMode(h); return; }
   if (VIEW_ORDER.includes(h)) switchView(h);
 }

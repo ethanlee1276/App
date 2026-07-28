@@ -34,6 +34,7 @@ MLB_SLATE = ROOT / "data" / "mlb_sample_slate.json"
 LIVE_FILES = {
     "nfl": WEB / "data" / "recommendations.json",
     "mlb": WEB / "data" / "mlb_recommendations.json",
+    "nba": WEB / "data" / "nba.json",
 }
 
 # Sleeper league-sync proxy: the browser can't always call api.sleeper.app
@@ -71,6 +72,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api(parse_qs(parsed.query), sport="nfl")
         if parsed.path in ("/api/mlb/recommendations", "/api/mlb/recommendations/"):
             return self._api(parse_qs(parsed.query), sport="mlb")
+        if parsed.path in ("/api/nba/recommendations", "/api/nba/recommendations/"):
+            return self._api(parse_qs(parsed.query), sport="nba")
         if parsed.path.startswith("/api/sleeper/"):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
         return self._static(parsed.path)
@@ -122,6 +125,16 @@ class Handler(BaseHTTPRequestHandler):
             min_edge=raw_edge / 100.0 if raw_edge >= 0.2 else raw_edge,
             max_juice=int(qf("max_juice", -350)),
         )
+        # NBA has no sample pipeline — the built file is the only source.
+        # (The frontend re-applies its filters client-side either way.)
+        if sport == "nba":
+            live = LIVE_FILES["nba"]
+            if live.is_file():
+                self._send(200, live.read_bytes(), ".json")
+            else:
+                self._send(200, json.dumps({"date": "", "status": "not built",
+                                            "games": [], "recommendations": []}).encode(), ".json")
+            return
         try:
             if sport == "mlb":
                 result = run_mlb_slate(MLB_SLATE, config)

@@ -364,7 +364,8 @@ SWEEP_VIEWS = [
     ("NFL Recommended", "?sport=nfl#recommended", "#view-recommended"),
     ("Polymarket", "?sport=mlb#intel", "#intel-body"),
     ("Fantasy", "?sport=mlb#fantasy", "#fantasy-body"),
-    ("NBA", "?sport=mlb#nba", "#nba-body"),
+    ("NBA Recommended", "?sport=nba#recommended", "#view-recommended"),
+    ("NBA Players", "?sport=nba#players", "#players"),
     ("UFC", "?sport=mlb#ufc", "#ufc-body"),
     ("Why Us", "?sport=mlb#why", "#why-body"),
 ]

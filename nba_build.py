@@ -92,7 +92,13 @@ def main() -> None:
     args = ap.parse_args()
 
     out: dict = {"generated_at": datetime.datetime.now()
-                 .isoformat(timespec="seconds"), "date": args.date}
+                 .isoformat(timespec="seconds"), "date": args.date,
+                 "sport": "nba", "generated_from": "live-nba",
+                 "recommendations": [], "game_bets": [], "long_shots": [],
+                 "longshot_watch": [],
+                 "market_scan": {"stale": [], "arbs": [], "middles": [],
+                                 "low_holds": [], "longshots": []},
+                 "counts": {"props_analyzed": 0, "recommended": 0}}
 
     try:
         games = parse_schedule_day(fetch_schedule(), args.date)
