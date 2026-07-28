@@ -142,3 +142,89 @@ def run_nba_slate(props: list[dict], meta: dict | None = None) -> dict:
                    "near_misses": len(misses), "skipped": len(skips)},
         "meta": meta or {},
     }
+
+
+# --- shared-schema adapter --------------------------------------------------
+# The seven shared pages (Recommended, Edge Board, Scanner, Trending,
+# Players, Record) all read one slate shape. This maps Scalpy's cards into
+# it WITHOUT changing Scalpy's identity: kind=pick → recommended, grade
+# Play; near-miss → Pass with its gate failures as the warnings; skips
+# (thin samples) carry no numbers and are dropped. "edge" keeps the shared
+# meaning (model probability minus the de-vigged fair), and the humility
+# clamp's note rides in the reasons.
+
+def _avg(vals, n=None):
+    xs = vals[:n] if n else vals
+    return round(sum(xs) / len(xs), 2) if xs else None
+
+
+def shared_recommendations(props: list[dict],
+                           lines_map: dict | None = None,
+                           dates_map: dict | None = None) -> list[dict]:
+    """Every evaluable prop as a shared-schema recommendation dict.
+
+    ``lines_map``: {(player, market): [line dicts]} — the multi-book quotes
+    the Scanner needs (Scalpy itself only keeps the best two-way price).
+    ``dates_map``: {player: [ISO dates, newest first]} for real log labels.
+    """
+    out = []
+    for prop in props:
+        r = evaluate_prop(prop)
+        if r["kind"] == "skip":
+            continue
+        vals = [float(v) for v in (prop.get("values") or [])]
+        dates = (dates_map or {}).get(prop["player"]) or []
+        recent3, prior = _avg(vals, 3), _avg(vals[3:]) if len(vals) > 3 else None
+        trend, delta = "flat", 0.0
+        if recent3 is not None and prior:
+            delta = round(recent3 - prior, 2)
+            rel = delta / prior if prior else 0.0
+            trend = "up" if rel > 0.10 else "down" if rel < -0.10 else "flat"
+        pick = r["kind"] == "pick"
+        grade = "Play" if pick else "Pass"
+        warnings = [] if pick else [f"Approval gate: {f}" for f in r.get("fails", [])]
+        reasons = [f"Projected {r['proj_minutes']} min × per-minute rate → "
+                   f"{r['projection']} {r['market_label'].lower()}",
+                   f"Minutes grade {r['minutes_grade']} · blowout risk "
+                   f"{r['blowout_prob']:.0%}"]
+        if r.get("clamp_note"):
+            reasons.append(r["clamp_note"])
+        out.append({
+            "player": r["player"], "team": r.get("team", ""),
+            "opponent": r.get("opponent", ""),
+            "market": r["market"], "market_label": r["market_label"],
+            "position": "", "usage_role": f"minutes {r['minutes_grade']}",
+            "headshot": "",
+            "side": r["side"], "book": r.get("book", ""),
+            "line": r["line"], "odds": r["odds"],
+            "projection": r["projection"],
+            "proj_low": round(r["projection"] - r["sd"], 1),
+            "proj_high": round(r["projection"] + r["sd"], 1),
+            "hit_prob": r["p_final"], "fair_prob": r["p_market"],
+            "edge": round(r["p_final"] - r["p_market"], 4),
+            "ev_per_unit": r["ev"],
+            "confidence": round(r["p_final"] * 10, 1),
+            "stake_units": r.get("stake_units", 0.0),
+            "grade": grade, "has_market": True,
+            "recent_values": vals[:12],
+            "trend": trend, "trend_delta": delta,
+            "recommended": pick, "warnings": warnings,
+            "headline": f"{r['player']} {r['side']} {r['line']:g} {r['market_label']}",
+            "summary": (f"Model {r['p_final']:.0%} vs market {r['p_market']:.0%} "
+                        f"after the humility clamp — needs {r['break_even']:.0%} "
+                        f"to break even at {r['odds']:+d}."),
+            "reasons": reasons,
+            "all_lines": (lines_map or {}).get((r["player"], r["market"]), []),
+            "logs": [{"week": i + 1,
+                      "date": dates[i] if i < len(dates) else "",
+                      "opponent": "", "value": v, "home": 1}
+                     for i, v in enumerate(vals[:20])],
+            "form": {"last1": _avg(vals, 1), "last3": _avg(vals, 3),
+                     "last5": _avg(vals, 5), "last10": _avg(vals, 10),
+                     "season": _avg(vals), "career": _avg(vals),
+                     "vs_opponent": None},
+        })
+    # Shared ordering: recommended first, then confidence, then edge.
+    out.sort(key=lambda x: (x["recommended"], x["confidence"], x["edge"]),
+             reverse=True)
+    return out

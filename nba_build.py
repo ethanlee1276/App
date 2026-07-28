@@ -62,6 +62,7 @@ def player_history(conn, teams: set[str]) -> dict:
     for p in hist.values():
         weeks = sorted(p["by_week"], reverse=True)[:20]
         p["minutes"] = [p["by_week"][w].get("min", 0.0) for w in weeks]
+        p["dates"] = weeks                      # ISO dates, newest first
         for stat in ("pts", "reb", "ast", "fg3m"):
             p[stat] = [p["by_week"][w].get(stat, 0.0) for w in weeks]
     return hist
@@ -205,6 +206,39 @@ def main() -> None:
             "teams_on_b2b": sorted(played_yday & teams),
         })
         out.update(status="slate", **picks_result)
+
+        # Shared-schema layer: the same slate shape NFL/MLB emit, so the
+        # seven shared pages can render NBA. Scalpy's own keys stay put.
+        try:
+            from engine.nba.pipeline import shared_recommendations
+            lines_map = {}
+            for pr in slate.props:
+                if pr.lines:
+                    lines_map[(pr.player, pr.market)] = [
+                        {"book": ln.book, "line": ln.line,
+                         "over_odds": ln.over_odds, "under_odds": ln.under_odds}
+                        for ln in pr.lines]
+            dates_map = {name: h.get("dates", []) for name, h in hist.items()}
+            recs = shared_recommendations(props, lines_map, dates_map)
+            out["recommendations"] = recs
+            out["counts"] = {**picks_result["counts"],
+                             "props_analyzed": len(recs),
+                             "recommended": sum(1 for r in recs
+                                                if r["recommended"])}
+            from engine.marketscan import scan_recommendations
+            ms = scan_recommendations(recs)
+            ms["stale"] = (out.get("market_scan") or {}).get("stale", [])
+            out["market_scan"] = ms
+            # Odds attach set spread/total on the slate games after the
+            # games list was written — carry them across for game cards.
+            by_pair = {(g.home, g.away): g for g in slate.games}
+            for gd in out.get("games", []):
+                g = by_pair.get((gd["home"], gd["away"]))
+                if g is not None:
+                    gd["spread"] = g.spread
+                    gd["total"] = g.total
+        except Exception as exc:
+            print(f"⚠️  shared-schema layer skipped: {exc}")
 
         # Journal picks + stale flags (sport='nba') so the Record page and
         # the sampler grade them like every other module. Settles from our

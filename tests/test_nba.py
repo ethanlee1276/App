@@ -188,6 +188,54 @@ def test_nba_cdn_parsers():
     assert by_market["fg3m"]["value"] == 4.0
 
 
+def test_shared_schema_maps_scalpy_without_changing_it():
+    """The adapter that lets NBA render on the shared seven pages: a pick
+    is recommended (grade Play), a near-miss is a Pass wearing its gate
+    failures as warnings, a skip vanishes, and edge keeps the shared
+    meaning (model minus de-vigged fair)."""
+    from engine.nba.pipeline import shared_recommendations
+
+    good = _prop(player="Pick Guy", line=22.5, over=115, under=-135,
+                 rate_val=23.2)
+    thin = _prop(player="Skip Guy", games=2)
+    props = [good, thin]
+    lines = {("Pick Guy", "pts"): [
+        {"book": "DK", "line": 22.5, "over_odds": 115, "under_odds": -135},
+        {"book": "FanDuel", "line": 22.5, "over_odds": 110, "under_odds": -130}]}
+    dates = {"Pick Guy": ["2026-01-15", "2026-01-13"]}
+    recs = shared_recommendations(props, lines, dates)
+
+    assert [r["player"] for r in recs] != []          # skip dropped
+    assert all(r["player"] != "Skip Guy" for r in recs)
+    r = next(x for x in recs if x["player"] == "Pick Guy")
+    # Shared-schema essentials the pages read:
+    for key in ("market_label", "hit_prob", "fair_prob", "edge", "grade",
+                "recommended", "all_lines", "logs", "form", "headline"):
+        assert key in r, key
+    assert abs(r["edge"] - (r["hit_prob"] - r["fair_prob"])) < 1e-9
+    assert len(r["all_lines"]) == 2                   # multi-book, for Scanner
+    assert r["logs"][0]["date"] == "2026-01-15"       # real dates on logs
+    if r["recommended"]:
+        assert r["grade"] == "Play" and r["stake_units"] > 0
+    else:
+        assert r["grade"] == "Pass" and r["warnings"]
+
+
+def test_shared_schema_near_miss_is_an_honest_pass():
+    from engine.nba.pipeline import shared_recommendations, evaluate_prop
+    # A fine player at a price with no value: evaluates, fails the gate.
+    p = _prop(player="Near Guy", line=24.5, over=-125, under=-105,
+              rate_val=24.0)
+    kind = evaluate_prop(p)["kind"]
+    recs = shared_recommendations([p], {}, {})
+    if kind == "near_miss":
+        r = recs[0]
+        assert r["recommended"] is False and r["grade"] == "Pass"
+        assert any("Approval gate" in w for w in r["warnings"])
+    else:
+        assert kind == "pick" and recs[0]["recommended"] is True
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
