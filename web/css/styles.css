@@ -312,7 +312,10 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 
 /* ---------------- Trending page ---------------- */
 .trend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
-.trend-col { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 16px; }
+/* min-width: 0 — grid items default to min-width:auto, which lets a wide
+   row inside push the column past its track and the whole page into
+   horizontal scroll on phones (the classic grid blowout). */
+.trend-col { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 16px; min-width: 0; }
 .trend-col h3 { font-size: 14px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .trend-col .colsub { color: var(--text-mute); font-size: 12px; margin-bottom: 12px; }
 .trow { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: var(--radius-sm); cursor: pointer; transition: background .15s ease; }
