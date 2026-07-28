@@ -230,6 +230,14 @@ def ingest_nfl(conn, seasons: list[int]) -> dict:
         rows = nfl_player_log_rows(weekly, season)
         rows += nfl_usage_rows(weekly, season)
         rows += nfl_td_rows(weekly, season)
+        # Snap counts ride the full ingest too — they were maintenance-only
+        # at first, which left a July backfill without snap shares until
+        # the in-season (Aug-Feb) job first ran.
+        try:
+            from .sources.nflverse import load_snap_counts
+            rows += snap_count_rows(load_snap_counts(season), season)
+        except DataUnavailable as exc:
+            result["skipped"].append(f"nfl snap counts {season}: {exc}")
         n = db.upsert_player_logs(conn, rows)
         result["player_logs"] += n
         db.log_ingest(conn, "nfl", "player_logs", str(season), n)
