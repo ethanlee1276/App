@@ -317,6 +317,35 @@ def main() -> None:
         except Exception as exc:
             print(f"⚠️  Line-movement stamps skipped: {exc}")
 
+    # Live picks: journaled pre-game picks whose games are in progress,
+    # with each player's current stat line from the live boxscore. The
+    # model never bets in-play; this is the tracker for bets already made.
+    try:
+        from engine import ledger as _lp_ledger
+        from engine.livepicks import assemble_live_picks
+        from engine.mlb.livestats import parse_live_stats
+        from engine.mlb.sources.statslogs import fetch_boxscore
+        _lpc = _lp_ledger.connect()
+        open_bets = [dict(r) for r in _lpc.execute(
+            "SELECT player, market, side, line, odds, stake_units FROM bets "
+            "WHERE status='open' AND sport='mlb' AND date=? AND category='main'",
+            (args.date,))]
+        progress: dict = {}
+        for g in slate.games:
+            if (g.live and g.live.state == "live" and getattr(g, "game_pk", 0)):
+                try:
+                    progress.update(parse_live_stats(fetch_boxscore(g.game_pk)))
+                except Exception:
+                    pass
+        result["live_picks"] = assemble_live_picks(
+            open_bets, result["recommendations"], result["games"], progress)
+        if result["live_picks"]:
+            n_clear = sum(1 for r in result["live_picks"] if r["status"] == "cleared")
+            print(f"Live picks: {len(result['live_picks'])} in progress"
+                  + (f", {n_clear} already cleared" if n_clear else ""))
+    except Exception as exc:
+        print(f"⚠️  live-pick tracker skipped: {exc}")
+
     # HR board funnel — when the Long Shots page is empty, this line says why.
     dg = result.get("longshot_diag") or {}
     if dg:

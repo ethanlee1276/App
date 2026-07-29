@@ -120,6 +120,9 @@ class MLBGame:
     # game a prop is for, and the labels the site shows.
     game_number: int = 1
     doubleheader: bool = False
+    # MLB Stats API gamePk — lets the build re-fetch this game's boxscore
+    # (live per-player stats for the live-pick tracker).
+    game_pk: int = 0
     total: float = 8.5                         # game run total (O/U)
     weather: MLBWeather = field(default_factory=MLBWeather)
     lineups_confirmed: bool = True

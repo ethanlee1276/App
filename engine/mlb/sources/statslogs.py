@@ -266,7 +266,8 @@ def build_live_slate(date: str, season: int | None = None,
                            pitchers=pitchers, lineups_confirmed=lineups_confirmed,
                            plate_umpire=parse_officials(box),
                            game_number=int(g.get("gameNumber") or 1),
-                           doubleheader=(g.get("doubleHeader") or "N") != "N")
+                           doubleheader=(g.get("doubleHeader") or "N") != "N",
+                           game_pk=int(game_pk or 0))
             if weather is not None:
                 game.weather = weather
             games.append(game)

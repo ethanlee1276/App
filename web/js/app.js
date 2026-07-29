@@ -317,6 +317,7 @@ function renderAll() {
   }
   renderStats();
   renderEmptySlate();
+  renderLivePicks();
   renderBestBets();
   renderTeamForm();
   renderGames();
@@ -503,6 +504,65 @@ async function renderBestBets() {
       in this box, it isn't a pick.</span></div>
     ${picksBlock}
     ${signalsBlock}`;
+}
+
+/* ============================================================
+   Live picks — journaled PRE-GAME picks whose games are in progress,
+   with the player's current stat line. The model never bets in-play;
+   this answers "how are the bets we already made doing?" the moment
+   the games start, instead of going dark until settlement.
+   ============================================================ */
+function renderLivePicks() {
+  const host = document.getElementById("live-picks");
+  if (!host) return;
+  const rows = (state.data || {}).live_picks || [];
+  if (!rows.length) { host.innerHTML = ""; return; }
+
+  const statusBits = (r) => {
+    if (r.status === "cleared")
+      return `<span style="color:var(--good);font-weight:800">✓ CLEARED</span>
+        <span style="display:block;color:var(--text-mute);font-size:11.5px">${r.current} so far — over ${r.line} is locked</span>`;
+    if (r.status === "busted")
+      return `<span style="color:var(--bad);font-weight:800">✕ BUSTED</span>
+        <span style="display:block;color:var(--text-mute);font-size:11.5px">${r.current} already — under ${r.line} can't cash</span>`;
+    if (r.current != null) {
+      const needs = r.side === "OVER"
+        ? `needs ${Math.max(1, Math.ceil(r.line - r.current))} more`
+        : `must stay at or under ${Math.floor(r.line)}`;
+      return `<span style="font-weight:800">${r.current} so far</span>
+        <span style="display:block;color:var(--text-mute);font-size:11.5px">${needs}</span>`;
+    }
+    return `<span style="color:var(--text-mute)">in play</span>`;
+  };
+  const gameLine = (g) => {
+    const score = (g.home_score != null)
+      ? `${escapeHtml(teamName(g.away))} ${g.away_score}–${g.home_score} ${escapeHtml(teamName(g.home))}`
+      : `${escapeHtml(teamName(g.away))} @ ${escapeHtml(teamName(g.home))}`;
+    return `${score}${g.period ? ` · ${escapeHtml(g.period)}` : ""}${
+      g.doubleheader ? ` · DH Game ${g.game_number || 1}` : ""}`;
+  };
+
+  host.innerHTML = `
+    <div class="section-title" style="margin-top:8px">🔴 Live picks
+      <span class="sub">— recommended and journaled BEFORE first pitch, now in progress.
+      Never new in-play bets: the model prices full games only.</span></div>
+    <div class="card" style="padding:0;border-left:3px solid var(--bad)">
+      ${rows.map((r) => `
+        <div style="display:flex;gap:12px;align-items:center;padding:11px 14px;
+                    border-bottom:1px solid rgba(255,255,255,.05)">
+          <span class="live-dot" style="flex-shrink:0"></span>
+          <span style="flex:1;min-width:0">
+            <strong>${escapeHtml(r.player)} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}</strong>
+            <span style="color:var(--text-mute)"> · placed pre-game ${american(r.odds)}${
+              r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
+            <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">${gameLine(r.game)}</span>
+          </span>
+          <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
+        </div>`).join("")}
+      <p style="padding:8px 14px;margin:0;font-size:11.5px;color:var(--text-mute)">
+        Stat lines update with the board's refresh cycle (boxscore data can lag a few
+        minutes). Every pick settles officially against final results overnight.</p>
+    </div>`;
 }
 
 /* ============================================================
