@@ -135,6 +135,23 @@ def test_unmatchable_bets_still_show():
     assert rows[-1] is ghost                     # unmapped sorts last
 
 
+def test_team_bets_track_from_the_live_score():
+    """Game totals / team totals / run lines get a live "current" from the
+    scoreboard, sportsbook-style. Runs only go up, so totals can clear or
+    bust early; a spread margin swings, so it only ever tracks; a moneyline
+    has no stat to bar at all."""
+    bets = [_bet("SF@LAD", "total", side="OVER", line=4.5),     # 5 runs in
+            _bet("LAD", "team_total", side="UNDER", line=2.5),  # LAD has 3
+            _bet("LAD", "spread", side="OVER", line=1.5),       # margin +1
+            _bet("LAD", "moneyline", line=0.5)]
+    rows = assemble_live_picks(bets, [], [LIVE_G], {})
+    by = {r["market"]: r for r in rows}
+    assert by["total"]["status"] == "cleared" and by["total"]["current"] == 5.0
+    assert by["team_total"]["status"] == "busted" and by["team_total"]["current"] == 3.0
+    assert by["spread"]["status"] == "tracking" and by["spread"]["current"] == 1.0
+    assert by["moneyline"]["status"] == "tracking" and by["moneyline"]["current"] is None
+
+
 # Runner at the TRUE END — a test defined after it never runs.
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

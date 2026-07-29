@@ -613,6 +613,32 @@ function renderLivePicks() {
     return `${score}${g.state === "final" ? " · Final" : g.period ? ` · ${escapeHtml(g.period)}` : ""}${
       g.doubleheader ? ` · DH Game ${g.game_number || 1}` : ""}`;
   };
+  // Sportsbook-style progress bar: fill = where the stat is now, tick = the
+  // line. Green once an over is home, red once an under is dead, neutral
+  // while it's still in the balance. Only for rows with a countable stat —
+  // moneylines have no bar (the score line tells that story).
+  const progressBar = (r) => {
+    if (r.current == null || !(r.line > 0) || r.market === "moneyline") return "";
+    // Span the bar to the first whole number past the line (what an OVER
+    // actually needs), stretched if the stat has already sailed past it.
+    const target = Math.max(Math.ceil(r.line + 0.001), 1);
+    const span = Math.max(target, r.current, 1);
+    const fillPct = Math.min(100, Math.max(0, (r.current / span) * 100));
+    const tickPct = Math.min(98.5, (r.line / span) * 100);
+    const good = r.status === "cleared" || r.status === "won_pending";
+    const bad = r.status === "busted" || r.status === "lost_pending";
+    const color = good ? "var(--good)" : bad ? "var(--bad)" : "var(--brand)";
+    return `
+      <span style="display:block;position:relative;margin-top:7px;height:5px;border-radius:3px;
+                   background:rgba(255,255,255,.10);max-width:420px">
+        <span style="position:absolute;left:0;top:0;bottom:0;width:${fillPct}%;
+                     border-radius:3px;background:${color};transition:width .4s"></span>
+        <span style="position:absolute;left:${tickPct}%;top:-3px;bottom:-3px;width:2px;
+                     border-radius:1px;background:var(--text-mute)"></span>
+      </span>
+      <span style="display:block;font-size:11px;color:var(--text-mute);margin-top:3px">
+        ${r.current} now · line ${r.line}</span>`;
+  };
   const nLive = rows.filter((r) => r.phase === "live").length;
 
   host.innerHTML = `
@@ -631,6 +657,7 @@ function renderLivePicks() {
             <span style="color:var(--text-mute)"> · placed ${american(r.odds)}${
               r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
             <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">${gameLine(r.game)}</span>
+            ${progressBar(r)}
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
         </div>`).join("")}

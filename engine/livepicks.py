@@ -100,7 +100,21 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
         status = "upcoming"
         if phase == "live":
             status = "tracking"
-            if current is not None:
+            if current is None and hs is not None and as_ is not None:
+                # Team markets track from the live score, same as the books
+                # do. Moneyline has no stat to bar — the score line says it.
+                pick_home = b.get("player") == g.get("home")
+                if market == "total":
+                    current = float(hs) + float(as_)
+                elif market == "team_total":
+                    current = float(hs if pick_home else as_)
+                elif market == "spread":
+                    current = float(hs - as_) if pick_home else float(as_ - hs)
+            # Early verdicts only where the number can't come back down:
+            # player stats and run totals only ever go UP, so an over can
+            # lock in and an under can die mid-game. A spread margin swings
+            # both ways, so it tracks without ever locking.
+            if current is not None and market not in ("spread", "moneyline"):
                 if side == "OVER" and current > line:
                     status = "cleared"          # an over can lock in early…
                 elif side == "UNDER" and current > line:
