@@ -385,111 +385,119 @@ async function renderBestBets() {
   if (!host) return;
   const rec = await loadRecordOnce();
   const sig = tonightSignals();
-  const rows = [];
+  const ud = unitDollars();
 
+  // ============ SPACE 1: TONIGHT'S PICKS — the actual bets ============
+  // Exactly the bets the "Recommended bets" tile counts. Nothing else is
+  // allowed in this box, so it can never contradict the tile again.
+  const propKey = (p, m) => `${String(p || "").toLowerCase()}|${String(m || "").toLowerCase()}`;
+  const staleByKey = new Map(sig.stale.filter((s) => s.player)
+    .map((s) => [propKey(s.player, s.market), s]));
+
+  const picks = [];
+  for (const b of sig.sharpBets) {
+    picks.push({ tag: "SHARP", color: "var(--cyan)", quality: 95 + (b.ev_per_unit || 0),
+      label: `${b.headline} · ${b.matchup} ${american(b.odds)}`,
+      metric: `${signedPct(b.ev_per_unit)} EV`, stake: b.stake_units, grade: b.grade,
+      why: "sharp-anchor price gap — backtested +13.5% against real closes" });
+  }
+  for (const b of sig.modelBets) {
+    picks.push({ tag: "GAME", color: "var(--brand)", quality: b.quality || b.confidence * 10 || 0,
+      label: `${b.headline} · ${b.matchup} ${american(b.odds)}`,
+      metric: signedPct(b.edge), stake: b.stake_units, grade: b.grade,
+      why: "game bet that cleared every gate" });
+  }
+  for (const r of sig.props) {
+    const twin = staleByKey.get(propKey(r.player, r.market));
+    picks.push({ tag: "PROP", color: "var(--brand)", quality: r.quality || r.confidence * 10 || 0,
+      label: `${r.player} ${r.side} ${r.line} ${r.market_label} ${american(r.odds)} (${r.book})`
+        + (r.doubleheader ? ` — DH Game ${r.game_number || 1}` : ""),
+      metric: signedPct(r.edge), stake: r.stake_units, grade: r.grade,
+      why: (r.quality != null ? `quality ${r.quality}/100 · Tier ${r.tier} · ${r.volatility}` : "cleared every gate")
+        + (twin ? ` · BONUS: ${twin.book} is lagging the field at ${american(twin.odds)} — take the cheaper price` : "") });
+  }
+  picks.sort((a, b) => b.quality - a.quality);
+
+  const perf = rec.overall || {};
+  const journalNote = perf.settled
+    ? `The journal so far: ${perf.wins}-${perf.losses} (${signedPct(perf.roi || 0)} ROI) — every pick below is graded there nightly.`
+    : "Every pick below is journaled at its real price and graded nightly on the Record page.";
+
+  const pickRow = (p, i) => `
+    <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
+                border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="opacity:.45;min-width:18px;font-weight:700">${i + 1}</span>
+      <span class="grade ${gradeClass(p.grade)}" style="flex-shrink:0">${escapeHtml(p.grade || "")}</span>
+      <span style="flex:1;min-width:0"><strong>${escapeHtml(p.label)}</strong>
+        <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">${escapeHtml(p.why)}</span></span>
+      <span style="text-align:right;white-space:nowrap"><span style="font-weight:800">${escapeHtml(p.metric)}</span>
+        ${p.stake > 0 ? `<span style="display:block;color:var(--good);font-size:12px;font-weight:700">${
+          ud > 0 ? money(stakeDollars(p.stake)) + " · " : ""}${p.stake.toFixed(2)}u</span>` : ""}</span>
+    </div>`;
+
+  const picksBlock = picks.length ? `
+    <div class="card" style="padding:0;border-left:3px solid var(--good)">
+      <p style="padding:10px 14px 6px;margin:0;font-size:12.5px;color:var(--text-mute)">
+        <b style="color:var(--text)">${picks.length} pick${picks.length === 1 ? "" : "s"} tonight — this is the whole list.</b>
+        Same count as the tile above, ranked by quality. ${escapeHtml(journalNote)}</p>
+      ${picks.map(pickRow).join("")}
+    </div>` : `
+    <div class="card" style="border-left:3px solid var(--warn)">
+      <p style="margin:0;font-weight:800;font-size:15px">No qualifying plays at current numbers.</p>
+      <p style="margin:6px 0 0;color:var(--text-mute);font-size:13px">That sentence is the system
+      working, not failing — every market tonight either missed the tier's edge bar, failed a
+      gate, or graded below 70. Loosening the sliders shows what was held and why.</p>
+    </div>`;
+
+  // ======= SPACE 2: tracked signals — measurements, NOT picks =======
+  const signals = [];
   for (const a of sig.arbs.slice(0, 2)) {
-    rows.push({ type: "ARB", color: "var(--good)",
+    signals.push({ tag: "ARB",
       label: `${a.bet}: Over ${a.over.line} ${american(a.over.odds)} (${a.over.book}) + Under ${a.under.line} ${american(a.under.odds)} (${a.under.book})`,
       metric: `+${(a.profit_pct * 100).toFixed(1)}%`,
-      why: "locked profit whichever way it lands — price math, no forecast · "
-         + "not journaled: with both sides held there is nothing to grade" });
+      why: "locked profit whichever way it lands — price math, no forecast; not journaled (nothing to grade)" });
   }
-  for (const b of sig.sharpBets.slice(0, 3)) {
-    rows.push({ type: "SHARP", color: "var(--cyan)",
-      label: `${b.headline} · ${b.matchup}`,
-      metric: `${signedPct(b.ev_per_unit)} EV`,
-      stake: b.stake_units,
-      why: "soft book pays more than the sharp book's fair price — backtested "
-         + "+13.5% against real closes · journaled in the main record" });
-  }
-  // A prop the model recommends can ALSO be the one a slow book left cheap.
-  // That's one bet with two reasons, not two bets — it gets a single merged
-  // row here so the list never shows the same prop twice at two prices.
-  const propKey = (p, m) => `${String(p || "").toLowerCase()}|${String(m || "").toLowerCase()}`;
-  const modelByKey = new Map(sig.props.map((r) => [propKey(r.player, r.market), r]));
   const st = rec.stale_flags || {};
-  const sampler = (st.wins || 0) + (st.losses || 0) > 0
+  const staleRec = (st.wins || 0) + (st.losses || 0) > 0
     ? ` · sampler so far ${st.wins}-${st.losses} (${signedPct(st.roi || 0)})` : "";
-  const staleShown = sig.stale.slice(0, 3);
-  for (const s of staleShown) {
-    const twin = s.player && modelByKey.get(propKey(s.player, s.market));
-    rows.push({ type: "STALE", color: "var(--warn)",
+  const pickKeys = new Set(sig.props.map((r) => propKey(r.player, r.market)));
+  for (const s of sig.stale.filter((x) => !pickKeys.has(propKey(x.player, x.market))).slice(0, 3)) {
+    signals.push({ tag: "STALE",
       label: `${s.bet} ${american(s.odds)} (${s.book}) — the field prices it ${american(s.fair_odds)}`,
       metric: `+${(s.gap_pts || 0).toFixed(1)}pt`,
-      stake: twin ? twin.stake_units : 0,
-      why: twin
-        ? `one bet, two reasons: the model recommends this side too (${signedPct(twin.edge)} edge, `
-          + `journaled at full stake) AND ${s.book} is lagging the field — take this cheaper price`
-        : `one book lagging the field — beat the close 64.8% of 30k measured quotes${sampler} · sampler-journaled at a flat 0.1u` });
+      why: `one book lagging the field — beat the close 64.8% of 30k quotes${staleRec} · paper-tracked at 0.1u` });
   }
   for (const p of sig.hr.slice(0, 2)) {
-    rows.push({ type: "HR", color: "var(--brand)",
+    signals.push({ tag: "HR",
       label: `${p.player} — ${p.market_label} ${american(p.odds)} (${p.book})`,
       metric: pct(p.model_prob),
-      why: "the strict HR tier — measured +11% ROI over its first 214 graded "
-         + "picks · tracked in the long-shot bucket (flat 0.1u)" });
+      why: "strict HR tier (+11% ROI over its first 214) · tracked in the long-shot bucket, never a headline pick" });
   }
-  const perf = rec.overall || {};
-  const propWhy = perf.settled
-    ? `model pick that cleared every gate · journal: ${perf.wins}-${perf.losses} (${signedPct(perf.roi || 0)} ROI)`
-    : "model pick that cleared every gate — graded nightly on the Record page";
-  // Model-driven game bets (non-sharp) and props share the MODEL tier.
-  // Both honor YOUR sliders via tonightSignals, so this list, the tiles
-  // and the boards below can never disagree about what qualifies.
-  const modelBetsShown = sig.modelBets.slice(0, 2);
-  for (const b of modelBetsShown) {
-    rows.push({ type: "MODEL", color: "var(--text-mute)",
-      label: `${b.headline} · ${b.matchup} ${american(b.odds)}`,
-      metric: signedPct(b.edge), stake: b.stake_units, why: propWhy });
-  }
-  const staleKeys = new Set(staleShown.filter((s) => s.player)
-    .map((s) => propKey(s.player, s.market)));
-  const propsNotMerged = sig.props.filter((r) => !staleKeys.has(propKey(r.player, r.market)));
-  const propsShown = propsNotMerged.slice(0, 3);
-  for (const r of propsShown) {
-    rows.push({ type: "MODEL", color: "var(--text-mute)",
-      label: `${r.player} ${r.side} ${r.line} ${r.market_label} ${american(r.odds)} (${r.book})`,
-      metric: signedPct(r.edge), stake: r.stake_units, why: propWhy });
-  }
+  const signalsBlock = signals.length ? `
+    <details class="rec-disclose" style="margin-top:10px">
+      <summary>Tracked signals tonight (${signals.length}) — measurements, not picks</summary>
+      <div style="padding:0">
+        <p style="margin:6px 0 8px;font-size:12px;color:var(--text-mute)">These are NOT
+        recommendations. They're the signal families the site paper-tracks in quarantined
+        Record buckets — each has a fixed promotion bar, and none is money tonight.</p>
+        ${signals.map((s) => `
+          <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 4px;
+                      border-bottom:1px solid rgba(255,255,255,.05);opacity:.75">
+            <span class="chip" style="min-width:50px;text-align:center;flex-shrink:0">${s.tag}</span>
+            <span style="flex:1;min-width:0;font-size:12.5px">${escapeHtml(s.label)}
+              <span style="display:block;color:var(--text-mute);font-size:11.5px">${escapeHtml(s.why)}</span></span>
+            <span style="font-weight:700;font-size:12.5px;white-space:nowrap">${escapeHtml(s.metric)}</span>
+          </div>`).join("")}
+      </div>
+    </details>` : "";
 
-  if (!rows.length) { host.innerHTML = ""; return; }
-  // Reconcile with the tiles OUT LOUD: this list previews the recommended
-  // bets and adds the untracked signal families, so its row count and the
-  // "Recommended bets" tile measure different things — say exactly how.
-  const nBets = sig.props.length + sig.sharpBets.length + sig.modelBets.length;
-  const heldBack = (propsNotMerged.length - propsShown.length)
-    + (sig.modelBets.length - modelBetsShown.length)
-    + Math.max(0, sig.sharpBets.length - 3);
-  const extras = [];
-  if (staleShown.length || sig.hr.length) extras.push(
-    `${Math.min(3, staleShown.length) + Math.min(2, sig.hr.length)} sampler signal(s) tracked separately at a flat 0.1u (never in the headline record)`);
-  if (sig.arbs.length) extras.push(`${Math.min(2, sig.arbs.length)} arb(s) — pure price math, not journaled`);
-  const ledger = `<p style="padding:9px 14px 0;margin:0;font-size:12px;color:var(--text-mute)">
-    <b>${nBets} recommended bet${nBets === 1 ? "" : "s"} tonight</b> (the tile above)${
-      heldBack > 0 ? ` — top ${nBets - heldBack} here, all ${nBets} in the cards and Game bets sections below` : ", all shown here"}${
-      extras.length ? " · plus " + extras.join(" · ") : ""}.</p>`;
+  if (!picks.length && !signals.length) { host.innerHTML = ""; return; }
   host.innerHTML = `
-    <div class="section-title" style="margin-top:8px">Best bets tonight
-      <span class="sub">— every signal ranked by what it has MEASURABLY returned, strongest
-      evidence first. Each row says where its number comes from; the Record page grades
-      all of it nightly.</span></div>
-    <div class="card" style="padding:0">
-      ${ledger}
-      ${rows.slice(0, 10).map((r) => `
-        <div style="display:flex;gap:12px;align-items:flex-start;padding:11px 14px;
-                    border-bottom:1px solid rgba(255,255,255,.05)">
-          <span class="chip" style="color:${r.color};min-width:56px;text-align:center;
-                font-weight:800;flex-shrink:0">${r.type}</span>
-          <span style="flex:1;min-width:0"><strong>${escapeHtml(r.label)}</strong>
-            <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">${escapeHtml(r.why)}</span></span>
-          <span style="text-align:right;white-space:nowrap"><span style="font-weight:800">${escapeHtml(r.metric)}</span>
-            ${r.stake > 0 ? `<span style="display:block;color:var(--text-mute);font-size:11.5px">${r.stake.toFixed(2)}u</span>` : ""}</span>
-        </div>`).join("")}
-      <p style="padding:9px 14px;margin:0;font-size:12px;color:var(--text-mute)">
-        Full lists: Edge Board (every prop) · Scanner (every price gap) ·
-        Long Shots (the whole HR board) · Record (how every bucket above has
-        actually graded).</p>
-    </div>`;
+    <div class="section-title" style="margin-top:8px">Tonight's picks
+      <span class="sub">— the one designated space for what we'd actually bet. If it isn't
+      in this box, it isn't a pick.</span></div>
+    ${picksBlock}
+    ${signalsBlock}`;
 }
 
 /* ============================================================
