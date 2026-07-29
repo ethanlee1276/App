@@ -459,7 +459,14 @@ async function renderBestBets() {
       <p style="padding:10px 14px 6px;margin:0;font-size:12.5px;color:var(--text-mute)">
         <b style="color:var(--text)">${picks.length} pick${picks.length === 1 ? "" : "s"} tonight — this is the whole list.</b>
         Same count as the tile above, ranked by quality. ${escapeHtml(journalNote)}${
-        asOf ? ` Prices are from the ${escapeHtml(asOf)} odds pull — always confirm the number still stands before betting.` : ""}</p>
+        asOf ? ` Prices are from the ${escapeHtml(asOf)} odds pull — always confirm the number still stands before betting.` : ""}${(() => {
+          const open = ((state.data || {}).live_picks || []).length;
+          return open > picks.length
+            ? ` <b style="color:var(--text)">Why Open Bets shows ${open}:</b> this list re-qualifies at every
+               odds pull, but a journaled bet is locked at the price it was placed — when a line
+               moves and a pick falls off here, the bet stays open up there until it settles.`
+            : "";
+        })()}</p>
       ${picks.map(pickRow).join("")}
     </div>` : `
     <div class="card" style="border-left:3px solid var(--warn)">
@@ -571,6 +578,20 @@ function renderLivePicks() {
   const betTxt = (r) => ml(r)
     ? `${escapeHtml(teamName(r.player))} Moneyline`
     : `${escapeHtml(r.player)} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
+  // What the board recommends at the CURRENT prices — so a journaled bet
+  // whose pick has since dropped off (line moved, gate re-closed) can say
+  // so instead of looking like a contradiction with Tonight's Picks.
+  const sig = tonightSignals();
+  const onBoard = new Set();
+  const norm = (s) => String(s || "").toLowerCase().trim();
+  sig.props.forEach((p) => onBoard.add(`${norm(p.player)}|${norm(p.market)}`));
+  [...sig.sharpBets, ...sig.modelBets].forEach((b) => {
+    [b.team, b.player, b.pick].forEach((t) => {
+      if (t) onBoard.add(`${norm(t)}|${norm(b.market)}`);
+    });
+  });
+  const offBoard = (r) => r.phase === "upcoming" && r.status !== "unmapped"
+    && !onBoard.has(`${norm(r.player)}|${norm(r.market)}`);
   const statusBits = (r) => {
     if (r.status === "cleared")
       return `<span style="color:var(--good);font-weight:800">✓ CLEARED</span>
@@ -657,6 +678,9 @@ function renderLivePicks() {
             <span style="color:var(--text-mute)"> · placed ${american(r.odds)}${
               r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
             <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">${gameLine(r.game)}</span>
+            ${offBoard(r) ? `<span style="display:block;font-size:11.5px;color:var(--warn);margin-top:2px">
+              ⚠ no longer on Tonight's Picks — the price moved since this was journaled.
+              The bet rides at ${american(r.odds)} as placed.</span>` : ""}
             ${progressBar(r)}
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
@@ -664,7 +688,9 @@ function renderLivePicks() {
       <p style="padding:8px 14px;margin:0;font-size:11.5px;color:var(--text-mute)">
         ${rows.length} open bet(s) on today's card${elsewhere
           ? ` · ${elsewhere} older open bet(s) awaiting results — graded on the Record page`
-          : ""}. Stat lines update with the board's refresh cycle; every bet settles
+          : ""}. A bet journals the moment it's recommended and stays here until it
+        settles — even if the pick later drops off Tonight's Picks because prices moved.
+        Stat lines update with the board's refresh cycle; every bet settles
         officially against ingested final results overnight.</p>
     </div>`;
 }
