@@ -1682,13 +1682,57 @@ function recHealthSection(h) {
     <p style="opacity:.55;font-size:.82em;margin-top:8px">${escapeHtml(h.disclaimer || "")}</p>`;
 }
 
+/* Polymarket flag record — the Intel page's graded flags, quarantined in
+   their own bucket exactly like Long Shots: paper-tracked observations,
+   never mixed into the headline record. */
+function recPolymarketSection(v) {
+  if (!v || !v.graded) return "";
+  const pctv = (x) => `${(x * 100).toFixed(1)}%`;
+  const rows = (v.recent || []).map((b) => `
+    <div class="rl-row ${b.won ? "won" : "lost"}">
+      <span class="rl-icon">${b.won ? "✓" : "✕"}</span>
+      <span class="rl-date">${escapeHtml(b.resolved || "")}</span>
+      <span class="rl-main"><strong>${escapeHtml(b.side)} ${escapeHtml(b.outcome)}</strong>
+        <span class="rl-bet">${escapeHtml(b.market)}</span></span>
+      <span class="rl-proc">score ${b.score} · ${escapeHtml(b.name || shortWallet(b.wallet || ""))}</span>
+      <span class="rl-odds">${b.price != null ? (b.price * 100).toFixed(0) + "¢" : ""}</span>
+      <span class="rl-pnl ${toneOf(b.roi)}">${b.roi >= 0 ? "+" : ""}${(b.roi * 100).toFixed(0)}%</span>
+    </div>`).join("");
+  return `
+    <div class="section-title" style="margin-top:22px">Polymarket flags — tracked separately
+      <span class="sub">— every informed-flow flag, graded when its market resolves.
+      Paper-tracked, never mixed into the record above.</span></div>
+    ${recDisclosure("Why these are quarantined", `The Polymarket page flags large
+      anomalous trades and paper-tracks whether following that money wins. These are
+      OBSERVATIONS graded at a flat nominal stake with zero bankroll impact — the fixed
+      promotion bar (100+ graded, z ≥ 2, positive ROI) decides if they ever become
+      recommendations. The verdict box on the Polymarket page always states the current
+      answer.`)}
+    <div class="stats rec-kpis">
+      ${recTile("Flag record", `${v.wins}-${v.graded - v.wins}`,
+                `${v.open || 0} open · ${v.graded} graded`)}
+      ${recTile("Hit rate", pctv(v.hit_rate), `entry prices implied ${pctv(v.avg_implied)}`)}
+      ${recTile("Flat-stake ROI", (v.roi >= 0 ? "+" : "") + pctv(v.roi),
+                "if every flag were $1", { tone: toneOf(v.roi) })}
+      ${recTile("Calibration z", String(v.z),
+                v.z >= 2 ? "beating its prices" : "not yet distinguishable from price",
+                { tone: v.z >= 2 ? "pos" : "" })}
+    </div>
+    <div class="card" style="padding:0;margin-top:12px">${rows ||
+      `<p class="loading" style="padding:12px">Flags settle as their markets resolve.</p>`}</div>`;
+}
+
 async function renderRecord() {
   const host = document.getElementById("record-body");
   if (!host) return;
-  let d = null;
+  let d = null, pmv = null;
   try {
     const res = await fetch("data/record.json?t=" + Date.now());
     if (res.ok) d = await res.json();
+  } catch (e) {}
+  try {
+    const res = await fetch("data/predmarkets.json?t=" + Date.now());
+    if (res.ok) pmv = ((await res.json()) || {}).validation;
   } catch (e) {}
   if (!d || !d.overall || (!d.overall.settled && !d.overall.open)) {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">📒</div>
@@ -1776,6 +1820,7 @@ async function renderRecord() {
     ${recHealthSection(d.account_health)}
     ${recLongshotSection(d.longshots)}
     ${recStaleSection(d.stale_flags)}
+    ${recPolymarketSection(pmv)}
     <p class="rec-stamp">Updated ${escapeHtml(d.generated_at || "")}
       · settles automatically as results are ingested each day.</p>`;
 }
@@ -2250,6 +2295,7 @@ async function renderIntel() {
   }
   setStandaloneSource("Polymarket public market + tape feeds", "Polymarket · live venue data");
   const tape = d.tape || {};
+  const proven = pmSignalProven(d.validation);
   const cents = (p) => p == null ? "—" : `${(p * 100).toFixed(0)}¢`;
   const usd = (v) => `$${Number(v || 0).toLocaleString()}`;
   const statusColor = { Live: "var(--good)", Chasing: "var(--warn)", Historical: "var(--text-mute)" };
@@ -2286,6 +2332,13 @@ async function renderIntel() {
         <div class="metric primary"><div class="k">Now</div><div class="v" style="color:${color}">${cents(f.current_price)}</div></div>
       </div>
       <div class="chips" style="margin-top:10px">${sigs}</div>
+      <div style="margin-top:10px;font-size:12.5px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
+        <span style="color:var(--text-mute)">The trade this flag points at:</span>
+        <b>${escapeHtml(f.side)} ${escapeHtml(f.outcome)}</b> at ${cents(f.current_price)} or better
+        · ${proven
+          ? `<span style="color:var(--good);font-weight:700">recommended (signal proven — 0.1u)</span>`
+          : `<span style="color:var(--warn)">tracked, not recommended</span> — graded on the Record page`}
+      </div>
     </article>`;
   }).join("");
 
@@ -2336,6 +2389,7 @@ async function renderIntel() {
       ${tile("Flow flags · 24h", (d.flow || []).length, "$5K+ scored trades")}
       ${tile("Updated", escapeHtml((d.generated_at || "").slice(11, 16)), "refreshes with the site")}
     </div>
+    ${intelVerdict(d.validation)}
     <div class="section-title">Informed flow
       <span class="sub">— large trades scored for anomaly signals, with receipts on every chip
       (hover). Probabilities, never verdicts.</span></div>
@@ -2809,6 +2863,37 @@ function dkBestAvailable(taken) {
       ${["QB", "RB", "WR", "TE"].map((p) => byPos[p]
         ? `<span class="chip">${p}: ${escapeHtml(byPos[p].player)} (+${byPos[p].vorp})</span>` : "")
         .join("")}</div>`;
+}
+
+/* One box that answers the only question that matters on this page: "so
+   what are you telling me to DO?" The answer is driven by the measured
+   record, with the promotion bar stated up front — no vibes. */
+function pmSignalProven(v) {
+  return !!(v && v.graded >= 100 && v.z >= 2 && v.roi > 0);
+}
+
+function intelVerdict(v) {
+  const pctv = (x) => `${(x * 100).toFixed(1)}%`;
+  const body = pmSignalProven(v)
+    ? `<div style="font-weight:800;font-size:16px;color:var(--good)">✅ The signal has earned
+         recommendation status</div>
+       <p style="margin:8px 0 0">Graded flags beat their entry prices over ${v.graded} resolutions
+       (hit ${pctv(v.hit_rate)} vs ${pctv(v.avg_implied)} implied, ${v.roi >= 0 ? "+" : ""}${pctv(v.roi)} ROI,
+       z ${v.z}). Following a fresh LIVE flag below — same side, at or better than the flagged
+       entry price — is now a recommended play, sized small (flat 0.1u).</p>`
+    : `<div style="font-weight:800;font-size:16px">🎯 What we recommend right now: <span style="color:var(--warn)">nothing — watch, don't bet</span></div>
+       <p style="margin:8px 0 0">This page detects large anomalous trades ("informed flow") and
+       <b>paper-tracks every flag</b> to find out whether following that money actually wins.
+       ${v && v.graded
+         ? `So far, over <b>${v.graded}</b> graded flags: hit ${pctv(v.hit_rate)} vs ${pctv(v.avg_implied)}
+            implied, ${v.roi >= 0 ? "+" : ""}${pctv(v.roi)} flat-stake ROI, z ${v.z} — statistically
+            indistinguishable from the market price. Not enough to bet on.`
+         : `No flags have resolved yet, so there is no evidence either way.`}</p>
+       <p style="margin:6px 0 0;color:var(--text-mute)">The promotion bar is fixed and public:
+       <b>100+ graded flags, z ≥ 2, positive ROI</b>. If the signal (or one wallet, or one
+       score band) clears it, this box flips to a recommendation. Until then, every flag below
+       is a tracked observation — not a play.</p>`;
+  return `<div class="card" style="margin-bottom:16px;border-left:3px solid ${pmSignalProven(v) ? "var(--good)" : "var(--warn)"}">${body}</div>`;
 }
 
 function intelReportCard(v) {

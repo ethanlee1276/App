@@ -63,6 +63,8 @@ def main() -> None:
     validation = pm.flag_report(conn)
     for w in validation.get("wallets", []):
         w["name"] = names.get(w["wallet"], "")
+    for r in validation.get("recent", []):
+        r["name"] = names.get(r["wallet"], "")
     conn.close()
 
     # Top traders by realized P&L (Polymarket's own leaderboard), each with

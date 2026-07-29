@@ -602,6 +602,19 @@ def flag_report(conn, min_wallet_flags: int = 3) -> dict:
                if len(fs) >= min_wallet_flags]
     skilled.sort(key=lambda s: -s["z"])
     report["wallets"] = skilled[:5]
+    # The receipts: the most recently graded flags, newest first, so the
+    # Record page can show WHAT resolved, not just the aggregates.
+    latest = sorted(rows, key=lambda f: f["resolved_ts"] or 0, reverse=True)
+    report["recent"] = [{
+        "market": f["market"], "slug": f["slug"],
+        "side": f["side"], "outcome": f["outcome"],
+        "price": f["price"], "score": f["score"], "wallet": f["wallet"],
+        "won": bool(f["won"]), "roi": f["roi"],
+        "resolved": (time.strftime("%Y-%m-%d", time.localtime(f["resolved_ts"]))
+                     if f["resolved_ts"] else ""),
+    } for f in latest[:12]]
+    report["open"] = conn.execute(
+        "SELECT COUNT(*) FROM pm_flags WHERE status='open'").fetchone()[0]
     return report
 
 

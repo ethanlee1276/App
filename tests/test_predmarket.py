@@ -235,6 +235,13 @@ def test_flags_store_settle_and_report():
     assert abs(rep["avg_implied"] - 0.5) < 1e-9
     assert rep["by_score"] and sum(b["n"] for b in rep["by_score"]) == 2
     assert rep["wallets"][0]["z"] >= rep["wallets"][-1]["z"]
+    # The receipts the Record page shows: every graded flag, newest first,
+    # with the fields a ✓/✕ row needs — plus the open count.
+    assert len(rep["recent"]) == 2
+    for r in rep["recent"]:
+        assert {"market", "side", "outcome", "price", "won",
+                "roi", "resolved", "score", "wallet"} <= set(r)
+    assert rep["open"] == 1                      # 0xother's market is pending
 
 
 def test_feed_ranks_by_score_then_size():
