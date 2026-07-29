@@ -396,10 +396,13 @@ async function renderBestBets() {
 
   const picks = [];
   for (const b of sig.sharpBets) {
+    // Show the ACTUAL numbers behind the gap (the first reason carries
+    // them), so a big EV can be eyeballed instead of trusted.
+    const anchor = (b.reasons || []).find((x) => String(x).startsWith("Sharp anchor"));
     picks.push({ tag: "SHARP", color: "var(--cyan)", quality: 95 + (b.ev_per_unit || 0),
       label: `${b.headline} · ${b.matchup} ${american(b.odds)}`,
       metric: `${signedPct(b.ev_per_unit)} EV`, stake: b.stake_units, grade: b.grade,
-      why: "sharp-anchor price gap — backtested +13.5% against real closes" });
+      why: anchor || "sharp-anchor price gap — backtested +13.5% against real closes" });
   }
   for (const b of sig.modelBets) {
     picks.push({ tag: "GAME", color: "var(--brand)", quality: b.quality || b.confidence * 10 || 0,
@@ -435,11 +438,13 @@ async function renderBestBets() {
           ud > 0 ? money(stakeDollars(p.stake)) + " · " : ""}${p.stake.toFixed(2)}u</span>` : ""}</span>
     </div>`;
 
+  const asOf = ((state.data || {}).odds_status || {}).at;
   const picksBlock = picks.length ? `
     <div class="card" style="padding:0;border-left:3px solid var(--good)">
       <p style="padding:10px 14px 6px;margin:0;font-size:12.5px;color:var(--text-mute)">
         <b style="color:var(--text)">${picks.length} pick${picks.length === 1 ? "" : "s"} tonight — this is the whole list.</b>
-        Same count as the tile above, ranked by quality. ${escapeHtml(journalNote)}</p>
+        Same count as the tile above, ranked by quality. ${escapeHtml(journalNote)}${
+        asOf ? ` Prices are from the ${escapeHtml(asOf)} odds pull — always confirm the number still stands before betting.` : ""}</p>
       ${picks.map(pickRow).join("")}
     </div>` : `
     <div class="card" style="border-left:3px solid var(--warn)">

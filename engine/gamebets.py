@@ -100,8 +100,23 @@ def _ml_confidence(edge: float, win_prob: float) -> float:
 # book's de-vigged fair value by at least MIN, and treat gaps beyond MAX as
 # broken prices (in-play or suspended market) rather than edges — the same
 # too-good-to-be-true guard the backtest needed.
+#
+# Between SUSPECT and MAX the number is *plausible but not believable*: a
+# 7%+ EV gap on a major-league market means the sharp book repriced on
+# news (a scratch, an injury) and the soft quote in our snapshot hadn't
+# caught up yet — by the time anyone reads the card, that price is gone or
+# the news explains it. Betting into it is adverse selection, so the card
+# renders with its full story but grades Pass and stakes zero: verify the
+# price still stands before a dollar moves.
 SHARP_MIN_EV = 0.02
+SHARP_SUSPECT_EV = 0.07
 SHARP_MAX_EV = 0.15
+
+_SUSPECT_NOTE = ("Gap too large to trust ({ev:+.1%} EV): a disagreement this "
+                 "big between books usually means the sharp side repriced on "
+                 "news (scratch, injury, weather) and this quote is stale — "
+                 "not free money. Shown for transparency, graded Pass; verify "
+                 "the live price before betting anything")
 
 
 def sharp_anchor_two_way(sharp_a: int, sharp_b: int,
@@ -129,6 +144,12 @@ def _sharpify(card: dict, fair: float, soft_odds: int, ev: float,
     card["fair_prob"] = round(implied, 4)
     card["edge"] = round(fair - implied, 4)
     card["ev_per_unit"] = round(ev, 4)
+    if ev > SHARP_SUSPECT_EV:
+        card["grade"] = "Pass"
+        card["stake_units"] = 0.0
+        card["suspect_gap"] = True
+        card["reasons"].insert(0, _SUSPECT_NOTE.format(ev=ev))
+        return card
     card["grade"] = ("Strong Play" if ev >= 0.06 else
                      "Play" if ev >= 0.035 else "Lean")
     card["stake_units"] = round(_kelly_stake(fair, soft_odds), 2)
@@ -207,13 +228,16 @@ def price_moneyline_sharp(home: str, away: str,
     soft_implied = american_to_prob(ml)
     edge = fair - soft_implied            # probability points of value
     confidence = _ml_confidence(edge, fair)
-    grade = ("Strong Play" if ev >= 0.06 else
-             "Play" if ev >= 0.035 else "Lean")
-    stake = _kelly_stake(fair, ml)
-
-    reasons = [f"Sharp anchor: this price implies {soft_implied:.0%} but the "
-               f"sharp book prices {pick} at {fair:.0%} fair — {ev:+.1%} EV "
-               f"on the price alone"]
+    if ev > SHARP_SUSPECT_EV:
+        grade, stake = "Pass", 0.0
+        reasons = [_SUSPECT_NOTE.format(ev=ev)]
+    else:
+        grade = ("Strong Play" if ev >= 0.06 else
+                 "Play" if ev >= 0.035 else "Lean")
+        stake = _kelly_stake(fair, ml)
+        reasons = [f"Sharp anchor: this price implies {soft_implied:.0%} but the "
+                   f"sharp book prices {pick} at {fair:.0%} fair — {ev:+.1%} EV "
+                   f"on the price alone"]
     if win_prob_home is not None:
         wp_pick = win_prob_home if is_home else 1.0 - win_prob_home
         reasons.append(f"Model context: rates {pick} at {wp_pick:.0%} to win")

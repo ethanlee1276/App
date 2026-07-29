@@ -159,6 +159,23 @@ def test_price_moneyline_sharp_passes_and_filters():
     assert price_moneyline_sharp("KC", "BUF", -1200, 750, 105, -120) is None
 
 
+def test_sharp_gap_in_the_suspect_band_shows_but_never_bets():
+    """A ~+12% EV moneyline gap (sharp ~-200 vs soft -136) is exactly the
+    number that looks like free money and almost never is — the sharp book
+    repriced on news and the soft quote is stale. The card must render with
+    its story, grade Pass, and stake zero. Same rule on totals."""
+    from engine.gamebets import price_moneyline_sharp, price_total_sharp
+    rec = price_moneyline_sharp("MIN", "KC", -200, 170, -136, 115)
+    assert rec is not None and rec.ev_per_unit > 0.07
+    assert rec.grade == "Pass" and rec.stake_units == 0.0
+    assert "verify the live price" in rec.reasons[0]
+
+    card = price_total_sharp("NYY", "BOS", 8.5, 107, -120, -125, 105)
+    assert card is not None and card["ev_per_unit"] > 0.07
+    assert card["grade"] == "Pass" and card["stake_units"] == 0.0
+    assert card.get("suspect_gap") is True
+
+
 def test_price_total_sharp_backs_the_underpriced_side():
     """Sharp quotes the total at -105/-115 (under is the fair-favored side);
     a soft book still hangs +100 on the under -> ~+4% EV -> Play/Lean."""
