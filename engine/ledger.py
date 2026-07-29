@@ -396,6 +396,76 @@ def form_report(conn) -> dict:
     return p
 
 
+def log_ufc_picks(conn, result: dict) -> int:
+    """Journal the UFC card's picks — category='ufc', its own probation
+    bucket (docs pattern: a newly opened gate earns its way into any
+    headline through its own graded record, never by assertion).
+
+    player = the fighter picked, market = moneyline, line 0.5, side OVER,
+    actual 1/0 — the standard grader applies. Real prices only."""
+    if result.get("status") != "card" or not result.get("picks"):
+        return 0
+    date = result.get("event_date", "")
+    now = datetime.datetime.utcnow().isoformat(timespec="seconds")
+    n = 0
+    for p in result["picks"]:
+        odds = p.get("odds")
+        if not odds or not p.get("pick") or not date:
+            continue
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
+            "line, book, odds, projection, hit_prob, edge, confidence, grade, "
+            "stake_units, stake_dollars, status, category) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'ufc')",
+            (now, "ufc", date, p["pick"], "moneyline", "OVER", 0.5,
+             p.get("book", ""), int(odds), None, p.get("p_final"),
+             p.get("edge"), None, "Pick",
+             float(p.get("stake_units") or 0), 0.0))
+        n += cur.rowcount
+    conn.commit()
+    return n
+
+
+def settle_ufc(conn, fetch_result=None) -> int:
+    """Settle open UFC picks from post-card results.
+
+    ``fetch_result(name, since_date)`` defaults to the ESPN MMA lookup;
+    injectable for tests. won → 1/0 through the standard side-aware
+    grader; a draw/NC voids, exactly as a book would."""
+    import datetime as _dt
+    if fetch_result is None:
+        from .sources.espnmma import latest_result as fetch_result
+    settled = 0
+    for b in conn.execute("SELECT * FROM bets WHERE status='open' "
+                          "AND sport='ufc'").fetchall():
+        try:
+            since = _dt.date.fromisoformat(b["date"])
+        except (TypeError, ValueError):
+            continue
+        try:
+            res = fetch_result(b["player"], since)
+        except Exception:
+            continue
+        if not res:
+            continue                       # card not fought/ingested yet
+        if res.get("won") is None:
+            conn.execute("UPDATE bets SET status='void', pnl_units=0, "
+                         "pnl_dollars=0 WHERE id=?", (b["id"],))
+        else:
+            _settle_one(conn, b, 1.0 if res["won"] else 0.0, None)
+        settled += 1
+    conn.commit()
+    return settled
+
+
+def ufc_report(conn) -> dict:
+    """The UFC bucket's scoreboard — same shape the other probation
+    buckets export, graded fight by fight."""
+    p = performance(conn, category="ufc")
+    p["recent"] = recent_settled(conn, limit=15, category="ufc")
+    return p
+
+
 # --- settling ---------------------------------------------------------------
 def _settle_one(conn, b, actual: float, closing_line: float | None) -> None:
     """Grade one open bet SIDE-AWARE and advance the bankroll.
@@ -1160,6 +1230,7 @@ def export_json(conn, path) -> None:
         "longshots": longshot_report(conn),
         "stale_flags": stale_report(conn),
         "form_sampler": form_report(conn),
+        "ufc_record": ufc_report(conn),
         "calibration": calibration(conn),
         "account_health": account_health(conn),
     }

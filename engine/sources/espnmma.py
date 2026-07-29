@@ -568,3 +568,48 @@ def fetch_dossier(name: str, today: _dt.date | None = None,
     return build_dossier(name, bio=bio, record=record, own_rows=own_rows,
                          fights=fights, total_ufc_fights=total_fights,
                          style_hint=style_hint, today=today)
+
+
+def latest_result(name: str, since: _dt.date,
+                  today: _dt.date | None = None) -> dict | None:
+    """The fighter's most recent COMPLETED fight on/after ``since``.
+
+    The settle path for UFC picks: a pick journaled on card day looks up
+    whether that fighter's fight actually happened and who won. Returns
+    ``{"won": True/False/None, "date": iso}`` — ``won=None`` means the bout
+    ended with no winner (draw/NC), which the ledger voids like a book
+    would. ``None`` (the function) = nothing completed yet; stay open.
+
+    Short-TTL fetches on purpose: the dossier caches (3 days) are fine for
+    scouting, but a settle check needs to see last night's result."""
+    today = today or _dt.date.today()
+    aid = find_athlete_id(name)
+    if not aid:
+        return None
+    try:
+        ev = _get_json(f"{CORE}/athletes/{aid}/eventlog?page=1",
+                       f"espn_mma_evlog_{aid}_p1.json", ttl=6 * 3600)
+    except DataUnavailable:
+        return None
+    best: dict | None = None
+    for it in ((ev.get("events") or {}).get("items") or [])[:12]:
+        ref = ((it.get("competition") or {}).get("$ref") or "") \
+            .replace("http://", "https://")
+        if not ref:
+            continue
+        cid = ref.rstrip("/").split("/")[-1].split("?")[0]
+        try:
+            comp = parse_competition(
+                _get_json(ref, f"espn_mma_res_{cid}.json", ttl=6 * 3600), aid)
+        except DataUnavailable:
+            continue
+        d = comp.get("date")
+        if not d or d < since or d > today:
+            continue
+        if comp["winner"] is None and d >= today:
+            continue                       # upcoming/unplayed — not a result
+        if best is None or (best.get("_d") or _dt.date.min) < d:
+            best = {"won": comp["winner"], "date": d.isoformat(), "_d": d}
+    if best:
+        best.pop("_d", None)
+    return best

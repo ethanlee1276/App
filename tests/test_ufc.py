@@ -179,6 +179,53 @@ def test_run_card_discipline_and_pass_list():
     assert all(p.get("why") for p in r["pass_list"])
 
 
+def test_journal_and_settle_from_fight_results():
+    """The honest-subset loop end to end: a card's picks journal at their
+    real prices (category='ufc'), settle from injected fight results —
+    win, loss, and a draw/NC that voids like a book would — and the
+    report aggregates for the Record page."""
+    import os
+    import tempfile
+    import datetime as dt
+    from engine import ledger
+
+    lconn = ledger.connect(os.path.join(tempfile.mkdtemp(), "led.db"))
+    card = {"status": "card", "event_date": "2026-08-01", "picks": [
+        {"pick": "Ada Striker", "odds": 120, "book": "DK", "p_final": 0.51,
+         "edge": 0.06, "stake_units": 0.4},
+        {"pick": "Bo Grappler", "odds": -140, "book": "FD", "p_final": 0.62,
+         "edge": 0.04, "stake_units": 0.3},
+        {"pick": "Cy Draw", "odds": 105, "book": "DK", "p_final": 0.52,
+         "edge": 0.05, "stake_units": 0.2},
+        {"pick": "No Price Guy", "odds": None},          # never journals
+    ]}
+    assert ledger.log_ufc_picks(lconn, card) == 3
+    assert ledger.log_ufc_picks(lconn, card) == 0        # idempotent
+
+    results = {"Ada Striker": {"won": True, "date": "2026-08-01"},
+               "Bo Grappler": {"won": False, "date": "2026-08-01"},
+               "Cy Draw": {"won": None, "date": "2026-08-01"}}
+
+    def fake_fetch(name, since):
+        assert since == dt.date(2026, 8, 1)
+        return results.get(name)
+
+    assert ledger.settle_ufc(lconn, fetch_result=fake_fetch) == 3
+    rep = ledger.ufc_report(lconn)
+    assert rep["wins"] == 1 and rep["losses"] == 1
+    assert rep["open"] == 0
+    # The draw voided: zero P&L, excluded from the record.
+    void = lconn.execute("SELECT status FROM bets WHERE player='Cy Draw'").fetchone()
+    assert void["status"] == "void"
+    # The winner paid plus-money: +0.4 x 1.2 units.
+    win = lconn.execute("SELECT pnl_units FROM bets WHERE player='Ada Striker'").fetchone()
+    assert abs(win["pnl_units"] - 0.48) < 1e-6
+    assert rep["recent"][0]["player"] in ("Ada Striker", "Bo Grappler")
+    lconn.close()
+
+
+# The runner stays at the TRUE END of the file — a test defined after it
+# never runs (this exact bug has now bitten three test files).
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

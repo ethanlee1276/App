@@ -1852,6 +1852,45 @@ function recHealthSection(h) {
     <p style="opacity:.55;font-size:.82em;margin-top:8px">${escapeHtml(h.disclaimer || "")}</p>`;
 }
 
+/* UFC record — journaled fight picks in their own probation bucket,
+   graded from post-card results. */
+function recUfcSection(u) {
+  if (!u || (!u.settled && !u.open)) return "";
+  const graded = (u.wins || 0) + (u.losses || 0);
+  const rows = (u.recent || []).map((b) => {
+    const won = b.status === "won";
+    const pnl = b.pnl_units || 0;
+    return `<div class="rl-row ${won ? "won" : "lost"}">
+      <span class="rl-icon">${won ? "✓" : "✕"}</span>
+      <span class="rl-date">${escapeHtml(b.date || "")}</span>
+      <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
+        <span class="rl-bet">moneyline</span></span>
+      <span class="rl-proc">${b.hit_prob != null ? `model ${(b.hit_prob * 100).toFixed(0)}%` : ""}</span>
+      <span class="rl-odds">${american(b.odds)}</span>
+      <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
+    </div>`;
+  }).join("");
+  return `
+    <div class="section-title" style="margin-top:22px">UFC — tracked separately
+      <span class="sub">— every journaled fight pick, graded from post-card results.
+      Never mixed into the record above.</span></div>
+    ${recDisclosure("Why these are quarantined", `Scalpy MMA's picks journal at
+      their real prices (one-fifth Kelly stakes) and settle automatically from ESPN's
+      fight results after each card. UFC is the newest graded module, so it earns its
+      way like every other signal: its own bucket, its own ROI, and no place in the
+      headline record until a real sample says it belongs there.`)}
+    <div class="stats rec-kpis">
+      ${recTile("Flat-stake ROI", ((u.roi || 0) >= 0 ? "+" : "") + ((u.roi || 0) * 100).toFixed(1) + "%",
+                `${(u.net_units || 0) >= 0 ? "+" : ""}${(u.net_units || 0).toFixed(2)}u on ${(u.units_staked || 0).toFixed(1)}u staked`,
+                { lead: true, tone: toneOf(u.roi || 0) })}
+      ${recTile("UFC record", `${u.wins || 0}-${u.losses || 0}`, `${u.open || 0} open`)}
+      ${recTile("Hit rate", graded ? ((u.wins / graded) * 100).toFixed(1) + "%" : "—",
+                "cards are small samples — judge after 50+")}
+    </div>
+    <div class="card" style="padding:0;margin-top:12px">${rows ||
+      `<p class="loading" style="padding:12px">Grades after each card's fights are official.</p>`}</div>`;
+}
+
 /* Polymarket flag record — the Intel page's graded flags, quarantined in
    their own bucket exactly like Long Shots: paper-tracked observations,
    never mixed into the headline record. */
@@ -1991,6 +2030,7 @@ async function renderRecord() {
     ${recLongshotSection(d.longshots)}
     ${recStaleSection(d.stale_flags)}
     ${recFormSection(d.form_sampler)}
+    ${recUfcSection(d.ufc_record)}
     ${recPolymarketSection(pmv)}
     <p class="rec-stamp">Updated ${escapeHtml(d.generated_at || "")}
       · settles automatically as results are ingested each day.</p>`;
@@ -3453,12 +3493,61 @@ async function renderUFC() {
       <div class="tile"><div class="k">Picks</div><div class="v">${c.picks || 0}</div>
         <div style="color:var(--text-mute);font-size:12px;margin-top:2px">max 3 per card by design</div></div>
     </div>
+    ${(() => {
+      // Fight-by-fight edge table: every PRICED bout on one scannable
+      // grid — model vs market vs break-even, and the verdict with its
+      // reason. The per-fight cards below carry the depth.
+      const rows = [...(d.picks || []).map((p) => ({ ...p, _pick: true })),
+                    ...(d.pass_list || []).filter((m) => m.p_final != null)];
+      if (!rows.length) return "";
+      return `<div class="section-title">Fight-by-fight edge board
+          <span class="sub">— every priced bout: the model's number vs the market's, and
+          the verdict. Bet rows are journaled in the UFC record.</span></div>
+        <div class="card" style="padding:0;overflow-x:auto">
+          ${rows.map((r) => `
+            <div style="display:flex;gap:12px;align-items:center;padding:10px 14px;
+                        border-bottom:1px solid rgba(255,255,255,.05);min-width:640px;
+                        ${r._pick ? "" : "opacity:.72"}">
+              <span style="min-width:74px;text-align:center;font-weight:800;flex-shrink:0;
+                    color:${r._pick ? "var(--good)" : "var(--text-mute)"}">${r._pick ? "BET" : "PASS"}</span>
+              <span style="flex:1;min-width:0"><strong>${escapeHtml(r.fight)}</strong>
+                <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">
+                  ${r._pick ? `${escapeHtml(r.pick)} ML ${american(r.odds)} (${escapeHtml(r.book || "")}) · stake ${r.stake_units}u`
+                            : escapeHtml(r.why || "")}</span></span>
+              <span style="text-align:right;white-space:nowrap;font-size:12.5px">
+                model ${pctv(r.p_final)} · market ${pctv(r.p_market)}
+                <span style="display:block;color:${(r.edge || 0) > 0 ? "var(--good)" : "var(--text-mute)"};font-weight:700">
+                  ${r.edge != null ? `${r.edge >= 0 ? "+" : ""}${(r.edge * 100).toFixed(1)}pts vs break-even` : ""}</span></span>
+            </div>`).join("")}
+        </div>`;
+    })()}
+    ${await (async () => {
+      // The UFC record — this card's picks are graded here after the
+      // fights, same probation-bucket pattern as every new signal.
+      const rec = await loadRecordOnce();
+      const u = rec.ufc_record || {};
+      if (!u.settled && !u.open) return "";
+      const graded = (u.wins || 0) + (u.losses || 0);
+      return `<div class="section-title" style="margin-top:18px">UFC record
+          <span class="sub">— every journaled pick, graded from fight results after each card.
+          Its own bucket until it earns more.</span></div>
+        <div class="stats">
+          <div class="tile"><div class="k">Record</div><div class="v">${u.wins || 0}-${u.losses || 0}</div>
+            <div style="color:var(--text-mute);font-size:12px;margin-top:2px">${u.open || 0} open</div></div>
+          <div class="tile"><div class="k">Flat ROI</div><div class="v ${(u.roi || 0) >= 0 ? "pos" : "neg"}">
+            ${(u.roi || 0) >= 0 ? "+" : ""}${((u.roi || 0) * 100).toFixed(1)}%</div>
+            <div style="color:var(--text-mute);font-size:12px;margin-top:2px">${(u.net_units || 0) >= 0 ? "+" : ""}${(u.net_units || 0).toFixed(2)}u</div></div>
+          <div class="tile"><div class="k">Graded</div><div class="v">${graded}</div>
+            <div style="color:var(--text-mute);font-size:12px;margin-top:2px">judge after 50+, not 5</div></div>
+        </div>`;
+    })()}
     ${d.no_qualifying ? `<div class="card"><div class="player">No qualifying plays on this card.</div>
         <div style="color:var(--text-body);font-size:13px;margin-top:6px">Most fights on any card
         have no exploitable edge — the pass list below says why, fight by fight. Re-check after
         Friday weigh-ins: missed weight and visible cut damage aren't fully priced for hours.</div></div>`
       : `<div class="section-title">Picks
-          <span class="sub">— cleared the clamp AND the gate · one-fifth Kelly stakes</span></div>
+          <span class="sub">— cleared the clamp AND the gate · one-fifth Kelly stakes · journaled
+          at these prices and graded after the card</span></div>
         <div class="cards wide">${(d.picks || []).map(pickCard).join("")}</div>`}
     ${(() => {
       // Grouped so the page reads as a card, not a wall: fights we

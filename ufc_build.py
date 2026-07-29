@@ -131,6 +131,27 @@ def main() -> None:
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(out, indent=2))
+
+    # Learning engine: journal the card's picks at their real prices and
+    # settle any open ones whose fights have since happened (ESPN MMA
+    # results). Its own probation bucket — never the headline record.
+    # Never let the journal break a build.
+    if args.odds or args.cached_odds:
+        try:
+            from engine import ledger
+            lconn = ledger.connect()
+            logged = ledger.log_ufc_picks(lconn, out)
+            open_n = lconn.execute(
+                "SELECT COUNT(*) FROM bets WHERE status='open' "
+                "AND sport='ufc'").fetchone()[0]
+            settled = ledger.settle_ufc(lconn) if open_n else 0
+            if logged or settled:
+                ledger.export_json(lconn, "web/data/record.json")
+                print(f"UFC journal: {logged} pick(s) logged, {settled} "
+                      f"settled — see the Record tab")
+        except Exception as exc:
+            print(f"⚠️  UFC journal skipped: {exc}")
+
     if out.get("status") == "card":
         c = out["counts"]
         print(f"UFC {event_label}: {c['fights']} bouts, {len(dossiers)} "
