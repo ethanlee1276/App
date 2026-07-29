@@ -82,4 +82,14 @@ def apply_rules(
         recommend = False
         warnings.append(f"{prop.player} listed {concern} — hold until inactives confirm status")
 
+    # §7 wind bands: 25+ mph is a hard block on deep-passing markets, not a
+    # haircut. Receptions survive (short throws complete in wind); the
+    # yardage markets that live on the deep ball do not.
+    w = getattr(game, "weather", None)
+    if (w is not None and not w.dome and (w.wind_mph or 0) >= 25
+            and prop.market in ("pass_yds", "rec_yds")):
+        recommend = False
+        warnings.append(f"Wind {w.wind_mph:.0f} mph — deep-passing markets "
+                        f"are avoided entirely at 25+ (model rule, no exceptions)")
+
     return RuleDecision(recommend=recommend, warnings=warnings)

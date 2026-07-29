@@ -24,9 +24,11 @@ from dataclasses import dataclass, field
 from .odds import american_to_decimal, american_to_prob
 
 # Display order for the per-grade P&L breakdown of the market-relative
-# segment. If Strong picks don't beat Lean picks, the model's conviction
-# carries no signal and no threshold tuning will conjure one.
-GRADE_ORDER = ("Strong Play", "Strong", "Play", "Lean")
+# segment. If higher grades don't beat lower ones, the model's conviction
+# carries no signal and no threshold tuning will conjure one. The letter
+# grades are the current ladder (docs/NFL_MODEL.md §10); the word grades
+# cover historical journal entries from before the regrade.
+GRADE_ORDER = ("A+", "A", "B+", "Strong Play", "Strong", "Play", "Lean")
 
 
 def _norm(name: str) -> str:

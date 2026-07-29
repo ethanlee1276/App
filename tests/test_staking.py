@@ -74,9 +74,11 @@ def test_stake_scales_with_edge_and_stays_capped():
 
 def test_grade_ladder_requires_real_net_edge():
     # Thresholds are net of the vig now: at −110 these are the model
-    # probabilities each tier demands.
+    # probabilities each tier demands. There is NO Lean tier — a lean is a
+    # bet that failed the filter published anyway (docs/NFL_MODEL.md §10),
+    # so what used to grade Lean is a Pass.
     assert _grade(10.0, net_edge(0.520, -110), -110) == "Pass"   # below the price
-    assert _grade(10.0, net_edge(0.528, -110), -110) == "Lean"
+    assert _grade(10.0, net_edge(0.528, -110), -110) == "Pass"   # old "Lean" band
     assert _grade(10.0, net_edge(0.535, -110), -110) == "Play"
     assert _grade(10.0, net_edge(0.546, -110), -110) == "Strong Play"
     # Confidence still gates independently of price edge.
@@ -106,8 +108,11 @@ def test_heavy_chalk_is_unreachable_even_at_a_maximum_edge():
         net = best_possible_net(o, u)
         assert _grade(10.0, net, o) == "Pass", (o, net)
     # Moderate favourites stay reachable — this is a surcharge, not a ban.
-    for o, u in ((-140, 120), (-170, 145), (-200, 170)):
+    # (−200 used to squeak in through the deleted "Lean" rung; without it,
+    # the reachable band ends around −170 — stricter, and intended.)
+    for o, u in ((-140, 120), (-170, 145)):
         assert _grade(10.0, best_possible_net(o, u), o) != "Pass", o
+    assert _grade(10.0, best_possible_net(-200, 170), -200) == "Pass"
 
 
 def test_confidence_does_not_penalise_underdogs():

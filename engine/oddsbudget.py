@@ -288,6 +288,12 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
                           "plan reset or the key changed")
         return False, (f"odds quota nearly exhausted ({state.remaining} left) — "
                        f"holding a reserve; scores still update free")
+    # The date matters (days-left divides the allowance), so it must come
+    # from the SAME clock as ``now`` — mixing an injected ``now`` with the
+    # real date.today() made the sparse/ordinary decision flip with the
+    # wall calendar, which is untestable and once meant a test that passed
+    # on the 28th failed on the 29th.
+    kw.setdefault("today", _dt.date.fromtimestamp(now))
     gap = min_seconds_between(requests_per_refresh, state, share=share, **kw)
     waited = now - state.sport_ts(sport)
     if gap == float("inf"):

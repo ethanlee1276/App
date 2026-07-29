@@ -14,17 +14,20 @@ from typing import Optional
 from .models import GameLog
 from .statmath import weighted_mean, sample_std, clamp
 
-# How much each look-back window contributes. Recent games are weighted more
-# heavily than the season, but the season still anchors the estimate so one
-# fluke game does not dominate.
+# How much each look-back window contributes. Re-fit to the spec's recency
+# rule (docs/NFL_MODEL.md §5: last 2 ≈ 45%, last 4 ≈ 35%, season ≈ 20%):
+# season averages blend September's team with December's — recent games
+# describe the team that will actually play Sunday. Mapped onto our window
+# structure, the recent windows (1/3/5) now carry ~75% and the long anchors
+# (10/season/career/opponent) ~25%.
 WINDOW_WEIGHTS = {
-    "last1": 0.14,
-    "last3": 0.24,
+    "last1": 0.22,
+    "last3": 0.33,
     "last5": 0.20,
-    "last10": 0.14,
-    "season": 0.16,
-    "career": 0.06,
-    "vs_opp": 0.06,
+    "last10": 0.10,
+    "season": 0.09,
+    "career": 0.03,
+    "vs_opp": 0.03,
 }
 
 

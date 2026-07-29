@@ -719,6 +719,24 @@ def pnl_curve(conn, sport: str | None = None) -> list[dict]:
     return out
 
 
+def drawdown_factor(conn, sport: str | None = None,
+                    drawdown_u: float = 10.0) -> float:
+    """§10 drawdown circuit-breaker (docs/NFL_MODEL.md).
+
+    After a 10-unit peak-to-trough drawdown (10% of bankroll at the standard
+    1u = 1%), every stake is cut in half until the peak is recovered.
+    Drawdowns are when systems start chasing; halving stakes makes the worst
+    case survivable and removes the mathematical possibility of ruin.
+
+    Returns 0.5 while in drawdown, else 1.0. Measured on the settled main
+    journal — the same numbers the Record page shows."""
+    peak = cum = 0.0
+    for point in pnl_curve(conn, sport=sport):
+        cum = point["cum_u"]
+        peak = max(peak, cum)
+    return 0.5 if (peak - cum) >= drawdown_u else 1.0
+
+
 def recent_settled(conn, limit: int = 30, category: str = "main") -> list[dict]:
     """The last settled picks, newest first — the site's receipts.
 

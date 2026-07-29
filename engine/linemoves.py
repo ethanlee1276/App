@@ -332,5 +332,10 @@ def annotate_recommendations(recs: list[dict], reports: list[MoveReport]) -> int
             rec.setdefault("warnings", []).append(
                 f"Market moving against the {side.title()} — {what} since "
                 f"our first snapshot{steam_txt}")
+        # §4/§10: movement is 15% of the unified quality grade. With-steam
+        # raises the score; sharp movement against drops it — below 70 the
+        # pick is rejected (fresh sharp money beats a stale model input).
+        from .quality import apply_movement
+        apply_movement(rec, with_us, rep.steam)
         n += 1
     return n

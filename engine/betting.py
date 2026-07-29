@@ -30,18 +30,27 @@ MAX_CREDIBLE_EDGE = 0.10
 
 
 def temper_edge(hit_raw: float, fair: float, book: str,
-                allow_synthetic_line: bool = False) -> tuple[float, float, bool]:
+                allow_synthetic_line: bool = False,
+                shrink: float | None = None) -> tuple[float, float, bool]:
     """Shrink the model probability toward the market and judge credibility.
 
     Returns ``(hit, edge, credible)`` where ``hit`` is the tempered win
     probability, ``edge = hit - fair``, and ``credible`` is False when the line
     is a placeholder or the raw disagreement is implausibly large.
 
+    ``shrink`` is the §3 haircut — how much of a raw disagreement with the
+    market we trust. It scales by market tier (see engine.quality): Tier 1
+    keeps half, Tier 3 keeps under a third, because most of a big raw edge in
+    a noisy market is model error. Defaults to the flat MARKET_SHRINK for
+    callers that don't tier (the backtest harness, older tests).
+
     ``allow_synthetic_line`` is for the backtest harness, which deliberately
     prices against a naive baseline line rather than a real book — there a
     "proxy" line is the point of the exercise, not a data error.
     """
-    hit = clamp(fair + MARKET_SHRINK * (hit_raw - fair), 1e-6, 1.0 - 1e-6)
+    if shrink is None:
+        shrink = MARKET_SHRINK
+    hit = clamp(fair + shrink * (hit_raw - fair), 1e-6, 1.0 - 1e-6)
     real_line = allow_synthetic_line or (book or "").lower() != "proxy"
     credible = real_line and abs(hit_raw - fair) <= MAX_CREDIBLE_EDGE
     return hit, hit - fair, credible
@@ -64,11 +73,14 @@ class Recommendation:
     fair_prob: float          # book's de-vigged implied probability
     edge: float               # hit_prob - fair_prob
     ev_per_unit: float
-    confidence: float         # 0..10
+    confidence: float         # quality / 10 — one score, two displays
     stake_units: float
-    grade: str                # "Strong Play" / "Play" / "Lean" / "Pass"
+    grade: str                # "A+" / "A" / "B+" / "Pass" — no Leans (§10)
     reasons: list[str] = field(default_factory=list)
     trend: str = "flat"
+    quality: int = 0          # the unified 0–100 grade (engine.quality)
+    tier: int = 2             # §8 market tier
+    volatility: str = "HIGH"  # LOW / MEDIUM / HIGH / EXTREME
     # False when no real book line was available and the "line" is the engine's
     # own proxy. There is nothing to have an edge *against* in that case, so the
     # edge is reported as zero rather than as a number that looks like alpha.
@@ -182,9 +194,10 @@ def net_edge(hit: float, odds: int) -> float:
 FAV_GUARD_FROM = 0.55
 FAV_GUARD_SLOPE = 0.18
 
+# No "Lean" tier — §10: a lean is a bet that failed the filter published
+# anyway. Below these floors the answer is Pass, not a softer yes.
 BASE_THRESHOLDS = (("Strong Play", 8.0, 0.020),
-                   ("Play", 6.5, 0.010),
-                   ("Lean", 4.5, 0.003))
+                   ("Play", 6.5, 0.010))
 
 
 def favourite_surcharge(odds: int) -> float:
@@ -217,8 +230,14 @@ def _grade(confidence: float, net: float, odds: int | None = None) -> str:
 MIN_STAKE_UNITS = 0.1
 
 
-def _kelly_stake(model_prob: float, odds: int, fraction: float = 0.25) -> float:
-    """Quarter-Kelly stake in units (0 = no bet), capped at 1u.
+def _kelly_stake(model_prob: float, odds: int, fraction: float = 0.25,
+                 cap_units: float = 1.0) -> float:
+    """Fractional-Kelly stake in units (0 = no bet).
+
+    §10: quarter Kelly is the default; half Kelly only for A+ plays in
+    Tier 1 markets. The input is the POST-haircut probability — feeding raw
+    model edge into Kelly would compound the same optimism twice.
+    ``cap_units`` is the per-grade bankroll cap (2u max on any single play).
 
     Zero has one meaning here: Kelly says this price is not beatable at
     our estimated probability. Anything positive is floored at
@@ -231,12 +250,20 @@ def _kelly_stake(model_prob: float, odds: int, fraction: float = 0.25) -> float:
     kelly = (b * model_prob - q) / b
     if kelly <= 0:
         return 0.0                      # below break-even AT THIS PRICE
-    stake = clamp(kelly * fraction, 0.0, 0.05) * 20      # 5% Kelly → 1.0u cap
+    stake = clamp(kelly * fraction, 0.0, cap_units * 0.05) * 20   # 5% Kelly → 1u
     return round(max(stake, MIN_STAKE_UNITS), 2)
 
 
 def evaluate_prop(prop: Prop, proj: Projection,
-                  allow_synthetic_line: bool = False) -> Recommendation:
+                  allow_synthetic_line: bool = False,
+                  game=None) -> Recommendation:
+    """§3's procedure end to end: shop the line, devig, price the
+    distribution, haircut by tier, gate on the tier minimum, grade 0–100,
+    size with fractional Kelly. ``game`` supplies the spread for the
+    game-script component of the grade (None → neutral)."""
+    from .quality import (tier_shrink, tier_min_edge, market_tier,
+                          volatility as market_volatility, quality_score,
+                          letter as quality_letter, STAKE_CAP_U)
     temp, bias = correction_for("nfl", prop.market)
 
     def p_over_at(line: float) -> float:
@@ -248,23 +275,61 @@ def evaluate_prop(prop: Prop, proj: Projection,
         return apply_temperature(raw, temp, bias)
 
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
-    hit, edge, credible = temper_edge(hit_raw, fair, best.book, allow_synthetic_line)
+    hit, edge, credible = temper_edge(hit_raw, fair, best.book,
+                                      allow_synthetic_line,
+                                      shrink=tier_shrink(prop.market))
     has_market = allow_synthetic_line or (best.book or "").lower() != "proxy"
     if not has_market:
         # No real price to beat — don't report a number that reads as an edge.
         edge = 0.0
     ev = expected_value(hit, best.odds)
-    trend_align = _trend_alignment(side, proj.form.trend)
-    confidence = _confidence_score(edge, hit, proj, trend_align)
     net = net_edge(hit, best.odds)
-    grade = _grade(confidence, net, best.odds) if credible else "Pass"
-    stake = _kelly_stake(hit, best.odds) if grade != "Pass" else 0.0
+
+    # Game-script inputs: who's favored, by how much (None when no spread).
+    favored, spread_abs = None, 0.0
+    spread = getattr(game, "spread", None) if game is not None else None
+    if spread:
+        home_fav = spread < 0
+        is_home = prop.team == getattr(game, "home", None)
+        favored = home_fav == is_home
+        spread_abs = abs(spread)
+
+    # The unified §10 grade — one score, the spec's exact weights.
+    form_cv = (proj.form.std / proj.form.mean) if proj.form.mean > 0 else 1.0
+    from .projection import CV_FLOOR
+    quality, quality_notes = quality_score(
+        edge=edge, market=prop.market, side=side,
+        favored=favored, spread_abs=spread_abs,
+        matchup_mult=proj.matchup.multiplier,
+        weather_mult=proj.weather.multipliers.get(prop.market, 1.0),
+        cv=form_cv, cv_typical=CV_FLOOR.get(prop.market, 0.35),
+        sample_games=proj.form.sample_games)
+    confidence = round(quality / 10.0, 1)
+
+    # The gates, in order of what they mean:
+    #  credible  — a >10% raw disagreement is bad data, not alpha (§2.5)
+    #  tier edge — the §3 minimum post-haircut edge for this market's tier
+    #  net       — must clear the REAL price plus the favourite surcharge
+    #  quality   — below 70 is no bet, not a lean (§10)
+    tier = market_tier(prop.market)
+    min_edge = tier_min_edge(prop.market)
+    gate_ok = (credible and has_market
+               and edge >= min_edge
+               and net >= 0.010 + favourite_surcharge(best.odds))
+    grade = quality_letter(quality) if gate_ok else "Pass"
+    fraction = 0.5 if (grade == "A+" and tier == 1) else 0.25
+    stake = (_kelly_stake(hit, best.odds, fraction, STAKE_CAP_U[grade])
+             if grade != "Pass" else 0.0)
 
     reasons = list(proj.reasons)
     if not credible:
         reasons.insert(0, "No credible market edge — line unavailable or price looks off")
     elif side == "UNDER":
         reasons.insert(0, f"Model sides UNDER — projects {proj.mean:g} under the {best.line:g} line")
+    if credible and has_market and 0 < edge < min_edge:
+        reasons.append(f"Edge {edge:+.1%} is under the Tier {tier} bar "
+                       f"({min_edge:.1%} post-haircut) — pass, not a lean")
+    reasons.extend(quality_notes)
 
     return Recommendation(
         player=prop.player,
@@ -288,4 +353,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
         reasons=reasons,
         trend=proj.form.trend,
         has_market=has_market,
+        quality=quality,
+        tier=tier,
+        volatility=market_volatility(prop.market),
     )

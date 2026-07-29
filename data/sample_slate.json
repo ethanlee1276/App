@@ -303,25 +303,25 @@
       "lines": [
         {
           "book": "DraftKings",
-          "line": 96.5,
+          "line": 97.5,
           "over_odds": -112,
           "under_odds": -108
         },
         {
           "book": "FanDuel",
-          "line": 95.5,
+          "line": 96.5,
           "over_odds": -110,
           "under_odds": -110
         },
         {
           "book": "BetMGM",
-          "line": 97.5,
+          "line": 98.5,
           "over_odds": -115,
           "under_odds": -105
         },
         {
           "book": "Caesars",
-          "line": 96.5,
+          "line": 97.5,
           "over_odds": -108,
           "under_odds": -112
         }
@@ -728,7 +728,7 @@
         {
           "week": 16,
           "opponent": "HOU",
-          "value": 5,
+          "value": 6,
           "home": false
         },
         {

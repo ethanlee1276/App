@@ -181,8 +181,25 @@ def main() -> None:
 
     result = run_slate(slate, config, model=model, nfl_usage=nfl_usage)
 
-    # Stamp each pick with how the market has moved relative to OUR side
-    # (informational — never changes a grade).
+    # §10 drawdown circuit-breaker: after a 10u peak-to-trough drawdown on
+    # the settled journal, every stake is halved until the peak is recovered.
+    # Applied before journaling so the ledger records what we'd actually bet.
+    try:
+        from engine import ledger as _ledger
+        dd = _ledger.drawdown_factor(_ledger.connect(), sport="nfl")
+        if dd < 1.0:
+            for r in result["recommendations"] + result.get("game_bets", []):
+                if r.get("recommended") and r.get("stake_units", 0) > 0:
+                    r["stake_units"] = round(r["stake_units"] * dd, 2)
+            result["staking_note"] = ("Drawdown rule active: stakes halved "
+                                      "until the journal recovers its peak")
+            print("  ⚠️  Drawdown rule active — all stakes halved (10u+ off peak)")
+    except Exception:
+        pass
+
+    # Stamp each pick with how the market has moved relative to OUR side.
+    # Movement is 15% of the quality grade: with-steam raises it, sharp
+    # movement against can reject the pick (see engine/quality.py).
     if real_odds:
         try:
             from engine.linemoves import (load_history, analyze, todays_rows,

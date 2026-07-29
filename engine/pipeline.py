@@ -57,6 +57,8 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "confidence": rec.confidence,
         "stake_units": rec.stake_units,
         "grade": rec.grade, "has_market": rec.has_market,
+        # §10/§8 — the unified 0–100 grade, market tier and volatility.
+        "quality": rec.quality, "tier": rec.tier, "volatility": rec.volatility,
         "recent_values": vals[:12],
         "trend": rec.trend,
         "trend_delta": round(proj.form.trend_delta, 1),
@@ -218,7 +220,8 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         game = slate.game_for(prop)
         opponent = slate.team(prop.opponent)
         proj = build_projection(prop, game, opponent, model=model)
-        rec = evaluate_prop(prop, proj, allow_synthetic_line=allow_synthetic_line)
+        rec = evaluate_prop(prop, proj, allow_synthetic_line=allow_synthetic_line,
+                            game=game)
         decision = apply_rules(rec, prop, game, config)
         d = _rec_to_dict(rec, prop, decision, proj)
         d["live"] = bool(game.live and game.live.state == "live")
@@ -228,6 +231,15 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
 
     # Rank: recommended bets first, then by confidence, then by edge.
     results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)
+
+    game_bets = _game_bets(slate.games, config)
+
+    # §9/§10 — correlation flags, incoherent-pair rejection, exposure caps.
+    # Runs AFTER ranking and BEFORE counts, so a rejected pick never counts
+    # as recommended and capped stakes are what the page (and journal) see.
+    from .correlation import flag_correlations, apply_exposure_caps
+    corr = flag_correlations(results)
+    corr["cap_notes"] = apply_exposure_caps(results, game_bets)
 
     recommended = [r for r in results if r["recommended"]]
     ls = _long_shots(slate, nfl_usage)
@@ -245,9 +257,10 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         },
         "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,
-        "game_bets": _game_bets(slate.games, config),
+        "game_bets": game_bets,
         "long_shots": ls,
         "market_scan": _market_scan(results, ls),
+        "correlation": corr,
     }
 
 

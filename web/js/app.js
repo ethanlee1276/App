@@ -85,8 +85,12 @@ function applySport() {
 }
 
 /* ---------------- formatting helpers ---------------- */
-const gradeClass = (g) => ({ "Strong Play": "strong", "Play": "play", "Lean": "lean", "Pass": "pass" }[g] || "pass");
-const gradeColor = (g) => ({ "Strong Play": "var(--good)", "Play": "var(--cyan)", "Lean": "var(--warn)", "Pass": "var(--text-mute)" }[g] || "var(--text-mute)");
+// NFL props grade A+/A/B+/Pass (the unified 0–100 grade, docs/NFL_MODEL.md
+// §10 — no Leans); other modules still use the word grades.
+const gradeClass = (g) => ({ "A+": "strong", "A": "play", "B+": "lean",
+  "Strong Play": "strong", "Play": "play", "Lean": "lean", "Pass": "pass" }[g] || "pass");
+const gradeColor = (g) => ({ "A+": "var(--good)", "A": "var(--cyan)", "B+": "var(--warn)",
+  "Strong Play": "var(--good)", "Play": "var(--cyan)", "Lean": "var(--warn)", "Pass": "var(--text-mute)" }[g] || "var(--text-mute)");
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
 const signedPct = (x) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
 const american = (o) => (o > 0 ? `+${o}` : `${o}`);
@@ -887,8 +891,25 @@ function moveChip(r) {
   return `<span class="chip ${withUs ? "up" : "down"}" title="${withUs ? "Books have re-priced toward our side since our first snapshot" : "Books have re-priced away from our side since our first snapshot"}">${icon} Market ${withUs ? "with" : "against"} pick · ${what}</span>`;
 }
 
+// §8/§10 chips: the market tier and volatility rating every play carries.
+function tierChip(r) {
+  if (r.tier == null) return "";
+  const volColor = { LOW: "var(--good)", MEDIUM: "var(--cyan)",
+                     HIGH: "var(--warn)", EXTREME: "var(--bad)" }[r.volatility] || "";
+  return `<span class="chip" title="Tier 1 = count props (most modelable) · Tier 2 = yardage · Tier 3 = touchdowns. Volatility feeds the edge haircut and the stake size.">
+    T${r.tier}${r.volatility ? ` · <span style="color:${volColor}">${escapeHtml(r.volatility)}</span>` : ""}</span>`;
+}
+
+function qualityChip(r) {
+  if (r.quality == null) return "";
+  return `<span class="chip" title="Unified bet quality 0–100: post-haircut edge 40% · usage stability 15% · market movement 15% · game-script fit 10% · matchup 10% · weather 10%. Below 70 is never a bet.">
+    Q ${r.quality}/100</span>`;
+}
+
 function cardHTML(r) {
   const reasons = (r.reasons || []).map(reasonLI).join("");
+  const corr = (r.correlations || []).map((c) =>
+    `<div class="warning" style="border-color:var(--cyan)">🔗 ${escapeHtml(c)}</div>`).join("");
   const warnings = (r.warnings || []).map((w) => `<div class="warning">⚠️ ${escapeHtml(w)}</div>`).join("");
   const ud = unitDollars();
   const stakeTxt = ud > 0
@@ -920,8 +941,8 @@ function cardHTML(r) {
         ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
              ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
         : ""}
-      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${trendChip(r)}${moveChip(r)}${booksChip(r)}${stakeChip}</div>
-      ${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
+      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${booksChip(r)}${stakeChip}</div>
+      ${corr}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
 }
 
