@@ -553,7 +553,7 @@ documented, not churned. Status: ✅ implemented · 🟡 partial · 📋 parked
 | §2.5 Sanity-check outputs | ✅ | `MAX_CREDIBLE_EDGE` (10% raw = data error) + per-market calibration reliability gate (`is_reliable`) — an unpriceable market is bet nothing, said out loud |
 | §3 Devig / distribution / edge | ✅ | Shared devig; per-market distributions: empirical history blend for TB/hits (right-skew handled), Poisson for HRs, normal+floors for Ks; Shin devig 📋 |
 | §3 Haircut by tier | ✅ | `engine/mlb/quality.py` → shared `TIER_SHRINK` (T1 0.50 · T2 0.45 · T3 0.30) feeding `temper_edge` |
-| §3 Tier minimum edges (2.5/4/6%) | ✅ | Shared `TIER_MIN_EDGE`, gated in `evaluate_mlb_prop` |
+| §3 Tier minimum edges | ✅ re-tuned | Shared `TIER_MIN_EDGE`, gated in `evaluate_mlb_prop` — operator re-tune 2026-07-29: Tier 2 minimum 4%→3% so the bar sits inside the credibility guard's believable window (see NFL map for the math); a ten-game slate producing one pick was a closed door, not discipline. The `gate_census` in every build now prints WHERE the slate's props die so future tuning is data-driven |
 | §3.7 Ladder shopping | 🟡 | Every book's every line is shopped both sides (`pick_side`); the odds feed carries main lines, so alt-rung ladders 📋 |
 | §4 Sharp hierarchy | ✅ | Game bets are sharp-anchored ONLY (model-alone picks measured -12.4% and demoted to info); props use devigged multi-book consensus; the stale-line scanner (measured 64.8%/30k) is the "recreational outlier" hunter |
 | §4 Movement engine | 🟡 | `engine/linemoves.py` open→current, steam, with/against verdict; movement adjusts the quality grade and steam-against can reject. Lineup-release re-check happens structurally (build re-runs on refresh after lineups post). Public bet % 📋 (no source) |

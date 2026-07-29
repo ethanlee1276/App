@@ -558,7 +558,7 @@ have yet — listed honestly rather than faked).
 | §3 Devig | ✅ | `engine/odds.py` multiplicative two-way devig; TD longshots use their own model against the measured plus-money avoidance rule (Shin-style devig 📋) |
 | §3 Distribution not point | ✅ | `statmath.prob_over` (normal) + `prob_over_discrete` for counts; §8 skew handled via CV floors |
 | §3 Edge haircut by tier | ✅ | `engine/quality.py` `TIER_SHRINK` (T1 0.50 · T2 0.45 · T3 0.30) feeding `betting.temper_edge` |
-| §3 Tier minimum edges (2.5/4/6%) | ✅ | `engine/quality.py` `TIER_MIN_EDGE`, gated in `betting.evaluate_prop` |
+| §3 Tier minimum edges | ✅ re-tuned | `engine/quality.py` `TIER_MIN_EDGE` — operator re-tune 2026-07-29: Tier 2 minimum 4%→3% so it sits inside the credibility guard's believable window (10% raw × 0.45 shrink = 4.5% ceiling; the spec's 4% left a half-point sliver that closed the tier). Tier 1 unchanged; Tier 3's 6% is above its own ceiling on purpose — TD markets stay quarantined on the Long Shots board |
 | §3 Line shopping | ✅ | `betting.pick_side` shops every book both sides; alt-line ladder 📋 (odds feed carries main lines only) |
 | §4 Sharp-book hierarchy | 🟡 | Prop truth = devigged multi-book consensus (`marketscan.stale_quotes`, measured 64.8%/30k); game bets use sharp-anchor pricing; per-book sharpness weights 📋 |
 | §4 Movement engine | 🟡 | `engine/linemoves.py`: open→current path, steam detection, with/against verdict, move age; movement adjusts the quality grade and sharp movement against a pick can reject it. Public bet%/money% and first-mover attribution 📋 (no data source) |

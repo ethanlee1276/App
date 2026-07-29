@@ -34,7 +34,19 @@ MARKET_TIER = {
 TIER_SHRINK = {1: 0.50, 2: 0.45, 3: 0.30}
 
 # §3 step 6: minimum POST-haircut edge (vs the devigged fair prob) to bet.
-TIER_MIN_EDGE = {1: 0.025, 2: 0.040, 3: 0.060}
+#
+# RE-TUNED 2026-07-29 (operator call): the minimum must sit INSIDE the
+# believable window, or the tier is mathematically closed rather than
+# disciplined. The credibility guard treats raw disagreement over 10% as
+# bad data, so the largest believable post-haircut edge is
+# 10% × shrink — 5.0% in Tier 1, 4.5% in Tier 2. The spec's original 4%
+# Tier 2 minimum left a half-point sliver (raw 8.9–10.0%), which produced
+# one pick on a full ten-game slate: a closed door wearing a bar's
+# clothes. 3% gives Tier 2 a real window (raw 6.7–10%) while still
+# demanding twice the vig's worth of edge. Tier 3 stays at 6% — above its
+# own believable ceiling ON PURPOSE: touchdown/HR markets are quarantined
+# on the Long Shots board with its own measured tier, never main picks.
+TIER_MIN_EDGE = {1: 0.025, 2: 0.030, 3: 0.060}
 
 VOLATILITY = {
     "receptions": "LOW",
@@ -92,10 +104,13 @@ def quality_score(*, edge: float, market: str, side: str,
     tier = market_tier(market)
     notes: list[str] = []
 
-    # Edge (40): scaled so the tier minimum earns half credit and twice the
-    # minimum earns full credit — an edge barely over the bar shouldn't grade
-    # like a monster.
-    edge_pts = clamp(edge / (2.0 * TIER_MIN_EDGE[tier]), 0.0, 1.0) * 40.0
+    # Edge (40): the tier minimum earns two-thirds credit; 1.5× the minimum
+    # earns full credit. (Re-tuned 2026-07-29 with the minimums above: the
+    # old half-credit scaling meant a gate-passing edge with neutral
+    # context still graded below 70 — the edge gate and the quality gate
+    # were double-charging for the same caution, and the credibility cap
+    # makes "twice the minimum" unreachable in Tier 2 anyway.)
+    edge_pts = clamp(edge / (1.5 * TIER_MIN_EDGE[tier]), 0.0, 1.0) * 40.0
 
     # Usage stability (15): §5's "who to avoid" filter. Week-to-week CV
     # relative to what this market normally shows, times sample depth.

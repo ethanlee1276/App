@@ -40,8 +40,24 @@ def test_tiers_scale_haircut_and_minimum_edge():
     assert market_tier("anytime_td") == 3
     assert tier_shrink("receptions") > tier_shrink("rush_yds") > tier_shrink("anytime_td")
     assert tier_min_edge("receptions") < tier_min_edge("rush_yds") < tier_min_edge("anytime_td")
-    assert TIER_MIN_EDGE[1] == 0.025 and TIER_MIN_EDGE[2] == 0.040 and TIER_MIN_EDGE[3] == 0.060
+    assert TIER_MIN_EDGE[1] == 0.025 and TIER_MIN_EDGE[2] == 0.030 and TIER_MIN_EDGE[3] == 0.060
     assert TIER_SHRINK[1] == 0.50
+
+
+def test_bettable_tiers_are_not_mathematically_closed():
+    """REGRESSION (2026-07-29): the credibility guard caps believable raw
+    disagreement at 10%, so a tier's largest believable post-haircut edge is
+    10% x shrink. The minimum-to-bet must sit meaningfully BELOW that
+    ceiling or the tier is a closed door wearing a bar's clothes — Tier 2's
+    old 4% minimum against a 4.5% ceiling produced one pick on a ten-game
+    slate. Tier 3 is closed ON PURPOSE (quarantined on the Long Shots
+    board), so it is exempt."""
+    from engine.betting import MAX_CREDIBLE_EDGE
+    for tier in (1, 2):
+        ceiling = MAX_CREDIBLE_EDGE * TIER_SHRINK[tier]
+        window = ceiling - TIER_MIN_EDGE[tier]
+        assert window >= 0.015, (tier, ceiling, TIER_MIN_EDGE[tier])
+    assert TIER_MIN_EDGE[3] > MAX_CREDIBLE_EDGE * TIER_SHRINK[3]   # intended
 
 
 def test_volatility_ratings_match_the_spec():

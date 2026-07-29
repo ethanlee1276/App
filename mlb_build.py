@@ -329,6 +329,11 @@ def main() -> None:
     confirmed = sum(1 for g in slate.games if g.lineups_confirmed)
     print(f"\n{args.date}: {len(slate.games)} games ({confirmed} with confirmed lineups)")
     print(f"Analyzed {c['props_analyzed']} props → {c['recommended']} recommended")
+    gc = result.get("gate_census") or {}
+    if gc:
+        # The funnel, so a thin board is a diagnosis instead of a mystery.
+        print("  Gate census: "
+              + " · ".join(f"{k.replace('_', ' ')} {v}" for k, v in gc.items() if v))
     if real_odds:
         print("(edges priced against real sportsbook lines)\n")
     else:

@@ -333,6 +333,47 @@ def _game_to_dict(g) -> dict:
     }
 
 
+def gate_census(recommendations: list[dict]) -> dict:
+    """Where did the slate's props die? One count per first-failing gate, so
+    "878 analyzed → 1 recommended" is a funnel you can read instead of a
+    number you have to trust. Tune thresholds against THIS, not vibes."""
+    from ..betting import favourite_surcharge, MAX_CREDIBLE_EDGE
+    from ..odds import american_to_prob
+    from ..calibrate import is_reliable
+    from .quality import TIER_SHRINK, TIER_MIN_EDGE
+    census = {"recommended": 0, "no_real_price": 0, "credibility": 0,
+              "calibration": 0, "tier_edge_bar": 0, "price_net": 0,
+              "quality_under_70": 0, "held_by_rules": 0}
+    for r in recommendations:
+        if r.get("recommended"):
+            census["recommended"] += 1
+            continue
+        if r.get("has_market") is False:
+            census["no_real_price"] += 1
+            continue
+        if not is_reliable("mlb", r.get("market", "")):
+            census["calibration"] += 1
+            continue
+        tier = r.get("tier", 2)
+        shrink = TIER_SHRINK.get(tier, 0.45)
+        raw = (r.get("edge") or 0) / shrink if shrink else 0
+        if abs(raw) > MAX_CREDIBLE_EDGE:
+            census["credibility"] += 1
+            continue
+        if (r.get("edge") or 0) < TIER_MIN_EDGE.get(tier, 0.03):
+            census["tier_edge_bar"] += 1
+            continue
+        net = (r.get("hit_prob") or 0) - american_to_prob(r.get("odds") or -110)
+        if net < 0.010 + favourite_surcharge(r.get("odds") or -110):
+            census["price_net"] += 1
+            continue
+        if (r.get("quality") or 0) < 70:
+            census["quality_under_70"] += 1
+            continue
+        census["held_by_rules"] += 1     # lineups, IL, live game, juice, sliders
+    return census
+
+
 def run_mlb_slate(slate: MLBSlate | str | Path,
                   config: RuleConfig | None = None, model=None,
                   il_map: dict | None = None) -> dict:
@@ -418,6 +459,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "generated_from": "mlb-sample-slate",
         "model": "learned" if model is not None else "rules",
         "counts": {"props_analyzed": len(results), "recommended": len(recommended)},
+        "gate_census": gate_census(results),
         "config": {"min_confidence": config.min_confidence, "min_edge": config.min_edge},
         "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,
