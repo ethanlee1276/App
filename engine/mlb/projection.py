@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..form import compute_form, FormResult
+from ..form import compute_form, FormResult, MLB_WINDOW_WEIGHTS
 from ..models import GameLog
 from ..statmath import clamp
 from .models import MLBProp, MLBGame, TOTAL_BASES, HITS, HOME_RUNS, STRIKEOUTS
@@ -80,7 +80,12 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None) -> MLBProject
     # Shared recent-form blend (last 1/3/5/10 + season + career + vs pitcher).
     logs = [GameLog(week=g.game, opponent=g.opponent, value=g.value, home=g.home)
             for g in prop.logs]
-    form = compute_form(logs, prop.career_avg, prop.vs_pitcher_avg)
+    # MLB recency curve (docs/MLB_MODEL.md §6): gentler than the NFL's —
+    # ~40% on the last week, ~30% on the fortnight, 20% season, 10% vs this
+    # pitcher — because a hot baseball week is mostly noise, and most
+    # batter-vs-pitcher history is an anecdote, not evidence.
+    form = compute_form(logs, prop.career_avg, prop.vs_pitcher_avg,
+                        weights=MLB_WINDOW_WEIGHTS)
 
     park = evaluate_park(get_park(game.park))
     weather = evaluate_weather(game.weather)

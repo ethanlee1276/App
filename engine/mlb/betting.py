@@ -12,13 +12,13 @@ from __future__ import annotations
 import math
 
 from ..betting import (
-    Recommendation, _confidence_score, _grade, _kelly_stake, net_edge,
-    _trend_alignment, pick_side, temper_edge,
+    Recommendation, _kelly_stake, net_edge, favourite_surcharge,
+    pick_side, temper_edge,
 )
 from ..calibrate import apply_temperature, correction_for, is_reliable
 from ..odds import expected_value
 from ..statmath import prob_over, clamp
-from .models import MLBProp, HOME_RUNS
+from .models import MLBProp, HOME_RUNS, STRIKEOUTS
 from .projection import MLBProjection
 
 
@@ -64,8 +64,46 @@ def _poisson_over(line: float, lam: float) -> float:
     return max(0.0, 1.0 - cdf)
 
 
+def _pitcher_certainty(prop: MLBProp, proj: MLBProjection, game=None) -> float:
+    """§5: grade the pitcher first, always. For a pitcher's own prop this is
+    how well-sampled and steady his log is; for a hitter prop it is whether
+    tonight's opposing probable is even KNOWN — an unconfirmed starter makes
+    every opposing hitter number a guess about a matchup that may not exist."""
+    if prop.market == STRIKEOUTS:
+        sample_q = clamp(proj.form.sample_games / 8.0, 0.3, 1.0)
+        cv = (proj.form.std / proj.form.mean) if proj.form.mean > 0 else 1.0
+        var_q = clamp(0.28 / cv, 0.4, 1.0) if cv > 0 else 1.0
+        return sample_q * var_q
+    if game is not None and getattr(game, "pitchers", None):
+        if game.pitchers.get(prop.opponent):
+            return 0.9
+    return 0.55
+
+
+def _lineup_certainty(prop: MLBProp, game=None) -> float:
+    """§2.3: hitter props are conditional until the lineup is confirmed —
+    the #2 hitter gets ~0.7 more PAs than the #7 hitter, so slot IS the
+    projection. Pitcher props care less (the probable is the condition)."""
+    confirmed = bool(getattr(game, "lineups_confirmed", True)) if game is not None else True
+    if prop.market == STRIKEOUTS:
+        return 1.0 if confirmed else 0.85
+    if prop.lineup_spot and confirmed:
+        return 1.0
+    if prop.lineup_spot:
+        return 0.7                     # projected slot, lineup not posted
+    return 0.35                        # not in any posted/projected lineup
+
+
 def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
-                      allow_synthetic_line: bool = False) -> Recommendation:
+                      allow_synthetic_line: bool = False,
+                      game=None) -> Recommendation:
+    """docs/MLB_MODEL.md §3 end to end: shop the ladder, devig, price with
+    the market's own distribution, haircut by tier, gate on the tier
+    minimum, grade 0–100 with baseball's weights, size with fractional
+    Kelly. ``game`` supplies lineup/probable/umpire context (None → neutral)."""
+    from .quality import (mlb_tier, mlb_tier_shrink, mlb_tier_min_edge,
+                          mlb_volatility, mlb_quality_score, letter,
+                          STAKE_CAP_U)
     history = [g.value for g in prop.logs] if prop.logs else []
     temp, bias = correction_for("mlb", prop.market)
 
@@ -83,24 +121,50 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         return apply_temperature(raw, temp, bias)
 
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
-    hit, edge, credible = temper_edge(hit_raw, fair, best.book, allow_synthetic_line)
+    hit, edge, credible = temper_edge(hit_raw, fair, best.book,
+                                      allow_synthetic_line,
+                                      shrink=mlb_tier_shrink(prop.market))
     has_market = allow_synthetic_line or (best.book or "").lower() != "proxy"
     if not has_market:
         # No real price to beat — don't report a number that reads as an edge.
         edge = 0.0
     ev = expected_value(hit, best.odds)
-    trend_align = _trend_alignment(side, proj.form.trend)
-    confidence = _confidence_score(edge, hit, proj, trend_align)
-    # Grade on net edge (vs the real price), not edge-vs-fair — see
-    # engine/betting.py._grade. This is what keeps every graded bet
-    # sizeable instead of shipping 0.00-unit "recommendations".
-    # A market whose own calibration fit ran to the edge of the search
-    # range is one we cannot price — the stored temperature is a cap, not
-    # a correction. Bet nothing there until the model is fixed.
+    net = net_edge(hit, best.odds)
+
+    # Environment: park × weather for this market, times the umpire's zone
+    # (K-factor for strikeout props, run environment for hitter markets) —
+    # haircut-sized in the ABS era, but not zero.
+    env_mult = (proj.park.multipliers.get(prop.market, 1.0)
+                * proj.weather.multipliers.get(prop.market, 1.0))
+    if game is not None:
+        env_mult *= (getattr(game, "ump_k_factor", 1.0) if prop.market == STRIKEOUTS
+                     else getattr(game, "ump_run_factor", 1.0))
+
+    quality, quality_notes = mlb_quality_score(
+        edge=edge, market=prop.market, side=side,
+        pitcher_certainty=_pitcher_certainty(prop, proj, game),
+        lineup_certainty=_lineup_certainty(prop, game),
+        env_mult=env_mult, matchup_mult=proj.matchup.multiplier)
+    confidence = round(quality / 10.0, 1)
+
+    # The gates, in order of what they mean:
+    #  calibration — a market whose calibration fit ran to the edge of its
+    #    search range cannot be priced; the stored temperature is a cap,
+    #    not a correction. Bet nothing there until the model is fixed.
+    #  credible    — a >10% raw disagreement is bad data, not alpha (§2.5)
+    #  tier edge   — §3's minimum post-haircut edge for this market's tier
+    #  net         — must clear the REAL price plus the favourite surcharge
+    #  quality     — below 70 is no bet, not a lean (§10)
     calibration_ok = is_reliable("mlb", prop.market)
-    grade = (_grade(confidence, net_edge(hit, best.odds), best.odds)
-             if credible and calibration_ok else "Pass")
-    stake = _kelly_stake(hit, best.odds) if grade != "Pass" else 0.0
+    tier = mlb_tier(prop.market)
+    min_edge = mlb_tier_min_edge(prop.market)
+    gate_ok = (credible and calibration_ok and has_market
+               and edge >= min_edge
+               and net >= 0.010 + favourite_surcharge(best.odds))
+    grade = letter(quality) if gate_ok else "Pass"
+    fraction = 0.5 if (grade == "A+" and tier == 1) else 0.25
+    stake = (_kelly_stake(hit, best.odds, fraction, STAKE_CAP_U[grade])
+             if grade != "Pass" else 0.0)
 
     reasons = list(proj.reasons)
     if not calibration_ok:
@@ -110,7 +174,19 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     if not credible:
         reasons.insert(0, "No credible market edge — line unavailable or price looks off")
     elif side == "UNDER":
-        reasons.insert(0, f"Model sides UNDER — projects {proj.mean:.2f} under the {best.line:g} line")
+        if proj.mean <= best.line:
+            reasons.insert(0, f"Model sides UNDER — projects {proj.mean:.2f} under the {best.line:g} line")
+        else:
+            # The empirical distribution chose the under even though the MEAN
+            # sits above the line — §8: averages lie on right-skewed stats,
+            # and the old text claimed a projection that wasn't true.
+            reasons.insert(0, f"Model sides UNDER — the mean is {proj.mean:.2f} but a "
+                              f"few big games inflate it; his actual game log clears "
+                              f"{best.line:g} less often than the price implies")
+    if credible and calibration_ok and has_market and 0 < edge < min_edge:
+        reasons.append(f"Edge {edge:+.1%} is under the Tier {tier} bar "
+                       f"({min_edge:.1%} post-haircut) — pass, not a lean")
+    reasons.extend(quality_notes)
 
     return Recommendation(
         player=prop.player, team=prop.team, opponent=prop.opponent,
@@ -124,4 +200,5 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         confidence=confidence, stake_units=round(stake, 2), grade=grade,
         reasons=reasons, trend=proj.form.trend,
         has_market=has_market,
+        quality=quality, tier=tier, volatility=mlb_volatility(prop.market),
     )

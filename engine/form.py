@@ -30,6 +30,21 @@ WINDOW_WEIGHTS = {
     "vs_opp": 0.03,
 }
 
+# MLB runs a GENTLER recency curve (docs/MLB_MODEL.md §6: last 7 ≈ 40% ·
+# last 15 ≈ 30% · season 20% · vs-pitcher 10%): baseball's nightly variance
+# is so large that a hot week means far less than a hot fortnight in the
+# NFL, and batter-vs-pitcher history stays a small input because most of
+# it is noise. Mapped onto the same window structure.
+MLB_WINDOW_WEIGHTS = {
+    "last1": 0.08,
+    "last3": 0.17,
+    "last5": 0.15,
+    "last10": 0.30,
+    "season": 0.20,
+    "career": 0.00,
+    "vs_opp": 0.10,
+}
+
 
 @dataclass
 class FormResult:
@@ -49,9 +64,12 @@ def compute_form(
     logs: list[GameLog],
     career_avg: float,
     vs_opponent_avg: Optional[float],
+    weights: dict | None = None,
 ) -> FormResult:
     """Blend look-back windows into a form-adjusted mean and a variance
-    estimate. ``logs`` are ordered most-recent first."""
+    estimate. ``logs`` are ordered most-recent first. ``weights`` selects the
+    sport's recency curve (default: the NFL spec's; MLB passes its own)."""
+    weights = weights or WINDOW_WEIGHTS
     vals = [g.value for g in logs]
 
     windows = {
@@ -65,9 +83,9 @@ def compute_form(
     }
 
     pairs = [
-        (v, WINDOW_WEIGHTS[k])
+        (v, weights[k])
         for k, v in windows.items()
-        if v is not None
+        if v is not None and weights.get(k, 0) > 0
     ]
     mean = weighted_mean(pairs)
 

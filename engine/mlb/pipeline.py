@@ -260,6 +260,8 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "edge": rec.edge, "ev_per_unit": rec.ev_per_unit,
         "confidence": rec.confidence, "stake_units": rec.stake_units,
         "grade": rec.grade, "has_market": rec.has_market, "trend": rec.trend,
+        # §9/§10 — the unified 0–100 grade, market tier and volatility.
+        "quality": rec.quality, "tier": rec.tier, "volatility": rec.volatility,
         "recent_values": vals[:12],
         "trend_delta": round(proj.form.trend_delta, 2),
         "recommended": decision.recommend, "warnings": decision.warnings,
@@ -269,7 +271,7 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
             f"(range {rec.proj_low:g}–{rec.proj_high:g}) vs a line of {rec.line:g}, "
             f"a {rec.hit_prob:.0%} hit probability against the book's "
             f"{rec.fair_prob:.0%} — a {rec.edge:+.1%} edge. "
-            f"Confidence {rec.confidence}/10 → {rec.grade}."
+            f"Quality {rec.quality}/100 (Tier {rec.tier}, {rec.volatility}) → {rec.grade}."
         ),
         "reasons": rec.reasons[:8],
         "all_lines": [
@@ -344,7 +346,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
     for prop in slate.props:
         game = slate.game_for(prop)
         proj = build_mlb_projection(prop, game, model=model)
-        rec = evaluate_mlb_prop(prop, proj)
+        rec = evaluate_mlb_prop(prop, proj, game=game)
         decision = apply_mlb_rules(rec, prop, game, proj, config)
         d = _rec_to_dict(rec, prop, decision, proj)
         il = il_map.get(normalize_name(prop.player))
@@ -366,6 +368,16 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
 
     results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]),
                  reverse=True)
+
+    game_bets = _game_bets(slate.games, config)
+
+    # §9/§10 — correlation flags, incoherent-pair rejection, exposure caps.
+    # Runs AFTER ranking and BEFORE counts, so a rejected pick never counts
+    # as recommended and capped stakes are what the page (and journal) see.
+    from ..correlation import flag_mlb_correlations, apply_exposure_caps
+    corr = flag_mlb_correlations(results)
+    corr["cap_notes"] = apply_exposure_caps(results, game_bets)
+
     recommended = [r for r in results if r["recommended"]]
 
     ls_picks, ls_watch, ls_diag = _long_shots(slate)
@@ -398,7 +410,8 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "config": {"min_confidence": config.min_confidence, "min_edge": config.min_edge},
         "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,
-        "game_bets": _game_bets(slate.games, config),
+        "game_bets": game_bets,
+        "correlation": corr,
         "long_shots": ls_picks,
         "longshot_watch": ls_watch,
         "longshot_diag": ls_diag,

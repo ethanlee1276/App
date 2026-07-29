@@ -95,6 +95,66 @@ def flag_correlations(recs: list[dict]) -> dict:
     return {"pairs_flagged": flagged, "pairs_rejected": rejected}
 
 
+MLB_K_MARKET = "strikeouts"
+MLB_HITTER_MARKETS = {"total_bases", "hits", "home_runs"}
+
+
+def flag_mlb_correlations(recs: list[dict]) -> dict:
+    """Baseball's §9 (docs/MLB_MODEL.md): the pitcher and the opposing
+    hitters share one set of pitches.
+
+    - A starter's strikeout OVER next to an opposing hitter's OVER is
+      incoherent — the same pitches can't strike out the side AND get hit.
+      The lower-graded half of the pair is rejected.
+    - Two or more hitter OVERs from ONE offense are one bet on that offense
+      wearing several jerseys — flagged as combined exposure on every card.
+    Mutates the dicts; returns a summary for the slate meta."""
+    on = [r for r in recs if r.get("recommended")]
+    flagged = rejected = 0
+
+    by_game: dict = {}
+    for r in on:
+        by_game.setdefault(_game_key(r), []).append(r)
+
+    for rows in by_game.values():
+        ks = [r for r in rows if r.get("market") == MLB_K_MARKET
+              and r.get("side") == "OVER"]
+        for k in ks:
+            for h in rows:
+                if not (k.get("recommended") and h.get("recommended")):
+                    continue
+                if (h.get("market") in MLB_HITTER_MARKETS
+                        and h.get("side") == "OVER"
+                        and h.get("team") == k.get("opponent")):
+                    loser = h if (h.get("quality", 0) <= k.get("quality", 0)) else k
+                    keeper = k if loser is h else h
+                    loser["recommended"] = False
+                    loser["stake_units"] = 0.0
+                    loser["grade"] = "Pass"
+                    loser.setdefault("warnings", []).append(
+                        f"Incoherent pairing with {keeper.get('player')} "
+                        f"{keeper.get('side', '').title()} {keeper.get('market_label', '')} "
+                        f"— the same pitches can't strike out the side and get "
+                        f"hit; the lower-graded bet is rejected")
+                    rejected += 1
+        # Offense stacks: hitters from one team, all needing big games.
+        by_team: dict = {}
+        for r in rows:
+            if (r.get("recommended") and r.get("market") in MLB_HITTER_MARKETS
+                    and r.get("side") == "OVER"):
+                by_team.setdefault(r.get("team"), []).append(r)
+        for team, stack in by_team.items():
+            if len(stack) >= 2:
+                for r in stack:
+                    others = [s.get("player") for s in stack if s is not r]
+                    r.setdefault("correlations", []).append(
+                        f"One offense, several jerseys — stacked with "
+                        f"{', '.join(others)} ({team}); counted as combined exposure")
+                flagged += 1
+
+    return {"pairs_flagged": flagged, "pairs_rejected": rejected}
+
+
 def apply_exposure_caps(recs: list[dict], game_bets: list[dict]) -> list[str]:
     """§10 circuit breakers: 5u per game, 15u per slate, correlated bets
     counted together (they are — everything in one game counts as that

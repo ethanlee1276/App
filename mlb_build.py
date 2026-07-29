@@ -263,8 +263,26 @@ def main() -> None:
 
     result = run_mlb_slate(slate, config, il_map=il_map)
 
-    # Line movement: what the market has done since our first snapshot, and
-    # whether it agrees with each pick (informational — never changes a grade).
+    # §10 drawdown circuit-breaker (docs/MLB_MODEL.md): after a 10u
+    # peak-to-trough drawdown on the settled journal, every stake is halved
+    # until the peak is recovered. Applied before journaling so the ledger
+    # records what we'd actually bet.
+    try:
+        from engine import ledger as _ledger
+        dd = _ledger.drawdown_factor(_ledger.connect(), sport="mlb")
+        if dd < 1.0:
+            for r in result["recommendations"] + result.get("game_bets", []):
+                if r.get("recommended") and r.get("stake_units", 0) > 0:
+                    r["stake_units"] = round(r["stake_units"] * dd, 2)
+            result["staking_note"] = ("Drawdown rule active: stakes halved "
+                                      "until the journal recovers its peak")
+            print("  ⚠️  Drawdown rule active — all stakes halved (10u+ off peak)")
+    except Exception:
+        pass
+
+    # Line movement: what the market has done since our first snapshot.
+    # Movement is 10% of the quality grade: with-steam raises it, sharp
+    # movement against can reject the pick (see engine/quality.py).
     if real_odds:
         try:
             from engine.linemoves import (load_history, analyze, summary_lines,
