@@ -319,6 +319,9 @@ def _game_to_dict(g) -> dict:
             "surface": park.surface, "plays": park.plays,
         },
         "lineups_confirmed": g.lineups_confirmed,
+        # Real moneyline prices ride along (0 = not offered): the team-form
+        # sampler journals the hot side at the price someone could bet.
+        "home_ml": g.home_ml, "away_ml": g.away_ml,
         "weather": {
             "dome": w.roof_closed or park.roof == "dome",
             "temp_f": w.temp_f, "wind_mph": w.wind_mph,

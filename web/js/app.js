@@ -318,6 +318,7 @@ function renderAll() {
   renderStats();
   renderEmptySlate();
   renderBestBets();
+  renderTeamForm();
   renderGames();
   renderGameBets();
   renderRecommended();
@@ -489,6 +490,58 @@ async function renderBestBets() {
         Long Shots (the whole HR board) · Record (how every bucket above has
         actually graded).</p>
     </div>`;
+}
+
+/* ============================================================
+   Team form — hot & cold from our own ingested results (MLB).
+   Track → measure → adjust, in that order: the audit line says whether
+   hot form has predicted anything, and the sampler line says how backing
+   hot teams at REAL prices is actually going. No vibes.
+   ============================================================ */
+async function renderTeamForm() {
+  const host = document.getElementById("team-form");
+  if (!host) return;
+  const tf = (state.data || {}).team_form;
+  if (!tf || (!(tf.hot || []).length && !(tf.cold || []).length)) {
+    host.innerHTML = "";
+    return;
+  }
+  const rec = await loadRecordOnce();
+  const fm = rec.form_sampler || {};
+  const gradedN = (fm.wins || 0) + (fm.losses || 0);
+  const sampler = gradedN
+    ? `sampler: backing hot teams at real prices is ${fm.wins}-${fm.losses} `
+      + `(${signedPct(fm.roi || 0)} ROI) — graded on the Record page`
+    : `sampler journals the hot side's moneyline in every hot-vs-cold matchup `
+      + `at the real price — grades on the Record page`;
+  const row = (r, tone) => `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+                padding:9px 4px;border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="display:flex;align-items:center;gap:8px;flex:1;min-width:150px">
+        ${teamMark(r.team, 18)} <strong>${escapeHtml(teamName(r.team))}</strong></span>
+      <span style="white-space:nowrap">${r.w}-${r.l}</span>
+      <span class="val ${tone}" style="white-space:nowrap;min-width:88px;text-align:right"
+            title="Run differential per game over the window minus the team's own season number — hot relative to itself, not the league">
+        ${r.delta_diff >= 0 ? "+" : ""}${r.delta_diff.toFixed(1)} r/g</span>
+      <span style="min-width:34px;text-align:right;color:${r.streak > 0 ? "var(--good)" : "var(--bad)"}">
+        ${r.streak > 0 ? `W${r.streak}` : r.streak < 0 ? `L${-r.streak}` : "—"}</span>
+    </div>`;
+  const col = (title, icon, rows, tone) => `
+    <div class="trend-col">
+      <h3>${icon} ${title}</h3>
+      ${rows.length ? rows.map((r) => row(r, tone)).join("")
+        : `<div class="empty" style="padding:18px">Nobody qualifies.</div>`}
+    </div>`;
+  host.innerHTML = `
+    <div class="section-title" style="margin-top:8px">Team form — last ${tf.window_days || 7} days
+      <span class="sub">— from our own ingested results, refreshed nightly. Tracked and
+      measured before it's ever allowed to move a bet.</span></div>
+    <div class="trend-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+      ${col("Running hot", "🔥", tf.hot || [], "pos")}
+      ${col("Running cold", "❄️", tf.cold || [], "neg")}
+    </div>
+    <p style="color:var(--text-mute);font-size:12.5px;margin-top:8px">
+      ${tf.audit && tf.audit.verdict ? `Season audit: ${escapeHtml(tf.audit.verdict)}. ` : ""}${escapeHtml(sampler)}.</p>`;
 }
 
 /* ============================================================
@@ -1820,6 +1873,7 @@ async function renderRecord() {
     ${recHealthSection(d.account_health)}
     ${recLongshotSection(d.longshots)}
     ${recStaleSection(d.stale_flags)}
+    ${recFormSection(d.form_sampler)}
     ${recPolymarketSection(pmv)}
     <p class="rec-stamp">Updated ${escapeHtml(d.generated_at || "")}
       · settles automatically as results are ingested each day.</p>`;
@@ -1829,6 +1883,52 @@ async function renderRecord() {
    nominal stake and settled like any bet. The signal's CLV was measured on
    30k harvested quotes; this bucket measures whether TAKING the flagged
    price actually cashes — the difference between a statistic and a bet. */
+/* Team-form sampler — does backing HOT teams at real prices make money?
+   Same quarantine pattern as the stale sampler. */
+function recFormSection(fm) {
+  if (!fm || (!fm.settled && !fm.open)) return "";
+  const graded = fm.wins + fm.losses;
+  const hitRate = graded ? (fm.wins / graded) * 100 : 0;
+  const rows = (fm.recent || []).map((b) => {
+    const won = b.status === "won";
+    const pnl = b.pnl_units || 0;
+    return `<div class="rl-row ${won ? "won" : "lost"}">
+      <span class="rl-icon">${won ? "✓" : "✕"}</span>
+      <span class="rl-date">${escapeHtml(b.date || "")}</span>
+      <span class="rl-main"><strong>${escapeHtml(teamName(b.player))}</strong>
+        <span class="rl-bet">hot-team moneyline</span></span>
+      <span class="rl-proc">form gap ${b.edge != null ? Number(b.edge).toFixed(2) : ""}</span>
+      <span class="rl-odds">${american(b.odds)}</span>
+      <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
+    </div>`;
+  }).join("");
+  return `
+    <div class="section-title" style="margin-top:22px">Team-form sampler — measurement in progress
+      <span class="sub">— every hot-vs-cold matchup, hot side's moneyline at the real book
+      price. Flat 0.1u, zero bankroll impact, never in the record above.</span></div>
+    ${recDisclosure("What this is testing", `Streaks are the most public stat in
+      sports, so the default assumption is the market already prices them — hot teams
+      cost more to back. This bucket journals the hot team's moneyline in every
+      hot-vs-cold matchup at the price someone could actually bet, and settles it
+      against the real result. The promotion bar is the same as every sampler:
+      100+ graded, z ≥ 2, positive ROI. Clear it and form becomes a model input;
+      miss it and we've learned the market has streaks covered — cheaply.`)}
+    <div class="stats rec-kpis">
+      ${recTile("Flat-stake ROI", (fm.roi >= 0 ? "+" : "") + (fm.roi * 100).toFixed(1) + "%",
+                `${fm.net_units >= 0 ? "+" : ""}${(fm.net_units || 0).toFixed(2)}u on ${(fm.units_staked || 0).toFixed(1)}u staked`,
+                { lead: true, tone: toneOf(fm.roi) })}
+      ${recTile("Sampler record", `${fm.wins}-${fm.losses}`, `${fm.open} open`)}
+      ${recTile("Hit rate", graded ? hitRate.toFixed(1) + "%" : "—",
+                fm.avg_taken_implied != null
+                  ? `needs ${(fm.avg_taken_implied * 100).toFixed(1)}% to break even`
+                  : "accrues as games settle")}
+      ${recTile("Avg form gap", fm.avg_form_gap != null ? fm.avg_form_gap.toFixed(2) : "—",
+                "hot-vs-cold score spread sampled")}
+    </div>
+    <div class="card" style="padding:0;margin-top:12px">${rows ||
+      `<p class="loading" style="padding:12px">Fills as hot-vs-cold matchups settle.</p>`}</div>`;
+}
+
 function recStaleSection(st) {
   if (!st || (!st.settled && !st.open)) return "";
   const graded = st.wins + st.losses;

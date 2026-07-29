@@ -336,6 +336,66 @@ def stale_report(conn) -> dict:
     return p
 
 
+def log_form_picks(conn, result: dict, team_form: dict,
+                   flat_stake: float = 0.1) -> int:
+    """The team-form sampler: for every slate game where a HOT team meets a
+    COLD one (form gap ≥ the bar), journal the hot side's moneyline at the
+    REAL book price, flat 0.1u, category='form'.
+
+    This is the measurement the "we're missing hot teams" instinct needs:
+    streaks are the most public stat in sports, so the default assumption is
+    the market already prices them. The sampler finds out — at the prices we
+    could actually bet — and the fixed promotion bar (100+ graded, z ≥ 2,
+    positive ROI) decides whether form ever becomes a recommendation input.
+    Settles automatically through the existing moneyline path (player = the
+    team picked, line 0.5, side OVER, actual 1/0).
+    """
+    from .mlb.teamform import FORM_GAP_BAR, form_score
+    sport = result.get("sport", "mlb")
+    slate_date = result.get("date", "")
+    now = datetime.datetime.utcnow().isoformat(timespec="seconds")
+    scores = {t: form_score(f) for t, f in (team_form or {}).items()}
+    n = 0
+    for g in result.get("games", []):
+        home, away = g.get("home"), g.get("away")
+        sh, sa = scores.get(home), scores.get(away)
+        if sh is None or sa is None or abs(sh - sa) < FORM_GAP_BAR:
+            continue
+        hot, hot_score = (home, sh) if sh > sa else (away, sa)
+        odds = g.get("home_ml") if hot == home else g.get("away_ml")
+        if not odds:
+            continue                      # no real price — nothing to sample
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
+            "line, book, odds, projection, hit_prob, edge, confidence, grade, "
+            "stake_units, stake_dollars, status, category) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'form')",
+            (now, sport, slate_date or g.get("date"), hot, "moneyline",
+             "OVER", 0.5, "best", int(odds), None,
+             # edge column carries the form gap being sampled.
+             None, round(abs(sh - sa), 3), None, "Form", flat_stake, 0.0))
+        n += cur.rowcount
+    conn.commit()
+    return n
+
+
+def form_report(conn) -> dict:
+    """The form sampler's scoreboard: does backing hot teams at real prices
+    make money? Mirrors stale_report; graded nightly with everything else."""
+    p = performance(conn, category="form")
+    row = conn.execute(
+        "SELECT AVG(CASE WHEN odds > 0 THEN 100.0 / (odds + 100.0) "
+        "            ELSE -odds / (100.0 - odds) END) AS taken_p, "
+        "AVG(edge) AS avg_gap, SUM(status='won') AS w, COUNT(*) AS n "
+        "FROM bets WHERE category='form' AND status IN ('won','lost')"
+    ).fetchone()
+    p["avg_taken_implied"] = round(row["taken_p"], 4) if row["taken_p"] is not None else None
+    p["avg_form_gap"] = round(row["avg_gap"], 3) if row["avg_gap"] is not None else None
+    p["actual_hit_rate"] = round(row["w"] / row["n"], 4) if row["n"] else None
+    p["recent"] = recent_settled(conn, limit=15, category="form")
+    return p
+
+
 # --- settling ---------------------------------------------------------------
 def _settle_one(conn, b, actual: float, closing_line: float | None) -> None:
     """Grade one open bet SIDE-AWARE and advance the bankroll.
@@ -1086,6 +1146,7 @@ def export_json(conn, path) -> None:
         "recent": recent_settled(conn),
         "longshots": longshot_report(conn),
         "stale_flags": stale_report(conn),
+        "form_sampler": form_report(conn),
         "calibration": calibration(conn),
         "account_health": account_health(conn),
     }

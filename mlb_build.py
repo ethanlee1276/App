@@ -263,6 +263,26 @@ def main() -> None:
 
     result = run_mlb_slate(slate, config, il_map=il_map)
 
+    # Team form: hot & cold from our own ingested results, plus the season
+    # audit (did hot form predict the next game at all?). Track → measure →
+    # only then adjust; the form SAMPLER below journals the hot side at
+    # real prices so the Record can answer the question that matters.
+    team_form_map = {}
+    try:
+        from engine.db import connect as hist_connect
+        from engine.mlb.teamform import team_form, hot_cold, audit
+        hconn = hist_connect()
+        team_form_map = team_form(hconn, args.date)
+        hot, cold = hot_cold(team_form_map)
+        result["team_form"] = {"as_of": args.date, "window_days": 7,
+                               "hot": hot, "cold": cold,
+                               "audit": audit(hconn)}
+        if hot or cold:
+            print(f"Team form (7d): {len(hot)} hot / {len(cold)} cold — "
+                  + ", ".join(f"{r['team']} {r['w']}-{r['l']}" for r in hot[:3]))
+    except Exception as exc:
+        print(f"⚠️  team form skipped: {exc}")
+
     # §10 drawdown circuit-breaker (docs/MLB_MODEL.md): after a 10u
     # peak-to-trough drawdown on the settled journal, every stake is halved
     # until the peak is recovered. Applied before journaling so the ledger
@@ -347,12 +367,14 @@ def main() -> None:
             logged = ledger.log_recommendations(lconn, result)
             ls_logged = ledger.log_longshots(lconn, result)
             st_logged = ledger.log_stale_flags(lconn, result)
+            fm_logged = ledger.log_form_picks(lconn, result, team_form_map)
             settled = ledger.settle_from_history(lconn, hist_connect(), sport="mlb")
             ledger.export_json(lconn, "web/data/record.json")
-            if logged or ls_logged or st_logged or settled:
+            if logged or ls_logged or st_logged or fm_logged or settled:
                 print(f"Journal: {logged} new pick(s) + {ls_logged} long shot(s) "
-                      f"+ {st_logged} stale flag(s) logged, {settled} settled — "
-                      f"see the Record tab or `python3 ledger.py report`")
+                      f"+ {st_logged} stale flag(s) + {fm_logged} form sample(s) "
+                      f"logged, {settled} settled — see the Record tab or "
+                      f"`python3 ledger.py report`")
         except Exception as exc:
             print(f"⚠️  Bet journal skipped: {exc}")
 
