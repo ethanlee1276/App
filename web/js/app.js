@@ -557,6 +557,14 @@ function renderLivePicks() {
   if (!host) return;
   const rows = (state.data || {}).live_picks || [];
   const elsewhere = (state.data || {}).open_elsewhere || 0;
+  const trackerErr = (state.data || {}).live_picks_error;
+  if (trackerErr) {
+    // A broken tracker must say so — an empty space reads as "no bets".
+    host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-top:8px">
+      <p style="margin:0;font-size:13px">⚠️ Open-bet tracker hit an error this build:
+      <code>${escapeHtml(trackerErr)}</code> — open bets still settle normally; see the Record page.</p></div>`;
+    return;
+  }
   if (!rows.length && !elsewhere) { host.innerHTML = ""; return; }
 
   const ml = (r) => r.market === "moneyline";
@@ -585,6 +593,9 @@ function renderLivePicks() {
     if (r.status === "upcoming")
       return `<span style="color:var(--text-mute);font-weight:700">UPCOMING</span>
         <span style="display:block;color:var(--text-mute);font-size:11.5px">${escapeHtml(whenLabel(r.game.date, r.game.kickoff) || "today")}</span>`;
+    if (r.status === "unmapped")
+      return `<span style="color:var(--warn);font-weight:700">OPEN</span>
+        <span style="display:block;color:var(--text-mute);font-size:11.5px">couldn't map to a game this cycle — still settles overnight</span>`;
     if (r.current != null) {
       const needs = r.side === "OVER"
         ? `needs ${Math.max(1, Math.ceil(r.line - r.current))} more`
@@ -595,6 +606,7 @@ function renderLivePicks() {
     return `<span style="color:var(--text-mute)">in play</span>`;
   };
   const gameLine = (g) => {
+    if (!g || !g.home) return "";
     const score = (g.home_score != null)
       ? `${escapeHtml(teamName(g.away))} ${g.away_score}–${g.home_score} ${escapeHtml(teamName(g.home))}`
       : `${escapeHtml(teamName(g.away))} @ ${escapeHtml(teamName(g.home))}`;

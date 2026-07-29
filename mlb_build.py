@@ -355,6 +355,9 @@ def main() -> None:
                   + (f", {result['open_elsewhere']} older still open"
                      if result["open_elsewhere"] else ""))
     except Exception as exc:
+        # Into the JSON, not just stdout — the launcher swallows build
+        # output, so a print-only failure is invisible on the site.
+        result["live_picks_error"] = str(exc)
         print(f"⚠️  live-pick tracker skipped: {exc}")
 
     # HR board funnel — when the Long Shots page is empty, this line says why.

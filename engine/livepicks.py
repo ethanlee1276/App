@@ -48,6 +48,20 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
                 if ((g.get("live") or {}).get("state")) == "live"]
         return (live or matches or [None])[0]
 
+    def _unmapped(b):
+        """An open bet the current board can't place — NEVER drop it: the
+        section's count must always match the Record's, and a bet we can't
+        map is a fact worth showing, not hiding."""
+        return {
+            "player": b.get("player"), "market": b.get("market", ""),
+            "market_label": b.get("market", ""),
+            "side": (b.get("side") or "OVER").upper(),
+            "line": float(b.get("line") or 0),
+            "odds": b.get("odds"), "stake_units": b.get("stake_units") or 0,
+            "current": None, "status": "unmapped", "phase": "upcoming",
+            "team": "", "game": {},
+        }
+
     out = []
     for b in open_bets:
         market = b.get("market", "")
@@ -61,10 +75,12 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
         else:
             rec = rec_idx.get((normalize_name(b.get("player", "")), market))
             if rec is None:
+                out.append(_unmapped(b))
                 continue
             g = _game_for(rec.get("team"), rec.get("opponent"),
                           rec.get("game_number") or 0)
         if not g:
+            out.append(_unmapped(b))
             continue
         live = g.get("live") or {}
         state = live.get("state") or "scheduled"
@@ -133,6 +149,6 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
     # settle, then tonight's not-yet-started bets.
     order = {"cleared": 0, "tracking": 1, "busted": 2,
              "won_pending": 3, "push_pending": 4, "lost_pending": 5,
-             "final_pending": 6, "upcoming": 7}
+             "final_pending": 6, "upcoming": 7, "unmapped": 8}
     out.sort(key=lambda r: (order.get(r["status"], 7), -(r["stake_units"] or 0)))
     return out

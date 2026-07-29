@@ -121,6 +121,21 @@ def test_team_bets_and_doubleheaders_route_correctly():
     assert prop["status"] == "tracking" and prop["current"] is None
 
 
+def test_unmatchable_bets_still_show():
+    """An open bet the current board can't place (lineup changed, prop
+    dropped this cycle) must STILL appear — the section's count has to
+    match the Record's open count, always."""
+    bets = [_bet("Ghost Hitter", "total_bases"),
+            _bet("Freddie Freeman", "total_bases")]
+    recs = [_rec("Freddie Freeman", "total_bases", "LAD", "SF")]
+    rows = assemble_live_picks(bets, recs, [LIVE_G], parse_live_stats(BOX))
+    assert len(rows) == 2
+    ghost = next(r for r in rows if r["player"] == "Ghost Hitter")
+    assert ghost["status"] == "unmapped" and ghost["phase"] == "upcoming"
+    assert rows[-1] is ghost                     # unmapped sorts last
+
+
+# Runner at the TRUE END — a test defined after it never runs.
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
