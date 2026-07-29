@@ -317,24 +317,58 @@ def test_longshots_journal_separately_with_no_bankroll_impact():
     # Picks + watchlist, deduped; proxy prices refused.
     assert ledger.log_longshots(conn, _ls_result()) == 2
     assert ledger.log_longshots(conn, _ls_result()) == 0    # idempotent
-    # The main record does not see them at all.
+    # The main record does not see them at all — and the RECORD bucket sees
+    # only the pick; the watchlist name journals in its own bucket.
     assert ledger.performance(conn)["open"] == 0
-    assert ledger.performance(conn, category="longshot")["open"] == 2
+    assert ledger.performance(conn, category="longshot")["open"] == 1
+    assert ledger.performance(conn, category="longshot_watch")["open"] == 1
 
     # Slugger homers (+320 at 0.1u = +0.32u); Watch Guy doesn't (-0.1u).
     ledger.settle(conn, {("Slugger", "home_runs"): 1.0,
                          ("Watch Guy", "home_runs"): 0.0})
     assert ledger.bankroll(conn) == 1000.0                  # zero dollar exposure
     ls = ledger.longshot_report(conn)
-    assert ls["wins"] == 1 and ls["losses"] == 1
-    assert abs(ls["net_units"] - 0.22) < 1e-9
-    # Calibration readout: model avg vs implied vs actual.
+    # Record = the pick only. Watch Guy's miss must NOT drag the W-L.
+    assert ls["wins"] == 1 and ls["losses"] == 0
+    assert abs(ls["net_units"] - 0.32) < 1e-9
+    assert ls["watch"] == {"graded": 1, "wins": 0, "net_units": -0.1,
+                           "roi": -1.0, "open": 0}
+    # Calibration readout spans BOTH buckets: model avg vs implied vs actual.
+    assert ls["calibration_n"] == 2
     assert abs(ls["avg_model_prob"] - 0.195) < 1e-9
     assert ls["actual_hit_rate"] == 0.5
-    assert ls["recent"][0]["player"] in ("Slugger", "Watch Guy")
+    assert ls["recent"][0]["player"] == "Slugger"           # picks only
     # Main performance and curve stay untouched.
     assert ledger.performance(conn)["settled"] == 0
     assert ledger.pnl_curve(conn) == []
+
+
+def test_split_watch_repairs_a_dart_board_record():
+    """The old journal put the whole watchlist in the record bucket. The
+    repair moves grade='Watch' rows (settled P&L intact) into the
+    calibration bucket, leaving a picks-only record."""
+    conn = _conn()
+    conn.execute(
+        "INSERT INTO bets (ts, sport, date, player, market, side, line, book, "
+        "odds, hit_prob, grade, stake_units, stake_dollars, status, pnl_units, "
+        "category) VALUES ('t','mlb','2026-07-25','Real Pick','home_runs',"
+        "'OVER',0.5,'FanDuel',320,0.24,'Strong Play',0.1,0,'won',0.32,'longshot')")
+    for i, status in enumerate(["won", "lost", "lost", "open"]):
+        pnl = {"won": 0.45, "lost": -0.1, "open": None}[status]
+        conn.execute(
+            "INSERT INTO bets (ts, sport, date, player, market, side, line, "
+            "book, odds, hit_prob, grade, stake_units, stake_dollars, status, "
+            "pnl_units, category) VALUES ('t','mlb','2026-07-25',?,"
+            "'home_runs','OVER',0.5,'DraftKings',450,0.15,'Watch',0.1,0,?,?,"
+            "'longshot')", (f"Dart {i}", status, pnl))
+    conn.commit()
+    assert ledger.split_watch_from_longshots(conn) == 4
+    assert ledger.split_watch_from_longshots(conn) == 0     # no-op once clean
+    ls = ledger.longshot_report(conn)
+    assert ls["wins"] == 1 and ls["losses"] == 0            # Real Pick only
+    assert ls["watch"]["graded"] == 3 and ls["watch"]["open"] == 1
+    assert abs(ls["watch"]["net_units"] - 0.25) < 1e-9      # +0.45 - 0.2
+    assert ls["calibration_n"] == 4                          # both buckets
 
 
 def test_home_run_pick_lands_only_in_the_longshot_bucket():
@@ -524,15 +558,19 @@ def test_longshot_home_runs_settle_from_ingested_logs():
     ])
     assert ledger.settle_from_history(conn, hist) == 2
 
-    rows = {r["player"]: r for r in ledger.recent_settled(conn, category="longshot")}
-    assert rows["Aaron Judge"]["status"] == "won"
-    assert rows["Mike Trout"]["status"] == "lost"
+    picks = {r["player"]: r for r in ledger.recent_settled(conn, category="longshot")}
+    watch = {r["player"]: r for r in
+             ledger.recent_settled(conn, category="longshot_watch")}
+    assert picks["Aaron Judge"]["status"] == "won"
+    assert watch["Mike Trout"]["status"] == "lost"
     # Flat 0.1u at +320 → +0.32u; measurement only, zero dollars at risk.
-    assert abs(rows["Aaron Judge"]["pnl_units"] - 0.32) < 1e-6
+    assert abs(picks["Aaron Judge"]["pnl_units"] - 0.32) < 1e-6
     assert ledger.bankroll(conn) == start_roll
     lr = ledger.longshot_report(conn)
-    assert lr["settled"] == 2 and lr["open"] == 0 and lr["wins"] == 1
-    assert lr["actual_hit_rate"] == 0.5
+    # Record = the pick; the watchlist name grades in its own bucket.
+    assert lr["settled"] == 1 and lr["open"] == 0 and lr["wins"] == 1
+    assert lr["watch"]["graded"] == 1 and lr["watch"]["wins"] == 0
+    assert lr["actual_hit_rate"] == 0.5          # calibration spans both
     # And none of it leaks into the headline record.
     assert ledger.performance(conn)["settled"] == 0
 

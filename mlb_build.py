@@ -417,6 +417,13 @@ def main() -> None:
             from engine import ledger
             from engine.db import connect as hist_connect
             lconn = ledger.connect()
+            # One-time repair (no-op once clean): watchlist rows journaled
+            # into the Long Shots RECORD move to their calibration bucket —
+            # the record scores the ≤3 picks, not 200 darts a night.
+            moved = ledger.split_watch_from_longshots(lconn)
+            if moved:
+                print(f"Journal repair: {moved} watchlist row(s) moved out of "
+                      f"the Long Shots record into the calibration bucket.")
             logged = ledger.log_recommendations(lconn, result)
             ls_logged = ledger.log_longshots(lconn, result)
             st_logged = ledger.log_stale_flags(lconn, result)

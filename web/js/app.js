@@ -1770,15 +1770,27 @@ function recCurveChart(curve) {
 }
 
 function recLongshotSection(ls) {
-  if (!ls || (!ls.settled && !ls.open)) return "";
+  // Show whenever EITHER bucket has data — after the watchlist split the
+  // picks record can be tiny while the calibration sample is huge.
+  const hasWatch = ls && ls.watch && (ls.watch.graded || ls.watch.open);
+  if (!ls || (!ls.settled && !ls.open && !hasWatch)) return "";
   const graded = ls.wins + ls.losses;
   const hitRate = graded ? (ls.wins / graded) * 100 : 0;
   const calib = ls.avg_model_prob != null
     ? `<div style="opacity:.7;font-size:.9em;padding:8px 14px">
-         Calibration: model claimed <strong>${(ls.avg_model_prob * 100).toFixed(1)}%</strong>
+         Calibration (picks + watchlist, ${ls.calibration_n || 0} graded): model claimed
+         <strong>${(ls.avg_model_prob * 100).toFixed(1)}%</strong>
          on average · books implied <strong>${(ls.avg_implied_prob * 100).toFixed(1)}%</strong>
          · actually hit <strong>${(ls.actual_hit_rate * 100).toFixed(1)}%</strong>.
          Model above books AND actual above implied = the board finds real value.</div>` : "";
+  const watch = ls.watch && (ls.watch.graded || ls.watch.open)
+    ? `<div style="opacity:.7;font-size:.9em;padding:8px 14px;border-top:1px solid rgba(128,128,128,.15)">
+         Watchlist sample — every real-priced homer on the slate, tracked purely to
+         tune the model: <strong>${ls.watch.wins}/${ls.watch.graded}</strong> graded
+         (${ls.watch.open} open), flat-stake
+         <strong>${ls.watch.roi >= 0 ? "+" : ""}${(ls.watch.roi * 100).toFixed(1)}% ROI</strong>.
+         Track a couple hundred homers a night and some always land — that's why this
+         sample feeds the calibration line above but never the record.</div>` : "";
   // Same row component as the main settled list, so it inherits the same
   // alignment and the same phone treatment instead of clipping mid-word.
   const rows = (ls.recent || []).map((b) => {
@@ -1799,18 +1811,22 @@ function recLongshotSection(ls) {
     <div class="section-title" style="margin-top:22px">Long Shots — tracked separately
       <span class="sub">— home runs &amp; anytime TDs, with their own ROI. Never mixed
       into the record above.</span></div>
-    ${recDisclosure("Why these are quarantined", `Every home-run and
-      anytime-TD pick and watchlist entry, graded at a flat 0.1u nominal stake with zero
-      bankroll impact. These markets are long shots by nature, so they are quarantined
-      here even when they clear the main board's bar — a night of +650 darts would
-      otherwise make the headline record describe the dart board instead of the picks
-      the model stands behind. Long shots lose most nights by design; judge the ROI and
-      calibration over weeks, not the hit column.`)}
+    ${recDisclosure("Why these are quarantined", `Only the board's actual
+      PICKS — three per night at most — count toward this record, graded at a flat 0.1u
+      nominal stake with zero bankroll impact. The watchlist (every real-priced home run
+      on the slate, sometimes 100+ names) is tracked separately as a calibration sample
+      and never enters this W-L: recommend a couple hundred homers a night and a handful
+      always land, which proves nothing. These markets are long shots by nature, so even
+      picks that clear the main board's bar are quarantined here — a night of +650 darts
+      would otherwise make the headline record describe the dart board instead of the
+      picks the model stands behind. Judge the ROI and calibration over weeks, not the
+      hit column.`)}
     <div class="stats rec-kpis">
       ${recTile("Flat-stake ROI", (ls.roi >= 0 ? "+" : "") + (ls.roi * 100).toFixed(1) + "%",
                 `${ls.net_units >= 0 ? "+" : ""}${(ls.net_units || 0).toFixed(2)}u on ${(ls.units_staked || 0).toFixed(1)}u staked`,
                 { lead: true, tone: toneOf(ls.roi) })}
-      ${recTile("Long-shot record", `${ls.wins}-${ls.losses}`, `${ls.open} open`)}
+      ${recTile("Long-shot record", `${ls.wins}-${ls.losses}`,
+                `picks only · ${ls.open} open`)}
       ${recTile("Hit rate", hitRate.toFixed(1) + "%",
                 ls.avg_implied_prob != null
                   ? `books implied ${(ls.avg_implied_prob * 100).toFixed(1)}%`
@@ -1824,7 +1840,7 @@ function recLongshotSection(ls) {
         `<span class="chip">${escapeHtml(s.toUpperCase())} ${d.w}/${d.n}
            (${d.net_u >= 0 ? "+" : ""}${d.net_u.toFixed(2)}u)</span>`).join(" ")}</div>` : ""}
     <div class="card" style="padding:0;margin-top:12px">${calib}${rows ||
-      `<p class="loading" style="padding:12px">Nothing settled yet — accrues from tonight's board.</p>`}</div>`;
+      `<p class="loading" style="padding:12px">Nothing settled yet — accrues from tonight's board.</p>`}${watch}</div>`;
 }
 
 /* Calibration: when the model said X%, how often did it actually happen.

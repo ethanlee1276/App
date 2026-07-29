@@ -208,19 +208,32 @@ SETTLEABLE_LONGSHOTS = {"home_runs", "anytime_td"}
 
 
 def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
-    """Journal the Long Shots board — separately from the main record.
+    """Journal the Long Shots board — picks and watchlist in SEPARATE buckets.
 
-    Everything the board shows (strict value picks AND the watchlist) is
-    tracked at a small flat stake with ZERO dollar exposure: the point is
-    measurement — does the model's HR probability beat the market's implied
-    one? — not a claim these are bets worth placing. ``category='longshot'``
-    keeps them out of the headline record entirely.
+    The picks (three per night at most — the bets the board actually
+    recommends) go to ``category='longshot'``: that is the record the Record
+    page scores. The watchlist — EVERY real-priced HR on the slate, often
+    100+ names — goes to ``category='longshot_watch'``: a calibration sample
+    only ("does the model's claimed probability beat the market's implied
+    one?"), never a record. One bucket used to hold both, and that made the
+    Long Shots W-L describe the dart board instead of the picks: journal a
+    couple hundred homers a night and a handful always land.
+
+    Both buckets track at a small flat stake with ZERO dollar exposure.
     """
     sport = result.get("sport", "mlb")
     date = result.get("date", "")
     now = datetime.datetime.utcnow().isoformat(timespec="seconds")
-    rows = (list(result.get("long_shots") or [])
-            + list(result.get("longshot_watch") or []))
+    n = _journal_longshot_rows(conn, result.get("long_shots") or [],
+                               sport, date, now, "longshot", flat_stake)
+    n += _journal_longshot_rows(conn, result.get("longshot_watch") or [],
+                                sport, date, now, "longshot_watch", flat_stake)
+    conn.commit()
+    return n
+
+
+def _journal_longshot_rows(conn, rows, sport, date, now, category,
+                           flat_stake) -> int:
     n = 0
     for r in rows:
         market = r.get("market", "home_runs")
@@ -240,17 +253,25 @@ def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
         # the night's rows as no-shows that can never settle.
         if r.get("lineup_confirmed") is False:
             continue
+        if category == "longshot_watch":
+            # A pick also sits on the watchlist. One measurement per bet —
+            # the record bucket already has him tonight.
+            dup = conn.execute(
+                "SELECT 1 FROM bets WHERE sport=? AND date=? AND player=? "
+                "AND market=? AND category='longshot'",
+                (sport, date, r["player"], market)).fetchone()
+            if dup:
+                continue
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'longshot')",
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?)",
             (now, sport, date, r["player"], market, "OVER", 0.5,
              r.get("book", ""), odds, None, r.get("model_prob"),
              r.get("edge", r.get("ev_per_unit")), r.get("confidence"),
-             r.get("grade", "Watch"), flat_stake, 0.0))
+             r.get("grade", "Watch"), flat_stake, 0.0, category))
         n += cur.rowcount
-    conn.commit()
     return n
 
 
@@ -1047,20 +1068,42 @@ def account_health(conn) -> dict:
 
 
 def longshot_report(conn) -> dict:
-    """The Long Shots scoreboard: flat-stake record plus the calibration
-    readout that actually answers "is the board finding value" — the model's
-    average claimed probability vs the books' implied vs what really hit."""
+    """The Long Shots scoreboard.
+
+    The W-L / ROI record covers ONLY ``category='longshot'`` — the board's
+    actual picks. The calibration readout ("does the model's claimed
+    probability beat the books' implied?") deliberately spans picks AND the
+    watchlist: it is a measurement, and the bigger sample is what made the
+    MIN_MODEL_PROB quartile analysis possible. The watchlist's own burn
+    rate is reported separately so nobody mistakes it for a record.
+    """
     p = performance(conn, category="longshot")
     row = conn.execute(
-        "SELECT AVG(hit_prob) AS model_p, "
+        "SELECT COUNT(*) AS n, AVG(hit_prob) AS model_p, "
         "AVG(100.0 / (odds + 100.0)) AS implied_p, "
         "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) AS actual_p "
-        "FROM bets WHERE category='longshot' AND status IN ('won','lost') "
-        "AND odds > 0").fetchone()
+        "FROM bets WHERE category IN ('longshot', 'longshot_watch') "
+        "AND status IN ('won','lost') AND odds > 0").fetchone()
+    p["calibration_n"] = row["n"] or 0
     p["avg_model_prob"] = round(row["model_p"], 4) if row["model_p"] is not None else None
     p["avg_implied_prob"] = round(row["implied_p"], 4) if row["implied_p"] is not None else None
     p["actual_hit_rate"] = round(row["actual_p"], 4) if row["actual_p"] is not None else None
     p["recent"] = recent_settled(conn, limit=15, category="longshot")
+    # The watchlist sample, kept visibly apart: every real-priced homer on
+    # the slate, graded at a nominal flat stake purely to tune the model.
+    row = conn.execute(
+        "SELECT COUNT(*) AS n, COALESCE(SUM(status='won'), 0) AS w, "
+        "COALESCE(SUM(pnl_units), 0) AS u, COALESCE(SUM(stake_units), 0) AS s "
+        "FROM bets WHERE category='longshot_watch' "
+        "AND status IN ('won','lost')").fetchone()
+    p["watch"] = {
+        "graded": row["n"] or 0, "wins": row["w"] or 0,
+        "net_units": round(row["u"], 2),
+        "roi": round(row["u"] / row["s"], 4) if row["s"] else 0.0,
+        "open": conn.execute(
+            "SELECT COUNT(*) FROM bets WHERE category='longshot_watch' "
+            "AND status='open'").fetchone()[0],
+    }
     # Which long-shot markets carry the bucket, and at what price. Average
     # odds matter here in a way they don't for the main record: a +250
     # board and a +900 board that both hit 12% are wildly different bets.
@@ -1170,6 +1213,36 @@ def recompute_bankroll(conn) -> float:
     val = round(start + total, 2)
     set_cfg(conn, "bankroll", val)
     return val
+
+
+def split_watch_from_longshots(conn) -> int:
+    """Repair: move watchlist rows out of the Long Shots record bucket.
+
+    The journal used to put the ENTIRE watchlist — every real-priced homer
+    on the slate, often 100+ names a night — into ``category='longshot'``
+    alongside the (max three) picks, so the Long Shots W-L was scoring the
+    dart board. Watchlist rows are identifiable by their grade ('Watch';
+    picks always carry a real grade) and move to ``longshot_watch`` with
+    their settled P&L intact. Safe to run every build — a no-op once clean.
+    """
+    rows = conn.execute(
+        "SELECT id, sport, date, player, market FROM bets "
+        "WHERE category='longshot' AND grade='Watch'").fetchall()
+    moved = 0
+    for r in rows:
+        dup = conn.execute(
+            "SELECT id FROM bets WHERE sport=? AND date=? AND player=? "
+            "AND market=? AND category='longshot_watch'",
+            (r["sport"], r["date"], r["player"], r["market"])).fetchone()
+        if dup:
+            conn.execute("DELETE FROM bets WHERE id=?", (r["id"],))
+        else:
+            conn.execute(
+                "UPDATE bets SET category='longshot_watch' WHERE id=?",
+                (r["id"],))
+        moved += 1
+    conn.commit()
+    return moved
 
 
 def move_longshots_out_of_main(conn, stake_units: float = 0.1) -> int:
