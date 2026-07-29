@@ -366,7 +366,7 @@ def gate_census(recommendations: list[dict]) -> dict:
             census["tier_edge_bar"] += 1
             continue
         net = (r.get("hit_prob") or 0) - american_to_prob(r.get("odds") or -110)
-        if net < 0.010 + favourite_surcharge(r.get("odds") or -110):
+        if net <= favourite_surcharge(r.get("odds") or -110):
             census["price_net"] += 1
             continue
         if (r.get("quality") or 0) < 70:

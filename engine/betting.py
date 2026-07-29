@@ -309,13 +309,18 @@ def evaluate_prop(prop: Prop, proj: Projection,
     # The gates, in order of what they mean:
     #  credible  — a >10% raw disagreement is bad data, not alpha (§2.5)
     #  tier edge — the §3 minimum post-haircut edge for this market's tier
-    #  net       — must clear the REAL price plus the favourite surcharge
+    #  net       — the REAL price must still clear break-even (plus the
+    #              measured favourite surcharge). NOT a second edge bar:
+    #              requiring a full extra point here (the old +0.010) sat
+    #              ABOVE the tier minimums at standard juice and silently
+    #              overrode the §3 bars — the same double-charging disease
+    #              as the old quality scaling, one layer down.
     #  quality   — below 70 is no bet, not a lean (§10)
     tier = market_tier(prop.market)
     min_edge = tier_min_edge(prop.market)
     gate_ok = (credible and has_market
                and edge >= min_edge
-               and net >= 0.010 + favourite_surcharge(best.odds))
+               and net > favourite_surcharge(best.odds))
     grade = quality_letter(quality) if gate_ok else "Pass"
     fraction = 0.5 if (grade == "A+" and tier == 1) else 0.25
     stake = (_kelly_stake(hit, best.odds, fraction, STAKE_CAP_U[grade])

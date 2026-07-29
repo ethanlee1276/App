@@ -453,6 +453,27 @@ async function renderBestBets() {
       <p style="margin:6px 0 0;color:var(--text-mute);font-size:13px">That sentence is the system
       working, not failing — every market tonight either missed the tier's edge bar, failed a
       gate, or graded below 70. Loosening the sliders shows what was held and why.</p>
+      ${(() => {
+        // The funnel, on screen: a zero-pick night must explain itself.
+        const gc = (state.data || {}).gate_census;
+        if (!gc) return "";
+        const names = { no_real_price: "no real book price yet",
+          credibility: "model-vs-market gap too big to trust (>10% raw = bad data)",
+          calibration: "market's calibration unreliable — closed until refit",
+          tier_edge_bar: "edge under the tier's minimum",
+          price_net: "price doesn't clear break-even",
+          quality_under_70: "quality grade under 70",
+          held_by_rules: "held by rules (lineups pending, IL, live game, juice)" };
+        const rows = Object.entries(gc)
+          .filter(([k, v]) => v > 0 && k !== "recommended")
+          .map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px;
+              padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px">
+            <span style="color:var(--text-mute)">${escapeHtml(names[k] || k)}</span>
+            <span style="font-weight:700">${v}</span></div>`).join("");
+        return rows ? `<div style="margin-top:10px">
+          <div style="font-size:12px;font-weight:700;margin-bottom:2px">Where tonight's props died</div>
+          ${rows}</div>` : "";
+      })()}
     </div>`;
 
   // ======= SPACE 2: tracked signals — measurements, NOT picks =======
