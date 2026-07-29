@@ -458,6 +458,7 @@ async function renderBestBets() {
         const gc = (state.data || {}).gate_census;
         if (!gc) return "";
         const names = { no_real_price: "no real book price yet",
+          longshot_board: "home runs — live on the Long Shots board by design",
           credibility: "model-vs-market gap too big to trust (>10% raw = bad data)",
           calibration: "market's calibration unreliable — closed until refit",
           tier_edge_bar: "edge under the tier's minimum",

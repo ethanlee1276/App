@@ -343,9 +343,9 @@ def gate_census(recommendations: list[dict]) -> dict:
     from ..odds import american_to_prob
     from ..calibrate import is_reliable
     from .quality import TIER_SHRINK, TIER_MIN_EDGE
-    census = {"recommended": 0, "no_real_price": 0, "credibility": 0,
-              "calibration": 0, "tier_edge_bar": 0, "price_net": 0,
-              "quality_under_70": 0, "held_by_rules": 0}
+    census = {"recommended": 0, "no_real_price": 0, "longshot_board": 0,
+              "credibility": 0, "calibration": 0, "tier_edge_bar": 0,
+              "price_net": 0, "quality_under_70": 0, "held_by_rules": 0}
     closed_markets: set = set()
     for r in recommendations:
         if r.get("recommended"):
@@ -353,6 +353,12 @@ def gate_census(recommendations: list[dict]) -> dict:
             continue
         if r.get("has_market") is False:
             census["no_real_price"] += 1
+            continue
+        # Tier 3 (home runs) is quarantined on the Long Shots board BY
+        # DESIGN — counting those deaths under "calibration" made 197
+        # working-as-intended props read as a broken model.
+        if r.get("tier", 2) == 3 or r.get("market") == "home_runs":
+            census["longshot_board"] += 1
             continue
         if not is_reliable("mlb", r.get("market", "")):
             census["calibration"] += 1
