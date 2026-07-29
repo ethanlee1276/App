@@ -82,13 +82,30 @@ def test_durable_opponents_drag_to_decision():
 
 
 def test_clamp_weights_and_debutant_no_bet():
-    assert clamp_weight(_fighter(), _fighter("B")) == 0.35       # both 5+
-    assert clamp_weight(_fighter(ufc_fights=3), _fighter("B")) == 0.25
-    assert clamp_weight(_fighter(ufc_fights=2), _fighter("B")) == 0.12
-    assert clamp_weight(_fighter(short_notice=True), _fighter("B")) == 0.12
+    assert clamp_weight(_fighter(), _fighter("B")) == 0.55       # both 5+
+    assert clamp_weight(_fighter(ufc_fights=3), _fighter("B")) == 0.45
+    assert clamp_weight(_fighter(ufc_fights=2), _fighter("B")) == 0.20
+    assert clamp_weight(_fighter(short_notice=True), _fighter("B")) == 0.20
     assert clamp_weight(_fighter(ufc_fights=0), _fighter("B")) is None
-    p, _ = humility_clamp(0.60, 0.52, 0.35)
-    assert abs(p - (0.35 * 0.60 + 0.65 * 0.52)) < 1e-9
+    p, _ = humility_clamp(0.60, 0.52, 0.55)
+    assert abs(p - (0.55 * 0.60 + 0.45 * 0.52)) < 1e-9
+
+
+def test_gate_is_not_mathematically_closed():
+    """REGRESSION (2026-07-29): with the old w=0.25, the largest clamped
+    edge (w x kill-diff = 3.75pts vs fair, ~1.75 over break-even) could
+    never satisfy the 4-point moneyline gate — only the unpriced-news
+    branch could ever produce a bet. The standard clamp must clear the
+    gate by a real margin; thin samples stay closed on purpose."""
+    from engine.ufc.model import (CLAMP_KILL_DIFF, GATE_EDGE_ML,
+                                  GATE_EDGE_PROP)
+    vig = 0.02                                    # ~break-even minus fair
+    standard = clamp_weight(_fighter(ufc_fights=3), _fighter("B"))
+    experienced = clamp_weight(_fighter(), _fighter("B"))
+    assert standard * CLAMP_KILL_DIFF - vig - GATE_EDGE_ML >= 0.005
+    assert experienced * CLAMP_KILL_DIFF - vig - GATE_EDGE_PROP >= 0.005
+    thin = clamp_weight(_fighter(ufc_fights=2), _fighter("B"))
+    assert thin * CLAMP_KILL_DIFF - vig < GATE_EDGE_ML     # closed by design
     killed, why = humility_clamp(0.75, 0.55, 0.35)
     assert killed is None and "not that soft" in why
 
@@ -99,8 +116,10 @@ def test_gate_mma_rules():
     assert any("red flag" in f for f in
                approval_gate(0.62, -120, "moneyline", ["missed weight"], 0))
     assert any("card cap" in f for f in approval_gate(0.62, -120, "moneyline", [], 3))
-    # Props need 6 points, not 4.
-    assert any("edge" in f for f in approval_gate(0.575, -110, "method", [], 0))
+    # Props need 5 points over break-even, not 4 (re-tuned from 6 — the
+    # old bar was unreachable under the clamp; see the welded-door test).
+    assert any("edge" in f for f in approval_gate(0.570, -110, "method", [], 0))
+    assert approval_gate(0.578, -110, "method", [], 0) == []
     # One-fifth Kelly, capped at 2.5% of roll.
     assert 0 < stake_units(0.62, -120) <= 0.5
 

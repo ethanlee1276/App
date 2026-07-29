@@ -362,7 +362,12 @@ def main() -> None:
     if gc:
         # The funnel, so a thin board is a diagnosis instead of a mystery.
         print("  Gate census: "
-              + " · ".join(f"{k.replace('_', ' ')} {v}" for k, v in gc.items() if v))
+              + " · ".join(f"{k.replace('_', ' ')} {v}" for k, v in gc.items()
+                           if v and k != "calibration_markets"))
+        if gc.get("calibration_markets"):
+            print("  ⚠️  Markets closed by calibration (fit at search boundary): "
+                  + ", ".join(gc["calibration_markets"])
+                  + " — refits nightly; comes back when the fit lands inside the range")
     if real_odds:
         print("(edges priced against real sportsbook lines)\n")
     else:

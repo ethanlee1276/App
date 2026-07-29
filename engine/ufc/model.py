@@ -16,9 +16,14 @@ gloves. The doctrine, as enforced code:
   finishing ability is noisy. The opponent's durability history weighs
   ~1.5× the fighter's finishing history in the distance model;
 * **the humility clamp** — w by information quality (0.60 unpriced news →
-  0.25 standard → 0.12 thin samples → NO BET for debutants), kill rule at
-  a 15-point disagreement;
-* **the approval gate** — edge ≥4 pts over break-even (6 on props), EV
+  0.45 standard → 0.20 thin samples → NO BET for debutants), kill rule at
+  a 15-point disagreement. RE-TUNED 2026-07-29: the old pairing (w=0.25
+  vs a 4-point-over-break-even gate) was mathematically closed — the
+  largest clamped edge was 3.75pts vs fair, ~1.75 over break-even,
+  against a 4-point requirement; only the unpriced-news branch could
+  ever bet. Same welded-door audit as NBA and the prop tiers. Thin
+  samples stay effectively closed on purpose;
+* **the approval gate** — edge ≥4 pts over break-even (5 on props), EV
   ≥5%, price never worse than −300 (MMA favorites above that are traps),
   camp red flags block, max 3 bets a card, 1 per fight;
 * **the pass list** — every fight NOT bet gets one line on why. A 13-fight
@@ -33,7 +38,7 @@ from __future__ import annotations
 WIN_CAP = 0.88
 CLAMP_KILL_DIFF = 0.15
 GATE_EDGE_ML = 0.04
-GATE_EDGE_PROP = 0.06
+GATE_EDGE_PROP = 0.05
 GATE_MIN_EV = 0.05
 GATE_WORST_PRICE = -300
 MAX_BETS_PER_CARD = 3
@@ -211,10 +216,10 @@ def clamp_weight(a: dict, b: dict, unpriced_info: bool = False) -> float | None:
     if unpriced_info:
         return 0.60
     if min(fa, fb) < 3 or a.get("short_notice") or b.get("short_notice"):
-        return 0.12
+        return 0.20        # still effectively no-bet vs the gate — intended
     if min(fa, fb) >= 5:
-        return 0.35
-    return 0.25
+        return 0.55
+    return 0.45
 
 
 def humility_clamp(p_model: float, p_market: float, w: float) -> tuple:

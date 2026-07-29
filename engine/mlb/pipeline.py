@@ -346,6 +346,7 @@ def gate_census(recommendations: list[dict]) -> dict:
     census = {"recommended": 0, "no_real_price": 0, "credibility": 0,
               "calibration": 0, "tier_edge_bar": 0, "price_net": 0,
               "quality_under_70": 0, "held_by_rules": 0}
+    closed_markets: set = set()
     for r in recommendations:
         if r.get("recommended"):
             census["recommended"] += 1
@@ -355,6 +356,7 @@ def gate_census(recommendations: list[dict]) -> dict:
             continue
         if not is_reliable("mlb", r.get("market", "")):
             census["calibration"] += 1
+            closed_markets.add(r.get("market_label") or r.get("market", ""))
             continue
         tier = r.get("tier", 2)
         shrink = TIER_SHRINK.get(tier, 0.45)
@@ -373,6 +375,11 @@ def gate_census(recommendations: list[dict]) -> dict:
             census["quality_under_70"] += 1
             continue
         census["held_by_rules"] += 1     # lineups, IL, live game, juice, sliders
+    if closed_markets:
+        # NAME the closed markets — 197 props dying to "calibration" is a
+        # mystery; "Total Bases closed until the fit comes off its boundary"
+        # is a diagnosis.
+        census["calibration_markets"] = sorted(closed_markets)
     return census
 
 

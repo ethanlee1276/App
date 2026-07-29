@@ -465,14 +465,18 @@ async function renderBestBets() {
           quality_under_70: "quality grade under 70",
           held_by_rules: "held by rules (lineups pending, IL, live game, juice)" };
         const rows = Object.entries(gc)
-          .filter(([k, v]) => v > 0 && k !== "recommended")
+          .filter(([k, v]) => v > 0 && k !== "recommended" && k !== "calibration_markets")
           .map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px;
               padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px">
             <span style="color:var(--text-mute)">${escapeHtml(names[k] || k)}</span>
             <span style="font-weight:700">${v}</span></div>`).join("");
+        const closed = (gc.calibration_markets || []).length
+          ? `<div style="margin-top:6px;font-size:12px;color:var(--warn)">Closed by calibration:
+             ${gc.calibration_markets.map(escapeHtml).join(", ")} — the nightly refit reopens
+             a market when its fit lands back inside the search range.</div>` : "";
         return rows ? `<div style="margin-top:10px">
           <div style="font-size:12px;font-weight:700;margin-bottom:2px">Where tonight's props died</div>
-          ${rows}</div>` : "";
+          ${rows}${closed}</div>` : "";
       })()}
     </div>`;
 
