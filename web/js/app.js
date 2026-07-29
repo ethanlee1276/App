@@ -556,8 +556,13 @@ function renderLivePicks() {
   const host = document.getElementById("live-picks");
   if (!host) return;
   const rows = (state.data || {}).live_picks || [];
-  if (!rows.length) { host.innerHTML = ""; return; }
+  const elsewhere = (state.data || {}).open_elsewhere || 0;
+  if (!rows.length && !elsewhere) { host.innerHTML = ""; return; }
 
+  const ml = (r) => r.market === "moneyline";
+  const betTxt = (r) => ml(r)
+    ? `${escapeHtml(teamName(r.player))} Moneyline`
+    : `${escapeHtml(r.player)} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
   const statusBits = (r) => {
     if (r.status === "cleared")
       return `<span style="color:var(--good);font-weight:800">✓ CLEARED</span>
@@ -565,6 +570,21 @@ function renderLivePicks() {
     if (r.status === "busted")
       return `<span style="color:var(--bad);font-weight:800">✕ BUSTED</span>
         <span style="display:block;color:var(--text-mute);font-size:11.5px">${r.current} already — under ${r.line} can't cash</span>`;
+    if (r.status === "won_pending")
+      return `<span style="color:var(--good);font-weight:800">✓ WON</span>
+        <span style="display:block;color:var(--text-mute);font-size:11.5px">${ml(r) ? "final" : `finished at ${r.current}`} — settles officially overnight</span>`;
+    if (r.status === "lost_pending")
+      return `<span style="color:var(--bad);font-weight:800">✕ LOST</span>
+        <span style="display:block;color:var(--text-mute);font-size:11.5px">${ml(r) ? "final" : `finished at ${r.current}`} — settles officially overnight</span>`;
+    if (r.status === "push_pending")
+      return `<span style="font-weight:800">➖ PUSH</span>
+        <span style="display:block;color:var(--text-mute);font-size:11.5px">landed exactly on ${r.line}</span>`;
+    if (r.status === "final_pending")
+      return `<span style="color:var(--text-mute);font-weight:700">FINAL</span>
+        <span style="display:block;color:var(--text-mute);font-size:11.5px">awaiting the overnight settle</span>`;
+    if (r.status === "upcoming")
+      return `<span style="color:var(--text-mute);font-weight:700">UPCOMING</span>
+        <span style="display:block;color:var(--text-mute);font-size:11.5px">${escapeHtml(whenLabel(r.game.date, r.game.kickoff) || "today")}</span>`;
     if (r.current != null) {
       const needs = r.side === "OVER"
         ? `needs ${Math.max(1, Math.ceil(r.line - r.current))} more`
@@ -578,30 +598,35 @@ function renderLivePicks() {
     const score = (g.home_score != null)
       ? `${escapeHtml(teamName(g.away))} ${g.away_score}–${g.home_score} ${escapeHtml(teamName(g.home))}`
       : `${escapeHtml(teamName(g.away))} @ ${escapeHtml(teamName(g.home))}`;
-    return `${score}${g.period ? ` · ${escapeHtml(g.period)}` : ""}${
+    return `${score}${g.state === "final" ? " · Final" : g.period ? ` · ${escapeHtml(g.period)}` : ""}${
       g.doubleheader ? ` · DH Game ${g.game_number || 1}` : ""}`;
   };
+  const nLive = rows.filter((r) => r.phase === "live").length;
 
   host.innerHTML = `
-    <div class="section-title" style="margin-top:8px">🔴 Live picks
-      <span class="sub">— recommended and journaled BEFORE first pitch, now in progress.
-      Never new in-play bets: the model prices full games only.</span></div>
-    <div class="card" style="padding:0;border-left:3px solid var(--bad)">
+    <div class="section-title" style="margin-top:8px">${nLive ? "🔴" : "📌"} Open bets
+      <span class="sub">— every journaled bet on today's card: live with real-time progress,
+      finished awaiting the official settle, or waiting on first pitch. Never new in-play
+      bets — everything here was placed pre-game.</span></div>
+    <div class="card" style="padding:0;border-left:3px solid ${nLive ? "var(--bad)" : "var(--brand)"}">
       ${rows.map((r) => `
         <div style="display:flex;gap:12px;align-items:center;padding:11px 14px;
-                    border-bottom:1px solid rgba(255,255,255,.05)">
-          <span class="live-dot" style="flex-shrink:0"></span>
+                    border-bottom:1px solid rgba(255,255,255,.05)${r.phase === "upcoming" ? ";opacity:.75" : ""}">
+          ${r.phase === "live" ? `<span class="live-dot" style="flex-shrink:0"></span>`
+            : `<span style="width:8px;flex-shrink:0"></span>`}
           <span style="flex:1;min-width:0">
-            <strong>${escapeHtml(r.player)} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}</strong>
-            <span style="color:var(--text-mute)"> · placed pre-game ${american(r.odds)}${
+            <strong>${betTxt(r)}</strong>
+            <span style="color:var(--text-mute)"> · placed ${american(r.odds)}${
               r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
             <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">${gameLine(r.game)}</span>
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
         </div>`).join("")}
       <p style="padding:8px 14px;margin:0;font-size:11.5px;color:var(--text-mute)">
-        Stat lines update with the board's refresh cycle (boxscore data can lag a few
-        minutes). Every pick settles officially against final results overnight.</p>
+        ${rows.length} open bet(s) on today's card${elsewhere
+          ? ` · ${elsewhere} older open bet(s) awaiting results — graded on the Record page`
+          : ""}. Stat lines update with the board's refresh cycle; every bet settles
+        officially against ingested final results overnight.</p>
     </div>`;
 }
 

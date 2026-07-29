@@ -332,17 +332,28 @@ def main() -> None:
             (args.date,))]
         progress: dict = {}
         for g in slate.games:
-            if (g.live and g.live.state == "live" and getattr(g, "game_pk", 0)):
+            # Finals too: a finished game's boxscore grades the bet
+            # provisionally on the spot instead of going dark until the
+            # overnight settle.
+            if (g.live and g.live.state in ("live", "final")
+                    and getattr(g, "game_pk", 0)):
                 try:
                     progress.update(parse_live_stats(fetch_boxscore(g.game_pk)))
                 except Exception:
                     pass
         result["live_picks"] = assemble_live_picks(
             open_bets, result["recommendations"], result["games"], progress)
+        # Open bets from OTHER dates can't map to today's games — say they
+        # exist so the page's count always reconciles with the Record's.
+        result["open_elsewhere"] = _lpc.execute(
+            "SELECT COUNT(*) FROM bets WHERE status='open' AND sport='mlb' "
+            "AND category='main' AND date != ?", (args.date,)).fetchone()[0]
         if result["live_picks"]:
-            n_clear = sum(1 for r in result["live_picks"] if r["status"] == "cleared")
-            print(f"Live picks: {len(result['live_picks'])} in progress"
-                  + (f", {n_clear} already cleared" if n_clear else ""))
+            n_live = sum(1 for r in result["live_picks"] if r["phase"] == "live")
+            print(f"Open-bet tracker: {len(result['live_picks'])} on today's "
+                  f"card ({n_live} live)"
+                  + (f", {result['open_elsewhere']} older still open"
+                     if result["open_elsewhere"] else ""))
     except Exception as exc:
         print(f"⚠️  live-pick tracker skipped: {exc}")
 

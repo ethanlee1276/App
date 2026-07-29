@@ -56,18 +56,42 @@ PREGAME_G = {"home": "NYY", "away": "BOS",
              "live": {"state": "scheduled"}}
 
 
-def test_only_live_games_qualify():
+def test_every_open_bet_gets_a_phase():
+    """Live bets track, not-started bets show as upcoming — the section
+    answers "where are my 5 open bets" in ALL states, not just mid-game."""
     bets = [_bet("Freddie Freeman", "total_bases"),
             _bet("Aaron Judge", "total_bases")]
     recs = [_rec("Freddie Freeman", "total_bases", "LAD", "SF"),
             _rec("Aaron Judge", "total_bases", "NYY", "BOS")]
     rows = assemble_live_picks(bets, recs, [LIVE_G, PREGAME_G],
                                parse_live_stats(BOX))
-    assert [r["player"] for r in rows] == ["Freddie Freeman"]
-    r = rows[0]
-    assert r["status"] == "cleared"            # 3 TB > 1.5 — over locked in
-    assert r["current"] == 3
-    assert r["game"]["period"] == "Top 6th"
+    assert [r["player"] for r in rows] == ["Freddie Freeman", "Aaron Judge"]
+    live, upcoming = rows
+    assert live["status"] == "cleared"         # 3 TB > 1.5 — over locked in
+    assert live["current"] == 3 and live["game"]["period"] == "Top 6th"
+    assert upcoming["status"] == "upcoming" and upcoming["phase"] == "upcoming"
+
+
+def test_final_games_grade_provisionally():
+    """A finished game grades on the spot — prop from the boxscore stat,
+    moneyline from the final score — flagged pending until the official
+    overnight settle."""
+    final_g = {"home": "LAD", "away": "SF", "game_number": 1,
+               "live": {"state": "final", "home_score": 5, "away_score": 2}}
+    bets = [_bet("Freddie Freeman", "total_bases", side="OVER", line=1.5),
+            _bet("Ace Arm", "strikeouts", side="OVER", line=6.5),
+            _bet("LAD", "moneyline", line=0.5),
+            _bet("SF", "moneyline", line=0.5)]
+    recs = [_rec("Freddie Freeman", "total_bases", "LAD", "SF"),
+            _rec("Ace Arm", "strikeouts", "LAD", "SF")]
+    rows = assemble_live_picks(bets, recs, [final_g], parse_live_stats(BOX))
+    by = {(r["player"], r["market"]): r for r in rows}
+    assert by[("Freddie Freeman", "total_bases")]["status"] == "won_pending"   # 3 > 1.5
+    assert by[("Ace Arm", "strikeouts")]["status"] == "lost_pending"           # 5 < 6.5
+    assert by[("LAD", "moneyline")]["status"] == "won_pending"                 # 5-2
+    assert by[("SF", "moneyline")]["status"] == "lost_pending"
+    # Winners sort ahead of losers, everything ahead of upcoming.
+    assert rows[0]["status"] == "won_pending"
 
 
 def test_under_can_bust_early_and_over_tracks():

@@ -64,9 +64,11 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
                 continue
             g = _game_for(rec.get("team"), rec.get("opponent"),
                           rec.get("game_number") or 0)
-        live = (g or {}).get("live") or {}
-        if not g or live.get("state") != "live":
+        if not g:
             continue
+        live = g.get("live") or {}
+        state = live.get("state") or "scheduled"
+        phase = state if state in ("live", "final") else "upcoming"
 
         current = None
         if market not in TEAM_MARKETS and market != "total":
@@ -74,12 +76,41 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
                 .get(market)
         side = (b.get("side") or "OVER").upper()
         line = float(b.get("line") or 0)
-        status = "tracking"
-        if current is not None:
-            if side == "OVER" and current > line:
-                status = "cleared"              # an over can lock in early…
-            elif side == "UNDER" and current > line:
-                status = "busted"               # …and an under can die early
+        hs, as_ = live.get("home_score"), live.get("away_score")
+
+        # Every open bet gets a phase and, where the numbers exist, a
+        # verdict-in-waiting. FINAL games grade provisionally on the spot
+        # (official settle still happens overnight from ingested results).
+        status = "upcoming"
+        if phase == "live":
+            status = "tracking"
+            if current is not None:
+                if side == "OVER" and current > line:
+                    status = "cleared"          # an over can lock in early…
+                elif side == "UNDER" and current > line:
+                    status = "busted"           # …and an under can die early
+        elif phase == "final":
+            actual = current
+            if actual is None and hs is not None and as_ is not None:
+                # Team markets grade from the final score.
+                pick_home = b.get("player") == g.get("home")
+                if market == "moneyline":
+                    actual = 1.0 if ((hs > as_) == pick_home) else 0.0
+                    side, line = "OVER", 0.5
+                elif market == "total":
+                    actual = float(hs) + float(as_)
+                elif market == "spread":
+                    actual = float(hs - as_) if pick_home else float(as_ - hs)
+                elif market == "team_total":
+                    actual = float(hs if pick_home else as_)
+            if actual is None:
+                status = "final_pending"        # no stat line available yet
+            elif actual == line:
+                status = "push_pending"
+            else:
+                won = (actual > line) == (side == "OVER")
+                status = "won_pending" if won else "lost_pending"
+                current = actual
         out.append({
             "player": b.get("player"), "market": market,
             "market_label": (rec or {}).get("market_label")
@@ -88,17 +119,20 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
                     .get(market, market),
             "side": side, "line": line,
             "odds": b.get("odds"), "stake_units": b.get("stake_units") or 0,
-            "current": current, "status": status,
+            "current": current, "status": status, "phase": phase,
             "team": (rec or {}).get("team", b.get("player", "")),
             "game": {"home": g.get("home"), "away": g.get("away"),
                      "game_number": g.get("game_number", 1),
                      "doubleheader": g.get("doubleheader", False),
-                     "state": live.get("state"),
+                     "date": g.get("date", ""), "kickoff": g.get("kickoff", ""),
+                     "state": state,
                      "period": live.get("period", ""),
-                     "home_score": live.get("home_score"),
-                     "away_score": live.get("away_score")},
+                     "home_score": hs, "away_score": as_},
         })
-    # Cleared first (good news leads), then by stake.
-    order = {"cleared": 0, "tracking": 1, "busted": 2}
-    out.sort(key=lambda r: (order.get(r["status"], 1), -(r["stake_units"] or 0)))
+    # Live action first (good news leads), then finals awaiting the official
+    # settle, then tonight's not-yet-started bets.
+    order = {"cleared": 0, "tracking": 1, "busted": 2,
+             "won_pending": 3, "push_pending": 4, "lost_pending": 5,
+             "final_pending": 6, "upcoming": 7}
+    out.sort(key=lambda r: (order.get(r["status"], 7), -(r["stake_units"] or 0)))
     return out
