@@ -230,6 +230,10 @@ def build_live_slate(date: str, season: int | None = None,
     games: list[MLBGame] = []
     props: list[MLBProp] = []
 
+    # Pass 1: games. Props are built in a second pass because doubleheaders
+    # need the full day known first — the same pair twice must be numbered,
+    # and props must attach to exactly ONE leg (see below).
+    raw: list[tuple] = []                # (schedule json, game, box, teams json)
     for day in sched.get("dates", []):
         for g in day.get("games", []):
             game_pk = g.get("gamePk")
@@ -260,49 +264,81 @@ def build_live_slate(date: str, season: int | None = None,
             game = MLBGame(home=home_ab, away=away_ab, park=park,
                            date=day.get("date", date), kickoff=g.get("gameDate", ""),
                            pitchers=pitchers, lineups_confirmed=lineups_confirmed,
-                           plate_umpire=parse_officials(box))
+                           plate_umpire=parse_officials(box),
+                           game_number=int(g.get("gameNumber") or 1),
+                           doubleheader=(g.get("doubleHeader") or "N") != "N")
             if weather is not None:
                 game.weather = weather
             games.append(game)
+            raw.append((g, game, box, teams, home, away))
 
-            # Hitter props from confirmed lineups — or, before lineups post,
-            # from each team's LAST batting order (projected; flagged via
-            # game.lineups_confirmed=False, which holds recommendations and
-            # caveats the HR board).
-            for side, team_ab, opp_ab in (("home", home_ab, away_ab),
-                                          ("away", away_ab, home_ab)):
-                entries = parse_lineup(box, side)
-                if not entries:
-                    tid = (home if side == "home" else away).get("id")
-                    entries = projected_lineup(tid, date) if tid else []
-                for entry in entries:
-                    try:
-                        person = parse_person(fetch_person(entry.person_id))
-                    except DataUnavailable:
-                        person = {"bats": "R"}
-                    for market in hitter_markets:
-                        _add_prop(props, entry.person_id, entry.name, team_ab,
-                                  opp_ab, entry.position or person.get("position", ""),
-                                  market, season, entry.spot, person.get("bats", "R"),
-                                  log_limit=limit)
+    # Doubleheader bookkeeping: number the legs by first pitch even when the
+    # feed's own fields are missing, and pick each pair's PROP game — the
+    # first leg that isn't final. Books post props for the next game to be
+    # played; building props for both legs would double every hitter's rows
+    # and merge two different games' prices under one line.
+    by_pair: dict[tuple, list[MLBGame]] = {}
+    for _, game, *_rest in raw:
+        by_pair.setdefault((game.home, game.away), []).append(game)
+    prop_games: set[int] = set()
+    for pair, legs in by_pair.items():
+        if len(legs) > 1:
+            legs.sort(key=lambda x: x.kickoff or "")
+            for i, leg in enumerate(legs):
+                leg.game_number = i + 1
+                leg.doubleheader = True
+    finals = {id(game): (g.get("status", {}).get("abstractGameState") == "Final")
+              for g, game, *_rest in raw}
+    for pair, legs in by_pair.items():
+        pg = next((x for x in legs if not finals.get(id(x))), legs[0])
+        prop_games.add(id(pg))
 
-            # Pitcher strikeout props from probable starters.
-            if include_pitchers:
-                for team_ab, opp_ab in ((home_ab, away_ab), (away_ab, home_ab)):
-                    pp = teams.get("home" if team_ab == home_ab else "away", {}).get("probablePitcher")
-                    if not pp:
-                        continue
-                    _add_prop(props, pp.get("id"), pp.get("fullName", "TBD"),
-                              team_ab, opp_ab, "SP", STRIKEOUTS, season,
-                              lineup_spot=1, bats="R",
-                              throws=pp.get("pitchHand", {}).get("code", "R"),
-                              log_limit=limit)
+    # Pass 2: props — only from each pair's prop game.
+    for g, game, box, teams, home, away in raw:
+        if id(game) not in prop_games:
+            continue
+        home_ab, away_ab = game.home, game.away
+        prop_gn = game.game_number if game.doubleheader else 0
+
+        # Hitter props from confirmed lineups — or, before lineups post,
+        # from each team's LAST batting order (projected; flagged via
+        # game.lineups_confirmed=False, which holds recommendations and
+        # caveats the HR board).
+        for side, team_ab, opp_ab in (("home", home_ab, away_ab),
+                                      ("away", away_ab, home_ab)):
+            entries = parse_lineup(box, side)
+            if not entries:
+                tid = (home if side == "home" else away).get("id")
+                entries = projected_lineup(tid, date) if tid else []
+            for entry in entries:
+                try:
+                    person = parse_person(fetch_person(entry.person_id))
+                except DataUnavailable:
+                    person = {"bats": "R"}
+                for market in hitter_markets:
+                    _add_prop(props, entry.person_id, entry.name, team_ab,
+                              opp_ab, entry.position or person.get("position", ""),
+                              market, season, entry.spot, person.get("bats", "R"),
+                              log_limit=limit, game_number=prop_gn)
+
+        # Pitcher strikeout props from probable starters.
+        if include_pitchers:
+            for team_ab, opp_ab in ((home_ab, away_ab), (away_ab, home_ab)):
+                pp = teams.get("home" if team_ab == home_ab else "away", {}).get("probablePitcher")
+                if not pp:
+                    continue
+                _add_prop(props, pp.get("id"), pp.get("fullName", "TBD"),
+                          team_ab, opp_ab, "SP", STRIKEOUTS, season,
+                          lineup_spot=1, bats="R",
+                          throws=pp.get("pitchHand", {}).get("code", "R"),
+                          log_limit=limit, game_number=prop_gn)
 
     return MLBSlate(date=date, games=games, props=props)
 
 
 def _add_prop(props, person_id, name, team, opp, position, market, season,
-              lineup_spot, bats, throws="R", log_limit: int | None = 15):
+              lineup_spot, bats, throws="R", log_limit: int | None = 15,
+              game_number: int = 0):
     if not person_id:
         return
     group = MARKET_GROUP[market]
@@ -322,5 +358,5 @@ def _add_prop(props, person_id, name, team, opp, position, market, season,
         lines=[SportsbookLine(book="proxy", line=_proxy_line(baseline, market),
                               over_odds=-110, under_odds=-110)],
         bats=bats, throws=throws, lineup_spot=lineup_spot,
-        person_id=int(person_id),
+        person_id=int(person_id), game_number=game_number,
     ))

@@ -322,6 +322,8 @@ def _game_to_dict(g) -> dict:
         # Real moneyline prices ride along (0 = not offered): the team-form
         # sampler journals the hot side at the price someone could bet.
         "home_ml": g.home_ml, "away_ml": g.away_ml,
+        "game_number": getattr(g, "game_number", 1),
+        "doubleheader": getattr(g, "doubleheader", False),
         "weather": {
             "dome": w.roof_closed or park.roof == "dome",
             "temp_f": w.temp_f, "wind_mph": w.wind_mph,
@@ -367,6 +369,12 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         d["live"] = bool(game.live and game.live.state == "live")
         d["game_date"] = game.date
         d["game_kickoff"] = game.kickoff
+        if getattr(game, "doubleheader", False):
+            # Say WHICH game of the doubleheader this prop is for — on the
+            # card, in the headline, everywhere.
+            d["game_number"] = game.game_number
+            d["doubleheader"] = True
+            d["headline"] += f" (DH Game {game.game_number})"
         results.append(d)
 
     results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]),

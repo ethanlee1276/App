@@ -28,6 +28,10 @@ class MLBSlate:
     def game_for(self, prop: MLBProp) -> MLBGame:
         for g in self.games:
             if prop.team in (g.home, g.away) and prop.opponent in (g.home, g.away):
+                # Doubleheader: the same pair appears twice; the prop's own
+                # game_number picks the right leg (0 = any/legacy).
+                if prop.game_number and getattr(g, "game_number", 1) != prop.game_number:
+                    continue
                 return g
         raise KeyError(f"No game for {prop.player} ({prop.team} vs {prop.opponent})")
 
@@ -56,6 +60,8 @@ def _game(d: dict) -> MLBGame:
         spread=d.get("spread", 0.0),
         spread_home_odds=d.get("spread_home_odds", -110),
         spread_away_odds=d.get("spread_away_odds", -110),
+        game_number=d.get("game_number", 1),
+        doubleheader=d.get("doubleheader", False),
     )
 
 
@@ -71,6 +77,7 @@ def _prop(d: dict) -> MLBProp:
         lineup_spot=d.get("lineup_spot", 0),
         headshot=d.get("headshot", ""),
         statcast=StatcastProfile(**d["statcast"]) if d.get("statcast") else None,
+        game_number=d.get("game_number", 0),
     )
 
 

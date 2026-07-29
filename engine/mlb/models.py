@@ -115,6 +115,11 @@ class MLBGame:
     park: str                                  # ParkProfile.key
     date: str = ""                             # game date, YYYY-MM-DD
     kickoff: str = ""                          # first pitch (ISO datetime)
+    # Doubleheaders: the same two teams twice on one date. game_number (1/2)
+    # plus the flag disambiguate everything downstream — game ids, which
+    # game a prop is for, and the labels the site shows.
+    game_number: int = 1
+    doubleheader: bool = False
     total: float = 8.5                         # game run total (O/U)
     weather: MLBWeather = field(default_factory=MLBWeather)
     lineups_confirmed: bool = True
@@ -224,3 +229,6 @@ class MLBProp:
     # factor when the player's current 5-game stretch is hot or cold.
     streak_factor: float = 1.0
     streak_note: str = ""
+    # Which game of a doubleheader this prop belongs to (0 = not a DH day /
+    # unspecified). Set by the slate builder; game_for() matches on it.
+    game_number: int = 0

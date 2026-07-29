@@ -585,7 +585,36 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     slate_pairs = {frozenset((g.home, g.away)) for g in slate.games}
 
     events = list_events(key, ttl=ttl, sport=sport, cache_only=cache_only)
-    games_by_pair = {frozenset((g.home, g.away)): g for g in slate.games}
+    # A pair can hold TWO games (MLB doubleheader) — keep them all, matched
+    # to events by first-pitch time below. Collapsing to one game merged
+    # both legs' prices under one line, silently.
+    pair_games: dict[frozenset, list] = {}
+    for g in slate.games:
+        pair_games.setdefault(frozenset((g.home, g.away)), []).append(g)
+    games_by_pair = {k: v[0] for k, v in pair_games.items()}
+    # Which leg of each doubleheader the slate's PROPS belong to (props are
+    # built for one leg only — the next to be played).
+    prop_leg: dict[frozenset, int] = {}
+    for p in getattr(slate, "props", []):
+        gn = getattr(p, "game_number", 0)
+        if gn:
+            prop_leg[frozenset((p.team, p.opponent))] = gn
+
+    def _leg_for_event(pair, commence: str):
+        legs = pair_games.get(pair) or []
+        if len(legs) <= 1:
+            return legs[0] if legs else None
+        # Two legs: the event's commence time picks the right one.
+        def _dist(g):
+            try:
+                a = commence.replace("Z", "+00:00")
+                b = (g.kickoff or "").replace("Z", "+00:00")
+                import datetime as _dt
+                return abs((_dt.datetime.fromisoformat(a)
+                            - _dt.datetime.fromisoformat(b)).total_seconds())
+            except Exception:
+                return float("inf")
+        return min(legs, key=_dist)
 
     # Only re-price games whose number can actually still move for us: in-play
     # and about-to-start games. A game tomorrow doesn't need a fresh quote every
@@ -596,6 +625,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                   if _is_active(g, active_window_hours)}
         if active:
             games_by_pair = {k: v for k, v in games_by_pair.items() if k in active}
+            pair_games = {k: v for k, v in pair_games.items() if k in active}
             slate_pairs = slate_pairs & active
     # Player-prop markets plus the three game markets in one request per event.
     markets = list(cfg["markets"]) + ["h2h", "totals", "spreads"]
@@ -617,12 +647,21 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             raise
         result.quota = quota
         result.events_used += 1
-        for k, lines in parse_event_lines(payload, cfg["markets"]).items():
-            index.setdefault(k, []).extend(lines)
-        for k, disp in parse_event_players(payload, cfg["markets"]).items():
-            menu.setdefault(k, {"player": disp, "home": home, "away": away})
-        # Attach real game-market prices to the matching game.
-        game = games_by_pair.get(frozenset((home, away)))
+        pair = frozenset((home, away))
+        game = _leg_for_event(pair, ev.get("commence_time") or "")
+        # Prop lines only index when this event IS the leg the slate's props
+        # were built for — a doubleheader's other leg has different lineups
+        # and different prices, and mixing them corrupts every quote.
+        wanted = prop_leg.get(pair, 0)
+        props_ok = (not wanted or game is None
+                    or getattr(game, "game_number", 1) == wanted)
+        if props_ok:
+            for k, lines in parse_event_lines(payload, cfg["markets"]).items():
+                index.setdefault(k, []).extend(lines)
+            for k, disp in parse_event_players(payload, cfg["markets"]).items():
+                menu.setdefault(k, {"player": disp, "home": home, "away": away})
+        # Attach real game-market prices to the matching game (each leg gets
+        # its own moneyline/total/spread).
         if game is not None:
             mls = parse_event_h2h(payload, cfg["teams"])
             if home in mls and away in mls:

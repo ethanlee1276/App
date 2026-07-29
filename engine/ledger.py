@@ -523,21 +523,34 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             _settle_one(conn, b, float(actual), None)
             settled += 1
             continue
-        row = hist_conn.execute(
+        rows = hist_conn.execute(
             f"SELECT value FROM player_game_logs WHERE {where} "
             f"AND market=? AND player=?",
-            (*wargs, b["market"], b["player"])).fetchone()
-        if row is None:
+            (*wargs, b["market"], b["player"])).fetchall()
+        if not rows:
             # Name-shape fallback (feeds disagree on accents/suffixes).
             target = normalize_name(b["player"])
-            row = next(
-                (c for c in hist_conn.execute(
-                    f"SELECT player, value FROM player_game_logs "
-                    f"WHERE {where} AND market=?",
-                    (*wargs, b["market"]))
-                 if normalize_name(c["player"]) == target), None)
-        if row is None:
+            rows = [c for c in hist_conn.execute(
+                        f"SELECT player, value FROM player_game_logs "
+                        f"WHERE {where} AND market=?",
+                        (*wargs, b["market"]))
+                    if normalize_name(c["player"]) == target]
+        if not rows:
             continue
+        if len(rows) > 1:
+            # DOUBLEHEADER day: the player has one stat row per game and the
+            # journal doesn't know which leg this bet was for. Settle only
+            # when the outcome is the same either way; an ambiguous bet
+            # stays open rather than being graded against the wrong game.
+            def _wins(v):
+                over = (b["side"] or "OVER").upper() != "UNDER"
+                if v == b["line"]:
+                    return "push"
+                return (v > b["line"]) == over
+            outcomes = {_wins(float(r["value"])) for r in rows}
+            if len(outcomes) > 1:
+                continue
+        row = rows[0]
 
         ck = (b["sport"], b["market"])
         if ck not in closes_cache:

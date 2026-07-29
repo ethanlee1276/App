@@ -716,7 +716,7 @@ function renderGames() {
 
 /* A stable handle for one game, safe in a URL hash. Two teams and a date
    identify a slate game uniquely — there is no id in the feed. */
-const gameId = (g) => `${g.date || ""}_${g.away}@${g.home}`;
+const gameId = (g) => `${g.date || ""}_${g.away}@${g.home}${(g.game_number || 1) > 1 ? `_G${g.game_number}` : ""}`;
 const findGame = (gid) => (((state.data || {}).games) || []).find((g) => gameId(g) === gid);
 
 function gameCard(g) {
@@ -737,6 +737,7 @@ function gameCard(g) {
   } else if (mlb) {
     const bits = [`O/U ${g.total.toFixed(1)}`];
     if (g.park_name) bits.unshift(g.park_name);
+    if (g.doubleheader) bits.unshift(`⚾ DH Game ${g.game_number || 1}`);
     if (g.lineups_confirmed === false) bits.push("⚠ lineups pending");
     sub = bits.join(" · ");
   } else {
@@ -814,7 +815,9 @@ function gameBetCount(g) {
 function propInGame(r, g) {
   const pair = new Set([r.team, r.opponent]);
   return pair.has(g.home) && pair.has(g.away)
-    && (!r.game_date || !g.date || r.game_date === g.date);
+    && (!r.game_date || !g.date || r.game_date === g.date)
+    // Doubleheader: a prop belongs to ONE leg, not both.
+    && (!r.game_number || !g.game_number || r.game_number === g.game_number);
 }
 
 function fillMeters(host) {
@@ -994,7 +997,7 @@ function cardHTML(r) {
         ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
              ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
         : ""}
-      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${booksChip(r)}${stakeChip}</div>
+      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">⚾ Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${booksChip(r)}${stakeChip}</div>
       ${corr}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
 }
@@ -1315,6 +1318,7 @@ function renderGamePage() {
         <div class="gp-sub">${escapeHtml([g.park_name, whenLabel(g.date, g.kickoff)]
           .filter(Boolean).join(" · "))}</div>
         <div class="chips gp-chips">
+          ${g.doubleheader ? `<span class="chip up">⚾ Doubleheader · Game ${g.game_number || 1}</span>` : ""}
           <span class="chip">O/U ${g.total != null ? g.total.toFixed(1) : "—"}</span>
           ${g.favorite ? `<span class="chip">${escapeHtml(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}</span>`
             : nba && g.spread ? `<span class="chip">${escapeHtml(teamName(g.spread < 0 ? g.home : g.away))} −${Math.abs(g.spread).toFixed(1)}</span>` : ""}
