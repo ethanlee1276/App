@@ -263,6 +263,16 @@ def main() -> None:
                          "grade": "Play", "stake_units": p["stake_units"],
                          "recommended": True}
                         for p in picks_result["picks"]]
+                # Same drawdown circuit-breaker as NFL/MLB: 10u off the
+                # journal's peak halves every stake until recovery.
+                try:
+                    dd = ledger.drawdown_factor(lconn, sport="nba")
+                    if dd < 1.0:
+                        for p in recs:
+                            p["stake_units"] = round(p["stake_units"] * dd, 2)
+                        print("  ⚠️  Drawdown rule active — NBA stakes halved")
+                except Exception:
+                    pass
                 n = ledger.log_recommendations(
                     lconn, {"sport": "nba", "date": args.date,
                             "recommendations": recs})

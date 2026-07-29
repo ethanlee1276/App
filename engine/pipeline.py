@@ -153,7 +153,9 @@ def _long_shots(slate, usage: dict | None = None) -> list[dict]:
 
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     started = game_has_started(g)
-    d["recommended"] = (d["grade"] != "Pass"
+    # No Leans (docs §10): a lean is a bet that failed the filter published
+    # anyway. Lean-graded game bets still render, but never as picks.
+    d["recommended"] = (d["grade"] not in ("Pass", "Lean")
                         and d["confidence"] >= config.min_confidence
                         and d["edge"] >= config.min_edge
                         and d["odds"] >= config.max_juice

@@ -181,6 +181,7 @@ def shared_recommendations(props: list[dict],
             rel = delta / prior if prior else 0.0
             trend = "up" if rel > 0.10 else "down" if rel < -0.10 else "flat"
         pick = r["kind"] == "pick"
+        edge = r["p_final"] - r["p_market"]
         grade = "Play" if pick else "Pass"
         warnings = [] if pick else [f"Approval gate: {f}" for f in r.get("fails", [])]
         reasons = [f"Projected {r['proj_minutes']} min × per-minute rate → "
@@ -203,7 +204,13 @@ def shared_recommendations(props: list[dict],
             "hit_prob": r["p_final"], "fair_prob": r["p_market"],
             "edge": round(r["p_final"] - r["p_market"], 4),
             "ev_per_unit": r["ev"],
-            "confidence": round(r["p_final"] * 10, 1),
+            # Confidence feeds the site's min-confidence slider (default
+            # 6.0). A raw p_final x 10 put real PICKS at 5.5-6.5 — hidden by
+            # the default slider on the page that exists to show them. Picks
+            # scale 7-9 with edge; passes keep the raw scale (below 7).
+            "confidence": (round(7.0 + min(max(edge, 0.0), 0.05) * 40, 1)
+                           if pick else
+                           round(min(6.9, r["p_final"] * 10), 1)),
             "stake_units": r.get("stake_units", 0.0),
             "grade": grade, "has_market": True,
             "recent_values": vals[:12],

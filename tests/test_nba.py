@@ -236,6 +236,32 @@ def test_shared_schema_near_miss_is_an_honest_pass():
         assert kind == "pick" and recs[0]["recommended"] is True
 
 
+def test_gate_is_not_mathematically_closed():
+    """REGRESSION (2026-07-29): the old pairing (clamp w=0.28, gate 3pts
+    over break-even) made a pick impossible at standard juice — the largest
+    clamped edge the model could produce was ~0.9pts over a −110 break-even
+    against a 3pt requirement. The maximum achievable edge must exceed the
+    requirement by a real margin, forever."""
+    from engine.nba.prob import (CLAMP_W_DEFAULT, CLAMP_KILL_DIFF,
+                                 GATE_EDGE_PTS)
+    max_edge_vs_fair = CLAMP_W_DEFAULT * CLAMP_KILL_DIFF
+    vig_at_110 = 0.024                      # break-even minus fair at −110
+    window = max_edge_vs_fair - vig_at_110 - GATE_EDGE_PTS
+    assert window >= 0.005, (max_edge_vs_fair, window)
+
+
+def test_a_real_value_spot_produces_a_visible_pick():
+    """Model 23.2 on a 22.5 line at +115 is genuine, in-bounds value — the
+    gate must approve it, and its confidence must clear the site's default
+    min-confidence slider (6.0), or the page built to show picks hides them."""
+    from engine.nba.pipeline import shared_recommendations
+    p = _prop(player="Pick Guy", line=22.5, over=115, under=-135, rate_val=23.2)
+    r = shared_recommendations([p], {}, {})[0]
+    assert r["recommended"] is True and r["grade"] == "Play"
+    assert r["confidence"] >= 7.0
+    assert r["stake_units"] > 0
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

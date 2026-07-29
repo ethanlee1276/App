@@ -34,10 +34,19 @@ SD_CV = {"pts": 0.30, "reb": 0.40, "ast": 0.43, "pra": 0.24,
          "fg3m": 0.50, "stl": 0.90, "blk": 0.90}
 DISCRETE = {"reb", "ast", "fg3m", "stl", "blk"}
 
-CLAMP_W_DEFAULT = 0.28
+# RE-TUNED 2026-07-29 (same audit as the NFL/MLB tier re-tune): the old
+# pairing (w=0.28, gate 3.0pts over break-even) was mathematically closed —
+# the largest clamped edge the model could EVER produce was
+# 0.28 × 0.12 = 3.36pts vs fair, which is ~0.9pts over a −110 break-even
+# against a 3.0pt requirement. No combination of line and price could
+# yield a pick at standard juice; verified by grid search. w=0.45 keeps
+# the market dominant (most of any disagreement is still assumed to be
+# our error) and 2.0pts over break-even still demands the model beat the
+# price by nearly a full vig — but the door now physically opens.
+CLAMP_W_DEFAULT = 0.45
 CLAMP_KILL_DIFF = 0.12
-GATE_EDGE_PTS = 0.03
-GATE_EDGE_PTS_HIGH_HOLD = 0.05
+GATE_EDGE_PTS = 0.02
+GATE_EDGE_PTS_HIGH_HOLD = 0.04
 GATE_MIN_EV = 0.035
 GATE_WORST_PRICE = -250
 GATE_MAX_HOLD = 0.10

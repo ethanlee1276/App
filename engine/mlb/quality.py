@@ -76,8 +76,12 @@ def mlb_quality_score(*, edge: float, market: str, side: str,
     tier = mlb_tier(market)
     notes: list[str] = []
 
-    # Edge (40): tier minimum earns half credit, twice the minimum full.
-    edge_pts = clamp(edge / (2.0 * TIER_MIN_EDGE[tier]), 0.0, 1.0) * 40.0
+    # Edge (40): the tier minimum earns two-thirds credit; 1.5x the minimum
+    # earns full credit — same 2026-07-29 re-tune as the NFL scorer, for the
+    # same reason: the edge gate and the quality gate must not double-charge
+    # for the same caution, and the credibility cap makes "twice the
+    # minimum" unreachable in Tier 2.
+    edge_pts = clamp(edge / (1.5 * TIER_MIN_EDGE[tier]), 0.0, 1.0) * 40.0
 
     pitcher_pts = 15.0 * clamp(pitcher_certainty, 0.0, 1.0)
     if pitcher_certainty < 0.6:
