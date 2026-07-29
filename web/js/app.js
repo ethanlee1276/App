@@ -395,6 +395,17 @@ async function renderBestBets() {
   const staleByKey = new Map(sig.stale.filter((s) => s.player)
     .map((s) => [propKey(s.player, s.market), s]));
 
+  // Which game each pick belongs to — matchup + first pitch on every row.
+  const gameOf = (r) => ((state.data || {}).games || []).find((g) => propInGame(r, g));
+  const propGameLine = (r) => {
+    const g = gameOf(r);
+    if (!g) return `${teamName(r.team)} vs ${teamName(r.opponent)}`;
+    const when = whenLabel(g.date, g.kickoff);
+    return `${teamName(g.away)} @ ${teamName(g.home)}`
+      + (g.doubleheader ? ` · DH Game ${g.game_number || 1}` : "")
+      + (when ? ` · ${when}` : "");
+  };
+
   const picks = [];
   for (const b of sig.sharpBets) {
     // Show the ACTUAL numbers behind the gap (the first reason carries
@@ -402,20 +413,22 @@ async function renderBestBets() {
     const anchor = (b.reasons || []).find((x) => String(x).startsWith("Sharp anchor"));
     picks.push({ tag: "SHARP", color: "var(--cyan)", quality: 95 + (b.ev_per_unit || 0),
       label: `${b.headline} · ${b.matchup} ${american(b.odds)}`,
+      game: whenLabel(b.date, b.kickoff),
       metric: `${signedPct(b.ev_per_unit)} EV`, stake: b.stake_units, grade: b.grade,
       why: anchor || "sharp-anchor price gap — backtested +13.5% against real closes" });
   }
   for (const b of sig.modelBets) {
     picks.push({ tag: "GAME", color: "var(--brand)", quality: b.quality || b.confidence * 10 || 0,
       label: `${b.headline} · ${b.matchup} ${american(b.odds)}`,
+      game: whenLabel(b.date, b.kickoff),
       metric: signedPct(b.edge), stake: b.stake_units, grade: b.grade,
       why: "game bet that cleared every gate" });
   }
   for (const r of sig.props) {
     const twin = staleByKey.get(propKey(r.player, r.market));
     picks.push({ tag: "PROP", color: "var(--brand)", quality: r.quality || r.confidence * 10 || 0,
-      label: `${r.player} ${r.side} ${r.line} ${r.market_label} ${american(r.odds)} (${r.book})`
-        + (r.doubleheader ? ` — DH Game ${r.game_number || 1}` : ""),
+      label: `${r.player} ${r.side} ${r.line} ${r.market_label} ${american(r.odds)} (${r.book})`,
+      game: propGameLine(r),
       metric: signedPct(r.edge), stake: r.stake_units, grade: r.grade,
       why: (r.quality != null ? `quality ${r.quality}/100 · Tier ${r.tier} · ${r.volatility}` : "cleared every gate")
         + (twin ? ` · BONUS: ${twin.book} is lagging the field at ${american(twin.odds)} — take the cheaper price` : "") });
@@ -433,6 +446,7 @@ async function renderBestBets() {
       <span style="opacity:.45;min-width:18px;font-weight:700">${i + 1}</span>
       <span class="grade ${gradeClass(p.grade)}" style="flex-shrink:0">${escapeHtml(p.grade || "")}</span>
       <span style="flex:1;min-width:0"><strong>${escapeHtml(p.label)}</strong>
+        ${p.game ? `<span style="display:block;font-size:12px;margin-top:2px">${(SPORT_META[state.sport] || {}).logo || "🏟️"} ${escapeHtml(p.game)}</span>` : ""}
         <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">${escapeHtml(p.why)}</span></span>
       <span style="text-align:right;white-space:nowrap"><span style="font-weight:800">${escapeHtml(p.metric)}</span>
         ${p.stake > 0 ? `<span style="display:block;color:var(--good);font-size:12px;font-weight:700">${
