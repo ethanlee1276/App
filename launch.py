@@ -1001,7 +1001,8 @@ def nfl_baseline() -> None:
     # Wants calibrated against a COMPLETE ingested season (2025 actuals),
     # set just under observed so "complete" passes and "partial" warns.
     for m, want in (("pass_yds", 500), ("rush_yds", 1500), ("rec_yds", 2400),
-                    ("receptions", 4000), ("anytime_td", 1500)):
+                    ("receptions", 4000), ("anytime_td", 1500),
+                    ("snap_pct", 6000)):
         check(f"weekly {m} rows", market_n(m), want)
     # pbp layer — measured roles and the new efficiency profiles.
     for m, want in (("xfp", 4000), ("rz_tgt", 4000), ("i5_car", 4000)):
@@ -1010,6 +1011,22 @@ def nfl_baseline() -> None:
         "SELECT COUNT(*) FROM games WHERE sport='nfl' AND season=? "
         "AND home_score IS NOT NULL", (season,)).fetchone()[0]
     check("final scores", games, 250)
+    # The UPCOMING season's schedule — game scripts and Week-1 slates
+    # build on it, and openers' lines land here weeks before kickoff.
+    upcoming = conn.execute(
+        "SELECT COUNT(*) FROM games WHERE sport='nfl' AND season=?",
+        (season + 1,)).fetchone()[0]
+    if upcoming:
+        check(f"{season + 1} schedule rows", upcoming, 272)
+        lines = conn.execute(
+            "SELECT COUNT(*) FROM games WHERE sport='nfl' AND season=? "
+            "AND spread IS NOT NULL AND total IS NOT NULL",
+            (season + 1,)).fetchone()[0]
+        print(f"  ·  {lines} upcoming game(s) already carry posted lines — "
+              "the game-scripts panel runs on these")
+    else:
+        print(f"  ⚠️  no {season + 1} schedule ingested — run "
+              "`python3 ingest.py nfl`")
     closes = conn.execute(
         "SELECT COUNT(*) FROM odds_history WHERE sport='nfl'").fetchone()[0]
     if closes:
