@@ -949,6 +949,26 @@ def settle_now(day: str | None = None) -> None:
     print("Record page updated.")
 
 
+def _tailscale_ip() -> str | None:
+    """The machine's Tailscale address (100.64.0.0/10), when Tailscale is
+    installed and up — the URL a phone on the same tailnet can open from
+    ANYWHERE, not just home Wi-Fi. See docs/PHONE.md for the setup."""
+    import subprocess
+    candidates = (
+        ["tailscale", "ip", "-4"],
+        ["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "ip", "-4"],
+    )
+    for cmd in candidates:
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True,
+                                 timeout=3).stdout.strip().splitlines()
+            if out and out[0].startswith("100."):
+                return out[0].strip()
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return None
+
+
 def _lan_ip() -> str | None:
     """This machine's LAN address — the URL a phone on the same Wi-Fi can
     open. The UDP connect never sends a packet; it just makes the OS pick
@@ -1086,6 +1106,11 @@ def main() -> None:
         print(f"  On your phone (same Wi-Fi):     → http://{lan}:{port}")
         print("  (If the phone can't connect, macOS may be asking to allow "
               "incoming connections for Python — click Allow.)")
+    ts = _tailscale_ip()
+    if ts:
+        print(f"  On your phone ANYWHERE (Tailscale): → http://{ts}:{port}")
+    else:
+        print("  Away from home? Free setup with Tailscale — see docs/PHONE.md")
     print("Press Ctrl+C to stop.")
     try:
         server.serve_forever()
