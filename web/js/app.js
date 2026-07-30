@@ -1883,7 +1883,8 @@ function recCurveChart(curve) {
         <path d="${area}" fill="url(#${gid})" stroke="none"/>
         <line x1="${padL}" y1="${y(0)}" x2="${w - padR}" y2="${y(0)}"
               stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" opacity="0.3"/>
-        ${yLabel(hi)}${yLabel(0)}${lo < 0 ? yLabel(lo) : ""}
+        ${Math.abs(y(0) - y(hi)) > 14 ? yLabel(hi) : ""}${yLabel(0)}${
+          lo < 0 && Math.abs(y(lo) - y(0)) > 14 ? yLabel(lo) : ""}
         <text x="${padL}" y="${h - 8}" font-size="10" fill="currentColor" opacity="0.45">${escapeHtml(curve[0].date)}</text>
         <text x="${w - padR}" y="${h - 8}" text-anchor="end" font-size="10" fill="currentColor" opacity="0.45">${escapeHtml(last.date)}</text>
         <path d="M${path}" fill="none" stroke="${color}" stroke-width="2.2"
