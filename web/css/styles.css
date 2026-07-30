@@ -157,7 +157,12 @@ input[type=range]::-webkit-slider-thumb {
 input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 
 /* ---------------- Games strip (stadiums + wind) ---------------- */
-.games-scroller { display: flex; gap: 15px; overflow-x: auto; padding: 4px 2px 14px; scroll-snap-type: x mandatory; }
+/* overflow-y is LOCKED: with only overflow-x set, CSS computes the other
+   axis to auto, and any pixel of slack turns a phone's vertical swipe into
+   scrolling the strip instead of the page. Sideways only — up/down always
+   belongs to the page. */
+.games-scroller { display: flex; gap: 15px; overflow-x: auto; overflow-y: hidden;
+  padding: 4px 2px 14px; scroll-snap-type: x mandatory; }
 .games-scroller::-webkit-scrollbar { height: 8px; }
 .games-scroller::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
 .game-card {
