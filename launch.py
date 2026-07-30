@@ -1120,15 +1120,41 @@ def main() -> None:
               f"{len(bad)} unreadable removed"
               + (": " + ", ".join(f.name for f in bad[:8]) if bad else
                  " — all clean."))
-        total = sum(f.stat().st_size for f in _CD.glob("*") if f.is_file())
-        print(f"Cache size: {total / 1e6:.1f} MB across "
-              f"{sum(1 for f in _CD.iterdir() if f.is_file()):,} file(s).")
-        from engine.maintenance import prune_cache, CACHE_KEEP_DAYS
+        import time as _t
+        from engine.maintenance import (prune_cache, CACHE_KEEP_DAYS,
+                                        PRUNABLE_CACHE_PREFIXES)
+        # Where the space actually is, so a big number is explainable
+        # instead of alarming: grouped by file family, with the age of the
+        # oldest member (that's what says when pruning starts helping).
+        fams: dict = {}
+        total = files = 0
+        now = _t.time()
+        for f in _CD.iterdir():
+            if not f.is_file():
+                continue
+            st = f.stat()
+            total += st.st_size
+            files += 1
+            fam = next((p for p in PRUNABLE_CACHE_PREFIXES
+                        if f.name.startswith(p)), None)
+            if fam is None:
+                fam = f.name if st.st_size > 5e6 else "other (kept)"
+            d = fams.setdefault(fam, [0, 0, 0.0])
+            d[0] += 1
+            d[1] += st.st_size
+            d[2] = max(d[2], (now - st.st_mtime) / 86400)
+        print(f"Cache size: {total / 1e6:.1f} MB across {files:,} file(s).")
+        for fam, (n_f, size, age) in sorted(fams.items(),
+                                            key=lambda kv: -kv[1][1])[:10]:
+            prunable = fam in PRUNABLE_CACHE_PREFIXES
+            print(f"  {fam:<26} {n_f:>6,} file(s)  {size / 1e6:>7.1f} MB  "
+                  f"oldest {age:>4.0f}d  "
+                  + ("prunes at 30d" if prunable else "kept always"))
         n, freed = prune_cache(log=lambda m: print(m.strip()))
         if not n:
-            print(f"  Nothing older than {CACHE_KEEP_DAYS} days to prune "
-                  f"(history, budget state and big downloads are never "
-                  f"pruned).")
+            print(f"  Nothing older than {CACHE_KEEP_DAYS} days yet — "
+                  f"pruning starts as these age out. History, budget state "
+                  f"and big downloads are never pruned.")
         return
     if "--nfl-baseline" in argv:
         nfl_baseline()
