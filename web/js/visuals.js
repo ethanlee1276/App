@@ -503,7 +503,15 @@ function sparkline(values, opts = {}) {
   // ~6px per step and keep the NEWEST games — recent form is the story a
   // sparkline tells. (values arrive newest-first; chart oldest -> newest.)
   const maxPts = Math.max(2, Math.floor((w - pad * 2) / 6));
-  const data = [...values].slice(0, maxPts).reverse();
+  // Missing games (null/undefined in the feed) must not poison the chart:
+  // ONE NaN coordinate makes SVG abort the rest of the line path while the
+  // per-point dots keep rendering — the "line stops, dots float" bug.
+  // Non-finite points are dropped, labels kept in sync.
+  const raw = [...values].slice(0, maxPts);
+  const rawLabs = opts.labels ? [...opts.labels].slice(0, maxPts) : null;
+  const keep = raw.map((v, i) => ({ v: Number(v), i }))
+    .filter((d) => Number.isFinite(d.v));
+  const data = keep.map((d) => d.v).reverse();
   // Mini mode (tight row charts): one thin line and one endpoint marker.
   // Per-point dots at this size render as noise, not data.
   const mini = opts.mini != null ? opts.mini : (w < 120 || h < 36);
@@ -518,9 +526,9 @@ function sparkline(values, opts = {}) {
   const x = (i) => pad + (i / (data.length - 1)) * (w - pad * 2);
   const y = (v) => h - pad - ((v - lo) / span) * (h - pad * 2);
 
-  // Hover labels: opts.labels comes newest-first like values; slice to the
-  // same window, reverse to match the charted order.
-  const labs = opts.labels ? [...opts.labels].slice(0, maxPts).reverse() : null;
+  // Hover labels: opts.labels comes newest-first like values; filtered to
+  // the same surviving points, reversed to match the charted order.
+  const labs = rawLabs ? keep.map((d) => rawLabs[d.i]).reverse() : null;
   const tip = (i) => (labs && labs[i] ? labs[i] + " — " : "") + data[i];
 
   const pts = data.map((v, i) => `${x(i)},${y(v)}`);
