@@ -435,6 +435,22 @@ async function renderBestBets() {
   }
   picks.sort((a, b) => b.quality - a.quality);
 
+  // Journaled bets whose pick no longer clears the bar at the CURRENT
+  // number. A bet doesn't unhappen when the line moves, so it stays on
+  // this board — placed price and live price side by side — instead of
+  // silently vanishing into the Live tab.
+  const nrm = (s) => String(s || "").toLowerCase().trim();
+  const onKeys = new Set();
+  sig.props.forEach((r) => onKeys.add(`${nrm(r.player)}|${nrm(r.market)}`));
+  [...sig.sharpBets, ...sig.modelBets].forEach((b) =>
+    [b.team, b.player, b.pick].forEach((t) => t && onKeys.add(`${nrm(t)}|${nrm(b.market)}`)));
+  const ridden = ((state.data || {}).live_picks || [])
+    .filter((r) => r.phase === "upcoming" && r.status !== "unmapped"
+      && !onKeys.has(`${nrm(r.player)}|${nrm(r.market)}`))
+    .map((b) => ({ b,
+      cur: ((state.data || {}).recommendations || []).find((r) =>
+        nrm(r.player) === nrm(b.player) && nrm(r.market) === nrm(b.market)) }));
+
   const perf = rec.overall || {};
   const journalNote = perf.settled
     ? `The journal so far: ${perf.wins}-${perf.losses} (${signedPct(perf.roi || 0)} ROI) — every pick below is graded there nightly.`
@@ -459,14 +475,8 @@ async function renderBestBets() {
       <p style="padding:10px 14px 6px;margin:0;font-size:12.5px;color:var(--text-mute)">
         <b style="color:var(--text)">${picks.length} pick${picks.length === 1 ? "" : "s"} tonight — this is the whole list.</b>
         Same count as the tile above, ranked by quality. ${escapeHtml(journalNote)}${
-        asOf ? ` Prices are from the ${escapeHtml(asOf)} odds pull — always confirm the number still stands before betting.` : ""}${(() => {
-          const open = ((state.data || {}).live_picks || []).length;
-          return open > picks.length
-            ? ` <b style="color:var(--text)">Why Open Bets shows ${open}:</b> this list re-qualifies at every
-               odds pull, but a journaled bet is locked at the price it was placed — when a line
-               moves and a pick falls off here, the bet stays open up there until it settles.`
-            : "";
-        })()}</p>
+        asOf ? ` Prices are from the ${escapeHtml(asOf)} odds pull — always confirm the number still stands before betting.` : ""}
+        Every journaled bet is tracked on the <b style="color:var(--text)">Live</b> tab through settlement.</p>
       ${picks.map(pickRow).join("")}
     </div>` : `
     <div class="card" style="border-left:3px solid var(--warn)">
@@ -544,12 +554,40 @@ async function renderBestBets() {
       </div>
     </details>` : "";
 
-  if (!picks.length && !signals.length) { host.innerHTML = ""; return; }
+  // ======= the bets already placed whose price moved off the bar =======
+  const riddenBlock = ridden.length ? `
+    <div class="card" style="padding:0;border-left:3px solid var(--warn);margin-top:10px">
+      <p style="padding:10px 14px 6px;margin:0;font-size:12.5px;color:var(--text-mute)">
+        <b style="color:var(--text)">Riding from earlier pulls (${ridden.length}).</b>
+        These WERE tonight's picks — journaled when they cleared the bar. The line has
+        moved since, and at the current number they no longer qualify, so: the bet rides
+        as placed, but don't add more at today's price. Tracked live on the Live tab.</p>
+      ${ridden.map(({ b, cur }) => `
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:11px 14px;
+                    border-bottom:1px solid rgba(255,255,255,.05);opacity:.85">
+          <span class="chip" style="flex-shrink:0">OPEN</span>
+          <span style="flex:1;min-width:0">
+            <strong>${b.market === "moneyline"
+              ? `${escapeHtml(teamName(b.player))} Moneyline`
+              : `${escapeHtml(b.player)} ${escapeHtml(b.side)} ${b.line} ${escapeHtml(b.market_label)}`}</strong>
+            <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">
+              placed ${american(b.odds)}${cur && cur.odds != null
+                ? ` · current best ${american(cur.odds)}${cur.line != null && Number(cur.line) !== Number(b.line)
+                    ? ` (line now ${cur.line})` : ""} — doesn't clear the bar at this number`
+                : ` · no live quote for this market right now`}</span>
+          </span>
+          <span style="text-align:right;white-space:nowrap;font-size:12px;color:var(--text-mute)">
+            ${b.stake_units > 0 ? `${Number(b.stake_units).toFixed(2)}u<br>` : ""}riding</span>
+        </div>`).join("")}
+    </div>` : "";
+
+  if (!picks.length && !signals.length && !ridden.length) { host.innerHTML = ""; return; }
   host.innerHTML = `
     <div class="section-title" style="margin-top:8px">Tonight's picks
       <span class="sub">— the one designated space for what we'd actually bet. If it isn't
       in this box, it isn't a pick.</span></div>
     ${picksBlock}
+    ${riddenBlock}
     ${signalsBlock}`;
 }
 
@@ -572,7 +610,16 @@ function renderLivePicks() {
       <code>${escapeHtml(trackerErr)}</code> — open bets still settle normally; see the Record page.</p></div>`;
     return;
   }
-  if (!rows.length && !elsewhere) { host.innerHTML = ""; return; }
+  if (!rows.length && !elsewhere) {
+    // A full tab now — an empty day says so instead of rendering nothing.
+    host.innerHTML = `
+      <div class="section-title" style="margin-top:8px">📌 Open bets
+        <span class="sub">— every journaled bet on today's card, tracked while its game runs</span></div>
+      <div class="card"><p class="loading">No open bets on today's card. A pick journals the
+        moment it's recommended and lives here until it settles — live progress bars, at-bat
+        situation, and provisional grades as the games run.</p></div>`;
+    return;
+  }
 
   const ml = (r) => r.market === "moneyline";
   const betTxt = (r) => ml(r)
@@ -705,8 +752,8 @@ function renderLivePicks() {
             <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">${gameLine(r.game)}</span>
             ${situationLine(r)}
             ${offBoard(r) ? `<span style="display:block;font-size:11.5px;color:var(--warn);margin-top:2px">
-              ⚠ no longer on Tonight's Picks — the price moved since this was journaled.
-              The bet rides at ${american(r.odds)} as placed.</span>` : ""}
+              ⚠ the price has moved off the bar since this was journaled — riding at
+              ${american(r.odds)} as placed (also listed under Tonight's Picks).</span>` : ""}
             ${progressBar(r)}
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
@@ -4206,7 +4253,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy", "ufc", "why"];
+const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy", "ufc", "why"];
 
 function switchView(name) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);

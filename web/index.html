@@ -33,6 +33,7 @@
     <nav class="nav" id="nav">
       <div class="nav-indicator" id="nav-indicator"></div>
       <button class="nav-btn active" data-view="recommended">Recommended</button>
+      <button class="nav-btn" data-view="live">Live</button>
       <button class="nav-btn" data-view="edge">Edge Board</button>
       <button class="nav-btn" data-view="scanner">Scanner</button>
       <button class="nav-btn" data-view="longshots" id="longshots-tab">Long Shots</button>
@@ -60,8 +61,6 @@
       <div class="games-scroller hero-games" id="games"></div>
 
       <div class="stats" id="stats"></div>
-
-      <div id="live-picks"></div>
 
       <div id="best-bets"></div>
 
@@ -104,6 +103,11 @@
       </div>
 
       <div class="cards" id="cards"><p class="loading">Loading model…</p></div>
+    </section>
+
+    <!-- Live — every open journaled bet, tracked as the games run -->
+    <section class="view" id="view-live">
+      <div id="live-picks"></div>
     </section>
 
     <!-- One game — reached by clicking a card in the stadium strip -->
