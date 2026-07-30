@@ -159,6 +159,13 @@ def fetch_boxscore(game_pk: int) -> dict:
                      f"mlb_box_{game_pk}.json", ttl=300)
 
 
+def fetch_linescore(game_pk: int) -> dict:
+    """The live situation: inning, outs, count, runners, batter/pitcher.
+    Short TTL — this is the payload that changes pitch to pitch."""
+    return _get_json(f"{STATS_BASE}/game/{game_pk}/linescore",
+                     f"mlb_line_{game_pk}.json", ttl=60)
+
+
 def fetch_person(person_id: int) -> dict:
     return _get_json(f"{STATS_BASE}/people/{person_id}",
                      f"mlb_person_{person_id}.json", ttl=86400)

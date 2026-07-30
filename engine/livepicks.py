@@ -157,7 +157,9 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
                      "date": g.get("date", ""), "kickoff": g.get("kickoff", ""),
                      "state": state,
                      "period": live.get("period", ""),
-                     "home_score": hs, "away_score": as_},
+                     "home_score": hs, "away_score": as_,
+                     # At-bat / outs / runners strip, when the feed has it.
+                     "situation": live.get("situation")},
         })
     # Live action first (good news leads), then finals awaiting the official
     # settle, then tonight's not-yet-started bets.

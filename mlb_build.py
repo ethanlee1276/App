@@ -323,14 +323,15 @@ def main() -> None:
     try:
         from engine import ledger as _lp_ledger
         from engine.livepicks import assemble_live_picks
-        from engine.mlb.livestats import parse_live_stats
-        from engine.mlb.sources.statslogs import fetch_boxscore
+        from engine.mlb.livestats import parse_live_stats, parse_situation
+        from engine.mlb.sources.statslogs import fetch_boxscore, fetch_linescore
         _lpc = _lp_ledger.connect()
         open_bets = [dict(r) for r in _lpc.execute(
             "SELECT player, market, side, line, odds, stake_units FROM bets "
             "WHERE status='open' AND sport='mlb' AND date=? AND category='main'",
             (args.date,))]
         progress: dict = {}
+        situations: dict = {}
         for g in slate.games:
             # Finals too: a finished game's boxscore grades the bet
             # provisionally on the spot instead of going dark until the
@@ -341,6 +342,18 @@ def main() -> None:
                     progress.update(parse_live_stats(fetch_boxscore(g.game_pk)))
                 except Exception:
                     pass
+                if g.live.state == "live":
+                    # At-bat / outs / runners strip for live games only.
+                    try:
+                        situations[(g.home, g.away, g.game_number or 1)] = \
+                            parse_situation(fetch_linescore(g.game_pk))
+                    except Exception:
+                        pass
+        for gd in result["games"]:
+            sit = situations.get((gd.get("home"), gd.get("away"),
+                                  gd.get("game_number") or 1))
+            if sit and isinstance(gd.get("live"), dict):
+                gd["live"]["situation"] = sit
         result["live_picks"] = assemble_live_picks(
             open_bets, result["recommendations"], result["games"], progress)
         # Open bets from OTHER dates can't map to today's games — say they

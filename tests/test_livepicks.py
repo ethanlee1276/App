@@ -13,7 +13,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from engine.livepicks import assemble_live_picks
-from engine.mlb.livestats import parse_live_stats
+from engine.mlb.livestats import parse_live_stats, parse_situation
 
 
 BOX = {"teams": {"home": {"players": {
@@ -133,6 +133,38 @@ def test_unmatchable_bets_still_show():
     ghost = next(r for r in rows if r["player"] == "Ghost Hitter")
     assert ghost["status"] == "unmapped" and ghost["phase"] == "upcoming"
     assert rows[-1] is ghost                     # unmapped sorts last
+
+
+def test_parse_situation_reads_the_at_bat_strip():
+    """Batter, outs, count, and occupied bases from a linescore payload —
+    the sportsbook-style situation strip."""
+    line = {"currentInning": 6, "inningHalf": "Top",
+            "outs": 2, "balls": 1, "strikes": 2,
+            "offense": {"batter": {"fullName": "Austin Wells"},
+                        "onDeck": {"fullName": "Aaron Judge"},
+                        "first": {"fullName": "Speedy Runner"},
+                        "third": {"fullName": "Slow Runner"}},
+            "defense": {"pitcher": {"fullName": "Ace Arm"}}}
+    s = parse_situation(line)
+    assert s["batter"] == "Austin Wells" and s["on_deck"] == "Aaron Judge"
+    assert s["pitcher"] == "Ace Arm"
+    assert (s["outs"], s["balls"], s["strikes"]) == (2, 1, 2)
+    assert s["bases"] == {"first": "Speedy Runner", "second": "",
+                          "third": "Slow Runner"}
+    assert s["half"] == "Top" and s["inning"] == 6
+    # Pre-game / missing payloads degrade to an empty situation, not a crash.
+    empty = parse_situation({})
+    assert empty["batter"] == "" and empty["outs"] == 0
+
+
+def test_situation_rides_along_on_live_rows():
+    g = {**LIVE_G, "live": {**LIVE_G["live"],
+                            "situation": {"batter": "Freddie Freeman",
+                                          "outs": 1, "bases": {}}}}
+    bets = [_bet("Freddie Freeman", "total_bases")]
+    recs = [_rec("Freddie Freeman", "total_bases", "LAD", "SF")]
+    rows = assemble_live_picks(bets, recs, [g], parse_live_stats(BOX))
+    assert rows[0]["game"]["situation"]["batter"] == "Freddie Freeman"
 
 
 def test_team_bets_track_from_the_live_score():

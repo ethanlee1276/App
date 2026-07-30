@@ -14,6 +14,31 @@ from __future__ import annotations
 from ..sources.oddsapi import normalize_name
 
 
+def parse_situation(linescore: dict) -> dict:
+    """The live game situation from a linescore payload: who's at the plate
+    (and on deck), who's pitching, outs, count, and which bases are
+    occupied — the sportsbook-style "Top 6 · 2 out · runners on the corners"
+    strip. Pure parsing; fixture-tested."""
+    off = linescore.get("offense") or {}
+    de = linescore.get("defense") or {}
+
+    def _name(d, key):
+        return ((d.get(key) or {}).get("fullName")) or ""
+
+    return {
+        "batter": _name(off, "batter"),
+        "on_deck": _name(off, "onDeck"),
+        "pitcher": _name(de, "pitcher"),
+        "outs": int(linescore.get("outs") or 0),
+        "balls": int(linescore.get("balls") or 0),
+        "strikes": int(linescore.get("strikes") or 0),
+        # Occupied bases carry the runner's name; empty bases are "".
+        "bases": {b: _name(off, b) for b in ("first", "second", "third")},
+        "half": (linescore.get("inningHalf") or ""),
+        "inning": int(linescore.get("currentInning") or 0),
+    }
+
+
 def parse_live_stats(boxscore: dict) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for side in ("home", "away"):

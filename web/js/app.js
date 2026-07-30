@@ -634,6 +634,31 @@ function renderLivePicks() {
     return `${score}${g.state === "final" ? " · Final" : g.period ? ` · ${escapeHtml(g.period)}` : ""}${
       g.doubleheader ? ` · DH Game ${g.game_number || 1}` : ""}`;
   };
+  // The live situation strip: who's at the plate, outs, runners — plus a
+  // loud badge when the batter IS this row's player.
+  const sameName = (a, b) =>
+    String(a || "").toLowerCase().trim() === String(b || "").toLowerCase().trim();
+  const situationLine = (r) => {
+    const s = (r.game || {}).situation;
+    if (!s || r.phase !== "live") return "";
+    const on = ["first", "second", "third"]
+      .map((b, i) => (s.bases || {})[b] ? ["1st", "2nd", "3rd"][i] : null)
+      .filter(Boolean);
+    const runners = on.length === 3 ? "bases loaded"
+      : on.length ? `runner${on.length > 1 ? "s" : ""} on ${on.join(" & ")}`
+      : "bases empty";
+    const mine = sameName(s.batter, r.player);
+    const batter = s.batter
+      ? (mine
+          ? `<b style="color:var(--warn)">⚡ ${escapeHtml(s.batter)} — YOUR PICK — at the plate</b>`
+          : `⚾ ${escapeHtml(s.batter)} at bat`)
+      : "";
+    const onDeck = !mine && s.on_deck && sameName(s.on_deck, r.player)
+      ? ` · <b style="color:var(--warn)">${escapeHtml(r.player)} on deck</b>` : "";
+    return `<span style="display:block;font-size:12px;margin-top:2px;color:var(--text-mute)">
+      ${batter}${onDeck} · ${s.outs} out${s.outs === 1 ? "" : "s"} · ${runners}
+      · ${s.balls}-${s.strikes} count</span>`;
+  };
   // Sportsbook-style progress bar: fill = where the stat is now, tick = the
   // line. Green once an over is home, red once an under is dead, neutral
   // while it's still in the balance. Only for rows with a countable stat —
@@ -678,6 +703,7 @@ function renderLivePicks() {
             <span style="color:var(--text-mute)"> · placed ${american(r.odds)}${
               r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
             <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">${gameLine(r.game)}</span>
+            ${situationLine(r)}
             ${offBoard(r) ? `<span style="display:block;font-size:11.5px;color:var(--warn);margin-top:2px">
               ⚠ no longer on Tonight's Picks — the price moved since this was journaled.
               The bet rides at ${american(r.odds)} as placed.</span>` : ""}
