@@ -540,6 +540,10 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 }
 
 /* ---------------- Sport switcher (NFL / MLB) ---------------- */
+/* Phone-menu section labels ("Sport" / "Page") — hidden wherever the
+   full navigation is already on screen. */
+.menu-head { display: none; }
+
 .sport-switch {
   display: flex; gap: 3px; margin-left: 14px; padding: 4px;
   background: var(--panel); border: 1px solid var(--border-soft); border-radius: 11px;
@@ -1354,20 +1358,66 @@ select.calc-in { width: auto; font-weight: 600; }
 
   /* Both destination rows live behind the menu on a phone. */
   .sport-switch, .nav { display: none; }
+  .menu-head { display: none; }
   .menu-open .sport-switch, .menu-open .nav {
     display: flex; flex: 1 1 100%; min-width: 0;
     flex-wrap: wrap; gap: 6px; background: transparent; padding: 0;
   }
-  .menu-open .sport-btn, .menu-open .nav-btn {
-    flex: 1 1 calc(50% - 3px); white-space: nowrap; text-align: center;
-    padding: 10px 8px;
+  /* Section labels. Two unlabelled grids of near-identical pills gave a
+     newcomer no way to know one switches SPORT and the other switches
+     PAGE — the single biggest confusion in this menu. */
+  .menu-open .menu-head {
+    display: block; flex: 1 1 100%;
+    font-size: 10.5px; font-weight: 800; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--text-mute);
+    margin: 4px 2px -2px;
   }
+  /* Leagues: four across, compact — they're short and instantly known. */
+  .menu-open .sport-btn[data-kind="league"] {
+    flex: 1 1 calc(25% - 5px); padding: 9px 4px; font-size: 12.5px;
+  }
+  /* Standalone tools get their own row so they stop reading as leagues. */
+  .menu-open .sport-btn[data-kind="tool"] {
+    flex: 1 1 calc(33.333% - 4px); padding: 9px 4px; font-size: 12px;
+  }
+  .menu-open .sport-btn { white-space: nowrap; text-align: center;
+    overflow: hidden; text-overflow: ellipsis; }
+  /* Pages: a real two-column GRID, not wrapped flex. Flex items grow to
+     fill a row, so a long label ("Recommended · tonight's picks") took a
+     whole line to itself and left the column edges ragged. */
+  .menu-open .nav {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  }
+  /* display:block, not the base flex — the hint must sit UNDER the name
+     rather than beside it. */
+  .menu-open .nav-btn {
+    display: block; text-align: left; white-space: normal;
+    padding: 8px 10px; line-height: 1.25;
+  }
+  .menu-open .nav-btn::after {
+    content: attr(data-hint); display: block;
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0;
+    text-transform: none; color: var(--text-mute); margin-top: 1px;
+  }
+  /* Where you ARE, unmistakably: filled, not merely bold. */
+  .menu-open .sport-btn.active, .menu-open .nav-btn.active {
+    background: color-mix(in srgb, var(--brand) 22%, transparent);
+    border-color: var(--brand); color: var(--text);
+  }
+  @supports not (background: color-mix(in srgb, red 10%, transparent)) {
+    .menu-open .sport-btn.active, .menu-open .nav-btn.active {
+      background: rgba(122, 139, 255, .22);
+    }
+  }
+  .menu-open .nav-btn.active::before { content: "● "; color: var(--brand); }
   .nav-indicator { display: none; }     /* the panel marks the active tab */
-  /* Keep the two destination grids together; status chips come last so
-     they never split the menu in half. */
+  /* Label, leagues+tools, label, pages — then status chips last so they
+     never split the menu in half. */
+  .menu-open .menu-head[data-head="sport"] { order: 1; }
   .menu-open .sport-switch { order: 2; }
-  .menu-open .nav { order: 3; }
-  .slate-meta { flex: 1 1 100%; order: 4; justify-content: flex-start;
+  .menu-open .menu-head[data-head="page"] { order: 3; }
+  .menu-open .nav { order: 4; }
+  .slate-meta { flex: 1 1 100%; order: 5; justify-content: flex-start;
     flex-wrap: wrap; gap: 8px; }
   /* Data rows (.drow) — Edge Board, Scanner pairs, stale lines, sharp
      anchors, fantasy sleepers. Each is a flex row whose fixed numeric
