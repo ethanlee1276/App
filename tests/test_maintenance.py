@@ -251,6 +251,52 @@ def test_autosettle_never_raises(monkeypatch):
     assert any("auto-settle failed" in m for m in logs)
 
 
+
+def test_prune_cache_never_touches_irreplaceable_state(_mp=None):
+    """The cache directory holds BOTH refetchable per-game files and state
+    that cannot be recovered: line_history.jsonl (CLV's line-movement
+    record), depth_snapshots.json (camp watch's daily depth charts),
+    odds_budget.json (credit accounting), and pbp_*.csv (~100MB). The
+    pruner works from an allowlist, so age alone can never delete them."""
+    import os, tempfile, time
+    from pathlib import Path
+    from engine.maintenance import prune_cache
+
+    root = Path(tempfile.mkdtemp())
+    old = time.time() - 90 * 86400
+    everything = [
+        # prunable, old -> should go
+        "mlb_box_777.json", "mlb_line_777.json", "mlb_schedule_2026-01-02.json",
+        "mlb_log_hitting_1_2026.json", "nba_box_x.json", "espn_mma_ath_9.json",
+        "meteo_coors.json", "mlb_results_2026-01-01_2026-01-07.json",
+        # prunable but RECENT -> must stay
+        "mlb_box_recent.json",
+        # never prunable at any age -> must stay
+        "line_history.jsonl", "depth_snapshots.json", "odds_budget.json",
+        "pbp_2025.csv", "games.csv", "sleeper_players_nfl.json",
+        "calibration.json",
+    ]
+    for name in everything:
+        p = root / name
+        p.write_text("{}")
+        if name != "mlb_box_recent.json":
+            os.utime(p, (old, old))          # age everything but the recent one
+
+    n, freed = prune_cache(max_age_days=30, cache_dir=root)
+    left = {f.name for f in root.iterdir()}
+    assert n == 8, f"pruned {n}, expected 8"
+    # Irreplaceable state and expensive downloads survive despite being old.
+    for keep in ("line_history.jsonl", "depth_snapshots.json",
+                 "odds_budget.json", "pbp_2025.csv", "games.csv",
+                 "sleeper_players_nfl.json", "calibration.json"):
+        assert keep in left, f"pruner destroyed {keep}"
+    # A recent per-game file is kept too.
+    assert "mlb_box_recent.json" in left
+    assert "mlb_box_777.json" not in left
+    # Missing directory is a no-op, not a crash.
+    assert prune_cache(cache_dir=root / "nope") == (0, 0)
+
+
 if __name__ == "__main__":
     class MP:
         def __init__(self): self._undo = []

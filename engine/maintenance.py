@@ -170,6 +170,61 @@ def _open_bet_days(lconn, today: _dt.date, lookback: int) -> list[str]:
     return [r[0] for r in rows if r[0]]
 
 
+# --- cache hygiene ----------------------------------------------------------
+# Per-game / per-date fetch caches. Each is a cheap re-fetch keyed to one
+# game, player or day, and once that day is weeks past nothing ever reads it
+# again — but the files accumulate forever (a full season of boxscores,
+# linescores and game logs runs to thousands).
+#
+# This is an ALLOWLIST on purpose. The same directory holds state that is
+# NOT refetchable — line_history.jsonl (the line-movement record behind
+# CLV), depth_snapshots.json (the camp watch's daily depth charts),
+# odds_budget.json (credit accounting) — plus expensive downloads
+# (pbp_*.csv is ~100MB). A denylist would quietly destroy the next such
+# file someone adds; an allowlist can only ever delete what it names.
+PRUNABLE_CACHE_PREFIXES = (
+    "mlb_box_", "mlb_line_", "mlb_live_", "mlb_schedule_", "mlb_teamsched_",
+    "mlb_results_", "mlb_tx_", "mlb_log_", "mlb_person_", "mlb_splits_",
+    "nba_box_", "espn_mma_", "meteo_",
+)
+CACHE_KEEP_DAYS = 30
+
+
+def prune_cache(max_age_days: int = CACHE_KEEP_DAYS, log=None,
+                cache_dir: Path | None = None) -> tuple[int, int]:
+    """Delete stale per-game/per-date fetch caches. Returns (files, bytes).
+
+    Only files whose names start with a PRUNABLE_CACHE_PREFIXES entry are
+    ever touched, and only when older than ``max_age_days``. Everything
+    else in the cache — accumulated history, budget state, big downloads —
+    is left alone by construction.
+    """
+    import time as _time
+    from .sources.fetch import CACHE_DIR
+    root = Path(cache_dir) if cache_dir else CACHE_DIR
+    if not root.is_dir():
+        return 0, 0
+    cutoff = _time.time() - max_age_days * 86400
+    n = freed = 0
+    for f in root.iterdir():
+        if not f.is_file() or not f.name.startswith(PRUNABLE_CACHE_PREFIXES):
+            continue
+        try:
+            st = f.stat()
+            if st.st_mtime >= cutoff:
+                continue
+            f.unlink()
+        except OSError:
+            continue
+        n += 1
+        freed += st.st_size
+    if n and log:
+        log(f"  cache: pruned {n:,} stale fetch file(s), freed "
+            f"{freed / 1e6:.1f} MB (kept everything newer than "
+            f"{max_age_days} days, and all history/budget state)")
+    return n, freed
+
+
 def settle_open(log=print, state_path: Path | None = None,
                 today: _dt.date | None = None, now: float | None = None,
                 force: bool = False) -> int:
@@ -380,6 +435,13 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                     log(f"  nfl pbp: {n:,} xFP/red-zone rows refreshed")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  nfl pbp refresh failed: {exc}")
+
+    # Keep the fetch cache from growing without bound (a season of
+    # per-game files runs to thousands). Never blocks the chores.
+    try:
+        prune_cache(log=log)
+    except Exception as exc:  # noqa: BLE001
+        log(f"  ⚠️  cache prune skipped: {exc}")
 
     if harvest:
         _maybe_harvest(yesterday, log)

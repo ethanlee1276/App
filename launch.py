@@ -1120,6 +1120,15 @@ def main() -> None:
               f"{len(bad)} unreadable removed"
               + (": " + ", ".join(f.name for f in bad[:8]) if bad else
                  " — all clean."))
+        total = sum(f.stat().st_size for f in _CD.glob("*") if f.is_file())
+        print(f"Cache size: {total / 1e6:.1f} MB across "
+              f"{sum(1 for f in _CD.iterdir() if f.is_file()):,} file(s).")
+        from engine.maintenance import prune_cache, CACHE_KEEP_DAYS
+        n, freed = prune_cache(log=lambda m: print(m.strip()))
+        if not n:
+            print(f"  Nothing older than {CACHE_KEEP_DAYS} days to prune "
+                  f"(history, budget state and big downloads are never "
+                  f"pruned).")
         return
     if "--nfl-baseline" in argv:
         nfl_baseline()
