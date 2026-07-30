@@ -203,6 +203,38 @@ def test_real_schedule_smoke():
         assert changes, "upcoming season present but zero coach changes found"
 
 
+def test_stamp_reaches_every_board_with_one_shared_moves_list():
+    """Trades must show on the usage and buy/sell boards too, not just the
+    draft kit — and a player on several boards is reported as ONE move."""
+    idx = offseason.index_players(_blob())
+    usage = [{"player": "Moved Receiver", "position": "WR", "team": "KC",
+              "fp_pg": 14.2},
+             {"player": "Kaycee Starter", "position": "QB", "team": "KC"}]
+    buy_low = [{"player": "Moved Receiver", "position": "WR", "team": "KC"}]
+    moves, seen = [], set()
+    offseason.stamp_current_teams(usage, idx, moves=moves, seen=seen)
+    offseason.stamp_current_teams(buy_low, idx, moves=moves, seen=seen)
+    assert usage[0]["team"] == "PIT" and usage[0]["moved_from"] == "KC"
+    assert buy_low[0]["team"] == "PIT"
+    assert moves == [{"player": "Moved Receiver", "position": "WR",
+                      "from": "KC", "to": "PIT"}]
+    assert usage[0]["fp_pg"] == 14.2          # projection never re-modeled
+    assert "moved_from" not in usage[1]       # unmoved player untouched
+
+
+def test_free_agents_get_flagged_not_ghost_teams():
+    """A cut player keeps his last known team but wears the flag — showing
+    him teamless would erase him; showing him unflagged would lie."""
+    blob = {"9": {"full_name": "Cut Veteran", "team": None, "position": "WR",
+                  "years_exp": 9, "depth_chart_order": None, "active": True,
+                  "status": ""}}
+    idx = offseason.index_players(blob)
+    rows = [{"player": "Cut Veteran", "position": "WR", "team": "DAL"}]
+    assert offseason.stamp_current_teams(rows, idx) == []
+    assert rows[0]["roster_flag"] == "free agent" and rows[0]["team"] == "DAL"
+
+
+# Runner at the TRUE END — a test defined after it never runs.
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -54,12 +54,36 @@ def main() -> None:
         trending = ({"adds": adds or [], "drops": drops or [],
                      "lookback_hours": 24}
                     if adds is not None or drops is not None else None)
+        usage = fantasy.usage_board(conn, season)
+        buy_sell = fantasy.buy_sell_board(conn, season)
+        # Trades must show on EVERY board, not just the draft kit — usage
+        # and buy/sell rows come out of the DB wearing last season's teams.
+        # The kit was stamped inside build_offseason; these join its moves
+        # list so the page's "player moves" section is complete.
+        if blob is not None:
+            idx = offseason.index_players(blob)
+            moves = off.setdefault("moves", [])
+            seen = {m["player"] for m in moves}
+            for rows in (usage, buy_sell.get("buy_low") or [],
+                         buy_sell.get("sell_high") or []):
+                offseason.stamp_current_teams(rows, idx, moves=moves, seen=seen)
+            moves.sort(key=lambda m: m["player"])
+        # The launch-time roster check, visible in the terminal every cycle.
+        synced = off.get("rosters_synced_at")
+        mv = off.get("moves") or []
+        print(f"Roster sync: Sleeper cache "
+              + (f"written {synced}" if synced else "UNAVAILABLE — team "
+                 "stamps may be stale")
+              + f" · {len(mv)} board player(s) on new teams"
+              + (": " + ", ".join(f"{m['player']} ({m['from']}→{m['to']})"
+                                  for m in mv[:6])
+                 + ("…" if len(mv) > 6 else "") if mv else ""))
         out = {
             "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "season": season,
-            "usage": fantasy.usage_board(conn, season),
+            "usage": usage,
             "rates": fantasy.league_rates(conn, season),
-            "buy_sell": fantasy.buy_sell_board(conn, season),
+            "buy_sell": buy_sell,
             "scripts": fantasy.game_scripts(conn),
             "draft_kit": kit,
             "offseason": off,

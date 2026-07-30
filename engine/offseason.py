@@ -273,33 +273,60 @@ def rookie_board(blob: dict, limit: int = 36) -> list[dict]:
     return rows[:limit]
 
 
-def apply_current_rosters(kit: dict, idx: dict) -> list[dict]:
-    """Stamp every draft-kit row with its player's CURRENT team. Returns
-    the moves list (board players whose team changed since the stats).
+def stamp_current_teams(rows: list[dict], idx: dict,
+                        moves: list[dict] | None = None,
+                        seen: set | None = None) -> list[dict]:
+    """Stamp any player rows (draft kit, usage board, buy/sell) with each
+    player's CURRENT team. Returns the moves list (players whose team
+    changed since the stats were recorded); pass ``moves``/``seen`` to
+    accumulate across several boards without duplicate entries.
 
     The projection is deliberately untouched: we know the player moved,
     we do not know what the new offense does to his volume, and silently
     "adjusting" for it would be invention. The flag is the honest output."""
-    moves, seen = [], set()
+    moves = moves if moves is not None else []
+    seen = seen if seen is not None else {m["player"] for m in moves}
+    for r in rows:
+        cur = _lookup(idx, r.get("player", ""), r.get("position", ""))
+        if cur is None:
+            continue
+        if cur["team"] and cur["team"] != r.get("team"):
+            if r["player"] not in seen:
+                seen.add(r["player"])
+                moves.append({"player": r["player"],
+                              "position": r.get("position", ""),
+                              "from": r.get("team", ""), "to": cur["team"]})
+            r["moved_from"] = r.get("team", "")
+            r["team"] = cur["team"]
+        elif not cur["team"] or not cur["active"]:
+            r["roster_flag"] = "free agent" if not cur["team"] else cur["status"] or "inactive"
+    return moves
+
+
+def apply_current_rosters(kit: dict, idx: dict) -> list[dict]:
+    """Stamp every draft-kit row (board, tiers, sleepers) — see
+    ``stamp_current_teams``."""
     rows = list(kit.get("board", []))
     for pos_rows in (kit.get("tiers") or {}).values():
         rows += pos_rows
     rows += kit.get("sleepers", [])
-    for r in rows:
-        cur = _lookup(idx, r["player"], r["position"])
-        if cur is None:
-            continue
-        if cur["team"] and cur["team"] != r["team"]:
-            if r["player"] not in seen:
-                seen.add(r["player"])
-                moves.append({"player": r["player"], "position": r["position"],
-                              "from": r["team"], "to": cur["team"]})
-            r["moved_from"] = r["team"]
-            r["team"] = cur["team"]
-        elif not cur["team"] or not cur["active"]:
-            r["roster_flag"] = "free agent" if not cur["team"] else cur["status"] or "inactive"
+    moves = stamp_current_teams(rows, idx, moves=[], seen=set())
     moves.sort(key=lambda m: m["player"])
     return moves
+
+
+def sleeper_synced_at() -> str | None:
+    """When the Sleeper players cache was last WRITTEN — the honest answer
+    to "how fresh are these rosters". The stale-beats-absent fallback can
+    quietly serve a weeks-old blob; this timestamp is how the page (and the
+    launch log) say so instead of implying live data."""
+    import datetime as _ts
+    p = Path(CACHE_DIR) / SLEEPER_CACHE
+    try:
+        return _ts.datetime.fromtimestamp(p.stat().st_mtime) \
+            .isoformat(timespec="minutes")
+    except OSError:
+        return None
 
 
 def qb_changes(schedule_rows: list[dict], idx: dict) -> list[dict]:
@@ -340,6 +367,7 @@ def build_offseason(schedule_rows: list[dict], blob: dict | None,
         "stats_season": last, "upcoming_season": upcoming,
         "coach_changes": coach_changes(schedule_rows or []),
         "rosters_live": blob is not None,
+        "rosters_synced_at": sleeper_synced_at() if blob is not None else None,
         "rookies": [], "moves": [], "qb_changes": [],
     }
     if blob is not None:

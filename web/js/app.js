@@ -2896,7 +2896,9 @@ async function renderFantasy() {
     <div class="ff-row">
       <span class="ff-who">${playerAvatar(u.player, u.team, { map: nflMap() })}
         <span class="ff-name"><strong>${escapeHtml(u.player)}</strong>
-          <span class="ff-pos">${escapeHtml(u.position)} · ${nflName(u.team)} · ${escapeHtml(u.metric)}</span></span></span>
+          <span class="ff-pos">${escapeHtml(u.position)} · ${nflName(u.team)}${
+            u.moved_from ? ` <b style="color:var(--warn)">← traded from ${nflName(u.moved_from)}</b>` : ""}${
+            u.roster_flag ? ` <b style="color:var(--warn)">(${escapeHtml(u.roster_flag)})</b>` : ""} · ${escapeHtml(u.metric)}</span></span></span>
       ${shareBar(u)}
       <span class="ff-n" title="season average">${pct(u.season)}</span>
       <span class="ff-n dim" title="4-week average">${pct(u.l4)}</span>
@@ -2928,7 +2930,9 @@ async function renderFantasy() {
       <div class="card-head">
         <div class="card-id">${playerAvatar(r.player, r.team, { map: nflMap() })}
           <div><div class="player">${escapeHtml(r.player)}</div>
-            <div class="subtitle">${escapeHtml(r.position)} · ${nflName(r.team)} ·
+            <div class="subtitle">${escapeHtml(r.position)} · ${nflName(r.team)}${
+              r.moved_from ? ` <b style="color:var(--warn)">← traded from ${nflName(r.moved_from)}</b>` : ""}${
+              r.roster_flag ? ` <b style="color:var(--warn)">(${escapeHtml(r.roster_flag)})</b>` : ""} ·
               ${r.targets_pg} tgt/g · ${r.carries_pg} car/g</div></div>
         </div>
         <span class="pm-status" style="color:${buy ? "var(--good)" : "var(--warn)"}">${buy ? "BUY LOW" : "SELL HIGH"}</span>
@@ -3095,10 +3099,24 @@ function offseasonHTML(off) {
         <div class="subtitle">${sub}</div></div></div>
       <div class="os-body">${rows || `<p class="loading" style="padding:8px 0">${empty}</p>`}</div>
     </article>`;
-  const rosterNote = off.rosters_live ? "" : `
+  const syncAge = (() => {
+    if (!off.rosters_synced_at) return null;
+    const ms = Date.now() - new Date(off.rosters_synced_at).getTime();
+    return Number.isFinite(ms) ? ms / 36e5 : null;   // hours
+  })();
+  const rosterNote = !off.rosters_live ? `
     <div class="warning" style="margin-bottom:12px">⚠️ Roster feed unreachable on the last
       build — team moves and rookies may be missing here until the next refresh.
-      Coaching changes still current (they come from the schedule file).</div>`;
+      Coaching changes still current (they come from the schedule file).</div>`
+    : syncAge != null && syncAge > 48 ? `
+    <div class="warning" style="margin-bottom:12px">⚠️ Rosters last synced
+      ${escapeHtml(off.rosters_synced_at)} — over ${Math.floor(syncAge / 24)} days ago
+      (the live pull has been failing and a cached copy is serving). Trades since then
+      won't show until the feed comes back.</div>`
+    : off.rosters_synced_at ? `
+    <div style="color:var(--text-mute);font-size:12px;margin-bottom:12px">
+      Rosters synced ${escapeHtml(off.rosters_synced_at)} — trades checked on every
+      launch, refreshed daily.</div>` : "";
   return `
     <div class="section-title" style="margin-top:22px">The ${off.upcoming_season || "upcoming"} offseason
       <span class="sub">— what the league changed under last season's numbers. Derived from
