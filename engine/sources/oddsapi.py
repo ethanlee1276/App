@@ -199,6 +199,16 @@ class Quota:
     used: str = "?"
 
 
+def _read_cached_json(path):
+    """Parse a cache file, or None when missing/empty/corrupt — a broken
+    cache is a MISS, not a raw JSONDecodeError thrown past every caller
+    that only guards OddsAPIError."""
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+
+
 def _request(url: str, cache_name: str, ttl: int = 300,
              timeout: int = 30, cache_only: bool = False) -> tuple[object, Quota]:
     """GET JSON with a short cache. Returns (parsed_json, quota).
@@ -213,11 +223,14 @@ def _request(url: str, cache_name: str, ttl: int = 300,
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path = CACHE_DIR / cache_name
     if cache_only:
-        if path.exists():
-            return json.loads(path.read_text()), Quota()
+        cached = _read_cached_json(path) if path.exists() else None
+        if cached is not None:
+            return cached, Quota()
         raise OddsAPIError(f"no cached odds yet for {cache_name}")
     if path.exists() and (time.time() - path.stat().st_mtime) < ttl:
-        return json.loads(path.read_text()), Quota()
+        fresh = _read_cached_json(path)
+        if fresh is not None:
+            return fresh, Quota()
 
     try:
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
@@ -248,8 +261,9 @@ def _request(url: str, cache_name: str, ttl: int = 300,
             raise OddsAPIError(f"Odds API auth/quota error {exc.code}: {detail}") from exc
         raise OddsAPIError(f"Odds API HTTP {exc.code}: {detail}") from exc
     except Exception as exc:
-        if path.exists():  # fall back to stale cache when offline
-            return json.loads(path.read_text()), Quota()
+        stale = _read_cached_json(path) if path.exists() else None
+        if stale is not None:          # fall back to stale cache when offline
+            return stale, Quota()
         raise OddsAPIError(f"Odds API request failed: {exc}") from exc
 
     path.write_text(body)

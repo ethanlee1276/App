@@ -140,20 +140,39 @@ def relative_wind(from_deg: float, cf_bearing: float,
     return "cross"
 
 
+def _read_cached_json(path):
+    """Parse a cache file, or None if it is missing/empty/corrupt.
+
+    A truncated or empty cache file (interrupted write, a 200 with an empty
+    body, a full disk) used to raise a raw JSONDecodeError straight out of
+    this module — past every caller that only guards DataUnavailable, which
+    is how one bad file killed the whole nightly auto-settle with
+    "Expecting value: line 1 column 1". An unreadable cache is a MISS, not
+    a fatal error."""
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+
+
 def _get_json(url: str, cache_name: str, ttl: int = 900, timeout: int = 30) -> dict:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path = CACHE_DIR / cache_name
     if path.exists() and (time.time() - path.stat().st_mtime) < ttl:
-        return json.loads(path.read_text())
+        fresh = _read_cached_json(path)
+        if fresh is not None:
+            return fresh                     # …otherwise fall through and refetch
     try:
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8")
-        path.write_text(body)
-        return json.loads(body)
+        data = json.loads(body)              # parse BEFORE caching
+        path.write_text(body)                # never cache an unparseable body
+        return data
     except Exception as exc:
-        if path.exists():
-            return json.loads(path.read_text())
+        stale = _read_cached_json(path) if path.exists() else None
+        if stale is not None:
+            return stale
         raise DataUnavailable(
             f"Could not fetch {url}: {exc}. This host may be blocked by the "
             f"environment's egress policy — run where statsapi.mlb.com / "

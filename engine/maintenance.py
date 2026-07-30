@@ -202,7 +202,18 @@ def settle_open(log=print, state_path: Path | None = None,
         hconn = db.connect()
         # One ingest spanning the open days; it is idempotent, and games
         # still in progress simply aren't returned as finished yet.
-        res = ingest.ingest_mlb_results(hconn, days[0], days[-1], with_logs=True)
+        #
+        # Its OWN try: a fetch hiccup (blocked host, rate limit, a corrupt
+        # cache file) must not skip the settle below. Everything already in
+        # the history DB can still grade tonight's bets — letting one bad
+        # response strand the whole journal is how bets sat open for days.
+        res = {"games": 0}
+        try:
+            res = ingest.ingest_mlb_results(hconn, days[0], days[-1],
+                                            with_logs=True)
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  results ingest skipped ({exc}) — settling on what's "
+                "already ingested")
         # NBA nights grade intraday too — CDN boxscores go final within
         # minutes of the buzzer. Only dates with open NBA picks are pulled.
         try:

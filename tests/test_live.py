@@ -150,6 +150,98 @@ def test_mlb_pipeline_marks_live_props():
     assert any(r.get("live") for r in result["recommendations"])
 
 
+
+def test_corrupt_cache_file_is_a_miss_not_a_crash():
+    """The bug behind "auto-settle failed: Expecting value: line 1 column 1":
+    an empty/truncated cache file made _get_json raise a raw JSONDecodeError
+    straight past every caller that only guards DataUnavailable, killing the
+    whole nightly settle. A broken cache must read as a MISS."""
+    import json as _json
+    from pathlib import Path
+    import tempfile
+    from engine.mlb.sources import mlbstats
+    from engine.sources.fetch import DataUnavailable
+
+    tmp = Path(tempfile.mkdtemp())
+    old_dir = mlbstats.CACHE_DIR
+    mlbstats.CACHE_DIR = tmp
+    try:
+        (tmp / "poison.json").write_text("")          # the empty cache file
+        # No network in tests: a corrupt cache must degrade to the documented
+        # DataUnavailable, never a raw parse error.
+        try:
+            mlbstats._get_json("http://127.0.0.1:9/none", "poison.json", ttl=99999)
+            raised = None
+        except DataUnavailable as exc:
+            raised = exc
+        except _json.JSONDecodeError as exc:          # the old behaviour
+            raise AssertionError(f"corrupt cache still crashes: {exc}")
+        assert raised is not None
+
+        # A VALID cache still serves normally.
+        (tmp / "good.json").write_text(_json.dumps({"ok": 1}))
+        assert mlbstats._get_json("http://127.0.0.1:9/none", "good.json",
+                                  ttl=99999) == {"ok": 1}
+        # And the helper itself reports corrupt/missing as None.
+        assert mlbstats._read_cached_json(tmp / "poison.json") is None
+        assert mlbstats._read_cached_json(tmp / "nope.json") is None
+    finally:
+        mlbstats.CACHE_DIR = old_dir
+
+
+def test_settle_runs_even_when_the_results_ingest_fails():
+    """A fetch hiccup must not strand the journal: settling runs on whatever
+    is already in the history DB."""
+    import datetime as _dt
+    from pathlib import Path
+    import tempfile
+    from engine import maintenance, ledger, db as histdb
+
+    state = Path(tempfile.mkdtemp()) / "state.json"
+    lconn = ledger.connect(Path(tempfile.mkdtemp()) / "led.db")
+    lconn.execute(
+        "INSERT INTO bets (sport, date, player, market, side, line, odds, "
+        "stake_units, stake_dollars, status, category) VALUES "
+        "('mlb','2026-07-30','Settle Me','total_bases','OVER',1.5,-110,"
+        "0.5,5.0,'open','main')")
+    lconn.commit()
+    hconn = histdb.connect(":memory:")
+    histdb.upsert_games(hconn, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-30",
+         "game_id": "SEA@LAD", "home": "LAD", "away": "SEA",
+         "home_score": 5, "away_score": 2, "spread": 0.0, "total": None,
+         "roof": "", "surface": "", "temp": None, "wind": None, "extra": None}])
+    histdb.upsert_player_logs(hconn, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-30",
+         "game_id": "g", "player": "Settle Me", "team": "LAD",
+         "opponent": "SEA", "position": "C", "home": 1,
+         "market": "total_bases", "value": 3.0}])
+
+    def boom(*a, **kw):
+        raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+    old = (maintenance.ledger, maintenance.db, maintenance.ingest) \
+        if hasattr(maintenance, "ingest") else None
+    import engine.ingest as _ing
+    import engine.db as _db
+    orig_ingest = _ing.ingest_mlb_results
+    orig_connect_l, orig_connect_h = ledger.connect, _db.connect
+    _ing.ingest_mlb_results = boom
+    ledger.connect = lambda *a, **kw: lconn
+    _db.connect = lambda *a, **kw: hconn
+    logs = []
+    try:
+        n = maintenance.settle_open(log=logs.append, state_path=state,
+                                    today=_dt.date(2026, 7, 30), now=1e9,
+                                    force=True)
+    finally:
+        _ing.ingest_mlb_results = orig_ingest
+        ledger.connect, _db.connect = orig_connect_l, orig_connect_h
+    assert n == 1, f"settle did not run: {logs}"
+    assert lconn.execute("SELECT status FROM bets").fetchone()[0] == "won"
+    assert any("ingest skipped" in m for m in logs), logs
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

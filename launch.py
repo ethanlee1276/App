@@ -1098,6 +1098,29 @@ def main() -> None:
     if "--check" in argv:
         preflight()
         return
+    if "--clean-cache" in argv:
+        # Corrupt/empty cache files are now treated as misses automatically,
+        # but sweeping them keeps the next fetch from paying a needless
+        # round-trip — and proves which file was poisoned.
+        import json as _json
+        from engine.sources.fetch import CACHE_DIR as _CD
+        bad, checked = [], 0
+        for f in sorted(_CD.glob("*.json")):
+            checked += 1
+            try:
+                _json.loads(f.read_text())
+            except Exception:
+                bad.append(f)
+        for f in bad:
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        print(f"Cache check: {checked} JSON file(s) scanned, "
+              f"{len(bad)} unreadable removed"
+              + (": " + ", ".join(f.name for f in bad[:8]) if bad else
+                 " — all clean."))
+        return
     if "--nfl-baseline" in argv:
         nfl_baseline()
         return
