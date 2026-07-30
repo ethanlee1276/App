@@ -3832,7 +3832,7 @@ async function renderUFC() {
       return `<div class="section-title">Fight-by-fight edge board
           <span class="sub">— every priced bout: the model's number vs the market's, and
           the verdict. Bet rows are journaled in the UFC record.</span></div>
-        <div class="card" style="padding:0;overflow-x:auto">
+        <div class="card" style="padding:0;overflow-x:auto;overflow-y:hidden">
           ${rows.map((r) => `
             <div style="display:flex;gap:12px;align-items:center;padding:10px 14px;
                         border-bottom:1px solid rgba(255,255,255,.05);min-width:640px;
@@ -3994,7 +3994,7 @@ function whyCalcDevig() {
     <p style="margin:8px 0 4px">Book implied: <strong>${(ps[0] * 100).toFixed(1)}%</strong> + <strong>${(ps[1] * 100).toFixed(1)}%</strong>
       = ${( (hold + 1) * 100).toFixed(1)}% → hold <strong style="color:${hold > 0.05 ? "var(--bad)" : hold > 0.02 ? "var(--warn)" : "var(--good)"}">${(hold * 100).toFixed(2)}%</strong>
       <span style="color:var(--text-mute)">— ${bench}.</span></p>
-    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.92em">
+    <div style="overflow-x:auto;overflow-y:hidden"><table style="width:100%;border-collapse:collapse;font-size:.92em">
       <tr style="color:var(--text-mute);text-align:right">
         <td style="padding:4px 10px;text-align:left">Fair (vig removed)</td><td>Side A</td><td>Side B</td></tr>
       ${methods.map((m) => row(...m)).join("")}
@@ -4157,7 +4157,7 @@ async function renderWhy() {
     ${proof}
 
     <div class="section-title" style="margin-top:24px">What picks services sell vs what this is</div>
-    <div class="card" style="padding:0;overflow-x:auto">
+    <div class="card" style="padding:0;overflow-x:auto;overflow-y:hidden">
       <table style="width:100%;border-collapse:collapse;font-size:.92em">
         <tr style="color:var(--text-mute)"><td style="padding:8px 12px">The usual pitch</td><td style="padding:8px 12px">Here</td></tr>
         ${vsRow("\"Locks\" and \"guaranteed winners\"", "Probabilities with uncertainty attached. A 60% play loses 4 times in 10 — we say so on the card.")}
