@@ -1109,6 +1109,9 @@ def main() -> None:
     ts = _tailscale_ip()
     if ts:
         print(f"  On your phone ANYWHERE (Tailscale): → http://{ts}:{port}")
+        print("  (Type the http:// part — Safari silently upgrades to https "
+              "and fails. Real https:// URL: `tailscale serve --bg "
+              f"{port}`, see docs/PHONE.md.)")
     else:
         print("  Away from home? Free setup with Tailscale — see docs/PHONE.md")
     print("Press Ctrl+C to stop.")

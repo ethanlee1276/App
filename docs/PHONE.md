@@ -41,6 +41,28 @@ can reach it. The free plan covers this use completely.
 **Make it feel like an app:** with the page open in Safari, tap Share →
 **Add to Home Screen**. One tap from then on.
 
+### "Bad request version" garbage in the Mac terminal?
+
+Lines full of `code 400 … Bad request version ('jjt\x9e…')` mean the
+phone spoke **HTTPS to our HTTP-only server**. Safari silently upgrades
+addresses to `https://` — the site can't answer that handshake, so the
+terminal prints the encrypted bytes as noise. Two fixes, either works:
+
+1. **Quick:** on the phone, type the address with `http://` spelled out
+   — `http://100.x.y.z:8000`, not just `100.x.y.z:8000`. If Safari
+   keeps forcing https, Chrome for iOS respects `http://` reliably.
+2. **Clean (recommended, one command):** give the site a REAL https
+   address through Tailscale. In the Mac terminal:
+
+       tailscale serve --bg 8000
+
+   It prints a link like `https://ethans-macbook.tail1234.ts.net` —
+   use THAT on the phone (and for the home-screen icon). Certificates
+   are automatic; the link only works for your own devices. First run
+   may ask you to enable HTTPS in the Tailscale admin page — the
+   command prints the exact link to click. `tailscale serve reset`
+   turns it off.
+
 ## The fine print (worth reading once)
 
 - **The Mac must be awake with `launch.py` running.** The site lives on

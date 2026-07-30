@@ -62,9 +62,35 @@ CONTENT_TYPES = {
 }
 
 
+_TLS_HINTED = False
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # quieter logging
         sys.stderr.write("  %s\n" % (fmt % args))
+
+    def handle_one_request(self):
+        # A TLS ClientHello (first byte 0x16) on this plain-HTTP port means
+        # a phone typed — or Safari silently upgraded to — https://. Without
+        # this check the log sprays cipher-suite bytes as "Bad request
+        # version" garbage; name the actual problem once instead.
+        try:
+            peek = self.rfile.peek(1)[:1]
+        except Exception:
+            peek = b""
+        if peek == b"\x16":
+            global _TLS_HINTED
+            if not _TLS_HINTED:
+                _TLS_HINTED = True
+                sys.stderr.write(
+                    "  ↳ A device tried HTTPS against this HTTP-only server.\n"
+                    "    On the phone, spell out http:// in the address —\n"
+                    "    Safari silently upgrades bare addresses to https.\n"
+                    "    Want a real https:// URL? Run:  tailscale serve --bg 8000\n"
+                    "    then use the https://…ts.net link it prints. docs/PHONE.md has details.\n")
+            self.close_connection = True
+            return
+        super().handle_one_request()
 
     def do_GET(self):
         parsed = urlparse(self.path)
