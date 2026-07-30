@@ -1286,6 +1286,59 @@ def test_export_json_carries_the_stale_sampler(tmp_path=None):
     assert data["stale_flags"]["open"] == 1
 
 
+
+def test_near_miss_sampler_journals_and_reports():
+    """The looser-gates sampler: near-misses journal at flat stake in
+    category='loose', settle from actuals, and report their own ROI —
+    never touching the headline record."""
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    result = {"sport": "mlb", "date": "2026-07-30", "near_miss": [
+        {"player": "Close Call", "market": "total_bases", "side": "OVER",
+         "line": 1.5, "odds": -110, "book": "FanDuel", "edge": 0.024,
+         "quality": 66.0, "hit_prob": 0.55, "grade": "B"},
+        {"player": "HR Guy", "market": "home_runs", "side": "OVER",
+         "line": 0.5, "odds": 300, "book": "FanDuel"},   # not settleable here
+        {"player": "Proxy Guy", "market": "hits", "side": "OVER",
+         "line": 0.5, "odds": -110, "book": "proxy"},    # refused
+    ]}
+    assert ledger.log_near_misses(conn, result) == 1
+    assert ledger.log_near_misses(conn, result) == 0     # idempotent
+    ledger.settle(conn, {("Close Call", "total_bases"): 2.0})
+    lo = ledger.loose_report(conn)
+    assert lo["wins"] == 1 and lo["losses"] == 0
+    assert ledger.performance(conn)["settled"] == 0      # headline untouched
+    assert ledger.bankroll(conn) == 1000.0               # zero exposure
+
+
+def test_near_misses_pick_only_the_just_under_bar():
+    """Selection: real-priced Tier 1/2 close to the bar only — comfortable
+    passes, structural failures, and HR quarantine are all excluded."""
+    from engine.mlb.pipeline import near_misses
+    rows = [
+        {"recommended": True, "player": "Picked", "market": "hits",
+         "tier": 2, "edge": 0.05, "quality": 90},
+        {"recommended": False, "player": "Near Edge", "market": "total_bases",
+         "market_label": "Total Bases", "side": "OVER", "line": 1.5,
+         "odds": -110, "book": "FanDuel", "tier": 2, "edge": 0.025,
+         "quality": 80, "hit_prob": 0.55, "grade": "B"},
+        {"recommended": False, "player": "Near Quality", "market": "hits",
+         "market_label": "Hits", "side": "OVER", "line": 0.5, "odds": -105,
+         "book": "BetMGM", "tier": 2, "edge": 0.04, "quality": 63,
+         "hit_prob": 0.6, "grade": "B"},
+        {"recommended": False, "player": "Way Off", "market": "hits",
+         "tier": 2, "edge": 0.005, "quality": 30, "book": "FanDuel"},
+        {"recommended": False, "player": "HR Dart", "market": "home_runs",
+         "tier": 3, "edge": 0.05, "quality": 80, "book": "FanDuel"},
+        {"recommended": False, "player": "No Price", "market": "hits",
+         "tier": 2, "edge": 0.028, "quality": 75, "has_market": False},
+    ]
+    nm = near_misses(rows)
+    assert [r["player"] for r in nm] == ["Near Quality", "Near Edge"]
+    assert "edge 2.5%" in nm[1]["missed_by"]
+    assert "quality 63/70" in nm[0]["missed_by"]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

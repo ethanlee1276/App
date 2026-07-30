@@ -441,6 +441,10 @@ def main() -> None:
             ls_logged = ledger.log_longshots(lconn, result)
             st_logged = ledger.log_stale_flags(lconn, result)
             fm_logged = ledger.log_form_picks(lconn, result, team_form_map)
+            nm_logged = ledger.log_near_misses(lconn, result)
+            if nm_logged:
+                print(f"Looser-gates sampler: {nm_logged} near-miss prop(s) "
+                      f"paper-tracked — the 'should we loosen?' evidence.")
             settled = ledger.settle_from_history(lconn, hist_connect(), sport="mlb")
             ledger.export_json(lconn, "web/data/record.json")
             if logged or ls_logged or st_logged or fm_logged or settled:

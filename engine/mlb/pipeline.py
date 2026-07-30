@@ -340,6 +340,58 @@ def _game_to_dict(g) -> dict:
     }
 
 
+# "Should we be looser?" is an empirical question, not a debate. These
+# margins define "missed by a hair": edge at least this fraction of the
+# tier's bar, or quality at least this close to 70 — everything else
+# (real price, credibility, calibration) already passed. The sampler
+# journals these nightly at a flat paper stake; if the bucket PROFITS
+# over 100+ graded, the real gates loosen. If it burns, they've earned
+# their strictness. Same promotion bar as every other probation signal.
+NEAR_EDGE_FRACTION = 0.70
+NEAR_QUALITY_FLOOR = 58.0
+
+
+def near_misses(recommendations: list[dict], limit: int = 10) -> list[dict]:
+    """The props just UNDER the bar tonight — the ones a looser model
+    would have picked. Real-priced, credible, calibration-open Tier 1/2
+    only; each row says which gate stopped it and by how much."""
+    from ..calibrate import is_reliable
+    from .quality import TIER_MIN_EDGE
+    out = []
+    for r in recommendations:
+        if r.get("recommended") or r.get("has_market") is False:
+            continue
+        tier = r.get("tier", 2)
+        if tier == 3 or r.get("market") == "home_runs":
+            continue                      # the Long Shots board owns those
+        if not is_reliable("mlb", r.get("market", "")):
+            continue
+        edge, quality = float(r.get("edge") or 0), float(r.get("quality") or 0)
+        bar = TIER_MIN_EDGE.get(tier, 0.030)
+        if edge < NEAR_EDGE_FRACTION * bar or quality < NEAR_QUALITY_FLOOR:
+            continue
+        if edge >= bar and quality >= 70:
+            continue                      # died at a structural gate — not
+                                          # a candidate for "looser bars"
+        misses = []
+        if edge < bar:
+            misses.append(f"edge {edge:.1%} vs {bar:.1%} bar")
+        if quality < 70:
+            misses.append(f"quality {quality:.0f}/70")
+        out.append({
+            "player": r.get("player"), "team": r.get("team"),
+            "market": r.get("market"), "market_label": r.get("market_label"),
+            "side": r.get("side"), "line": r.get("line"),
+            "odds": r.get("odds"), "book": r.get("book"),
+            "edge": round(edge, 4), "quality": quality, "tier": tier,
+            "hit_prob": r.get("hit_prob"), "grade": r.get("grade"),
+            "missed_by": " · ".join(misses),
+        })
+    # Closest to the bar first — the best case looser gates could make.
+    out.sort(key=lambda x: -(x["edge"] * (x["quality"] / 100.0)))
+    return out[:limit]
+
+
 def gate_census(recommendations: list[dict]) -> dict:
     """Where did the slate's props die? One count per first-failing gate, so
     "878 analyzed → 1 recommended" is a funnel you can read instead of a
@@ -480,6 +532,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "model": "learned" if model is not None else "rules",
         "counts": {"props_analyzed": len(results), "recommended": len(recommended)},
         "gate_census": gate_census(results),
+        "near_miss": near_misses(results),
         "config": {"min_confidence": config.min_confidence, "min_edge": config.min_edge},
         "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,

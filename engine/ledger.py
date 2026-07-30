@@ -294,6 +294,55 @@ STALE_SETTLEABLE = {"total_bases", "hits", "home_runs",
                     "pts", "reb", "ast", "fg3m"}
 
 
+# The looser-gates sampler settles from the same ingested logs as the
+# main record; only settleable, calibration-open markets journal.
+LOOSE_SETTLEABLE = {"total_bases", "hits", "strikeouts"}
+
+
+def log_near_misses(conn, result: dict, flat_stake: float = 0.1) -> int:
+    """Journal the props that JUST missed the bar — category='loose'.
+
+    The standing question "should the filters be looser?" gets an
+    empirical answer: paper-track the near-misses at a flat stake with
+    zero dollar exposure, grade them nightly, and read the bucket's ROI.
+    Profitable over 100+ graded → loosen the real gates. Burning → the
+    gates were right. Never mixed into the headline record.
+    """
+    sport = result.get("sport", "mlb")
+    date = result.get("date", "")
+    now = datetime.datetime.utcnow().isoformat(timespec="seconds")
+    n = 0
+    for r in result.get("near_miss") or []:
+        if r.get("market") not in LOOSE_SETTLEABLE:
+            continue
+        try:
+            odds = int(r.get("odds") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not r.get("player") or not odds or (r.get("book") or "").lower() == "proxy":
+            continue
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
+            "line, book, odds, projection, hit_prob, edge, confidence, grade, "
+            "stake_units, stake_dollars, status, category) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'loose')",
+            (now, sport, date, r["player"], r["market"],
+             (r.get("side") or "OVER").upper(), float(r.get("line") or 0),
+             r.get("book", ""), odds, None, r.get("hit_prob"), r.get("edge"),
+             None, r.get("grade", "Near miss"), flat_stake, 0.0))
+        n += cur.rowcount
+    conn.commit()
+    return n
+
+
+def loose_report(conn) -> dict:
+    """The looser-gates scoreboard: flat-stake record for the near-miss
+    bucket, plus the decision framing the Record page renders."""
+    p = performance(conn, category="loose")
+    p["recent"] = recent_settled(conn, limit=15, category="loose")
+    return p
+
+
 def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
     """Journal the scanner's stale-line flags — the sampler for our best-
     measured signal.
@@ -1554,6 +1603,7 @@ def export_json(conn, path) -> None:
         "longshots": longshot_report(conn),
         "stale_flags": stale_report(conn),
         "form_sampler": form_report(conn),
+        "loose_sampler": loose_report(conn),
         "ufc_record": ufc_report(conn),
         "calibration": calibration(conn),
         # The same chart scoped to the CURRENT model era — the all-time

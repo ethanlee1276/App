@@ -478,38 +478,17 @@ async function renderBestBets() {
         asOf ? ` Prices are from the ${escapeHtml(asOf)} odds pull — always confirm the number still stands before betting.` : ""}
         Every journaled bet is tracked on the <b style="color:var(--text)">Live</b> tab through settlement.</p>
       ${picks.map(pickRow).join("")}
+      <details class="rec-disclose" style="margin:2px 14px 10px">
+        <summary>Why only ${picks.length}? — where the other props died</summary>
+        ${censusFunnelHTML()}
+      </details>
     </div>` : `
     <div class="card" style="border-left:3px solid var(--warn)">
       <p style="margin:0;font-weight:800;font-size:15px">No qualifying plays at current numbers.</p>
       <p style="margin:6px 0 0;color:var(--text-mute);font-size:13px">That sentence is the system
       working, not failing — every market tonight either missed the tier's edge bar, failed a
       gate, or graded below 70. Loosening the sliders shows what was held and why.</p>
-      ${(() => {
-        // The funnel, on screen: a zero-pick night must explain itself.
-        const gc = (state.data || {}).gate_census;
-        if (!gc) return "";
-        const names = { no_real_price: "no real book price yet",
-          longshot_board: "home runs — live on the Long Shots board by design",
-          credibility: "model-vs-market gap too big to trust (>10% raw = bad data)",
-          calibration: "market's calibration unreliable — closed until refit",
-          tier_edge_bar: "edge under the tier's minimum",
-          price_net: "price doesn't clear break-even",
-          quality_under_70: "quality grade under 70",
-          held_by_rules: "held by rules (lineups pending, IL, live game, juice)" };
-        const rows = Object.entries(gc)
-          .filter(([k, v]) => v > 0 && k !== "recommended" && k !== "calibration_markets")
-          .map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px;
-              padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px">
-            <span style="color:var(--text-mute)">${escapeHtml(names[k] || k)}</span>
-            <span style="font-weight:700">${v}</span></div>`).join("");
-        const closed = (gc.calibration_markets || []).length
-          ? `<div style="margin-top:6px;font-size:12px;color:var(--warn)">Closed by calibration:
-             ${gc.calibration_markets.map(escapeHtml).join(", ")} — the nightly refit reopens
-             a market when its fit lands back inside the search range.</div>` : "";
-        return rows ? `<div style="margin-top:10px">
-          <div style="font-size:12px;font-weight:700;margin-bottom:2px">Where tonight's props died</div>
-          ${rows}${closed}</div>` : "";
-      })()}
+      ${censusFunnelHTML()}
     </div>`;
 
   // ======= SPACE 2: tracked signals — measurements, NOT picks =======
@@ -519,6 +498,17 @@ async function renderBestBets() {
       label: `${a.bet}: Over ${a.over.line} ${american(a.over.odds)} (${a.over.book}) + Under ${a.under.line} ${american(a.under.odds)} (${a.under.book})`,
       metric: `+${(a.profit_pct * 100).toFixed(1)}%`,
       why: "locked profit whichever way it lands — price math, no forecast; not journaled (nothing to grade)" });
+  }
+  const lo = rec.loose_sampler || {};
+  const looseRec = (lo.wins || 0) + (lo.losses || 0) > 0
+    ? ` · sampler so far ${lo.wins}-${lo.losses} (${signedPct(lo.roi || 0)})` : "";
+  for (const nm of ((state.data || {}).near_miss || []).slice(0, 3)) {
+    signals.push({ tag: "NEAR",
+      label: `${nm.player} ${nm.side} ${nm.line} ${nm.market_label} ${american(nm.odds)} (${nm.book})`,
+      metric: signedPct(nm.edge),
+      why: `missed the bar by a hair (${nm.missed_by}) — paper-tracked in the`
+        + ` looser-gates sampler${looseRec}; if that bucket profits over 100+ graded,`
+        + ` the real gates loosen` });
   }
   const st = rec.stale_flags || {};
   const staleRec = (st.wins || 0) + (st.losses || 0) > 0
@@ -597,6 +587,35 @@ async function renderBestBets() {
    this answers "how are the bets we already made doing?" the moment
    the games start, instead of going dark until settlement.
    ============================================================ */
+/* The gate-census funnel — why tonight's props died, gate by gate. Rendered
+   inside the empty state AND as a collapsed drawer under a non-empty picks
+   list: "890 analyzed → 1 recommended" must always be explainable. */
+function censusFunnelHTML() {
+  const gc = (state.data || {}).gate_census;
+  if (!gc) return "";
+  const names = { no_real_price: "no real book price yet",
+    longshot_board: "home runs — live on the Long Shots board by design",
+    credibility: "model-vs-market gap too big to trust (>10% raw = bad data)",
+    calibration: "market's calibration unreliable — closed until refit",
+    tier_edge_bar: "edge under the tier's minimum",
+    price_net: "price doesn't clear break-even",
+    quality_under_70: "quality grade under 70",
+    held_by_rules: "held by rules (lineups pending, IL, live game, juice)" };
+  const rows = Object.entries(gc)
+    .filter(([k, v]) => v > 0 && k !== "recommended" && k !== "calibration_markets")
+    .map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px;
+        padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px">
+      <span style="color:var(--text-mute)">${escapeHtml(names[k] || k)}</span>
+      <span style="font-weight:700">${v}</span></div>`).join("");
+  const closed = (gc.calibration_markets || []).length
+    ? `<div style="margin-top:6px;font-size:12px;color:var(--warn)">Closed by calibration:
+       ${gc.calibration_markets.map(escapeHtml).join(", ")} — the nightly refit reopens
+       a market when its fit lands back inside the search range.</div>` : "";
+  return rows ? `<div style="margin-top:10px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:2px">Where tonight's props died</div>
+    ${rows}${closed}</div>` : "";
+}
+
 function renderLivePicks() {
   const host = document.getElementById("live-picks");
   if (!host) return;
@@ -2151,6 +2170,47 @@ function recUfcSection(u) {
 /* Polymarket flag record — the Intel page's graded flags, quarantined in
    their own bucket exactly like Long Shots: paper-tracked observations,
    never mixed into the headline record. */
+/* The looser-gates sampler — the standing "should the filters be looser?"
+   question, answered by its own paper-tracked record instead of a debate. */
+function recLooseSection(lo) {
+  if (!lo || (!lo.settled && !lo.open)) return "";
+  const graded = (lo.wins || 0) + (lo.losses || 0);
+  const rows = (lo.recent || []).map((b) => {
+    const won = b.status === "won";
+    const push = b.status === "push";
+    const pnl = b.pnl_units || 0;
+    return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
+      <span class="rl-icon">${push ? "➖" : won ? "✓" : "✕"}</span>
+      <span class="rl-date">${escapeHtml(b.date || "")}</span>
+      <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
+        <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
+      <span class="rl-proc">${b.hit_prob != null ? `model ${(b.hit_prob * 100).toFixed(0)}%` : ""}</span>
+      <span class="rl-odds">${american(b.odds)}</span>
+      <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
+    </div>`;
+  }).join("");
+  return `
+    <div class="section-title" style="margin-top:22px">Looser-gates sampler — measurement in progress
+      <span class="sub">— the props that JUST missed the bar, paper-tracked nightly.
+      This bucket IS the answer to "should we loosen the filters?"</span></div>
+    ${recDisclosure("How this decides anything", `Every build journals the
+      near-misses — real-priced Tier 1/2 props within reach of the edge bar or a
+      quality grade in the 60s — at a flat 0.1u with zero bankroll impact. If this
+      bucket is PROFITABLE after 100+ graded, the real gates loosen and those props
+      become picks. If it burns, the gates were right and the argument is over.
+      Same promotion bar as every other probation signal on this page.`)}
+    <div class="stats rec-kpis">
+      ${recTile("Flat-stake ROI", graded ? (lo.roi >= 0 ? "+" : "") + (lo.roi * 100).toFixed(1) + "%" : "—",
+                `${(lo.net_units || 0) >= 0 ? "+" : ""}${(lo.net_units || 0).toFixed(2)}u on ${(lo.units_staked || 0).toFixed(1)}u`,
+                { lead: true, tone: toneOf(lo.roi || 0) })}
+      ${recTile("Record", `${lo.wins || 0}-${lo.losses || 0}`, `${lo.open || 0} open`)}
+      ${recTile("Toward the bar", `${graded}/100`,
+                graded >= 100 ? "sample reached — read the ROI" : "graded picks needed")}
+    </div>
+    <div class="card" style="padding:0;margin-top:12px">${rows ||
+      `<p class="loading" style="padding:12px">Nothing settled yet — accrues from tonight's near-misses.</p>`}</div>`;
+}
+
 function recPolymarketSection(v) {
   if (!v || !v.graded) return "";
   const pctv = (x) => `${(x * 100).toFixed(1)}%`;
@@ -2288,6 +2348,7 @@ async function renderRecord() {
     ${recLongshotSection(d.longshots)}
     ${recStaleSection(d.stale_flags)}
     ${recFormSection(d.form_sampler)}
+    ${recLooseSection(d.loose_sampler)}
     ${recUfcSection(d.ufc_record)}
     ${recPolymarketSection(pmv)}
     <p class="rec-stamp">Updated ${escapeHtml(d.generated_at || "")}
