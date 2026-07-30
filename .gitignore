@@ -6,9 +6,13 @@ __pycache__/
 venv/
 .pytest_cache/
 
-# Generated output (regenerate with: python3 generate.py)
-web/data/recommendations.json
-web/data/mlb_recommendations.json
+# Generated site data — every build writes here (slates, fantasy, NBA,
+# Polymarket, UFC) and `ledger.export_json` writes record.json, which is
+# the operator's own betting journal and bankroll. All of it regenerates
+# from the build scripts, none of it belongs on the remote. Ignoring the
+# directory (not a file list) so a NEW build target can't silently start
+# tracking output again.
+web/data/
 
 # Downloaded / cached data feeds
 data/cache/
