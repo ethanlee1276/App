@@ -73,6 +73,55 @@ def test_mlb_final_game():
     assert fin.state == "final" and fin.home_score == 2
 
 
+# Braves @ Mets doubleheader: leg 1 (1:10) final, leg 2 (7:10) just live.
+# ids 121 = NYM, 144 = ATL.
+DH_SCHED = {"dates": [{"games": [
+    {"gamePk": 111, "gameNumber": 1, "doubleHeader": "S",
+     "status": {"abstractGameState": "Final"},
+     "teams": {"home": {"team": {"id": 121}, "score": 4},
+               "away": {"team": {"id": 144}, "score": 2}},
+     "linescore": {}},
+    {"gamePk": 222, "gameNumber": 2, "doubleHeader": "S",
+     "status": {"abstractGameState": "Live", "detailedState": "In Progress"},
+     "teams": {"home": {"team": {"id": 121}, "score": 0},
+               "away": {"team": {"id": 144}, "score": 0}},
+     "linescore": {"currentInningOrdinal": "1st", "inningState": "Top",
+                   "outs": 0}},
+]}]}
+
+
+def test_doubleheader_legs_keep_their_own_live_state():
+    """The bug this pins: the live board was keyed by team pair alone, so a
+    doubleheader's second leg overwrote the first and BOTH site cards wore
+    one game's inning and score. Legs must key apart; the ambiguous bare
+    pair key must not exist at all."""
+    board = parse_live(DH_SCHED)
+    pair = frozenset(("NYM", "ATL"))
+    assert board[111].state == "final" and board[111].home_score == 4
+    assert board[222].state == "live" and board[222].period == "Top 1st"
+    assert board[(pair, 1)] is board[111]
+    assert board[(pair, 2)] is board[222]
+    assert pair not in board                    # bare key would lie — gone
+
+
+def test_attach_live_routes_each_leg_by_game_pk():
+    from types import SimpleNamespace as NS
+    from engine.mlb.sources import live as live_mod
+    slate = NS(games=[
+        NS(home="NYM", away="ATL", game_pk=111, game_number=1, live=None),
+        NS(home="NYM", away="ATL", game_pk=222, game_number=2, live=None),
+    ])
+    old = live_mod.fetch_live
+    live_mod.fetch_live = lambda date: parse_live(DH_SCHED)
+    try:
+        assert live_mod.attach_live(slate, "2026-07-29") == 2
+    finally:
+        live_mod.fetch_live = old
+    g1, g2 = slate.games
+    assert g1.live.state == "final" and g1.live.home_score == 4
+    assert g2.live.state == "live" and g2.live.period == "Top 1st"
+
+
 # --- serialization + pipeline flag ------------------------------------------
 def test_live_to_dict():
     assert live_to_dict(None) is None

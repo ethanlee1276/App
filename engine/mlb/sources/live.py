@@ -26,9 +26,19 @@ def _state(abstract: str, detailed: str = "") -> str:
     return base
 
 
-def parse_live(schedule_json: dict) -> dict[frozenset, LiveStatus]:
-    """Map a schedule+linescore payload to {frozenset({home, away}): LiveStatus}."""
-    out: dict[frozenset, LiveStatus] = {}
+def parse_live(schedule_json: dict) -> dict:
+    """Map a schedule+linescore payload to a live board with THREE key
+    shapes per game:
+
+    * ``gamePk`` (int) — exact, the join attach_live prefers;
+    * ``(frozenset({home, away}), gameNumber)`` — doubleheader-safe;
+    * ``frozenset({home, away})`` — kept for single games only. On a
+      doubleheader day the same pair plays twice, and this bare key once
+      held whichever leg parsed LAST — both slate cards then wore one
+      game's inning and score. An ambiguous key is now dropped entirely.
+    """
+    out: dict = {}
+    pairs_seen: set = set()
     for day in schedule_json.get("dates", []):
         for g in day.get("games", []):
             teams = g.get("teams", {})
@@ -54,17 +64,28 @@ def parse_live(schedule_json: dict) -> dict[frozenset, LiveStatus]:
                 off = ls.get("offense", {}) or {}
                 occ = [b for b, k in ((1, "first"), (2, "second"), (3, "third")) if off.get(k)]
                 bases = occ
-            out[frozenset((home_ab, away_ab))] = LiveStatus(
+            st = LiveStatus(
                 state=state,
                 home_score=teams.get("home", {}).get("score"),
                 away_score=teams.get("away", {}).get("score"),
                 period=period, outs=outs, bases=bases,
                 start_time=g.get("gameDate", ""),
             )
+            pair = frozenset((home_ab, away_ab))
+            out[(pair, int(g.get("gameNumber") or 1))] = st
+            pk = g.get("gamePk")
+            if pk:
+                out[int(pk)] = st
+            dh = (g.get("doubleHeader") or "N") != "N"
+            if dh or pair in pairs_seen:
+                out.pop(pair, None)      # two legs — the bare key lies
+            else:
+                out[pair] = st
+            pairs_seen.add(pair)
     return out
 
 
-def fetch_live(date: str) -> dict[frozenset, LiveStatus]:
+def fetch_live(date: str) -> dict:
     data = _get_json(
         f"{STATS_BASE}/schedule?sportId=1&date={date}&hydrate=linescore",
         f"mlb_live_{date}.json", ttl=30)
@@ -72,13 +93,18 @@ def fetch_live(date: str) -> dict[frozenset, LiveStatus]:
 
 
 def attach_live(slate, date: str) -> int:
+    """Overlay live state onto the slate's games — by gamePk first (exact),
+    then pair+leg number, then the bare pair (single games only)."""
     try:
         board = fetch_live(date)
     except DataUnavailable:
         return 0
     n = 0
     for g in slate.games:
-        live = board.get(frozenset((g.home, g.away)))
+        pair = frozenset((g.home, g.away))
+        live = (board.get(int(getattr(g, "game_pk", 0) or 0))
+                or board.get((pair, getattr(g, "game_number", 0) or 1))
+                or board.get(pair))
         if live:
             g.live = live
             n += 1
