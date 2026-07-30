@@ -1359,17 +1359,24 @@ select.calc-in { width: auto; font-weight: 600; }
      inside the card's overflow:hidden. Split into two lines: what the bet
      was, then how it did. The splits drop their CLV column for the same
      reason — the market name is what the table is for. */
+  /* Each meta span gets its OWN area — several grid items assigned to a
+     shared area don't flow side by side, they stack on top of each other
+     (the overlapping-text bug). */
   .rl-row {
-    grid-template-columns: 20px minmax(0, 1fr) 72px;
-    grid-template-areas: "icon main pnl" ". meta meta";
+    grid-template-columns: 20px auto auto minmax(0, 1fr) 72px;
+    grid-template-areas: "icon main main main pnl"
+                         ".    date proc odds .";
     row-gap: 3px; padding: 10px 12px 10px 11px;
   }
   .rl-icon { grid-area: icon; }
   .rl-main { grid-area: main; white-space: normal; }
   .rl-pnl { grid-area: pnl; }
-  .rl-date, .rl-proc, .rl-odds { grid-area: meta; display: inline; text-align: left; }
-  .rl-date::after { content: " · "; opacity: .4; }
-  .rl-odds::before { content: " · "; opacity: .4; }
+  .rl-date { grid-area: date; }
+  .rl-proc { grid-area: proc; white-space: normal; }
+  .rl-odds { grid-area: odds; }
+  .rl-date, .rl-proc, .rl-odds { text-align: left; justify-self: start; }
+  .rl-date::after { content: " ·"; opacity: .4; }
+  .rl-odds::before { content: "· "; opacity: .4; }
   .rb-rows.has-clv .rb-row { grid-template-columns: minmax(0, 1fr) 46px 54px 66px; }
   .rb-clv { display: none; }
   .rec-chart .rc-net { font-size: 22px; }
