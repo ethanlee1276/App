@@ -169,9 +169,20 @@ def _finish_paid_pull(spend: bool, before_seen: str, ok: bool, tail: str,
               + f") — retrying in ~{FAILED_PULL_RETRY_S // 60} min")
 
 
+def _slate_date() -> str:
+    """The BASEBALL day, which rolls at 5 AM local — not midnight.
+
+    West-coast games run past 12:00, and flipping the board on the
+    calendar tick yanked still-live bets off the Live tab in the 7th
+    inning. Until 5 AM the slate (board, tracker, journal date) stays on
+    the night being played; results ingest and settling use the real
+    calendar independently."""
+    return (_dt.datetime.now() - _dt.timedelta(hours=5)).date().isoformat()
+
+
 def refresh_mlb(quiet: bool = False) -> bool:
     """Build today's MLB slate into web/data/mlb_recommendations.json."""
-    date = _dt.date.today().isoformat()
+    date = _slate_date()
     out = MLB_OUT
     args = ["mlb_build.py", date, "--out", out]
     # games>0: an empty offseason slate never spends a paid pull. The first
@@ -278,7 +289,7 @@ def refresh_nba(quiet: bool = False) -> bool:
     board could never see a real price: nothing ever seeded the cache.
     Now it paces on its own clock like MLB/NFL, holding its pull for its
     own pre-game window. The games>0 gate keeps the offseason free."""
-    args = ["nba_build.py", _dt.date.today().isoformat(), "--out", NBA_OUT]
+    args = ["nba_build.py", _slate_date(), "--out", NBA_OUT]
     spend = _slate_games(NBA_OUT) > 0 and _odds_affordable(NBA_OUT, quiet,
                                                            sport="nba")
     before_seen = _paid_pull_baseline() if spend else ""
