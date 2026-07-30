@@ -38,8 +38,9 @@ def test_aggregate_values_players_and_proe():
     # 30 inside-5 carries league-wide: half score (avg 3.05 pts each),
     # 30 open-field carries for 5 yards each (0.5 pts each).
     for i in range(30):
-        rows.append(_run("3", "KC", "A.Back", 2, 1, td=(i % 2), oe="0.1"))
-        rows.append(_run("3", "SF", "B.Back", 50, 5, oe="-0.05"))
+        # pass_oe arrives in percentage points (nflfastR scale): +10pp.
+        rows.append(_run("3", "KC", "A.Back", 2, 1, td=(i % 2), oe="10"))
+        rows.append(_run("3", "SF", "B.Back", 50, 5, oe="-5"))
     agg = aggregate_pbp(rows)
     assert abs(agg["values"]["car_i5"] - (0.1 * 1 + 3.0)) < 1e-6
     assert abs(agg["values"]["car_open"] - 0.5) < 1e-6
@@ -87,7 +88,7 @@ def test_epa_both_sides_and_neutral_pace():
     rows = []
     secs = 3600.0
     for i in range(24):
-        r = _run("3", "KC", "A.Back", 50, 4, oe="0.1")
+        r = _run("3", "KC", "A.Back", 50, 4, oe="10")
         r.update(epa="0.25" if i % 2 else "-0.05", defteam="DEN",
                  game_id="G1", wp="0.55", qtr="2",
                  game_seconds_remaining=str(secs))

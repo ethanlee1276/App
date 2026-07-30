@@ -998,7 +998,9 @@ def nfl_baseline() -> None:
             "AND season=? AND market=?", (season, m)).fetchone()[0]
 
     # Weekly stat layer — what settles bets and feeds projections.
-    for m, want in (("pass_yds", 500), ("rush_yds", 2000), ("rec_yds", 4000),
+    # Wants calibrated against a COMPLETE ingested season (2025 actuals),
+    # set just under observed so "complete" passes and "partial" warns.
+    for m, want in (("pass_yds", 500), ("rush_yds", 1500), ("rec_yds", 2400),
                     ("receptions", 4000), ("anytime_td", 1500)):
         check(f"weekly {m} rows", market_n(m), want)
     # pbp layer — measured roles and the new efficiency profiles.
@@ -1010,7 +1012,13 @@ def nfl_baseline() -> None:
     check("final scores", games, 250)
     closes = conn.execute(
         "SELECT COUNT(*) FROM odds_history WHERE sport='nfl'").fetchone()[0]
-    check("harvested odds snapshots", closes, 1000)
+    if closes:
+        check("harvested odds snapshots", closes, 1000)
+    else:
+        # Not a Week-1 blocker: the closes harvest accrues from September.
+        print("  ·  odds snapshots: none yet — the maintenance harvest "
+              "accrues these once NFL lines go live (CLV layer, not a "
+              "Week-1 blocker)")
 
     profs = teamprofiles.season_profiles(conn)
     check("team efficiency profiles (EPA/PROE/pace)", len(profs), 32)
@@ -1024,9 +1032,11 @@ def nfl_baseline() -> None:
         print("  Stat coverage: " + ", ".join(
             f"{s} {n}/{len(profs)}" for s, n in cov.items()))
         if any(n < len(profs) for n in cov.values()):
-            print("  ⚠️  EPA/pace gaps mean the cached pbp file predates this "
-                  "build — delete data/cache/pbp_*.csv and rerun "
-                  "`python3 ingest.py nfl` to re-aggregate.")
+            print("  ⚠️  EPA/pace gaps — rerun `python3 ingest.py nfl` to "
+                  "re-aggregate (the cached pbp file already has the columns).")
+        if base.get("proe") is not None and abs(base["proe"]) > 0.5:
+            print("  ⚠️  PROE stored in percentage points (pre-fix rows) — "
+                  "rerun `python3 ingest.py nfl` to restate as fractions.")
     else:
         print("\n  ⚠️  No team profiles yet — run `python3 ingest.py nfl` "
               "(Tuesday maintenance also refreshes them in season).")

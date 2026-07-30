@@ -123,7 +123,9 @@ def aggregate_pbp(rows) -> dict:
             t["plays"] += 1
             oe = r.get("pass_oe")
             if oe not in (None, "", "NA"):
-                t["oe"][0] += _f(oe)
+                # nflfastR ships pass_oe in PERCENTAGE POINTS (league avg
+                # ≈ -2.3); everything downstream speaks fractions.
+                t["oe"][0] += _f(oe) / 100.0
                 t["oe"][1] += 1
             epa = r.get("epa")
             if epa not in (None, "", "NA"):
