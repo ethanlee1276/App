@@ -1822,6 +1822,54 @@ function recCurveChart(curve) {
     </div>`;
 }
 
+function recEraSection(er) {
+  const eras = (er || {}).eras || [];
+  // Nothing to compare until there's more than one era with any activity.
+  const active = eras.filter((e) => e.settled || e.open);
+  if (eras.length < 2 || active.length < 1) return "";
+  const row = (e, isCurrent) => {
+    const graded = e.wins + e.losses;
+    const range = e.from
+      ? `since ${e.from}` : (e.to ? `through ${e.to}` : "");
+    const roiTxt = graded
+      ? `${e.roi >= 0 ? "+" : ""}${(e.roi * 100).toFixed(1)}%`
+      : "—";
+    const clv = e.avg_clv != null
+      ? ` · CLV ${e.avg_clv >= 0 ? "+" : ""}${e.avg_clv.toFixed(2)} pts (${e.clv_n})`
+      : "";
+    const sports = Object.entries(e.by_sport || {}).map(([s, d]) =>
+      `${s.toUpperCase()} ${d.w}-${d.l} (${d.net_u >= 0 ? "+" : ""}${d.net_u.toFixed(2)}u)`)
+      .join(" · ");
+    return `
+      <div style="display:flex;gap:12px;align-items:center;padding:10px 14px;
+                  border-bottom:1px solid rgba(255,255,255,.05)${isCurrent ? "" : ";opacity:.75"}">
+        <span style="flex:1;min-width:0">
+          <strong>${escapeHtml(e.label)}</strong>
+          ${isCurrent ? `<span class="chip" style="margin-left:6px">running now</span>` : ""}
+          <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">
+            ${escapeHtml(range)}${sports ? ` · ${sports}` : ""}${clv}</span>
+        </span>
+        <span style="text-align:right;white-space:nowrap">
+          <strong>${e.wins}-${e.losses}</strong>
+          <span style="display:block;font-size:12px" class="${toneOf(e.net_units)}">
+            ${graded ? `${e.net_units >= 0 ? "+" : ""}${e.net_units.toFixed(2)}u · ${roiTxt} ROI`
+                     : `${e.open} open — accruing`}</span>
+        </span>
+      </div>`;
+  };
+  return `
+    <div class="section-title" style="margin-top:22px">Model eras — did the re-tune work?
+      <span class="sub">— the record split at each model change. Old losses belong to
+      gates that no longer exist; the current era is the model being judged now.</span></div>
+    <div class="card" style="padding:0">
+      ${eras.map((e) => row(e, e.key === er.current)).join("")}
+      <p style="padding:8px 14px;margin:0;font-size:11.5px;color:var(--text-mute)">
+        CLV (closing-line value) is the fast signal — beating the close consistently
+        shows up weeks before the W-L means anything. Judge the new era on CLV first,
+        ROI once it has 50+ graded bets.</p>
+    </div>`;
+}
+
 function recLongshotSection(ls) {
   // Show whenever EITHER bucket has data — after the watchlist split the
   // picks record can be tiny while the calibration sample is huge.
@@ -2131,6 +2179,7 @@ async function renderRecord() {
         </div>`;
       }).join("") || `<p class="loading" style="padding:12px">Nothing settled yet.</p>`}
     </div>
+    ${recEraSection(d.model_eras)}
     ${recCalibrationSection(d.calibration)}
     ${recHealthSection(d.account_health)}
     ${recLongshotSection(d.longshots)}

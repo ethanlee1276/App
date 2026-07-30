@@ -786,6 +786,34 @@ def test_log_longshots_skips_projected_lineups():
     assert players == {"Confirmed Guy", "Legacy Row No Flag"}
 
 
+def test_era_report_splits_the_record_at_the_retune():
+    """Losses earned by gates that no longer exist stay in their own era;
+    the current era starts clean at the re-tune date and reports its own
+    W-L / ROI / per-sport split."""
+    conn = _conn()
+    _insert_settled(conn, "Old Guy", status="lost", date="2026-07-20")
+    _insert_settled(conn, "Old Guy 2", status="won", odds=100, date="2026-07-25")
+    _insert_settled(conn, "New Guy", status="won", odds=100, date="2026-07-30")
+    # The fixture leaves pnl_units at 0 — give the eras real P&L to split.
+    conn.execute("UPDATE bets SET pnl_units=-1.0 WHERE player='Old Guy'")
+    conn.execute("UPDATE bets SET pnl_units=1.0 WHERE player='New Guy'")
+    conn.execute(
+        "INSERT INTO bets (sport, date, player, market, side, line, odds, "
+        "stake_units, stake_dollars, status, category) VALUES ('mlb', "
+        "'2026-07-30', 'Open Guy', 'total_bases', 'OVER', 1.5, -110, 0.5, 5, "
+        "'open', 'main')")
+    conn.commit()
+    er = ledger.era_report(conn)
+    assert er["current"] == "v2"
+    v1, v2 = er["eras"]
+    assert (v1["wins"], v1["losses"]) == (1, 1)
+    assert (v2["wins"], v2["losses"]) == (1, 0)
+    assert v2["open"] == 1
+    assert v2["net_units"] > 0
+    assert v1["to"] == "2026-07-29" and v2["from"] == "2026-07-29"
+    assert "nfl" in v1["by_sport"] or "mlb" in v1["by_sport"]
+
+
 def test_partial_stat_lines_never_settle_a_live_game():
     """The premature-settle bug: MLB's game-log API includes an in-progress
     game's partial line, and one ingested partial row graded tonight's bet

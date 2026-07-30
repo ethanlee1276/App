@@ -929,6 +929,69 @@ def summary(conn, sport: str | None = None) -> str:
     return "\n".join(lines)
 
 
+# The dates each model re-tune shipped, oldest first. A bet is graded
+# against the era it was journaled in, so "did the re-tune work" is
+# answered by the journal itself instead of by memory. Append a row here
+# on the next re-tune; everything downstream (report, Record page) follows.
+MODEL_ERAS = [
+    {"key": "v1", "label": "Original model", "start": None},
+    {"key": "v2", "label": "Re-tuned gates — Scalpy 2.0 + pro NFL model",
+     "start": "2026-07-29"},
+]
+
+
+def era_report(conn) -> dict:
+    """The headline record split at every model re-tune.
+
+    A −22% ROI earned by gates that no longer exist says nothing about the
+    model running tonight. Each era keeps its own W-L / ROI / CLV (and
+    per-sport split), so the re-tune's effect is measured, not vibed.
+    Category='main' only — the samplers already grade themselves.
+    """
+    starts = [e["start"] for e in MODEL_ERAS]
+    eras = []
+    for i, e in enumerate(MODEL_ERAS):
+        start, end = e["start"], starts[i + 1] if i + 1 < len(starts) else None
+        where = "category='main' AND stake_units > 0"
+        args: list = []
+        if start:
+            where += " AND date >= ?"
+            args.append(start)
+        if end:
+            where += " AND date < ?"
+            args.append(end)
+        bets = conn.execute(
+            f"SELECT * FROM bets WHERE {where} "
+            f"AND status IN ('won','lost','push')", args).fetchall()
+        wins = sum(1 for b in bets if b["status"] == "won")
+        losses = sum(1 for b in bets if b["status"] == "lost")
+        net = sum(b["pnl_units"] or 0.0 for b in bets)
+        staked = sum(b["stake_units"] or 0.0 for b in bets
+                     if b["status"] in ("won", "lost"))
+        clvs = [c for c in (_bet_clv(b) for b in bets) if c is not None]
+        by_sport: dict[str, dict] = {}
+        for b in bets:
+            d = by_sport.setdefault(b["sport"], {"w": 0, "l": 0, "net_u": 0.0})
+            if b["status"] == "won":
+                d["w"] += 1
+            elif b["status"] == "lost":
+                d["l"] += 1
+            d["net_u"] = round(d["net_u"] + (b["pnl_units"] or 0.0), 2)
+        eras.append({
+            "key": e["key"], "label": e["label"], "from": start, "to": end,
+            "settled": len(bets), "wins": wins, "losses": losses,
+            "net_units": round(net, 2),
+            "roi": round(net / staked, 4) if staked else 0.0,
+            "avg_clv": round(sum(clvs) / len(clvs), 3) if clvs else None,
+            "clv_n": len(clvs),
+            "open": conn.execute(
+                f"SELECT COUNT(*) FROM bets WHERE {where} AND status='open'",
+                args).fetchone()[0],
+            "by_sport": by_sport,
+        })
+    return {"eras": eras, "current": MODEL_ERAS[-1]["key"]}
+
+
 def pnl_curve(conn, sport: str | None = None) -> list[dict]:
     """Cumulative settled P&L by slate date — the Record page's equity curve.
 
@@ -1367,6 +1430,7 @@ def export_json(conn, path) -> None:
         "nfl": performance(conn, "nfl"),
         "curve": pnl_curve(conn),
         "recent": recent_settled(conn),
+        "model_eras": era_report(conn),
         "longshots": longshot_report(conn),
         "stale_flags": stale_report(conn),
         "form_sampler": form_report(conn),
