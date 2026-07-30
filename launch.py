@@ -949,6 +949,23 @@ def settle_now(day: str | None = None) -> None:
     print("Record page updated.")
 
 
+def _lan_ip() -> str | None:
+    """This machine's LAN address — the URL a phone on the same Wi-Fi can
+    open. The UDP connect never sends a packet; it just makes the OS pick
+    the outbound interface. None when there's no usable network."""
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+        finally:
+            s.close()
+        return None if ip.startswith("127.") else ip
+    except OSError:
+        return None
+
+
 def main() -> None:
     argv = sys.argv[1:]
     if "--reset-budget" in argv:
@@ -1064,6 +1081,11 @@ def main() -> None:
             pass
 
     print(f"\nGridiron Edge running (LIVE data) → http://localhost:{port}")
+    lan = _lan_ip()
+    if lan:
+        print(f"  On your phone (same Wi-Fi):     → http://{lan}:{port}")
+        print("  (If the phone can't connect, macOS may be asking to allow "
+              "incoming connections for Python — click Allow.)")
     print("Press Ctrl+C to stop.")
     try:
         server.serve_forever()
