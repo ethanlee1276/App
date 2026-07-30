@@ -786,6 +786,135 @@ def test_log_longshots_skips_projected_lineups():
     assert players == {"Confirmed Guy", "Legacy Row No Flag"}
 
 
+def test_partial_stat_lines_never_settle_a_live_game():
+    """The premature-settle bug: MLB's game-log API includes an in-progress
+    game's partial line, and one ingested partial row graded tonight's bet
+    "lost" in the 4th inning. When the games table says the team's game has
+    no final score yet, the settler must leave the bet open."""
+    from engine import db as hist_db
+    conn = _conn()
+    r = _result(sport="mlb", date="2026-07-29")
+    r["recommendations"][0].update(player="Austin Wells", market="total_bases",
+                                   side="OVER", line=0.5, odds=100)
+    ledger.log_recommendations(conn, r)
+
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_games(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-29",
+         "game_id": "NYY@CHW", "home": "CHW", "away": "NYY",
+         "home_score": None, "away_score": None,      # still in progress
+         "spread": 0.0, "total": 8.5, "roof": "", "surface": "",
+         "temp": None, "wind": None, "extra": None}])
+    hist_db.upsert_player_logs(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-29",
+         "game_id": "w", "player": "Austin Wells", "team": "NYY",
+         "opponent": "CHW", "position": "C", "home": 0,
+         "market": "total_bases", "value": 0.0}])      # partial: 0 TB so far
+    assert ledger.settle_from_history(conn, hist, sport="mlb") == 0
+    assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "open"
+
+    # Game goes final: score lands, the stat row updates — NOW it settles.
+    hist_db.upsert_games(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-29",
+         "game_id": "NYY@CHW", "home": "CHW", "away": "NYY",
+         "home_score": 2, "away_score": 5, "spread": 0.0, "total": 8.5,
+         "roof": "", "surface": "", "temp": None, "wind": None, "extra": None}])
+    hist_db.upsert_player_logs(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-29",
+         "game_id": "w", "player": "Austin Wells", "team": "NYY",
+         "opponent": "CHW", "position": "C", "home": 0,
+         "market": "total_bases", "value": 2.0}])
+    assert ledger.settle_from_history(conn, hist, sport="mlb") == 1
+    b = conn.execute("SELECT status, actual FROM bets").fetchone()
+    assert b["status"] == "won" and b["actual"] == 2.0
+
+
+def test_resettle_fixes_bets_graded_off_partial_stats():
+    """The user-facing repair: a bet already marked "lost" at 0 total bases
+    mid-game flips to "won" (with P&L and bankroll restated) once the final
+    number lands. Clean journals are a no-op."""
+    from engine import db as hist_db
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    conn.execute(
+        "INSERT INTO bets (ts, sport, date, player, market, side, line, book, "
+        "odds, stake_units, stake_dollars, status, actual, pnl_units, "
+        "pnl_dollars, category) VALUES ('t','mlb','2026-07-29','Austin Wells',"
+        "'total_bases','OVER',0.5,'BetMGM',100,0.1,1.0,'lost',0.0,-0.1,-1.0,"
+        "'main')")
+    conn.commit()
+
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_games(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-29",
+         "game_id": "NYY@CHW", "home": "CHW", "away": "NYY",
+         "home_score": 2, "away_score": 5, "spread": 0.0, "total": 8.5,
+         "roof": "", "surface": "", "temp": None, "wind": None, "extra": None}])
+    hist_db.upsert_player_logs(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-29",
+         "game_id": "w", "player": "Austin Wells", "team": "NYY",
+         "opponent": "CHW", "position": "C", "home": 0,
+         "market": "total_bases", "value": 2.0}])
+    fixed = ledger.resettle_mismatches(conn, hist)
+    assert [(f["was"], f["now"]) for f in fixed] == [("lost", "won")]
+    b = conn.execute("SELECT * FROM bets").fetchone()
+    assert b["status"] == "won" and b["actual"] == 2.0
+    assert abs(b["pnl_units"] - 0.1) < 1e-9        # +100 at 0.1u
+    assert abs(b["pnl_dollars"] - 1.0) < 1e-9
+    assert ledger.bankroll(conn) == 1001.0         # restated, not stacked
+    assert ledger.resettle_mismatches(conn, hist) == []   # idempotent
+
+
+def test_resettle_waits_while_the_game_is_still_running():
+    """The repair must not "fix" a grade using another partial line — an
+    unfinished game's numbers aren't evidence in either direction."""
+    from engine import db as hist_db
+    conn = _conn()
+    conn.execute(
+        "INSERT INTO bets (ts, sport, date, player, market, side, line, book, "
+        "odds, stake_units, stake_dollars, status, actual, pnl_units, "
+        "pnl_dollars, category) VALUES ('t','mlb','2026-07-29','Austin Wells',"
+        "'total_bases','OVER',0.5,'BetMGM',100,0.1,1.0,'lost',0.0,-0.1,-1.0,"
+        "'main')")
+    conn.commit()
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_games(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-29",
+         "game_id": "NYY@CHW", "home": "CHW", "away": "NYY",
+         "home_score": None, "away_score": None, "spread": 0.0, "total": 8.5,
+         "roof": "", "surface": "", "temp": None, "wind": None, "extra": None}])
+    hist_db.upsert_player_logs(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-29",
+         "game_id": "w", "player": "Austin Wells", "team": "NYY",
+         "opponent": "CHW", "position": "C", "home": 0,
+         "market": "total_bases", "value": 1.0}])     # partial again
+    assert ledger.resettle_mismatches(conn, hist) == []
+    assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "lost"
+
+
+def test_slate_ingest_withholds_same_day_rows_for_teams_in_play():
+    """Layer zero of the premature-settle fix: a live slate's game-log rows
+    for TODAY are only written once the team's day is final — MLB's API
+    includes the in-progress game with partial stats."""
+    from types import SimpleNamespace as NS
+    from engine.ingest import mlb_rows_from_slate
+    weather = NS(temp_f=75.0, wind_mph=5.0)
+    g = NS(home="NYY", away="CHW", park="Yankee Stadium", total=8.5,
+           weather=weather, live=NS(state="live"))
+    p = NS(player="Austin Wells", team="NYY", position="C",
+           market="total_bases",
+           logs=[NS(date="2026-07-29", game=1, opponent="CHW", home=True,
+                    value=0.0),
+                 NS(date="2026-07-27", game=2, opponent="BOS", home=False,
+                    value=2.0)])
+    _, prows = mlb_rows_from_slate(NS(games=[g], props=[p]), "2026-07-29")
+    assert [r["period"] for r in prows] == ["2026-07-27"]
+    # Once the game is final the same-day row flows through.
+    g.live = NS(state="final")
+    _, prows = mlb_rows_from_slate(NS(games=[g], props=[p]), "2026-07-29")
+    assert "2026-07-29" in [r["period"] for r in prows]
+
+
 def test_nfl_week_bets_settle_from_weekly_logs():
     """An NFL slate journals as '2025-W05'; results land as period '005'
     within a season. The mapping must join BOTH keys — a bare week number

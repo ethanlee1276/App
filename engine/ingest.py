@@ -274,6 +274,16 @@ def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
             "roof": park.roof, "surface": park.surface,
             "temp": g.weather.temp_f, "wind": g.weather.wind_mph, "extra": g.park,
         })
+    # Teams with a KNOWN not-final game on this date. MLB's game-log API
+    # includes a player's in-progress game with partial stats, and one
+    # ingested partial row is enough for the settler to grade tonight's
+    # bet mid-game (the premature "lost" bug). Same-date log rows for
+    # these teams are withheld until the team's day is truly final.
+    teams_in_play = set()
+    for g in slate.games:
+        st = (getattr(g, "live", None) and getattr(g.live, "state", "")) or ""
+        if st and st != "final":
+            teams_in_play.update((g.home, g.away))
     prows = []
     for p in slate.props:
         for gl in p.logs:
@@ -282,6 +292,8 @@ def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
             # real game under a new key on every ingest and duplicate history.
             # Fall back to the index only when the source gave us no date.
             period = gl.date or f"idx-{gl.game:04d}"
+            if period == date and p.team in teams_in_play:
+                continue
             log_season = int(gl.date[:4]) if gl.date else season
             prows.append({
                 "sport": "mlb", "season": log_season, "period": period,

@@ -488,32 +488,46 @@ def ufc_report(conn) -> dict:
 
 
 # --- settling ---------------------------------------------------------------
-def _settle_one(conn, b, actual: float, closing_line: float | None) -> None:
-    """Grade one open bet SIDE-AWARE and advance the bankroll.
+def _grade_side_aware(b, actual: float) -> tuple[str, float]:
+    """(status, pnl_units) for a bet at a given actual — SIDE-AWARE.
 
     ``actual > line`` is only a win for an OVER — grading unders with the
     over's rule inverts half the journal, the same bug that once inverted the
     backtest's P&L."""
     side = (b["side"] or "OVER").upper()
-    if actual > b["line"]:
-        over = 1
-    elif actual < b["line"]:
-        over = 0
-    else:
-        over = None
-    if over is None:
-        status, pnl_u = "push", 0.0
-    else:
-        won = (over == 1) if side == "OVER" else (over == 0)
-        if won:
-            status, pnl_u = "won", (american_to_decimal(b["odds"]) - 1.0) * b["stake_units"]
-        else:
-            status, pnl_u = "lost", -b["stake_units"]
+    if actual == b["line"]:
+        return "push", 0.0
+    won = (actual > b["line"]) == (side == "OVER")
+    if won:
+        return "won", (american_to_decimal(b["odds"]) - 1.0) * (b["stake_units"] or 0.0)
+    return "lost", -(b["stake_units"] or 0.0)
+
+
+def _settle_one(conn, b, actual: float, closing_line: float | None) -> None:
+    """Grade one open bet and advance the bankroll."""
+    status, pnl_u = _grade_side_aware(b, actual)
     pnl_d = round(pnl_u / b["stake_units"] * b["stake_dollars"], 2) if b["stake_units"] else 0.0
     conn.execute(
         "UPDATE bets SET status=?, actual=?, pnl_units=?, pnl_dollars=?, closing_line=? WHERE id=?",
         (status, actual, round(pnl_u, 4), pnl_d, closing_line, b["id"]))
     set_cfg(conn, "bankroll", round(bankroll(conn) + pnl_d, 2))
+
+
+def _team_day_unfinished(hist_conn, where, wargs, log_row) -> bool:
+    """True when the stat row's team has a game that day WITHOUT a final
+    score in the games table — meaning the row may be a partial line from a
+    game in progress, and nothing should grade against it yet. Unknown team
+    or no game rows = no evidence either way → False (legacy behavior; the
+    ingest layer separately withholds same-day rows for teams in play)."""
+    team = log_row["team"] if "team" in log_row.keys() else None
+    if not team:
+        return False
+    r = hist_conn.execute(
+        f"SELECT COUNT(*), COALESCE(SUM(home_score IS NOT NULL), 0) "
+        f"FROM games WHERE {where} AND (home=? OR away=?)",
+        (*wargs, team, team)).fetchone()
+    tot, fin = int(r[0] or 0), int(r[1] or 0)
+    return bool(tot) and fin < tot
 
 
 def _snapshot_closes() -> dict:
@@ -615,18 +629,20 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             settled += 1
             continue
         rows = hist_conn.execute(
-            f"SELECT value FROM player_game_logs WHERE {where} "
+            f"SELECT value, team FROM player_game_logs WHERE {where} "
             f"AND market=? AND player=?",
             (*wargs, b["market"], b["player"])).fetchall()
         if not rows:
             # Name-shape fallback (feeds disagree on accents/suffixes).
             target = normalize_name(b["player"])
             rows = [c for c in hist_conn.execute(
-                        f"SELECT player, value FROM player_game_logs "
+                        f"SELECT player, value, team FROM player_game_logs "
                         f"WHERE {where} AND market=?",
                         (*wargs, b["market"]))
                     if normalize_name(c["player"]) == target]
         if not rows:
+            continue
+        if _team_day_unfinished(hist_conn, where, wargs, rows[0]):
             continue
         if len(rows) > 1:
             # DOUBLEHEADER day: the player has one stat row per game and the
@@ -696,6 +712,57 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
 
     conn.commit()
     return settled + voided
+
+
+def resettle_mismatches(conn, hist_conn) -> list[dict]:
+    """Audit every settled stat bet against the CURRENT history rows and
+    fix any wrong grade.
+
+    The premature-settle bug graded bets off partial stat lines from games
+    still in progress ("lost" at 0 total bases in the 4th inning). Once the
+    real final numbers land, this pass finds every settled bet whose stat
+    row now disagrees with the actual it was graded on, re-grades it
+    side-aware, restates its P&L and the bankroll, and reports what moved.
+    Idempotent — a clean journal is a no-op. Team markets are exempt: they
+    only ever settle from final scores.
+    """
+    from .sources.oddsapi import normalize_name
+    fixed = []
+    for b in conn.execute(
+            "SELECT * FROM bets WHERE status IN ('won','lost','push') "
+            "AND market NOT IN ('moneyline','total','spread','team_total')"
+            ).fetchall():
+        where, wargs = _hist_where(b)
+        rows = hist_conn.execute(
+            f"SELECT value, team FROM player_game_logs WHERE {where} "
+            f"AND market=? AND player=?",
+            (*wargs, b["market"], b["player"])).fetchall()
+        if not rows:
+            target = normalize_name(b["player"])
+            rows = [c for c in hist_conn.execute(
+                        f"SELECT player, value, team FROM player_game_logs "
+                        f"WHERE {where} AND market=?", (*wargs, b["market"]))
+                    if normalize_name(c["player"]) == target]
+        if len(rows) != 1:
+            continue          # missing or ambiguous (doubleheader) — leave it
+        if _team_day_unfinished(hist_conn, where, wargs, rows[0]):
+            continue          # game still running — its numbers aren't evidence
+        actual = float(rows[0]["value"])
+        if b["actual"] is not None and abs(actual - float(b["actual"])) < 1e-9:
+            continue          # graded on the number that stands — correct
+        status, pnl_u = _grade_side_aware(b, actual)
+        pnl_d = round(pnl_u / b["stake_units"] * b["stake_dollars"], 2) \
+            if b["stake_units"] else 0.0
+        conn.execute(
+            "UPDATE bets SET status=?, actual=?, pnl_units=?, pnl_dollars=? "
+            "WHERE id=?", (status, actual, round(pnl_u, 4), pnl_d, b["id"]))
+        fixed.append({"date": b["date"], "player": b["player"],
+                      "market": b["market"], "was": b["status"], "now": status,
+                      "actual": actual})
+    if fixed:
+        conn.commit()
+        recompute_bankroll(conn)
+    return fixed
 
 
 def settle(conn, actuals: dict[tuple[str, str], float], sport: str | None = None,

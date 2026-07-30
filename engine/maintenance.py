@@ -215,8 +215,17 @@ def settle_open(log=print, state_path: Path | None = None,
         except Exception:  # noqa: BLE001 — free-feed hiccup; daily pass catches up
             pass
         settled = ledger.settle_from_history(lconn, hconn)
-        if settled:
+        # Self-healing: any bet ever graded off a partial stat line gets
+        # re-graded once the real final number is in.
+        fixed = ledger.resettle_mismatches(lconn, hconn)
+        if fixed:
+            log(f"  ⚠️  corrected {len(fixed)} bet(s) graded off partial "
+                "stats: " + "; ".join(
+                    f"{f['player']} {f['market']} {f['was']}→{f['now']}"
+                    for f in fixed[:5]))
+        if settled or fixed:
             ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+        if settled:
             log(f"  settled {settled} pick(s) from {res['games']} finished "
                 f"game(s) ({days[0]}"
                 + (f" → {days[-1]}" if days[-1] != days[0] else "") + ")")
@@ -273,7 +282,13 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
     try:
         from . import db, ledger
         lconn = ledger.connect()
-        n = ledger.settle_from_history(lconn, db.connect())
+        hconn = db.connect()
+        n = ledger.settle_from_history(lconn, hconn)
+        fixed = ledger.resettle_mismatches(lconn, hconn)
+        if fixed:
+            log(f"  ⚠️  corrected {len(fixed)} bet(s) graded off partial stats: "
+                + "; ".join(f"{f['player']} {f['market']} {f['was']}→{f['now']}"
+                            for f in fixed[:5]))
         ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
         log(f"  journal: settled {n} pick(s)" if n else "  journal: nothing to settle")
     except Exception as exc:  # noqa: BLE001

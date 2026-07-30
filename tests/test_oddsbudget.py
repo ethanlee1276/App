@@ -310,10 +310,14 @@ def test_legacy_state_seeds_the_mlb_clock():
 
 def test_budget_share_splits_the_daily_allowance():
     """Two live slates each get half the day's spend, so September can't
-    plan to burn the month twice over."""
+    plan to burn the month twice over. Date INJECTED: at month-end the
+    real clock doubles the daily allowance until the full-share gap hits
+    the MIN_REFRESH_GAP floor, which breaks the 2x relation spuriously."""
+    import datetime as _dt
     st = BudgetState(remaining=20000)
-    full = min_seconds_between(10, st, share=1.0)
-    half = min_seconds_between(10, st, share=0.5)
+    mid = _dt.date(2026, 7, 15)
+    full = min_seconds_between(10, st, today=mid, share=1.0)
+    half = min_seconds_between(10, st, today=mid, share=0.5)
     assert half >= full * 2 or half == float("inf")
 
 
