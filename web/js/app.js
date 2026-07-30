@@ -227,7 +227,9 @@ function normalizeSlate(d) {
 async function load(quiet = false) {
   state.quiet = quiet;                       // silent re-render (no entrance anim)
   if (!quiet) showSkeleton();
-  const refreshBtn = document.getElementById("refresh");
+  // The brand IS the refresh control now — it spins while data loads, so
+  // a tap always has visible feedback even though the button is gone.
+  const refreshBtn = document.getElementById("brand-home");
   if (refreshBtn && !quiet) refreshBtn.classList.add("loading");
   const meta = SPORT_META[state.sport];
   const params = new URLSearchParams({ min_confidence: state.minConf, min_edge: state.minEdge, max_juice: state.maxJuice });
@@ -4421,6 +4423,23 @@ function moveIndicator() {
    phone they collapse into one menu that shows the current page and
    opens the full list.
    ============================================================ */
+/* Home = the current sport's Recommended board, freshly loaded.
+
+   Standalone pages (Polymarket, Fantasy, UFC, Why Us) aren't sports and
+   have no Recommended view, so from there home means "back to the sport
+   you were on" — exitStandaloneMode restores its nav and brand. */
+function goHome() {
+  closeMobileMenu();
+  if (STANDALONE_MODES.includes(state.view)) {
+    exitStandaloneMode();
+  } else if (state.view !== "recommended") {
+    switchView("recommended");
+  }
+  syncMenuLabel();
+  window.scrollTo({ top: 0, behavior: state.quiet ? "auto" : "smooth" });
+  load();                                   // always pull current numbers
+}
+
 function closeMobileMenu() {
   document.body.classList.remove("menu-open");
   const btn = document.getElementById("menu-toggle");
@@ -4525,7 +4544,17 @@ function bind() {
   };
   bankrollEl.addEventListener("input", onBankrollChange);
   unitEl.addEventListener("input", onBankrollChange);
-  document.getElementById("refresh").addEventListener("click", load);
+  // Brand = home. Every site works this way, so nobody has to be taught
+  // it: back to THIS sport's Recommended board, with fresh data. It
+  // replaced the Refresh button outright — one control, no ambiguity
+  // about which one gets you current numbers.
+  const home = document.getElementById("brand-home");
+  if (home) {
+    home.addEventListener("click", (e) => {
+      e.preventDefault();
+      goHome();
+    });
+  }
   document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
   window.addEventListener("resize", moveIndicator);
 }

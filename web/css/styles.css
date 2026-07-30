@@ -69,6 +69,17 @@ h1, h2, h3 { margin: 0; }
   backdrop-filter: blur(14px);
 }
 .brand { display: flex; align-items: center; gap: 12px; }
+/* Logo + name act as the home link, so they must LOOK tappable — the
+   convention only helps if the target reads as clickable. */
+.brand-home {
+  display: flex; align-items: center; gap: 12px;
+  color: inherit; text-decoration: none; cursor: pointer;
+  border-radius: 12px; padding: 2px; margin: -2px;
+  transition: opacity .15s ease;
+}
+.brand-home:hover { opacity: .82; }
+.brand-home:active { opacity: .65; }
+.brand-home:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
 .logo {
   width: 42px; height: 42px; border-radius: 12px;
   display: grid; place-items: center; font-size: 22px;
@@ -531,12 +542,18 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 
 /* refresh glyph spins while the model reloads */
 .rfx { display: inline-block; }
-#refresh.loading .rfx { animation: spinGlyph .8s linear infinite; }
+/* Loading feedback moved to the brand when the Refresh button retired:
+   a tap on the logo visibly pulses while the new numbers land. */
+#brand-home.loading .logo { animation: pulseLogo .9s ease-in-out infinite; }
+@keyframes pulseLogo {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .55; transform: scale(.94); }
+}
 @keyframes spinGlyph { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {
   .view.active.from-right, .view.active.from-left { animation: none; }
-  #refresh.loading .rfx { animation: none; }
+  #brand-home.loading .logo { animation: none; opacity: .6; }
 }
 
 /* ---------------- Sport switcher (NFL / MLB) ---------------- */

@@ -14,11 +14,19 @@
       <span class="mt-label" id="menu-label">Menu</span>
     </button>
     <div class="brand">
-      <span class="logo" id="brand-logo">🏈</span>
-      <div>
-        <h1>Gridiron Edge</h1>
-        <div class="tagline" id="tagline">AI-powered NFL player-prop model</div>
-      </div>
+      <!-- The universal "back to home" affordance: logo + name returns to
+           the current sport's Recommended board AND pulls fresh data,
+           which is why there's no separate Refresh button. An <a> (not a
+           button) because a heading isn't valid inside a button, and the
+           href gives it real keyboard/semantic behaviour. -->
+      <a class="brand-home" id="brand-home" href="#recommended"
+         title="Home — tonight's picks for this sport (also refreshes)">
+        <span class="logo" id="brand-logo">🏈</span>
+        <div>
+          <h1>Gridiron Edge</h1>
+          <div class="tagline" id="tagline">AI-powered NFL player-prop model</div>
+        </div>
+      </a>
       <!-- data-kind groups the menu on a phone: the four LEAGUES read as
            one compact row, the standalone TOOLS as another. Mixed
            together they looked like seven equal "sports", which is why
@@ -56,7 +64,6 @@
       <span id="live-refresh" class="live-refresh" style="display:none"></span>
       <span id="slate-date">—</span>
       <button id="theme-toggle" class="theme-toggle" title="Toggle light / dark" aria-label="Toggle theme">🌙</button>
-      <button id="refresh" class="btn ghost"><span class="rfx">↻</span> Refresh</button>
     </div>
   </header>
 
