@@ -831,7 +831,7 @@ async function renderTeamForm() {
     <div class="section-title" style="margin-top:8px">Team form — last ${tf.window_days || 7} days
       <span class="sub">— from our own ingested results, refreshed nightly. Tracked and
       measured before it's ever allowed to move a bet.</span></div>
-    <div class="trend-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+    <div class="trend-grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))">
       ${col("Running hot", "🔥", tf.hot || [], "pos")}
       ${col("Running cold", "❄️", tf.cold || [], "neg")}
     </div>
@@ -1364,7 +1364,7 @@ function watchlistHTML(watch, mlb) {
     const spark = (r.recent_values || []).length > 2
       ? sparkline(r.recent_values, { line: 0.5, stroke: teamPrimary(r.team), w: 64, h: 22 })
       : "";
-    return `<div style="display:flex;align-items:center;gap:12px;padding:7px 14px;
+    return `<div class="drow" style="display:flex;align-items:center;gap:12px;padding:7px 14px;
         border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden">
       <span style="opacity:.5;min-width:18px;font-size:.85em">${i + 1}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">
@@ -2522,7 +2522,7 @@ function edgeBoardRows() {
 
 function edgeRowHTML(r, i) {
   const evPct = (r.ev * 100).toFixed(1);
-  return `<div class="ls-row" style="display:flex;align-items:center;gap:14px;
+  return `<div class="ls-row drow" style="display:flex;align-items:center;gap:14px;
        padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
     <span style="opacity:.5;min-width:20px">${i + 1}</span>
     <span style="flex:1"><strong>${escapeHtml(r.label)}</strong>
@@ -2572,7 +2572,7 @@ function scanPairRow(p, extra) {
   const leg = (side, l) =>
     `<span style="display:block"><strong>${side} ${l.line}</strong>
        <span style="opacity:.65">@ ${escapeHtml(l.book)} ${american(l.odds)}</span></span>`;
-  return `<div style="display:flex;align-items:center;gap:14px;padding:11px 16px;
+  return `<div class="drow" style="display:flex;align-items:center;gap:14px;padding:11px 16px;
       border-bottom:1px solid rgba(255,255,255,.05)">
     <span style="flex:1"><strong>${escapeHtml(p.bet)}</strong></span>
     <span style="min-width:170px">${leg("Over", p.over)}${leg("Under", p.under)}</span>
@@ -2630,7 +2630,7 @@ function renderScanner() {
       ? `showing the ${st.length} biggest gaps of ${total} found · ` : "";
   };
 
-  const staleRow = (t) => `<div style="display:flex;align-items:center;gap:14px;
+  const staleRow = (t) => `<div class="drow" style="display:flex;align-items:center;gap:14px;
       padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
     <span style="flex:1"><strong>${escapeHtml(t.bet)}</strong>
       <span style="display:block;opacity:.65;font-size:.85em">
@@ -2658,7 +2658,7 @@ function renderScanner() {
       + "prices — the books shade big payouts 2.6x harder. No forecast is involved and "
       + "none helps; this is what the PRICE costs before anyone has a view on the player",
       (state.data.market_scan && state.data.market_scan.longshots) || [],
-      (t) => `<div style="display:flex;align-items:center;gap:14px;padding:11px 16px;
+      (t) => `<div class="drow" style="display:flex;align-items:center;gap:14px;padding:11px 16px;
           border-bottom:1px solid rgba(255,255,255,.05)">
         <span style="flex:1"><strong>${escapeHtml(t.bet)}</strong>
           <span style="display:block;opacity:.65;font-size:.85em">
@@ -2698,7 +2698,7 @@ function renderScanner() {
     + `<div class="section-title" style="margin-top:20px">Sharp money
         <span class="sub">— where the professional side of the market is</span></div>
       <div class="card" style="padding:0">
-        ${anchors.map((b) => `<div style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
+        ${anchors.map((b) => `<div class="drow" style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
             <span style="flex:1"><strong>${escapeHtml(b.pick_label || "")}</strong>
               <span style="display:block;opacity:.6;font-size:.85em">${escapeHtml(b.matchup || "")} · priced off the sharp book's fair value</span></span>
             <span style="min-width:64px;text-align:right">${american(b.odds)}</span>
@@ -2712,7 +2712,7 @@ function renderScanner() {
             : ((r.ev_per_unit || 0) > 0
                ? ["Live", "var(--good,#3ddc84)", "value still available near the sharp number"]
                : ["Chase", "var(--warn,#e8b33e)", "line already moved past it — do not follow"]);
-          return `<div style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
+          return `<div class="drow" style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
             <span>🔥</span>
             <span style="flex:1"><strong>${escapeHtml(r.player)} ${escapeHtml(r.market_label || "")}</strong>
               <span style="display:block;opacity:.6;font-size:.85em">steam — several books moved together, ${m.verdict === "with" ? "toward" : "against"} our ${escapeHtml(r.side || "")}${age != null ? ` · ${age < 60 ? age + "m" : Math.round(age / 60) + "h"} ago` : ""} · ${cls[2]}</span></span>
@@ -2950,7 +2950,7 @@ async function renderIntel() {
   const marketRows = (d.markets || []).slice(0, 20).map((m, i) => `
     <div class="dl-row pm-market">
       <span class="dl-rank">${i + 1}</span>
-      <span class="dl-main" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+      <span class="dl-main pm-q">
         <a href="https://polymarket.com/market/${escapeHtml(m.slug)}" target="_blank" rel="noopener"
            style="color:inherit;font-weight:600">${escapeHtml(m.question)}</a></span>
       <span class="dl-num strong">${cents(m.yes)}</span>
@@ -3260,7 +3260,7 @@ function waiverPulseHTML(t) {
       <span class="sub">— who the fantasy world grabbed and dumped in the last
       ${t.lookback_hours || 24}h (every Sleeper league). Market attention, not our model —
       check the movers against the usage boards below before following the crowd.</span></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:14px">
       ${(t.adds || []).length ? col("🔥 Most added", t.adds, "var(--good)", "adds") : ""}
       ${(t.drops || []).length ? col("🧊 Most dropped", t.drops, "var(--bad)", "drops") : ""}
     </div>`;
@@ -3686,7 +3686,7 @@ function renderSleeperPanel(d, ctx) {
     || (b.u ? b.u.fp_pg : 0) - (a.u ? a.u.fp_pg : 0));
 
   const rowHTML = (r) => `
-    <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;
+    <div class="drow" style="display:flex;align-items:center;gap:12px;padding:8px 16px;
         border-bottom:1px solid rgba(255,255,255,.05)">
       <span style="flex:0 0 auto">${playerAvatar(r.name, r.team, { map: nflMap() })}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
