@@ -1156,6 +1156,61 @@ def main() -> None:
                   f"pruning starts as these age out. History, budget state "
                   f"and big downloads are never pruned.")
         return
+    if "--data-audit" in argv:
+        # "Is my data still there?" answered by counting it, not by
+        # promising. Everything below is PERMANENT storage; none of it is
+        # reachable by the cache pruner (asserted at the end).
+        from pathlib import Path as _P
+        from engine import db as _db, ledger as _led, calibrate as _cal
+        from engine.sources.fetch import CACHE_DIR as _CD
+        h = _db.connect()
+        print("PERMANENT DATA — stats, results and journal\n")
+        rows = h.execute(
+            "SELECT sport, COUNT(*) n, COUNT(DISTINCT season) s, "
+            "MIN(period) a, MAX(period) b FROM player_game_logs "
+            "GROUP BY sport ORDER BY n DESC").fetchall()
+        for r in rows:
+            print(f"  {r['sport'].upper():<5} player stats : {r['n']:>9,} rows  "
+                  f"{r['s']} season(s)  {r['a']} → {r['b']}")
+        for r in h.execute(
+                "SELECT sport, COUNT(*) n, SUM(home_score IS NOT NULL) f "
+                "FROM games GROUP BY sport ORDER BY n DESC"):
+            print(f"  {r['sport'].upper():<5} games        : {r['n']:>9,} "
+                  f"({r['f'] or 0:,} with final scores)")
+        for tbl, label in (("team_weeks", "team EPA/PROE/pace"),
+                           ("odds_history", "harvested odds"),
+                           ("game_starters", "starting pitchers"),
+                           ("game_umpires", "umpires")):
+            try:
+                n = h.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
+                print(f"  {'':<5} {label:<13}: {n:>9,} rows")
+            except Exception:
+                pass
+        c = _led.connect()
+        b = c.execute(
+            "SELECT COUNT(*) n, SUM(status='open') o, "
+            "SUM(status IN ('won','lost','push')) s FROM bets").fetchone()
+        print(f"\n  BET JOURNAL       : {b['n']:,} bet(s) — "
+              f"{b['s'] or 0:,} settled, {b['o'] or 0:,} open")
+        for r in c.execute("SELECT category, COUNT(*) n FROM bets "
+                           "GROUP BY category ORDER BY n DESC"):
+            print(f"     {r['category']:<16} {r['n']:>7,}")
+        print(f"  bankroll          : ${_led.bankroll(c):,.2f}")
+        cal = _P(_cal.DEFAULT_PATH)
+        print(f"  calibration model : "
+              f"{'present' if cal.exists() else 'not fitted yet'}")
+        # The guarantee, checked rather than claimed.
+        print("\nPRUNE SAFETY")
+        cache = _CD.resolve()
+        for label, p in (("history DB", _db.DEFAULT_DB),
+                         ("ledger DB", _led.DEFAULT_DB),
+                         ("calibration", _cal.DEFAULT_PATH)):
+            inside = cache in _P(p).resolve().parents
+            print(f"  {label:<12} {_P(p).resolve()}  "
+                  f"{'⚠️ INSIDE CACHE' if inside else '✅ outside the cache'}")
+        print(f"  The pruner only ever looks in {cache} and only deletes "
+              f"per-game fetch files there.")
+        return
     if "--nfl-baseline" in argv:
         nfl_baseline()
         return

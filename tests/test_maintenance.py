@@ -297,6 +297,33 @@ def test_prune_cache_never_touches_irreplaceable_state(_mp=None):
     assert prune_cache(cache_dir=root / "nope") == (0, 0)
 
 
+
+def test_prune_can_never_reach_stats_journal_or_models(_mp=None):
+    """The structural guarantee behind "we never delete stats": every
+    permanent store lives OUTSIDE the cache directory, so the pruner —
+    which only iterates that one directory — cannot see them at any age.
+    A refactor that moved a DB under data/cache/ would fail here."""
+    from pathlib import Path
+    from engine import db, ledger, calibrate
+    from engine.sources.fetch import CACHE_DIR
+    from engine import maintenance
+
+    cache = Path(CACHE_DIR).resolve()
+    for label, p in (("history DB", db.DEFAULT_DB),
+                     ("ledger DB", ledger.DEFAULT_DB),
+                     ("calibration", calibrate.DEFAULT_PATH)):
+        assert cache not in Path(p).resolve().parents, \
+            f"{label} sits inside the prunable cache directory"
+
+    # And even if a stats-shaped file WERE dropped in the cache, no
+    # prunable prefix matches a database or model file.
+    for name in ("history.db", "ledger.db", "calibration.json",
+                 "line_history.jsonl", "depth_snapshots.json",
+                 "odds_budget.json", "pbp_2025.csv"):
+        assert not name.startswith(maintenance.PRUNABLE_CACHE_PREFIXES), \
+            f"{name} would be deleted by the pruner"
+
+
 if __name__ == "__main__":
     class MP:
         def __init__(self): self._undo = []
