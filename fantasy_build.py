@@ -19,7 +19,7 @@ import datetime
 import json
 from pathlib import Path
 
-from engine import fantasy, fantasy_draft, offseason
+from engine import fantasy, fantasy_draft, offseason, preseason
 from engine.db import connect
 from engine.sources.fetch import DataUnavailable
 
@@ -78,9 +78,25 @@ def main() -> None:
               + (": " + ", ".join(f"{m['player']} ({m['from']}→{m['to']})"
                                   for m in mv[:6])
                  + ("…" if len(mv) > 6 else "") if mv else ""))
+        # Camp signals: snapshot today's depth charts, diff across the
+        # preseason window. The chart is the coaching staff's own verdict
+        # — tracked daily, it says who WON a job before Week 1 lines and
+        # fantasy drafts have priced it.
+        camp = preseason.camp_report(
+            blob, datetime.date.today().isoformat())
+        if camp and camp.get("days", 0) >= 2:
+            ns = camp.get("new_starters") or []
+            print(f"Camp watch ({camp['from']} → {camp['to']}): "
+                  f"{len(ns)} new starter(s), {len(camp['risers'])} riser(s), "
+                  f"{len(camp['fallers'])} faller(s)"
+                  + (": " + ", ".join(
+                      f"{r['player']} ({r['team']} {r['position']}1"
+                      + (", rookie" if r.get("rookie") else "") + ")"
+                      for r in ns[:5]) if ns else ""))
         out = {
             "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "season": season,
+            "camp": camp,
             "usage": usage,
             "rates": fantasy.league_rates(conn, season),
             "buy_sell": buy_sell,

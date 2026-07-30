@@ -2987,6 +2987,7 @@ async function renderFantasy() {
         <div style="color:var(--text-mute);font-size:12px;margin-top:2px">games with posted lines</div></div>
     </div>
     <div id="sleeper-zone"></div>
+    ${campHTML(d.camp)}
     ${waiverPulseHTML(d.trending)}
     ${offseasonHTML(off)}
     ${draftKit}
@@ -3038,6 +3039,50 @@ async function renderFantasy() {
    Orioles (both leagues use MIN and BAL). These helpers pin the map. */
 const nflMap = () => (typeof TEAMS !== "undefined" ? TEAMS : {});
 const nflName = (a) => (nflMap()[a] && nflMap()[a].nick) || a;
+
+/* Camp watch — daily depth-chart snapshots diffed across the preseason.
+   The chart is the coaching staff's own verdict; the DIFF is the signal:
+   who won a job before Week 1 lines and fantasy drafts price it. */
+function campHTML(camp) {
+  if (!camp) return "";
+  const slot = (r, o) => `${escapeHtml(r.position)}${o}`;
+  const row = (r, tone) => `
+    <div class="os-row"><span class="os-team">${escapeHtml(r.player)}
+        <span class="dk-pt">${nflName(r.team)}${r.rookie ? " · rookie" : ""}</span></span>
+      <span class="os-before">${slot(r, r.from_order)}</span>
+      <span class="os-arrow">→</span>
+      <span class="os-now" style="color:${tone}">${slot(r, r.to_order)}</span></div>`;
+  const box = (title, sub, rows, empty) => `
+    <article class="card os-card">
+      <div class="card-head"><div><div class="player">${title}</div>
+        <div class="subtitle">${sub}</div></div></div>
+      <div class="os-body">${rows || `<p class="loading" style="padding:8px 0">${empty}</p>`}</div>
+    </article>`;
+  if ((camp.days || 0) < 2) {
+    return `
+      <div class="section-title" style="margin-top:22px">Camp watch
+        <span class="sub">— depth charts snapshotted daily; movers appear as camp
+        shakes them out</span></div>
+      <div class="card"><p class="loading">Tracking started ${escapeHtml(camp.tracking_since || "today")} —
+        the first movers show after a few days of snapshots. The depth chart is the coaching
+        staff's own verdict; the change over camp is the honest preseason signal, not
+        August box scores.</p></div>`;
+  }
+  const accruing = `No chart movement in the window yet.`;
+  return `
+    <div class="section-title" style="margin-top:22px">Camp watch
+      <span class="sub">— depth-chart movement ${escapeHtml(camp.from)} → ${escapeHtml(camp.to)},
+      from the coaching staffs' own charts. Preseason box scores are backups vs backups;
+      WHO RUNS FIRST-TEAM is the signal that prices Week 1.</span></div>
+    <div class="cards wide">
+      ${box("New starters", "took over a №1 job during camp — the strongest Week-1 signal here",
+            (camp.new_starters || []).map((r) => row(r, "var(--good)")).join(""), accruing)}
+      ${box("Risers", "climbing the chart — roles headed their way",
+            (camp.risers || []).map((r) => row(r, "var(--good)")).join(""), accruing)}
+      ${box("Fallers", "sliding — last season's usage overstates their Week-1 role",
+            (camp.fallers || []).map((r) => row(r, "var(--warn)")).join(""), accruing)}
+    </div>`;
+}
 
 /* ============================================================
    Offseason panel — what changed since the stats were recorded.
