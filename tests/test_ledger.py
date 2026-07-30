@@ -814,6 +814,21 @@ def test_era_report_splits_the_record_at_the_retune():
     assert "nfl" in v1["by_sport"] or "mlb" in v1["by_sport"]
 
 
+def test_calibration_since_scopes_to_the_current_era():
+    """The all-time chart mixes retired gates with tonight's model; the
+    since= filter judges the current era on its own picks only."""
+    conn = _conn()
+    _insert_settled(conn, "Old Miss", status="lost", hit_prob=0.60,
+                    edge=0.05, date="2026-07-20")
+    _insert_settled(conn, "New Hit", status="won", hit_prob=0.60,
+                    edge=0.05, date="2026-07-30")
+    all_time = ledger.calibration(conn)
+    era = ledger.calibration(conn, since="2026-07-29")
+    assert all_time["n"] == 2 and all_time["since"] is None
+    assert era["n"] == 1 and era["since"] == "2026-07-29"
+    assert era["buckets"][0]["actual"] == 1.0     # only the new pick counts
+
+
 def test_partial_stat_lines_never_settle_a_live_game():
     """The premature-settle bug: MLB's game-log API includes an in-progress
     game's partial line, and one ingested partial row graded tonight's bet

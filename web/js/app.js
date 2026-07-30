@@ -2020,9 +2020,8 @@ function recLongshotSection(ls) {
 /* Calibration: when the model said X%, how often did it actually happen.
    Rendered as honest rows with a sample-size band — small buckets read as
    "too early", never as verdicts. */
-function recCalibrationSection(cal) {
-  if (!cal || !cal.n || !(cal.buckets || []).length) return "";
-  const rows = cal.buckets.map((b) => {
+function calBucketRows(buckets) {
+  return (buckets || []).map((b) => {
     const off = Math.abs(b.actual - b.predicted);
     const flag = b.n < 20 ? `<span style="opacity:.5">n=${b.n} — too early</span>`
       : b.in_band ? `<span style="color:var(--good)">✓ within noise (n=${b.n})</span>`
@@ -2039,6 +2038,11 @@ function recCalibrationSection(cal) {
       <span style="min-width:150px;text-align:right;font-size:.85em">${flag}</span>
     </div>`;
   }).join("");
+}
+
+function recCalibrationSection(cal, era) {
+  if (!cal || !cal.n || !(cal.buckets || []).length) return "";
+  const rows = calBucketRows(cal.buckets);
   const brier = cal.brier_edge == null ? "" : cal.brier_edge > 0
     ? `<p style="padding:10px 14px;margin:0;font-size:.88em;color:var(--good)">Forecast test: the model's Brier score
        (${cal.brier_model}) beats the de-vigged market's (${cal.brier_market}) on the same bets — lower is better.
@@ -2046,9 +2050,34 @@ function recCalibrationSection(cal) {
     : `<p style="padding:10px 14px;margin:0;font-size:.88em;color:var(--warn)">Forecast test: the de-vigged market's Brier score
        (${cal.brier_market}) still beats the model's (${cal.brier_model}) on our own picks. Shown anyway —
        a site that hides this number is a tout with a website.</p>`;
+  // Era scoping: the all-time chart is dominated by picks from RETIRED
+  // gates. Until the current model has a real sample, say so; after ~50
+  // graded, give it its own chart.
+  const eraN = (era || {}).n || 0;
+  const eraNote = eraN >= 50 ? "" : `
+    <p style="padding:10px 14px;margin:0;font-size:.85em;color:var(--text-mute);
+              border-top:1px solid rgba(255,255,255,.06)">
+      Era note: ${cal.n - eraN} of these ${cal.n} graded picks predate the model re-tune${
+      (era || {}).since ? ` (${escapeHtml(era.since)})` : ""} — the misses above were mostly
+      earned by gates that no longer exist. The current model gets its own chart here once
+      ~50 of its picks settle (${eraN} so far). The nightly calibration refit already feeds
+      these misses back into the model's tempering.</p>`;
+  const eraBlock = eraN >= 50 ? `
+    <div class="section-title" style="margin-top:14px">Current model only
+      <span class="sub">— the same test, restricted to picks graded since the
+      ${escapeHtml((era || {}).since || "")} re-tune (n=${eraN}).</span></div>
+    <div class="card" style="padding:0">${calBucketRows(era.buckets)}${
+      era.brier_edge == null ? "" : era.brier_edge > 0
+        ? `<p style="padding:10px 14px;margin:0;font-size:.88em;color:var(--good)">Current era Brier:
+           model ${era.brier_model} vs market ${era.brier_market} — the re-tuned model out-forecasts
+           the de-vigged close on its own picks.</p>`
+        : `<p style="padding:10px 14px;margin:0;font-size:.88em;color:var(--warn)">Current era Brier:
+           market ${era.brier_market} still beats model ${era.brier_model} — the re-tune hasn't
+           earned the claim yet.</p>`}</div>` : "";
   return `<div class="section-title" style="margin-top:18px">Calibration — did "60%" mean 60%?
       <span class="sub">— every settled pick, bucketed by the model's claimed probability.</span></div>
-    <div class="card" style="padding:0">${rows}${brier}</div>`;
+    <div class="card" style="padding:0">${rows}${brier}${eraNote}</div>
+    ${eraBlock}`;
 }
 
 /* Account health: how sharp our own journaled action looks per book —
@@ -2253,7 +2282,7 @@ async function renderRecord() {
       }).join("") || `<p class="loading" style="padding:12px">Nothing settled yet.</p>`}
     </div>
     ${recEraSection(d.model_eras)}
-    ${recCalibrationSection(d.calibration)}
+    ${recCalibrationSection(d.calibration, d.calibration_era)}
     ${recHealthSection(d.account_health)}
     ${recLongshotSection(d.longshots)}
     ${recStaleSection(d.stale_flags)}

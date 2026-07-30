@@ -1052,7 +1052,8 @@ def recent_settled(conn, limit: int = 30, category: str = "main") -> list[dict]:
     return out
 
 
-def calibration(conn, category: str = "main", bucket_pts: int = 5) -> dict:
+def calibration(conn, category: str = "main", bucket_pts: int = 5,
+                since: str | None = None) -> dict:
     """Predicted vs realized, in probability buckets — the public honesty page.
 
     Groups every settled won/lost bet by the model's claimed hit probability
@@ -1063,10 +1064,14 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5) -> dict:
     stored as model-minus-fair at bet time): if we can't out-forecast the
     de-vigged close on our own selections, the edge story is fiction."""
     from math import sqrt
-    rows = conn.execute(
-        "SELECT hit_prob, edge, status FROM bets "
-        "WHERE status IN ('won','lost') AND category=? AND hit_prob IS NOT NULL",
-        (category,)).fetchall()
+    q = ("SELECT hit_prob, edge, status FROM bets "
+         "WHERE status IN ('won','lost') AND category=? AND hit_prob IS NOT NULL")
+    args: list = [category]
+    if since:
+        # Era-scoped: judge the model running NOW on its own picks only.
+        q += " AND date >= ?"
+        args.append(since)
+    rows = conn.execute(q, args).fetchall()
     nb = max(1, 100 // bucket_pts)
     buckets: list[dict] = [{"lo": i * bucket_pts, "hi": (i + 1) * bucket_pts,
                             "n": 0, "_p": 0.0, "_w": 0} for i in range(nb)]
@@ -1098,7 +1103,7 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5) -> dict:
             "ci": round(ci, 4), "in_band": abs(act - pred) <= ci})
     n = len(rows)
     return {
-        "n": n, "bucket_pts": bucket_pts, "buckets": out_buckets,
+        "n": n, "bucket_pts": bucket_pts, "buckets": out_buckets, "since": since,
         "brier_model": round(se_model / n, 4) if n else None,
         "brier_market": round(se_market / n_market, 4) if n_market else None,
         # Positive = the model out-forecasts the de-vigged market prices on
@@ -1436,6 +1441,9 @@ def export_json(conn, path) -> None:
         "form_sampler": form_report(conn),
         "ufc_record": ufc_report(conn),
         "calibration": calibration(conn),
+        # The same chart scoped to the CURRENT model era — the all-time
+        # chart is dominated by picks from gates that no longer exist.
+        "calibration_era": calibration(conn, since=MODEL_ERAS[-1]["start"]),
         "account_health": account_health(conn),
     }
     p = _Path(path)
