@@ -969,6 +969,69 @@ def _tailscale_ip() -> str | None:
     return None
 
 
+def nfl_baseline() -> None:
+    """Phase-1 audit: is the ingested base complete enough to price Week 1?
+
+    Checks the layers Week-1 projections stand on — weekly stats, pbp
+    aggregates (xFP / roles / EPA / PROE / pace), final scores, and
+    harvested closing lines — and says which are thin BEFORE the season
+    exposes it. `python3 launch.py --nfl-baseline`.
+    """
+    from engine import db, teamprofiles
+    conn = db.connect()
+    row = conn.execute("SELECT MAX(season) FROM player_game_logs "
+                       "WHERE sport='nfl'").fetchone()
+    season = int(row[0]) if row and row[0] is not None else None
+    if season is None:
+        print("No NFL data ingested at all — run `python3 ingest.py nfl` first.")
+        return
+    print(f"NFL baseline audit — season {season}\n")
+
+    def check(label, n, want, unit=""):
+        mark = "✅" if n >= want else "⚠️ "
+        print(f"  {mark} {label}: {n:,}{unit}" +
+              ("" if n >= want else f"  (want ≥ {want:,} — thin)"))
+
+    def market_n(m):
+        return conn.execute(
+            "SELECT COUNT(*) FROM player_game_logs WHERE sport='nfl' "
+            "AND season=? AND market=?", (season, m)).fetchone()[0]
+
+    # Weekly stat layer — what settles bets and feeds projections.
+    for m, want in (("pass_yds", 500), ("rush_yds", 2000), ("rec_yds", 4000),
+                    ("receptions", 4000), ("anytime_td", 1500)):
+        check(f"weekly {m} rows", market_n(m), want)
+    # pbp layer — measured roles and the new efficiency profiles.
+    for m, want in (("xfp", 4000), ("rz_tgt", 4000), ("i5_car", 4000)):
+        check(f"pbp {m} rows", market_n(m), want)
+    games = conn.execute(
+        "SELECT COUNT(*) FROM games WHERE sport='nfl' AND season=? "
+        "AND home_score IS NOT NULL", (season,)).fetchone()[0]
+    check("final scores", games, 250)
+    closes = conn.execute(
+        "SELECT COUNT(*) FROM odds_history WHERE sport='nfl'").fetchone()[0]
+    check("harvested odds snapshots", closes, 1000)
+
+    profs = teamprofiles.season_profiles(conn)
+    check("team efficiency profiles (EPA/PROE/pace)", len(profs), 32)
+    if profs:
+        base = teamprofiles.league_baseline(profs)
+        cov = {s: sum(1 for p in profs.values() if p.get(s) is not None)
+               for s in ("off_epa", "def_epa", "proe", "pace")}
+        print(f"\n  League baseline: EPA/play {base.get('off_epa')} · "
+              f"PROE {base.get('proe')} · pace {base.get('pace')}s · "
+              f"{base.get('plays_per_game')} plays/g")
+        print("  Stat coverage: " + ", ".join(
+            f"{s} {n}/{len(profs)}" for s, n in cov.items()))
+        if any(n < len(profs) for n in cov.values()):
+            print("  ⚠️  EPA/pace gaps mean the cached pbp file predates this "
+                  "build — delete data/cache/pbp_*.csv and rerun "
+                  "`python3 ingest.py nfl` to re-aggregate.")
+    else:
+        print("\n  ⚠️  No team profiles yet — run `python3 ingest.py nfl` "
+              "(Tuesday maintenance also refreshes them in season).")
+
+
 def _lan_ip() -> str | None:
     """This machine's LAN address — the URL a phone on the same Wi-Fi can
     open. The UDP connect never sends a packet; it just makes the OS pick
@@ -996,6 +1059,9 @@ def main() -> None:
         return
     if "--check" in argv:
         preflight()
+        return
+    if "--nfl-baseline" in argv:
+        nfl_baseline()
         return
     if "--why-empty" in argv:
         i = argv.index("--why-empty")

@@ -47,7 +47,8 @@ def test_aggregate_values_players_and_proe():
     # Player-week bucket counts.
     assert agg["players"][("A.Back", "KC", 3)]["car_i5"] == 30
     # Team PROE = mean pass_oe over its plays.
-    assert abs(agg["teams"][("KC", 3)][1] / agg["teams"][("KC", 3)][2] - 0.1) < 1e-9
+    kc = agg["teams"][("KC", 3)]
+    assert abs(kc["oe"][0] / kc["oe"][1] - 0.1) < 1e-9
 
     prow = {(r["player"], r["market"]): r["value"]
             for r in xfp_player_rows(agg, 2025)}
@@ -78,6 +79,75 @@ def test_rz_car_counts_every_red_zone_carry():
             for r in xfp_player_rows(aggregate_pbp(rows), 2025)}
     assert prow[("A.Back", "rz_car")] == 2.0
     assert prow[("A.Back", "i5_car")] == 1.0
+
+
+def test_epa_both_sides_and_neutral_pace():
+    """EPA aggregates per offense (pass/rush split) AND per defense
+    (allowed); pace counts only believable snap gaps in neutral script."""
+    rows = []
+    secs = 3600.0
+    for i in range(24):
+        r = _run("3", "KC", "A.Back", 50, 4, oe="0.1")
+        r.update(epa="0.25" if i % 2 else "-0.05", defteam="DEN",
+                 game_id="G1", wp="0.55", qtr="2",
+                 game_seconds_remaining=str(secs))
+        rows.append(r)
+        secs -= 28.0                                  # 28s between snaps
+    # A garbage-time snap: wp outside the window — never counts for pace.
+    junk = _run("3", "KC", "A.Back", 50, 4)
+    junk.update(epa="1.0", defteam="DEN", game_id="G1", wp="0.95", qtr="4",
+                game_seconds_remaining=str(secs))
+    rows.append(junk)
+    trow = {r["team"]: r for r in team_week_rows(aggregate_pbp(rows), 2025)}
+    kc = trow["KC"]
+    # 25 plays: 12×0.25 + 12×(-0.05) + 1.0 = 3.4 → /25 = 0.136
+    assert abs(kc["off_epa"] - 0.136) < 1e-6
+    assert abs(kc["rush_epa"] - 0.136) < 1e-6 and kc["pass_epa"] is None
+    assert abs(kc["pace"] - 28.0) < 1e-6              # junk snap excluded
+    # Defense: DEN allowed the same EPA KC's offense earned.
+    den = trow["DEN"]
+    assert abs(den["def_epa"] - 0.136) < 1e-6
+    assert den["off_epa"] is None and den["plays"] == 0
+
+
+def test_team_profiles_average_and_migrate():
+    """season_profiles averages team_weeks (min-week gate, form window);
+    an OLD pre-EPA team_weeks table gains the new columns on connect."""
+    import sqlite3, tempfile
+    from pathlib import Path
+    from engine import db, teamprofiles
+    path = Path(tempfile.mkdtemp()) / "hist.db"
+    old = sqlite3.connect(str(path))
+    old.execute("CREATE TABLE team_weeks (sport TEXT, season INTEGER, "
+                "period TEXT, team TEXT, plays INTEGER, proe REAL, "
+                "PRIMARY KEY (sport, season, period, team))")
+    old.execute("INSERT INTO team_weeks VALUES ('nfl', 2025, '001', 'KC', 65, 0.05)")
+    old.commit(); old.close()
+
+    conn = db.connect(path)                           # migration runs here
+    rows = [{"sport": "nfl", "season": 2025, "period": f"{wk:03d}",
+             "team": "KC", "plays": 60 + wk, "proe": 0.04,
+             "off_epa": 0.10, "pass_epa": 0.15, "rush_epa": 0.02,
+             "def_epa": -0.05, "pace": 27.0 + wk}
+            for wk in range(2, 7)]
+    rows.append({"sport": "nfl", "season": 2025, "period": "001",
+                 "team": "DEN", "plays": 55, "proe": -0.02, "off_epa": -0.1,
+                 "pass_epa": None, "rush_epa": None, "def_epa": 0.02,
+                 "pace": None})
+    db.upsert_team_weeks(conn, rows)
+
+    profs = teamprofiles.season_profiles(conn)
+    assert "DEN" not in profs                         # 1 week < MIN_WEEKS
+    kc = profs["KC"]
+    assert kc["weeks"] == 6 and kc["off_epa"] == 0.10
+    assert kc["def_epa"] == -0.05
+    # Week 1 predates EPA (migrated NULLs) — averaged over present weeks only.
+    assert abs(kc["pace"] - (sum(27.0 + w for w in range(2, 7)) / 5)) < 1e-6
+    # Form window: last 2 weeks only.
+    form = teamprofiles.season_profiles(conn, last_n=2, min_weeks=2)
+    assert abs(form["KC"]["pace"] - 32.5) < 1e-6      # weeks 5,6 → 32,33
+    base = teamprofiles.league_baseline(profs)
+    assert base["off_epa"] == 0.10                    # only KC qualifies
 
 
 def test_fantasy_prefers_xfp_and_attaches_proe():

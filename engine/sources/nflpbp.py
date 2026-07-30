@@ -13,8 +13,13 @@ by 370 columns, so rows are reduced to the handful of fields we need):
   short targets), fit from the season itself;
 * **per player-week**: opportunity counts per bucket → xFP, plus the two
   usage numbers that carry TD equity (red-zone targets, inside-5 carries);
-* **per team-week**: plays and pass rate over expectation — nflfastR ships
-  ``pass_oe`` per play, so PROE is a clean average of intent vs situation.
+* **per team-week**: plays, pass rate over expectation (nflfastR ships
+  ``pass_oe`` per play, so PROE is a clean average of intent vs situation),
+  **EPA per play** on offense (with pass/rush splits) and allowed on
+  defense — the spec's efficiency layer, measured instead of inferred from
+  box scores — and **neutral pace** (seconds between snaps with the game
+  still in the balance: win probability 20–80%, first three quarters),
+  the stable half of a totals/environment read.
 
 Free nflverse release data, cached a day; everything degrades to a
 reported skip when unreachable.
@@ -29,7 +34,14 @@ from .fetch import fetch_text, DataUnavailable
 
 NEEDED = ("week", "posteam", "play_type", "yardline_100", "air_yards",
           "complete_pass", "yards_gained", "rush_touchdown", "pass_touchdown",
-          "rusher_player_name", "receiver_player_name", "pass_oe")
+          "rusher_player_name", "receiver_player_name", "pass_oe",
+          "game_id", "defteam", "epa", "wp", "qtr", "game_seconds_remaining")
+
+# Neutral-pace guards: only snaps with the game in the balance (win prob
+# 20–80%, quarters 1–3), and only believable snap-to-snap gaps — under 4s
+# is a penalty replay artifact, over 45s spans a drive change or timeout.
+PACE_WP = (0.20, 0.80)
+PACE_GAP_S = (4.0, 45.0)
 
 CARRY_BUCKETS = ("car_i5", "car_rz", "car_open")
 TARGET_BUCKETS = ("tgt_rz", "tgt_deep", "tgt_short")
@@ -81,11 +93,19 @@ def _target_bucket(yl: float, air: float) -> str:
     return "tgt_rz" if yl <= 20 else "tgt_deep" if air >= 15 else "tgt_short"
 
 
+def _new_team() -> dict:
+    return {"plays": 0, "oe": [0.0, 0], "epa": [0.0, 0],
+            "pass_epa": [0.0, 0], "rush_epa": [0.0, 0], "pace": [0.0, 0]}
+
+
 def aggregate_pbp(rows) -> dict:
-    """One pass: situation value table + player-week buckets + team PROE."""
+    """One pass: situation value table + player-week buckets + team
+    PROE / EPA (both sides of the ball) / neutral pace."""
     bucket_pts: dict[str, list] = {b: [0.0, 0] for b in CARRY_BUCKETS + TARGET_BUCKETS}
     players: dict[tuple, dict] = {}
-    teams: dict[tuple, list] = {}
+    teams: dict[tuple, dict] = {}
+    defense: dict[tuple, list] = {}
+    last_snap: dict[tuple, float] = {}     # (game_id, posteam) → seconds left
 
     for r in rows:
         try:
@@ -99,12 +119,40 @@ def aggregate_pbp(rows) -> dict:
         yl = _f(r.get("yardline_100"), 100.0)
 
         if ptype in ("run", "pass") and team:
-            t = teams.setdefault((team, wk), [0, 0.0, 0])
-            t[0] += 1
+            t = teams.setdefault((team, wk), _new_team())
+            t["plays"] += 1
             oe = r.get("pass_oe")
             if oe not in (None, "", "NA"):
-                t[1] += _f(oe)
-                t[2] += 1
+                t["oe"][0] += _f(oe)
+                t["oe"][1] += 1
+            epa = r.get("epa")
+            if epa not in (None, "", "NA"):
+                v = _f(epa)
+                t["epa"][0] += v
+                t["epa"][1] += 1
+                split = t["pass_epa"] if ptype == "pass" else t["rush_epa"]
+                split[0] += v
+                split[1] += 1
+                dt = r.get("defteam") or ""
+                if dt:
+                    d = defense.setdefault((dt, wk), [0.0, 0])
+                    d[0] += v
+                    d[1] += 1
+            # Neutral pace: gap to this team's PREVIOUS snap in the same
+            # game, counted only while the game is in the balance.
+            gid = r.get("game_id") or ""
+            secs = _f(r.get("game_seconds_remaining"), -1.0)
+            if gid and secs >= 0:
+                wp = _f(r.get("wp"), -1.0)
+                qtr = _f(r.get("qtr"), 5.0)
+                prev = last_snap.get((gid, team))
+                if (prev is not None and PACE_WP[0] <= wp <= PACE_WP[1]
+                        and qtr <= 3):
+                    gap = prev - secs
+                    if PACE_GAP_S[0] <= gap <= PACE_GAP_S[1]:
+                        t["pace"][0] += gap
+                        t["pace"][1] += 1
+                last_snap[(gid, team)] = secs
 
         if ptype == "run" and r.get("rusher_player_name"):
             b = _carry_bucket(yl)
@@ -125,7 +173,8 @@ def aggregate_pbp(rows) -> dict:
 
     values = {b: round(s / n, 4) if n >= 30 else None
               for b, (s, n) in bucket_pts.items()}
-    return {"values": values, "players": players, "teams": teams}
+    return {"values": values, "players": players, "teams": teams,
+            "defense": defense}
 
 
 def xfp_player_rows(agg: dict, season: int) -> list[dict]:
@@ -162,10 +211,29 @@ def xfp_player_rows(agg: dict, season: int) -> list[dict]:
     return out
 
 
+def _avg(pair, min_n):
+    s, n = pair
+    return round(s / n, 4) if n >= min_n else None
+
+
 def team_week_rows(agg: dict, season: int) -> list[dict]:
+    """team_weeks rows: volume + intent (PROE) + efficiency (EPA, both
+    sides) + neutral pace. Minimum sample per stat, else NULL — a two-play
+    week must not print an "EPA"."""
     out = []
-    for (team, wk), (plays, oe_sum, oe_n) in agg["teams"].items():
-        out.append({"sport": "nfl", "season": season, "period": f"{wk:03d}",
-                    "team": team, "plays": plays,
-                    "proe": round(oe_sum / oe_n, 4) if oe_n >= 20 else None})
+    defense = agg.get("defense", {})
+    # Union of both sides: in real data every team that defends also ran
+    # offense that week, but the row must not silently vanish if not.
+    for team, wk in sorted(set(agg["teams"]) | set(defense)):
+        t = agg["teams"].get((team, wk)) or _new_team()
+        out.append({
+            "sport": "nfl", "season": season, "period": f"{wk:03d}",
+            "team": team, "plays": t["plays"],
+            "proe": _avg(t["oe"], 20),
+            "off_epa": _avg(t["epa"], 20),
+            "pass_epa": _avg(t["pass_epa"], 10),
+            "rush_epa": _avg(t["rush_epa"], 8),
+            "def_epa": _avg(defense.get((team, wk), [0.0, 0]), 20),
+            "pace": _avg(t["pace"], 8),
+        })
     return out

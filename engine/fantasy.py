@@ -263,8 +263,10 @@ def game_scripts(conn) -> list[dict]:
     spread and total, newest season/week first. Confidence scales with the
     spread — a 7+ favorite is a genuine script prediction, a 2-point spread
     is a coin flip and says so."""
+    from .teamprofiles import season_profiles
     out = []
     proe = team_proe(conn)
+    profs = season_profiles(conn)
     for g in conn.execute(
             "SELECT season, period, home, away, spread, total FROM games "
             "WHERE sport='nfl' AND total IS NOT NULL AND spread IS NOT NULL "
@@ -290,6 +292,13 @@ def game_scripts(conn) -> list[dict]:
             "away_implied": round(away_imp, 1),
             "home_proe": proe.get(g["home"]),
             "away_proe": proe.get(g["away"]),
+            # Measured efficiency + pace from pbp (None until ingested).
+            "home_epa": (profs.get(g["home"]) or {}).get("off_epa"),
+            "away_epa": (profs.get(g["away"]) or {}).get("off_epa"),
+            "home_def_epa": (profs.get(g["home"]) or {}).get("def_epa"),
+            "away_def_epa": (profs.get(g["away"]) or {}).get("def_epa"),
+            "home_pace": (profs.get(g["home"]) or {}).get("pace"),
+            "away_pace": (profs.get(g["away"]) or {}).get("pace"),
             "favorite": g["home"] if spread < 0 else g["away"],
             "confidence": conf, "archetype": name, "read": desc,
         })

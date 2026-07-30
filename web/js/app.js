@@ -3047,6 +3047,14 @@ async function renderFantasy() {
         ? `<div style="margin-top:6px;color:var(--text-dim);font-size:12px" title="Pass rate over expectation — intent vs situation, the stable half of game script">
             PROE: ${escapeHtml(s.home)} ${s.home_proe != null ? `${s.home_proe >= 0 ? "+" : ""}${(s.home_proe * 100).toFixed(1)}%` : "—"}
             · ${escapeHtml(s.away)} ${s.away_proe != null ? `${s.away_proe >= 0 ? "+" : ""}${(s.away_proe * 100).toFixed(1)}%` : "—"}</div>` : ""}
+      ${s.home_epa != null || s.away_epa != null
+        ? `<div style="margin-top:4px;color:var(--text-dim);font-size:12px"
+               title="EPA/play: offensive efficiency measured from every snap (league avg ≈ 0). Pace: seconds per snap with the game in the balance — lower is faster.">
+            EPA/play: ${escapeHtml(s.home)} ${s.home_epa != null ? `${s.home_epa >= 0 ? "+" : ""}${s.home_epa.toFixed(2)}` : "—"}
+            · ${escapeHtml(s.away)} ${s.away_epa != null ? `${s.away_epa >= 0 ? "+" : ""}${s.away_epa.toFixed(2)}` : "—"}${
+            s.home_pace != null || s.away_pace != null
+              ? ` &nbsp;·&nbsp; pace ${s.home_pace != null ? s.home_pace.toFixed(1) : "—"}s / ${
+                  s.away_pace != null ? s.away_pace.toFixed(1) : "—"}s` : ""}</div>` : ""}
       <div style="margin-top:6px;color:var(--text-mute);font-size:12px">Script confidence: ${escapeHtml(s.confidence)}</div>
     </article>`).join("");
 

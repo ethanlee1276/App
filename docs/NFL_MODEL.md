@@ -565,7 +565,7 @@ have yet — listed honestly rather than faked).
 | §5 Volume-first projection | 🟡 | Form blends volume-correlated windows; measured red-zone/snap roles (`engine/nflusage.py`) feed the TD board; full opportunity→efficiency decomposition 📋 (needs routes/targets per game in the ingest) |
 | §5 Recency weighting 45/35/20 | ✅ | `engine/form.py` `WINDOW_WEIGHTS` re-fit to the spec (recent windows ≈75%, season+career ≈25%) |
 | §5 Reset rule | 📋 | Needs coordinator-change/role-change detection; offseason moves partially covered by `engine/offseason.py` |
-| §5 EPA / PROE / pace inputs | 📋 | nflverse pbp is already ingested for results — EPA/PROE aggregation is the natural next build on top of it |
+| §5 EPA / PROE / pace inputs | ✅ | `engine/sources/nflpbp.py` aggregates EPA/play (offense + pass/rush splits + defense allowed), PROE, and neutral pace per team-week into `team_weeks`; `engine/teamprofiles.py` serves season/form profiles; game scripts display them; `launch.py --nfl-baseline` audits coverage. Model pricing hookup is Phase 2 |
 | §5 Usage Stability Score | ✅ | `engine/quality.py` stability component (15%): week-to-week CV vs the market's typical variance × sample size |
 | §6 Coordinator profiles | 📋 | No tendency feed; fantasy module tracks coach *changes* (`engine/offseason.py`) as a first signal |
 | §6 Alignment-level matchups | 📋 | Needs coverage/alignment data; `engine/matchup.py` prices team-level defense today |

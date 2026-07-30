@@ -66,11 +66,14 @@ CREATE TABLE IF NOT EXISTS game_umpires (
     sport TEXT, season INTEGER, period TEXT, game_id TEXT, umpire TEXT,
     PRIMARY KEY (sport, season, period, game_id)
 );
--- Team-week aggregates from play-by-play (plays run + PROE — pass rate
--- over expectation). PROE is the stable half of the game-script engine.
+-- Team-week aggregates from play-by-play: volume (plays), intent (PROE —
+-- pass rate over expectation), efficiency (EPA per play, offense with
+-- pass/rush splits and defense allowed), and neutral pace (seconds per
+-- snap, game in the balance). The measured coaching/efficiency layer.
 CREATE TABLE IF NOT EXISTS team_weeks (
     sport TEXT, season INTEGER, period TEXT, team TEXT,
     plays INTEGER, proe REAL,
+    off_epa REAL, pass_epa REAL, rush_epa REAL, def_epa REAL, pace REAL,
     PRIMARY KEY (sport, season, period, team)
 );
 CREATE INDEX IF NOT EXISTS idx_odds_hist_lookup
@@ -99,6 +102,12 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
     conn.executescript(SCHEMA)
     # Migrations for columns added after a table shipped (CREATE IF NOT
     # EXISTS won't touch an existing table).
+    for col in ("off_epa", "pass_epa", "rush_epa", "def_epa", "pace"):
+        try:
+            conn.execute(f"ALTER TABLE team_weeks ADD COLUMN {col} REAL")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass                     # already there
     try:
         conn.execute("ALTER TABLE game_starters ADD COLUMN throws TEXT")
         conn.commit()
@@ -151,7 +160,8 @@ def upsert_odds_history(conn, rows: list[dict]) -> int:
 STARTER_COLS = ["sport", "season", "period", "game_id", "team", "pitcher",
                 "throws"]
 UMPIRE_COLS = ["sport", "season", "period", "game_id", "umpire"]
-TEAM_WEEK_COLS = ["sport", "season", "period", "team", "plays", "proe"]
+TEAM_WEEK_COLS = ["sport", "season", "period", "team", "plays", "proe",
+                  "off_epa", "pass_epa", "rush_epa", "def_epa", "pace"]
 
 
 def upsert_team_weeks(conn, rows: list[dict]) -> int:
