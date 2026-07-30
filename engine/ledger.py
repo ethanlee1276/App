@@ -80,6 +80,12 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     _migrate(conn)
     conn.executescript(SCHEMA)
+    # Doubleheader leg (1/2) — lets the settler grade a DH bet against the
+    # RIGHT game's stat line. NULL = single game or pre-migration row.
+    try:
+        conn.execute("ALTER TABLE bets ADD COLUMN leg INTEGER")
+    except sqlite3.OperationalError:
+        pass
     for k, v in DEFAULTS.items():
         conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
     conn.commit()
@@ -147,11 +153,14 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
-            "stake_dollars, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open')",
+            "stake_dollars, status, leg) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?)",
             (now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
              r["line"], r.get("book", ""), r.get("odds", -110), r.get("projection"),
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
-             stake_units, round(stake_units * unit_dollars, 2)))
+             stake_units, round(stake_units * unit_dollars, 2),
+             # Which doubleheader leg this bet belongs to — the settler
+             # grades against that game's stat line, not a coin flip.
+             r.get("game_number") if r.get("doubleheader") else None))
         n += cur.rowcount
     # Recommended game bets journal too (sharp-anchor picks live or die by
     # forward results). Moneylines store player = the team picked, line 0.5,
@@ -190,11 +199,12 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
-            "stake_dollars, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open')",
+            "stake_dollars, status, leg) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?)",
             (now, sport, date, player, market, side, line,
              r.get("book", "best"), r.get("odds", -110), None,
              r.get("win_prob"), r.get("edge"), r.get("confidence"),
-             r.get("grade"), stake_units, round(stake_units * unit_dollars, 2)))
+             r.get("grade"), stake_units, round(stake_units * unit_dollars, 2),
+             r.get("game_number") if r.get("doubleheader") else None))
         n += cur.rowcount
     conn.commit()
     return n
@@ -513,6 +523,69 @@ def _settle_one(conn, b, actual: float, closing_line: float | None) -> None:
     set_cfg(conn, "bankroll", round(bankroll(conn) + pnl_d, 2))
 
 
+def _leg_row(rows, leg):
+    """The stat row for a KNOWN doubleheader leg. Leg 1 owns the plain
+    game_id; later legs carry the ``-G{n}`` suffix the ingest stamps in
+    chronological order (MLB's game log is oldest-first). None when the
+    bet doesn't know its leg or the row isn't there."""
+    if not leg:
+        return None
+    leg = int(leg)
+    for r in rows:
+        gid = str((r["game_id"] if "game_id" in r.keys() else "") or "")
+        tail = gid.rsplit("-G", 1)
+        n = int(tail[1]) if len(tail) == 2 and tail[1].isdigit() else 1
+        if n == leg:
+            return r
+    return None
+
+
+def _pick_dh_game(games_rows, b, actual_fn):
+    """Resolve which games row a TEAM-market bet grades against.
+
+    Singles pass straight through (once final). On a doubleheader day a
+    bet that knows its leg takes that game; a legacy bet without one
+    settles only if the outcome is identical either way — and once every
+    leg is final with the outcomes still disagreeing, it voids: grading
+    against a coin-flip choice of game would be invention, and leaving
+    it open forever is phantom exposure. Returns (row_or_None, verdict)
+    where verdict is "void" or None (None row = wait).
+    """
+    rows = list(games_rows or [])
+    finals = [g for g in rows
+              if g["home_score"] is not None and g["away_score"] is not None]
+    if len(rows) <= 1:
+        return (finals[0] if finals else None), None
+    picked = _leg_row(rows, b["leg"] if "leg" in b.keys() else None)
+    if picked is not None:
+        if picked["home_score"] is None or picked["away_score"] is None:
+            return None, None            # our leg isn't final yet
+        return picked, None
+    if not finals:
+        return None, None
+    outcomes = {_grade_side_aware(b, actual_fn(g))[0] for g in finals}
+    if len(outcomes) == 1 and len(finals) == len(rows):
+        return finals[0], None
+    if len(outcomes) > 1 and len(finals) == len(rows):
+        return None, "void"
+    return None, None                    # partial day — wait for the rest
+
+
+def _team_day_final(hist_conn, where, wargs, log_row) -> bool:
+    """True only with POSITIVE evidence the team's whole day is final —
+    games rows exist and every one has a score. No games rows = no
+    evidence = False; voiding an ambiguous bet needs proof, not absence."""
+    team = log_row["team"] if "team" in log_row.keys() else None
+    if not team:
+        return False
+    r = hist_conn.execute(
+        f"SELECT COUNT(*), COALESCE(SUM(home_score IS NOT NULL), 0) "
+        f"FROM games WHERE {where} AND (home=? OR away=?)",
+        (*wargs, team, team)).fetchone()
+    tot, fin = int(r[0] or 0), int(r[1] or 0)
+    return bool(tot) and fin == tot
+
+
 def _team_day_unfinished(hist_conn, where, wargs, log_row) -> bool:
     """True when the stat row's team has a game that day WITHOUT a final
     score in the games table — meaning the row may be a partial line from a
@@ -585,25 +658,40 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         if b["market"] == "moneyline":
             # player = the team picked; the game's final score settles it.
             g = hist_conn.execute(
-                f"SELECT home, away, home_score, away_score FROM games "
-                f"WHERE {where} AND (home=? OR away=?) "
-                f"AND home_score IS NOT NULL AND away_score IS NOT NULL",
-                (*wargs, b["player"], b["player"])).fetchone()
+                f"SELECT home, away, home_score, away_score, game_id "
+                f"FROM games WHERE {where} AND (home=? OR away=?)",
+                (*wargs, b["player"], b["player"])).fetchall()
+
+            def _ml_actual(row):
+                pick_home = row["home"] == b["player"]
+                # Stored as line 0.5 / side OVER: actual 1.0 = pick won.
+                return 1.0 if ((row["home_score"] > row["away_score"])
+                               == pick_home) else 0.0
+            g, verdict = _pick_dh_game(g, b, _ml_actual)
+            if verdict == "void":
+                conn.execute("UPDATE bets SET status='void', pnl_units=0, "
+                             "pnl_dollars=0 WHERE id=?", (b["id"],))
+                settled += 1
+                continue
             if g is None:
                 continue
-            pick_home = g["home"] == b["player"]
-            won = (g["home_score"] > g["away_score"]) == pick_home
-            # Stored as line 0.5 / side OVER: actual 1.0 = pick won.
-            _settle_one(conn, b, 1.0 if won else 0.0, None)
+            _settle_one(conn, b, _ml_actual(g), None)
             settled += 1
             continue
         if b["market"] == "total":
             # player = the matchup key (AWAY@HOME); actual = combined runs.
+            # LIKE catches doubleheader legs' -G suffixes.
             g = hist_conn.execute(
-                f"SELECT home_score, away_score FROM games "
-                f"WHERE {where} AND game_id=? "
-                f"AND home_score IS NOT NULL AND away_score IS NOT NULL",
-                (*wargs, b["player"])).fetchone()
+                f"SELECT home, away, home_score, away_score, game_id "
+                f"FROM games WHERE {where} AND (game_id=? OR game_id LIKE ?)",
+                (*wargs, b["player"], b["player"] + "-G%")).fetchall()
+            g, verdict = _pick_dh_game(
+                g, b, lambda r: float(r["home_score"]) + float(r["away_score"]))
+            if verdict == "void":
+                conn.execute("UPDATE bets SET status='void', pnl_units=0, "
+                             "pnl_dollars=0 WHERE id=?", (b["id"],))
+                settled += 1
+                continue
             if g is None:
                 continue
             _settle_one(conn, b, float(g["home_score"]) + float(g["away_score"]), None)
@@ -613,31 +701,38 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             # player = the team; its own margin (spread) or score (team
             # total) is the actual the grader compares to the stored line.
             g = hist_conn.execute(
-                f"SELECT home, away, home_score, away_score FROM games "
-                f"WHERE {where} AND (home=? OR away=?) "
-                f"AND home_score IS NOT NULL AND away_score IS NOT NULL",
-                (*wargs, b["player"], b["player"])).fetchone()
+                f"SELECT home, away, home_score, away_score, game_id "
+                f"FROM games WHERE {where} AND (home=? OR away=?)",
+                (*wargs, b["player"], b["player"])).fetchall()
+
+            def _team_actual(row):
+                home_side = row["home"] == b["player"]
+                if b["market"] == "spread":
+                    return float((row["home_score"] - row["away_score"])
+                                 if home_side
+                                 else (row["away_score"] - row["home_score"]))
+                return float(row["home_score"] if home_side else row["away_score"])
+            g, verdict = _pick_dh_game(g, b, _team_actual)
+            if verdict == "void":
+                conn.execute("UPDATE bets SET status='void', pnl_units=0, "
+                             "pnl_dollars=0 WHERE id=?", (b["id"],))
+                settled += 1
+                continue
             if g is None:
                 continue
-            home_side = g["home"] == b["player"]
-            if b["market"] == "spread":
-                actual = (g["home_score"] - g["away_score"]) if home_side \
-                    else (g["away_score"] - g["home_score"])
-            else:
-                actual = g["home_score"] if home_side else g["away_score"]
-            _settle_one(conn, b, float(actual), None)
+            _settle_one(conn, b, _team_actual(g), None)
             settled += 1
             continue
         rows = hist_conn.execute(
-            f"SELECT value, team FROM player_game_logs WHERE {where} "
+            f"SELECT value, team, game_id FROM player_game_logs WHERE {where} "
             f"AND market=? AND player=?",
             (*wargs, b["market"], b["player"])).fetchall()
         if not rows:
             # Name-shape fallback (feeds disagree on accents/suffixes).
             target = normalize_name(b["player"])
             rows = [c for c in hist_conn.execute(
-                        f"SELECT player, value, team FROM player_game_logs "
-                        f"WHERE {where} AND market=?",
+                        f"SELECT player, value, team, game_id "
+                        f"FROM player_game_logs WHERE {where} AND market=?",
                         (*wargs, b["market"]))
                     if normalize_name(c["player"]) == target]
         if not rows:
@@ -645,18 +740,32 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         if _team_day_unfinished(hist_conn, where, wargs, rows[0]):
             continue
         if len(rows) > 1:
-            # DOUBLEHEADER day: the player has one stat row per game and the
-            # journal doesn't know which leg this bet was for. Settle only
-            # when the outcome is the same either way; an ambiguous bet
-            # stays open rather than being graded against the wrong game.
-            def _wins(v):
-                over = (b["side"] or "OVER").upper() != "UNDER"
-                if v == b["line"]:
-                    return "push"
-                return (v > b["line"]) == over
-            outcomes = {_wins(float(r["value"])) for r in rows}
-            if len(outcomes) > 1:
-                continue
+            # DOUBLEHEADER day: one stat row per leg (game_id suffix -G2 on
+            # the second). A bet that KNOWS its leg grades against that
+            # game's line; a legacy bet without one settles only when the
+            # outcome is identical either way — and once the day is fully
+            # final with the legs still disagreeing, it VOIDS: grading it
+            # against a coin-flip choice of game would be invention, and
+            # leaving it open forever is a slow leak of phantom exposure.
+            picked = _leg_row(rows, b["leg"] if "leg" in b.keys() else None)
+            if picked is None:
+                def _wins(v):
+                    over = (b["side"] or "OVER").upper() != "UNDER"
+                    if v == b["line"]:
+                        return "push"
+                    return (v > b["line"]) == over
+                outcomes = {_wins(float(r["value"])) for r in rows}
+                if len(outcomes) > 1:
+                    # Void needs PROOF the day ended with the legs still
+                    # disagreeing; without games rows, keep waiting.
+                    if _team_day_final(hist_conn, where, wargs, rows[0]):
+                        conn.execute(
+                            "UPDATE bets SET status='void', pnl_units=0, "
+                            "pnl_dollars=0 WHERE id=?", (b["id"],))
+                        settled += 1
+                    continue
+                picked = rows[0]
+            rows = [picked]
         row = rows[0]
 
         ck = (b["sport"], b["market"])
@@ -734,15 +843,21 @@ def resettle_mismatches(conn, hist_conn) -> list[dict]:
             ).fetchall():
         where, wargs = _hist_where(b)
         rows = hist_conn.execute(
-            f"SELECT value, team FROM player_game_logs WHERE {where} "
+            f"SELECT value, team, game_id FROM player_game_logs WHERE {where} "
             f"AND market=? AND player=?",
             (*wargs, b["market"], b["player"])).fetchall()
         if not rows:
             target = normalize_name(b["player"])
             rows = [c for c in hist_conn.execute(
-                        f"SELECT player, value, team FROM player_game_logs "
+                        f"SELECT player, value, team, game_id "
+                        f"FROM player_game_logs "
                         f"WHERE {where} AND market=?", (*wargs, b["market"]))
                     if normalize_name(c["player"]) == target]
+        if len(rows) > 1:
+            # Doubleheader day: a bet that knows its leg re-checks against
+            # that game's row; without one, ambiguity stays untouchable.
+            picked = _leg_row(rows, b["leg"] if "leg" in b.keys() else None)
+            rows = [picked] if picked is not None else rows
         if len(rows) != 1:
             continue          # missing or ambiguous (doubleheader) — leave it
         if _team_day_unfinished(hist_conn, where, wargs, rows[0]):

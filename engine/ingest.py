@@ -259,6 +259,13 @@ def ingest_nfl(conn, seasons: list[int]) -> dict:
 
 
 # --- MLB --------------------------------------------------------------------
+def _dh_game_id(g) -> str:
+    """``AWAY@HOME``, with a ``-G{n}`` suffix on doubleheader legs past the
+    first — one shared key made the second leg overwrite the first."""
+    gn = int(getattr(g, "game_number", 1) or 1)
+    return f"{g.away}@{g.home}" + (f"-G{gn}" if gn > 1 else "")
+
+
 def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
     """Game + player-log rows from a live MLB slate. Player logs use the game
     index within the season as the sortable period."""
@@ -269,7 +276,7 @@ def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
         park = get_park(g.park)
         grows.append({
             "sport": "mlb", "season": season, "period": date,
-            "game_id": f"{g.away}@{g.home}", "home": g.home, "away": g.away,
+            "game_id": _dh_game_id(g), "home": g.home, "away": g.away,
             "home_score": None, "away_score": None, "spread": 0.0, "total": g.total,
             "roof": park.roof, "surface": park.surface,
             "temp": g.weather.temp_f, "wind": g.weather.wind_mph, "extra": g.park,
@@ -285,6 +292,12 @@ def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
         if st and st != "final":
             teams_in_play.update((g.home, g.away))
     prows = []
+    # Doubleheader stat lines: a player has TWO same-date log entries and
+    # both must survive — one shared game_id let the second overwrite the
+    # first, which also blinded the settler's ambiguity guard. Entries
+    # arrive chronologically (MLB's game log is oldest-first), so the
+    # occurrence count IS the leg number.
+    seen_leg: dict[tuple, int] = {}
     for p in slate.props:
         for gl in p.logs:
             # Key on the game's real date. ``gl.game`` is only a recency index —
@@ -294,10 +307,14 @@ def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
             period = gl.date or f"idx-{gl.game:04d}"
             if period == date and p.team in teams_in_play:
                 continue
+            leg = seen_leg.get((p.player, p.market, period), 0) + 1
+            seen_leg[(p.player, p.market, period)] = leg
             log_season = int(gl.date[:4]) if gl.date else season
             prows.append({
                 "sport": "mlb", "season": log_season, "period": period,
-                "game_id": f"{p.player}-{period}", "player": p.player,
+                "game_id": f"{p.player}-{period}"
+                           + (f"-G{leg}" if leg > 1 else ""),
+                "player": p.player,
                 "team": p.team, "opponent": gl.opponent, "position": p.position,
                 "home": 1 if gl.home else 0, "market": p.market, "value": gl.value,
             })
@@ -318,7 +335,7 @@ def mlb_starter_rows(slate, date: str) -> list[dict]:
                 continue
             rows.append({
                 "sport": "mlb", "season": season, "period": date,
-                "game_id": f"{g.away}@{g.home}", "team": team_ab,
+                "game_id": _dh_game_id(g), "team": team_ab,
                 "pitcher": name,
                 "throws": getattr(pitcher, "throws", "") or "",
             })
@@ -330,7 +347,7 @@ def mlb_umpire_rows(slate, date: str) -> list[dict]:
     have officials in the boxscore). Feeds the umpire K/run profiles."""
     season = int(date[:4])
     return [{"sport": "mlb", "season": season, "period": date,
-             "game_id": f"{g.away}@{g.home}", "umpire": g.plate_umpire}
+             "game_id": _dh_game_id(g), "umpire": g.plate_umpire}
             for g in slate.games if getattr(g, "plate_umpire", "")]
 
 
@@ -344,9 +361,12 @@ def mlb_result_rows(results: list[dict]) -> list[dict]:
         park_key = next((k for frag, k in VENUE_PARK.items() if frag in venue), "generic")
         park = get_park(park_key)
         date = r["date"]
+        gn = int(r.get("game_number") or 1)
         out.append({
             "sport": "mlb", "season": int(date[:4]), "period": date,
-            "game_id": f"{r['away']}@{r['home']}",
+            # Leg 2+ of a doubleheader gets its own key — one shared id
+            # meant the second final score erased the first.
+            "game_id": f"{r['away']}@{r['home']}" + (f"-G{gn}" if gn > 1 else ""),
             "home": r["home"], "away": r["away"],
             "home_score": r["home_score"], "away_score": r["away_score"],
             "spread": 0.0, "total": None,

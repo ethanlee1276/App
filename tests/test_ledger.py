@@ -814,6 +814,121 @@ def test_era_report_splits_the_record_at_the_retune():
     assert "nfl" in v1["by_sport"] or "mlb" in v1["by_sport"]
 
 
+def _dh_hist(final2=True):
+    """History DB for a Braves@Mets doubleheader day: leg 1 final 4-2,
+    leg 2 final 7-1 (or still open); the hitter went 0 TB in leg 1 and
+    3 TB in leg 2."""
+    from engine import db as hist_db
+    hist = hist_db.connect(":memory:")
+    games = [{"sport": "mlb", "season": 2026, "period": "2026-07-29",
+              "game_id": "ATL@NYM", "home": "NYM", "away": "ATL",
+              "home_score": 4, "away_score": 2, "spread": 0.0, "total": None,
+              "roof": "", "surface": "", "temp": None, "wind": None,
+              "extra": None},
+             {"sport": "mlb", "season": 2026, "period": "2026-07-29",
+              "game_id": "ATL@NYM-G2", "home": "NYM", "away": "ATL",
+              "home_score": 7 if final2 else None,
+              "away_score": 1 if final2 else None, "spread": 0.0,
+              "total": None, "roof": "", "surface": "", "temp": None,
+              "wind": None, "extra": None}]
+    hist_db.upsert_games(hist, games)
+    logs = [{"sport": "mlb", "season": 2026, "period": "2026-07-29",
+             "game_id": "DH Guy-2026-07-29", "player": "DH Guy",
+             "team": "NYM", "opponent": "ATL", "position": "C", "home": 1,
+             "market": "total_bases", "value": 0.0}]
+    if final2:
+        logs.append({**logs[0], "game_id": "DH Guy-2026-07-29-G2",
+                     "value": 3.0})
+    hist_db.upsert_player_logs(hist, logs)
+    return hist
+
+
+def test_dh_prop_bet_grades_against_its_own_leg():
+    """A bet that KNOWS its doubleheader leg settles on that game's stat
+    line — 0 TB in leg 1 must not grade a leg-2 bet."""
+    conn = _conn()
+    r = _result(sport="mlb", date="2026-07-29")
+    r["recommendations"][0].update(player="DH Guy", market="total_bases",
+                                   side="OVER", line=1.5, odds=100,
+                                   doubleheader=True, game_number=2)
+    ledger.log_recommendations(conn, r)
+    assert conn.execute("SELECT leg FROM bets").fetchone()["leg"] == 2
+    assert ledger.settle_from_history(conn, _dh_hist(), sport="mlb") == 1
+    b = conn.execute("SELECT status, actual FROM bets").fetchone()
+    assert b["status"] == "won" and b["actual"] == 3.0    # leg 2's line
+
+
+def test_legacy_ambiguous_dh_bet_voids_only_when_day_final():
+    """A pre-leg bet whose two legs disagree: while any leg runs it stays
+    open; once the day is fully final it VOIDS — grading it against a
+    coin-flip choice of game would be invention."""
+    conn = _conn()
+    r = _result(sport="mlb", date="2026-07-29")
+    r["recommendations"][0].update(player="DH Guy", market="total_bases",
+                                   side="OVER", line=1.5, odds=100)
+    ledger.log_recommendations(conn, r)
+    # Leg 2 still running → 0 TB (leg 1) is not evidence — stays open.
+    assert ledger.settle_from_history(conn, _dh_hist(final2=False),
+                                      sport="mlb") == 0
+    assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "open"
+    # Day fully final, outcomes differ (0 vs 3 TB on a 1.5 line) → void.
+    ledger.settle_from_history(conn, _dh_hist(), sport="mlb")
+    b = conn.execute("SELECT status, pnl_units FROM bets").fetchone()
+    assert b["status"] == "void" and b["pnl_units"] == 0
+
+
+def test_dh_moneyline_grades_against_its_own_game():
+    """Team markets had the same collapse: both legs shared one games row.
+    With per-leg rows, a leg-2 moneyline grades on game 2's score, and a
+    legacy bet settles when both legs agree."""
+    conn = _conn()
+    r = _result(sport="mlb", date="2026-07-29")
+    r["recommendations"] = []
+    r["game_bets"] = [{"recommended": True, "bet_type": "moneyline",
+                       "pick": "NYM", "odds": -120, "stake_units": 0.5,
+                       "grade": "Strong Play", "doubleheader": True,
+                       "game_number": 2}]
+    ledger.log_recommendations(conn, r)
+    assert conn.execute("SELECT leg FROM bets").fetchone()["leg"] == 2
+    assert ledger.settle_from_history(conn, _dh_hist(), sport="mlb") == 1
+    assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "won"
+    # Legacy (no leg): NYM won BOTH legs — identical outcome settles it.
+    conn2 = _conn()
+    r["game_bets"][0] = {"recommended": True, "bet_type": "moneyline",
+                         "pick": "NYM", "odds": -120, "stake_units": 0.5,
+                         "grade": "Strong Play"}
+    ledger.log_recommendations(conn2, r)
+    assert ledger.settle_from_history(conn2, _dh_hist(), sport="mlb") == 1
+    assert conn2.execute("SELECT status FROM bets").fetchone()["status"] == "won"
+
+
+def test_dh_slate_ingest_keeps_both_legs():
+    """The root collapse: both legs' stat lines shared one game_id and the
+    second overwrote the first — the settler then graded against whichever
+    survived. Same-date entries now get -G{n} suffixes and BOTH persist."""
+    from types import SimpleNamespace as NS
+    from engine import db as hist_db
+    from engine.ingest import mlb_rows_from_slate
+    weather = NS(temp_f=75.0, wind_mph=5.0)
+    g1 = NS(home="NYM", away="ATL", park="citi field", total=8.5,
+            weather=weather, live=NS(state="final"), game_number=1)
+    g2 = NS(home="NYM", away="ATL", park="citi field", total=7.5,
+            weather=weather, live=NS(state="final"), game_number=2)
+    p = NS(player="DH Guy", team="NYM", position="C", market="total_bases",
+           logs=[NS(date="2026-07-29", game=1, opponent="ATL", home=True,
+                    value=0.0),
+                 NS(date="2026-07-29", game=2, opponent="ATL", home=True,
+                    value=3.0)])
+    grows, prows = mlb_rows_from_slate(NS(games=[g1, g2], props=[p]),
+                                       "2026-07-29")
+    assert [r["game_id"] for r in grows] == ["ATL@NYM", "ATL@NYM-G2"]
+    assert [r["game_id"] for r in prows] == \
+        ["DH Guy-2026-07-29", "DH Guy-2026-07-29-G2"]
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_player_logs(hist, prows)
+    assert hist.execute("SELECT COUNT(*) FROM player_game_logs").fetchone()[0] == 2
+
+
 def test_calibration_since_scopes_to_the_current_era():
     """The all-time chart mixes retired gates with tonight's model; the
     since= filter judges the current era on its own picks only."""

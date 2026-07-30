@@ -110,6 +110,11 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     d["live"] = bool(g.live and g.live.state == "live")
     d["date"] = g.date
     d["kickoff"] = g.kickoff
+    if getattr(g, "doubleheader", False):
+        # The journal stamps this as the bet's leg — the settler grades a
+        # DH team bet against ITS game, not a coin-flip choice of two.
+        d["doubleheader"] = True
+        d["game_number"] = g.game_number
     return d
 
 

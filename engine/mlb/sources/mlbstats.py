@@ -225,6 +225,9 @@ def parse_results(schedule_json: dict) -> list[dict]:
                 "home": home, "away": away,
                 "home_score": float(hs), "away_score": float(as_),
                 "venue": (g.get("venue", {}) or {}).get("name", ""),
+                # Doubleheader leg — without it both legs share one game_id
+                # in the history DB and the second's score ERASES the first.
+                "game_number": int(g.get("gameNumber") or 1),
             })
     return out
 
