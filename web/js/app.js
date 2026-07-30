@@ -602,7 +602,8 @@ function censusFunnelHTML() {
     quality_under_70: "quality grade under 70",
     held_by_rules: "held by rules (lineups pending, IL, live game, juice)" };
   const rows = Object.entries(gc)
-    .filter(([k, v]) => v > 0 && k !== "recommended" && k !== "calibration_markets")
+    .filter(([k, v]) => typeof v === "number" && v > 0
+      && k !== "recommended" && k !== "calibration_markets")
     .map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px;
         padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px">
       <span style="color:var(--text-mute)">${escapeHtml(names[k] || k)}</span>
@@ -611,9 +612,21 @@ function censusFunnelHTML() {
     ? `<div style="margin-top:6px;font-size:12px;color:var(--warn)">Closed by calibration:
        ${gc.calibration_markets.map(escapeHtml).join(", ")} — the nightly refit reopens
        a market when its fit lands back inside the search range.</div>` : "";
+  // The biggest bucket deserves its own breakdown: "no real book price" is
+  // mostly the shape of the books' menu (we project every hitter in the
+  // lineup; books post lines for a subset), not a broken feed.
+  const npm = gc.no_price_markets || {};
+  const npmRows = Object.entries(npm).sort((a, b) => b[1] - a[1])
+    .map(([m, n]) => `${escapeHtml(m)} ${n}`).join(" · ");
+  const noPrice = npmRows
+    ? `<div style="margin-top:6px;font-size:12px;color:var(--text-mute)">
+       Unpriced by market: ${npmRows}. We project every hitter in the lineup;
+       books post lines for a subset — that gap is normal, not a broken feed.
+       A price we <em>paid</em> for and failed to match is a different thing:
+       the build prints those as a name-match warning.</div>` : "";
   return rows ? `<div style="margin-top:10px">
     <div style="font-size:12px;font-weight:700;margin-bottom:2px">Where tonight's props died</div>
-    ${rows}${closed}</div>` : "";
+    ${rows}${noPrice}${closed}</div>` : "";
 }
 
 function renderLivePicks() {

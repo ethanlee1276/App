@@ -410,6 +410,14 @@ def gate_census(recommendations: list[dict]) -> dict:
             continue
         if r.get("has_market") is False:
             census["no_real_price"] += 1
+            # WHICH markets go unpriced matters: books post a total-bases
+            # line for most starters but strikeouts only for the two
+            # pitchers, so a big count here is usually the shape of the
+            # books' menu, not a broken join. Named, it's checkable.
+            census.setdefault("no_price_markets", {})
+            lbl = r.get("market_label") or r.get("market", "?")
+            census["no_price_markets"][lbl] = \
+                census["no_price_markets"].get(lbl, 0) + 1
             continue
         # Tier 3 (home runs) is quarantined on the Long Shots board BY
         # DESIGN — counting those deaths under "calibration" made 197

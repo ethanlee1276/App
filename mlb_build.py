@@ -75,6 +75,16 @@ def main() -> None:
                   f"{src_note} (quota remaining {res.quota.remaining}).")
             if res.moneylines:
                 print(f"  Moneylines attached to {res.moneylines} game(s).")
+            # Prices we PAID for and failed to join — the only part of the
+            # "no real book price" bucket that is a bug rather than a fact
+            # about what books offer.
+            if res.name_misses:
+                odds_status["name_misses"] = len(res.name_misses)
+                print(f"  ⚠️  {len(res.name_misses)} book price(s) nearly "
+                      f"matched a prop but didn't join — fix the name map:")
+                for m in res.name_misses[:6]:
+                    print(f"       slate '{m['prop']}' vs book '{m['book']}' "
+                          f"({m['market']})")
         except oddsapi.OddsAPIError as exc:
             odds_status["error"] = str(exc)
             print(f"⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")

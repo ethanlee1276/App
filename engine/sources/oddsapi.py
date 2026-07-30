@@ -539,6 +539,46 @@ class OddsAttachResult:
     # menu knows who's playing before the official lineup does. Each entry:
     # {player, market, home, away, lines}.
     book_only: list = field(default_factory=list)
+    # NEAR-misses: a slate prop and a book line for what is almost certainly
+    # the same player, whose normalized keys still didn't match. Every one of
+    # these is a price we PAID for and then ignored, and it hides inside the
+    # "no real book price" bucket looking like a market the book never
+    # offered. Loud on purpose. Each entry: {prop, book, market}.
+    name_misses: list = field(default_factory=list)
+
+
+def _name_key_loose(name: str) -> str:
+    """First initial + last name — the shape that survives the disagreements
+    normalize_name can't fix: nicknames ("Mike"/"Michael"), dropped middle
+    names, and feeds that shorten to "J. Chourio"."""
+    parts = normalize_name(name).split()
+    if not parts:
+        return ""
+    return f"{parts[0][:1]} {parts[-1]}"
+
+
+def _name_near_misses(slate, menu: dict, matched_keys: set) -> list[dict]:
+    """Slate props and book lines that are almost certainly the same player
+    but whose exact keys didn't join.
+
+    This is the difference between "the book never offered this market"
+    (fine, expected — we project more players than books post) and "we paid
+    for this price and threw it away" (a bug). Only the second kind belongs
+    in anyone's attention."""
+    by_loose: dict[str, list] = {}
+    for (nkey, market), info in menu.items():
+        if (nkey, market) in matched_keys:
+            continue
+        by_loose.setdefault(f"{_name_key_loose(info['player'])}|{market}", []).append(info["player"])
+    out: list[dict] = []
+    for p in slate.props:
+        if (normalize_name(p.player), p.market) in menu:
+            continue                       # matched exactly — nothing to see
+        cands = by_loose.get(f"{_name_key_loose(p.player)}|{p.market}")
+        if not cands:
+            continue
+        out.append({"prop": p.player, "book": cands[0], "market": p.market})
+    return out
 
 
 def _is_active(game, window_hours: float) -> bool:
@@ -708,6 +748,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         result.book_only.append({"player": info["player"], "market": k[1],
                                  "home": info["home"], "away": info["away"],
                                  "lines": index.get(k, [])})
+    result.name_misses = _name_near_misses(slate, menu, matched_keys)
 
     # Append a timestamped snapshot so repeated runs build a line-movement
     # history (engine.linemoves reads it; proxy lines are skipped).

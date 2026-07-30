@@ -331,6 +331,42 @@ def test_one_sided_markets_never_fabricate_the_missing_side():
     assert side == "OVER" and best.odds == 320
 
 
+
+def test_name_near_misses_catch_prices_we_paid_for():
+    """The dangerous half of "no real book price": a book line and a slate
+    prop that are obviously the same player but whose keys didn't join.
+    Those are paid-for prices being thrown away — they must be reported,
+    while genuinely unoffered markets stay quiet."""
+    from types import SimpleNamespace as NS
+    from engine.sources.oddsapi import _name_near_misses, normalize_name
+
+    slate = NS(props=[
+        NS(player="Michael Harris II", market="total_bases"),   # book: M. Harris
+        NS(player="Jackson Chourio", market="hits"),            # book: J. Chourio
+        NS(player="Bench Guy", market="total_bases"),           # truly unoffered
+        NS(player="Exact Match", market="hits"),
+    ])
+    menu = {
+        (normalize_name("M Harris"), "total_bases"):
+            {"player": "M Harris", "home": "ATL", "away": "NYM"},
+        (normalize_name("J Chourio"), "hits"):
+            {"player": "J Chourio", "home": "MIL", "away": "CHC"},
+        (normalize_name("Exact Match"), "hits"):
+            {"player": "Exact Match", "home": "LAD", "away": "SD"},
+        (normalize_name("Someone Else"), "hits"):
+            {"player": "Someone Else", "home": "LAD", "away": "SD"},
+    }
+    matched = {(normalize_name("Exact Match"), "hits")}
+    misses = _name_near_misses(slate, menu, matched)
+    got = {(m["prop"], m["book"]) for m in misses}
+    assert got == {("Michael Harris II", "M Harris"),
+                   ("Jackson Chourio", "J Chourio")}
+    # A prop the books never offered is NOT a near miss — silence is right.
+    assert all(m["prop"] != "Bench Guy" for m in misses)
+    # An exactly-matched prop never reports as a miss.
+    assert all(m["prop"] != "Exact Match" for m in misses)
+
+
 if __name__ == "__main__":
     class MP:
         def __init__(self): self._undo = []
