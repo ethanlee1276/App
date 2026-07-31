@@ -23,6 +23,13 @@ from engine.sources.fetch import DataUnavailable
 from engine.nba.pipeline import run_nba_slate
 
 
+# The markets the slate prices. PRA rides along because it is the WNBA
+# spec's headline tier-1 market and it is free — player props bill per
+# event, not per market — and it is derived from three columns already
+# ingested, so it needs no new feed.
+SLATE_MARKETS = ("pts", "reb", "ast", "fg3m", "pra")
+
+
 class _Game:
     def __init__(self, home, away, kickoff):
         self.home, self.away, self.kickoff = home, away, kickoff
@@ -65,7 +72,81 @@ def player_history(conn, teams: set[str], sport: str = "nba") -> dict:
         p["dates"] = weeks                      # ISO dates, newest first
         for stat in ("pts", "reb", "ast", "fg3m"):
             p[stat] = [p["by_week"][w].get(stat, 0.0) for w in weeks]
+        # PRA is the WNBA spec's headline tier-1 market and it needs no new
+        # ingest — it is the sum of three columns we already store. Deriving
+        # it here rather than fetching it also guarantees the history and
+        # the line refer to the same three numbers.
+        p["pra"] = [round(p["pts"][i] + p["reb"][i] + p["ast"][i], 1)
+                    for i in range(len(weeks))]
     return hist
+
+
+def schedule_density(schedule_days: dict, team: str, date: str) -> dict:
+    """§6 — how compressed this team's last week has been.
+
+    A ~44-game season inside ~4.5 months makes the WNBA schedule denser
+    than the NBA's, and density is the part that survived charter flights:
+    raw travel matters less now, games-per-days still matters.
+    """
+    import datetime as _d
+    try:
+        d0 = _d.date.fromisoformat(date)
+    except ValueError:
+        return {"rest": "1day", "games_in_4": 0, "games_in_6": 0}
+    played = set()
+    for offset in range(1, 7):
+        day = (d0 - _d.timedelta(days=offset)).isoformat()
+        for g in schedule_days.get(day, []):
+            if team in (g.get("home"), g.get("away")):
+                played.add(offset)
+    in_4 = sum(1 for o in played if o <= 3)
+    in_6 = sum(1 for o in played if o <= 5)
+    if 1 in played:
+        rest = "3in4" if in_4 >= 2 else "b2b_home"
+    elif in_6 >= 3:
+        rest = "4in6_road"
+    elif not played:
+        rest = "2plus"
+    else:
+        rest = "1day"
+    return {"rest": rest, "games_in_4": in_4 + 1, "games_in_6": in_6 + 1}
+
+
+def schedule_fit(density: dict) -> float:
+    """0-1 for the §8 grade: a rested team is a clean spot, a team on its
+    third game in four nights is not."""
+    return {"2plus": 1.0, "1day": 0.85, "b2b_home": 0.55,
+            "3in4": 0.4, "4in6_road": 0.35}.get(density.get("rest"), 0.7)
+
+
+def defense_ratings(conn, sport: str) -> dict:
+    """{team: points allowed per game} — the only matchup read the ingested
+    data actually supports.
+
+    The spec asks for points allowed PER POSSESSION and is right that
+    per-game is pace-polluted. We do not ingest possessions, so this is
+    labelled as what it is and scored as a directional input rather than
+    the headline — which is also what §6 says to do with small-sample
+    defensive splits.
+    """
+    rows = conn.execute(
+        "SELECT home, away, home_score, away_score FROM games "
+        "WHERE sport=? AND home_score IS NOT NULL", (sport,)).fetchall()
+    agg: dict = {}
+    for r in rows:
+        agg.setdefault(r["home"], [0.0, 0]);  agg[r["home"]][0] += float(r["away_score"]); agg[r["home"]][1] += 1
+        agg.setdefault(r["away"], [0.0, 0]);  agg[r["away"]][0] += float(r["home_score"]); agg[r["away"]][1] += 1
+    return {t: round(pa / n, 2) for t, (pa, n) in agg.items() if n >= 5}
+
+
+def matchup_fit(defense: dict, opponent: str) -> float:
+    """0-1: is this a defence worth attacking? Half when we can't tell."""
+    if not defense or opponent not in defense:
+        return 0.5
+    vals = sorted(defense.values())
+    rank = sum(1 for v in vals if v < defense[opponent]) / max(1, len(vals) - 1)
+    # Leakier defence (higher points allowed) = better spot for an Over.
+    return round(0.35 + 0.5 * rank, 3)
 
 
 def best_two_way(lines) -> tuple | None:
@@ -141,6 +222,18 @@ def main() -> None:
     if games:
         played_yday = {t for g in yesterday
                        for t in (g["home"], g["away"])}
+        # §6 schedule density needs a week of schedule, not just yesterday:
+        # "three games in four nights" and "four in six" are the reads that
+        # survived charter flights, and one day of lookback cannot see them.
+        sched_days: dict = {}
+        try:
+            _sched = fetch_schedule()
+            for _off in range(1, 7):
+                _day = (datetime.date.fromisoformat(args.date)
+                        - datetime.timedelta(days=_off)).isoformat()
+                sched_days[_day] = parse_schedule_day(_sched, _day)
+        except DataUnavailable:
+            sched_days = {}
         conn = connect()
         teams = {t for g in games for t in (g["home"], g["away"])}
         hist = player_history(conn, teams, sport=args.league)
@@ -149,7 +242,7 @@ def main() -> None:
                         for g in games], [])
         for player, h in hist.items():
             if len(h["minutes"]) >= 3:
-                for stat in ("pts", "reb", "ast", "fg3m"):
+                for stat in SLATE_MARKETS:
                     slate.props.append(_Prop(player, stat))
 
         odds_note = "no odds requested — engine ran with no bettable prices"
@@ -202,6 +295,16 @@ def main() -> None:
                 spread_by_team[g.home] = (float(g.spread), float(g.spread) < 0)
                 spread_by_team[g.away] = (-float(g.spread), float(g.spread) > 0)
 
+        defense = defense_ratings(conn, args.league)
+        density = {t: schedule_density(sched_days, t, args.date) for t in teams}
+        # §8 freshness: how recently the price we would bet was actually
+        # fetched. There is no availability feed for either league, so this
+        # tops out below 1.0 on purpose — and with it the grade, which is
+        # why half-Kelly (A+, 90) stays out of reach until one exists.
+        fresh = 0.9 if (args.odds and "cached" not in odds_note) else 0.5
+        if "unavailable" in odds_note:
+            fresh = 0.2
+
         props = []
         for prop in slate.props:
             two = best_two_way(prop.lines)
@@ -220,7 +323,18 @@ def main() -> None:
                 "book": book, "minutes": h["minutes"],
                 "values": h[prop.market], "is_starter": bool(h["starter"]),
                 "spread": spread, "is_favorite": fav,
-                "rest": ("b2b_home" if h["team"] in played_yday else "1day"),
+                "rest": density.get(h["team"], {}).get(
+                    "rest", "b2b_home" if h["team"] in played_yday else "1day"),
+                "density": density.get(h["team"], {}),
+                "freshness": fresh,
+                "schedule_fit": schedule_fit(density.get(h["team"], {})),
+                "matchup_fit": matchup_fit(defense, next(
+                    (g["away"] if g["home"] == h["team"] else g["home"]
+                     for g in games if h["team"] in (g["home"], g["away"])), "")),
+                # No per-prop line-movement feed exists for either league;
+                # scoring this neutral is the honest answer, and it is
+                # listed as parked rather than quietly assumed favourable.
+                "movement_fit": 0.5,
             })
 
         picks_result = run_nba_slate(props, tune=tune, meta={
@@ -241,7 +355,8 @@ def main() -> None:
                          "over_odds": ln.over_odds, "under_odds": ln.under_odds}
                         for ln in pr.lines]
             dates_map = {name: h.get("dates", []) for name, h in hist.items()}
-            recs = shared_recommendations(props, lines_map, dates_map)
+            recs = shared_recommendations(props, lines_map, dates_map,
+                                          tune=tune)
             out["recommendations"] = recs
             out["counts"] = {**picks_result["counts"],
                              "props_analyzed": len(recs),
@@ -277,6 +392,10 @@ def main() -> None:
                          "hit_prob": p["p_final"], "edge": p["edge"],
                          "confidence": round(p["p_final"] * 10, 1),
                          "grade": "Play", "stake_units": p["stake_units"],
+                         # The assumption the whole bet rests on (§11.8),
+                         # journaled so the loss review can separate a
+                         # rotation miss from a shooting night.
+                         "proj_minutes": p.get("proj_minutes"),
                          "recommended": True}
                         for p in picks_result["picks"]]
                 # Same drawdown circuit-breaker as NFL/MLB: 10u off the

@@ -44,16 +44,24 @@ BLOWOUT_GRADE_DROP = 0.25          # P(blowout) above this drops one grade
 GRADE_STAKE = {"A": 1.0, "B": 0.75, "C": 0.5, "D": 0.0}
 
 
-def base_minutes(recent_minutes: list[float]) -> float | None:
+def base_minutes(recent_minutes: list[float],
+                 tune: LeagueTuning = NBA) -> float | None:
     """Weighted current-role minutes, most recent first. The caller feeds
-    only current-role games with early-exit/blowout games excluded."""
+    only current-role games with early-exit/blowout games excluded.
+
+    The windows are NESTED — last 5, then games 6-10, then the rest. A spec
+    that says "last 5 at 40% and last 10 at 30%" is describing overlapping
+    windows, and weighting them literally would count the five most recent
+    games twice, at 70%, which is not what anybody means by it.
+    """
     if len(recent_minutes) < 3:
         return None
     m = recent_minutes[:20]
-    chunks = ((m[:5], 0.50), (m[5:10], 0.30), (m[10:20], 0.20))
+    w5, w10, w20 = (tune.recency_weights + (0.0, 0.0, 0.0))[:3]
+    chunks = ((m[:5], w5), (m[5:10], w10), (m[10:20], w20))
     num = den = 0.0
     for vals, w in chunks:
-        if vals:
+        if vals and w:
             num += w * (sum(vals) / len(vals))
             den += w
     return round(num / den, 2) if den else None

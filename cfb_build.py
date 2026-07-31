@@ -152,6 +152,70 @@ def _books_for(ev: dict, entry: dict, home: str, away: str,
     return found
 
 
+def attach_talent(conn, ratings: dict, year: int, lookup: dict) -> dict:
+    """Blend the recruiting-based preseason prior into the team ratings.
+
+    Everything here is key-gated behind CollegeFootballData, and the whole
+    block degrades to "no prior" rather than to a guess — which costs
+    accuracy in September and nothing at all by November, the exact shape
+    of the thing a preseason prior is for.
+    """
+    from engine.cfb import talent as T
+    from engine.sources import cfbd
+    from engine.sources.fetch import DataUnavailable
+
+    report: dict = {"ratings": ratings, "available": False,
+                    "note": "", "fit": {}, "teams_with_prior": 0}
+    try:
+        raw_talent = cfbd.fetch_talent(year)
+    except DataUnavailable as exc:
+        report["note"] = str(exc)
+        return report
+
+    # CFBD speaks school names ("Ohio State"); our ratings are keyed by the
+    # ESPN abbreviations the schedule uses.
+    def _abbr(school: str) -> str:
+        return cfbdata.resolve_team(school, lookup)
+
+    talent = {a: v for a, v in
+              ((_abbr(s), v) for s, v in raw_talent.items()) if a}
+    try:
+        blue = {a: v for a, v in
+                ((_abbr(s), v) for s, v in cfbd.blue_chip_ratio(year).items()) if a}
+    except DataUnavailable:
+        blue = {}
+    try:
+        returning = {a: v for a, v in
+                     ((_abbr(s), v) for s, v in cfbd.fetch_returning(year).items()) if a}
+    except DataUnavailable:
+        returning = {}
+
+    # Fit the talent→points slope against our own completed seasons before
+    # trusting it. Prior seasons are pulled from cache when present.
+    by_year: dict = {}
+    for y in range(year - 1, year - 5, -1):
+        try:
+            rows = cfbd.fetch_talent(y)
+        except DataUnavailable:
+            continue
+        by_year[y] = {a: v for a, v in
+                      ((_abbr(s), v) for s, v in rows.items()) if a}
+    fit = T.fit_points_per_sd(T.team_seasons_from_db(conn, by_year)) \
+        if by_year else T.PRIOR_FIT
+
+    prior = T.talent_prior(talent, fit, blue)
+    blended, blend_report = T.apply_prior(ratings, prior, returning)
+    report.update(
+        ratings=blended, available=True,
+        teams_with_prior=blend_report["teams"],
+        blue_chip_teams=len(blue), returning_teams=len(returning),
+        fit={"points_per_sd": fit.points_per_sd, "fitted": fit.fitted,
+             "samples": fit.samples, "r": fit.r, "note": fit.note},
+        note=(f"Preseason prior from recruiting applied to "
+              f"{blend_report['teams']} team(s). {fit.note}"))
+    return report
+
+
 def build_plays(games: list[dict], priced: dict, ratings: dict,
                 fit, prev: dict, nxt: dict) -> list[dict]:
     """Every game with a price → the plays the CFB pipeline will judge."""
@@ -355,6 +419,14 @@ def main() -> None:
     ratings = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0)
     fit = cfbratings.fit_from_history(conn, ratings)
     cfbratings.install(fit)
+
+    # §5/§6 — the preseason prior, built from high-school recruiting. In
+    # September a team's own results are two games against opponents nobody
+    # has measured either; without this the model quietly asserts that an
+    # unproven Alabama and an unproven Kent State are both average.
+    talent_report = attach_talent(conn, ratings, day.year, lookup)
+    ratings = talent_report.pop("ratings")
+    out["talent"] = talent_report
 
     store = cfbstatus.load_store()
     games = [cfbstatus.annotate_game(g, store) for g in games]

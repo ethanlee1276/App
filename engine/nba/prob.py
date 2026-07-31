@@ -151,15 +151,33 @@ def humility_clamp(p_model: float, p_market: float,
             f"clamped toward market (w={w:g})")
 
 
+def required_edge(stat: str, hold: float, tune: LeagueTuning = NBA,
+                  high_hold_market: bool = False) -> float:
+    """The post-clamp edge this market has to clear.
+
+    A league that declares market tiers uses them; one that doesn't keeps
+    the original points-based bar. That split is deliberate — the WNBA spec
+    raised its own minimums, and applying its numbers to the calibrated NBA
+    board would be re-tuning a working model on another league's say-so.
+    """
+    tier = (tune.market_tier or {}).get(stat)
+    if tier is not None and tune.tier_min_edge:
+        return tune.tier_min_edge.get(tier, max(tune.tier_min_edge.values()))
+    return (GATE_EDGE_PTS_HIGH_HOLD if (high_hold_market or hold > HIGH_HOLD)
+            else GATE_EDGE_PTS)
+
+
 def approval_gate(p_final: float, odds: int, hold: float,
-                  minutes_grade: str, high_hold_market: bool = False) -> list[str]:
+                  minutes_grade: str, high_hold_market: bool = False,
+                  stat: str = "", tune: LeagueTuning = NBA) -> list[str]:
     """Every reason this bet fails the gate; empty list = approved."""
     fails: list[str] = []
     be = break_even(odds)
-    need = GATE_EDGE_PTS_HIGH_HOLD if (high_hold_market or hold > HIGH_HOLD) \
-        else GATE_EDGE_PTS
+    need = required_edge(stat, hold, tune, high_hold_market)
     if p_final - be < need:
-        fails.append(f"edge {p_final - be:+.1%} < required {need:.0%} over "
+        # .1%, not .0% — the tier bars are 3.0/4.5/6.5, and rounding to
+        # whole percent printed the 6.5% bar as "6%".
+        fails.append(f"edge {p_final - be:+.1%} < required {need:.1%} over "
                      f"break-even {be:.1%}")
     ev = p_final * (_dec(odds) - 1.0) - (1.0 - p_final)
     if ev < GATE_MIN_EV:

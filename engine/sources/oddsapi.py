@@ -122,6 +122,12 @@ NBA_ODDS_TO_MARKET = {
     "player_rebounds": "reb",
     "player_assists": "ast",
     "player_threes": "fg3m",
+    # PRA is the WNBA spec's headline tier-1 market — it aggregates away
+    # single-category noise, which is exactly what you want from a 44-game
+    # season where one cold shooting night distorts a season average. It
+    # costs nothing extra to request: player props are billed per event,
+    # not per market.
+    "player_points_rebounds_assists": "pra",
 }
 NBA_TEAM_ABBR = {
     "Atlanta Hawks": "ATL", "Boston Celtics": "BOS", "Brooklyn Nets": "BKN",

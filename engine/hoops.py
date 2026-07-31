@@ -60,6 +60,28 @@ class LeagueTuning:
     max_picks_per_slate: int = 4
     max_picks_per_game: int = 2
     thin_sample: int = 10
+    # Nested minutes windows, most recent first: last 5 · games 6-10 · the
+    # rest of the season. Nested, NOT overlapping — "last 5 at 40% and last
+    # 10 at 30%" reads as overlapping windows, and implementing it that way
+    # would count the last five games twice at 70%.
+    recency_weights: tuple = (0.50, 0.30, 0.20)
+    # --- market structure ----------------------------------------------------
+    # Which markets are worth betting, and how hard each has to clear.
+    # Empty tier map = this league gates on points-edge alone (the NBA's
+    # original behaviour), so adding tiers to one league can't silently
+    # re-tune the other.
+    market_tier: dict = field(default_factory=dict)
+    tier_min_edge: dict = field(default_factory=dict)
+    # --- §8 the unified grade ------------------------------------------------
+    grade_weights: dict = field(default_factory=dict)
+    min_grade: int | None = None       # None = the grade is reported, not gating
+    # Week-to-week coefficient of variation in minutes above which a role is
+    # a coin flip and the projection is fiction. None = filter off.
+    stability_max_cv: float | None = None
+    # --- §8 bankroll caps, as fractions of bankroll --------------------------
+    cap_per_play: float = 0.03
+    cap_per_game: float = 0.06
+    cap_per_slate: float = 0.15
     # --- provenance ---------------------------------------------------------
     calibrated: bool = True
     inherited_from: str = ""
@@ -86,6 +108,22 @@ NBA = LeagueTuning(
 # same margin. Inheriting a number and admitting it beats inventing one.
 _MIN_SCALE = 40 / 48
 
+# §7 — the WNBA's own beatability order, which is NOT the NBA's. Count
+# stats tied tightly to minutes and role are tier 1 and PRA aggregates away
+# single-category noise; points are efficiency-contaminated; made threes
+# are low-frequency events where one hot night distorts every average.
+WNBA_TIERS = {"reb": 1, "ast": 1, "pra": 1, "pts": 2, "fg3m": 3,
+              "stl": 3, "blk": 3}
+# §3.6 — minimum edge AFTER the haircut. Deliberately above the NFL/MLB
+# thresholds: when a soft-market model disagrees with a soft market, the
+# extra cushion is the protection against being confidently wrong together.
+WNBA_TIER_MIN_EDGE = {1: 0.030, 2: 0.045, 3: 0.065}
+# §8 — the unified 0-100 grade. Minutes/role certainty is 20% because
+# minutes are the king input, and freshness is 15% because a stale injury
+# report is how this league beats you.
+WNBA_GRADE_WEIGHTS = {"edge": 40, "minutes_certainty": 20, "freshness": 15,
+                      "movement": 10, "matchup": 10, "schedule": 5}
+
 WNBA = replace(
     NBA,
     key="wnba", name="WNBA",
@@ -94,14 +132,25 @@ WNBA = replace(
     season_games=44,
     personal_fouls=5,
     vacancy_cap_over_high=round(NBA.vacancy_cap_over_high * _MIN_SCALE, 2),
+    # §5 — last 5 · games 6-10 · rest of season, nested.
+    recency_weights=(0.40, 0.30, 0.20),
+    market_tier=WNBA_TIERS,
+    tier_min_edge=WNBA_TIER_MIN_EDGE,
+    grade_weights=WNBA_GRADE_WEIGHTS,
+    min_grade=70,                      # "Below 70: no bet, no leans."
+    stability_max_cv=0.35,
+    # §8 — tighter than the NFL/MLB slate cap, because WNBA limits are lower
+    # and re-betting a moved line is harder: a soft market punishes
+    # over-concentration with worse fills, not just variance.
+    cap_per_play=0.02, cap_per_game=0.05, cap_per_slate=0.12,
     calibrated=False,
     inherited_from="nba",
-    note=("Tuning inherited from the NBA model and NOT yet fitted to WNBA "
-          "results. Minutes-denominated values are scaled to the 40-minute "
-          "game; the fitted ones (margin SD, blowout curves, stat spreads, "
-          "gate thresholds) are the NBA's. Picks are journaled and graded "
-          "on probation — they do not count as bets until the bucket "
-          "clears the promotion bar."),
+    note=("Market tiers, tier minimums, the 0-100 grade, the role-stability "
+          "filter and the bankroll caps are the WNBA spec's own. What is "
+          "still inherited from the NBA are the fitted numbers — margin SD, "
+          "blowout curves, stat spreads — which are not yet fitted to WNBA "
+          "results. Picks are journaled and graded on probation; they do "
+          "not count as bets until the bucket clears the promotion bar."),
 )
 
 LEAGUES = {"nba": NBA, "wnba": WNBA}

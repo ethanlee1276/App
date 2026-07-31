@@ -14,8 +14,10 @@ from ..hoops import NBA, LeagueTuning
 from .minutes import (base_minutes, project_minutes, minutes_grade,
                       blowout_prob, GRADE_STAKE)
 from .prob import (p_over, sd_for, devig, market_hold, humility_clamp,
-                   approval_gate, break_even, ev_per_unit, _dec,
-                   CLAMP_W_DEFAULT, HIGH_HOLD)
+                   approval_gate, required_edge, break_even, ev_per_unit,
+                   _dec, CLAMP_W_DEFAULT, HIGH_HOLD)
+from .quality import (usage_stability, stability_blocks, quality_score,
+                      grade_label, kelly_stake, apply_exposure_caps)
 
 MAX_PICKS_PER_SLATE = 4
 MAX_PICKS_PER_GAME = 2
@@ -40,10 +42,21 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     label = MARKET_LABELS.get(stat, stat)
     minutes = prop.get("minutes") or []
     values = prop.get("values") or []
-    base = base_minutes(minutes)
+    base = base_minutes(minutes, tune)
     rate = _rate_per_min(minutes, values)
     if base is None or rate is None:
         return {"kind": "skip", "why": "thin sample — under 3 usable games"}
+
+    # §5 — a volatile role is unbettable at any modeled edge. This comes
+    # before the pricing on purpose: the whole projection is minutes × a
+    # rate, so if the minutes are a coin flip there is nothing here to
+    # price and computing an edge from it only makes the fiction look
+    # numerate.
+    stability = usage_stability(minutes)
+    volatile = stability_blocks(minutes, tune)
+    if volatile:
+        return {"kind": "skip", "why": volatile, "player": prop["player"],
+                "market": label}
 
     spread = float(prop.get("spread", 0.0))
     grade = minutes_grade(prop.get("is_starter", False), spread,
@@ -79,7 +92,22 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
                 "market": label}
 
     fails = approval_gate(p_final, odds, hold, grade,
-                          high_hold_market=stat == "fg3m")
+                          high_hold_market=stat == "fg3m",
+                          stat=stat, tune=tune)
+    need = required_edge(stat, hold, tune, high_hold_market=stat == "fg3m")
+    tier = (tune.market_tier or {}).get(stat, 2)
+    # §8 — the five context components, each a restatement of something
+    # measured. Freshness is what the build could actually confirm about
+    # availability; movement and matchup score half when the feed that
+    # would answer them is absent, rather than assuming the best case.
+    score = quality_score(
+        edge=p_final - break_even(odds), required=need, minutes_grade=grade,
+        stability=stability["score"],
+        freshness=float(prop.get("freshness", 0.5)),
+        movement=float(prop.get("movement_fit", 0.5)),
+        matchup=float(prop.get("matchup_fit", 0.5)),
+        schedule=float(prop.get("schedule_fit", 0.5)),
+        tune=tune)
     card = {
         "player": prop["player"], "team": prop.get("team", ""),
         "opponent": prop.get("opponent", ""),
@@ -95,15 +123,32 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
         "projection": proj, "sd": round(sd_for(stat, proj, tune), 2),
         "blowout_prob": blowout_prob(spread, tune=tune),
         "league": tune.key,
+        "required_edge": need,
+        "market_tier": tier,
+        "grade_score": score,
+        "grade_label": grade_label(score, tune),
+        "stability": stability,
         "kill_if": ("late scratch, minutes restriction, or lineup change "
                     "touching this player → automatic void"),
         "clamp_note": clamp_note,
     }
+    # "Below 70: no bet, no leans" — but only where a league's tuning says
+    # the grade is the authority. The NBA board predates this grade and is
+    # calibrated; bolting a new bar onto it because another league's spec
+    # asked for one would be a silent re-tune of a working model.
+    if tune.min_grade is not None and score < tune.min_grade:
+        fails = fails + [f"grade {score} below the {tune.min_grade} bar — "
+                         f"no bet, no leans"]
     if fails:
         return {"kind": "near_miss", **card, "fails": fails}
-    stake = 0.25 * max(0.0, (p_final * (_dec(odds) - 1.0) - (1 - p_final))
-                       / (_dec(odds) - 1.0))
-    card["stake_units"] = round(min(stake, 0.03) * 20 * GRADE_STAKE[grade], 2)
+    if tune.grade_weights:
+        frac = kelly_stake(p_final, odds, score, tier, tune)
+    else:
+        stake = 0.25 * max(0.0, (p_final * (_dec(odds) - 1.0) - (1 - p_final))
+                           / (_dec(odds) - 1.0))
+        frac = min(stake, tune.cap_per_play)
+    card["stake_fraction"] = frac
+    card["stake_units"] = round(frac * 20 * GRADE_STAKE[grade], 2)
     return {"kind": "pick", **card}
 
 
@@ -119,7 +164,12 @@ def run_nba_slate(props: list[dict], meta: dict | None = None,
         else:
             skips.append(r)
 
-    picks.sort(key=lambda p: -p["ev"])
+    # Rank by the grade where a league has one — the grade already contains
+    # the edge at 40% plus everything EV alone can't see, so ordering by raw
+    # EV would put a volatile-role play with a fat number above a settled
+    # one with a slightly smaller edge.
+    picks.sort(key=lambda p: (-p.get("grade_score", 0), -p["ev"])
+               if tune.grade_weights else (-p["ev"], 0))
     # Discipline: 4 per slate, 2 per game — selectivity is the model.
     chosen, per_game = [], {}
     for p in picks:
@@ -130,6 +180,17 @@ def run_nba_slate(props: list[dict], meta: dict | None = None,
             continue
         per_game[gkey] = per_game.get(gkey, 0) + 1
         chosen.append(p)
+
+    # §8 bankroll caps: 2% a play, 5% a game, 12% a slate. The count limits
+    # above cap the NUMBER of positions; these cap the MONEY, and in a
+    # low-limit league where a moved line is hard to re-bet, that is the
+    # constraint that actually binds.
+    if tune.grade_weights:
+        chosen = apply_exposure_caps(chosen, tune)
+        for p in chosen:
+            p["stake_units"] = round(p.get("stake_fraction", 0.0) * 20
+                                     * GRADE_STAKE[p["minutes_grade"]], 2)
+        chosen = [p for p in chosen if p["stake_units"] > 0]
 
     # Near-miss report: the 3 closest, with what would need to change.
     misses.sort(key=lambda m: -(m["ev"]))
@@ -171,16 +232,23 @@ def _avg(vals, n=None):
 
 def shared_recommendations(props: list[dict],
                            lines_map: dict | None = None,
-                           dates_map: dict | None = None) -> list[dict]:
+                           dates_map: dict | None = None,
+                           tune: LeagueTuning = NBA) -> list[dict]:
     """Every evaluable prop as a shared-schema recommendation dict.
 
     ``lines_map``: {(player, market): [line dicts]} — the multi-book quotes
     the Scanner needs (Scalpy itself only keeps the best two-way price).
     ``dates_map``: {player: [ISO dates, newest first]} for real log labels.
+
+    ``tune`` is NOT optional in practice. This layer is what the seven
+    shared pages actually render, and it used to call ``evaluate_prop``
+    with the default — so the WNBA board displayed every prop graded
+    against NBA tuning: a 48-minute game, the NBA's gate, no tier bars.
+    Scalpy's own ``picks`` were right and the page beside them was not.
     """
     out = []
     for prop in props:
-        r = evaluate_prop(prop)
+        r = evaluate_prop(prop, tune)
         if r["kind"] == "skip":
             continue
         vals = [float(v) for v in (prop.get("values") or [])]

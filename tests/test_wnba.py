@@ -77,6 +77,20 @@ def test_the_fitted_constants_are_inherited_and_labelled():
     assert "not yet fitted" in hoops.WNBA.note.lower()
 
 
+def test_the_decision_rules_are_the_wnba_spec_s_own_not_inherited():
+    """Inheriting a fitted constant is honest; inheriting a DECISION rule
+    the spec explicitly rewrote is not. Tiers, bars, grade, stability
+    filter and caps all belong to this league."""
+    assert hoops.WNBA.market_tier and not hoops.NBA.market_tier
+    assert hoops.WNBA.tier_min_edge and not hoops.NBA.tier_min_edge
+    assert hoops.WNBA.grade_weights and not hoops.NBA.grade_weights
+    assert hoops.WNBA.min_grade == 70 and hoops.NBA.min_grade is None
+    assert hoops.WNBA.stability_max_cv and hoops.NBA.stability_max_cv is None
+    # Tighter than the NFL/MLB slate cap, on purpose.
+    assert (hoops.WNBA.cap_per_play, hoops.WNBA.cap_per_game,
+            hoops.WNBA.cap_per_slate) == (0.02, 0.05, 0.12)
+
+
 # --- the label has to reach the page ----------------------------------------
 def test_probation_reaches_the_payload():
     out = run_nba_slate([], tune=hoops.WNBA)

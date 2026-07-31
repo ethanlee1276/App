@@ -86,6 +86,16 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
         conn.execute("ALTER TABLE bets ADD COLUMN leg INTEGER")
     except sqlite3.OperationalError:
         pass
+    # Projected vs actual minutes — the basketball spec calls this the
+    # single fastest diagnostic, and it is: if losses cluster on minutes
+    # misses the rotation pipeline is broken, and if the minutes were right
+    # and the results weren't, it's efficiency or variance. No other pair
+    # of columns separates those two failure modes.
+    for col in ("proj_minutes", "actual_minutes"):
+        try:
+            conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
+        except sqlite3.OperationalError:
+            pass
     for k, v in DEFAULTS.items():
         conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
     conn.commit()
@@ -153,14 +163,19 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
-            "stake_dollars, status, leg) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?)",
+            "stake_dollars, status, leg, proj_minutes) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?)",
             (now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
              r["line"], r.get("book", ""), r.get("odds", -110), r.get("projection"),
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
              stake_units, round(stake_units * unit_dollars, 2),
              # Which doubleheader leg this bet belongs to — the settler
              # grades against that game's stat line, not a coin flip.
-             r.get("game_number") if r.get("doubleheader") else None))
+             r.get("game_number") if r.get("doubleheader") else None,
+             # The minutes this bet assumed. Basketball props are minutes
+             # bets wearing a stat's name; without this column a loss can't
+             # be attributed to the rotation read or to the shooting.
+             r.get("proj_minutes")))
         n += cur.rowcount
     # Recommended game bets journal too (sharp-anchor picks live or die by
     # forward results). Moneylines store player = the team picked, line 0.5,
@@ -562,13 +577,16 @@ def _grade_side_aware(b, actual: float) -> tuple[str, float]:
     return "lost", -(b["stake_units"] or 0.0)
 
 
-def _settle_one(conn, b, actual: float, closing_line: float | None) -> None:
+def _settle_one(conn, b, actual: float, closing_line: float | None,
+                actual_minutes: float | None = None) -> None:
     """Grade one open bet and advance the bankroll."""
     status, pnl_u = _grade_side_aware(b, actual)
     pnl_d = round(pnl_u / b["stake_units"] * b["stake_dollars"], 2) if b["stake_units"] else 0.0
     conn.execute(
-        "UPDATE bets SET status=?, actual=?, pnl_units=?, pnl_dollars=?, closing_line=? WHERE id=?",
-        (status, actual, round(pnl_u, 4), pnl_d, closing_line, b["id"]))
+        "UPDATE bets SET status=?, actual=?, pnl_units=?, pnl_dollars=?, "
+        "closing_line=?, actual_minutes=? WHERE id=?",
+        (status, actual, round(pnl_u, 4), pnl_d, closing_line,
+         actual_minutes, b["id"]))
     set_cfg(conn, "bankroll", round(bankroll(conn) + pnl_d, 2))
 
 
@@ -829,7 +847,20 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
                 closes_cache["_snapshots"] = _snapshot_closes()
             close_line = closes_cache["_snapshots"].get(
                 (normalize_name(b["player"]), b["market"], b["date"]))
-        _settle_one(conn, b, float(row["value"]), close_line)
+        # Capture the minutes actually played alongside the result, so the
+        # journal can answer "did we lose because the rotation read was
+        # wrong, or because she shot 3-for-12?" — the one question that
+        # separates a pipeline bug from variance.
+        actual_minutes = None
+        if b["sport"] in ("nba", "wnba"):
+            m = hist_conn.execute(
+                f"SELECT value FROM player_game_logs WHERE {where} "
+                f"AND market='min' AND player=? AND game_id=?",
+                (*wargs, b["player"], row["game_id"])).fetchone()
+            if m:
+                actual_minutes = float(m["value"])
+        _settle_one(conn, b, float(row["value"]), close_line,
+                    actual_minutes=actual_minutes)
         settled += 1
 
     # --- Void the no-shows ---------------------------------------------

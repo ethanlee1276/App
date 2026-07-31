@@ -135,7 +135,9 @@ auto-settle last ran, so you can see the loop is alive.
 | Confirm a college QB (turns a conditional into a bet) | `python3 launch.py --confirm-qb "TOL" --starter "Name"` |
 | See which CFB games are waiting on a QB | `python3 launch.py --confirm-qb` |
 | New Odds API key | put it in `secrets.local`, then `python3 launch.py --reset-budget` |
+| College recruiting data (free, big September upgrade) | get a key at collegefootballdata.com/key, put `CFBD_API_KEY=…` in `secrets.local` |
 | Health check | `python3 launch.py --check` |
+| **What data is each model missing?** | `python3 launch.py --coverage` (or `--coverage wnba cfb`) |
 | Leave it running while you're out, picking up pushed fixes | `caffeinate -is python3 launch.py --auto-update` |
 | Force a settle right now (rarely needed — it's automatic) | `python3 launch.py --settle` |
 | Bets still open after the games ended | `python3 launch.py --settle all` |
@@ -189,6 +191,27 @@ results, not one it asserts. Until roughly 400 games are in the database
 it uses a documented prior instead, marks the board on probation, and
 journals without staking. Run the backfill above once and the numbers
 become measurements.
+
+**About `--coverage`:** every sport has a written spec in `docs/` with an
+implementation map, and those maps are prose — prose rots. A feed stops
+resolving, a season never gets ingested, a key expires, and the table still
+says ✅ because nobody edited it. `--coverage` answers the same question by
+*looking*: it reads the database, the cache and your config, and prints
+what each model actually has behind it, why that layer matters, and the
+command that closes the gap. A 📋 means no free source exists — those stay
+listed every time on purpose, because a permanent gap you've stopped
+seeing is how a blind spot becomes an identity.
+
+**About the college recruiting key:** this is the high-school layer —
+recruiting composites, blue-chip ratio, returning production, the portal.
+It matters most in September, when a team's own results are two games
+against opponents nobody has measured either. Without it a results-only
+rating quietly says an unproven Alabama and an unproven Kent State are both
+average; the market disagrees, and it will take money for that. The prior
+carries about a quarter of the projection early and decays to almost
+nothing by November, which is the point — it fills the gap until real
+results exist. It is free and read-only; without it the college board just
+runs without a prior and says so.
 
 **About `--weigh-in`:** every UFC pick prints `KILL IF: missed weight …
 → automatic void`. That was a rule with nothing enforcing it. Now a

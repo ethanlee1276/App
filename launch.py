@@ -1742,6 +1742,12 @@ def main() -> None:
     if "--odds-doctor" in argv:
         odds_doctor()
         return
+    if "--coverage" in argv:
+        from engine.coverage import report
+        i = argv.index("--coverage")
+        want = [a.lower() for a in argv[i + 1:] if not a.startswith("-")]
+        print(report(want or None))
+        return
     if "--clean-cache" in argv:
         # Corrupt/empty cache files are now treated as misses automatically,
         # but sweeping them keeps the next fetch from paying a needless
