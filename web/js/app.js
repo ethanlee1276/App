@@ -2821,6 +2821,10 @@ function enterStandaloneMode(name) {
     x.classList.toggle("active", x.dataset.sport === name));
   const nav = document.getElementById("nav");
   if (nav) nav.style.display = "none";
+  // …and its menu label with it: a "PAGE" header over an empty space is
+  // worse than no header. Standalone pages have no page list.
+  const phead = document.querySelector('.menu-head[data-head="page"]');
+  if (phead) phead.style.display = "none";
   const brand = STANDALONE_BRAND[name];
   if (brand) {
     document.getElementById("brand-logo").textContent = brand.logo;
@@ -2834,6 +2838,8 @@ function enterStandaloneMode(name) {
 function exitStandaloneMode() {
   const nav = document.getElementById("nav");
   if (nav) nav.style.display = "";
+  const phead = document.querySelector('.menu-head[data-head="page"]');
+  if (phead) phead.style.display = "";
   document.querySelectorAll(".sport-btn").forEach((x) =>
     x.classList.toggle("active", x.dataset.sport === state.sport));
   // Restore the sport's own brand (logo + tagline) along with its nav.
@@ -4467,9 +4473,19 @@ function initMobileMenu() {
     const open = document.body.classList.toggle("menu-open");
     btn.setAttribute("aria-expanded", String(open));
   });
-  // Picking a destination is the end of the interaction — never leave
-  // the panel covering the thing the tap just navigated to.
-  document.querySelectorAll(".sport-btn, .nav-btn").forEach((b) =>
+  // Choosing a SPORT is step one of two: NFL/MLB/NBA each have their own
+  // page list, so the panel stays open for the second tap (and the Page
+  // section updates live — NBA drops Long Shots, for instance). Standalone
+  // destinations (Polymarket, Fantasy, UFC, Why Us) have no page list, so
+  // they behave like any other final choice and close.
+  document.querySelectorAll(".sport-btn").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (STANDALONE_MODES.includes(b.dataset.sport)) closeMobileMenu();
+      syncMenuLabel();
+    }));
+  // Picking a PAGE is the end of the interaction — never leave the panel
+  // covering the thing the tap just navigated to.
+  document.querySelectorAll(".nav-btn").forEach((b) =>
     b.addEventListener("click", () => { closeMobileMenu(); syncMenuLabel(); }));
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeMobileMenu();
