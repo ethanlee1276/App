@@ -81,6 +81,12 @@ def main() -> None:
             # about what books offer.
             if res.name_misses:
                 odds_status["name_misses"] = len(res.name_misses)
+                # Keep a few of the actual pairs, not just the count: this
+                # is the one part of "no book price" that IS a bug, and it
+                # is unfixable without knowing which names missed.
+                odds_status["name_miss_examples"] = [
+                    {"prop": m.get("prop"), "book": m.get("book"),
+                     "market": m.get("market")} for m in res.name_misses[:8]]
                 print(f"  ⚠️  {len(res.name_misses)} book price(s) nearly "
                       f"matched a prop but didn't join — fix the name map:")
                 for m in res.name_misses[:6]:

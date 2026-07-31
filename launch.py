@@ -434,7 +434,13 @@ def odds_doctor() -> None:
             print(f"            ⚠️  {os_['error']}")
         if os_.get("name_misses"):
             print(f"            ⚠️  {os_['name_misses']} price(s) nearly matched "
-                  f"a prop but didn't join — that part IS a bug")
+                  f"a prop but didn't join — that part IS a bug:")
+            for m in os_.get("name_miss_examples", [])[:8]:
+                print(f"                 ours '{m.get('prop')}' vs book "
+                      f"'{m.get('book')}' ({m.get('market')})")
+            if not os_.get("name_miss_examples"):
+                print("                 (rebuild once on the new code to see "
+                      "which names)")
 
     # 4. The budget's own books, and what the pacer would decide right now.
     try:
