@@ -137,6 +137,7 @@ auto-settle last ran, so you can see the loop is alive.
 | Fold old 0.00-unit picks back into the record (once) | `python3 launch.py --resize-unstaked` |
 | Separate long shots from the main record (once) | `python3 launch.py --repair-journal` |
 | Why is the board empty? | `python3 launch.py --why-empty` |
+| Why do N props have no book price? | `python3 launch.py --odds-doctor` |
 
 **About `--auto-update`:** the laptop is at home and you are not. With
 this flag the launcher checks the branch every 5 minutes, fast-forwards

@@ -350,6 +350,115 @@ def _run_autosettle() -> None:
         print(f"  ⚠️  auto-settle failed: {exc}")
 
 
+def odds_doctor() -> None:
+    """Why does the board say N props have no book price?
+
+    Written after guessing wrong about it twice. "753 unpriced" has at
+    least three unrelated causes that look identical on the phone — the
+    board is frozen, the board is fresh but re-applying a stale cached
+    price snapshot, or the books genuinely have not posted those lines —
+    and the difference is entirely in numbers that live on this machine.
+    So print them instead of reasoning about them.
+    """
+    import datetime as _d
+
+    def ago(ts):
+        """A timestamp with its distance from now — in either direction, so
+        the same helper reads correctly for a pull that happened and a first
+        pitch that hasn't."""
+        if not ts:
+            return "never"
+        mins = (time.time() - float(ts)) / 60
+        when = _d.datetime.fromtimestamp(float(ts)).strftime("%a %H:%M")
+        gap = abs(mins)
+        span = f"{gap:.0f} min" if gap < 180 else f"{gap / 60:.1f} h"
+        return f"{when} ({span} {'ago' if mins >= 0 else 'from now'})"
+
+    print("Odds doctor — why the board is priced the way it is\n")
+
+    # 1. Is this machine even running the code I think it is?
+    ok, head = _git("log", "-1", "--format=%h %s")
+    if ok:
+        print(f"  code      {head[:72]}")
+        _git("fetch", "-q", "origin")
+        ok2, behind = _git("rev-list", "--count", "HEAD..@{u}")
+        if ok2 and behind.isdigit() and int(behind):
+            print(f"            ⚠️  {behind} commit(s) BEHIND origin — "
+                  f"you have not pulled. `git pull` first; everything below "
+                  f"is the old code's behaviour.")
+        elif ok2:
+            print("            up to date with origin")
+
+    # 2. The board file itself: how old, and what it says about its prices.
+    path = ROOT / MLB_OUT
+    if not path.is_file():
+        print(f"\n  board     {MLB_OUT} does not exist — nothing has built.")
+        return
+    age_min = (time.time() - path.stat().st_mtime) / 60
+    try:
+        board = json.loads(path.read_text())
+    except Exception as exc:
+        print(f"\n  board     unreadable: {exc}")
+        return
+    props = board.get("recommendations", []) or []
+    priced = sum(1 for r in props if r.get("has_market"))
+    census = board.get("gate_census", {}) or {}
+    os_ = board.get("odds_status", {}) or {}
+    print(f"\n  board     rebuilt {age_min:.0f} min ago · slate {board.get('date')}"
+          f" · {len(board.get('games', []))} game(s)")
+    if census:
+        print(f"            {len(props)} prop(s): {priced} with a real book "
+              f"price, {census.get('no_real_price', 0)} without")
+    else:
+        print(f"            {len(props)} prop(s): {priced} with a real book "
+              f"price (this build recorded no gate census)")
+    if age_min > 5:
+        print(f"            ⚠️  a running launcher rebuilds this every 60s. "
+              f"{age_min:.0f} minutes means it is NOT running (or is failing).")
+
+    # 3. What the last build did about odds. `source` is the key field:
+    #    "cache" means it re-applied the last PAID pull's snapshot, so a
+    #    board can be seconds old and its prices hours old.
+    if not os_:
+        print("\n  odds      the build recorded nothing — it ran without "
+              "--odds/--cached-odds (no ODDS_API_KEY?)")
+    else:
+        src = os_.get("source")
+        print(f"\n  odds      last build used: "
+              f"{'FRESH paid pull' if src == 'fresh' else 'CACHED prices' if src == 'cache' else src}")
+        print(f"            matched {os_.get('matched', 0)} prop price(s) "
+              f"across {os_.get('events', 0)} game(s)")
+        if os_.get("priced_at"):
+            print(f"            those prices were pulled {ago(os_['priced_at'])}")
+        if os_.get("error"):
+            print(f"            ⚠️  {os_['error']}")
+        if os_.get("name_misses"):
+            print(f"            ⚠️  {os_['name_misses']} price(s) nearly matched "
+                  f"a prop but didn't join — that part IS a bug")
+
+    # 4. The budget's own books, and what the pacer would decide right now.
+    try:
+        from engine import oddsbudget
+        st = oddsbudget.load()
+        print(f"\n  budget    {oddsbudget.summary()}")
+        print(f"            last paid MLB pull: "
+              f"{ago(st.sport_ts('mlb') or st.last_refresh_ts)}")
+        kicks = _slate_kickoffs(str(path))
+        if kicks:
+            print(f"            first pitch {ago(min(kicks))} · pre-game window "
+                  f"opens {ago(min(kicks) - oddsbudget.PRIME_BEFORE_S)}")
+        ok3, why = oddsbudget.should_refresh(
+            _games_on_slate(str(path)) + 1, kickoffs=kicks, sport="mlb",
+            share=_budget_share())
+        print(f"\n  right now {'WOULD pull' if ok3 else 'would NOT pull'}: {why}")
+    except Exception as exc:                       # noqa: BLE001
+        print(f"\n  budget    unreadable: {exc}")
+
+    if not _with_odds():
+        print("\n  ⚠️  ODDS_API_KEY is not set in this shell — every build is "
+              "running on proxy lines. Check secrets.local.")
+
+
 AUTO_UPDATE_EVERY_S = 300
 
 
@@ -1246,6 +1355,9 @@ def main() -> None:
         return
     if "--check" in argv:
         preflight()
+        return
+    if "--odds-doctor" in argv:
+        odds_doctor()
         return
     if "--clean-cache" in argv:
         # Corrupt/empty cache files are now treated as misses automatically,
