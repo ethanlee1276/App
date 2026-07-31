@@ -140,6 +140,17 @@ auto-settle last ran, so you can see the loop is alive.
 | Why do N props have no book price? | `python3 launch.py --odds-doctor` |
 | A trade isn't showing on the Fantasy page | `python3 launch.py --refresh-rosters "Player Name"` |
 | See a team's active roster | Menu → **More** → **Rosters** (search a team or a player) |
+| Record a UFC weigh-in (fight day) | `python3 launch.py --weigh-in "Fighter Name" 155.5` |
+| See which weigh-ins are still missing | `python3 launch.py --weigh-in` |
+
+**About `--weigh-in`:** every UFC pick prints `KILL IF: missed weight …
+→ automatic void`. That was a rule with nothing enforcing it. Now a
+recorded miss becomes a red flag, and red flags already gate a bet off the
+card — so the rule holds itself. Weigh-ins are typed in because no free
+structured feed of them exists; the division and the one-pound non-title
+allowance are worked out from the fighter's dossier, so you type a name
+and a number. A weigh-in nobody has recorded shows as **"not recorded"**
+rather than passing for "made weight" — those are opposite facts.
 
 **About `--auto-update`:** the laptop is at home and you are not. With
 this flag the launcher checks the branch every 5 minutes, fast-forwards

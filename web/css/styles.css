@@ -1742,3 +1742,15 @@ select.calc-in { width: auto; font-weight: 600; }
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 }
+
+/* The fight-by-fight edge board is a 640px-wide scroller, which is fine on
+   a laptop and hides the most important column on a phone: a PASS row's
+   REASON. That reason now carries the weigh-in gate ("missed weight by
+   1.5 lb"), so a verdict you have to scroll sideways to read is a verdict
+   that doesn't get read. On a phone the row wraps instead. */
+@media (max-width: 700px) {
+  .ufc-edge-row { flex-wrap: wrap; min-width: 0 !important; row-gap: 4px; }
+  .ufc-edge-row > span:first-child { min-width: 52px !important; text-align: left !important; }
+  .ufc-edge-row > span:nth-child(2) { flex: 1 1 100% !important; order: 3; }
+  .ufc-edge-row > span:last-child { text-align: left !important; white-space: normal !important; }
+}

@@ -116,6 +116,18 @@ def main() -> None:
         except oddsapi.OddsAPIError as exc:
             out["odds_error"] = str(exc)
 
+    # Weigh-ins, before the model runs: a missed weight is appended to that
+    # fighter's red_flags, and approval_gate already refuses to bet through
+    # a red flag. The rule every card prints in `kill_if` finally has
+    # something enforcing it.
+    weigh_store = {}
+    if fights:
+        from engine.ufc import weighin
+        weigh_store = weighin.load_store()
+        for f in fights:
+            weighin.annotate_fight(f, weigh_store)
+        out["weigh_ins"] = weighin.card_summary(fights)
+
     if not fights:
         out.update(status="no_card",
                    note=out.get("odds_error",
@@ -127,6 +139,15 @@ def main() -> None:
         result = run_card(fights)
         out.update(status="card", event_date=event_label,
                    dossiers_loaded=len(dossiers), **result)
+        # Carry the per-fight weigh-in state onto the rendered rows so the
+        # page can show "not recorded" rather than implying "made weight".
+        by_fight = {f"{(f.get('prices') or {}).get('fighter_a', '')} vs "
+                    f"{(f.get('prices') or {}).get('fighter_b', '')}":
+                    f.get("weigh_in") for f in fights}
+        for row in list(out.get("picks", [])) + list(out.get("pass_list", [])):
+            wi = by_fight.get(row.get("fight"))
+            if wi:
+                row["weigh_in"] = wi
 
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)

@@ -368,6 +368,86 @@ def _run_autosettle() -> None:
         print(f"  ⚠️  auto-settle failed: {exc}")
 
 
+def weigh_in_cli(argv: list) -> None:
+    """Record a weigh-in, or show what the current card is missing.
+
+        python3 launch.py --weigh-in "Fighter Name" 155.5
+        python3 launch.py --weigh-in "Champ Name" 155 --title
+        python3 launch.py --weigh-in                 (just show the card)
+
+    The division comes from the fighter's dossier, so the limit — and the
+    one-pound non-title allowance — are worked out rather than typed.
+    """
+    import json as _json
+    from engine.ufc import weighin
+
+    args = [a for a in argv[argv.index("--weigh-in") + 1:]
+            if not a.startswith("--")]
+    title = "--title" in argv
+    store = weighin.load_store()
+
+    if len(args) >= 2:
+        name, raw = " ".join(args[:-1]), args[-1]
+        try:
+            weight = float(raw)
+        except ValueError:
+            print(f"'{raw}' isn't a weight. Usage: --weigh-in \"Name\" 155.5")
+            return
+        # The division is the dossier's, not something to retype wrong.
+        try:
+            dossiers = _json.loads(Path("data/ufc_dossiers.json").read_text())
+        except (OSError, ValueError):
+            dossiers = {}
+        from engine.sources.oddsapi import normalize_name
+        d = dossiers.get(normalize_name(name)) or {}
+        division = d.get("division", "")
+        if not division:
+            print(f"No dossier for '{name}', so there's no division to check "
+                  f"{weight} against. Add the dossier first — this engine "
+                  f"doesn't bet fighters it has no dossier for anyway.")
+            return
+        res = weighin.record(name, weight, division, title_fight=title)
+        limit = res.get("limit")
+        if res["state"] == "missed":
+            print(f"⛔ {name}: {weight} vs {limit} limit — MISSED by "
+                  f"{res['over']:g} lb ({division}"
+                  f"{', title' if title else ''}).")
+            print("   Recorded as a red flag: every bet on this fight is now "
+                  "gated off the card, which is what `kill_if` always said.")
+        else:
+            print(f"✅ {name}: {weight} vs {limit} limit — made weight "
+                  f"({division}{', title' if title else ''}).")
+
+    # Always finish by showing what the card still needs.
+    path = ROOT / UFC_OUT
+    try:
+        card = _json.loads(path.read_text())
+    except (OSError, ValueError):
+        print("\nNo UFC card built yet — run the launcher once.")
+        return
+    rows = list(card.get("picks") or []) + list(card.get("pass_list") or [])
+    if not rows:
+        print(f"\nNo bouts on the built card ({card.get('status', '?')}).")
+        return
+    print(f"\nCard {card.get('event_date', '')} — weigh-in status:")
+    for row in rows:
+        wi = row.get("weigh_in") or {}
+        bits = []
+        for side in ("a", "b"):
+            st = wi.get(side) or {}
+            nm = st.get("name", "?")
+            s = st.get("state")
+            bits.append(f"{nm}: " + (
+                f"{st.get('weight')} ✅" if s == "made" else
+                f"{st.get('weight')} ⛔ +{st.get('over'):g}" if s == "missed"
+                else "— not recorded"))
+        print(f"  {row.get('fight', '?')}\n      " + "   |   ".join(bits))
+    summary = card.get("weigh_ins") or {}
+    if summary:
+        print(f"\n  {summary.get('made', 0)} made · {summary.get('missed', 0)} "
+              f"missed · {summary.get('unrecorded', 0)} not recorded")
+
+
 def refresh_rosters(name: str | None = None) -> None:
     """Re-pull the roster feed now, and say what it knows about a player.
 
@@ -1499,6 +1579,9 @@ def main() -> None:
         return
     if "--check" in argv:
         preflight()
+        return
+    if "--weigh-in" in argv:
+        weigh_in_cli(argv)
         return
     if "--refresh-rosters" in argv:
         i = argv.index("--refresh-rosters")

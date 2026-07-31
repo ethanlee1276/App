@@ -3988,6 +3988,26 @@ function renderSleeperPanel(d, ctx) {
 /* ============================================================
    NBA — Scalpy probability engine
    ============================================================ */
+/* Weigh-in state for one bout. "Not recorded" is drawn as its own thing
+   on purpose: it and "made weight" are opposite facts, and a page that
+   renders them the same way is the reason KILL IF went unenforced. */
+function weighInHTML(wi) {
+  if (!wi || (!wi.a && !wi.b)) return "";
+  const one = (st) => {
+    if (!st) return "";
+    const n = escapeHtml(st.name || "?");
+    if (st.state === "missed") {
+      return `<span class="chip down">${n} ⛔ ${st.weight} (+${st.over} over)</span>`;
+    }
+    if (st.state === "made") return `<span class="chip up">${n} ✅ ${st.weight}</span>`;
+    if (st.state === "unknown_division") {
+      return `<span class="chip">${n} ${st.weight} · catchweight, no limit</span>`;
+    }
+    return `<span class="chip">${n} — weigh-in not recorded</span>`;
+  };
+  return `<div class="chips" style="margin-top:8px">${one(wi.a)}${one(wi.b)}</div>`;
+}
+
 async function renderUFC() {
   const host = document.getElementById("ufc-body");
   if (!host) return;
@@ -4054,6 +4074,7 @@ async function renderUFC() {
       <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">
         ${(p.style_notes || []).map(escapeHtml).join(" · ")} · hold ${(p.hold * 100).toFixed(1)}%
         · stake ${p.stake_units}u (one-fifth Kelly)</div>
+      ${weighInHTML(p.weigh_in)}
       <div class="warning" style="margin-top:8px">KILL IF: ${escapeHtml(p.kill_if)}</div>
     </article>`;
 
@@ -4138,7 +4159,7 @@ async function renderUFC() {
           the verdict. Bet rows are journaled in the UFC record.</span></div>
         <div class="card" style="padding:0;overflow-x:auto;overflow-y:hidden">
           ${rows.map((r) => `
-            <div style="display:flex;gap:12px;align-items:center;padding:10px 14px;
+            <div class="ufc-edge-row" style="display:flex;gap:12px;align-items:center;padding:10px 14px;
                         border-bottom:1px solid rgba(255,255,255,.05);min-width:640px;
                         ${r._pick ? "" : "opacity:.72"}">
               <span style="min-width:74px;text-align:center;font-weight:800;flex-shrink:0;
@@ -4173,6 +4194,30 @@ async function renderUFC() {
           <div class="tile"><div class="k">Graded</div><div class="v">${graded}</div>
             <div style="color:var(--text-mute);font-size:12px;margin-top:2px">judge after 50+, not 5</div></div>
         </div>`;
+    })()}
+    ${(() => {
+      // The page said "re-check after Friday weigh-ins" and then offered no
+      // way to know whether anyone had. This is that status, up top, where
+      // it changes what you do with the card below.
+      const w = d.weigh_ins;
+      if (!w) return "";
+      if (w.missed) {
+        return `<div class="card" style="border-left:3px solid var(--bad);margin-bottom:12px">
+          <div class="player">⛔ ${w.missed} fighter(s) missed weight</div>
+          <div style="color:var(--text-body);font-size:13px;margin-top:4px">Their fights are
+          gated off the pick list automatically — that is what KILL IF always said and now
+          enforces. ${w.unrecorded} weigh-in(s) still unrecorded.</div></div>`;
+      }
+      if (w.unrecorded) {
+        return `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
+          <div class="player">⏳ ${w.unrecorded} weigh-in(s) not recorded yet</div>
+          <div style="color:var(--text-body);font-size:13px;margin-top:4px">Prices below do not
+          know who made weight. Record them as they land:
+          <code>python3 launch.py --weigh-in "Fighter Name" 155.5</code> — a miss gates that
+          fight on the next build.</div></div>`;
+      }
+      return `<div class="card" style="border-left:3px solid var(--good);margin-bottom:12px">
+        <div class="player">✅ Weigh-ins complete — ${w.made} on weight, none missed</div></div>`;
     })()}
     ${d.no_qualifying ? `<div class="card"><div class="player">No qualifying plays on this card.</div>
         <div style="color:var(--text-body);font-size:13px;margin-top:6px">Most fights on any card
