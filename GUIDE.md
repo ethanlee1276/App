@@ -128,12 +128,14 @@ auto-settle last ran, so you can see the loop is alive.
 | When | Command |
 |---|---|
 | I say "pull and relaunch" | `git pull`, then Ctrl+C the launcher and `python3 launch.py` |
+| **Build multi-season history (do this once per sport)** | see "Filling in the history" below |
 | NFL data refresh (few times a season) | `python3 ingest.py nfl` |
-| MLB history rebuild (rarely needed) | `python3 ingest.py mlb --from 2026-03-26 --to <today>` |
-| NBA history (from October, occasionally) | `python3 ingest.py nba --from <start> --to <today>` |
-| WNBA history (May–September, this is the live one) | `python3 ingest.py wnba --from 2026-05-01 --to <today>` |
+| MLB history | `python3 ingest.py mlb --seasons 2021-2026` |
+| NBA history | `python3 ingest.py nba --seasons 2021-2026 --scores-only` |
+| WNBA history (May–October, the live one right now) | `python3 ingest.py wnba --seasons 2021-2026` |
+| College football history | `python3 ingest.py cfb --seasons 2021-2026` |
 | WNBA board (May–September) | builds automatically once the history above is ingested; it is **on probation** — see below |
-| College football history (once, before the season) | `python3 ingest.py cfb --from 2025-08-24 --to 2026-01-20` |
+
 | Confirm a college QB (turns a conditional into a bet) | `python3 launch.py --confirm-qb "TOL" --starter "Name"` |
 | See which CFB games are waiting on a QB | `python3 launch.py --confirm-qb` |
 | New Odds API key | put it in `secrets.local`, then `python3 launch.py --reset-budget` |
@@ -197,6 +199,41 @@ results, not one it asserts. Until roughly 400 games are in the database
 it uses a documented prior instead, marks the board on probation, and
 journals without staking. Run the backfill above once and the numbers
 become measurements.
+
+### Filling in the history
+
+The NFL had five seasons in the database and everything else had one or
+none, and almost every limitation traced back to that. Team ratings firm
+up with games. A prop backtest can only replay games it actually has.
+Calibration needs hundreds of graded results before it means anything. The
+college football variance fit refuses to run at all under 400 games.
+
+`--seasons` expands into each sport's real calendar for you, so you don't
+have to remember that the WNBA runs May to October, the NBA crosses New
+Year, and college football ends in January:
+
+```
+python3 ingest.py cfb  --seasons 2021-2026
+python3 ingest.py wnba --seasons 2021-2026
+python3 ingest.py mlb  --seasons 2021-2026
+python3 ingest.py nba  --seasons 2021-2026 --scores-only
+```
+
+**Start with CFB and WNBA** — they're fast and they unblock the two boards
+that need it most. MLB is a few hours. **NBA is the slow one:** a season is
+~1,200 games and each needs its own box score, so six seasons is an
+afternoon. `--scores-only` skips the box scores entirely and runs many
+times faster — that gets you team ratings, the variance fits and
+settlement, everything except player-prop backtests. Run it that way
+first, and add the full version later if you want prop history.
+
+All of it is **resumable**. Days already stored are skipped, so if it dies
+halfway, or you close the laptop, just run the same command again. Ctrl-C
+is safe too.
+
+A season is labelled by the year it *starts*, so the 2021 NBA season means
+October 2021 through June 2022 — same convention the NFL data already
+uses.
 
 **About `--coverage`:** every sport has a written spec in `docs/` with an
 implementation map, and those maps are prose — prose rots. A feed stops

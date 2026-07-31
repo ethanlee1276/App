@@ -218,8 +218,8 @@ def mlb(conn) -> SportCoverage:
     umps = _count(conn, "SELECT COUNT(*) FROM game_umpires")
     starters = _count(conn, "SELECT COUNT(*) FROM game_starters")
     return SportCoverage("mlb", "MLB", [
-        _results_layer(conn, "mlb", 600, "python3 ingest.py mlb --from 2026-03-26 --to $(date +%F)"),
-        _logs_layer(conn, "mlb", 20000, "python3 ingest.py mlb --from 2026-03-26 --to $(date +%F)"),
+        _results_layer(conn, "mlb", 600, "python3 ingest.py mlb --seasons 2021-2026"),
+        _logs_layer(conn, "mlb", 20000, "python3 ingest.py mlb --seasons 2021-2026"),
         _odds_layer(),
         Layer("Statcast", "exit velocity and barrel rate are the difference "
               "between a hitter's luck and his contact quality",
@@ -243,8 +243,8 @@ def mlb(conn) -> SportCoverage:
 
 def nba(conn) -> SportCoverage:
     return SportCoverage("nba", "NBA", [
-        _results_layer(conn, "nba", 400, "python3 ingest.py nba --from 2025-10-21 --to $(date +%F)"),
-        _logs_layer(conn, "nba", 8000, "python3 ingest.py nba --from 2025-10-21 --to $(date +%F)"),
+        _results_layer(conn, "nba", 400, "python3 ingest.py nba --seasons 2021-2026 --scores-only"),
+        _logs_layer(conn, "nba", 8000, "python3 ingest.py nba --seasons 2021-2026 --scores-only"),
         _odds_layer(),
         Layer("Schedule feed", "the free NBA CDN answers 'is there a slate "
               "tonight' before a single credit is spent", OK,
@@ -267,8 +267,8 @@ def nba(conn) -> SportCoverage:
 def wnba(conn) -> SportCoverage:
     from .hoops import WNBA
     return SportCoverage("wnba", "WNBA", [
-        _results_layer(conn, "wnba", 200, "python3 ingest.py wnba --from 2026-05-01 --to $(date +%F)"),
-        _logs_layer(conn, "wnba", 3000, "python3 ingest.py wnba --from 2026-05-01 --to $(date +%F)"),
+        _results_layer(conn, "wnba", 200, "python3 ingest.py wnba --seasons 2021-2026"),
+        _logs_layer(conn, "wnba", 3000, "python3 ingest.py wnba --seasons 2021-2026"),
         _odds_layer(),
         Layer("Schedule feed", "the day's slate and its finals",
               OK, "ESPN basketball/wnba, keyless"),
@@ -301,7 +301,7 @@ def cfb(conn) -> SportCoverage:
     qb = ROOT / "data" / "cfb_qb_status.json"
     return SportCoverage("cfb", "College football", [
         _results_layer(conn, "cfb", R.MIN_GAMES,
-                       "python3 ingest.py cfb --from 2025-08-24 --to 2026-01-20"),
+                       "python3 ingest.py cfb --seasons 2021-2026"),
         Layer("Schedule / conferences / rankings", "attention tier is the "
               "whole model, and it reads all three", OK,
               "ESPN college-football feed, keyless"),
@@ -310,7 +310,7 @@ def cfb(conn) -> SportCoverage:
               "decides every probability on the board",
               OK if fit.fitted else MISSING,
               fit.note.split(".")[0],
-              "python3 ingest.py cfb --from 2025-08-24 --to 2026-01-20"),
+              "python3 ingest.py cfb --seasons 2021-2026"),
         Layer("Recruiting / talent prior", "§5-§6 — in September a team's own "
               "results are two games against unmeasured opponents; the "
               "high-school layer is what carries the number until then",

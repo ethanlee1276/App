@@ -168,10 +168,32 @@ def test_the_shared_build_can_use_this_source():
 
 # --- the diagnostics --------------------------------------------------------
 def test_a_repeated_failure_prints_once():
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    src = open(os.path.join(root, "ingest.py"), encoding="utf-8").read()
-    assert "seen_errors" in src
-    assert "identical failures suppressed" in src
+    """A feed that is down is down for every date in the range. Printing
+    the same failure ninety-two times buries the one line that says why.
+
+    Tested by running the real walker against a feed that always fails,
+    rather than by grepping for a variable name — the logic moved once
+    already and the old test only noticed the rename."""
+    import io
+    import contextlib
+    from engine import db
+    import ingest as I
+
+    conn = db.connect(":memory:")
+    dates = [f"2026-07-{d:02d}" for d in range(1, 21)]
+
+    def always_fails(_conn, date):
+        return {"games": 0, "player_logs": 0,
+                "skipped": [f"wnba scoreboard {date}: host unreachable"]}
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        I._walk_days(conn, "wnba", dates, always_fails, False, False)
+    complaints = [ln for ln in buf.getvalue().splitlines()
+                  if "skipped" in ln]
+    assert len(complaints) == 1, \
+        f"the same failure printed {len(complaints)} times"
+    assert "host unreachable" in complaints[0]
 
 
 def test_there_is_a_probe_that_reports_what_each_endpoint_returns():

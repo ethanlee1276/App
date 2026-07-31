@@ -80,16 +80,79 @@ def print_summary(conn) -> None:
                   f"(free) so those purchased lines join to settled games")
 
 
+
+def _already_have(conn, sport: str, date: str, need_logs: bool) -> bool:
+    """Is this date already stored? Backfills get interrupted.
+
+    A six-season walk is thousands of requests; if a re-run started from
+    scratch every time, one dropped connection would cost the whole run.
+    Days already in the table are skipped, so the command is resumable by
+    simply running it again.
+    """
+    g = conn.execute("SELECT COUNT(*) FROM games WHERE sport=? AND period=?",
+                     (sport, date)).fetchone()[0]
+    if not g:
+        return False
+    if not need_logs:
+        return True
+    p = conn.execute("SELECT COUNT(*) FROM player_game_logs "
+                     "WHERE sport=? AND period=?", (sport, date)).fetchone()[0]
+    return bool(p)
+
+
+def _walk_days(conn, sport: str, dates: list, ingest_day, scores_only: bool,
+               refresh: bool) -> tuple:
+    """Ingest a list of dates with progress, resumability and one line per
+    distinct failure."""
+    import time as _time
+    total_g = total_p = skipped = 0
+    seen: set = set()
+    started = _time.time()
+    for i, d in enumerate(dates, 1):
+        if not refresh and _already_have(conn, sport, d, not scores_only):
+            skipped += 1
+            continue
+        try:
+            res = ingest_day(conn, d)
+        except KeyboardInterrupt:
+            print(f"\n  Stopped at {d}. Progress is saved — re-run the same "
+                  f"command to pick up where it left off.")
+            break
+        total_g += res["games"]
+        total_p += res["player_logs"]
+        for msg in res["skipped"]:
+            key = msg.split(":", 1)[-1].strip()[:80]
+            if key in seen:
+                continue
+            seen.add(key)
+            print(f"  skipped {msg}")
+        if i % 25 == 0 or i == len(dates):
+            rate = i / max(1e-6, _time.time() - started)
+            left = (len(dates) - i) / rate if rate else 0
+            print(f"  {i:>5}/{len(dates)} days · {total_g:,} games · "
+                  f"{total_p:,} log rows"
+                  + (f" · ~{left / 60:.0f} min left" if left > 90 else ""))
+    return total_g, total_p, skipped
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Populate the historical database.")
     ap.add_argument("sport",
                     choices=["nfl", "mlb", "nba", "wnba", "cfb", "ufc",
                              "status"])
-    ap.add_argument("--seasons", default=default_seasons(),
-                    help="NFL: e.g. 2021-2025 (default: last 5 completed seasons)")
+    # NO default. It used to carry the NFL's "last five seasons", which
+    # meant `python3 ingest.py nba` with no arguments silently launched a
+    # 1,366-day backfill instead of printing usage. A command that starts
+    # an afternoon of work when you typed it to see the options is a trap.
+    ap.add_argument("--seasons", default="",
+                    help="e.g. 2021-2026 — expanded to each sport's real "
+                         "season window (NFL defaults to the last 5)")
     ap.add_argument("--dates", default="", help="MLB: comma-separated YYYY-MM-DD")
     ap.add_argument("--from", dest="start", default="",
                     help="MLB: start date YYYY-MM-DD (ingest completed results through --to)")
+    ap.add_argument("--refresh", action="store_true",
+                    help="re-ingest dates already stored (default: skip them, "
+                         "which makes a long backfill resumable)")
     ap.add_argument("--probe", action="store_true",
                     help="report what each candidate feed endpoint "
                          "actually returns, then exit")
@@ -107,7 +170,7 @@ def main() -> None:
         return
 
     if args.sport == "nfl":
-        seasons = parse_seasons(args.seasons)
+        seasons = parse_seasons(args.seasons or default_seasons())
         print(f"Ingesting NFL seasons {seasons[0]}-{seasons[-1]} → {args.db}")
         res = ingest.ingest_nfl(conn, seasons)
         print(f"  games: {res['games']:,}   player-log rows: {res['player_logs']:,}")
@@ -118,14 +181,33 @@ def main() -> None:
         # settler. Without a season in the table the board prices from a
         # prior and stays on probation.
         from engine.sources import cfbdata
-        if not (args.start and args.end):
-            print("Provide --from/--to YYYY-MM-DD for college football, e.g.\n"
-                  "  python3 ingest.py cfb --from 2025-08-24 --to 2026-01-20")
+        from engine.seasons import parse_seasons as _ps, window, describe
+        spans = []
+        if args.seasons:
+            yrs = _ps(args.seasons)
+            print(describe("cfb", yrs, sum(1 for _ in yrs)))
+            today = datetime.date.today().isoformat()
+            for yr in yrs:
+                lo, hi = window("cfb", yr)
+                if lo > today:
+                    print(f"  {yr}: season hasn't started yet — skipped")
+                    continue
+                spans.append((yr, lo, min(hi, today)))
+        elif args.start and args.end:
+            spans = [(None, args.start, args.end)]
+        else:
+            print("Provide --seasons 2021-2026 or --from/--to YYYY-MM-DD for "
+                  "college football, e.g.\n"
+                  "  python3 ingest.py cfb --seasons 2021-2026")
             return
-        print(f"Ingesting CFB {args.start} → {args.end} → {args.db}")
-        games = cfbdata.load_results(args.start, args.end)
-        rows = cfbdata.game_rows(games)
-        n = db.upsert_games(conn, rows) if rows else 0
+        n = 0
+        for yr, lo, hi in spans:
+            print(f"  {yr or ''} {lo} → {hi}".rstrip())
+            games = cfbdata.load_results(lo, hi)
+            rows = cfbdata.game_rows(games)
+            got = db.upsert_games(conn, rows) if rows else 0
+            n += got
+            print(f"    games: {got:,} finished")
         print(f"  games: {n:,} finished")
         if not n:
             print("  Nothing stored. FBS plays late August to mid-January — "
@@ -173,15 +255,26 @@ def main() -> None:
                               f"· NOT JSON · starts {row.get('head')!r}")
                     print()
                 return
-            # ESPN first: it is the endpoint family that already feeds NFL
-            # live scores and the whole college football board here, so it
-            # is the one route in this file that is known to work rather
-            # than assumed to.
-            from engine.sources.wnbaespn import ingest_day
-        else:
-            from engine.sources.nbadata import ingest_nba_date as ingest_day
-        label = args.sport.upper()
-        if args.start and args.end:
+            pass
+        # ESPN for BOTH leagues. The NBA CDN only ever serves the CURRENT
+        # season's schedule, so it cannot answer a question about 2021 —
+        # which is exactly why this database had one season of basketball
+        # and five of football. ESPN's scoreboard is per-date and goes back
+        # as far as the sport does.
+        from engine.sources import espnhoops
+        league = args.sport
+        label = league.upper()
+
+        def ingest_day(c, d):
+            return espnhoops.ingest_day(c, d, league=league,
+                                        scores_only=args.scores_only)
+
+        from engine.seasons import parse_seasons as _ps, dates_for, describe
+        if args.seasons:
+            yrs = _ps(args.seasons)
+            dates = dates_for(league, yrs)
+            print(describe(league, yrs, len(dates)))
+        elif args.start and args.end:
             day = _dt.date.fromisoformat(args.start)
             last = _dt.date.fromisoformat(args.end)
             dates = []
@@ -191,35 +284,40 @@ def main() -> None:
         else:
             dates = [d.strip() for d in args.dates.split(",") if d.strip()]
         if not dates:
-            print(f"Provide --dates or --from/--to YYYY-MM-DD for {label}.")
+            print(f"Provide --seasons 2021-2026, --dates, or --from/--to for "
+                  f"{label}.")
             return
+        if args.scores_only:
+            print("  scores only — no box scores, so no prop backtests, but "
+                  "team ratings and settlement work and it runs many times "
+                  "faster.")
         print(f"Ingesting {label} {dates[0]} → {dates[-1]} → {args.db}")
-        total_g = total_p = 0
-        seen_errors: set = set()
-        for d in dates:
-            res = ingest_day(conn, d)
-            total_g += res["games"]
-            total_p += res["player_logs"]
-            for skip in res["skipped"]:
-                # One line per DISTINCT problem. A feed that is down is down
-                # for every date in the range, and printing the same failure
-                # ninety times buries the one line that says why.
-                key = skip.split(":", 1)[-1].strip()[:80]
-                if key in seen_errors:
-                    continue
-                seen_errors.add(key)
-                print(f"  skipped {skip}")
-                if len(seen_errors) == 1:
-                    print(f"    (further identical failures suppressed — run "
-                          f"`python3 ingest.py {args.sport} --probe` to see "
-                          f"what each endpoint actually returns)"
-                          if args.sport == "wnba" else
-                          "    (further identical failures suppressed)")
-        print(f"  games: {total_g:,}   player-log rows: {total_p:,}")
-        if not total_p:
-            print(f"  No player logs stored. If the range is right, the "
-                  f"{label} season may not cover these dates — "
-                  f"{'May-September' if args.sport == 'wnba' else 'October-June'}.")
+        total_g, total_p, skipped = _walk_days(
+            conn, league, dates, ingest_day, args.scores_only, args.refresh)
+        print(f"  games: {total_g:,}   player-log rows: {total_p:,}"
+              + (f"   ({skipped:,} day(s) already stored, skipped)"
+                 if skipped else ""))
+        if not total_g and not skipped:
+            print(f"  Nothing stored. Run `python3 ingest.py {league} --probe` "
+                  f"to see what the feed actually returns.")
+    elif args.sport == "mlb" and args.seasons and not (args.start and args.end):
+        # Whole seasons, expanded to their real date windows so nobody has
+        # to remember that baseball starts in late March.
+        from engine.seasons import parse_seasons as _ps, window, describe
+        yrs = _ps(args.seasons)
+        print(describe("mlb", yrs, sum(1 for _ in yrs)))
+        for yr in yrs:
+            lo, hi = window("mlb", yr)
+            today = datetime.date.today().isoformat()
+            hi = min(hi, today)
+            if lo > today:
+                print(f"  {yr}: season hasn't started yet — skipped")
+                continue
+            print(f"\n  {yr} season: {lo} → {hi}")
+            res = ingest.ingest_mlb_results(conn, lo, hi,
+                                            with_logs=not args.scores_only)
+            print(f"    games: {res['games']:,}   "
+                  f"player-log rows: {res['player_logs']:,}")
     elif args.start and args.end:
         # Historical results: real final scores, the basis for team ratings.
         print(f"Ingesting MLB {args.start} → {args.end} → {args.db}")
