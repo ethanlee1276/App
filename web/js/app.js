@@ -9,7 +9,10 @@
 const state = {
   data: null, minConf: 6.0, minEdge: 2.0, maxJuice: -350, showAll: false,
   view: "recommended", search: "",
-  sport: (["mlb", "nba"].includes(new URLSearchParams(location.search).get("sport"))
+  // Every sport with its own board. This list is the reason ?sport=wnba
+  // silently fell back to NFL — a new league has to be added here too, or
+  // the deep link and the launcher's own preflight URLs quietly lie.
+  sport: (["mlb", "nba", "wnba"].includes(new URLSearchParams(location.search).get("sport"))
     ? new URLSearchParams(location.search).get("sport") : "nfl"),
   static: new URLSearchParams(location.search).has("static"),
   bankroll: null, unitPct: 1.0,      // per-user bankroll sizing (localStorage)
@@ -53,6 +56,12 @@ const SPORT_META = {
          gamesSub: "real park shapes, roof state, live wind and the home-run "
                    + "factor each one is playing to right now",
          api: "/api/mlb/recommendations", fallback: "data/mlb_recommendations.json" },
+  wnba: { logo: "🏀", tagline: "Scalpy — WNBA probability engine (on probation)",
+          gamesTitle: "Tonight's slate",
+          gamesSub: "same minutes-first model as the NBA board, tuned to a "
+                    + "40-minute game — and journaled on probation until it "
+                    + "has graded enough WNBA results to earn a stake",
+          api: "/api/wnba/recommendations", fallback: "data/wnba.json" },
   nba: { logo: "🏀", tagline: "Scalpy — NBA probability engine",
          gamesTitle: "Tonight's slate",
          gamesSub: "minutes first, distributions not point estimates, every "
@@ -67,12 +76,15 @@ function applySport() {
     ? (typeof MLB_TEAMS !== "undefined" ? MLB_TEAMS : {})
     : state.sport === "nba"
       ? (typeof NBA_TEAMS !== "undefined" ? NBA_TEAMS : {})
-      : (typeof TEAMS !== "undefined" ? TEAMS : {});
+      : state.sport === "wnba"
+        ? (typeof WNBA_TEAMS !== "undefined" ? WNBA_TEAMS : {})
+        : (typeof TEAMS !== "undefined" ? TEAMS : {});
   // No NBA long-shot engine exists (nothing like HR/anytime-TD markets),
   // so the tab hides rather than faking an empty page.
   const lsBtn = document.querySelector('.nav-btn[data-view="longshots"]');
-  if (lsBtn) lsBtn.style.display = state.sport === "nba" ? "none" : "";
-  if (state.sport === "nba" && state.view === "longshots") switchView("recommended");
+  const noLongShots = state.sport === "nba" || state.sport === "wnba";
+  if (lsBtn) lsBtn.style.display = noLongShots ? "none" : "";
+  if (noLongShots && state.view === "longshots") switchView("recommended");
   document.getElementById("tagline").textContent = meta.tagline;
   const gt = document.getElementById("games-title");
   // innerHTML, not textContent: this is the page's hero and it carries a
@@ -343,6 +355,28 @@ function renderDataSource(d) {
     : "Illustrative sample data — run a live build (see LAUNCH.md) for real games";
 }
 
+/* A league whose tuning was fitted somewhere else does not get to bet on
+   the strength of borrowed numbers. It journals and grades exactly like a
+   live board, and the page says so — the same probation the long-shot
+   watchlist and the Polymarket flow model sit under. Saying it once, at
+   the top, beats a footnote nobody reads under a stake size. */
+function renderProbation() {
+  const host = document.getElementById("probation-note");
+  if (!host) return;
+  const d = state.data || {};
+  if (!d.probation) { host.innerHTML = ""; return; }
+  const t = d.tuning || {};
+  host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
+    <div class="player">⚗️ ${escapeHtml((SPORT_META[state.sport] || {}).name || state.sport.toUpperCase())} is on probation — graded, not bet</div>
+    <div style="color:var(--text-body);font-size:13px;margin-top:5px">
+      ${escapeHtml(t.note || "This league's tuning has not been fitted to its own results yet.")}
+      Everything below is priced and journaled exactly as a live board would be,
+      so the record it builds is real — it just doesn't stake anything until that
+      record clears the promotion bar${t.inherited_from
+        ? ` (the numbers are the ${escapeHtml(t.inherited_from.toUpperCase())} model's for now)` : ""}.
+    </div></div>`;
+}
+
 function renderAll() {
   const d = state.data;
   if (!d) return;
@@ -356,6 +390,7 @@ function renderAll() {
     renderDataSource(d);
     document.getElementById("slate-date").textContent = slateDateLabel(d);
   }
+  renderProbation();
   renderStats();
   renderEmptySlate();
   renderLivePicks();
@@ -1095,7 +1130,7 @@ const findGame = (gid) => (((state.data || {}).games) || []).find((g) => gameId(
 
 function gameCard(g) {
   const mlb = state.sport === "mlb";
-  const nba = state.sport === "nba";
+  const nba = state.sport === "nba" || state.sport === "wnba";
   const w = g.weather || {};
   const windTxt = mlb && w.wind_dir && !w.dome
     ? `${Math.round(w.wind_mph)}mph ${w.wind_dir}`
@@ -1115,8 +1150,10 @@ function gameCard(g) {
     if (g.lineups_confirmed === false) bits.push("⚠ lineups pending");
     sub = bits.join(" · ");
   } else {
-    const favTxt = g.favorite ? `${teamName(g.favorite)} −${Math.abs(g.spread).toFixed(1)}` : "";
-    sub = `${favTxt} · O/U ${g.total.toFixed(1)}`;
+    const favTxt = (g.favorite && g.spread != null)
+      ? `${teamName(g.favorite)} −${Math.abs(g.spread).toFixed(1)}` : "";
+    const ouTxt = g.total != null ? `O/U ${g.total.toFixed(1)}` : "line not posted yet";
+    sub = [favTxt, ouTxt].filter(Boolean).join(" · ");
   }
   const art = mlb ? ballpark(g) : nba ? court(g) : stadium(g);
   const live = g.live || {};
@@ -1636,7 +1673,7 @@ function renderGamePage() {
     return;
   }
   const mlb = state.sport === "mlb";
-  const nba = state.sport === "nba";
+  const nba = state.sport === "nba" || state.sport === "wnba";
   const w = g.weather || {};
   const live = g.live || {};
   const isLive = live.state === "live";

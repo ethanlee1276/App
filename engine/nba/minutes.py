@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import math
 
+from ..hoops import NBA, LeagueTuning
+
 BLOWOUT_STARTER = ((4.5, 1.00), (7.5, 0.98), (10.5, 0.95),
                    (13.5, 0.91), (float("inf"), 0.86))
 BLOWOUT_BENCH = ((4.5, 1.00), (7.5, 1.02), (10.5, 1.06),
@@ -57,39 +59,47 @@ def base_minutes(recent_minutes: list[float]) -> float | None:
     return round(num / den, 2) if den else None
 
 
-def blowout_mult(spread: float, is_starter: bool, is_favorite: bool) -> float:
+def blowout_mult(spread: float, is_starter: bool, is_favorite: bool,
+                 tune: LeagueTuning = NBA) -> float:
     """Spread-driven minutes multiplier, asymmetric by side."""
     size = abs(spread)
-    table = BLOWOUT_STARTER if is_starter else BLOWOUT_BENCH
+    table = tune.blowout_starter if is_starter else tune.blowout_bench
     for cap, mult in table:
         if size <= cap:
             full = mult
             break
     if is_favorite:
         return full
-    return round(1.0 + (full - 1.0) * DOG_HAIRCUT_SHARE, 4)
+    return round(1.0 + (full - 1.0) * tune.dog_haircut_share, 4)
 
 
-def blowout_prob(spread: float, sd: float = MARGIN_SD) -> float:
-    """P(final margin ≥ 18) with margin ~ Normal(|spread|, sd)."""
-    z = (BLOWOUT_MARGIN - abs(spread)) / sd
+def blowout_prob(spread: float, sd: float | None = None,
+                 tune: LeagueTuning = NBA) -> float:
+    """P(final margin ≥ blowout) with margin ~ Normal(|spread|, sd)."""
+    sd = tune.margin_sd if sd is None else sd
+    z = (tune.blowout_margin - abs(spread)) / sd
     return round(1.0 - 0.5 * (1.0 + math.erf(z / math.sqrt(2))), 4)
 
 
 def project_minutes(base: float, spread: float, is_starter: bool,
                     is_favorite: bool, rest: str = "1day",
                     vacancy_minutes: float = 0.0,
-                    recent_high: float | None = None) -> float:
-    proj = base * blowout_mult(spread, is_starter, is_favorite) \
-        * REST_MULT.get(rest, 1.0) + vacancy_minutes
+                    recent_high: float | None = None,
+                    tune: LeagueTuning = NBA) -> float:
+    proj = base * blowout_mult(spread, is_starter, is_favorite, tune) \
+        * tune.rest_mult.get(rest, 1.0) + vacancy_minutes
     if recent_high is not None:
-        proj = min(proj, recent_high + VACANCY_CAP_OVER_HIGH)
-    return round(proj, 1)
+        proj = min(proj, recent_high + tune.vacancy_cap_over_high)
+    # Nobody plays more minutes than the game has. Obvious, and the reason
+    # it matters: the NBA cap applied to a 40-minute game would have let a
+    # projection sail past regulation without anything objecting.
+    return round(min(proj, float(tune.game_minutes)), 1)
 
 
 def minutes_grade(is_starter: bool, spread: float, sample_games: int,
                   restriction: bool = False,
-                  role_uncertain: bool = False) -> str:
+                  role_uncertain: bool = False,
+                  tune: LeagueTuning = NBA) -> str:
     """A-D confidence grade. D means no bet, full stop."""
     if restriction:
         return "D"
@@ -98,6 +108,6 @@ def minutes_grade(is_starter: bool, spread: float, sample_games: int,
     grade = "A" if (is_starter and sample_games >= 3) else "B"
     if role_uncertain:
         grade = "C" if grade == "B" else "B"
-    if blowout_prob(spread) > BLOWOUT_GRADE_DROP:
+    if blowout_prob(spread, tune=tune) > tune.blowout_grade_drop:
         grade = {"A": "B", "B": "C", "C": "D"}.get(grade, "D")
     return grade

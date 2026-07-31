@@ -30,6 +30,8 @@ from __future__ import annotations
 
 import math
 
+from ..hoops import NBA, LeagueTuning
+
 SD_CV = {"pts": 0.30, "reb": 0.40, "ast": 0.43, "pra": 0.24,
          "fg3m": 0.50, "stl": 0.90, "blk": 0.90}
 DISCRETE = {"reb", "ast", "fg3m", "stl", "blk"}
@@ -65,8 +67,8 @@ def break_even(odds: int) -> float:
     return round(1.0 / _dec(odds), 4)
 
 
-def sd_for(stat: str, mean: float) -> float:
-    return max(0.1, SD_CV.get(stat, 0.35) * mean)
+def sd_for(stat: str, mean: float, tune: LeagueTuning = NBA) -> float:
+    return max(0.1, tune.sd_cv.get(stat, 0.35) * mean)
 
 
 def p_over_normal(proj: float, line: float, sd: float) -> float:
@@ -94,13 +96,14 @@ def p_over_negbin(mean: float, line: float, cv: float) -> float:
     return max(0.0, min(1.0, 1.0 - cdf))
 
 
-def p_over(stat: str, proj: float, line: float) -> float:
+def p_over(stat: str, proj: float, line: float,
+           tune: LeagueTuning = NBA) -> float:
     """P(stat crosses the line), exact for low-count discrete stats —
     normal approximation there is off by the 2-4 points that ARE the edge."""
-    cv = SD_CV.get(stat, 0.35)
+    cv = tune.sd_cv.get(stat, 0.35)
     if stat in DISCRETE and line < 25:
         return round(p_over_negbin(proj, line, cv), 4)
-    return round(p_over_normal(proj, line, sd_for(stat, proj)), 4)
+    return round(p_over_normal(proj, line, sd_for(stat, proj, tune)), 4)
 
 
 # --- market math ------------------------------------------------------------

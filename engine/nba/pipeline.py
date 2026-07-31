@@ -10,6 +10,7 @@ would need to change. A no-bet night is a correct output, not a failure.
 
 from __future__ import annotations
 
+from ..hoops import NBA, LeagueTuning
 from .minutes import (base_minutes, project_minutes, minutes_grade,
                       blowout_prob, GRADE_STAKE)
 from .prob import (p_over, sd_for, devig, market_hold, humility_clamp,
@@ -33,7 +34,7 @@ def _rate_per_min(minutes: list[float], values: list[float]) -> float | None:
     return (sum(v for _, v in pairs) / tm) if tm > 0 else None
 
 
-def evaluate_prop(prop: dict) -> dict:
+def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     """One prop → a pick card, a near-miss, or a skip (with the reason)."""
     stat = prop["market"]
     label = MARKET_LABELS.get(stat, stat)
@@ -48,16 +49,18 @@ def evaluate_prop(prop: dict) -> dict:
     grade = minutes_grade(prop.get("is_starter", False), spread,
                           sample_games=len(minutes),
                           restriction=prop.get("restriction", False),
-                          role_uncertain=prop.get("role_uncertain", False))
+                          role_uncertain=prop.get("role_uncertain", False),
+                          tune=tune)
     proj_min = project_minutes(base, spread, prop.get("is_starter", False),
                                prop.get("is_favorite", False),
                                prop.get("rest", "1day"),
-                               recent_high=max(minutes) if minutes else None)
+                               recent_high=max(minutes) if minutes else None,
+                               tune=tune)
     proj = round(rate * proj_min, 2)
 
     over_odds, under_odds = int(prop["over_odds"]), int(prop["under_odds"])
     line = float(prop["line"])
-    p_model_over = p_over(stat, proj, line)
+    p_model_over = p_over(stat, proj, line, tune)
     mkt_over, mkt_under = devig(over_odds, under_odds)
     hold = market_hold(over_odds, under_odds)
 
@@ -68,7 +71,7 @@ def evaluate_prop(prop: dict) -> dict:
         side, p_model, p_market, odds = ("UNDER", 1 - p_model_over,
                                          mkt_under, under_odds)
 
-    w = CLAMP_W_THIN if len(minutes) < THIN_SAMPLE else \
+    w = CLAMP_W_THIN if len(minutes) < tune.thin_sample else \
         float(prop.get("clamp_w", CLAMP_W_DEFAULT))
     p_final, clamp_note = humility_clamp(p_model, p_market, w)
     if p_final is None:
@@ -89,8 +92,9 @@ def evaluate_prop(prop: dict) -> dict:
         "ev": ev_per_unit(p_final, odds), "hold": hold,
         "minutes_grade": grade, "stake_mult": GRADE_STAKE[grade],
         "proj_minutes": proj_min, "base_minutes": base,
-        "projection": proj, "sd": round(sd_for(stat, proj), 2),
-        "blowout_prob": blowout_prob(spread),
+        "projection": proj, "sd": round(sd_for(stat, proj, tune), 2),
+        "blowout_prob": blowout_prob(spread, tune=tune),
+        "league": tune.key,
         "kill_if": ("late scratch, minutes restriction, or lineup change "
                     "touching this player → automatic void"),
         "clamp_note": clamp_note,
@@ -103,10 +107,11 @@ def evaluate_prop(prop: dict) -> dict:
     return {"kind": "pick", **card}
 
 
-def run_nba_slate(props: list[dict], meta: dict | None = None) -> dict:
+def run_nba_slate(props: list[dict], meta: dict | None = None,
+                  tune: LeagueTuning = NBA) -> dict:
     picks, misses, skips = [], [], []
     for prop in props:
-        r = evaluate_prop(prop)
+        r = evaluate_prop(prop, tune)
         if r["kind"] == "pick":
             picks.append(r)
         elif r["kind"] == "near_miss":
@@ -119,9 +124,9 @@ def run_nba_slate(props: list[dict], meta: dict | None = None) -> dict:
     chosen, per_game = [], {}
     for p in picks:
         gkey = tuple(sorted((p["team"], p["opponent"])))
-        if len(chosen) >= MAX_PICKS_PER_SLATE:
+        if len(chosen) >= tune.max_picks_per_slate:
             break
-        if per_game.get(gkey, 0) >= MAX_PICKS_PER_GAME:
+        if per_game.get(gkey, 0) >= tune.max_picks_per_game:
             continue
         per_game[gkey] = per_game.get(gkey, 0) + 1
         chosen.append(p)
@@ -134,7 +139,13 @@ def run_nba_slate(props: list[dict], meta: dict | None = None) -> dict:
                      "; ".join(m["fails"][:2]) or "—"})
 
     return {
-        "sport": "nba",
+        "sport": tune.key,
+        # An uncalibrated league grades but does not bet: its tuning was
+        # fitted somewhere else, and borrowed numbers have to earn the
+        # right to stake money the same way every other sampler here does.
+        "probation": tune.probation,
+        "tuning": {"inherited_from": tune.inherited_from,
+                   "calibrated": tune.calibrated, "note": tune.note},
         "picks": chosen,
         "no_qualifying": not chosen,
         "near_misses": near,

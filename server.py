@@ -36,6 +36,7 @@ LIVE_FILES = {
     "nfl": WEB / "data" / "recommendations.json",
     "mlb": WEB / "data" / "mlb_recommendations.json",
     "nba": WEB / "data" / "nba.json",
+    "wnba": WEB / "data" / "wnba.json",
 }
 
 # Sleeper league-sync proxy: the browser can't always call api.sleeper.app
@@ -104,6 +105,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api(parse_qs(parsed.query), sport="mlb")
         if parsed.path in ("/api/nba/recommendations", "/api/nba/recommendations/"):
             return self._api(parse_qs(parsed.query), sport="nba")
+        if parsed.path in ("/api/wnba/recommendations", "/api/wnba/recommendations/"):
+            return self._api(parse_qs(parsed.query), sport="wnba")
         if parsed.path.startswith("/api/sleeper/"):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
         return self._static(parsed.path)
@@ -158,8 +161,8 @@ class Handler(BaseHTTPRequestHandler):
         )
         # NBA has no sample pipeline — the built file is the only source.
         # (The frontend re-applies its filters client-side either way.)
-        if sport == "nba":
-            live = LIVE_FILES["nba"]
+        if sport in ("nba", "wnba"):
+            live = LIVE_FILES[sport]
             if live.is_file():
                 self._send(200, live.read_bytes(), ".json",
                            mtime=live.stat().st_mtime)
@@ -167,7 +170,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Full shared-schema shape even when nothing is built — a
                 # stub missing keys crashed the frontend renderers once.
                 self._send(200, json.dumps({
-                    "date": "", "status": "not built", "sport": "nba",
+                    "date": "", "status": "not built", "sport": sport,
                     "games": [], "recommendations": [], "game_bets": [],
                     "long_shots": [], "longshot_watch": [],
                     "market_scan": {}, "counts": {"props_analyzed": 0,

@@ -18,8 +18,8 @@ import json
 from pathlib import Path
 
 from engine.db import connect
+from engine.hoops import for_league
 from engine.sources.fetch import DataUnavailable
-from engine.sources.nbadata import fetch_schedule, parse_schedule_day
 from engine.nba.pipeline import run_nba_slate
 
 
@@ -43,15 +43,15 @@ class _Slate:
         self.games, self.props = games, props
 
 
-def player_history(conn, teams: set[str]) -> dict:
+def player_history(conn, teams: set[str], sport: str = "nba") -> dict:
     """{player: {"team", "starter", "minutes": [...], stat: [...]}} newest
     first, last 20 games, for players on tonight's teams."""
     hist: dict = {}
     rows = conn.execute(
         "SELECT player, team, position, period, market, value "
-        "FROM player_game_logs WHERE sport='nba' AND team IN (%s) "
+        "FROM player_game_logs WHERE sport=? AND team IN (%s) "
         "ORDER BY period DESC" % ",".join("?" * len(teams)),
-        tuple(teams)).fetchall()
+        (sport, *teams)).fetchall()
     for r in rows:
         p = hist.setdefault(r["player"], {"team": r["team"], "starter": None,
                                           "by_week": {}})
@@ -89,11 +89,26 @@ def main() -> None:
     ap.add_argument("--odds", action="store_true")
     ap.add_argument("--cached-odds", action="store_true")
     ap.add_argument("--out", default="web/data/nba.json")
+    # One build, two leagues. The WNBA runs the same Scalpy pipeline on the
+    # same JSON shapes from its own CDN; what differs is the tuning (a
+    # 40-minute game) and the fact that its tuning has never been fitted to
+    # WNBA results — see engine/hoops.py.
+    ap.add_argument("--league", choices=["nba", "wnba"], default="nba")
     args = ap.parse_args()
+    tune = for_league(args.league)
+    if args.league == "wnba":
+        from engine.sources.wnbadata import fetch_schedule, parse_schedule_day
+    else:
+        from engine.sources.nbadata import fetch_schedule, parse_schedule_day
 
     out: dict = {"generated_at": datetime.datetime.now()
                  .isoformat(timespec="seconds"), "date": args.date,
-                 "sport": "nba", "generated_from": "live-nba",
+                 "sport": args.league,
+                 "generated_from": f"live-{args.league}",
+                 "probation": tune.probation,
+                 "tuning": {"calibrated": tune.calibrated,
+                            "inherited_from": tune.inherited_from,
+                            "note": tune.note},
                  "recommendations": [], "game_bets": [], "long_shots": [],
                  "longshot_watch": [],
                  "market_scan": {"stale": [], "arbs": [], "middles": [],
@@ -117,7 +132,8 @@ def main() -> None:
 
     if not games and "status" not in out:
         out.update(status="offseason",
-                   note="No NBA games on this date. The engine (minutes model, "
+                   note=f"No {tune.name} games on this date. The engine "
+                        "(minutes model, "
                         "distributions, humility clamp, approval gate) is built "
                         "and tested — it goes live with the schedule.")
 
@@ -127,7 +143,7 @@ def main() -> None:
                        for t in (g["home"], g["away"])}
         conn = connect()
         teams = {t for g in games for t in (g["home"], g["away"])}
-        hist = player_history(conn, teams)
+        hist = player_history(conn, teams, sport=args.league)
 
         slate = _Slate([_Game(g["home"], g["away"], g["kickoff"])
                         for g in games], [])
@@ -141,7 +157,7 @@ def main() -> None:
             from engine.sources import oddsapi
             try:
                 res = oddsapi.apply_odds_to_slate(
-                    slate, sport="nba",
+                    slate, sport=args.league,
                     cache_only=args.cached_odds and not args.odds)
                 odds_note = (f"matched {res.matched} props across "
                              f"{res.events_used} events"
@@ -207,7 +223,7 @@ def main() -> None:
                 "rest": ("b2b_home" if h["team"] in played_yday else "1day"),
             })
 
-        picks_result = run_nba_slate(props, meta={
+        picks_result = run_nba_slate(props, tune=tune, meta={
             "games": len(games), "odds": odds_note,
             "teams_on_b2b": sorted(played_yday & teams),
         })
@@ -266,7 +282,7 @@ def main() -> None:
                 # Same drawdown circuit-breaker as NFL/MLB: 10u off the
                 # journal's peak halves every stake until recovery.
                 try:
-                    dd = ledger.drawdown_factor(lconn, sport="nba")
+                    dd = ledger.drawdown_factor(lconn, sport=args.league)
                     if dd < 1.0:
                         for p in recs:
                             p["stake_units"] = round(p["stake_units"] * dd, 2)
@@ -279,7 +295,7 @@ def main() -> None:
             st = ledger.log_stale_flags(
                 lconn, {"sport": "nba", "date": args.date,
                         "market_scan": out.get("market_scan") or {}})
-            settled = ledger.settle_from_history(lconn, connect(), sport="nba")
+            settled = ledger.settle_from_history(lconn, connect(), sport=args.league)
             if n or st or settled:
                 ledger.export_json(lconn, "web/data/record.json")
                 print(f"Journal: {n} NBA pick(s) + {st} stale flag(s) "

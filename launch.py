@@ -63,6 +63,7 @@ def _with_odds() -> bool:
 MLB_OUT = "web/data/mlb_recommendations.json"
 NFL_OUT = "web/data/recommendations.json"
 NBA_OUT = "web/data/nba.json"
+WNBA_OUT = "web/data/wnba.json"
 UFC_OUT = "web/data/ufc.json"
 
 
@@ -88,7 +89,8 @@ def _budget_share() -> float:
     """This sport's slice of the daily odds allowance: one share per LIVE
     slate. October runs three at once (MLB playoffs, NFL, NBA) — without
     the split they'd jointly plan to spend the month several times over."""
-    live = sum(1 for p in (MLB_OUT, NFL_OUT, NBA_OUT) if _slate_games(p) > 0)
+    live = sum(1 for p in (MLB_OUT, NFL_OUT, NBA_OUT, WNBA_OUT)
+               if _slate_games(p) > 0)
     return 1.0 / max(1, live)
 
 
@@ -306,6 +308,30 @@ def refresh_nba(quiet: bool = False) -> bool:
     return ok
 
 
+def refresh_wnba(quiet: bool = False) -> bool:
+    """WNBA slate — the same Scalpy build with --league wnba.
+
+    Paced exactly like NBA, including the games>0 gate: the schedule comes
+    from a free keyless CDN, so "is there a slate tonight" is answerable
+    before spending anything. The season runs May-September, so this is the
+    one board that is live while the NBA's is dark."""
+    args = ["nba_build.py", _slate_date(), "--league", "wnba",
+            "--out", WNBA_OUT]
+    spend = _slate_games(WNBA_OUT) > 0 and _odds_affordable(WNBA_OUT, quiet,
+                                                            sport="wnba")
+    before_seen = _paid_pull_baseline() if spend else ""
+    if spend:
+        args.append("--odds")
+    elif _with_odds():
+        args.append("--cached-odds")
+    ok, tail = _run_build(args)
+    _finish_paid_pull(spend, before_seen, ok, tail, "WNBA", sport="wnba")
+    if not quiet:
+        print(f"  WNBA {_slate_date()}: {'refreshed' if ok else 'unavailable'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
 def refresh_ufc(quiet: bool = False) -> bool:
     """UFC card (Scalpy MMA) — a real member of the paid-pull rotation.
 
@@ -341,6 +367,7 @@ def refresh_all(quiet: bool = False) -> None:
     refresh_predmarkets(quiet=quiet)
     refresh_fantasy(quiet=quiet)
     refresh_nba(quiet=quiet)
+    refresh_wnba(quiet=quiet)
     refresh_ufc(quiet=quiet)
 
 

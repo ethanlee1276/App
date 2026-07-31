@@ -142,6 +142,16 @@ NBA_TEAM_ABBR = {
 }
 
 # Per-sport wiring: The Odds API sport key, market map, and team-name map.
+WNBA_TEAM_ABBR = {
+    "Atlanta Dream": "ATL", "Chicago Sky": "CHI", "Connecticut Sun": "CON",
+    "Dallas Wings": "DAL", "Golden State Valkyries": "GSV",
+    "Indiana Fever": "IND", "Las Vegas Aces": "LVA", "Los Angeles Sparks": "LAS",
+    "Minnesota Lynx": "MIN", "New York Liberty": "NYL",
+    "Phoenix Mercury": "PHX", "Portland Fire": "POR",
+    "Seattle Storm": "SEA", "Toronto Tempo": "TOR",
+    "Washington Mystics": "WAS",
+}
+
 SPORT_CONFIG = {
     "nfl": {"sport_key": "americanfootball_nfl",
             "markets": ODDS_TO_MARKET, "teams": TEAM_ABBR},
@@ -149,6 +159,11 @@ SPORT_CONFIG = {
             "markets": MLB_ODDS_TO_MARKET, "teams": MLB_TEAM_ABBR},
     "nba": {"sport_key": "basketball_nba",
             "markets": NBA_ODDS_TO_MARKET, "teams": NBA_TEAM_ABBR},
+    # Same markets and the same book keys; only the league and the team
+    # names differ. The WNBA expanded twice in two years, so this map is
+    # the 2026 field.
+    "wnba": {"sport_key": "basketball_wnba",
+             "markets": NBA_ODDS_TO_MARKET, "teams": WNBA_TEAM_ABBR},
     # MMA events are one bout each; "teams" are fighter names, so the map is
     # identity (ufc_build reads the h2h payload directly).
     "ufc": {"sport_key": "mma_mixed_martial_arts", "markets": {}, "teams": {}},

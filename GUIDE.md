@@ -129,6 +129,7 @@ auto-settle last ran, so you can see the loop is alive.
 | NFL data refresh (few times a season) | `python3 ingest.py nfl` |
 | MLB history rebuild (rarely needed) | `python3 ingest.py mlb --from 2026-03-26 --to <today>` |
 | NBA history (from October, occasionally) | `python3 ingest.py nba --from <start> --to <today>` |
+| WNBA board (May–September) | builds automatically; it is **on probation** — see below |
 | New Odds API key | put it in `secrets.local`, then `python3 launch.py --reset-budget` |
 | Health check | `python3 launch.py --check` |
 | Leave it running while you're out, picking up pushed fixes | `caffeinate -is python3 launch.py --auto-update` |
@@ -142,6 +143,18 @@ auto-settle last ran, so you can see the loop is alive.
 | See a team's active roster | Menu → **More** → **Rosters** (search a team or a player) |
 | Record a UFC weigh-in (fight day) | `python3 launch.py --weigh-in "Fighter Name" 155.5` |
 | See which weigh-ins are still missing | `python3 launch.py --weigh-in` |
+
+**About the WNBA board:** it runs the same Scalpy pipeline as the NBA —
+minutes first, distributions, humility clamp, approval gate — with the
+40-minute game accounted for wherever a number is denominated in minutes.
+What it does *not* have is tuning fitted to WNBA results: the margin SD,
+the blowout curves, the stat spreads and the gate thresholds were all
+fitted against NBA games. So the board is **on probation**. It prices and
+journals every pick exactly as a live board would, and grades them, but it
+stakes nothing until that record clears the promotion bar. The page says
+so at the top. Inventing "WNBA-ish" constants would have looked tailored
+while being made up, and nothing downstream could have told the
+difference.
 
 **About `--weigh-in`:** every UFC pick prints `KILL IF: missed weight …
 → automatic void`. That was a rule with nothing enforcing it. Now a
