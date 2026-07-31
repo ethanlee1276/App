@@ -400,15 +400,74 @@ def refresh_rosters(name: str | None = None) -> None:
             print(f"\n  '{name}' is not in the roster feed under that name. "
                   f"The feed's spelling is what the board matches on.")
         for full, p in hits:
-            print(f"\n  {full} — {p.get('position')} · team "
+            print(f"\n  roster feed: {full} — {p.get('position')} · team "
                   f"{p.get('team') or '(free agent)'} · "
                   f"{'active' if p.get('active') else 'inactive'}"
                   f" · depth {p.get('depth_chart_position')}"
                   f"{p.get('depth_chart_order')}")
-            print(f"    If the board still shows an old team after a rebuild, "
-                  f"the feed itself is behind — nothing local can fix that.")
+
+        # Knowing the feed is right only gets you halfway. A move is only
+        # ever REPORTED for players who are on one of the fantasy boards —
+        # so a correct feed plus an absent player still looks like a bug,
+        # and the answer is "he was never checked", which nothing on the
+        # page says out loud.
+        _where_on_board(name)
 
     print("\nRebuild the fantasy page to apply it:  python3 fantasy_build.py")
+
+
+def _where_on_board(name: str) -> None:
+    """Which fantasy boards carry this player, and with what team.
+
+    Team moves are stamped onto board rows; a player on none of them is
+    never examined, which is indistinguishable on screen from a player the
+    feed got wrong."""
+    from engine.sources.oddsapi import normalize_name
+    want = normalize_name(name)
+    path = ROOT / "web" / "data" / "fantasy.json"
+    if not path.is_file():
+        print(f"\n  board: {path.name} not built yet — run python3 fantasy_build.py")
+        return
+    try:
+        d = json.loads(path.read_text())
+    except Exception as exc:
+        print(f"\n  board: unreadable ({exc})")
+        return
+    kit = d.get("draft_kit") or {}
+    groups = {
+        "draft kit board": kit.get("board") or [],
+        "usage movers": d.get("usage") or [],
+        "buy low": (d.get("buy_sell") or {}).get("buy_low") or [],
+        "sell high": (d.get("buy_sell") or {}).get("sell_high") or [],
+    }
+    for pos_rows in (kit.get("tiers") or {}).values():
+        groups.setdefault("draft kit tiers", []).extend(pos_rows)
+
+    found = False
+    print()
+    for label, rows in groups.items():
+        for r in rows:
+            if normalize_name(r.get("player", "")) != want:
+                continue
+            found = True
+            moved = (f" (was {r['moved_from']})" if r.get("moved_from") else "")
+            flag = f" · {r['roster_flag']}" if r.get("roster_flag") else ""
+            print(f"  board: on '{label}' as {r.get('team')}{moved}{flag}")
+            break
+    if not found:
+        print(f"  board: '{name}' is on NONE of the fantasy boards, so a trade "
+              f"for him is never looked for.")
+        print(f"         The boards are built from last season's volume — a "
+              f"player who didn't play, or ranks outside the kit, simply has "
+              f"no row to stamp. That is why he is absent rather than wrong.")
+    moves = ((d.get("offseason") or {}).get("moves") or [])
+    hit = [m for m in moves if normalize_name(m.get("player", "")) == want]
+    if hit:
+        m = hit[0]
+        print(f"  moves list: reported {m['from']} → {m['to']}")
+    elif found:
+        print("  moves list: not reported — the feed's team matches the "
+              "board's, so nothing has changed as far as the data knows.")
 
 
 def odds_doctor() -> None:
