@@ -270,8 +270,8 @@ def wnba(conn) -> SportCoverage:
         _results_layer(conn, "wnba", 200, "python3 ingest.py wnba --from 2026-05-01 --to $(date +%F)"),
         _logs_layer(conn, "wnba", 3000, "python3 ingest.py wnba --from 2026-05-01 --to $(date +%F)"),
         _odds_layer(),
-        Layer("Schedule feed", "the free WNBA CDN, same shape as the NBA's",
-              OK, "cdn.wnba.com, keyless"),
+        Layer("Schedule feed", "the day's slate and its finals",
+              OK, "ESPN basketball/wnba, keyless"),
         Layer("Fitted tuning", "margin SD, blowout curves and stat spreads "
               "are the NBA's until this league has graded results of its own",
               PARTIAL if WNBA.probation else OK,

@@ -90,6 +90,9 @@ def main() -> None:
     ap.add_argument("--dates", default="", help="MLB: comma-separated YYYY-MM-DD")
     ap.add_argument("--from", dest="start", default="",
                     help="MLB: start date YYYY-MM-DD (ingest completed results through --to)")
+    ap.add_argument("--probe", action="store_true",
+                    help="report what each candidate feed endpoint "
+                         "actually returns, then exit")
     ap.add_argument("--scores-only", action="store_true",
                     help="MLB range: game scores only, skip per-player logs")
     ap.add_argument("--to", dest="end", default="",
@@ -153,7 +156,28 @@ def main() -> None:
         # board that is LIVE while the NBA's is dark.
         import datetime as _dt
         if args.sport == "wnba":
-            from engine.sources.wnbadata import ingest_wnba_date as ingest_day
+            if args.probe:
+                from engine.sources.wnbadata import probe as _probe
+                print("Probing every WNBA endpoint — what each one ACTUALLY "
+                      "returns right now:\n")
+                for row in _probe():
+                    print(f"  {row['label']}")
+                    print(f"    {row['url']}")
+                    if row.get("error"):
+                        print(f"    ✗ {row['status']}: {row['error']}")
+                    elif row.get("json"):
+                        print(f"    ✅ {row['status']} · {row['bytes']:,} bytes "
+                              f"· JSON · top keys {row.get('top_keys')}")
+                    else:
+                        print(f"    ✗ {row['status']} · {row['bytes']:,} bytes "
+                              f"· NOT JSON · starts {row.get('head')!r}")
+                    print()
+                return
+            # ESPN first: it is the endpoint family that already feeds NFL
+            # live scores and the whole college football board here, so it
+            # is the one route in this file that is known to work rather
+            # than assumed to.
+            from engine.sources.wnbaespn import ingest_day
         else:
             from engine.sources.nbadata import ingest_nba_date as ingest_day
         label = args.sport.upper()
@@ -171,12 +195,26 @@ def main() -> None:
             return
         print(f"Ingesting {label} {dates[0]} → {dates[-1]} → {args.db}")
         total_g = total_p = 0
+        seen_errors: set = set()
         for d in dates:
             res = ingest_day(conn, d)
             total_g += res["games"]
             total_p += res["player_logs"]
             for skip in res["skipped"]:
+                # One line per DISTINCT problem. A feed that is down is down
+                # for every date in the range, and printing the same failure
+                # ninety times buries the one line that says why.
+                key = skip.split(":", 1)[-1].strip()[:80]
+                if key in seen_errors:
+                    continue
+                seen_errors.add(key)
                 print(f"  skipped {skip}")
+                if len(seen_errors) == 1:
+                    print(f"    (further identical failures suppressed — run "
+                          f"`python3 ingest.py {args.sport} --probe` to see "
+                          f"what each endpoint actually returns)"
+                          if args.sport == "wnba" else
+                          "    (further identical failures suppressed)")
         print(f"  games: {total_g:,}   player-log rows: {total_p:,}")
         if not total_p:
             print(f"  No player logs stored. If the range is right, the "

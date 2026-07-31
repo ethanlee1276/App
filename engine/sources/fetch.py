@@ -56,6 +56,56 @@ def fetch_text(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
         raise DataUnavailable(f"Could not fetch {url}: {exc}") from exc
 
 
+def fetch_json(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
+               timeout: int = 45):
+    """Fetch JSON, and refuse to cache anything that isn't.
+
+    ``fetch_text`` writes whatever the server returned straight to disk. If
+    a host answers a wrong path with an HTML error page or an empty body —
+    which is what a guessed CDN path does — that garbage becomes the cached
+    answer for the whole TTL, and every caller after it fails with a
+    JSONDecodeError pointing at column 1 rather than at the real problem.
+
+    So: parse first, cache second, and delete a cache entry that no longer
+    parses. A poisoned cache should cost one request to recover from, not
+    six hours.
+    """
+    import json as _json
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path = _cache_path(cache_name)
+
+    if path.exists() and (time.time() - path.stat().st_mtime) < ttl:
+        try:
+            return _json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            path.unlink(missing_ok=True)          # poisoned — go to the wire
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+        if raw[:2] == b"\x1f\x8b":
+            raw = gzip.decompress(raw)
+        text = raw.decode("utf-8", errors="replace")
+    except Exception as exc:
+        if path.exists():
+            try:
+                return _json.loads(path.read_text(encoding="utf-8"))
+            except ValueError:
+                path.unlink(missing_ok=True)
+        raise DataUnavailable(f"Could not fetch {url}: {exc}") from exc
+
+    try:
+        data = _json.loads(text)
+    except ValueError as exc:
+        head = text.strip()[:70].replace("\n", " ")
+        raise DataUnavailable(
+            f"{url} did not return JSON — got {len(text)} byte(s) starting "
+            f"{head!r}. Nothing was cached.") from exc
+    path.write_text(text, encoding="utf-8")
+    return data
+
+
 def fetch_csv(url: str, cache_name: str, **kw) -> list[dict]:
     """Fetch a CSV and return it as a list of row dicts."""
     text = fetch_text(url, cache_name, **kw)

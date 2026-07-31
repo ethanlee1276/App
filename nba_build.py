@@ -178,7 +178,11 @@ def main() -> None:
     args = ap.parse_args()
     tune = for_league(args.league)
     if args.league == "wnba":
-        from engine.sources.wnbadata import fetch_schedule, parse_schedule_day
+        # ESPN, not the WNBA CDN. The CDN path was written by analogy with
+        # the NBA's and never returned JSON on a real machine; this is the
+        # endpoint family that already carries NFL scores and the whole
+        # college football board here.
+        from engine.sources.wnbaespn import fetch_schedule, parse_schedule_day
     else:
         from engine.sources.nbadata import fetch_schedule, parse_schedule_day
 
