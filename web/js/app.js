@@ -4494,6 +4494,9 @@ function initMobileMenu() {
       window.scrollTo({ top: 0, behavior: "instant" });
     }
     const open = document.body.classList.toggle("menu-open");
+    // The menu lives inside the header, so a retracted header must come
+    // back before it opens — otherwise the panel animates in off-screen.
+    if (open) document.body.classList.remove("nav-tucked");
     btn.setAttribute("aria-expanded", String(open));
   });
   // Choosing a SPORT is step one of two: NFL/MLB/NBA each have their own
@@ -4514,6 +4517,48 @@ function initMobileMenu() {
     if (e.key === "Escape") closeMobileMenu();
   });
   syncMenuLabel();
+}
+
+/* On a phone the header is four stacked rows — menu bar, brand, freshness,
+   date — about 200px of an 844px screen, and it is position:sticky, so it
+   sat there for the entire scroll. A quarter of the screen permanently
+   spent on chrome you are not currently using.
+   It now retracts on a downward scroll and returns on ANY upward one, the
+   same way Safari treats its own toolbar: reading gets the whole screen,
+   the menu is one flick away, and nothing is removed. The CSS moves it
+   with a transform, never height or display, so the page never reflows —
+   that is the bug class that produced the "top of the page keeps
+   enlarging" chase. */
+function initHeaderTuck() {
+  const SHOW_ABOVE = 90;   // near the top, always show — that's the brand
+  const DEADZONE = 6;      // ignore jitter and iOS rubber-band wobble
+  let last = window.scrollY;
+  let ticking = false;
+
+  const apply = () => {
+    ticking = false;
+    // Negative on an iOS overscroll bounce; clamp or the maths inverts.
+    const y = Math.max(0, window.scrollY);
+    // While the menu is open the body can't scroll anyway, and hiding the
+    // panel's own container mid-use would be absurd.
+    if (document.body.classList.contains("menu-open") || y <= SHOW_ABOVE) {
+      document.body.classList.remove("nav-tucked");
+      last = y;
+      return;
+    }
+    const dy = y - last;
+    // Leave `last` alone on a sub-deadzone move, so a slow drag still
+    // accumulates into a decision instead of being ignored forever.
+    if (Math.abs(dy) < DEADZONE) return;
+    document.body.classList.toggle("nav-tucked", dy > 0);
+    last = y;
+  };
+
+  addEventListener("scroll", () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(apply);
+  }, { passive: true });
 }
 
 /* ---------------- wiring ---------------- */
@@ -4612,5 +4657,6 @@ updateUnitNote();
 initialView();
 watchSectionSubs();
 initMobileMenu();
+initHeaderTuck();
 requestAnimationFrame(moveIndicator);
 load();

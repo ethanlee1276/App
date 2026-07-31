@@ -1614,3 +1614,29 @@ select.calc-in { width: auto; font-weight: 600; }
   }
   .sport-btn, .nav-btn { min-height: 36px; }
 }
+
+/* ============================================================
+   Retracting header on touch devices
+   ============================================================ */
+
+/* Phones (either orientation) and tablets — never a desktop with a mouse,
+   where a 177px header on a 900px window is not in the way. The header is
+   four stacked rows on a phone and position:sticky, so ~200px of an 844px
+   screen was spent on chrome for the entire scroll. initHeaderTuck() adds
+   .nav-tucked on a downward scroll and drops it on any upward one.
+
+   TRANSFORM, not height/display: a transform doesn't reflow anything, so
+   the content behind it cannot shift. Height animation here would be the
+   "top of the page keeps enlarging" bug all over again. The sticky box
+   also keeps its place in flow, so nothing jumps when it comes back. */
+@media (max-width: 760px), (pointer: coarse) and (max-width: 1024px) {
+  .topbar { transition: transform .22s ease; }
+  body.nav-tucked .topbar { transform: translateY(-100%); }
+  /* An open menu is never tucked (see initHeaderTuck), but if the two ever
+     disagree, showing the panel beats hiding it. */
+  body.menu-open .topbar { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar { transition: none; }
+}
