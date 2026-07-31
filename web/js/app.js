@@ -4495,8 +4495,8 @@ function initMobileMenu() {
     }
     const open = document.body.classList.toggle("menu-open");
     // The menu lives inside the header, so a retracted header must come
-    // back before it opens — otherwise the panel animates in off-screen.
-    if (open) document.body.classList.remove("nav-tucked");
+    // back before it opens — otherwise the panel opens off-screen.
+    if (open) showHeader();
     btn.setAttribute("aria-expanded", String(open));
   });
   // Choosing a SPORT is step one of two: NFL/MLB/NBA each have their own
@@ -4519,39 +4519,85 @@ function initMobileMenu() {
   syncMenuLabel();
 }
 
-/* On a phone the header is four stacked rows — menu bar, brand, freshness,
-   date — about 200px of an 844px screen, and it is position:sticky, so it
-   sat there for the entire scroll. A quarter of the screen permanently
-   spent on chrome you are not currently using.
-   It now retracts on a downward scroll and returns on ANY upward one, the
-   same way Safari treats its own toolbar: reading gets the whole screen,
-   the menu is one flick away, and nothing is removed. The CSS moves it
-   with a transform, never height or display, so the page never reflows —
-   that is the bug class that produced the "top of the page keeps
-   enlarging" chase. */
+/* The phone header is four stacked rows — menu bar, brand, freshness, date
+   — about 200px of an 844px screen, and position:sticky, so it sat there
+   for the entire scroll. A quarter of the display permanently spent on
+   chrome you are not currently using.
+
+   It now follows the finger, the way YouTube's search bar does: the header
+   is offset by exactly as much as you have scrolled since your last change
+   of direction, clamped to its own height. Swipe up 40px and it moves up
+   40px; reverse and it comes back down at the same rate, from wherever it
+   happens to be, at any point on the page.
+
+   That 1:1 tracking is the whole feel, and it is why there is no threshold
+   and no animation here. A deadzone makes it ignore small drags; a CSS
+   transition makes it glide on its own schedule instead of the finger's.
+   Both read as the header lagging behind the page.
+
+   TRANSFORM, never height or display: a transform is painted, not laid
+   out, so nothing behind it can reflow. Resizing this header at runtime is
+   what produced the "top of the page keeps enlarging" bug. */
+let headerOffset = 0;    // 0 = fully down, -height = fully retracted
+
+function showHeader() {
+  headerOffset = 0;
+  const bar = document.querySelector(".topbar");
+  if (bar) bar.style.transform = "";
+}
+
+/* Phones and tablets in either orientation — never a desktop with a mouse,
+   where a 177px header on a 900px window is not in the way. This has to be
+   kept identical to the media query at the end of styles.css; the transform
+   is written inline, so nothing else stops it running on a laptop.
+   tests/test_headertuck.py asserts the two stay in sync. */
+const HEADER_TUCK_MQ =
+  "(max-width: 760px), (pointer: coarse) and (max-width: 1024px)";
+
 function initHeaderTuck() {
-  const SHOW_ABOVE = 90;   // near the top, always show — that's the brand
-  const DEADZONE = 6;      // ignore jitter and iOS rubber-band wobble
-  let last = window.scrollY;
+  const bar = document.querySelector(".topbar");
+  if (!bar) return;
+  const touch = matchMedia(HEADER_TUCK_MQ);
+  let last = Math.max(0, window.scrollY);
+  let height = 0;          // cached: reading it per frame forces layout
   let ticking = false;
+
+  const measure = () => { height = bar.offsetHeight || 0; };
+  measure();
+  // The header grows AFTER first paint — the freshness chip is display:none
+  // until data lands, which is 11px. Measured once at startup, the clamp
+  // was 11px short and the bar never fully cleared the screen. Watch it
+  // instead of trusting one reading.
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(measure).observe(bar);
+  }
+  // Rotating or resizing changes the header's height, so a stale offset
+  // would leave it parked at the wrong place — start it from home instead.
+  const reset = () => { measure(); showHeader(); last = Math.max(0, window.scrollY); };
+  addEventListener("resize", reset);
+  addEventListener("orientationchange", reset);
+  if (touch.addEventListener) touch.addEventListener("change", reset);
 
   const apply = () => {
     ticking = false;
-    // Negative on an iOS overscroll bounce; clamp or the maths inverts.
+    // iOS reports a NEGATIVE scrollY mid-overscroll-bounce. Unclamped, the
+    // delta inverts and the header twitches at the top of every page.
     const y = Math.max(0, window.scrollY);
-    // While the menu is open the body can't scroll anyway, and hiding the
-    // panel's own container mid-use would be absurd.
-    if (document.body.classList.contains("menu-open") || y <= SHOW_ABOVE) {
-      document.body.classList.remove("nav-tucked");
-      last = y;
+    const dy = y - last;
+    last = y;
+    // The menu panel lives inside this header; the body can't scroll while
+    // it's open anyway. At the very top there is nothing to retract past.
+    // And on a desktop the header stays put — see HEADER_TUCK_MQ.
+    if (!touch.matches || document.body.classList.contains("menu-open")
+        || y === 0) {
+      showHeader();
       return;
     }
-    const dy = y - last;
-    // Leave `last` alone on a sub-deadzone move, so a slow drag still
-    // accumulates into a decision instead of being ignored forever.
-    if (Math.abs(dy) < DEADZONE) return;
-    document.body.classList.toggle("nav-tucked", dy > 0);
-    last = y;
+    if (!height) measure();
+    headerOffset = Math.min(0, Math.max(-height, headerOffset - dy));
+    // Empty string, not translateY(0), so the element drops back to its
+    // stylesheet state rather than carrying a permanent inline transform.
+    bar.style.transform = headerOffset ? `translateY(${headerOffset}px)` : "";
   };
 
   addEventListener("scroll", () => {

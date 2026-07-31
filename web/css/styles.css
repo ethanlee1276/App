@@ -1619,24 +1619,16 @@ select.calc-in { width: auto; font-weight: 600; }
    Retracting header on touch devices
    ============================================================ */
 
-/* Phones (either orientation) and tablets — never a desktop with a mouse,
-   where a 177px header on a 900px window is not in the way. The header is
-   four stacked rows on a phone and position:sticky, so ~200px of an 844px
-   screen was spent on chrome for the entire scroll. initHeaderTuck() adds
-   .nav-tucked on a downward scroll and drops it on any upward one.
+/* The movement itself is inline style written by initHeaderTuck(), which
+   offsets the header by however far you have scrolled since your last
+   change of direction — the YouTube search-bar feel.
 
-   TRANSFORM, not height/display: a transform doesn't reflow anything, so
-   the content behind it cannot shift. Height animation here would be the
-   "top of the page keeps enlarging" bug all over again. The sticky box
-   also keeps its place in flow, so nothing jumps when it comes back. */
+   There is deliberately NO transition on that transform. A transition
+   would animate on its own clock while your finger is on the glass, so the
+   bar would trail the page instead of moving with it. The only thing left
+   here is the guarantee that an open menu is never off-screen: the panel
+   lives inside this element, and !important because it has to beat the
+   inline transform. */
 @media (max-width: 760px), (pointer: coarse) and (max-width: 1024px) {
-  .topbar { transition: transform .22s ease; }
-  body.nav-tucked .topbar { transform: translateY(-100%); }
-  /* An open menu is never tucked (see initHeaderTuck), but if the two ever
-     disagree, showing the panel beats hiding it. */
-  body.menu-open .topbar { transform: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .topbar { transition: none; }
+  body.menu-open .topbar { transform: none !important; }
 }
