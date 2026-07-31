@@ -149,6 +149,7 @@ auto-settle last ran, so you can see the loop is alive.
 | See a team's active roster | Menu → **More** → **Rosters** (search a team or a player) |
 | Record a UFC weigh-in (fight day) | `python3 launch.py --weigh-in "Fighter Name" 155.5` |
 | See which weigh-ins are still missing | `python3 launch.py --weigh-in` |
+| Set where a UFC card is being held (cage size + altitude) | `python3 launch.py --card-venue "UFC Apex" "Las Vegas"` |
 
 **About the WNBA board:** it runs the same Scalpy pipeline as the NBA —
 minutes first, distributions, humility clamp, approval gate — with the
@@ -212,6 +213,27 @@ carries about a quarter of the projection early and decays to almost
 nothing by November, which is the point — it fills the gap until real
 results exist. It is free and read-only; without it the college board just
 runs without a prior and says so.
+
+**About `--card-venue`:** cage size is the input almost nobody prices.
+The promotion's own facility uses a 25-foot cage and arenas use 30 — less
+room to retreat means pressure fighters and wrestlers gain and finishes go
+up. Altitude is the other half: Mexico City and Denver impose a real
+cardio tax that pushes finishes later. Neither rides in the odds feed and
+both are one fact per card, so you type them once and every method and
+distance price on that card is reshaped. Leave it unset and the model
+scores it neutral rather than guessing.
+
+**What changed for UFC:** the model always computed a full outcome
+distribution — who wins, by what method, and whether it reaches the
+scorecards — and then bet the moneyline anyway. That was backwards. Books
+derive method props lazily off the moneyline, so the moneyline is the one
+number they have thought about and the props are the ones they haven't.
+Now every fight's distribution prices *every* market it implies, and the
+model takes the biggest edge relative to that market's own bar. A pick
+card can now read "Alpha by KO/TKO +190" instead of a moneyline with no
+edge in it. Markets your books quote but our odds feed doesn't carry show
+our fair number instead, under "every market this fight implies" — those
+are yours to shop, and they are never staked or journaled.
 
 **About `--weigh-in`:** every UFC pick prints `KILL IF: missed weight …
 → automatic void`. That was a rule with nothing enforcing it. Now a

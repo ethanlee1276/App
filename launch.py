@@ -512,6 +512,57 @@ def weigh_in_cli(argv: list) -> None:
               f"missed · {summary.get('unrecorded', 0)} not recorded")
 
 
+def card_venue_cli(argv: list) -> None:
+    """Record where this card is being held, or show what's set.
+
+        python3 launch.py --card-venue "UFC Apex" "Las Vegas"
+        python3 launch.py --card-venue          (show the current card)
+
+    §8 of the MMA spec calls cage size the input almost nobody prices: the
+    promotion's own facility uses a 25-foot cage and arenas use 30, and
+    less space means pressure fighters and wrestlers gain while finishes
+    go up. Altitude is the other half — Mexico City and Denver impose a
+    real cardio tax that pushes finishes later.
+
+    Neither rides in the odds feed, and both are one fact per card rather
+    than one per fight, so they are typed in the same way weigh-ins are.
+    """
+    import json as _json
+    from engine.ufc import environment as env
+
+    args = [a for a in argv[argv.index("--card-venue") + 1:]
+            if not a.startswith("--")]
+    try:
+        board = _json.loads((ROOT / UFC_OUT).read_text())
+    except (OSError, ValueError):
+        board = {}
+    event_date = board.get("event_date") or _slate_date()
+
+    if args:
+        venue = args[0]
+        city = args[1] if len(args) > 1 else ""
+        env.record_card(event_date, venue, city)
+        cage = env.cage_size(venue)
+        alt = env.altitude(city)
+        print(f"✅ {event_date}: {venue}" + (f", {city}" if city else ""))
+        print(f"   cage — {cage['note']}")
+        print(f"   altitude — {alt['note']}")
+        print("   Rebuild to apply it: python3 ufc_build.py --cached-odds")
+        return
+
+    rec = env.card_for(event_date, env.load_cards())
+    if rec.get("venue"):
+        print(f"{event_date}: {rec['venue']}"
+              + (f", {rec['city']}" if rec.get("city") else ""))
+        print(f"  cage — {env.cage_size(rec['venue'])['note']}")
+        print(f"  altitude — {env.altitude(rec.get('city', ''))['note']}")
+    else:
+        print(f"{event_date}: no venue recorded. Cage size and altitude are "
+              f"unchecked, which the grade scores as neutral rather than "
+              f"good.")
+        print('  Set it:  python3 launch.py --card-venue "UFC Apex" "Las Vegas"')
+
+
 def confirm_qb_cli(argv: list) -> None:
     """Confirm a starting quarterback, or list what the board is waiting on.
 
@@ -1733,6 +1784,9 @@ def main() -> None:
         return
     if "--confirm-qb" in argv:
         confirm_qb_cli(argv)
+        return
+    if "--card-venue" in argv:
+        card_venue_cli(argv)
         return
     if "--refresh-rosters" in argv:
         i = argv.index("--refresh-rosters")

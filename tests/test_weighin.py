@@ -103,13 +103,25 @@ def test_a_missed_weight_turns_a_pick_into_a_pass():
                 "ko_losses": 0, "ko_losses_last3": 0, "times_finished": 0,
                 "r3_decay": 0.0, "red_flags": []}
 
+    made = {"state": "made"}
+
     def run(flags):
-        a = {**_dossier("Alpha Fighter", 1.6), "red_flags": list(flags)}
-        b = _dossier("Beta Fighter", 0.0)
+        # A fixture that earns its pick: a named style mismatch, a real
+        # price edge, both fighters on the scale, and a known venue. The
+        # §10 grade needs all of that — a bet that merely scrapes past the
+        # edge threshold is exactly what "below 70: no bet" refuses.
+        a = {**_dossier("Alpha Fighter", 1.6), "archetype": "wrestler",
+             "red_flags": list(flags)}
+        b = {**_dossier("Beta Fighter", 0.0),
+             "archetype": "striker_poor_tdd"}
         return evaluate_fight(a, b, {"fighter_a": "Alpha Fighter",
                                      "fighter_b": "Beta Fighter",
-                                     "a_odds": 110, "b_odds": -130,
-                                     "book": "test"}, "lightweight", 0)
+                                     "a_odds": -120, "b_odds": 98,
+                                     "book": "test",
+                                     "venue": "T-Mobile Arena",
+                                     "city": "Las Vegas",
+                                     "weigh_in": {"a": made, "b": made}},
+                              "lightweight", 0)
 
     clean = run([])
     if clean["kind"] != "pick":

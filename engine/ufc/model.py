@@ -35,6 +35,10 @@ Staking is one-fifth Kelly (model error runs higher than NBA), capped at
 
 from __future__ import annotations
 
+from . import environment
+from . import grade as grade_mod
+from . import markets
+
 WIN_CAP = 0.88
 CLAMP_KILL_DIFF = 0.15
 GATE_EDGE_ML = 0.04
@@ -235,13 +239,26 @@ def _dec_odds(odds: int) -> float:
 
 
 def approval_gate(p_final: float, odds: int, market: str,
-                  red_flags: list[str], bets_on_card: int) -> list[str]:
+                  red_flags: list[str], bets_on_card: int,
+                  thin_data: bool = False, edge: float | None = None,
+                  required: float | None = None) -> list[str]:
+    """Every reason this bet fails the gate; empty list = approved.
+
+    ``edge``/``required`` describe the market actually being taken, which
+    is not always the moneyline — §3.8's whole point. When they're absent
+    the moneyline's own numbers are used, which is the old behaviour.
+    """
     fails = []
     be = 1.0 / _dec_odds(odds)
-    need = GATE_EDGE_PROP if market != "moneyline" else GATE_EDGE_ML
-    if p_final - be < need:
-        fails.append(f"edge {p_final - be:+.1%} < {need:.0%} over "
-                     f"break-even {be:.1%}")
+    if required is None:
+        required = markets.min_edge_for(market, thin_data)
+    if edge is None:
+        edge = p_final - be
+    if edge < required:
+        fails.append(f"edge {edge:+.1%} < {required:.1%} over "
+                     f"break-even {be:.1%}"
+                     + (" (thin data — prelim/debut/short-notice bar)"
+                        if thin_data and market == "moneyline" else ""))
     ev = p_final * (_dec_odds(odds) - 1.0) - (1.0 - p_final)
     if ev < GATE_MIN_EV:
         fails.append(f"EV {ev:+.1%} < +5%")
@@ -332,8 +349,61 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
     cond_b = method_conditionals(b, a, division)
     joint = joint_method(p_model, cond_a, cond_b)
 
+    # §8 — where the fight happens reshapes HOW it ends. Bounded, and it
+    # never touches who wins: each fighter's total win probability is
+    # preserved, so a venue can't manufacture a moneyline edge.
+    env_shift = environment.distribution_shift(prices.get("venue", ""),
+                                               prices.get("city", ""))
+    joint = environment.apply_to_joint(joint, env_shift)
+
+    # §8 — a close decision on the road, or an offence judges score badly,
+    # is a worse path than the raw numbers say. The haircut moves that
+    # fighter's decision share into the opponent's, which is where it
+    # actually goes.
+    for who, f, opp_who in (("a", a, "b"), ("b", b, "a")):
+        jr = environment.judging_read(f, bool(prices.get("road_" + who)))
+        if jr["decision_haircut"]:
+            moved = round(joint[f"{who}_dec"] * jr["decision_haircut"], 4)
+            joint[f"{who}_dec"] = round(joint[f"{who}_dec"] - moved, 4)
+            joint[f"{opp_who}_dec"] = round(joint[f"{opp_who}_dec"] + moved, 4)
+            notes.append(f"Judging: {f.get('name', who)} — "
+                         + "; ".join(jr["why"]))
+    joint["distance"] = round(joint["a_dec"] + joint["b_dec"], 4)
+
     red = list(fighter.get("red_flags", []))
-    fails = approval_gate(p_final, odds, "moneyline", red, bets_so_far)
+    thin = markets.thin_data_fight(a, b, prices)
+
+    # §3.8 — the translation step. The distribution prices every market the
+    # fight implies, not just the famous one. Books derive method props
+    # lazily off the moneyline, so the moneyline is the number they thought
+    # about and the props are the ones they didn't.
+    implied = markets.implied_markets(joint, name_a, name_b)
+    prop_prices = prices.get("props") or {}
+    board = []
+    for row in implied:
+        is_ml_side = (row["market"] == "moneyline" and row["selection"] == side)
+        book_odds = odds if is_ml_side else prop_prices.get(row["selection"])
+        board.append(markets.price_market(
+            row, book_odds,
+            haircut_p=p_final if is_ml_side else None,
+            thin_data=thin, book=prices.get("book", "")))
+
+    best = markets.best_market(board)
+    ml_card = next(c for c in board
+                   if c["market"] == "moneyline" and c["selection"] == side)
+    chosen = best or ml_card
+
+    # §10 — the 0-100 grade. Two of its six components ask how much we
+    # actually know, which in this sport is 30% of the answer.
+    dq = grade_mod.data_quality(a, b)
+    ci = grade_mod.camp_info(prices.get("weigh_in"), a, b)
+    sc = grade_mod.style_clarity(notes, a, b)
+    es = grade_mod.environment_score(env_shift)
+    score = grade_mod.grade(
+        edge=chosen.get("edge") or 0.0,
+        required=chosen["required_edge"], data=dq["score"], camp=ci["score"],
+        style=sc["score"], env=es["score"])
+
     card = {
         **base, "pick": side, "odds": odds, "book": prices.get("book", ""),
         "p_model": round(p_m, 4), "p_market": round(p_mkt, 4),
@@ -344,13 +414,38 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
         "hold": market_hold(int(odds_a), int(odds_b)),
         "method": joint, "p_distance": joint["distance"],
         "style_notes": notes,
+        # §13 — the full board, so the page can show what to shop even
+        # where our feed carried no price.
+        "market_board": board,
+        "best_market": chosen,
+        "market": chosen["market"], "market_tier": chosen["market_tier"],
+        "selection": chosen["selection"],
+        "volatility": chosen["volatility"],
+        "required_edge": chosen["required_edge"],
+        "thin_data": thin,
+        "environment": env_shift,
+        "grade_score": score, "grade_label": grade_mod.grade_label(score),
+        "grade_parts": {"data": dq, "camp": ci, "style": sc, "env": es},
         "kill_if": ("missed weight, late replacement, or visible cut damage "
                     "at weigh-ins → automatic void"),
     }
+
+    fails = approval_gate(p_final, chosen.get("odds") or odds,
+                          chosen["market"], red, bets_so_far,
+                          thin_data=thin, edge=chosen.get("edge"),
+                          required=chosen["required_edge"])
+    if score < grade_mod.MIN_GRADE:
+        fails.append(f"grade {score} below the {grade_mod.MIN_GRADE} bar — "
+                     f"no bet, no leans")
     if fails:
         return {**card, "kind": "pass", "reason_code": "gate",
                 "why": "; ".join(fails[:2]), "near_miss": True}
-    card["stake_units"] = stake_units(p_final, odds)
+
+    # Kelly runs on the market we are actually taking.
+    p_bet = chosen["p_used"]
+    card["stake_fraction"] = grade_mod.stake_fraction(
+        p_bet, chosen["odds"], score, drawdown=bool(prices.get("drawdown")))
+    card["stake_units"] = grade_mod.units(card["stake_fraction"])
     return {**card, "kind": "pick"}
 
 
@@ -358,11 +453,34 @@ def run_card(fights: list[dict]) -> dict:
     """fights: [{a, b, prices, division}] → picks (≤3) + the pass list."""
     picks, passes = [], []
     for f in fights:
-        r = evaluate_fight(f.get("a"), f.get("b"), f.get("prices", {}),
+        prices = dict(f.get("prices", {}))
+        # The weigh-in state annotate_fight attached, so the grade's
+        # fight-week component can see the one fight-week fact we observe.
+        prices["weigh_in"] = f.get("weigh_in")
+        r = evaluate_fight(f.get("a"), f.get("b"), prices,
                            f.get("division", ""), len(picks))
         (picks if r["kind"] == "pick" else passes).append(r)
+
+    # §10 — 2.5% per fight with correlated positions counted together, 8%
+    # across the card. The headcount cap above limits POSITIONS; this one
+    # limits money, and on a night when every finish lands at once that is
+    # the constraint that matters.
+    picks = grade_mod.apply_card_caps(picks)
+    for p in picks:
+        p["stake_units"] = grade_mod.units(p.get("stake_fraction", 0.0))
+    dropped = [p for p in picks if p["stake_units"] <= 0]
+    picks = [p for p in picks if p["stake_units"] > 0]
+    passes += [{**p, "kind": "pass", "reason_code": "card_cap",
+                "why": p.get("cap_note") or "no room under the card cap"}
+               for p in dropped]
+    picks.sort(key=lambda p: (-p.get("grade_score", 0), -p.get("ev", 0)))
+
     near = [p for p in passes if p.get("near_miss")][:3]
+    exposure = round(sum(p.get("stake_fraction", 0.0) for p in picks), 5)
     return {"sport": "ufc", "picks": picks, "pass_list": passes,
             "near_misses": near, "no_qualifying": not picks,
+            "exposure": exposure,
+            "card_cap": grade_mod.CAP_PER_CARD,
+            "correlation_flags": markets.correlation_flags(picks),
             "counts": {"fights": len(fights), "picks": len(picks),
                        "passes": len(passes)}}

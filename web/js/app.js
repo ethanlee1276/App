@@ -4169,13 +4169,38 @@ async function renderUFC() {
       <span>distance ${pctv(m.distance)}</span></div>`;
   };
 
-  const pickCard = (p) => `
+  /* The bet is no longer always the moneyline. Books derive method props
+     off the moneyline, so the distribution routinely finds its edge in a
+     market the book barely thought about — the card has to say WHICH. */
+  const MARKET_LABEL = { moneyline: "Moneyline", method: "Method",
+                         distance: "Distance", fighter_finish: "Finish",
+                         round: "Round", exact_round: "Exact round" };
+  const shopRow = (c) => `
+    <div class="ufc-shop-row">
+      <span class="sr-m">${escapeHtml(MARKET_LABEL[c.market] || c.market)}</span>
+      <span class="sr-s">${escapeHtml(c.selection)}</span>
+      <span class="sr-o">${c.priced ? american(c.odds) : `fair ${american(c.fair_odds)}`}</span>
+      <span class="sr-e ${c.priced ? (c.edge >= c.required_edge ? "pos" : "") : "mute"}">${
+        c.priced ? `${c.edge >= 0 ? "+" : ""}${(c.edge * 100).toFixed(1)}%` : "shop it"}</span>
+    </div>`;
+
+  const pickCard = (p) => {
+    const best = p.best_market || {};
+    const shown = best.odds != null ? best.odds : p.odds;
+    const title = p.selection || `${p.pick} ML`;
+    const board = (p.market_board || []).filter((c) => c.priced || c.fair_odds);
+    return `
     <article class="card" style="--grade-color:var(--good)">
       <div class="card-head">
-        <div><div class="player">${escapeHtml(p.pick)} ML</div>
+        <div><div class="player">${escapeHtml(title)}</div>
           <div class="subtitle">${escapeHtml(p.fight)}${p.division ? ` · ${escapeHtml(p.division)}` : ""} ·
-            ${escapeHtml(p.book)} ${american(p.odds)}</div></div>
-        <span class="pm-status" style="color:var(--good)">TIER ${p.edge >= 0.08 ? "A" : p.edge >= 0.05 ? "B" : "C"}</span>
+            ${escapeHtml(p.book)} ${american(shown)}</div></div>
+        <span class="pm-status" style="color:var(--good)">${escapeHtml(p.grade_label || "")} ${p.grade_score != null ? p.grade_score : ""}</span>
+      </div>
+      <div class="chips" style="margin:2px 0 8px">
+        <span class="chip">${escapeHtml(MARKET_LABEL[p.market] || p.market || "moneyline")} · tier ${p.market_tier || 1}</span>
+        <span class="chip cond">${escapeHtml(p.volatility || "MEDIUM")} volatility</span>
+        ${p.thin_data ? `<span class="chip" style="color:var(--warn);border-color:currentColor">thin data — higher bar</span>` : ""}
       </div>
       <div class="metrics">
         <div class="metric"><div class="k">p_model</div><div class="v">${pctv(p.p_model)}</div></div>
@@ -4190,10 +4215,17 @@ async function renderUFC() {
       ${methodBar(p.method || {})}
       <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">
         ${(p.style_notes || []).map(escapeHtml).join(" · ")} · hold ${(p.hold * 100).toFixed(1)}%
-        · stake ${p.stake_units}u (one-fifth Kelly)</div>
+        · stake ${p.stake_units}u${p.required_edge ? ` · needs ${(p.required_edge * 100).toFixed(1)}%` : ""}</div>
+      ${(p.environment && (p.environment.why || []).length)
+        ? `<div style="margin-top:6px;color:var(--text-mute);font-size:12px">🏟️ ${
+            escapeHtml([(p.environment.cage || {}).note, (p.environment.altitude || {}).note]
+              .filter(Boolean).join(" · "))}</div>` : ""}
+      ${board.length ? `<details class="ufc-shop"><summary>Every market this fight implies (${board.length}) — shop the unpriced ones</summary>
+        ${board.map(shopRow).join("")}</details>` : ""}
       ${weighInHTML(p.weigh_in)}
       <div class="warning" style="margin-top:8px">KILL IF: ${escapeHtml(p.kill_if)}</div>
     </article>`;
+  };
 
   // A passed fight still shows both corners — the matchup is the whole
   // point of the page, and an unbet fight you can read is far more useful
@@ -4263,7 +4295,21 @@ async function renderUFC() {
         <div style="color:var(--text-mute);font-size:12px;margin-top:2px">books post MMA lines late</div></div>
       <div class="tile"><div class="k">Picks</div><div class="v">${c.picks || 0}</div>
         <div style="color:var(--text-mute);font-size:12px;margin-top:2px">max 3 per card by design</div></div>
+      <div class="tile"><div class="k">Card exposure</div><div class="v">${((d.exposure || 0) * 100).toFixed(1)}%</div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">of bankroll · cap ${((d.card_cap || 0.08) * 100).toFixed(0)}%,
+          the tightest in the system</div></div>
     </div>
+    ${(d.correlation_flags || []).length ? `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
+        <div class="player">⚠️ Correlation on this card</div>
+        <ul class="reasons">${(d.correlation_flags || []).map((f) =>
+          `<li class="neg">${escapeHtml(f)}</li>`).join("")}</ul></div>` : ""}
+    ${d.card_venue && d.card_venue.venue
+      ? `<div class="ls-note" style="margin-bottom:12px">🏟️ ${escapeHtml(d.card_venue.venue)}${
+          d.card_venue.city ? `, ${escapeHtml(d.card_venue.city)}` : ""} — cage size and altitude
+          are applied to every method and distance price on this card.</div>`
+      : `<div class="ls-note" style="margin-bottom:12px">🏟️ Venue not set, so cage size and altitude
+          are unchecked — a 25-foot cage raises finishes and altitude pushes them later.
+          Set it with <code>python3 launch.py --card-venue "UFC Apex" "Las Vegas"</code>.</div>`}
     ${(() => {
       // Fight-by-fight edge table: every PRICED bout on one scannable
       // grid — model vs market vs break-even, and the verdict with its
@@ -4283,7 +4329,7 @@ async function renderUFC() {
                     color:${r._pick ? "var(--good)" : "var(--text-mute)"}">${r._pick ? "BET" : "PASS"}</span>
               <span style="flex:1;min-width:0"><strong>${escapeHtml(r.fight)}</strong>
                 <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">
-                  ${r._pick ? `${escapeHtml(r.pick)} ML ${american(r.odds)} (${escapeHtml(r.book || "")}) · stake ${r.stake_units}u`
+                  ${r._pick ? `${escapeHtml(r.selection || (r.pick + " ML"))} ${american((r.best_market || {}).odds != null ? r.best_market.odds : r.odds)} (${escapeHtml(r.book || "")}) · stake ${r.stake_units}u`
                             : escapeHtml(r.why || "")}</span></span>
               <span style="text-align:right;white-space:nowrap;font-size:12.5px">
                 model ${pctv(r.p_final)} · market ${pctv(r.p_market)}

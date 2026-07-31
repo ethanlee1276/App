@@ -303,6 +303,7 @@ def ufc(conn) -> SportCoverage:
         except Exception:
             n = 0
     weigh = ROOT / "data" / "ufc_weighins.json"
+    cards = ROOT / "data" / "ufc_cards.json"
     return SportCoverage("ufc", "UFC", [
         Layer("Fighter dossiers", "the engine refuses to bet a fighter it has "
               "no measured record for", OK if n >= 20 else PARTIAL if n else MISSING,
@@ -313,8 +314,27 @@ def ufc(conn) -> SportCoverage:
               OK if weigh.exists() else PARTIAL,
               "recorded" if weigh.exists() else "none recorded this card",
               'python3 launch.py --weigh-in "Fighter" 155.5'),
-        Layer("Judge tendencies", "decision-heavy fights turn on them", PARKED,
-              "no structured scoring-tendency feed"),
+        Layer("Card venue", "§8 — a 25-foot cage raises finishes and altitude "
+              "pushes them later; both reshape every method and distance "
+              "price and neither rides in the odds feed",
+              OK if cards.exists() else MISSING,
+              "recorded" if cards.exists() else "not set — cage size and "
+              "altitude unchecked, scored neutral",
+              'python3 launch.py --card-venue "UFC Apex" "Las Vegas"'),
+        Layer("Method / distance prop prices", "§3.8 — books derive method "
+              "props off the moneyline, so the props are the numbers they "
+              "did NOT think about. Without prices we can only publish our "
+              "fair number for you to shop", PARTIAL,
+              "our feed carries moneylines reliably and method markets "
+              "rarely; unpriced markets publish a fair number instead",
+              "shop the fair numbers on each pick card"),
+        Layer("Line movement open → close", "§4 — MMA lines move further from "
+              "open to close than almost any market, and the path is the "
+              "signal", PARKED,
+              "no per-fight movement history is stored yet"),
+        Layer("Referee & judge assignments", "§8 — a quick-stoppage referee "
+              "raises TKO probability; assigned judges shift every decision "
+              "path", PARKED, "no structured assignment feed"),
         _journal_layer("ufc"),
     ])
 

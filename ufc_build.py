@@ -113,6 +113,15 @@ def main() -> None:
                     db = dossiers.get(normalize_name(b))
                     fights.append({"a": da, "b": db, "prices": prices,
                                    "division": (da or db or {}).get("division", "")})
+            # §8 — where the card is. One fact per event, recorded by hand
+            # because the odds feed carries no venue; it decides cage size
+            # and altitude, which reshape every method and distance price.
+            from engine.ufc import environment as _env
+            venue = _env.card_for(event_label, _env.load_cards())
+            out["card_venue"] = venue
+            for f in fights:
+                f["prices"]["venue"] = venue.get("venue", "")
+                f["prices"]["city"] = venue.get("city", "")
         except oddsapi.OddsAPIError as exc:
             out["odds_error"] = str(exc)
 
