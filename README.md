@@ -1,9 +1,11 @@
-# 🏈 Gridiron Edge — AI-Powered NFL Prop Engine
+# Qelly — a multi-sport betting model
 
-An NFL player-prop analytics engine that ingests player form, defensive matchups,
-weather and injuries, projects each prop, prices it against the sportsbook line,
-and surfaces only the bets where the model believes the book is **mispriced** —
-with a plain-English explanation for every pick.
+A player-prop and game-bet analytics engine covering NFL, MLB, NBA and UFC,
+plus Polymarket flow and fantasy football. It ingests player form, matchups,
+weather and injuries, projects each market, prices it against the sportsbook
+line, and surfaces only the bets where the model believes the book is
+**mispriced** — with a plain-English explanation for every pick, and every
+pick journaled at its real price and graded on the Record page.
 
 This repository is the **working brain** of that platform. It runs end-to-end
 today on realistic sample data, with clean seams where live data sources plug in.

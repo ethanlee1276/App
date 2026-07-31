@@ -118,7 +118,7 @@ python3 server.py --live
 You'll see:
 
 ```
-Gridiron Edge running (LIVE data) → http://localhost:8000
+Qelly running (LIVE data) → http://localhost:8000
   MLB: web/data/mlb_recommendations.json (ready)
 ```
 

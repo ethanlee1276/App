@@ -1,4 +1,4 @@
-/* Gridiron Edge — app shell.
+/* Qelly — app shell.
  *
  * A small client-side router over three views (Recommended / Trending /
  * Players) sharing one data fetch. Rendering helpers draw the pick cards,
@@ -73,7 +73,6 @@ function applySport() {
   const lsBtn = document.querySelector('.nav-btn[data-view="longshots"]');
   if (lsBtn) lsBtn.style.display = state.sport === "nba" ? "none" : "";
   if (state.sport === "nba" && state.view === "longshots") switchView("recommended");
-  document.getElementById("brand-logo").textContent = meta.logo;
   document.getElementById("tagline").textContent = meta.tagline;
   const gt = document.getElementById("games-title");
   // innerHTML, not textContent: this is the page's hero and it carries a
@@ -2816,15 +2815,14 @@ function pmAgo(ts) {
    inside a sport — entering one hides the sport nav; leaving restores it. */
 const STANDALONE_MODES = ["intel", "fantasy", "ufc", "why"];
 
-// Header identity per standalone page — the brand logo/tagline follow the
-// ACTIVE page, exactly like the tab emojis. Before this, opening
-// Polymarket from the MLB tab left a baseball in the corner of a page
-// that has nothing to do with baseball.
+// Header identity per standalone page — the tagline follows the ACTIVE
+// page. Before this, opening Polymarket from the MLB tab left a baseball
+// description in the corner of a page that has nothing to do with baseball.
 const STANDALONE_BRAND = {
-  intel: { logo: "🛰️", tagline: "Polymarket informed-flow intelligence" },
-  fantasy: { logo: "🏆", tagline: "Fantasy football — usage, scripts, draft kit" },
-  ufc: { logo: "🥊", tagline: "Scalpy MMA — dossier-gated fight model" },
-  why: { logo: "🧭", tagline: "See the math. Know if it's working." },
+  intel: { tagline: "Polymarket informed-flow intelligence" },
+  fantasy: { tagline: "Fantasy football — usage, scripts, draft kit" },
+  ufc: { tagline: "Scalpy MMA — dossier-gated fight model" },
+  why: { tagline: "See the math. Know if it's working." },
 };
 
 function enterStandaloneMode(name) {
@@ -2838,7 +2836,6 @@ function enterStandaloneMode(name) {
   if (phead) phead.style.display = "none";
   const brand = STANDALONE_BRAND[name];
   if (brand) {
-    document.getElementById("brand-logo").textContent = brand.logo;
     document.getElementById("tagline").textContent = brand.tagline;
   }
   // Fantasy is NFL — avatars must draw helmets even if MLB was selected.
@@ -2853,10 +2850,10 @@ function exitStandaloneMode() {
   if (phead) phead.style.display = "";
   document.querySelectorAll(".sport-btn").forEach((x) =>
     x.classList.toggle("active", x.dataset.sport === state.sport));
-  // Restore the sport's own brand (logo + tagline) along with its nav.
+  // Restore the sport's own tagline along with its nav. (The Q tile is
+  // constant now, so only the words change.)
   const meta = SPORT_META[state.sport];
   if (meta) {
-    document.getElementById("brand-logo").textContent = meta.logo;
     document.getElementById("tagline").textContent = meta.tagline;
   }
   window.ACTIVE_SPORT = state.sport;

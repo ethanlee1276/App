@@ -473,7 +473,7 @@ def _browser_sweep(ok: str, warn: str, bad: str) -> None:
             server.shutdown()
 
 
-def _reachable(url: str, timeout: int = 6, ua: str = "gridiron-edge/preflight") -> bool:
+def _reachable(url: str, timeout: int = 6, ua: str = "qelly/preflight") -> bool:
     import urllib.error
     import urllib.request
     try:
@@ -489,7 +489,7 @@ def _reachable(url: str, timeout: int = 6, ua: str = "gridiron-edge/preflight") 
 def preflight() -> None:
     """Print a readiness checklist — what's live-ready and what still needs a step."""
     ok, warn, bad = "  ✅", "  ⚠️ ", "  ❌"
-    print("Gridiron Edge — preflight check\n")
+    print("Qelly — preflight check\n")
 
     v = sys.version_info
     print(f"{ok if v >= (3, 9) else warn} Python {v.major}.{v.minor}"
@@ -1280,7 +1280,7 @@ def main() -> None:
     ports = [a for a in argv if not a.startswith("--")]
     port = int(ports[0]) if ports else 8000
 
-    print("Gridiron Edge — grabbing the newest live data for both leagues…")
+    print("Qelly — grabbing the newest live data for both leagues…")
     if not _with_odds():
         print("  (no ODDS_API_KEY set — using model/proxy lines; live scores still update)")
     refresh_all()
@@ -1317,7 +1317,7 @@ def main() -> None:
         except Exception:
             pass
 
-    print(f"\nGridiron Edge running (LIVE data) → http://localhost:{port}")
+    print(f"\nQelly running (LIVE data) → http://localhost:{port}")
     lan = _lan_ip()
     if lan:
         print(f"  On your phone (same Wi-Fi):     → http://{lan}:{port}")

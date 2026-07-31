@@ -59,6 +59,9 @@ CONTENT_TYPES = {
     ".js": "application/javascript; charset=utf-8",
     ".json": "application/json; charset=utf-8",
     ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".ico": "image/x-icon",
+    ".webmanifest": "application/manifest+json",
 }
 
 
@@ -227,7 +230,7 @@ def main() -> None:
     server.live_mode = live  # read by Handler._api
 
     mode = "LIVE data" if live else "sample data"
-    print(f"Gridiron Edge running ({mode}) → http://localhost:{port}")
+    print(f"Qelly running ({mode}) → http://localhost:{port}")
     lan = _lan_ip()
     if lan:
         print(f"  On your phone (same Wi-Fi): http://{lan}:{port}")

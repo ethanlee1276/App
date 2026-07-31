@@ -1,4 +1,4 @@
-# Gridiron Edge — Owner's Guide
+# Qelly — Owner's Guide
 
 Written for the owner, assuming no coding background. Everything you need
 to run, check, and troubleshoot the system is on this page.

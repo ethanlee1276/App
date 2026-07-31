@@ -3,7 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gridiron Edge · NFL Prop Engine</title>
+  <title>Qelly · multi-sport betting model</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <!-- iOS ignores SVG icons; this is what "Add to Home Screen" uses. -->
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-title" content="Qelly" />
+  <meta name="theme-color" content="#0f1420" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
@@ -21,9 +26,25 @@
            href gives it real keyboard/semantic behaviour. -->
       <a class="brand-home" id="brand-home" href="#recommended"
          title="Home — tonight's picks for this sport (also refreshes)">
-        <span class="logo" id="brand-logo">🏈</span>
+        <!-- The mark: a geometric Q — one ring, one tail cut flat where it
+             crosses. The tile used to BE the sport emoji, which left the
+             app with no constant identity and resized the header with
+             whichever glyph was in it. It's fixed now; the sport is named
+             by the tagline on desktop and by the menu bar ("⚾ MLB ·
+             Recommended") on a phone. The translate() optically centres
+             the mark, whose ink sits high-left of the tile with the tail
+             hanging low-right. Same geometry lives in favicon.svg and in
+             the apple-touch-icon — change all three together. -->
+        <span class="logo" id="brand-logo" aria-hidden="true">
+          <svg class="qmark" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
+            <g transform="translate(-1.1 0.9)">
+              <circle cx="24" cy="22" r="13" />
+              <path d="M30.01 28.01 L39.91 37.91" />
+            </g>
+          </svg>
+        </span>
         <div>
-          <h1>Gridiron Edge</h1>
+          <h1>Qelly</h1>
           <div class="tagline" id="tagline">AI-powered NFL player-prop model</div>
         </div>
       </a>
