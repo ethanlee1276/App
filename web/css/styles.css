@@ -1389,6 +1389,11 @@ select.calc-in { width: auto; font-weight: 600; }
   .mt-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     color: var(--text-dim); font-weight: 600; }
 
+  /* While the menu is up the page behind must not scroll: a different
+     sport's board is a different length, so any scrolling underneath
+     re-anchored the view and appeared to move the menu itself. */
+  body.menu-open { overflow: hidden; }
+
   /* Both destination rows live behind the menu on a phone. */
   .sport-switch, .nav { display: none; }
   .menu-head { display: none; }

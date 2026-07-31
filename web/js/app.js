@@ -4481,6 +4481,18 @@ function initMobileMenu() {
   const btn = document.getElementById("menu-toggle");
   if (!btn) return;
   btn.addEventListener("click", () => {
+    // Anchor FIRST, then freeze: the .menu-open class locks body scroll,
+    // so scrolling after it lands leaves the page pinned wherever it
+    // happened to be. Left scrollable, the board underneath kept moving
+    // while the menu was up — and because a different sport's board is a
+    // different LENGTH, switching sports re-anchored the scroll and
+    // dragged the menu with it.
+    if (!document.body.classList.contains("menu-open")) {
+      // "instant", not "auto": auto defers to the stylesheet, which sets
+      // scroll-behavior: smooth — so the page GLIDED to the top under the
+      // opening menu, which is itself visible movement.
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
     const open = document.body.classList.toggle("menu-open");
     btn.setAttribute("aria-expanded", String(open));
   });
@@ -4521,8 +4533,14 @@ function bind() {
       const url = new URL(location.href);
       url.searchParams.set("sport", state.sport);
       history.replaceState(null, "", url);
+      // Switching sports from an OPEN menu loads quietly. The skeleton
+      // wipe and entrance animations exist for a page you are looking at;
+      // firing them under the menu made the board collapse to placeholders
+      // and rebuild while you were still choosing — the page appeared to
+      // reload and throw you back into the menu. Picking a page closes the
+      // menu and shows the finished board.
       applySport();
-      load();
+      load(document.body.classList.contains("menu-open"));
     }));
 
   const conf = document.getElementById("min-conf"), edge = document.getElementById("min-edge");
