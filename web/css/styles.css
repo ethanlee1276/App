@@ -1,5 +1,5 @@
 /* ============================================================
-   Qelly — design system
+   Qellys Book — design system
    Cohesive dark palette: indigo/blue anchor, cyan + violet accents,
    semantic green/amber/red tuned to the same chroma family.
    ============================================================ */
@@ -95,14 +95,15 @@ h1, h2, h3 { margin: 0; }
   display: grid; place-items: center; font-size: 22px;
   background: var(--grad-brand); box-shadow: 0 6px 18px rgba(77, 140, 255, 0.4);
 }
-/* The Q. Brand-coloured, not white: the flat-chrome override further down
-   paints the tile in --panel-2, which is light in the light theme, where a
-   white Q would be an empty box — --brand reads on both. And the caps stay
-   butt (the default): a round cap on the tail bulges into the counter and
-   the whole mark reads as a magnifying glass. */
+/* The Q. Hairline weight and one accent colour, matching the nav and the
+   panels rather than shouting over them. --brand (not white) because the
+   flat-chrome override further down paints the tile in --panel-2, which is
+   light in the light theme — a white Q there would be an empty box. Caps
+   stay butt (the default): a round cap on the tail bulges into the counter
+   and the whole mark reads as a magnifying glass. */
 .qmark {
   width: 100%; height: 100%;
-  stroke: var(--brand); stroke-width: 5;
+  stroke: var(--brand); stroke-width: 3.5;
 }
 .brand h1 { font-size: 19px; letter-spacing: 0.2px; font-weight: 800; white-space: nowrap; }
 .tagline { color: var(--text-dim); font-size: 12px; margin-top: 1px;

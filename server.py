@@ -230,7 +230,7 @@ def main() -> None:
     server.live_mode = live  # read by Handler._api
 
     mode = "LIVE data" if live else "sample data"
-    print(f"Qelly running ({mode}) → http://localhost:{port}")
+    print(f"Qellys Book running ({mode}) → http://localhost:{port}")
     lan = _lan_ip()
     if lan:
         print(f"  On your phone (same Wi-Fi): http://{lan}:{port}")

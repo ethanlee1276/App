@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rasterise the Qelly "Q" mark into the home-screen icon.
+"""Rasterise the Qellys Book "Q" mark into the home-screen icon.
 
 iOS ignores SVG for "Add to Home Screen", so the phone needs a real PNG.
 Rather than commit a binary nobody can regenerate, this draws it from the
@@ -24,18 +24,21 @@ from pathlib import Path
 
 # --- the mark, in the SVG's 48x48 user units -----------------------------
 U = 48.0
-CX, CY, R = 24.0, 22.0, 13.0     # ring centre and radius
-HALF = 2.5                       # half of the 5-unit stroke
-TAIL_A = (30.01, 28.01)          # tail starts inside the counter (r = 8.5)…
-TAIL_B = (39.91, 37.91)          # …and is cut off flat outside it (r = 22.5)
-# Optical centring: the ring sits high-left and the tail hangs low-right, so
-# the ink's bounding box is off-centre. Matches the <g transform> in the SVG.
-NUDGE = (-1.1, 0.9)
+CX, CY, R = 24.0, 22.0, 14.0     # ring centre and radius
+HALF = 1.75                      # half of the 3.5-unit stroke
+TAIL_A = (30.36, 28.36)          # tail crosses the ring: from r = 9 inside…
+TAIL_B = (36.73, 34.73)          # …to r = 18, just outside. A LONG tail here
+                                 # turns the mark into a magnifying glass.
+# The ring is centred at y=22 to leave room for a tail that no longer needs
+# it, so the whole mark drops 2 units. Matches the <g transform> in the SVG.
+NUDGE = (0.0, 2.0)
 CORNER = 11.0                    # tile corner radius, matching the favicon
 
-TOP = (0x8F, 0xB2, 0xFF)         # tile gradient, top…
-BOT = (0x4D, 0x6F, 0xD8)         # …to bottom
-INK = (0xFF, 0xFF, 0xFF)
+# Flat, not a gradient: these are the site's own --panel-2 and --brand, so
+# the home-screen tile looks like the chrome it opens into.
+TOP = (0x16, 0x17, 0x1D)
+BOT = (0x16, 0x17, 0x1D)
+INK = (0x7A, 0xA2, 0xF7)
 
 SS = 4                           # supersampling factor per axis
 

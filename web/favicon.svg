@@ -1,16 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
-  <!-- Qelly mark. Identical geometry to the header tile in index.html and
-       to apple-touch-icon.png — change all three together, or the tab,
-       the home screen and the page stop looking like one brand. -->
-  <defs>
-    <linearGradient id="qbg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#8fb2ff"/>
-      <stop offset="1" stop-color="#4d6fd8"/>
-    </linearGradient>
-  </defs>
-  <rect width="48" height="48" rx="11" fill="url(#qbg)"/>
-  <g fill="none" stroke="#fff" stroke-width="5" transform="translate(-1.1 0.9)">
-    <circle cx="24" cy="22" r="13"/>
-    <path d="M30.01 28.01 L39.91 37.91"/>
+  <!-- Qellys Book. Flat panel + one thin accent stroke, because that is the
+       whole design system: hairline borders, no gradients, one calm blue.
+       Colours are --panel-2 and --brand from web/css/styles.css.
+
+       Identical geometry to the header tile in index.html and to
+       apple-touch-icon.png — change all three together, or the tab, the
+       home screen and the page stop looking like one brand. -->
+  <rect width="48" height="48" rx="11" fill="#16171d"/>
+  <g fill="none" stroke="#7aa2f7" stroke-width="3.5" transform="translate(0 2)">
+    <circle cx="24" cy="22" r="14"/>
+    <path d="M30.36 28.36 L36.73 34.73"/>
   </g>
 </svg>

@@ -1,4 +1,4 @@
-# Qelly — a multi-sport betting model
+# Qellys Book — a multi-sport betting model
 
 A player-prop and game-bet analytics engine covering NFL, MLB, NBA and UFC,
 plus Polymarket flow and fantasy football. It ingests player form, matchups,

@@ -1,4 +1,4 @@
-# Qelly on your phone
+# Qellys Book on your phone
 
 The site runs on your Mac. Your phone just needs a path to it. There are
 two, and they stack — set up both once and the right one simply works
@@ -39,10 +39,11 @@ can reach it. The free plan covers this use completely.
    work, anywhere — as long as the Tailscale toggle on the phone is on.
 
 **Make it feel like an app:** with the page open in Safari, tap Share →
-**Add to Home Screen**. One tap from then on. It lands as the blue Qelly
-**Q** tile named "Qelly" — that comes from `web/apple-touch-icon.png`,
-which `make_icon.py` draws from the same shape as the site's favicon.
-(iOS ignores SVG icons, which is the only reason a PNG is in the repo.)
+**Add to Home Screen**. One tap from then on. It lands as a dark tile with
+the blue **Q** on it, labelled "Qellys Book". That icon is
+`web/apple-touch-icon.png`, which `make_icon.py` draws from the same shape
+as the site's favicon — iOS ignores SVG icons, which is the only reason a
+PNG lives in the repo at all.
 
 ### "Bad request version" garbage in the Mac terminal?
 

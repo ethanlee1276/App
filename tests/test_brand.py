@@ -1,4 +1,4 @@
-"""The Qelly brand mark has to stay one mark.
+"""The Qellys Book brand mark has to stay one mark.
 
 The Q is drawn three times — as CSS-styled SVG in the header, as a
 standalone favicon, and rasterised into the iOS home-screen icon. Nothing
@@ -114,6 +114,33 @@ def test_the_old_name_is_gone():
                  os.path.join("web", "js", "app.js"),
                  os.path.join("docs", "PHONE.md")):
         assert "gridiron" not in _read(name).lower(), name
+
+
+def test_the_name_is_spelled_the_same_everywhere():
+    html = _read("web", "index.html")
+    assert "<h1>Qellys Book</h1>" in html
+    assert "<title>Qellys Book" in html
+    assert 'apple-mobile-web-app-title" content="Qellys Book"' in html
+    # A bare "Qelly" anywhere means a rename only got half-applied.
+    for name in ("README.md", "GUIDE.md", "LAUNCH.md", "STRATEGY.md",
+                 "server.py", "launch.py",
+                 os.path.join("web", "index.html"),
+                 os.path.join("docs", "PHONE.md")):
+        assert not re.search(r"Qelly(?!s Book)", _read(name)), name
+
+
+def test_the_mark_matches_the_design_system():
+    # Flat panel, one accent, no gradient — the same chrome as everything
+    # else. A gradient-filled tile reads as a sticker on a flat interface.
+    svg = _read("web", "favicon.svg")
+    assert "linearGradient" not in svg
+    css = _read("web", "css", "styles.css")
+    panel_2 = re.search(r"--panel-2:\s*(#[0-9a-fA-F]{6})", css).group(1)
+    brand = re.search(r"--brand:\s*(#[0-9a-fA-F]{6})", css).group(1)
+    assert panel_2.lower() in svg.lower(), "tile drifted off --panel-2"
+    assert brand.lower() in svg.lower(), "stroke drifted off --brand"
+    assert make_icon.INK == tuple(int(brand[i:i + 2], 16) for i in (1, 3, 5))
+    assert make_icon.TOP == make_icon.BOT, "the tile must stay flat"
 
 
 def test_brand_is_constant_across_sports():

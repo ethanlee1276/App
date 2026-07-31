@@ -16,7 +16,7 @@ import urllib.request
 from pathlib import Path
 
 CACHE_DIR = Path(__file__).resolve().parents[2] / "data" / "cache"
-USER_AGENT = "qelly/0.1 (+nflverse loader)"
+USER_AGENT = "qellys-book/0.1 (+nflverse loader)"
 DEFAULT_TTL = 12 * 3600  # re-download at most twice a day
 
 

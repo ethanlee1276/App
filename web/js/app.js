@@ -1,4 +1,4 @@
-/* Qelly — app shell.
+/* Qellys Book — app shell.
  *
  * A small client-side router over three views (Recommended / Trending /
  * Players) sharing one data fetch. Rendering helpers draw the pick cards,

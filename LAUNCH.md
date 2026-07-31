@@ -118,7 +118,7 @@ python3 server.py --live
 You'll see:
 
 ```
-Qelly running (LIVE data) → http://localhost:8000
+Qellys Book running (LIVE data) → http://localhost:8000
   MLB: web/data/mlb_recommendations.json (ready)
 ```
 

@@ -1,6 +1,6 @@
 # Strategy Review — the honest edit of the Scalpy 3.0 / MLB 2.0 specs
 
-This is the working strategy document for Qelly: your two instruction
+This is the working strategy document for Qellys Book: your two instruction
 sets, graded against what our own backtests have *measured* (not guessed),
 and turned into a prioritized build order. The one-line summary:
 
