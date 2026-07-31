@@ -199,6 +199,17 @@ def test_every_command_the_scan_prints_actually_exists():
                 f"{script} does not accept the subcommand {first!r}"
 
 
+def test_ingest_speaks_every_sport_the_scan_reports_on():
+    """The scan tells you to ingest a sport; ingest.py has to know it.
+    Every gap between those two lists is a fix line that fails."""
+    import subprocess
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out = subprocess.run(["python3", os.path.join(root, "ingest.py"), "--help"],
+                         capture_output=True, text=True, timeout=60)
+    for sport in C.BUILDERS:
+        assert sport in out.stdout, f"ingest.py has no {sport} arm"
+
+
 def test_the_launcher_exposes_it():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(root, "launch.py"), encoding="utf-8") as fh:

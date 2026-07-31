@@ -339,9 +339,20 @@ function manageAutoRefresh() {
 // off the network — and the number on screen is history, not tonight.
 const STALE_AFTER_MS = 8 * 60 * 1000;
 
+/* Pages with no data feed behind them. The freshness chip ages the SLATE,
+   and on a pure reference page that is a lie of scope — "Stale — built
+   10h ago" over a page of prose that has no build at all. */
+const REFERENCE_VIEWS = ["why", "about"];
+
 function updateAgo() {
   const el = document.getElementById("live-refresh");
-  if (!el || !state.lastLoad) return;
+  if (!el) return;
+  if (REFERENCE_VIEWS.includes(state.view)) {
+    el.style.visibility = "hidden";   // hidden, not display:none — the row
+    return;                           // must not change height mid-tap
+  }
+  el.style.visibility = "";
+  if (!state.lastLoad) return;
   // Age of the DATA where the server told us (Last-Modified), falling back
   // to the fetch time. The fallback flatters: it can only ever say
   // "seconds", which is exactly how a frozen board looked live from across
@@ -2999,7 +3010,7 @@ function pmAgo(ts) {
 
 /* Polymarket and Fantasy are top-level modes next to NFL/MLB, not tabs
    inside a sport — entering one hides the sport nav; leaving restores it. */
-const STANDALONE_MODES = ["intel", "fantasy", "ufc", "rosters", "why"];
+const STANDALONE_MODES = ["intel", "fantasy", "ufc", "rosters", "why", "about"];
 
 // Header identity per standalone page — the tagline follows the ACTIVE
 // page. Before this, opening Polymarket from the MLB tab left a baseball
@@ -4595,6 +4606,185 @@ function whyCalcParlay() {
       Correlated same-game legs can flip this — but the books price those separately for exactly that reason.</p>`;
 }
 
+/* ============================================================
+   About — what this site is, for someone who just landed on it.
+
+   Written for a reader with no context: no jargon in the first screen,
+   the limits stated as plainly as the strengths, and the legal and
+   responsible-gambling terms in the same place rather than buried in a
+   footer nobody opens. The tone is deliberately flat. A page that hypes
+   the model on the way to a disclaimer has not really made the
+   disclaimer.
+   ============================================================ */
+function renderAbout() {
+  const host = document.getElementById("about-body");
+  if (!host) return;
+  const src = document.getElementById("data-source");
+  if (src) {
+    src.className = "data-source";
+    src.textContent = "Reference";
+    src.title = "Plain-English explainer — no data feed involved";
+  }
+  const dt = document.getElementById("slate-date");
+  if (dt) dt.textContent = "About · terms · responsible play";
+
+  const card = (title, body, accent) => `
+    <article class="card about-card"${accent ? ` style="border-left:3px solid ${accent}"` : ""}>
+      <div class="player">${title}</div>
+      <div class="about-body">${body}</div>
+    </article>`;
+
+  host.innerHTML = `
+    <div class="about-lede">
+      <p><strong>Qellys Book is an analytics tool, not a sportsbook and not a
+      tipster.</strong> You cannot place a bet here and no money changes hands
+      on this site. What it does is take the same public information the
+      sportsbooks use — every game, every player's recent form, injuries,
+      weather, venues, and the live prices at ten different books — pull it
+      into one place, and estimate its own probability for each outcome.</p>
+
+      <p>Then it does the only thing that actually matters: it compares that
+      probability to the price. When our number and the book's number
+      disagree by enough to survive our own margin for error, the board
+      shows it. When they don't, the board says <em>"no qualifying plays"</em>
+      and shows you nothing. That happens often, and it is the system
+      working rather than failing.</p>
+    </div>
+
+    <div class="section-title" style="margin-top:20px">Everything in one place
+      <span class="sub">— the practical reason this exists</span></div>
+    <div class="cards wide">
+      ${card("The information is public. Having it together is the edge.", `
+        <p>None of the data here is secret. Box scores, injury reports, depth
+        charts, park factors, weather, recruiting rankings, fighter records —
+        anyone can look all of it up. The problem is that "anyone" would need
+        a dozen browser tabs and two hours per slate, and the line will have
+        moved before they finish.</p>
+        <p>This site does that gathering continuously and automatically, then
+        prices it against <strong>ten sportsbooks at once</strong>. Two books
+        quoting the same game differently is a real, ordinary occurrence, and
+        on a two-way market a twenty-cent difference in price can be the whole
+        margin. You cannot beat a book on information it also has; you can
+        beat it on information it hasn't bothered to price carefully, and on
+        being at the right window.</p>`)}
+
+      ${card("What the model is actually doing", `
+        <p>For each market it builds a full <strong>distribution</strong>, not a
+        pick. Not "this player goes over" but "here is the range of outcomes
+        and how likely each one is." It removes the book's built-in margin
+        (the "vig") to find what the market really believes, compares that to
+        our number, and then <strong>deliberately shrinks our own edge</strong>
+        — because a model that trusts itself completely is a model that has
+        stopped noticing it can be wrong.</p>
+        <p>Whatever survives that gets graded 0–100 and sized by a fraction of
+        the Kelly criterion, a standard bankroll formula. Anything under the
+        bar is not shown as a weaker suggestion. It is not shown.</p>`)}
+
+      ${card("We show our losses", `
+        <p>Every play the model publishes is recorded at the price and time it
+        was published, then graded against the real result — wins and losses
+        both — on the <strong>Record</strong> page. Nothing is quietly deleted
+        after it loses.</p>
+        <p>Newer models are marked <em>on probation</em>: they are tracked and
+        graded like everything else, but they have not yet earned the right to
+        be staked. Where we are missing a data source, the page says so
+        instead of filling the hole with a guess.</p>`)}
+    </div>
+
+    <div class="section-title" style="margin-top:22px">The honest part
+      <span class="sub">— please read this bit properly</span></div>
+    <div class="cards wide">
+      ${card("⚠️ Anything can happen. Genuinely anything.", `
+        <p>Sports are random and betting is gambling. A 90% favourite loses
+        one time in ten, and that one time can be tonight, and it can happen
+        three nights in a row. A quarterback rolls an ankle on the first
+        drive. A fighter who has never been stopped gets caught by a punch he
+        did not see. A game gets called for weather in the sixth inning.</p>
+        <p><strong>No model can predict a single event, and this one does not
+        claim to.</strong> It claims something much smaller: that across
+        hundreds of bets, taking prices that are better than they should be
+        works out better than taking prices that aren't. Even if every number
+        on this site were perfect, you would still have long losing runs. That
+        is not a bug in the method — it is what randomness looks like from the
+        inside.</p>
+        <p>Nothing here is a guarantee, a lock, a sure thing, or a prediction.
+        Past results — including ours — do not predict future results.</p>`,
+        "var(--bad)")}
+
+      ${card("This is not betting advice", `
+        <p>Everything published here is <strong>automated statistical output
+        and general information</strong>, produced by our model from public
+        data. It is not financial advice, investment advice, or a
+        recommendation that you place any particular wager. We are not your
+        advisor and we have no idea what your circumstances are.</p>
+        <p>Every decision you make with this information is yours alone, and
+        so is every outcome. If you would not be comfortable losing the money,
+        do not put it at risk.</p>`,
+        "var(--warn)")}
+
+      ${card("Legal — the rules that apply", `
+        <ul class="about-list">
+          <li><strong>You must be of legal gambling age</strong> where you are.
+            That is 21 in most of the United States and 18 in some
+            jurisdictions. If you are under it, this site is not for you.</li>
+          <li><strong>Sports betting is not legal everywhere.</strong> Laws
+            differ by country, state and province and they change. It is your
+            responsibility to know the rules where you are and to follow
+            them.</li>
+          <li><strong>We are not affiliated with any sportsbook</strong>, and
+            not with the NFL, MLB, NBA, WNBA, UFC, the NCAA or any team,
+            school or league. Book names appear only to identify where a price
+            was quoted. All trademarks belong to their owners.</li>
+          <li><strong>We take no bets, hold no money and process no
+            payments.</strong> No part of this site is a wagering service.</li>
+          <li><strong>Prices change.</strong> Odds shown were correct when
+            fetched and may be stale by the time you read them. The
+            timestamp on each page tells you how old the data is — check it.
+            Always confirm the current price at your book.</li>
+          <li><strong>No warranty.</strong> Data can be wrong, feeds can break
+            and models can be miscalibrated. Everything here is provided as-is,
+            with no guarantee of accuracy or fitness for any purpose, and we
+            accept no liability for losses arising from its use.</li>
+          <li><strong>Personal use.</strong> This is a private analytics tool.
+            It is not a licensed gambling operator or a paid tipping service,
+            and nothing on it is an offer to provide one.</li>
+        </ul>`,
+        "var(--brand)")}
+
+      ${card("🛟 If it stops being fun, stop", `
+        <p>Gambling is genuinely addictive, and a tool that makes betting feel
+        more rigorous can make it easier to bet more, not less. Bet only money
+        you can afford to lose. Never chase a loss. Set a limit before you
+        start rather than during. Take breaks. Betting is not a way to make
+        a living or to fix a financial problem.</p>
+        <p>If it has stopped being fun, or someone close to you thinks it has,
+        help is free and confidential:</p>
+        <ul class="about-list">
+          <li><strong>United States</strong> — 1-800-GAMBLER
+            (1-800-426-2537), or text 800GAM to 53342.
+            <a href="https://www.ncpgambling.org" target="_blank"
+               rel="noopener noreferrer">ncpgambling.org</a></li>
+          <li><strong>United Kingdom</strong> — GamCare, 0808 8020 133.
+            <a href="https://www.begambleaware.org" target="_blank"
+               rel="noopener noreferrer">begambleaware.org</a></li>
+          <li><strong>Canada</strong> — ConnexOntario, 1-866-531-2600</li>
+          <li><strong>Anywhere</strong> — Gamblers Anonymous,
+            <a href="https://www.gamblersanonymous.org" target="_blank"
+               rel="noopener noreferrer">gamblersanonymous.org</a></li>
+        </ul>
+        <p>Most sportsbooks also offer deposit limits, time-outs and
+        self-exclusion. Using them is a sign of good process, not weakness.</p>`,
+        "var(--good)")}
+    </div>
+
+    <div class="ls-note" style="margin-top:18px">
+      In one sentence: <strong>we gather every number in one place and tell you
+      when a price looks wrong — you decide what, if anything, to do about
+      it, and the result is never guaranteed.</strong>
+    </div>`;
+  revealChildren(host);
+}
+
 async function renderWhy() {
   const host = document.getElementById("why-body");
   if (!host) return;
@@ -4803,7 +4993,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "trending", "players", "rosters", "record", "intel", "fantasy", "ufc", "why"];
+const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "trending", "players", "rosters", "record", "intel", "fantasy", "ufc", "why", "about"];
 
 function switchView(name) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -4831,6 +5021,8 @@ function switchView(name) {
   if (name === "fantasy") renderFantasy();
   if (name === "ufc") renderUFC();
   if (name === "why") renderWhy();
+  if (name === "about") renderAbout();
+  updateAgo();          // reference pages hide the freshness chip
   if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
   moveIndicator();
 }

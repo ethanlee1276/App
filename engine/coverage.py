@@ -301,7 +301,7 @@ def cfb(conn) -> SportCoverage:
     qb = ROOT / "data" / "cfb_qb_status.json"
     return SportCoverage("cfb", "College football", [
         _results_layer(conn, "cfb", R.MIN_GAMES,
-                       "python3 cfb_build.py --backfill 2025-08-24:2026-01-20"),
+                       "python3 ingest.py cfb --from 2025-08-24 --to 2026-01-20"),
         Layer("Schedule / conferences / rankings", "attention tier is the "
               "whole model, and it reads all three", OK,
               "ESPN college-football feed, keyless"),
@@ -310,7 +310,7 @@ def cfb(conn) -> SportCoverage:
               "decides every probability on the board",
               OK if fit.fitted else MISSING,
               fit.note.split(".")[0],
-              "python3 cfb_build.py --backfill 2025-08-24:2026-01-20"),
+              "python3 ingest.py cfb --from 2025-08-24 --to 2026-01-20"),
         Layer("Recruiting / talent prior", "§5-§6 — in September a team's own "
               "results are two games against unmeasured opponents; the "
               "high-school layer is what carries the number until then",

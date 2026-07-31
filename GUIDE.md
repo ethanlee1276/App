@@ -52,6 +52,7 @@ output.
 | **🏀 NBA** | Scalpy: minutes engine, probability distributions, humility clamp, max 4 picks a slate | October |
 | **🥊 UFC** | Scalpy MMA: fighter dossiers, joint method-of-victory model, pass list | Fight weeks (needs dossiers — see below) |
 | **🧭 Why Us** | The positioning page: what makes this different from picks services, live receipts from the journal, and an open math toolbox (de-vig, Kelly sizing, parlay-vs-singles calculators) | Always (no data feed needed) |
+| **ℹ️ About** | Plain-English explainer for anyone who lands here cold: what the site is and isn't, the legal terms, why nothing here is betting advice, and responsible-gambling help | Always (no data feed needed) |
 
 Shared ideas everywhere: **real prices only** (nothing is recommended
 against a placeholder line), **every pick is journaled and graded**
@@ -132,7 +133,7 @@ auto-settle last ran, so you can see the loop is alive.
 | NBA history (from October, occasionally) | `python3 ingest.py nba --from <start> --to <today>` |
 | WNBA history (May–September, this is the live one) | `python3 ingest.py wnba --from 2026-05-01 --to <today>` |
 | WNBA board (May–September) | builds automatically once the history above is ingested; it is **on probation** — see below |
-| College football history (once, before the season) | `python3 cfb_build.py --backfill 2025-08-24:2026-01-20` |
+| College football history (once, before the season) | `python3 ingest.py cfb --from 2025-08-24 --to 2026-01-20` |
 | Confirm a college QB (turns a conditional into a bet) | `python3 launch.py --confirm-qb "TOL" --starter "Name"` |
 | See which CFB games are waiting on a QB | `python3 launch.py --confirm-qb` |
 | New Odds API key | put it in `secrets.local`, then `python3 launch.py --reset-budget` |
@@ -148,6 +149,7 @@ auto-settle last ran, so you can see the loop is alive.
 | Why do N props have no book price? | `python3 launch.py --odds-doctor` |
 | A trade isn't showing on the Fantasy page | `python3 launch.py --refresh-rosters "Player Name"` |
 | See a team's active roster | Menu → **More** → **Rosters** (search a team or a player) |
+| Settle UFC picks + see what dossiers are needed | `python3 ingest.py ufc` |
 | Record a UFC weigh-in (fight day) | `python3 launch.py --weigh-in "Fighter Name" 155.5` |
 | See which weigh-ins are still missing | `python3 launch.py --weigh-in` |
 | Set where a UFC card is being held (cage size + altitude) | `python3 launch.py --card-venue "UFC Apex" "Las Vegas"` |

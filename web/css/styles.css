@@ -1790,3 +1790,40 @@ select.calc-in { width: auto; font-weight: 600; }
   .ufc-shop-row { grid-template-columns: 1fr auto 58px; }
   .ufc-shop-row .sr-m { display: none; }
 }
+
+/* About — a reading page, not a dashboard. Longer measure, looser leading
+   and real paragraph rhythm, because this is the one page on the site
+   somebody actually reads top to bottom. */
+.about-lede { max-width: 68ch; margin: 0 0 4px; }
+.about-lede p { color: var(--text-body); font-size: 15px; line-height: 1.62; margin: 0 0 12px; }
+.about-lede strong { color: var(--text); }
+.about-card .about-body { margin-top: 6px; max-width: 62ch; }
+.about-card .about-body p { color: var(--text-body); font-size: 13.5px; line-height: 1.6; margin: 0 0 10px; }
+.about-card .about-body p:last-child { margin-bottom: 0; }
+.about-card .about-body strong { color: var(--text); }
+.about-card .about-body em { color: var(--text-dim); font-style: normal; }
+.about-list { margin: 4px 0 0; padding-left: 18px; }
+.about-list li { color: var(--text-body); font-size: 13.5px; line-height: 1.58; margin-bottom: 7px; }
+.about-list a { color: var(--brand); }
+/* One column: these cards are prose, and prose in two narrow columns on a
+   wide screen is harder to read, not denser. */
+#about-body .cards.wide { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 560px) {
+  .about-lede p { font-size: 14.5px; }
+  .about-card .about-body p, .about-list li { font-size: 13px; }
+}
+
+/* The help links are the most important thing on the About page and were
+   the hardest to hit — 15px tall inline text. On a touch screen they get
+   a real target. Someone reaching for a helpline should not have to aim. */
+.about-list a {
+  display: inline-block; padding: 3px 2px; text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .about-list a {
+    padding: 12px 10px; margin: 2px 0; min-height: 24px; line-height: 20px;
+    border: 1px solid var(--border-soft); border-radius: 9px;
+    background: var(--fill-subtle); text-decoration: none; font-weight: 600;
+  }
+}

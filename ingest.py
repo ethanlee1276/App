@@ -82,7 +82,9 @@ def print_summary(conn) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Populate the historical database.")
-    ap.add_argument("sport", choices=["nfl", "mlb", "nba", "wnba", "status"])
+    ap.add_argument("sport",
+                    choices=["nfl", "mlb", "nba", "wnba", "cfb", "ufc",
+                             "status"])
     ap.add_argument("--seasons", default=default_seasons(),
                     help="NFL: e.g. 2021-2025 (default: last 5 completed seasons)")
     ap.add_argument("--dates", default="", help="MLB: comma-separated YYYY-MM-DD")
@@ -106,6 +108,43 @@ def main() -> None:
         print(f"Ingesting NFL seasons {seasons[0]}-{seasons[-1]} → {args.db}")
         res = ingest.ingest_nfl(conn, seasons)
         print(f"  games: {res['games']:,}   player-log rows: {res['player_logs']:,}")
+    elif args.sport == "cfb":
+        # College football's results come from the same keyless ESPN feed
+        # the board reads, one request per day. Everything downstream needs
+        # them: the team ratings, the fitted margin/total variance, and the
+        # settler. Without a season in the table the board prices from a
+        # prior and stays on probation.
+        from engine.sources import cfbdata
+        if not (args.start and args.end):
+            print("Provide --from/--to YYYY-MM-DD for college football, e.g.\n"
+                  "  python3 ingest.py cfb --from 2025-08-24 --to 2026-01-20")
+            return
+        print(f"Ingesting CFB {args.start} → {args.end} → {args.db}")
+        games = cfbdata.load_results(args.start, args.end)
+        rows = cfbdata.game_rows(games)
+        n = db.upsert_games(conn, rows) if rows else 0
+        print(f"  games: {n:,} finished")
+        if not n:
+            print("  Nothing stored. FBS plays late August to mid-January — "
+                  "check the range, and note that ESPN is keyless so a zero "
+                  "here usually means the dates, not the network.")
+    elif args.sport == "ufc":
+        # Two different things, both needed before the model may bet:
+        # the dossiers it refuses to fight without, and the results that
+        # settle what it already bet.
+        from engine import ledger
+        from engine.db import connect as _hist
+        print("Settling any open UFC picks from ESPN MMA results…")
+        try:
+            lconn = ledger.connect()
+            settled = ledger.settle_ufc(lconn)
+            print(f"  settled: {settled}")
+        except Exception as exc:                       # noqa: BLE001
+            print(f"  could not settle ({exc})")
+        print("\nFighter dossiers are the other half — the engine refuses to "
+              "bet a fighter it has no measured record for. Draft the next "
+              "card's fighters with:\n  python3 ufc_dossiers.py\n"
+              "  python3 ufc_dossiers.py \"Fighter Name\"   (one fighter)")
     elif args.sport in ("nba", "wnba"):
         # One path, two leagues. Both publish the same JSON shapes on their
         # own CDN, so the only thing that differs is which day-ingester to

@@ -229,7 +229,7 @@ margin spread, total spread, home field and scoring baseline from ingested
 results. Below 400 games it uses a documented prior instead and sets
 `probation` — the board is journaled and graded, never staked, and says so on
 the page. Backfill a season with
-`python3 cfb_build.py --backfill 2025-08-24:2026-01-20` and the numbers become
+`python3 ingest.py cfb --from 2025-08-24 --to 2026-01-20` and the numbers become
 measurements.
 
 **It has no talent layer.** §6 is the largest parked item and the honest
