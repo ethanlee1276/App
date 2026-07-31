@@ -631,6 +631,31 @@ async function renderBestBets() {
 /* The gate-census funnel — why tonight's props died, gate by gate. Rendered
    inside the empty state AND as a collapsed drawer under a non-empty picks
    list: "890 analyzed → 1 recommended" must always be explainable. */
+/* "753 props with no book price" reads like a dead feed at 9 AM. It isn't:
+   books post hitter props close to first pitch, and our own pacer holds the
+   paid pulls for the same window (spending credits at breakfast buys proxy
+   lines and silence). Both facts lived only in the launcher's terminal —
+   the one place you can't see from a phone at work. So say them here, on
+   the number that prompts the question. */
+function oddsClockHTML() {
+  const os = (state.data || {}).odds_status || {};
+  const clock = (ts) => new Date(ts * 1000)
+    .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const bits = [];
+  if (os.priced_at) bits.push(`last pulled <b>${clock(os.priced_at)}</b>`);
+  if (os.window_opens_at) {
+    const opens = os.window_opens_at * 1000;
+    bits.push(Date.now() < opens
+      ? `full pre-game pricing from <b>${clock(os.window_opens_at)}</b>`
+      : `pre-game window is open`);
+  }
+  if (!bits.length) return "";
+  return `<div style="margin-top:6px;font-size:12px;color:var(--text-mute)">
+    Book prices: ${bits.join(" · ")}. Most of these fill in as the books post
+    hitter lines near first pitch — the rest of the board (scores, lineups,
+    live tracking) refreshes every minute regardless.</div>`;
+}
+
 function censusFunnelHTML() {
   const gc = (state.data || {}).gate_census;
   if (!gc) return "";
@@ -664,7 +689,7 @@ function censusFunnelHTML() {
        Unpriced by market: ${npmRows}. We project every hitter in the lineup;
        books post lines for a subset — that gap is normal, not a broken feed.
        A price we <em>paid</em> for and failed to match is a different thing:
-       the build prints those as a name-match warning.</div>` : "";
+       the build prints those as a name-match warning.</div>${oddsClockHTML()}` : "";
   return rows ? `<div style="margin-top:10px">
     <div style="font-size:12px;font-weight:700;margin-bottom:2px">Where tonight's props died</div>
     ${rows}${noPrice}${closed}</div>` : "";

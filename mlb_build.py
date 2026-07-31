@@ -16,6 +16,7 @@ sandboxes; see the README).
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import sys
 
@@ -88,6 +89,33 @@ def main() -> None:
         except oddsapi.OddsAPIError as exc:
             odds_status["error"] = str(exc)
             print(f"⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
+
+    # WHEN the book prices on this board were last pulled, and when the
+    # pre-game window opens. Both were only visible in the launcher's
+    # terminal, which is the one place you can't see from a phone at work —
+    # and "753 props with no book price" reads like a broken feed at 9 AM
+    # when it is really just the books not having posted hitter props yet.
+    try:
+        from engine import oddsbudget
+        _st = oddsbudget.load()
+        _priced = _st.sport_ts("mlb") or _st.last_refresh_ts
+        odds_status["priced_at"] = _priced or None
+        # Same parse as launch.py's pacer, from the same field, so the time
+        # shown on the page is the time the budgeter actually acts on.
+        kicks = []
+        for g in slate.games:
+            k = getattr(g, "kickoff", "") or ""
+            if "T" not in k:
+                continue
+            try:
+                kicks.append(datetime.datetime.fromisoformat(
+                    k.replace("Z", "+00:00")).timestamp())
+            except ValueError:
+                continue
+        odds_status["window_opens_at"] = (
+            min(kicks) - oddsbudget.PRIME_BEFORE_S if kicks else None)
+    except Exception:      # telemetry must never fail a build
+        pass
 
     # Book-menu props: players the books have priced who aren't on the slate
     # (lineup not posted, nothing to project). The books' menu says they're
