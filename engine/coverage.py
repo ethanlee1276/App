@@ -80,11 +80,24 @@ def _logs(conn, sport: str) -> int:
                   (sport,))
 
 
-def _cache_age_h(name: str) -> float | None:
-    p = CACHE / name
-    if not p.exists():
+def _cache_age_h(pattern: str) -> float | None:
+    """Age of the NEWEST cache file matching a glob, in hours.
+
+    A glob, not a filename, and that is a bug fix rather than a flourish:
+    the injury feed caches as ``injuries_2026.csv`` and Statcast as
+    ``savant_barrels_batter_2026.csv``, so checking for a fixed name
+    reported two working feeds as never fetched. A scan that cries wolf is
+    worse than no scan — you stop reading it, and then the real gap goes
+    past you too.
+    """
+    try:
+        hits = [p for p in CACHE.glob(pattern) if p.is_file()]
+    except OSError:
         return None
-    return round((time.time() - p.stat().st_mtime) / 3600, 1)
+    if not hits:
+        return None
+    newest = max(p.stat().st_mtime for p in hits)
+    return round((time.time() - newest) / 3600, 1)
 
 
 def _has_key(env: str) -> bool:
@@ -137,8 +150,33 @@ def _odds_layer() -> Layer:
                  "free key at the-odds-api.com → secrets.local")
 
 
+BOARD_FILE = {"nfl": "recommendations.json", "mlb": "mlb_recommendations.json",
+              "nba": "nba.json", "wnba": "wnba.json", "cfb": "cfb.json",
+              "ufc": "ufc.json"}
+
+
+def _board_status(sport: str) -> str:
+    """What the last build of this sport's board said about itself."""
+    import json
+    p = ROOT / "web" / "data" / BOARD_FILE.get(sport, "")
+    try:
+        return str(json.loads(p.read_text()).get("status") or "")
+    except (OSError, ValueError):
+        return ""
+
+
 def _journal_layer(sport: str) -> Layer:
     o, s = _journal(sport)
+    # An empty journal in the offseason is not a gap — there were no games
+    # to bet. Reporting it as ❌ next to a real gap is how a scan trains
+    # you to skim past the rows that matter.
+    dormant = _board_status(sport) in ("offseason", "no_card")
+    if not (o or s) and dormant:
+        return Layer("Graded record", "CLV and the audit loop are what decide "
+                     "whether this model is allowed to keep betting", PARTIAL,
+                     "nothing journaled yet — this board is out of season, so "
+                     "there has been nothing to bet",
+                     "it fills itself once the season starts")
     state = OK if s >= 25 else PARTIAL if (o or s) else MISSING
     return Layer("Graded record", "CLV and the audit loop are what decide "
                  "whether this model is allowed to keep betting", state,
@@ -159,14 +197,14 @@ def nfl(conn) -> SportCoverage:
               f"{weeks} team-week row(s)", "python3 ingest.py nfl"),
         Layer("Injury report", "§7's ripple model holds clouded players and "
               "boosts the beneficiaries",
-              OK if _cache_age_h("nflverse_injuries.csv") is not None else MISSING,
-              _fresh("nflverse_injuries.csv"), "refreshes with the launcher"),
+              OK if _cache_age_h("injuries_*.csv") is not None else MISSING,
+              _fresh("injuries_*.csv"), "refreshes with the launcher"),
         Layer("Weather", "§7's wind bands block deep passing above 25mph",
               OK, "Open-Meteo, keyless"),
         Layer("Rosters / depth charts", "a traded player projected on his old "
               "team is a silently wrong number",
-              OK if _cache_age_h("sleeper_players_nfl.json") is not None else MISSING,
-              _fresh("sleeper_players_nfl.json"),
+              OK if _cache_age_h("sleeper_players_nfl*.json") is not None else MISSING,
+              _fresh("sleeper_players_nfl*.json"),
               "python3 launch.py --refresh-rosters"),
         Layer("Referee crews", "§7 crew foul tendencies feed the margins",
               PARKED, "no free assignment or tendency feed"),
@@ -185,8 +223,8 @@ def mlb(conn) -> SportCoverage:
         _odds_layer(),
         Layer("Statcast", "exit velocity and barrel rate are the difference "
               "between a hitter's luck and his contact quality",
-              OK if _cache_age_h("savant_statcast.csv") is not None else PARTIAL,
-              _fresh("savant_statcast.csv"), "refreshes with the launcher"),
+              OK if _cache_age_h("savant_*.csv") is not None else PARTIAL,
+              _fresh("savant_*.csv"), "refreshes with the launcher"),
         Layer("Confirmed lineups", "a projected lineup that never took the "
               "field is a void, and betting it is a guess",
               OK if starters else MISSING, f"{starters} recorded lineup row(s)",

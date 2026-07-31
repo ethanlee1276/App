@@ -92,6 +92,72 @@ def test_the_report_renders_without_a_database():
     assert "no free source exists" in text
 
 
+def test_cache_checks_glob_rather_than_guessing_a_filename():
+    """The bug this prevents, and it fired on the real machine: the injury
+    feed caches as injuries_2026.csv and Statcast as
+    savant_barrels_batter_2026.csv, so a fixed-name check reported two
+    working feeds as never fetched. A scan that cries wolf is worse than
+    no scan — you stop reading it, and the real gap goes past you too."""
+    import tempfile
+    from pathlib import Path as _P
+    saved = C.CACHE
+    try:
+        tmp = _P(tempfile.mkdtemp())
+        C.CACHE = tmp
+        for name in ("injuries_2026.csv", "savant_barrels_batter_2026.csv",
+                     "sleeper_players_nfl.json"):
+            (tmp / name).write_text("x")
+        assert C._cache_age_h("injuries_*.csv") is not None
+        assert C._cache_age_h("savant_*.csv") is not None
+        assert C._cache_age_h("sleeper_players_nfl*.json") is not None
+        # …and a genuinely absent feed still reports absent.
+        assert C._cache_age_h("espn_cfb_*.json") is None
+    finally:
+        C.CACHE = saved
+
+
+def test_no_layer_checks_a_cache_name_nothing_writes():
+    """Every glob in the scan must match something a source actually
+    writes, or it is a permanent false alarm."""
+    import re
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "engine", "coverage.py"),
+               encoding="utf-8").read()
+    globs = set(re.findall(r'_cache_age_h\("([^"]+)"\)', src))
+    assert globs, "the scan checks no caches at all"
+    engine_src = ""
+    for dirpath, _dirs, files in os.walk(os.path.join(root, "engine")):
+        for f in files:
+            if f.endswith(".py"):
+                engine_src += open(os.path.join(dirpath, f),
+                                   encoding="utf-8").read()
+    for g in globs:
+        stem = g.split("*")[0]
+        assert stem in engine_src, (
+            f"nothing in engine/ ever writes a cache starting {stem!r} — "
+            f"this check can only ever report a false gap")
+
+
+def test_an_out_of_season_board_is_not_reported_as_a_failure():
+    """NFL in July has journaled nothing because there was nothing to bet.
+    Flagging that ❌ next to a real gap trains you to skim the rows that
+    matter."""
+    saved = C.ROOT
+    import tempfile, json as _json
+    from pathlib import Path as _P
+    try:
+        tmp = _P(tempfile.mkdtemp())
+        (tmp / "web" / "data").mkdir(parents=True)
+        (tmp / "web" / "data" / "recommendations.json").write_text(
+            _json.dumps({"status": "offseason"}))
+        C.ROOT = tmp
+        layer = C._journal_layer("nfl")
+        assert layer.state == C.PARTIAL
+        assert "out of season" in layer.detail
+    finally:
+        C.ROOT = saved
+
+
 def test_the_launcher_exposes_it():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(root, "launch.py"), encoding="utf-8") as fh:
