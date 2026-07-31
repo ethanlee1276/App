@@ -40,7 +40,7 @@ import json
 import re
 import unicodedata
 
-from .fetch import fetch_text, DataUnavailable
+from .fetch import fetch_json, DataUnavailable
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/football/college-football"
 SCOREBOARD = BASE + "/scoreboard"
@@ -330,19 +330,19 @@ def fetch_scoreboard(date: str, ttl: int = 300) -> dict:
     """
     day = date.replace("-", "")
     url = f"{SCOREBOARD}?dates={day}&groups={FBS_GROUP}&limit=900"
-    return json.loads(fetch_text(url, f"espn_cfb_{day}.json", ttl=ttl))
+    return fetch_json(url, f"espn_cfb_{day}.json", ttl=ttl)
 
 
 def fetch_teams(ttl: int = 7 * 24 * 3600) -> dict:
     url = f"{TEAMS}?limit=900&groups={FBS_GROUP}"
-    return json.loads(fetch_text(url, "espn_cfb_teams.json", ttl=ttl))
+    return fetch_json(url, "espn_cfb_teams.json", ttl=ttl)
 
 
 def fetch_conferences(ttl: int = 7 * 24 * 3600) -> dict[str, str]:
     """Live conference names, falling back to the built-in ids."""
     try:
-        payload = json.loads(fetch_text(f"{GROUPS}?groups={FBS_GROUP}",
-                                        "espn_cfb_groups.json", ttl=ttl))
+        payload = fetch_json(f"{GROUPS}?groups={FBS_GROUP}",
+                             "espn_cfb_groups.json", ttl=ttl)
     except DataUnavailable:
         return {}
     return parse_conferences(payload)

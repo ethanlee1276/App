@@ -15,20 +15,20 @@ from __future__ import annotations
 import json
 import re
 
-from .fetch import fetch_text, DataUnavailable
+from .fetch import fetch_json, DataUnavailable
 
 CDN = "https://cdn.nba.com/static/json"
 NBA_MARKETS = ("min", "pts", "reb", "ast", "fg3m")
 
 
 def fetch_schedule(ttl: int = 21600) -> dict:
-    return json.loads(fetch_text(f"{CDN}/staticData/scheduleLeagueV2.json",
-                                 "nba_schedule.json", ttl=ttl))
+    return fetch_json(f"{CDN}/staticData/scheduleLeagueV2.json",
+                      "nba_schedule.json", ttl=ttl)
 
 
 def fetch_boxscore(game_id: str, ttl: int = 21600) -> dict:
-    return json.loads(fetch_text(f"{CDN}/liveData/boxscore/boxscore_{game_id}.json",
-                                 f"nba_box_{game_id}.json", ttl=ttl))
+    return fetch_json(f"{CDN}/liveData/boxscore/boxscore_{game_id}.json",
+                      f"nba_box_{game_id}.json", ttl=ttl)
 
 
 def parse_minutes(pt: str) -> float:

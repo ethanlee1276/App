@@ -146,6 +146,8 @@ auto-settle last ran, so you can see the loop is alive.
 | Fold old 0.00-unit picks back into the record (once) | `python3 launch.py --resize-unstaked` |
 | Separate long shots from the main record (once) | `python3 launch.py --repair-journal` |
 | Why is the board empty? | `python3 launch.py --why-empty` |
+| Why did the UFC card produce no picks? | `python3 launch.py --why-ufc` |
+| What does each WNBA feed endpoint actually return? | `python3 ingest.py wnba --probe` |
 | Why do N props have no book price? | `python3 launch.py --odds-doctor` |
 | A trade isn't showing on the Fantasy page | `python3 launch.py --refresh-rosters "Player Name"` |
 | See a team's active roster | Menu → **More** → **Rosters** (search a team or a player) |

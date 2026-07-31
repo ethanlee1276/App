@@ -315,6 +315,49 @@ def test_the_card_reports_its_own_exposure():
     assert "correlation_flags" in out
 
 
+# --- the "why is the card empty?" diagnostic --------------------------------
+def test_the_launcher_can_explain_an_empty_card():
+    """"No qualifying plays" is a valid output, but valid is not the same
+    as understood — and the first guess is always the weigh-ins, which are
+    usually not the culprit."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "launch.py"), encoding="utf-8").read()
+    assert "def why_ufc(" in src
+    assert '"--why-ufc" in argv' in src, "defined but never dispatched"
+    fn = src[src.index("def why_ufc("):src.index("def why_empty(")]
+    # It must name every pass reason the model can emit, or a card will be
+    # explained with a bare reason code.
+    for code in ("no_dossier", "no_data", "no_price", "clamp_kill", "gate",
+                 "card_cap"):
+        assert code in fn, f"why-ufc cannot explain a {code} pass"
+    # And it must say the thing Ethan actually asked.
+    assert "Unrecorded does NOT block a bet" in fn
+
+
+def test_an_unrecorded_weigh_in_does_not_block_a_bet():
+    """Only a MISSED weight is a red flag. If an unrecorded one gated the
+    fight, every card would be empty until fight-day morning."""
+    from engine.ufc import weighin
+    assert weighin.red_flags("Nobody Recorded", {}) == []
+    a, b = _puncher_vs_chinny()
+    r = evaluate_fight(a, b, _prices(weigh_in=None,
+                                     props={"Alpha by KO/TKO": 190}),
+                       "heavyweight", 0)
+    assert r["kind"] == "pick", "an unrecorded weigh-in blocked a real edge"
+
+
+def test_recording_the_weigh_ins_helps_but_is_not_the_gate():
+    """It is worth grade points — about 5 of 100 — and that is all."""
+    a, b = _puncher_vs_chinny()
+    blank = evaluate_fight(a, b, _prices(weigh_in=None,
+                                         props={"Alpha by KO/TKO": 190}),
+                           "heavyweight", 0)
+    made = evaluate_fight(a, b, _prices(props={"Alpha by KO/TKO": 190}),
+                          "heavyweight", 0)
+    assert made["grade_score"] > blank["grade_score"]
+    assert made["grade_score"] - blank["grade_score"] <= 8
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

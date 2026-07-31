@@ -1407,6 +1407,108 @@ def preflight() -> None:
     print("\n  When everything above is ✅ (or intentionally skipped), run:  python3 launch.py")
 
 
+def why_ufc(argv: list | None = None) -> None:
+    """Explain a UFC card with no picks — which gate stopped each fight.
+
+        python3 launch.py --why-ufc
+
+    "No qualifying plays on this card" is a valid and common output for
+    this model, but valid is not the same as understood. This walks the
+    built card and, for every bout, says exactly what stopped it: no
+    dossier, no tracked stats, no posted price, the humility clamp, the
+    edge bar, or the 0-100 grade — and when it is the grade, which of the
+    six components was short and by how much.
+    """
+    import json as _json
+    from engine.ufc import grade as G
+
+    try:
+        card = _json.loads((ROOT / UFC_OUT).read_text())
+    except (OSError, ValueError):
+        print("No UFC card built yet — run the launcher once.")
+        return
+    if card.get("status") != "card":
+        print(f"No card in the window ({card.get('status')}). "
+              f"{card.get('note', '')}")
+        return
+
+    picks = card.get("picks") or []
+    passes = card.get("pass_list") or []
+    print(f"UFC {card.get('event_date', '')}: {len(picks)} pick(s), "
+          f"{len(passes)} pass(es), {card.get('dossiers_loaded', 0)} dossier(s) "
+          f"loaded\n")
+
+    # Weigh-ins first, because that is the usual suspicion — and usually
+    # not the culprit. An UNRECORDED weigh-in is not a red flag; only a
+    # MISSED weight blocks a bet outright.
+    wi = card.get("weigh_ins") or {}
+    if wi:
+        print(f"Weigh-ins: {wi.get('made', 0)} made · {wi.get('missed', 0)} "
+              f"missed · {wi.get('unrecorded', 0)} not recorded")
+        if wi.get("missed"):
+            print("  A missed weight is a hard red flag and blocks that fight.")
+        if wi.get("unrecorded"):
+            print("  Unrecorded does NOT block a bet. It costs grade points "
+                  "though — the fight-week component scores 0.35 instead of "
+                  "0.70, which is about 5 points of 100.")
+        print()
+
+    buckets: dict = {}
+    for row in passes:
+        buckets.setdefault(row.get("reason_code", "other"), []).append(row)
+    LABEL = {
+        "no_dossier": "no dossier for a corner — the engine will not bet a "
+                      "fighter it has never measured",
+        "no_data": "no fight-by-fight stats (regional/uncovered record)",
+        "no_price": "no two-sided price posted yet — books open MMA late",
+        "clamp_kill": "model and market disagree too far — treated as our "
+                      "input being wrong, not as a goldmine",
+        "gate": "priced and modelled, but failed the edge bar or the grade",
+        "card_cap": "trimmed by the card exposure cap",
+    }
+    for code, rows in sorted(buckets.items(), key=lambda kv: -len(kv[1])):
+        print(f"{len(rows):>3} × {LABEL.get(code, code)}")
+        for r in rows[:4]:
+            print(f"      {r.get('fight', '')}")
+        if len(rows) > 4:
+            print(f"      … and {len(rows) - 4} more")
+    print()
+
+    # The gated fights are the interesting ones: they had everything and
+    # still did not clear. Show the grade arithmetic.
+    gated = buckets.get("gate", [])
+    if not gated:
+        print("Nothing reached the grade — the blockers above are upstream "
+              "of it. Fix those first.")
+        return
+    print("Fights that were priced and modelled — how close each came:\n")
+    for r in sorted(gated, key=lambda x: -(x.get("grade_score") or 0)):
+        best = r.get("best_market") or {}
+        print(f"  {r.get('fight', '')}")
+        print(f"    would bet: {r.get('selection', r.get('pick', ''))} "
+              f"{best.get('odds', r.get('odds', ''))}  "
+              f"edge {(best.get('edge') or 0):+.1%} vs bar "
+              f"{(r.get('required_edge') or 0):.1%}")
+        print(f"    grade {r.get('grade_score', 0)}/{G.MIN_GRADE} needed"
+              f"  ({r.get('why', '')})")
+        parts = r.get("grade_parts") or {}
+        for key, weight in G.GRADE_WEIGHTS.items():
+            if key == "edge":
+                continue
+            got = (parts.get({"data_quality": "data", "camp_info": "camp",
+                              "style_clarity": "style",
+                              "environment": "env"}.get(key, key)) or {})
+            sc = got.get("score")
+            if sc is None:
+                continue
+            print(f"      {key:14} {sc:.2f} → {sc * weight:4.1f} of {weight}")
+        print()
+    print("The two components that cannot reach full marks today are "
+          "fight-week info (no camp-report feed) and market movement (no "
+          "open→close history). That is deliberate and documented — it also "
+          "means a fight needs a genuinely large edge to clear 70.")
+
+
 def why_empty(sport: str = "mlb", min_conf: float = 6.0,
               min_edge: float = 0.02, max_juice: int = -350) -> None:
     """Explain an empty board: which gate is actually filtering everything.
@@ -1917,6 +2019,9 @@ def main() -> None:
         return
     if "--nfl-baseline" in argv:
         nfl_baseline()
+        return
+    if "--why-ufc" in argv:
+        why_ufc(argv)
         return
     if "--why-empty" in argv:
         i = argv.index("--why-empty")
