@@ -46,7 +46,17 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  /* iOS Safari "text autosizing": it inflates font sizes inside blocks it
+     judges wide relative to the viewport, and RE-RUNS that judgement on
+     every DOM change — so switching sports with the menu open visibly
+     enlarged the header each time. This layout sets its own sizes and is
+     responsive already, so the guessing is pure damage. 100% = leave our
+     type alone (it does NOT disable the user's own zoom). */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 
 body {
   margin: 0;
@@ -1351,6 +1361,12 @@ select.calc-in { width: auto; font-weight: 600; }
   .topbar { flex-wrap: wrap; gap: 10px; padding: 10px 12px; }
   .brand { flex: 1 1 100%; flex-wrap: wrap; gap: 10px; min-width: 0; }
   .brand .tagline { display: none; }
+
+  /* iOS Safari zooms the WHOLE PAGE in when a focused field is smaller
+     than 16px — and it never zooms back out, which leaves every later
+     tap looking enlarged. Range sliders don't trigger it and keep their
+     own sizing. */
+  input:not([type="range"]), select, textarea { font-size: 16px; }
 
   .menu-toggle {
     display: flex; align-items: center; gap: 10px; order: -1;
