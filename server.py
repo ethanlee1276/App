@@ -186,6 +186,12 @@ class Handler(BaseHTTPRequestHandler):
     def _static(self, path: str):
         if path in ("/", ""):
             path = "/index.html"
+        # Browsers probe /favicon.ico on their own, before they have parsed
+        # the <link rel="icon"> that points at our SVG. We only ship the one
+        # icon, so hand it back here too — otherwise every single page load
+        # logs a 404 that means nothing.
+        if path == "/favicon.ico":
+            path = "/favicon.svg"
         target = (WEB / path.lstrip("/")).resolve()
         # Prevent path traversal outside the web root. is_relative_to (not a
         # string prefix) so a sibling like web2/ could never slip through.

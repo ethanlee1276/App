@@ -2928,7 +2928,10 @@ async function renderIntel() {
         </div>
         <span class="pm-status" style="color:${color}">${f.status.toUpperCase()}</span>
       </div>
-      <div style="margin:8px 0 10px;font-weight:600;line-height:1.35">
+      <!-- .pm-title so the stylesheet can find this link: it is the card's
+           headline and its main tap target, and needs a thumb-sized hit
+           box on a phone. -->
+      <div class="pm-title" style="margin:8px 0 10px;font-weight:600;line-height:1.35">
         <a href="https://polymarket.com/market/${escapeHtml(f.slug)}" target="_blank"
            rel="noopener" style="color:inherit">${escapeHtml(f.market)}</a></div>
       <div class="metrics">

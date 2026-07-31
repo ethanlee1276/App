@@ -1517,7 +1517,17 @@ select.calc-in { width: auto; font-weight: 600; }
   /* Thumb-sized tap targets. The pill toggles were 21px tall — under
      every mobile guideline and a real miss-rate on a moving bus. This
      block sits AFTER the base .why-toggle rule, so it actually wins. */
-  .why-toggle { padding: 6px 12px; line-height: 1.5; }
+  .why-toggle { padding: 8px 14px; line-height: 1.5; position: relative; }
+  /* …and the pill is still only ~34px of ink. Rather than inflate a 10px
+     label into a 44px lozenge, the REACH grows without the pill growing:
+     an invisible child stretches the hit area to Apple's 44px minimum.
+     Its siblings in .section-title are plain text, so the few pixels of
+     overhang can't steal a tap from another control. */
+  .why-toggle::after {
+    content: ""; position: absolute; left: 0; right: 0;
+    top: 50%; transform: translateY(-50%);
+    height: 44px; min-width: 44px;
+  }
   .drow { flex-wrap: wrap; row-gap: 4px; }
   .drow > * { min-width: 0 !important; }
   /* The label column gets its OWN line. Sharing one with the numeric
@@ -1525,6 +1535,19 @@ select.calc-in { width: auto; font-weight: 600; }
      nothing ("Yank…"); wrapped, it reads in full and the numbers follow
      underneath. */
   .drow > [style*="flex:1"] { flex: 1 1 100% !important; }
+  /* …but a full-width line is no use if the text can't use it. Several of
+     these rows set white-space:nowrap inline (on the row, or on the label
+     itself) so their columns hold one line on a desktop. On a phone that
+     turned the label into a 577px sentence inside a 390px card, silently
+     clipped by the row's overflow:hidden — "Aaron Judge · Yankees vs
+     Rockies · Elite barrel rate" ended somewhere around "Elite ba".
+     Only the LABEL column is released; the numeric columns keep the row's
+     nowrap so "48% vs 41%" can't break across two lines. */
+  .drow > [style*="flex:1"],
+  .drow > [style*="flex:1"] * { white-space: normal !important; }
+  .drow > [style*="flex:1"] {
+    overflow: visible !important; text-overflow: clip !important;
+  }
   .drow > span[style*="text-align:right"] { text-align: left !important; }
   /* Record page. The settled-pick row needs 414px of fixed columns before
      the label gets a pixel, so on a phone it clips its own P&L figure
@@ -1560,4 +1583,34 @@ select.calc-in { width: auto; font-weight: 600; }
   .cards { grid-template-columns: 1fr; }
   .controls { gap: 16px; padding: 14px; }
   .control { min-width: 100%; }
+}
+
+/* ============================================================
+   Touch targets, keyed to the INPUT DEVICE rather than the viewport
+   ============================================================ */
+
+/* Standalone links that happen to be inline — a trader handle, a market
+   question, a wallet address. Each already owns its line, so it is a row's
+   main tap target while measuring only its own cap height (16–20px). The
+   padding grows the hit box; the matching negative margin keeps the line
+   box the size it was, so nothing on the page moves. */
+@media (pointer: coarse) {
+  .player > a, .dl-main > a, .pm-title > a {
+    display: inline-block; padding: 8px 0; margin: -8px 0;
+  }
+}
+
+/* A touch device wide enough to be served the DESKTOP layout: a phone held
+   sideways, or a tablet. Every tap-target rule above lives in a
+   max-width media query, so rotating the phone silently handed back the
+   21px "why?" pill and the 29px sport buttons — the fingers did not get
+   any smaller. Width decides which LAYOUT; pointer decides which HAND. */
+@media (pointer: coarse) and (min-width: 761px) {
+  .why-toggle { padding: 8px 14px; line-height: 1.5; position: relative; }
+  .why-toggle::after {
+    content: ""; position: absolute; left: 0; right: 0;
+    top: 50%; transform: translateY(-50%);
+    height: 44px; min-width: 44px;
+  }
+  .sport-btn, .nav-btn { min-height: 36px; }
 }

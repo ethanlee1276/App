@@ -103,6 +103,13 @@ def test_server_serves_icons_as_images():
     assert CONTENT_TYPES[".svg"] == "image/svg+xml"
 
 
+def test_favicon_ico_falls_back_to_the_svg():
+    # Browsers probe /favicon.ico before parsing <link rel="icon">, so
+    # without the alias every page load logs a meaningless 404.
+    src = _read("server.py")
+    assert '"/favicon.ico"' in src and '"/favicon.svg"' in src
+
+
 def test_the_old_name_is_gone():
     # "Gridiron" is somebody else's trademark; it must not creep back in.
     # engine/sources/fetch.py matters most: its User-Agent is the name we
