@@ -7,6 +7,7 @@ pin the behaviour that prevents that.
 Run directly: `python3 tests/test_oddsbudget.py`
 """
 
+import datetime as _dt
 import os
 import sys
 import tempfile
@@ -50,19 +51,28 @@ def test_daily_allowance_spreads_what_is_left():
     assert per_day * days_left_in_month() <= (5000 - RESERVE) * 0.5 + 50
 
 
+# Pacing tests inject a MID-MONTH date on purpose. On the last day of a
+# month days_left is 1, so the entire remaining balance is allotted to
+# today, every gap bottoms out at MIN_REFRESH_GAP, and comparisons between
+# them collapse into equality — a calendar artifact, not a scheduler bug.
+MID_MONTH = _dt.date(2026, 7, 15)
+
+
 def test_refresh_gap_widens_as_quota_shrinks():
     """The scheduler must slow down as the allowance runs down."""
     from engine.oddsbudget import MIN_REFRESH_GAP
-    rich = min_seconds_between(16, BudgetState(remaining=20000))
-    poor = min_seconds_between(16, BudgetState(remaining=3000))
+    rich = min_seconds_between(16, BudgetState(remaining=20000), today=MID_MONTH)
+    poor = min_seconds_between(16, BudgetState(remaining=3000), today=MID_MONTH)
     assert poor > rich >= MIN_REFRESH_GAP
 
 
 def test_cheaper_refresh_allows_more_frequent_polling():
     """Re-pricing only live/soon games costs less, so it can run more often —
     the whole point of the active-game filter."""
-    whole_slate = min_seconds_between(16, BudgetState(remaining=20000))
-    live_only = min_seconds_between(4, BudgetState(remaining=20000))
+    whole_slate = min_seconds_between(16, BudgetState(remaining=20000),
+                                      today=MID_MONTH)
+    live_only = min_seconds_between(4, BudgetState(remaining=20000),
+                                    today=MID_MONTH)
     assert live_only < whole_slate
 
 
@@ -74,7 +84,8 @@ def test_costs_are_denominated_in_credits_not_requests():
     assert CREDITS_PER_EVENT >= 4
     # With ~1.4k/day allowed at 20k remaining, a 128-credit refresh must be
     # spaced in tens of minutes, not seconds.
-    gap = min_seconds_between(16, BudgetState(remaining=20000))
+    gap = min_seconds_between(16, BudgetState(remaining=20000),
+                              today=MID_MONTH)
     assert gap >= MIN_REFRESH_GAP
 
 
@@ -313,11 +324,9 @@ def test_budget_share_splits_the_daily_allowance():
     plan to burn the month twice over. Date INJECTED: at month-end the
     real clock doubles the daily allowance until the full-share gap hits
     the MIN_REFRESH_GAP floor, which breaks the 2x relation spuriously."""
-    import datetime as _dt
     st = BudgetState(remaining=20000)
-    mid = _dt.date(2026, 7, 15)
-    full = min_seconds_between(10, st, today=mid, share=1.0)
-    half = min_seconds_between(10, st, today=mid, share=0.5)
+    full = min_seconds_between(10, st, today=MID_MONTH, share=1.0)
+    half = min_seconds_between(10, st, today=MID_MONTH, share=0.5)
     assert half >= full * 2 or half == float("inf")
 
 
