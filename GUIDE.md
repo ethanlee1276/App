@@ -131,11 +131,26 @@ auto-settle last ran, so you can see the loop is alive.
 | NBA history (from October, occasionally) | `python3 ingest.py nba --from <start> --to <today>` |
 | New Odds API key | put it in `secrets.local`, then `python3 launch.py --reset-budget` |
 | Health check | `python3 launch.py --check` |
+| Leave it running while you're out, picking up pushed fixes | `caffeinate -is python3 launch.py --auto-update` |
 | Force a settle right now (rarely needed — it's automatic) | `python3 launch.py --settle` |
 | Bets still open after the games ended | `python3 launch.py --settle all` |
 | Fold old 0.00-unit picks back into the record (once) | `python3 launch.py --resize-unstaked` |
 | Separate long shots from the main record (once) | `python3 launch.py --repair-journal` |
 | Why is the board empty? | `python3 launch.py --why-empty` |
+
+**About `--auto-update`:** the laptop is at home and you are not. With
+this flag the launcher checks the branch every 5 minutes, fast-forwards
+anything that's been pushed, and restarts itself into the new code — so a
+fix lands without you typing `git pull`. Pair it with `caffeinate -is` so
+the Mac stays awake for the whole day:
+
+    caffeinate -is python3 launch.py --auto-update
+
+It is off unless you type the flag, because it pulls code and then runs
+it. And it is deliberately timid: `--ff-only` (never merges, never
+rebases), it refuses outright if the working tree has uncommitted changes,
+it never switches branches, and a diverged branch stops it with a message
+rather than being resolved behind your back.
 
 **About `--settle`:** this used to be a nightly chore, because the journal
 only graded itself on the first cycle of the *next* day. It doesn't work

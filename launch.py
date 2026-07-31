@@ -350,6 +350,88 @@ def _run_autosettle() -> None:
         print(f"  ⚠️  auto-settle failed: {exc}")
 
 
+AUTO_UPDATE_EVERY_S = 300
+
+
+def _git(*args, timeout: int = 60):
+    """Run a git command in the repo. Returns (ok, output)."""
+    import subprocess
+    try:
+        p = subprocess.run(("git", "-C", str(ROOT)) + args, capture_output=True,
+                           text=True, timeout=timeout)
+        return p.returncode == 0, (p.stdout + p.stderr).strip()
+    except Exception as exc:                       # git missing, hung, offline
+        return False, str(exc)
+
+
+def _auto_update() -> bool:
+    """Fast-forward to whatever has been pushed. True if new code arrived.
+
+    The point is a laptop that is at home while you are not: a fix gets
+    pushed, and the machine picks it up without anyone typing `git pull`.
+
+    Deliberately timid, because this ends in running code:
+
+    * ``--ff-only`` — it will never merge, rebase, or resolve anything. If
+      the branch has diverged it stops and says so.
+    * a dirty working tree is left completely alone. Uncommitted work on
+      the laptop is someone's work in progress, not an obstacle.
+    * it stays on the branch already checked out; it never switches.
+    """
+    ok, dirty = _git("status", "--porcelain")
+    if not ok:
+        return False
+    if dirty:
+        print("  ⚠️  auto-update skipped: uncommitted changes in the working "
+              "tree. Commit or stash them and it resumes on its own.")
+        return False
+    ok, branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+    if not ok or not branch or branch == "HEAD":
+        return False
+    ok, before = _git("rev-parse", "HEAD")
+    if not ok:
+        return False
+    ok, out = _git("pull", "--ff-only", "origin", branch)
+    if not ok:
+        # Offline is the common case and not worth shouting about; a real
+        # divergence is, because it means auto-update has stopped working.
+        if "diverge" in out.lower() or "non-fast-forward" in out.lower():
+            print(f"  ⚠️  auto-update stopped: {branch} has diverged from "
+                  f"origin. Sort it out by hand — nothing was changed.")
+        return False
+    ok, after = _git("rev-parse", "HEAD")
+    return bool(ok and after != before)
+
+
+def _restart_into_new_code() -> None:
+    """Replace this process with a fresh one running the code just pulled.
+
+    Python has already imported the old modules, so a pull alone changes
+    nothing that matters — the engine in memory is still yesterday's. execv
+    keeps the same PID and terminal, so the launcher simply reappears with
+    the new code and the phone reconnects on its next poll.
+    """
+    import os
+    print("  ↻ new code pulled — restarting the launcher into it…\n")
+    sys.stdout.flush()
+    try:
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+    except Exception as exc:                       # noqa: BLE001
+        print(f"  ⚠️  restart failed ({exc}) — the new code is on disk; "
+              f"Ctrl+C and start it again to pick it up.")
+
+
+def _auto_updater() -> None:
+    """Check for pushed code every few minutes, and restart when it lands."""
+    while True:
+        time.sleep(AUTO_UPDATE_EVERY_S)
+        try:
+            if _auto_update():
+                _restart_into_new_code()
+        except Exception as exc:                   # noqa: BLE001
+            print(f"  ⚠️  auto-update error: {exc}")
+
+
 def _background_refresher(interval: int) -> None:
     """Keep the served data fresh while the server runs (quiet after startup)."""
     while True:
@@ -1372,6 +1454,15 @@ def main() -> None:
             print(f"  ⚠️  auto-settle failed: {exc}")
 
     threading.Thread(target=_startup_chores, daemon=True).start()
+
+    if "--auto-update" in argv:
+        # Opt-in, every run: this pulls code and executes it, so it should
+        # be a thing you asked for this morning, not a setting you forgot.
+        if _auto_update():
+            _restart_into_new_code()
+        threading.Thread(target=_auto_updater, daemon=True).start()
+        print(f"Auto-update ON — pulling pushed fixes every "
+              f"{AUTO_UPDATE_EVERY_S // 60} min and restarting into them.")
 
     if interval > 0:
         t = threading.Thread(target=_background_refresher, args=(interval,), daemon=True)
