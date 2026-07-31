@@ -130,7 +130,8 @@ auto-settle last ran, so you can see the loop is alive.
 | NFL data refresh (few times a season) | `python3 ingest.py nfl` |
 | MLB history rebuild (rarely needed) | `python3 ingest.py mlb --from 2026-03-26 --to <today>` |
 | NBA history (from October, occasionally) | `python3 ingest.py nba --from <start> --to <today>` |
-| WNBA board (May–September) | builds automatically; it is **on probation** — see below |
+| WNBA history (May–September, this is the live one) | `python3 ingest.py wnba --from 2026-05-01 --to <today>` |
+| WNBA board (May–September) | builds automatically once the history above is ingested; it is **on probation** — see below |
 | College football history (once, before the season) | `python3 cfb_build.py --backfill 2025-08-24:2026-01-20` |
 | Confirm a college QB (turns a conditional into a bet) | `python3 launch.py --confirm-qb "TOL" --starter "Name"` |
 | See which CFB games are waiting on a QB | `python3 launch.py --confirm-qb` |

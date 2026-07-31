@@ -82,7 +82,7 @@ def print_summary(conn) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Populate the historical database.")
-    ap.add_argument("sport", choices=["nfl", "mlb", "nba", "status"])
+    ap.add_argument("sport", choices=["nfl", "mlb", "nba", "wnba", "status"])
     ap.add_argument("--seasons", default=default_seasons(),
                     help="NFL: e.g. 2021-2025 (default: last 5 completed seasons)")
     ap.add_argument("--dates", default="", help="MLB: comma-separated YYYY-MM-DD")
@@ -106,9 +106,18 @@ def main() -> None:
         print(f"Ingesting NFL seasons {seasons[0]}-{seasons[-1]} → {args.db}")
         res = ingest.ingest_nfl(conn, seasons)
         print(f"  games: {res['games']:,}   player-log rows: {res['player_logs']:,}")
-    elif args.sport == "nba":
+    elif args.sport in ("nba", "wnba"):
+        # One path, two leagues. Both publish the same JSON shapes on their
+        # own CDN, so the only thing that differs is which day-ingester to
+        # call — and the WNBA arm existing at all matters more than it
+        # looks: its season runs May-September, so it is the basketball
+        # board that is LIVE while the NBA's is dark.
         import datetime as _dt
-        from engine.sources.nbadata import ingest_nba_date
+        if args.sport == "wnba":
+            from engine.sources.wnbadata import ingest_wnba_date as ingest_day
+        else:
+            from engine.sources.nbadata import ingest_nba_date as ingest_day
+        label = args.sport.upper()
         if args.start and args.end:
             day = _dt.date.fromisoformat(args.start)
             last = _dt.date.fromisoformat(args.end)
@@ -119,16 +128,21 @@ def main() -> None:
         else:
             dates = [d.strip() for d in args.dates.split(",") if d.strip()]
         if not dates:
-            print("Provide --dates or --from/--to YYYY-MM-DD for NBA.")
+            print(f"Provide --dates or --from/--to YYYY-MM-DD for {label}.")
             return
+        print(f"Ingesting {label} {dates[0]} → {dates[-1]} → {args.db}")
         total_g = total_p = 0
         for d in dates:
-            res = ingest_nba_date(conn, d)
+            res = ingest_day(conn, d)
             total_g += res["games"]
             total_p += res["player_logs"]
             for skip in res["skipped"]:
                 print(f"  skipped {skip}")
         print(f"  games: {total_g:,}   player-log rows: {total_p:,}")
+        if not total_p:
+            print(f"  No player logs stored. If the range is right, the "
+                  f"{label} season may not cover these dates — "
+                  f"{'May-September' if args.sport == 'wnba' else 'October-June'}.")
     elif args.start and args.end:
         # Historical results: real final scores, the basis for team ratings.
         print(f"Ingesting MLB {args.start} → {args.end} → {args.db}")

@@ -218,8 +218,8 @@ def mlb(conn) -> SportCoverage:
     umps = _count(conn, "SELECT COUNT(*) FROM game_umpires")
     starters = _count(conn, "SELECT COUNT(*) FROM game_starters")
     return SportCoverage("mlb", "MLB", [
-        _results_layer(conn, "mlb", 600, "python3 ingest.py mlb --from … --to …"),
-        _logs_layer(conn, "mlb", 20000, "python3 ingest.py mlb --from … --to …"),
+        _results_layer(conn, "mlb", 600, "python3 ingest.py mlb --from 2026-03-26 --to $(date +%F)"),
+        _logs_layer(conn, "mlb", 20000, "python3 ingest.py mlb --from 2026-03-26 --to $(date +%F)"),
         _odds_layer(),
         Layer("Statcast", "exit velocity and barrel rate are the difference "
               "between a hitter's luck and his contact quality",
@@ -243,8 +243,8 @@ def mlb(conn) -> SportCoverage:
 
 def nba(conn) -> SportCoverage:
     return SportCoverage("nba", "NBA", [
-        _results_layer(conn, "nba", 400, "python3 ingest.py nba --from … --to …"),
-        _logs_layer(conn, "nba", 8000, "python3 ingest.py nba --from … --to …"),
+        _results_layer(conn, "nba", 400, "python3 ingest.py nba --from 2025-10-21 --to $(date +%F)"),
+        _logs_layer(conn, "nba", 8000, "python3 ingest.py nba --from 2025-10-21 --to $(date +%F)"),
         _odds_layer(),
         Layer("Schedule feed", "the free NBA CDN answers 'is there a slate "
               "tonight' before a single credit is spent", OK,
@@ -267,8 +267,8 @@ def nba(conn) -> SportCoverage:
 def wnba(conn) -> SportCoverage:
     from .hoops import WNBA
     return SportCoverage("wnba", "WNBA", [
-        _results_layer(conn, "wnba", 200, "python3 ingest.py wnba --from … --to …"),
-        _logs_layer(conn, "wnba", 3000, "python3 ingest.py wnba --from … --to …"),
+        _results_layer(conn, "wnba", 200, "python3 ingest.py wnba --from 2026-05-01 --to $(date +%F)"),
+        _logs_layer(conn, "wnba", 3000, "python3 ingest.py wnba --from 2026-05-01 --to $(date +%F)"),
         _odds_layer(),
         Layer("Schedule feed", "the free WNBA CDN, same shape as the NBA's",
               OK, "cdn.wnba.com, keyless"),

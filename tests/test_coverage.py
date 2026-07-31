@@ -158,6 +158,47 @@ def test_an_out_of_season_board_is_not_reported_as_a_failure():
         C.ROOT = saved
 
 
+def test_every_command_the_scan_prints_actually_exists():
+    """The bug this prevents, and it fired on the real machine: the WNBA
+    row told Ethan to run `python3 ingest.py wnba`, and ingest.py had no
+    wnba mode. A fix line that doesn't run is worse than no fix line —
+    it sends you off to debug your own machine over our typo."""
+    import re
+    import subprocess
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "engine", "coverage.py"),
+               encoding="utf-8").read()
+    cmds = set(re.findall(r"python3 ([a-z_]+\.py)([^\"']*)", src))
+    assert cmds, "the scan offers no commands at all"
+
+    launch = open(os.path.join(root, "launch.py"), encoding="utf-8").read()
+    for script, tail in sorted(cmds):
+        assert os.path.isfile(os.path.join(root, script)), \
+            f"the scan points at {script}, which does not exist"
+        tail = tail.strip()
+        if not tail:
+            continue
+        first = tail.split()[0]
+        if first.startswith("--"):
+            # A launcher flag has to be dispatched, or it silently starts
+            # the server instead of doing what the row promised.
+            if script == "launch.py":
+                assert f'"{first}" in argv' in launch, \
+                    f"launch.py never dispatches {first}"
+            else:
+                out = subprocess.run(
+                    ["python3", os.path.join(root, script), "--help"],
+                    capture_output=True, text=True, timeout=60)
+                assert first in out.stdout, f"{script} has no {first}"
+        else:
+            # A positional subcommand has to be in that script's choices.
+            out = subprocess.run(
+                ["python3", os.path.join(root, script), "--help"],
+                capture_output=True, text=True, timeout=60)
+            assert first in out.stdout, \
+                f"{script} does not accept the subcommand {first!r}"
+
+
 def test_the_launcher_exposes_it():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(root, "launch.py"), encoding="utf-8") as fh:
