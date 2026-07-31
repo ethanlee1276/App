@@ -1451,6 +1451,12 @@ select.calc-in { width: auto; font-weight: 600; }
   .nav-indicator { display: none; }     /* the panel marks the active tab */
   /* Label, leagues+tools, label, pages — then status chips last so they
      never split the menu in half. */
+  /* Inside the switcher: leagues, then the "More" divider, then the
+     standalone tools. Polymarket / Fantasy / Why Us are not sports and
+     shouldn't sit under a leagues heading. */
+  .menu-open .sport-btn[data-kind="league"] { order: 1; }
+  .menu-open .menu-head[data-head="more"] { order: 2; margin-top: 8px; }
+  .menu-open .sport-btn[data-kind="tool"] { order: 3; }
   .menu-open .menu-head[data-head="sport"] { order: 1; }
   .menu-open .sport-switch { order: 2; }
   .menu-open .menu-head[data-head="page"] { order: 3; }
