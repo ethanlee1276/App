@@ -575,6 +575,10 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   display: flex; gap: 3px; margin-left: 14px; padding: 4px;
   background: var(--panel); border: 1px solid var(--border-soft); border-radius: 11px;
 }
+/* display:contents — the wrappers exist only to be styled as separate
+   cards on a phone; on desktop their buttons flow straight into the
+   switcher's single row as if the wrappers weren't there. */
+.sport-group { display: contents; }
 .sport-btn {
   border: 0; background: transparent; cursor: pointer; font-family: inherit;
   color: var(--text-dim); font-weight: 700; font-size: 12.5px;
@@ -1401,6 +1405,18 @@ select.calc-in { width: auto; font-weight: 600; }
     display: flex; flex: 1 1 100%; min-width: 0;
     flex-wrap: wrap; gap: 6px; background: transparent; padding: 0;
   }
+  /* The switcher itself stops being a card here — otherwise the "More"
+     heading sat INSIDE one outline with the leagues, which read as a
+     stray label rather than a new section. Each group carries its own
+     card instead, so the headings sit above their own boxes. */
+  .menu-open .sport-switch { border: 0; margin-left: 0; }
+  .menu-open .sport-group {
+    display: flex; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 6px;
+    background: var(--panel); border: 1px solid var(--border-soft);
+    border-radius: 11px; padding: 4px;
+  }
+  .menu-open .sport-group[data-group="leagues"] { order: 1; }
+  .menu-open .sport-group[data-group="tools"] { order: 3; }
   /* Section labels. Two unlabelled grids of near-identical pills gave a
      newcomer no way to know one switches SPORT and the other switches
      PAGE — the single biggest confusion in this menu. */

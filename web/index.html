@@ -32,15 +32,22 @@
            together they looked like seven equal "sports", which is why
            Polymarket and Why Us sat among the ball games. -->
       <div class="menu-head" data-head="sport" aria-hidden="true">Leagues</div>
+      <!-- .sport-group is display:contents on desktop, so all seven
+           buttons still flow as ONE row there; on a phone each group
+           becomes its own card under its own heading. -->
       <div class="sport-switch" id="sport-switch">
-        <button class="sport-btn active" data-sport="nfl" data-kind="league" title="NFL">🏈 NFL</button>
-        <button class="sport-btn" data-sport="mlb" data-kind="league" title="MLB">⚾ MLB</button>
-        <button class="sport-btn" data-sport="nba" data-kind="league" title="NBA — Scalpy probability engine">🏀 NBA</button>
-        <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC — Scalpy MMA engine">🥊 UFC</button>
+        <div class="sport-group" data-group="leagues">
+          <button class="sport-btn active" data-sport="nfl" data-kind="league" title="NFL">🏈 NFL</button>
+          <button class="sport-btn" data-sport="mlb" data-kind="league" title="MLB">⚾ MLB</button>
+          <button class="sport-btn" data-sport="nba" data-kind="league" title="NBA — Scalpy probability engine">🏀 NBA</button>
+          <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC — Scalpy MMA engine">🥊 UFC</button>
+        </div>
         <div class="menu-head" data-head="more" aria-hidden="true">More</div>
-        <button class="sport-btn" data-sport="intel" data-kind="tool" title="Polymarket informed-flow intelligence">🛰️ Polymarket</button>
-        <button class="sport-btn" data-sport="fantasy" data-kind="tool" title="Fantasy football — usage, scripts, buy-low">🏆 Fantasy</button>
-        <button class="sport-btn" data-sport="why" data-kind="tool" title="Why this beats a picks service — and the open math toolbox">🧭 Why Us</button>
+        <div class="sport-group" data-group="tools">
+          <button class="sport-btn" data-sport="intel" data-kind="tool" title="Polymarket informed-flow intelligence">🛰️ Polymarket</button>
+          <button class="sport-btn" data-sport="fantasy" data-kind="tool" title="Fantasy football — usage, scripts, buy-low">🏆 Fantasy</button>
+          <button class="sport-btn" data-sport="why" data-kind="tool" title="Why this beats a picks service — and the open math toolbox">🧭 Why Us</button>
+        </div>
       </div>
     </div>
 
