@@ -261,22 +261,33 @@ async function load(quiet = false) {
 function manageAutoRefresh() {
   const hasLive = (state.data?.games || []).some((g) => (g.live || {}).state === "live");
   const el = document.getElementById("live-refresh");
-  if (hasLive && !state.static) {
+  // The freshness chip is ALWAYS shown. Two reasons: "how old is this?" is
+  // worth answering on every page, not only when a game happens to be in
+  // progress; and a chip that appears for one sport and vanishes for
+  // another re-wrapped the status row, which changed the header's height
+  // mid-tap — the "it enlarges when I switch sports" bug.
+  if (el) el.style.display = "";
+  state.livePolling = hasLive && !state.static;
+  if (state.livePolling) {
     if (!state.refreshTimer) state.refreshTimer = setInterval(() => load(true), 30000);
-    if (!state.tickTimer) state.tickTimer = setInterval(updateAgo, 1000);
-    if (el) el.style.display = "";
   } else {
     clearInterval(state.refreshTimer); state.refreshTimer = null;
-    clearInterval(state.tickTimer); state.tickTimer = null;
-    if (el) el.style.display = "none";
   }
+  // The ticker runs regardless so the age stays honest between loads.
+  if (!state.tickTimer) state.tickTimer = setInterval(updateAgo, 1000);
+  updateAgo();
 }
 
 function updateAgo() {
   const el = document.getElementById("live-refresh");
   if (!el || !state.lastLoad) return;
   const s = Math.max(0, Math.round((Date.now() - state.lastLoad) / 1000));
-  el.innerHTML = `<span class="live-dot"></span>Auto · updated ${s}s ago`;
+  const ago = s < 60 ? `${s}s` : s < 3600 ? `${Math.round(s / 60)}m` : `${Math.round(s / 3600)}h`;
+  // Same wording either way so the chip's width barely moves; the live dot
+  // is what says "and it's polling because games are running".
+  el.innerHTML = (state.livePolling ? `<span class="live-dot"></span>` : "")
+    + `Updated ${ago} ago`;
+  el.classList.toggle("idle", !state.livePolling);
 }
 
 function passesFilters(r) {

@@ -1450,8 +1450,26 @@ select.calc-in { width: auto; font-weight: 600; }
   .menu-open .sport-switch { order: 2; }
   .menu-open .menu-head[data-head="page"] { order: 3; }
   .menu-open .nav { order: 4; }
-  .slate-meta { flex: 1 1 100%; order: 5; justify-content: flex-start;
-    flex-wrap: wrap; gap: 8px; }
+  /* The status row's chips vary by sport and by the day's data (a live
+     game adds the polling dot, a multi-day slate widens the date), so it
+     wraps to one line for one sport and two for the next. That changed
+     the HEADER's height mid-tap — the page appeared to grow when
+     switching sports. Reserve the two-line height so the chrome above
+     the content never moves. */
+  /* A fixed 2-column GRID, not wrapped flex. The chips' widths vary by
+     sport and by day — a live game adds the polling dot, and a multi-day
+     slate turns "Sat, Jun 20" into "Sun, Jan 4 - Mon, Jan 5" — so a
+     wrapping row landed on a different number of lines per sport and the
+     HEADER changed height mid-tap. Four cells in two rows is the same
+     height whatever the text says; each chip truncates in its own cell. */
+  .slate-meta { flex: 1 1 100%; order: 5; display: grid;
+    grid-template-columns: 1fr 1fr; gap: 8px; align-items: center;
+    justify-content: stretch; }
+  .slate-meta > * { min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; justify-self: start; }
+  .theme-toggle { justify-self: end; }
+  /* Idle (nothing live) reads quieter than the polling state. */
+  .live-refresh.idle { opacity: .75; }
   /* Data rows (.drow) — Edge Board, Scanner pairs, stale lines, sharp
      anchors, fantasy sleepers. Each is a flex row whose fixed numeric
      columns sum well past a phone viewport (the Edge Board's alone need
