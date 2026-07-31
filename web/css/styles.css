@@ -667,6 +667,13 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   background: rgba(251, 44, 70, 0.12); border: 1px solid rgba(251, 44, 70, 0.32);
 }
 .live-refresh .live-dot { background: #fb2c46; }
+/* Amber, not red: the board isn't wrong, it's old. Red here would compete
+   with the live-game dot, which is the one colour that has to keep meaning
+   "a game is running right now". */
+.live-refresh.stale {
+  color: var(--warn); background: rgba(217, 165, 72, 0.12);
+  border-color: rgba(217, 165, 72, 0.4);
+}
 
 .data-source {
   display: inline-flex; align-items: center; gap: 6px;

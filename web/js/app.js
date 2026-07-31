@@ -232,9 +232,19 @@ async function load(quiet = false) {
   if (refreshBtn && !quiet) refreshBtn.classList.add("loading");
   const meta = SPORT_META[state.sport];
   const params = new URLSearchParams({ min_confidence: state.minConf, min_edge: state.minEdge, max_juice: state.maxJuice });
+  // When the payload came off disk the server stamps Last-Modified with the
+  // build time. That, not the fetch time, is what "how fresh is this?"
+  // means — a laptop whose refresh loop died still answers instantly with
+  // a board from this morning.
+  const stampFrom = (res) => {
+    const lm = res.headers.get("Last-Modified");
+    const t = lm ? Date.parse(lm) : NaN;
+    state.builtAt = Number.isFinite(t) ? t : null;
+  };
   try {
     const res = await fetch(`${meta.api}?${params}`);
     if (!res.ok) throw new Error("api");
+    stampFrom(res);
     state.data = normalizeSlate(await res.json());
   } catch (e) {
     // The fallback file can be missing too (a sport that has never been
@@ -243,8 +253,10 @@ async function load(quiet = false) {
     try {
       const res = await fetch(meta.fallback);
       if (!res.ok) throw new Error("fallback");
+      stampFrom(res);
       state.data = normalizeSlate(await res.json());
     } catch (e2) {
+      state.builtAt = null;
       state.data = normalizeSlate({ date: "", status: "not built" });
     }
   }
@@ -277,16 +289,33 @@ function manageAutoRefresh() {
   updateAgo();
 }
 
+// The refresh loop rebuilds every board every 60s. Past a few minutes with
+// no new build, something on the machine has stopped — asleep, crashed,
+// off the network — and the number on screen is history, not tonight.
+const STALE_AFTER_MS = 8 * 60 * 1000;
+
 function updateAgo() {
   const el = document.getElementById("live-refresh");
   if (!el || !state.lastLoad) return;
-  const s = Math.max(0, Math.round((Date.now() - state.lastLoad) / 1000));
+  // Age of the DATA where the server told us (Last-Modified), falling back
+  // to the fetch time. The fallback flatters: it can only ever say
+  // "seconds", which is exactly how a frozen board looked live from across
+  // town — so when it's all we have, don't claim staleness either way.
+  const known = state.builtAt != null;
+  const since = known ? state.builtAt : state.lastLoad;
+  const s = Math.max(0, Math.round((Date.now() - since) / 1000));
   const ago = s < 60 ? `${s}s` : s < 3600 ? `${Math.round(s / 60)}m` : `${Math.round(s / 3600)}h`;
+  const stale = known && (Date.now() - state.builtAt) > STALE_AFTER_MS;
   // Same wording either way so the chip's width barely moves; the live dot
   // is what says "and it's polling because games are running".
-  el.innerHTML = (state.livePolling ? `<span class="live-dot"></span>` : "")
-    + `Updated ${ago} ago`;
-  el.classList.toggle("idle", !state.livePolling);
+  el.innerHTML = (state.livePolling && !stale ? `<span class="live-dot"></span>` : "")
+    + (stale ? `Stale — built ${ago} ago` : `Updated ${ago} ago`);
+  el.classList.toggle("idle", !state.livePolling && !stale);
+  el.classList.toggle("stale", stale);
+  el.title = stale
+    ? "The server hasn't rebuilt the board in a while — check that the "
+      + "laptop is awake and python3 launch.py is still running."
+    : "How long ago the server last rebuilt this board.";
 }
 
 function passesFilters(r) {

@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -139,7 +140,8 @@ class Handler(BaseHTTPRequestHandler):
         if getattr(self.server, "live_mode", False):
             live = LIVE_FILES.get(sport)
             if live and live.is_file():
-                self._send(200, live.read_bytes(), ".json")
+                self._send(200, live.read_bytes(), ".json",
+                           mtime=live.stat().st_mtime)
                 return
             # No build yet → fall through to the sample pipeline below so the
             # page still loads (with a clear note in LAUNCH.md on how to build).
@@ -159,7 +161,8 @@ class Handler(BaseHTTPRequestHandler):
         if sport == "nba":
             live = LIVE_FILES["nba"]
             if live.is_file():
-                self._send(200, live.read_bytes(), ".json")
+                self._send(200, live.read_bytes(), ".json",
+                           mtime=live.stat().st_mtime)
             else:
                 # Full shared-schema shape even when nothing is built — a
                 # stub missing keys crashed the frontend renderers once.
@@ -198,13 +201,24 @@ class Handler(BaseHTTPRequestHandler):
         if not target.is_relative_to(WEB.resolve()) or not target.is_file():
             self._send(404, b"Not found", ".html")
             return
-        self._send(200, target.read_bytes(), target.suffix)
+        self._send(200, target.read_bytes(), target.suffix,
+                   mtime=target.stat().st_mtime)
 
-    def _send(self, code: int, body: bytes, suffix: str):
+    def _send(self, code: int, body: bytes, suffix: str, mtime: float | None = None):
         self.send_response(code)
         self.send_header("Content-Type", CONTENT_TYPES.get(suffix, "application/octet-stream"))
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        # When the payload came from a file on disk, say when that file was
+        # last written. The site's freshness chip used to time its own
+        # fetch, which is always a few seconds old — so a phone across town
+        # read "Updated 4s ago" over a board the laptop stopped rebuilding
+        # hours earlier. This is the age of the DATA, and it needs no build
+        # script to cooperate: every payload is a file, and a build that
+        # fails leaves the old one (and its old timestamp) in place.
+        if mtime is not None:
+            self.send_header("Last-Modified", formatdate(mtime, usegmt=True))
+            self.send_header("Access-Control-Expose-Headers", "Last-Modified")
         self.end_headers()
         self.wfile.write(body)
 

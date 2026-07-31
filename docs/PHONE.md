@@ -70,9 +70,28 @@ terminal prints the encrypted bytes as noise. Two fixes, either works:
 ## The fine print (worth reading once)
 
 - **The Mac must be awake with `launch.py` running.** The site lives on
-  your laptop; if it sleeps, the site sleeps. For evening use, plug the
-  Mac in and set System Settings → Battery → Options → "Prevent
-  automatic sleeping on power adapter when the display is off".
+  your laptop; if it sleeps, the site sleeps. Plug the Mac in and set
+  System Settings → Battery → Options → "Prevent automatic sleeping on
+  power adapter when the display is off". To be certain for one long
+  stretch — a full day at work — start it under `caffeinate` instead,
+  which holds the machine awake for exactly as long as the launcher runs
+  and releases it the moment you Ctrl+C:
+
+      caffeinate -is python3 launch.py
+
+- **How to tell it's still alive, from the phone.** The chip in the
+  header is the age of the *board*, not of your page load: the server
+  reports when it last rebuilt. Under a few minutes is normal — it
+  rebuilds every 60 seconds. If it turns amber and says **"Stale — built
+  Nh ago"**, the laptop stopped rebuilding: asleep, off the network, or
+  the launcher quit.
+- **"Off-peak — saving the odds budget" is not a problem.** Only the
+  *paid* sportsbook price pulls are paced; they bunch up near first pitch
+  because that is when books post real prop numbers. Everything free —
+  scores, lineups, live tracking, park weather, Polymarket, settling —
+  keeps refreshing every 60 seconds all day, and the board is rebuilt
+  every cycle with the last real prices. A board that says "Updated 30s
+  ago" at noon is genuinely current.
 - **The Tailscale address is stable** — it doesn't change day to day,
   so the home-screen icon keeps working.
 - **Battery:** the Tailscale app on the phone idles at roughly nothing;
