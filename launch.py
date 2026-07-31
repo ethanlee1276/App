@@ -63,6 +63,7 @@ def _with_odds() -> bool:
 MLB_OUT = "web/data/mlb_recommendations.json"
 NFL_OUT = "web/data/recommendations.json"
 NBA_OUT = "web/data/nba.json"
+UFC_OUT = "web/data/ufc.json"
 
 
 def _slate_games(path: str) -> int:
@@ -306,11 +307,28 @@ def refresh_nba(quiet: bool = False) -> bool:
 
 
 def refresh_ufc(quiet: bool = False) -> bool:
-    """UFC card (Scalpy MMA). Cached odds between budgeted pulls."""
-    args = ["ufc_build.py", "--out", "web/data/ufc.json"]
-    if _with_odds():
+    """UFC card (Scalpy MMA) — a real member of the paid-pull rotation.
+
+    It was cached-ONLY, which is precisely the bug NBA had and had fixed:
+    with every call reading cache and nothing ever writing it, the event
+    list came back empty forever, ``select_card`` found no bouts, and the
+    page said "no card" straight through fight night. A card that can only
+    be read from a cache nothing seeds is a card that never appears.
+
+    It now paces on its own clock like the others. There is deliberately
+    no games>0 gate — for UFC the card only EXISTS in the payload once a
+    pull has happened, so gating the pull on the card is circular, which
+    is the same knot in a different rope.
+    """
+    args = ["ufc_build.py", "--out", UFC_OUT]
+    spend = _odds_affordable(UFC_OUT, quiet, sport="ufc")
+    before_seen = _paid_pull_baseline() if spend else ""
+    if spend:
+        args.append("--odds")
+    elif _with_odds():
         args.append("--cached-odds")
     ok, tail = _run_build(args)
+    _finish_paid_pull(spend, before_seen, ok, tail, "UFC", sport="ufc")
     if not quiet:
         print(f"  UFC  card: {'refreshed' if ok else 'unavailable'}"
               + (f"  ({tail})" if not ok and tail else ""))
