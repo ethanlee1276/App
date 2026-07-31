@@ -993,6 +993,11 @@ def settle_now(day: str | None = None) -> None:
         res = ingest.ingest_mlb_results(hconn, day, day, with_logs=True)
         print(f"  results: {res['games']} game(s), "
               f"{res['player_logs']:,} player log rows")
+        # A called-off game is the usual reason a night refuses to grade:
+        # it sits in the DB scoreless, looking exactly like a game still in
+        # progress, and holds every pick on both teams open. Name it.
+        for a in res.get("abandoned", []):
+            print(f"  ⛔ {a}")
         for s in res.get("skipped", []):
             print(f"  ⚠️  {s}")
         if not res["games"]:
@@ -1005,11 +1010,20 @@ def settle_now(day: str | None = None) -> None:
     ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
     after = counts(lconn)
     print(f"  journal: settled {n} pick(s)")
-    for cat in ("main", "longshot"):
+    # Every bucket that has (or had) something open, not just main/longshot.
+    # Most open picks live in longshot_watch and the samplers; reporting two
+    # buckets made a pass that cleared 40 watch rows look like it did nothing.
+    cats = sorted({c for (c, s) in list(before) + list(after) if s == "open"}
+                  | {"main", "longshot"})
+    for cat in cats:
         b_open, a_open = before.get((cat, "open"), 0), after.get((cat, "open"), 0)
+        if not (b_open or a_open):
+            continue
         graded = sum(v for (c, s), v in after.items()
                      if c == cat and s in ("won", "lost", "push"))
-        print(f"  {cat:>8}: open {b_open} → {a_open}   ({graded} graded total)")
+        moved = "" if b_open == a_open else "  ←"
+        print(f"  {cat:>15}: open {b_open} → {a_open}"
+              f"   ({graded} graded total){moved}")
     print("Record page updated.")
 
 

@@ -251,15 +251,106 @@ def parse_results(schedule_json: dict) -> list[dict]:
     return out
 
 
+# Games that will never produce a score: cancelled, postponed, or suspended
+# with no result. The schedule keeps listing them, but waiting on them is
+# waiting forever.
+DEAD_GAME_STATES = {"C", "D", "T"}
+
+
+def _game_is_resolved(g: dict) -> bool:
+    """Has this game reached a state it will never leave?
+
+    Final counts, and so does postponed/cancelled — a postponed game is not
+    pending, it is not happening on this date at all. Anything else
+    (scheduled, warmup, in progress) can still change.
+    """
+    status = g.get("status", {}) or {}
+    return (status.get("abstractGameState") == "Final"
+            or (status.get("codedGameState") or "") in DEAD_GAME_STATES)
+
+
+def schedule_is_settled(schedule_json: dict) -> bool:
+    """True when every game in the payload has reached a final state."""
+    return all(_game_is_resolved(g)
+               for day in schedule_json.get("dates", [])
+               for g in day.get("games", []))
+
+
+def parse_abandoned(schedule_json: dict) -> list[dict]:
+    """Games the schedule says were postponed, cancelled or suspended.
+
+    These are the ones that never get a score. Left sitting in the history
+    DB as a scoreless row they look identical to a game still in progress,
+    which is what the settle guard checks — so every bet on either team
+    that day stays open forever, waiting on a game that will never be
+    played. Callers use this to tell the two apart."""
+    out: list[dict] = []
+    for day in schedule_json.get("dates", []):
+        for g in day.get("games", []):
+            status = g.get("status", {}) or {}
+            if (status.get("codedGameState") or "") not in DEAD_GAME_STATES:
+                continue
+            teams = g.get("teams", {}) or {}
+            home_t, away_t = teams.get("home", {}) or {}, teams.get("away", {}) or {}
+            home = TEAM_ID_ABBR.get((home_t.get("team") or {}).get("id"),
+                                    (home_t.get("team") or {}).get("abbreviation", ""))
+            away = TEAM_ID_ABBR.get((away_t.get("team") or {}).get("id"),
+                                    (away_t.get("team") or {}).get("abbreviation", ""))
+            if not home or not away:
+                continue
+            out.append({
+                "date": (g.get("officialDate") or g.get("gameDate", ""))[:10],
+                "home": home, "away": away,
+                "game_number": int(g.get("gameNumber") or 1),
+                "state": status.get("detailedState") or "Postponed",
+            })
+    return out
+
+
+def fetch_schedule(start: str, end: str) -> dict:
+    """Raw schedule payload for a date range (inclusive), one request.
+
+    Cached for a day, because a date whose games have all finished is
+    immutable — but NEVER cached when something was still in progress at
+    capture time. That snapshot is provisional: replaying it for the next
+    24 hours is how a settle pass run at 4 AM kept reporting the same
+    "8/10 games final" it saw at 11 PM, and graded nothing.
+    """
+    url = (f"{STATS_BASE}/schedule?sportId=1"
+           f"&startDate={start}&endDate={end}")
+    cache = f"mlb_results_{start}_{end}.json"
+    data = _get_json(url, cache, ttl=86400)
+    if not schedule_is_settled(data):
+        # Whatever we just used — cache hit or fresh fetch — is provisional.
+        # Drop it and go back to the wire once, so a caller asking after the
+        # last out gets the last out.
+        path = CACHE_DIR / cache
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        data = _get_json(url, cache, ttl=0)
+        # Still unsettled means the games really are in progress. Don't let
+        # that snapshot linger either.
+        if not schedule_is_settled(data):
+            try:
+                path.unlink()
+            except OSError:
+                pass
+    return data
+
+
 def fetch_results(start: str, end: str) -> list[dict]:
     """Final scores for every completed game between two dates (inclusive).
 
     One request covers the whole range, so ingesting a full season is a handful
     of calls rather than one per day."""
-    url = (f"{STATS_BASE}/schedule?sportId=1"
-           f"&startDate={start}&endDate={end}")
-    data = _get_json(url, f"mlb_results_{start}_{end}.json", ttl=86400)
-    return parse_results(data)
+    return parse_results(fetch_schedule(start, end))
+
+
+def fetch_abandoned(start: str, end: str) -> list[dict]:
+    """Postponed/cancelled games in a date range — see parse_abandoned."""
+    return parse_abandoned(fetch_schedule(start, end))
 
 
 def build_games(date: str, with_weather: bool = True) -> list[MLBGame]:

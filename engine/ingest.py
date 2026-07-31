@@ -392,15 +392,31 @@ def ingest_mlb_results(conn, start: str, end: str,
     against, which is exactly the dead end of "N book lines, 0 entries found".
     """
     import datetime as _dt
-    from .mlb.sources.mlbstats import fetch_results
-    result = {"games": 0, "player_logs": 0, "skipped": []}
+    from .mlb.sources.mlbstats import (fetch_schedule, parse_abandoned,
+                                       parse_results)
+    result = {"games": 0, "player_logs": 0, "abandoned": [], "skipped": []}
     try:
-        rows = mlb_result_rows(fetch_results(start, end))
+        schedule = fetch_schedule(start, end)
     except DataUnavailable as exc:
         result["skipped"].append(f"mlb results {start}..{end}: {exc}")
         return result
+    rows = mlb_result_rows(parse_results(schedule))
     result["games"] = db.upsert_games(conn, rows)
     db.log_ingest(conn, "mlb", "results", f"{start}..{end}", result["games"])
+
+    # A postponed game keeps its schedule slot, so the per-date slate ingest
+    # stored it as a scoreless row — which the settle guard cannot tell from
+    # a game still in progress. Result: every pick on either team that night
+    # sits open forever. Clear the ones the API positively calls off; the
+    # game comes back on its make-up date.
+    for g in parse_abandoned(schedule):
+        gn = int(g.get("game_number") or 1)
+        gid = f"{g['away']}@{g['home']}" + (f"-G{gn}" if gn > 1 else "")
+        if db.drop_games(conn, [{"sport": "mlb", "period": g["date"],
+                                 "game_id": gid}]):
+            result["abandoned"].append(
+                f"{g['date']} {g['away']}@{g['home']}: {g['state']} — "
+                f"cleared; picks on it will void")
 
     if not with_logs:
         return result

@@ -149,6 +149,35 @@ def upsert_games(conn, rows: list[dict]) -> int:
     return len(rows)
 
 
+def drop_games(conn, rows: list[dict]) -> int:
+    """Remove game rows that are never going to happen on this date.
+
+    A postponed game keeps its schedule entry, so it lands in the table as
+    a row with no score — indistinguishable from a game still in progress,
+    which is exactly what the settle guard looks for. Every bet on either
+    team that night then waits forever on a game that will not be played.
+
+    Only ever called with games the schedule API positively reports as
+    postponed/cancelled. Scorelessness alone must NOT reach here: a game in
+    progress looks the same, and deleting its row would remove the guard
+    that stops bets grading against a partial line. The game returns to the
+    table on its make-up date, ingested normally, where it belongs.
+    """
+    if not rows:
+        return 0
+    dropped = 0
+    for r in rows:
+        cur = conn.execute(
+            "DELETE FROM games WHERE sport=? AND period=? AND game_id=? "
+            # Never delete something that has a result — if a score is
+            # present the game was played, whatever the schedule says now.
+            "AND home_score IS NULL",
+            (r["sport"], r["period"], r["game_id"]))
+        dropped += cur.rowcount
+    conn.commit()
+    return dropped
+
+
 def upsert_player_logs(conn, rows: list[dict]) -> int:
     return _upsert(conn, "player_game_logs", LOG_COLS, rows)
 
