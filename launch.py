@@ -350,6 +350,67 @@ def _run_autosettle() -> None:
         print(f"  ⚠️  auto-settle failed: {exc}")
 
 
+def refresh_rosters(name: str | None = None) -> None:
+    """Re-pull the roster feed now, and say what it knows about a player.
+
+    Team moves come from Sleeper's player file, which is cached for hours
+    and — when the fetch fails — falls back to the last good copy for as
+    long as it takes. Either way a trade from yesterday can be invisible
+    with nothing on screen admitting it. This forces the pull and prints
+    the feed's own answer, so "why isn't this trade showing" stops being a
+    guess about caches.
+    """
+    import datetime as _d
+    from engine import offseason
+    from engine.sources.fetch import CACHE_DIR
+
+    cached = Path(CACHE_DIR) / offseason.SLEEPER_CACHE
+    if cached.exists():
+        age_h = (time.time() - cached.stat().st_mtime) / 3600
+        print(f"Cached roster file: {age_h:.1f} h old — deleting it so the "
+              f"next read has to go to the wire.")
+        try:
+            cached.unlink()
+        except OSError as exc:
+            print(f"  ⚠️  couldn't delete it: {exc}")
+
+    blob = offseason.load_sleeper_players(max_age_s=0)
+    if not blob:
+        print("⚠️  Roster feed unreachable and no cached copy — team moves "
+              "cannot update until api.sleeper.app is reachable.")
+        return
+    fresh = cached.exists()
+    print(f"Roster feed: {len(blob):,} players "
+          f"({'fetched just now' if fresh else 'served from cache — the pull failed'})")
+    if fresh:
+        print(f"  synced {_d.datetime.fromtimestamp(cached.stat().st_mtime):%Y-%m-%d %H:%M}")
+
+    if name:
+        from engine.sources.oddsapi import normalize_name
+        want = normalize_name(name)
+        hits = []
+        for p in blob.values():
+            if not isinstance(p, dict):
+                continue
+            full = (p.get("full_name")
+                    or f"{p.get('first_name', '')} {p.get('last_name', '')}").strip()
+            if full and normalize_name(full) == want:
+                hits.append((full, p))
+        if not hits:
+            print(f"\n  '{name}' is not in the roster feed under that name. "
+                  f"The feed's spelling is what the board matches on.")
+        for full, p in hits:
+            print(f"\n  {full} — {p.get('position')} · team "
+                  f"{p.get('team') or '(free agent)'} · "
+                  f"{'active' if p.get('active') else 'inactive'}"
+                  f" · depth {p.get('depth_chart_position')}"
+                  f"{p.get('depth_chart_order')}")
+            print(f"    If the board still shows an old team after a rebuild, "
+                  f"the feed itself is behind — nothing local can fix that.")
+
+    print("\nRebuild the fantasy page to apply it:  python3 fantasy_build.py")
+
+
 def odds_doctor() -> None:
     """Why does the board say N props have no book price?
 
@@ -1361,6 +1422,11 @@ def main() -> None:
         return
     if "--check" in argv:
         preflight()
+        return
+    if "--refresh-rosters" in argv:
+        i = argv.index("--refresh-rosters")
+        who = " ".join(a for a in argv[i + 1:] if not a.startswith("-")) or None
+        refresh_rosters(who)
         return
     if "--odds-doctor" in argv:
         odds_doctor()

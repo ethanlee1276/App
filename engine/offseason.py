@@ -131,7 +131,14 @@ def _final_qbs(schedule_rows: list[dict], season: int) -> dict[str, str]:
 
 
 # --- Sleeper-derived: rosters, rookies, depth --------------------------------
-def load_sleeper_players(max_age_s: int = 86400) -> dict | None:
+# Six hours, not a day. Rosters change on trade news, and a 24h cache could
+# hide a trade for a full day with the page showing an old team and nothing
+# saying it was looking at yesterday's file. The blob is a few MB, so four
+# pulls a day is affordable; `launch.py --refresh-rosters` forces one.
+ROSTER_TTL_S = 6 * 3600
+
+
+def load_sleeper_players(max_age_s: int = ROSTER_TTL_S) -> dict | None:
     """The Sleeper players blob, cache-first (the proxy shares this file).
     None when unreachable — callers must treat that as "no roster layer",
     not as an empty league."""
