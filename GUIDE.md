@@ -139,6 +139,7 @@ auto-settle last ran, so you can see the loop is alive.
 | Why is the board empty? | `python3 launch.py --why-empty` |
 | Why do N props have no book price? | `python3 launch.py --odds-doctor` |
 | A trade isn't showing on the Fantasy page | `python3 launch.py --refresh-rosters "Player Name"` |
+| See a team's active roster | Menu → **More** → **Rosters** (search a team or a player) |
 
 **About `--auto-update`:** the laptop is at home and you are not. With
 this flag the launcher checks the branch every 5 minutes, fast-forwards

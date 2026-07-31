@@ -24,12 +24,53 @@ from engine.db import connect
 from engine.sources.fetch import DataUnavailable
 
 
+def _write_rosters(path: Path, blob: dict | None) -> None:
+    """Active rosters + recent team changes, from the players blob.
+
+    Separate from the fantasy payload on purpose: the NFL page shouldn't
+    have to download draft tiers and buy-low tables to list a roster.
+
+    An unreachable feed writes a payload that SAYS the feed was
+    unreachable, rather than an empty one — "no rosters" and "every team
+    has nobody" look identical on a page and mean opposite things.
+    """
+    from engine import rosters as _r
+    if not blob:
+        path.write_text(json.dumps({
+            "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+            "teams": {}, "team_count": 0, "player_count": 0,
+            "feed": "unavailable",
+            "note": "The roster feed was unreachable on this build, so this "
+                    "is not an empty league — it is no data. Try "
+                    "`python3 launch.py --refresh-rosters`.",
+        }, indent=2))
+        print("Rosters: feed unavailable — wrote an empty payload that says so.")
+        return
+    today = datetime.date.today().isoformat()
+    out = _r.build_rosters(blob)
+    # Transactions come from diffing OUR OWN daily snapshots. No news feed,
+    # nothing to curate, and it covers every rostered player rather than
+    # the ones somebody thought to mention.
+    store = _r.record_teams(blob, today)
+    out["transactions"] = _r.transactions(store)
+    out["generated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+    out["feed"] = "live"
+    path.write_text(json.dumps(out, indent=2))
+    tx = out["transactions"]["moves"]
+    print(f"Rosters: {out['team_count']} teams, {out['player_count']:,} players"
+          + (f" · {len(tx)} team change(s) in the tracked window: "
+             + ", ".join(f"{m['player']} ({m['from']}→{m['to']})" for m in tx[:4])
+             + ("…" if len(tx) > 4 else "") if tx else
+             f" · no team changes across {out['transactions']['days']} tracked day(s)"))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="web/data/fantasy.json")
     args = ap.parse_args()
 
     conn = connect()
+    blob = None
     season = fantasy.latest_season(conn)
     if season is None:
         out = {"generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
@@ -110,6 +151,12 @@ def main() -> None:
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(out, indent=2))
+
+    # Active rosters ride along: the players blob is already in memory and
+    # already paid for, so this is a second reading of it rather than a
+    # second fetch. Written to its own file so the NFL page never has to
+    # load the whole fantasy payload to answer "who is on this team".
+    _write_rosters(p.parent / "rosters.json", blob)
     bs = out.get("buy_sell") or {}
     print(f"Fantasy: season {out['season']}, {len(out['usage'])} usage rows, "
           f"{len(bs.get('buy_low', []))} buy-low / {len(bs.get('sell_high', []))} "

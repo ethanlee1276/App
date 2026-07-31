@@ -2882,7 +2882,7 @@ function pmAgo(ts) {
 
 /* Polymarket and Fantasy are top-level modes next to NFL/MLB, not tabs
    inside a sport — entering one hides the sport nav; leaving restores it. */
-const STANDALONE_MODES = ["intel", "fantasy", "ufc", "why"];
+const STANDALONE_MODES = ["intel", "fantasy", "ufc", "rosters", "why"];
 
 // Header identity per standalone page — the tagline follows the ACTIVE
 // page. Before this, opening Polymarket from the MLB tab left a baseball
@@ -2891,6 +2891,7 @@ const STANDALONE_BRAND = {
   intel: { tagline: "Polymarket informed-flow intelligence" },
   fantasy: { tagline: "Fantasy football — usage, scripts, draft kit" },
   ufc: { tagline: "Scalpy MMA — dossier-gated fight model" },
+  rosters: { tagline: "Active NFL rosters — depth charts and team changes" },
   why: { tagline: "See the math. Know if it's working." },
 };
 
@@ -3431,6 +3432,147 @@ function offseasonHTML(off) {
       <div class="card" style="padding:8px 16px">
         <div class="os-rookies">${off.rookies.map(rookie).join("")}</div>
       </div>` : ""}`;
+}
+
+/* ============================================================
+   Active rosters — every team as it stands today.
+   ============================================================ */
+let _rosterCache = null;
+let _rosterOpen = null;          // which team's roster is expanded
+
+async function loadRosters() {
+  if (_rosterCache !== null) return _rosterCache;
+  try {
+    const res = await fetch("data/rosters.json?t=" + (Date.now() / 60000 | 0));
+    _rosterCache = res.ok ? await res.json() : {};
+  } catch (e) { _rosterCache = {}; }
+  return _rosterCache;
+}
+
+// Position groups, in the order a depth chart is normally read.
+const ROSTER_GROUPS = [
+  ["Offense", ["QB", "RB", "FB", "WR", "TE", "OL", "OT", "OG", "C"]],
+  ["Defense", ["DL", "DE", "DT", "NT", "LB", "ILB", "OLB", "CB", "S", "FS", "SS", "DB"]],
+  ["Special teams", ["K", "P", "LS"]],
+];
+
+function rosterGroupOf(pos) {
+  for (const [label, members] of ROSTER_GROUPS) if (members.includes(pos)) return label;
+  return "Other";
+}
+
+/* One player line. The depth slot is the staff's opinion and is shown as
+   such; an unranked player gets no number rather than an invented one. */
+function rosterPlayerHTML(p) {
+  const slot = p.depth_order ? `${escapeHtml(p.depth_pos || p.position)}${p.depth_order}` : "—";
+  const tags = [
+    p.rookie ? `<span class="chip">rookie</span>` : "",
+    p.unavailable ? `<span class="chip down">${escapeHtml(p.status || "out")}</span>` : "",
+  ].join("");
+  return `<div class="ros-row${p.unavailable ? " out" : ""}">
+    <span class="ros-slot">${escapeHtml(slot)}</span>
+    <span class="ros-name">${escapeHtml(p.player)}${tags}</span>
+    <span class="ros-pos">${escapeHtml(p.position)}</span>
+    <span class="ros-n">${p.age != null ? p.age : "—"}</span>
+    <span class="ros-n">${p.years_exp != null ? (p.years_exp === 0 ? "R" : p.years_exp) : "—"}</span>
+  </div>`;
+}
+
+function rosterTeamHTML(abbr, team, expanded) {
+  const meta = (typeof TEAMS !== "undefined" && TEAMS[abbr]) || {};
+  const label = meta.name || abbr;
+  if (!expanded) {
+    return `<button class="ros-team" data-team="${escapeHtml(abbr)}">
+      <span class="ros-mark" style="background:${escapeHtml(meta.primary || "#39405166")}">${escapeHtml(abbr)}</span>
+      <span class="ros-team-name">${escapeHtml(label)}</span>
+      <span class="ros-team-n">${team.count}</span>
+    </button>`;
+  }
+  const byGroup = {};
+  for (const p of team.players) {
+    (byGroup[rosterGroupOf(p.position)] ||= []).push(p);
+  }
+  const groups = ROSTER_GROUPS.map(([g]) => g).concat("Other")
+    .filter((g) => byGroup[g] && byGroup[g].length)
+    .map((g) => `<div class="ros-group">${escapeHtml(g)}
+        <span class="ros-group-n">${byGroup[g].length}</span></div>
+      ${byGroup[g].map(rosterPlayerHTML).join("")}`).join("");
+  return `<div class="card ros-card">
+    <button class="ros-team open" data-team="${escapeHtml(abbr)}">
+      <span class="ros-mark" style="background:${escapeHtml(meta.primary || "#39405166")}">${escapeHtml(abbr)}</span>
+      <span class="ros-team-name">${escapeHtml(label)}</span>
+      <span class="ros-team-n">${team.count} · ${team.rookies} rookie${team.rookies === 1 ? "" : "s"}${team.unavailable ? ` · ${team.unavailable} out` : ""}</span>
+    </button>
+    <div class="ros-head">
+      <span class="ros-slot">SLOT</span><span class="ros-name">PLAYER</span>
+      <span class="ros-pos">POS</span><span class="ros-n">AGE</span><span class="ros-n">EXP</span>
+    </div>
+    ${groups}</div>`;
+}
+
+/* Recent team changes, found by diffing our own daily snapshots — no news
+   feed to curate and nothing to tell the site about. */
+function transactionsHTML(tx) {
+  const moves = (tx && tx.moves) || [];
+  if (!moves.length) {
+    return `<div class="ls-note">No team changes across the
+      ${tx && tx.days ? tx.days : 0} day(s) tracked so far. This list fills
+      itself in: each build records where every player is, and a trade is
+      simply the day that answer changed.</div>`;
+  }
+  return `<div class="card" style="padding:0;margin-bottom:14px">
+    ${moves.slice(0, 40).map((m) => `<div class="ros-move">
+      <span class="ros-move-name">${escapeHtml(m.player)}</span>
+      <span class="ros-move-teams">${escapeHtml(m.from)} → <b>${escapeHtml(m.to)}</b></span>
+      <span class="ros-move-date">${escapeHtml(m.date)}</span>
+    </div>`).join("")}</div>`;
+}
+
+async function renderRosters() {
+  const host = document.getElementById("rosters-body");
+  if (!host) return;
+  const d = await loadRosters();
+  const teams = d.teams || {};
+  const abbrs = Object.keys(teams).sort();
+  if (!abbrs.length) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">📋</div>
+      <h3>No roster data yet</h3><p>${escapeHtml(d.note
+        || "Run `python3 fantasy_build.py` once — rosters ride along with it.")}</p></div>`;
+    return;
+  }
+  const q = (state.rosterQuery || "").trim().toLowerCase();
+  // A player search jumps you to his team rather than showing a stray row:
+  // "who is this guy with" and "show me that roster" are the same question.
+  let shown = abbrs;
+  if (q) {
+    shown = abbrs.filter((a) => {
+      const meta = (typeof TEAMS !== "undefined" && TEAMS[a]) || {};
+      if (a.toLowerCase().includes(q)) return true;
+      if ((meta.name || "").toLowerCase().includes(q)) return true;
+      if ((meta.nick || "").toLowerCase().includes(q)) return true;
+      if ((meta.loc || "").toLowerCase().includes(q)) return true;
+      return teams[a].players.some((p) => p.player.toLowerCase().includes(q));
+    });
+  }
+  // One match is unambiguous — open it instead of making you tap again.
+  const open = shown.length === 1 ? shown[0] : _rosterOpen;
+  const stale = d.feed === "unavailable"
+    ? `<div class="warning" style="margin-bottom:12px">⚠️ ${escapeHtml(d.note || "")}</div>` : "";
+  host.innerHTML = stale + `
+    <div class="section-title" style="margin-top:4px">Recent team changes
+      <span class="sub">— from diffing this site's own daily roster snapshots,
+      not a news feed. Anything that changed teams shows up here on its own.</span></div>
+    ${transactionsHTML(d.transactions)}
+    <div class="section-title">Teams
+      <span class="sub">— ${shown.length} of ${abbrs.length} shown${q ? ` matching "${escapeHtml(q)}"` : ""}
+      · ${(d.player_count || 0).toLocaleString()} players on file</span></div>
+    ${shown.length ? `<div class="ros-teams">
+        ${shown.map((a) => rosterTeamHTML(a, teams[a], a === open)).join("")}
+      </div>` : `<p class="loading">No team or player matches "${escapeHtml(q)}".</p>`}`;
+  host.querySelectorAll(".ros-team").forEach((b) => b.addEventListener("click", () => {
+    _rosterOpen = _rosterOpen === b.dataset.team ? null : b.dataset.team;
+    renderRosters();
+  }));
 }
 
 /* ============================================================
@@ -4453,7 +4595,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "trending", "players", "record", "intel", "fantasy", "ufc", "why"];
+const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "trending", "players", "rosters", "record", "intel", "fantasy", "ufc", "why"];
 
 function switchView(name) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -4475,6 +4617,7 @@ function switchView(name) {
     window.scrollTo({ top: 0, behavior: state.quiet ? "auto" : "smooth" });
     return;
   }
+  if (name === "rosters") renderRosters();
   if (name === "record") renderRecord();
   if (name === "intel") renderIntel();
   if (name === "fantasy") renderFantasy();
@@ -4725,6 +4868,14 @@ function bind() {
   });
   document.getElementById("player-search").addEventListener("input", (e) => {
     state.search = e.target.value; renderPlayers();
+  });
+  const rosterSearch = document.getElementById("roster-search");
+  if (rosterSearch) rosterSearch.addEventListener("input", (e) => {
+    state.rosterQuery = e.target.value;
+    // Typing a new query abandons whatever was expanded: the old card
+    // would otherwise stay open under a list it no longer belongs to.
+    _rosterOpen = null;
+    renderRosters();
   });
 
   const bankrollEl = document.getElementById("bankroll");

@@ -67,6 +67,7 @@
         <div class="sport-group" data-group="tools">
           <button class="sport-btn" data-sport="intel" data-kind="tool" title="Polymarket informed-flow intelligence">🛰️ Polymarket</button>
           <button class="sport-btn" data-sport="fantasy" data-kind="tool" title="Fantasy football — usage, scripts, buy-low">🏆 Fantasy</button>
+          <button class="sport-btn" data-sport="rosters" data-kind="tool" title="Active NFL rosters — every team's depth chart, and who just changed teams">📋 Rosters</button>
           <button class="sport-btn" data-sport="why" data-kind="tool" title="Why this beats a picks service — and the open math toolbox">🧭 Why Us</button>
         </div>
       </div>
@@ -237,6 +238,21 @@
       </div>
       <div class="longshot-note" id="longshots-note"></div>
       <div class="cards" id="longshots"></div>
+    </section>
+
+    <!-- Active rosters -->
+    <section class="view" id="view-rosters">
+      <div class="section-title">Active rosters
+        <span class="sub">— every team as it stands today, ordered by the coaching
+        staff's own depth chart. Players who are unavailable (IR, PUP, suspended)
+        are listed with their status rather than quietly removed.</span>
+      </div>
+      <div class="search-wrap">
+        <span class="ico">🔍</span>
+        <input id="roster-search" type="text" autocomplete="off"
+               placeholder="Search a team or a player… (e.g. 49ers, SF, Purdy)" />
+      </div>
+      <div id="rosters-body"></div>
     </section>
 
     <!-- Trending -->
