@@ -65,6 +65,10 @@ NFL_OUT = "web/data/recommendations.json"
 NBA_OUT = "web/data/nba.json"
 WNBA_OUT = "web/data/wnba.json"
 UFC_OUT = "web/data/ufc.json"
+CFB_OUT = "web/data/cfb.json"
+# One bulk request covers h2h + spreads + totals for the whole
+# board, so the cost is per-market, not per-game.
+CFB_ODDS_COST = 3
 
 
 def _slate_games(path: str) -> int:
@@ -89,7 +93,7 @@ def _budget_share() -> float:
     """This sport's slice of the daily odds allowance: one share per LIVE
     slate. October runs three at once (MLB playoffs, NFL, NBA) — without
     the split they'd jointly plan to spend the month several times over."""
-    live = sum(1 for p in (MLB_OUT, NFL_OUT, NBA_OUT, WNBA_OUT)
+    live = sum(1 for p in (MLB_OUT, NFL_OUT, NBA_OUT, WNBA_OUT, CFB_OUT)
                if _slate_games(p) > 0)
     return 1.0 / max(1, live)
 
@@ -116,7 +120,8 @@ def _slate_kickoffs(path: str) -> list:
     return out
 
 
-def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None) -> bool:
+def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
+                     cost: int | None = None) -> bool:
     """Decide whether this refresh can afford to re-pull odds.
 
     Scores are free and always refresh; odds are metered, so they only ride
@@ -129,7 +134,12 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None) -> bo
         from engine.oddsbudget import should_refresh
     except Exception:
         return True
-    ok, reason = should_refresh(_games_on_slate(out_path) + 1,
+    # Cost is normally one request per game (player props are event-scoped).
+    # A sport that pulls its whole board in one call passes its real cost
+    # instead — charging CFB sixty credits for a three-credit request would
+    # mean the pacer never authorised a single Saturday.
+    ok, reason = should_refresh(cost if cost is not None
+                                else _games_on_slate(out_path) + 1,
                                 kickoffs=_slate_kickoffs(out_path),
                                 sport=sport, share=_budget_share())
     if not quiet:
@@ -332,6 +342,32 @@ def refresh_wnba(quiet: bool = False) -> bool:
     return ok
 
 
+def refresh_cfb(quiet: bool = False) -> bool:
+    """College football — one bulk odds request for the whole board.
+
+    Everything except the prices is keyless (ESPN), so the schedule,
+    conferences, rankings and results refresh on every cycle for free; only
+    the lines are metered. And they are metered CHEAPLY here: full-game
+    markets come back for the entire slate in a single call, so a 60-game
+    Saturday costs the same three credits as a four-game Tuesday. That is
+    why this passes an explicit cost instead of the games-on-slate default.
+    """
+    args = ["cfb_build.py", _slate_date(), "--out", CFB_OUT]
+    spend = _slate_games(CFB_OUT) > 0 and _odds_affordable(
+        CFB_OUT, quiet, sport="cfb", cost=CFB_ODDS_COST)
+    before_seen = _paid_pull_baseline() if spend else ""
+    if spend:
+        args.append("--odds")
+    elif _with_odds():
+        args.append("--cached-odds")
+    ok, tail = _run_build(args)
+    _finish_paid_pull(spend, before_seen, ok, tail, "CFB", sport="cfb")
+    if not quiet:
+        print(f"  CFB  {_slate_date()}: {'refreshed' if ok else 'unavailable'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
 def refresh_ufc(quiet: bool = False) -> bool:
     """UFC card (Scalpy MMA) — a real member of the paid-pull rotation.
 
@@ -368,6 +404,7 @@ def refresh_all(quiet: bool = False) -> None:
     refresh_fantasy(quiet=quiet)
     refresh_nba(quiet=quiet)
     refresh_wnba(quiet=quiet)
+    refresh_cfb(quiet=quiet)
     refresh_ufc(quiet=quiet)
 
 
@@ -473,6 +510,84 @@ def weigh_in_cli(argv: list) -> None:
     if summary:
         print(f"\n  {summary.get('made', 0)} made · {summary.get('missed', 0)} "
               f"missed · {summary.get('unrecorded', 0)} not recorded")
+
+
+def confirm_qb_cli(argv: list) -> None:
+    """Confirm a starting quarterback, or list what the board is waiting on.
+
+        python3 launch.py --confirm-qb "TOL" --starter "Tucker Gleason"
+        python3 launch.py --confirm-qb "TOL" --out          (starter is OUT)
+        python3 launch.py --confirm-qb                      (just show me)
+
+    College football has no league-mandated injury report, so this is the
+    one fact the engine cannot fetch. §2.3 makes it a gate: until both
+    sidelines are confirmed, every play in the game publishes as a
+    conditional with its number and its edge but no stake. This command is
+    how a conditional becomes a bet.
+
+    Confirmations are scoped to the slate date, so last week's answer can
+    never authorise this week's bet.
+    """
+    import json as _json
+    from engine.cfb import status as qb
+
+    args = [a for a in argv[argv.index("--confirm-qb") + 1:]
+            if not a.startswith("--")]
+    try:
+        board = _json.loads((ROOT / CFB_OUT).read_text())
+    except (OSError, ValueError):
+        board = {}
+
+    if args:
+        team = " ".join(args).strip()
+        # Date the confirmation against the game this team is ACTUALLY
+        # playing, not against today. Weeknight college games are on the
+        # board days before Saturday, and a confirmation stamped with the
+        # wrong date is worse than none — it reports success and authorises
+        # nothing.
+        date = next((g.get("date") for g in board.get("games", [])
+                     if team.upper() in (g.get("home", "").upper(),
+                                         g.get("away", "").upper())
+                     and g.get("date")), None)
+        if not date:
+            date = _slate_date()
+            print(f"⚠️  {team.upper()} isn't on the built board — recording "
+                  f"against {date}. If their game is another day, rebuild "
+                  f"first so this lands on the right one.")
+        starter = ""
+        if "--starter" in argv:
+            i = argv.index("--starter")
+            starter = " ".join(a for a in argv[i + 1:]
+                               if not a.startswith("--")).strip()
+        state = qb.BACKUP if "--out" in argv else qb.CONFIRMED
+        qb.record(team, date, state=state, starter=starter)
+        if state == qb.BACKUP:
+            print(f"⚠️  {team.upper()} — starter reported OUT for {date}"
+                  f"{f' (backup: {starter})' if starter else ''}.")
+            print("   That's information, not a hold: the market underprices "
+                  "this more often in college than anywhere else.")
+        else:
+            print(f"✅ {team.upper()} — starter confirmed for {date}"
+                  f"{f' ({starter})' if starter else ''}.")
+        print("   Rebuild the board to promote its conditionals: "
+              "python3 cfb_build.py --cached-odds")
+
+    # Always finish by showing what the board is still waiting on.
+    if not board:
+        print("\nNo CFB board built yet — run the launcher once.")
+        return
+    pending = [g for g in board.get("games", []) if not g.get("qb_confirmed")]
+    conditionals = [b for b in board.get("game_bets", []) if b.get("conditional")]
+    print(f"\nCFB {board.get('date', '')}: {len(board.get('games', []))} game(s), "
+          f"{len(pending)} awaiting a QB confirmation.")
+    if conditionals:
+        print("  Conditionals — these are bets the moment the starter is confirmed:")
+        for b in conditionals[:12]:
+            print(f"    {b.get('matchup', ''):16} {b.get('pick_label', ''):22} "
+                  f"{b.get('odds', 0):+5}  edge {b.get('edge', 0):+.1%}  "
+                  f"{b.get('stake_if_confirmed_units', 0):.2f}u if confirmed")
+    else:
+        print("  Nothing is waiting on a quarterback right now.")
 
 
 def refresh_rosters(name: str | None = None) -> None:
@@ -941,13 +1056,18 @@ def preflight() -> None:
     try:
         from engine.db import connect
         conn = connect()
-        for sport in ("nfl", "mlb"):
+        for sport in ("nfl", "mlb", "cfb"):
             n = conn.execute("SELECT COUNT(*) FROM games WHERE sport=?", (sport,)).fetchone()[0]
             if n:
                 print(f"{ok} Team ratings ({sport.upper()}): {n} games ingested")
             else:
+                # College football fills its own table from the ESPN feed;
+                # ingest.py has no cfb mode, so pointing at it would send
+                # you to a command that doesn't exist.
+                how = ("python3 cfb_build.py --backfill 2025-08-24:2026-01-20"
+                       if sport == "cfb" else f"python3 ingest.py {sport}")
                 print(f"{warn} Team ratings ({sport.upper()}): none — run "
-                      f"`python3 ingest.py {sport}` so game bets have an edge")
+                      f"`{how}` so game bets have an edge")
         conn.close()
     except Exception as exc:  # noqa: BLE001
         print(f"{warn} Team ratings: could not read the database ({exc})")
@@ -968,6 +1088,7 @@ def preflight() -> None:
         ("NFL schedules (nflverse)", "https://raw.githubusercontent.com/nflverse/nflverse-data/master/README.md"),
         ("NFL weekly stats/pbp (releases)", "https://github.com/nflverse/nflverse-data/releases"),
         ("NBA schedule/boxscores (CDN)", "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"),
+        ("College football (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"),
         ("Polymarket markets (Gamma)", "https://gamma-api.polymarket.com/markets?limit=1"),
         ("Polymarket tape (Data API)", "https://data-api.polymarket.com/trades?limit=1"),
         ("Polymarket leaderboard", "https://lb-api.polymarket.com/leaderboard?window=all&limit=1"),
@@ -1609,6 +1730,9 @@ def main() -> None:
         return
     if "--weigh-in" in argv:
         weigh_in_cli(argv)
+        return
+    if "--confirm-qb" in argv:
+        confirm_qb_cli(argv)
         return
     if "--refresh-rosters" in argv:
         i = argv.index("--refresh-rosters")

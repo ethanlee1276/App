@@ -167,6 +167,11 @@ SPORT_CONFIG = {
     # MMA events are one bout each; "teams" are fighter names, so the map is
     # identity (ufc_build reads the h2h payload directly).
     "ufc": {"sport_key": "mma_mixed_martial_arts", "markets": {}, "teams": {}},
+    # College football is full-game markets only, and its team map is BUILT
+    # at run time from the ESPN feed rather than listed here — 134 schools
+    # is the kind of table that rots the moment a conference reshuffles.
+    # cfb_build passes the map it derived into the parsers.
+    "cfb": {"sport_key": "americanfootball_ncaaf", "markets": {}, "teams": {}},
 }
 
 
@@ -301,6 +306,35 @@ def list_events(api_key: str | None = None, ttl: int = 300,
     data, _ = _request(url, f"odds_events_{sport}.json", ttl=ttl,
                        cache_only=cache_only)
     return data
+
+
+def fetch_sport_odds(sport: str, api_key: str | None = None,
+                     markets: list[str] | None = None,
+                     books: list[str] | None = None,
+                     ttl: int = 600, cache_only: bool = False) -> tuple[list, Quota]:
+    """Every game's full-game lines in ONE request.
+
+    The event-scoped endpoint above costs a request per game, which is the
+    right trade for player props (they only exist per event). Full-game
+    markets don't: this endpoint returns h2h/spreads/totals for the whole
+    board for the price of one call per market. On a 60-game college
+    Saturday that is the difference between three credits and sixty, and
+    the budget pacer would simply never authorise sixty.
+    """
+    key = get_api_key(api_key)
+    cfg = SPORT_CONFIG[sport]
+    params = {
+        "apiKey": key,
+        "regions": "us",
+        "markets": ",".join(markets or ["h2h", "spreads", "totals"]),
+        "oddsFormat": "american",
+        "bookmakers": ",".join(books or DEFAULT_BOOKS),
+    }
+    url = (f"{ODDS_BASE}/sports/{cfg['sport_key']}/odds"
+           f"?{urllib.parse.urlencode(params)}")
+    data, quota = _request(url, f"odds_board_{sport}.json", ttl=ttl,
+                           cache_only=cache_only)
+    return (data if isinstance(data, list) else []), quota
 
 
 def fetch_event_odds(event_id: str, api_key: str | None = None,

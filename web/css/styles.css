@@ -335,6 +335,15 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .chip.stake { color: var(--brand); border-color: rgba(77, 140, 255, .4); }
 .chip.books { color: var(--cyan); border-color: rgba(55, 205, 234, .35); }
 .chip.when { color: var(--text-dim); border-color: rgba(255, 255, 255, .14); }
+/* College football. A conditional is amber, never green — the edge is real
+   but nothing has been staked, and the two must never look alike. The
+   attention chip is the one number that explains why a MAC total is a bet
+   and the same edge in a marquee game isn't. */
+.chip.cond { color: var(--warn); border-color: rgba(240, 180, 41, .45); }
+.cfb-rank { color: var(--warn); font-weight: 800; font-size: .9em; }
+.chip.tier-low { color: var(--good); border-color: rgba(47, 213, 140, .35); }
+.chip.tier-standard { color: var(--text-dim); }
+.chip.tier-marquee { color: var(--text-mute); }
 
 .reasons { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 .reasons li { font-size: 12.5px; color: var(--text-body); padding-left: 22px; position: relative; }
@@ -1466,6 +1475,14 @@ select.calc-in { width: auto; font-weight: 600; }
      whole line to itself and left the column edges ragged. */
   .menu-open .nav {
     display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    /* FOUR rows always, whether or not this sport has all eight pages.
+       Sports hide the pages they have no engine for (CFB has no props, so
+       no Players/Trending/Long Shots), and without a fixed row count the
+       open menu got 52px shorter the instant you tapped CFB — sliding the
+       page buttons up under a finger already on its way down. Content
+       must not decide layout. Empty rows hold their space; a row whose
+       label wraps still grows. */
+    grid-template-rows: repeat(4, minmax(46px, auto));
   }
   /* display:block, not the base flex — the hint must sit UNDER the name
      rather than beside it. */

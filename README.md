@@ -1,6 +1,7 @@
 # Qellys Book — a multi-sport betting model
 
-A player-prop and game-bet analytics engine covering NFL, MLB, NBA and UFC,
+A player-prop and game-bet analytics engine covering NFL, college football,
+MLB, NBA, WNBA and UFC,
 plus Polymarket flow and fantasy football. It ingests player form, matchups,
 weather and injuries, projects each market, prices it against the sportsbook
 line, and surfaces only the bets where the model believes the book is

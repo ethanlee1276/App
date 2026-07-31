@@ -109,21 +109,26 @@ def evaluate_play(play: dict) -> dict:
         "risks": play.get("risks") or [],
     }
 
-    # The refusals come first: a play whose quarterback is unknown is not a
-    # worse play, it is not a play.
-    blocks = blocking_conditions(game, market)
-    if blocks:
-        return {**base, "kind": "hold", "why": "; ".join(blocks),
-                "grade": 0, "grade_label": "Hold"}
-
     if cut < bar:
         return {**base, "kind": "pass", "grade": 0, "grade_label": "Pass",
                 "why": (f"edge {cut:+.1%} after the {tier} haircut is under "
                         f"this tier's {bar:.1%} bar")}
 
+    # §2.3 says the refusal PUBLISHES A CONDITIONAL — "IF the starter
+    # plays" — not nothing. So a blocked play is graded on the certainty it
+    # would have once the condition clears, and only then held. Grading it
+    # on today's ignorance instead would bury the very games worth checking:
+    # the unconfirmed quarterback is why the number is soft in the first
+    # place, so penalising the grade for it AND gating on it would mean the
+    # board never surfaces a single game worth a phone call.
+    blocks = blocking_conditions(game, market)
+    certainty = float(play.get("information_certainty", 0.0))
+    if blocks:
+        certainty = float(play.get("information_certainty_confirmed", certainty))
+
     g = grade(GradeInput(
         edge_after_haircut=cut, tier=tier,
-        information_certainty=float(play.get("information_certainty", 0.0)),
+        information_certainty=certainty,
         attention_fit=float(play.get("attention_fit", 0.0)),
         situational_fit=float(play.get("situational_fit", 0.0)),
         matchup_fit=float(play.get("matchup_fit", 0.0)),
@@ -136,8 +141,18 @@ def evaluate_play(play: dict) -> dict:
     # Kelly runs on the POST-haircut edge (§9), which is the whole point of
     # haircutting: stake the number you believe, not the one you hoped for.
     p_staked = min(0.99, break_even(odds) + cut)
-    card["stake_fraction"] = kelly_stake(p_staked, odds, tier, g,
-                                         drawdown=bool(play.get("drawdown")))
+    stake = kelly_stake(p_staked, odds, tier, g,
+                        drawdown=bool(play.get("drawdown")))
+    if blocks:
+        # A conditional carries everything a play does EXCEPT the stake, so
+        # it can be acted on the moment the condition clears — and so that
+        # no renderer can mistake it for a bet that was sized.
+        return {**card, "kind": "hold", "grade_label": "Conditional",
+                "why": "; ".join(blocks),
+                "conditions_pending": blocks,
+                "stake_if_confirmed": stake,
+                "graded_as_if_confirmed": True}
+    card["stake_fraction"] = stake
     return {**card, "kind": "play"}
 
 
@@ -148,6 +163,7 @@ def run_cfb_slate(plays: list[dict], meta: dict | None = None) -> dict:
     holds = [c for c in evaluated if c["kind"] == "hold"]
     passes = [c for c in evaluated if c["kind"] == "pass"]
 
+    holds.sort(key=lambda p: (-p["grade"], -p["edge"]))
     published = apply_caps(published)
     # A play the caps trimmed to nothing is not a play.
     dropped = [p for p in published if p.get("stake_fraction", 0) <= 0]

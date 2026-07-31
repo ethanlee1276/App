@@ -46,6 +46,7 @@ output.
 |---|---|---|
 | **⚾ MLB** | The betting model: player props, sharp-anchor game bets, Edge Board, Long Shots (home-run board), Record | Now (daily in season) |
 | **🏈 NFL** | Same engine for football | September |
+| **🏈 CFB** | College football: full-game markets tiered by how hard the market is watching, and conditionals that wait on a starting QB | Late August |
 | **🛰️ Polymarket** | Informed-flow detection on prediction markets: whale flags with scores, top traders by profit, our flag report card | Now |
 | **🏆 Fantasy** | Usage trends, buy-low/sell-high (xFP), game scripts, Sleeper league sync, **draft kit** (VORP board, tiers, live draft sync) | Now (2025 data until September) |
 | **🏀 NBA** | Scalpy: minutes engine, probability distributions, humility clamp, max 4 picks a slate | October |
@@ -130,6 +131,9 @@ auto-settle last ran, so you can see the loop is alive.
 | MLB history rebuild (rarely needed) | `python3 ingest.py mlb --from 2026-03-26 --to <today>` |
 | NBA history (from October, occasionally) | `python3 ingest.py nba --from <start> --to <today>` |
 | WNBA board (May–September) | builds automatically; it is **on probation** — see below |
+| College football history (once, before the season) | `python3 cfb_build.py --backfill 2025-08-24:2026-01-20` |
+| Confirm a college QB (turns a conditional into a bet) | `python3 launch.py --confirm-qb "TOL" --starter "Name"` |
+| See which CFB games are waiting on a QB | `python3 launch.py --confirm-qb` |
 | New Odds API key | put it in `secrets.local`, then `python3 launch.py --reset-budget` |
 | Health check | `python3 launch.py --check` |
 | Leave it running while you're out, picking up pushed fixes | `caffeinate -is python3 launch.py --auto-update` |
@@ -155,6 +159,36 @@ stakes nothing until that record clears the promotion bar. The page says
 so at the top. Inventing "WNBA-ish" constants would have looked tailored
 while being made up, and nothing downstream could have told the
 difference.
+
+**About the college football board:** it is the same decision spine as
+everything else, with one idea layered on top — **attention is the axis**.
+About 134 teams play 60-plus games most Saturdays, and no book prices a
+Wednesday MAC game the way it prices Ohio State – Michigan, so how much of
+our own edge we believe depends on how hard the market was looking. A
+marquee game keeps half its edge and has to clear 4%; a low-attention game
+keeps three quarters and clears 2.5%. That is why the same model number
+can be a pass in one game and a bet in another, and it is the whole reason
+the page exists.
+
+Two things on that board will look unusual and are meant to.
+
+**Conditionals.** College football has no league-wide injury report, and
+the gap between a starter and his backup is routinely worth four to seven
+points — more than any edge the model will ever find. So a game whose
+quarterbacks nobody has confirmed publishes as a *conditional*: the real
+number, the real price, the real edge, an amber badge, and **no stake**.
+Check the starter, run `python3 launch.py --confirm-qb "TEAM"`, rebuild,
+and it becomes a bet at the grade the conditional advertised. December
+games additionally wait on participation being verified, because bowl
+opt-outs and the portal can gut a roster between the last game and the
+bowl.
+
+**Probation until the variance is measured.** How far college games land
+from a projection is a number this engine *measures* from ingested
+results, not one it asserts. Until roughly 400 games are in the database
+it uses a documented prior instead, marks the board on probation, and
+journals without staking. Run the backfill above once and the numbers
+become measurements.
 
 **About `--weigh-in`:** every UFC pick prints `KILL IF: missed weight …
 → automatic void`. That was a rule with nothing enforcing it. Now a

@@ -37,6 +37,7 @@ LIVE_FILES = {
     "mlb": WEB / "data" / "mlb_recommendations.json",
     "nba": WEB / "data" / "nba.json",
     "wnba": WEB / "data" / "wnba.json",
+    "cfb": WEB / "data" / "cfb.json",
 }
 
 # Sleeper league-sync proxy: the browser can't always call api.sleeper.app
@@ -107,6 +108,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api(parse_qs(parsed.query), sport="nba")
         if parsed.path in ("/api/wnba/recommendations", "/api/wnba/recommendations/"):
             return self._api(parse_qs(parsed.query), sport="wnba")
+        if parsed.path in ("/api/cfb/recommendations", "/api/cfb/recommendations/"):
+            return self._api(parse_qs(parsed.query), sport="cfb")
         if parsed.path.startswith("/api/sleeper/"):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
         return self._static(parsed.path)
@@ -159,9 +162,9 @@ class Handler(BaseHTTPRequestHandler):
             min_edge=raw_edge / 100.0 if raw_edge >= 0.2 else raw_edge,
             max_juice=int(qf("max_juice", -350)),
         )
-        # NBA has no sample pipeline — the built file is the only source.
-        # (The frontend re-applies its filters client-side either way.)
-        if sport in ("nba", "wnba"):
+        # NBA/WNBA/CFB have no sample pipeline — the built file is the only
+        # source. (The frontend re-applies its filters client-side anyway.)
+        if sport in ("nba", "wnba", "cfb"):
             live = LIVE_FILES[sport]
             if live.is_file():
                 self._send(200, live.read_bytes(), ".json",

@@ -12,7 +12,7 @@ const state = {
   // Every sport with its own board. This list is the reason ?sport=wnba
   // silently fell back to NFL — a new league has to be added here too, or
   // the deep link and the launcher's own preflight URLs quietly lie.
-  sport: (["mlb", "nba", "wnba"].includes(new URLSearchParams(location.search).get("sport"))
+  sport: (["mlb", "nba", "wnba", "cfb"].includes(new URLSearchParams(location.search).get("sport"))
     ? new URLSearchParams(location.search).get("sport") : "nfl"),
   static: new URLSearchParams(location.search).has("static"),
   bankroll: null, unitPct: 1.0,      // per-user bankroll sizing (localStorage)
@@ -67,24 +67,49 @@ const SPORT_META = {
          gamesSub: "minutes first, distributions not point estimates, every "
                    + "number clamped toward the de-vigged market",
          api: "/api/nba/recommendations", fallback: "data/nba.json" },
+  cfb: { logo: "🏈", tagline: "College football — attention is the axis",
+         gamesTitle: "Saturday's board",
+         gamesSub: "134 teams, 60+ games, and no book prices a Wednesday MAC "
+                   + "game the way it prices Ohio State – Michigan — so the "
+                   + "haircut on our own edge is a dial, not a constant",
+         api: "/api/cfb/recommendations", fallback: "data/cfb.json" },
 };
 
+/* Pages a sport has no engine for. Listed here rather than as conditions
+   scattered through applySport, because "which pages does this sport
+   have?" is one question and it should have one answer. */
+const HIDDEN_VIEWS = {
+  nba: ["longshots"],
+  wnba: ["longshots"],
+  cfb: ["longshots", "trending", "players"],
+};
+
+/* College football's 134 identities ride in the payload rather than a
+   checked-in file, so they aren't known until the slate lands — hence the
+   refresh on every load as well as on every sport switch. */
+function teamsForSport(sport) {
+  if (sport === "mlb") return typeof MLB_TEAMS !== "undefined" ? MLB_TEAMS : {};
+  if (sport === "nba") return typeof NBA_TEAMS !== "undefined" ? NBA_TEAMS : {};
+  if (sport === "wnba") return typeof WNBA_TEAMS !== "undefined" ? WNBA_TEAMS : {};
+  if (sport === "cfb") return (state.data && state.data.teams) || {};
+  return typeof TEAMS !== "undefined" ? TEAMS : {};
+}
+
 function applySport() {
-  const meta = SPORT_META[state.sport];
+  // A sport with no metadata used to throw here and leave the previous
+  // league's page on screen under the new league's branding.
+  const meta = SPORT_META[state.sport] || SPORT_META.nfl;
   window.ACTIVE_SPORT = state.sport;
-  window.ACTIVE_TEAMS = state.sport === "mlb"
-    ? (typeof MLB_TEAMS !== "undefined" ? MLB_TEAMS : {})
-    : state.sport === "nba"
-      ? (typeof NBA_TEAMS !== "undefined" ? NBA_TEAMS : {})
-      : state.sport === "wnba"
-        ? (typeof WNBA_TEAMS !== "undefined" ? WNBA_TEAMS : {})
-        : (typeof TEAMS !== "undefined" ? TEAMS : {});
-  // No NBA long-shot engine exists (nothing like HR/anytime-TD markets),
-  // so the tab hides rather than faking an empty page.
-  const lsBtn = document.querySelector('.nav-btn[data-view="longshots"]');
-  const noLongShots = state.sport === "nba" || state.sport === "wnba";
-  if (lsBtn) lsBtn.style.display = noLongShots ? "none" : "";
-  if (noLongShots && state.view === "longshots") switchView("recommended");
+  window.ACTIVE_TEAMS = teamsForSport(state.sport);
+  // A page with no engine behind it hides rather than rendering empty. No
+  // NBA/WNBA long-shot market exists (nothing like HR / anytime-TD), and
+  // college football is full-game markets only — there is no CFB player
+  // projection layer, so every prop-shaped page goes with it.
+  const hidden = HIDDEN_VIEWS[state.sport] || [];
+  document.querySelectorAll(".nav-btn[data-view]").forEach((b) => {
+    b.style.display = hidden.includes(b.dataset.view) ? "none" : "";
+  });
+  if (hidden.includes(state.view)) switchView("recommended");
   document.getElementById("tagline").textContent = meta.tagline;
   const gt = document.getElementById("games-title");
   // innerHTML, not textContent: this is the page's hero and it carries a
@@ -98,10 +123,15 @@ function applySport() {
 /* ---------------- formatting helpers ---------------- */
 // NFL props grade A+/A/B+/Pass (the unified 0–100 grade, docs/NFL_MODEL.md
 // §10 — no Leans); other modules still use the word grades.
+/* "Conditional" is a college-football grade with no equivalent elsewhere:
+   the number and the edge are real, the bet is waiting on news (a starting
+   QB, a bowl roster). Amber, never green — it must not read as a play. */
 const gradeClass = (g) => ({ "A+": "strong", "A": "play", "B+": "lean",
-  "Strong Play": "strong", "Play": "play", "Lean": "lean", "Pass": "pass" }[g] || "pass");
+  "Strong Play": "strong", "Play": "play", "Lean": "lean", "Pass": "pass",
+  "Conditional": "lean" }[g] || "pass");
 const gradeColor = (g) => ({ "A+": "var(--good)", "A": "var(--cyan)", "B+": "var(--warn)",
-  "Strong Play": "var(--good)", "Play": "var(--cyan)", "Lean": "var(--warn)", "Pass": "var(--text-mute)" }[g] || "var(--text-mute)");
+  "Strong Play": "var(--good)", "Play": "var(--cyan)", "Lean": "var(--warn)",
+  "Conditional": "var(--warn)", "Pass": "var(--text-mute)" }[g] || "var(--text-mute)");
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
 const signedPct = (x) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
 const american = (o) => (o > 0 ? `+${o}` : `${o}`);
@@ -116,7 +146,10 @@ const NEG_REASON = new RegExp(
    "strong late relief", "fewer ", "struggles", "knocks balls down",
    "kills carry", "cold", "underdog", "passing risk", "regression risk",
    "soft contact", "\\boverperforming", "reduced exit", "tight zone",
-   "small zone", "moving against", "give back", "gives back"].join("|"), "i");
+   "small zone", "moving against", "give back", "gives back",
+   // College football: a reason that WITHHOLDS the bet is not a point in
+   // its favour, whatever else the card says.
+   "unconfirmed", "unverified", "^CONDITIONAL", "EXTREME"].join("|"), "i");
 
 function reasonLI(x) {
   return `<li class="${NEG_REASON.test(x) ? "neg" : ""}">${escapeHtml(x)}</li>`;
@@ -380,6 +413,10 @@ function renderProbation() {
 function renderAll() {
   const d = state.data;
   if (!d) return;
+  // CFB identities arrive WITH the slate, so they have to be picked up
+  // here — applySport runs before the fetch and would leave every college
+  // helmet drawing in the fallback brand colour.
+  window.ACTIVE_TEAMS = teamsForSport(state.sport);
   // The header badge describes the ACTIVE page. While a standalone page
   // (Fantasy, Polymarket, NBA, UFC) is up, the sports slate finishing a
   // background load must not stamp its own source over it — that's how the
@@ -957,8 +994,12 @@ async function renderTeamForm() {
    Game bets — grouped by market (moneyline / spread / total)
    ============================================================ */
 function passesGameBet(r) {
+  // A conditional is not a bet. It clears every filter on the numbers —
+  // that is the point of publishing it — but counting it as recommended
+  // would put "11 game bets — all journaled" on a page where five were
+  // journaled and six are waiting on a quarterback.
   return r.confidence >= state.minConf && r.edge * 100 >= state.minEdge
-    && r.odds >= state.maxJuice && r.grade !== "Pass";
+    && r.odds >= state.maxJuice && r.grade !== "Pass" && !r.conditional;
 }
 
 const GAMEBET_GROUPS = [
@@ -968,7 +1009,10 @@ const GAMEBET_GROUPS = [
 
 function renderGameBets() {
   const bets = (state.data.game_bets || []).map((r) => ({ ...r, _ok: passesGameBet(r) }));
-  const visible = bets.filter((r) => (state.showAll ? true : r._ok));
+  // Conditionals always show — a bet you can't see isn't one you can go and
+  // confirm — but they render faded, amber and stake-less, because they are
+  // not bets yet.
+  const visible = bets.filter((r) => (state.showAll ? true : r._ok || r.conditional));
   const title = document.getElementById("gamebets-title");
   const host = document.getElementById("gamebets");
   if (!visible.length) {
@@ -994,7 +1038,20 @@ function gameBetCard(r) {
   const stakeTxt = ud > 0
     ? `Stake ${money(stakeDollars(r.stake_units))} · ${r.stake_units.toFixed(2)}u`
     : `Stake ${r.stake_units.toFixed(2)}u`;
-  const stakeChip = r._ok ? `<span class="chip stake">${stakeTxt}</span>` : "";
+  const stakeChip = r._ok && r.stake_units > 0
+    ? `<span class="chip stake">${stakeTxt}</span>` : "";
+  // College football's conditionals: a real number waiting on real news.
+  // The would-be stake is shown so it's obvious what a phone call is
+  // worth, and it is deliberately NOT in the stake chip — nothing here has
+  // been wagered.
+  const condChip = r.conditional
+    ? `<span class="chip cond" title="${escapeHtml((r.conditions_pending || []).join(" · "))}">⏳ Conditional`
+      + (r.stake_if_confirmed_units > 0
+        ? ` · ${r.stake_if_confirmed_units.toFixed(2)}u if confirmed` : "")
+      + `</span>` : "";
+  const tierChip = r.attention_tier
+    ? `<span class="chip tier-${escapeHtml(r.attention_tier)}">${escapeHtml(r.attention_tier)} attention</span>`
+    : "";
   const reasons = (r.reasons || []).map(reasonLI).join("");
 
   // Header (badge + title + sub) varies by bet type; the metrics are shared.
@@ -1042,7 +1099,7 @@ function gameBetCard(r) {
         ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
              ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
         : ""}
-      <div class="chips">${stakeChip}</div>
+      <div class="chips">${stakeChip}${condChip}${tierChip}</div>
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
 }
@@ -1085,10 +1142,18 @@ function renderStats() {
   const exposure = staked.reduce((s, r) => s + (r.stake_units || 0), 0);
   const ud = unitDollars();
   const nb = sig.sharpBets.length + sig.modelBets.length;
+  // College football prices full-game markets, not props — "18 props
+  // analyzed" on a board with no player model is just wrong.
+  const cfb = state.sport === "cfb";
+  const waiting = (d.game_bets || []).filter((b) => b.conditional).length;
   const tiles = [
-    { k: "Props analyzed", to: d.counts.props_analyzed, dec: 0 },
+    { k: cfb ? "Markets priced" : "Props analyzed", to: d.counts.props_analyzed, dec: 0,
+      sub: cfb ? `spreads, totals and moneylines across ${(d.games || []).length} game(s)` : "" },
     { k: "Recommended bets", to: staked.length, dec: 0,
-      sub: `${sig.props.length} prop${sig.props.length === 1 ? "" : "s"} · ${nb} game bet${nb === 1 ? "" : "s"} — all journaled` },
+      sub: cfb
+        ? `${nb} game bet${nb === 1 ? "" : "s"} journaled`
+          + (waiting ? ` · ${waiting} conditional, waiting on a starter` : "")
+        : `${sig.props.length} prop${sig.props.length === 1 ? "" : "s"} · ${nb} game bet${nb === 1 ? "" : "s"} — all journaled` },
     { k: "Avg edge", to: staked.length ? avgEdge * 100 : 0, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "", cls: "pos" },
     ud > 0
       ? { k: "Suggested exposure", to: exposure * ud, dec: 2, pre: "$", sub: `${exposure.toFixed(2)}u across all ${staked.length} bet(s)` }
@@ -1131,14 +1196,26 @@ const findGame = (gid) => (((state.data || {}).games) || []).find((g) => gameId(
 function gameCard(g) {
   const mlb = state.sport === "mlb";
   const nba = state.sport === "nba" || state.sport === "wnba";
+  const cfb = state.sport === "cfb";
   const w = g.weather || {};
   const windTxt = mlb && w.wind_dir && !w.dome
     ? `${Math.round(w.wind_mph)}mph ${w.wind_dir}`
     : `${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
+  // No weather feed runs for college football, and a card that says
+  // "NaN°F · NaNmph" is worse than one that says nothing — say what is
+  // actually known about the venue instead.
   const cond = nba ? "Indoor hardwood"
+    : cfb ? (g.indoor ? "Indoor" : "Outdoor · weather not pulled")
     : w.dome ? "Indoor" : `${Math.round(w.temp_f)}°F · ${windTxt}`;
   let sub;
-  if (nba) {
+  if (cfb) {
+    const bits = [];
+    if (g.attention_tier) bits.push(`${g.attention_tier} attention`);
+    if (g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
+    if (g.spread != null) bits.push(`${teamName(g.spread < 0 ? g.home : g.away)} ${-Math.abs(g.spread)}`);
+    if (!g.qb_confirmed) bits.push("⚠ QB unconfirmed");
+    sub = bits.join(" · ") || "line not posted yet";
+  } else if (nba) {
     const bits = [];
     if (g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
     if (g.spread) bits.push(`${teamName(g.spread < 0 ? g.home : g.away)} ${-Math.abs(g.spread)}`);
@@ -1156,6 +1233,9 @@ function gameCard(g) {
     sub = [favTxt, ouTxt].filter(Boolean).join(" · ");
   }
   const art = mlb ? ballpark(g) : nba ? court(g) : stadium(g);
+  // A ranked college team is called by its rank — that IS the identity.
+  const ranked = (side) => (cfb && g[`${side}_rank`]
+    ? `<span class="cfb-rank">#${g[`${side}_rank`]}</span> ` : "");
   const live = g.live || {};
   const isLive = live.state === "live";
   const isFinal = live.state === "final";
@@ -1183,7 +1263,7 @@ function gameCard(g) {
     liveDetail = `<div class="live-detail"><span class="live-dot sm"></span>${escapeHtml(live.detail)}</div>`;
   }
   // The wind gauge and (for MLB live) the base diamond share the footer row.
-  const footer = nba
+  const footer = (nba || cfb)
     ? `<div class="wind-wrap"><span class="cond">${escapeHtml(cond)}</span>${liveDetail}</div>`
     : isLive && mlb
     ? `<div class="wind-wrap live-footer">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span>${liveDetail}</div>`
@@ -1199,9 +1279,9 @@ function gameCard(g) {
       <div class="stadium-wrap">${art}${badge}</div>
       <div class="game-info">
         <div class="matchup">
-          <span class="mt away">${teamMark(g.away, 18)} ${escapeHtml(teamName(g.away))} ${score("away")}</span>
+          <span class="mt away">${teamMark(g.away, 18)} ${ranked("away")}${escapeHtml(teamName(g.away))} ${score("away")}</span>
           <span class="at">@</span>
-          <span class="mt home">${teamMark(g.home, 18)} ${escapeHtml(teamName(g.home))} ${score("home")}</span></div>
+          <span class="mt home">${teamMark(g.home, 18)} ${ranked("home")}${escapeHtml(teamName(g.home))} ${score("home")}</span></div>
         <div class="game-sub">${escapeHtml(sub)}</div>
         ${whenLabel(g.date, g.kickoff) ? `<div class="game-when">🗓️ ${escapeHtml(whenLabel(g.date, g.kickoff))}</div>` : ""}
         ${isLive && !mlb ? liveDetail : ""}
