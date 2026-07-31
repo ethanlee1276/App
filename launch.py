@@ -688,7 +688,17 @@ def preflight() -> None:
             except Exception:
                 return (0, 0)
 
-        for day in ledger.open_by_day(lconn, today)[:8]:
+        open_days = ledger.open_by_day(lconn, today)
+        # More than one night stuck is a launcher that was off, not a
+        # one-off — say so once here rather than making someone read eight
+        # lines and run --settle eight times.
+        stale_days = [d for d in open_days
+                      if d["stale"] and "-W" not in (d["date"] or "")]
+        if len(stale_days) > 1:
+            print(f"{warn}   {len(stale_days)} finished days still have picks "
+                  f"open. Settle them all in one go: "
+                  f"python3 launch.py --settle all")
+        for day in open_days[:8]:
             parts = ", ".join(f"{n} {c}" for c, n in sorted(day["counts"].items()))
             if "-W" in (day["date"] or ""):
                 # NFL journals under week labels, not ISO days — the MLB
@@ -910,6 +920,39 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
          sorted(near, key=lambda x: -(x["net"] - x["need"]))[:5])
 
 
+def _settleable_days(open_days) -> list[str]:
+    """Which open-pick dates a per-date settle pass can actually grade.
+
+    NFL journals under week labels ("2026-W1") rather than ISO days, and
+    grades off weekly stats — feeding one to the MLB per-date results
+    ingest looks like a night whose results never arrived. Oldest first,
+    so each pass builds on the history the previous one stored."""
+    return sorted(d["date"] for d in open_days
+                  if d.get("date") and "-W" not in d["date"])
+
+
+def settle_all() -> None:
+    """Grade every day that still has picks open, oldest first.
+
+    "Some bets aren't settled" is usually more than one night — a laptop
+    that slept, a crashed pass, a west-coast game that ended after the
+    launcher was closed. Finding each date by hand off the --check output
+    and running --settle once per day is busywork the machine can do."""
+    from engine import ledger
+    lconn = ledger.connect()
+    try:
+        days = _settleable_days(ledger.open_by_day(lconn, _slate_date()))
+    finally:
+        lconn.close()
+    if not days:
+        print("Nothing open to settle.")
+        return
+    print(f"{len(days)} day(s) with open picks: {', '.join(sorted(days))}\n")
+    for day in sorted(days):        # oldest first, so history builds forward
+        settle_now(day)
+        print()
+
+
 def settle_now(day: str | None = None) -> None:
     """Ingest a day's results and grade the journal against them, now.
 
@@ -917,13 +960,23 @@ def settle_now(day: str | None = None) -> None:
     a night's picks normally grade tomorrow morning. This does it on
     demand — run it after the games end to see tonight's board settle,
     and it prints the open/settled counts per bucket either side of the
-    run so nothing has to be taken on faith."""
+    run so nothing has to be taken on faith.
+
+    Pass "all" to sweep every day that still has something open."""
     import datetime as _dt
-    day = day or _dt.date.today().isoformat()
+    if day == "all":
+        return settle_all()
+    # _slate_date(), not date.today(): the baseball day rolls at 5 AM, so
+    # between midnight and 5 the picks you are looking at are journaled
+    # under YESTERDAY's date. Defaulting to the calendar date meant that a
+    # bare `--settle` at 4 AM — exactly when you'd reach for it, with the
+    # west-coast games just finished — ingested an empty date and reported
+    # settling nothing, while last night's board sat open.
+    day = day or _slate_date()
     try:
         _dt.date.fromisoformat(day)
     except ValueError:
-        print(f"--settle takes a date like 2026-07-26 (got {day!r}).")
+        print(f"--settle takes a date like 2026-07-26, or 'all' (got {day!r}).")
         return
     from engine import db, ingest, ledger
 

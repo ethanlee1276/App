@@ -132,6 +132,7 @@ auto-settle last ran, so you can see the loop is alive.
 | New Odds API key | put it in `secrets.local`, then `python3 launch.py --reset-budget` |
 | Health check | `python3 launch.py --check` |
 | Force a settle right now (rarely needed — it's automatic) | `python3 launch.py --settle` |
+| Bets still open after the games ended | `python3 launch.py --settle all` |
 | Fold old 0.00-unit picks back into the record (once) | `python3 launch.py --resize-unstaked` |
 | Separate long shots from the main record (once) | `python3 launch.py --repair-journal` |
 | Why is the board empty? | `python3 launch.py --why-empty` |
@@ -142,11 +143,30 @@ that way any more — the launcher settles finished games every ~15 minutes
 and again the moment you start it, so picks close out on their own within
 about a quarter hour of the last out.
 
-`--settle` is still there for two cases: grading an **older** date
-(`python3 launch.py --settle 2026-07-25`), and forcing a run when you want
-to watch it happen. It ingests that day's results, grades every open pick
+`--settle` is still there for when the launcher *wasn't* running — a
+laptop that slept, a night it was closed, a west-coast game that ended
+after you quit. It ingests that day's results, grades every open pick
 against them, and prints the open → settled counts for both buckets so
 nothing has to be taken on faith.
+
+Three ways to call it:
+
+| | |
+|---|---|
+| `python3 launch.py --settle` | tonight's board |
+| `python3 launch.py --settle 2026-07-25` | one older date |
+| `python3 launch.py --settle all` | **every** day that still has picks open |
+
+Use `all` when more than one night is stuck — `--check` says so explicitly
+when it spots that, and it saves reading the list and running the command
+once per date.
+
+**A note on the clock.** The baseball day rolls at **5 AM**, not midnight,
+because west-coast games run past twelve and flipping the board on the
+calendar tick would yank still-live bets off the Live tab in the 7th
+inning. So a bare `--settle` at 3 AM grades *last night's* board, which is
+the one you're looking at — you do not need to work out yesterday's date
+and type it in.
 
 ## Draft day (Fantasy page, before your Sleeper draft)
 
