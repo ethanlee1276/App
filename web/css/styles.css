@@ -326,7 +326,10 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .conf-num { font-weight: 800; font-size: 14px; min-width: 54px; text-align: right; }
 
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
-.chip { font-size: 11px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); font-weight: 600; }
+/* inline-block, not inline: a bordered INLINE box that wraps is drawn as
+   two broken half-pills, one per line — which is exactly what the usage
+   trend chips did once the column got narrow on a phone. */
+.chip { display: inline-block; font-size: 11px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); font-weight: 600; }
 .chip.up { color: var(--good); border-color: rgba(47, 213, 140, .4); }
 .chip.down { color: var(--bad); border-color: rgba(251, 90, 106, .4); }
 .chip.stake { color: var(--brand); border-color: rgba(77, 140, 255, .4); }
@@ -1215,6 +1218,11 @@ select.calc-in { width: auto; font-weight: 600; }
   .ff-row { grid-template-columns: minmax(0, 1fr) 56px 100px; }
   .ff-row > .ff-n:not(.lead):not(.trend) { display: none; }
   .ff-head .ff-n:not(.lead):not(.trend) { display: none; }
+  /* "▲ +55pt vs 4wk" does not fit 100px, and the column header already
+     says TREND with "season vs 4-week vs last week" right above it — so
+     drop the words the layout is already saying and keep the number. */
+  .chip-suffix { display: none; }
+  .ff-n.trend .chip { white-space: nowrap; }
 }
 
 /* Draft kit */

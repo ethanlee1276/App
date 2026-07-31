@@ -1892,7 +1892,10 @@ function countUp(el) {
    process is working (ROI and CLV). */
 function recTile(label, value, sub, opts) {
   const o = opts || {};
-  return `<div class="tile${o.lead ? " lead" : ""}">
+  // opts.help is a hover explanation for the desktop; a phone can't show a
+  // title, which is why anything load-bearing belongs in `sub` instead.
+  return `<div class="tile${o.lead ? " lead" : ""}"${
+      o.help ? ` title="${escapeHtml(o.help)}"` : ""}>
     <div class="k">${label}</div>
     <div class="v${o.tone ? " " + o.tone : ""}">${value}</div>
     ${sub ? `<div class="tile-sub">${sub}</div>` : ""}</div>`;
@@ -2371,8 +2374,20 @@ async function renderRecord() {
       ${recTile("Record", `${o.wins}-${o.losses}-${o.pushes}`, `${o.open} open · ${o.settled} settled`)}
       ${recTile("Win rate", (o.win_rate * 100).toFixed(1) + "%", "break-even ≈ 52.4% at −110")}
       ${recTile("Process", nProc ? `${pr.good || 0}✓ ${pr.bad || 0}✗` : "—",
-                nProc ? `${pr.lucky_wins || 0} lucky win(s) · ${pr.unlucky_losses || 0} good-bet loss(es)`
-                      : "grades the decision vs the close, not the result")}
+                // The count is the point. This grades a bet against the
+                // CLOSING line, so it can only speak for the picks where a
+                // close was captured — which is a small slice. Without the
+                // denominator the tile looks frozen ("still 4?") when it is
+                // just quiet, and worse, looks like a verdict on the whole
+                // record when it is a verdict on four bets.
+                nProc ? `${nProc} of ${o.settled} priced at close · `
+                        + `${pr.lucky_wins || 0} lucky win(s), `
+                        + `${pr.unlucky_losses || 0} good-bet loss(es)`
+                      : "needs closing lines — none captured yet",
+                { help: "Grades the DECISION, not the result: a win that "
+                        + "closed worse than we bet it got lucky; a loss that "
+                        + "beat the close was still a good bet. Only counts "
+                        + "picks where we captured the closing line." })}
     </div>
     ${recDisclosure("What counts as a tracked bet", `Journals every
       <strong>Recommended</strong> bet — the same count the "Recommended bets"
@@ -3097,8 +3112,8 @@ async function renderFantasy() {
   const deltaChip = (dv) => {
     if (dv == null || Math.abs(dv) < 0.03) return `<span class="chip">steady</span>`;
     return dv > 0
-      ? `<span class="chip up">▲ +${(dv * 100).toFixed(0)}pt vs 4wk</span>`
-      : `<span class="chip down">▼ ${(dv * 100).toFixed(0)}pt vs 4wk</span>`;
+      ? `<span class="chip up">▲ +${(dv * 100).toFixed(0)}pt<span class="chip-suffix"> vs 4wk</span></span>`
+      : `<span class="chip down">▼ ${(dv * 100).toFixed(0)}pt<span class="chip-suffix"> vs 4wk</span></span>`;
   };
 
   // A flex row with one greedy name column left ~600px of empty table
