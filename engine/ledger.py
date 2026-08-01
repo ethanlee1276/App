@@ -732,8 +732,10 @@ def _logged_within(hist_conn, b, want: str, days: int = 1) -> str | None:
         d0 = _dt.date.fromisoformat(b["date"] or "")
     except ValueError:
         return None
-    for off in range(-days, days + 1):
-        if off == 0:
+    # Previous day FIRST: that is the one the settle will actually use, and
+    # a report naming a day the grader ignores is worse than silent.
+    for off in (-1, 1):
+        if abs(off) > days:
             continue
         d = (d0 + _dt.timedelta(days=off)).isoformat()
         rows = hist_conn.execute(
@@ -870,23 +872,28 @@ def _neighbour_day_rows(hist_conn, b, where: str, wargs: list):
     except ValueError:
         return [], wargs
     target = normalize_name(b["player"] or "")
-    found = []
-    for off in (-1, 1):
-        d = (d0 + _dt.timedelta(days=off)).isoformat()
-        alt = list(wargs)
-        alt[-1] = d
-        rows = [c for c in hist_conn.execute(
-                    f"SELECT player, value, team, game_id "
-                    f"FROM player_game_logs WHERE {where} AND market=?",
-                    (*alt, b["market"]))
-                if normalize_name(c["player"]) == target]
-        if rows:
-            found.append((rows, alt))
-    # Exactly one neighbour, or nothing: two candidate games is not a
-    # date-boundary artefact, it is two different nights.
-    if len(found) != 1:
-        return [], wargs
-    return found[0]
+    # The PREVIOUS day only, and the direction is not a preference — it is
+    # the geography. Every mechanism that produces this drift labels a US
+    # evening game with a UTC clock, and 9pm Eastern is 01:00 the NEXT day
+    # in UTC. So a bet carrying the shift always sits AHEAD of its result,
+    # never behind it.
+    #
+    # "Exactly one neighbour" was the first guard here and it was useless
+    # for baseball: teams play most days, so a regular is logged on both
+    # sides of any date and every bet stayed ambiguous. Twenty-four of
+    # thirty survived it. Direction is the discriminator that actually
+    # separates the case, and a match on date+1 keeps being refused —
+    # nothing explains a bet dated BEFORE its own game, so grading one
+    # would be inventing a reason.
+    d = (d0 - _dt.timedelta(days=1)).isoformat()
+    alt = list(wargs)
+    alt[-1] = d
+    rows = [c for c in hist_conn.execute(
+                f"SELECT player, value, team, game_id "
+                f"FROM player_game_logs WHERE {where} AND market=?",
+                (*alt, b["market"]))
+            if normalize_name(c["player"]) == target]
+    return (rows, alt) if rows else ([], wargs)
 
 
 def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:

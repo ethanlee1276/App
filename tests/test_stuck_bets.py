@@ -213,6 +213,19 @@ def test_the_thin_bar_is_named_and_sized_for_a_real_slate():
     assert ledger.THIN_DAY_PLAYERS >= 50
 
 
+def test_the_report_names_the_day_the_grader_will_actually_use():
+    """A report pointing at a day the settle ignores is worse than silent —
+    it sends you to confirm a fix that will not happen."""
+    lconn = _one_bet("Cal Raleigh", date="2026-07-27")
+    hconn = db.connect(":memory:")
+    _day(hconn, "2026-07-27", 278)
+    _day(hconn, "2026-07-26", 300, extra_names=("Cal Raleigh",))
+    _day(hconn, "2026-07-28", 368, extra_names=("Cal Raleigh",))
+    r = ledger.why_open(lconn, hconn, D_NOW)[0]
+    assert r["logged_on"] == "2026-07-26", \
+        "the report offers the later day while the grader uses the earlier"
+
+
 def test_a_late_game_filed_on_the_next_date_is_its_own_diagnosis():
     """His 7-27 board: 278 players and 12 games stored, and thirty regulars
     "missing" anyway. A 10pm Pacific first pitch is already tomorrow in UTC,
@@ -318,12 +331,23 @@ def test_a_bet_stranded_one_day_off_its_result_now_settles():
     assert row[0] == "won"
 
 
-def test_two_candidate_days_leave_it_open_rather_than_guessing():
-    """Both neighbours logged is not a boundary artefact, it is two
-    different nights. Grading against a coin-flip choice would put a wrong
-    number in the record, and nothing downstream can tell a wrong settled
-    bet from a right one — worse than leaving it open."""
+def test_a_regular_logged_on_both_neighbours_still_grades():
+    """My first guard was "exactly one neighbouring day", and it was useless
+    for baseball: teams play most days, so any regular is logged on both
+    sides of any date. Twenty-four of the reported thirty survived it and
+    stayed open. Direction is the discriminator that works."""
     lconn, hconn = _stranded(log_day="2026-07-26", also=("2026-07-28",))
+    assert ledger.settle_from_history(lconn, hconn) == 1
+    assert lconn.execute("SELECT status FROM bets").fetchone()[0] == "won"
+
+
+def test_a_log_only_on_the_day_AFTER_is_still_refused():
+    """The direction is geography, not preference. Every mechanism that
+    produces this drift labels a US evening game with a UTC clock, so a
+    drifted bet always sits AHEAD of its result. Nothing explains a bet
+    dated BEFORE its own game, and grading one would be inventing a
+    reason."""
+    lconn, hconn = _stranded(log_day="2026-07-28")
     assert ledger.settle_from_history(lconn, hconn) == 0
     assert lconn.execute("SELECT status FROM bets").fetchone()[0] == "open"
 
