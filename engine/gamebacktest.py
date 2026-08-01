@@ -372,3 +372,212 @@ def backtest_sharp_anchor(conn, sport: str = "mlb", sharp: str = "Pinnacle",
                 b["staked"] += 1.0
                 b["net"] += gain
     return r
+
+
+# ===========================================================================
+# Spreads and totals — the layer that had never been graded
+# ===========================================================================
+# The moneyline backtest above has existed for a while. Spreads and totals
+# never had one, for a boring reason: the closing numbers were not stored.
+# The build asked the API for h2h, spreads and totals, attached all three to
+# the slate, priced bets off all three — and journaled only h2h. So the
+# spread/total model could be argued about and not measured, which is how it
+# ended up shipping with no market shrink and no credibility ceiling at all.
+#
+# engine.lineledger now writes those closes on every build (free — the
+# prices are already in memory), and engine.sources.oddshistory stores them
+# on a paid historical harvest. This replays them.
+
+def game_line_closes(conn, sport: str, market: str, book: str = "best") -> dict:
+    """``{(date, home, away): (line, odds_a, odds_b)}`` — last snapshot wins.
+
+    For a total: ``(line, over_odds, under_odds)``. For a spread: the HOME
+    team's number and ``(home_odds, away_odds)``.
+    """
+    q = ("SELECT taken_at, home, away, line, over_odds, under_odds "
+         "FROM odds_history WHERE sport=? AND market=? AND book=? "
+         "ORDER BY taken_at")
+    out: dict = {}
+    for r in conn.execute(q, (sport, market, book)):
+        if r["line"] is None or r["over_odds"] is None or r["under_odds"] is None:
+            continue
+        out[(str(r["taken_at"])[:10], r["home"], r["away"])] = (
+            float(r["line"]), int(r["over_odds"]), int(r["under_odds"]))
+    return out
+
+
+@dataclass
+class GameLineBacktest:
+    sport: str = "mlb"
+    market: str = "total"
+    games_seen: int = 0
+    games_quoted: int = 0      # had a stored close AND enough team history
+    n_bets: int = 0
+    wins: int = 0
+    pushes: int = 0
+    staked: float = 0.0
+    net: float = 0.0
+    refused: int = 0           # priced, but over the credibility ceiling
+    mae: float = 0.0           # mean |projection - closing number|, in points
+    _abs_err: float = 0.0
+    grades: dict = field(default_factory=dict)
+
+    @property
+    def roi(self) -> float:
+        return (self.net / self.staked) if self.staked else 0.0
+
+    def summary(self) -> str:
+        lines = [
+            f"{self.sport.upper()} {self.market} backtest · real stored closes",
+            f"  Games       {self.games_seen} completed, "
+            f"{self.games_quoted} with a stored close + team history",
+        ]
+        if self.games_quoted:
+            # The number that actually matters. If the model sits four points
+            # off the closing number on average, no gate downstream can save
+            # it — and that is exactly what an inflated edge board looks like
+            # from the inside.
+            lines.append(f"  Projection  off the closing number by "
+                         f"{self.mae:.2f} pts on average")
+            lines.append(f"  Refused     {self.refused} priced games exceeded the "
+                         f"credibility ceiling")
+        if self.n_bets:
+            decided = self.n_bets - self.pushes
+            rate = (self.wins / decided) if decided else 0.0
+            lines.append(
+                f"  Bets        {self.n_bets} placed, {self.wins} won, "
+                f"{self.pushes} push ({rate:.1%})  ROI {self.roi:+.1%}  "
+                f"net {self.net:+.2f}u")
+            for name in ("Strong Play", "Play"):
+                g = self.grades.get(name)
+                if g and g["n_bets"]:
+                    roi = g["net"] / g["staked"] if g["staked"] else 0.0
+                    lines.append(f"        {name:11} {g['n_bets']:>4} bets, "
+                                 f"{g['wins']} won  ROI {roi:+.1%}")
+            # 30 bets is noise dressed as a verdict; say so on the same line
+            # as the ROI rather than in a footnote nobody reads.
+            if self.n_bets < 100:
+                lines.append(f"  ⚠️  {self.n_bets} bets is not a verdict — at this "
+                             f"sample a ±{1.0 / max(self.n_bets, 1) ** 0.5:.0%} "
+                             f"swing is ordinary luck")
+        elif self.games_quoted:
+            lines.append("  Bets        none graded above Pass")
+        if not self.games_quoted:
+            lines.append(f"  No stored {self.market} closes for {self.sport}. "
+                         f"They accumulate free on every build from now on "
+                         f"(engine.lineledger); for past dates, harvest with "
+                         f"harvest_odds.py.")
+        return "\n".join(lines)
+
+
+def _settle_total(line: float, side: str, hs: float, as_: float):
+    """(won, push) for an over/under on the combined score."""
+    combined = hs + as_
+    if combined == line:
+        return False, True
+    return ((combined > line) if side == "Over" else (combined < line)), False
+
+
+def _settle_spread(line: float, picked_home: bool, hs: float, as_: float):
+    """(won, push). ``line`` is the HOME number; home covers when the
+    margin plus its spread is positive."""
+    edge = (hs - as_) + line
+    if edge == 0:
+        return False, True
+    return (edge > 0) == picked_home, False
+
+
+def backtest_game_lines(conn, sport: str, market: str = "total",
+                        min_team_games: int = 15) -> GameLineBacktest:
+    """Replay stored spread/total closes through the PRODUCTION pricer.
+
+    Deliberately calls gamebets.price_total / price_spread rather than
+    reimplementing them, so the shrink, the credibility ceiling and the
+    grade ladder under test are the ones that ship. A backtest of a model
+    you do not run is a number about nothing.
+    """
+    from .gamebets import (price_total, price_spread, project_total,
+                           project_team_points, game_margin, _sd, SCORING_BASELINE)
+    if market not in ("total", "spread"):
+        raise ValueError(f"market must be 'total' or 'spread', got {market!r}")
+    # Refuse rather than borrow, same as the pricer: a sport with no
+    # registered variance cannot be replayed through another league's.
+    baseline = _sd(SCORING_BASELINE, sport, "scoring baseline")
+
+    closes = game_line_closes(conn, sport, market)
+    rows = conn.execute(
+        "SELECT period, home, away, home_score, away_score FROM games "
+        "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
+        "ORDER BY period", (sport,)).fetchall()
+
+    r = GameLineBacktest(sport=sport, market=market)
+    agg: dict[str, tuple[float, float, int]] = {}
+
+    for row in rows:
+        date, home, away = row["period"], row["home"], row["away"]
+        hs, as_ = float(row["home_score"]), float(row["away_score"])
+        r.games_seen += 1
+        quote = closes.get((date, home, away))
+        enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
+                  and agg.get(away, (0, 0, 0))[2] >= min_team_games)
+
+        if quote and enough:
+            h_off, h_def = _split(agg, home, baseline)
+            a_off, a_def = _split(agg, away, baseline)
+            line, odds_a, odds_b = quote
+            r.games_quoted += 1
+
+            if market == "total":
+                proj = project_total(sport, h_off, h_def, a_off, a_def)
+                card = price_total(sport, home, away, proj, line, odds_a, odds_b)
+                r._abs_err += abs(proj - line)
+                settle = lambda: _settle_total(line, card["side"], hs, as_)
+            else:
+                h_net = h_off - h_def
+                a_net = a_off - a_def
+                proj = game_margin(sport, h_net, a_net)
+                card = price_spread(sport, home, away, proj, line, odds_a, odds_b)
+                # The stored line is the home number; the card may back away.
+                r._abs_err += abs(proj + line)
+                picked_home = card["team"] == home
+                settle = lambda: _settle_spread(line, picked_home, hs, as_)
+
+            if not card["credible"]:
+                r.refused += 1
+            if card["grade"] != "Pass":
+                won, push = settle()
+                stake = card["stake_units"] if card["stake_units"] > 0 else 1.0
+                gain = (0.0 if push else
+                        ((american_to_decimal(card["odds"]) - 1.0) * stake
+                         if won else -stake))
+                r.n_bets += 1
+                r.wins += 1 if won else 0
+                r.pushes += 1 if push else 0
+                r.staked += 0.0 if push else stake
+                r.net += gain
+                b = r.grades.setdefault(card["grade"], {"n_bets": 0, "wins": 0,
+                                                        "staked": 0.0, "net": 0.0})
+                b["n_bets"] += 1
+                b["wins"] += 1 if won else 0
+                b["staked"] += 0.0 if push else stake
+                b["net"] += gain
+
+        pf, pa, n = agg.get(home, (0.0, 0.0, 0))
+        agg[home] = (pf + hs, pa + as_, n + 1)
+        pf, pa, n = agg.get(away, (0.0, 0.0, 0))
+        agg[away] = (pf + as_, pa + hs, n + 1)
+
+    if r.games_quoted:
+        r.mae = r._abs_err / r.games_quoted
+    return r
+
+
+def _split(agg: dict, team: str, baseline: float) -> tuple[float, float]:
+    """(offense, defense) ratings vs league baseline — the same shrunk form
+    engine.teamrates computes, so the replay prices what the live board
+    would have priced."""
+    pf, pa, n = agg.get(team, (0.0, 0.0, 0))
+    if not n:
+        return 0.0, 0.0
+    factor = n / (n + SHRINK)
+    return (pf / n - baseline) * factor, (pa / n - baseline) * factor

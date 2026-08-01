@@ -96,6 +96,19 @@ def main() -> None:
             odds_status["error"] = str(exc)
             print(f"⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
 
+    # Write down the game lines we just paid for. The build has always asked
+    # the API for h2h, spreads and totals and journaled only h2h, so the
+    # spread and total models had no stored closing number to be graded
+    # against — the reason that layer shipped ungraded. Free: the prices are
+    # already in memory.
+    try:
+        from engine import lineledger, db as _hdb
+        _hc = _hdb.connect()
+        lineledger.record(_hc, "mlb", slate.games)
+        _hc.close()
+    except Exception:
+        pass
+
     # WHEN the book prices on this board were last pulled, and when the
     # pre-game window opens. Both were only visible in the launcher's
     # terminal, which is the one place you can't see from a phone at work —

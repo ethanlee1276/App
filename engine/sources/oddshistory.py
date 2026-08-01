@@ -36,6 +36,7 @@ from .oddsapi import (
     ODDS_BASE, SPORT_CONFIG, SCORER_ODDS_TO_MARKET, OddsAPIError, _request,
     get_api_key, parse_event_lines, parse_event_h2h, parse_event_h2h_by_book,
     parse_event_scorers, DEFAULT_BOOKS,
+    parse_event_totals, parse_event_spreads,
 )
 
 # A past price is immutable, so cache it effectively forever.
@@ -156,6 +157,13 @@ class HistoricalOdds:
     moneylines: dict = field(default_factory=dict)  # team -> american odds
     moneylines_by_book: dict = field(default_factory=dict)  # book -> {team: odds}
     scorers: dict = field(default_factory=dict)     # (player, market) -> [quote dicts]
+    # (line, over/home odds, under/away odds) or None. These were parsed by
+    # the live path and thrown away by the history path, so the database had
+    # six seasons of player props and moneylines and not one stored spread
+    # or total — which meant the spread/total model could never be graded
+    # against a real closing number, only asserted about.
+    total: tuple | None = None
+    spread: tuple | None = None
 
 
 def parse_snapshot(snap: Snapshot, sport: str) -> HistoricalOdds:
@@ -171,6 +179,8 @@ def parse_snapshot(snap: Snapshot, sport: str) -> HistoricalOdds:
         moneylines=parse_event_h2h(body, cfg["teams"]),
         moneylines_by_book=parse_event_h2h_by_book(body, cfg["teams"]),
         scorers=parse_event_scorers(body, SCORER_ODDS_TO_MARKET),
+        total=parse_event_totals(body),
+        spread=parse_event_spreads(body, cfg["teams"], home, away),
     )
 
 
@@ -209,6 +219,27 @@ def to_rows(hist: HistoricalOdds, include_best: bool = True) -> list[dict]:
                 "player": team, "market": "moneyline", "book": "best",
                 "line": 0.0, "over_odds": price, "under_odds": None,
             })
+    # Game lines. `player` carries the side's identity the same way the
+    # moneyline rows carry the team, so one table serves every market.
+    # Same `include_best` rule as the moneyline aggregate above: these are
+    # shopped-best numbers, so a subset-of-books harvest must not overwrite
+    # the real best already stored for that snapshot.
+    if include_best and hist.total:
+        line, over, under = hist.total
+        rows.append({
+            "sport": hist.sport, "taken_at": hist.taken,
+            "event_id": hist.event_id, "home": hist.home, "away": hist.away,
+            "player": "TOTAL", "market": "total", "book": "best",
+            "line": line, "over_odds": over, "under_odds": under,
+        })
+    if include_best and hist.spread:
+        line, home_odds, away_odds = hist.spread
+        rows.append({
+            "sport": hist.sport, "taken_at": hist.taken,
+            "event_id": hist.event_id, "home": hist.home, "away": hist.away,
+            "player": hist.home, "market": "spread", "book": "best",
+            "line": line, "over_odds": home_odds, "under_odds": away_odds,
+        })
     for book, prices in hist.moneylines_by_book.items():
         for team, price in prices.items():
             rows.append({

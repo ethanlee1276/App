@@ -141,6 +141,40 @@ def _logs_layer(conn, sport: str, need: int, fix: str) -> Layer:
                  f"{n} log row(s) (need ~{need})", fix)
 
 
+#: Bets you can grade before the number means anything. Below this the ROI
+#: is a coin flip with a decimal point, which is worse than no number.
+GRADEABLE_BETS = 100
+
+
+def _game_lines_layer(conn, sport: str) -> Layer:
+    """Are there stored CLOSES for the spread/total model to be graded on?
+
+    Every other layer here asks whether the board can be built. This one
+    asks whether it can be checked — the game-bet model priced spreads and
+    totals for months against numbers nobody wrote down, which is how it
+    shipped with no market shrink and no credibility ceiling and nobody
+    could tell.
+    """
+    n = _count(conn, "SELECT COUNT(DISTINCT event_id) FROM odds_history "
+                     "WHERE sport=? AND market IN ('total','spread')", (sport,))
+    fix = f"python3 game_backtest.py {sport}"
+    if n >= GRADEABLE_BETS:
+        return Layer("Stored game-line closes", "the spread/total model can "
+                     "only be graded against numbers we wrote down", OK,
+                     f"{n} game(s) with a stored close — enough to backtest",
+                     fix)
+    if n:
+        return Layer("Stored game-line closes", "the spread/total model can "
+                     "only be graded against numbers we wrote down", PARTIAL,
+                     f"{n} game(s) stored (want ~{GRADEABLE_BETS} before the "
+                     f"ROI means anything) — every build adds more, free", fix)
+    return Layer("Stored game-line closes", "the spread/total model can only "
+                 "be graded against numbers we wrote down", MISSING,
+                 "none yet — the board prices spreads and totals it cannot "
+                 "check", "they accumulate on every build from now on; for "
+                 "past dates: python3 harvest_odds.py")
+
+
 def _odds_layer() -> Layer:
     if _has_key("ODDS_API_KEY"):
         return Layer("Sportsbook prices", "nothing is recommended against a "
@@ -191,6 +225,7 @@ def nfl(conn) -> SportCoverage:
         _results_layer(conn, "nfl", 250, "python3 ingest.py nfl"),
         _logs_layer(conn, "nfl", 5000, "python3 ingest.py nfl"),
         _odds_layer(),
+        _game_lines_layer(conn, "nfl"),
         Layer("EPA / PROE / pace", "§5's volume-first projection — the inputs "
               "that separate a real usage read from a box-score average",
               OK if weeks >= 200 else PARTIAL if weeks else MISSING,
@@ -221,6 +256,7 @@ def mlb(conn) -> SportCoverage:
         _results_layer(conn, "mlb", 600, "python3 ingest.py mlb --seasons 2021-2026"),
         _logs_layer(conn, "mlb", 20000, "python3 ingest.py mlb --seasons 2021-2026"),
         _odds_layer(),
+        _game_lines_layer(conn, "mlb"),
         Layer("Statcast", "exit velocity and barrel rate are the difference "
               "between a hitter's luck and his contact quality",
               OK if _cache_age_h("savant_*.csv") is not None else PARTIAL,
@@ -324,6 +360,7 @@ def cfb(conn) -> SportCoverage:
               "whole model, and it reads all three", OK,
               "ESPN college-football feed, keyless"),
         _odds_layer(),
+        _game_lines_layer(conn, "cfb"),
         Layer("Fitted variance", "how far games land from the projection "
               "decides every probability on the board",
               OK if fit.fitted else MISSING,

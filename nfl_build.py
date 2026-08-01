@@ -125,6 +125,17 @@ def main() -> None:
             if res.unmatched:
                 print(f"  No line found for {len(res.unmatched)}: "
                       f"{', '.join(res.unmatched[:6])}{' …' if len(res.unmatched) > 6 else ''}")
+            # Keep the spread and total we just paid for. Both were parsed,
+            # attached and priced against, then dropped — which is why the
+            # spread/total model has never had a stored close to be graded
+            # on. Costs nothing; the numbers are already in memory.
+            try:
+                from engine import lineledger, db as _hdb
+                _hc = _hdb.connect()
+                lineledger.record(_hc, "nfl", slate.games)
+                _hc.close()
+            except Exception:
+                pass
         except oddsapi.OddsAPIError as exc:
             odds_status["error"] = str(exc)
             print(f"\n⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")

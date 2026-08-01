@@ -178,7 +178,15 @@ def test_every_command_the_scan_prints_actually_exists():
         tail = tail.strip()
         if not tail:
             continue
+        # A fix line may template the sport it belongs to. Resolve the
+        # placeholder rather than skipping the row: the point of this test
+        # is that "python3 ingest.py wnba" was offered for a mode that did
+        # not exist, and a templated command can be wrong the same way.
+        tail = tail.replace("{sport}", "mlb")
         first = tail.split()[0]
+        if first.startswith("{"):
+            raise AssertionError(f"{script}: unresolved placeholder {first!r} "
+                                 f"— the printed command would not run")
         if first.startswith("--"):
             # A launcher flag has to be dispatched, or it silently starts
             # the server instead of doing what the row promised.
