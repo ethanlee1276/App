@@ -695,6 +695,7 @@ async function renderBestBets() {
     </div>`;
 
   const asOf = ((state.data || {}).odds_status || {}).at;
+  const prePrice = prePriceHeadline();
   const picksBlock = picks.length ? `
     <div class="card" style="padding:0;border-left:3px solid var(--good)">
       <p style="padding:10px 14px 6px;margin:0;font-size:12.5px;color:var(--text-mute)">
@@ -709,10 +710,14 @@ async function renderBestBets() {
       </details>
     </div>` : `
     <div class="card" style="border-left:3px solid var(--warn)">
-      <p style="margin:0;font-weight:800;font-size:15px">No qualifying plays at current numbers.</p>
-      <p style="margin:6px 0 0;color:var(--text-mute);font-size:13px">That sentence is the system
-      working, not failing — every market tonight either missed the tier's edge bar, failed a
-      gate, or graded below 70. Loosening the sliders shows what was held and why.</p>
+      <p style="margin:0;font-weight:800;font-size:15px">${prePrice
+        || "No qualifying plays at current numbers."}</p>
+      <p style="margin:6px 0 0;color:var(--text-mute);font-size:13px">${prePrice
+        ? `The gate counts below ran against the last pull, not today's prices — read them
+           as stale, not as a verdict on today's slate.`
+        : `That sentence is the system working, not failing — every market tonight either
+           missed the tier's edge bar, failed a gate, or graded below 70. Loosening the
+           sliders shows what was held and why.`}</p>
       ${censusFunnelHTML()}
     </div>`;
 
@@ -821,23 +826,62 @@ async function renderBestBets() {
    lines and silence). Both facts lived only in the launcher's terminal —
    the one place you can't see from a phone at work. So say them here, on
    the number that prompts the question. */
+/* Before the day's pricing window opens, an empty board is the SCHEDULE, not
+   a verdict — and the two are not interchangeable. "Every market missed the
+   edge bar" is a claim about today's prices; at 11 AM there are no today's
+   prices to have missed anything, because the books have not posted hitter
+   lines and the pacer is deliberately holding its credits for the window.
+   Saying the wrong one of those makes a working system look broken and, worse,
+   would make a genuinely dead feed indistinguishable from a normal morning.
+   Returns "" once the window is open, and the old sentence stands. */
+function prePriceHeadline() {
+  const os = (state.data || {}).odds_status || {};
+  const opens = os.window_opens_at ? os.window_opens_at * 1000 : 0;
+  if (!opens || Date.now() >= opens) return "";
+  const t = new Date(opens).toLocaleTimeString([],
+    { hour: "numeric", minute: "2-digit" });
+  return `Today's book prices haven't been pulled yet — the window opens ${t}.`;
+}
+
 function oddsClockHTML() {
   const os = (state.data || {}).odds_status || {};
-  const clock = (ts) => new Date(ts * 1000)
-    .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  /* A bare "3:32 PM" on a timestamp from YESTERDAY reads as impossible at
+     11 AM, and the only conclusion available is that the feed is broken.
+     The whole job of this line is answering "how fresh is this" — the day
+     it belongs to is part of that answer, not decoration. */
+  const midnight = (ms) => new Date(ms).setHours(0, 0, 0, 0);
+  const clock = (ts) => {
+    const d = new Date(ts * 1000);
+    const t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const days = Math.round((midnight(Date.now()) - midnight(ts * 1000)) / 864e5);
+    if (days <= 0) return t;
+    if (days === 1) return `${t} <span style="opacity:.8">yesterday</span>`;
+    return `${t} <span style="opacity:.8">on ${d.toLocaleDateString([],
+      { month: "short", day: "numeric" })}</span>`;
+  };
+  const opens = os.window_opens_at ? os.window_opens_at * 1000 : 0;
+  const waiting = opens && Date.now() < opens;
   const bits = [];
   if (os.priced_at) bits.push(`last pulled <b>${clock(os.priced_at)}</b>`);
-  if (os.window_opens_at) {
-    const opens = os.window_opens_at * 1000;
-    bits.push(Date.now() < opens
-      ? `full pre-game pricing from <b>${clock(os.window_opens_at)}</b>`
+  if (opens) {
+    bits.push(waiting
+      ? `today's pricing starts <b>${clock(os.window_opens_at)}</b>`
       : `pre-game window is open`);
   }
   if (!bits.length) return "";
+  /* Before the window, "no book price" is not a symptom of anything — it is
+     the schedule. Say that as the first clause rather than leaving it to be
+     inferred from two timestamps, because the reader arriving at this box
+     has already decided something is wrong. */
+  const why = waiting
+    ? `Nothing is broken: the pre-game window opens 2½ hours before first
+       pitch, which is both when the books post hitter lines and when our own
+       pacer spends credits. Pulling at breakfast buys proxy lines and an
+       empty board. Until then this page stays thin by design`
+    : `Most of these fill in as the books post hitter lines near first pitch`;
   return `<div style="margin-top:6px;font-size:12px;color:var(--text-mute)">
-    Book prices: ${bits.join(" · ")}. Most of these fill in as the books post
-    hitter lines near first pitch — the rest of the board (scores, lineups,
-    live tracking) refreshes every minute regardless.</div>`;
+    Book prices: ${bits.join(" · ")}. ${why} — the rest of the board (scores,
+    lineups, live tracking) refreshes every minute regardless.</div>`;
 }
 
 function censusFunnelHTML() {

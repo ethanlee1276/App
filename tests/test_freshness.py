@@ -116,10 +116,30 @@ def test_a_frozen_board_is_called_out():
     assert "state.livePolling && !stale" in fn
 
 
-def test_the_stale_state_is_styled():
+def _css():
     with open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8") as fh:
-        css = fh.read()
-    assert re.search(r"\.live-refresh\.stale \{", css)
+        return fh.read()
+
+
+def test_the_stale_state_is_styled():
+    assert re.search(r"\.live-refresh\.stale \{", _css())
+
+
+def test_the_healthy_state_is_quieter_than_the_stale_one():
+    """The base chip shipped RED — red pill, red border, red text reading
+    "Updated 1m ago" — while `.stale` below it was amber. Backwards, and it
+    cost a real morning: a board that was working was read as broken,
+    because the one chip describing its health was the loudest thing on the
+    page. Whatever the fresh state is, it must not be the alarm."""
+    css = _css()
+    base = re.search(r"\n\.live-refresh \{([^}]*)\}", css).group(1)
+    stale = re.search(r"\n\.live-refresh\.stale \{([^}]*)\}", css).group(1)
+    reds = ("251, 44, 70", "#fb2c46", "#ff8a97", "var(--bad)")
+    assert not any(r in base for r in reds), \
+        "the healthy refresh chip is wearing the alarm colour again"
+    # And the degraded state still has to differ from it, or the distinction
+    # is gone in the other direction.
+    assert stale.strip() and stale != base
 
 
 if __name__ == "__main__":

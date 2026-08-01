@@ -780,14 +780,20 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .basediamond { display: block; flex-shrink: 0; }
 .base-label { font-size: 11px; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
 
-/* live auto-refresh indicator in the header */
+/* Live auto-refresh indicator in the header.
+   The healthy state used to be RED — a red pill, red border, red text
+   reading "Updated 1m ago" — while the DEGRADED state below was amber.
+   That is exactly backwards, and it cost a real morning: a board that was
+   working perfectly was read as broken because the one chip describing its
+   health was the loudest alarm on the page. Fresh is quiet; the pulsing dot
+   alone carries "this is live". */
 .live-refresh {
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 700; color: #ff8a97;
+  font-size: 12px; font-weight: 700; color: var(--text-dim);
   padding: 5px 10px; border-radius: 999px;
-  background: rgba(251, 44, 70, 0.12); border: 1px solid rgba(251, 44, 70, 0.32);
+  background: var(--fill-subtle); border: 1px solid var(--border-soft);
 }
-.live-refresh .live-dot { background: #fb2c46; }
+.live-refresh .live-dot { background: var(--good); box-shadow: 0 0 7px var(--good); }
 /* Amber, not red: the board isn't wrong, it's old. Red here would compete
    with the live-game dot, which is the one colour that has to keep meaning
    "a game is running right now". */
