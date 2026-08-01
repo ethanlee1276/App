@@ -928,6 +928,27 @@ function oddsClockHTML() {
     lineups, live tracking) refreshes every minute regardless.</div>`;
 }
 
+/* The census keys that are counts of props, as opposed to bookkeeping — so
+   "biggest reason" never reports a total as if it were a cause. */
+function censusBuckets() {
+  const gc = (state.data || {}).gate_census || {};
+  return Object.entries(gc).filter(([k, v]) =>
+    typeof v === "number" && v > 0 && !["recommended", "props_built",
+      "calibration_markets", "no_price_markets"].includes(k));
+}
+
+function censusTotal() {
+  return censusBuckets().reduce((a, [, v]) => a + v, 0);
+}
+
+function biggestCensusBucket() {
+  const rows = censusBuckets().sort((a, b) => b[1] - a[1]);
+  if (!rows.length) return ["", 0];
+  const names = { no_real_price: "no real book price yet",
+                  no_history: "no stored game log for that player" };
+  return [names[rows[0][0]] || rows[0][0], rows[0][1]];
+}
+
 function censusFunnelHTML() {
   const gc = (state.data || {}).gate_census;
   if (!gc) return "";
@@ -938,7 +959,10 @@ function censusFunnelHTML() {
     tier_edge_bar: "edge under the tier's minimum",
     price_net: "price doesn't clear break-even",
     quality_under_70: "quality grade under 70",
-    held_by_rules: "held by rules (lineups pending, IL, live game, juice)" };
+    held_by_rules: "held by rules (lineups pending, IL, live game, juice)",
+    // Hoops: the two the build drops before the model ever sees them.
+    no_history: "no stored game log for this player yet",
+    props_built: "props built from history" };
   const rows = Object.entries(gc)
     .filter(([k, v]) => typeof v === "number" && v > 0
       && k !== "recommended" && k !== "calibration_markets")
@@ -1549,11 +1573,25 @@ function renderRecommended() {
         in-play lines. The other ${recs.length - real.length} prop(s) are
         waiting on real book prices, which books post close to first pitch.
         The board fills as tonight's prices arrive; no slider changes that.`;
+    } else if (!recs.length && censusTotal() > 0) {
+      /* Nothing reached the board AT ALL, which the old copy answered with
+         "loosen the sliders" — advice that cannot work, because a slider
+         filters what arrives and nothing arrived. The WNBA sat on that
+         sentence with 430 props built from history and 384 of them never
+         priced by a book. Name the biggest actual cause instead. */
+      const [why, n] = biggestCensusBucket();
+      const built = ((state.data || {}).counts || {}).props_built;
+      msg = `No props reached the board. The largest reason is
+        <b>${escapeHtml(why)}</b> (${n})${built ? ` out of ${built} built from
+        player history` : ""}. Sliders filter what arrives, so they cannot
+        help here — the full breakdown is below.`;
     } else {
       msg = `No props clear the current thresholds. Loosen the sliders or
         enable “show non-recommended”.`;
     }
-    host.innerHTML = `<p class="loading">${msg}</p>`;
+    // The funnel goes under EVERY empty message, not just the ones that
+    // mention it. "Why is this blank" is the same question in all cases.
+    host.innerHTML = `<p class="loading">${msg}</p>${censusFunnelHTML()}`;
     return;
   }
   // Group by market so all Total Bases props sit together, all Hits

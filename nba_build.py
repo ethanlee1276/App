@@ -465,11 +465,23 @@ def main() -> None:
         if "unavailable" in odds_note:
             fresh = 0.2
 
+        # Count what gets dropped here. This loop silently discarded every
+        # prop without a two-way book price, which is most of them most of
+        # the time, and nothing downstream knew the difference between "the
+        # model rejected 430 props" and "we never had a price for any of
+        # them". On the WNBA board those two produced the identical blank
+        # page — 430 props buildable from history, zero priced, no census,
+        # no explanation anywhere.
+        census = {"no_real_price": 0, "no_history": 0}
         props = []
         for prop in slate.props:
             two = best_two_way(prop.lines)
             h = hist.get(prop.player)
-            if not two or not h:
+            if not h:
+                census["no_history"] += 1
+                continue
+            if not two:
+                census["no_real_price"] += 1
                 continue
             line, over_odds, under_odds, book = two
             spread, fav = spread_by_team.get(h["team"], (0.0, False))
@@ -502,6 +514,11 @@ def main() -> None:
             "teams_on_b2b": sorted(played_yday & teams),
         })
         out.update(status="slate", **picks_result)
+        # The build's own drops and the pipeline's, in one table. Without the
+        # first two rows an empty board reads as "the model hated everything"
+        # when the truth is usually "no book had priced any of it yet".
+        out["gate_census"] = {**census, **(picks_result.get("gate_census") or {})}
+        out["counts"]["props_built"] = len(slate.props)
 
         # Shared-schema layer: the same slate shape NFL/MLB emit, so the
         # seven shared pages can render NBA. Scalpy's own keys stay put.

@@ -212,8 +212,50 @@ def run_nba_slate(props: list[dict], meta: dict | None = None,
         "near_misses": near,
         "counts": {"props_analyzed": len(props), "picks": len(chosen),
                    "near_misses": len(misses), "skipped": len(skips)},
+        # WHY each prop died, tallied. The counts above say how many were
+        # analyzed and how many survived; the difference was a number with
+        # no story attached, which on an empty board is the only thing
+        # anybody wants to know. Skips carry their own reason already and
+        # near-misses carry the gate they failed — both were computed and
+        # then thrown away.
+        "gate_census": _census(skips, misses),
         "meta": meta or {},
     }
+
+
+#: Reasons are written as prose for the card ("thin sample — under 3 usable
+#: games"), which makes a poor tally key. Collapse to the part before the
+#: dash, which is the category.
+def _reason_key(text: str) -> str:
+    """Strip the NUMBERS out, keep the category.
+
+    Reasons are written for a card, so they carry this prop's own figures:
+    "edge -1.7% < required 4.5% over break-even 52.4%". Tallied verbatim,
+    every prop becomes its own row and the census turns into a list — two
+    hundred rows reading 1. What a reader wants is "edge under required:
+    186", so the digits go and the sentence stays.
+    """
+    import re
+    head = str(text or "other").split("—")[0].split("(")[0]
+    head = re.sub(r"[-+]?\d[\d,.]*%?", "", head)          # drop the figures
+    head = re.sub(r"[<>=]+", "", head)
+    head = re.sub(r"\s+", " ", head).strip(" .,:;").lower()
+    return (head or "other")[:60]
+
+
+def _census(skips: list, misses: list) -> dict:
+    out: dict = {}
+    for r in skips:
+        k = _reason_key(r.get("why"))
+        out[k] = out.get(k, 0) + 1
+    for m in misses:
+        # The FIRST failure is the one to report: a prop that fails three
+        # gates is not three findings, and counting it three times would
+        # make the census sum to more than the props analyzed.
+        fails = m.get("fails") or ["failed a gate"]
+        k = _reason_key(fails[0])
+        out[k] = out.get(k, 0) + 1
+    return out
 
 
 # --- shared-schema adapter --------------------------------------------------
