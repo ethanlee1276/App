@@ -281,8 +281,150 @@ def fetch(date: str | None = None) -> dict:
     return _get_json(url, f"mma_live_{day}.json", ttl=10)
 
 
+# The scoreboard is a SUMMARY shape and carries no statistics — not
+# during a bout and not after one, which a probe run mid-card proved by
+# showing an already-finished fight with no stats block either. Numbers
+# live on the fuller records below. Tried in order; the first that
+# answers wins, and the probe reports which one it was.
+def _stat_sources(event_id: str, comp_id: str) -> list[tuple[str, str, str]]:
+    """[(label, url, cache-name)] — where per-fighter stats might live."""
+    from ..sources.espnmma import CORE
+
+    site = "https://site.web.api.espn.com/apis/site/v2/sports/mma/ufc"
+    return [
+        ("summary(event)", f"{site}/summary?event={event_id}",
+         f"mma_sum_ev_{event_id}.json"),
+        ("summary(competition)", f"{site}/summary?competition={comp_id}",
+         f"mma_sum_comp_{comp_id}.json"),
+        ("core(competition)",
+         f"{CORE}/events/{event_id}/competitions/{comp_id}",
+         f"mma_core_comp_{comp_id}.json"),
+    ]
+
+
+# A real boxscore nests further than feels reasonable —
+# boxscore → players → [] → statistics → [] → athletes → [] is seven
+# levels before a fighter's numbers appear, and a shallower cap silently
+# returned nothing at all. The guard is a NODE BUDGET rather than a depth
+# limit: it bounds the work without having to guess how deep is deep
+# enough, which is the guess that was wrong.
+_WALK_BUDGET = 20000
+
+
+def _walk_for_stats(node, depth: int = 0, budget: list | None = None
+                    ) -> list[dict]:
+    """Every competitor-ish object carrying stats, anywhere in a payload.
+
+    Deliberately a walk rather than a path. ESPN nests MMA statistics
+    differently across these three endpoints, and a hard-coded path that
+    is right today is a blank body diagram the week it moves. Anything
+    with a name and something that parses as a target count is a
+    candidate; `build` decides what to do with them.
+    """
+    found: list[dict] = []
+    if budget is None:
+        budget = [_WALK_BUDGET]
+    if depth > 14 or budget[0] <= 0:
+        return found
+    budget[0] -= 1
+    if isinstance(node, dict):
+        if (node.get("athlete") or node.get("fighter")
+                or node.get("displayName") or node.get("labels")):
+            stats = parse_fighter_stats(node)
+            if stats["targets"] or stats["totals"]:
+                found.append(node)
+        for v in node.values():
+            found += _walk_for_stats(v, depth + 1, budget)
+    elif isinstance(node, list):
+        for v in node:
+            found += _walk_for_stats(v, depth + 1, budget)
+    return found
+
+
+def fetch_bout_stats(event_id: str, comp_id: str) -> tuple[list[dict], str]:
+    """(competitor entries carrying stats, which source answered)."""
+    from ..sources.espnmma import _get_json
+
+    for label, url, cache in _stat_sources(event_id, comp_id):
+        try:
+            payload = _get_json(url, cache, ttl=10)
+        except Exception:  # noqa: BLE001 — try the next one
+            continue
+        hits = _walk_for_stats(payload)
+        if hits:
+            return hits, label
+    return [], ""
+
+
+def _merge_stats(bout: dict, entries: list[dict]) -> bool:
+    """Fold fetched stats into a bout parsed from the scoreboard.
+
+    Matched by NAME, because the two payloads do not agree on ordering
+    and getting a fighter's numbers onto his opponent is the one error
+    here that would look completely normal.
+    """
+    from ..sources.oddsapi import normalize_name
+
+    by_name = {}
+    for e in entries:
+        n = normalize_name(_name_of(e))
+        if n:
+            by_name.setdefault(n, parse_fighter_stats(e))
+    if not by_name:
+        return False
+
+    changed = False
+    for f in bout["fighters"]:
+        got = by_name.get(normalize_name(f["name"]))
+        if not got or not (got["targets"] or got["totals"]):
+            continue
+        f["landed"] = got["targets"] or f["landed"]
+        f["totals"] = got["totals"] or f["totals"]
+        changed = True
+    if not changed:
+        return False
+
+    if len(bout["fighters"]) == 2:
+        a, b = bout["fighters"]
+        a["absorbed"], b["absorbed"] = dict(b["landed"]), dict(a["landed"])
+    for f in bout["fighters"]:
+        f["absorbed_total"] = sum(f["absorbed"].values())
+        f["landed_total"] = sum(f["landed"].values())
+    bout["has_targets"] = any(f["landed"] for f in bout["fighters"])
+    return True
+
+
 def refresh(date: str | None = None) -> dict:
-    return build(fetch(date))
+    """The live payload, following through to wherever the stats are.
+
+    Only LIVE bouts are followed. A 14-fight card would otherwise be 14
+    extra requests every twelve seconds to re-read numbers that stopped
+    changing hours ago.
+    """
+    payload = fetch(date)
+    blob = build(payload)
+    event_id = ""
+    for ev in (payload.get("events") or []):
+        event_id = str(ev.get("id") or "")
+        break
+    if not event_id:
+        return blob
+
+    sources = set()
+    for bout in blob["bouts"]:
+        if not bout["status"]["live"] or bout["has_targets"]:
+            continue
+        entries, src = fetch_bout_stats(event_id, bout["id"])
+        if entries and _merge_stats(bout, entries):
+            sources.add(src)
+
+    if sources:
+        blob["stat_source"] = ", ".join(sorted(sources))
+        # The note was written for a card with no numbers anywhere; if the
+        # deeper read found them, it is no longer true.
+        if any(b["has_targets"] for b in blob["bouts"] if b["status"]["live"]):
+            blob["note"] = ""
+    return blob
 
 
 def probe(date: str | None = None) -> list[str]:
@@ -330,15 +472,61 @@ def probe(date: str | None = None) -> list[str]:
                              f"  totals: {parsed['totals'] or '(none)'}")
 
     blob = build(payload)
-    lines.append(f"\nstatus: {blob['status']}  live bouts: {blob.get('live_count', 0)}")
-    if blob["note"]:
-        lines.append(blob["note"])
-    if not any(b["has_targets"] for b in blob["bouts"]):
+    lines.append(f"\nscoreboard: {blob['status']}  "
+                 f"live bouts: {blob.get('live_count', 0)}")
+
+    # The scoreboard carries no statistics at all — proved by a probe run
+    # mid-card that showed an already-FINISHED bout with no stats block
+    # either. So the only question that matters is whether the deeper
+    # records have them, and this is where that gets answered.
+    event_id = str((events[0] or {}).get("id") or "") if events else ""
+    live_bouts = [b for b in blob["bouts"] if b["status"]["live"]]
+    if not event_id:
+        lines.append("no event id — cannot follow to the stats endpoints")
+        return lines
+    if not live_bouts:
+        lines.append("\nNo bout in progress, so nothing to follow. Re-run "
+                     "this while a fight is on — that is the only moment "
+                     "this question has an answer.")
+        return lines
+
+    lines.append(f"\nFollowing the deeper records for {len(live_bouts)} live "
+                 f"bout(s) — the scoreboard never carries stats:")
+    answered = False
+    for bout in live_bouts:
+        who = " vs ".join(f["name"] for f in bout["fighters"])
+        lines.append(f"  {who}")
+        for label, url, cache in _stat_sources(event_id, bout["id"]):
+            try:
+                from ..sources.espnmma import _get_json
+                data = _get_json(url, cache, ttl=10)
+            except Exception as exc:  # noqa: BLE001
+                lines.append(f"    {label:22} unreachable ({str(exc)[:60]})")
+                continue
+            hits = _walk_for_stats(data)
+            if not hits:
+                lines.append(f"    {label:22} reachable, no stats in it")
+                continue
+            answered = True
+            lines.append(f"    {label:22} ✅ {len(hits)} entr(ies) with stats")
+            for h in hits[:4]:
+                st = parse_fighter_stats(h)
+                lines.append(f"      {_name_of(h) or '?'}: "
+                             f"targets {st['targets'] or '(none)'}  "
+                             f"totals {st['totals'] or '(none)'}")
+            break                       # first source that answers wins
+
+    if answered:
+        lines.append("\nThe body diagram can be drawn from this. The live "
+                     "page follows the same path automatically.")
+    else:
         lines.append(
-            "\nNo head/body/leg counts anywhere on this card. If a fight is "
-            "LIVE above and the raw lines show stats but none of them name a "
-            "target area, this feed publishes totals only — the diagram "
-            "cannot be drawn from it and the page will say so rather than "
-            "draw an empty body. If the raw lines are empty during a live "
-            "fight, the feed publishes stats only after the bout.")
+            "\nNone of the deeper records carry per-fighter statistics for "
+            "this bout either. That is the real answer: ESPN does not "
+            "publish live strike-by-target for this card, and no amount of "
+            "waiting or re-reading changes it. The page will say so rather "
+            "than draw an empty body. If the stats appear AFTER the bout "
+            "ends, a post-fight diagram is still worth having — say the "
+            "word and it becomes a round-by-round recap instead of a live "
+            "one.")
     return lines

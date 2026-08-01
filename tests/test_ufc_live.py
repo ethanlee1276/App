@@ -219,6 +219,94 @@ def test_the_build_writes_a_payload_that_says_a_failure_was_a_failure():
     assert '"status": "unavailable"' in src
 
 
+
+# --- following through to where the stats actually are ----------------------
+def test_stats_are_looked_for_beyond_the_scoreboard():
+    """Proved by a probe run mid-card: the scoreboard carries no
+    statistics at all — an already-FINISHED bout had no stats block
+    either, so it was never "they appear after the fight". They live on
+    the fuller records, and this is the same mistake the weigh-in reader
+    made and fixed."""
+    srcs = live._stat_sources("600", "9001")
+    assert len(srcs) >= 3, "only one place is tried"
+    labels = [lbl for lbl, _u, _c in srcs]
+    assert any("summary" in l for l in labels)
+    assert any("core" in l for l in labels)
+    for _lbl, url, cache in srcs:
+        assert "600" in url or "9001" in url
+        assert cache.endswith(".json")
+
+
+def test_the_walk_finds_stats_however_they_are_nested():
+    """A hard-coded path that is right today is a blank body diagram the
+    week ESPN moves it, so this walks rather than indexes."""
+    buried = {"boxscore": {"players": [{"statistics": [{"athletes": [
+        {"athlete": {"displayName": "Deep Guy"},
+         "stats": ["21 of 40", "6 of 9"],
+         "labels": ["sigStrHead", "sigStrBody"]}]}]}]}}
+    hits = live._walk_for_stats(buried)
+    assert len(hits) == 1
+    assert live.parse_fighter_stats(hits[0])["targets"] == {"head": 21, "body": 6}
+
+
+def test_the_walk_ignores_objects_with_no_numbers_in_them():
+    assert live._walk_for_stats({"athlete": {"displayName": "Nobody"}}) == []
+    assert live._walk_for_stats({"a": {"b": {"c": "text"}}}) == []
+
+
+def test_fetched_stats_are_matched_by_name_not_by_order():
+    """The two payloads do not agree on ordering, and putting a fighter's
+    numbers on his opponent is the one error here that looks completely
+    normal."""
+    bout = live.build(_payload(_comp()))["bouts"][0]
+    assert bout["has_targets"] is False
+    # Deliberately REVERSED relative to the scoreboard's order.
+    entries = [
+        {"athlete": {"displayName": "Beta"},
+         "labels": ["sigStrHead"], "stats": ["5"]},
+        {"athlete": {"displayName": "Alpha"},
+         "labels": ["sigStrHead"], "stats": ["30"]},
+    ]
+    assert live._merge_stats(bout, entries) is True
+    alpha, beta = bout["fighters"]
+    assert alpha["landed"] == {"head": 30}
+    assert alpha["absorbed"] == {"head": 5}, "the stats landed on the wrong man"
+    assert beta["absorbed"] == {"head": 30}
+    assert bout["has_targets"] is True
+
+
+def test_a_merge_that_matches_nobody_changes_nothing():
+    bout = live.build(_payload(_comp()))["bouts"][0]
+    assert live._merge_stats(bout, [
+        {"athlete": {"displayName": "Somebody Else"},
+         "labels": ["sigStrHead"], "stats": ["9"]}]) is False
+    assert bout["has_targets"] is False
+
+
+def test_only_live_bouts_are_followed():
+    """A 14-fight card would otherwise be 14 extra requests every twelve
+    seconds to re-read numbers that stopped changing hours ago."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "engine", "ufc", "live.py"),
+               encoding="utf-8").read()
+    fn = src[src.index("def refresh("):src.index("def probe(")]
+    assert 'if not bout["status"]["live"] or bout["has_targets"]' in fn
+
+
+def test_the_probe_names_which_source_answered():
+    """The point of running it again is finding out WHERE the numbers are,
+    so "it worked" is not an answer — which endpoint has to be."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "engine", "ufc", "live.py"),
+               encoding="utf-8").read()
+    fn = src[src.index("def probe("):]
+    assert "_stat_sources(" in fn, "the probe never tries the deeper records"
+    assert "reachable, no stats in it" in fn, "a reachable-but-empty source "\
+        "must be distinguished from an unreachable one"
+    # Matched on a fragment that is contiguous in the SOURCE — the
+    # sentence is split across lines by the line length.
+    assert "publish live strike-by-target" in fn
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
