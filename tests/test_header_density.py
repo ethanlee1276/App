@@ -148,6 +148,83 @@ def test_the_phone_menu_has_no_toggle_inside_the_menu():
     assert ".more-toggle { display: none !important; }" in joined
 
 
+
+def _media_block(css, query):
+    """The body of an @media block, or "" when there is no such query."""
+    needle = "@media " + query
+    i = css.find(needle)
+    if i < 0:
+        return ""
+    depth, out, started = 0, [], False
+    for ch in css[i:]:
+        if ch == "{":
+            depth += 1
+            started = True
+        elif ch == "}":
+            depth -= 1
+            if started and depth == 0:
+                break
+        out.append(ch)
+    return "".join(out)
+
+
+# --- the two tabs Standings and Rosters added -------------------------------
+def test_the_tablet_nav_is_one_scrolling_row_not_two_stacked_ones():
+    """Ten tabs do not lay out in a row at 761-1023px. They wrapped, and
+    the header grew to 244px on an iPad in portrait — a quarter of the
+    screen handed to chrome, which is the exact complaint the header work
+    already answered at other widths."""
+    css = _read("web", "css", "styles.css")
+    block = _media_block(css, "(min-width: 761px) and (max-width: 1023px)")
+    assert block, "no tablet-width nav rule at all"
+    assert "flex-wrap: nowrap" in block, "the nav can still wrap to two rows"
+    assert "overflow-x: auto" in block, "a nowrap row with no scroll hides tabs"
+
+
+def test_the_tablet_sport_switcher_does_not_wrap_either():
+    """Six leagues plus More is ~497px of buttons; at 768 they took a
+    second row and pushed the brand row from 46px to 88."""
+    css = _read("web", "css", "styles.css")
+    assert ".sport-switch .sport-btn" in css
+    block = css[css.index(".sport-switch .sport-btn"):]
+    block = block[:block.index("}") + 1]
+    assert "padding" in block and "font-size" in block
+
+
+def test_the_sport_switcher_is_not_given_a_scroll_container():
+    """It cannot have one: the More dropdown is absolutely positioned, and
+    a scrolling parent would clip it open. Tighter buttons, not scrolling."""
+    css = _read("web", "css", "styles.css")
+    i = css.index("The sport switcher at tablet widths")
+    # The one @media block that follows that comment, brace-matched.
+    block = _media_block(css[i:], "(min-width: 761px) and (max-width: 1023px)")
+    assert block, "the tablet sport-switcher rule vanished"
+    assert "overflow-x" not in block, \
+        "a scroll container here clips the More menu open"
+
+
+def test_the_view_transition_cannot_scroll_the_page_sideways():
+    """The tab slide-in translates a view by 30px, which widened the
+    DOCUMENT for the third of a second the animation ran — so a swipe
+    landing mid-transition jogged the whole page sideways on a phone."""
+    css = _read("web", "css", "styles.css")
+    main = css[css.index("main { max-width"):]
+    main = main[:main.index("}") + 1]
+    assert "overflow-x: clip" in main or "overflow-x: hidden" in main
+
+
+def test_the_url_and_the_page_can_never_disagree():
+    """Nothing listened for a hash change, so back, forward, a pasted
+    #standings link and an in-page anchor all moved the address bar while
+    leaving the previous view on screen — and the URL you then copied
+    pointed at something you were not looking at."""
+    js = _read("web", "js", "app.js")
+    assert 'addEventListener("hashchange"' in js
+    # A tab TAP is a navigation and earns a history entry, so the phone's
+    # back-swipe returns to the tab you came from.
+    assert "switchView(b.dataset.view, true)" in js
+    assert "history.pushState" in js
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

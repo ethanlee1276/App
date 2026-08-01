@@ -142,6 +142,18 @@ def test_the_page_says_which_kind_of_roster_it_is_showing():
     assert "actually appeared" in copy
 
 
+def test_the_search_box_speaks_the_sport_it_is_sitting_on():
+    """It shipped asking for "49ers, SF, Purdy" on every league, which on
+    the MLB page is an example of nothing you can type."""
+    js = _read("web", "js", "app.js")
+    block = js[js.index("const ROSTER_PLACEHOLDER"):js.index("const ROSTER_COPY")]
+    for sport, hint in (("nfl", "Purdy"), ("mlb", "Judge"),
+                        ("nba", "Tatum"), ("wnba", "Stewart")):
+        assert f"{sport}:" in block and hint in block, f"{sport} has no examples"
+    assert "search.placeholder = ROSTER_PLACEHOLDER" in js, \
+        "the placeholder is defined but never applied"
+
+
 def test_the_builder_covers_every_sport_the_site_shows():
     src = _read("rosters_build.py")
     for sport in ("mlb", "nba", "wnba"):

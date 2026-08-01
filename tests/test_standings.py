@@ -213,6 +213,20 @@ def test_switching_leagues_redraws_the_table():
     assert 'state.view === "standings"' in fn
 
 
+def test_the_bracket_round_names_share_one_line():
+    """Letting the round name ride the space-around distribution walked
+    the headings diagonally down the page — the later the round, the lower
+    its label. Only the matchups spread out to meet the next round."""
+    css = _read("web", "css", "styles.css")
+    js = _read("web", "js", "app.js")
+    assert ".brk-matches" in css and "brk-matches" in js, \
+        "the matchups have no wrapper, so the heading still spreads"
+    block = css[css.index(".brk-round {"):]
+    block = block[:block.index("}") + 1]
+    assert "justify-content" not in block, \
+        "the round column still distributes its heading"
+
+
 def test_the_launcher_builds_them():
     src = _read("launch.py")
     fn = src[src.index("def refresh_all("):src.index("def _run_maintenance(")]

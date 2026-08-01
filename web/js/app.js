@@ -3656,6 +3656,16 @@ function rosterGroupOf(pos) {
 /* What each league's roster tab is actually showing, said plainly. The
    NFL has a published depth chart; the others are built from who really
    appeared, and the page must not let those look like the same claim. */
+/* The search box has to speak the sport it is sitting on. It shipped
+   asking for "49ers, SF, Purdy" on every league, which on the MLB page is
+   an example of nothing you can type. */
+const ROSTER_PLACEHOLDER = {
+  nfl: "Search a team or a player… (e.g. 49ers, SF, Purdy)",
+  mlb: "Search a team or a player… (e.g. Yankees, NYY, Judge)",
+  nba: "Search a team or a player… (e.g. Celtics, BOS, Tatum)",
+  wnba: "Search a team or a player… (e.g. Liberty, NYL, Stewart)",
+};
+
 const ROSTER_COPY = {
   nfl: "— every team as it stands today, ordered by the coaching staff's own "
      + "depth chart. Players who are unavailable (IR, PUP, suspended) are listed "
@@ -3820,7 +3830,7 @@ function bracketHTML(b) {
   return `<div class="brk">${b.rounds.map((r) => `
     <div class="brk-round">
       <div class="brk-round-name">${escapeHtml(r.name)}</div>
-      ${r.matchups.map((m) => {
+      <div class="brk-matches">${r.matchups.map((m) => {
         const [a, bb] = m.teams, [wa, wb] = m.score;
         const line = (team, score, won) => `<div class="brk-side${won ? " won" : ""}">
           <span class="brk-team">${escapeHtml(team)}</span>
@@ -3829,7 +3839,7 @@ function bracketHTML(b) {
           ${line(a, wa, m.leader === a)}
           ${line(bb, wb, m.leader === bb)}
         </div>`;
-      }).join("")}
+      }).join("")}</div>
     </div>`).join("")}</div>`;
 }
 
@@ -3897,6 +3907,9 @@ async function renderRosters() {
   const byAppearance = (d.source === "appearances");
   const sub = document.getElementById("rosters-sub");
   if (sub) sub.textContent = ROSTER_COPY[sport] || "— every team as it stands today.";
+  const search = document.getElementById("roster-search");
+  if (search) search.placeholder = ROSTER_PLACEHOLDER[sport]
+    || "Search a team or a player…";
   const title = document.getElementById("rosters-title");
   if (title) title.childNodes[0].nodeValue =
     `${(SPORT_META[sport] || {}).label || sport.toUpperCase()} rosters `;
@@ -5246,7 +5259,7 @@ function watchSectionSubs() {
 
 const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "trending", "players", "rosters", "standings", "record", "intel", "fantasy", "ufc", "why", "about"];
 
-function switchView(name) {
+function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
   state.view = name;
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
@@ -5275,7 +5288,16 @@ function switchView(name) {
   if (name === "why") renderWhy();
   if (name === "about") renderAbout();
   updateAgo();          // reference pages hide the freshness chip
-  if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
+  if (location.hash !== `#${name}`) {
+    // A tab TAP is a navigation and earns a history entry, so the phone's
+    // back-swipe returns to the tab you came from instead of leaving the
+    // site. Programmatic switches (first load, a sport change, bouncing
+    // off a hidden tab) replace instead — they are not places you chose to
+    // be, and stacking them would make Back walk backwards through moves
+    // you never made.
+    if (push) history.pushState({ view: name }, "", `#${name}`);
+    else history.replaceState({ view: name }, "", `#${name}`);
+  }
   moveIndicator();
 }
 
@@ -5481,7 +5503,29 @@ function initHeaderTuck() {
 /* ---------------- wiring ---------------- */
 function bind() {
   document.querySelectorAll(".nav-btn").forEach((b) =>
-    b.addEventListener("click", () => switchView(b.dataset.view)));
+    b.addEventListener("click", () => switchView(b.dataset.view, true)));
+
+  /* The URL and the page must never disagree. Nothing listened for a hash
+     change, so back, forward, a pasted #standings link and an in-page
+     anchor all moved the address bar while leaving the previous view on
+     screen — and then the URL you copied pointed at something you were not
+     looking at. */
+  window.addEventListener("hashchange", () => {
+    const h = (location.hash || "").replace("#", "");
+    if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
+    if (!h || h === state.view) return;
+    if (!VIEW_ORDER.includes(h) || !document.getElementById(`view-${h}`)) return;
+    // A tab this sport does not have stays unreachable by URL — and the
+    // address bar is put back, because refusing to navigate while leaving
+    // the URL pointing at the page you refused is the same lie in reverse.
+    if ((HIDDEN_VIEWS[state.sport] || []).includes(h)) {
+      history.replaceState({ view: state.view }, "", `#${state.view}`);
+      return;
+    }
+    if (STANDALONE_MODES.includes(h)) { enterStandaloneMode(h); return; }
+    exitStandaloneMode();
+    switchView(h);
+  });
 
   document.querySelectorAll(".sport-btn").forEach((b) =>
     b.addEventListener("click", () => {
