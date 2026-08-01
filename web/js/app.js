@@ -5591,6 +5591,12 @@ function switchView(name, push = false) {
     if (push) history.pushState({ view: name }, "", `#${name}`);
     else history.replaceState({ view: name }, "", `#${name}`);
   }
+  // Called HERE rather than at each tap, because switchView is the single
+  // place the highlight changes. Wiring it to the click handlers only
+  // covered taps: coming back with the phone's back-swipe re-rendered the
+  // page but left the header reading the tab you had just left, so the one
+  // line telling you where you are was the one line that was wrong.
+  syncMenuLabel();
   moveIndicator();
 }
 
@@ -5806,7 +5812,17 @@ function bind() {
   window.addEventListener("hashchange", () => {
     const h = (location.hash || "").replace("#", "");
     if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
-    if (!h || h === state.view) return;
+    // An EMPTY hash is a destination, not a no-op: it is the entry the
+    // first tab tap pushed on top of, so backing all the way out landed on
+    // "/" with the last tab still on screen and the URL claiming the board.
+    // One more back would then leave the site from a page you were not on.
+    if (!h) {
+      if (state.view === "recommended") return;
+      exitStandaloneMode();
+      switchView("recommended");
+      return;
+    }
+    if (h === state.view) return;
     if (!VIEW_ORDER.includes(h) || !document.getElementById(`view-${h}`)) return;
     // A tab this sport does not have stays unreachable by URL — and the
     // address bar is put back, because refusing to navigate while leaving

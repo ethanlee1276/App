@@ -4,7 +4,7 @@
    Self-hosted, because everything else on this site works with the
    network unplugged and the fonts should too — a board that renders in
    Times New Roman the one night your wifi drops is not a board you trust.
-   Three files, 60KB total, and `font-display: swap` means text is
+   Two files, 45KB total, and `font-display: swap` means text is
    readable before they land rather than invisible.
 
    Instrument Serif for headings, Instrument Sans for everything else.
@@ -25,13 +25,6 @@
   src: url("../fonts/instrument-serif.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Instrument Serif";
-  src: url("../fonts/instrument-serif-italic.woff2") format("woff2");
-  font-weight: 400;
-  font-style: italic;
   font-display: swap;
 }
 
@@ -133,6 +126,14 @@ h1, h2, h3 { margin: 0; font-family: var(--font-display); font-weight: 400; }
 /* The serif is a DISPLAY face — it is drawn for size and goes muddy
    small, so it is never used below ~17px. Section headings keep the
    sans, because at 11px in caps a serif is just noise. */
+
+/* No italic serif ships. It was declared for a while and I tried putting
+   prose emphasis in it — the obvious home for an editorial italic. A
+   screenshot at 390px/DPR3 killed it: our prose runs 13–14.5px, and this
+   serif's thin strokes at 13px on a dark panel read LIGHTER than the
+   sentence around them, so `<em>` came out looking de-emphasised. The
+   floor above is not a style preference, it is where the face stops
+   working. Emphasis stays in the sans. */
 
 /* ---------------- Top bar + nav ---------------- */
 .topbar {
@@ -304,7 +305,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    hug the left edge with two-thirds of the screen empty beside it, which
    reads as broken rather than selective — and sparse IS this product's
    normal state, since the models are built to pass on most things. */
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(346px, 440px));
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(346px, 100%), 440px));
   gap: 18px; justify-content: center; }
 .loading { color: var(--text-dim); grid-column: 1 / -1; text-align: center; padding: 60px; }
 .card {
@@ -323,7 +324,22 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .card.faded { opacity: .6; }
 .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--grade-color, var(--text-mute)); }
 
-.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+/* space-between distributes LEFTOVER space; it does not make anything
+   shrink. Flex items default to min-width:auto, so a long market question
+   refuses to go below its content width and shoves the trailing status
+   chip past the card's right edge — where .card's overflow:hidden cuts it
+   in half. Measured on Polymarket at 320px: "HISTORICAL" lost its tail.
+   min-width:0 lets the title wrap; the chip stays whole.
+
+   :not(:first-child) below matters: plenty of card heads hold a title and
+   nothing else, and pinning an only child to flex:0 0 auto stops it
+   shrinking at all — a 258px head with an 830px child, far worse than the
+   bug being fixed. Only a TRAILING sibling gets pinned. And wrap, because
+   at 320px a title and a "HISTORICAL" chip genuinely do not share a line;
+   the chip drops below rather than off. */
+.card-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.card-head > * { min-width: 0; }
+.card-head > :last-child:not(:first-child) { flex: 0 0 auto; }
 .card-id { display: flex; gap: 12px; align-items: flex-start; }
 .avatar { border-radius: 50%; flex-shrink: 0; box-shadow: 0 3px 12px rgba(0, 0, 0, .4); }
 .player { font-size: 18px; font-weight: 800; letter-spacing: -0.2px; }
@@ -444,7 +460,10 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    row inside push the column past its track and the whole page into
    horizontal scroll on phones (the classic grid blowout). */
 .trend-col { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 16px; min-width: 0; }
-.trend-col h3 { font-size: 14px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+/* 14px is under the serif's floor (see the display-face note near the top),
+   and a measurement across every view found this was the only heading that
+   broke it. It is a column LABEL, not a headline, so it takes the sans. */
+.trend-col h3 { font-family: var(--font-sans); font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .trend-col .colsub { color: var(--text-mute); font-size: 12px; margin-bottom: 12px; }
 .trow { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: var(--radius-sm); cursor: pointer; transition: background .15s ease; }
 .trow:hover { background: var(--fill-hover); }
@@ -467,7 +486,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .search-wrap input:focus { border-color: var(--brand); box-shadow: var(--ring); }
 .search-wrap .ico { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-mute); font-size: 17px; }
 
-.player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 18px; }
+.player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: 18px; }
 .profile {
   background: linear-gradient(180deg, var(--panel-2), var(--panel));
   border: 1px solid var(--border-soft); border-radius: var(--radius); box-shadow: var(--shadow);
@@ -481,7 +500,13 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .profile-head .sub { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
 .profile-head .grade { align-self: flex-start; }
 
-.form-tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 0 18px 14px; }
+/* minmax(0, 1fr), not 1fr: a bare 1fr is minmax(AUTO, 1fr), so a track
+   whose label is wider than its fifth of the row grows instead of sharing,
+   and five uneven tracks pushed the last tile out of the card at 320px.
+   With the floor at 0 the five columns are genuinely equal and the label
+   wraps inside its tile. */
+.form-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 0 18px 14px; }
+.form-tile .k, .form-tile .v { overflow-wrap: break-word; }
 .form-tile { background: var(--fill-subtle); border: 1px solid var(--border-soft); border-radius: 10px; padding: 8px 6px; text-align: center; }
 .form-tile .k { font-size: 10px; color: var(--text-mute); text-transform: uppercase; letter-spacing: .4px; }
 .form-tile .v { font-size: 16px; font-weight: 800; margin-top: 2px; }
@@ -1198,9 +1223,18 @@ select.calc-in { width: auto; font-weight: 600; }
    tracks it doesn't use, so a section holding two cards stretched them to
    660px each — a card twice the width of the same card one section down.
    auto-fill keeps the column width fixed and lets a short row end early,
-   which is what a grid of comparable things should do. */
+   which is what a grid of comparable things should do.
+
+   The min() is not decoration. A bare minmax(340px, 1fr) is a FLOOR, so in
+   a container narrower than 340px the track stays 340px and overflows it.
+   `.cards` is overridden to 1fr on phones, but `.cards.wide` outranks that
+   rule on specificity, so Polymarket, Fantasy and the UFC board kept a
+   340px track inside a 296px column at 320px wide — and `.card`'s
+   overflow:hidden then CHOPPED the right 44px off every card rather than
+   letting it scroll. min(340px, 100%) lets the floor collapse to the
+   container when the container is smaller, which is the whole trick. */
 .cards.wide {
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
   justify-content: stretch;
 }
 
@@ -2208,6 +2242,14 @@ select.calc-in { width: auto; font-weight: 600; }
      Volkan…" identifies nobody, and there is vertical room here. */
   .lf-name { white-space: normal; overflow: visible; font-size: 12.5px;
              line-height: 1.25; min-height: 2.5em; }
+
+  /* A fixed column count stops working somewhere, and for these it is the
+     small phone. Measured at 320px: the four-up long shot row leaves 33px
+     of usable label width once padding is taken out, so "chances" — one
+     unbreakable word about 45px wide — ran straight out of the card, which
+     clips. Two-up gives ~71px and the labels fit. The three-up metric row
+     was doing a smaller version of the same thing (4.5px over). */
+  .metrics, .card.longshot .metrics { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ============================================================
