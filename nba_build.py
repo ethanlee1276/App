@@ -174,6 +174,100 @@ def best_two_way(lines) -> tuple | None:
     return line, over.over_odds, under.under_odds, over.book
 
 
+def diagnose(league: str, date: str) -> None:
+    """Why does this board have no props? Answer it with counts, not guesses.
+
+    Every prop here is projected from stored player game logs, and the query
+    that finds them is narrow on purpose — this sport, these teams, these
+    seasons. Any one of the three failing produces the same symptom: a slate
+    with games on it and nothing to bet. From the outside those look
+    identical, and from the terminal they were invisible.
+
+    So print each filter and what survives it. The line that drops to zero
+    is the answer.
+    """
+    from engine.seasons import recent_seasons
+    if league == "wnba":
+        from engine.sources.wnbaespn import fetch_schedule, parse_schedule_day
+    else:
+        from engine.sources.nbadata import fetch_schedule, parse_schedule_day
+
+    L = league.upper()
+    print(f"\n{L} prop diagnosis for {date}")
+    try:
+        games = parse_schedule_day(fetch_schedule(), date)
+    except DataUnavailable as exc:
+        print(f"  Schedule            UNREACHABLE — {exc}")
+        print(f"  Nothing downstream can work without it. Fix the feed first.")
+        return
+    print(f"  Schedule            {len(games)} game(s)"
+          + (": " + ", ".join(f"{g['away']}@{g['home']}" for g in games[:6])
+             if games else " — nothing scheduled, so no props is correct"))
+    if not games:
+        return
+
+    teams = {t for g in games for t in (g["home"], g["away"])}
+    seasons = recent_seasons(league, date)
+    print(f"  Teams tonight       {', '.join(sorted(teams))}")
+    print(f"  Seasons queried     {seasons}")
+
+    conn = connect()
+    total = conn.execute("SELECT COUNT(*) FROM player_game_logs WHERE sport=?",
+                         (league,)).fetchone()[0]
+    print(f"  Logs in DB          {total:,} row(s) for {league}")
+    if not total:
+        print(f"  ✗ No player logs at all. Fix: python3 ingest.py {league} "
+              f"--seasons 2021-2026")
+        return
+
+    by_season = conn.execute(
+        "SELECT season, COUNT(*) n FROM player_game_logs WHERE sport=? "
+        "GROUP BY season ORDER BY season", (league,)).fetchall()
+    print("    by season         "
+          + " · ".join(f"{r['season']}: {r['n']:,}" for r in by_season))
+    in_window = sum(r["n"] for r in by_season if r["season"] in seasons)
+    if not in_window:
+        print(f"  ✗ Logs exist, but NONE in the seasons this board reads "
+              f"({seasons}). The ingest and the query disagree about which "
+              f"year these games belong to.")
+        return
+
+    codes = {r["team"] for r in conn.execute(
+        "SELECT DISTINCT team FROM player_game_logs WHERE sport=? "
+        "AND season IN (%s)" % ",".join("?" * len(seasons)),
+        (league, *seasons))}
+    print(f"    team codes seen   {', '.join(sorted(codes))}")
+    hit, miss = teams & codes, teams - codes
+    print(f"  Team-code match     {len(hit)} of {len(teams)} tonight's teams "
+          f"appear in the logs")
+    if miss:
+        print(f"  ✗ No logs under: {', '.join(sorted(miss))}")
+        print(f"    The schedule feed and the ingest are naming the same "
+              f"clubs differently, so the query matches nothing. This is a "
+              f"code fix, not an ingest — nothing you re-run will help.")
+        if not hit:
+            return
+
+    hist = player_history(conn, teams, sport=league, seasons=seasons)
+    ready = [p for p, h in hist.items() if len(h["minutes"]) >= 3]
+    print(f"  Players found       {len(hist)}")
+    print(f"  With 3+ games       {len(ready)}")
+    print(f"  Props buildable     {len(ready) * len(SLATE_MARKETS)}")
+    if not ready and hist:
+        print(f"  ✗ Players are in the logs but none has three games in "
+              f"{seasons} — too early in the season to project anyone.")
+    elif ready and not miss:
+        print(f"  ✓ The history is fine. If the board is still empty, the "
+              f"props are being built and then filtered — check the gate "
+              f"census under \"Where tonight's props died\" on the page.")
+    elif ready:
+        # Partial match. Saying "the history is fine" here would contradict
+        # the ✗ three lines up, and a report that argues with itself is
+        # worse than one that says nothing.
+        print(f"  ⚠️  Only the matched teams can be priced — tonight's board "
+              f"will be missing every player on {', '.join(sorted(miss))}.")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("date", nargs="?",
@@ -186,7 +280,13 @@ def main() -> None:
     # 40-minute game) and the fact that its tuning has never been fitted to
     # WNBA results — see engine/hoops.py.
     ap.add_argument("--league", choices=["nba", "wnba"], default="nba")
+    ap.add_argument("--diagnose", action="store_true",
+                    help="report exactly where this board loses its props "
+                         "(schedule teams vs stored logs) and exit")
     args = ap.parse_args()
+    if args.diagnose:
+        diagnose(args.league, args.date)
+        return
     tune = for_league(args.league)
     # Swap in whatever this league's OWN results can measure. The WNBA
     # shipped inheriting the NBA's margin SD and stat spreads because
