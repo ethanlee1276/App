@@ -23,15 +23,28 @@ TEAM_MARKETS = {"moneyline", "spread", "team_total"}
 
 def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
                         games: list[dict],
-                        progress: dict | None = None) -> list[dict]:
+                        progress: dict | None = None,
+                        longshots: list[dict] | None = None) -> list[dict]:
     """One row per open journaled pick whose game is LIVE right now.
 
     ``progress``: {normalized player name: {market: current value}} from
     engine.mlb.livestats — optional; rows render without it.
+
+    ``longshots``: the Long Shots board. A player prop is placed on the
+    field by looking its name up in the recommendations, and long shots are
+    NOT in that list — they are a separate board with its own bucket in the
+    journal. Without them here, every home-run bet the site recommends maps
+    to nothing and reports itself as unmapped, which is how a full night of
+    live long shots renders as an empty tracker.
     """
     progress = progress or {}
     rec_idx = {(normalize_name(r.get("player", "")), r.get("market", "")): r
                for r in recommendations}
+    # The main board wins a collision: if the same player+market is on both,
+    # the main row is the one carrying the staked bet's context.
+    for r in (longshots or []):
+        rec_idx.setdefault(
+            (normalize_name(r.get("player", "")), r.get("market", "")), r)
 
     def _game_for(team, opp=None, gn=0):
         matches = []

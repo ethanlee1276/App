@@ -26,6 +26,14 @@ from engine.sources.fetch import DataUnavailable
 from engine.rules import RuleConfig
 
 
+def _shift_day(date: str, days: int) -> str:
+    """YYYY-MM-DD ± n days. String arithmetic on dates is how the --stuck
+    listing once compared "2026-W1" against "2026-08-01" and decided the
+    football bet was older."""
+    d = datetime.date.fromisoformat(date) + datetime.timedelta(days=days)
+    return d.isoformat()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build a live MLB slate and run the model.")
     ap.add_argument("date", help="slate date, YYYY-MM-DD")
@@ -401,10 +409,34 @@ def main() -> None:
         from engine.mlb.livestats import parse_live_stats, parse_situation
         from engine.mlb.sources.statslogs import fetch_boxscore, fetch_linescore
         _lpc = _lp_ledger.connect()
-        open_bets = [dict(r) for r in _lpc.execute(
-            "SELECT player, market, side, line, odds, stake_units FROM bets "
-            "WHERE status='open' AND sport='mlb' AND date=? AND category='main'",
-            (args.date,))]
+        # Two filters used to sit here, and between them they hid most of a
+        # normal night.
+        #
+        # category='main' excluded 'longshot' — the home-run board, which on
+        # an MLB slate is where most of the action is. Those are real picks
+        # at real prices, journaled, graded, and scored on the Record page;
+        # they were simply never eligible to appear on the Live tab.
+        #
+        # date=? excluded any bet whose journal date drifted off the slate's.
+        # That drift is real and we have already fixed it once in the other
+        # direction: a long shot is stamped with its GAME's date, so a 10 PM
+        # first pitch lands on tomorrow in UTC. The bet is live on tonight's
+        # card and was filed under a date this query would not ask for.
+        #
+        # So: ask for a window, and let the game-matching decide. Bets filed
+        # under today are all shown, mapped or not, because the section's
+        # count has to reconcile with the Record's. Bets pulled in from the
+        # neighbouring days are shown only if they actually land on a game
+        # in tonight's slate — otherwise a widened window becomes clutter.
+        _cols = ("player, market, side, line, odds, stake_units, date, category")
+        _where = ("status='open' AND sport='mlb' "
+                  "AND category IN ('main','longshot')")
+        open_today = [dict(r) for r in _lpc.execute(
+            f"SELECT {_cols} FROM bets WHERE {_where} AND date=?", (args.date,))]
+        _near = [_shift_day(args.date, d) for d in (-1, 1)]
+        open_near = [dict(r) for r in _lpc.execute(
+            f"SELECT {_cols} FROM bets WHERE {_where} AND date IN (?,?)",
+            tuple(_near))]
         progress: dict = {}
         situations: dict = {}
         for g in slate.games:
@@ -429,13 +461,22 @@ def main() -> None:
                                   gd.get("game_number") or 1))
             if sit and isinstance(gd.get("live"), dict):
                 gd["live"]["situation"] = sit
-        result["live_picks"] = assemble_live_picks(
-            open_bets, result["recommendations"], result["games"], progress)
-        # Open bets from OTHER dates can't map to today's games — say they
-        # exist so the page's count always reconciles with the Record's.
-        result["open_elsewhere"] = _lpc.execute(
+        _ls = result.get("long_shots") or []
+        rows = assemble_live_picks(open_today, result["recommendations"],
+                                   result["games"], progress, _ls)
+        rows += [r for r in assemble_live_picks(open_near,
+                                                result["recommendations"],
+                                                result["games"], progress, _ls)
+                 if r["status"] != "unmapped"]
+        result["live_picks"] = rows
+        # Every other open bet, so the page's count always reconciles with
+        # the Record's. Counted as "all open minus what we are showing"
+        # rather than "not today's date", because the window above now
+        # shows some bets whose journal date is not today.
+        _all_open = _lpc.execute(
             "SELECT COUNT(*) FROM bets WHERE status='open' AND sport='mlb' "
-            "AND category='main' AND date != ?", (args.date,)).fetchone()[0]
+            "AND category IN ('main','longshot')").fetchone()[0]
+        result["open_elsewhere"] = max(0, _all_open - len(rows))
         if result["live_picks"]:
             n_live = sum(1 for r in result["live_picks"] if r["phase"] == "live")
             print(f"Open-bet tracker: {len(result['live_picks'])} on today's "

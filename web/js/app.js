@@ -1033,6 +1033,11 @@ function renderLivePicks() {
   const onBoard = new Set();
   const norm = (s) => String(s || "").toLowerCase().trim();
   sig.props.forEach((p) => onBoard.add(`${norm(p.player)}|${norm(p.market)}`));
+  // Long shots are a board of their own. Leaving them out here marked every
+  // tracked home-run bet "no longer on the board" while it sat, recommended,
+  // on the Long Shots page two tabs over.
+  (state.data.long_shots || []).forEach(
+    (p) => onBoard.add(`${norm(p.player)}|${norm(p.market)}`));
   [...sig.sharpBets, ...sig.modelBets].forEach((b) => {
     [b.team, b.player, b.pick].forEach((t) => {
       if (t) onBoard.add(`${norm(t)}|${norm(b.market)}`);
