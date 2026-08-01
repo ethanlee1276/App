@@ -65,14 +65,51 @@ def load_book() -> dict:
     return book
 
 
-def needs_draft(book: dict, name: str, refresh: bool = False) -> bool:
+# How long a fighter ESPN could not find stays skipped. Not forever: a
+# debutant can be added to their database later in the week, and a
+# transient failure must not blacklist somebody permanently. Not zero
+# either — see `needs_draft`.
+UNFOUND_RETRY_H = 24
+UNFOUND_KEY = "_unfound"
+
+
+def _unfound(book: dict) -> dict:
+    u = book.get(UNFOUND_KEY)
+    return u if isinstance(u, dict) else {}
+
+
+def needs_draft(book: dict, name: str, refresh: bool = False,
+                now: str | None = None) -> bool:
     """Is this fighter missing, or an auto entry worth re-fetching?
 
     Never true for a hand-written entry. The one thing this tool must not
     do is overwrite something a human decided.
+
+    A fighter ESPN could not find is remembered and skipped for a day, and
+    that is load-bearing rather than tidy. Failures were not recorded at
+    all, so an unfindable name needed drafting forever, sat at the front of
+    the card, and consumed the launcher's whole per-tick budget every
+    cycle — four debutants on one card meant the seven real fighters
+    behind them were never drafted at all. Observed in the wild as
+    "drafted 0, 7 still to draft, 4 not on ESPN", every single refresh.
     """
+    import datetime as _dt
+
     existing = book.get(name)
     if not isinstance(existing, dict):
+        if refresh:
+            return True
+        rec = _unfound(book).get(name) or {}
+        when = rec.get("last_tried")
+        if when:
+            try:
+                age_h = (_dt.datetime.fromisoformat(now or _dt.datetime.now()
+                                                    .isoformat())
+                         - _dt.datetime.fromisoformat(when)).total_seconds() / 3600
+            except (TypeError, ValueError):
+                age_h = UNFOUND_RETRY_H + 1
+            if 0 <= age_h < UNFOUND_RETRY_H:
+                return False
         return True
     auto = str(existing.get("source", "")).endswith("-auto")
     # Auto drafts from an older schema (no career_fights marker) are
@@ -92,28 +129,48 @@ def draft(names: list[str], refresh: bool = False, limit: int | None = None,
     refresh for half an hour. Progress is written to disk as it goes, so
     every tick keeps what it earned.
     """
+    import datetime as _dt
+
     book = load_book()
     from engine.sources.espnmma import fetch_dossier, octagon_styles, _norm
     styles = octagon_styles()      # one request; style hints for ranked names
     drafted, kept, missing = [], [], []
+    unfound = dict(_unfound(book))
+    # The budget counts fighters DRAFTED, not attempts. A name ESPN cannot
+    # find costs one quick search; a name it can costs ~50 requests and
+    # half a minute. Charging both to the same allowance let the cheap
+    # failures crowd out the expensive successes. Attempts are still
+    # bounded, so a card of thirty unfindable names cannot spin.
+    attempts, max_attempts = 0, (limit * 4 if limit is not None else None)
     for name in names:
         if not needs_draft(book, name, refresh):
             kept.append(name)
             continue
-        if limit is not None and len(drafted) + len(missing) >= limit:
+        if limit is not None and len(drafted) >= limit:
             continue                     # next tick picks this one up
+        if max_attempts is not None and attempts >= max_attempts:
+            continue
+        attempts += 1
         if verbose:
             print(f"  fetching {name} … (a fighter takes ~30s the first time)")
+        def _remember_missing():
+            rec = unfound.get(name) or {"attempts": 0}
+            rec["attempts"] = int(rec.get("attempts", 0)) + 1
+            rec["last_tried"] = _dt.datetime.now().isoformat(timespec="seconds")
+            unfound[name] = rec
         try:
             d = fetch_dossier(name, style_hint=styles.get(_norm(name)))
         except DataUnavailable as exc:
             if verbose:
                 print(f"  ⚠️  {name}: {exc}")
+            _remember_missing()
             missing.append(name)
             continue
         if d is None:
+            _remember_missing()
             missing.append(name)
             continue
+        unfound.pop(name, None)          # found at last — stop skipping him
         book[name] = d
         # Record the gym on every draft. A camp CHANGE is only visible
         # because we remember where he was last time — the same
@@ -129,6 +186,7 @@ def draft(names: list[str], refresh: bool = False, limit: int | None = None,
         drafted.append(name)
         DOSSIERS.write_text(json.dumps(book, indent=2))   # save as we go
 
+    book[UNFOUND_KEY] = unfound
     DOSSIERS.write_text(json.dumps(book, indent=2))
     return book, drafted, kept, missing
 

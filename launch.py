@@ -431,7 +431,9 @@ def _auto_dossiers(quiet: bool = False) -> None:
             if left:
                 note += f", {left} still to draft (a few per refresh)"
             if missing:
-                note += f", {len(missing)} not on ESPN (debut/spelling)"
+                note += (f", {len(missing)} not on ESPN (debut/spelling) — "
+                         f"skipped for a day so they stop crowding out the "
+                         f"fighters that can be drafted")
             print(note)
     except Exception as exc:  # noqa: BLE001 — never let this stop the card
         if not quiet:
@@ -1160,7 +1162,11 @@ def _browser_sweep(ok: str, warn: str, bad: str) -> None:
         return
 
     print("\n  Page render sweep (headless browser):")
-    port = 8973
+    # Port 0 lets the OS pick a free one. A fixed port here meant two
+    # --check runs at once — or one left half-finished — failed on
+    # "address already in use" during a HEALTH CHECK, which is the worst
+    # possible moment to hand somebody an error about our own plumbing.
+    port = 0
     server = None
     try:
         # The sweep's own server must not narrate every asset fetch into
@@ -1170,6 +1176,7 @@ def _browser_sweep(ok: str, warn: str, bad: str) -> None:
                 pass
 
         server = ThreadingHTTPServer(("127.0.0.1", port), _Quiet)
+        port = server.server_address[1]        # whatever the OS handed us
         server.live_mode = True
         threading.Thread(target=server.serve_forever, daemon=True).start()
         with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False,
@@ -2245,7 +2252,24 @@ def main() -> None:
         print("  (no ODDS_API_KEY set — using model/proxy lines; live scores still update)")
     refresh_all()
 
-    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    try:
+        server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    except OSError as exc:
+        # "Address already in use" is not a crash, it is the single most
+        # ordinary thing that can happen: the site is already running in
+        # another window. A traceback for that teaches somebody to be
+        # afraid of their own tool.
+        if getattr(exc, "errno", None) not in (48, 98, 10048):
+            raise
+        print(f"\n  ⚠️  Port {port} is already in use — Qellys Book is almost "
+              f"certainly already running.\n"
+              f"\n  Open it:            http://localhost:{port}\n"
+              f"  Or use another port: python3 launch.py {port + 1}\n"
+              f"\n  If you want to restart it, close the other Terminal "
+              f"window (Ctrl+C in it) and run this again. To find it:\n"
+              f"      lsof -ti :{port}          ← the process id\n"
+              f"      kill $(lsof -ti :{port})  ← stop it\n")
+        return
     server.live_mode = True
 
     # Daily chores run in the background so the site is up immediately; the

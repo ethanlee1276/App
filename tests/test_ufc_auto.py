@@ -201,6 +201,91 @@ def test_the_probe_is_dispatched_not_just_defined():
     assert '"--probe-weighins" in argv' in src
 
 
+
+# --- the livelock, seen in the wild -----------------------------------------
+def test_a_fighter_espn_cannot_find_stops_eating_the_budget():
+    """Observed on a real card as "drafted 0, 7 still to draft, 4 not on
+    ESPN" — every single refresh. Failures were never recorded, so an
+    unfindable name needed drafting forever, sat at the front of the card,
+    and consumed the whole per-tick allowance. The seven real fighters
+    behind it were never drafted at all."""
+    import ufc_dossiers as UD
+    book = {"_unfound": {"Debut Guy": {"last_tried": "2026-08-01T10:00:00",
+                                       "attempts": 1}}}
+    assert UD.needs_draft(book, "Debut Guy", now="2026-08-01T11:00:00") is False
+    # …but not forever: he may be added to their database later in the week.
+    assert UD.needs_draft(book, "Debut Guy", now="2026-08-03T11:00:00") is True
+    # And an explicit refresh always retries.
+    assert UD.needs_draft(book, "Debut Guy", refresh=True,
+                          now="2026-08-01T11:00:00") is True
+
+
+def test_a_corrupt_timestamp_retries_rather_than_blocking_forever():
+    import ufc_dossiers as UD
+    book = {"_unfound": {"X": {"last_tried": "not a date"}}}
+    assert UD.needs_draft(book, "X", now="2026-08-01T11:00:00") is True
+
+
+def test_the_budget_counts_drafts_not_attempts():
+    """A name ESPN cannot find costs one quick search; a name it can costs
+    ~50 requests and half a minute. Charging both to the same allowance
+    let the cheap failures crowd out the expensive successes."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "ufc_dossiers.py"), encoding="utf-8").read()
+    fn = src[src.index("def draft("):src.index("def _fighters(")]
+    assert "len(drafted) >= limit" in fn, "failures still consume the budget"
+    assert "max_attempts" in fn, "a card of unfindable names could spin"
+
+
+def test_a_fighter_found_at_last_stops_being_skipped():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "ufc_dossiers.py"), encoding="utf-8").read()
+    assert "unfound.pop(name, None)" in src
+
+
+def test_the_unfound_list_is_not_mistaken_for_a_dossier():
+    """It lives in the same file, so anything walking fighters has to skip
+    it or the review tool will try to review a bookkeeping record."""
+    import ufc_dossiers as UD
+    book = {"_readme": "x", "_unfound": {"A": {}},
+            "Real Guy": {"archetype": "wrestler"}}
+    assert [k for k, _v in UD._fighters(book)] == ["Real Guy"]
+
+
+# --- the port that was already in use ---------------------------------------
+def test_an_already_running_site_is_explained_not_traced():
+    """"Address already in use" is the most ordinary thing that can
+    happen — the site is open in another window. A traceback for that
+    teaches somebody to be afraid of their own tool."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "launch.py"), encoding="utf-8").read()
+    # Anchor on the bind and read forward past the handler — the block is
+    # long because it explains what to do, which is the point.
+    # The LIVE server, not the health-check sweep's — there are two binds
+    # and only one of them is the site.
+    i = src.index('ThreadingHTTPServer(("0.0.0.0"')
+    block = src[src.rindex("try:", 0, i):src.index("server.live_mode", i)]
+    assert "except OSError" in block
+    assert "48" in block and "98" in block, "only one platform's errno"
+    assert "already running" in block
+    assert "lsof" in block, "no way to find the other process"
+    # A different OSError must still surface.
+    assert "raise" in block
+
+
+def test_the_health_check_does_not_fight_over_a_fixed_port():
+    """A fixed port meant two --check runs at once, or one left
+    half-finished, failed on "address already in use" during a HEALTH
+    CHECK — the worst possible moment to hand somebody an error about our
+    own plumbing."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "launch.py"), encoding="utf-8").read()
+    i = src.index("Page render sweep (headless browser)")
+    block = src[i:i + 900]
+    assert "port = 0" in block, "the sweep still binds a hard-coded port"
+    assert "server.server_address[1]" in src, \
+        "the OS-chosen port is never read back, so the browser gets the wrong one"
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
