@@ -213,6 +213,56 @@ def test_the_thin_bar_is_named_and_sized_for_a_real_slate():
     assert ledger.THIN_DAY_PLAYERS >= 50
 
 
+def test_a_late_game_filed_on_the_next_date_is_its_own_diagnosis():
+    """His 7-27 board: 278 players and 12 games stored, and thirty regulars
+    "missing" anyway. A 10pm Pacific first pitch is already tomorrow in UTC,
+    so the bet's slate date and the feed's game date can differ by one. That
+    is a boundary bug, not a DNP and not a spelling difference, and calling
+    it either would send someone to fix the wrong thing."""
+    lconn = _one_bet("Cal Raleigh", date="2026-07-27")
+    hconn = db.connect(":memory:")
+    _day(hconn, "2026-07-27", 278)
+    _day(hconn, "2026-07-28", 368, extra_names=("Cal Raleigh",))
+    r = ledger.why_open(lconn, hconn, D_NOW)[0]
+    assert r["reason"] == "logged under the next day"
+    assert r["logged_on"] == "2026-07-28"
+
+
+def test_a_genuinely_absent_player_is_still_reported_as_absent():
+    """The neighbour check must not swallow the real DNPs."""
+    lconn = _one_bet("Never Played", date="2026-07-27")
+    hconn = db.connect(":memory:")
+    _day(hconn, "2026-07-27", 278)
+    _day(hconn, "2026-07-28", 368)
+    r = ledger.why_open(lconn, hconn, D_NOW)[0]
+    assert r["reason"] == "player has no log"
+    assert not r.get("logged_on")
+
+
+def test_the_neighbour_search_only_looks_one_day_each_way():
+    """Two days out is a different game, and matching it would grade a bet
+    against the wrong night's box score — the worst outcome available."""
+    lconn = _one_bet("Cal Raleigh", date="2026-07-27")
+    hconn = db.connect(":memory:")
+    _day(hconn, "2026-07-27", 278)
+    _day(hconn, "2026-07-30", 300, extra_names=("Cal Raleigh",))
+    r = ledger.why_open(lconn, hconn, D_NOW)[0]
+    assert r["reason"] == "player has no log"
+
+
+def test_a_week_label_has_no_neighbours_to_search():
+    """NFL dates are not days, so date arithmetic on them must not throw."""
+    lconn = ledger.connect(os.path.join(tempfile.mkdtemp(), "l.db"))
+    lconn.execute(
+        "INSERT INTO bets (sport,date,player,market,side,line,odds,grade,"
+        "stake_units,stake_dollars,status,category) VALUES ('nfl','2026-W1',"
+        "'A Receiver','rec_yds','OVER',50.5,-110,'A',1.0,10.0,'open','main')")
+    lconn.commit()
+    hconn = db.connect(":memory:")
+    rows = ledger.why_open(lconn, hconn, D_NOW)
+    assert rows and rows[0]["reason"]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

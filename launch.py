@@ -1816,7 +1816,9 @@ def show_stuck() -> None:
         group = by_reason[reason]
         print(f"  {len(group):>4}  {reason}")
         for r in sorted(group, key=lambda x: x["date"])[:6]:
-            near = f"  ~ feed has {r['closest']!r}" if r.get("closest") else ""
+            near = (f"  → logged on {r['logged_on']}" if r.get("logged_on")
+                    else f"  ~ feed has {r['closest']!r}" if r.get("closest")
+                    else "")
             print(f"          {r['date']}  {r['sport']:<5} "
                   f"{(r['player'] or '')[:26]:<26} {r['market']} "
                   f"({r['age_days']}d){near}")
@@ -1847,6 +1849,12 @@ def show_stuck() -> None:
             "a DNP (correct to void), or the journal spells his name "
             "differently from the feed (a name-map fix — the line shows the "
             "closest name the feed has, when there is one).",
+        "logged under the next day":
+            "the player IS in the results, on the date beside this one — a "
+            "late first pitch that is already tomorrow in UTC. The bet's "
+            "slate date and the feed's game date disagree, which is a "
+            "boundary bug rather than a missing result. Tell me and I will "
+            "fix the join.",
         "day barely ingested":
             "the date has far too few players stored to conclude anything "
             "about one of them — the ingest for that day did not finish. "

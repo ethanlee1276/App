@@ -712,6 +712,30 @@ STUCK_AFTER_DAYS = 2
 THIN_DAY_PLAYERS = 120
 
 
+def _logged_within(hist_conn, b, want: str, days: int = 1) -> str | None:
+    """The nearby date this player IS logged on, if any.
+
+    Only meaningful for ISO dates; a week label has no neighbours.
+    """
+    import datetime as _dt
+
+    from .sources.oddsapi import normalize_name
+    try:
+        d0 = _dt.date.fromisoformat(b["date"] or "")
+    except ValueError:
+        return None
+    for off in range(-days, days + 1):
+        if off == 0:
+            continue
+        d = (d0 + _dt.timedelta(days=off)).isoformat()
+        rows = hist_conn.execute(
+            "SELECT DISTINCT player FROM player_game_logs "
+            "WHERE sport=? AND period=?", (b["sport"], d))
+        if any(normalize_name(r[0]) == want for r in rows):
+            return d
+    return None
+
+
 def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
              ) -> list[dict]:
     """Every still-open bet whose day is done, and WHY it has not graded.
@@ -797,8 +821,19 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
                 near = difflib.get_close_matches(want, names, n=1, cutoff=0.8)
                 if near:
                     extra["closest"] = near[0]
-                reason = ("day barely ingested" if len(names) < THIN_DAY_PLAYERS
-                          else "player has no log")
+                # Before blaming the name or the player: is he logged on the
+                # day NEXT DOOR? A 10pm Pacific first pitch is already
+                # tomorrow in UTC, so a slate date and a game date can
+                # disagree by one — and that is neither a DNP nor a spelling
+                # problem, it is a boundary problem with its own fix.
+                found_on = _logged_within(hist_conn, b, want, days=1)
+                if found_on:
+                    extra["logged_on"] = found_on
+                    reason = "logged under the next day"
+                elif len(names) < THIN_DAY_PLAYERS:
+                    reason = "day barely ingested"
+                else:
+                    reason = "player has no log"
             else:
                 has = hist_conn.execute(
                     f"SELECT COUNT(*) FROM player_game_logs WHERE {where} "
