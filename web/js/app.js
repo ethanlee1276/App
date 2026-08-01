@@ -566,6 +566,50 @@ function renderEmptySlate() {
   const el = document.getElementById("empty-slate");
   const noGames = !(state.data.games || []).length;
   const noProps = !(state.data.recommendations || []).length;
+
+  /* Games on the schedule and no props is NOT a quiet night, and it used to
+     render as one: a board with nothing on it and no explanation. The WNBA
+     sat like that through a live season because every prop here is projected
+     from stored player logs and that league had never been ingested. The
+     build reports the gap; this shows it, with the games still listed —
+     they are real, it is only our history that is missing. */
+  const gap = state.data.history_gap;
+  /* The panel normally sits eighth in the view, which is fine when the whole
+     board is empty — everything above it is empty too. With a history gap
+     the games ARE there, so it landed 900px down, below the slate, the
+     probation note, the KPI tiles and best-bets: past the point where anyone
+     has already decided the site is broken. It moves up under the slate for
+     this case only, and moves back for every other. */
+  const anchor = document.getElementById("games");
+  if (el && el.parentElement && anchor) {
+    if (gap) {
+      if (el.previousElementSibling !== anchor) {
+        el.dataset.homeIndex = el.dataset.homeIndex
+          || [...el.parentElement.children].indexOf(el);
+        anchor.after(el);
+      }
+    } else if (el.dataset.homeIndex) {
+      const kids = el.parentElement.children;
+      const back = kids[Number(el.dataset.homeIndex)];
+      if (back && back !== el) back.after(el);
+      delete el.dataset.homeIndex;
+    }
+  }
+  if (gap && el) {
+    el.style.display = "";
+    document.getElementById("games-title").style.display = "";
+    el.innerHTML = `<div class="es-icon">📥</div>
+      <div class="es-title">Games tonight, but no player history to project from</div>
+      <div class="es-sub">Every prop on this board is built from stored game
+      logs, and this database has
+      <b>${gap.players_found || 0}</b> player(s) with any history for tonight's
+      teams — a prop needs three games. Nothing is broken and no odds are
+      wasted; the league just hasn't been ingested yet.<br><br>
+      Run once, then the board fills on the next refresh:<br>
+      <code>${escapeHtml(gap.fix || "")}</code></div>`;
+    return;
+  }
+
   if (!noGames || !el) {
     if (el) el.style.display = "none";
     document.getElementById("games-title").style.display = "";

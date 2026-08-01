@@ -284,6 +284,27 @@ def main() -> None:
                 for stat in SLATE_MARKETS:
                     slate.props.append(_Prop(player, stat))
 
+        # Every prop on this board is projected from stored game logs, so an
+        # empty history produces an empty board that looks exactly like a
+        # quiet night. It is not the same thing at all, and the WNBA hit it:
+        # games on the schedule, a live season, and zero props, because the
+        # league had never been ingested. Say which of the two it is — here
+        # in the terminal, and on the page via `history_gap` below.
+        if games and not slate.props:
+            out["history_gap"] = {
+                "teams": sorted(teams),
+                "players_found": len(hist),
+                "seasons": recent_seasons(args.league, args.date),
+                "fix": f"python3 ingest.py {args.league} --seasons 2021-2026",
+            }
+            print(f"\n⚠️  {len(games)} {args.league.upper()} game(s) on the "
+                  f"schedule and NO props to build.")
+            print(f"    Props come from stored player logs, and this database "
+                  f"has {len(hist)} player(s) with any history for tonight's "
+                  f"teams (a prop needs 3+ games).")
+            print(f"    Fix: python3 ingest.py {args.league} "
+                  f"--seasons 2021-2026")
+
         odds_note = "no odds requested — engine ran with no bettable prices"
         if args.odds or args.cached_odds:
             from engine.sources import oddsapi

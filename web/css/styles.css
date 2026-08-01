@@ -1979,7 +1979,14 @@ select.calc-in { width: auto; font-weight: 600; }
   .sport-more { position: relative; display: inline-flex; }
   .sport-more .sport-group[data-group="tools"] {
     display: none;
-    position: absolute; top: calc(100% + 10px); right: 0; z-index: 60;
+    /* left, not right. Right-aligning a 200px menu to the right edge of a
+       55px button hangs 145px of it out to the LEFT, so it opened under
+       "WNBA" and "UFC" and looked like it belonged to them — measured at
+       1440: button 630-685, menu 485-685. Anchored left it starts under the
+       word you clicked. Safe at every desktop width because the switcher is
+       centred and "More" is its last item, so there is always at least the
+       menu's width to its right (checked at 800/1024/1280/1440/1800). */
+    position: absolute; top: calc(100% + 10px); left: 0; z-index: 60;
     flex-direction: column; gap: 2px; min-width: 200px; padding: 6px;
     background: var(--panel-2); border: 1px solid var(--border);
     border-radius: 12px; box-shadow: 0 14px 34px rgba(0, 0, 0, .34);
