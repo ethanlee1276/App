@@ -701,6 +701,96 @@ def _hist_where(b) -> tuple[str, list]:
     return "sport=? AND period=?", [b["sport"], b["date"]]
 
 
+#: A bet older than this whose game is long finished is not "waiting" —
+#: something is stopping it, and the difference matters because one of them
+#: needs patience and the other needs a fix.
+STUCK_AFTER_DAYS = 2
+
+
+def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
+             ) -> list[dict]:
+    """Every still-open bet whose day is done, and WHY it has not graded.
+
+    `--settle all` sweeping back to a date weeks old is the symptom: those
+    days keep re-appearing because something on them can never settle, and
+    the sweep has no way to say so. It re-ingests, finds nothing new to
+    match, reports zero, and leaves them open to be swept again tomorrow.
+
+    Each returned row carries a ``reason`` naming which lookup failed:
+
+      no results ingested   — nothing stored for that sport/date at all;
+                              the ingest is the fix
+      player has no log     — results ARE stored and this player is not in
+                              them: a scratch, a DNP, or a name the journal
+                              spells differently from the feed
+      market not ingested   — the player played, but this stat was never
+                              stored for him
+      game not found        — a game-level bet (moneyline/total/spread)
+                              whose game is not in the results
+
+    Nothing here writes. It is a report, so it can be run on a live journal
+    without deciding anything.
+    """
+    from .sources.oddsapi import normalize_name
+
+    # No `date < ?` in the SQL. Journal dates are not all ISO: NFL writes
+    # "2026-W1", and string-comparing that against "2026-08-01" puts it in
+    # the FUTURE ("W" sorts above "0"), so every football bet was filtered
+    # out of this report before it was looked at — on the one sport where a
+    # stranded bet would sit unnoticed until the next season. Age is decided
+    # below, where the week label has a branch.
+    rows = conn.execute(
+        "SELECT * FROM bets WHERE status='open' ORDER BY date").fetchall()
+    out: list[dict] = []
+    import datetime as _dt
+    try:
+        today_d = _dt.date.fromisoformat(today)
+    except ValueError:
+        today_d = _dt.date.today()
+
+    for b in rows:
+        date = b["date"] or ""
+        try:
+            age = (today_d - _dt.date.fromisoformat(date)).days
+        except ValueError:
+            # A week label carries no day, so it cannot be aged. Judge it on
+            # content instead of dropping it: if its stats are stored it is
+            # gradeable and should not still be open.
+            age = older_than
+        if age < older_than:
+            continue
+        where, wargs = _hist_where(b)
+        game_market = b["market"] in ("moneyline", "total", "spread",
+                                      "team_total")
+        n_games = hist_conn.execute(
+            f"SELECT COUNT(*) FROM games WHERE {where}", wargs).fetchone()[0]
+        n_logs = hist_conn.execute(
+            f"SELECT COUNT(*) FROM player_game_logs WHERE {where}",
+            wargs).fetchone()[0]
+
+        if game_market:
+            reason = ("no results ingested" if not n_games
+                      else "game not found")
+        elif not n_logs:
+            reason = "no results ingested"
+        else:
+            want = normalize_name(b["player"] or "")
+            names = {normalize_name(r[0]) for r in hist_conn.execute(
+                f"SELECT DISTINCT player FROM player_game_logs WHERE {where}",
+                wargs)}
+            if want not in names:
+                reason = "player has no log"
+            else:
+                has = hist_conn.execute(
+                    f"SELECT COUNT(*) FROM player_game_logs WHERE {where} "
+                    f"AND market=?", (*wargs, b["market"])).fetchone()[0]
+                reason = "market not ingested" if not has else "gradeable now"
+        out.append({"id": b["id"], "sport": b["sport"], "date": date,
+                    "player": b["player"], "market": b["market"],
+                    "age_days": age, "reason": reason})
+    return out
+
+
 def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     """Auto-settle open bets straight from the history database.
 

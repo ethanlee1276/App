@@ -1789,6 +1789,64 @@ def _settleable_days(open_days) -> list[str]:
                   if d.get("date") and "-W" not in d["date"])
 
 
+def show_stuck() -> None:
+    """Which open bets can never settle, and why.
+
+    `--settle all` reaching back weeks is the tell: those dates keep coming
+    back because something on them cannot grade, and the sweep has no way
+    to say which. It re-ingests, matches nothing new, reports zero, and
+    leaves them to be swept again tomorrow — forever.
+    """
+    from engine import db, ledger
+    lconn = ledger.connect()
+    hconn = db.connect()
+    try:
+        rows = ledger.why_open(lconn, hconn, _slate_date())
+    finally:
+        lconn.close(); hconn.close()
+    if not rows:
+        print("Nothing stuck — every open pick is from a day still in play.")
+        return
+
+    by_reason: dict = {}
+    for r in rows:
+        by_reason.setdefault(r["reason"], []).append(r)
+    print(f"{len(rows)} open pick(s) on days that are already over:\n")
+    for reason in sorted(by_reason, key=lambda k: -len(by_reason[k])):
+        group = by_reason[reason]
+        print(f"  {len(group):>4}  {reason}")
+        for r in sorted(group, key=lambda x: x["date"])[:6]:
+            print(f"          {r['date']}  {r['sport']:<5} "
+                  f"{(r['player'] or '')[:26]:<26} {r['market']} "
+                  f"({r['age_days']}d)")
+        if len(group) > 6:
+            print(f"          … and {len(group) - 6} more")
+        print()
+
+    # What to do about each, in the order they are worth doing.
+    tips = {
+        "no results ingested":
+            "the games were never stored. Ingest that date's results "
+            "(python3 ingest.py <sport> …) and they grade on the next pass.",
+        "gradeable now":
+            "results ARE there and these match — run `python3 launch.py "
+            "--settle all`; if they survive it, tell me.",
+        "player has no log":
+            "the player is not in that day's stored results: a scratch or a "
+            "DNP (correct to void), or the journal spells his name "
+            "differently from the feed (a name-map fix).",
+        "market not ingested":
+            "he played, but this stat was never stored for him — the ingest "
+            "for that sport does not carry this market.",
+        "game not found":
+            "a game-level bet whose game is not in the results: usually a "
+            "postponement, which should be voided rather than graded.",
+    }
+    print("What each means:")
+    for reason in sorted(by_reason, key=lambda k: -len(by_reason[k])):
+        print(f"  {reason} — {tips.get(reason, 'unknown')}")
+
+
 def settle_all() -> None:
     """Grade every day that still has picks open, oldest first.
 
@@ -2231,6 +2289,9 @@ def main() -> None:
         print(f"  net     {before['net_units']:+.2f}u → {after['net_units']:+.2f}u"
               f"   ROI {before['roi']:+.1%} → {after['roi']:+.1%}")
         print("Record page updated.")
+        return
+    if "--stuck" in argv:
+        show_stuck()
         return
     if "--settle" in argv:
         i = argv.index("--settle")
