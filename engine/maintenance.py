@@ -45,13 +45,18 @@ HARVEST_DAY_BUDGET = 400
 
 
 def _load_state(path: Path) -> dict:
+    # Coerce: a caller passing a plain string used to fall into the bare
+    # `except` below (str has no .read_text), get {} back, and so lose the
+    # throttle SILENTLY — settle_open would run its full pass on every
+    # cycle instead of every fifteen minutes. A path is a path.
     try:
-        return json.loads(path.read_text())
+        return json.loads(Path(path).read_text())
     except Exception:
         return {}
 
 
 def _save_state(path: Path, state: dict) -> None:
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state))
 
@@ -225,6 +230,31 @@ def prune_cache(max_age_days: int = CACHE_KEEP_DAYS, log=None,
     return n, freed
 
 
+def _hoops_ingesters():
+    """(nba, wnba) day-ingest callables, or None where unavailable.
+
+    Imported through a function so a broken or missing source module
+    degrades to "that league does not grade intraday" rather than taking
+    the whole settle pass down with it.
+    """
+    nba = wnba = None
+    try:
+        from .sources.nbadata import ingest_nba_date as nba
+    except Exception:  # noqa: BLE001
+        nba = None
+    try:
+        from .sources import espnhoops as _h
+
+        def wnba(conn, date):
+            return _h.ingest_day(conn, date, league="wnba")
+    except Exception:  # noqa: BLE001
+        wnba = None
+    return nba, wnba
+
+
+_nba_day, _wnba_day = _hoops_ingesters()
+
+
 def settle_open(log=print, state_path: Path | None = None,
                 today: _dt.date | None = None, now: float | None = None,
                 force: bool = False) -> int:
@@ -269,17 +299,29 @@ def settle_open(log=print, state_path: Path | None = None,
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  results ingest skipped ({exc}) — settling on what's "
                 "already ingested")
-        # NBA nights grade intraday too — CDN boxscores go final within
-        # minutes of the buzzer. Only dates with open NBA picks are pulled.
-        try:
-            from .sources.nbadata import ingest_nba_date
+        # Basketball grades intraday too — box scores go final within
+        # minutes of the buzzer. Only dates that actually have an open pick
+        # in that league are pulled, so this costs nothing on a quiet night.
+        #
+        # WNBA was missing here, and it is the board that needed it most:
+        # the NBA is dark from June to October while the WNBA plays through
+        # exactly those months, so the one basketball league with live bets
+        # all summer was the one whose picks could not close until the next
+        # day's maintenance pass.
+        for league, ingest_day in (("nba", _nba_day), ("wnba", _wnba_day)):
+            if ingest_day is None:
+                continue
             for d in days:
-                if lconn.execute(
+                if not lconn.execute(
                         "SELECT 1 FROM bets WHERE status='open' AND "
-                        "sport='nba' AND date=? LIMIT 1", (d,)).fetchone():
-                    ingest_nba_date(hconn, d)
-        except Exception:  # noqa: BLE001 — free-feed hiccup; daily pass catches up
-            pass
+                        "sport=? AND date=? LIMIT 1", (league, d)).fetchone():
+                    continue
+                try:
+                    ingest_day(hconn, d)
+                except Exception:  # noqa: BLE001 — one league's feed hiccup
+                    # must not strand the other's bets, nor the MLB settle
+                    # below. The daily pass catches up.
+                    pass
         settled = ledger.settle_from_history(lconn, hconn)
         # Self-healing: any bet ever graded off a partial stat line gets
         # re-graded once the real final number is in.
