@@ -706,6 +706,11 @@ def _hist_where(b) -> tuple[str, list]:
 #: needs patience and the other needs a fix.
 STUCK_AFTER_DAYS = 2
 
+#: Fewer distinct players than this on a date with games means the day was
+#: only partly ingested — a full MLB slate stores several hundred. Below the
+#: bar, a missing player says nothing about that player.
+THIN_DAY_PLAYERS = 120
+
 
 def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
              ) -> list[dict]:
@@ -760,6 +765,7 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
         if age < older_than:
             continue
         where, wargs = _hist_where(b)
+        extra: dict = {}
         game_market = b["market"] in ("moneyline", "total", "spread",
                                       "team_total")
         n_games = hist_conn.execute(
@@ -779,7 +785,20 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
                 f"SELECT DISTINCT player FROM player_game_logs WHERE {where}",
                 wargs)}
             if want not in names:
-                reason = "player has no log"
+                # "player has no log" is two different problems wearing one
+                # label, and they need opposite fixes. Either the DAY is
+                # thin — a partial ingest, where the answer is to re-fetch
+                # it — or the day is complete and this one name is spelled
+                # differently from the feed's, which is a name-map fix.
+                # A count and the nearest name separate them.
+                extra["day_players"] = len(names)
+                extra["day_games"] = n_games
+                import difflib
+                near = difflib.get_close_matches(want, names, n=1, cutoff=0.8)
+                if near:
+                    extra["closest"] = near[0]
+                reason = ("day barely ingested" if len(names) < THIN_DAY_PLAYERS
+                          else "player has no log")
             else:
                 has = hist_conn.execute(
                     f"SELECT COUNT(*) FROM player_game_logs WHERE {where} "
@@ -787,7 +806,7 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
                 reason = "market not ingested" if not has else "gradeable now"
         out.append({"id": b["id"], "sport": b["sport"], "date": date,
                     "player": b["player"], "market": b["market"],
-                    "age_days": age, "reason": reason})
+                    "age_days": age, "reason": reason, **extra})
     return out
 
 

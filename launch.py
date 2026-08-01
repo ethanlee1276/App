@@ -1816,11 +1816,22 @@ def show_stuck() -> None:
         group = by_reason[reason]
         print(f"  {len(group):>4}  {reason}")
         for r in sorted(group, key=lambda x: x["date"])[:6]:
+            near = f"  ~ feed has {r['closest']!r}" if r.get("closest") else ""
             print(f"          {r['date']}  {r['sport']:<5} "
                   f"{(r['player'] or '')[:26]:<26} {r['market']} "
-                  f"({r['age_days']}d)")
+                  f"({r['age_days']}d){near}")
         if len(group) > 6:
             print(f"          … and {len(group) - 6} more")
+        # How much of each day IS stored. A date with 30 players in it is a
+        # partial ingest and every "missing" player on it is a symptom of
+        # that, not 30 separate name problems.
+        days = {}
+        for r in group:
+            if r.get("day_players") is not None:
+                days[r["date"]] = (r["day_players"], r.get("day_games", 0))
+        for d, (players, games) in sorted(days.items()):
+            print(f"          {d}: {players} player(s), {games} game(s) "
+                  f"stored for that date")
         print()
 
     # What to do about each, in the order they are worth doing.
@@ -1832,9 +1843,15 @@ def show_stuck() -> None:
             "results ARE there and these match — run `python3 launch.py "
             "--settle all`; if they survive it, tell me.",
         "player has no log":
-            "the player is not in that day's stored results: a scratch or a "
-            "DNP (correct to void), or the journal spells his name "
-            "differently from the feed (a name-map fix).",
+            "that day IS ingested and this player is not in it: a scratch or "
+            "a DNP (correct to void), or the journal spells his name "
+            "differently from the feed (a name-map fix — the line shows the "
+            "closest name the feed has, when there is one).",
+        "day barely ingested":
+            "the date has far too few players stored to conclude anything "
+            "about one of them — the ingest for that day did not finish. "
+            "Re-run it (python3 ingest.py <sport> --dates <date>) and settle "
+            "again.",
         "market not ingested":
             "he played, but this stat was never stored for him — the ingest "
             "for that sport does not carry this market.",
