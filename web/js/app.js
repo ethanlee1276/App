@@ -2796,7 +2796,7 @@ async function renderRecord() {
       ${recTile("ROI", (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
                 `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`,
                 { lead: true, tone: toneOf(o.roi) })}
-      ${recTile("Avg CLV", o.avg_clv == null ? "—" : (o.avg_clv >= 0 ? "+" : "") + o.avg_clv.toFixed(2) + " pts",
+      ${recTile("Avg CLV", o.avg_clv == null ? "—" : (o.avg_clv >= 0 ? "+" : "") + o.avg_clv.toFixed(2) + ' <span class="unit">pts</span>',
                 o.avg_clv == null ? "accrues as daily closes are captured" : "beat the close = sharp process",
                 { lead: true, tone: o.avg_clv == null ? "" : toneOf(o.avg_clv) })}
       ${recTile("Record", `${o.wins}-${o.losses}-${o.pushes}`, `${o.open} open · ${o.settled} settled`)}
@@ -3441,7 +3441,7 @@ async function renderIntel() {
             style="background:conic-gradient(${heat(f.score)} ${f.score * 3.6}deg, rgba(255,255,255,.08) 0)">
             <span>${f.score}</span></div>
           <div>
-            <div class="player"><a href="https://polymarket.com/profile/${escapeHtml(f.wallet)}"
+            <div class="player"><a class="wallet" href="https://polymarket.com/profile/${escapeHtml(f.wallet)}"
               target="_blank" rel="noopener" style="color:inherit">${escapeHtml(f.name || shortWallet(f.wallet))}</a></div>
             <div class="subtitle">${pmAgo(f.ts)} · ${f.wallet_trades} trade(s) on our tape</div>
             <div class="pick">${escapeHtml(f.side)} ${escapeHtml(f.outcome)}
@@ -3485,9 +3485,9 @@ async function renderIntel() {
         <div class="card-id">
           <div class="pm-avatar">${escapeHtml(initials)}</div>
           <div>
-            <div class="player">#${t.rank} <a href="https://polymarket.com/profile/${escapeHtml(t.wallet)}"
+            <div class="player">#${t.rank} <a class="wallet" href="https://polymarket.com/profile/${escapeHtml(t.wallet)}"
               target="_blank" rel="noopener" style="color:inherit">${escapeHtml(label)}</a></div>
-            <div class="subtitle">${shortWallet(t.wallet)}</div>
+            <div class="subtitle wallet">${shortWallet(t.wallet)}</div>
           </div>
         </div>
         <span style="font-weight:800;font-size:19px;color:${t.pnl >= 0 ? "var(--good)" : "var(--bad)"}">
@@ -4461,7 +4461,7 @@ function intelReportCard(v) {
     </div>`).join("");
   const wallets = (v.wallets || []).map((w) => `
     <div class="dl-row pm-wallet">
-      <span class="dl-main"><a href="https://polymarket.com/profile/${escapeHtml(w.wallet)}" target="_blank"
+      <span class="dl-main"><a class="wallet" href="https://polymarket.com/profile/${escapeHtml(w.wallet)}" target="_blank"
         rel="noopener" style="color:inherit;font-weight:600">${escapeHtml(w.name || shortWallet(w.wallet))}</a></span>
       <span class="dl-num">${w.wins}-${w.n - w.wins}</span>
       <span class="dl-num implied">${pctv(w.hit_rate)} vs ${pctv(w.avg_implied)}</span>

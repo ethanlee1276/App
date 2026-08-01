@@ -4,10 +4,11 @@
    Self-hosted, because everything else on this site works with the
    network unplugged and the fonts should too — a board that renders in
    Times New Roman the one night your wifi drops is not a board you trust.
-   Two files, 45KB total, and `font-display: swap` means text is
+   Four files, 65KB total, and `font-display: swap` means text is
    readable before they land rather than invisible.
 
-   Instrument Serif for headings, Instrument Sans for everything else.
+   Instrument Serif for headings, Instrument Sans for everything else,
+   IBM Plex Mono for every NUMBER — see the note above its @font-face.
    The pairing is the point: a serif masthead over a grotesque body is a
    choice somebody made, where a single neutral sans everywhere is what
    you get when nobody did. It also does real work here — it separates
@@ -24,6 +25,32 @@
   font-family: "Instrument Serif";
   src: url("../fonts/instrument-serif.woff2") format("woff2");
   font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+/* IBM Plex Mono (SIL OFL), latin subset — 20KB for both weights.
+   The numbers were the same grotesque as the labels, at weight 800 with
+   -0.5px tracking: the house style of every generated dashboard, and the
+   thing that read as machine-made no matter what else changed. A drawn
+   monospace is the oldest signal in data typography that a person chose
+   the face — slotted zero, flagged one, a rhythm the eye can scan down a
+   column.
+
+   The serif was tried first and measured out. It has no `tnum` feature at
+   all (111 renders 29.9px, 777 renders 43.7px — a 46% jump on a board that
+   rewrites every 60 seconds) and its "1" is an unflagged stroke, so "11"
+   reads as "ll". Beautiful for a masthead, unusable for a scoreboard. */
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../fonts/plex-mono.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../fonts/plex-mono-500.woff2") format("woff2");
+  font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
@@ -79,7 +106,7 @@
                "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-display: "Instrument Serif", "Iowan Old Style", "Palatino Linotype",
                   Palatino, Georgia, serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   /* Tighter corners. A 10px radius on every panel is the house style of
      every component library shipped since 2022 — softening everything
@@ -853,6 +880,61 @@ body { font-size: 14.5px; }
 .tile .v, .metric .v, .stat-v, .ml-odds, .book, .spark, td, .v {
   font-variant-numeric: tabular-nums;
 }
+
+/* …and are SET like one. Deliberately a narrower list than the rule above:
+   `td` and `.book` carry player names and "FanDuel", and a proportional
+   word in a fixed-pitch face looks like a bug rather than a choice.
+
+   Weight 500, not 800. The mono ships 400 and 500; asking for 800 would
+   have the browser fake it, and a smeared outline at 30px is the loudest
+   thing on the page. The tracking goes back to 0 too — negative letter
+   spacing on a fixed-pitch face fights the one property it has. */
+.tile .v, .metric .v, .stat-v, .ml-odds, .conf-num, .trow .val,
+.tp-metric .v, .form-tile .v, .rec-chart .rc-net, .lf-region-n,
+.brk-score, .std-num, .rec-scope-n,
+/* Found by sweeping every view for text that is mostly digits and still in
+   the sans. A half-converted board reads as an accident; the price, the
+   score, the P&L and the win-loss record are the same KIND of thing as the
+   KPI above them and have to be set like it. */
+.book, .score, .rb-net, .rb-wl, .rl-pnl, .rl-odds, .rl-date,
+td.num, .dl-num, .std-n, .pm-avatar, .clv-num, .odds,
+.rb-clv, .dl-rank, .ros-n {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0;
+  font-feature-settings: "tnum" 1, "zero" 1;   /* slashed zero, on purpose */
+}
+/* A unit is not part of the figure. Set at full display size it competes
+   with the number and, in a monospace — which is wider per character than
+   the sans it replaced — it pushed "-106.50 pts" onto a second line at
+   every width. Smaller, lighter, and the value never breaks mid-number. */
+/* NOT white-space: nowrap. That stopped the wrap and started a clip — an
+   unbreakable "-106.50 pts" ran 56px out of a 320px phone tile, which is
+   worse than two lines. The break opportunity stays; the unit is just made
+   small enough that a desktop tile no longer needs it. */
+.tile .v .unit {
+  font-size: .5em; font-weight: 400; opacity: .7; letter-spacing: .04em;
+}
+/* The space before it is load-bearing: without one there is no break
+   opportunity in the run, so a phone tile clipped "pts" clean off instead
+   of dropping it to the next line. The gap is that space, not a margin. */
+
+/* A wallet address is a string you compare character by character — the one
+   place a monospace is not a style choice but a functional requirement. */
+.pm-wallet, .trader-addr, code,
+/* Polymarket renders a trader handle as a bare link and the wallet
+   under it as .subtitle, so both are addressed by where they sit. */
+.wallet { font-family: var(--font-mono); }
+/* Both weights get a job. A face nobody matches is a file the browser never
+   fetches and a line of CSS that quietly means nothing — the same dead
+   declaration the italic serif was deleted for. 400 carries the small
+   supporting figures, 500 the ones you read first. */
+.tp-metric .v, .form-tile .v, .lf-region-n, .rec-scope-n, .brk-score {
+  font-weight: 400;
+}
+/* The lead KPI carried its own size and tracking; keep the size, drop the
+   tracking with it. */
+.tile .v { letter-spacing: 0; }
 
 /* Chrome: flat topbar + segmented nav. */
 .topbar { backdrop-filter: blur(10px); border-bottom: 1px solid var(--border-soft); }
