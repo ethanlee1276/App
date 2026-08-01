@@ -1088,9 +1088,15 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
         "net_dollars": round(net_d, 2),
         "starting_bankroll": float(get_cfg(conn, "starting_bankroll")),
         "bankroll": bankroll(conn),
+        # SPORT-SCOPED, and it was not. Every other number in this dict
+        # honours the `sport` argument; this one counted the whole
+        # journal, so `performance(conn, "mlb")` reported football's open
+        # bets as baseball's. Invisible while one board was live, and
+        # exactly wrong the moment six are.
         "open": conn.execute(
-            "SELECT COUNT(*) FROM bets WHERE status='open' AND category=? "
-            "AND stake_units > 0", (category,)).fetchone()[0],
+            "SELECT COUNT(*) FROM bets WHERE status='open' AND category=?"
+            + (" AND sport=?" if sport else "") + " AND stake_units > 0",
+            ((category, sport) if sport else (category,))).fetchone()[0],
         "unstaked": unstaked,
         "avg_clv": (sum(clvs) / len(clvs)) if clvs else None,
         "process": process,
@@ -1226,17 +1232,22 @@ def drawdown_factor(conn, sport: str | None = None,
     return 0.5 if (peak - cum) >= drawdown_u else 1.0
 
 
-def recent_settled(conn, limit: int = 30, category: str = "main") -> list[dict]:
+def recent_settled(conn, limit: int = 30, category: str = "main",
+                   sport: str | None = None) -> list[dict]:
     """The last settled picks, newest first — the site's receipts.
 
     Each row carries its side-aware CLV and process grade so the page can
     show "won but got lucky" / "lost but beat the close" honestly."""
-    rows = conn.execute(
-        "SELECT date, sport, player, market, side, line, odds, grade, status, "
-        "pnl_units, hit_prob, closing_line, stake_units FROM bets "
-        "WHERE status IN ('won','lost','push') AND category=? "
-        "AND stake_units > 0 "
-        "ORDER BY date DESC, id DESC LIMIT ?", (category, limit)).fetchall()
+    q = ("SELECT date, sport, player, market, side, line, odds, grade, status, "
+         "pnl_units, hit_prob, closing_line, stake_units FROM bets "
+         "WHERE status IN ('won','lost','push') AND category=? "
+         "AND stake_units > 0")
+    args: list = [category]
+    if sport:
+        q += " AND sport=?"
+        args.append(sport)
+    rows = conn.execute(q + " ORDER BY date DESC, id DESC LIMIT ?",
+                        (*args, limit)).fetchall()
     out = []
     for r in rows:
         d = dict(r)
@@ -1248,7 +1259,7 @@ def recent_settled(conn, limit: int = 30, category: str = "main") -> list[dict]:
 
 
 def calibration(conn, category: str = "main", bucket_pts: int = 5,
-                since: str | None = None) -> dict:
+                since: str | None = None, sport: str | None = None) -> dict:
     """Predicted vs realized, in probability buckets — the public honesty page.
 
     Groups every settled won/lost bet by the model's claimed hit probability
@@ -1266,6 +1277,14 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5,
         # Era-scoped: judge the model running NOW on its own picks only.
         q += " AND date >= ?"
         args.append(since)
+    if sport:
+        # Sport-scoped: an aggregate calibration answers "is the SYSTEM
+        # honest", which is worth knowing and is not the question a person
+        # tuning one model is asking. A baseball model that reads 4 points
+        # hot and a football model 4 points cold cancel to a perfect line
+        # nobody should trust.
+        q += " AND sport=?"
+        args.append(sport)
     rows = conn.execute(q, args).fetchall()
     nb = max(1, 100 // bucket_pts)
     buckets: list[dict] = [{"lo": i * bucket_pts, "hi": (i + 1) * bucket_pts,
@@ -1615,6 +1634,47 @@ def move_longshots_out_of_main(conn, stake_units: float = 0.1) -> int:
     return moved
 
 
+# Every board that journals a bet. Polymarket is deliberately absent: its
+# flags are not wagers in this ledger, they are graded in
+# `predmarkets.json` by their own report card, and folding a
+# prediction-market flag rate into a betting P&L would make both numbers
+# mean nothing.
+TRACKED_SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "ufc")
+
+
+def sport_report(conn, sport: str) -> dict:
+    """One sport's whole record — the tuning view.
+
+    The combined page answers "is the system making money", which is the
+    question an owner asks. This answers "is THIS model any good", which
+    is the question the next change to it depends on, and the aggregate
+    actively hides it: a baseball model reading four points hot and a
+    football model reading four points cold average to a perfect
+    calibration line nobody should trust.
+    """
+    perf = performance(conn, sport)
+    return {
+        "sport": sport,
+        "overall": perf,
+        "curve": pnl_curve(conn, sport),
+        "recent": recent_settled(conn, 20, sport=sport),
+        "calibration": calibration(conn, sport=sport),
+        "calibration_era": calibration(conn, since=MODEL_ERAS[-1]["start"],
+                                       sport=sport),
+        # Enough graded bets for the numbers above to mean anything. Stated
+        # rather than implied: a 3-1 record is not a 75% win rate, and a
+        # page that shows one without the other invites exactly that read.
+        "thin": perf.get("settled", 0) < MIN_GRADED_FOR_SIGNAL,
+        "min_graded": MIN_GRADED_FOR_SIGNAL,
+    }
+
+
+# Below this, a per-sport record is a small sample wearing a percentage.
+# Not a gate on showing it — hiding your own results is its own dishonesty
+# — but the page says so next to every rate it prints.
+MIN_GRADED_FOR_SIGNAL = 30
+
+
 def export_json(conn, path) -> None:
     """Write the journal's performance to a JSON file the website renders.
 
@@ -1636,6 +1696,10 @@ def export_json(conn, path) -> None:
         "form_sampler": form_report(conn),
         "loose_sampler": loose_report(conn),
         "ufc_record": ufc_report(conn),
+        # Per-sport, so each model can be tuned on its own evidence rather
+        # than on the average of six.
+        "by_sport": {sp: sport_report(conn, sp) for sp in TRACKED_SPORTS},
+        "tracked_sports": list(TRACKED_SPORTS),
         "calibration": calibration(conn),
         # The same chart scoped to the CURRENT model era — the all-time
         # chart is dominated by picks from gates that no longer exist.

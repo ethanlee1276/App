@@ -151,9 +151,18 @@ def test_the_help_links_are_real_tap_targets_on_a_phone():
     aim."""
     css = _read("web", "css", "styles.css")
     assert ".about-list a" in css
-    coarse = css[css.rindex("@media (pointer: coarse)"):]
-    assert ".about-list a" in coarse
-    block = coarse[coarse.index(".about-list a"):]
+    # Search EVERY coarse-pointer block, not just the last one in the
+    # file. Pinning it to the last was never the requirement — it only
+    # held until another feature appended a coarse rule of its own, and
+    # then this failed on a page it has nothing to do with.
+    blocks, i = [], css.find("@media (pointer: coarse)")
+    while i >= 0:
+        blocks.append(css[i:css.find("@media", i + 10)
+                          if css.find("@media", i + 10) > 0 else len(css)])
+        i = css.find("@media (pointer: coarse)", i + 10)
+    hit = next((b for b in blocks if ".about-list a" in b), "")
+    assert hit, "no coarse-pointer rule sizes the help links"
+    block = hit[hit.index(".about-list a"):]
     assert "padding: 12px" in block[:220]
 
 

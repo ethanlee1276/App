@@ -2559,6 +2559,41 @@ function recPolymarketSection(v) {
       `<p class="loading" style="padding:12px">Flags settle as their markets resolve.</p>`}</div>`;
 }
 
+/* Which record you are looking at. The combined page answers "is the
+   system making money", which is the owner's question. A per-sport page
+   answers "is THIS model any good", which is what the next change to it
+   depends on — and the aggregate actively hides it: a baseball model
+   reading four points hot and a football model four points cold average
+   to a perfect calibration line nobody should trust. */
+let _recordScope = null;          // null = follow the sport you are on
+
+function recordScopeHTML(d, scope) {
+  const tracked = d.tracked_sports || [];
+  const btn = (key, label, n) => `<button class="rec-scope${
+    scope === key ? " active" : ""}" data-scope="${escapeHtml(key)}">${
+    escapeHtml(label)}${n != null ? ` <span class="rec-scope-n">${n}</span>` : ""}</button>`;
+  const parts = [btn("all", "All bets", (d.overall || {}).settled)];
+  parts.push(btn("intel", "Polymarket", null));
+  for (const sp of tracked) {
+    const r = (d.by_sport || {})[sp] || {};
+    const settled = (r.overall || {}).settled || 0;
+    const open = (r.overall || {}).open || 0;
+    // A sport with nothing journaled is still listed. Hiding it would
+    // make "no bets yet" and "no such board" look identical.
+    parts.push(btn(sp, (SPORT_META[sp] || {}).name || sp.toUpperCase(),
+                   settled || open || 0));
+  }
+  return `<div class="rec-scopes">${parts.join("")}</div>`;
+}
+
+function bindRecordScopes(host) {
+  host.querySelectorAll(".rec-scope").forEach((b) =>
+    b.addEventListener("click", () => {
+      _recordScope = b.dataset.scope;
+      renderRecord();
+    }));
+}
+
 async function renderRecord() {
   const host = document.getElementById("record-body");
   if (!host) return;
@@ -2580,19 +2615,57 @@ async function renderRecord() {
       scoreboard for everything the model recommends.</div></div>`;
     return;
   }
-  const o = d.overall;
+  // Default to the sport whose board you came from; "all" is a click away.
+  const tracked = d.tracked_sports || [];
+  let scope = _recordScope
+    || (tracked.includes(state.sport) ? state.sport : "all");
+  if (scope !== "all" && scope !== "intel" && !(d.by_sport || {})[scope])
+    scope = "all";
+  const scoped = (scope === "all") ? null
+    : (scope === "intel" ? {overall: {}, curve: [], recent: [],
+                            calibration: null, calibration_era: null}
+                         : d.by_sport[scope]);
+  const scopeBar = recordScopeHTML(d, scope);
+
+  // Everything below reads ONE object. Scoping by swapping the source
+  // rather than by filtering at each call site means a panel cannot
+  // quietly keep showing the combined number next to a per-sport one.
+  const src = scoped || d;
+  const o = src.overall;
+  if (scope === "intel") {
+    host.innerHTML = scopeBar + (pmv
+      ? recPolymarketSection(pmv)
+      : `<div class="empty-slate"><div class="es-icon">🛰️</div>
+         <div class="es-title">No Polymarket flags graded yet</div>
+         <div class="es-sub">Flags are recorded as the trade tape is read and
+         grade when their markets resolve. This is a report card on the
+         detector, not a betting P&L — nothing here is staked.</div></div>`);
+    bindRecordScopes(host);
+    return;
+  }
+  if (scoped && !o.settled && !o.open) {
+    host.innerHTML = scopeBar + `<div class="empty-slate"><div class="es-icon">📒</div>
+      <div class="es-title">Nothing journaled for ${escapeHtml(
+        (SPORT_META[scope] || {}).name || scope.toUpperCase())} yet</div>
+      <div class="es-sub">This board has not recommended a bet that reached a
+      result. It fills itself in — every pick is journaled at its real price
+      the moment it is made, and grades when the games settle.</div></div>`;
+    bindRecordScopes(host);
+    return;
+  }
   const unstaked = o.unstaked
     ? `<p class="loading" style="margin-top:10px">ℹ️ ${o.unstaked} older settled pick(s)
        are held out of this record: a grading bug sized them at 0.00 units, so they were
        never really bets. Run <code>python3 launch.py --resize-unstaked</code> to stake
        them at a flat 0.1u and fold the profit (or loss) they produced back in.</p>` : "";
   const small = o.settled < 100
-    ? `<p class="loading" style="margin-top:10px">⚠️ ${o.settled} settled pick(s) —
+    ? `<p class="loading" style="margin-top:10px">⚠️ ${o.settled} settled pick(s)${
+       scoped ? ` for ${escapeHtml((SPORT_META[scope] || {}).name || scope)}` : ""} —
        results this small are mostly luck. Judge the model after 100+, and judge
        the process by CLV before that.</p>` : "";
   const pr = o.process || {};
   const nProc = (pr.good || 0) + (pr.bad || 0) + (pr.flat || 0);
-  host.innerHTML = `
+  host.innerHTML = scopeBar + `
     <div class="stats rec-kpis">
       ${recTile("ROI", (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
                 `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`,
@@ -2628,7 +2701,7 @@ async function renderRecord() {
       not tracked bets.`)}
     ${unstaked}
     ${small}
-    ${recCurveChart(d.curve)}
+    ${recCurveChart(src.curve)}
     <div class="section-title" style="margin-top:20px">Splits
       <span class="sub">— where the units actually came from. The bar is win rate;
       the number that matters is net.</span></div>
@@ -2641,7 +2714,7 @@ async function renderRecord() {
     <div class="section-title" style="margin-top:22px">Recent settled picks
       <span class="sub">— newest first, at the price we actually got</span></div>
     <div class="card rec-list">
-      ${(d.recent || []).map((b) => {
+      ${(src.recent || []).map((b) => {
         const won = b.status === "won";
         const push = b.status === "push";
         const pnl = b.pnl_units || 0;
@@ -2665,17 +2738,26 @@ async function renderRecord() {
         </div>`;
       }).join("") || `<p class="loading" style="padding:12px">Nothing settled yet.</p>`}
     </div>
-    ${recEraSection(d.model_eras)}
-    ${recCalibrationSection(d.calibration, d.calibration_era)}
-    ${recHealthSection(d.account_health)}
-    ${recLongshotSection(d.longshots)}
-    ${recStaleSection(d.stale_flags)}
-    ${recFormSection(d.form_sampler)}
-    ${recLooseSection(d.loose_sampler)}
-    ${recUfcSection(d.ufc_record)}
-    ${recPolymarketSection(pmv)}
+    ${/* The samplers and account health are whole-journal by nature —
+          a per-book limit risk and a cross-sport promotion bar are not
+          per-sport questions — so they only appear on the combined view
+          rather than repeating an unscoped number under a sport's name. */
+      scoped ? "" : recEraSection(d.model_eras)}
+    ${recCalibrationSection(src.calibration, src.calibration_era)}
+    ${scoped ? "" : recHealthSection(d.account_health)}
+    ${scoped ? "" : recLongshotSection(d.longshots)}
+    ${scoped ? "" : recStaleSection(d.stale_flags)}
+    ${scoped ? "" : recFormSection(d.form_sampler)}
+    ${scoped ? "" : recLooseSection(d.loose_sampler)}
+    ${scoped && scope !== "ufc" ? "" : recUfcSection(d.ufc_record)}
+    ${/* Polymarket's flags are not wagers in this ledger — they are graded
+          by their own report card in predmarkets.json. Folding a flag rate
+          into a betting P&L would make both numbers mean nothing, so it
+          gets its own scope rather than a row in the table. */
+      scoped && scope !== "intel" ? "" : recPolymarketSection(pmv)}
     <p class="rec-stamp">Updated ${escapeHtml(d.generated_at || "")}
       · settles automatically as results are ingested each day.</p>`;
+  bindRecordScopes(host);
 }
 
 /* The stale-line sampler: every pre-game scanner flag, journaled at a flat

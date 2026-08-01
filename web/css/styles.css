@@ -2131,3 +2131,37 @@ select.calc-in { width: auto; font-weight: 600; }
   .lf-name { white-space: normal; overflow: visible; font-size: 12.5px;
              line-height: 1.25; min-height: 2.5em; }
 }
+
+/* ============================================================
+   Record scope — which model you are judging
+   ============================================================
+   The combined page answers "is the system making money". A per-sport
+   page answers "is THIS model any good", which is what the next change to
+   it depends on. Scrolls on one row rather than wrapping, because seven
+   scopes above a table should not cost two lines of header. */
+.rec-scopes {
+  display: flex; gap: 6px; margin-bottom: 14px; padding-bottom: 2px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.rec-scopes::-webkit-scrollbar { display: none; }
+.rec-scope {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 13px; border-radius: 999px; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--text-dim); font: inherit; font-size: 12.5px; font-weight: 700;
+  min-height: 38px;
+}
+.rec-scope:hover { border-color: var(--brand); color: var(--text); }
+.rec-scope.active {
+  background: var(--grad-brand); border-color: transparent; color: #fff;
+}
+/* The count is the honest part: a scope with nothing in it still appears,
+   because hiding it would make "no bets yet" and "no such board" look
+   identical. */
+.rec-scope-n {
+  font-size: 10.5px; font-weight: 600; opacity: .75;
+  font-variant-numeric: tabular-nums;
+}
+.rec-scope.active .rec-scope-n { opacity: .9; }
+
+@media (pointer: coarse) { .rec-scope { min-height: 42px; } }

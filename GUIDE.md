@@ -94,6 +94,16 @@ total, and the game card already shows it.
   week is noise; CLV over hundreds of bets is the scoreboard.
 - **"No qualifying plays" / small pick counts** — the models are built to
   pass on most things. That is the discipline, not a bug.
+- **Per-sport records.** The Record tab now opens on whichever sport you
+  came from, with a row of chips across the top — All bets, Polymarket, and
+  one per league. The combined number answers "is the system making money";
+  a per-sport one answers "is this model any good", and the average of six
+  models actively hides that. A journal reading −7% overall can be MLB at
+  +2% and NFL at −19%, and only one of those needs fixing.
+  The samplers, account health and model eras stay on **All bets** — a
+  per-book limit risk is not a per-sport question — and Polymarket has its
+  own scope because its flags are graded by a report card, not staked as
+  bets. Folding a flag rate into a betting P&L would make both meaningless.
 - **Calibration readouts** (Record tab, Polymarket report card) — "model
   said X%, reality delivered Y%." When those track each other, trust
   grows; when they don't, we fix the model, not the story.
