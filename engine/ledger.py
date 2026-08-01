@@ -284,15 +284,23 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
             dup = conn.execute(
                 "SELECT 1 FROM bets WHERE sport=? AND date=? AND player=? "
                 "AND market=? AND category='longshot'",
-                (sport, date, r["player"], market)).fetchone()
+                (sport, str(r.get("game_date") or "").strip() or date,
+                 r["player"], market)).fetchone()
             if dup:
                 continue
+        # The GAME's own date, not the slate label. A 9pm Eastern first
+        # pitch is already tomorrow in UTC, so a slate stamped off a UTC
+        # clock can sit a day ahead of the date the box score is filed
+        # under — and a bet dated one day off its own result cannot settle.
+        # Measured on a real journal: thirty home-run bets dated 07-27 whose
+        # players were every one of them logged on 07-26.
+        row_date = str(r.get("game_date") or "").strip() or date
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?)",
-            (now, sport, date, r["player"], market, "OVER", 0.5,
+            (now, sport, row_date, r["player"], market, "OVER", 0.5,
              r.get("book", ""), odds, None, r.get("model_prob"),
              r.get("edge", r.get("ev_per_unit")), r.get("confidence"),
              r.get("grade", "Watch"), flat_stake, 0.0, category))
@@ -845,6 +853,42 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
     return out
 
 
+def _neighbour_day_rows(hist_conn, b, where: str, wargs: list):
+    """This player's stat rows on the day either side, when his own is empty.
+
+    Returns ``(rows, wargs)`` — the args are handed back rewritten to the
+    date that answered, so everything downstream (the doubleheader check,
+    the day-finished guard) reasons about the right day.
+    """
+    import datetime as _dt
+
+    from .sources.oddsapi import normalize_name
+    if "period=?" not in where:
+        return [], wargs
+    try:
+        d0 = _dt.date.fromisoformat(b["date"] or "")
+    except ValueError:
+        return [], wargs
+    target = normalize_name(b["player"] or "")
+    found = []
+    for off in (-1, 1):
+        d = (d0 + _dt.timedelta(days=off)).isoformat()
+        alt = list(wargs)
+        alt[-1] = d
+        rows = [c for c in hist_conn.execute(
+                    f"SELECT player, value, team, game_id "
+                    f"FROM player_game_logs WHERE {where} AND market=?",
+                    (*alt, b["market"]))
+                if normalize_name(c["player"]) == target]
+        if rows:
+            found.append((rows, alt))
+    # Exactly one neighbour, or nothing: two candidate games is not a
+    # date-boundary artefact, it is two different nights.
+    if len(found) != 1:
+        return [], wargs
+    return found[0]
+
+
 def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     """Auto-settle open bets straight from the history database.
 
@@ -946,6 +990,21 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
                         f"FROM player_game_logs WHERE {where} AND market=?",
                         (*wargs, b["market"]))
                     if normalize_name(c["player"]) == target]
+        if not rows:
+            # DATE-SHAPE fallback. A 9pm Eastern first pitch is already
+            # tomorrow in UTC, so a slate labelled from a UTC clock can sit
+            # one day ahead of the date the box score is filed under —
+            # measured on a real journal: thirty home-run bets dated 07-27
+            # whose players are all logged on 07-26.
+            #
+            # Narrow on purpose. It applies only when the bet's OWN date has
+            # no log for this player at all, and exactly ONE neighbouring
+            # date does. If both neighbours have one, the day is ambiguous
+            # and the bet stays open — grading against a coin-flip choice of
+            # game would put a wrong number in the record, which is worse
+            # than an open bet because nothing downstream can tell it from a
+            # right one.
+            rows, wargs = _neighbour_day_rows(hist_conn, b, where, wargs)
         if not rows:
             continue
         if _team_day_unfinished(hist_conn, where, wargs, rows[0]):

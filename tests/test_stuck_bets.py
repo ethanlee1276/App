@@ -263,6 +263,83 @@ def test_a_week_label_has_no_neighbours_to_search():
     assert rows and rows[0]["reason"]
 
 
+# --- the cause, and the repair ----------------------------------------------
+def test_a_longshot_is_journaled_under_its_own_games_date():
+    """The cause. A 9pm Eastern first pitch is already tomorrow in UTC, so a
+    slate stamped off a UTC clock sits a day ahead of the date the box score
+    is filed under — and a bet dated one day off its own result can never
+    settle. The row already carried game_date; the journal ignored it."""
+    lconn = ledger.connect(os.path.join(tempfile.mkdtemp(), "l.db"))
+    ledger.log_longshots(lconn, {"sport": "mlb", "date": "2026-07-27",
+        "longshot_watch": [{"player": "Cal Raleigh", "market": "home_runs",
+                            "odds": 400, "book": "FanDuel",
+                            "game_date": "2026-07-26", "model_prob": 0.2}]})
+    got = lconn.execute("SELECT date FROM bets").fetchone()[0]
+    assert got == "2026-07-26", got
+
+
+def test_a_row_with_no_game_date_still_uses_the_slate():
+    lconn = ledger.connect(os.path.join(tempfile.mkdtemp(), "l.db"))
+    ledger.log_longshots(lconn, {"sport": "mlb", "date": "2026-07-27",
+        "longshot_watch": [{"player": "No Date", "market": "home_runs",
+                            "odds": 400, "book": "FanDuel",
+                            "model_prob": 0.2}]})
+    assert lconn.execute("SELECT date FROM bets").fetchone()[0] == "2026-07-27"
+
+
+def _stranded(day="2026-07-27", log_day="2026-07-26", also=()):
+    """A bet dated a day off its own stat line — the reported shape."""
+    lconn = ledger.connect(os.path.join(tempfile.mkdtemp(), "l.db"))
+    lconn.execute(
+        "INSERT INTO bets (sport,date,player,market,side,line,odds,grade,"
+        "stake_units,stake_dollars,status,category) VALUES ('mlb',?,"
+        "'Cal Raleigh','home_runs','OVER',0.5,400,'C',0.1,0.0,'open',"
+        "'longshot_watch')", (day,))
+    lconn.commit()
+    hconn = db.connect(":memory:")
+    for d in (log_day, *also):
+        db.upsert_player_logs(hconn, [{
+            "sport": "mlb", "season": 2026, "period": d, "game_id": f"g{d}",
+            "player": "Cal Raleigh", "team": "SEA", "opponent": "NYY",
+            "position": "S", "home": 1, "market": "home_runs", "value": 1.0}])
+        db.upsert_games(hconn, [{
+            "sport": "mlb", "season": 2026, "period": d, "game_id": f"g{d}",
+            "home": "SEA", "away": "NYY", "home_score": 5, "away_score": 2,
+            "spread": 0.0, "total": None, "roof": "open", "surface": "grass",
+            "temp": None, "wind": None, "extra": ""}])
+    return lconn, hconn
+
+
+def test_a_bet_stranded_one_day_off_its_result_now_settles():
+    """The repair, for the thirty already in the journal."""
+    lconn, hconn = _stranded()
+    assert ledger.settle_from_history(lconn, hconn) == 1
+    row = lconn.execute("SELECT status FROM bets").fetchone()
+    assert row[0] == "won"
+
+
+def test_two_candidate_days_leave_it_open_rather_than_guessing():
+    """Both neighbours logged is not a boundary artefact, it is two
+    different nights. Grading against a coin-flip choice would put a wrong
+    number in the record, and nothing downstream can tell a wrong settled
+    bet from a right one — worse than leaving it open."""
+    lconn, hconn = _stranded(log_day="2026-07-26", also=("2026-07-28",))
+    assert ledger.settle_from_history(lconn, hconn) == 0
+    assert lconn.execute("SELECT status FROM bets").fetchone()[0] == "open"
+
+
+def test_the_fallback_does_not_reach_two_days_out():
+    lconn, hconn = _stranded(log_day="2026-07-24")
+    assert ledger.settle_from_history(lconn, hconn) == 0
+
+
+def test_the_bets_own_day_still_wins_when_it_has_the_log():
+    """The neighbour search must only run when the bet's own date is empty
+    for this player — never in preference to it."""
+    lconn, hconn = _stranded(log_day="2026-07-27", also=("2026-07-26",))
+    assert ledger.settle_from_history(lconn, hconn) == 1
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
