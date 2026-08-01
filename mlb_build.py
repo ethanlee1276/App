@@ -133,6 +133,23 @@ def main() -> None:
                 continue
         odds_status["window_opens_at"] = (
             min(kicks) - oddsbudget.PRIME_BEFORE_S if kicks else None)
+        # WHEN the next paid pull is allowed. Without it, "629 props with no
+        # book price" an hour before first pitch is unanswerable from the
+        # page: the prices are missing because the pacer is holding, and the
+        # pacer's reasoning lived only in the launcher's terminal.
+        if kicks:
+            import time as _t
+            _now = _t.time()
+            _in_window = oddsbudget.prime_window(kicks, _now)
+            _kw = {}
+            if _in_window is True:
+                _kw["active_hours"] = max(
+                    1.0, oddsbudget._window_hours_left(kicks, _now))
+            _share = oddsbudget.PRIME_BURST if _in_window is True else 1.0
+            _gap = oddsbudget.min_seconds_between(
+                len(slate.games) + 1, _st, share=_share, **_kw)
+            if _gap != float("inf"):
+                odds_status["next_pull_at"] = _priced + _gap if _priced else _now
     except Exception:      # telemetry must never fail a build
         pass
 

@@ -248,6 +248,19 @@ PROBE_INTERVAL = 6 * 3600
 PRIME_BEFORE_S = 2.5 * 3600      # window opens this long before first pitch
 PRIME_AFTER_LAST_S = 4 * 3600    # and covers the last game into play
 OFFPEAK_STRETCH = 4              # off-peak refresh gaps widen by this factor
+# A flat 1/31st-of-the-balance-per-day is the wrong shape for how this is
+# used. Most days nobody bets, and those days' credits are not lost — they
+# are still in `remaining`, which is what the daily figure is computed from.
+# But the divisor cannot tell a day with fifteen games from a Tuesday in
+# February, so a real slate got the same allowance as an empty one: ~314
+# credits against a 128-credit refresh, i.e. two pulls, spread so thin the
+# second landed after first pitch.
+#
+# Inside the pre-game window a slate may spend this multiple of the flat
+# daily rate. It is a BURST, not a raise: the balance still has to cover it,
+# the reserve is still untouchable, and off-peak hours keep the flat rate,
+# so a quiet week accumulates the credits a busy Saturday spends.
+PRIME_BURST = 3.0
 
 
 def prime_window(kickoffs, now: float):
@@ -264,6 +277,20 @@ def prime_window(kickoffs, now: float):
 
 def _fmt_clock(ts: float) -> str:
     return _dt.datetime.fromtimestamp(ts).strftime("%H:%M")
+
+
+def _window_hours_left(kickoffs, now: float) -> float:
+    """Hours from now to the end of tonight's pre-game window.
+
+    Shrinks as the evening goes on, which is the point: the same remaining
+    allowance concentrates into the time that is left, so a slate does not
+    finish the night with credits it saved for hours that no longer exist.
+    """
+    ks = [k for k in (kickoffs or [])
+          if isinstance(k, (int, float)) and now - 12 * 3600 < k < now + 36 * 3600]
+    if not ks:
+        return 14.0
+    return max(0.0, (max(ks) + PRIME_AFTER_LAST_S - now)) / 3600.0
 
 
 def should_refresh(requests_per_refresh: int, now: float | None = None,
@@ -294,6 +321,20 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     # wall calendar, which is untestable and once meant a test that passed
     # on the 28th failed on the 29th.
     kw.setdefault("today", _dt.date.fromtimestamp(now))
+    # Spread the day's allowance over the hours that HAVE prices, not over
+    # a nominal 14-hour day. This is the whole bug behind an empty 5pm
+    # board: 15 games cost 128 credits a refresh, a fresh month divides the
+    # balance by 31 days, and the resulting ~314/day buys 2.45 refreshes —
+    # spread across 14 hours that is one every 5.7 HOURS. The pacer pulled
+    # at 12:37, and the next slot landed after first pitch. Every credit was
+    # spent, none of it where the prices were, and the board showed "629
+    # props with no book price" an hour before the games.
+    #
+    # Inside the window the same 2.45 refreshes are spread over the window
+    # instead, which is the only stretch where a pull buys a real board.
+    if window is True:
+        kw.setdefault("active_hours", max(1.0, _window_hours_left(kickoffs, now)))
+        share = share * PRIME_BURST
     gap = min_seconds_between(requests_per_refresh, state, share=share, **kw)
     waited = now - state.sport_ts(sport)
     if gap == float("inf"):

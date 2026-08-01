@@ -912,6 +912,13 @@ function oddsClockHTML() {
       ? `today's pricing starts <b>${clock(os.window_opens_at)}</b>`
       : `pre-game window is open`);
   }
+  /* The question this box exists to answer, an hour before first pitch, is
+     "why is nothing priced" — and the answer is usually that the next paid
+     pull is not due yet. That was only ever visible in the terminal. */
+  const due = os.next_pull_at ? os.next_pull_at * 1000 : 0;
+  if (due && due > Date.now()) {
+    bits.push(`next paid pull <b>${clock(os.next_pull_at)}</b>`);
+  }
   if (!bits.length) return "";
   /* Before the window, "no book price" is not a symptom of anything — it is
      the schedule. Say that as the first clause rather than leaving it to be
