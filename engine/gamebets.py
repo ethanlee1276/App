@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from .statmath import normal_cdf, clamp
 from .odds import (american_to_decimal, american_to_prob, devig_two_way,
                    expected_value)
-from .betting import _grade, _kelly_stake
+from .betting import _grade, _kelly_stake, temper_edge, MAX_CREDIBLE_EDGE
 
 # NFL: SD of a game's final margin. MLB: SD of the run margin used for win prob.
 NFL_MARGIN_SD = 13.5
@@ -48,6 +48,30 @@ SCORING_BASELINE = {"nfl": 22.6, "mlb": 4.5}
 MARGIN_SD = {"nfl": NFL_MARGIN_SD, "mlb": MLB_MARGIN_SD}
 TOTAL_SD = {"nfl": NFL_TOTAL_SD, "mlb": MLB_TOTAL_SD}
 HOME_FIELD = {"nfl": NFL_HOME_FIELD, "mlb": MLB_HOME_FIELD}
+
+
+def _sd(table: dict, sport: str, what: str) -> float:
+    """This sport's variance, or a refusal — never another sport's.
+
+    Every one of these tables is a `.get(sport, default)` away from pricing
+    college football with the NFL's 13.5-point margin and no home field at
+    all, and the failure is silent: you get a confident number with the
+    wrong physics behind it. CFB DOES register its own (engine.cfb.ratings
+    calls install() at import and again after each fit), so today every real
+    build is correct — but "correct as long as somebody imported the right
+    module first" is not a property, it is a coincidence waiting to lapse.
+
+    Same fault as the moneyline backtest that fell back to `nfl_win_prob`
+    for any sport it did not know. Refusing by name is the whole fix.
+    """
+    try:
+        return table[sport]
+    except KeyError:
+        raise ValueError(
+            f"no {what} registered for {sport!r} — pricing it against another "
+            f"league's variance would produce a confident wrong number. "
+            f"Register it (see engine.cfb.ratings.install) before pricing."
+        ) from None
 
 
 def nfl_win_prob(home_rating: float, away_rating: float) -> float:
@@ -88,10 +112,27 @@ class MoneylineRec:
     reasons: list[str] = field(default_factory=list)
 
 
+#: Post-haircut edge that saturates the confidence scale. It is half of the
+#: 0.07 this used before, and the halving is not a loosening — edges reaching
+#: this function are now shrunk 50% toward the market, so 0.035 here is the
+#: same REAL model-vs-market disagreement 0.07 used to be. Leaving it at 0.07
+#: would have quietly doubled the bar rather than kept it.
+CONFIDENCE_SATURATES_AT = 0.035
+
+
 def _ml_confidence(edge: float, win_prob: float) -> float:
-    """0–10 confidence for a moneyline. Edge is the main driver; a clearer
-    favorite adds a little certainty. Tuned so a ~4% edge grades a Play."""
-    edge_component = clamp(edge / 0.07, 0.0, 1.0) * 6.5
+    """0–10 confidence for a game bet, from the TEMPERED edge.
+
+    Worth being honest about what this is: a hand-drawn curve, never fitted
+    to outcomes. Combined with the credibility ceiling it leaves a narrow
+    qualifying band — a raw disagreement of roughly 7% to 10%, which is 2.4
+    to 3.5 points on an NFL total. Betting only in the strip just below
+    "this is a rating error" is an uncomfortable place to live, and it is
+    the honest read of a layer that has not yet been graded against results.
+    Until gamebacktest.py has run these markets over real closing lines,
+    treat a graded game bet as journaled, not earned.
+    """
+    edge_component = clamp(edge / CONFIDENCE_SATURATES_AT, 0.0, 1.0) * 6.5
     prob_component = clamp((win_prob - 0.5) / 0.35, 0.0, 1.0) * 2.0
     return round(clamp(edge_component + prob_component, 0.0, 10.0), 1)
 
@@ -264,18 +305,22 @@ def price_moneyline(home: str, away: str, win_prob_home: float,
     away_edge = wp_away - fair_away
 
     if home_edge >= away_edge:
-        pick, is_home, wp, ml, fair, edge = home, True, wp_home, home_ml, fair_home, home_edge
+        pick, is_home, raw, ml, fair = home, True, wp_home, home_ml, fair_home
     else:
-        pick, is_home, wp, ml, fair, edge = away, False, wp_away, away_ml, fair_away, away_edge
+        pick, is_home, raw, ml, fair = away, False, wp_away, away_ml, fair_away
+    wp, edge, credible = temper(raw, fair)
 
     ev = expected_value(wp, ml)
     confidence = _ml_confidence(edge, wp)
-    grade = _grade(confidence, edge)
+    grade = _grade(confidence, edge) if credible else "Pass"
     stake = _kelly_stake(wp, ml) if grade != "Pass" else 0.0
 
     reasons = list(context or [])
     reasons.insert(0, f"Model win probability {wp:.0%} vs book's {fair:.0%} "
-                      f"— a {edge:+.1%} edge on {pick}")
+                      f"— a {edge:+.1%} edge on {pick} after the market haircut")
+    if not credible:
+        reasons.insert(0, f"Model disagrees with the market by more than "
+                          f"{MAX_CREDIBLE_EDGE:.0%} — a rating error, not an edge")
 
     return MoneylineRec(
         home=home, away=away, pick=pick, pick_is_home=is_home,
@@ -316,28 +361,57 @@ def moneyline_to_dict(rec: MoneylineRec) -> dict:
 # --- totals & spreads ------------------------------------------------------
 def project_team_points(sport: str, off: float, opp_def: float) -> float:
     """Projected points/runs for one team: its offense vs the opponent's defense."""
-    return SCORING_BASELINE.get(sport, 0.0) + off + opp_def
+    return _sd(SCORING_BASELINE, sport, "scoring baseline") + off + opp_def
 
 
 def project_total(sport: str, home_off: float, home_def: float,
                   away_off: float, away_def: float) -> float:
     """Projected combined score: each side's offense meets the other's defense."""
-    base = SCORING_BASELINE.get(sport, 0.0)
+    base = _sd(SCORING_BASELINE, sport, "scoring baseline")
     # home pts = base + home_off + away_def ; away pts = base + away_off + home_def
     return 2 * base + home_off + away_off + home_def + away_def
 
 
 def game_margin(sport: str, home_rating: float, away_rating: float) -> float:
     """Projected home scoring margin (points/runs), including home field."""
-    return (home_rating - away_rating) + HOME_FIELD.get(sport, 0.0)
+    return (home_rating - away_rating) + _sd(HOME_FIELD, sport, "home field")
+
+
+def temper(raw_win: float, fair: float) -> tuple[float, float, bool]:
+    """The prop layer's §2.5/§3 discipline, applied to a GAME bet.
+
+    It was missing here, and the asymmetry was visible on one screen: a
+    passing-yards prop 13 points clear of the market was graded Pass, while
+    four spreads and totals with the SAME size disagreement sat above it
+    graded Play at +12% to +21% EV. Only the prop layer had the guards.
+
+    Two things happen, both borrowed rather than reinvented:
+
+    1. Shrink halfway to the market. An uncalibrated model that disagrees
+       with a closing NFL line by four points is far more likely to be four
+       points wrong than four points right — the line is the aggregate of
+       everyone who bet it, and we are one model.
+    2. Refuse a raw disagreement over MAX_CREDIBLE_EDGE. A 4-point gap on
+       an NFL total is 11.7% raw; spreads and totals are the most efficiently
+       priced markets in American sport, and an 11.7% edge in one is a
+       statement about our ratings, not about the market.
+
+    Returns ``(tempered_win, edge_vs_fair, credible)``.
+    """
+    return temper_edge(raw_win, fair, book="", allow_synthetic_line=True)
 
 
 def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
-              pick_label, reasons, team="", side="", line=0.0, headline=""):
+              pick_label, reasons, team="", side="", line=0.0, headline="",
+              credible=True):
     ev = expected_value(win, odds)
     confidence = _ml_confidence(edge, win)
-    grade = _grade(confidence, edge)
+    grade = _grade(confidence, edge) if credible else "Pass"
     stake = _kelly_stake(win, odds) if grade != "Pass" else 0.0
+    if not credible:
+        reasons = [f"Model disagrees with the market by more than "
+                   f"{MAX_CREDIBLE_EDGE:.0%} — in a market this efficiently "
+                   f"priced that is a rating error, not an edge"] + list(reasons)
     return {
         "bet_type": bet_type,
         "market": bet_type,
@@ -357,6 +431,7 @@ def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
         "confidence": confidence,
         "stake_units": round(stake, 2),
         "grade": grade,
+        "credible": credible,
         "headline": headline or pick_label,
         "reasons": reasons,
     }
@@ -367,22 +442,24 @@ def price_total(sport: str, home: str, away: str, proj_total: float,
                 units: str = "points", context: list[str] | None = None) -> dict:
     """Price the game total (over/under) from the projected combined score."""
     fair_over, fair_under = devig_two_way(over_odds, under_odds)
-    sd = TOTAL_SD.get(sport, 10.0)
+    sd = _sd(TOTAL_SD, sport, "total SD")
     p_over = clamp(normal_cdf((proj_total - market_total) / sd), 0.02, 0.98)
     over_edge = p_over - fair_over
     under_edge = (1.0 - p_over) - fair_under
 
     if over_edge >= under_edge:
-        side, win, odds, fair, edge = "Over", p_over, over_odds, fair_over, over_edge
+        side, raw, odds, fair = "Over", p_over, over_odds, fair_over
     else:
-        side, win, odds, fair, edge = "Under", 1.0 - p_over, under_odds, fair_under, under_edge
+        side, raw, odds, fair = "Under", 1.0 - p_over, under_odds, fair_under
+    win, edge, credible = temper(raw, fair)
 
     reasons = list(context or [])
     reasons.insert(0, f"Model projects {proj_total:.1f} {units} vs the {market_total:g} "
-                      f"total — {side} ({edge:+.1%} edge)")
+                      f"total — {side} ({edge:+.1%} edge after the market haircut)")
     return _game_bet("total", "Total", home, away, win, fair, edge, odds,
                      pick_label=f"{side} {market_total:g}", side=side, line=market_total,
-                     reasons=reasons, headline=f"{side} {market_total:g} {units}")
+                     reasons=reasons, headline=f"{side} {market_total:g} {units}",
+                     credible=credible)
 
 
 def price_team_total(sport: str, team: str, home: str, away: str,
@@ -391,22 +468,25 @@ def price_team_total(sport: str, team: str, home: str, away: str,
                      units: str = "points", context: list[str] | None = None) -> dict:
     """Price a single team's total (over/under) from its projected scoring."""
     fair_over, fair_under = devig_two_way(over_odds, under_odds)
-    sd = TEAM_TOTAL_SD.get(sport, 9.5)
+    sd = _sd(TEAM_TOTAL_SD, sport, "team-total SD")
     p_over = clamp(normal_cdf((proj_points - line) / sd), 0.02, 0.98)
     over_edge = p_over - fair_over
     under_edge = (1.0 - p_over) - fair_under
 
     if over_edge >= under_edge:
-        side, win, odds, fair, edge = "Over", p_over, over_odds, fair_over, over_edge
+        side, raw, odds, fair = "Over", p_over, over_odds, fair_over
     else:
-        side, win, odds, fair, edge = "Under", 1.0 - p_over, under_odds, fair_under, under_edge
+        side, raw, odds, fair = "Under", 1.0 - p_over, under_odds, fair_under
+    win, edge, credible = temper(raw, fair)
 
     reasons = list(context or [])
     reasons.insert(0, f"Model projects {team} for {proj_points:.1f} {units} vs the "
-                      f"{line:g} team total — {side} ({edge:+.1%} edge)")
+                      f"{line:g} team total — {side} ({edge:+.1%} edge after the "
+                      f"market haircut)")
     return _game_bet("team_total", "Team total", home, away, win, fair, edge, odds,
                      pick_label=f"{team} {side} {line:g}", team=team, side=side, line=line,
-                     reasons=reasons, headline=f"{team} team {side} {line:g}")
+                     reasons=reasons, headline=f"{team} team {side} {line:g}",
+                     credible=credible)
 
 
 def price_spread(sport: str, home: str, away: str, proj_margin: float,
@@ -418,19 +498,22 @@ def price_spread(sport: str, home: str, away: str, proj_margin: float,
     covers when the actual margin beats it, i.e. margin + home_spread > 0.
     """
     fair_home, fair_away = devig_two_way(home_odds, away_odds)
-    sd = MARGIN_SD.get(sport, 13.5)
+    sd = _sd(MARGIN_SD, sport, "margin SD")
     p_home = clamp(normal_cdf((proj_margin + home_spread) / sd), 0.02, 0.98)
     home_edge = p_home - fair_home
     away_edge = (1.0 - p_home) - fair_away
 
     if home_edge >= away_edge:
-        team, spread, win, odds, fair, edge = home, home_spread, p_home, home_odds, fair_home, home_edge
+        team, spread, raw, odds, fair = home, home_spread, p_home, home_odds, fair_home
     else:
-        team, spread, win, odds, fair, edge = away, -home_spread, 1.0 - p_home, away_odds, fair_away, away_edge
+        team, spread, raw, odds, fair = away, -home_spread, 1.0 - p_home, away_odds, fair_away
+    win, edge, credible = temper(raw, fair)
 
     reasons = list(context or [])
     reasons.insert(0, f"Model margin {proj_margin:+.1f} vs the {home} {home_spread:+g} "
-                      f"line — {team} {spread:+g} ({edge:+.1%} edge)")
+                      f"line — {team} {spread:+g} ({edge:+.1%} edge after the "
+                      f"market haircut)")
     return _game_bet("spread", "Spread", home, away, win, fair, edge, odds,
                      pick_label=f"{team} {spread:+g}", team=team, line=spread,
-                     reasons=reasons, headline=f"{team} {spread:+g}")
+                     reasons=reasons, headline=f"{team} {spread:+g}",
+                     credible=credible)

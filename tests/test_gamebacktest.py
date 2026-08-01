@@ -44,7 +44,14 @@ def _seed_history(conn, n_days=20):
     games = []
     for d in range(1, n_days + 1):
         date = f"2026-05-{d:02d}"
-        games.append(_game(date, "AAA", "BBB", 5, 2))
+        # 4-3, not the old 5-2. A team that wins twenty straight by three
+        # runs rates 38 points clear of an even market, and the backtest now
+        # refuses that the same way the live board does — a disagreement
+        # that size is a rating error, whatever a synthetic fixture intends.
+        # Making the fixture realistic keeps this file testing what it is
+        # named for (settlement against real scores) instead of testing the
+        # guard, which has its own tests.
+        games.append(_game(date, "AAA", "BBB", 4, 3))
         games.append(_game(date, "CCC", "DDD", 3, 3 + (d % 2)))
     db.upsert_games(conn, games)
 
@@ -52,12 +59,13 @@ def _seed_history(conn, n_days=20):
 def test_walk_forward_settles_against_real_scores():
     conn = _conn()
     _seed_history(conn)
-    # Judgment day: the dominant team is priced as only a slight favorite —
-    # the model (which watched AAA win 20 straight by 3) should pounce.
+    # Judgment day: the market has AAA at -150 (57.4% de-vigged) and the
+    # model reads 66.6% — a 9.2-point disagreement, inside the credibility
+    # ceiling, which is what a real edge looks like.
     db.upsert_games(conn, [_game("2026-06-01", "AAA", "BBB", 4, 1)])
     db.upsert_odds_history(conn, [
-        _ml("2026-06-01", "AAA", "BBB", "AAA", -110),
-        _ml("2026-06-01", "AAA", "BBB", "BBB", -110),
+        _ml("2026-06-01", "AAA", "BBB", "AAA", -150),
+        _ml("2026-06-01", "AAA", "BBB", "BBB", 125),
     ])
     r = backtest_moneylines(conn, "mlb", min_team_games=15)
     assert r.games_seen == 41

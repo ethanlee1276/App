@@ -3002,9 +3002,19 @@ function renderEdgeBoard() {
       hundreds of bets.</p></div>`;
     return;
   }
-  note.innerHTML = `${rows.length} positively-priced bet(s) on the board ·
-    every number vs a real book price · ✅ = clears your current sliders on the
-    Recommended page; everything else is a watchlist, not a tracked bet`;
+  /* "18 positively-priced bets" sounds like a finding and is arithmetic. On
+     a two-way market the de-vigged prices sum to 1, so the two sides' edges
+     sum to exactly ZERO — one side is always non-negative, whatever the
+     model thinks. A full board is the count of markets priced, not evidence
+     of anything, and reading it as a haul is the single easiest way to talk
+     yourself into a bad night. The ✅ count is the number that means
+     something, so lead with it. */
+  const plays = rows.filter((r) => r.rec).length;   // same flag the ✅ uses
+  note.innerHTML = `<b>${plays}</b> clear your current sliders · ${rows.length}
+    market(s) priced against a real book number. One side of every two-way
+    market always prices positive — the two sides' edges sum to zero by
+    construction — so the length of this list is not a signal. ✅ = a tracked
+    bet; everything else is a watchlist.`;
   host.innerHTML = EDGE_BANDS.map(([title, test]) => {
     const band = rows.filter((r) => test(r.odds));
     if (!band.length) return "";

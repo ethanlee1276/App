@@ -61,12 +61,36 @@ def test_price_moneyline_backs_the_side_with_the_edge():
 
 
 def test_price_moneyline_can_back_the_underdog():
-    # Model thinks the road dog wins 55%; book prices them +150 (40% fair).
+    """Still backs the dog the model likes — but the number it SHOWS is now
+    the tempered one, not the raw model probability.
+
+    This used to assert win_prob == 0.55, the model's untouched output.
+    Game bets now take the same haircut props have always taken, so a raw
+    55% against a 38.6% market renders between the two. The side and the
+    sign of the edge are the behaviour under test; the raw number was never
+    the point."""
     rec = price_moneyline("HOME", "AWAY", 0.45, -175, 150)
     assert rec.pick == "AWAY"
     assert rec.pick_is_home is False
-    assert approx(rec.win_prob, 0.55)
+    assert 0.386 < rec.win_prob < 0.55, "shown probability is not tempered"
     assert rec.edge > 0
+
+
+def test_a_moneyline_the_model_disagrees_with_by_16_points_is_refused():
+    """The fixture above is also, deliberately, an example of the guard: a
+    book at 38.6% and a model at 55% is not an edge anybody finds on a
+    major-league moneyline. It renders with its reasoning and grades Pass."""
+    rec = price_moneyline("HOME", "AWAY", 0.45, -175, 150)
+    assert rec.grade == "Pass"
+    assert any("disagrees with the market" in r for r in rec.reasons)
+
+
+def test_the_haircut_is_half_of_the_disagreement():
+    """Not a magic number: it is betting.MARKET_SHRINK, the same constant
+    the prop model has always used, so the two layers cannot drift."""
+    from engine.betting import MARKET_SHRINK
+    rec = price_moneyline("HOME", "AWAY", 0.56, -110, -110)
+    assert abs(rec.win_prob - (0.5 + MARKET_SHRINK * 0.06)) < 1e-3
 
 
 def test_price_moneyline_passes_when_it_agrees_with_the_market():
