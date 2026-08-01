@@ -35,28 +35,47 @@ SRC = open(os.path.join(ROOT, "engine", "maintenance.py"), encoding="utf-8").rea
 # --- the gap ----------------------------------------------------------------
 def test_both_basketball_leagues_grade_intraday():
     """The NBA had an intraday ingest and the WNBA did not."""
-    i = SRC.index("for league, ingest_day in")
-    block = SRC[i:i + 700]
+    i = SRC.index("def ingest_for_open_bets(")
+    block = SRC[i:i + 2200]
     assert '("nba", _nba_day)' in block
     assert '("wnba", _wnba_day)' in block
 
 
 def test_a_league_is_only_pulled_when_it_has_an_open_pick_that_day():
-    """Otherwise a quiet night costs two feed round-trips per open date for
+    """Otherwise a quiet night costs a feed round-trip per open date for
     leagues with nothing riding on them."""
-    i = SRC.index("for league, ingest_day in")
-    block = SRC[i:i + 900]
-    assert "WHERE status='open' AND " in block
-    assert "sport=? AND date=? LIMIT 1" in block, \
+    i = SRC.index("def ingest_for_open_bets(")
+    block = SRC[i:i + 2200]
+    assert "_has_open(lconn, league, [d])" in block
+    helper = SRC[SRC.index("def _has_open("):]
+    assert "WHERE status='open' AND sport=?" in helper[:400], \
         "the open-pick check is not scoped to the league being ingested"
+
+
+def test_baseball_is_only_pulled_when_it_has_an_open_pick_too():
+    """It used to run unconditionally, so a WNBA-only night still paid for
+    a full MLB results fetch."""
+    i = SRC.index("def ingest_for_open_bets(")
+    block = SRC[i:i + 2200]
+    assert '_has_open(lconn, "mlb", days)' in block
+
+
+def test_both_settle_paths_share_one_ingest():
+    """They drifted once already: the intraday pass learned about the WNBA
+    and the --settle CLI did not, so the same bet graded on one path and
+    sat open on the other."""
+    launch = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    assert "from engine.maintenance import ingest_for_open_bets" in launch
+    assert "ingest.ingest_mlb_results(hconn, day, day" not in launch, \
+        "the CLI still ingests baseball and only baseball"
 
 
 def test_one_leagues_feed_hiccup_cannot_strand_the_others_bets():
     """The try/except has to be INSIDE the loop. Wrapping the whole loop
     means a WNBA outage skips the NBA ingest sitting after it — and both
     would then miss the MLB settle below."""
-    i = SRC.index("for league, ingest_day in")
-    block = SRC[i:i + 900]
+    i = SRC.index("def ingest_for_open_bets(")
+    block = SRC[i:i + 2200]
     body = block[block.index("for d in days:"):]
     assert body.index("try:") < body.index("ingest_day(hconn, d)")
     assert "except Exception:" in body

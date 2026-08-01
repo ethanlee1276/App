@@ -1906,9 +1906,14 @@ def settle_now(day: str | None = None) -> None:
     print(f"Settling {day} …")
     hconn = db.connect()
     try:
-        res = ingest.ingest_mlb_results(hconn, day, day, with_logs=True)
-        print(f"  results: {res['games']} game(s), "
-              f"{res['player_logs']:,} player log rows")
+        # Every sport with an open pick that day, not just baseball. This
+        # ingested MLB alone, so a WNBA or UFC pick had no stat line to be
+        # graded against and stayed open — which is why `--settle all` began
+        # at the same old date every night and reported nothing settled.
+        from engine.maintenance import ingest_for_open_bets
+        res = ingest_for_open_bets(lconn, hconn, [day], print)
+        print(f"  results: {res.get('games', 0)} game(s), "
+              f"{res.get('player_logs', 0):,} player log rows")
         # A called-off game is the usual reason a night refuses to grade:
         # it sits in the DB scoreless, looking exactly like a game still in
         # progress, and holds every pick on both teams open. Name it.

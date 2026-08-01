@@ -230,6 +230,52 @@ def prune_cache(max_age_days: int = CACHE_KEEP_DAYS, log=None,
     return n, freed
 
 
+def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
+    """Pull results for every SPORT that has an open pick on these days.
+
+    Both settle paths used to ingest baseball and nothing else, so a WNBA or
+    UFC pick could never grade from them: `settle_from_history` compares a
+    bet to a stored stat line, and nobody had stored one. The date then kept
+    its open pick forever, which is why `--settle all` began at the same
+    old date every night, reported zero settled, and did it again tomorrow.
+
+    Each league is pulled only on dates that actually have an open pick in
+    it, and each pull is isolated — one league's feed hiccup must not skip
+    the next league's ingest, nor the settle that runs after all of them.
+    """
+    from . import ingest
+
+    res = {"games": 0}
+    if _has_open(lconn, "mlb", days):
+        try:
+            res = ingest.ingest_mlb_results(hconn, days[0], days[-1],
+                                            with_logs=True)
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  MLB results ingest skipped ({exc}) — settling on "
+                "what's already ingested")
+    for league, ingest_day in (("nba", _nba_day), ("wnba", _wnba_day)):
+        if ingest_day is None:
+            continue
+        for d in days:
+            if not _has_open(lconn, league, [d]):
+                continue
+            try:
+                ingest_day(hconn, d)
+            except Exception:  # noqa: BLE001
+                log(f"  ⚠️  {league.upper()} results for {d} unavailable — "
+                    f"those picks stay open")
+    return res
+
+
+def _has_open(lconn, sport: str, days: list[str]) -> bool:
+    if not days:
+        return False
+    marks = ",".join("?" * len(days))
+    return bool(lconn.execute(
+        f"SELECT 1 FROM bets WHERE status='open' AND sport=? "
+        f"AND date IN ({marks}) LIMIT 1", (sport, *days)).fetchone())
+
+
 def _hoops_ingesters():
     """(nba, wnba) day-ingest callables, or None where unavailable.
 
@@ -292,36 +338,7 @@ def settle_open(log=print, state_path: Path | None = None,
         # cache file) must not skip the settle below. Everything already in
         # the history DB can still grade tonight's bets — letting one bad
         # response strand the whole journal is how bets sat open for days.
-        res = {"games": 0}
-        try:
-            res = ingest.ingest_mlb_results(hconn, days[0], days[-1],
-                                            with_logs=True)
-        except Exception as exc:  # noqa: BLE001
-            log(f"  ⚠️  results ingest skipped ({exc}) — settling on what's "
-                "already ingested")
-        # Basketball grades intraday too — box scores go final within
-        # minutes of the buzzer. Only dates that actually have an open pick
-        # in that league are pulled, so this costs nothing on a quiet night.
-        #
-        # WNBA was missing here, and it is the board that needed it most:
-        # the NBA is dark from June to October while the WNBA plays through
-        # exactly those months, so the one basketball league with live bets
-        # all summer was the one whose picks could not close until the next
-        # day's maintenance pass.
-        for league, ingest_day in (("nba", _nba_day), ("wnba", _wnba_day)):
-            if ingest_day is None:
-                continue
-            for d in days:
-                if not lconn.execute(
-                        "SELECT 1 FROM bets WHERE status='open' AND "
-                        "sport=? AND date=? LIMIT 1", (league, d)).fetchone():
-                    continue
-                try:
-                    ingest_day(hconn, d)
-                except Exception:  # noqa: BLE001 — one league's feed hiccup
-                    # must not strand the other's bets, nor the MLB settle
-                    # below. The daily pass catches up.
-                    pass
+        res = ingest_for_open_bets(lconn, hconn, days, log)
         settled = ledger.settle_from_history(lconn, hconn)
         # Self-healing: any bet ever graded off a partial stat line gets
         # re-graded once the real final number is in.
