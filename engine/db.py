@@ -355,9 +355,34 @@ def date_ranges(conn) -> dict:
     return out
 
 
+#: Reported first, in this order, whether or not they have rows — a board
+#: with an EMPTY history is the single most useful thing this summary can
+#: say, and omitting it makes "no data" and "no such sport" identical.
+CORE_SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba")
+
+
+def sports_present(conn) -> list[str]:
+    """Every sport with rows, core boards first.
+
+    This used to be the literal tuple ("nfl", "mlb"), which meant a two-hour
+    NBA backfill finished by printing a summary that did not mention
+    basketball — leaving no way to tell a completed ingest from a broken
+    one except by opening SQLite.
+    """
+    found = set()
+    for table in ("games", "player_game_logs"):
+        try:
+            found.update(r[0] for r in conn.execute(
+                f"SELECT DISTINCT sport FROM {table}") if r[0])
+        except Exception:                     # table may not exist yet
+            continue
+    rest = sorted(found - set(CORE_SPORTS))
+    return list(CORE_SPORTS) + rest
+
+
 def summary(conn) -> dict:
     out: dict = {"games": {}, "scored_games": {}, "player_logs": {}, "seasons": {}}
-    for sport in ("nfl", "mlb"):
+    for sport in sports_present(conn):
         out["games"][sport] = conn.execute(
             "SELECT COUNT(*) FROM games WHERE sport=?", (sport,)).fetchone()[0]
         # Games with a final score — what team ratings and the moneyline

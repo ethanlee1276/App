@@ -38,6 +38,33 @@ from ..statmath import clamp
 # Plate appearances by lineup spot — the top of the order simply bats more.
 PA_BY_SPOT = {1: 4.6, 2: 4.5, 3: 4.4, 4: 4.3, 5: 4.2,
               6: 4.0, 7: 3.9, 8: 3.8, 9: 3.7}
+
+# Clubs file the official card with MLB roughly this long before first pitch;
+# our own confirmation reads that same feed, so this is when the caveat below
+# can clear at the earliest.
+LINEUP_POSTS_BEFORE_H = 3
+
+
+def _lineup_eta(game) -> str:
+    """"not confirmed yet" invites the obvious question — WHEN will it be?
+
+    Without an answer the warning reads as "we failed to check", when the
+    truth is that the lineup does not exist anywhere yet: nobody has it,
+    including the book taking the bet. Naming the hour turns a worry into a
+    time to come back.
+    """
+    import datetime as _dt
+    k = (getattr(game, "kickoff", "") or "").replace("Z", "+00:00")
+    try:
+        first = _dt.datetime.fromisoformat(k)
+    except ValueError:
+        return "not confirmed yet"
+    if first.tzinfo is not None:
+        first = first.astimezone()
+    eta = first - _dt.timedelta(hours=LINEUP_POSTS_BEFORE_H)
+    when = eta.strftime("%-I:%M %p").lower().replace("am", "AM").replace("pm", "PM")
+    return (f"lineups post around {when}, ~{LINEUP_POSTS_BEFORE_H}h before "
+            f"first pitch, and this clears itself then")
 DEFAULT_PA = 4.0
 
 LEAGUE_HR_PER_PA = 0.033        # ~3.3% of plate appearances
@@ -219,8 +246,9 @@ def hr_probability(prop: MLBProp, game: MLBGame) -> tuple[float, dict]:
     if not has_statcast:
         caveats.append("No Statcast contact data — power profile is inferred from results only")
     if not getattr(game, "lineups_confirmed", True):
-        caveats.append("Projected from the team's last lineup — not confirmed yet; "
-                       "verify he's starting before betting")
+        caveats.append("Projected from the team's last lineup — "
+                       + _lineup_eta(game)
+                       + "; verify he's starting before betting")
     elif prop.lineup_spot in (0, None):
         caveats.append("Lineup spot unconfirmed — plate appearances estimated")
 

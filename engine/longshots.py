@@ -135,6 +135,22 @@ def _stake(model_prob: float, odds: int, fraction: float = 0.2) -> float:
     return round(clamp(kelly * fraction, 0.0, 0.03) * 20, 2)
 
 
+#: Hold assumed when only one side of a market is published.
+#:
+#: Direction matters and is worth stating, because it is easy to get
+#: backwards: implied = raw / this, so a SMALLER assumption leaves implied
+#: HIGHER, which makes `model − implied` smaller and the pick harder to
+#: qualify. Assuming the book is fairer than it is costs us picks; assuming
+#: it is greedier than it is invents edge. 1.06 is the cautious end.
+#:
+#: It is still an assumption, not a measurement — real hold on a longshot
+#: prop is usually wider than 6%, which means this understates the book's
+#: true margin and the edge on these picks is the optimistic bound of a
+#: range, not a number. Every pick priced this way carries the caveat, and
+#: nothing here is staked off a one-sided quote without it being said.
+ONE_SIDED_HOLD = 1.06
+
+
 def _price(model_prob: float, over_odds: int, under_odds: int | None):
     """De-vig the book's price. With only one side quoted (common for TD/HR
     markets) we strip an assumed hold instead, which is less precise — the
@@ -152,7 +168,7 @@ def _price(model_prob: float, over_odds: int, under_odds: int | None):
         exact = True
     else:
         raw = american_to_prob(over_odds)
-        implied = raw / 1.06          # assume ~6% hold on a one-sided quote
+        implied = raw / ONE_SIDED_HOLD
         exact = False
     return implied, exact
 
@@ -184,7 +200,16 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
     raw_prob = clamp(apply_temperature(model_prob, _t, _b), 1e-4, 0.999)
     implied, exact = _price(raw_prob, odds, under_odds)
     if not exact:
-        caveats = caveats + ["Only one side quoted — the book's true price is estimated"]
+        # Say WHY there is one side. "Only one side quoted" on its own reads
+        # as a feed we failed to pull; in fact books don't offer "no home
+        # run" as a bet, so the other price does not exist to be pulled. The
+        # cost is that the vig is assumed rather than measured — and the
+        # assumption is set so the error lands against the pick, not for it.
+        caveats = caveats + [
+            f"Books don't offer the NO side of this market, so the vig is "
+            f"assumed at {ONE_SIDED_HOLD - 1:.0%} rather than measured off "
+            f"both prices. Real hold here is usually wider, so treat this "
+            f"edge as the optimistic end of a range"]
 
     # Same discipline as the yardage-prop model: shrink toward the market while
     # the model is still uncalibrated, and treat an implausibly large

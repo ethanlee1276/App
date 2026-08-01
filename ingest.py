@@ -45,9 +45,14 @@ def parse_seasons(spec: str) -> list[int]:
 def print_summary(conn) -> None:
     s = db.summary(conn)
     print("\nHistory DB contents:")
-    for sport in ("nfl", "mlb"):
+    for sport in s["games"]:
         seasons = s["seasons"][sport]
         span = f"{seasons[0]}-{seasons[-1]}" if seasons else "—"
+        if not s["games"][sport] and not s["player_logs"][sport]:
+            # Say it rather than skip it: an absent line reads as "that board
+            # isn't a thing here", which is a different fact entirely.
+            print(f"  {sport.upper()}: nothing stored yet")
+            continue
         print(f"  {sport.upper()}: {s['games'][sport]:,} games "
               f"({s['scored_games'][sport]:,} with final scores), "
               f"{s['player_logs'][sport]:,} player-log rows  (seasons {span})")
@@ -100,12 +105,26 @@ def _already_have(conn, sport: str, date: str, need_logs: bool) -> bool:
     return bool(p)
 
 
+def _held(conn, sport: str) -> tuple[int, int]:
+    """What the DB holds for this sport, regardless of what this run added.
+
+    A run that adds nothing because everything is already there and a run
+    that adds nothing because the feed is dead print the same zero. The
+    standing total is the number that tells them apart.
+    """
+    g = conn.execute("SELECT COUNT(*) FROM games WHERE sport=?",
+                     (sport,)).fetchone()[0]
+    p = conn.execute("SELECT COUNT(*) FROM player_game_logs WHERE sport=?",
+                     (sport,)).fetchone()[0]
+    return g, p
+
+
 def _walk_days(conn, sport: str, dates: list, ingest_day, scores_only: bool,
                refresh: bool) -> tuple:
     """Ingest a list of dates with progress, resumability and one line per
     distinct failure."""
     import time as _time
-    total_g = total_p = skipped = 0
+    total_g = total_p = skipped = empty = 0
     seen: set = set()
     started = _time.time()
     for i, d in enumerate(dates, 1):
@@ -118,6 +137,13 @@ def _walk_days(conn, sport: str, dates: list, ingest_day, scores_only: bool,
             print(f"\n  Stopped at {d}. Progress is saved — re-run the same "
                   f"command to pick up where it left off.")
             break
+        # A date the league simply did not play. Counting these is what lets
+        # the caller tell "the feed gave us nothing" apart from "there was
+        # nothing to give" — a season WINDOW is not a schedule, and an NBA
+        # window holds three weeks of preseason, an All-Star break, playoff
+        # travel days and the fortnight after the finals.
+        if not res["games"] and not res["skipped"]:
+            empty += 1
         total_g += res["games"]
         total_p += res["player_logs"]
         for msg in res["skipped"]:
@@ -132,7 +158,7 @@ def _walk_days(conn, sport: str, dates: list, ingest_day, scores_only: bool,
             print(f"  {i:>5}/{len(dates)} days · {total_g:,} games · "
                   f"{total_p:,} log rows"
                   + (f" · ~{left / 60:.0f} min left" if left > 90 else ""))
-    return total_g, total_p, skipped
+    return total_g, total_p, skipped, empty
 
 
 def main() -> None:
@@ -292,12 +318,28 @@ def main() -> None:
                   "team ratings and settlement work and it runs many times "
                   "faster.")
         print(f"Ingesting {label} {dates[0]} → {dates[-1]} → {args.db}")
-        total_g, total_p, skipped = _walk_days(
+        total_g, total_p, skipped, empty = _walk_days(
             conn, league, dates, ingest_day, args.scores_only, args.refresh)
-        print(f"  games: {total_g:,}   player-log rows: {total_p:,}"
-              + (f"   ({skipped:,} day(s) already stored, skipped)"
-                 if skipped else ""))
-        if not total_g and not skipped:
+        print(f"  games: {total_g:,} new   player-log rows: {total_p:,} new")
+        if skipped:
+            print(f"  {skipped:,} of {len(dates):,} day(s) were already "
+                  f"stored — skipped.")
+        # "0 games" after a long run reads as total failure, and here it
+        # usually is not: a season WINDOW is Oct 1 - Jun 30, but the league
+        # does not play three weeks of that October, the All-Star break, the
+        # gaps between playoff rounds, or the fortnight after the finals.
+        # Naming the empty days is the difference between "your backfill is
+        # done" and "something is broken", which are not close.
+        if empty:
+            print(f"  {empty:,} day(s) had no {label} games at all — a season "
+                  f"window spans preseason, the All-Star break, playoff off "
+                  f"days and the weeks after the finals.")
+        if not total_g and skipped + empty == len(dates):
+            held_g, held_p = _held(conn, league)
+            print(f"  Nothing left to fetch — this backfill is COMPLETE. "
+                  f"Holding {held_g:,} {label} games and {held_p:,} "
+                  f"player-log rows.")
+        elif not total_g and not skipped:
             print(f"  Nothing stored. Run `python3 ingest.py {league} --probe` "
                   f"to see what the feed actually returns.")
     elif args.sport == "mlb" and args.seasons and not (args.start and args.end):
