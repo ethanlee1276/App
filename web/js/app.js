@@ -508,6 +508,7 @@ function renderAll() {
   // header — the same class of bug as a standalone page keeping a stale
   // badge, and it looks like the switch silently failed.
   if (state.view === "rosters") renderRosters();
+  if (state.view === "standings") renderStandings();
 }
 
 /* ============================================================
@@ -3753,6 +3754,138 @@ function transactionsHTML(tx) {
     </div>`).join("")}</div>`;
 }
 
+/* ============================================================
+   Standings + the postseason bracket.
+
+   Both are counted from the same games the rest of the site reads, so a
+   record here and a record on a matchup card are the same rows. The two
+   are deliberately separate objects: standings are REGULAR SEASON, the
+   bracket is postseason and is drawn only from games actually played.
+   ============================================================ */
+const _standingsCache = {};
+
+async function loadStandings(sport) {
+  const key = sport || state.sport || "nfl";
+  if (_standingsCache[key] !== undefined) return _standingsCache[key];
+  try {
+    const res = await fetch(`data/standings_${key}.json?t=` + (Date.now() / 60000 | 0));
+    _standingsCache[key] = res.ok ? await res.json() : {};
+  } catch (e) { _standingsCache[key] = {}; }
+  return _standingsCache[key];
+}
+
+function standingsRowHTML(t, label) {
+  const meta = (typeof teamsForSport === "function"
+    ? teamsForSport(state.sport)[t.team] : null) || {};
+  const diff = t.diff > 0 ? `+${t.diff}` : `${t.diff}`;
+  const cls = t.diff > 0 ? "good" : t.diff < 0 ? "bad" : "";
+  const strk = t.streak > 0 ? "good" : t.streak < 0 ? "bad" : "";
+  return `<div class="std-row">
+    <span class="std-rank">${t.rank}</span>
+    <span class="std-mark" style="background:${escapeHtml(meta.primary || "#39405166")}">${escapeHtml(t.team)}</span>
+    <span class="std-name">${escapeHtml(meta.name || meta.nick || t.team)}</span>
+    <span class="std-n std-rec">${escapeHtml(t.record)}</span>
+    <span class="std-n">${t.pct.toFixed(3).replace(/^0/, "")}</span>
+    <span class="std-n ${cls}">${escapeHtml(diff)}</span>
+    <span class="std-n std-wide">${t.pf_per_game}/${t.pa_per_game}</span>
+    <span class="std-n std-wide">${escapeHtml(t.home)}</span>
+    <span class="std-n std-wide">${escapeHtml(t.away)}</span>
+    <span class="std-n ${strk}">${escapeHtml(t.streak_label)}</span>
+    <span class="std-n std-wide">${escapeHtml(t.last10_label)}</span>
+  </div>`;
+}
+
+function standingsGroupHTML(g, scoreLabel) {
+  return `<div class="card std-card">
+    <div class="std-group">${escapeHtml(g.label || g.conference)}</div>
+    <div class="std-head">
+      <span class="std-rank">#</span><span class="std-mark"></span>
+      <span class="std-name">TEAM</span>
+      <span class="std-n std-rec">W-L</span><span class="std-n">PCT</span>
+      <span class="std-n">DIFF</span>
+      <span class="std-n std-wide">${escapeHtml(scoreLabel || "PF/PA")}</span>
+      <span class="std-n std-wide">HOME</span><span class="std-n std-wide">AWAY</span>
+      <span class="std-n">STRK</span><span class="std-n std-wide">L10</span>
+    </div>
+    ${g.teams.map((t) => standingsRowHTML(t)).join("")}
+  </div>`;
+}
+
+/* The bracket. Every matchup on it happened; nothing here is projected —
+   that is what `projected_seeds` is for, and it says so on its face. */
+function bracketHTML(b) {
+  if (!b || !b.started) {
+    return `<div class="ls-note">${escapeHtml((b && b.note) || "")}</div>`;
+  }
+  return `<div class="brk">${b.rounds.map((r) => `
+    <div class="brk-round">
+      <div class="brk-round-name">${escapeHtml(r.name)}</div>
+      ${r.matchups.map((m) => {
+        const [a, bb] = m.teams, [wa, wb] = m.score;
+        const line = (team, score, won) => `<div class="brk-side${won ? " won" : ""}">
+          <span class="brk-team">${escapeHtml(team)}</span>
+          <span class="brk-score">${score}</span></div>`;
+        return `<div class="brk-match">
+          ${line(a, wa, m.leader === a)}
+          ${line(bb, wb, m.leader === bb)}
+        </div>`;
+      }).join("")}
+    </div>`).join("")}</div>`;
+}
+
+function seedsHTML(seeds) {
+  if (!seeds || !seeds.length) return "";
+  return `<div class="section-title">If the season ended today
+      <span class="sub">— a PROJECTION from the table above, not a bracket.
+      Nothing below has been played, and seeding here uses our own order
+      rather than the league's official tiebreakers.</span></div>
+    <div class="ros-teams">${seeds.map((c) => `<div class="card std-card">
+      <div class="std-group">${escapeHtml(c.conference)}</div>
+      ${c.seeds.map((t) => `<div class="std-row">
+        <span class="std-rank">${t.seed}</span>
+        <span class="std-name">${escapeHtml(t.team)}</span>
+        <span class="std-n std-rec">${escapeHtml(t.record)}</span>
+        <span class="std-n">${t.pct.toFixed(3).replace(/^0/, "")}</span>
+      </div>`).join("")}
+    </div>`).join("")}</div>`;
+}
+
+async function renderStandings() {
+  const host = document.getElementById("standings-body");
+  if (!host) return;
+  const sport = state.sport || "nfl";
+  const d = await loadStandings(sport);
+  const title = document.getElementById("standings-title");
+  if (title) title.childNodes[0].nodeValue =
+    `${(SPORT_META[sport] || {}).label || sport.toUpperCase()} standings `;
+  const sub = document.getElementById("standings-sub");
+  if (sub) {
+    sub.textContent = d.season
+      ? `— ${d.season} regular season · ${(d.games_counted || 0).toLocaleString()} games counted from our own results · ${d.order_note || ""}`
+      : "— counted from our own results.";
+  }
+  const groups = d.groups || [];
+  if (!groups.length) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">📊</div>
+      <h3>No standings yet</h3><p>${escapeHtml(d.note
+        || "Run `python3 standings_build.py` once.")}</p></div>`;
+    return;
+  }
+  const b = d.bracket || {};
+  host.innerHTML = `
+    ${b.started ? `<div class="section-title" style="margin-top:0">Postseason
+        <span class="sub">— every matchup here was played. Series scores are
+        games won, so an unfinished series shows where it stands.</span></div>
+      ${bracketHTML(b)}` : ""}
+    <div class="section-title"${b.started ? "" : ' style="margin-top:0"'}>Teams
+      <span class="sub">— ${groups.length} group(s)</span></div>
+    <div class="ros-teams">
+      ${groups.map((g) => standingsGroupHTML(g, d.score_label)).join("")}
+    </div>
+    ${b.started ? "" : seedsHTML(d.projected_seeds)}
+    ${b.started ? "" : `<div class="ls-note">${escapeHtml(b.note || "")}</div>`}`;
+}
+
 async function renderRosters() {
   const host = document.getElementById("rosters-body");
   if (!host) return;
@@ -5111,7 +5244,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "trending", "players", "rosters", "record", "intel", "fantasy", "ufc", "why", "about"];
+const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "trending", "players", "rosters", "standings", "record", "intel", "fantasy", "ufc", "why", "about"];
 
 function switchView(name) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -5134,6 +5267,7 @@ function switchView(name) {
     return;
   }
   if (name === "rosters") renderRosters();
+  if (name === "standings") renderStandings();
   if (name === "record") renderRecord();
   if (name === "intel") renderIntel();
   if (name === "fantasy") renderFantasy();

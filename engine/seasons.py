@@ -40,6 +40,11 @@ SEASON_WINDOWS = {
     "wnba": (4, 25, 10, 31, False),
     # Week 0 in late August through the national championship in January.
     "cfb": (8, 15, 1, 20, True),
+    # Kickoff in early September through the Super Bowl in February. The
+    # NFL ingest is week-driven rather than date-driven, so this window is
+    # not used to walk days — it is here so anything asking "has this
+    # season started" gets the same answer for every sport.
+    "nfl": (9, 1, 2, 20, True),
 }
 
 # Sports whose day-by-day ingest is worth warning about before it starts.

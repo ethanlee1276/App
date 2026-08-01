@@ -315,6 +315,17 @@ def refresh_sport_rosters(quiet: bool = False) -> bool:
     return ok
 
 
+def refresh_standings(quiet: bool = False) -> bool:
+    """Standings and the postseason bracket. Zero network — both are
+    counted from the same finished games every other board reads, so they
+    cannot disagree with the records shown beside them."""
+    ok, tail = _run_build(["standings_build.py"])
+    if not quiet:
+        print(f"  STD  standings: {'refreshed' if ok else 'unavailable'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
 def refresh_nba(quiet: bool = False) -> bool:
     """NBA slate (Scalpy) — a full member of the paid-pull rotation.
 
@@ -490,6 +501,7 @@ def refresh_all(quiet: bool = False) -> None:
     refresh_cfb(quiet=quiet)
     refresh_ufc(quiet=quiet)
     refresh_sport_rosters(quiet=quiet)
+    refresh_standings(quiet=quiet)
 
 
 def _run_maintenance() -> None:

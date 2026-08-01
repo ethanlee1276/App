@@ -52,6 +52,7 @@ output.
 | **🏀 NBA** | Scalpy: minutes engine, probability distributions, humility clamp, max 4 picks a slate | October |
 | **🥊 UFC** | Scalpy MMA: fighter dossiers, joint method-of-victory model, pass list | Fight weeks (needs dossiers — see below) |
 | **🧭 Why Us** | The positioning page: what makes this different from picks services, live receipts from the journal, and an open math toolbox (de-vig, Kelly sizing, parlay-vs-singles calculators) | Always (no data feed needed) |
+| **📊 Standings** | A tab inside each sport (not UFC): full standings for the current season, grouped by real conference and division, plus the postseason bracket once it starts. Counted from our own results, so it can never disagree with the records shown elsewhere |
 | **📋 Rosters** | Now a **tab inside each sport**, not its own page. NFL shows the real published depth chart; MLB, NBA and WNBA show who has actually appeared for each club this season, most games first — built from our own game logs |
 | **ℹ️ About** | Plain-English explainer for anyone who lands here cold: what the site is and isn't, the legal terms, why nothing here is betting advice, and responsible-gambling help | Always (no data feed needed) |
 
