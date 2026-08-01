@@ -57,16 +57,12 @@ STAT_MAP = {"MIN": "min", "PTS": "pts", "REB": "reb", "AST": "ast",
 def _season_of(date: str, league: str) -> int:
     """The season a date belongs to, labelled by the year it STARTED.
 
-    An NBA game in March 2022 belongs to the 2021 season. Keying it to
-    2022 would split every season in half in the games table and quietly
-    halve every team's sample.
+    Lives in ``engine.seasons`` now — the ingest that writes the label and
+    the queries that read it must never disagree about which year a March
+    game belongs to.
     """
-    from ..seasons import SEASON_WINDOWS
-    year, month = int(date[:4]), int(date[5:7])
-    win = SEASON_WINDOWS.get(league)
-    if not win or not win[4]:
-        return year                       # season inside one calendar year
-    return year if month >= win[0] else year - 1
+    from ..seasons import season_of
+    return season_of(league, date)
 
 
 def _num(raw) -> float | None:

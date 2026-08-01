@@ -235,6 +235,18 @@ A season is labelled by the year it *starts*, so the 2021 NBA season means
 October 2021 through June 2022 — same convention the NFL data already
 uses.
 
+**More history is not automatically better, and the code had to learn
+that.** Once MLB went from one season to six, three things quietly changed
+meaning. The prop model's "season average" became a six-year career
+average. A team's "season run differential" — the baseline the hot/cold
+board measures against — became a multi-year one, and its win streak ran
+straight through the offseason. And two database joins that were instant
+on one season stopped being instant on six, which is what made the MLB
+board time out. All three are fixed: the live model now reads *this*
+season and the measurements still read all of them. The first run after
+this change builds a few new database indexes — expect one slow startup,
+then faster than before.
+
 **About `--coverage`:** every sport has a written spec in `docs/` with an
 implementation map, and those maps are prose — prose rots. A feed stops
 resolving, a season never gets ingested, a key expires, and the table still

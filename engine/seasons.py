@@ -58,6 +58,33 @@ def window(sport: str, season: int) -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
+def season_of(sport: str, date: str) -> int:
+    """The season an ISO date belongs to, labelled by the year it STARTED.
+
+    An NBA game in March 2022 belongs to the 2021 season. Keying it to 2022
+    would split every season in half in the games table and quietly halve
+    every team's sample. Sports whose season lives inside one calendar year
+    are just the year.
+    """
+    year, month = int(date[:4]), int(date[5:7])
+    win = SEASON_WINDOWS.get(sport)
+    if not win or not win[4]:
+        return year
+    return year if month >= win[0] else year - 1
+
+
+def recent_seasons(sport: str, date: str, back: int = 1) -> list[int]:
+    """The season containing ``date`` plus ``back`` earlier ones.
+
+    For live projections that want a player's last N games: early in a
+    season those games run back into the previous one, so one season is not
+    enough — but six is a different player. This is the bound that keeps a
+    "recent form" query reading recent rows.
+    """
+    s = season_of(sport, date)
+    return [s - i for i in range(back + 1)]
+
+
 def parse_seasons(spec: str) -> list[int]:
     """'2021-2026' or '2021,2023' or '2024' → [years].
 

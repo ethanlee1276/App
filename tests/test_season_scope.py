@@ -95,6 +95,78 @@ def test_cfb_ratings_are_fit_on_one_season():
         "turn over every year, so an unbounded fit rates graduated players")
 
 
+def test_team_form_baseline_stops_at_the_season_boundary():
+    """"season run differential" must mean THIS season.
+
+    Unbounded it becomes a multi-year average, so a team playing exactly to
+    its current normal reads as hot or cold purely because a past year was
+    different.
+    """
+    from engine.db import connect as _c, upsert_games
+    from engine.mlb.teamform import team_form
+
+    conn = _c(":memory:")
+    rows = []
+    gid = 0
+
+    def _g(season, date, home, away, hs, as_):
+        nonlocal gid
+        gid += 1
+        return {"sport": "mlb", "season": season, "period": date,
+                "game_id": str(gid), "home": home, "away": away,
+                "home_score": hs, "away_score": as_}
+
+    # 2025: AAA was a juggernaut, winning by 10 every night into October.
+    for d in range(1, 9):
+        rows.append(_g(2025, f"2025-09-{d:02d}", "AAA", "BBB", 10, 0))
+    # 2026: a different roster — still winning, but by exactly 1.
+    for d in range(1, 9):
+        rows.append(_g(2026, f"2026-07-{d:02d}", "AAA", "BBB", 5, 4))
+    upsert_games(conn, rows)
+
+    f = team_form(conn, "2026-07-09", window_days=7)["AAA"]
+    # Baseline is 2026's +1.0, not the +5.5 a two-year blend would give —
+    # under which this team's ordinary week would read as ice cold.
+    assert abs(f["season_diff_pg"] - 1.0) < 1e-6
+    assert abs(f["delta_diff"]) < 1e-6, (
+        "delta_diff compared this week against a multi-year baseline")
+    # 8 wins this season, not 16 — the streak must not run through an
+    # offseason and chain last September's wins onto this July's.
+    assert f["streak"] == 8
+
+
+def test_recent_seasons_spans_the_turn_of_the_year():
+    """An NBA game in March belongs to the season that started last October."""
+    from engine.seasons import season_of, recent_seasons
+
+    assert season_of("nba", "2022-03-05") == 2021
+    assert season_of("nba", "2021-11-05") == 2021
+    assert season_of("mlb", "2026-07-31") == 2026     # inside one year
+    # Live projections read this season and last — 20 games of "recent form"
+    # in November reach back into the previous season.
+    assert recent_seasons("nba", "2026-11-05") == [2026, 2025]
+
+
+def test_nba_player_history_bounds_to_the_seasons_asked_for():
+    from engine.db import connect as _c, upsert_player_logs
+    from nba_build import player_history
+
+    conn = _c(":memory:")
+    logs = []
+    for season, date in ((2021, "2022-03-05"), (2026, "2026-11-05")):
+        for m, v in (("min", 30.0), ("pts", 20.0), ("reb", 5.0), ("ast", 4.0)):
+            logs.append({"sport": "nba", "season": season, "period": date,
+                         "game_id": f"g{season}", "player": "A Guard",
+                         "team": "BOS", "opponent": "MIA", "position": "S",
+                         "home": 1, "market": m, "value": v})
+    upsert_player_logs(conn, logs)
+
+    wide = player_history(conn, {"BOS"}, sport="nba")
+    assert len(wide["A Guard"]["by_week"]) == 2
+    recent = player_history(conn, {"BOS"}, sport="nba", seasons=[2026, 2025])
+    assert list(recent["A Guard"]["by_week"]) == ["2026-11-05"]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

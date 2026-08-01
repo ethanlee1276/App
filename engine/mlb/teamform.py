@@ -25,13 +25,16 @@ from __future__ import annotations
 import datetime as _dt
 
 
-def _mlb_games(hist_conn):
-    """Every scored MLB game, date-ordered: (date, home, away, hs, as)."""
-    return hist_conn.execute(
-        "SELECT period AS date, home, away, home_score, away_score "
-        "FROM games WHERE sport='mlb' AND home_score IS NOT NULL "
-        "AND away_score IS NOT NULL AND period IS NOT NULL "
-        "ORDER BY period").fetchall()
+def _mlb_games(hist_conn, seasons: list[int] | None = None):
+    """Scored MLB games, date-ordered: (season, date, home, away, hs, as)."""
+    q = ("SELECT season, period AS date, home, away, home_score, away_score "
+         "FROM games WHERE sport='mlb' AND home_score IS NOT NULL "
+         "AND away_score IS NOT NULL AND period IS NOT NULL")
+    args: list = []
+    if seasons:
+        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args = list(seasons)
+    return hist_conn.execute(q + " ORDER BY period", args).fetchall()
 
 
 def team_form(hist_conn, on_date: str, window_days: int = 7,
@@ -43,15 +46,29 @@ def team_form(hist_conn, on_date: str, window_days: int = 7,
     the window minus the team's season run differential per game. A +2.1
     means the team has been two runs a game better than its own normal —
     "hot" relative to itself, not to the league.
+
+    Everything here is scoped to the season ``on_date`` falls in, and that
+    is what makes the numbers mean what they are named. Across a
+    backfilled history the baseline would become a multi-year run
+    differential — so a team playing exactly to its 2026 normal would read
+    as hot or cold purely because 2023 was different — and the streak
+    would run straight through an offseason, chaining last October's wins
+    onto this April's.
     """
+    from ..seasons import season_of
+
+    this = season_of("mlb", on_date)
     cutoff = (_dt.date.fromisoformat(on_date)
               - _dt.timedelta(days=window_days)).isoformat()
     season: dict[str, list] = {}     # team -> [w, l, rd_sum, n]
     window: dict[str, list] = {}
     streaks: dict[str, list] = {}    # team -> ordered W/L chars
-    for g in (_rows if _rows is not None else _mlb_games(hist_conn)):
+    rows = _rows if _rows is not None else _mlb_games(hist_conn, [this])
+    for g in rows:
         if g["date"] >= on_date:
             break
+        if g["season"] != this:
+            continue                 # another year's team, same name
         for team, mine, theirs in ((g["home"], g["home_score"], g["away_score"]),
                                    (g["away"], g["away_score"], g["home_score"])):
             won = mine > theirs
@@ -120,25 +137,35 @@ def audit(hist_conn, window_days: int = 7, min_games: int = 4) -> dict:
     journals real prices, is the only judge of that.
     """
     import math
-    rows = _mlb_games(hist_conn)
-    by_date: dict[str, list] = {}
-    for g in rows:
-        by_date.setdefault(g["date"], []).append(g)
+    # Every season we have — this is the MEASUREMENT, and it is the one
+    # place where a deeper backfill is straightforwardly better. But each
+    # season is walked on its own: `team_form` is O(games before the date),
+    # so handing it the whole history would make this quadratic in the
+    # backfill, and it would also re-introduce the cross-season baseline
+    # the function exists to avoid.
+    by_season: dict[int, list] = {}
+    for g in _mlb_games(hist_conn):
+        by_season.setdefault(g["season"], []).append(g)
 
     n = hot_wins = 0
-    for date in sorted(by_date):
-        form = team_form(hist_conn, date, window_days, min_games, _rows=rows)
-        for g in by_date[date]:
-            fh, fa = form.get(g["home"]), form.get(g["away"])
-            if not fh or not fa:
-                continue
-            sh, sa = form_score(fh), form_score(fa)
-            if abs(sh - sa) < FORM_GAP_BAR:
-                continue
-            hot_home = sh > sa
-            hot_won = (g["home_score"] > g["away_score"]) == hot_home
-            n += 1
-            hot_wins += 1 if hot_won else 0
+    for srows in by_season.values():
+        by_date: dict[str, list] = {}
+        for g in srows:
+            by_date.setdefault(g["date"], []).append(g)
+        for date in sorted(by_date):
+            form = team_form(hist_conn, date, window_days, min_games,
+                             _rows=srows)
+            for g in by_date[date]:
+                fh, fa = form.get(g["home"]), form.get(g["away"])
+                if not fh or not fa:
+                    continue
+                sh, sa = form_score(fh), form_score(fa)
+                if abs(sh - sa) < FORM_GAP_BAR:
+                    continue
+                hot_home = sh > sa
+                hot_won = (g["home_score"] > g["away_score"]) == hot_home
+                n += 1
+                hot_wins += 1 if hot_won else 0
 
     if not n:
         return {"n": 0, "verdict": "not enough scored games in the DB yet — "

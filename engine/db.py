@@ -82,6 +82,21 @@ CREATE INDEX IF NOT EXISTS idx_logs_lookup
     ON player_game_logs (sport, market, player, season, period);
 CREATE INDEX IF NOT EXISTS idx_games_lookup
     ON games (sport, season, period);
+-- The context joins below key on (sport, period, ...), which is NOT a prefix
+-- of either table's primary key — those lead with season. Without these,
+-- SQLite falls back to matching on sport alone and re-scans the whole
+-- context table once per log row. Measured on a six-season MLB history:
+-- one platoon-split call went from >10 minutes to under two seconds. The
+-- ordinary cost of holding more history is disk; this was the cost of
+-- holding it in a shape the queries could not use.
+CREATE INDEX IF NOT EXISTS idx_starters_team
+    ON game_starters (sport, period, team);
+CREATE INDEX IF NOT EXISTS idx_starters_game
+    ON game_starters (sport, period, game_id);
+CREATE INDEX IF NOT EXISTS idx_umpires_game
+    ON game_umpires (sport, period, game_id);
+CREATE INDEX IF NOT EXISTS idx_logs_period
+    ON player_game_logs (sport, market, period, player);
 """
 
 GAME_COLS = ["sport", "season", "period", "game_id", "home", "away",

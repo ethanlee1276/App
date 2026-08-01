@@ -50,15 +50,26 @@ class _Slate:
         self.games, self.props = games, props
 
 
-def player_history(conn, teams: set[str], sport: str = "nba") -> dict:
+def player_history(conn, teams: set[str], sport: str = "nba",
+                   seasons: list[int] | None = None) -> dict:
     """{player: {"team", "starter", "minutes": [...], stat: [...]}} newest
-    first, last 20 games, for players on tonight's teams."""
+    first, last 20 games, for players on tonight's teams.
+
+    ``seasons`` bounds the read. Only 20 games survive the slice no matter
+    how many are loaded, so an unbounded query on a backfilled history
+    sorts several seasons of rows to throw nearly all of them away — and
+    for a player who has not appeared this year it would hand back last
+    year's form as if it were current.
+    """
     hist: dict = {}
-    rows = conn.execute(
-        "SELECT player, team, position, period, market, value "
-        "FROM player_game_logs WHERE sport=? AND team IN (%s) "
-        "ORDER BY period DESC" % ",".join("?" * len(teams)),
-        (sport, *teams)).fetchall()
+    q = ("SELECT player, team, position, period, market, value "
+         "FROM player_game_logs WHERE sport=? AND team IN (%s)"
+         % ",".join("?" * len(teams)))
+    args: list = [sport, *teams]
+    if seasons:
+        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args += list(seasons)
+    rows = conn.execute(q + " ORDER BY period DESC", args).fetchall()
     for r in rows:
         p = hist.setdefault(r["player"], {"team": r["team"], "starter": None,
                                           "by_week": {}})
@@ -240,7 +251,12 @@ def main() -> None:
             sched_days = {}
         conn = connect()
         teams = {t for g in games for t in (g["home"], g["away"])}
-        hist = player_history(conn, teams, sport=args.league)
+        # This season and last: early in a year a player's most recent 20
+        # games run back into the previous season, so one is too few — and
+        # six is a different player.
+        from engine.seasons import recent_seasons
+        hist = player_history(conn, teams, sport=args.league,
+                              seasons=recent_seasons(args.league, args.date))
 
         slate = _Slate([_Game(g["home"], g["away"], g["kickoff"])
                         for g in games], [])
