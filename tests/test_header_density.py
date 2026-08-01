@@ -39,7 +39,10 @@ def test_the_leagues_stay_visible_and_the_tools_do_not():
     leagues = re.findall(r'data-sport="(\w+)" data-kind="league"', html)
     tools = re.findall(r'data-sport="(\w+)" data-kind="tool"', html)
     assert set(leagues) == {"nfl", "cfb", "mlb", "nba", "wnba", "ufc"}
-    assert set(tools) == {"intel", "fantasy", "rosters", "why", "about"}
+    # Rosters is NOT here: a roster belongs to a league, so it is a tab
+    # inside each sport rather than a tool you navigate away to.
+    assert set(tools) == {"intel", "fantasy", "why", "about"}
+    assert 'data-view="rosters"' in html, "the per-sport tab is missing"
     # Every tool button must live inside the More wrapper.
     more = html[html.index('id="sport-more"'):]
     more = more[:more.index("</div>\n      </div>")]

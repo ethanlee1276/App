@@ -115,6 +115,17 @@ def draft(names: list[str], refresh: bool = False, limit: int | None = None,
             missing.append(name)
             continue
         book[name] = d
+        # Record the gym on every draft. A camp CHANGE is only visible
+        # because we remember where he was last time — the same
+        # diff-our-own-history trick that finds NFL trades without a news
+        # feed. It needs two drafts to see one, which is why it is worth
+        # writing down now rather than when we want it.
+        if d.get("gym"):
+            from engine.ufc import camp as _camp
+            moved = _camp.record_gym(name, d["gym"])
+            if verbose and moved["changed"]:
+                print(f"  📍 {name} changed camps: "
+                      f"{moved['changed_from']} → {moved['gym']}")
         drafted.append(name)
         DOSSIERS.write_text(json.dumps(book, indent=2))   # save as we go
 

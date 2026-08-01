@@ -83,48 +83,74 @@ def data_quality(a: dict, b: dict) -> dict:
             "note": f"{thin} tracked UFC fight(s) on the thinner corner"}
 
 
-def camp_info(weigh_in: dict | None, a: dict, b: dict) -> dict:
-    """§10/§7 — how much of fight week we can actually see.
+def camp_info(weigh_in: dict | None, a: dict, b: dict,
+              today: str | None = None) -> dict:
+    """§10/§7 — how much of fight week and camp we can actually see.
 
-    Weigh-ins are the one fight-week fact this system genuinely observes,
-    so they carry the component. Everything else in §7 — camp footage,
-    training reports, gym changes — has no structured source, and scoring
-    it as present would be inventing the sport's signature edge rather
-    than having it. That is why this component cannot reach 1.0: the cap
-    is the honest statement that we are missing the layer the spec calls
-    MMA's signature edge.
+    Two halves, averaged, and both are measured rather than assumed:
+
+    * **camp** — layoff, activity rate and gym (with changes found by
+      diffing our own drafts), from :mod:`engine.ufc.camp`. Scored off the
+      WORSE corner, because a fight is priced on the pair.
+    * **fight week** — the scale, which is the one fight-week fact anybody
+      publishes.
+
+    What is still missing is camp *footage* and training reports, which
+    have no structured source anywhere. Scoring those as present would be
+    inventing the sport's signature edge rather than having it — so they
+    are named in `why` and left out of the arithmetic. When neither half
+    is observable the component returns None and drops out of the grade
+    entirely, rather than dragging the fight down for a gap it cannot
+    close.
     """
+    from . import camp as camp_mod
+
     wi = weigh_in or {}
     states = [(wi.get(side) or {}).get("state") for side in ("a", "b")]
     made = sum(1 for s in states if s == "made")
     missed = sum(1 for s in states if s == "missed")
     short = bool(a.get("short_notice") or b.get("short_notice"))
-    why = []
+    why: list[str] = []
 
-    if not made and not missed and not short:
-        # Nothing about fight week is observable yet. That is a HOLE in the
-        # scorecard, not a bad score — the fight is graded on the rest and
-        # the coverage number says so. Docking every fight a fixed amount
-        # for a weigh-in that has not happened yet meant the board stayed
-        # empty until Friday no matter how good the fights were.
-        return {"score": None, "why": ["weigh-in not recorded yet — this "
-                                       "fight is graded without the "
-                                       "fight-week component",
-                                       "no camp-footage or training-report "
-                                       "feed exists"]}
+    # The measured half: layoff, activity and gym, from data the dossier
+    # already carries. Scored off the WORSE corner, like data quality —
+    # a fight is priced on the pair, and a perfect camp opposite a man
+    # coming off three years out is not an average camp.
+    gyms = camp_mod.load_gyms()
+    profiles = [camp_mod.profile(x, gyms, today=today) for x in (a, b)]
+    measured = [p["score"] for p in profiles if p["score"] is not None]
+    camp_part = min(measured) if measured else None
+    for corner, prof in zip((a, b), profiles):
+        for line in prof["why"]:
+            why.append(f"{corner.get('name', 'corner')}: {line}")
 
-    score = 0.5 + 0.5 * (made / 2.0)
-    if made == 2:
-        why.append("both made weight")
-    elif missed:
-        why.append("a missed weight is recorded — a live negative, not a gap")
+    # The fight-week half: the scale, which is the one fight-week fact
+    # published anywhere.
+    week_part = None
+    if made or missed:
+        week_part = 0.5 + 0.5 * (made / 2.0)
+        why.append("both made weight" if made == 2 else
+                   "a missed weight is recorded — a live negative, not a gap"
+                   if missed else "weigh-in partially recorded")
     else:
-        why.append("weigh-in partially recorded")
+        why.append("weigh-in not recorded yet — it lands the morning before "
+                   "the card and is pulled automatically")
+
+    have = [p for p in (camp_part, week_part) if p is not None]
+    if not have:
+        # Genuinely nothing observable. A HOLE in the scorecard, not a bad
+        # score: the fight is graded on the rest and coverage says so.
+        return {"score": None, "why": why + [
+            "no camp-footage or training-report feed exists"]}
+
+    score = sum(have) / len(have)
     if short:
         score -= 0.2
         why.append("short-notice booking — no full camp to observe")
-    why.append("no camp-footage or training-report feed exists")
-    return {"score": round(max(0.0, min(1.0, score)), 3), "why": why}
+    why.append("no camp-footage or training-report feed exists — layoff, "
+               "activity and gym are the measurable part")
+    return {"score": round(max(0.0, min(1.0, score)), 3), "why": why,
+            "camp": profiles}
 
 
 def style_clarity(notes: list[str], a: dict, b: dict) -> dict:

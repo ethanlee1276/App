@@ -81,7 +81,9 @@ const SPORT_META = {
 const HIDDEN_VIEWS = {
   nba: ["longshots"],
   wnba: ["longshots"],
-  cfb: ["longshots", "trending", "players"],
+  // CFB has 134 programs and no free player-level feed. A roster tab that
+  // can only ever say "no data" is worse than no tab.
+  cfb: ["longshots", "trending", "players", "rosters"],
 };
 
 /* College football's 134 identities ride in the payload rather than a
@@ -500,6 +502,12 @@ function renderAll() {
   // 60s refresh replaces the data under an open game page — both need the
   // view redrawn once the new data is actually here.
   if (state.view === "game") renderGamePage();
+  // Rosters live in their own per-sport payload rather than the slate, so
+  // nothing above redraws them. Switching leagues while sitting on the tab
+  // left the previous league's teams on screen under the new league's
+  // header — the same class of bug as a standalone page keeping a stale
+  // badge, and it looks like the switch silently failed.
+  if (state.view === "rosters") renderRosters();
 }
 
 /* ============================================================
@@ -3054,7 +3062,10 @@ function pmAgo(ts) {
 
 /* Polymarket and Fantasy are top-level modes next to NFL/MLB, not tabs
    inside a sport — entering one hides the sport nav; leaving restores it. */
-const STANDALONE_MODES = ["intel", "fantasy", "ufc", "rosters", "why", "about"];
+/* Rosters used to live here, which put "who is on this team" behind a
+   tools menu and made it mean the NFL and only the NFL. It is a tab
+   inside each sport now. */
+const STANDALONE_MODES = ["intel", "fantasy", "ufc", "why", "about"];
 
 // Header identity per standalone page — the tagline follows the ACTIVE
 // page. Before this, opening Polymarket from the MLB tab left a baseball
@@ -3063,7 +3074,6 @@ const STANDALONE_BRAND = {
   intel: { tagline: "Polymarket informed-flow intelligence" },
   fantasy: { tagline: "Fantasy football — usage, scripts, draft kit" },
   ufc: { tagline: "Scalpy MMA — dossier-gated fight model" },
-  rosters: { tagline: "Active NFL rosters — depth charts and team changes" },
   why: { tagline: "See the math. Know if it's working." },
 };
 
@@ -3612,19 +3622,25 @@ function offseasonHTML(off) {
 /* ============================================================
    Active rosters — every team as it stands today.
    ============================================================ */
-let _rosterCache = null;
+/* One cache PER SPORT. Rosters used to be a single page that only ever
+   meant the NFL; a roster belongs to a league, and "who is on this team"
+   is a question you ask while looking at that league's board. */
+const _rosterCache = {};
 let _rosterOpen = null;          // which team's roster is expanded
 
-async function loadRosters() {
-  if (_rosterCache !== null) return _rosterCache;
+async function loadRosters(sport) {
+  const key = sport || state.sport || "nfl";
+  if (_rosterCache[key] !== undefined) return _rosterCache[key];
   try {
-    const res = await fetch("data/rosters.json?t=" + (Date.now() / 60000 | 0));
-    _rosterCache = res.ok ? await res.json() : {};
-  } catch (e) { _rosterCache = {}; }
-  return _rosterCache;
+    const res = await fetch(`data/rosters_${key}.json?t=` + (Date.now() / 60000 | 0));
+    _rosterCache[key] = res.ok ? await res.json() : {};
+  } catch (e) { _rosterCache[key] = {}; }
+  return _rosterCache[key];
 }
 
-// Position groups, in the order a depth chart is normally read.
+// Position groups, in the order a depth chart is normally read. Football
+// only — the other leagues have no unit split worth grouping by, so their
+// players list as one squad rather than under an invented heading.
 const ROSTER_GROUPS = [
   ["Offense", ["QB", "RB", "FB", "WR", "TE", "OL", "OT", "OG", "C"]],
   ["Defense", ["DL", "DE", "DT", "NT", "LB", "ILB", "OLB", "CB", "S", "FS", "SS", "DB"]],
@@ -3636,25 +3652,52 @@ function rosterGroupOf(pos) {
   return "Other";
 }
 
+/* What each league's roster tab is actually showing, said plainly. The
+   NFL has a published depth chart; the others are built from who really
+   appeared, and the page must not let those look like the same claim. */
+const ROSTER_COPY = {
+  nfl: "— every team as it stands today, ordered by the coaching staff's own "
+     + "depth chart. Players who are unavailable (IR, PUP, suspended) are listed "
+     + "with their status rather than quietly removed.",
+  mlb: "— built from who has actually appeared for each club this season, most "
+     + "games first. That is a record of who played, not a copy of a roster page: "
+     + "it is what our own game logs know, and it refreshes with them.",
+  nba: "— built from who has actually appeared for each club this season, most "
+     + "minutes-logged games first. Measured playing time is the depth chart here, "
+     + "rather than somebody's published guess at one.",
+  wnba: "— built from who has actually appeared for each club this season, most "
+      + "games first. Measured playing time is the depth chart here, rather than "
+      + "somebody's published guess at one.",
+};
+
 /* One player line. The depth slot is the staff's opinion and is shown as
    such; an unranked player gets no number rather than an invented one. */
-function rosterPlayerHTML(p) {
-  const slot = p.depth_order ? `${escapeHtml(p.depth_pos || p.position)}${p.depth_order}` : "—";
+function rosterPlayerHTML(p, byAppearance) {
+  const slot = byAppearance
+    ? (p.games != null ? String(p.games) : "—")
+    : (p.depth_order ? `${escapeHtml(p.depth_pos || p.position)}${p.depth_order}` : "—");
   const tags = [
     p.rookie ? `<span class="chip">rookie</span>` : "",
     p.unavailable ? `<span class="chip down">${escapeHtml(p.status || "out")}</span>` : "",
   ].join("");
+  const colA = byAppearance
+    ? (p.last_seen ? escapeHtml(String(p.last_seen).slice(5)) : "—")
+    : (p.age != null ? p.age : "—");
+  const colB = byAppearance
+    ? "" : (p.years_exp != null ? (p.years_exp === 0 ? "R" : p.years_exp) : "—");
   return `<div class="ros-row${p.unavailable ? " out" : ""}">
     <span class="ros-slot">${escapeHtml(slot)}</span>
     <span class="ros-name">${escapeHtml(p.player)}${tags}</span>
     <span class="ros-pos">${escapeHtml(p.position)}</span>
-    <span class="ros-n">${p.age != null ? p.age : "—"}</span>
-    <span class="ros-n">${p.years_exp != null ? (p.years_exp === 0 ? "R" : p.years_exp) : "—"}</span>
+    <span class="ros-n">${colA}</span>
+    <span class="ros-n">${colB}</span>
   </div>`;
 }
 
-function rosterTeamHTML(abbr, team, expanded) {
-  const meta = (typeof TEAMS !== "undefined" && TEAMS[abbr]) || {};
+function rosterTeamHTML(abbr, team, expanded, byAppearance) {
+  const meta = (typeof teamsForSport === "function"
+    ? teamsForSport(state.sport)[abbr] : null)
+    || ((typeof TEAMS !== "undefined" && TEAMS[abbr]) || {});
   const label = meta.name || abbr;
   if (!expanded) {
     return `<button class="ros-team" data-team="${escapeHtml(abbr)}">
@@ -3663,24 +3706,31 @@ function rosterTeamHTML(abbr, team, expanded) {
       <span class="ros-team-n">${team.count}</span>
     </button>`;
   }
-  const byGroup = {};
-  for (const p of team.players) {
-    (byGroup[rosterGroupOf(p.position)] ||= []).push(p);
+  // Football splits into units; the other leagues do not, so they list as
+  // one squad rather than under an invented heading.
+  let groups;
+  if (byAppearance) {
+    groups = team.players.map((p) => rosterPlayerHTML(p, true)).join("");
+  } else {
+    const byGroup = {};
+    for (const p of team.players) {
+      (byGroup[rosterGroupOf(p.position)] ||= []).push(p);
+    }
+    groups = ROSTER_GROUPS.map(([g]) => g).concat("Other")
+      .filter((g) => byGroup[g] && byGroup[g].length)
+      .map((g) => `<div class="ros-group">${escapeHtml(g)}
+          <span class="ros-group-n">${byGroup[g].length}</span></div>
+        ${byGroup[g].map((p) => rosterPlayerHTML(p, false)).join("")}`).join("");
   }
-  const groups = ROSTER_GROUPS.map(([g]) => g).concat("Other")
-    .filter((g) => byGroup[g] && byGroup[g].length)
-    .map((g) => `<div class="ros-group">${escapeHtml(g)}
-        <span class="ros-group-n">${byGroup[g].length}</span></div>
-      ${byGroup[g].map(rosterPlayerHTML).join("")}`).join("");
   return `<div class="card ros-card">
     <button class="ros-team open" data-team="${escapeHtml(abbr)}">
       <span class="ros-mark" style="background:${escapeHtml(meta.primary || "#39405166")}">${escapeHtml(abbr)}</span>
       <span class="ros-team-name">${escapeHtml(label)}</span>
-      <span class="ros-team-n">${team.count} · ${team.rookies} rookie${team.rookies === 1 ? "" : "s"}${team.unavailable ? ` · ${team.unavailable} out` : ""}</span>
+      <span class="ros-team-n">${team.count}${byAppearance ? "" : ` · ${team.rookies} rookie${team.rookies === 1 ? "" : "s"}`}${team.unavailable ? ` · ${team.unavailable} ${byAppearance ? "cold" : "out"}` : ""}</span>
     </button>
     <div class="ros-head">
-      <span class="ros-slot">SLOT</span><span class="ros-name">PLAYER</span>
-      <span class="ros-pos">POS</span><span class="ros-n">AGE</span><span class="ros-n">EXP</span>
+      <span class="ros-slot">${byAppearance ? "GP" : "SLOT"}</span><span class="ros-name">PLAYER</span>
+      <span class="ros-pos">POS</span><span class="ros-n">${byAppearance ? "LAST" : "AGE"}</span><span class="ros-n">${byAppearance ? "" : "EXP"}</span>
     </div>
     ${groups}</div>`;
 }
@@ -3706,13 +3756,24 @@ function transactionsHTML(tx) {
 async function renderRosters() {
   const host = document.getElementById("rosters-body");
   if (!host) return;
-  const d = await loadRosters();
+  const sport = state.sport || "nfl";
+  const d = await loadRosters(sport);
+  // Only the NFL has a published depth chart. Everything else is built
+  // from appearances, and the page must never let those read as the same
+  // kind of claim.
+  const byAppearance = (d.source === "appearances");
+  const sub = document.getElementById("rosters-sub");
+  if (sub) sub.textContent = ROSTER_COPY[sport] || "— every team as it stands today.";
+  const title = document.getElementById("rosters-title");
+  if (title) title.childNodes[0].nodeValue =
+    `${(SPORT_META[sport] || {}).label || sport.toUpperCase()} rosters `;
   const teams = d.teams || {};
   const abbrs = Object.keys(teams).sort();
   if (!abbrs.length) {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">📋</div>
-      <h3>No roster data yet</h3><p>${escapeHtml(d.note
-        || "Run `python3 fantasy_build.py` once — rosters ride along with it.")}</p></div>`;
+      <h3>No roster data for ${escapeHtml(sport.toUpperCase())}</h3>
+      <p>${escapeHtml(d.note
+        || "Run `python3 rosters_build.py` once to build this sport's rosters.")}</p></div>`;
     return;
   }
   const q = (state.rosterQuery || "").trim().toLowerCase();
@@ -3720,8 +3781,10 @@ async function renderRosters() {
   // "who is this guy with" and "show me that roster" are the same question.
   let shown = abbrs;
   if (q) {
+    const known = (typeof teamsForSport === "function")
+      ? teamsForSport(sport) : (typeof TEAMS !== "undefined" ? TEAMS : {});
     shown = abbrs.filter((a) => {
-      const meta = (typeof TEAMS !== "undefined" && TEAMS[a]) || {};
+      const meta = known[a] || {};
       if (a.toLowerCase().includes(q)) return true;
       if ((meta.name || "").toLowerCase().includes(q)) return true;
       if ((meta.nick || "").toLowerCase().includes(q)) return true;
@@ -3733,16 +3796,21 @@ async function renderRosters() {
   const open = shown.length === 1 ? shown[0] : _rosterOpen;
   const stale = d.feed === "unavailable"
     ? `<div class="warning" style="margin-bottom:12px">⚠️ ${escapeHtml(d.note || "")}</div>` : "";
-  host.innerHTML = stale + `
+  // Team changes come from diffing daily roster snapshots, which only the
+  // NFL feed produces. Showing an empty "recent moves" panel for a sport
+  // that cannot detect one would read as "no trades happened".
+  const moves = d.transactions ? `
     <div class="section-title" style="margin-top:4px">Recent team changes
       <span class="sub">— from diffing this site's own daily roster snapshots,
       not a news feed. Anything that changed teams shows up here on its own.</span></div>
-    ${transactionsHTML(d.transactions)}
+    ${transactionsHTML(d.transactions)}` : "";
+  host.innerHTML = stale + moves + `
     <div class="section-title">Teams
       <span class="sub">— ${shown.length} of ${abbrs.length} shown${q ? ` matching "${escapeHtml(q)}"` : ""}
-      · ${(d.player_count || 0).toLocaleString()} players on file</span></div>
+      · ${(d.player_count || 0).toLocaleString()} players on file${
+        byAppearance && d.season ? ` · ${d.season} season appearances` : ""}</span></div>
     ${shown.length ? `<div class="ros-teams">
-        ${shown.map((a) => rosterTeamHTML(a, teams[a], a === open)).join("")}
+        ${shown.map((a) => rosterTeamHTML(a, teams[a], a === open, byAppearance)).join("")}
       </div>` : `<p class="loading">No team or player matches "${escapeHtml(q)}".</p>`}`;
   host.querySelectorAll(".ros-team").forEach((b) => b.addEventListener("click", () => {
     _rosterOpen = _rosterOpen === b.dataset.team ? null : b.dataset.team;
@@ -5079,6 +5147,13 @@ function switchView(name) {
 
 function initialView() {
   const h = (location.hash || "").replace("#", "");
+  // A tab this sport does not have must not be reachable by URL. CFB has
+  // no roster feed, and #rosters would otherwise open a page whose own tab
+  // is hidden — the nav and the content disagreeing about what exists.
+  if ((HIDDEN_VIEWS[state.sport] || []).includes(h)) {
+    switchView("recommended");
+    return;
+  }
   if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
   if (h === "nba") {           // legacy hash from when NBA was standalone
     state.sport = "nba"; applySport(); load(); switchView("recommended"); return;
@@ -5289,6 +5364,13 @@ function bind() {
       state.search = "";
       const search = document.getElementById("player-search");
       if (search) search.value = "";
+      // The roster tab is per-sport now: a team abbreviation and a player
+      // search from the league you just left mean nothing in the one you
+      // just entered.
+      state.rosterQuery = "";
+      _rosterOpen = null;
+      const rsearch = document.getElementById("roster-search");
+      if (rsearch) rsearch.value = "";
       const url = new URL(location.href);
       url.searchParams.set("sport", state.sport);
       history.replaceState(null, "", url);

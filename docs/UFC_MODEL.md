@@ -319,6 +319,9 @@ listed honestly rather than faked).
 | **§3.8 Bet the right market, not the obvious one** | ✅ | `engine/ufc/markets.py` — the distribution prices every market it implies, and `best_market` picks the largest edge **over its own bar**. Markets our feed didn't price publish a fair number to shop |
 | §4 Truth sources | 🟡 | Best price across books with sharp books excluded from the bettable aggregate; offshore-lead weighting 📋 |
 | §4 Movement engine (open → close, steam, RLM) | 📋 | No per-fight movement history is stored yet — the movement component is absent from the scorecard (it does not score against a fight, but it does hold coverage below 100%) |
+| §7 Camp intelligence (layoff, activity, gym changes) | ✅ | `engine/ufc/camp.py` — measured from the dossier's own fight dates and ESPN's association field; gym changes found by diffing our own drafts, so the first one is visible after a fighter's second draft |
+| §7 Camp FOOTAGE / training reports | 📋 | No structured source exists. Named in the grade's `why` and left out of the arithmetic — scoring it as present would be inventing the sport's signature edge |
+| §7 Weigh-in results | ✅ | `engine/ufc/weighin_feed.py` pulls them from the card feed on every refresh; `--weigh-in` remains for what a feed cannot cover, `--probe-weighins` says what came back |
 | §5.1 Simulate paths | 🟡 | Method distribution is real; a round-by-round hazard is 📋 (dossiers carry no finish TIMES), which is why round and exact-round markets are absent rather than invented |
 | §5.2 Positional model | ✅ | Takedown rate × accuracy, TDD, control time, all differenced against the opponent |
 | §5.3 Striking | ✅ | Landed-minus-absorbed differential; knockdown rate per 100 as the power proxy rather than KO% |

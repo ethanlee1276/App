@@ -295,6 +295,20 @@ def refresh_fantasy(quiet: bool = False) -> bool:
     return ok
 
 
+def refresh_sport_rosters(quiet: bool = False) -> bool:
+    """Per-sport roster tabs. Zero network — reads our own game logs.
+
+    The NFL's rosters come off the players feed inside `fantasy_build`;
+    everything else is built from who actually appeared for a team, which
+    is a second reading of history the nightly ingest already stores.
+    """
+    ok, tail = _run_build(["rosters_build.py"])
+    if not quiet:
+        print(f"  ROS  rosters: {'refreshed' if ok else 'unavailable'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
 def refresh_nba(quiet: bool = False) -> bool:
     """NBA slate (Scalpy) — a full member of the paid-pull rotation.
 
@@ -469,6 +483,7 @@ def refresh_all(quiet: bool = False) -> None:
     refresh_wnba(quiet=quiet)
     refresh_cfb(quiet=quiet)
     refresh_ufc(quiet=quiet)
+    refresh_sport_rosters(quiet=quiet)
 
 
 def _run_maintenance() -> None:

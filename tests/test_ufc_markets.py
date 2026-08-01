@@ -236,12 +236,30 @@ def test_fight_week_information_scores_what_it_observes():
 
 
 def test_an_unrecorded_weigh_in_is_a_hole_not_a_penalty():
-    """Before the scale, fight week is UNOBSERVED. Docking every fight a
-    fixed amount for a weigh-in that has not happened yet held the whole
-    board hostage until Friday."""
+    """Before the scale, and with no dated fight history to measure a camp
+    from, fight week is UNOBSERVED. Docking every fight a fixed amount for
+    a weigh-in that has not happened yet held the board hostage until
+    Friday."""
     none = G.camp_info(None, _d("A"), _d("B"))
     assert none["score"] is None
-    assert any("graded without" in w for w in none["why"])
+    assert any("weigh-in not recorded" in w for w in none["why"])
+
+
+def test_camp_is_measured_from_layoff_even_with_no_weigh_in():
+    """Layoff and activity ARE camp information, and we already have them.
+    A fighter on a normal cycle scores; one three years out does not — and
+    neither of them has to wait for a scale."""
+    fresh = {**_d("A"), "last_fight": "2026-04-01", "first_fight": "2022-01-01",
+             "fights": 9}
+    rusty = {**_d("B"), "last_fight": "2023-01-01", "first_fight": "2022-01-01",
+             "fights": 2}
+    good = G.camp_info(None, fresh, dict(fresh, name="B"), today="2026-08-01")
+    bad = G.camp_info(None, fresh, rusty, today="2026-08-01")
+    assert good["score"] is not None and bad["score"] is not None
+    assert bad["score"] < good["score"], "a three-year layoff scored as well "\
+        "as an active camp"
+    # Scored off the WORSE corner — a fight is priced on the pair.
+    assert any("layoff" in w for w in bad["why"])
 
 
 def test_a_missing_venue_drops_out_rather_than_scoring_badly():

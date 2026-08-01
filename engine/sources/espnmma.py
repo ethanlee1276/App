@@ -319,7 +319,7 @@ LAYOFF_MONTHS = 18
 def build_dossier(name: str, *, bio: dict, record: tuple[int, int, int],
                   own_rows: dict[str, dict], fights: list[dict],
                   total_ufc_fights: int, style_hint: str | None = None,
-                  today: _dt.date | None = None) -> dict:
+                  today: _dt.date | None = None, gym: str = "") -> dict:
     """Pure assembly: probed pieces in, spec §3 dossier out.
 
     ``fights`` is newest-first, one dict per analyzed fight:
@@ -418,7 +418,13 @@ def build_dossier(name: str, *, bio: dict, record: tuple[int, int, int],
     if ko_last3 >= 2:
         red_flags.append(f"{ko_last3} KO losses in last three fights — "
                          "chin damage clusters")
-    last = next((f["date"] for f in fights if f["date"]), None)
+    dated = [f["date"] for f in fights if f["date"]]
+    last = dated[0] if dated else None
+    # Both ends of the tracked window, stored rather than only tested
+    # against one threshold. `engine.ufc.camp` turns them into a measured
+    # layoff and an activity rate — the part of "how is his camp" that IS
+    # observable without a camp-report feed.
+    first = dated[-1] if dated else None
     if last and (today - last).days > LAYOFF_MONTHS * 30:
         red_flags.append(f"no fight since {last.isoformat()} — "
                          f"{(today - last).days // 30}-month layoff")
@@ -456,6 +462,9 @@ def build_dossier(name: str, *, bio: dict, record: tuple[int, int, int],
         "r3_decay": 0.15,
         "short_notice": False,
         "red_flags": red_flags,
+        "last_fight": last.isoformat() if last else None,
+        "first_fight": first.isoformat() if first else None,
+        "gym": gym,
         "source": "espn-auto",
         "fetched": today.isoformat(),
         "review": review,
@@ -463,6 +472,26 @@ def build_dossier(name: str, *, bio: dict, record: tuple[int, int, int],
     # Unmeasured fields are OMITTED, never stored as null — the model's
     # .get() defaults handle absent keys; a null would crash arithmetic.
     return {k: v for k, v in out.items() if v is not None}
+
+
+def _gym_of(bio_raw: dict) -> str:
+    """The fighter's gym/association, where the payload names one.
+
+    Shape-tolerant on purpose: this field is inconsistently present and
+    inconsistently named across MMA payloads, and a camp signal that
+    silently returns "" for everyone because one path moved is worse than
+    one that looks in the obvious places. An empty answer is fine — the
+    camp profile simply has one fewer thing to say.
+    """
+    for key in ("association", "team", "gym", "camp"):
+        v = bio_raw.get(key)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+        if isinstance(v, dict):
+            for k in ("displayName", "name", "shortName"):
+                if isinstance(v.get(k), str) and v[k].strip():
+                    return v[k].strip()
+    return ""
 
 
 def fetch_dossier(name: str, today: _dt.date | None = None,
@@ -489,6 +518,11 @@ def fetch_dossier(name: str, today: _dt.date | None = None,
                - ((today.month, today.day) < (dob.month, dob.day)))
     bio = {"age": age, "weight_lbs": bio_raw.get("weight"),
            "gender": bio_raw.get("gender", "")}
+    # Gym/association where the payload names one. Absent on many
+    # fighters, which is why nothing downstream requires it — but stored
+    # on every draft, so a camp CHANGE becomes visible by diffing our own
+    # history rather than needing a news source.
+    gym_name = _gym_of(bio_raw)
 
     record = (0, 0, 0)
     try:
@@ -565,7 +599,8 @@ def fetch_dossier(name: str, today: _dt.date | None = None,
     if not fights:
         return None
     fights.sort(key=lambda f: f["date"] or _dt.date.min, reverse=True)
-    return build_dossier(name, bio=bio, record=record, own_rows=own_rows,
+    return build_dossier(name, gym=gym_name,
+                         bio=bio, record=record, own_rows=own_rows,
                          fights=fights, total_ufc_fights=total_fights,
                          style_hint=style_hint, today=today)
 

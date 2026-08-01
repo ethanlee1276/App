@@ -25,10 +25,13 @@ from engine.sources.fetch import DataUnavailable
 
 
 def _write_rosters(path: Path, blob: dict | None) -> None:
-    """Active rosters + recent team changes, from the players blob.
+    """Active NFL rosters + recent team changes, from the players blob.
 
     Separate from the fantasy payload on purpose: the NFL page shouldn't
-    have to download draft tiers and buy-low tables to list a roster.
+    have to download draft tiers and buy-low tables to list a roster. It
+    is named per-sport because every league now owns its own roster tab —
+    a roster belongs to a league, and "who is on this team" is a question
+    you ask while looking at that league's board.
 
     An unreachable feed writes a payload that SAYS the feed was
     unreachable, rather than an empty one — "no rosters" and "every team
@@ -156,7 +159,7 @@ def main() -> None:
     # already paid for, so this is a second reading of it rather than a
     # second fetch. Written to its own file so the NFL page never has to
     # load the whole fantasy payload to answer "who is on this team".
-    _write_rosters(p.parent / "rosters.json", blob)
+    _write_rosters(p.parent / "rosters_nfl.json", blob)
     bs = out.get("buy_sell") or {}
     print(f"Fantasy: season {out['season']}, {len(out['usage'])} usage rows, "
           f"{len(bs.get('buy_low', []))} buy-low / {len(bs.get('sell_high', []))} "

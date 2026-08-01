@@ -52,6 +52,7 @@ output.
 | **🏀 NBA** | Scalpy: minutes engine, probability distributions, humility clamp, max 4 picks a slate | October |
 | **🥊 UFC** | Scalpy MMA: fighter dossiers, joint method-of-victory model, pass list | Fight weeks (needs dossiers — see below) |
 | **🧭 Why Us** | The positioning page: what makes this different from picks services, live receipts from the journal, and an open math toolbox (de-vig, Kelly sizing, parlay-vs-singles calculators) | Always (no data feed needed) |
+| **📋 Rosters** | Now a **tab inside each sport**, not its own page. NFL shows the real published depth chart; MLB, NBA and WNBA show who has actually appeared for each club this season, most games first — built from our own game logs |
 | **ℹ️ About** | Plain-English explainer for anyone who lands here cold: what the site is and isn't, the legal terms, why nothing here is betting advice, and responsible-gambling help | Always (no data feed needed) |
 
 Shared ideas everywhere: **real prices only** (nothing is recommended
@@ -294,7 +295,17 @@ are yours to shop, and they are never staked or journaled.
 recorded miss becomes a red flag, and red flags already gate a bet off the
 card — so the rule holds itself.
 
-**These pull themselves now.** The launcher checks the card's feed on
+**Camp data pulls itself too.** There is still no feed anywhere for camp
+footage or training reports — that part is genuinely missing and the page
+says so. But three real camp facts *are* measurable from what the dossier
+already fetches, and they now feed the grade: how long since he fought
+(ring rust is one of the few camp effects with evidence behind it), how
+often he fights, and where he trains. Gym changes are found by diffing our
+own drafts, the same way NFL trades are found here without a news feed —
+which means the first one shows up after the second time a fighter is
+drafted, not immediately.
+
+**Weigh-ins pull themselves now.** The launcher checks the card's feed on
 every refresh and records whatever weights it carries, validated against
 the division limit and the one-pound non-title allowance. `--weigh-in
 "Fighter Name" 155.5` still exists for the one case a feed can't cover:

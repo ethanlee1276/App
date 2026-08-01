@@ -119,6 +119,116 @@ def group_of(position: str) -> str:
     return "Other"
 
 
+# --- Rosters for the sports with no roster feed -----------------------------
+#
+# Only the NFL has a published players file here. For MLB, the NBA and the
+# WNBA the honest source is the one we already own: our own ingested game
+# logs. Who has actually appeared for a team this season, how often, and
+# how recently is not a copy of somebody's roster page — it is a record of
+# who played, which is the question a bettor is really asking. It also
+# cannot go stale in the way a scraped roster can, because it is refreshed
+# by the same nightly ingest that feeds the models.
+#
+# What it is NOT: a transactions feed. A player who was traded last week
+# appears under BOTH teams with the dates that say so, and the page shows
+# his most recent club first rather than pretending to know the move
+# happened. That is the truthful version of what game logs can tell you.
+
+# How many days without an appearance before somebody is listed as
+# inactive rather than active. Long enough to survive a rest day or a
+# short IL stint, short enough that a released player stops looking like a
+# starter.
+STALE_DAYS = {"mlb": 14, "nba": 21, "wnba": 21}
+
+# The market we count appearances from, per sport. One row per game
+# played, so counting these counts games — using every market would count
+# a hitter once per stat line.
+APPEARANCE_MARKET = {"mlb": "pa", "nba": "min", "wnba": "min"}
+
+
+def from_game_logs(conn, sport: str, seasons: list[int] | None = None,
+                   today: str | None = None) -> dict:
+    """Rosters for one sport, built from who actually appeared.
+
+    Returns the same payload shape as :func:`build_rosters` so the page
+    renders one way for every sport.
+    """
+    import datetime as _dt
+
+    market = APPEARANCE_MARKET.get(sport)
+    if not market:
+        return {"teams": {}, "team_count": 0, "player_count": 0}
+    q = ("SELECT player, team, position, MAX(period) AS last_seen, "
+         "COUNT(*) AS games FROM player_game_logs "
+         "WHERE sport=? AND market=? AND team IS NOT NULL AND team != ''")
+    args: list = [sport, market]
+    if seasons:
+        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args += list(seasons)
+    q += " GROUP BY player, team"
+    rows = conn.execute(q, args).fetchall()
+
+    day = _dt.date.fromisoformat(today) if today else _dt.date.today()
+    cutoff = (day - _dt.timedelta(days=STALE_DAYS.get(sport, 21))).isoformat()
+
+    def _dated(period: str) -> bool:
+        """Is this period an ISO date we can measure staleness against?
+
+        The NFL stores week numbers here, not dates. Comparing "018" to a
+        cutoff string is a comparison that always succeeds and always
+        means nothing — it would stamp an entire league "not in a game
+        since 018". A period we cannot read is one we make no claim about.
+        """
+        try:
+            _dt.date.fromisoformat(str(period))
+            return True
+        except ValueError:
+            return False
+
+    # A player who changed teams has a row per team. His CURRENT club is
+    # the one he appeared for most recently; the others are history and
+    # are not listed as if he were still there.
+    latest: dict[str, str] = {}
+    for r in rows:
+        seen = latest.get(r["player"])
+        if seen is None or str(r["last_seen"]) > seen:
+            latest[r["player"]] = str(r["last_seen"])
+
+    teams: dict[str, list] = {}
+    for r in rows:
+        last = str(r["last_seen"])
+        if last != latest[r["player"]]:
+            continue                      # an old club, not this one
+        cold = _dated(last) and last < cutoff
+        teams.setdefault(r["team"], []).append({
+            "player": r["player"],
+            "team": r["team"],
+            "position": (r["position"] or "").upper(),
+            "depth_pos": (r["position"] or "").upper(),
+            "depth_order": None,
+            "status": f"not in a game since {last}" if cold else "",
+            "unavailable": cold,
+            "rookie": False,
+            "years_exp": None, "number": None, "age": None,
+            "games": int(r["games"]), "last_seen": last,
+        })
+
+    out: dict[str, dict] = {}
+    for team, players in teams.items():
+        # Most games played first: on a roster with no published depth
+        # chart, playing time IS the depth chart, and it is measured
+        # rather than claimed.
+        players.sort(key=lambda p: (p["unavailable"], -p["games"], p["player"]))
+        out[team] = {
+            "players": players,
+            "count": len(players),
+            "unavailable": sum(1 for p in players if p["unavailable"]),
+            "rookies": 0,
+        }
+    return {"teams": out, "team_count": len(out),
+            "player_count": sum(t["count"] for t in out.values())}
+
+
 # --- Transactions: who changed teams, found by diffing our own history ------
 #
 # There is no transactions API here and none is needed. The roster feed
