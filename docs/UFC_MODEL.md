@@ -321,6 +321,7 @@ listed honestly rather than faked).
 | §4 Movement engine (open → close, steam, RLM) | 📋 | No per-fight movement history is stored yet — the movement component is absent from the scorecard (it does not score against a fight, but it does hold coverage below 100%) |
 | §7 Camp intelligence (layoff, activity, gym changes) | ✅ | `engine/ufc/camp.py` — measured from the dossier's own fight dates and ESPN's association field; gym changes found by diffing our own drafts, so the first one is visible after a fighter's second draft |
 | §7 Camp FOOTAGE / training reports | 📋 | No structured source exists. Named in the grade's `why` and left out of the arithmetic — scoring it as present would be inventing the sport's signature edge |
+| §12 LIVE fight state (strikes by target, body diagram) | 🟡 | `engine/ufc/live.py` + the UFC page's Live panel. Shows what each fighter has ABSORBED per target area, polled every 12s while a bout is on. DISPLAY ONLY — it never reaches the model, because §10 refuses in-play prices. Whether this feed publishes strike targets at broadcast latency is unverified: there was no live card to test against, so the reader is shape-tolerant and `--probe-live` is how the answer gets established |
 | §7 Weigh-in results | ✅ | `engine/ufc/weighin_feed.py` pulls them from the card feed on every refresh; `--weigh-in` remains for what a feed cannot cover, `--probe-weighins` says what came back |
 | §5.1 Simulate paths | 🟡 | Method distribution is real; a round-by-round hazard is 📋 (dossiers carry no finish TIMES), which is why round and exact-round markets are absent rather than invented |
 | §5.2 Positional model | ✅ | Takedown rate × accuracy, TDD, control time, all differenced against the opponent |
@@ -386,6 +387,44 @@ them needs a finish-time hazard, and the dossiers carry no finish times.
 An invented round shape would land in the highest-vig markets on the
 board, which is the worst possible place for one. §9 calls them tier 3 and
 rare in any case.
+
+## The live fight page, and what it deliberately is not
+
+The UFC's broadcast body graphic is not a damage model. It is a count of
+significant strikes landed to each target area, and this implementation
+keeps that distinction because it is the difference between a number and
+a judgement: "damage" is something nobody publishes, "strikes to the
+head" is something somebody counts.
+
+Four decisions worth stating:
+
+**It shows what a fighter ABSORBED.** His own landed strikes appear on his
+opponent. Inverting that would flip the entire picture while looking
+completely normal, so it happens in one place with a test on it.
+
+**The figure is scaled to the hottest region in the FIGHT**, across both
+corners, not to each fighter's own total. Share-of-own-total was the first
+attempt and it was useless — a fighter hit evenly in three places scores
+~33% everywhere and renders uniformly mid-red, so 41 strikes to the head
+looked no different from 7 to the leg. The bars beside the figure keep the
+share-of-own-total view, because "where is he being hit" and "how hard,
+compared to the other guy" are two different questions.
+
+**It never interpolates.** If the feed last moved 90 seconds ago the page
+says so and the badge changes from LIVE to STALLED. A smoothly-rising
+count that is really a stale one redrawn is the worst thing to put beside
+a fight somebody is watching.
+
+**It is not an in-play betting signal and cannot become one.** §10 refuses
+live prices by design, and a test asserts that no file in `engine/ufc/`
+that prices a bet reads the live feed. A live page is something to watch.
+
+**The honest gap:** whether this feed publishes strike-by-target during a
+bout, rather than only after it, is unverified — the implementation was
+written with no live card available and from an environment that blocks
+the host. A live fight with no target data renders an explanation rather
+than a diagram of zeros, because zeros look like a fight where nothing has
+landed, which is a different claim entirely.
 
 ## The two upgrades worth money
 

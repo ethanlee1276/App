@@ -4397,9 +4397,172 @@ function weighInHTML(wi) {
   return `<div class="chips" style="margin-top:8px">${one(wi.a)}${one(wi.b)}</div>`;
 }
 
+/* ============================================================
+   Live fight — the body diagram
+   ============================================================
+   The UFC's broadcast graphic is not a damage model. It is a count of
+   significant strikes landed to each target area, and that distinction
+   is the whole design: "damage" is a judgement nobody publishes, strikes
+   to the head is a number somebody counts. Shaded by SHARE of what a
+   fighter has absorbed — the deepest colour is where he is being hit
+   most, which is what a viewer actually reads off it.
+
+   The diagram shows what a fighter has TAKEN. His own landed strikes
+   appear on his opponent. Getting that backwards would invert the whole
+   picture while looking completely normal. */
+let _liveTimer = null;
+
+const BODY_REGIONS = [
+  ["head", "Head"], ["body", "Body"], ["leg", "Legs"],
+];
+
+/* Intensity is a region's count against the HOTTEST region in the fight
+   — across both fighters, so the two diagrams are directly comparable.
+
+   Share-of-own-total was the first attempt and it was quietly useless: a
+   fighter hit evenly in three places scores ~33% everywhere and comes out
+   uniformly mid-red, so a man taking 41 to the head looked like a man
+   taking 7 to the leg. Normalising to the fight's peak means the worst
+   area on the card is the deepest colour and everything else reads
+   against it, which is the comparison a viewer is actually making.
+
+   Zero absorbed is not "safe", it is "nothing landed yet" — so an untouched
+   diagram is flat panel colour rather than green. Colour never means good. */
+function regionFill(n, peak) {
+  if (!peak || n == null) return "var(--panel-3)";
+  if (!n) return "var(--panel-3)";
+  const a = 0.14 + Math.min(1, n / peak) * 0.76;
+  return `rgba(239, 68, 68, ${a.toFixed(3)})`;
+}
+
+function bodySVG(absorbed, total, peak) {
+  const share = (k) => (total > 0 ? (absorbed[k] || 0) / total : null);
+  const seg = (k, d) => `<path d="${d}" fill="${regionFill(absorbed[k] || 0, peak)}"
+      stroke="var(--border)" stroke-width="1.2"><title>${escapeHtml(
+        BODY_REGIONS.find((r) => r[0] === k)[1])}: ${absorbed[k] || 0} landed${
+        total > 0 ? ` (${Math.round((share(k) || 0) * 100)}%)` : ""}</title></path>`;
+  return `<svg class="bodyfig" viewBox="0 0 100 200" role="img"
+      aria-label="Significant strikes absorbed by target area">
+    ${seg("head", "M50 6 c9 0 15 7 15 16 c0 10 -6 18 -15 18 c-9 0 -15 -8 -15 -18 c0 -9 6 -16 15 -16 Z")}
+    ${seg("body", "M35 44 c-9 3 -14 9 -16 20 l-4 26 c-1 6 6 8 8 2 l4 -16 l1 34 c0 8 1 14 2 20 h60 c1 -6 2 -12 2 -20 l1 -34 l4 16 c2 6 9 4 8 -2 l-4 -26 c-2 -11 -7 -17 -16 -20 c-6 -2 -12 -3 -25 -3 c-13 0 -19 1 -25 3 Z")}
+    ${seg("leg", "M30 132 c-1 22 -2 44 -4 60 c-1 6 12 6 13 0 l7 -44 l7 44 c1 6 14 6 13 0 c-2 -16 -3 -38 -4 -60 Z")}
+  </svg>`;
+}
+
+function fighterPanelHTML(f, peak) {
+  const abs = f.absorbed || {}, total = f.absorbed_total || 0;
+  const rows = BODY_REGIONS.map(([k, label]) => {
+    const n = abs[k] || 0;
+    // The BAR is share of this fighter's own total — "where is he being
+    // hit" — while the FIGURE is scaled to the fight's peak — "how hard,
+    // compared to the other guy". Two questions, two encodings, and the
+    // count on the right is the answer to neither being in doubt.
+    const pct = total > 0 ? Math.round((n / total) * 100) : 0;
+    return `<div class="lf-region">
+      <span class="lf-region-name">${escapeHtml(label)}</span>
+      <span class="lf-bar"><span style="width:${pct}%;
+        background:${regionFill(n, peak)}"></span></span>
+      <span class="lf-region-n">${n}</span>
+    </div>`;
+  }).join("");
+  const t = f.totals || {};
+  const chip = (label, v) => (v == null ? "" :
+    `<span class="chip">${escapeHtml(label)} ${v}</span>`);
+  return `<div class="lf-fighter">
+    <div class="lf-name">${escapeHtml(f.name || "—")}${
+      f.winner ? ` <span class="chip good">WINNER</span>` : ""}</div>
+    ${bodySVG(abs, total, peak)}
+    <div class="lf-absorbed">${total} significant strike${total === 1 ? "" : "s"} absorbed</div>
+    ${rows}
+    <div class="lf-chips">
+      ${chip("landed", f.landed_total)}
+      ${chip("of", t.sig_attempted)}
+      ${chip("TD", t.takedowns)}
+      ${chip("KD", t.knockdowns)}
+    </div>
+  </div>`;
+}
+
+function liveBoutHTML(b, stale) {
+  const s = b.status || {};
+  const badge = s.live
+    ? `<span class="chip ${stale ? "warn" : "live"}">${stale ? "STALLED" : "LIVE"}${
+        s.round ? ` · R${s.round}` : ""}${s.clock ? ` ${escapeHtml(s.clock)}` : ""}</span>`
+    : `<span class="chip">${escapeHtml(s.detail || s.state || "")}</span>`;
+  if (!b.has_targets) {
+    return `<div class="card lf-card">
+      <div class="lf-head">${escapeHtml(b.fighters.map((f) => f.name).join(" vs "))} ${badge}</div>
+      <div class="ls-note">This bout is live, but the feed is not publishing
+      strikes by target for it — so there is no body diagram to draw. Totals
+      appear here as soon as it does. A diagram of zeros would look like a
+      fight where nothing has landed, which is a different claim entirely.</div>
+    </div>`;
+  }
+  // The hottest single region across BOTH corners sets the scale, so the
+  // two figures can be read against each other rather than each against
+  // itself.
+  const peak = Math.max(1, ...b.fighters.flatMap(
+    (f) => BODY_REGIONS.map(([k]) => (f.absorbed || {})[k] || 0)));
+  return `<div class="card lf-card">
+    <div class="lf-head">${escapeHtml(b.division || "")} ${badge}</div>
+    <div class="lf-pair">${b.fighters.map((f) => fighterPanelHTML(f, peak)).join("")}</div>
+  </div>`;
+}
+
+async function renderLiveFights(host) {
+  if (!host) return false;
+  let d = null;
+  try {
+    const res = await fetch("data/ufc_live.json?t=" + Date.now());
+    if (res.ok) d = await res.json();
+  } catch (e) {}
+  if (!d || !(d.bouts || []).length) { host.innerHTML = ""; return false; }
+
+  const live = (d.bouts || []).filter((b) => b.status && b.status.live);
+  if (!live.length) { host.innerHTML = ""; return false; }
+
+  // Age of the DATA, not of the fetch. A count that last moved 90 seconds
+  // ago is 90 seconds old however recently we asked for it, and a smoothly
+  // redrawn stale number next to a fight somebody is watching is the worst
+  // thing this page could do.
+  const built = Date.parse(d.generated_at || "") || 0;
+  const ageS = built ? Math.max(0, Math.round((Date.now() - built) / 1000)) : null;
+  const stale = ageS != null && ageS > (d.stale_after_s || 75);
+
+  host.innerHTML = `
+    <div class="section-title" style="margin-top:0">Live now
+      <span class="sub">— ${escapeHtml(d.disclaimer || "")}</span></div>
+    <div class="lf-age ${stale ? "warn" : ""}">${
+      ageS == null ? "" : stale
+        ? `⚠️ these numbers last changed ${ageS}s ago — the feed has stopped moving`
+        : `updated ${ageS}s ago`}</div>
+    ${live.map((b) => liveBoutHTML(b, stale)).join("")}
+    ${/* Each card already explains its own missing-target case, so the
+          payload-level note would just say it a second time. Keep it only
+          when it is telling you something the cards did not. */
+      d.note && live.some((b) => b.has_targets)
+        ? `<div class="ls-note">${escapeHtml(d.note)}</div>` : ""}`;
+  return true;
+}
+
 async function renderUFC() {
   const host = document.getElementById("ufc-body");
   if (!host) return;
+  // A live fight refreshes on its own clock — the 60s page cycle is far
+  // too slow for something that moves in seconds. The timer is cleared on
+  // the way out of the view so it cannot keep polling a page nobody is on.
+  let liveHost = document.getElementById("ufc-live");
+  if (!liveHost) {
+    liveHost = document.createElement("div");
+    liveHost.id = "ufc-live";
+    host.parentNode.insertBefore(liveHost, host);
+  }
+  renderLiveFights(liveHost);
+  if (_liveTimer) clearInterval(_liveTimer);
+  _liveTimer = setInterval(() => {
+    if (state.view !== "ufc") { clearInterval(_liveTimer); _liveTimer = null; return; }
+    renderLiveFights(liveHost);
+  }, 10000);
   let d = null;
   try {
     const res = await fetch("data/ufc.json?t=" + Date.now());

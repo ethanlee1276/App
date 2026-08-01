@@ -1065,6 +1065,32 @@ def _background_refresher(interval: int) -> None:
         refresh_all(quiet=True)
 
 
+# A fight moves in seconds, so the live card cannot ride the 60-second
+# cycle the rest of the site uses. This runs on its own clock, and it
+# BACKS OFF to the slow tick when nothing is in progress — polling a free
+# feed every 12 seconds around the clock to watch an empty octagon is
+# rude and pointless.
+LIVE_FAST_S = 12
+LIVE_IDLE_S = 180
+
+
+def _live_ufc_refresher() -> None:
+    """Poll the live fight feed fast while a bout is on, slowly otherwise."""
+    import json as _json
+    while True:
+        wait = LIVE_IDLE_S
+        try:
+            ok, _tail = _run_build(["ufc_live_build.py"])
+            if ok:
+                blob = _json.loads((ROOT / "web" / "data" /
+                                    "ufc_live.json").read_text())
+                if blob.get("status") == "live":
+                    wait = LIVE_FAST_S
+        except Exception:      # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(wait)
+
+
 # Every page the site serves, and the container whose text proves it
 # actually rendered. A page can fetch its data fine and still throw while
 # drawing it — the failure that leaves a blank panel and no clue anywhere.
@@ -2132,6 +2158,14 @@ def main() -> None:
     if "--why-ufc" in argv:
         why_ufc(argv)
         return
+    if "--probe-live" in argv:
+        from engine.ufc import live as _live
+        i = argv.index("--probe-live")
+        day = (argv[i + 1] if len(argv) > i + 1
+               and not argv[i + 1].startswith("-") else None)
+        for line in _live.probe(day):
+            print(line)
+        return
     if "--probe-weighins" in argv:
         from engine.ufc import weighin_feed
         i = argv.index("--probe-weighins")
@@ -2245,6 +2279,10 @@ def main() -> None:
         t = threading.Thread(target=_background_refresher, args=(interval,), daemon=True)
         t.start()
         print(f"Auto-refresh every {interval}s (scores free; odds budgeted).")
+        # Its own clock: a fight moves in seconds, and this feed is free.
+        threading.Thread(target=_live_ufc_refresher, daemon=True).start()
+        print(f"  UFC live fights: every {LIVE_FAST_S}s while a bout is on, "
+              f"{LIVE_IDLE_S}s otherwise.")
         try:
             from engine.oddsbudget import summary as _bsum
             if _with_odds():

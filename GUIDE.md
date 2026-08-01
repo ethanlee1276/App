@@ -296,6 +296,25 @@ are yours to shop, and they are never staked or journaled.
 recorded miss becomes a red flag, and red flags already gate a bet off the
 card — so the rule holds itself.
 
+**Live fights.** While a UFC bout is actually happening, the UFC page
+grows a **Live now** panel at the top: a body figure per fighter shaded by
+where he is being hit, plus head/body/leg counts, the round and the clock.
+It polls every 12 seconds while a fight is on and backs off to every 3
+minutes when none is.
+
+What it shows is *significant strikes absorbed by target area* — the same
+thing the UFC's broadcast graphic shows. It is not a damage score and it
+is not a betting signal; the model refuses in-play prices by design and
+nothing on this panel reaches it.
+
+Two things it will not do: if the feed stops moving, the badge changes
+from LIVE to **STALLED** and the panel says how old the numbers are rather
+than redrawing a stale count as though it were current. And if a fight is
+live but the feed publishes no target breakdown, it says that instead of
+drawing an empty body — zeros look like a fight where nothing has landed.
+If that happens, `python3 launch.py --probe-live` prints exactly what the
+feed is sending, mid-fight.
+
 **Camp data pulls itself too.** There is still no feed anywhere for camp
 footage or training reports — that part is genuinely missing and the page
 says so. But three real camp facts *are* measurable from what the dossier
