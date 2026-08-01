@@ -1389,11 +1389,14 @@ select.calc-in { width: auto; font-weight: 600; }
    measured, that is 1512 and up (brand 866 + strip 576 + gap), which
    takes a 16" MacBook from 227px of header to 177px. Below that they
    still stack, which is correct: they genuinely do not fit. */
-@media (min-width: 1200px) and (max-width: 1799px) {
-  .brand { flex: 0 1 auto; order: 1; }
-  .slate-meta { flex: 0 0 auto; order: 2; margin-left: auto; justify-content: flex-end; }
-  .nav { order: 3; }
-}
+/* SUPERSEDED by the two-row assignment further down. This block existed to
+   pair the brand and the status strip on one line when they fitted, which
+   was the best available answer while the sport switcher was 1,195px wide
+   and forced everything else to stack. Now the switcher fits beside the
+   brand and the rows are assigned explicitly, so pairing here would only
+   fight that. Left as a comment rather than silently deleted because the
+   measurement in it is still the reason the current layout is shaped the
+   way it is. */
 
 @media (max-width: 760px) {
   .topbar { flex-wrap: wrap; gap: 10px; padding: 10px 12px; }
@@ -1529,13 +1532,23 @@ select.calc-in { width: auto; font-weight: 600; }
      sport and by day — a live game adds the polling dot, and a multi-day
      slate turns "Sat, Jun 20" into "Sun, Jan 4 - Mon, Jan 5" — so a
      wrapping row landed on a different number of lines per sport and the
-     HEADER changed height mid-tap. Four cells in two rows is the same
-     height whatever the text says; each chip truncates in its own cell. */
+     HEADER changed height mid-tap. A FIXED grid is the same height
+     whatever the text says; each chip truncates in its own cell.
+
+     One row, not two: the theme toggle moved up into the menu bar (where
+     every app puts it, and where 40px of empty space already was), which
+     freed the fourth cell. Same stability guarantee, half the height. */
   .slate-meta { flex: 1 1 100%; order: 5; display: grid;
-    grid-template-columns: 1fr 1fr; gap: 8px; align-items: center;
-    justify-content: stretch; }
+    grid-template-columns: auto auto minmax(0, 1fr); gap: 8px;
+    align-items: center; justify-content: stretch; }
   .slate-meta > * { min-width: 0; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; justify-self: start; }
+  /* The date cell must FILL its track, not size to its content. With
+     justify-self:start it took max-content width, so a range date
+     ("Wed, Oct 7 - Sat, Oct 10") pushed six pixels past the viewport
+     instead of truncating — the badges beside it are pills and do want to
+     hug their text, so only this one stretches. */
+  .slate-meta > #slate-date { justify-self: stretch; width: 100%; }
   .theme-toggle { justify-self: end; }
   /* Idle (nothing live) reads quieter than the polling state. */
   .live-refresh.idle { opacity: .75; }
@@ -1826,4 +1839,111 @@ select.calc-in { width: auto; font-weight: 600; }
     border: 1px solid var(--border-soft); border-radius: 9px;
     background: var(--fill-subtle); text-decoration: none; font-weight: 600;
   }
+}
+
+/* ============================================================
+   Header density — the chrome was taking a quarter of the screen.
+
+   Eleven sport buttons made the switcher 1,195px wide, which forced the
+   status row and the page nav onto lines of their own: three stacked
+   rows, 227px, 25% of a 900px desktop and 28% of a laptop. The leagues
+   are the primary axis and stay visible; the five tools move behind a
+   "More" menu, which is enough to fit the brand, the switcher and the
+   status row on one line again.
+   ============================================================ */
+@media (min-width: 761px) {
+  .sport-more { position: relative; display: inline-flex; }
+  .sport-more .sport-group[data-group="tools"] {
+    display: none;
+    position: absolute; top: calc(100% + 10px); right: 0; z-index: 60;
+    flex-direction: column; gap: 2px; min-width: 200px; padding: 6px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 12px; box-shadow: 0 14px 34px rgba(0, 0, 0, .34);
+  }
+  .sport-more.open .sport-group[data-group="tools"] { display: flex; }
+  .sport-more .sport-group[data-group="tools"] .sport-btn {
+    white-space: nowrap; text-align: left; justify-content: flex-start;
+    width: 100%; padding: 8px 10px;
+  }
+  .more-toggle[aria-expanded="true"] { color: var(--text); }
+  /* Where you ARE, when you're inside one of the tools. */
+  .more-toggle.has-active { color: var(--text); }
+  .more-toggle.has-active::after {
+    content: ""; width: 5px; height: 5px; border-radius: 50%;
+    background: var(--brand); margin-left: 5px;
+  }
+
+  /* Two rows, deliberately assigned rather than left to the wrap
+     algorithm. Letting flex decide produced THREE rows: the brand got
+     shrunk below its content width, which made the switcher wrap inside
+     it, and then the nav and the status row each took a line of their
+     own. Row 1 is identity + league; row 2 is page + status. */
+  .topbar { padding: 10px 20px; gap: 8px 14px; align-items: center; }
+  .brand { flex: 1 0 100%; flex-wrap: nowrap; order: 1; }
+  /* Row 2 reads left to right the way the page does: where you can go,
+     then how fresh what you're looking at is. */
+  .nav { flex: 0 1 auto; min-width: 0; order: 2; }
+  .slate-meta { margin-left: auto; flex: 0 1 auto; min-width: 0; order: 3;
+    justify-content: flex-end; }
+}
+
+/* On a phone the wrapper must not exist: the slide-down menu already
+   groups these as their own card under a "More" heading, and a second
+   toggle inside it would be a control that opens a control. */
+@media (max-width: 760px) {
+  .sport-more { display: contents; }
+  .more-toggle { display: none !important; }
+}
+
+/* A laptop is not a desktop. At 1280 the page nav and the status row want
+   1,243px and have 1,240 — three pixels short, which cost a whole third
+   row. Slightly tighter tabs buy it back rather than pushing the status
+   row down for the sake of six pixels of padding. */
+@media (min-width: 761px) and (max-width: 1439px) {
+  .nav-btn { padding: 9px 12px; font-size: 13.5px; }
+  .slate-meta { gap: 9px; font-size: 12.5px; }
+}
+
+/* On a phone the status row wrapped to two lines: badge + freshness chip,
+   then date + theme toggle. The toggle belongs in the menu bar — that is
+   where every app puts it, the row is already there, and it is otherwise
+   40px of empty space. That alone gets the status back to one line. */
+@media (max-width: 760px) {
+  .topbar { position: sticky; }
+  #theme-toggle { position: absolute; top: 8px; right: 14px; z-index: 3; }
+  /* …and keep the menu bar's label clear of it on a narrow phone. */
+  .menu-toggle { padding-right: 52px; }
+  .slate-meta { gap: 8px; flex-wrap: nowrap; overflow: hidden; }
+  #slate-date { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
+}
+
+/* Below ~1200px the page nav and the status row can no longer reliably
+   share a line — and "reliably" is the whole point. CFB hides three tabs
+   it has no engine for, so its nav is narrower than MLB's; at 1024 that
+   meant MLB got a three-row header and CFB got two, and switching sports
+   moved the whole page by 48px under your finger.
+
+   So below the threshold the status row always takes its own line, for
+   every sport. Content must not decide layout — a header that is one
+   pixel taller for one league is a header that jumps. */
+@media (min-width: 761px) and (max-width: 1199px) {
+  .slate-meta { flex: 1 0 100%; margin-left: 0; justify-content: flex-start; }
+}
+
+/* Between the phone menu and a wide desktop, the page nav and the status
+   row cannot share a line: with all eight tabs they need ~1,208px and a
+   1,024px window has 984. So below the width where they DO fit, the
+   status row takes its own line — for every sport.
+
+   That last part is the whole point. Left to the wrap algorithm, college
+   football (which hides three tabs it has no engine for) fitted on one
+   line at 1,024 while every other sport wrapped, so the header was 120px
+   on one board and 168px on the next. Content must not decide layout. */
+@media (min-width: 761px) and (max-width: 1247px) {
+  .slate-meta { flex: 1 0 100%; margin-left: 0; justify-content: flex-start; }
+  /* The 40px theme button was setting the row's height on its own. Up in
+     the corner it costs nothing and the row shrinks to chip height. */
+  #theme-toggle { position: absolute; top: 10px; right: 16px; z-index: 3; }
+  #slate-date { min-width: 0; }
 }

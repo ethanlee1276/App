@@ -95,6 +95,48 @@ function teamsForSport(sport) {
   return typeof TEAMS !== "undefined" ? TEAMS : {};
 }
 
+/* ---------------- the desktop "More" menu ----------------
+   Five tool buttons live behind it so the switcher stays one row. It has
+   to behave like a real menu or it is worse than the row it replaced:
+   closes on outside click, on Escape, and the moment you pick something;
+   and it marks itself when the page you're on is one of its own, so
+   "where am I" survives the collapse. */
+function closeMoreMenu() {
+  const wrap = document.getElementById("sport-more");
+  const btn = document.getElementById("more-toggle");
+  if (wrap) wrap.classList.remove("open");
+  if (btn) btn.setAttribute("aria-expanded", "false");
+}
+
+function initMoreMenu() {
+  const wrap = document.getElementById("sport-more");
+  const btn = document.getElementById("more-toggle");
+  if (!wrap || !btn) return;
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const open = wrap.classList.toggle("open");
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  // A click anywhere else closes it — including on one of its own items,
+  // which is the common case and should not need a second tap.
+  document.addEventListener("click", (e) => {
+    if (!wrap.contains(e.target)) closeMoreMenu();
+  });
+  wrap.querySelectorAll(".sport-btn:not(.more-toggle)")
+      .forEach((b) => b.addEventListener("click", closeMoreMenu));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMoreMenu();
+  });
+}
+
+function markMoreMenu() {
+  const btn = document.getElementById("more-toggle");
+  if (!btn) return;
+  const inTools = !!document.querySelector(
+    '.sport-more .sport-group[data-group="tools"] .sport-btn.active');
+  btn.classList.toggle("has-active", inTools);
+}
+
 function applySport() {
   // A sport with no metadata used to throw here and leave the previous
   // league's page on screen under the new league's branding.
@@ -117,7 +159,9 @@ function applySport() {
   if (gt) gt.innerHTML = `${escapeHtml(meta.gamesTitle)}`
     + (meta.gamesSub ? ` <span class="sub">— ${escapeHtml(meta.gamesSub)}</span>` : "");
   document.querySelectorAll(".sport-btn").forEach((b) =>
-    b.classList.toggle("active", b.dataset.sport === state.sport));
+    b.classList.toggle("active",
+                       !!b.dataset.sport && b.dataset.sport === state.sport));
+  markMoreMenu();
 }
 
 /* ---------------- formatting helpers ---------------- */
@@ -3025,13 +3069,14 @@ const STANDALONE_BRAND = {
 
 function enterStandaloneMode(name) {
   document.querySelectorAll(".sport-btn").forEach((x) =>
-    x.classList.toggle("active", x.dataset.sport === name));
+    x.classList.toggle("active", !!x.dataset.sport && x.dataset.sport === name));
   const nav = document.getElementById("nav");
   if (nav) nav.style.display = "none";
   // …and its menu label with it: a "PAGE" header over an empty space is
   // worse than no header. Standalone pages have no page list.
   const phead = document.querySelector('.menu-head[data-head="page"]');
   if (phead) phead.style.display = "none";
+  markMoreMenu();          // the tool button just became active
   const brand = STANDALONE_BRAND[name];
   if (brand) {
     document.getElementById("tagline").textContent = brand.tagline;
@@ -3047,7 +3092,9 @@ function exitStandaloneMode() {
   const phead = document.querySelector('.menu-head[data-head="page"]');
   if (phead) phead.style.display = "";
   document.querySelectorAll(".sport-btn").forEach((x) =>
-    x.classList.toggle("active", x.dataset.sport === state.sport));
+    x.classList.toggle("active",
+                       !!x.dataset.sport && x.dataset.sport === state.sport));
+  markMoreMenu();
   // Restore the sport's own tagline along with its nav. (The Q tile is
   // constant now, so only the words change.)
   const meta = SPORT_META[state.sport];
@@ -5226,6 +5273,12 @@ function bind() {
 
   document.querySelectorAll(".sport-btn").forEach((b) =>
     b.addEventListener("click", () => {
+      // The "More" toggle wears .sport-btn for its looks but is not a
+      // sport. Without this guard it fell through to the switcher with an
+      // undefined data-sport, blanked state.sport, and then matched the
+      // active test because undefined === undefined — so opening the menu
+      // marked itself as the current league and un-marked the real one.
+      if (!b.dataset.sport) return;
       if (STANDALONE_MODES.includes(b.dataset.sport)) { enterStandaloneMode(b.dataset.sport); return; }
       exitStandaloneMode();
       if (state.sport === b.dataset.sport) return;
@@ -5323,6 +5376,7 @@ updateUnitNote();
 initialView();
 watchSectionSubs();
 initMobileMenu();
+initMoreMenu();
 initHeaderTuck();
 requestAnimationFrame(moveIndicator);
 load();

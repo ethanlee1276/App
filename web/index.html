@@ -66,12 +66,24 @@
           <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC — Scalpy MMA engine">🥊 UFC</button>
         </div>
         <div class="menu-head" data-head="more" aria-hidden="true">More</div>
+        <!-- Six leagues stay visible because the league IS the primary axis
+             of the whole site. The five tools are visited occasionally, and
+             leaving them out here kept the switcher at 1,195px on desktop —
+             wide enough to push the status row and the page nav onto lines
+             of their own and hand a quarter of the screen to chrome. On a
+             phone this wrapper is display:contents, so the slide-down menu
+             renders exactly as it did. -->
+        <div class="sport-more" id="sport-more">
+          <button class="sport-btn more-toggle" id="more-toggle" type="button"
+                  aria-expanded="false" aria-haspopup="true"
+                  title="Polymarket, Fantasy, Rosters, Why Us, About">⋯ More</button>
         <div class="sport-group" data-group="tools">
           <button class="sport-btn" data-sport="intel" data-kind="tool" title="Polymarket informed-flow intelligence">🛰️ Polymarket</button>
           <button class="sport-btn" data-sport="fantasy" data-kind="tool" title="Fantasy football — usage, scripts, buy-low">🏆 Fantasy</button>
           <button class="sport-btn" data-sport="rosters" data-kind="tool" title="Active NFL rosters — every team's depth chart, and who just changed teams">📋 Rosters</button>
           <button class="sport-btn" data-sport="why" data-kind="tool" title="Why this beats a picks service — and the open math toolbox">🧭 Why Us</button>
           <button class="sport-btn" data-sport="about" data-kind="tool" title="What this site is, what it isn't, and the legal and responsible-gambling terms">ℹ️ About</button>
+        </div>
         </div>
       </div>
     </div>
