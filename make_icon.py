@@ -38,7 +38,7 @@ CORNER = 11.0                    # tile corner radius, matching the favicon
 # the home-screen tile looks like the chrome it opens into.
 TOP = (0x16, 0x17, 0x1D)
 BOT = (0x16, 0x17, 0x1D)
-INK = (0x7A, 0xA2, 0xF7)
+INK = (0xE6, 0xDC, 0xCB)
 
 SS = 4                           # supersampling factor per axis
 

@@ -137,6 +137,10 @@ def test_the_name_is_spelled_the_same_everywhere():
 
 
 def test_the_mark_matches_the_design_system():
+    """The favicon, the header tile and the home-screen icon are one
+    brand or they are three. This fired for real when the accent moved
+    off blue and the mark stayed behind — the tab would have been one
+    colour and the site another."""
     # Flat panel, one accent, no gradient — the same chrome as everything
     # else. A gradient-filled tile reads as a sticker on a flat interface.
     svg = _read("web", "favicon.svg")
@@ -157,6 +161,42 @@ def test_brand_is_constant_across_sports():
     assert "brand-logo" not in app
     assert "brand-sport" not in app
 
+
+
+def test_the_masthead_never_asks_for_a_weight_the_serif_does_not_have():
+    """Instrument Serif ships one weight. Asking for 800 makes the browser
+    synthesise a bold by smearing the outline, which on a serif reads as a
+    printing fault rather than emphasis."""
+    css = _read("web", "css", "styles.css")
+    rule = css[css.index(".brand h1 {"):]
+    rule = rule[:rule.index("}") + 1]
+    assert "font-weight: 400" in rule, "the masthead asks for a fake bold"
+
+
+def test_the_type_is_self_hosted():
+    """Everything else on this site works with the network unplugged and
+    the fonts have to as well — a board that renders in Times New Roman
+    the one night the wifi drops is not a board you trust."""
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    css = _read("web", "css", "styles.css")
+    assert "fonts.googleapis.com" not in css and "fonts.gstatic.com" not in css
+    html = _read("web", "index.html")
+    assert "fonts.googleapis.com" not in html
+    for f in ("instrument-sans.woff2", "instrument-serif.woff2"):
+        assert os.path.isfile(os.path.join(root, "web", "fonts", f)), f
+        assert f in css, f"{f} is on disk but nothing loads it"
+    assert "font-display: swap" in css, "text would be invisible while loading"
+
+
+def test_numbers_are_tabular_everywhere():
+    """Every figure sits in a column next to another figure. Proportional
+    digits make those columns wobble as the numbers change, which on a
+    board refreshing every minute reads as the page twitching."""
+    css = _read("web", "css", "styles.css")
+    body = css[css.index("body {"):]
+    body = body[:body.index("}") + 1]
+    assert "tabular-nums" in body
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
