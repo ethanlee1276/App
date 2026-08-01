@@ -243,8 +243,14 @@ def mlb(conn) -> SportCoverage:
 
 def nba(conn) -> SportCoverage:
     return SportCoverage("nba", "NBA", [
-        _results_layer(conn, "nba", 400, "python3 ingest.py nba --seasons 2021-2026 --scores-only"),
-        _logs_layer(conn, "nba", 8000, "python3 ingest.py nba --seasons 2021-2026 --scores-only"),
+        _results_layer(conn, "nba", 400,
+                       "python3 ingest.py nba --seasons 2021-2026 --scores-only"),
+        # NOT --scores-only. That flag is precisely what SKIPS the logs, so
+        # offering it as the fix for "0 player game logs" hands over a
+        # command that cannot work — and worse, one that exits looking
+        # successful because every day is already stored.
+        _logs_layer(conn, "nba", 8000,
+                    "python3 ingest.py nba --seasons 2024-2026"),
         _odds_layer(),
         Layer("Schedule feed", "the free NBA CDN answers 'is there a slate "
               "tonight' before a single credit is spent", OK,

@@ -199,6 +199,64 @@ def test_every_command_the_scan_prints_actually_exists():
                 f"{script} does not accept the subcommand {first!r}"
 
 
+def test_a_fix_command_never_contradicts_the_layer_it_fixes():
+    """The previous test only asks whether a command RUNS. This one asks
+    whether it does the thing the row promised.
+
+    The bug it fired on: the NBA "0 player game logs" row offered
+    `ingest.py nba --seasons 2021-2026 --scores-only`. That command runs,
+    it is spelled correctly, and `--scores-only` is exactly the flag that
+    SKIPS player logs — so it would exit looking successful (every day is
+    already stored) having changed nothing. A fix line that quietly does
+    the opposite of what it claims is worse than a typo, because a typo
+    tells you something is wrong.
+    """
+    from engine import coverage
+    from engine.db import connect
+
+    conn = connect(":memory:")
+    for sport, build in coverage.BUILDERS.items():
+        for layer in build(conn).layers:
+            fix = (layer.fix or "").lower()
+            if not fix:
+                continue
+            if "player game logs" in layer.name.lower():
+                assert "--scores-only" not in fix, (
+                    f"{sport}: the fix for missing player logs passes "
+                    f"--scores-only, which is what skips them")
+            if "results history" in layer.name.lower():
+                assert "ingest.py" in fix, (
+                    f"{sport}: results are closed by an ingest, not by "
+                    f"{fix!r}")
+
+
+def test_a_layer_that_claims_the_launcher_refreshes_it_is_actually_refreshed():
+    """"→ refreshes with the launcher" is a promise, and it was false.
+
+    The NFL injury layer said it, and `refresh_nfl` never passed
+    `--injuries` — so §7's ripple model would have gone into Week 1
+    unfetched while the scan told you it was handled. A fix line nobody
+    has to run is the easiest kind to leave broken.
+    """
+    from engine import coverage
+    from engine.db import connect
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    launch = open(os.path.join(root, "launch.py"), encoding="utf-8").read()
+    conn = connect(":memory:")
+    claims = [(s, l) for s, build in coverage.BUILDERS.items()
+              for l in build(conn).layers
+              if "refreshes with the launcher" in (l.fix or "")]
+    assert claims, "no layer makes this claim — did the wording change?"
+    for sport, layer in claims:
+        if "injury" in layer.name.lower() and sport == "nfl":
+            fn = launch[launch.index("def refresh_nfl("):
+                        launch.index("def refresh_predmarkets(")]
+            assert "--injuries" in fn, (
+                "the NFL injury layer says the launcher refreshes it, and "
+                "refresh_nfl never asks for injuries")
+
+
 def test_ingest_speaks_every_sport_the_scan_reports_on():
     """The scan tells you to ingest a sport; ingest.py has to know it.
     Every gap between those two lists is a fix line that fails."""

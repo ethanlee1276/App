@@ -256,7 +256,13 @@ def refresh_nfl(quiet: bool = False) -> bool:
         return False
     season, week = wk
     out = NFL_OUT
-    args = ["nfl_build.py", str(season), str(week), "--out", out]
+    # --injuries was never passed here, so §7's ripple model — the layer
+    # that holds a clouded player's props and boosts the beneficiaries —
+    # sat unfetched with the coverage scan promising it "refreshes with
+    # the launcher". It does now. The feed is free and cached, and
+    # nfl_build already degrades to a warning when it cannot be reached,
+    # so this cannot cost a build.
+    args = ["nfl_build.py", str(season), str(week), "--out", out, "--injuries"]
     spend = _slate_games(out) > 0 and _odds_affordable(out, quiet, sport="nfl")
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:
