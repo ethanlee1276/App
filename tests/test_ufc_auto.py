@@ -105,16 +105,58 @@ def test_an_empty_feed_is_reported_not_silently_swallowed():
     assert res["recorded"] == 0 and res["note"]
 
 
-def test_the_probe_explains_a_blank_result():
-    """A blank board must never be a mystery."""
-    orig = weighin_feed.fetch_card
-    weighin_feed.fetch_card = lambda date=None: {"events": [_event([])]}
+def _dated_event(date, weights=None):
+    ev = _event(weights or [])
+    ev.update({"id": "600", "date": date})
+    return ev
+
+
+def test_the_probe_says_which_reason_a_blank_result_has():
+    """"Nothing found" has two causes with opposite meanings — the scale
+    has not happened yet, or this feed does not carry weights at all. A
+    diagnostic you still have to guess after is not a diagnostic."""
+    orig_fetch, orig_deep = weighin_feed.fetch_card, weighin_feed.deep_scan
+    weighin_feed.deep_scan = lambda eid, limit=6: []
     try:
-        lines = "\n".join(weighin_feed.probe())
+        weighin_feed.fetch_card = lambda date=None: {
+            "events": [_dated_event("2026-08-09T23:00Z")]}
+        early = "\n".join(weighin_feed.probe("2026-08-01"))
+        weighin_feed.fetch_card = lambda date=None: {
+            "events": [_dated_event("2026-08-01T23:00Z")]}
+        onday = "\n".join(weighin_feed.probe("2026-08-01"))
     finally:
-        weighin_feed.fetch_card = orig
-    assert "usable weigh-in weights found: 0" in lines
-    assert "--weigh-in" in lines, "the manual escape hatch must stay offered"
+        weighin_feed.fetch_card, weighin_feed.deep_scan = orig_fetch, orig_deep
+
+    assert "nothing published yet and nothing wrong" in early
+    assert "does not publish weigh-in results" not in early, \
+        "a card that has not weighed in yet was called a dead feed"
+    assert "does not publish weigh-in results" in onday
+    for text in (early, onday):
+        assert "--weigh-in" in text, "the manual escape hatch must stay offered"
+        assert "camp.py" in text, "the probe must say the board is not blocked"
+
+
+def test_the_probe_checks_the_fuller_record_before_giving_a_verdict():
+    """The scoreboard is a SUMMARY shape. "The summary has no weights" and
+    "ESPN has no weights" are different findings, and the second one is
+    the one worth acting on."""
+    orig_fetch, orig_deep = weighin_feed.fetch_card, weighin_feed.deep_scan
+    called = []
+    weighin_feed.fetch_card = lambda date=None: {
+        "events": [_dated_event("2026-08-01T23:00Z")]}
+    weighin_feed.deep_scan = lambda eid, limit=6: (
+        called.append(eid) or [{"name": "Deep Guy", "weight": 155.0,
+                                "field": "weighIn", "keys": [],
+                                "division": "lightweight",
+                                "title_fight": False}])
+    try:
+        lines = "\n".join(weighin_feed.probe("2026-08-01"))
+    finally:
+        weighin_feed.fetch_card, weighin_feed.deep_scan = orig_fetch, orig_deep
+    assert called == ["600"], "the deeper record was never checked"
+    assert "155.0 lbs" in lines
+    assert "does not publish weigh-in results" not in lines, \
+        "found weights in the core API and still called the feed dead"
 
 
 # --- dossier auto-draft -----------------------------------------------------

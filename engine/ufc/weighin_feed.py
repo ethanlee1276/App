@@ -133,6 +133,60 @@ def fetch_card(date: str | None = None) -> dict:
     return _get_json(url, f"mma_scoreboard_{day}.json", ttl=1800)
 
 
+# How many bouts to follow into the core API when the scoreboard's own
+# competitor entries carry no weight. Enough to answer "does this feed
+# have it at all", bounded so a probe is never a hundred requests.
+DEEP_BOUTS = 6
+
+
+def deep_scan(event_id: str, limit: int = DEEP_BOUTS) -> list[dict]:
+    """Follow the core API's competitor refs, which are richer than the
+    scoreboard's summary entries.
+
+    The scoreboard is a *summary* shape — it carries enough to draw a card
+    and no more. If a weigh-in weight is published anywhere in this feed
+    it is on the fuller competitor record, so "the scoreboard has no
+    weights" is not the same finding as "ESPN has no weights", and the
+    difference is worth one request per bout to establish.
+    """
+    from ..sources.espnmma import _get_json, CORE
+
+    out: list[dict] = []
+    try:
+        comps = _get_json(f"{CORE}/events/{event_id}/competitions",
+                          f"mma_ev_{event_id}_comps.json", ttl=1800)
+    except Exception:  # noqa: BLE001 — a probe reports, it does not raise
+        return out
+    for item in (comps.get("items") or [])[:limit]:
+        ref = (item.get("$ref") or "").replace("http://", "https://")
+        if not ref:
+            continue
+        cid = ref.rstrip("/").split("/")[-1].split("?")[0]
+        try:
+            comp = _get_json(ref, f"mma_comp_{cid}.json", ttl=1800)
+        except Exception:  # noqa: BLE001
+            continue
+        div = _division_text((comp.get("type") or {}).get("text") or "")
+        title = bool(comp.get("titleFight") or comp.get("isTitleFight"))
+        for c in (comp.get("competitors") or []):
+            entry = c
+            cref = (c.get("$ref") or "").replace("http://", "https://")
+            if cref and not any(f in c for f in WEIGHT_FIELDS):
+                try:
+                    entry = _get_json(
+                        cref, f"mma_cptr_{cid}_{c.get('id', '')}.json",
+                        ttl=1800)
+                except Exception:  # noqa: BLE001
+                    entry = c
+            weight, field = read_weight(entry)
+            out.append({"name": _name_of(entry) or _name_of(c),
+                        "weight": weight, "field": field,
+                        "keys": sorted(k for k in entry
+                                       if "weigh" in k.lower()),
+                        "division": div, "title_fight": title})
+    return out
+
+
 def refresh(date: str | None = None, store_path=None,
             today: str | None = None) -> dict:
     """Pull the card and record every weigh-in it carries.
@@ -205,14 +259,59 @@ def probe(date: str | None = None) -> list[str]:
         if len(comps) > 3:
             lines.append(f"      … {len(comps) - 3} more bout(s) not shown")
     hits = sum(len(scan_event(ev)) for ev in events)
-    lines.append(f"\nusable weigh-in weights found: {hits}")
-    if not hits:
+    lines.append(f"\nusable weigh-in weights on the scoreboard: {hits}")
+
+    # The scoreboard is a summary shape. Before concluding anything, look
+    # in the fuller record — "the summary has no weights" and "ESPN has no
+    # weights" are different findings.
+    deep_hits = 0
+    if not hits and events:
+        eid = str(events[0].get("id") or "")
+        lines.append(f"\nfollowing the core API for event {eid} "
+                     f"(the fuller competitor record)…")
+        rows = deep_scan(eid)
+        if not rows:
+            lines.append("  core API returned no competitors either")
+        for r in rows[:8]:
+            if r["weight"] is not None:
+                deep_hits += 1
+                lines.append(f"  {r['name']}: {r['weight']} lbs "
+                             f"from {r['field']!r}")
+            else:
+                lines.append(f"  {r['name']}: no weight"
+                             + (f" (weigh-ish keys: {r['keys']})"
+                                if r["keys"] else ""))
+        lines.append(f"  usable weights in the core API: {deep_hits}")
+
+    if hits or deep_hits:
+        return lines
+
+    # Which of the two reasons is it? The probe used to leave that hanging,
+    # which made it a diagnostic you still had to guess after.
+    when = str(events[0].get("date") or "")[:10] if events else ""
+    day = date or _dt.date.today().isoformat()
+    lines.append("")
+    if when and when > day:
         lines.append(
-            "Nothing to record. That is either because the scale has not "
-            "happened yet (they weigh in the morning before the card) or "
-            "because this feed does not carry weigh-in weights for this "
-            "event. Either way the model grades these fights WITHOUT the "
-            "fight-week component rather than penalising them — and "
-            "`python3 launch.py --weigh-in \"Name\" 155.5` still works if "
-            "you see the scale before the feed does.")
+            f"VERDICT: the card is {when} and today is {day}. Fighters weigh "
+            f"in the MORNING BEFORE the card, so there is nothing published "
+            f"yet and nothing wrong. Re-run this on {when} (or the day "
+            f"before) to find out whether the feed actually carries them — "
+            f"until then this tells you nothing either way.")
+    else:
+        lines.append(
+            "VERDICT: the card is today or already past and BOTH the "
+            "scoreboard and the fuller core record carry no weights. That "
+            "is the real answer: this feed does not publish weigh-in "
+            "results, and no amount of waiting will change it. Use "
+            "`python3 launch.py --weigh-in \"Name\" 155.5` for a fight you "
+            "care about, or leave it — see below.")
+    lines.append(
+        "\nEither way this does NOT hold the board back. Camp is now scored "
+        "from layoff, activity and gym (engine/ufc/camp.py), and a missing "
+        "weigh-in drops out of the grade instead of marking the fight down. "
+        "The one thing a recorded weigh-in still does that nothing else can "
+        "is catch a MISS, which gates that fight outright — so if you see "
+        "the scale on the broadcast before anyone publishes it: "
+        "`python3 launch.py --weigh-in \"Name\" 155.5`.")
     return lines
