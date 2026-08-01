@@ -23,15 +23,26 @@ from .models import MLBProp, MLBGameLog, HITTER_MARKETS
 MIN_LOGS = 3
 
 
-def logs_by_player(conn, market: str) -> dict[str, dict]:
+def logs_by_player(conn, market: str,
+                   seasons: list[int] | None = None) -> dict[str, dict]:
     """``{normalized_player: {"player", "team", "position", "logs"}}`` from
     the ingested history — logs newest-first, like a live game log."""
     from ..sources.oddsapi import normalize_name
 
-    rows = conn.execute(
-        "SELECT player, team, opponent, position, period, value, home "
-        "FROM player_game_logs WHERE sport='mlb' AND market=? "
-        "ORDER BY period", (market,)).fetchall()
+    # SEASON-SCOPED, and that is not an optimisation. `compute_form` blends
+    # a "season" window at 20% for MLB, and this query used to return every
+    # row we had. With one season ingested that was correct by accident;
+    # with six it silently turned the season average into a six-year career
+    # average and diluted current form with a player who no longer exists.
+    # More history made the live model worse — the backtest wants all of
+    # it, the projection wants this year.
+    q = ("SELECT player, team, opponent, position, period, value, home "
+         "FROM player_game_logs WHERE sport='mlb' AND market=?")
+    args: list = [market]
+    if seasons:
+        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args += list(seasons)
+    rows = conn.execute(q + " ORDER BY period", args).fetchall()
     out: dict[str, dict] = {}
     for r in rows:
         rec = out.setdefault(normalize_name(r["player"]),
@@ -51,12 +62,19 @@ def logs_by_player(conn, market: str) -> dict[str, dict]:
     return out
 
 
-def add_book_listed_props(slate, book_only: list[dict], conn) -> int:
+def add_book_listed_props(slate, book_only: list[dict], conn,
+                          seasons: list[int] | None = None) -> int:
     """Build hitter props for book-priced players missing from the slate.
 
     Returns how many props were added. Pitcher markets are skipped (probable
     starters already exist independent of lineups), as is anyone without
-    enough ingested history to project honestly."""
+    enough ingested history to project honestly.
+
+    ``seasons`` bounds the form history. Callers on the LIVE path pass the
+    current season; leaving it open means the projection's "season" window
+    quietly becomes a career average once more than one season is
+    ingested.
+    """
     existing = set()
     from ..sources.oddsapi import normalize_name
     for p in slate.props:
@@ -75,7 +93,7 @@ def add_book_listed_props(slate, book_only: list[dict], conn) -> int:
         if not norm or (norm, market) in existing:
             continue
         if market not in history:
-            history[market] = logs_by_player(conn, market)
+            history[market] = logs_by_player(conn, market, seasons)
         rec = history[market].get(norm)
         if not rec or len(rec["logs"]) < MIN_LOGS:
             continue                     # nobody to model — needs history

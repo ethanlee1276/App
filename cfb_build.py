@@ -416,7 +416,14 @@ def main() -> None:
                                   _iso(day + datetime.timedelta(days=NEIGHBOUR_DAYS)))
     prev, nxt = cfbcontext.neighbours(history, upcoming)
 
-    ratings = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0)
+    # THIS season only. College rosters turn over ~25% a year, so blending
+    # six ingested seasons would rate a team on players who have graduated
+    # — and it is exactly the gap the recruiting prior below exists to fill
+    # while the current season is still young. The VARIANCE fit underneath
+    # deliberately uses every season it can get: how far games land from a
+    # projection is a property of the sport, not of one roster.
+    ratings = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0,
+                                             seasons=[day.year])
     fit = cfbratings.fit_from_history(conn, ratings)
     cfbratings.install(fit)
 

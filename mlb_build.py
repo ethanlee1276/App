@@ -131,7 +131,8 @@ def main() -> None:
             from engine.db import connect as _bconn
             from engine.mlb.bookmenu import add_book_listed_props
             conn_b = _bconn()
-            n_menu = add_book_listed_props(slate, res.book_only, conn_b)
+            n_menu = add_book_listed_props(slate, res.book_only, conn_b,
+                                           seasons=[int(args.date[:4])])
             conn_b.close()
             if n_menu:
                 print(f"Book menu: built {n_menu} prop(s) for book-priced "
