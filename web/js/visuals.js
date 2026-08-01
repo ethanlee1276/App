@@ -240,8 +240,8 @@ function windGauge(weather, opts = {}) {
       <!-- compass ticks + N -->
       <text x="46" y="15" text-anchor="middle" font-size="8" fill="#7c86a8" font-family="system-ui">N</text>
       <circle cx="46" cy="46" r="15" fill="#0c1020" opacity="0.7"/>
-      <text x="46" y="44" text-anchor="middle" font-size="13" font-weight="800" fill="#eaeefb"
-            font-family="system-ui">${Math.round(mph)}</text>
+      <text class="num" x="46" y="44" text-anchor="middle" font-size="13" font-weight="800"
+            fill="#eaeefb">${Math.round(mph)}</text>
       <text x="46" y="55" text-anchor="middle" font-size="7" fill="#9aa6c9" font-family="system-ui">MPH</text>
     </svg>
   </div>`;
@@ -388,14 +388,14 @@ function ballpark(game, opts = {}) {
   const hrBadge = hrPct ? `
     <g>
       <rect x="168" y="128" width="64" height="15" rx="7.5" fill="#0c1020" opacity="0.72"/>
-      <text x="200" y="139" text-anchor="middle" font-size="8.5" font-weight="700"
-            fill="${hrPct > 0 ? "#ffb547" : "#6fd3ff"}" font-family="system-ui">HR ${hrPct > 0 ? "+" : ""}${hrPct}%</text>
+      <text class="num" x="200" y="139" text-anchor="middle" font-size="8.5" font-weight="700"
+            fill="${hrPct > 0 ? "#ffb547" : "#6fd3ff"}">HR ${hrPct > 0 ? "+" : ""}${hrPct}%</text>
     </g>` : "";
   const altBadge = (game.altitude_ft || 0) >= 3000 ? `
     <g>
       <rect x="8" y="128" width="70" height="15" rx="7.5" fill="#0c1020" opacity="0.72"/>
-      <text x="43" y="139" text-anchor="middle" font-size="8.5" font-weight="700"
-            fill="#8a6cff" font-family="system-ui">⛰ ${(game.altitude_ft / 1000).toFixed(1)}k ft</text>
+      <text class="num" x="43" y="139" text-anchor="middle" font-size="8.5" font-weight="700"
+            fill="#8a6cff">⛰ ${(game.altitude_ft / 1000).toFixed(1)}k ft</text>
     </g>` : "";
   const roofOverlay = covered ? `
     <ellipse cx="120" cy="82" rx="104" ry="64" fill="url(#${uid}roof)" opacity="0.78"/>

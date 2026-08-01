@@ -847,7 +847,7 @@ async function renderBestBets() {
 
   if (!picks.length && !signals.length && !ridden.length) { host.innerHTML = ""; return; }
   host.innerHTML = `
-    <div class="section-title" style="margin-top:8px">Tonight's picks
+    <div class="section-title">Tonight's picks
       <span class="sub">— the one designated space for what we'd actually bet. If it isn't
       in this box, it isn't a pick.</span></div>
     ${picksBlock}
@@ -1014,7 +1014,7 @@ function renderLivePicks() {
   if (!rows.length && !elsewhere) {
     // A full tab now — an empty day says so instead of rendering nothing.
     host.innerHTML = `
-      <div class="section-title" style="margin-top:8px">📌 Open bets
+      <div class="section-title">📌 Open bets
         <span class="sub">— every journaled bet on today's card, tracked while its game runs</span></div>
       <div class="card"><p class="loading">No open bets on today's card. A pick journals the
         moment it's recommended and lives here until it settles — live progress bars, at-bat
@@ -1136,7 +1136,7 @@ function renderLivePicks() {
   const nLive = rows.filter((r) => r.phase === "live").length;
 
   host.innerHTML = `
-    <div class="section-title" style="margin-top:8px">${nLive ? "🔴" : "📌"} Open bets
+    <div class="section-title">${nLive ? "🔴" : "📌"} Open bets
       <span class="sub">— every journaled bet on today's card: live with real-time progress,
       finished awaiting the official settle, or waiting on first pitch. Never new in-play
       bets — everything here was placed pre-game.</span></div>
@@ -1210,7 +1210,7 @@ async function renderTeamForm() {
         : `<div class="empty" style="padding:18px">Nobody qualifies.</div>`}
     </div>`;
   host.innerHTML = `
-    <div class="section-title" style="margin-top:8px">Team form — last ${tf.window_days || 7} days
+    <div class="section-title">Team form — last ${tf.window_days || 7} days
       <span class="sub">— from our own ingested results, refreshed nightly. Tracked and
       measured before it's ever allowed to move a bet.</span></div>
     <div class="trend-grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))">
@@ -1622,7 +1622,7 @@ function renderRecommended() {
     const nRec = rows.filter((r) => r._ok).length;
     const hrNote = k.toLowerCase() === "home runs"
       ? ` · top 3 only — the full board is on the Long Shots page` : "";
-    return `<div class="section-title" style="grid-column:1/-1;margin:14px 0 0">
+    return `<div class="section-title subhead" style="grid-column:1/-1">
         ${escapeHtml(k)} <span class="sub">— ${rows.length} prop(s)${nRec ? `, ${nRec} recommended` : ""}${hrNote}</span>
       </div>` + rows.map(cardHTML).join("");
   }).join("");
@@ -1820,7 +1820,7 @@ function watchlistHTML(watch, mlb) {
     </div>`;
   }).join("");
   return `<div style="grid-column:1/-1;min-width:0">
-    <div class="section-title" style="margin-top:20px">Most likely ${mlb ? "to homer" : "to score"} tonight
+    <div class="section-title">Most likely ${mlb ? "to homer" : "to score"} tonight
       <span class="sub">— model % vs the book's implied %. Positive EV = price worth taking;
       negative = likely but overpriced. Never a guarantee.</span></div>
     <div class="card" style="padding:0">${rows}</div></div>`;
@@ -2082,7 +2082,7 @@ function renderGamePage() {
       <div class="cards gp-cards">${betsShown.map(gameBetCard).join("")}</div>` : ""}
 
     ${shown.length ? [...byMarket.keys()].map((k) => `
-        <div class="section-title" style="margin-top:20px">${escapeHtml(k)}
+        <div class="section-title">${escapeHtml(k)}
           <span class="sub">— ${plural(byMarket.get(k).length, "prop", "props")}</span></div>
         <div class="cards gp-cards">${byMarket.get(k).map(cardHTML).join("")}</div>`).join("")
       : `<div class="empty-slate"><div class="es-icon">🎯</div>
@@ -2092,7 +2092,7 @@ function renderGamePage() {
           ${props.length ? `<button class="btn ghost" id="gp-showall" style="margin-top:12px">
             Show all ${props.length} analyzed prop(s) anyway</button>` : ""}</div>`}
 
-    ${shots.length ? `<div class="section-title" style="margin-top:20px">Long shots
+    ${shots.length ? `<div class="section-title">Long shots
         <span class="sub">— tracked in their own bucket, never in the headline record</span></div>
       <div class="cards gp-cards">${shots.map(longShotCard).join("")}</div>` : ""}
 
@@ -2328,7 +2328,7 @@ function recCurveChart(curve) {
   const gid = `pnlfill${Math.random().toString(36).slice(2, 8)}`;
   const net = last.cum_u;
   return `
-    <div class="section-title" style="margin-top:18px">Running P&amp;L
+    <div class="section-title">Running P&amp;L
       <span class="sub">— every settled pick, by slate date</span></div>
     <div class="card rec-chart">
       <div class="rc-head">
@@ -2395,7 +2395,7 @@ function recEraSection(er) {
       </div>`;
   };
   return `
-    <div class="section-title" style="margin-top:22px">Model eras — did the re-tune work?
+    <div class="section-title">Model eras — did the re-tune work?
       <span class="sub">— the record split at each model change. Old losses belong to
       gates that no longer exist; the current era is the model being judged now.</span></div>
     <div class="card" style="padding:0">
@@ -2446,7 +2446,7 @@ function recLongshotSection(ls) {
     </div>`;
   }).join("");
   return `
-    <div class="section-title" style="margin-top:22px">Long Shots — tracked separately
+    <div class="section-title">Long Shots — tracked separately
       <span class="sub">— home runs &amp; anytime TDs, with their own ROI. Never mixed
       into the record above.</span></div>
     ${recDisclosure("Why these are quarantined", `Only the board's actual
@@ -2527,7 +2527,7 @@ function recCalibrationSection(cal, era) {
       ~50 of its picks settle (${eraN} so far). The nightly calibration refit already feeds
       these misses back into the model's tempering.</p>`;
   const eraBlock = eraN >= 50 ? `
-    <div class="section-title" style="margin-top:14px">Current model only
+    <div class="section-title">Current model only
       <span class="sub">— the same test, restricted to picks graded since the
       ${escapeHtml((era || {}).since || "")} re-tune (n=${eraN}).</span></div>
     <div class="card" style="padding:0">${calBucketRows(era.buckets)}${
@@ -2538,7 +2538,7 @@ function recCalibrationSection(cal, era) {
         : `<p style="padding:10px 14px;margin:0;font-size:.88em;color:var(--warn)">Current era Brier:
            market ${era.brier_market} still beats model ${era.brier_model} — the re-tune hasn't
            earned the claim yet.</p>`}</div>` : "";
-  return `<div class="section-title" style="margin-top:18px">Calibration — did "60%" mean 60%?
+  return `<div class="section-title">Calibration — did "60%" mean 60%?
       <span class="sub">— every settled pick, bucketed by the model's claimed probability.</span></div>
     <div class="card" style="padding:0">${rows}${brier}${eraNote}</div>
     ${eraBlock}`;
@@ -2566,7 +2566,7 @@ function recHealthSection(h) {
         <ul style="margin:4px 0 0;padding-left:18px;color:var(--text-body)">
         ${b.actions.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : ""}
     </div>`).join("");
-  return `<div class="section-title" style="margin-top:18px">Account health
+  return `<div class="section-title">Account health
       <span class="sub">— books quietly limit winners; this estimates how limit-prone your action looks, per book.</span></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">${cards}</div>
     <p style="opacity:.55;font-size:.82em;margin-top:8px">${escapeHtml(h.disclaimer || "")}</p>`;
@@ -2591,7 +2591,7 @@ function recUfcSection(u) {
     </div>`;
   }).join("");
   return `
-    <div class="section-title" style="margin-top:22px">UFC — tracked separately
+    <div class="section-title">UFC — tracked separately
       <span class="sub">— every journaled fight pick, graded from post-card results.
       Never mixed into the record above.</span></div>
     ${recDisclosure("Why these are quarantined", `Scalpy MMA's picks journal at
@@ -2634,7 +2634,7 @@ function recLooseSection(lo) {
     </div>`;
   }).join("");
   return `
-    <div class="section-title" style="margin-top:22px">Looser-gates sampler — measurement in progress
+    <div class="section-title">Looser-gates sampler — measurement in progress
       <span class="sub">— the props that JUST missed the bar, paper-tracked nightly.
       This bucket IS the answer to "should we loosen the filters?"</span></div>
     ${recDisclosure("How this decides anything", `Every build journals the
@@ -2669,7 +2669,7 @@ function recPolymarketSection(v) {
       <span class="rl-pnl ${toneOf(b.roi)}">${b.roi >= 0 ? "+" : ""}${(b.roi * 100).toFixed(0)}%</span>
     </div>`).join("");
   return `
-    <div class="section-title" style="margin-top:22px">Polymarket flags — tracked separately
+    <div class="section-title">Polymarket flags — tracked separately
       <span class="sub">— every informed-flow flag, graded when its market resolves.
       Paper-tracked, never mixed into the record above.</span></div>
     ${recDisclosure("Why these are quarantined", `The Polymarket page flags large
@@ -2835,7 +2835,7 @@ async function renderRecord() {
     ${unstaked}
     ${small}
     ${recCurveChart(src.curve)}
-    <div class="section-title" style="margin-top:20px">Splits
+    <div class="section-title">Splits
       <span class="sub">— where the units actually came from. The bar is win rate;
       the number that matters is net.</span></div>
     <div class="rec-buckets">
@@ -2844,7 +2844,7 @@ async function renderRecord() {
       ${recBucketTable("By grade", o.by_grade)}
       ${recBucketTable("By book", o.by_book)}
     </div>
-    <div class="section-title" style="margin-top:22px">Recent settled picks
+    <div class="section-title">Recent settled picks
       <span class="sub">— newest first, at the price we actually got</span></div>
     <div class="card rec-list">
       ${(src.recent || []).map((b) => {
@@ -2917,7 +2917,7 @@ function recFormSection(fm) {
     </div>`;
   }).join("");
   return `
-    <div class="section-title" style="margin-top:22px">Team-form sampler — measurement in progress
+    <div class="section-title">Team-form sampler — measurement in progress
       <span class="sub">— every hot-vs-cold matchup, hot side's moneyline at the real book
       price. Flat 0.1u, zero bankroll impact, never in the record above.</span></div>
     ${recDisclosure("What this is testing", `Streaks are the most public stat in
@@ -2968,7 +2968,7 @@ function recStaleSection(st) {
     </div>`;
   }).join("");
   return `
-    <div class="section-title" style="margin-top:22px">Stale-line sampler — measurement in progress
+    <div class="section-title">Stale-line sampler — measurement in progress
       <span class="sub">— every pre-game stale-line flag, taken at the flagged price. Flat 0.1u,
       zero bankroll impact, never in the record above.</span></div>
     ${recDisclosure("What this is testing", `The scanner flags a book pricing
@@ -3107,7 +3107,7 @@ function renderEdgeBoard() {
   host.innerHTML = EDGE_BANDS.map(([title, test]) => {
     const band = rows.filter((r) => test(r.odds));
     if (!band.length) return "";
-    return `<div class="section-title" style="margin-top:18px">${title}
+    return `<div class="section-title">${title}
         <span class="sub">— ${band.length} bet(s)</span></div>
       <div class="card" style="padding:0">${band.map(edgeRowHTML).join("")}</div>`;
   }).join("") || "";
@@ -3129,7 +3129,7 @@ function scanPairRow(p, extra) {
 }
 
 function scanSection(title, sub, rows, rowFn, emptyText) {
-  return `<div class="section-title" style="margin-top:20px">${title}
+  return `<div class="section-title">${title}
       <span class="sub">— ${sub}</span></div>
     <div class="card" style="padding:0">
       ${rows.length ? rows.map(rowFn).join("")
@@ -3166,7 +3166,7 @@ function renderScanner() {
   const stakeInput = `<div class="ls-note" style="display:flex;align-items:center;gap:8px">
     Total stake for the splits below: $
     <input id="scan-stake" type="number" min="10" step="10" value="${stake}"
-      style="width:90px;background:transparent;color:inherit;border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:4px 8px" />
+      style="width:90px;background:transparent;color:inherit;border:1px solid rgba(255,255,255,.2);border-radius:var(--radius);padding:4px 8px" />
   </div>`;
 
   // With seven books on every prop, hundreds of quotes sit a point below
@@ -3243,7 +3243,7 @@ function renderScanner() {
         `<span style="font-weight:700">${(h.hold_pct * 100).toFixed(1)}% hold</span>
          <span style="display:block;opacity:.7;font-size:.85em">≈ $${(h.cost_per_1k != null ? h.cost_per_1k : h.hold_pct * 1000).toFixed(0)} per $1,000 bet through</span>`),
       "No low-hold pairs on the current board.")
-    + `<div class="section-title" style="margin-top:20px">Sharp money
+    + `<div class="section-title">Sharp money
         <span class="sub">— where the professional side of the market is</span></div>
       <div class="card" style="padding:0">
         ${anchors.map((b) => `<div class="drow" style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
@@ -3536,11 +3536,11 @@ async function renderIntel() {
         <div class="es-sub">The feed scores the last 24h of recorded tape and accumulates
         across refreshes — big trades are a few per hour.</div></div>`}</div>
     ${intelReportCard(d.validation)}
-    <div class="section-title" style="margin-top:26px">Top traders
+    <div class="section-title">Top traders
       <span class="sub">— ${escapeHtml(d.traders_note || "by realized profit")}</span></div>
     <div class="cards wide">${traderCards ||
       `<p class="loading" style="grid-column:1/-1">No trader data yet — fills on the next refresh.</p>`}</div>
-    <div class="section-title" style="margin-top:26px">Top markets
+    <div class="section-title">Top markets
       <span class="sub">— live markets by 24h volume · YES price · resolution date</span></div>
     <div class="card" style="padding:0">${marketRows}</div>
     <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Wallet-age signal
@@ -3700,7 +3700,7 @@ async function renderFantasy() {
     ${draftKit}
     <div class="ls-note">Shares are of TEAM volume: targets for WR/TE/QB, carries for RB.
       The delta column is the money — a riser at 42% beats a flat 60%.</div>
-    <div class="section-title" style="margin-top:16px">Usage movers
+    <div class="section-title">Usage movers
       <span class="sub">— season vs 4-week vs last week, biggest role changes first</span></div>
     <div class="card ff-table">
       <div class="ff-row ff-head">
@@ -3710,15 +3710,15 @@ async function renderFantasy() {
       </div>
       ${usageRows || `<p class="loading" style="padding:12px">No usage rows for this season yet.</p>`}
     </div>
-    <div class="section-title" style="margin-top:26px">Buy low
+    <div class="section-title">Buy low
       <span class="sub">— volume-expected points say the production is coming</span></div>
     <div class="cards wide">${(bs.buy_low || []).map((r) => tradeCard(r, "buy")).join("") ||
       `<p class="loading" style="grid-column:1/-1">Nobody outside the sustainable band right now.</p>`}</div>
-    <div class="section-title" style="margin-top:26px">Sell high
+    <div class="section-title">Sell high
       <span class="sub">— outrunning their opportunity; regression risk</span></div>
     <div class="cards wide">${(bs.sell_high || []).map((r) => tradeCard(r, "sell")).join("") ||
       `<p class="loading" style="grid-column:1/-1">Nobody outside the sustainable band right now.</p>`}</div>
-    <div class="section-title" style="margin-top:26px">Game scripts
+    <div class="section-title">Game scripts
       <span class="sub">— Vegas is the input: implied totals, archetypes, and confidence that
       scales with the spread</span></div>
     <div class="cards wide">${scriptCards ||
@@ -3767,7 +3767,7 @@ function campHTML(camp) {
     </article>`;
   if ((camp.days || 0) < 2) {
     return `
-      <div class="section-title" style="margin-top:22px">Camp watch
+      <div class="section-title">Camp watch
         <span class="sub">— depth charts snapshotted daily; movers appear as camp
         shakes them out</span></div>
       <div class="card"><p class="loading">Tracking started ${escapeHtml(camp.tracking_since || "today")} —
@@ -3777,7 +3777,7 @@ function campHTML(camp) {
   }
   const accruing = `No chart movement in the window yet.`;
   return `
-    <div class="section-title" style="margin-top:22px">Camp watch
+    <div class="section-title">Camp watch
       <span class="sub">— depth-chart movement ${escapeHtml(camp.from)} → ${escapeHtml(camp.to)},
       from the coaching staffs' own charts. Preseason box scores are backups vs backups;
       WHO RUNS FIRST-TEAM is the signal that prices Week 1.</span></div>
@@ -3817,7 +3817,7 @@ function waiverPulseHTML(t) {
         </div>`).join("")}
     </div>`;
   return `
-    <div class="section-title" style="margin-top:26px">Waiver-wire pulse
+    <div class="section-title">Waiver-wire pulse
       <span class="sub">— who the fantasy world grabbed and dumped in the last
       ${t.lookback_hours || 24}h (every Sleeper league). Market attention, not our model —
       check the movers against the usage boards below before following the crowd.</span></div>
@@ -3870,7 +3870,7 @@ function offseasonHTML(off) {
       Rosters synced ${escapeHtml(off.rosters_synced_at)} — trades checked on every
       launch, refreshed daily.</div>` : "";
   return `
-    <div class="section-title" style="margin-top:22px">The ${off.upcoming_season || "upcoming"} offseason
+    <div class="section-title">The ${off.upcoming_season || "upcoming"} offseason
       <span class="sub">— what the league changed under last season's numbers. Derived from
       the schedule and roster feeds on every build, not from a news list that goes stale.</span></div>
     ${rosterNote}
@@ -3885,7 +3885,7 @@ function offseasonHTML(off) {
               ? "Nobody on the board has changed teams." : "Needs the roster feed.")}
     </div>
     ${(off.rookies || []).length ? `
-      <div class="section-title" style="margin-top:16px">Rookies
+      <div class="section-title">Rookies
         <span class="sub">— on rosters now, deliberately unranked: no NFL volume exists,
         and projecting them would be invention. Depth-chart slot is the honest signal.</span></div>
       <div class="card" style="padding:8px 16px">
@@ -4156,7 +4156,7 @@ async function renderStandings() {
   }
   const b = d.bracket || {};
   host.innerHTML = `
-    ${b.started ? `<div class="section-title" style="margin-top:0">Postseason
+    ${b.started ? `<div class="section-title tight">Postseason
         <span class="sub">— every matchup here was played. Series scores are
         games won, so an unfinished series shows where it stands.</span></div>
       ${bracketHTML(b)}` : ""}
@@ -4219,7 +4219,7 @@ async function renderRosters() {
   // NFL feed produces. Showing an empty "recent moves" panel for a sport
   // that cannot detect one would read as "no trades happened".
   const moves = d.transactions ? `
-    <div class="section-title" style="margin-top:4px">Recent team changes
+    <div class="section-title">Recent team changes
       <span class="sub">— from diffing this site's own daily roster snapshots,
       not a news feed. Anything that changed teams shows up here on its own.</span></div>
     ${transactionsHTML(d.transactions)}` : "";
@@ -4299,7 +4299,7 @@ function draftKitHTML(kit) {
     </div>`).join("");
 
   return `
-    <div class="section-title" style="margin-top:22px">Draft kit
+    <div class="section-title">Draft kit
       <span class="sub">— last season's volume turned into value over replacement.
       Draft by tier, not rank; rookies are not on this board and it says so.</span></div>
     <div class="card dk-draftday">
@@ -4311,21 +4311,21 @@ function draftKitHTML(kit) {
       <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
         <input id="dk-draft-id" type="text" placeholder="https://sleeper.com/draft/nfl/…  or draft ID"
           style="flex:1;min-width:220px;background:var(--panel-2);color:inherit;
-          border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:inherit"/>
+          border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-family:inherit"/>
         <button class="btn" id="dk-connect">Connect</button>
         <button class="btn ghost ff-hidden" id="dk-disconnect">Stop</button>
       </div>
       <div id="dk-best" class="ff-hidden" style="margin-top:12px"></div>
     </div>
-    <div class="section-title" style="margin-top:18px">Overall board
+    <div class="section-title">Overall board
       <span class="sub">— ordered by VORP, not points: value over the best player
       still on the wire at the same position</span></div>
     <div class="card" style="padding:0">${board}</div>
-    <div class="section-title" style="margin-top:18px">Position tiers
+    <div class="section-title">Position tiers
       <span class="sub">— the gaps are the information: inside a tier the differences
       are noise</span></div>
     <div class="cards wide">${["QB", "RB", "WR", "TE"].map(posCard).join("")}</div>
-    ${sleepers ? `<div class="section-title" style="margin-top:18px">Usage says buy
+    ${sleepers ? `<div class="section-title">Usage says buy
         <span class="sub">— expected points clearly above what they actually scored;
         the draft-day version of buy-low</span></div>
       <div class="card" style="padding:0">${sleepers}</div>` : ""}
@@ -4449,7 +4449,7 @@ function intelVerdict(v) {
 }
 
 function intelReportCard(v) {
-  const head = `<div class="section-title" style="margin-top:26px">Flag report card
+  const head = `<div class="section-title">Flag report card
       <span class="sub">— do our flags actually win? Every flag is stored and graded when
       its market resolves. Published, not promised.</span></div>`;
   if (!v || !v.graded) {
@@ -4484,7 +4484,7 @@ function intelReportCard(v) {
         <div style="color:var(--text-mute);font-size:12px;margin-top:2px">above 0 = flags beat their price</div></div>
     </div>
     ${bands ? `<div class="card" style="padding:0">${bands}</div>` : ""}
-    ${wallets ? `<div class="section-title" style="margin-top:14px">Wallets least like luck
+    ${wallets ? `<div class="section-title">Wallets least like luck
         <span class="sub">— graded flags only, min 3, ranked by calibration z</span></div>
       <div class="card" style="padding:0">${wallets}</div>` : ""}`;
 }
@@ -4511,7 +4511,7 @@ function sleeperConnectHTML(msg) {
     <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
       <input id="sleeper-username" type="text" placeholder="Sleeper username"
         style="flex:1;min-width:180px;background:var(--panel-2);color:inherit;
-        border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:inherit"/>
+        border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-family:inherit"/>
       <button class="btn" id="sleeper-connect">Connect</button>
     </div>
     ${msg ? `<div class="warning" style="margin-top:10px">⚠️ ${escapeHtml(msg)}</div>` : ""}
@@ -4617,15 +4617,15 @@ function renderSleeperPanel(d, ctx) {
         <div class="subtitle">Sleeper · season ${ctx.seasonTried} · roster read-only</div></div>
       <div style="display:flex;gap:8px;align-items:center">
         <select id="sleeper-league" style="background:var(--panel-2);color:inherit;
-          border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-family:inherit">${leagueOpts}</select>
+          border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-family:inherit">${leagueOpts}</select>
         <button class="btn ghost" id="sleeper-disconnect">Disconnect</button>
       </div>
     </div>
-    <div class="section-title" style="margin-top:12px">My roster
+    <div class="section-title">My roster
       <span class="sub">— usage trend (season → 4wk → last) and trade flags for YOUR players</span></div>
     <div style="margin:0 -18px">${myRows.map(rowHTML).join("") ||
       `<p class="loading" style="padding:12px 16px">Couldn't match a roster you own in this league.</p>`}</div>
-    <div class="section-title" style="margin-top:14px">Waiver watch
+    <div class="section-title">Waiver watch
       <span class="sub">— usage RISERS nobody in this league rosters</span></div>
     <div style="margin:0 -18px">${waivers.map((u) => rowHTML({
         name: u.player, pos: u.position, team: u.team, u, flag: flagByName[ffNorm(u.player)] })).join("") ||
@@ -4803,7 +4803,7 @@ async function renderLiveFights(host) {
   const stale = ageS != null && ageS > (d.stale_after_s || 75);
 
   host.innerHTML = `
-    <div class="section-title" style="margin-top:0">Live now
+    <div class="section-title tight">Live now
       <span class="sub">— ${escapeHtml(d.disclaimer || "")}</span></div>
     <div class="lf-age ${stale ? "warn" : ""}">${
       ageS == null ? "" : stale
@@ -4866,10 +4866,10 @@ async function renderUFC() {
   }
 
   const methodBar = (m) => {
-    const segs = [["a_ko", "var(--bad)"], ["a_sub", "var(--violet,#a78bfa)"],
+    const segs = [["a_ko", "var(--bad)"], ["a_sub", "var(--plum)"],
                   ["a_dec", "var(--brand)"], ["b_dec", "var(--cyan)"],
                   ["b_sub", "var(--warn)"], ["b_ko", "var(--good)"]];
-    return `<div style="display:flex;height:10px;border-radius:6px;overflow:hidden;margin-top:8px"
+    return `<div style="display:flex;height:10px;border-radius:var(--radius);overflow:hidden;margin-top:8px"
         title="method distribution — left: pick's KO/SUB/DEC, right: opponent's DEC/SUB/KO">
       ${segs.map(([k, c]) => `<span style="width:${(m[k] || 0) * 100}%;background:${c}"></span>`).join("")}
     </div>
@@ -5054,7 +5054,7 @@ async function renderUFC() {
       const u = rec.ufc_record || {};
       if (!u.settled && !u.open) return "";
       const graded = (u.wins || 0) + (u.losses || 0);
-      return `<div class="section-title" style="margin-top:18px">UFC record
+      return `<div class="section-title">UFC record
           <span class="sub">— every journaled pick, graded from fight results after each card.
           Its own bucket until it earns more.</span></div>
         <div class="stats">
@@ -5120,15 +5120,15 @@ async function renderUFC() {
         const rows = list.filter((m) => codes.includes(m.reason_code));
         rows.forEach((m) => seen.add(m));
         if (!rows.length) continue;
-        html += `<div class="section-title" style="margin-top:22px">${title}
+        html += `<div class="section-title">${title}
             <span class="sub">— ${rows.length} fight(s) · ${sub}</span></div>
           <div class="cards wide">${rows.map(passCard).join("")}</div>`;
       }
       const rest = list.filter((m) => !seen.has(m));
       if (rest.length)
-        html += `<div class="section-title" style="margin-top:22px">Other passes</div>
+        html += `<div class="section-title">Other passes</div>
           <div class="cards wide">${rest.map(passCard).join("")}</div>`;
-      return html || `<div class="section-title" style="margin-top:22px">Pass list</div>
+      return html || `<div class="section-title">Pass list</div>
         <p class="loading" style="padding:12px">Nothing to pass on.</p>`;
     })()}
     <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Dossiers draft themselves:
@@ -5351,7 +5351,7 @@ function renderAbout() {
       working rather than failing.</p>
     </div>
 
-    <div class="section-title" style="margin-top:20px">Everything in one place
+    <div class="section-title">Everything in one place
       <span class="sub">— the practical reason this exists</span></div>
     <div class="cards wide">
       ${card("The information is public. Having it together is the edge.", `
@@ -5391,7 +5391,7 @@ function renderAbout() {
         instead of filling the hole with a guess.</p>`)}
     </div>
 
-    <div class="section-title" style="margin-top:22px">The honest part
+    <div class="section-title">The honest part
       <span class="sub">— please read this bit properly</span></div>
     <div class="cards wide">
       ${card("⚠️ Anything can happen. Genuinely anything.", `
@@ -5554,11 +5554,11 @@ async function renderWhy() {
         every night can never say it.`)}
     </div>
 
-    <div class="section-title" style="margin-top:24px">The receipts, live
+    <div class="section-title">The receipts, live
       <span class="sub">— these numbers come from the actual journal, right now, losses included.</span></div>
     ${proof}
 
-    <div class="section-title" style="margin-top:24px">What picks services sell vs what this is</div>
+    <div class="section-title">What picks services sell vs what this is</div>
     <div class="card" style="padding:0;overflow-x:auto;overflow-y:hidden">
       <table style="width:100%;border-collapse:collapse;font-size:.92em">
         <tr style="color:var(--text-mute)"><td style="padding:8px 12px">The usual pitch</td><td style="padding:8px 12px">Here</td></tr>
@@ -5570,7 +5570,7 @@ async function renderWhy() {
       </table>
     </div>
 
-    <div class="section-title" style="margin-top:24px">What we deliberately don't do</div>
+    <div class="section-title">What we deliberately don't do</div>
     <div class="card" style="padding:14px 18px">
       <ul style="margin:0;padding-left:18px;line-height:1.9;color:var(--text-body)">
         <li>No guarantees, locks, or "can't-miss" anything — that language is how touts talk, and it's always false.</li>
@@ -5581,7 +5581,7 @@ async function renderWhy() {
       </ul>
     </div>
 
-    <div class="section-title" style="margin-top:24px">The open math layer
+    <div class="section-title">The open math layer
       <span class="sub">— the same formulas the engines run, interactive. Punch in any real price and check our work.</span></div>
 
     <div class="card" style="padding:16px;margin-bottom:14px">
