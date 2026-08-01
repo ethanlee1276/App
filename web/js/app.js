@@ -467,6 +467,53 @@ function renderProbation() {
     </div></div>`;
 }
 
+/* The talent prior, shown rather than assumed. It is the layer that
+   carries a September projection — when a team's own results are two games
+   against opponents nobody has measured either — so "is it on, and which
+   of its four inputs actually arrived" is a question the page has to be
+   able to answer. A prior quietly running on recruiting alone, with the
+   portal missing, is a different number from a complete one. */
+function renderTalent() {
+  const host = document.getElementById("talent-note");
+  if (!host) return;
+  const t = (state.data || {}).talent;
+  if (state.sport !== "cfb" || !t) { host.innerHTML = ""; return; }
+
+  if (!t.available) {
+    host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
+      <div class="player">📋 No preseason talent prior</div>
+      <div style="color:var(--text-body);font-size:13px;margin-top:5px">
+        The board is running on results only. In September that means an
+        unproven Alabama and an unproven Kent State are both rated near
+        average, which is wrong in a direction the market will take money
+        for. ${escapeHtml(t.note || "")}
+      </div></div>`;
+    return;
+  }
+  const L = t.layers || {};
+  const chip = (name, n) => `<span class="chip ${n ? "good" : "down"}">${
+    escapeHtml(name)} ${n ? n : "—"}</span>`;
+  const fit = t.fit || {};
+  host.innerHTML = `<div class="card" style="border-left:3px solid var(--good);margin-bottom:12px">
+    <div class="player">🎓 Preseason talent prior — ${t.teams_with_prior} team(s)</div>
+    <div class="lf-chips" style="margin:6px 0">
+      ${chip("recruiting", L.talent)}${chip("blue-chip", L.blue_chip)}
+      ${chip("returning", L.returning)}${chip("portal", L.portal)}
+    </div>
+    <div style="color:var(--text-body);font-size:13px">
+      ${fit.fitted
+        ? `One standard deviation of recruiting talent is worth
+           ${escapeHtml(String(fit.points_per_sd))} net points a game, fitted on
+           ${fit.samples} completed team-seasons (r=${escapeHtml(String(fit.r))}).`
+        : `The talent-to-points slope is still a documented prior rather than a
+           fit — ${escapeHtml(fit.note || "")}`}
+      It carries ~25% of a Week-1 projection and decays toward 5% by November,
+      because by then a team's own results have answered the question.
+      ${(t.missing_layers || []).length
+        ? `<b> Not loaded: ${escapeHtml((t.missing_layers || []).join(", "))}.</b>` : ""}
+    </div></div>`;
+}
+
 function renderAll() {
   const d = state.data;
   if (!d) return;
@@ -485,6 +532,7 @@ function renderAll() {
     document.getElementById("slate-date").textContent = slateDateLabel(d);
   }
   renderProbation();
+  renderTalent();
   renderStats();
   renderEmptySlate();
   renderLivePicks();

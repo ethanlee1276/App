@@ -189,6 +189,15 @@ def attach_talent(conn, ratings: dict, year: int, lookup: dict) -> dict:
                      ((_abbr(s), v) for s, v in cfbd.fetch_returning(year).items()) if a}
     except DataUnavailable:
         returning = {}
+    # The portal. A recruiting composite describes the roster a team
+    # signed, not the one it has after a dozen starters transfer out — and
+    # in the modern sport that gap is the single biggest reason a
+    # preseason prior is wrong about a team.
+    try:
+        portal = {a: v for a, v in
+                  ((_abbr(s), v) for s, v in cfbd.fetch_portal(year).items()) if a}
+    except DataUnavailable:
+        portal = {}
 
     # Fit the talent→points slope against our own completed seasons before
     # trusting it. Prior seasons are pulled from cache when present.
@@ -204,15 +213,26 @@ def attach_talent(conn, ratings: dict, year: int, lookup: dict) -> dict:
         if by_year else T.PRIOR_FIT
 
     prior = T.talent_prior(talent, fit, blue)
-    blended, blend_report = T.apply_prior(ratings, prior, returning)
+    blended, blend_report = T.apply_prior(ratings, prior, returning, portal)
+    # Each sub-layer is reported separately. "The talent layer is on" and
+    # "all four of its inputs arrived" are different facts, and a page that
+    # cannot tell them apart will show a September prior built on
+    # recruiting alone as though it also knew who transferred.
+    layers = {"talent": len(talent), "blue_chip": len(blue),
+              "returning": len(returning), "portal": len(portal)}
+    missing = [k for k, v in layers.items() if not v]
     report.update(
         ratings=blended, available=True,
         teams_with_prior=blend_report["teams"],
+        portal_teams=blend_report.get("portal_teams", 0),
         blue_chip_teams=len(blue), returning_teams=len(returning),
+        layers=layers, missing_layers=missing,
         fit={"points_per_sd": fit.points_per_sd, "fitted": fit.fitted,
              "samples": fit.samples, "r": fit.r, "note": fit.note},
         note=(f"Preseason prior from recruiting applied to "
-              f"{blend_report['teams']} team(s). {fit.note}"))
+              f"{blend_report['teams']} team(s); portal adjusted "
+              f"{blend_report.get('portal_teams', 0)}. {fit.note}"
+              + (f" NOT loaded: {', '.join(missing)}." if missing else "")))
     return report
 
 

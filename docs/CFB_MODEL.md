@@ -208,8 +208,8 @@ listed honestly rather than faked).
 | §3.5 Edge haircut by tier | ✅ | `pipeline.evaluate_play` applies `haircut_edge` before anything is graded or staked |
 | §3.6 Minimum edge by tier | ✅ | `model.MIN_EDGE` 4.0% / 3.0% / 2.5%; props clear 4.0% at every tier (thin menus, heavy vig) |
 | §5 Opponent-adjusted efficiency | 🟡 | `engine/teamrates.py` builds net/offense/defense ratings from ingested results, and `engine/cfb/ratings.py` **fits** the margin/total spread, home field and scoring baseline from those same games. Drive-level and success-rate efficiency 📋 (needs play-by-play) |
-| §5 Preseason prior decaying to 5% | 📋 | Needs §6's talent layer to exist first — the prior IS returning production × recruiting × coaching |
-| §6 Recruiting / blue-chip / portal / returning production | 📋 | No free structured source. Deliberately **not** approximated: the spec's own point is that this data answers "who is this player", and a substitute number would answer it wrongly |
+| §5 Preseason prior decaying to 5% | ✅ | `engine/cfb/talent.py` — 25% at week 1 decaying to a 5% floor, and returning production scales how fast it gives way. Key-gated: no CFBD key means no prior, said on the page |
+| §6 Recruiting / blue-chip / portal / returning production | ✅ | `engine/sources/cfbd.py` + `engine/cfb/talent.py`. All four inputs wired; the talent→points slope is fitted from our own completed team-seasons where there are enough, a documented prior otherwise. The page names any input that did not load |
 | §7 Situational spots | 🟡 | `engine/cfb/context.py` proves letdown, lookahead, short week and late-season conference rivalries from the schedule either side of the game. Body-clock and motivation reads 📋 |
 | §8 Market tiers & volatility | ✅ | Tiers as above; `pipeline.volatility` runs LOW→EXTREME and widens for rivalry, low-attention data, blowout ranges and an unconfirmed quarterback |
 | §9 Unified 0–100 grade | ✅ | `model.grade` with the spec's weights (edge 40 · information 20 · attention fit 10 · situational 10 · matchup 10 · environment 10). Edge is scored against **this tier's own bar**, so +2.6% that cleared a MAC bar outranks +2.6% that missed a marquee one |
@@ -232,13 +232,40 @@ the page. Backfill a season with
 `python3 ingest.py cfb --from 2025-08-24 --to 2026-01-20` and the numbers become
 measurements.
 
-**It has no talent layer.** §6 is the largest parked item and the honest
-reason is that recruiting composites, blue-chip ratio, returning production
-and portal movement have no free structured feed. The model says the prior is
-missing rather than substituting a plausible number — which matters most in
-September, exactly when the spec says the prior is carrying the projection.
+**The talent layer is built.** This section used to say §6 was parked
+because recruiting data had no free structured feed. CollegeFootballData's
+key-gated API is that feed, and it is free — so the layer exists:
+`engine/sources/cfbd.py` fetches recruiting composites, blue-chip ratio,
+returning production and portal movement; `engine/cfb/talent.py` turns them
+into a preseason prior worth ~25% of a Week-1 projection, decaying toward 5%
+by November.
 
-**Parked list, in priority order:** the §6 talent layer if a source appears
-(CFBD's key-gated API is the obvious candidate); play-by-play efficiency for
-§5's success-rate and drive metrics; opener→close line movement and key-number
+Three things it is careful about, because a prior is the easiest place in this
+model to double-count:
+
+* **Blue-chip ratio adds no points.** It is the same high-school star ratings
+  the composite is built from, so counting it again would count one fact
+  twice. It only shades the prior toward zero when the two views disagree.
+* **Returning production scales the DECAY, not the size.** A talented team
+  returning nobody should be trusted less early, not rated lower forever.
+* **The portal adjusts the prior, not the rating.** A recruiting composite
+  describes the roster a team signed, not the one it has after a dozen
+  starters transfer out — and that correction belongs to the preseason
+  number and decays with it. Deliberately small and clamped: net portal
+  stars is a noisy, incomplete count, so it nudges rather than steers.
+
+The talent→points slope is **fitted** against completed team-seasons in our
+own database wherever there are enough of them; until then a documented prior
+slope stands in and `fitted` is False, exactly as an unfitted variance does.
+The CFB page shows which of the four inputs actually loaded, because a prior
+running on recruiting alone with the portal missing is a different number
+from a complete one.
+
+**It needs a key.** Without `CFBD_API_KEY` in `secrets.local` the whole block
+degrades to "no prior" and says so on the page, rather than substituting a
+plausible number — which matters most in September, exactly when the spec
+says the prior is carrying the projection.
+
+**Parked list, in priority order:** play-by-play efficiency for §5's
+success-rate and drive metrics; opener→close line movement and key-number
 shopping; a QB-status feed to replace the manual confirmation.

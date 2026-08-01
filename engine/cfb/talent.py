@@ -164,8 +164,33 @@ def fit_points_per_sd(team_seasons: list[tuple[float, float]],
               f"(r={r:.2f})."))
 
 
+# The transfer portal, in star-equivalents. A roster is not the roster its
+# recruiting class describes once a dozen starters have walked out of it,
+# and the portal is the only place that shows up before a snap is played.
+# The scale is deliberately small: net portal stars is a noisy, incomplete
+# count (not every move is graded, and a player's stars say little about
+# what he became in three years of college), so it NUDGES the prior rather
+# than steering it. Clamped so no team's prior can be halved or doubled by
+# a transfer list.
+PORTAL_POINTS_PER_STAR = 0.12
+PORTAL_CLAMP = 2.5                  # points of net rating, either way
+
+
+def portal_shift(entry: dict | None) -> float:
+    """Points of net rating this team's portal traffic is worth."""
+    if not entry:
+        return 0.0
+    try:
+        net = float(entry.get("net_stars") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    return round(max(-PORTAL_CLAMP,
+                     min(PORTAL_CLAMP, net * PORTAL_POINTS_PER_STAR)), 3)
+
+
 def apply_prior(ratings: dict, prior: dict[str, float],
-                returning: dict[str, dict] | None = None) -> tuple[dict, dict]:
+                returning: dict[str, dict] | None = None,
+                portal: dict[str, dict] | None = None) -> tuple[dict, dict]:
     """Blend the talent prior into results-based ratings.
 
     Only the NET rating is blended. Offense/defense — which is what the
@@ -173,16 +198,27 @@ def apply_prior(ratings: dict, prior: dict[str, float],
     composite says a roster is good, not that it scores 34 a game, and
     inventing a split would put a fabricated number straight into every
     total on the board. Totals stay results-only, and the report says so.
+
+    ``portal`` adjusts the PRIOR, not the rating. A team that gutted its
+    roster in the portal has a recruiting composite describing players who
+    left; a team that raided it has one describing players it does not yet
+    include. Both corrections belong to the preseason number and decay
+    with it, which is why they are applied here rather than to the blend.
     """
     from dataclasses import replace as _replace
 
-    blended, report = {}, {"teams": 0, "prior_only": 0, "results_only": 0}
+    blended, report = {}, {"teams": 0, "prior_only": 0, "results_only": 0,
+                           "portal_teams": 0}
     for team, r in ratings.items():
         p = prior.get(team)
         if p is None:
             report["results_only"] += 1
             blended[team] = r
             continue
+        shift = portal_shift((portal or {}).get(team))
+        if shift:
+            p += shift
+            report["portal_teams"] += 1
         ret = (returning or {}).get(team, {}).get("overall")
         net = blend_rating(r.net, p, r.games, ret)
         blended[team] = _replace(r, net=net)

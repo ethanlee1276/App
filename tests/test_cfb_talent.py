@@ -222,6 +222,90 @@ def test_the_build_reaches_for_the_prior():
     assert "attach_talent(conn, ratings" in src, "defined but never called"
 
 
+
+# --- the portal, wired last and nearly left dead -----------------------------
+def test_the_portal_moves_the_prior_in_the_right_direction():
+    """A recruiting composite describes the roster a team SIGNED, not the
+    one it has after a dozen starters transfer out. `fetch_portal` and
+    `parse_portal` were written and then never called by anything — the
+    parser existed, the layer did not."""
+    from engine.cfb import talent as T
+    assert T.portal_shift({"net_stars": 10.0}) > 0
+    assert T.portal_shift({"net_stars": -10.0}) < 0
+    assert T.portal_shift({"net_stars": 0}) == 0
+    assert T.portal_shift(None) == 0 and T.portal_shift({}) == 0
+
+
+def test_the_portal_can_never_steer_the_prior_on_its_own():
+    """Net portal stars is a noisy, incomplete count — not every move is
+    graded, and a player's stars say little about what he became in three
+    years of college. It nudges."""
+    from engine.cfb import talent as T
+    for extreme in (500.0, -500.0):
+        assert abs(T.portal_shift({"net_stars": extreme})) <= T.PORTAL_CLAMP
+
+
+def test_a_gutted_roster_rates_below_an_identical_one_that_kept_everybody():
+    from dataclasses import dataclass
+    from engine.cfb import talent as T
+
+    @dataclass
+    class R:
+        net: float = 0.0
+        off: float = 0.0
+        def_: float = 0.0
+        games: int = 1
+
+    ratings = {"AAA": R(), "BBB": R()}
+    prior = {"AAA": 8.0, "BBB": 8.0}
+    portal = {"AAA": {"net_stars": -20.0}, "BBB": {"net_stars": 20.0}}
+    blended, report = T.apply_prior(ratings, prior, None, portal)
+    assert blended["AAA"].net < blended["BBB"].net
+    assert report["portal_teams"] == 2
+    # …and with no portal data at all, nothing moves.
+    flat, rep2 = T.apply_prior(ratings, prior)
+    assert flat["AAA"].net == flat["BBB"].net and rep2["portal_teams"] == 0
+
+
+def test_the_build_actually_fetches_the_portal():
+    """The gap this closes: the parser shipped, the fetch never ran."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "cfb_build.py"), encoding="utf-8").read()
+    fn = src[src.index("def attach_talent("):src.index("def build_plays(")]
+    assert "fetch_portal" in fn, "the portal is parsed but never fetched"
+    assert "portal)" in fn, "the portal is fetched but never applied"
+
+
+def test_the_page_says_which_inputs_actually_loaded():
+    """A prior running on recruiting alone with the portal missing is a
+    different number from a complete one, and nothing on the page could
+    tell them apart."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(root, "web", "js", "app.js"), encoding="utf-8").read()
+    assert "function renderTalent(" in js
+    fn = js[js.index("function renderTalent("):js.index("function renderAll(")]
+    for layer in ("recruiting", "blue-chip", "returning", "portal"):
+        assert layer in fn, f"{layer} is not shown"
+    assert "missing_layers" in fn
+    assert 'state.sport !== "cfb"' in fn, "the panel would leak onto other sports"
+    assert "renderTalent();" in js, "defined but never called"
+
+
+def test_the_implementation_map_does_not_claim_a_built_layer_is_parked():
+    """Prose rots. This one rotted for real: §6 read "📋 No free structured
+    source" for weeks after `engine/cfb/talent.py` existed and was wired,
+    which is exactly the failure `--coverage` was built to catch."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    doc = open(os.path.join(root, "docs", "CFB_MODEL.md"), encoding="utf-8").read()
+    for line in doc.splitlines():
+        if line.startswith("| §6 Recruiting"):
+            assert "📋" not in line, "the doc still calls the talent layer parked"
+            assert "✅" in line
+            break
+    else:
+        raise AssertionError("the §6 row vanished from the implementation map")
+    assert "It has no talent layer." not in doc
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
