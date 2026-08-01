@@ -368,6 +368,67 @@ def refresh_cfb(quiet: bool = False) -> bool:
     return ok
 
 
+# A fighter is ~50 small cached requests, about half a minute cold. The
+# refresh loop runs every 60s, so drafting a few per tick lets a 34-bout
+# card fill itself in over a few minutes instead of stalling one refresh
+# for half an hour. Progress is saved as it goes.
+DOSSIERS_PER_TICK = 4
+
+
+def _auto_dossiers(quiet: bool = False) -> None:
+    """Draft the upcoming card's missing fighter dossiers, unprompted.
+
+    "No dossier, no bet" is the right rule and it was also, in practice,
+    the reason most of a card never got modelled: drafting was a command
+    you had to remember to run. A card the site knows about is a card the
+    site can look up on its own. Hand-written dossiers are never touched.
+    """
+    try:
+        import ufc_dossiers as UD
+        _label, names = UD.card_fighters()
+        if not names:
+            return
+        book = UD.load_book()
+        todo = [n for n in names if UD.needs_draft(book, n)]
+        if not todo:
+            return
+        _b, drafted, _kept, missing = UD.draft(todo,
+                                               limit=DOSSIERS_PER_TICK)
+        left = len(todo) - len(drafted) - len(missing)
+        if not quiet and (drafted or left):
+            note = f"  UFC  dossiers: drafted {len(drafted)}"
+            if left:
+                note += f", {left} still to draft (a few per refresh)"
+            if missing:
+                note += f", {len(missing)} not on ESPN (debut/spelling)"
+            print(note)
+    except Exception as exc:  # noqa: BLE001 — never let this stop the card
+        if not quiet:
+            print(f"  UFC  dossiers: auto-draft unavailable ({exc})")
+
+
+def _auto_weighins(quiet: bool = False) -> None:
+    """Pull official weigh-in results for the upcoming card, unprompted.
+
+    Recording these by hand was the one place this system still asked a
+    person to type in data, and `--weigh-in` stays available for exactly
+    the case a feed cannot cover: you watched the scale on the broadcast
+    before anyone published it.
+    """
+    try:
+        from engine.ufc import weighin_feed
+        res = weighin_feed.refresh()
+        if not quiet and res.get("recorded"):
+            print(f"  UFC  weigh-ins: recorded {res['recorded']} "
+                  f"({res['made']} made, {res['missed']} missed) "
+                  f"from {res['source']}")
+        elif not quiet and res.get("note"):
+            print(f"  UFC  weigh-ins: {res['note']}")
+    except Exception as exc:  # noqa: BLE001
+        if not quiet:
+            print(f"  UFC  weigh-ins: auto-pull unavailable ({exc})")
+
+
 def refresh_ufc(quiet: bool = False) -> bool:
     """UFC card (Scalpy MMA) — a real member of the paid-pull rotation.
 
@@ -382,6 +443,8 @@ def refresh_ufc(quiet: bool = False) -> bool:
     pull has happened, so gating the pull on the card is circular, which
     is the same knot in a different rope.
     """
+    _auto_dossiers(quiet)
+    _auto_weighins(quiet)
     args = ["ufc_build.py", "--out", UFC_OUT]
     spend = _odds_affordable(UFC_OUT, quiet, sport="ufc")
     before_seen = _paid_pull_baseline() if spend else ""
@@ -1448,9 +1511,13 @@ def why_ufc(argv: list | None = None) -> None:
         if wi.get("missed"):
             print("  A missed weight is a hard red flag and blocks that fight.")
         if wi.get("unrecorded"):
-            print("  Unrecorded does NOT block a bet. It costs grade points "
-                  "though — the fight-week component scores 0.35 instead of "
-                  "0.70, which is about 5 points of 100.")
+            print("  Unrecorded does NOT block a bet and no longer costs "
+                  "grade points either. The fight-week component drops out "
+                  "of the scorecard entirely and the remaining components "
+                  "are renormalised, so an un-weighed fight is graded on "
+                  "what we DO know rather than marked down for a Friday "
+                  "that has not happened. Results are pulled automatically "
+                  "once they publish — see --probe-weighins.")
         print()
 
     buckets: dict = {}
@@ -1500,13 +1567,22 @@ def why_ufc(argv: list | None = None) -> None:
                               "environment": "env"}.get(key, key)) or {})
             sc = got.get("score")
             if sc is None:
+                print(f"      {key:14}  —   no feed: dropped from the "
+                      f"scorecard, not scored against this fight")
                 continue
             print(f"      {key:14} {sc:.2f} → {sc * weight:4.1f} of {weight}")
+        cov = r.get("grade_coverage")
+        if cov is not None:
+            print(f"      graded on {cov:.0%} of the scorecard"
+                  + ("  (capped — an incomplete scorecard cannot earn top "
+                     "marks)" if r.get("grade_capped") else ""))
         print()
-    print("The two components that cannot reach full marks today are "
-          "fight-week info (no camp-report feed) and market movement (no "
-          "open→close history). That is deliberate and documented — it also "
-          "means a fight needs a genuinely large edge to clear 70.")
+    print("Components with no feed score NOTHING rather than a fixed "
+          "neutral: they leave the scorecard and the rest is renormalised, "
+          "so the grade answers 'how good is this bet on what we can "
+          "actually see'. Market movement has no UFC line history yet and "
+          "is always one of them; fight-week info joins it until the scale "
+          "happens. A fight that fails now fails on its own merits.")
 
 
 def why_empty(sport: str = "mlb", min_conf: float = 6.0,
@@ -2022,6 +2098,14 @@ def main() -> None:
         return
     if "--why-ufc" in argv:
         why_ufc(argv)
+        return
+    if "--probe-weighins" in argv:
+        from engine.ufc import weighin_feed
+        i = argv.index("--probe-weighins")
+        day = (argv[i + 1] if len(argv) > i + 1
+               and not argv[i + 1].startswith("-") else None)
+        for line in weighin_feed.probe(day):
+            print(line)
         return
     if "--why-empty" in argv:
         i = argv.index("--why-empty")

@@ -289,14 +289,25 @@ edge in it. Markets your books quote but our odds feed doesn't carry show
 our fair number instead, under "every market this fight implies" — those
 are yours to shop, and they are never staked or journaled.
 
-**About `--weigh-in`:** every UFC pick prints `KILL IF: missed weight …
+**About weigh-ins:** every UFC pick prints `KILL IF: missed weight …
 → automatic void`. That was a rule with nothing enforcing it. Now a
 recorded miss becomes a red flag, and red flags already gate a bet off the
-card — so the rule holds itself. Weigh-ins are typed in because no free
-structured feed of them exists; the division and the one-pound non-title
-allowance are worked out from the fighter's dossier, so you type a name
-and a number. A weigh-in nobody has recorded shows as **"not recorded"**
-rather than passing for "made weight" — those are opposite facts.
+card — so the rule holds itself.
+
+**These pull themselves now.** The launcher checks the card's feed on
+every refresh and records whatever weights it carries, validated against
+the division limit and the one-pound non-title allowance. `--weigh-in
+"Fighter Name" 155.5` still exists for the one case a feed can't cover:
+you watched the scale on the broadcast before anyone published it. If
+nothing is landing, `python3 launch.py --probe-weighins` prints exactly
+what the feed returned, bout by bout — a blank board should never be a
+mystery.
+
+An unrecorded weigh-in still shows as **"not recorded"** rather than
+passing for "made weight" — those are opposite facts. What changed is
+that it no longer costs the fight anything: the fight-week component drops
+out of the grade and the rest is renormalised, so a card is judged on what
+we know instead of being marked down for a Friday that hasn't happened.
 
 **About `--auto-update`:** the laptop is at home and you are not. With
 this flag the launcher checks the branch every 5 minutes, fast-forwards
@@ -389,11 +400,16 @@ section fills in on its own.
 
 ## UFC dossiers (a two-minute review before each card)
 
-The UFC model follows "no dossier, no bet" — and dossiers now draft
-themselves. Before a card you care about, run:
+The UFC model follows "no dossier, no bet" — and **the launcher now
+drafts them without being asked.** A few fighters per refresh, saved as it
+goes, so a 34-bout card fills itself in over a few minutes instead of
+stalling one refresh for half an hour. You do not have to run anything.
+
+To draft a whole card at once anyway, or a specific fighter:
 
 ```
 python3 ufc_dossiers.py
+python3 ufc_dossiers.py "Fighter Name"
 ```
 
 It reads the upcoming card from the odds feed (free), pulls every

@@ -4209,8 +4209,9 @@ async function renderUFC() {
         style beats talent (highest-weight input) · win probability hard-capped at 88% —
         four-ounce gloves mean nobody is safer · method of victory is a JOINT distribution
         that must sum to 100% · durability weighs 1.5× finishing ability · the humility
-        clamp kills any 15-point market disagreement · never worse than −300 · max 3 bets
-        a card, and a 13-fight card with zero bets is a valid output.</div>`;
+        clamp kills any 15-point market disagreement · never worse than −300 · no cap on how
+        many fights qualify — money is capped instead, and a 13-fight card with zero bets is
+        a valid output.</div>`;
     return;
   }
 
@@ -4352,7 +4353,7 @@ async function renderUFC() {
       <div class="tile"><div class="k">Awaiting prices</div><div class="v">${nWaiting}</div>
         <div style="color:var(--text-mute);font-size:12px;margin-top:2px">books post MMA lines late</div></div>
       <div class="tile"><div class="k">Picks</div><div class="v">${c.picks || 0}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">max 3 per card by design</div></div>
+        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">every fight that clears the bar</div></div>
       <div class="tile"><div class="k">Card exposure</div><div class="v">${((d.exposure || 0) * 100).toFixed(1)}%</div>
         <div style="color:var(--text-mute);font-size:12px;margin-top:2px">of bankroll · cap ${((d.card_cap || 0.08) * 100).toFixed(0)}%,
           the tightest in the system</div></div>
@@ -4432,10 +4433,11 @@ async function renderUFC() {
       if (w.unrecorded) {
         return `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
           <div class="player">⏳ ${w.unrecorded} weigh-in(s) not recorded yet</div>
-          <div style="color:var(--text-body);font-size:13px;margin-top:4px">Prices below do not
-          know who made weight. Record them as they land:
-          <code>python3 launch.py --weigh-in "Fighter Name" 155.5</code> — a miss gates that
-          fight on the next build.</div></div>`;
+          <div style="color:var(--text-body);font-size:13px;margin-top:4px">Fighters weigh in the
+          morning before the card, and the site pulls the results on its own once they publish —
+          nothing for you to do. Until then these fights are graded <em>without</em> the fight-week
+          component rather than being marked down for it, so the picks below stand on their own.
+          A miss, when one lands, gates that fight on the next build.</div></div>`;
       }
       return `<div class="card" style="border-left:3px solid var(--good);margin-bottom:12px">
         <div class="player">✅ Weigh-ins complete — ${w.made} on weight, none missed</div></div>`;
@@ -4443,7 +4445,8 @@ async function renderUFC() {
     ${d.no_qualifying ? `<div class="card"><div class="player">No qualifying plays on this card.</div>
         <div style="color:var(--text-body);font-size:13px;margin-top:6px">Most fights on any card
         have no exploitable edge — the pass list below says why, fight by fight. Re-check after
-        Friday weigh-ins: missed weight and visible cut damage aren't fully priced for hours.</div></div>`
+        Friday weigh-ins: missed weight and visible cut damage aren't fully priced for hours, and
+        the weigh-in results land here automatically.</div></div>`
       : `<div class="section-title">Picks
           <span class="sub">— cleared the clamp AND the gate · one-fifth Kelly stakes · journaled
           at these prices and graded after the card</span></div>

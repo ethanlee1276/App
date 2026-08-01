@@ -25,7 +25,8 @@ gloves. The doctrine, as enforced code:
   samples stay effectively closed on purpose;
 * **the approval gate** — edge ≥4 pts over break-even (5 on props), EV
   ≥5%, price never worse than −300 (MMA favorites above that are traps),
-  camp red flags block, max 3 bets a card, 1 per fight;
+  camp red flags block, 1 position per fight. There is no cap on how
+  many fights a card may produce — money is capped instead;
 * **the pass list** — every fight NOT bet gets one line on why. A 13-fight
   card with zero bets is a completely valid output.
 
@@ -45,7 +46,9 @@ GATE_EDGE_ML = 0.04
 GATE_EDGE_PROP = 0.05
 GATE_MIN_EV = 0.05
 GATE_WORST_PRICE = -300
-MAX_BETS_PER_CARD = 3
+# No headcount cap on a card. See `approval_gate` — the 2.5%/8% money
+# caps in engine.ufc.grade are what bound the risk, and they allocate in
+# grade order instead of card order.
 KELLY_FRACTION = 0.20
 STAKE_CAP = 0.025
 
@@ -239,7 +242,7 @@ def _dec_odds(odds: int) -> float:
 
 
 def approval_gate(p_final: float, odds: int, market: str,
-                  red_flags: list[str], bets_on_card: int,
+                  red_flags: list[str], bets_on_card: int = 0,
                   thin_data: bool = False, edge: float | None = None,
                   required: float | None = None) -> list[str]:
     """Every reason this bet fails the gate; empty list = approved.
@@ -266,8 +269,14 @@ def approval_gate(p_final: float, odds: int, market: str,
         fails.append(f"price {odds} worse than −300 — MMA favorites there are traps")
     if red_flags:
         fails.append("unresolved red flag(s): " + ", ".join(red_flags[:3]))
-    if bets_on_card >= MAX_BETS_PER_CARD:
-        fails.append("card cap — max 3 bets per card")
+    # No headcount cap. It used to reject anything past the third qualifying
+    # fight, which threw away real edges for a reason that was never about
+    # the fights — and worse, it applied in CARD ORDER, so the third-best
+    # play could knock out the best one purely by being listed earlier.
+    # Money is still capped, which is the constraint that actually protects
+    # a bankroll: 2.5% on one fight and 8% across the card, allocated in
+    # grade order by `apply_card_caps`. Ten good bets now means ten smaller
+    # bets, not seven discarded ones.
     return fails
 
 
@@ -298,7 +307,7 @@ def fighter_brief(d: dict | None, name: str) -> dict:
 
 
 def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
-                   division: str, bets_so_far: int) -> dict:
+                   division: str, bets_so_far: int = 0) -> dict:
     """One fight → a pick, or a pass-list line with the reason."""
     name_a = prices.get("fighter_a", (a or {}).get("name", "A"))
     name_b = prices.get("fighter_b", (b or {}).get("name", "B"))
@@ -399,10 +408,14 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
     ci = grade_mod.camp_info(prices.get("weigh_in"), a, b)
     sc = grade_mod.style_clarity(notes, a, b)
     es = grade_mod.environment_score(env_shift)
-    score = grade_mod.grade(
+    # Components with no feed score None and drop out, rather than taking a
+    # fixed neutral that no fight can ever improve on. `movement` has no
+    # UFC line-history feed at all yet, so it is always one of them.
+    gd = grade_mod.grade_detail(
         edge=chosen.get("edge") or 0.0,
         required=chosen["required_edge"], data=dq["score"], camp=ci["score"],
-        style=sc["score"], env=es["score"])
+        style=sc["score"], env=es["score"], movement=None)
+    score = gd["score"]
 
     card = {
         **base, "pick": side, "odds": odds, "book": prices.get("book", ""),
@@ -426,12 +439,14 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
         "environment": env_shift,
         "grade_score": score, "grade_label": grade_mod.grade_label(score),
         "grade_parts": {"data": dq, "camp": ci, "style": sc, "env": es},
+        "grade_coverage": gd["coverage"], "grade_missing": gd["missing"],
+        "grade_capped": gd["capped"], "grade_why": gd["why"],
         "kill_if": ("missed weight, late replacement, or visible cut damage "
                     "at weigh-ins → automatic void"),
     }
 
     fails = approval_gate(p_final, chosen.get("odds") or odds,
-                          chosen["market"], red, bets_so_far,
+                          chosen["market"], red,
                           thin_data=thin, edge=chosen.get("edge"),
                           required=chosen["required_edge"])
     if score < grade_mod.MIN_GRADE:
@@ -450,7 +465,7 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
 
 
 def run_card(fights: list[dict]) -> dict:
-    """fights: [{a, b, prices, division}] → picks (≤3) + the pass list."""
+    """fights: [{a, b, prices, division}] → picks + the pass list."""
     picks, passes = [], []
     for f in fights:
         prices = dict(f.get("prices", {}))
@@ -458,13 +473,15 @@ def run_card(fights: list[dict]) -> dict:
         # fight-week component can see the one fight-week fact we observe.
         prices["weigh_in"] = f.get("weigh_in")
         r = evaluate_fight(f.get("a"), f.get("b"), prices,
-                           f.get("division", ""), len(picks))
+                           f.get("division", ""))
         (picks if r["kind"] == "pick" else passes).append(r)
 
     # §10 — 2.5% per fight with correlated positions counted together, 8%
-    # across the card. The headcount cap above limits POSITIONS; this one
-    # limits money, and on a night when every finish lands at once that is
-    # the constraint that matters.
+    # across the card. This is now the ONLY cap: nothing limits how many
+    # fights may qualify, because a card that genuinely offers six edges
+    # should show six. What must not grow with the count is the money, and
+    # `apply_card_caps` allocates it in grade order — so a seventh play
+    # takes room from the weakest, never from the best.
     picks = grade_mod.apply_card_caps(picks)
     for p in picks:
         p["stake_units"] = grade_mod.units(p.get("stake_fraction", 0.0))

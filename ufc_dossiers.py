@@ -59,6 +59,69 @@ def card_fighters() -> tuple[str, list[str]]:
     return label, names
 
 
+def load_book() -> dict:
+    book = json.loads(DOSSIERS.read_text()) if DOSSIERS.exists() else {}
+    book.setdefault("_readme", README)
+    return book
+
+
+def needs_draft(book: dict, name: str, refresh: bool = False) -> bool:
+    """Is this fighter missing, or an auto entry worth re-fetching?
+
+    Never true for a hand-written entry. The one thing this tool must not
+    do is overwrite something a human decided.
+    """
+    existing = book.get(name)
+    if not isinstance(existing, dict):
+        return True
+    auto = str(existing.get("source", "")).endswith("-auto")
+    # Auto drafts from an older schema (no career_fights marker) are
+    # re-drafted automatically — their rates predate the coverage fix.
+    stale = auto and "career_fights" not in existing
+    return stale or (refresh and auto)
+
+
+def draft(names: list[str], refresh: bool = False, limit: int | None = None,
+          verbose: bool = False) -> tuple[dict, list, list, list]:
+    """Draft dossiers for ``names``. Returns (book, drafted, kept, missing).
+
+    ``limit`` caps how many fighters are FETCHED in one call. A fighter is
+    ~50 small cached requests and takes about half a minute cold, so the
+    launcher's 60-second refresh drafts a few per tick and lets a 34-bout
+    card fill itself in over several minutes rather than stalling one
+    refresh for half an hour. Progress is written to disk as it goes, so
+    every tick keeps what it earned.
+    """
+    book = load_book()
+    from engine.sources.espnmma import fetch_dossier, octagon_styles, _norm
+    styles = octagon_styles()      # one request; style hints for ranked names
+    drafted, kept, missing = [], [], []
+    for name in names:
+        if not needs_draft(book, name, refresh):
+            kept.append(name)
+            continue
+        if limit is not None and len(drafted) + len(missing) >= limit:
+            continue                     # next tick picks this one up
+        if verbose:
+            print(f"  fetching {name} … (a fighter takes ~30s the first time)")
+        try:
+            d = fetch_dossier(name, style_hint=styles.get(_norm(name)))
+        except DataUnavailable as exc:
+            if verbose:
+                print(f"  ⚠️  {name}: {exc}")
+            missing.append(name)
+            continue
+        if d is None:
+            missing.append(name)
+            continue
+        book[name] = d
+        drafted.append(name)
+        DOSSIERS.write_text(json.dumps(book, indent=2))   # save as we go
+
+    DOSSIERS.write_text(json.dumps(book, indent=2))
+    return book, drafted, kept, missing
+
+
 def _fighters(book: dict):
     return [(k, v) for k, v in book.items()
             if isinstance(v, dict) and not k.startswith("_")]
@@ -150,39 +213,8 @@ def main() -> None:
             print("No UFC card inside the 8-day odds window — nothing to draft.")
             return
 
-    book = json.loads(DOSSIERS.read_text()) if DOSSIERS.exists() else {}
-    book.setdefault("_readme", README)
-
-    from engine.sources.espnmma import fetch_dossier, octagon_styles
-    styles = octagon_styles()      # one request; style hints for ranked names
-    drafted, kept, missing = [], [], []
-    for name in names:
-        existing = book.get(name)
-        auto = (isinstance(existing, dict)
-                and str(existing.get("source", "")).endswith("-auto"))
-        # Auto drafts from an older schema (no career_fights marker) are
-        # re-drafted automatically — their rates predate the coverage fix.
-        stale = auto and "career_fights" not in existing
-        if existing and isinstance(existing, dict) \
-                and not ((args.refresh and auto) or stale):
-            kept.append(name)
-            continue
-        print(f"  fetching {name} … (a fighter takes ~30s the first time)")
-        try:
-            from engine.sources.espnmma import _norm
-            d = fetch_dossier(name, style_hint=styles.get(_norm(name)))
-        except DataUnavailable as exc:
-            print(f"  ⚠️  {name}: {exc}")
-            missing.append(name)
-            continue
-        if d is None:
-            missing.append(name)
-            continue
-        book[name] = d
-        drafted.append(name)
-        DOSSIERS.write_text(json.dumps(book, indent=2))   # save as we go
-
-    DOSSIERS.write_text(json.dumps(book, indent=2))
+    book, drafted, kept, missing = draft(names, refresh=args.refresh,
+                                         verbose=True)
 
     print(f"\nUFC dossiers · card {label}: {len(drafted)} drafted, "
           f"{len(kept)} kept (hand-made or already drafted), "

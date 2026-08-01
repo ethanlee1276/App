@@ -115,7 +115,10 @@ def test_gate_mma_rules():
     assert any("−300" in f for f in approval_gate(0.85, -400, "moneyline", [], 0))
     assert any("red flag" in f for f in
                approval_gate(0.62, -120, "moneyline", ["missed weight"], 0))
-    assert any("card cap" in f for f in approval_gate(0.62, -120, "moneyline", [], 3))
+    # No headcount cap: the tenth qualifying fight on a card is judged on
+    # its own merits, exactly like the first. Money is what gets capped —
+    # see test_card_money_cap_replaces_the_headcount_cap.
+    assert approval_gate(0.62, -120, "moneyline", [], 9) == []
     # Props need 5 points over break-even, not 4 (re-tuned from 6 — the
     # old bar was unreachable under the clamp; see the welded-door test).
     assert any("edge" in f for f in approval_gate(0.570, -110, "method", [], 0))

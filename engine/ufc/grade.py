@@ -29,6 +29,20 @@ GRADE_WEIGHTS = {"edge": 40, "data_quality": 15, "camp_info": 15,
                  "style_clarity": 10, "environment": 10, "movement": 10}
 MIN_GRADE = 70                     # "Below 70: no bet, no leans."
 
+# A component we have no feed for scores ``None`` — UNOBSERVED, which is
+# not the same as neutral. Scoring it 0.5 and then measuring the total
+# against 100 taxes every fight for a gap that no fight can close: with
+# no line-movement feed and no weigh-in, the best possible card in the
+# world topped out around 90, so a "70 bar" was really a 77 bar and the
+# board sat empty for a reason that had nothing to do with the fights.
+#
+# Instead the present components are renormalised to 100 — the grade
+# answers "how good is this bet on the scorecard we can actually see".
+# The honesty lives in COVERAGE instead: an incomplete scorecard is
+# reported, and it cannot earn top marks.
+MIN_COVERAGE = 0.60                # below this there is no grade to give
+INCOMPLETE_CEILING = 89            # no A+ on a scorecard with holes
+
 # §10 — fractional Kelly. Half is never used in MMA.
 KELLY_FLOOR = 0.125                # an eighth
 KELLY_CEILING = 0.25               # a quarter, and that is the ceiling
@@ -85,16 +99,29 @@ def camp_info(weigh_in: dict | None, a: dict, b: dict) -> dict:
     made = sum(1 for s in states if s == "made")
     missed = sum(1 for s in states if s == "missed")
     short = bool(a.get("short_notice") or b.get("short_notice"))
-    score = 0.35 + 0.35 * (made / 2.0)
     why = []
+
+    if not made and not missed and not short:
+        # Nothing about fight week is observable yet. That is a HOLE in the
+        # scorecard, not a bad score — the fight is graded on the rest and
+        # the coverage number says so. Docking every fight a fixed amount
+        # for a weigh-in that has not happened yet meant the board stayed
+        # empty until Friday no matter how good the fights were.
+        return {"score": None, "why": ["weigh-in not recorded yet — this "
+                                       "fight is graded without the "
+                                       "fight-week component",
+                                       "no camp-footage or training-report "
+                                       "feed exists"]}
+
+    score = 0.5 + 0.5 * (made / 2.0)
     if made == 2:
         why.append("both made weight")
     elif missed:
         why.append("a missed weight is recorded — a live negative, not a gap")
     else:
-        why.append("weigh-in not recorded yet")
+        why.append("weigh-in partially recorded")
     if short:
-        score -= 0.15
+        score -= 0.2
         why.append("short-notice booking — no full camp to observe")
     why.append("no camp-footage or training-report feed exists")
     return {"score": round(max(0.0, min(1.0, score)), 3), "why": why}
@@ -120,33 +147,78 @@ def environment_score(shift: dict) -> dict:
     """§10 — do we know where this fight is happening?
 
     Knowing the venue is worth full marks whether or not it moves the
-    number; an unknown venue scores NEUTRAL rather than badly. The
-    difference matters: a missing feed is not evidence against a bet, and
-    scoring it as though it were would quietly sink every card until a
+    number. An unknown venue is UNOBSERVED — it drops out of the grade
+    rather than scoring badly, because a missing feed is not evidence
+    against a bet and docking it would quietly sink every card until a
     source exists. Set the card's venue and this becomes a real component
-    instead of a shrug — see `launch.py --card-venue`.
+    instead of a hole — see `launch.py --card-venue`.
     """
     cage = (shift or {}).get("cage") or {}
     alt = (shift or {}).get("altitude") or {}
     known = int(bool(cage.get("known"))) + int(bool(alt.get("known")))
+    if not known:
+        return {"score": None,
+                "why": ["venue not set — cage size and altitude unchecked, "
+                        "so this fight is graded without them"]}
     return {"score": round(0.5 + 0.25 * known, 3),
-            "why": (shift or {}).get("why")
-            or (["venue not set — cage size and altitude unchecked"]
-                if not known else ["standard conditions"])}
+            "why": (shift or {}).get("why") or ["standard conditions"]}
 
 
-def grade(edge: float, required: float, data: float, camp: float,
-          style: float, env: float, movement: float = 0.5) -> int:
-    """The §10 unified 0-100 grade."""
+def _clip(v):
+    return None if v is None else max(0.0, min(1.0, float(v)))
+
+
+def grade_detail(edge: float, required: float, data: float | None,
+                 camp: float | None, style: float | None, env: float | None,
+                 movement: float | None = None) -> dict:
+    """The §10 grade, scored over the components we actually observed.
+
+    ``None`` means "no feed for this" and drops the component from both
+    the numerator and the denominator. ``coverage`` is the share of the
+    weight that was observable, and it is reported rather than buried:
+    a grade of 78 on 85% coverage is a different object from a 78 on all
+    of it, and the page says so.
+
+    Edge is never optional. If we cannot price the bet there is no bet.
+    """
     parts = {
         "edge": edge_score(edge, required),
-        "data_quality": max(0.0, min(1.0, data)),
-        "camp_info": max(0.0, min(1.0, camp)),
-        "style_clarity": max(0.0, min(1.0, style)),
-        "environment": max(0.0, min(1.0, env)),
-        "movement": max(0.0, min(1.0, movement)),
+        "data_quality": _clip(data),
+        "camp_info": _clip(camp),
+        "style_clarity": _clip(style),
+        "environment": _clip(env),
+        "movement": _clip(movement),
     }
-    return int(round(sum(parts[k] * w for k, w in GRADE_WEIGHTS.items())))
+    present = {k: v for k, v in parts.items() if v is not None}
+    total_w = sum(GRADE_WEIGHTS.values())
+    have_w = sum(GRADE_WEIGHTS[k] for k in present)
+    coverage = round(have_w / total_w, 4)
+    missing = sorted(k for k in parts if parts[k] is None)
+
+    if coverage < MIN_COVERAGE:
+        return {"score": 0, "coverage": coverage, "missing": missing,
+                "capped": False, "parts": parts,
+                "why": (f"only {coverage:.0%} of the scorecard is observable "
+                        f"— not enough to grade, let alone bet")}
+
+    raw = sum(present[k] * GRADE_WEIGHTS[k] for k in present) / have_w * 100.0
+    score = int(round(raw))
+    capped = bool(missing) and score > INCOMPLETE_CEILING
+    if capped:
+        score = INCOMPLETE_CEILING
+    return {"score": score, "coverage": coverage, "missing": missing,
+            "capped": capped, "parts": parts,
+            "why": ("graded on the full scorecard" if not missing else
+                    f"graded on {coverage:.0%} of the scorecard — no feed for "
+                    + ", ".join(m.replace("_", " ") for m in missing))}
+
+
+def grade(edge: float, required: float, data: float | None,
+          camp: float | None, style: float | None, env: float | None,
+          movement: float | None = None) -> int:
+    """The §10 unified 0-100 grade (see :func:`grade_detail`)."""
+    return grade_detail(edge, required, data, camp, style, env,
+                        movement)["score"]
 
 
 def grade_label(score: int) -> str:

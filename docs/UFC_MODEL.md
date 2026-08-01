@@ -224,6 +224,7 @@ This is the engine. Everything in Sections 6–8 is an input to it.
 - Max **1.5% of bankroll per fight** (tighter than the other sports — a single fight is a single coin flip with a hard edge).
 - Max **2.5% per fight** including all correlated positions (ML + method + round on the same fight counted together).
 - Max **8% total exposure per card** — the tightest slate cap in this system. **Why:** a 13-fight card invites 13 bets, and correlated chaos (a night of finishes, a night of robberies) can hit every position at once.
+- **There is no cap on how many fights may qualify.** An earlier build rejected everything past the third qualifying bout, which threw away real edges for a reason that was never about the fights — and worse, applied in *card order*, so the third-best play could knock out the best one purely by being listed earlier. Money is the thing that must not grow with the count, and the caps above already bound it: `apply_card_caps` allocates in **grade order**, so an eighth play takes room from the weakest, never from the best.
 - **Drawdown rule:** after a 10% bankroll drawdown, halve all stakes until the previous peak is recovered. MMA drawdowns are steeper and faster than any other sport here — plan for them structurally rather than reacting emotionally.
 
 ---
@@ -317,7 +318,7 @@ listed honestly rather than faked).
 | §3.6 Tiered minimum edges | ✅ | `markets.MIN_EDGE` — ML 4%, prelim/debut/short-notice ML 6%, method & distance 5%, exotics 8% |
 | **§3.8 Bet the right market, not the obvious one** | ✅ | `engine/ufc/markets.py` — the distribution prices every market it implies, and `best_market` picks the largest edge **over its own bar**. Markets our feed didn't price publish a fair number to shop |
 | §4 Truth sources | 🟡 | Best price across books with sharp books excluded from the bettable aggregate; offshore-lead weighting 📋 |
-| §4 Movement engine (open → close, steam, RLM) | 📋 | No per-fight movement history is stored yet — the movement component of the grade scores neutral and says so |
+| §4 Movement engine (open → close, steam, RLM) | 📋 | No per-fight movement history is stored yet — the movement component is absent from the scorecard (it does not score against a fight, but it does hold coverage below 100%) |
 | §5.1 Simulate paths | 🟡 | Method distribution is real; a round-by-round hazard is 📋 (dossiers carry no finish TIMES), which is why round and exact-round markets are absent rather than invented |
 | §5.2 Positional model | ✅ | Takedown rate × accuracy, TDD, control time, all differenced against the opponent |
 | §5.3 Striking | ✅ | Landed-minus-absorbed differential; knockdown rate per 100 as the power proxy rather than KO% |
@@ -360,12 +361,22 @@ threshold" applied to a number with no data behind it is not a high
 threshold, it is a guess wearing a decimal point. The spec's own §11 note
 that most models find no edge in debut bets points the same way.
 
-**The grade cannot reach A+ today, and that is deliberate.** Two of its
-six components rest on feeds that do not exist: camp reporting and line
-movement. Both score neutral rather than badly — a missing feed is not
-evidence against a bet — but neither can score full marks. The practical
-effect is that quarter Kelly is unreachable and the model operates in the
-eighth-to-0.1875 band, which is exactly §10's stated operating range.
+**A component with no feed leaves the scorecard; it does not score
+neutral on it.** This was a real bug and it emptied the board. Camp
+reporting and line movement have no source, so under the old scheme every
+fight was scored against a fixed 0.35 and 0.50 — and the arithmetic that
+follows is the whole story: the best conceivable fight in the world topped
+out at **90.5 of 100**, so the documented "70 bar" was in practice a 77
+bar, and it moved *further* out of reach the less we knew. A gap no fight
+can close is not a standard, it is a tax.
+
+The grade now renormalises over the components actually observed and
+reports **coverage** alongside the score. A 78 on 75% coverage is a
+different object from a 78 on all of it, and the page says which. Two
+guards keep "unknown" from becoming "excellent": a scorecard with holes
+cannot exceed **89** (no A+ on an incomplete read), and below **60%
+coverage** there is no grade at all. As feeds land, coverage rises and the
+same fight is judged on more evidence rather than on a bigger handicap.
 
 **Round and exact-round markets are absent rather than modelled.** Pricing
 them needs a finish-time hazard, and the dossiers carry no finish times.
@@ -384,4 +395,6 @@ them instead of asking you to shop them.
 **Line movement.** MMA lines move further from open to close than almost
 any market, and a late sharp move on a prelim nobody is watching is one of
 the highest-signal events in the sport. Storing open → daily → close per
-fight would turn the grade's neutral movement component into a real one.
+fight would add the movement component to the scorecard for the first
+time — today it is simply absent, which costs a fight nothing but does cap
+it below A+.

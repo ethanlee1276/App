@@ -228,23 +228,28 @@ def test_data_quality_is_scored_off_the_thinner_corner():
                           _d("B", ufc_fights=8))["score"] == 1.0
 
 
-def test_fight_week_information_can_never_reach_full_marks():
-    """Weigh-ins are the one fight-week fact we observe. Scoring a clean
-    scale as complete knowledge would be claiming MMA's signature edge
-    without having it."""
+def test_fight_week_information_scores_what_it_observes():
+    """Both fighters on the scale is the best fight-week read we get."""
     best = G.camp_info({"a": MADE, "b": MADE}, _d("A"), _d("B"))
-    assert best["score"] < 1.0
+    assert best["score"] == 1.0
     assert any("no camp-footage" in w for w in best["why"])
+
+
+def test_an_unrecorded_weigh_in_is_a_hole_not_a_penalty():
+    """Before the scale, fight week is UNOBSERVED. Docking every fight a
+    fixed amount for a weigh-in that has not happened yet held the whole
+    board hostage until Friday."""
     none = G.camp_info(None, _d("A"), _d("B"))
-    assert none["score"] < best["score"]
+    assert none["score"] is None
+    assert any("graded without" in w for w in none["why"])
 
 
-def test_a_missing_venue_scores_neutral_rather_than_bad():
+def test_a_missing_venue_drops_out_rather_than_scoring_badly():
     """A missing feed is not evidence against a bet."""
     unknown = G.environment_score(E.distribution_shift("", ""))
     known = G.environment_score(E.distribution_shift("UFC Apex", "Las Vegas"))
-    assert unknown["score"] == 0.5
-    assert known["score"] > unknown["score"]
+    assert unknown["score"] is None
+    assert known["score"] > 0.5
 
 
 def test_half_kelly_is_never_used_in_mma():
@@ -273,6 +278,24 @@ def test_the_card_cap_is_the_tightest_in_the_system():
     assert sum(p["stake_fraction"] for p in capped) <= G.CAP_PER_CARD + 1e-9
     kept = [p["fight"] for p in capped if p["stake_fraction"] > 0]
     assert "F8" in kept and "F0" not in kept, "the cap cost us our best play"
+
+
+def test_card_money_cap_replaces_the_headcount_cap():
+    """A card that genuinely offers eight edges should show eight.
+
+    The old rule rejected everything past the third qualifying fight —
+    and applied in CARD ORDER, so the third-best play could knock out the
+    best one purely by being listed earlier. What must not grow with the
+    count is the money.
+    """
+    picks = [{"fight": f"F{i}", "grade": 70 + i, "stake_fraction": 0.008}
+             for i in range(8)]
+    capped = G.apply_card_caps(picks)
+    live = [p for p in capped if p["stake_fraction"] > 0]
+    assert len(live) > 3, "the headcount cap is still throwing away edges"
+    assert sum(p["stake_fraction"] for p in capped) <= G.CAP_PER_CARD + 1e-9
+    # And the room goes to the best plays, not the first ones listed.
+    assert live[0]["fight"] == "F7"
 
 
 def test_correlated_positions_on_one_fight_share_a_budget():
@@ -346,16 +369,56 @@ def test_an_unrecorded_weigh_in_does_not_block_a_bet():
     assert r["kind"] == "pick", "an unrecorded weigh-in blocked a real edge"
 
 
-def test_recording_the_weigh_ins_helps_but_is_not_the_gate():
-    """It is worth grade points — about 5 of 100 — and that is all."""
+def test_recording_the_weigh_ins_adds_coverage_and_never_costs_grade():
+    """Recording the scale buys CONFIDENCE, not a bonus.
+
+    It closes a hole in the scorecard, so coverage goes up. What it must
+    never do is make a fight look worse than leaving it unknown — that was
+    the old behaviour's real damage, where an unrecorded weigh-in scored a
+    fixed 0.35 and dragged every fight on the card below the bar.
+    """
     a, b = _puncher_vs_chinny()
     blank = evaluate_fight(a, b, _prices(weigh_in=None,
                                          props={"Alpha by KO/TKO": 190}),
-                           "heavyweight", 0)
+                           "heavyweight")
     made = evaluate_fight(a, b, _prices(props={"Alpha by KO/TKO": 190}),
-                          "heavyweight", 0)
-    assert made["grade_score"] > blank["grade_score"]
-    assert made["grade_score"] - blank["grade_score"] <= 8
+                          "heavyweight")
+    assert made["grade_score"] >= blank["grade_score"]
+    assert made["grade_coverage"] > blank["grade_coverage"]
+    assert "camp_info" in blank["grade_missing"]
+    assert "camp_info" not in made["grade_missing"]
+
+
+def test_a_missing_feed_no_longer_taxes_every_fight_on_the_card():
+    """The bug this replaced: with no weigh-in, no venue and no
+    line-movement feed, the best conceivable fight topped out in the low
+    80s — so a "70 bar" was really a 77 bar and the board sat empty for a
+    reason that had nothing to do with the fights."""
+    perfect = dict(edge=0.10, required=0.04, data=1.0, style=1.0)
+    # Everything observable is perfect; the three unfeedable components
+    # are absent. That must still be an A-grade bet.
+    d = G.grade_detail(camp=None, env=None, movement=None, **perfect)
+    assert d["score"] >= 80, "an unfeedable component is taxing the grade"
+    assert d["coverage"] < 1.0 and d["missing"]
+    # Under the OLD scheme those three scored a fixed 0.5/0.35 neutral:
+    old = G.grade_detail(camp=0.35, env=0.5, movement=0.5, **perfect)
+    assert old["score"] < d["score"]
+
+
+def test_a_scorecard_with_holes_cannot_earn_top_marks():
+    """Renormalising must not turn "unknown" into "excellent"."""
+    d = G.grade_detail(edge=0.20, required=0.04, data=1.0, style=1.0,
+                       camp=None, env=None, movement=None)
+    assert d["score"] == G.INCOMPLETE_CEILING and d["capped"]
+    full = G.grade_detail(edge=0.20, required=0.04, data=1.0, style=1.0,
+                          camp=1.0, env=1.0, movement=1.0)
+    assert full["score"] == 100 and not full["capped"]
+
+
+def test_too_little_of_the_scorecard_is_no_grade_at_all():
+    d = G.grade_detail(edge=0.20, required=0.04, data=None, style=None,
+                       camp=None, env=None, movement=None)
+    assert d["score"] == 0 and "not enough to grade" in d["why"]
 
 
 if __name__ == "__main__":
