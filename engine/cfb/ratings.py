@@ -73,9 +73,18 @@ def _neutral(extra: str | None) -> bool:
         return False
 
 
-def _sd(values: list[float]) -> float:
+def _sd(values: list[float]) -> float | None:
+    """Sample standard deviation, or None when there is no sample.
+
+    None rather than 0.0, and that distinction is load-bearing. The
+    callers wrote ``_sd(res) or PRIOR.margin_sd``, which silently swapped
+    in the prior whenever the computed value came out ZERO — and then
+    reported ``fitted=True`` with a note claiming the number had been
+    measured. "No sample" and "the residuals were tiny" are opposite
+    findings and must not share a return value.
+    """
     if len(values) < 2:
-        return 0.0
+        return None
     mean = sum(values) / len(values)
     return math.sqrt(sum((v - mean) ** 2 for v in values) / (len(values) - 1))
 
@@ -125,16 +134,28 @@ def fit_from_history(conn, ratings: dict, seasons: list[int] | None = None,
         total_res.append((hs + as_) - (proj_home + proj_away))
         team_res += [hs - proj_home, as_ - proj_away]
 
-    margin_sd = _sd(margin_res) or PRIOR.margin_sd
-    total_sd = _sd(total_res) or PRIOR.total_sd
-    team_sd = _sd(team_res) or PRIOR.team_total_sd
+    # A None here means the residual list was too short to measure, which
+    # is the ONLY case that should fall back to the prior. A measured
+    # value is used as measured, however small — see `_sd`.
+    m, t, tt = _sd(margin_res), _sd(total_res), _sd(team_res)
+    borrowed = [name for name, v in (("margin", m), ("total", t),
+                                     ("team total", tt)) if v is None]
+    margin_sd = m if m is not None else PRIOR.margin_sd
+    total_sd = t if t is not None else PRIOR.total_sd
+    team_sd = tt if tt is not None else PRIOR.team_total_sd
+    note = (f"Fitted on {len(rows)} CFB games: margins land {margin_sd:.1f} "
+            f"points from the projection, totals {total_sd:.1f}, and home "
+            f"field is worth {hfa:+.1f}.")
+    if borrowed:
+        # Say so. A prior wearing a fitted label is the one number on the
+        # board nobody would think to check.
+        note += (" NOT fitted: " + ", ".join(borrowed) + " had too few "
+                 "residuals to measure and kept the prior value.")
     return CFBRatings(
         scoring_baseline=round(baseline, 2), home_field=round(hfa, 2),
         margin_sd=round(margin_sd, 2), total_sd=round(total_sd, 2),
-        team_total_sd=round(team_sd, 2), fitted=True, games=len(rows),
-        note=(f"Fitted on {len(rows)} CFB games: margins land {margin_sd:.1f} "
-              f"points from the projection, totals {total_sd:.1f}, and home "
-              f"field is worth {hfa:+.1f}."),
+        team_total_sd=round(team_sd, 2), fitted=not borrowed,
+        games=len(rows), note=note,
     )
 
 

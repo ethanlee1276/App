@@ -302,7 +302,19 @@ def wnba(conn) -> SportCoverage:
 
 def cfb(conn) -> SportCoverage:
     from .cfb import ratings as R
-    fit = R.fit_from_history(conn, {})
+    from . import teamrates
+    # REAL ratings, not {}. The variance is the spread of residuals around
+    # what the ratings projected, so an empty map skips every row, leaves
+    # nothing to measure, and hands back the PRIOR — which this scan then
+    # reported as "Fitted on 4,005 CFB games". A prior wearing a fitted
+    # label is the one number on the board nobody would think to check.
+    import datetime as _dt
+    season = _dt.date.today().year
+    rates = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0,
+                                           seasons=[season])
+    if not rates:                     # out of season — fit on what we have
+        rates = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0)
+    fit = R.fit_from_history(conn, rates)
     talent_key = _has_key("CFBD_API_KEY")
     qb = ROOT / "data" / "cfb_qb_status.json"
     return SportCoverage("cfb", "College football", [

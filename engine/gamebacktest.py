@@ -149,7 +149,19 @@ def backtest_moneylines(conn, sport: str = "mlb", min_team_games: int = 15,
     """
     closes = moneyline_closes(conn, sport)
     baseline = SCORING_BASELINE.get(sport, 0.0)
-    win_prob = mlb_win_prob if sport == "mlb" else nfl_win_prob
+    # Named, not defaulted. `else nfl_win_prob` meant any sport we had not
+    # thought about — college football most obviously — would be replayed
+    # with the NFL's win curve and the NFL's hard-coded 13.5-point margin
+    # SD, and would produce a confident, wrong backtest that looked exactly
+    # like a real one. A model that has no curve here should say so.
+    CURVES = {"mlb": mlb_win_prob, "nfl": nfl_win_prob}
+    if sport not in CURVES:
+        raise ValueError(
+            f"No win-probability curve for {sport!r}. This backtest replays "
+            f"games through a sport's OWN margin model; borrowing another "
+            f"league's would produce a confident number about nothing. "
+            f"Supported: {', '.join(sorted(CURVES))}.")
+    win_prob = CURVES[sport]
     use_pitchers = use_pitchers and sport == "mlb"
     starters = starters_by_game(conn, sport) if use_pitchers else {}
 

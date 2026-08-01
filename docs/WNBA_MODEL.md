@@ -234,6 +234,42 @@ listed honestly rather than faked).
 | §10 Live betting | 📋 by design | The pre-game model refuses in-play prices |
 | §11 Output format | ✅ | Card carries market/line/price/book, de-vigged and model probability, post-haircut edge, grade + tier, volatility, stake, the explicit minutes projection, and the kill-if conditions |
 
+## What the WNBA inherits from the NBA — and what it no longer does
+
+One engine, two leagues, which is the right design and also the one place
+this system can be wrong without erroring: a model that runs perfectly
+while quietly describing the other sport. Three kinds of number live here
+and they are kept apart on purpose.
+
+**Structural facts are the WNBA's own and always were.** 40 minutes, not
+48. 12 on a roster, not 15. 44 games, not 82. Anything denominated in
+minutes is scaled by 40/48, because a cap of "8 minutes above his recent
+high" is a sixth of an NBA game and has to stay a sixth of a WNBA one.
+
+**Market structure is the WNBA spec's own.** Its tier order (rebounds,
+assists and PRA at tier 1; points demoted for efficiency contamination;
+threes at tier 3), its higher minimum edges, its 0-100 grade weights, its
+role-stability filter, its tighter caps.
+
+**Fitted numbers WERE inherited, and now are not.** Margin SD and the
+per-stat spreads shipped as the NBA's, because there was no WNBA sample
+to fit them against — an honest position that stopped being true the
+moment the backfill landed 1,576 games and 151,765 player logs. An
+inherited number that could now be measured is just a wrong number with a
+good excuse. `engine/hoops_fit.py` measures both from this league's own
+results at every build, and anything still unmeasurable keeps the
+inherited value **and says which is which**. The stat CVs are measured
+per player and then averaged, never pooled: pooling would measure how
+different players are from each other, when the number the model needs is
+how much one player's line moves game to game.
+
+**Fitting the constants does not end probation, and that is not a
+technicality.** They are two different claims. Fitted constants say our
+numbers describe this league. Probation is about whether our *picks* have
+been graded against real prices in it. Only the journal's promotion bar
+answers the second, and a better model does not get to award itself the
+first.
+
 ## Two places this implementation deliberately differs from the spec
 
 **§4 says the WNBA model may lean harder on itself against the market. It

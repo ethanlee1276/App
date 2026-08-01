@@ -188,6 +188,25 @@ def main() -> None:
     ap.add_argument("--league", choices=["nba", "wnba"], default="nba")
     args = ap.parse_args()
     tune = for_league(args.league)
+    # Swap in whatever this league's OWN results can measure. The WNBA
+    # shipped inheriting the NBA's margin SD and stat spreads because
+    # there was no WNBA sample to fit them against; there is one now, and
+    # an inherited number that could be measured is just a wrong number
+    # with a good excuse. Anything still unmeasurable keeps the inherited
+    # value and says so — this never flips `calibrated`, because fitting
+    # constants and earning the right to bet are different claims.
+    try:
+        from engine.db import connect as _fconn
+        from engine.hoops_fit import fitted_tuning, describe
+        _fc = _fconn()
+        try:
+            tune, _fit_report = fitted_tuning(_fc, args.league)
+        finally:
+            _fc.close()
+        if _fit_report["fitted"]:
+            print(describe(_fit_report))
+    except Exception as exc:  # noqa: BLE001 — a failed fit must not stop a build
+        print(f"⚠️  Tuning fit unavailable — using inherited numbers.\n   {exc}")
     if args.league == "wnba":
         # ESPN, not the WNBA CDN. The CDN path was written by analogy with
         # the NBA's and never returned JSON on a real machine; this is the
