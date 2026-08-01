@@ -197,10 +197,39 @@ def fitted_tuning(conn, league: str, seasons: list[int] | None = None
     # award itself the first.
     note = base.note
     if report["fitted"]:
-        note = (note + " UPDATED: " + "; ".join(report["fitted"])
-                + ". Fitted from this league's own results — but still on "
-                  "probation, which is about graded picks, not constants.")
+        note = note + " " + fitted_sentence(report)
     return replace(base, note=note, **changes), report
+
+
+def fitted_sentence(report: dict) -> str:
+    """One sentence for the PAGE. The detail belongs in the terminal.
+
+    The report's lines are written for a developer reading a build log —
+    "sd_cv[pts] 0.3 → 0.84 (29662 rows); sd_cv[reb] 0.4 → 0.811 (29662
+    rows); ..." — and they were being concatenated straight into the note
+    that renders on the board. Six variable names and their row counts in a
+    paragraph a bettor is meant to read is not transparency, it is a log
+    file with a border around it, and it is exactly what "machine-made"
+    looks like on a page.
+
+    So: say how many numbers are now measured, on how much, and what that
+    does and does not buy. `describe()` below still prints every line for
+    whoever is actually debugging the fit.
+    """
+    n_fit = len(report["fitted"])
+    games = report.get("games") or 0
+    rows = max((report.get("stat_rows") or {}).values(), default=0)
+    on = []
+    if games:
+        on.append(f"{games:,} games")
+    if rows:
+        on.append(f"{rows:,} player games")
+    where = f" from {' and '.join(on)}" if on else ""
+    is_are = "is" if n_fit == 1 else "are"
+    return (f"UPDATE: {n_fit} of these constants {is_are} now measured"
+            f"{where or ''} of this league's own results rather than "
+            f"borrowed. That makes the numbers this league's; it does not "
+            f"make the picks proven, which is what probation is about.")
 
 
 def describe(report: dict) -> str:

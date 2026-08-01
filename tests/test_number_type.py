@@ -136,6 +136,49 @@ def test_the_serif_rejection_is_recorded_with_its_measurement():
     assert "reads as \"ll\"" in CSS
 
 
+
+
+# --- the same disease, one layer down ---------------------------------------
+def test_the_probation_note_is_prose_and_not_a_build_log():
+    """The WNBA note rendered on the board as:
+
+        UPDATED: margin_sd 11.5 → 13.54 (from 1576 games); sd_cv[pts] 0.3 →
+        0.84 (29662 rows); sd_cv[reb] 0.4 → 0.811 (29662 rows); sd_cv[ast]
+        0.43 → 0.939 (29662 rows); sd_cv[pra] 0.24 → 0.69 (29662 rows);
+        sd_cv[fg3m] 0.55 → 1.172 (29662 rows).
+
+    Six variable names and their row counts in a paragraph a bettor is meant
+    to read. That is not transparency, it is a log file with a border around
+    it — and it is precisely what "machine-made" looks like on a page."""
+    from engine.hoops_fit import fitted_sentence
+    report = {"fitted": [f"sd_cv[{s}] 0.3 → 0.84 (29662 rows)"
+                         for s in ("pts", "reb", "ast", "pra", "fg3m")],
+              "games": 1576, "stat_rows": {"pts": 29662}}
+    out = fitted_sentence(report)
+    assert "sd_cv[" not in out and "margin_sd" not in out, \
+        "variable names are still being shown to the reader"
+    assert "→" not in out
+    assert "1,576 games" in out, "the sample size is worth keeping"
+    assert "probation" in out
+
+
+def test_the_terminal_still_gets_every_line():
+    """Losing the detail would be the opposite mistake — whoever is
+    debugging the fit needs each constant and its row count."""
+    from engine.hoops_fit import describe
+    out = describe({"league": "wnba",
+                    "fitted": ["margin_sd 11.5 → 13.54 (from 1576 games)"],
+                    "inherited": ["sd_cv[fg3m] 0.55 — 12 rows, need 400"]})
+    assert "margin_sd 11.5 → 13.54" in out
+    assert "sd_cv[fg3m]" in out
+
+
+def test_it_reads_correctly_for_a_single_constant():
+    from engine.hoops_fit import fitted_sentence
+    out = fitted_sentence({"fitted": ["one"], "games": 0, "stat_rows": {}})
+    assert "1 of these constants is now measured" in out
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
