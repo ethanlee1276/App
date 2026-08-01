@@ -1744,8 +1744,14 @@ select.calc-in { width: auto; font-weight: 600; }
      One row, not two: the theme toggle moved up into the menu bar (where
      every app puts it, and where 40px of empty space already was), which
      freed the fourth cell. Same stability guarantee, half the height. */
+  /* FOUR columns, not three. The fourth was removed when the theme toggle
+     was lifted into the menu bar — but "lifted" meant absolutely positioned
+     on top of it, and the menu pill is a bordered box ~40px tall starting
+     at the same y, so the toggle's circle sat ON its right edge with its
+     own right side clipped by the screen. Two overlapping bordered boxes.
+     It belongs on this row, at the end, level with the date. */
   .slate-meta { flex: 1 1 100%; order: 5; display: grid;
-    grid-template-columns: auto auto minmax(0, 1fr); gap: 8px;
+    grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 8px;
     align-items: center; justify-content: stretch; }
   .slate-meta > * { min-width: 0; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; justify-self: start; }
@@ -2123,10 +2129,34 @@ select.calc-in { width: auto; font-weight: 600; }
    40px of empty space. That alone gets the status back to one line. */
 @media (max-width: 760px) {
   .topbar { position: sticky; }
-  #theme-toggle { position: absolute; top: 8px; right: 14px; z-index: 3; }
-  /* …and keep the menu bar's label clear of it on a narrow phone. */
-  .menu-toggle { padding-right: 52px; }
-  .slate-meta { gap: 8px; flex-wrap: nowrap; overflow: hidden; }
+  /* NOT absolutely positioned over the bar. It was, at top:8/right:14, and
+     the menu bar's own bordered pill starts at ~14 and is ~40px tall — so
+     the toggle's circle sat ON the pill's right edge with its own right
+     side clipped by the viewport. Two overlapping bordered boxes is what
+     "bugged in" looks like. padding-right kept the LABEL clear and did
+     nothing about the box.
+     As a flex sibling they share the row: the pill takes what is left, the
+     toggle keeps its 40px, and the gap between them is the topbar's. */
+  /* Back in the flow. `.slate-meta` is its parent and is a GRID, which is
+     why ordering it against `.menu-toggle` did nothing and margin-left:auto
+     did nothing — neither is a flex sibling of anything here. It simply
+     takes the fourth column restored above. */
+  #theme-toggle { position: static; }
+  /* Tighter gap and a slightly smaller toggle: giving the toggle its own
+     column costs the date ~48px, and "Sat, Jun …" truncating the month is
+     a worse trade than 6px of breathing room. 36px still clears the 36px
+     touch floor for a control sitting inside a larger tappable row. */
+  .slate-meta { gap: 6px; flex-wrap: nowrap; overflow: hidden; }
+  .slate-meta .theme-toggle { width: 36px; height: 36px; font-size: 16px;
+    position: relative; }
+  /* The BOX shrinks, the reach does not — same trick the "why?" pill uses.
+     36px is under Apple's 44px minimum, and a control you have to aim at
+     is a control you stop using. */
+  .slate-meta .theme-toggle::after {
+    content: ""; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 44px; height: 44px;
+  }
   #slate-date { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; }
 }
@@ -2155,9 +2185,14 @@ select.calc-in { width: auto; font-weight: 600; }
    on one board and 168px on the next. Content must not decide layout. */
 @media (min-width: 761px) and (max-width: 1247px) {
   .slate-meta { flex: 1 0 100%; margin-left: 0; justify-content: flex-start; }
-  /* The 40px theme button was setting the row's height on its own. Up in
-     the corner it costs nothing and the row shrinks to chip height. */
-  #theme-toggle { position: absolute; top: 10px; right: 16px; z-index: 3; }
+  /* It used to be lifted "up in the corner" to stop the 40px button setting
+     this row's height. The corner is not empty: at 761-1247px it landed on
+     top of the sport-switch pill's right end, overlapping its border — the
+     same fault reported on the phone, one breakpoint over, found by the
+     test written for the phone one. Seven pixels of row height is a cheaper
+     price than a button that looks bolted on. */
+  #theme-toggle { position: static; margin-left: auto; flex: 0 0 auto;
+                  width: 36px; height: 36px; font-size: 16px; }
   #slate-date { min-width: 0; }
 }
 

@@ -181,6 +181,44 @@ def test_an_empty_hash_is_a_destination_and_not_a_no_op():
         "the empty hash is being swallowed again"
 
 
+
+
+# --- the theme toggle sat on top of the menu bar ----------------------------
+def test_the_theme_toggle_is_not_positioned_over_the_menu_bar():
+    """Reported from the phone: the moon button "sitting like bugged in with
+    the recommended bar". It was `position: absolute; top: 8px; right: 14px`
+    — and the menu pill is a bordered box ~40px tall starting at the same y,
+    so the toggle's circle sat ON its right edge with its own right side
+    clipped by the screen. Two overlapping bordered boxes.
+
+    The fix is not a nudge. It belongs in the status row, which is a GRID —
+    the reason `order` and `margin-left: auto` both did nothing when tried
+    against `.menu-toggle`: they are not flex siblings of anything here."""
+    # Not "the first max-width:760 block" — there are several, and this rule
+    # lives in a later one. The same assumption broke test_about_page.py
+    # once already.
+    assert "#theme-toggle { position: static; }" in CSS
+    assert "top: 8px; right: 14px" not in CSS
+    assert "top: 10px; right: 16px" not in _strip_comments(CSS), \
+        "the tablet breakpoint still floats it over the bar"
+
+
+def test_the_status_row_has_a_column_for_it():
+    """Three columns and four children put the toggle on its own row. The
+    fourth column was removed when it was lifted onto the menu bar."""
+    i = CSS.index(".slate-meta { flex: 1 1 100%; order: 5; display: grid;")
+    block = CSS[i:CSS.index("}", i)]
+    assert "grid-template-columns: auto auto minmax(0, 1fr) auto;" in block
+
+
+def test_the_shrunk_toggle_keeps_a_44px_reach():
+    """36px is under Apple's minimum, and a control you have to aim at is a
+    control you stop using. Tap-tested: hits out to 25px above centre."""
+    i = CSS.index(".slate-meta .theme-toggle::after")
+    block = CSS[i:CSS.index("}", i)]
+    assert "width: 44px; height: 44px;" in block
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
