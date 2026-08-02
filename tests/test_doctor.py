@@ -254,6 +254,50 @@ def test_it_is_reachable_by_hand_too():
     assert 'if "--doctor" in argv:' in src
 
 
+def test_ci_mode_drops_the_checks_that_need_the_laptop():
+    """Six warnings a night that are all correct behaviour is noise, and
+    noise teaches you to ignore the run."""
+    rep = doctor.run(skip_tests=True, code_only=True)
+    names = {c["check"] for c in rep.checks}
+    assert names == {"git"}, f"code-only still ran {names - {'git'}}"
+
+
+def test_ci_mode_still_runs_the_suite_when_asked():
+    src = open(os.path.join(ROOT, "doctor.py"), encoding="utf-8").read()
+    assert "if code_only and fn in DATA_CHECKS:" in src
+    assert doctor.check_tests not in doctor.DATA_CHECKS, \
+        "code-only would skip the test suite, which is the whole point of CI"
+
+
+def test_the_odds_budget_does_not_report_its_own_default_as_a_reading():
+    """load() falls back to ASSUMED_MONTHLY when no state file exists, so a
+    fresh clone would report "500 credits left" — the same lie as calling an
+    empty journal clean."""
+    src = open(os.path.join(ROOT, "doctor.py"), encoding="utf-8").read()
+    i = src.index("def check_odds_budget(")
+    block = src[i:i + 900]
+    assert "Path(ob.STATE_PATH).exists()" in block
+
+
+def test_the_workflow_uses_code_only_so_a_red_run_means_something():
+    wf = open(os.path.join(ROOT, ".github", "workflows", "nightly.yml"),
+              encoding="utf-8").read()
+    assert "--code-only" in wf
+    assert "python3 run_tests.py" in wf
+
+
+def test_the_workflow_does_not_quietly_grow_a_dependency():
+    """The engine is standard library end to end. A pip install appearing
+    here is a fact worth noticing, not papering over."""
+    wf = open(os.path.join(ROOT, ".github", "workflows", "nightly.yml"),
+              encoding="utf-8").read()
+    # Comments stripped: the comment explaining why there is no install step
+    # names the thing it is ruling out, and that note is the point.
+    steps = "\n".join(l for l in wf.splitlines()
+                      if not l.lstrip().startswith("#"))
+    assert "pip install" not in steps
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

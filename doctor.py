@@ -16,6 +16,7 @@ that goes silent when it breaks is worse than no monitor at all.
     python3 doctor.py --quiet      # findings only — nothing if all clear
     python3 doctor.py --json       # machine-readable, for an agent
     python3 doctor.py --skip-tests # the slow one, when iterating
+    python3 doctor.py --code-only  # for CI: skip everything needing the laptop
 
 Exit codes: 0 all clear · 1 warnings only · 2 something needs a human.
 """
@@ -225,6 +226,12 @@ def check_odds_budget(rep):
     @_check(rep, "odds budget")
     def _():
         from engine import oddsbudget as ob
+        # No state file means no paid pull has ever run HERE, and load()
+        # falls back to ASSUMED_MONTHLY. Reporting that as "500 credits
+        # left" is the same lie as reporting an empty journal as clean.
+        if not Path(ob.STATE_PATH).exists():
+            rep.add("odds budget", WARN, _no_data("odds-budget state"))
+            return
         st = ob.load()
         remaining = getattr(st, "remaining", None)
         days = ob.days_left_in_month()
@@ -323,18 +330,30 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
           check_ingest_freshness, check_odds_budget, check_journal_sanity,
           check_record_page, check_git]
 
+# The checks that need the laptop's databases, budget state and built
+# slates. On a machine that has none of those — CI, a fresh clone — they
+# correctly report "not my machine", and six such warnings every night is
+# noise that teaches you to ignore the run. --code-only drops them, so a
+# red CI run means something is actually red.
+DATA_CHECKS = (check_stuck_bets, check_slate_freshness,
+               check_ingest_freshness, check_odds_budget,
+               check_journal_sanity, check_record_page)
 
-def run(skip_tests: bool = False) -> Report:
+
+def run(skip_tests: bool = False, code_only: bool = False) -> Report:
     rep = Report()
     for fn in CHECKS:
         if skip_tests and fn is check_tests:
+            continue
+        if code_only and fn in DATA_CHECKS:
             continue
         fn(rep)
     return rep
 
 
 def main(argv: list[str]) -> int:
-    rep = run(skip_tests="--skip-tests" in argv)
+    rep = run(skip_tests="--skip-tests" in argv,
+              code_only="--code-only" in argv)
     if "--json" in argv:
         print(json.dumps({"verdict": ["ok", "warn", "fail"][rep.verdict],
                           "checks": rep.checks}, indent=2))
