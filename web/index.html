@@ -26,21 +26,16 @@
            href gives it real keyboard/semantic behaviour. -->
       <a class="brand-home" id="brand-home" href="#recommended"
          title="Home — tonight's picks for this sport (also refreshes)">
-        <!-- The mark: a thin geometric Q, one ring and a short tail that
-             crosses it. Same weight and accent as the rest of the chrome —
-             a heavier or gradient-filled mark reads as a sticker glued to
-             a flat interface. The tile used to BE the sport emoji, which
-             left the app with no constant identity and resized the header
-             with whichever glyph was in it; the sport is named by the
-             tagline on desktop and by the menu bar ("⚾ MLB · Recommended")
-             on a phone. Same geometry lives in favicon.svg and in the
-             apple-touch-icon — change all three together. -->
+        <!-- The mark: the venue bowl ellipse, the smallest scale of the
+             venue system drawn in web/js/visuals.js — the logo and the
+             product are the same idea (redesign spec §6.1). It replaces a
+             thin geometric Q that said nothing about what this is and read
+             as a magnifying glass at 16px. Same geometry lives in
+             favicon.svg and in the apple-touch-icon — change all three
+             together. -->
         <span class="logo" id="brand-logo" aria-hidden="true">
           <svg class="qmark" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
-            <g transform="translate(0 2)">
-              <circle cx="24" cy="22" r="14" />
-              <path d="M30.36 28.36 L36.73 34.73" />
-            </g>
+            <ellipse cx="24" cy="24" rx="17" ry="11.5" />
           </svg>
         </span>
         <div>

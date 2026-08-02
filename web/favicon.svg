@@ -1,14 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
-  <!-- Qellys Book. Flat panel + one thin accent stroke, because that is the
-       whole design system: hairline borders, no gradients, one calm blue.
-       Colours are --panel-2 and --brand from web/css/styles.css.
+  <!-- Qellys Book. The mark is the venue bowl ellipse — literally the
+       smallest scale of the venue system in web/js/visuals.js, which means
+       the logo and the product are the same idea. Redesign spec §6.1.
 
+       It replaces the geometric Q, which said nothing about what this is
+       and read as a magnifying glass at 16px.
+
+       Flat tile, one stroke, no gradient: the same chrome as everything
+       else. Colours are --panel-2 and --brand from web/css/styles.css.
        Identical geometry to the header tile in index.html and to
        apple-touch-icon.png — change all three together, or the tab, the
        home screen and the page stop looking like one brand. -->
-  <rect width="48" height="48" rx="11" fill="#16171d"/>
-  <g fill="none" stroke="#e6dccb" stroke-width="3.5" transform="translate(0 2)">
-    <circle cx="24" cy="22" r="14"/>
-    <path d="M30.36 28.36 L36.73 34.73"/>
+  <rect width="48" height="48" fill="#101115"/>
+  <g fill="none" stroke="#FFB000" stroke-width="3.4">
+    <ellipse cx="24" cy="24" rx="17" ry="11.5"/>
   </g>
 </svg>

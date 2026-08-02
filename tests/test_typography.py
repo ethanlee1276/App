@@ -87,7 +87,8 @@ def test_the_prototype_self_hosts_its_faces_like_the_rest_of_the_site():
 
 def test_the_header_comment_still_describes_what_ships():
     n = len(set(re.findall(r'url\("\.\./fonts/([^"]+)"', CSS)))
-    words = {2: "Two", 3: "Three", 4: "Four"}[n]
+    words = {2: "Two", 3: "Three", 4: "Four", 5: "Five", 6: "Six",
+             7: "Seven", 8: "Eight"}[n]
     assert f"{words} files" in CSS, \
         f"{n} font files ship but the note at the top says otherwise"
 

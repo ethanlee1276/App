@@ -124,8 +124,8 @@ def test_the_value_can_still_break_between_number_and_unit():
 
 def test_the_header_note_counts_the_files_that_ship():
     n = len(set(re.findall(r'url\("\.\./fonts/([^"]+)"', CSS)))
-    assert n == 4
-    assert "Four files" in CSS
+    assert n == 7
+    assert "Seven files" in CSS
     assert "IBM Plex Mono for every NUMBER" in CSS
 
 

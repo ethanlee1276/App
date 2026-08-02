@@ -110,10 +110,25 @@ def test_the_inline_styles_in_the_renderer_obey_the_same_three_steps():
     assert not stray, f"inline container radii in the renderer: {sorted(stray)}"
 
 
-def test_the_three_steps_are_actually_distinct():
-    for token, value in (("--radius-sm", "4px"), ("--radius", "5px"),
-                         ("--radius-lg", "10px")):
-        assert re.search(rf"{token}:\s*{value}", CSS), f"{token} moved"
+def test_there_is_no_radius_left_to_have_steps():
+    """This used to assert three distinct radius steps — 4/5/10 — as the fix
+    for an audit that found fourteen values in use (1,2,3,4,6,7,8,9,10,11,
+    12,13,16). Three beat fourteen.
+
+    Night Form retires the question: radius 0 everywhere, spec §3.3, so a
+    rounded container cannot be reintroduced by picking a number at all.
+    The tokens stay defined because ~90 rules reference them; they just
+    resolve to nothing.
+
+    50% survives on purpose. An avatar mask, a status dot and a score ring
+    are GRAPHICS, not containers, and squaring them is not what "no rounded
+    cards" meant."""
+    for token in ("--radius-sm", "--radius", "--radius-lg"):
+        assert re.search(rf"{token}:\s*0\s*;", CSS), f"{token} is not 0"
+    body = _strip(CSS) if "_strip" in globals() else re.sub(r"/\*.*?\*/", " ", CSS, flags=re.S)
+    stray = sorted({v for v in re.findall(r"border-radius:\s*([^;}]+)", body)
+                    if v.strip() not in ("0", "50%")})
+    assert not stray, f"rounded containers are back: {stray}"
 
 
 # --- 5. Perfectly even vertical rhythm --------------------------------------

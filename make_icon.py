@@ -24,38 +24,46 @@ from pathlib import Path
 
 # --- the mark, in the SVG's 48x48 user units -----------------------------
 U = 48.0
-CX, CY, R = 24.0, 22.0, 14.0     # ring centre and radius
-HALF = 1.75                      # half of the 3.5-unit stroke
-TAIL_A = (30.36, 28.36)          # tail crosses the ring: from r = 9 inside…
-TAIL_B = (36.73, 34.73)          # …to r = 18, just outside. A LONG tail here
+CX, CY = 24.0, 24.0              # bowl centre
+RX, RY = 17.0, 11.5              # bowl radii — the venue mark's proportions
+HALF = 1.7                       # half of the 3.4-unit stroke
                                  # turns the mark into a magnifying glass.
 # The ring is centred at y=22 to leave room for a tail that no longer needs
 # it, so the whole mark drops 2 units. Matches the <g transform> in the SVG.
-NUDGE = (0.0, 2.0)
-CORNER = 11.0                    # tile corner radius, matching the favicon
+NUDGE = (0.0, 0.0)
+CORNER = 0.0                     # square: radius 0 everywhere, spec §3.3
 
 # Flat, not a gradient: these are the site's own --panel-2 and --brand, so
 # the home-screen tile looks like the chrome it opens into.
-TOP = (0x16, 0x17, 0x1D)
-BOT = (0x16, 0x17, 0x1D)
-INK = (0xE6, 0xDC, 0xCB)
+TOP = (0x10, 0x11, 0x15)
+BOT = (0x10, 0x11, 0x15)
+INK = (0xFF, 0xB0, 0x00)
 
 SS = 4                           # supersampling factor per axis
 
 
 def _in_mark(x: float, y: float) -> bool:
-    """Is this point (in user units) painted white?"""
+    """Is this point (in user units) painted?
+
+    The mark is the venue bowl ellipse (redesign spec §6.1) — the smallest
+    scale of the venue system, so the logo and the product are the same
+    idea. It replaced a geometric Q whose tail read as a magnifying glass
+    at tab size.
+
+    An ellipse has no closed-form distance-to-outline, so this measures the
+    implicit-function residual and scales it by the local gradient. That
+    gives a true perpendicular distance to first order, which is what a
+    constant-width stroke needs — the naive |f(x,y)-1| test paints a band
+    that is visibly fat at the ends of the major axis and thin at the top.
+    """
     x, y = x - NUDGE[0], y - NUDGE[1]
-    if abs(math.hypot(x - CX, y - CY) - R) <= HALF:
-        return True
-    # The tail, with a flat cap at both ends — a round cap would bulge into
-    # the counter and read as a magnifying glass rather than a Q.
-    ax, ay = TAIL_A
-    dx, dy = TAIL_B[0] - ax, TAIL_B[1] - ay
-    t = ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy)
-    if not 0.0 <= t <= 1.0:
+    dx, dy = x - CX, y - CY
+    f = (dx * dx) / (RX * RX) + (dy * dy) / (RY * RY) - 1.0
+    gx, gy = 2 * dx / (RX * RX), 2 * dy / (RY * RY)
+    g = math.hypot(gx, gy)
+    if g == 0:
         return False
-    return math.hypot(x - (ax + t * dx), y - (ay + t * dy)) <= HALF
+    return abs(f) / g <= HALF
 
 
 def _in_tile(x: float, y: float, size: int, corner: float) -> bool:

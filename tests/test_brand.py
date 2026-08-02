@@ -33,28 +33,29 @@ def _numbers(text):
 
 
 def _mark_geometry(svg_text):
-    """The <g> that holds the ring and the tail, numbers only."""
-    m = re.search(r"<g[^>]*transform=\"translate\(([^)]*)\)\"[^>]*>(.*?)</g>",
-                  svg_text, re.S)
-    assert m, "no transformed <g> holding the mark"
-    return _numbers(m.group(1)), _numbers(m.group(2))
+    """The bowl ellipse, numbers only — cx, cy, rx, ry.
+
+    The mark used to be a circle plus a crossing tail inside a translated
+    <g>, and this helper read that <g>. It is the venue bowl now (redesign
+    spec §6.1): one ellipse, no group, no optical nudge, because a
+    symmetric shape needs no correction."""
+    m = re.search(r"<ellipse[^>]*/>", svg_text)
+    assert m, "no <ellipse> holding the mark"
+    return _numbers(m.group(0))
 
 
-def test_favicon_and_header_draw_the_same_q():
-    fav_nudge, fav_paths = _mark_geometry(_read("web", "favicon.svg"))
-    page_nudge, page_paths = _mark_geometry(_read("web", "index.html"))
-    assert fav_nudge == page_nudge, "optical-centring nudge drifted apart"
-    assert fav_paths == page_paths, "ring/tail geometry drifted apart"
+def test_favicon_and_header_draw_the_same_mark():
+    assert _mark_geometry(_read("web", "favicon.svg")) \
+        == _mark_geometry(_read("web", "index.html")), \
+        "bowl geometry drifted apart between the tab and the page"
 
 
 def test_raster_icon_matches_the_svg():
-    # favicon.svg: translate(x y), circle cx cy r, then the tail's two points.
-    nudge, paths = _mark_geometry(_read("web", "favicon.svg"))
-    cx, cy, r, ax, ay, bx, by = paths
-    assert tuple(nudge) == make_icon.NUDGE
-    assert (cx, cy, r) == (make_icon.CX, make_icon.CY, make_icon.R)
-    assert (ax, ay) == make_icon.TAIL_A
-    assert (bx, by) == make_icon.TAIL_B
+    cx, cy, rx, ry = _mark_geometry(_read("web", "favicon.svg"))
+    assert (cx, cy) == (make_icon.CX, make_icon.CY)
+    assert (rx, ry) == (make_icon.RX, make_icon.RY)
+    assert make_icon.NUDGE == (0.0, 0.0), \
+        "an ellipse centred in its own box needs no optical nudge"
 
 
 def test_stroke_width_matches_the_rasteriser():
@@ -66,13 +67,26 @@ def test_stroke_width_matches_the_rasteriser():
     assert width == css_width == make_icon.HALF * 2
 
 
-def test_tail_cap_is_flat_everywhere():
-    # A round cap bulges into the counter and the Q reads as a magnifying
-    # glass. Neither the SVGs nor the CSS may ask for one.
-    assert "stroke-linecap" not in _read("web", "favicon.svg")
-    css = _read("web", "css", "styles.css")
-    qmark = re.search(r"\.qmark\s*\{([^}]*)\}", css, re.S).group(1)
-    assert "linecap" not in qmark
+def test_the_mark_is_one_unfilled_stroke():
+    """The bowl is an outline. A fill turns it into a lozenge, and a second
+    shape turns the logo into an illustration — the whole point of §6.1 is
+    that the mark IS the venue system at its smallest scale, and at 16px
+    only the silhouette survives anyway."""
+    svg = _read("web", "favicon.svg")
+    assert svg.count("<ellipse") == 1, "the mark grew a second shape"
+    assert 'fill="none"' in svg
+    assert "<path" not in svg and "<circle" not in svg, "the Q's tail is back"
+
+
+def test_the_tile_is_square():
+    """Radius 0 everywhere, spec §3.3 — including the icon, which is the
+    one surface a rounded corner survives on by being baked into a PNG."""
+    # Scoped to the RECT. `rx=` also appears on the ellipse itself, where it
+    # is a radius and not a corner — the first version of this assertion
+    # failed on the mark it was meant to protect.
+    rect = re.search(r"<rect[^>]*/>", _read("web", "favicon.svg")).group(0)
+    assert "rx=" not in rect, "the tile is rounded again"
+    assert make_icon.CORNER == 0.0
 
 
 def test_the_page_links_both_icons():
@@ -164,7 +178,7 @@ def test_brand_is_constant_across_sports():
 
 
 def test_the_masthead_never_asks_for_a_weight_the_serif_does_not_have():
-    """Instrument Serif ships one weight. Asking for 800 makes the browser
+    """Bodoni Moda ships one weight. Asking for 800 makes the browser
     synthesise a bold by smearing the outline, which on a serif reads as a
     printing fault rather than emphasis."""
     css = _read("web", "css", "styles.css")
@@ -183,7 +197,11 @@ def test_the_type_is_self_hosted():
     assert "fonts.googleapis.com" not in css and "fonts.gstatic.com" not in css
     html = _read("web", "index.html")
     assert "fonts.googleapis.com" not in html
-    for f in ("instrument-sans.woff2", "instrument-serif.woff2"):
+    # Named rather than counted, so dropping a family shows up here rather
+    # than as a silent fallback to the platform's default serif.
+    for f in ("archivo-narrow.woff2", "archivo-narrow-700.woff2",
+              "bodoni-moda-700.woff2", "bodoni-moda-900.woff2",
+              "plex-mono.woff2", "plex-mono-500.woff2", "plex-mono-600.woff2"):
         assert os.path.isfile(os.path.join(root, "web", "fonts", f)), f
         assert f in css, f"{f} is on disk but nothing loads it"
     assert "font-display: swap" in css, "text would be invisible while loading"
