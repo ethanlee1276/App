@@ -413,3 +413,26 @@ def summary(conn) -> dict:
             "SELECT COUNT(*) FROM player_game_logs WHERE sport=?", (sport,)).fetchone()[0]
         out["seasons"][sport] = seasons_present(conn, sport)
     return out
+
+
+def nfl_game_winds(conn, season: int) -> dict[str, float]:
+    """``{game_id: wind_mph}`` for one NFL season, game_id being ``AWAY@HOME``.
+
+    This is what fills the conditions column in a player's past-performance
+    table (redesign spec §6.4). The weekly player feed carries no weather at
+    all — it is the `games` table, populated by a separate ingest, that knows
+    the wind — so the table showed a column of em dashes until this join
+    existed.
+
+    Keyed by game_id alone rather than (period, game_id): a matchup happens
+    at most twice a season and the second meeting is at the other venue, so
+    the id already differs. Weeks are therefore not needed to disambiguate,
+    and not requiring them means a log whose week numbering is off by a
+    playoff round still finds its game.
+    """
+    out: dict[str, float] = {}
+    for row in conn.execute(
+            "SELECT game_id, wind FROM games WHERE sport='nfl' AND season=? "
+            "AND wind IS NOT NULL", (season,)):
+        out[str(row["game_id"])] = float(row["wind"])
+    return out

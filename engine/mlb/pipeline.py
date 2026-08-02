@@ -288,7 +288,15 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "logs": [
             # Each MLB log row is one GAME (not a week); carry its real date
             # so the site can label it as such.
-            {"week": g.game, "date": g.date, "opponent": g.opponent,
+            #
+            # `park` is the CONDITIONS column the past-performance table asks
+            # for (redesign spec §6.4: "add the conditions column — WIND for
+            # NFL, PARK for MLB"). It needs no new data source: a log already
+            # records the opponent and whether the player was home, and those
+            # two facts name the venue exactly. The HR factor rides along
+            # because "Coors" only means something if you know it plays +22%.
+            {**_log_park(prop, g),
+             "week": g.game, "date": g.date, "opponent": g.opponent,
              "value": g.value, "home": g.home}
             for g in prop.logs
         ],
@@ -301,7 +309,81 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
     }
 
 
-def _game_to_dict(g) -> dict:
+def _conditions(g, park, results: list[dict] | None) -> dict:
+    """Did this park's conditions actually MOVE a number tonight?
+
+    The NFL half of this lives in engine/pipeline.py and the reasoning is
+    the same — see the long note there. Here the model is the PARK rather
+    than the weather: `evaluate_park` returns per-market multipliers, and a
+    park is material when one of the markets it moves is a market someone
+    priced at this game tonight.
+
+    Coors is not "material" on a card where the only priced prop is
+    strikeouts and the altitude never touched the number. That distinction
+    is the whole point of §5.1 — an amber stroke is a claim, and a claim
+    that is always true says nothing.
+    """
+    from .parks import evaluate_park
+    from .homeruns import park_weather_multiplier
+
+    eff = evaluate_park(park)
+    moved = {m for m, mult in eff.multipliers.items() if abs(mult - 1.0) > 1e-9}
+    priced = {r.get("market") for r in (results or [])
+              if r.get("team") in (g.home, g.away)
+              or r.get("opponent") in (g.home, g.away)}
+    hit = sorted(moved & priced) if priced else sorted(moved)
+
+    """Wind and temperature are NOT in evaluate_park — that function only
+    knows the building. The home-run model is where a ballpark's weather
+    actually gets priced, so ask it, and take its sentences.
+
+    This matters at Wrigley specifically. Its park factors (hr 1.04, run
+    1.02) sit under evaluate_park's own thresholds, so the park moves
+    nothing — but 16mph blowing OUT is the most famous wind effect in
+    baseball, and the park's own profile text says to check the wind before
+    anything else there. The first version of this flagged that game
+    material with an EMPTY reason list, which is precisely the failure §5.1
+    forbids: an amber stroke that encodes nothing."""
+    hr_mult, hr_reasons, _caveats = park_weather_multiplier(g)
+    weather_moved = abs(hr_mult - park.hr_factor) > 1e-9
+
+    w = g.weather
+    roofed = bool(w.roof_closed or park.roof == "dome")
+    why = list(eff.reasons)
+    # WEATHER sentences only. The two functions overlap on the park itself,
+    # and exact-match dedupe is not enough because they word it differently:
+    # Coors came out saying "boosts home runs (+22% vs average)" AND "plays
+    # big for home runs (+22% HR factor)", and named its altitude twice.
+    _WEATHER = ("wind", "°f", "roof", "air")
+    why += [r for r in hr_reasons
+            if any(k in r.lower() for k in _WEATHER)
+            and "altitude" not in r.lower()
+            and r not in why]
+    return {
+        "material": bool(hit) or roofed or weather_moved,
+        "markets_moved": hit,
+        "roofed": roofed,
+        "why": why,
+    }
+
+
+def _log_park(prop, log) -> dict:
+    """The ballpark a past game was played in, plus how it plays.
+
+    Returns {} when the team is unknown, so the column is OMITTED rather than
+    rendered as a row of em dashes — a blank column is worse than no column,
+    because it looks like the data is missing rather than not applicable."""
+    from .parks import park_of_game
+
+    park = park_of_game(getattr(prop, "team", "") or "",
+                        getattr(log, "opponent", "") or "",
+                        bool(getattr(log, "home", True)))
+    if park is None:
+        return {}
+    return {"park": park.name, "park_hr": round(park.hr_factor, 2)}
+
+
+def _game_to_dict(g, results: list[dict] | None = None) -> dict:
     park = get_park(g.park)
     w = g.weather
     return {
@@ -337,6 +419,8 @@ def _game_to_dict(g) -> dict:
             "wind_dir": w.wind_dir_rel,       # "out" | "in" | "cross"
             "rain": w.precip_chance >= 0.5, "snow": False,
         },
+        # §5.1's encoding contract, computed rather than assumed.
+        "conditions": _conditions(g, park, results),
     }
 
 
@@ -570,7 +654,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "near_miss": near_misses(results),
         "priced_out": priced_out(results),
         "config": {"min_confidence": config.min_confidence, "min_edge": config.min_edge},
-        "games": [_game_to_dict(g) for g in slate.games],
+        "games": [_game_to_dict(g, results) for g in slate.games],
         "recommendations": results,
         "game_bets": game_bets,
         "correlation": corr,

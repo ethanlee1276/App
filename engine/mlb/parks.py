@@ -267,6 +267,27 @@ def get_park(key: str) -> ParkProfile:
     return PARKS.get(key, GENERIC_PARK)
 
 
+# Built once. Every park names the team it belongs to, so the reverse index
+# is free — and it is what lets a PAST game be attributed to a ballpark: a
+# game log already records the opponent and whether the player was home, and
+# those two facts name the venue exactly.
+_BY_TEAM: dict[str, ParkProfile] = {p.team: p for p in PARKS.values() if p.team}
+
+
+def park_for_team(abbr: str) -> ParkProfile | None:
+    """The park a team plays its home games in, or None if unknown."""
+    return _BY_TEAM.get((abbr or "").upper())
+
+
+def park_of_game(player_team: str, opponent: str, home: bool) -> ParkProfile | None:
+    """Which ballpark a past game was played in.
+
+    The home side's park, whichever side that is. Neutral-site games are rare
+    enough in a regular season that treating the home team's park as the
+    venue is right far more often than any guess that tries to be clever."""
+    return park_for_team(player_team if home else opponent)
+
+
 @dataclass
 class ParkEffect:
     multipliers: dict[str, float]

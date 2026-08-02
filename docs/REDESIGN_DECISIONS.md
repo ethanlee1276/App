@@ -87,17 +87,57 @@ returns SVG. Same design, expressed in the stack that exists.
 
 ---
 
-## Outstanding — things the prototype fakes
+## Closed — the two things the prototype used to fake
 
-Both must be closed during migration rather than shipped as-is.
+Both are computed by the build now. Kept here because the *reasoning* is
+the part worth not re-deriving.
 
-- **§5.3 `material`.** The flag that gates every amber stroke is supposed to
-  be computed upstream — true when the condition actually moved a number for
-  at least one play at that venue. The prototype derives a stand-in from
-  thresholds (wind ≥ 8mph, altitude ≥ 3000ft, any roof). Wiring the real
-  flag is a build change in `engine/`.
-- **The conditions column in the past-performance table.** §6.4 asks for
-  WIND on NFL and PARK on MLB. The slate's game logs carry
-  `{week, opponent, value, home}` and nothing about conditions, so the
-  column is omitted rather than filled with em dashes. `engine/` has the
-  weather per game; it has to reach the payload first.
+### §5.3 `material` — the flag that gates every amber stroke
+
+`engine/pipeline.py::_conditions` (NFL) and `engine/mlb/pipeline.py::_conditions`
+(MLB). The prototype used thresholds — wind ≥ 8mph, altitude ≥ 3000ft, any
+roof — and that answers a **different question**. It says the condition is
+*big*, not that it *did anything*. A 20mph wind at a venue whose only priced
+prop is a market the wind model never touches moved nothing, and the mark
+should be dim; a threshold cannot tell those two cases apart.
+
+What ships instead: ask the model for its own per-market multipliers
+(`evaluate_weather`, `evaluate_park`), keep the ones that are not 1.0, and
+intersect with the markets **actually priced at that game tonight**. The
+reasons shown on the card are the model's own sentences, so the mark and the
+card cannot disagree about why it is lit.
+
+Two cases that shaped it:
+
+- **A roof is material on its own terms.** `evaluate_weather` returns flat
+  multipliers for a dome *because* nothing else applies, so materiality
+  cannot come from the multipliers there. §5.1: "the absence of weather is
+  information."
+- **Wrigley.** Its park factors (hr 1.04, run 1.02) sit under
+  `evaluate_park`'s own thresholds, so the building moves nothing — but
+  16mph blowing out is the most famous wind effect in baseball, and the
+  park's own profile text says to check the wind before anything else there.
+  Weather is priced in the **home-run** model, not in `evaluate_park`. The
+  first version flagged that game material with an **empty reason list**,
+  which is precisely what §5.1 forbids: an amber stroke encoding nothing.
+
+### §6.4 the conditions column — WIND for NFL, PARK for MLB
+
+- **MLB needs no new data source.** A game log already records the opponent
+  and whether the player was home, and those two facts name the venue
+  exactly (`parks.park_of_game`). The HR factor rides along, because "Coors"
+  only means something if you know it plays +22%.
+- **NFL needs a join.** The weekly player feed carries no weather at all;
+  the `games` table does. `db.nfl_game_winds` keys on `game_id`, which is
+  `AWAY@HOME`. The lookup tries **both** orderings rather than trusting
+  `log.home`, because nflverse weekly rows have no home flag and `GameLog`
+  defaults it to `True` — a lookup that believed it would miss every away
+  game.
+- **The season is not the calendar year.** Week 18 of the 2025 season is
+  played in January 2026. Keying on the year sent every January slate
+  looking in a season the database had not started, and the column came back
+  empty. `nfl_season_of` cuts at March.
+
+Where the data genuinely is not there the column is **omitted**, not filled
+with em dashes — a blank column looks like the data is missing rather than
+not applicable.

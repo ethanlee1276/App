@@ -114,12 +114,19 @@
     const mph = Math.round(w.wind_mph || 0);
     const bearing = COMPASS[(w.wind_dir || "").toUpperCase()] ?? 0;
     const alt = (g.stadium && g.stadium.altitude_ft) || g.altitude_ft || 0;
-    // §5.3: `material` is true when the condition actually moved a number.
-    // The slate does not carry that flag yet, so the prototype derives a
-    // stand-in from thresholds the engines already use — wind at 8mph+,
-    // altitude at 3000ft+, a roof at all. Wiring the real flag is a build
-    // change and belongs with the migration, not with the look.
-    const material = roofed || mph >= 8 || alt >= 3000;
+    /* §5.3: `material` is true when the condition actually MOVED a number
+       for at least one play at this venue, and it is computed upstream now —
+       engine/pipeline.py::_conditions and engine/mlb/pipeline.py::_conditions
+       read the model's own per-market multipliers and intersect them with the
+       markets actually priced tonight.
+
+       The threshold fallback below is what this used to do on its own, and it
+       answers a DIFFERENT question: it says the condition is big, not that it
+       did anything. A 10mph wind at a venue whose only priced market is
+       rushing yards moves nothing and should render dim. It survives only for
+       payloads built before the flag existed. */
+    const c = g.conditions;
+    const material = c ? !!c.material : (roofed || mph >= 8 || alt >= 3000);
     return { roofed, wind: { mph, bearing }, alt, material,
              shortPorch: (g.park_factor_hr || 0) > 0 };
   }
@@ -247,6 +254,16 @@
     const t = new Date(d + "T12:00:00");
     return isNaN(t) ? d : t.toLocaleDateString("en-US",
       { weekday: "short", month: "short", day: "numeric" });
+  };
+  /* MLB kickoffs arrive as a full ISO timestamp and NFL's as "HH:MM", so
+     the caption was printing "2026-06-20 2026-06-20T18:20:00Z" — the date
+     twice, once as a machine string. One formatter, both shapes. */
+  const when = r => {
+    const d = r.game_date ? fmtDate(String(r.game_date).slice(0, 10)) : "";
+    const k = r.game_kickoff || "";
+    const t = /T\d\d:/.test(k) ? fmtTime(k.slice(11, 16))
+            : /^\d\d?:\d\d/.test(k) ? fmtTime(k) : "";
+    return [d, t].filter(Boolean).join(" · ");
   };
   const fmtTime = k => {
     const [h, m] = String(k).split(":").map(Number);
@@ -415,23 +432,34 @@
     const line = r.line;
     const hitOf = v => line != null && v != null
       && (r.side === "UNDER" ? v < line : v > line);
-    /* The spec asks for a conditions column — WIND for NFL, PARK for MLB.
-       The game logs in the slate carry {week, opponent, value, home} and
-       nothing about conditions, so the column is OMITTED rather than filled
-       with em dashes. Populating it is a build change (engine/ has the
-       weather per game), and it is listed on the field map as outstanding
-       rather than quietly shipped as a row of blanks. */
+    /* §6.4's conditions column — WIND for NFL, PARK for MLB. Both are
+       populated by the build now (see engine/pipeline.py::_log_wind and
+       engine/mlb/pipeline.py::_log_park). It is still rendered ONLY when the
+       data is actually there: a column of em dashes looks like the data is
+       missing rather than not applicable, which is worse than no column. */
     const rows = logs.length ? logs
       : vals.slice(-6).map(v => ({ value: v }));
+    const hasWind = rows.some(g => g.wind != null);
+    const hasPark = rows.some(g => g.park);
+    const cond = hasWind ? "Wind" : hasPark ? "Park" : null;
+    const condCell = g => !cond ? ""
+      : hasWind ? `<td>${g.wind != null ? esc(g.wind) : "—"}</td>`
+      : `<td title="${esc(g.park || "")}">${g.park
+          ? esc(String(g.park).replace(/ (Field|Park|Stadium|Center|Centre)$/, ""))
+            + (g.park_hr && Math.abs(g.park_hr - 1) >= 0.04
+               ? ` <span class="${g.park_hr > 1 ? "hot" : ""}">${
+                   g.park_hr > 1 ? "+" : ""}${Math.round((g.park_hr - 1) * 100)}%</span>` : "")
+          : "—"}</td>`;
     return `<table class="pp">
-      <tr><th>Game</th><th>Opp</th><th>Line</th><th>Actual</th><th>Result</th></tr>
+      <tr><th>Game</th><th>Opp</th>${cond ? `<th>${cond}</th>` : ""}
+          <th>Line</th><th>Actual</th><th>Result</th></tr>
       ${rows.map(g => {
         const v = g.value != null ? g.value : g.actual;
         const hit = hitOf(v);
         const opp = g.opponent
           ? `${g.home === false ? "@" : ""}${g.opponent}` : "—";
         return `<tr><td>${esc(g.week != null ? "Wk " + g.week : g.date || "—")}</td>
-          <td>${esc(opp)}</td><td>${line != null ? line : "—"}</td>
+          <td>${esc(opp)}</td>${condCell(g)}<td>${line != null ? line : "—"}</td>
           <td>${v != null ? v : "—"}</td>
           <td class="${hit ? "hit" : "miss"}">${line == null ? "—"
             : hit ? (r.side || "OVER") : "miss"}</td></tr>`;
@@ -486,8 +514,7 @@
         <div class="sel">${esc(r.side || "")} ${esc(r.line ?? "")}
           ${esc(r.market_label || r.market || "")}
           <span class="bk">— ${esc(r.book || "")} ${esc(r.odds ?? "")}</span></div>
-        <div class="cap">${cap}${r.game_date ? ` · ${esc(r.game_date)}` : ""}${
-          r.game_kickoff ? ` ${esc(r.game_kickoff)}` : ""}</div>
+        <div class="cap">${cap}${when(r) ? ` · ${esc(when(r))}` : ""}</div>
         ${projBar(r)}
         ${ppTable(r)}
         <ul class="reasons">${(r.reasons || []).map(x =>
@@ -528,7 +555,7 @@
     ["Projection vs line slider", "engraved ticks on one rule, bone = proj, amber = line"],
     ["HIT PROB / EDGE / EV per unit", "EDGE is the 33px hero in green/red; the rest are key/value rows"],
     ["0–10 score bar + readout", "green bar under the hero with the numeric readout"],
-    ["Recent-form trendline", "promoted to the past-performance table, with a conditions column"],
+    ["Recent-form trendline", "promoted to the past-performance table, with a real conditions column — WIND from the history DB for NFL, PARK plus its HR factor for MLB"],
     ["Chip row 1 + 2", "one mono caption line under the selection"],
     ["Reasoning ✓/✗ list", "footnote list, green check / red cross, drawn not typed"],
     ["Venue cards + wind dial", "kept front and centre, first block on the page: live badge and clock, score, line summary, kickoff, situation line, engraved compass dial, per-game link, horizontal scroll"],

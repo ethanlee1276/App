@@ -158,15 +158,27 @@ def test_the_baseline_exists_and_covers_everything():
 
 def test_the_baseline_is_big_enough_to_be_the_real_site():
     """A truncated or half-failed harvest would still be valid JSON and
-    would still diff clean against itself. Pin the order of magnitude."""
+    would still diff clean against itself, so the harvest needs its own
+    sanity check.
+
+    Measured PER PAGE, not as a global total. The first version asserted
+    ">= 3000 strings" and broke the moment the sample slate was regenerated
+    with fewer picks — 2632 across 256 pages is obviously a real site, and
+    the test was pinning how many bets the fixture happened to contain
+    rather than whether the harvest worked. Density is the property that
+    actually distinguishes a rendered page from an empty one."""
     inv = json.load(open(BASELINE, encoding="utf-8"))
     pages = inv["pages"]
     assert len(pages) >= 240, f"only {len(pages)} pages in the baseline"
-    strings = set().union(*[set(p["strings"]) for p in pages.values()])
-    assert len(strings) >= 3000, f"only {len(strings)} strings captured"
     blank = [k for k, v in pages.items() if not v["strings"]]
     assert len(blank) < len(pages) * 0.1, \
         f"{len(blank)} pages harvested empty — the fixture server was probably down"
+    live = [v for v in pages.values() if v["strings"]]
+    thin = [n for n in (len(v["strings"]) for v in live) if n < 20]
+    assert len(thin) < len(live) * 0.2, \
+        f"{len(thin)} of {len(live)} pages rendered under 20 strings"
+    assert min(len(v["classes"]) for v in live) >= 10, \
+        "a page rendered with almost no markup — the stylesheet or JS failed"
 
 
 def test_the_baseline_records_counts_not_just_presence():

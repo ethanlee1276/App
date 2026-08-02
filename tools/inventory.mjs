@@ -11,8 +11,22 @@
  * string that stops rendering shows up as a deletion, not as a surprise
  * three weeks later.
  *
+ *   python3 generate.py && python3 generate_mlb.py      # deterministic
  *   node tools/inventory.mjs --out docs/inventory-baseline.json
  *   node tools/inventory.mjs --diff docs/inventory-baseline.json
+ *
+ * REGENERATE THE SAMPLE DATA FIRST, both times. The baseline records what
+ * RENDERED, so it is a function of the code AND the slate it was rendered
+ * from. The first baseline was taken against whatever fixture JSON happened
+ * to be sitting in the scratchpad; the moment an engine change made those
+ * files stale, a diff reported 7393 "lost" strings that were all just
+ * different numbers. Both generators are deterministic — same input, same
+ * bytes — so building from them makes the baseline reproducible from the
+ * repo alone, and a diff then means what it says.
+ *
+ * When a diff is large and the entries are mostly NUMBERS, suspect the data
+ * before the code: stash the change, regenerate, harvest, unstash,
+ * regenerate, and diff those two. That isolates the code from the slate.
  *
  * Needs a static server over web/ on $QB_FIXTURE (default 8777) and
  * Playwright's Chromium. Both live in the scratchpad; this file is in the

@@ -73,7 +73,9 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         ],
         # Per-player history for the Players & Trending pages.
         "logs": [
-            {"week": g.week, "opponent": g.opponent, "value": g.value, "home": g.home}
+            {**_log_wind(prop, g),
+             "week": g.week, "opponent": g.opponent,
+             "value": g.value, "home": g.home}
             for g in prop.logs
         ],
         "form": {
@@ -86,6 +88,82 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
             "vs_opponent": prop.vs_opponent_avg,
         },
     }
+
+
+# The slate's own date, set once per build. A game log carries a week
+# number but not a year, so the season has to come from the board it is
+# being rendered for.
+_SLATE_DATE: dict[str, str] = {}
+
+
+def nfl_season_of(date_str: str | None) -> int:
+    """The SEASON a date belongs to, which is not its calendar year.
+
+    An NFL season spans the new year: week 18 of the 2025 season is played
+    in January 2026, and the playoffs run to February. Keying on the
+    calendar year sent every January game looking in a season the database
+    had not started yet — the first version of the conditions column came
+    back empty for exactly this reason, on a slate dated 2026-01-04 whose
+    games are all stored under 2025.
+
+    March is the cut: the league year opens in mid-March, so anything before
+    it still belongs to the season that started the previous autumn.
+    """
+    import datetime as _dt
+    if date_str:
+        try:
+            d = _dt.date.fromisoformat(str(date_str)[:10])
+        except ValueError:
+            d = _dt.date.today()
+    else:
+        d = _dt.date.today()
+    return d.year - 1 if d.month < 3 else d.year
+
+
+def _wind_index(season: int | None = None) -> dict[str, float]:
+    """Per-game wind for one NFL season, loaded once.
+
+    Cached on the function because a slate builds a few hundred prop rows and
+    each one walks a dozen logs — that is thousands of lookups against the
+    same ~190-row table. Returns {} when there is no history database, which
+    is the normal state of a fresh clone, and the conditions column is then
+    omitted rather than rendered blank.
+    """
+    season = season or nfl_season_of(None)
+    cache = _wind_index.__dict__.setdefault("_cache", {})
+    if season in cache:
+        return cache[season]
+    try:
+        from .db import connect, nfl_game_winds
+        with connect() as conn:
+            cache[season] = nfl_game_winds(conn, season)
+    except Exception:
+        # A missing or unreadable database must never take a slate down; a
+        # board with no wind column is a board, a board that fails to build
+        # is nothing.
+        cache[season] = {}
+    return cache[season]
+
+
+def _log_wind(prop, log) -> dict:
+    """Wind for one past game, or {} if it is not known.
+
+    The player feed does not say which side was home — nflverse weekly rows
+    carry no home flag, and GameLog defaults it to True — so rather than
+    trust that, try BOTH orderings of the matchup. Only one of "A@B" and
+    "B@A" is a real game, so the ambiguity resolves itself and the column
+    stops depending on a field that is not actually populated.
+    """
+    team = (getattr(prop, "team", "") or "").upper()
+    opp = (getattr(log, "opponent", "") or "").upper()
+    if not team or not opp:
+        return {}
+    idx = _wind_index(nfl_season_of(getattr(log, "date", None)
+                                    or _SLATE_DATE.get("date")))
+    for gid in (f"{opp}@{team}", f"{team}@{opp}"):
+        if gid in idx:
+            return {"wind": round(idx[gid])}
+    return {}
 
 
 def _opportunity_shares(slate) -> dict:
@@ -216,6 +294,9 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     if not isinstance(slate, Slate):
         slate = load_slate(slate)
     config = config or RuleConfig()
+    # Set before the prop rows are built: _log_wind needs the season, a game
+    # log carries a week but not a year, and January belongs to last season.
+    _SLATE_DATE["date"] = str(getattr(slate, "date", "") or "")
 
     results = []
     for prop in slate.props:
@@ -258,7 +339,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
             "min_confidence": config.min_confidence,
             "min_edge": config.min_edge,
         },
-        "games": [_game_to_dict(g) for g in slate.games],
+        "games": [_game_to_dict(g, results) for g in slate.games],
         "recommendations": results,
         "game_bets": game_bets,
         "long_shots": ls,
@@ -288,7 +369,51 @@ def _market_scan(results: list[dict], long_shots: list[dict] | None = None) -> d
     return out
 
 
-def _game_to_dict(g) -> dict:
+def _conditions(g, results: list[dict] | None) -> dict:
+    """Did this venue's conditions actually MOVE a number tonight?
+
+    The redesign spec (§5.1) makes this the rule that separates a venue mark
+    from clip-art: *"A venue mark never renders without encoding something.
+    Amber stroke = that condition is material to tonight's plays. Never
+    applied decoratively."* §5.3 says the flag is "computed upstream by the
+    model — true when the condition actually moved the number for at least
+    one play at that venue."
+
+    So it is computed here, from the model, rather than guessed from a
+    threshold. The prototype used `wind >= 8mph or altitude >= 3000ft or any
+    roof`, which is a different claim: it says the condition is BIG, not that
+    it did anything. A 10mph wind at a venue whose only priced market is
+    rushing yards moves nothing, and the mark should be dim.
+
+    The test is: some market with a priced prop at this game has a weather
+    multiplier that is not 1.0. `evaluate_weather` already returns exactly
+    those multipliers, so this reads the model's own answer instead of
+    re-deriving one that could drift from it.
+    """
+    from .weather import evaluate_weather
+
+    eff = evaluate_weather(g.weather)
+    moved = {m for m, mult in eff.multipliers.items() if abs(mult - 1.0) > 1e-9}
+    # Markets actually on the board for this game. A condition that only
+    # touches markets nobody priced tonight did not move a number tonight.
+    priced = {r.get("market") for r in (results or [])
+              if r.get("team") in (g.home, g.away)
+              or r.get("opponent") in (g.home, g.away)}
+    hit = sorted(moved & priced) if priced else sorted(moved)
+    # A roof is material on its own terms: the ABSENCE of weather is
+    # information, and evaluate_weather returns early with flat multipliers
+    # for a dome precisely because nothing else applies.
+    roofed = bool(g.weather.dome) or (g.roof or "").lower() in ("dome", "closed")
+    return {
+        "material": bool(hit) or roofed,
+        "markets_moved": hit,
+        "roofed": roofed,
+        # The model's own sentences, so the mark and the card cannot disagree.
+        "why": list(eff.reasons),
+    }
+
+
+def _game_to_dict(g, results: list[dict] | None = None) -> dict:
     """Per-game context for the dashboard's stadium + weather visuals."""
     w = g.weather
     fav = g.home if g.spread < 0 else g.away
@@ -314,4 +439,6 @@ def _game_to_dict(g) -> dict:
             "rain": w.rain,
             "snow": w.snow,
         },
+        # §5.1's encoding contract, computed rather than assumed.
+        "conditions": _conditions(g, results),
     }
