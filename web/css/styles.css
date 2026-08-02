@@ -488,6 +488,29 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .metric .v { font-size: var(--fs-xl); font-weight: 800; margin-top: 3px; }
 .metric .v.pos { color: var(--good); } .metric .v.neg { color: var(--bad); }
 
+/* The SUPPORTING numbers, in rows that HAVE a hero. Scoped through :has()
+   on purpose. Not every metrics row is a hierarchy — the NFL game-script
+   card shows "CHI implied" beside "GB implied", the same quantity for both
+   sides of one game. That is a COMPARISON, and receding half of a
+   comparison does not clarify it, it just makes the card quieter. A row
+   only recedes when there is something in it to recede behind.
+
+   Where :has() is unsupported these stay at 17px and the hero still leads
+   at 22px, so the fallback is a smaller version of the same idea rather
+   than a broken layout. */
+.metrics:has(.metric.primary) .metric:not(.primary) .v {
+  font-size: var(--fs-lg);
+  color: var(--text-body);
+}
+/* A supporting number keeps its SIGN — it is written into the glyph,
+   "+39.3%" — but gives up the semantic colour. When all three numbers on a
+   card are green, green has stopped saying anything, and the one number the
+   card exists to communicate has no way left to stand out. */
+.metrics:has(.metric.primary) .metric:not(.primary) .v.pos,
+.metrics:has(.metric.primary) .metric:not(.primary) .v.neg {
+  color: var(--text-body);
+}
+
 .projbar { margin-top: 2px; }
 .projbar .labels { display: flex; justify-content: space-between; font-size: var(--fs-sm); color: var(--text-dim); margin-bottom: 6px; }
 .track { position: relative; height: 10px; border-radius: 999px; background: var(--panel-3); }
@@ -1230,16 +1253,45 @@ select.calc-in { width: auto; font-weight: 600; }
    presented three equally-weighted numbers and left the eye to pick.
    Edge is the one the whole site is organised around — the AVG EDGE
    tile, the min-edge slider, the Edge Board — so it gets the emphasis
-   and the other two become the context they actually are. */
-.metric.primary {
-  background: color-mix(in srgb, var(--brand) 9%, transparent);
-  border-color: color-mix(in srgb, var(--brand) 34%, transparent);
-}
+   and the other two become the context they actually are. The same shape
+   repeats on the other card types: MODEL / BOOK IMPLIED / *EDGE* on a game
+   bet, POSITION / ENTRY / *NOW* on a wallet flag.
+
+   That much was already true. What this rule USED to do about it was a
+   tint and a border — and measurement says the type barely moved:
+
+       supporting numbers   17.0px
+       the hero             18.6px      a 9% difference
+
+   `font-size: 1.24em` was written to mean "24% bigger than its siblings",
+   but `em` on font-size resolves against the PARENT — `.metric`, at the
+   card's 15px — not against the 17px the sibling values are set in. So the
+   rule said "1.24x the card's body text" and landed 1.6px above the things
+   it was supposed to lead. The box was carrying the whole idea, which is
+   the one tool this item rules out: size, weight and colour, not borders.
+
+   Weight cannot be the lever here. These numbers are set in the mono face,
+   which ships 400 and 500 only — asking for 800 gets a synthesised smear.
+   So the emphasis is size and colour, and the tint and border-colour that
+   were standing in for them are gone: all three tiles are now the same
+   container, and only the type inside them differs. */
 .metric.primary .k { color: var(--text-dim); }
-.metric.primary .v { font-size: 1.24em; letter-spacing: -0.2px; }
-@supports not (background: color-mix(in srgb, red 10%, transparent)) {
-  .metric.primary { background: rgba(90, 140, 255, .09); border-color: rgba(90, 140, 255, .34); }
+.metric.primary .v {
+  /* 22px against the supporting 15px. 30px was tried and screenshotted:
+     it leads harder, but the hero fills its tile edge to edge while the two
+     supporting tiles become mostly empty box, and the row reads lopsided
+     rather than ordered. Whether the number should also outrank the card's
+     TITLE is a composition question, and composition is the next item. */
+  font-size: var(--fs-2xl);
+  letter-spacing: -0.2px;
 }
+/* Signed heroes keep the semantic colour; an unsigned one takes the
+   brightest text so it still leads. Written as :not() rather than as a
+   plain `color:` because this rule and `.metric .v.pos` have the SAME
+   specificity, and being later in the file would silently win — which
+   would paint every edge figure white and delete the one colour on the
+   card that means something. */
+.metric.primary .v:not(.pos):not(.neg) { color: var(--text); }
 
 /* ======================================================================
    Record page
@@ -2486,6 +2538,12 @@ select.calc-in { width: auto; font-weight: 600; }
      clips. Two-up gives ~71px and the labels fit. The three-up metric row
      was doing a smaller version of the same thing (4.5px over). */
   .metrics, .card.longshot .metrics { grid-template-columns: repeat(2, 1fr); }
+  /* Three tiles into two columns leaves the hero stranded on a half-empty
+     second row — which is worse than the flat version it replaced, because
+     now it looks like a layout bug rather than a choice. Give it the whole
+     first row instead: on the screen with the least room, the number the
+     card exists to communicate is read first and the context follows. */
+  .metrics .metric.primary { grid-column: 1 / -1; order: -1; }
 }
 
 /* ============================================================

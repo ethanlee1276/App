@@ -13,12 +13,18 @@ brand and a profile name are four jobs, and collapsing them further would
 be tidiness bought with hierarchy.
 
 The queue item also claimed the fractional sizes were "accidents — what a
-percentage did to an inherited size". Reading them, that was wrong and is
-corrected here: 8.2, 11.6, 12.76 and friends come from three DELIBERATE
-relative rules — `.5em` on a unit suffix, `1.24em` on an emphasised metric,
-`.9em` on a rank chip — which are supposed to track their parent. They
-render fractional because they are derived, not because anyone typed them.
-They stay.
+percentage did to an inherited size". Reading them, that was MOSTLY wrong:
+8.2, 11.6 and friends come from deliberate relative rules — `.5em` on a
+unit suffix, `.9em` on a rank chip — which are supposed to track their
+parent. They render fractional because they are derived, not because anyone
+typed them. They stay.
+
+One of the three did turn out to be exactly the accident the queue
+described, and only a later pass measuring what RENDERS found it: `1.24em`
+on the emphasised metric resolved against `.metric` at the card's 15px
+instead of the 17px its siblings were set in, so "24% bigger" shipped as
+12.76... then 18.6px, a 9% lead on the number a card exists to communicate.
+That one is a token now. See test_relative_sizes_are_left_alone below.
 
 Rendered result: 32 distinct sizes → 20. Of those, 9 are the ramp, 7 are
 the SVG graphics scale (labels inside 24-to-240 unit viewBoxes, a different
@@ -76,12 +82,27 @@ def test_the_renderer_does_not_invent_sizes_either():
 
 
 def test_relative_sizes_are_left_alone():
-    """`.5em` on a unit suffix and `1.24em` on an emphasised metric are
-    SUPPOSED to track their parent. Freezing them to px would break the
-    relationship to chase a tidier number in an audit."""
+    """`.5em` on a unit suffix is SUPPOSED to track its parent — the "u" in
+    "1.63u" has to stay proportional to the number it hangs off. Freezing it
+    to px would break the relationship to chase a tidier audit number.
+
+    This test used to defend `1.24em` on the emphasised metric for the same
+    reason, and that reason was WRONG — corrected here rather than deleted,
+    because the mistake is worth keeping visible. `em` on `font-size`
+    resolves against the PARENT element, and the parent of `.metric .v` is
+    `.metric`, sitting at the card's 15px — not the 17px its sibling values
+    were set in. So a rule written to mean "24% bigger than the other
+    numbers" rendered at 18.6px against their 17px: a 9% difference, on the
+    one number the card exists to communicate. It is a token now, and
+    tests/test_density.py measures the gap it is supposed to open.
+
+    The general lesson, which is why this docstring is long: `1.24em` LOOKS
+    like it tracks the thing next to it and does not. A relative size is
+    only self-documenting when its parent is the thing you meant."""
     body = _strip_comments(CSS)
     assert "font-size: .5em" in body
-    assert "font-size: 1.24em" in body
+    assert "font-size: 1.24em" not in body, \
+        "the emphasised metric is back on a parent-relative size"
 
 
 def test_the_svg_graphics_scale_is_not_folded_into_the_body_ramp():

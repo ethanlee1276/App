@@ -1976,7 +1976,7 @@ function longShotCard(r) {
       <div class="metrics">
         <div class="metric"><div class="k">Model</div><div class="v">${pct(r.model_prob)}</div></div>
         <div class="metric"><div class="k">Book implied</div><div class="v">${pct(r.implied_prob)}</div></div>
-        <div class="metric"><div class="k">Edge</div><div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>
+        <div class="metric primary"><div class="k">Edge</div><div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>
         <div class="metric"><div class="k">${oppLabel}</div><div class="v">${r.expected_opportunities}</div></div>
       </div>
       ${confMeter(r)}
@@ -3759,7 +3759,7 @@ async function renderFantasy() {
       <div class="metrics">
         <div class="metric"><div class="k">Actual</div><div class="v">${r.actual_ppg}</div></div>
         <div class="metric"><div class="k">${r.basis === "xfp" ? "xFP says" : "Volume says"}</div><div class="v">${r.expected_ppg}</div></div>
-        <div class="metric"><div class="k">Gap</div><div class="v ${r.gap < 0 ? "pos" : "neg"}">${r.gap > 0 ? "+" : ""}${r.gap}</div></div>
+        <div class="metric primary"><div class="k">Gap</div><div class="v ${r.gap < 0 ? "pos" : "neg"}">${r.gap > 0 ? "+" : ""}${r.gap}</div></div>
       </div>
       <div style="margin-top:8px;color:var(--text-body);font-size:var(--fs-sm)">
         ${r.basis === "xfp"

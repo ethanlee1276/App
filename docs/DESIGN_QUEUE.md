@@ -28,6 +28,14 @@ indistinguishable from no design change.
    from a second port and run the identical script against both. A before
    number from a narrower script and an after number from a wider one is
    not a delta.
+
+   **Check the instrument measures the ITEM.** The density pass built a
+   per-card "does anything dominate" score, made the change, and the number
+   did not move at all — because the card's most prominent element was the
+   player's name both before and after, and the item was about the *numbers*.
+   A metric that cannot move when the work succeeds is as useless as one
+   that cannot fail. If the number does not move, suspect the ruler before
+   the change.
 3. Make the change. Re-measure. **The number has to move**, and you have to
    say what it moved to.
 4. Screenshot at 390px and 1280px. Look at them. A measurement that improves
@@ -112,11 +120,58 @@ the bottom rather than acting on it.
   the exact thing the audit was checking for; trading one tell for another
   is not progress.~~
 
-- [ ] **Density contrast inside a card.** Section spacing now has three
+- [x] **Density contrast inside a card.** DONE — measured over 358 metric
+  rows (8 sports × 10 views × 2 widths), before and after on one instrument:
+
+  | | before | after |
+  |---|---|---|
+  | hero size ÷ supporting size | **1.09×** | **1.47×** |
+  | rows under 1.2× | 348/348 | 0 |
+  | hero colour distinct from siblings | 314/348 | 358/358 |
+  | emphasis carried by a box | 348/348 | **0** |
+
+  **The item's framing was slightly off and the correction is the useful
+  part.** It reads as "pick the one number" — but the site had *already*
+  picked it on every card type, and said so with a border: HIT PROB ·
+  **EDGE** · EV/UNIT, MODEL · BOOK IMPLIED · **EDGE**, POSITION · ENTRY ·
+  **NOW**. So the work was not choosing; it was saying it with type instead
+  of chrome, which is what the item's own constraint asks for.
+
+  It looked chosen and wasn't, because of a unit bug that reads as correct:
+  `font-size: 1.24em` on the hero resolves `em` against the **parent**
+  (`.metric`, at the card's 15px), not against the 17px its siblings are set
+  in. A rule written to mean "24% bigger than the other numbers" rendered at
+  **18.6px against 17px**. Nobody sees 1.6px; everybody sees the box.
+  `test_type_ramp.py` had been *defending* that rule on the rationale that
+  it "tracks its parent" — corrected in place rather than deleted, because
+  the mistake is worth keeping visible.
+
+  Weight is not one of the levers here: these numbers are in the mono face,
+  which ships 400/500 only, so 800 gets synthesised. Size and colour do it.
+
+  Two things measurement forced that reading would not have:
+  - **Five rows had no hero at all** — the 4-up long-shot row and the
+    fantasy buy-low row both *have* the number (Edge, Gap) and never marked
+    it. Unfixed, they'd have been the only rows where the supporting values
+    shrank with nothing rising.
+  - **Not every metric row is a hierarchy.** The NFL game-script card shows
+    "CHI implied" beside "GB implied" — one quantity, both sides of a game.
+    Receding half a comparison just makes it quieter. The recession is
+    scoped through `:has(.metric.primary)`, and degrades to "hero still
+    leads, by less" where `:has()` is unsupported.
+
+  **Left undone deliberately:** the hero still does not outrank the card's
+  *title* (player/team name, 17px/800) — 0/358 before and after. 30px was
+  tried and screenshotted: the hero fills its tile edge to edge while the
+  supporting tiles go mostly empty, and the row reads lopsided rather than
+  ordered. Whether the number should lead the whole card is a composition
+  question — which is exactly the next item.
+
+  ~~Section spacing now has three
   levels (34 / 14 / 0). Inside a card everything is still evenly spaced, so
   a card's most important number reads at the same weight as its footnote.
   Pick the one number per card that the card exists to communicate, and let
-  the rest recede — size, weight, and colour, not borders.
+  the rest recede — size, weight, and colour, not borders.~~
 
 - [ ] **Fewer, larger.** Recommended shows four stat tiles of equal size, so
   none of them is the answer. Decide which single number a person opens this
