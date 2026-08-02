@@ -472,12 +472,28 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .total-badge.under { background: var(--warn); }
 
 /* Empty state */
-.empty-slate { text-align: center; padding: 46px 24px; margin: 10px 0 4px;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 0; }
-.empty-slate .es-icon { font-size: var(--fs-4xl); }
-.empty-slate .es-title { font-size: var(--fs-xl); font-weight: 800; margin-top: 8px; }
-.empty-slate .es-sub { color: var(--text-dim); font-size: var(--fs-md); margin-top: 6px; max-width: 520px; margin-inline: auto; line-height: 1.5; }
-.empty-slate code { background: var(--panel-3); padding: 2px 6px; border-radius: 0; }
+/* §6.12. An empty state is a sentence, not a poster.
+ *
+ * It was a centred block with a 34px emoji on top — the loudest object on a
+ * page whose entire message is that there is nothing here, and somebody
+ * else's illustration at somebody else's weight. Night Form's answer is the
+ * same as its answer everywhere: rule it off, set it left, let the words
+ * carry it, and draw the mark at the size of the text it sits beside. */
+.empty-slate { text-align: left; padding: 26px 0 30px; margin: 6px 0 4px;
+  border-top: 1px solid var(--border); background: none; border-radius: 0;
+  grid-column: 1 / -1; }
+.empty-slate .es-icon { color: var(--text-mute); line-height: 1;
+  display: block; margin-bottom: 12px; }
+.empty-slate .es-icon .ic { width: 22px; height: 22px; }
+.empty-slate .es-title { font-size: var(--fs-lg); font-weight: 700;
+  margin-top: 0; letter-spacing: .01em; }
+.empty-slate .es-sub { color: var(--text-dim); font-size: var(--fs-sm);
+  margin-top: 7px; max-width: 68ch; margin-inline: 0; line-height: 1.65; }
+.empty-slate code { background: var(--fill-subtle); padding: 2px 6px;
+  border-radius: 0; }
+/* A drawn mark on a text baseline. */
+.ico-mark { display: inline-flex; vertical-align: -2px; margin-right: 6px;
+  color: currentColor; }
 
 /* Top plays leaderboard */
 .topplays { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }

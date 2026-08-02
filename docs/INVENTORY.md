@@ -9,7 +9,7 @@ preservation contract. The prose contract says what must survive; this
 says what is actually there, and `node tools/inventory.mjs --diff
 docs/inventory-baseline.json` says whether it still is.
 
-**266 pages · 1429 distinct strings · 256 classes · 17 views × 8 sports × 2 widths**
+**266 pages · 1419 distinct strings · 258 classes · 17 views × 8 sports × 2 widths**
 
 ---
 
@@ -17,23 +17,23 @@ docs/inventory-baseline.json` says whether it still is.
 
 | View | Sports | Components | Explanatory prose | Expanders | Inputs |
 |---|---|---|---|---|---|
-| Recommended | 8/8 | 105 | 19 | 4 | 4 |
-| Live | 8/8 | 11 | 3 | 0 | 0 |
-| Edge Board | 8/8 | 16 | 6 | 0 | 0 |
-| Scanner / Market Scanner | 8/8 | 14 | 8 | 0 | 1 |
-| Long Shots | 8/8 | 62 | 10 | 0 | 4 |
-| parlays | 8/8 | 27 | 12 | 0 | 0 |
-| Trending | 8/8 | 45 | 4 | 0 | 4 |
-| Players | 8/8 | 57 | 3 | 0 | 5 |
-| Rosters | 8/8 | 32 | 6 | 0 | 8 |
-| Standings | 8/8 | 36 | 6 | 0 | 0 |
-| Record | 8/8 | 50 | 6 | 1 | 0 |
-| Polymarket / Informed Flow | 8/8 | 9 | 3 | 0 | 0 |
-| Fantasy | 8/8 | 9 | 3 | 0 | 0 |
-| UFC | 8/8 | 8 | 2 | 0 | 0 |
+| Recommended | 8/8 | 106 | 19 | 4 | 4 |
+| Live | 8/8 | 13 | 3 | 0 | 0 |
+| Edge Board | 8/8 | 17 | 6 | 0 | 0 |
+| Scanner / Market Scanner | 8/8 | 15 | 8 | 0 | 1 |
+| Long Shots | 8/8 | 63 | 10 | 0 | 4 |
+| parlays | 8/8 | 28 | 12 | 0 | 0 |
+| Trending | 8/8 | 47 | 4 | 0 | 4 |
+| Players | 8/8 | 58 | 3 | 0 | 5 |
+| Rosters | 8/8 | 33 | 6 | 0 | 8 |
+| Standings | 8/8 | 37 | 6 | 0 | 0 |
+| Record | 8/8 | 51 | 6 | 1 | 0 |
+| Polymarket / Informed Flow | 8/8 | 10 | 3 | 0 | 0 |
+| Fantasy | 8/8 | 10 | 3 | 0 | 0 |
+| UFC | 8/8 | 9 | 2 | 0 | 0 |
 | Reference (why) | 8/8 | 12 | 27 | 0 | 2 |
-| About | 8/8 | 15 | 25 | 0 | 0 |
-| Game board (no nav tab — reached from a venue card) | 5/8 | 83 | 14 | 0 | 0 |
+| About | 8/8 | 16 | 25 | 0 | 0 |
+| Game board (no nav tab — reached from a venue card) | 5/8 | 84 | 14 | 0 | 0 |
 
 ---
 
@@ -57,10 +57,10 @@ metrics  mini  ml-odds  mt  nav  nav-btn
 nav-indicator  per  pfx  pick  play  player
 pos  primary  proj  proj-dot  projbar  range
 reasons  rec-disclose  reveal  sample  score  sfx
-sm  src-dot  stadium-wrap  stake  stats  status-badge
-strong  sub  subhead  subtitle  tile  tile-sub
-tilt  toggle  track  up  v  when
-why-toggle  wind  wind-wrap
+sm  src-dot  stadium-wrap  stake  stale  stats
+status-badge  strong  sub  subhead  subtitle  tile
+tile-sub  tilt  toggle  track  up  v
+when  why-toggle  wind  wind-wrap
 ```
 
 **Expanders:** `Tracked signals tonight (2) — measurements, not picks` · `Tracked signals tonight (4) — measurements, not picks` · `Why only 1? — where the other props died` · `Why only 6? — where the other props died`
@@ -98,8 +98,9 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-card  from-right  idle  live-dot  loading  nav
-nav-btn  nav-indicator  sample  src-dot  sub
+card  from-right  ico-mark  idle  live-dot  loading
+nav  nav-btn  nav-indicator  sample  src-dot  stale
+sub
 ```
 
 **Explanatory prose — 3 passage(s), must survive
@@ -119,7 +120,7 @@ thing on screen that has to still be a thing on screen):
 ```
 card  drow  empty-slate  es-icon  from-right  idle
 live-dot  longshot-note  ls-row  nav  nav-btn  nav-indicator
-sample  src-dot  sub  why-toggle
+sample  src-dot  stale  sub  why-toggle
 ```
 
 **Explanatory prose — 6 passage(s), must survive
@@ -142,7 +143,7 @@ thing on screen that has to still be a thing on screen):
 ```
 card  drow  from-right  idle  live-dot  loading
 ls-note  nav  nav-btn  nav-indicator  sample  src-dot
-sub  why-toggle
+stale  sub  why-toggle
 ```
 
 **Inputs:** `number`
@@ -175,9 +176,9 @@ hero-games  idle  in  k  lean  live-dot
 longshot  longshot-note  ls-note  ls-primary  metric  metrics
 mini  ml-odds  nav  nav-btn  nav-indicator  pfx
 pick  play  player  pos  primary  reasons
-reveal  sample  sfx  src-dot  stake  stats
-sub  subtitle  tile  tile-sub  toggle  v
-warning  why-toggle
+reveal  sample  sfx  src-dot  stake  stale
+stats  sub  subtitle  tile  tile-sub  toggle
+v  warning  why-toggle
 ```
 
 **Inputs:** `1000` · `checkbox` · `number` · `range`
@@ -208,7 +209,7 @@ empty-slate  es-icon  es-sub  es-title  from-right  idle
 in  live-dot  nav  nav-btn  nav-indicator  pz-census
 pz-doctrine  pz-kill-who  pz-kill-why  pz-ledger  pz-ledger-title  pz-mark
 pz-no  pz-note  pz-probation  pz-sub  pz-verdict  reveal
-sample  src-dot  sub
+sample  src-dot  stale  sub
 ```
 
 **Explanatory prose — 12 passage(s), must survive
@@ -237,12 +238,12 @@ thing on screen that has to still be a thing on screen):
 ```
 bankroll  bankroll-inputs  cards  colsub  control  controls
 cyan  empty  empty-slate  es-icon  es-sub  es-title
-from-right  gamebets-wrap  games-scroller  hero-games  idle  in
-k  live-dot  mini  mk  nav  nav-btn
-nav-indicator  neg  nm  pfx  pos  reveal
-sample  sfx  src-dot  stats  sub  tile
-tile-sub  toggle  trank  trend-col  trend-grid  trow
-v  val  who
+from-right  gamebets-wrap  games-scroller  hero-games  ico-mark  idle
+in  k  live-dot  mini  mk  nav
+nav-btn  nav-indicator  neg  nm  pfx  pos
+reveal  sample  sfx  src-dot  stale  stats
+sub  tile  tile-sub  toggle  trank  trend-col
+trend-grid  trow  v  val  who
 ```
 
 **Inputs:** `1000` · `checkbox` · `number` · `range`
@@ -271,8 +272,8 @@ in  k  lean  live-dot  log-table  meta
 miss  nav  nav-btn  nav-indicator  nm  num
 pass  pfx  play  player-grid  pos  profile
 profile-head  profile-pick  profile-spark  reveal  sample  search-wrap
-sfx  src-dot  stats  strong  sub  tile
-tile-sub  toggle  v
+sfx  src-dot  stale  stats  strong  sub
+tile  tile-sub  toggle  v
 ```
 
 **Inputs:** `1000` · `Search a player… (e.g. Amon-Ra, Jacobs)` · `checkbox` · `number` · `range`
@@ -296,8 +297,8 @@ bankroll  bankroll-inputs  cards  control  controls  empty-slate
 es-icon  es-sub  es-title  from-right  gamebets-wrap  games-scroller
 hero-games  ico  idle  k  live-dot  nav
 nav-btn  nav-indicator  pfx  pos  sample  search-wrap
-sfx  src-dot  stats  tile  tile-sub  toggle
-v  why-toggle
+sfx  src-dot  stale  stats  tile  tile-sub
+toggle  v  why-toggle
 ```
 
 **Inputs:** `1000` · `Search a team or a player… (e.g. 49ers, SF, Purdy)` · `Search a team or a player… (e.g. Celtics, BOS, Tatum)` · `Search a team or a player… (e.g. Liberty, NYL, Stewart)` · `Search a team or a player… (e.g. Yankees, NYY, Judge)` · `checkbox` · `number` · `range`
@@ -323,9 +324,10 @@ thing on screen that has to still be a thing on screen):
 bad  brk  brk-match  brk-matches  brk-round  brk-round-name
 brk-score  brk-side  brk-team  card  empty-slate  es-icon
 from-right  good  idle  live-dot  nav  nav-btn
-nav-indicator  ros-teams  sample  src-dot  std-card  std-group
-std-head  std-mark  std-n  std-name  std-rank  std-rec
-std-row  std-wide  sub  tight  why-toggle  won
+nav-indicator  ros-teams  sample  src-dot  stale  std-card
+std-group  std-head  std-mark  std-n  std-name  std-rank
+std-rec  std-row  std-wide  sub  tight  why-toggle
+won
 ```
 
 **Explanatory prose — 6 passage(s), must survive
@@ -353,8 +355,8 @@ rb-labels  rb-name  rb-net  rb-row  rb-rows  rb-wl
 rec-bucket  rec-buckets  rec-disclose  rec-kpis  rec-list  rec-scope
 rec-scope-n  rec-scopes  rec-stamp  rl-bet  rl-date  rl-icon
 rl-main  rl-odds  rl-pnl  rl-proc  rl-row  sample
-src-dot  stats  sub  tile  tile-sub  v
-why-toggle  won
+src-dot  stale  stats  sub  tile  tile-sub
+v  why-toggle  won
 ```
 
 **Expanders:** `What counts as a tracked bet`
@@ -378,7 +380,7 @@ thing on screen that has to still be a thing on screen):
 
 ```
 empty-slate  es-icon  es-sub  es-title  from-right  has-active
-idle  live-dot  why-toggle
+idle  live-dot  stale  why-toggle
 ```
 
 **Explanatory prose — 3 passage(s), must survive
@@ -397,7 +399,7 @@ thing on screen that has to still be a thing on screen):
 
 ```
 empty-slate  es-icon  es-sub  es-title  from-right  has-active
-idle  live-dot  why-toggle
+idle  live-dot  stale  why-toggle
 ```
 
 **Explanatory prose — 3 passage(s), must survive
@@ -416,7 +418,7 @@ thing on screen that has to still be a thing on screen):
 
 ```
 empty-slate  es-icon  es-sub  es-title  from-right  idle
-live-dot  why-toggle
+live-dot  stale  why-toggle
 ```
 
 **Explanatory prose — 2 passage(s), must survive
@@ -479,8 +481,8 @@ thing on screen that has to still be a thing on screen):
 
 ```
 about-body  about-card  about-lede  about-list  card  cards
-from-right  has-active  in  ls-note  player  reveal
-sub  why-toggle  wide
+from-right  has-active  ico-mark  in  ls-note  player
+reveal  sub  why-toggle  wide
 ```
 
 **Links:** `begambleaware.org` · `gamblersanonymous.org` · `ncpgambling.org`
@@ -534,8 +536,8 @@ pk-factor  pk-factors  pk-facts  pk-fbar  pk-fk  pk-fv
 pk-head  pk-note  pk-panel  pk-plays  play  player
 pos  primary  proj  proj-dot  projbar  range
 reasons  reveal  s  sample  src-dot  stake
-stats  strong  sub  subtitle  tile  tile-sub
-track  up  v  warning  when
+stale  stats  strong  sub  subtitle  tile
+tile-sub  track  up  v  warning  when
 ```
 
 **Explanatory prose — 14 passage(s), must survive

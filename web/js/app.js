@@ -255,6 +255,44 @@ const ICON_PATHS = {
   sun: '<circle cx="8" cy="8" r="3.1"/>'
        + '<path d="M8 1.4v1.6M8 13v1.6M1.4 8h1.6M13 8h1.6'
        + 'M3.3 3.3l1.2 1.2M11.5 11.5l1.2 1.2M12.7 3.3l-1.2 1.2M4.5 11.5l-1.2 1.2"/>',
+
+  /* --- §6.12. Drawn marks for the places that still typed a picture. ---
+     An emoji is somebody else's illustration at somebody else's weight: it
+     renders as a different drawing on every platform, ignores the stroke and
+     the colour of everything around it, and at 34px in an empty state it is
+     the loudest thing on a page whose whole message is that there is
+     nothing here. These are 1.7px strokes in currentColor, same as the rest.
+
+     Deliberately literal rather than clever. The dome gauge and the first
+     stadium mark were both drawn as concentric ellipses and both read as an
+     EYE at 13px — twice, and only a screenshot ever said so. */
+  rising: '<path d="M1.8 11.4l4.1-4.2 2.6 2.6 4.1-4.6"/>'
+          + '<path d="M9.6 5.2h3.6v3.6"/>',
+  falling: '<path d="M1.8 4.6l4.1 4.2 2.6-2.6 4.1 4.6"/>'
+           + '<path d="M9.6 10.8h3.6V7.2"/>',
+  // Heat: a flame is a teardrop with a kink, not a leaf.
+  hot: '<path d="M8 1.8c2.4 2.6 4.2 4.5 4.2 7a4.2 4.2 0 11-8.4 0c0-1.3.6-2.4 1.6-3.6'
+       + '.4 1 1 1.6 1.8 1.9C6.6 5.6 7 3.6 8 1.8z"/>',
+  cold: '<path d="M8 1.6v12.8M2.4 4.8l11.2 6.4M13.6 4.8L2.4 11.2"/>',
+  // Value: a cut stone, because "biggest edge" is the thing you dig for.
+  gem: '<path d="M4.4 2.4h7.2l2.6 3.6L8 13.8 1.8 6z"/><path d="M1.8 6h12.4"/>',
+  inbox: '<path d="M1.9 8.4h3.4l1 2h3.4l1-2h3.4"/>'
+         + '<path d="M3.6 2.6h8.8l2.1 5.8v4a1.2 1.2 0 01-1.2 1.2H2.7a1.2 1.2 0 01-1.2-1.2v-4z"/>',
+  book: '<path d="M2.4 2.6h4a2.2 2.2 0 012.2 2.2v8.4a1.7 1.7 0 00-1.7-1.7H2.4z"/>'
+        + '<path d="M13.6 2.6h-4a2.2 2.2 0 00-2.2 2.2v8.4a1.7 1.7 0 011.7-1.7h4.5z"/>',
+  signal: '<path d="M8 12.6v.01"/><path d="M5.6 10.2a3.4 3.4 0 014.8 0"/>'
+          + '<path d="M3.2 7.8a6.8 6.8 0 019.6 0"/>'
+          + '<path d="M.9 5.4a10.1 10.1 0 0114.2 0"/>',
+  trophy: '<path d="M4.6 2.2h6.8v3.6a3.4 3.4 0 11-6.8 0z"/>'
+          + '<path d="M4.6 3.2H2.4v1a2.4 2.4 0 002.4 2.4M11.4 3.2h2.2v1a2.4 2.4 0 01-2.4 2.4"/>'
+          + '<path d="M8 9.2v2.4M5.4 13.8h5.2"/>',
+  target: '<circle cx="8" cy="8" r="5.8"/><circle cx="8" cy="8" r="2.4"/>',
+  list: '<path d="M5.4 4.4h7.8M5.4 8h7.8M5.4 11.6h7.8"/>'
+        + '<path d="M2.8 4.4v.01M2.8 8v.01M2.8 11.6v.01"/>',
+  chart: '<path d="M2.2 13.4V2.4"/><path d="M2.2 13.4h11.6"/>'
+         + '<path d="M4.8 11V7.6M7.6 11V4.6M10.4 11V8.8M13 11V6"/>',
+  glove: '<path d="M3.4 13.4V7.2a1.6 1.6 0 013.2 0V4.2a1.6 1.6 0 013.2 0v3'
+         + 'a1.6 1.6 0 013.2 0v3.4a3.8 3.8 0 01-3.8 3.8z"/>',
 };
 
 function icon(name, size = 13) {
@@ -263,6 +301,13 @@ function icon(name, size = 13) {
   return `<svg class="ic" viewBox="0 0 16 16" width="${size}" height="${size}"
     fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
     stroke-linejoin="round" aria-hidden="true" focusable="false">${d}</svg>`;
+}
+
+/* A drawn mark sized to sit inside a line of text. `icon()` defaults to
+   13px and is used inside chips and buttons; headings and column titles
+   want it a touch larger and nudged onto the baseline. */
+function iconMark(name, size = 14) {
+  return `<span class="ico-mark">${icon(name, size)}</span>`;
 }
 
 function escapeHtml(s) {
@@ -570,7 +615,7 @@ function renderProbation() {
   if (!d.probation) { host.innerHTML = ""; return; }
   const t = d.tuning || {};
   host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
-    <div class="player">⚗️ ${escapeHtml((SPORT_META[state.sport] || {}).name || state.sport.toUpperCase())} is on probation — graded, not bet</div>
+    <div class="player">${iconMark("warn")}${escapeHtml((SPORT_META[state.sport] || {}).name || state.sport.toUpperCase())} is on probation — graded, not bet</div>
     <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
       ${escapeHtml(t.note || "This league's tuning has not been fitted to its own results yet.")}
       Everything below is priced and journaled exactly as a live board would be,
@@ -594,7 +639,7 @@ function renderTalent() {
 
   if (!t.available) {
     host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
-      <div class="player">📋 No preseason talent prior</div>
+      <div class="player">${iconMark("list")}No preseason talent prior</div>
       <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
         The board is running on results only. In September that means an
         unproven Alabama and an unproven Kent State are both rated near
@@ -608,7 +653,7 @@ function renderTalent() {
     escapeHtml(name)} ${n ? n : "—"}</span>`;
   const fit = t.fit || {};
   host.innerHTML = `<div class="card" style="border-left:3px solid var(--good);margin-bottom:12px">
-    <div class="player">🎓 Preseason talent prior — ${t.teams_with_prior} team(s)</div>
+    <div class="player">${iconMark("check")}Preseason talent prior — ${t.teams_with_prior} team(s)</div>
     <div class="lf-chips" style="margin:6px 0">
       ${chip("recruiting", L.talent)}${chip("blue-chip", L.blue_chip)}
       ${chip("returning", L.returning)}${chip("portal", L.portal)}
@@ -712,7 +757,7 @@ function renderEmptySlate() {
   if (gap && el) {
     el.style.display = "";
     document.getElementById("games-title").style.display = "";
-    el.innerHTML = `<div class="es-icon">📥</div>
+    el.innerHTML = `<div class="es-icon">${icon("inbox", 30)}</div>
       <div class="es-title">Games tonight, but no player history to project from</div>
       <div class="es-sub">Every prop on this board is built from stored game
       logs, and this database has
@@ -732,14 +777,14 @@ function renderEmptySlate() {
   const live = String(state.data.generated_from || "").startsWith("live");
   el.style.display = "";
   el.innerHTML = state.data.status === "not built"
-    ? `<div class="es-icon">⏳</div><div class="es-title">This slate hasn't been built yet</div>
+    ? `<div class="es-icon">${icon("clock", 30)}</div><div class="es-title">This slate hasn't been built yet</div>
        <div class="es-sub">If <code>launch.py</code> is running, it builds every sport on its next
        refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.</div>`
     : live
-    ? `<div class="es-icon">🗓️</div><div class="es-title">No games on the board right now</div>
+    ? `<div class="es-icon">${icon("calendar", 30)}</div><div class="es-title">No games on the board right now</div>
        <div class="es-sub">Nothing is scheduled or in progress for this slate yet. Check back closer to
        game time — the board refreshes automatically.</div>`
-    : `<div class="es-icon">🏟️</div><div class="es-title">No slate loaded</div>
+    : `<div class="es-icon">${icon("stadium", 30)}</div><div class="es-title">No slate loaded</div>
        <div class="es-sub">Build a live slate (see LAUNCH.md) or run <code>python3 generate.py</code>
        for the sample board.</div>`;
   // Nothing else to show; clear the busier sections.
@@ -845,7 +890,7 @@ async function renderBestBets() {
       <span style="opacity:.45;min-width:18px;font-weight:700">${i + 1}</span>
       <span class="grade ${gradeClass(p.grade)}" style="flex-shrink:0">${escapeHtml(p.grade || "")}</span>
       <span style="flex:1;min-width:0"><strong>${escapeHtml(p.label)}</strong>
-        ${p.game ? `<span style="display:block;font-size:var(--fs-sm);margin-top:2px">${(SPORT_META[state.sport] || {}).logo || "🏟️"} ${escapeHtml(p.game)}</span>` : ""}
+        ${p.game ? `<span style="display:block;font-size:var(--fs-sm);margin-top:2px">${(SPORT_META[state.sport] || {}).logo || ""} ${escapeHtml(p.game)}</span>` : ""}
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${escapeHtml(p.why)}</span></span>
       <span style="text-align:right;white-space:nowrap"><span style="font-weight:800">${escapeHtml(p.metric)}</span>
         ${p.stake > 0 ? `<span style="display:block;color:var(--good);font-size:var(--fs-sm);font-weight:700">${
@@ -1128,7 +1173,7 @@ function renderLivePicks() {
   if (!rows.length && !elsewhere) {
     // A full tab now — an empty day says so instead of rendering nothing.
     host.innerHTML = `
-      <div class="section-title">📌 Open bets
+      <div class="section-title">${iconMark("target")} Open bets
         <span class="sub">— every journaled bet on today's card, tracked while its game runs</span></div>
       <div class="card"><p class="loading">No open bets on today's card. A pick journals the
         moment it's recommended and lives here until it settles — live progress bars, at-bat
@@ -1217,8 +1262,8 @@ function renderLivePicks() {
     const mine = sameName(s.batter, r.player);
     const batter = s.batter
       ? (mine
-          ? `<b style="color:var(--warn)">⚡ ${escapeHtml(s.batter)} — YOUR PICK — at the plate</b>`
-          : `⚾ ${escapeHtml(s.batter)} at bat`)
+          ? `<b style="color:var(--warn)">${iconMark("dot", 10)}${escapeHtml(s.batter)} — YOUR PICK — at the plate</b>`
+          : `${iconMark("dot", 10)}${escapeHtml(s.batter)} at bat`)
       : "";
     const onDeck = !mine && s.on_deck && sameName(s.on_deck, r.player)
       ? ` · <b style="color:var(--warn)">${escapeHtml(r.player)} on deck</b>` : "";
@@ -1326,7 +1371,7 @@ async function renderTeamForm() {
     </div>`;
   const col = (title, icon, rows, tone) => `
     <div class="trend-col">
-      <h3>${icon} ${title}</h3>
+      <h3>${mark} ${title}</h3>
       ${rows.length ? rows.map((r) => row(r, tone)).join("")
         : `<div class="empty" style="padding:18px">Nobody qualifies.</div>`}
     </div>`;
@@ -1335,8 +1380,8 @@ async function renderTeamForm() {
       <span class="sub">— from our own ingested results, refreshed nightly. Tracked and
       measured before it's ever allowed to move a bet.</span></div>
     <div class="trend-grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))">
-      ${col("Running hot", "🔥", tf.hot || [], "pos")}
-      ${col("Running cold", "❄️", tf.cold || [], "neg")}
+      ${col("Running hot", iconMark("hot"), tf.hot || [], "pos")}
+      ${col("Running cold", iconMark("cold"), tf.cold || [], "neg")}
     </div>
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:8px">
       ${tf.audit && tf.audit.verdict ? `Season audit: ${escapeHtml(tf.audit.verdict)}. ` : ""}${escapeHtml(sampler)}.</p>`;
@@ -1582,7 +1627,7 @@ function gameCard(g) {
   } else if (mlb) {
     const bits = [`O/U ${g.total.toFixed(1)}`];
     if (g.park_name) bits.unshift(esc(g.park_name));
-    if (g.doubleheader) bits.unshift(`⚾ DH Game ${esc(g.game_number || 1)}`);
+    if (g.doubleheader) bits.unshift(`${iconMark("calendar", 12)}DH Game ${esc(g.game_number || 1)}`);
     if (g.lineups_confirmed === false) bits.push(`${icon('warn')} lineups pending`);
     sub = bits.join(" · ");
   } else {
@@ -1799,8 +1844,8 @@ function confMeter(r) {
 }
 
 function trendChip(r) {
-  if (r.trend === "up") return `<span class="chip up">📈 Trending up</span>`;
-  if (r.trend === "down") return `<span class="chip down">📉 Cooling off</span>`;
+  if (r.trend === "up") return `<span class="chip up">${icon("rising")} Trending up</span>`;
+  if (r.trend === "down") return `<span class="chip down">${icon("falling")} Cooling off</span>`;
   return `<span class="chip">Steady form</span>`;
 }
 function booksChip(r) {
@@ -1814,8 +1859,8 @@ function moveChip(r) {
     ? `${m.open} → ${m.current}`
     : `${m.open_odds != null ? american(m.open_odds) : "?"} → ${m.current_odds != null ? american(m.current_odds) : "?"}`;
   const withUs = m.verdict === "with";
-  const icon = m.steam ? "🔥" : withUs ? "📈" : "📉";
-  return `<span class="chip ${withUs ? "up" : "down"}" title="${withUs ? "Books have re-priced toward our side since our first snapshot" : "Books have re-priced away from our side since our first snapshot"}">${icon} Market ${withUs ? "with" : "against"} pick · ${what}</span>`;
+  const mark = m.steam ? iconMark("hot") : iconMark(withUs ? "rising" : "falling");
+  return `<span class="chip ${withUs ? "up" : "down"}" title="${withUs ? "Books have re-priced toward our side since our first snapshot" : "Books have re-priced away from our side since our first snapshot"}">${mark} Market ${withUs ? "with" : "against"} pick · ${what}</span>`;
 }
 
 // §8/§10 chips: the market tier and volatility rating every play carries.
@@ -1836,7 +1881,7 @@ function qualityChip(r) {
 function cardHTML(r) {
   const reasons = (r.reasons || []).map(reasonLI).join("");
   const corr = (r.correlations || []).map((c) =>
-    `<div class="warning" style="border-color:var(--cyan)">🔗 ${escapeHtml(c)}</div>`).join("");
+    `<div class="warning" style="border-color:var(--cyan)">${iconMark("tag")}${escapeHtml(c)}</div>`).join("");
   const warnings = (r.warnings || []).map((w) => `<div class="warning">${icon('warn')} ${escapeHtml(w)}</div>`).join("");
   const ud = unitDollars();
   const stakeTxt = ud > 0
@@ -1868,7 +1913,7 @@ function cardHTML(r) {
         ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
              ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
         : ""}
-      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">⚾ Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${booksChip(r)}${stakeChip}</div>
+      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${booksChip(r)}${stakeChip}</div>
       ${corr}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
 }
@@ -1892,7 +1937,7 @@ function renderLongShots() {
       ? `<div class="ls-note">No price clears the strict <b>value</b> bar right now —
          but the model still ranks tonight's most likely ${mlb ? "home runs" : "scorers"} below,
          with the price shown honestly so you can see what the book charges for them.</div>`
-      : `<div class="empty-slate"><div class="es-icon">🎯</div>
+      : `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <div class="es-title">No ${mlb ? "home-run" : "touchdown"} board right now</div>
       <div class="es-sub">${escapeHtml(longshotEmptyReason(mlb))}</div></div>`;
     return;
@@ -2344,7 +2389,7 @@ function renderGamePage() {
   if (!state.data) { host.innerHTML = `<p class="loading">Loading the slate…</p>`; return; }
   const g = findGame(state.gameId);
   if (!g) {
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🏟️</div>
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("stadium", 30)}</div>
       <div class="es-title">That game isn't on the current slate</div>
       <div class="es-sub">Slates roll over each day. Head back to the board for
       today's games.</div></div>
@@ -2410,7 +2455,7 @@ function renderGamePage() {
         <div class="gp-sub">${escapeHtml([g.park_name, whenLabel(g.date, g.kickoff)]
           .filter(Boolean).join(" · "))}</div>
         <div class="chips gp-chips">
-          ${g.doubleheader ? `<span class="chip up">⚾ Doubleheader · Game ${g.game_number || 1}</span>` : ""}
+          ${g.doubleheader ? `<span class="chip up">${icon("calendar", 11)} Doubleheader · Game ${g.game_number || 1}</span>` : ""}
           <span class="chip">O/U ${g.total != null ? g.total.toFixed(1) : "—"}</span>
           ${g.favorite ? `<span class="chip">${escapeHtml(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}</span>`
             : nba && g.spread ? `<span class="chip">${escapeHtml(teamName(g.spread < 0 ? g.home : g.away))} −${Math.abs(g.spread).toFixed(1)}</span>` : ""}
@@ -2441,7 +2486,7 @@ function renderGamePage() {
         <div class="section-title">${escapeHtml(k)}
           <span class="sub">— ${plural(byMarket.get(k).length, "prop", "props")}</span></div>
         <div class="cards gp-cards">${byMarket.get(k).map(cardHTML).join("")}</div>`).join("")
-      : `<div class="empty-slate"><div class="es-icon">🎯</div>
+      : `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
           <div class="es-title">No player props clear the filters in this game</div>
           <div class="es-sub">Either the model passes on everything here, or books haven't
           posted prices for it yet.</div>
@@ -2482,9 +2527,9 @@ function renderTrending() {
   const edges = [...recs].sort((a, b) => b.edge - a.edge).slice(0, 6);
 
   const cols = [
-    { title: "🔥 Trending Up", sub: "Biggest recent-form risers", rows: risers, metric: (r) => `<span class="val pos">+${r.trend_delta.toFixed(2)}</span>`, stroke: "var(--good)" },
-    { title: "❄️ Cooling Off", sub: "Production sliding vs prior form", rows: fallers, metric: (r) => `<span class="val neg">${r.trend_delta.toFixed(2)}</span>`, stroke: "var(--bad)" },
-    { title: "💎 Biggest Edges", sub: "Model vs the sportsbook line — a big edge is not automatically a play; the approval gates decide", rows: edges, metric: (r) => `<span class="val cyan">${signedPct(r.edge)}</span>`, stroke: "var(--cyan)",
+    { title: `${iconMark("hot")} Trending Up`, sub: "Biggest recent-form risers", rows: risers, metric: (r) => `<span class="val pos">+${r.trend_delta.toFixed(2)}</span>`, stroke: "var(--good)" },
+    { title: `${iconMark("cold")} Cooling Off`, sub: "Production sliding vs prior form", rows: fallers, metric: (r) => `<span class="val neg">${r.trend_delta.toFixed(2)}</span>`, stroke: "var(--bad)" },
+    { title: `${iconMark("gem")} Biggest Edges`, sub: "Model vs the sportsbook line — a big edge is not automatically a play; the approval gates decide", rows: edges, metric: (r) => `<span class="val cyan">${signedPct(r.edge)}</span>`, stroke: "var(--cyan)",
       // Say whether each edge actually IS a bet, so this column can never
       // contradict the Recommended page.
       tag: (r) => passesFilters(r)
@@ -3137,7 +3182,7 @@ async function renderRecord() {
     if (res.ok) pmv = ((await res.json()) || {}).validation;
   } catch (e) {}
   if (!d || !d.overall || (!d.overall.settled && !d.overall.open)) {
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">📒</div>
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("book", 30)}</div>
       <div class="es-title">No graded picks yet</div>
       <div class="es-sub">Every recommended pick is journaled automatically at its real
       price and grades itself once results are ingested (nightly, automatic).
@@ -3165,7 +3210,7 @@ async function renderRecord() {
   if (scope === "intel") {
     host.innerHTML = scopeBar + (pmv
       ? recPolymarketSection(pmv)
-      : `<div class="empty-slate"><div class="es-icon">🛰️</div>
+      : `<div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
          <div class="es-title">No Polymarket flags graded yet</div>
          <div class="es-sub">Flags are recorded as the trade tape is read and
          grade when their markets resolve. This is a report card on the
@@ -3174,7 +3219,7 @@ async function renderRecord() {
     return;
   }
   if (scoped && !o.settled && !o.open) {
-    host.innerHTML = scopeBar + `<div class="empty-slate"><div class="es-icon">📒</div>
+    host.innerHTML = scopeBar + `<div class="empty-slate"><div class="es-icon">${icon("book", 30)}</div>
       <div class="es-title">Nothing journaled for ${escapeHtml(
         (SPORT_META[scope] || {}).name || scope.toUpperCase())} yet</div>
       <div class="es-sub">This board has not recommended a bet that reached a
@@ -3184,7 +3229,7 @@ async function renderRecord() {
     return;
   }
   const unstaked = o.unstaked
-    ? `<p class="loading" style="margin-top:10px">ℹ️ ${o.unstaked} older settled pick(s)
+    ? `<p class="loading" style="margin-top:10px">${iconMark("dash")}${o.unstaked} older settled pick(s)
        are held out of this record: a grading bug sized them at 0.00 units, so they were
        never really bets. Run <code>python3 launch.py --resize-unstaked</code> to stake
        them at a flat 0.1u and fold the profit (or loss) they produced back in.</p>` : "";
@@ -3251,9 +3296,9 @@ async function renderRecord() {
         // Process chip: judge the decision against the close, out loud.
         let procChip = `<span class="rl-proc none">no close</span>`;
         if (b.process === "bad" && won)
-          procChip = `<span class="rl-proc warn" title="Won, but the market closed against us — a bad bet that got lucky">🍀 lucky</span>`;
+          procChip = `<span class="rl-proc warn" title="Won, but the market closed against us — a bad bet that got lucky">${iconMark("dot", 10)}lucky</span>`;
         else if (b.process === "good" && b.status === "lost")
-          procChip = `<span class="rl-proc good" title="Lost, but we beat the closing line — good bet, bad night">📐 beat close</span>`;
+          procChip = `<span class="rl-proc good" title="Lost, but we beat the closing line — good bet, bad night">${iconMark("rising", 11)}beat close</span>`;
         else if (b.clv != null)
           procChip = `<span class="rl-proc ${b.clv >= 0 ? "good" : "bad"}"
             title="Closing-line value — how far the market moved our way after the bet">${b.clv >= 0 ? "+" : ""}${b.clv.toFixed(1)} CLV</span>`;
@@ -3478,7 +3523,7 @@ function renderEdgeBoard() {
   const rows = edgeBoardRows();
   if (!rows.length) {
     note.innerHTML = "";
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">📈</div>
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
       <h3>No positively-priced bets right now</h3>
       <p>${noMarketExplainer()}</p>
       <p style="opacity:.7">The Edge Board lists every bet whose real price
@@ -3658,7 +3703,7 @@ function renderScanner() {
                ? ["Live", "var(--good,#3ddc84)", "value still available near the sharp number"]
                : ["Chase", "var(--warn,#e8b33e)", "line already moved past it — do not follow"]);
           return `<div class="drow" style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
-            <span>🔥</span>
+            <span>${iconMark("hot")}</span>
             <span style="flex:1"><strong>${escapeHtml(r.player)} ${escapeHtml(r.market_label || "")}</strong>
               <span style="display:block;opacity:.6;font-size:.85em">steam — several books moved together, ${m.verdict === "with" ? "toward" : "against"} our ${escapeHtml(r.side || "")}${age != null ? ` · ${age < 60 ? age + "m" : Math.round(age / 60) + "h"} ago` : ""} · ${cls[2]}</span></span>
             <span style="min-width:56px;text-align:right;font-weight:700;color:${cls[1]}">${cls[0]}</span>
@@ -3817,7 +3862,7 @@ async function renderIntel() {
     if (res.ok) d = await res.json();
   } catch (e) {}
   if (!d || (!(d.flow || []).length && !(d.markets || []).length)) {
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🛰️</div>
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
       <div class="es-title">No prediction-market data yet</div>
       <div class="es-sub">The launcher pulls Polymarket's public market list and trade
       tape on every refresh (free, no key needed). If this persists, the machine may not
@@ -3928,7 +3973,7 @@ async function renderIntel() {
       <span class="sub">— large trades scored for anomaly signals, with receipts on every chip
       (hover). Probabilities, never verdicts.</span></div>
     <div class="cards wide">${flagCards ||
-      `<div class="empty-slate" style="grid-column:1/-1"><div class="es-icon">📡</div>
+      `<div class="empty-slate" style="grid-column:1/-1"><div class="es-icon">${icon("signal", 30)}</div>
         <div class="es-title">No flagged flow yet</div>
         <div class="es-sub">The feed scores the last 24h of recorded tape and accumulates
         across refreshes — big trades are a few per hour.</div></div>`}</div>
@@ -3958,7 +4003,7 @@ async function renderFantasy() {
     if (res.ok) d = await res.json();
   } catch (e) {}
   if (!d || !d.season) {
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🏆</div>
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("trophy", 30)}</div>
       <div class="es-title">No NFL usage data yet</div>
       <div class="es-sub">${escapeHtml((d && d.note) || "Run `python3 ingest.py nfl` once — usage rows (targets, carries, air yards, PPR points) ride along with the normal player-log ingest, then this page fills automatically.")}</div></div>`;
     return;
@@ -4055,7 +4100,7 @@ async function renderFantasy() {
         <span class="chip">${escapeHtml(s.archetype)}</span>
       </div>
       ${[s.home, s.away].filter((t) => coachChanged[t]).map((t) =>
-        `<div class="warning" style="margin-top:8px">🔄 ${escapeHtml(t)} has a new head coach
+        `<div class="warning" style="margin-top:8px">${iconMark("clock")}${escapeHtml(t)} has a new head coach
            (${escapeHtml(coachChanged[t])}) — last season's tendencies (PROE included) may not carry</div>`).join("")}
       <div class="metrics">
         <div class="metric"><div class="k">${escapeHtml(s.home)} implied</div><div class="v">${s.home_implied}</div></div>
@@ -4219,8 +4264,8 @@ function waiverPulseHTML(t) {
       ${t.lookback_hours || 24}h (every Sleeper league). Market attention, not our model —
       check the movers against the usage boards below before following the crowd.</span></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:14px">
-      ${(t.adds || []).length ? col("🔥 Most added", t.adds, "var(--good)", "adds") : ""}
-      ${(t.drops || []).length ? col("🧊 Most dropped", t.drops, "var(--bad)", "drops") : ""}
+      ${(t.adds || []).length ? col(`${iconMark("hot")} Most added`, t.adds, "var(--good)", "adds") : ""}
+      ${(t.drops || []).length ? col(`${iconMark("cold")} Most dropped`, t.drops, "var(--bad)", "drops") : ""}
     </div>`;
 }
 
@@ -4546,7 +4591,7 @@ async function renderStandings() {
   }
   const groups = d.groups || [];
   if (!groups.length) {
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">📊</div>
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
       <h3>No standings yet</h3><p>${escapeHtml(d.note
         || "Run `python3 standings_build.py` once.")}</p></div>`;
     return;
@@ -4586,7 +4631,7 @@ async function renderRosters() {
   const teams = d.teams || {};
   const abbrs = Object.keys(teams).sort();
   if (!abbrs.length) {
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">📋</div>
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("list", 30)}</div>
       <h3>No roster data for ${escapeHtml(sport.toUpperCase())}</h3>
       <p>${escapeHtml(d.note
         || "Run `python3 rosters_build.py` once to build this sport's rosters.")}</p></div>`;
@@ -4830,7 +4875,7 @@ function intelVerdict(v) {
        (hit ${pctv(v.hit_rate)} vs ${pctv(v.avg_implied)} implied, ${v.roi >= 0 ? "+" : ""}${pctv(v.roi)} ROI,
        z ${v.z}). Following a fresh LIVE flag below — same side, at or better than the flagged
        entry price — is now a recommended play, sized small (flat 0.1u).</p>`
-    : `<div style="font-weight:800;font-size:var(--fs-xl)">🎯 What we recommend right now: <span style="color:var(--warn)">nothing — watch, don't bet</span></div>
+    : `<div style="font-weight:800;font-size:var(--fs-xl)">${iconMark("target", 16)}What we recommend right now: <span style="color:var(--warn)">nothing — watch, don't bet</span></div>
        <p style="margin:8px 0 0">This page detects large anomalous trades ("informed flow") and
        <b>paper-tracks every flag</b> to find out whether following that money actually wins.
        ${v && v.graded
@@ -5239,7 +5284,7 @@ async function renderUFC() {
     if (res.ok) d = await res.json();
   } catch (e) {}
   if (!d) {
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🥊</div>
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("glove", 30)}</div>
       <div class="es-title">No UFC data yet</div>
       <div class="es-sub">The launcher builds the card each refresh once you pull and relaunch.</div></div>`;
     return;
@@ -5249,7 +5294,7 @@ async function renderUFC() {
   const pctv = (x) => x == null ? "—" : `${(x * 100).toFixed(1)}%`;
 
   if (d.status !== "card") {
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">🥊</div>
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("glove", 30)}</div>
       <div class="es-title">No card in the window</div>
       <div class="es-sub">${escapeHtml(d.note || "")}</div></div>
       <div class="ls-note" style="margin-top:14px">The Scalpy MMA doctrine, ready:
@@ -5340,7 +5385,7 @@ async function renderUFC() {
   const fighterCol = (f) => {
     const flags = (f.red_flags || []).map((x) =>
       `<span class="chip" style="color:var(--bad);border-color:currentColor"
-         title="${escapeHtml(x)}">⚑ ${escapeHtml(x.split("—")[0].trim())}</span>`).join("");
+         title="${escapeHtml(x)}">${iconMark("warn", 11)}${escapeHtml(x.split("—")[0].trim())}</span>`).join("");
     const stats = f.covered
       ? `${fmt(f.slpm)}/${fmt(f.sapm)} strikes · TDD ${f.tdd == null ? "—" : (f.tdd * 100).toFixed(0) + "%"}
          · TD ${fmt(f.td_per15)}/15`
@@ -5848,7 +5893,7 @@ function renderAbout() {
         </ul>`,
         "var(--brand)")}
 
-      ${card("🛟 If it stops being fun, stop", `
+      ${card(`${iconMark("warn")}If it stops being fun, stop`, `
         <p>Gambling is genuinely addictive, and a tool that makes betting feel
         more rigorous can make it easier to bet more, not less. Bet only money
         you can afford to lose. Never chase a loss. Set a limit before you
@@ -5943,13 +5988,13 @@ async function renderWhy() {
       from data you can name, every pick is graded in public, and the math is on this page for you to check by hand.</p>
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:14px">
-      ${pillar("🔍", "Transparent math", `Park factors, umpire tendencies, lineup-slot plate appearances, bullpen fatigue,
+      ${pillar(icon("search", 22), "Transparent math", `Park factors, umpire tendencies, lineup-slot plate appearances, bullpen fatigue,
         minutes engines — every factor on a card is measured from real data, and negative factors get a red ✗, not a hidden footnote.
         The de-vig, Kelly and EV formulas the engines run are open below.`)}
-      ${pillar("📒", "Graded in public", `Every recommended pick journals at its real book price the moment it appears and grades
+      ${pillar(icon("book", 22), "Graded in public", `Every recommended pick journals at its real book price the moment it appears and grades
         itself against the final result — wins, losses, closing-line value, and a calibration curve that says whether "60%" meant 60%.
         Long shots are tracked in a separate bucket, never blended into the headline record.`)}
-      ${pillar("🚫", "Built to pass", `Approval gates, humility clamps toward the market, hard pick caps, and pass lists that
+      ${pillar(icon("cross", 22), "Built to pass", `Approval gates, humility clamps toward the market, hard pick caps, and pass lists that
         say why each game was skipped. "No qualifying plays tonight" is a correct output here — a service that must sell picks
         every night can never say it.`)}
     </div>
