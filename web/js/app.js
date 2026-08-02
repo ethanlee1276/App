@@ -505,7 +505,7 @@ function renderProbation() {
   const t = d.tuning || {};
   host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
     <div class="player">⚗️ ${escapeHtml((SPORT_META[state.sport] || {}).name || state.sport.toUpperCase())} is on probation — graded, not bet</div>
-    <div style="color:var(--text-body);font-size:13px;margin-top:5px">
+    <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
       ${escapeHtml(t.note || "This league's tuning has not been fitted to its own results yet.")}
       Everything below is priced and journaled exactly as a live board would be,
       so the record it builds is real — it just doesn't stake anything until that
@@ -529,7 +529,7 @@ function renderTalent() {
   if (!t.available) {
     host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
       <div class="player">📋 No preseason talent prior</div>
-      <div style="color:var(--text-body);font-size:13px;margin-top:5px">
+      <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
         The board is running on results only. In September that means an
         unproven Alabama and an unproven Kent State are both rated near
         average, which is wrong in a direction the market will take money
@@ -547,7 +547,7 @@ function renderTalent() {
       ${chip("recruiting", L.talent)}${chip("blue-chip", L.blue_chip)}
       ${chip("returning", L.returning)}${chip("portal", L.portal)}
     </div>
-    <div style="color:var(--text-body);font-size:13px">
+    <div style="color:var(--text-body);font-size:var(--fs-md)">
       ${fit.fitted
         ? `One standard deviation of recruiting talent is worth
            ${escapeHtml(String(fit.points_per_sd))} net points a game, fitted on
@@ -778,10 +778,10 @@ async function renderBestBets() {
       <span style="opacity:.45;min-width:18px;font-weight:700">${i + 1}</span>
       <span class="grade ${gradeClass(p.grade)}" style="flex-shrink:0">${escapeHtml(p.grade || "")}</span>
       <span style="flex:1;min-width:0"><strong>${escapeHtml(p.label)}</strong>
-        ${p.game ? `<span style="display:block;font-size:12px;margin-top:2px">${(SPORT_META[state.sport] || {}).logo || "🏟️"} ${escapeHtml(p.game)}</span>` : ""}
-        <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">${escapeHtml(p.why)}</span></span>
+        ${p.game ? `<span style="display:block;font-size:var(--fs-sm);margin-top:2px">${(SPORT_META[state.sport] || {}).logo || "🏟️"} ${escapeHtml(p.game)}</span>` : ""}
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${escapeHtml(p.why)}</span></span>
       <span style="text-align:right;white-space:nowrap"><span style="font-weight:800">${escapeHtml(p.metric)}</span>
-        ${p.stake > 0 ? `<span style="display:block;color:var(--good);font-size:12px;font-weight:700">${
+        ${p.stake > 0 ? `<span style="display:block;color:var(--good);font-size:var(--fs-sm);font-weight:700">${
           ud > 0 ? money(stakeDollars(p.stake)) + " · " : ""}${p.stake.toFixed(2)}u</span>` : ""}</span>
     </div>`;
 
@@ -789,7 +789,7 @@ async function renderBestBets() {
   const prePrice = prePriceHeadline();
   const picksBlock = picks.length ? `
     <div class="card" style="padding:0;border-left:3px solid var(--good)">
-      <p style="padding:10px 14px 6px;margin:0;font-size:12.5px;color:var(--text-mute)">
+      <p style="padding:10px 14px 6px;margin:0;font-size:var(--fs-sm);color:var(--text-mute)">
         <b style="color:var(--text)">${picks.length} pick${picks.length === 1 ? "" : "s"} tonight — this is the whole list.</b>
         Same count as the tile above, ranked by quality. ${escapeHtml(journalNote)}${
         asOf ? ` Prices are from the ${escapeHtml(asOf)} odds pull — always confirm the number still stands before betting.` : ""}
@@ -801,9 +801,9 @@ async function renderBestBets() {
       </details>
     </div>` : `
     <div class="card" style="border-left:3px solid var(--warn)">
-      <p style="margin:0;font-weight:800;font-size:15px">${prePrice
+      <p style="margin:0;font-weight:800;font-size:var(--fs-lg)">${prePrice
         || "No qualifying plays at current numbers."}</p>
-      <p style="margin:6px 0 0;color:var(--text-mute);font-size:13px">${prePrice
+      <p style="margin:6px 0 0;color:var(--text-mute);font-size:var(--fs-md)">${prePrice
         ? `The gate counts below ran against the last pull, not today's prices — read them
            as stale, not as a verdict on today's slate.`
         : `That sentence is the system working, not failing — every market tonight either
@@ -851,16 +851,16 @@ async function renderBestBets() {
     <details class="rec-disclose" style="margin-top:10px">
       <summary>Tracked signals tonight (${signals.length}) — measurements, not picks</summary>
       <div style="padding:0">
-        <p style="margin:6px 0 8px;font-size:12px;color:var(--text-mute)">These are NOT
+        <p style="margin:6px 0 8px;font-size:var(--fs-sm);color:var(--text-mute)">These are NOT
         recommendations. They're the signal families the site paper-tracks in quarantined
         Record buckets — each has a fixed promotion bar, and none is money tonight.</p>
         ${signals.map((s) => `
           <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 4px;
                       border-bottom:1px solid rgba(255,255,255,.05);opacity:.75">
             <span class="chip" style="min-width:50px;text-align:center;flex-shrink:0">${s.tag}</span>
-            <span style="flex:1;min-width:0;font-size:12.5px">${escapeHtml(s.label)}
-              <span style="display:block;color:var(--text-mute);font-size:11.5px">${escapeHtml(s.why)}</span></span>
-            <span style="font-weight:700;font-size:12.5px;white-space:nowrap">${escapeHtml(s.metric)}</span>
+            <span style="flex:1;min-width:0;font-size:var(--fs-sm)">${escapeHtml(s.label)}
+              <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${escapeHtml(s.why)}</span></span>
+            <span style="font-weight:700;font-size:var(--fs-sm);white-space:nowrap">${escapeHtml(s.metric)}</span>
           </div>`).join("")}
       </div>
     </details>` : "";
@@ -868,7 +868,7 @@ async function renderBestBets() {
   // ======= the bets already placed whose price moved off the bar =======
   const riddenBlock = ridden.length ? `
     <div class="card" style="padding:0;border-left:3px solid var(--warn);margin-top:10px">
-      <p style="padding:10px 14px 6px;margin:0;font-size:12.5px;color:var(--text-mute)">
+      <p style="padding:10px 14px 6px;margin:0;font-size:var(--fs-sm);color:var(--text-mute)">
         <b style="color:var(--text)">Riding from earlier pulls (${ridden.length}).</b>
         These WERE tonight's picks — journaled when they cleared the bar. The line has
         moved since, and at the current number they no longer qualify, so: the bet rides
@@ -881,13 +881,13 @@ async function renderBestBets() {
             <strong>${b.market === "moneyline"
               ? `${escapeHtml(teamName(b.player))} Moneyline`
               : `${escapeHtml(b.player)} ${escapeHtml(b.side)} ${b.line} ${escapeHtml(b.market_label)}`}</strong>
-            <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">
+            <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
               placed ${american(b.odds)}${cur && cur.odds != null
                 ? ` · current best ${american(cur.odds)}${cur.line != null && Number(cur.line) !== Number(b.line)
                     ? ` (line now ${cur.line})` : ""} — doesn't clear the bar at this number`
                 : ` · no live quote for this market right now`}</span>
           </span>
-          <span style="text-align:right;white-space:nowrap;font-size:12px;color:var(--text-mute)">
+          <span style="text-align:right;white-space:nowrap;font-size:var(--fs-sm);color:var(--text-mute)">
             ${b.stake_units > 0 ? `${Number(b.stake_units).toFixed(2)}u<br>` : ""}riding</span>
         </div>`).join("")}
     </div>` : "";
@@ -977,7 +977,7 @@ function oddsClockHTML() {
        pacer spends credits. Pulling at breakfast buys proxy lines and an
        empty board. Until then this page stays thin by design`
     : `Most of these fill in as the books post hitter lines near first pitch`;
-  return `<div style="margin-top:6px;font-size:12px;color:var(--text-mute)">
+  return `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
     Book prices: ${bits.join(" · ")}. ${why} — the rest of the board (scores,
     lineups, live tracking) refreshes every minute regardless.</div>`;
 }
@@ -1021,11 +1021,11 @@ function censusFunnelHTML() {
     .filter(([k, v]) => typeof v === "number" && v > 0
       && k !== "recommended" && k !== "calibration_markets")
     .map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px;
-        padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px">
+        padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:var(--fs-sm)">
       <span style="color:var(--text-mute)">${escapeHtml(names[k] || k)}</span>
       <span style="font-weight:700">${v}</span></div>`).join("");
   const closed = (gc.calibration_markets || []).length
-    ? `<div style="margin-top:6px;font-size:12px;color:var(--warn)">Closed by calibration:
+    ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--warn)">Closed by calibration:
        ${gc.calibration_markets.map(escapeHtml).join(", ")} — the nightly refit reopens
        a market when its fit lands back inside the search range.</div>` : "";
   // The biggest bucket deserves its own breakdown: "no real book price" is
@@ -1035,13 +1035,13 @@ function censusFunnelHTML() {
   const npmRows = Object.entries(npm).sort((a, b) => b[1] - a[1])
     .map(([m, n]) => `${escapeHtml(m)} ${n}`).join(" · ");
   const noPrice = npmRows
-    ? `<div style="margin-top:6px;font-size:12px;color:var(--text-mute)">
+    ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
        Unpriced by market: ${npmRows}. We project every hitter in the lineup;
        books post lines for a subset — that gap is normal, not a broken feed.
        A price we <em>paid</em> for and failed to match is a different thing:
        the build prints those as a name-match warning.</div>${oddsClockHTML()}` : "";
   return rows ? `<div style="margin-top:10px">
-    <div style="font-size:12px;font-weight:700;margin-bottom:2px">Where tonight's props died</div>
+    <div style="font-size:var(--fs-sm);font-weight:700;margin-bottom:2px">Where tonight's props died</div>
     ${rows}${noPrice}${closed}</div>` : "";
 }
 
@@ -1054,7 +1054,7 @@ function renderLivePicks() {
   if (trackerErr) {
     // A broken tracker must say so — an empty space reads as "no bets".
     host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-top:8px">
-      <p style="margin:0;font-size:13px">⚠️ Open-bet tracker hit an error this build:
+      <p style="margin:0;font-size:var(--fs-md)">⚠️ Open-bet tracker hit an error this build:
       <code>${escapeHtml(trackerErr)}</code> — open bets still settle normally; see the Record page.</p></div>`;
     return;
   }
@@ -1095,34 +1095,34 @@ function renderLivePicks() {
   const statusBits = (r) => {
     if (r.status === "cleared")
       return `<span style="color:var(--good);font-weight:800">✓ CLEARED</span>
-        <span style="display:block;color:var(--text-mute);font-size:11.5px">${r.current} so far — over ${r.line} is locked</span>`;
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${r.current} so far — over ${r.line} is locked</span>`;
     if (r.status === "busted")
       return `<span style="color:var(--bad);font-weight:800">✕ BUSTED</span>
-        <span style="display:block;color:var(--text-mute);font-size:11.5px">${r.current} already — under ${r.line} can't cash</span>`;
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${r.current} already — under ${r.line} can't cash</span>`;
     if (r.status === "won_pending")
       return `<span style="color:var(--good);font-weight:800">✓ WON</span>
-        <span style="display:block;color:var(--text-mute);font-size:11.5px">${ml(r) ? "final" : `finished at ${r.current}`} — settles officially overnight</span>`;
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${ml(r) ? "final" : `finished at ${r.current}`} — settles officially overnight</span>`;
     if (r.status === "lost_pending")
       return `<span style="color:var(--bad);font-weight:800">✕ LOST</span>
-        <span style="display:block;color:var(--text-mute);font-size:11.5px">${ml(r) ? "final" : `finished at ${r.current}`} — settles officially overnight</span>`;
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${ml(r) ? "final" : `finished at ${r.current}`} — settles officially overnight</span>`;
     if (r.status === "push_pending")
       return `<span style="font-weight:800">➖ PUSH</span>
-        <span style="display:block;color:var(--text-mute);font-size:11.5px">landed exactly on ${r.line}</span>`;
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">landed exactly on ${r.line}</span>`;
     if (r.status === "final_pending")
       return `<span style="color:var(--text-mute);font-weight:700">FINAL</span>
-        <span style="display:block;color:var(--text-mute);font-size:11.5px">awaiting the overnight settle</span>`;
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">awaiting the overnight settle</span>`;
     if (r.status === "upcoming")
       return `<span style="color:var(--text-mute);font-weight:700">UPCOMING</span>
-        <span style="display:block;color:var(--text-mute);font-size:11.5px">${escapeHtml(whenLabel(r.game.date, r.game.kickoff) || "today")}</span>`;
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${escapeHtml(whenLabel(r.game.date, r.game.kickoff) || "today")}</span>`;
     if (r.status === "unmapped")
       return `<span style="color:var(--warn);font-weight:700">OPEN</span>
-        <span style="display:block;color:var(--text-mute);font-size:11.5px">couldn't map to a game this cycle — still settles overnight</span>`;
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">couldn't map to a game this cycle — still settles overnight</span>`;
     if (r.current != null) {
       const needs = r.side === "OVER"
         ? `needs ${Math.max(1, Math.ceil(r.line - r.current))} more`
         : `must stay at or under ${Math.floor(r.line)}`;
       return `<span style="font-weight:800">${r.current} so far</span>
-        <span style="display:block;color:var(--text-mute);font-size:11.5px">${needs}</span>`;
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${needs}</span>`;
     }
     return `<span style="color:var(--text-mute)">in play</span>`;
   };
@@ -1155,7 +1155,7 @@ function renderLivePicks() {
       : "";
     const onDeck = !mine && s.on_deck && sameName(s.on_deck, r.player)
       ? ` · <b style="color:var(--warn)">${escapeHtml(r.player)} on deck</b>` : "";
-    return `<span style="display:block;font-size:12px;margin-top:2px;color:var(--text-mute)">
+    return `<span style="display:block;font-size:var(--fs-sm);margin-top:2px;color:var(--text-mute)">
       ${batter}${onDeck} · ${s.outs} out${s.outs === 1 ? "" : "s"} · ${runners}
       · ${s.balls}-${s.strikes} count</span>`;
   };
@@ -1182,7 +1182,7 @@ function renderLivePicks() {
         <span style="position:absolute;left:${tickPct}%;top:-3px;bottom:-3px;width:2px;
                      border-radius:1px;background:var(--text-mute)"></span>
       </span>
-      <span style="display:block;font-size:11px;color:var(--text-mute);margin-top:3px">
+      <span style="display:block;font-size:var(--fs-xs);color:var(--text-mute);margin-top:3px">
         ${r.current} now · line ${r.line}</span>`;
   };
   const nLive = rows.filter((r) => r.phase === "live").length;
@@ -1202,16 +1202,16 @@ function renderLivePicks() {
             <strong>${betTxt(r)}</strong>
             <span style="color:var(--text-mute)"> · placed ${american(r.odds)}${
               r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
-            <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">${gameLine(r.game)}</span>
+            <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${gameLine(r.game)}</span>
             ${situationLine(r)}
-            ${offBoard(r) ? `<span style="display:block;font-size:11.5px;color:var(--warn);margin-top:2px">
+            ${offBoard(r) ? `<span style="display:block;font-size:var(--fs-xs);color:var(--warn);margin-top:2px">
               ⚠ the price has moved off the bar since this was journaled — riding at
               ${american(r.odds)} as placed (also listed under Tonight's Picks).</span>` : ""}
             ${progressBar(r)}
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
         </div>`).join("")}
-      <p style="padding:8px 14px;margin:0;font-size:11.5px;color:var(--text-mute)">
+      <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">
         ${rows.length} open bet(s) on today's card${elsewhere
           ? ` · ${elsewhere} older open bet(s) awaiting results — graded on the Record page`
           : ""}. A bet journals the moment it's recommended and stays here until it
@@ -1269,7 +1269,7 @@ async function renderTeamForm() {
       ${col("Running hot", "🔥", tf.hot || [], "pos")}
       ${col("Running cold", "❄️", tf.cold || [], "neg")}
     </div>
-    <p style="color:var(--text-mute);font-size:12.5px;margin-top:8px">
+    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:8px">
       ${tf.audit && tf.audit.verdict ? `Season audit: ${escapeHtml(tf.audit.verdict)}. ` : ""}${escapeHtml(sampler)}.</p>`;
 }
 
@@ -2435,12 +2435,12 @@ function recEraSection(er) {
         <span style="flex:1;min-width:0">
           <strong>${escapeHtml(e.label)}</strong>
           ${isCurrent ? `<span class="chip" style="margin-left:6px">running now</span>` : ""}
-          <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">
+          <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
             ${escapeHtml(range)}${sports ? ` · ${sports}` : ""}${clv}</span>
         </span>
         <span style="text-align:right;white-space:nowrap">
           <strong>${e.wins}-${e.losses}</strong>
-          <span style="display:block;font-size:12px" class="${toneOf(e.net_units)}">
+          <span style="display:block;font-size:var(--fs-sm)" class="${toneOf(e.net_units)}">
             ${graded ? `${e.net_units >= 0 ? "+" : ""}${e.net_units.toFixed(2)}u · ${roiTxt} ROI`
                      : `${e.open} open — accruing`}</span>
         </span>
@@ -2452,7 +2452,7 @@ function recEraSection(er) {
       gates that no longer exist; the current era is the model being judged now.</span></div>
     <div class="card" style="padding:0">
       ${eras.map((e) => row(e, e.key === er.current)).join("")}
-      <p style="padding:8px 14px;margin:0;font-size:11.5px;color:var(--text-mute)">
+      <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">
         CLV (closing-line value) is the fast signal — beating the close consistently
         shows up weeks before the W-L means anything. Judge the new era on CLV first,
         ROI once it has 50+ graded bets.</p>
@@ -3487,7 +3487,7 @@ async function renderIntel() {
   const statusColor = { Live: "var(--good)", Chasing: "var(--warn)", Historical: "var(--text-mute)" };
   const heat = (s) => s >= 70 ? "var(--bad)" : s >= 40 ? "var(--warn)" : "var(--brand)";
   const tile = (k, v, sub) => `<div class="tile"><div class="k">${k}</div>
-    <div class="v">${v}</div>${sub ? `<div style="color:var(--text-mute);font-size:12px;margin-top:2px">${sub}</div>` : ""}</div>`;
+    <div class="v">${v}</div>${sub ? `<div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${sub}</div>` : ""}</div>`;
 
   const flagCards = (d.flow || []).slice(0, 12).map((f) => {
     const color = statusColor[f.status] || "var(--brand)";
@@ -3521,7 +3521,7 @@ async function renderIntel() {
         <div class="metric primary"><div class="k">Now</div><div class="v" style="color:${color}">${cents(f.current_price)}</div></div>
       </div>
       <div class="chips" style="margin-top:10px">${sigs}</div>
-      <div style="margin-top:10px;font-size:12.5px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
+      <div style="margin-top:10px;font-size:var(--fs-sm);padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
         <span style="color:var(--text-mute)">The trade this flag points at:</span>
         <b>${escapeHtml(f.side)} ${escapeHtml(f.outcome)}</b> at ${cents(f.current_price)} or better
         · ${proven
@@ -3549,13 +3549,13 @@ async function renderIntel() {
             <div class="subtitle wallet">${shortWallet(t.wallet)}</div>
           </div>
         </div>
-        <span style="font-weight:800;font-size:19px;color:${t.pnl >= 0 ? "var(--good)" : "var(--bad)"}">
+        <span style="font-weight:800;font-size:var(--fs-xl);color:${t.pnl >= 0 ? "var(--good)" : "var(--bad)"}">
           ${t.pnl ? `${t.pnl >= 0 ? "+" : "−"}${usd(Math.abs(t.pnl))}` : "—"}</span>
       </div>
       ${t.pnl_series && t.pnl_series.length > 1
         ? `<div style="margin-top:10px">${pmSpark(t.pnl_series, 300, 62)}
-           <div style="color:var(--text-mute);font-size:11.5px;margin-top:3px">Cumulative P&amp;L — past month (hover for numbers)</div></div>` : ""}
-      <div style="margin-top:10px;color:var(--text-body);font-size:12.5px">
+           <div style="color:var(--text-mute);font-size:var(--fs-xs);margin-top:3px">Cumulative P&amp;L — past month (hover for numbers)</div></div>` : ""}
+      <div style="margin-top:10px;color:var(--text-body);font-size:var(--fs-sm)">
         <span style="color:var(--text-mute)">Latest:</span> ${lastTxt}</div>
     </article>`;
   }).join("");
@@ -3595,7 +3595,7 @@ async function renderIntel() {
     <div class="section-title">Top markets
       <span class="sub">— live markets by 24h volume · YES price · resolution date</span></div>
     <div class="card" style="padding:0">${marketRows}</div>
-    <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Wallet-age signal
+    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Wallet-age signal
       matures as the tape accrues (it cannot be backfilled). Kalshi omitted: no public
       trader identity. Analyzing public flow is market research; what the CFTC prosecutes
       (2026) is trading on information <i>you</i> hold a duty to keep confidential.</p>`;
@@ -3693,7 +3693,7 @@ async function renderFantasy() {
         <div class="metric"><div class="k">${r.basis === "xfp" ? "xFP says" : "Volume says"}</div><div class="v">${r.expected_ppg}</div></div>
         <div class="metric"><div class="k">Gap</div><div class="v ${r.gap < 0 ? "pos" : "neg"}">${r.gap > 0 ? "+" : ""}${r.gap}</div></div>
       </div>
-      <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">
+      <div style="margin-top:8px;color:var(--text-body);font-size:var(--fs-sm)">
         ${r.basis === "xfp"
           ? (buy ? "Expected points value every opportunity by WHERE it happened — his say the production is coming."
                  : "Scoring above what his situations support — beyond the ~" + (bs.band || 1.5) + " PPG a good player sustains.")
@@ -3716,34 +3716,34 @@ async function renderFantasy() {
         <div class="metric"><div class="k">${escapeHtml(s.home)} implied</div><div class="v">${s.home_implied}</div></div>
         <div class="metric"><div class="k">${escapeHtml(s.away)} implied</div><div class="v">${s.away_implied}</div></div>
       </div>
-      <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">${escapeHtml(s.read)}</div>
+      <div style="margin-top:8px;color:var(--text-body);font-size:var(--fs-sm)">${escapeHtml(s.read)}</div>
       ${s.home_proe != null || s.away_proe != null
-        ? `<div style="margin-top:6px;color:var(--text-dim);font-size:12px" title="Pass rate over expectation — intent vs situation, the stable half of game script">
+        ? `<div style="margin-top:6px;color:var(--text-dim);font-size:var(--fs-sm)" title="Pass rate over expectation — intent vs situation, the stable half of game script">
             PROE: ${escapeHtml(s.home)} ${s.home_proe != null ? `${s.home_proe >= 0 ? "+" : ""}${(s.home_proe * 100).toFixed(1)}%` : "—"}
             · ${escapeHtml(s.away)} ${s.away_proe != null ? `${s.away_proe >= 0 ? "+" : ""}${(s.away_proe * 100).toFixed(1)}%` : "—"}</div>` : ""}
       ${s.home_epa != null || s.away_epa != null
-        ? `<div style="margin-top:4px;color:var(--text-dim);font-size:12px"
+        ? `<div style="margin-top:4px;color:var(--text-dim);font-size:var(--fs-sm)"
                title="EPA/play: offensive efficiency measured from every snap (league avg ≈ 0). Pace: seconds per snap with the game in the balance — lower is faster.">
             EPA/play: ${escapeHtml(s.home)} ${s.home_epa != null ? `${s.home_epa >= 0 ? "+" : ""}${s.home_epa.toFixed(2)}` : "—"}
             · ${escapeHtml(s.away)} ${s.away_epa != null ? `${s.away_epa >= 0 ? "+" : ""}${s.away_epa.toFixed(2)}` : "—"}${
             s.home_pace != null || s.away_pace != null
               ? ` &nbsp;·&nbsp; pace ${s.home_pace != null ? s.home_pace.toFixed(1) : "—"}s / ${
                   s.away_pace != null ? s.away_pace.toFixed(1) : "—"}s` : ""}</div>` : ""}
-      <div style="margin-top:6px;color:var(--text-mute);font-size:12px">Script confidence: ${escapeHtml(s.confidence)}</div>
+      <div style="margin-top:6px;color:var(--text-mute);font-size:var(--fs-sm)">Script confidence: ${escapeHtml(s.confidence)}</div>
     </article>`).join("");
 
   const bsCount = (bs.buy_low || []).length + (bs.sell_high || []).length;
   host.innerHTML = `
     <div class="stats">
       <div class="tile"><div class="k">Season</div><div class="v">${d.season}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">${d.season < new Date().getFullYear()
+        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${d.season < new Date().getFullYear()
           ? "last completed — live weekly in Sept" : "updating weekly"}</div></div>
       <div class="tile"><div class="k">Usage movers</div><div class="v">${(d.usage || []).length}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">biggest role changes tracked</div></div>
+        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">biggest role changes tracked</div></div>
       <div class="tile"><div class="k">Trade flags</div><div class="v">${bsCount}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">outside the sustainable band</div></div>
+        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">outside the sustainable band</div></div>
       <div class="tile"><div class="k">Game scripts</div><div class="v">${(d.scripts || []).length}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">games with posted lines</div></div>
+        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">games with posted lines</div></div>
     </div>
     <div id="sleeper-zone"></div>
     ${campHTML(d.camp)}
@@ -3776,7 +3776,7 @@ async function renderFantasy() {
     <div class="cards wide">${scriptCards ||
       `<p class="loading" style="grid-column:1/-1">No upcoming NFL games with posted spreads and
        totals in the DB yet — fills when next season's lines are ingested.</p>`}</div>
-    <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Expected points are
+    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Expected points are
       fit from this season's own data (league value per target and per carry by position) —
       volume-based, so a player can legitimately sustain a positive gap; only gaps beyond
       ~${bs.band || 1.5} PPG are flagged. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
@@ -3918,7 +3918,7 @@ function offseasonHTML(off) {
       (the live pull has been failing and a cached copy is serving). Trades since then
       won't show until the feed comes back.</div>`
     : off.rosters_synced_at ? `
-    <div style="color:var(--text-mute);font-size:12px;margin-bottom:12px">
+    <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-bottom:12px">
       Rosters synced ${escapeHtml(off.rosters_synced_at)} — trades checked on every
       launch, refreshed daily.</div>` : "";
   return `
@@ -4381,7 +4381,7 @@ function draftKitHTML(kit) {
         <span class="sub">— expected points clearly above what they actually scored;
         the draft-day version of buy-low</span></div>
       <div class="card" style="padding:0">${sleepers}</div>` : ""}
-    <p style="color:var(--text-mute);font-size:12.5px;margin-top:10px">
+    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:10px">
       ${(kit.notes || []).map(escapeHtml).join(" ")}</p>`;
 }
 
@@ -4479,13 +4479,13 @@ function pmSignalProven(v) {
 function intelVerdict(v) {
   const pctv = (x) => `${(x * 100).toFixed(1)}%`;
   const body = pmSignalProven(v)
-    ? `<div style="font-weight:800;font-size:16px;color:var(--good)">✅ The signal has earned
+    ? `<div style="font-weight:800;font-size:var(--fs-xl);color:var(--good)">✅ The signal has earned
          recommendation status</div>
        <p style="margin:8px 0 0">Graded flags beat their entry prices over ${v.graded} resolutions
        (hit ${pctv(v.hit_rate)} vs ${pctv(v.avg_implied)} implied, ${v.roi >= 0 ? "+" : ""}${pctv(v.roi)} ROI,
        z ${v.z}). Following a fresh LIVE flag below — same side, at or better than the flagged
        entry price — is now a recommended play, sized small (flat 0.1u).</p>`
-    : `<div style="font-weight:800;font-size:16px">🎯 What we recommend right now: <span style="color:var(--warn)">nothing — watch, don't bet</span></div>
+    : `<div style="font-weight:800;font-size:var(--fs-xl)">🎯 What we recommend right now: <span style="color:var(--warn)">nothing — watch, don't bet</span></div>
        <p style="margin:8px 0 0">This page detects large anomalous trades ("informed flow") and
        <b>paper-tracks every flag</b> to find out whether following that money actually wins.
        ${v && v.graded
@@ -4530,10 +4530,10 @@ function intelReportCard(v) {
     <div class="stats">
       <div class="tile"><div class="k">Flags graded</div><div class="v">${v.graded}</div></div>
       <div class="tile"><div class="k">Hit rate</div><div class="v">${pctv(v.hit_rate)}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">prices implied ${pctv(v.avg_implied)}</div></div>
+        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">prices implied ${pctv(v.avg_implied)}</div></div>
       <div class="tile"><div class="k">Flat-stake ROI</div><div class="v ${v.roi >= 0 ? "pos" : ""}">${v.roi >= 0 ? "+" : ""}${pctv(v.roi)}</div></div>
       <div class="tile"><div class="k">Calibration z</div><div class="v" style="color:${zColor}">${v.z}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">above 0 = flags beat their price</div></div>
+        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">above 0 = flags beat their price</div></div>
     </div>
     ${bands ? `<div class="card" style="padding:0">${bands}</div>` : ""}
     ${wallets ? `<div class="section-title">Wallets least like luck
@@ -4682,7 +4682,7 @@ function renderSleeperPanel(d, ctx) {
     <div style="margin:0 -18px">${waivers.map((u) => rowHTML({
         name: u.player, pos: u.position, team: u.team, u, flag: flagByName[ffNorm(u.player)] })).join("") ||
       `<p class="loading" style="padding:12px 16px">Every notable riser is already rostered here.</p>`}</div>
-    <p style="color:var(--text-mute);font-size:12px;margin:10px 2px 8px">Boards use PPR scoring;
+    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:10px 2px 8px">Boards use PPR scoring;
       custom-scoring recompute lands with the in-season update.</p>
   </div>`;
 
@@ -4925,7 +4925,7 @@ async function renderUFC() {
         title="method distribution — left: pick's KO/SUB/DEC, right: opponent's DEC/SUB/KO">
       ${segs.map(([k, c]) => `<span style="width:${(m[k] || 0) * 100}%;background:${c}"></span>`).join("")}
     </div>
-    <div style="display:flex;justify-content:space-between;color:var(--text-mute);font-size:11px;margin-top:3px">
+    <div style="display:flex;justify-content:space-between;color:var(--text-mute);font-size:var(--fs-xs);margin-top:3px">
       <span>KO ${pctv(m.a_ko)} · SUB ${pctv(m.a_sub)} · DEC ${pctv(m.a_dec)}</span>
       <span>distance ${pctv(m.distance)}</span></div>`;
   };
@@ -4974,11 +4974,11 @@ async function renderUFC() {
         <div class="metric primary"><div class="k">EV</div><div class="v pos">+${(p.ev * 100).toFixed(1)}%</div></div>
       </div>
       ${methodBar(p.method || {})}
-      <div style="margin-top:8px;color:var(--text-body);font-size:12.5px">
+      <div style="margin-top:8px;color:var(--text-body);font-size:var(--fs-sm)">
         ${(p.style_notes || []).map(escapeHtml).join(" · ")} · hold ${(p.hold * 100).toFixed(1)}%
         · stake ${p.stake_units}u${p.required_edge ? ` · needs ${(p.required_edge * 100).toFixed(1)}%` : ""}</div>
       ${(p.environment && (p.environment.why || []).length)
-        ? `<div style="margin-top:6px;color:var(--text-mute);font-size:12px">🏟️ ${
+        ? `<div style="margin-top:6px;color:var(--text-mute);font-size:var(--fs-sm)">🏟️ ${
             escapeHtml([(p.environment.cage || {}).note, (p.environment.altitude || {}).note]
               .filter(Boolean).join(" · "))}</div>` : ""}
       ${board.length ? `<details class="ufc-shop"><summary>Every market this fight implies (${board.length}) — shop the unpriced ones</summary>
@@ -5023,7 +5023,7 @@ async function renderUFC() {
     const fs = m.fighters || [];
     return `<article class="card" style="--grade-color:${color};padding:14px 16px">
       <div class="card-head" style="align-items:flex-start">
-        <div><div class="player" style="font-size:15px">${escapeHtml(m.fight)}</div>
+        <div><div class="player" style="font-size:var(--fs-lg)">${escapeHtml(m.fight)}</div>
           <div class="subtitle">${escapeHtml((m.division || "").replace(/_/g, " ") || "division n/a")}
             ${m.odds ? ` · ${escapeHtml(m.book || "")} ${american(m.odds)}` : ""}</div></div>
         <span class="pm-status" style="color:${color}">${m.near_miss ? "NEAR MISS" : label}</span>
@@ -5036,7 +5036,7 @@ async function renderUFC() {
         <div class="metric"><div class="k">p_market</div><div class="v">${pctv(m.p_market)}</div></div>
         <div class="metric primary"><div class="k">p_final</div><div class="v">${pctv(m.p_final)}</div></div>
       </div>` : ""}
-      <div style="margin-top:10px;color:var(--text-body);font-size:12.5px">
+      <div style="margin-top:10px;color:var(--text-body);font-size:var(--fs-sm)">
         <span style="color:${color};font-weight:700">Passed:</span> ${escapeHtml(m.why || "")}</div>
     </article>`;
   };
@@ -5049,15 +5049,15 @@ async function renderUFC() {
   host.innerHTML = `
     <div class="stats">
       <div class="tile"><div class="k">Card</div><div class="v">${escapeHtml(d.event_date || "")}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">${c.fights || 0} bouts</div></div>
+        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${c.fights || 0} bouts</div></div>
       <div class="tile"><div class="k">Modeled</div><div class="v">${nModeled}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">priced &amp; run through the model</div></div>
+        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">priced &amp; run through the model</div></div>
       <div class="tile"><div class="k">Awaiting prices</div><div class="v">${nWaiting}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">books post MMA lines late</div></div>
+        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">books post MMA lines late</div></div>
       <div class="tile"><div class="k">Picks</div><div class="v">${c.picks || 0}</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">every fight that clears the bar</div></div>
+        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">every fight that clears the bar</div></div>
       <div class="tile"><div class="k">Card exposure</div><div class="v">${((d.exposure || 0) * 100).toFixed(1)}%</div>
-        <div style="color:var(--text-mute);font-size:12px;margin-top:2px">of bankroll · cap ${((d.card_cap || 0.08) * 100).toFixed(0)}%,
+        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">of bankroll · cap ${((d.card_cap || 0.08) * 100).toFixed(0)}%,
           the tightest in the system</div></div>
     </div>
     ${(d.correlation_flags || []).length ? `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
@@ -5089,10 +5089,10 @@ async function renderUFC() {
               <span style="min-width:74px;text-align:center;font-weight:800;flex-shrink:0;
                     color:${r._pick ? "var(--good)" : "var(--text-mute)"}">${r._pick ? "BET" : "PASS"}</span>
               <span style="flex:1;min-width:0"><strong>${escapeHtml(r.fight)}</strong>
-                <span style="display:block;color:var(--text-mute);font-size:12px;margin-top:2px">
+                <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
                   ${r._pick ? `${escapeHtml(r.selection || (r.pick + " ML"))} ${american((r.best_market || {}).odds != null ? r.best_market.odds : r.odds)} (${escapeHtml(r.book || "")}) · stake ${r.stake_units}u`
                             : escapeHtml(r.why || "")}</span></span>
-              <span style="text-align:right;white-space:nowrap;font-size:12.5px">
+              <span style="text-align:right;white-space:nowrap;font-size:var(--fs-sm)">
                 model ${pctv(r.p_final)} · market ${pctv(r.p_market)}
                 <span style="display:block;color:${(r.edge || 0) > 0 ? "var(--good)" : "var(--text-mute)"};font-weight:700">
                   ${r.edge != null ? `${r.edge >= 0 ? "+" : ""}${(r.edge * 100).toFixed(1)}pts vs break-even` : ""}</span></span>
@@ -5111,12 +5111,12 @@ async function renderUFC() {
           Its own bucket until it earns more.</span></div>
         <div class="stats">
           <div class="tile"><div class="k">Record</div><div class="v">${u.wins || 0}-${u.losses || 0}</div>
-            <div style="color:var(--text-mute);font-size:12px;margin-top:2px">${u.open || 0} open</div></div>
+            <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${u.open || 0} open</div></div>
           <div class="tile"><div class="k">Flat ROI</div><div class="v ${(u.roi || 0) >= 0 ? "pos" : "neg"}">
             ${(u.roi || 0) >= 0 ? "+" : ""}${((u.roi || 0) * 100).toFixed(1)}%</div>
-            <div style="color:var(--text-mute);font-size:12px;margin-top:2px">${(u.net_units || 0) >= 0 ? "+" : ""}${(u.net_units || 0).toFixed(2)}u</div></div>
+            <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${(u.net_units || 0) >= 0 ? "+" : ""}${(u.net_units || 0).toFixed(2)}u</div></div>
           <div class="tile"><div class="k">Graded</div><div class="v">${graded}</div>
-            <div style="color:var(--text-mute);font-size:12px;margin-top:2px">judge after 50+, not 5</div></div>
+            <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">judge after 50+, not 5</div></div>
         </div>`;
     })()}
     ${(() => {
@@ -5128,14 +5128,14 @@ async function renderUFC() {
       if (w.missed) {
         return `<div class="card" style="border-left:3px solid var(--bad);margin-bottom:12px">
           <div class="player">⛔ ${w.missed} fighter(s) missed weight</div>
-          <div style="color:var(--text-body);font-size:13px;margin-top:4px">Their fights are
+          <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:4px">Their fights are
           gated off the pick list automatically — that is what KILL IF always said and now
           enforces. ${w.unrecorded} weigh-in(s) still unrecorded.</div></div>`;
       }
       if (w.unrecorded) {
         return `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
           <div class="player">⏳ ${w.unrecorded} weigh-in(s) not recorded yet</div>
-          <div style="color:var(--text-body);font-size:13px;margin-top:4px">Fighters weigh in the
+          <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:4px">Fighters weigh in the
           morning before the card, and the site pulls the results on its own once they publish —
           nothing for you to do. Until then these fights are graded <em>without</em> the fight-week
           component rather than being marked down for it, so the picks below stand on their own.
@@ -5145,7 +5145,7 @@ async function renderUFC() {
         <div class="player">✅ Weigh-ins complete — ${w.made} on weight, none missed</div></div>`;
     })()}
     ${d.no_qualifying ? `<div class="card"><div class="player">No qualifying plays on this card.</div>
-        <div style="color:var(--text-body);font-size:13px;margin-top:6px">Most fights on any card
+        <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:6px">Most fights on any card
         have no exploitable edge — the pass list below says why, fight by fight. Re-check after
         Friday weigh-ins: missed weight and visible cut damage aren't fully priced for hours, and
         the weigh-in results land here automatically.</div></div>`
@@ -5183,7 +5183,7 @@ async function renderUFC() {
       return html || `<div class="section-title">Pass list</div>
         <p class="loading" style="padding:12px">Nothing to pass on.</p>`;
     })()}
-    <p style="color:var(--text-mute);font-size:12.5px;margin-top:14px">Dossiers draft themselves:
+    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Dossiers draft themselves:
       run <code>python3 ufc_dossiers.py</code> before a card, then review the numbers it prints
       (red flags block bets until you confirm or delete them). The model refuses any fight
       missing a dossier. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
@@ -5565,7 +5565,7 @@ async function renderWhy() {
       : `the market still forecasts our picks better (Brier ${cal.brier_model} vs ${cal.brier_market}) — shown anyway, because hiding it would make us a tout`)
     : "accrues as picks settle";
   const tile = (k, v, sub) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div>
-    ${sub ? `<div style="color:var(--text-mute);font-size:12px;margin-top:2px">${sub}</div>` : ""}</div>`;
+    ${sub ? `<div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${sub}</div>` : ""}</div>`;
   const proof = o && (o.settled || o.open)
     ? `<div class="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
         ${tile("Journaled record", `${o.wins}-${o.losses}-${o.pushes}`, `${o.open} open · every pick, no deletions`)}

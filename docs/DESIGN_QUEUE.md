@@ -36,14 +36,26 @@ the bottom rather than acting on it.
 
 ## Queue
 
-- [ ] **One type ramp.** The rendered pages use **32 distinct font sizes**,
+- [x] **One type ramp.** DONE — 32 rendered sizes → 20: nine ramp tokens,
+  seven SVG graphics sizes (a separate system inside small viewBoxes), and
+  four derived from relative rules. 196 stylesheet declarations and 83
+  inline ones now go through tokens; no raw px survives in either. Nine
+  steps not seven, because the large end is role-differentiated — tile
+  value, chart number, brand, profile name. **The item's premise was partly
+  wrong and is corrected in the tests: the fractional sizes are not
+  accidents.** 8.2/11.6/12.76 come from three deliberate relative rules
+  (`.5em` unit suffix, `1.24em` emphasised metric, `.9em` rank chip) that
+  are supposed to track their parent. They stay. Only one genuine oddity
+  existed — an 8.2 SVG monogram belonging to no scale — now 8.
+
+  ~~The rendered pages use **32 distinct font sizes**,
   including fractional accidents: 8.2, 10.8333, 12.325, 12.76, 17.98. That
   is not one ramp; it is no ramp. Collapse to ~7 steps, defined as tokens,
   and map every rule onto them. The fractional ones are the tell — nobody
   chooses 12.76px, it is what a percentage did to an inherited size.
   Expect this to move text on every page; screenshot widely.
   *Constraint:* the 11px caps section labels and the mono number sizes were
-  both deliberate. Do not flatten them into the body ramp.
+  both deliberate. Do not flatten them into the body ramp.~~
 
 - [ ] **Emoji are not an icon set.** 42 emoji-bearing text nodes carry real
   meaning right now — 🏟️ ⛰ 📅 🔴 ✓ ✕. They render differently on every

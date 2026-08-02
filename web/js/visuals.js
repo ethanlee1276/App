@@ -187,7 +187,7 @@ function teamMark(abbr, size = 20, src = null) {
           stroke="${shade(t.primary, -40)}" stroke-width="1"/>
     <path d="M1 16 L23 7 L23 10.4 L1 19.4 Z" fill="${t.secondary}" opacity="0.4"/>
     <text x="12" y="15.8" text-anchor="middle" font-family="system-ui, sans-serif"
-          font-size="8.2" font-weight="800"
+          font-size="8" font-weight="800"
           fill="${idealText(t.primary)}">${escapeAttr(String(abbr).slice(0, 3))}</text>
   </svg>`;
 }

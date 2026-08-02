@@ -144,9 +144,15 @@ def test_the_serif_is_not_used_below_its_stated_floor():
     and the stylesheet from disagreeing again."""
     assert "never used below ~17px" in CSS
     trend = re.search(r"\.trend-col h3 \{[^}]*\}", CSS).group(0)
-    assert "font-size: 14px" in trend
+    # The size is asserted through the ramp, not as a literal. This pinned
+    # "font-size: 14px" and failed the moment that declaration became
+    # var(--fs-lg) — while the rule it exists to protect (a heading under
+    # the serif's floor must be on the sans) was never in danger.
+    step = re.search(r"font-size: var\(--fs-([0-9a-z]+)\)", trend).group(1)
+    size = float(re.search(rf"--fs-{step}: *([0-9.]+)px", CSS).group(1))
+    assert size < 17, f"{size}px is at or above the serif's stated floor"
     assert "font-family: var(--font-sans)" in trend, \
-        "a 14px heading is back on the display face"
+        "a sub-17px heading is back on the display face"
 
 
 def test_no_rule_asks_the_serif_for_a_weight_it_does_not_have():
