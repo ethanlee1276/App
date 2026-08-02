@@ -6447,6 +6447,13 @@ initMobileMenu();
 initMoreMenu();
 initHeaderTuck();
 requestAnimationFrame(moveIndicator);
+/* The tab labels are set in a web font. Measuring on the next frame reads
+   the FALLBACK metrics, so the underline was drawn 114px wide under a 96px
+   tab and stayed wrong until something else moved it. Re-measure once the
+   real face has loaded. */
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(moveIndicator);
+}
 // §9: the standing record is masthead chrome, not a page — it renders once
 // at boot and is independent of which view or sport is showing.
 renderStandingRecord();

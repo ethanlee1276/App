@@ -1215,15 +1215,25 @@ td.num, .dl-num, .std-n, .pm-avatar, .clv-num, .odds,
    tracking with it. */
 .tile .v { letter-spacing: 0; }
 
-/* Chrome: flat topbar + segmented nav. */
+/* Chrome: flat topbar, and the nav is a row of labels — not a box.
+ *
+ * This block used to paint `.nav` with a panel fill and a full border, and
+ * `.nav-indicator` with a filled slab. Both directly contradict the rule
+ * they override, whose own comment reads: "No pill backgrounds, no boxes:
+ * the bar is a row of labels over a single rule ... a section nav is not a
+ * row of buttons." Two bordered boxes stacked inside a 157px topbar is what
+ * made the whole header read as one smooshed block — and the league
+ * switcher's box stretched to 1144px around 380px of buttons, so most of it
+ * was an empty outline. The underline treatment was already there
+ * underneath; these overrides were sitting on top of it. */
 .topbar { backdrop-filter: blur(10px); border-bottom: 1px solid var(--border-soft); }
 .logo { background: var(--panel-2); border: 1px solid var(--border);
         box-shadow: none; border-radius: 0; }
-.nav { background: var(--panel); border: 1px solid var(--border-soft); border-radius: 0; }
-.nav-btn { font-size: var(--fs-md); letter-spacing: .01em; }
+.nav { background: none; border: 0; border-bottom: 1px solid var(--border); }
 .nav-btn.active { color: var(--text); }
-.nav-indicator { background: var(--panel-3); border: 1px solid var(--border);
+.nav-indicator { background: var(--brand); border: 0; height: 2px;
                  box-shadow: none; border-radius: 0; }
+.sport-switch { background: none; border: 0; padding: 0; }
 .btn, .btn:hover { box-shadow: none; }
 .btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
 .btn:hover { border-color: var(--brand); filter: none; }
@@ -1932,15 +1942,27 @@ select.calc-in { width: auto; font-weight: 600; }
    Here the bar stacks and each row wraps onto as many lines as it needs.
    The menu stays OFF: at this width there is room to show every
    destination at once, and hiding them behind a tap would be worse. */
+/* The topbar wraps onto its own lines below 1800px, which is every normal
+   laptop — so this is the DESKTOP layout, not a narrow-screen fallback, and
+   it was styled as though it were one. `gap: 6px` on an eleven-tab nav and a
+   seven-league switcher is what made the whole header read as one smooshed
+   block; the spacing now comes from the header-rhythm rules at the end of
+   this file. What stays here is only the wrapping itself. */
 @media (max-width: 1799px) {
-  .topbar { flex-wrap: wrap; gap: 10px; padding: 12px 16px; }
-  .brand { flex: 1 1 100%; flex-wrap: wrap; gap: 12px; min-width: 0; }
-  .sport-switch, .nav {
-    flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 6px;
-  }
+  .topbar { flex-wrap: wrap; padding: 12px 16px; }
+  .brand { flex: 1 1 100%; flex-wrap: wrap; min-width: 0; }
+  .sport-switch, .nav { min-width: 0; flex-wrap: wrap; }
   .sport-btn, .nav-btn { flex: 0 0 auto; white-space: nowrap; }
-  .nav-indicator { display: none; }   /* it cannot track a wrapped row */
-  .slate-meta { flex: 1 1 100%; justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+  .slate-meta { flex-wrap: wrap; }
+}
+
+/* The indicator cannot track a row that has wrapped onto two lines, so it
+   hides — but only once the nav ACTUALLY wraps. At 1799px it does not:
+   eleven tabs occupy about 990px of a 1390px row. Hiding it that early left
+   the active tab with no underline at any desktop width until you clicked
+   something, which is the one moment a nav most needs to say where you are. */
+@media (max-width: 1100px) {
+  .nav-indicator { display: none; }
 }
 
 /* Four stacked rows is the right answer on a tablet and a waste on a
@@ -2911,3 +2933,68 @@ select.calc-in { width: auto; font-weight: 600; }
   font-family: var(--font-sans); font-weight: 700; color: var(--text-mute); }
 .standing:empty { display: none; }
 @media (max-width: 760px) { .standing { gap: 12px; font-size: var(--fs-2xs); } }
+
+
+/* ---------------- Header rhythm ----------------
+ * The topbar carries THREE layers of information and used to render them as
+ * one 157px slab: identity and league on the first line, eleven page tabs
+ * and the freshness chips fighting for the second, the running record on a
+ * third pressed up underneath. Rows sat 9 and 15px apart with no rule
+ * between them, so nothing told the eye where one thing ended and the next
+ * began.
+ *
+ * Three fixes, no new ink:
+ *   1. Separate the layers with space and a single hairline, so identity is
+ *      visibly not navigation.
+ *   2. Give the page tabs the whole width by moving the status chips down
+ *      onto the record line, where they belong anyway — freshness and record
+ *      are both "how much should you trust this", and eleven tabs sharing a
+ *      line with them left the nav squeezed into half the bar.
+ *   3. Let the two label rows differ. They were the same weight, so they
+ *      competed; the league is the primary axis of the site and reads
+ *      louder, the page tabs read quieter and smaller underneath it.
+ */
+.topbar { padding: 16px 26px 12px; row-gap: 4px; }
+
+/* The league row hugs its buttons instead of stretching a container across
+   the bar, and closes with a hairline that separates identity from pages. */
+.brand { flex: 1 1 100%; align-items: flex-start; gap: 18px;
+  padding-bottom: 13px; border-bottom: 1px solid var(--border-soft); }
+/* Spacing comes from the container's gap, not from a margin on each button.
+   `.sport-group` is display:contents, so its buttons flow into this row —
+   which means `.sport-btn:last-child` matches the last LEAGUE, not the last
+   button, and zeroing its margin ran "UFC" straight into "MORE". A gap has
+   no such edge case. */
+.sport-switch { flex: 0 1 auto; margin-left: 22px; margin-top: 6px;
+  gap: 26px; flex-wrap: wrap; }
+.sport-btn { font-size: var(--fs-md); letter-spacing: .14em;
+  padding: 5px 0 9px; margin-right: 0; }
+
+/* Page tabs: the full width, quieter than the league row above them. */
+.nav { flex: 1 1 100%; order: 5; gap: 26px; margin-top: 11px; }
+.nav-btn { font-size: var(--fs-sm); letter-spacing: .1em; font-weight: 600;
+  padding: 7px 0 10px; }
+
+/* Status: freshness and the running record on one line, under everything. */
+/* order 10 against the record's 9: the record leads the status line and the
+   chips close it, which is the reading order the sentence has anyway. In
+   DOM order the chips come first, so without this they landed on the left
+   and the record was pushed into the middle of the bar. */
+.slate-meta { order: 10; flex: 0 1 auto; margin-left: auto; gap: 14px;
+  justify-content: flex-end; font-size: var(--fs-sm); padding-top: 11px; }
+.standing { flex: 1 1 auto; order: 9; border-top: 0; margin-top: 0;
+  padding: 15px 18px 2px 0; gap: 22px; }
+
+/* The tagline was clipping mid-word ("AI-POWERED MLB PLA…") because it was
+   capped at 34ch inside a column that had room for more. It sits under the
+   masthead on its own line now, so it can simply be as long as it is. */
+.tagline { max-width: none; }
+
+@media (max-width: 1100px) {
+  .nav { gap: 18px; }
+  .sport-switch { gap: 18px; }
+}
+@media (max-width: 900px) {
+  .brand { padding-bottom: 0; border-bottom: 0; }
+  .slate-meta, .standing { padding-top: 0; }
+}
