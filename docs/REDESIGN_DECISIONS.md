@@ -87,6 +87,51 @@ returns SVG. Same design, expressed in the stack that exists.
 
 ---
 
+## 5. The prototype's last three ideas are declined, not pending.
+
+Decided 2026-08-02, after rendering the prototype and the live page side by
+side. These had sat unresolved long enough to look like a backlog; they are
+not one. **The prototype is now a record of what was adopted, not a list of
+what is owed.**
+
+### §6.4 the entry block — NOT adopted
+
+The prototype renders each pick as a three-column entry: a 96px venue-mark
+gutter, the pick with a projection-vs-line rule and a recent-form table, and
+a 200px right rail carrying the hero number. Six picks is roughly six
+screens.
+
+**We keep the compact ranked list.** The list answers "what am I betting"
+in one screen, which is the question the page exists for, and every field
+the entry block shows already lives behind the per-pick `why?` panel. The
+detail is not missing; it is one click away instead of always open.
+
+### Agate tables — the premise was stale
+
+The item read "0 of 9 converted". It does not reproduce: **32 rules already
+set `font-variant-numeric: tabular-nums`**, so the site's numeric columns
+already line up. The instrument that produced "0" was reading the first cell
+of the first row, which is a player name — the same class of ruler error the
+design queue's own protocol warns about ("suspect the ruler before the
+change").
+
+What is genuinely undone is the prototype's mono *voice*: 10.5px monospace
+with dotted row rules. **Declined.** It is a large legibility cost on a
+board read nightly, for a stylistic gain, and figures that align already
+carry the function the agate treatment was for.
+
+### §6.2 masthead right block — NOT re-cut
+
+The prototype has a right-aligned uppercase edition line with a mono
+timestamp. The live masthead has the data-mode pill, the updated stamp, the
+date and the theme toggle. **The pill stays**: it is the at-a-glance
+live-vs-cached signal, and §9 lists the data-mode pill as promoted and never
+hidden — the edition treatment would bury it. The spacing in this block was
+also tuned in response to a specific complaint about crowding; disturbing it
+needs a reason better than a prototype.
+
+---
+
 ## Closed — the two things the prototype used to fake
 
 Both are computed by the build now. Kept here because the *reasoning* is
