@@ -411,6 +411,55 @@ def sports_present(conn) -> list[str]:
 THIN_PLAYERS_PER_GAME = 12
 
 
+#: A day counts as inside the season once its surrounding week is mostly
+#: logged. Baseball is played nearly every day, so a real season is dense;
+#: anything sparser is an island.
+DENSE_WINDOW_DAYS = 7
+DENSE_WINDOW_MIN = 4
+
+
+def _logged_window(conn, where: str, args: list) -> dict:
+    """``{season: (first, last)}`` covering each season's DENSE logged region.
+
+    Min-to-max was the obvious rule and it is wrong for a specific,
+    recurring reason: MLB now opens some seasons ABROAD. The Seoul Series
+    (2024-03-20/21) and the Tokyo Series (2025-03-18/19) are regular-season
+    games played a week before domestic opening day, with spring training
+    still running in between. So the first LOGGED day of 2024 is March 20th,
+    and a plain min-to-max window drags a dozen exhibition fixtures a day
+    into scope behind it — which is precisely the eight days this report was
+    still flagging after two rounds of narrowing.
+
+    The season proper is where logging is DENSE. Walk in from each end until
+    the surrounding week is mostly logged, and the island falls off both
+    times. A genuine mid-season outage does not: the days around it are
+    dense, so it stays in scope and stays reported.
+    """
+    import datetime as _dt
+    by_season: dict[int, list[str]] = {}
+    for s, day in conn.execute(
+            f"SELECT DISTINCT season, period FROM player_game_logs "
+            f"WHERE {where} ORDER BY period", args):
+        by_season.setdefault(int(s or 0), []).append(day)
+
+    out: dict[int, tuple] = {}
+    for season, days in by_season.items():
+        have = set(days)
+
+        def dense(day: str) -> bool:
+            try:
+                d0 = _dt.date.fromisoformat(day)
+            except ValueError:
+                return True
+            n = sum(1 for k in range(-DENSE_WINDOW_DAYS, DENSE_WINDOW_DAYS + 1)
+                    if (d0 + _dt.timedelta(days=k)).isoformat() in have)
+            return n >= DENSE_WINDOW_MIN
+
+        core = [d for d in days if dense(d)]
+        out[season] = (core[0], core[-1]) if core else (days[0], days[-1])
+    return out
+
+
 def coverage_gaps(conn, sport: str = "mlb", start: str | None = None,
                   end: str | None = None) -> list[dict]:
     """Days INSIDE the stored span that are incomplete. Read-only, no network.
@@ -473,13 +522,7 @@ def coverage_gaps(conn, sport: str = "mlb", start: str | None = None,
     logs = {r[0]: (r[1], r[2]) for r in conn.execute(
         f"SELECT period, COUNT(*), COUNT(DISTINCT player) "
         f"FROM player_game_logs WHERE {where} GROUP BY period", args)}
-    # The window each season's LOGS actually cover. Derived, not assumed:
-    # a hardcoded "regular season starts in April" would be wrong the year
-    # the league moves opening day, and would say nothing about a season
-    # whose backfill genuinely stopped in July.
-    window = {int(s): (lo, hi) for s, lo, hi in conn.execute(
-        f"SELECT season, MIN(period), MAX(period) FROM player_game_logs "
-        f"WHERE {where} GROUP BY season", args)}
+    window = _logged_window(conn, where, args)
     out: list[dict] = []
     for r in rows:
         day, n, fin = r["period"], int(r["n"] or 0), int(r["fin"] or 0)

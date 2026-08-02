@@ -332,6 +332,67 @@ def test_the_unrepairable_days_get_their_own_heading_and_remedy():
     assert "postponed" in out
     # And it must not pretend a re-ingest is the answer for them.
     assert "nothing a re-ingest would fill" in out
+# --- the international opener -----------------------------------------------
+def _season(c, first_day, n_days=40, games=14, players=400):
+    import datetime as _dt
+    d0 = _dt.date.fromisoformat(first_day)
+    for k in range(n_days):
+        d = (d0 + _dt.timedelta(days=k)).isoformat()
+        for i in range(games):
+            _game(c, d, f"g{i}")
+        _logs(c, d, players)
+
+
+def test_a_season_that_opens_abroad_does_not_drag_spring_training_in():
+    """The eight days that survived two rounds of narrowing.
+
+    MLB opens some seasons ABROAD — the Seoul Series (2024-03-20/21) and the
+    Tokyo Series (2025-03-18/19) are regular-season games played a week
+    before domestic opening day, with spring training still running in
+    between. So the first LOGGED day of 2024 is March 20th, and a plain
+    min-to-max window drags a dozen exhibition fixtures a day into scope
+    behind it.
+
+    The season proper is where logging is DENSE, and the island is not.
+    """
+    import datetime as _dt
+    c = _conn()
+    for d in ("2024-03-20", "2024-03-21"):          # the two real games
+        for i in range(13):
+            _game(c, d, f"g{i}")                    # + 11 exhibition
+        _logs(c, d, 25)
+    d0 = _dt.date(2024, 3, 22)
+    for k in range(6):                              # pure spring training
+        d = (d0 + _dt.timedelta(days=k)).isoformat()
+        for i in range(18):
+            _game(c, d, f"g{i}")
+    _season(c, "2024-03-28")                        # the domestic season
+    c.commit()
+    assert db.coverage_gaps(c) == []
+
+
+def test_a_real_mid_season_hole_still_reports():
+    """The control, and the one that matters. Narrowing the window must not
+    silence an outage inside the season — the days around a real hole are
+    dense, so it stays in scope."""
+    c = _conn()
+    _season(c, "2024-03-28")
+    c.execute("DELETE FROM player_game_logs WHERE period='2024-04-17'")
+    c.commit()
+    assert _kinds(c) == {"2024-04-17": "no_logs"}
+
+
+def test_the_dense_window_is_derived_not_dated():
+    """No calendar constants. A hardcoded "the season starts in April" would
+    be wrong the year the league moves opening day, and says nothing about a
+    backfill that genuinely stopped in July."""
+    c = _conn()
+    _season(c, "2024-06-15", n_days=30)     # a season stored only from June
+    c.commit()
+    # The fixtures store every row under season 2026.
+    lo, hi = db._logged_window(c, "sport=?", ["mlb"])[2026]
+    assert lo == "2024-06-15"
+    assert db.coverage_gaps(c) == []
 
 
 if __name__ == "__main__":
