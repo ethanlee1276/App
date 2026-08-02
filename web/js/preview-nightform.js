@@ -48,13 +48,13 @@
   function windArrow(bearing, hot) {
     // Drawn at true bearing, §5.1. 0deg = blowing toward the top of the mark.
     const r = (bearing - 90) * Math.PI / 180;
-    const cx = 60, cy = 42, L = 22;
+    const cx = 60, cy = 42, L = 15;
     const x2 = cx + Math.cos(r) * L, y2 = cy + Math.sin(r) * L;
     const a1 = r + 2.5, a2 = r - 2.5;
     return `<path class="${hot ? "eng-hot" : "eng-dim"}"
       d="M${cx - Math.cos(r) * L} ${cy - Math.sin(r) * L}L${x2} ${y2}
-         M${x2} ${y2}L${x2 + Math.cos(a1) * 7} ${y2 + Math.sin(a1) * 7}
-         M${x2} ${y2}L${x2 + Math.cos(a2) * 7} ${y2 + Math.sin(a2) * 7}"/>`;
+         M${x2} ${y2}L${x2 + Math.cos(a1) * 5} ${y2 + Math.sin(a1) * 5}
+         M${x2} ${y2}L${x2 + Math.cos(a2) * 5} ${y2 + Math.sin(a2) * 5}"/>`;
   }
 
   function venueMark(kind, scale, cond = {}) {
@@ -145,6 +145,191 @@
   };
   const venueName = g => (g.stadium && g.stadium.name) || g.park_name
     || `${g.away} @ ${g.home}`;
+
+  /* ── the engraved compass dial, §5.5 ───────────────────────────────
+     "The current cards carry a wind compass dial (numeric mph, cardinal
+     label, direction arrow) alongside the diagram. Keep it — but render it
+     as an engraved dial. It is the only place the exact bearing is
+     legible." So it is kept, and it is the same geometry as the wind arrow
+     on the mark rather than a second unrelated drawing. */
+  function compass(w, material) {
+    const mph = Math.round(w.wind_mph || 0);
+    const dir = (w.wind_dir || "").toUpperCase();
+    const bearing = COMPASS[dir] ?? 0;
+    const cx = 46, cy = 46;
+    const hot = material && mph >= 8;
+    const ticks = [0, 45, 90, 135, 180, 225, 270, 315].map(d => {
+      const a = (d - 90) * Math.PI / 180;
+      const outer = 36, inner = d % 90 ? 32 : 29;
+      return `M${cx + Math.cos(a) * outer} ${cy + Math.sin(a) * outer}
+              L${cx + Math.cos(a) * inner} ${cy + Math.sin(a) * inner}`;
+    }).join(" ");
+    /* The needle used to run from rim to rim THROUGH the centre, straight
+       across the mph value — the number and the bearing fought for the same
+       12 pixels. It is a rim pointer now: the bearing stays exact and
+       legible, and the centre is left to the number it belongs to. */
+    const a = (bearing - 90) * Math.PI / 180;
+    const tip = 40, base = 29, halfw = 0.20;
+    const pt = (rad, ang) => `${cx + Math.cos(ang) * rad},${cy + Math.sin(ang) * rad}`;
+    return `<svg width="92" height="92" viewBox="0 0 92 92" class="dial" aria-hidden="true">
+      <circle class="eng-dim" cx="46" cy="46" r="38"/>
+      <path class="eng-dim" d="${ticks}"/>
+      <text x="46" y="13" text-anchor="middle" class="dial-n">N</text>
+      ${mph ? `<polygon class="${hot ? "dial-hot" : "dial-cold"}"
+          points="${pt(tip, a)} ${pt(base, a + halfw)} ${pt(base, a - halfw)}"/>` : ""}
+      <text x="46" y="50" text-anchor="middle" class="dial-v ${hot ? "hot" : ""}">${mph}</text>
+      <text x="46" y="62" text-anchor="middle" class="dial-u">MPH${dir ? " " + esc(dir) : ""}</text>
+    </svg>`;
+  }
+
+  /* ── venue cards §1.3 ──────────────────────────────────────────────
+     The spec contradicts itself here: §1.3 lists every field on these
+     cards as must-survive, and §7 says "Venue cards -> conditions strip".
+     Following §7 dropped the live badge, the score, the situation line,
+     the line summary, the kickoff, the compass dial and the per-game link
+     — 205 strings measured missing against the live page. §1.3 wins:
+     the preservation contract outranks a layout suggestion. The strip
+     stays as well, because §6.5 is explicit that it "replaces nothing". */
+  function venueCard(g, picksFor) {
+    const c = condOf(g);
+    const live = g.live || {};
+    const isLive = live.state === "live";
+    const isFinal = live.state === "final";
+    const w = g.weather || {};
+    const fav = g.favorite && g.spread != null
+      ? `${esc(teamNick(g.favorite))} −${Math.abs(g.spread).toFixed(1)}` : "";
+    const ou = g.total != null ? `O/U ${g.total.toFixed(1)}` : "line not posted yet";
+    const score = side => (live.home_score != null && (isLive || isFinal))
+      ? `<span class="vc-score">${side === "home" ? live.home_score : live.away_score}</span>` : "";
+    const when = [g.date ? fmtDate(g.date) : "", g.kickoff ? fmtTime(g.kickoff) : ""]
+      .filter(Boolean).join(" · ");
+    return `<article class="vcard ${isLive ? "on" : ""}">
+      ${isLive ? `<div class="vc-live"><i></i>LIVE ${esc(live.period || "")}
+          ${esc(live.clock || "")}</div>` : ""}
+      <div class="vc-art">${venueMark(markKind(g), 200, c)}
+        ${c.roofed ? `<div class="vc-roof">Dome</div>` : ""}</div>
+      <div class="vc-body">
+        <div class="vc-teams">
+          <span class="vc-t">${esc(teamNick(g.away))}</span>${score("away")}
+          <span class="vc-at">@</span>
+          <span class="vc-t">${esc(teamNick(g.home))}</span>${score("home")}
+        </div>
+        <div class="vc-line">${[fav, ou].filter(Boolean).join(" · ")}</div>
+        <div class="vc-when">${esc(when)}</div>
+        ${isLive && (live.detail || live.situation)
+          ? `<div class="vc-sit"><i></i>${esc(live.detail || live.situation)}</div>` : ""}
+        <div class="vc-cond">
+          ${c.roofed ? "" : compass(w, c.material)}
+          <div class="vc-condtext">
+            <div class="vc-venue">${esc(venueName(g))}</div>
+            <div>${condText(g)}</div>
+          </div>
+        </div>
+      </div>
+      <a class="vc-foot" href="#">${picksFor
+        ? `${picksFor} pick${picksFor === 1 ? "" : "s"} for this game`
+        : "See this game's board"}<span>&#8594;</span></a>
+    </article>`;
+  }
+
+  /* Team identities come from the same teams.js the live site loads, so a
+     card says "Packers", not "GB". Falls back to the abbreviation for CFB,
+     whose 134 identities ride in the payload rather than a checked-in file. */
+  const TEAMSET = () => {
+    if (SPORT === "mlb") return typeof MLB_TEAMS !== "undefined" ? MLB_TEAMS : {};
+    if (SPORT === "nba") return typeof NBA_TEAMS !== "undefined" ? NBA_TEAMS : {};
+    if (SPORT === "wnba") return typeof WNBA_TEAMS !== "undefined" ? WNBA_TEAMS : {};
+    if (SPORT === "cfb") return (window.__teams || {});
+    return typeof TEAMS !== "undefined" ? TEAMS : {};
+  };
+  const teamNick = a => (TEAMSET()[a] && TEAMSET()[a].nick) || a;
+  const fmtDate = d => {
+    const t = new Date(d + "T12:00:00");
+    return isNaN(t) ? d : t.toLocaleDateString("en-US",
+      { weekday: "short", month: "short", day: "numeric" });
+  };
+  const fmtTime = k => {
+    const [h, m] = String(k).split(":").map(Number);
+    if (isNaN(h)) return k;
+    const ap = h >= 12 ? "PM" : "AM";
+    return `${((h + 11) % 12) + 1}:${String(m || 0).padStart(2, "0")} ${ap} ET`;
+  };
+
+  function venueCards(d) {
+    const games = d.games || [];
+    const count = g => picks(d).filter(r =>
+      r.team === g.home || r.team === g.away
+      || r.opponent === g.home || r.opponent === g.away).length
+      + (d.game_bets || []).filter(b => b.recommended
+      && b.home === g.home && b.away === g.away).length;
+    $("#vc-n").textContent = `${games.length} venue(s)`;
+    $("#vcards").innerHTML = games.map(g => venueCard(g, count(g))).join("")
+      || `<div class="note" style="border-color:var(--rule)">
+            Nothing is scheduled or in progress for this slate yet.</div>`;
+  }
+
+  /* ── game bets §1.3 ────────────────────────────────────────────────
+     "moneyline, spread & total edges from the team model", with per-market
+     count badges. Dropped from the first prototype entirely. */
+  function gameBets(d) {
+    const bets = (d.game_bets || []).filter(b => b.recommended);
+    const byMarket = {};
+    bets.forEach(b => { const k = (b.market_label || b.market || "").toUpperCase();
+      byMarket[k] = (byMarket[k] || 0) + 1; });
+    $("#gb-counts").innerHTML = Object.entries(byMarket)
+      .map(([k, n]) => `<span class="mkt">${esc(k)} <b>${n}</b></span>`).join("");
+    $("#gamebets").innerHTML = bets.map((b, i) => `<article class="entry gb">
+      <div class="gutter"></div>
+      <div>
+        <div class="ehead">
+          <span class="rot">${String(i + 1).padStart(3, "0")}</span>
+          <span class="name">${esc(b.pick_label || b.headline)}</span>
+          ${b.grade ? `<span class="grade">${esc(b.grade)}</span>` : ""}
+          <span class="match">${esc(b.matchup || "")}</span>
+        </div>
+        <div class="sel">${esc(b.market_label || b.market)}
+          <span class="bk">— ${esc(b.odds ?? "")}</span></div>
+        <ul class="reasons">${(b.reasons || []).map(x =>
+          `<li>${esc(x)}</li>`).join("")}</ul>
+      </div>
+      <div class="rail">
+        <div class="heroblock">
+          <div class="hero ${(b.edge || 0) < 0 ? "neg" : ""}">${signed(b.edge || 0)}</div>
+          <div class="hero-l">Edge</div>
+        </div>
+        <div>
+          <div class="kv"><span>Model</span><b>${pct(b.win_prob || 0)}</b></div>
+          <div class="kv"><span>Book implied</span><b>${pct(b.fair_prob || 0)}</b></div>
+          <div class="kv hot"><span>EV / unit</span><b>${signed(b.ev_per_unit || 0)}</b></div>
+          <div class="kv"><span>Stake ¼ Kelly</span><b>${
+            b.stake_units != null ? b.stake_units.toFixed(2) + "u" : "—"}</b></div>
+        </div>
+      </div>
+    </article>`).join("") || `<div class="note" style="border-color:var(--rule)">
+        No game bets cleared the gates on this card.</div>`;
+  }
+
+  /* ── the ranked picks list §1.3 ────────────────────────────────────
+     The compact list above the cards: rank, Play, selection, book+odds,
+     matchup, qualifier, EV and stake right-aligned. */
+  function picksList(d) {
+    const rows = picks(d);
+    $("#pl-lead").textContent =
+      `${rows.length} pick${rows.length === 1 ? "" : "s"} tonight — this is the whole list.`;
+    $("#pickslist").innerHTML = rows.map((r, i) => `<div class="prow">
+      <span class="pr-n">${String(i + 1).padStart(2, "0")}</span>
+      <button class="play sm">Play</button>
+      <span class="pr-sel"><b>${esc(r.player)} ${esc(r.side || "")} ${esc(r.line ?? "")}
+        ${esc(r.market_label || r.market || "")}</b>
+        <span class="pr-bk">${esc(r.odds ?? "")} (${esc(r.book || "")})</span>
+        <span class="pr-mt">${esc(r.team || "")} vs ${esc(r.opponent || "")}${
+          r.game_date ? ` · ${esc(fmtDate(r.game_date))}` : ""}${
+          r.game_kickoff ? ` · ${esc(fmtTime(r.game_kickoff))}` : ""}</span>
+        <span class="pr-q">cleared every gate</span></span>
+      <span class="pr-ev">${signed(r.edge || 0)}</span>
+      <span class="pr-u">${r.stake_units != null ? r.stake_units.toFixed(2) + "u" : "—"}</span>
+    </div>`).join("");
+  }
 
   /* ── render ────────────────────────────────────────────────────────── */
   function nav() {
@@ -378,7 +563,9 @@
     .then(r => r.json())
     .then(d => {
       window.__games = d.games || [];
+      window.__teams = d.teams || {};
       chrome(d); standing(d); strip(d.games || []); summary(d);
+      venueCards(d); picksList(d); gameBets(d);
       $("#entries").innerHTML = picks(d).map(entry).join("")
         || `<div class="note" style="border-color:var(--rule)">
               No qualifying plays on this card. Most slates have none — the pass

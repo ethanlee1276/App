@@ -118,6 +118,69 @@ nav a.on{color:var(--bone);border-bottom-color:var(--amber)}
             letter-spacing:.04em;white-space:nowrap;margin-top:3px}
 .cell .cond .hot{color:var(--amber)}
 
+/* ── venue cards §1.3 — every field kept, re-cut as engraving ──────── */
+.scroller{overflow-x:auto;margin:14px 0 0;padding-bottom:4px}
+.vcards{display:flex;gap:0}
+.vcard{flex:0 0 330px;border-left:1px solid var(--rule-hair);padding:0 18px 0;
+       position:relative;display:flex;flex-direction:column}
+.vcard:first-child{border-left:0;padding-left:0}
+.vcard.on{background:var(--ink-raised)}
+.vc-live{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;
+  border:1px solid var(--amber);color:var(--amber);padding:2px 8px;margin-bottom:8px;
+  font-family:var(--head);font-weight:700;font-size:10px;letter-spacing:.18em;
+  text-transform:uppercase}
+.vc-live i{width:5px;height:5px;background:var(--amber);display:block}
+.vc-art{position:relative}
+.vc-roof{position:absolute;top:6px;left:50%;transform:translateX(-50%);
+  font-family:var(--head);font-weight:700;font-size:9px;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--amber)}
+.vc-teams{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;margin-top:6px}
+.vc-t{font-family:var(--mast);font-weight:700;font-size:19px}
+.vc-at{color:var(--graphite);font-size:12px}
+.vc-score{font-family:var(--mono);font-weight:600;font-size:19px;color:var(--amber)}
+.vc-line{font-family:var(--mono);font-size:11px;color:var(--bone-2);margin-top:4px;
+  letter-spacing:.04em}
+.vc-when{font-family:var(--mono);font-size:10.5px;color:var(--bone-3);margin-top:3px}
+.vc-sit{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;
+  color:var(--amber);margin-top:5px}
+.vc-sit i{width:5px;height:5px;background:var(--amber);display:block;flex:0 0 auto}
+.vc-cond{display:flex;gap:12px;align-items:center;margin-top:10px;
+  border-top:1px solid var(--rule-hair);padding-top:10px}
+.vc-condtext{font-family:var(--mono);font-size:10.5px;color:var(--bone-3);min-width:0}
+.vc-venue{font-family:var(--head);font-weight:700;font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--bone-2);margin-bottom:2px}
+.vc-condtext .hot{color:var(--amber)}
+.vc-foot{margin-top:auto;padding:11px 0 2px;display:flex;justify-content:space-between;
+  border-top:1px solid var(--rule-hair);text-decoration:none;color:var(--bone-2);
+  font-family:var(--head);font-weight:700;font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase}
+.vc-foot:hover{color:var(--amber)}
+.dial{flex:0 0 auto}
+.dial-n{fill:var(--graphite);font-family:var(--mono);font-size:8px}
+.dial-v{fill:var(--bone);font-family:var(--mono);font-weight:600;font-size:17px}
+.dial-hot{fill:var(--amber);stroke:none}
+.dial-cold{fill:var(--graphite);stroke:none}
+.dial-v.hot{fill:var(--amber)}
+.dial-u{fill:var(--graphite);font-family:var(--mono);font-size:7px;letter-spacing:.08em}
+
+/* ── the ranked picks list §1.3 ────────────────────────────────────── */
+.pl-lead{font-family:var(--head);font-weight:700;font-size:12px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--bone-2);margin:14px 0 4px}
+.prow{display:grid;grid-template-columns:26px 54px 1fr 68px 54px;gap:10px;
+  align-items:center;padding:9px 0;border-bottom:1px solid var(--rule-hair)}
+.pr-n{font-family:var(--mono);font-size:11px;color:var(--graphite)}
+.pr-sel{font-family:var(--mono);font-size:11px;color:var(--bone-2);min-width:0}
+.pr-sel b{font-weight:500;color:var(--bone);display:block;font-size:12px}
+.pr-bk,.pr-mt,.pr-q{color:var(--bone-3);margin-right:8px;font-size:10px}
+.pr-q{color:var(--graphite)}
+.pr-ev,.pr-u{font-family:var(--mono);font-weight:600;font-size:13px;text-align:right}
+.pr-ev{color:var(--amber)}
+.play.sm{margin:0;padding:3px 8px;font-size:9.5px}
+.mkt{font-family:var(--mono);font-size:10px;color:var(--graphite);margin-right:12px;
+  letter-spacing:.06em}
+.mkt b{color:var(--amber);font-weight:600}
+.entry.gb .gutter{min-height:1px}
+
 /* ── section headers + why? §6.7 ────────────────────────────────────── */
 .sect{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
       margin:34px 0 0;padding-bottom:9px;border-bottom:1px solid var(--rule)}
@@ -257,6 +320,10 @@ footer .rg{margin-top:10px;border-left:2px solid var(--amber);padding-left:13px;
         gap:0 18px;align-items:start}
   .rail .heroblock{grid-column:1/-1}
   .metrics{grid-template-columns:1fr 1fr;gap:16px 0}
+  .vcard{flex-basis:270px}
+  .prow{grid-template-columns:22px 1fr 60px;row-gap:2px}
+  .prow .play.sm{display:none}
+  .pr-ev{grid-column:3} .pr-u{grid-column:3;text-align:right;font-size:11px;color:var(--bone-3)}
   .metrics>div:nth-child(3){padding-left:0;border-left:0}
   .mast-r{text-align:left}
 }
@@ -318,6 +385,18 @@ footer .rg{margin-top:10px;border-left:2px solid var(--amber);padding-left:13px;
   <div class="metrics" id="summary"></div>
 
   <div class="sect">
+    <h2>This week's stadiums</h2>
+    <span class="n" id="vc-n"></span>
+    <button class="why" data-note="n-vc">why<sup>&dagger;</sup></button>
+  </div>
+  <div class="note" id="n-vc" hidden>
+    One card per game on tonight's card, with the live score and situation
+    while it runs. The venue mark is drawn in amber only where a condition
+    actually moved a number — the compass keeps the exact bearing legible.
+  </div>
+  <div class="scroller"><div class="vcards" id="vcards"></div></div>
+
+  <div class="sect">
     <h2>Recommended</h2><span class="n" id="rec-n"></span>
     <button class="why" data-note="n-rec">why<sup>†</sup></button>
   </div>
@@ -327,7 +406,21 @@ footer .rg{margin-top:10px;border-left:2px solid var(--amber);padding-left:13px;
     the Record page.
   </div>
 
+  <div class="pl-lead" id="pl-lead"></div>
+  <div id="pickslist"></div>
+
+  <div class="sect"><h2>Prop cards</h2>
+    <span class="n">the same picks, with the work shown</span></div>
   <div id="entries"></div>
+
+  <div class="sect"><h2>Game bets</h2>
+    <span class="n" id="gb-counts"></span>
+    <button class="why" data-note="n-gb">why<sup>&dagger;</sup></button></div>
+  <div class="note" id="n-gb" hidden>
+    Moneyline, spread and total edges from the team model rather than the
+    player model. They are journaled and graded in the same record.
+  </div>
+  <div id="gamebets"></div>
 
   <details>
     <summary id="died-label">Why only — · where the other props died</summary>
@@ -353,4 +446,8 @@ footer .rg{margin-top:10px;border-left:2px solid var(--amber);padding-left:13px;
   </footer>
 </div>
 
+<script src="js/teams.js"></script>
+<script src="js/teams_mlb.js"></script>
+<script src="js/teams_nba.js"></script>
+<script src="js/teams_wnba.js"></script>
 <script src="js/preview-nightform.js"></script>
