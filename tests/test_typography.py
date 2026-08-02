@@ -188,12 +188,26 @@ def test_the_serif_is_not_used_below_its_stated_floor():
         "a sub-17px heading is back on the display face"
 
 
-def test_no_rule_asks_the_serif_for_a_weight_it_does_not_have():
-    """Instrument Serif ships 400 only. A heavier request is synthesised —
-    a smeared outline, worst at masthead size on a phone."""
+def test_no_rule_asks_the_display_face_for_a_weight_it_does_not_have():
+    """A weight the face does not ship is SYNTHESISED — the browser smears
+    the outline — and it is worst at masthead size on a phone.
+
+    This used to hardcode 400, because Instrument Serif shipped 400 only.
+    Bodoni Moda ships 700 and 900 here, so the constant was wrong the
+    moment the face changed while the RULE stayed exactly right. Derive the
+    allowed set from the @font-face declarations instead: then adding a
+    weight to the masthead without shipping the file fails, and swapping
+    the family again does not need this test edited."""
+    fam = re.search(r'--font-display:\s*"([^"]+)"', CSS).group(1)
+    have = {int(w) for w in re.findall(
+        rf'font-family:\s*"{re.escape(fam)}";[^}}]*?font-weight:\s*(\d+)', CSS, re.S)}
+    assert have, f"{fam} is the display face but ships no @font-face"
     for m in re.finditer(r"\.brand h1 \{[^}]*\}", CSS):
-        assert "font-weight: 400" in m.group(0), \
-            "the masthead is asking for fake bold again"
+        want = re.search(r"font-weight:\s*(\d+)", m.group(0))
+        assert want, "the masthead sets no weight, so it inherits one"
+        assert int(want.group(1)) in have, (
+            f"the masthead asks {fam} for {want.group(1)}; "
+            f"only {sorted(have)} ship — the rest are synthesised")
 
 
 # --- where the URL and the page can disagree --------------------------------

@@ -177,14 +177,17 @@ def test_brand_is_constant_across_sports():
 
 
 
-def test_the_masthead_never_asks_for_a_weight_the_serif_does_not_have():
-    """Bodoni Moda ships one weight. Asking for 800 makes the browser
-    synthesise a bold by smearing the outline, which on a serif reads as a
-    printing fault rather than emphasis."""
+def test_the_masthead_is_set_in_the_display_face():
+    """Brand identity, which is this file's job. Whether the weight it asks
+    for is one the face actually SHIPS is checked in test_typography.py,
+    which derives the allowed set from the @font-face declarations — this
+    test used to duplicate that check against a hardcoded 400 and went
+    stale the moment the family changed."""
     css = _read("web", "css", "styles.css")
     rule = css[css.index(".brand h1 {"):]
     rule = rule[:rule.index("}") + 1]
-    assert "font-weight: 400" in rule, "the masthead asks for a fake bold"
+    assert "font-family: var(--font-display)" in rule, \
+        "the masthead fell back to the body face"
 
 
 def test_the_type_is_self_hosted():

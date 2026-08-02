@@ -265,38 +265,54 @@ svg text.num, svg .svg-num { font-family: var(--font-mono);
   width: 100%; height: 100%;
   stroke: var(--brand); stroke-width: 3.4;
 }
-/* The masthead is a SERIF at 400 — the only weight Instrument Serif
-   ships. Asking for 800 made the browser synthesise a fake bold by
-   smearing the outline, which on a serif looks like a printing fault. A
-   masthead gets its authority from size and letterfit, not from weight. */
-.brand h1 { font-size: var(--fs-2xl); letter-spacing: -0.01em; font-weight: 400;
-  white-space: nowrap; line-height: 1.1; }
-.tagline { color: var(--text-dim); font-size: var(--fs-sm); margin-top: 1px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 26ch; }
+/* The masthead is Bodoni Moda at 900 — a weight the face actually ships,
+   so nothing is synthesised. The old note here warned against asking
+   Instrument Serif for a bold it did not have; the hazard is unchanged and
+   the answer is now to use the weight that exists rather than avoid weight
+   altogether. A Didone at masthead size is the whole point of the
+   direction: it is the one thing on the page that is not data. */
+.brand h1 { font-family: var(--font-display); font-size: var(--fs-3xl);
+  letter-spacing: -0.02em; font-weight: 900; white-space: nowrap;
+  line-height: .96; }
+/* The contextual subtitle — per-league, and a real feature (§1.1). Tracked
+   out and small so it reads as a standing line under a masthead rather
+   than as a second heading competing with it. */
+.tagline { color: var(--text-mute); font-size: var(--fs-2xs); margin-top: 5px;
+  font-weight: 700; letter-spacing: .3em; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 34ch; }
 
-.nav { display: flex; gap: 4px; position: relative; background: var(--panel); padding: 5px; border-radius: 0; border: 1px solid var(--border-soft); }
+/* §6.3. No pill backgrounds, no boxes: the bar is a row of labels over a
+   single rule, and the active one is marked by a 2px amber underline. The
+   old treatment inverted a parchment slab behind the active tab, which is
+   a button, and a section nav is not a row of buttons. */
+.nav { display: flex; gap: 22px; position: relative; background: none;
+  padding: 0; border: 0; border-bottom: 1px solid var(--border); }
 .nav-btn {
   position: relative; z-index: 1; border: 0; background: transparent; cursor: pointer;
-  color: var(--text-dim); font-weight: 600; font-size: var(--fs-lg); font-family: inherit;
-  padding: 9px 16px; border-radius: 0; display: flex; align-items: center; gap: 7px;
+  color: var(--text-mute); font-weight: 700; font-size: var(--fs-sm);
+  font-family: var(--font-sans); letter-spacing: .16em; text-transform: uppercase;
+  padding: 9px 0; display: flex; align-items: center; gap: 7px;
   transition: color .2s ease;
 }
 .nav-btn:hover { color: var(--text); }
-.nav-btn.active { color: var(--brand-ink); }
+.nav-btn.active { color: var(--text); }
 .nav-indicator {
-  position: absolute; top: 5px; bottom: 5px; z-index: 0; border-radius: 0;
-  background: var(--grad-brand); box-shadow: none;
+  position: absolute; top: auto; bottom: -1px; height: 2px; z-index: 0;
+  background: var(--brand); box-shadow: none;
   transition: left .28s cubic-bezier(.5, 1.4, .5, 1), width .28s cubic-bezier(.5, 1.4, .5, 1);
 }
 .slate-meta { display: flex; align-items: center; gap: 12px; color: var(--text-dim); font-size: var(--fs-md); }
 
+/* §6.11: 1px bone border, transparent fill, uppercase. Hover fills. A
+   solid accent slab is the one shape this direction does not have. */
 .btn {
-  background: var(--grad-brand); color: var(--brand-ink); border: 0; cursor: pointer;
-  padding: 9px 15px; border-radius: 0; font-weight: 700; font-size: var(--fs-md); font-family: inherit;
-  transition: transform .1s ease, box-shadow .2s ease, filter .2s ease;
+  background: none; color: var(--text); border: 1px solid var(--text); cursor: pointer;
+  padding: 7px 14px; font-weight: 700; font-size: var(--fs-xs);
+  font-family: var(--font-sans); letter-spacing: .13em; text-transform: uppercase;
+  transition: background .12s ease, color .12s ease;
   box-shadow: none;
 }
-.btn:hover { filter: brightness(1.08); box-shadow: none; }
+.btn:hover { background: var(--text); color: var(--bg); box-shadow: none; }
 .btn:active { transform: translateY(1px); }
 .btn.ghost { background: var(--panel-2); border: 1px solid var(--border); box-shadow: none; color: var(--text-dim); }
 .btn.ghost:hover { color: var(--text); border-color: var(--brand); }
@@ -317,21 +333,19 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
 .section-title .sub { color: var(--text-mute); font-weight: 500; font-size: var(--fs-sm); }
 
 /* ---------------- Stat tiles ---------------- */
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(168px, 100%), 1fr)); gap: 0; margin-bottom: 20px; }
+/* §6.6. No card, no background, no border box — a row of columns divided
+   by a single vertical rule. Four equal bordered tiles with a big number
+   in each is item 6 on the anti-pattern list, and it was the shape this
+   page opened with. */
 .tile {
   position: relative; overflow: hidden;
-  background: linear-gradient(180deg, var(--panel-2), var(--panel));
-  border: 1px solid var(--border-soft); border-radius: 0; padding: 16px 18px;
+  background: none;
+  border: 0; border-left: 1px solid var(--border-soft);
+  padding: 2px 18px;
 }
-.tile::after {
-  /* A hard-edged 90px circle at 8% opacity read as a rendering glitch
-     rather than decoration — you could see exactly where it stopped.
-     A radial falloff has no edge to notice. */
-  content: ""; position: absolute; right: -50px; top: -60px;
-  width: 180px; height: 180px; pointer-events: none;
-  background: radial-gradient(circle, var(--brand) 0%, transparent 68%);
-  opacity: 0.09;
-}
+.stats > .tile:first-child { border-left: 0; padding-left: 0; }
+/* The tile's radial wash is gone with the tile. §8.7: gradient anything. */
 .tile .k { color: var(--text-mute); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .7px; font-weight: 600; }
 .tile .v { font-size: var(--fs-3xl); font-weight: 800; margin-top: 5px; letter-spacing: -0.5px; }
 .tile .v.pos { color: var(--good); }
@@ -369,7 +383,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .games-scroller::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0; }
 .game-card {
   flex: 0 0 272px; scroll-snap-align: start; overflow: hidden;
-  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  background: var(--panel-2);
   border: 1px solid var(--border-soft); border-radius: 0; box-shadow: none;
   transition: transform .14s ease, border-color .2s ease;
 }
@@ -585,7 +599,12 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   -webkit-mask-image: var(--ic-cross); mask-image: var(--ic-cross);
 }
 .reasons li.neg { color: var(--text-dim); }
-.warning { background: rgba(251, 90, 106, .1); border: 1px solid rgba(251, 90, 106, .32); color: #ffc4ca; font-size: var(--fs-sm); padding: 9px 11px; border-radius: 0; }
+/* §6.8: a 2px left rule, no box, no fill. A tinted rounded panel around
+   every caution is the "card containers wrapping every element" tell, and
+   at four to a page it stops being read at all. */
+.warning { background: none; border: 0; border-left: 2px solid var(--bad);
+  color: var(--text-body); font-size: var(--fs-sm); padding: 7px 0 7px 13px;
+  border-radius: 0; }
 
 /* ---------------- Sparkline ---------------- */
 .spark { display: block; width: 100%; height: auto; }
@@ -597,7 +616,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 /* min-width: 0 — grid items default to min-width:auto, which lets a wide
    row inside push the column past its track and the whole page into
    horizontal scroll on phones (the classic grid blowout). */
-.trend-col { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--border-soft); border-radius: 0; padding: 16px; min-width: 0; }
+.trend-col { background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 0; padding: 16px; min-width: 0; }
 /* 14px is under the serif's floor (see the display-face note near the top),
    and a measurement across every view found this was the only heading that
    broke it. It is a column LABEL, not a headline, so it takes the sans. */
@@ -626,7 +645,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 
 .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: 18px; }
 .profile {
-  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  background: var(--panel-2);
   border: 1px solid var(--border-soft); border-radius: 0; box-shadow: none;
   overflow: hidden;
 }
@@ -779,7 +798,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .logo { position: relative; overflow: hidden; }
 .logo::after {
   content: ""; position: absolute; inset: 0;
-  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.35) 50%, transparent 70%);
+  background: none;
   transform: translateX(-120%); animation: sheen 5.5s ease-in-out infinite;
 }
 @keyframes sheen { 0%, 70% { transform: translateX(-120%); } 85%, 100% { transform: translateX(120%); } }
@@ -848,16 +867,17 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    switcher's single row as if the wrappers weren't there. */
 .sport-group { display: contents; }
 .sport-btn {
-  border: 0; background: transparent; cursor: pointer; font-family: inherit;
-  color: var(--text-dim); font-weight: 700; font-size: var(--fs-sm);
-  padding: 7px 12px; border-radius: 0;
-  transition: color .2s ease, background .2s ease;
+  border: 0; background: transparent; cursor: pointer;
+  font-family: var(--font-sans);
+  color: var(--text-mute); font-weight: 700; font-size: var(--fs-sm);
+  letter-spacing: .16em; text-transform: uppercase;
+  padding: 7px 0; margin-right: 18px;
+  border-bottom: 2px solid transparent;
+  transition: color .2s ease, border-color .2s ease;
 }
 .sport-btn:hover { color: var(--text); }
-.sport-btn.active { color: var(--brand-ink);
-  background: var(--grad-brand);
-  box-shadow: none; }
-:root[data-theme="light"] .sport-btn.active { color: var(--brand-ink); }
+.sport-btn.active { color: var(--text); border-bottom-color: var(--brand); }
+:root[data-theme="light"] .sport-btn.active { color: var(--text); }
 @media (max-width: 900px) { .sport-switch { margin-left: 6px; } }
 
 /* ============================================================
@@ -865,23 +885,30 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    ============================================================ */
 .stadium-wrap { position: relative; }
 
+/* Live is a CONDITION, which in this palette is amber — not the red of a
+   loss. The old badge was a red gradient lozenge, which said "bad" on a
+   game that is merely in progress. Outline, not fill: nothing else on the
+   page is a solid slab of colour. */
 .status-badge {
   position: absolute; top: 9px; left: 9px; z-index: 2;
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .4px;
-  padding: 4px 9px; border-radius: 0; color: #fff;
-  background: rgba(8, 12, 26, 0.72); backdrop-filter: blur(4px);
+  font-family: var(--font-sans);
+  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .18em;
+  text-transform: uppercase;
+  padding: 3px 8px; border-radius: 0; color: var(--text-dim);
+  background: var(--bg); border: 1px solid var(--border);
 }
-.status-badge.live { background: linear-gradient(135deg, #fb2c46, #d11733); box-shadow: none; }
-.status-badge.final { background: rgba(8, 12, 26, 0.78); color: var(--text-dim); }
+.status-badge.live { background: var(--bg); border-color: var(--warn);
+  color: var(--warn); box-shadow: none; }
+.status-badge.final { background: var(--bg); color: var(--text-mute); }
 .status-badge .per { font-weight: 700; opacity: .92; }
 
 .live-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: #fff;
+  width: 6px; height: 6px; border-radius: 0; background: var(--warn);
   box-shadow: none;
   animation: livePulse 1.4s ease-out infinite; flex-shrink: 0;
 }
-.status-badge.live .live-dot { background: #fff; }
+.status-badge.live .live-dot { background: var(--warn); }
 .live-dot.sm { width: 6px; height: 6px; }
 @keyframes livePulse {
   0%   { box-shadow: none; }
@@ -906,7 +933,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
   font-size: var(--fs-xs); font-weight: 800; letter-spacing: .4px; color: #fff;
   padding: 4px 10px; border-radius: 0;
-  background: linear-gradient(135deg, #fb2c46, #d11733);
+  background: var(--bg); border-color: var(--warn); color: var(--warn);
   box-shadow: none;
 }
 .live-ribbon .live-dot { background: #fff; }
@@ -1245,18 +1272,34 @@ select.calc-in { width: auto; font-weight: 600; }
    The reasoning stays available and is never deleted; it just stops
    being the first thing on every section. See enhanceSectionSubs(). */
 .section-title .sub.sub-collapsed { display: none; }
+/* §6.7. A grey outlined box next to a heading reads as a DISABLED CONTROL,
+   which is the opposite of what these are — they are the site's core
+   differentiator, the place it shows its work. So the box goes and they
+   become a footnote marker: amber, tracked, with a dagger. That is a
+   promotion. Explanation should look like editorial apparatus, not like a
+   button somebody switched off. */
 .why-toggle {
-  background: transparent; border: 1px solid var(--border);
-  color: var(--text-mute); border-radius: 0;
-  font: inherit; font-size: var(--fs-2xs); font-weight: 600; letter-spacing: .04em;
-  text-transform: none; padding: 1px 9px; cursor: pointer;
-  line-height: 1.6; opacity: .75;
+  background: none; border: 0; padding: 0 0 0 2px;
+  color: var(--brand); border-radius: 0;
+  font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: .1em; text-transform: lowercase; cursor: pointer;
+  line-height: 1.4; opacity: 1;
 }
-.why-toggle:hover { color: var(--text); border-color: var(--text-mute); opacity: 1; }
+.why-toggle::after { content: "\2020"; font-size: .85em; vertical-align: super;
+  margin-left: 1px; }
+.why-toggle:hover { color: var(--text); }
 .why-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 /* Expanded copy drops onto its own line so it never squeezes the title. */
 .section-title { flex-wrap: wrap; }
 .section-title .sub { flex-basis: 100%; }
+/* §6.7: expanded, it is set as prose behind a 2px amber rule — the same
+   apparatus the probation banner uses, so an explanation looks like an
+   explanation wherever it appears. */
+.section-title .sub:not(.sub-collapsed) {
+  border-left: 2px solid var(--brand); padding: 6px 0 6px 13px;
+  margin-top: 8px; text-transform: none; letter-spacing: 0;
+  font-weight: 400; color: var(--text-body); max-width: 74ch;
+}
 
 
 /* --- One number leads on a card --------------------------------------
@@ -1319,8 +1362,7 @@ select.calc-in { width: auto; font-weight: 600; }
 
 .rec-kpis .tile.lead {
   border-color: color-mix(in srgb, var(--brand) 30%, var(--border-soft));
-  background: linear-gradient(180deg,
-    color-mix(in srgb, var(--brand) 7%, var(--panel-2)), var(--panel));
+  background: none;
 }
 .rec-kpis .tile.lead::after { opacity: .16; }
 .rec-kpis .tile.lead .v { font-size: var(--fs-4xl); }
@@ -1366,7 +1408,7 @@ select.calc-in { width: auto; font-weight: 600; }
 .rec-buckets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 700px) { .rec-buckets { grid-template-columns: 1fr; } }
 .rec-bucket {
-  min-width: 0; background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  min-width: 0; background: var(--panel-2);
   border: 1px solid var(--border-soft); border-radius: 0; overflow: hidden;
 }
 .rb-head {
@@ -1446,7 +1488,7 @@ select.calc-in { width: auto; font-weight: 600; }
 .gp-hero {
   display: grid; grid-template-columns: minmax(220px, 380px) minmax(0, 1fr);
   gap: 22px; align-items: center; margin-bottom: 20px;
-  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  background: var(--panel-2);
   border: 1px solid var(--border-soft); border-radius: 0;
   padding: 18px; overflow: hidden;
 }
@@ -2569,17 +2611,24 @@ select.calc-in { width: auto; font-weight: 600; }
   overflow-x: auto; scrollbar-width: none;
 }
 .rec-scopes::-webkit-scrollbar { display: none; }
+/* §8.9: pill-shaped filter chips with filled backgrounds are on the
+   anti-pattern list, and a filled amber slab for the active scope is the
+   loudest thing on a page whose subject is a P&L curve. Same treatment as
+   the nav — labels over a rule, active marked by a 2px underline — so the
+   two rows of tabs on this page stop being two different components. */
 .rec-scope {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 13px; border-radius: 0; cursor: pointer;
-  background: var(--panel-2); border: 1px solid var(--border);
-  color: var(--text-dim); font: inherit; font-size: var(--fs-sm); font-weight: 700;
-  min-height: 38px;
+  padding: 7px 0; margin-right: 18px; border-radius: 0; cursor: pointer;
+  background: none; border: 0; border-bottom: 2px solid transparent;
+  color: var(--text-mute); font-family: var(--font-sans);
+  font-size: var(--fs-sm); font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase;
+  min-height: 34px;
 }
-.rec-scope:hover { border-color: var(--brand); color: var(--text); }
+.rec-scope:hover { color: var(--text); }
 .rec-scope.active {
-  background: var(--grad-brand); border-color: transparent;
-  color: var(--brand-ink);
+  background: none; border-bottom-color: var(--brand);
+  color: var(--text);
 }
 /* The count is the honest part: a scope with nothing in it still appears,
    because hiding it would make "no bets yet" and "no such board" look
@@ -2597,3 +2646,94 @@ select.calc-in { width: auto; font-weight: 600; }
    the baseline for free; an inline <svg> is a replaced element and sits on
    it, which puts it a couple of pixels low next to its own label. */
 .ic { vertical-align: -0.14em; flex-shrink: 0; }
+
+
+/* ======================================================================
+   Venue art — engraving
+   ======================================================================
+   The stadium, ballpark and court diagrams are the site's most distinctive
+   asset, and they were coloured illustration: team-tinted radial washes,
+   green mow stripes, oak-plank courts, gradient roofs. Night Form re-cuts
+   them as line engraving — §5 promotes the venue mark from decoration to a
+   data-bearing component.
+
+   This is done from the STYLESHEET, not by rewriting web/js/visuals.js,
+   for one specific reason: SVG presentation attributes (`fill="..."`,
+   `stroke="..."` written on the element) sit at the very bottom of the
+   cascade, so any CSS rule beats them. Re-skinning here changes every
+   painted surface while leaving every <text>, every label, every score and
+   every geometry untouched — which is exactly the guarantee the
+   preservation contract needs. A rewrite of three 60-line drawing
+   functions could silently drop a label; this cannot.
+
+   The one exception the spec grants is team colour (§6.13). It survives on
+   the endzone and paint-area rects as a flat block behind the monogram, so
+   you can still tell whose building you are looking at.
+   ------------------------------------------------------------------- */
+.stadium, .field { background: none; }
+
+/* The sky/bowl/wood washes: flat ink, no gradient. */
+.stadium > rect:first-of-type,
+.field > rect:first-of-type { fill: var(--bg-2); stroke: none; }
+
+/* Bowl, stands, court surface — outline only. */
+.stadium > ellipse,
+.field > rect { fill: none; stroke: var(--text-mute); stroke-width: 1.1; }
+
+/* The playing surface: an outlined rect, not a green field. Mow stripes
+   and plank lines become hatching at the same weight as everything else. */
+.stadium > rect:not(:first-of-type),
+.field line { fill: none; stroke: var(--border); stroke-width: 1; opacity: 1; }
+.stadium line { stroke: var(--border); stroke-opacity: 1; }
+.stadium g[stroke] line, .stadium g[stroke] path { stroke: var(--border); }
+
+/* Circles: centre badge, mound, tip-off. Outline, bone. */
+.stadium circle, .field circle { fill: none; stroke: var(--text-mute); stroke-width: 1.1; }
+/* …except the floodlights, which are points of light and read as dots. */
+.stadium g circle { fill: var(--text-mute); stroke: none; }
+
+.field path { fill: none; stroke: var(--text-mute); stroke-width: 1.1; opacity: 1; }
+
+/* Every label on the art is bone at one weight. The old art set them in
+   white, in the team's ideal-contrast colour, and at four opacities. */
+.stadium text, .field text {
+  fill: var(--text-dim); font-family: var(--font-mono); font-weight: 400;
+  opacity: 1;
+}
+.stadium text.num, .field text.num { fill: var(--text); }
+
+/* §6.13 — team colour is the one permitted exception, kept as a flat block
+   behind the monogram so the building is still identifiable. */
+.stadium rect[fill^="#"]:not(:first-of-type) { opacity: .5; }
+
+
+/* The wind gauge, engraved. §5.5 is explicit that it survives the redesign
+   — "it is the only place the exact bearing is legible" — but as a drawn
+   dial rather than a filled navy disc with a green needle. Same cascade
+   trick as the venue art: presentation attributes lose to CSS, so the
+   drawing keeps every number and label it had. */
+.wind circle { fill: none; stroke: var(--border); stroke-width: 1; }
+/* The streams are STROKED lines that show flow, not filled shapes — the
+   first pass filled them and the dial grew a scatter of amber dashes. The
+   needle (polygon) is the only filled thing here. */
+/* Graphite, not amber. Amber-stroked streams put eight accent elements
+   inside one 92px dial and crossed the mph reading — §3.1's own warning is
+   that more than ~8 amber elements on a screen means something is being
+   decorated rather than encoded. The NEEDLE carries the bearing in amber;
+   the flow lines are texture behind it. */
+.wind .stream { fill: none; stroke: var(--border); stroke-width: 2; }
+.wind polygon { fill: var(--warn); stroke: none; }
+.wind path:not(.stream) { fill: none; stroke: var(--text-mute); stroke-width: 1.2; }
+.wind line { stroke: var(--border); }
+.wind text { fill: var(--text-dim); font-family: var(--font-mono); }
+.wind .num, .wind text[font-weight="800"], .wind text[font-weight="700"] {
+  fill: var(--text);
+}
+.wind.dome path { fill: none; stroke: var(--text-mute); stroke-width: 1.2; }
+
+/* Team identity badges — §6.13. A white monogram on a filled colour chip
+   is the one shape this palette does not have. The colour survives as a
+   block; the letters go bone so they read at any tint. */
+.team-mark rect, .team-mark circle { rx: 0; }
+.team-mark text { fill: var(--text); font-family: var(--font-mono);
+  font-weight: 500; }
