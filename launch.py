@@ -530,6 +530,129 @@ def _run_autosettle() -> None:
         print(f"  ⚠️  auto-settle failed: {exc}")
 
 
+def why_live(sport: str = "mlb") -> None:
+    """Account for every open bet: shown on the Live tab, or why not.
+
+    "we are only showing live longshots and not the actual recommended
+    player props" is a claim about a difference between two sets, and the
+    only way to answer it without guessing is to print both sets and the
+    decision made about each row.
+
+    This reads the board the site is ALREADY serving rather than rebuilding
+    it, so it costs nothing and describes exactly what you are looking at.
+    """
+    import json as _json
+    from engine import ledger as _led
+    from engine.livepicks import assemble_live_picks
+    from engine.sources.oddsapi import normalize_name
+
+    path = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
+            "wnba": WNBA_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
+    try:
+        d = _json.loads(Path(path).read_text())
+    except Exception as exc:
+        print(f"can't read {path}: {exc}")
+        return
+
+    date = d.get("date", "")
+    games = d.get("games") or []
+    recs = d.get("recommendations") or []
+    shots = d.get("long_shots") or []
+    live = d.get("live_picks") or []
+    print(f"Live tab — {sport.upper()} slate {date}")
+    print(f"  built with {len(games)} game(s), {len(recs)} analyzed prop(s), "
+          f"{len(shots)} long shot(s)")
+    if d.get("live_picks_error"):
+        print(f"  ⚠️  the tracker errored this build: {d['live_picks_error']}")
+    n_live_games = sum(1 for g in games
+                       if ((g.get("live") or {}).get("state")) == "live")
+    print(f"  {n_live_games} game(s) live right now\n")
+
+    conn = _led.connect()
+    rows = [dict(r) for r in conn.execute(
+        "SELECT player, market, side, line, odds, stake_units, date, category "
+        "FROM bets WHERE status='open' AND sport=? ORDER BY date, category",
+        (sport,))]
+    if not rows:
+        print("  The journal has NO open bets for this sport. Nothing to show "
+              "is the correct output — check the Record page: they may have "
+              "already settled.")
+        return
+
+    # The same index the tracker builds, so this cannot drift from it.
+    idx = {(normalize_name(r.get("player", "")), r.get("market", "")): "main"
+           for r in recs}
+    for r in shots:
+        idx.setdefault((normalize_name(r.get("player", "")), r.get("market", "")),
+                       "long shots")
+    shown = {(normalize_name(r.get("player", "")), r.get("market", ""))
+             for r in live}
+    # If the payload has no live_picks KEY at all, it was written by a build
+    # that predates the tracker. Every "not shown" below would then be this
+    # one fact wearing five different explanations — so say it once and stop.
+    if "live_picks" not in d:
+        print("  ⚠️  This slate was built before the open-bet tracker ran.\n"
+              "      Nothing below is a verdict about your bets — rebuild "
+              "first (the launcher does it on its next cycle), then re-run "
+              "this.\n")
+
+    by_cat: dict = {}
+    for b in rows:
+        by_cat.setdefault(b["category"], []).append(b)
+    print(f"  {len(rows)} open bet(s) in the journal, by bucket:")
+    for cat, bs in sorted(by_cat.items()):
+        n_shown = sum(1 for b in bs
+                      if (normalize_name(b["player"]), b["market"]) in shown)
+        flag = "" if cat in ("main", "longshot") else \
+            "   ← not eligible for the Live tab by design"
+        print(f"    {cat:<16} {len(bs):>4} open · {n_shown} on the Live tab{flag}")
+
+    print("\n  Every open bet, and what happened to it:")
+    hdr = (f"    {'player':<22} {'market':<13} {'bucket':<15} "
+           f"{'date':<11} verdict")
+    print(hdr)
+    print("    " + "-" * (len(hdr) - 4))
+    for b in rows:
+        key = (normalize_name(b["player"]), b["market"])
+        if key in shown:
+            row = next(r for r in live if (normalize_name(r["player"]),
+                                           r["market"]) == key)
+            verdict = f"SHOWN — {row['status']} ({row['phase']})"
+        elif b["category"] not in ("main", "longshot"):
+            verdict = "excluded — bucket is not tracked live"
+        elif b["date"] != date and b["date"] not in _near_dates(date):
+            verdict = f"excluded — journaled {b['date']}, slate is {date}"
+        elif key not in idx:
+            verdict = ("NOT ON EITHER BOARD — the build no longer carries this "
+                       "player+market, so it can't be placed on a game")
+        else:
+            verdict = (f"on the {idx[key]} board but not tracked — no game "
+                       f"matched (team/opponent, or the doubleheader leg)")
+        print(f"    {str(b['player'])[:21]:<22} {b['market'][:12]:<13} "
+              f"{b['category'][:14]:<15} {b['date']:<11} {verdict}")
+
+    main_open = len(by_cat.get("main", []))
+    main_shown = sum(1 for b in by_cat.get("main", [])
+                     if (normalize_name(b["player"]), b["market"]) in shown)
+    print(f"\n  Player props (category 'main'): {main_open} open, "
+          f"{main_shown} on the Live tab.")
+    if main_open == 0:
+        print("  There are none to show. The main board journals a prop only "
+              "when it is RECOMMENDED and staked above zero — on a thin night "
+              "that is one or two picks, and they leave this list the moment "
+              "they settle.")
+
+
+def _near_dates(date: str) -> set:
+    """The neighbouring days the tracker also considers, so this report and
+    the tracker agree about what 'today' means."""
+    try:
+        d = _dt.date.fromisoformat(date)
+    except ValueError:
+        return set()
+    return {(d + _dt.timedelta(days=n)).isoformat() for n in (-1, 1)}
+
+
 def _run_doctor(force: bool = False) -> int:
     """Once a day, say out loud whether anything is wrong.
 
@@ -2311,6 +2434,12 @@ def main() -> None:
                and not argv[i + 1].startswith("-") else None)
         for line in weighin_feed.probe(day):
             print(line)
+        return
+    if "--why-live" in argv:
+        i = argv.index("--why-live")
+        who = next((a.lower() for a in argv[i + 1:]
+                    if not a.startswith("-")), "mlb")
+        why_live(who)
         return
     if "--why-empty" in argv:
         i = argv.index("--why-empty")
