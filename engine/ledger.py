@@ -340,6 +340,61 @@ STALE_SETTLEABLE = {"total_bases", "hits", "home_runs",
 LOOSE_SETTLEABLE = {"total_bases", "hits", "strikeouts"}
 
 
+def log_priced_out(conn, result: dict, flat_stake: float = 0.1) -> int:
+    """Journal the picks the model liked and Kelly refused — 'pricedout'.
+
+    A prop can carry a real grade and still size at 0.00u, because the edge
+    bar compares us to the de-vigged fair number while Kelly compares us to
+    the price on offer: beat fair by 2% and the vig can still eat it. Those
+    used to be flagged recommended, shown on the board, and skipped by the
+    journal — landing in no bucket at all.
+
+    They are not bets and never get dollars. They are the empirical answer
+    to "was Kelly right to refuse?": paper-track at a flat stake, grade
+    nightly, read the bucket's win rate against the prices it declined. If
+    this bucket is consistently profitable at those prices, the sizing is
+    too strict. If it burns, the refusal was correct and the board is
+    better off without them.
+    """
+    sport = result.get("sport", "mlb")
+    date = result.get("date", "")
+    now = datetime.datetime.utcnow().isoformat(timespec="seconds")
+    n = 0
+    for r in result.get("priced_out") or []:
+        if r.get("market") in LONGSHOT_MARKETS:
+            continue                      # the HR board keeps its own record
+        try:
+            odds = int(r.get("odds") or 0)
+        except (TypeError, ValueError):
+            continue
+        # A proxy price is not a price anyone declined; there is nothing to
+        # learn from grading against a number no book offered.
+        if (not r.get("player") or not odds
+                or (r.get("book") or "").lower() == "proxy"
+                or r.get("has_market") is False):
+            continue
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
+            "line, book, odds, projection, hit_prob, edge, confidence, grade, "
+            "stake_units, stake_dollars, status, category) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'pricedout')",
+            (now, sport, date, r["player"], r["market"],
+             (r.get("side") or "OVER").upper(), float(r.get("line") or 0),
+             r.get("book", ""), odds, r.get("projection"), r.get("hit_prob"),
+             r.get("edge"), r.get("confidence"), r.get("grade", "?"),
+             flat_stake, 0.0))
+        n += cur.rowcount
+    conn.commit()
+    return n
+
+
+def priced_out_report(conn) -> dict:
+    """Was Kelly right to refuse these? The bucket's own scorecard."""
+    p = performance(conn, category="pricedout")
+    p["recent"] = recent_settled(conn, limit=15, category="pricedout")
+    return p
+
+
 def log_near_misses(conn, result: dict, flat_stake: float = 0.1) -> int:
     """Journal the props that JUST missed the bar — category='loose'.
 

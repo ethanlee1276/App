@@ -32,6 +32,26 @@ def apply_mlb_rules(rec: Recommendation, prop: MLBProp, game: MLBGame,
 
     if rec.grade == "Pass":
         recommend = False
+    # Kelly sizing it at zero means that AT THIS PRICE, with our own
+    # probability, the bet is negative expectation. The grade and the stake
+    # measure different things — the grade is how much we trust the read
+    # (edge 40%, pitcher certainty 15%, lineup certainty 15%...), the stake
+    # is whether the price is worth taking — and they can disagree, because
+    # the edge bar compares us to the DE-VIGGED fair number while Kelly
+    # compares us to the price actually on offer. A pick can beat fair by
+    # 2% and still lose to the vig.
+    #
+    # Nothing checked this, so such a pick was flagged recommended, shown on
+    # the board, and then skipped by the journal — landing in no bucket at
+    # all. The board said "pick" and every other surface disagreed. A pick
+    # we would not stake is not a pick; it is paper-tracked instead (see
+    # ledger.log_priced_out).
+    if (rec.stake_units or 0) <= 0 and rec.grade != "Pass":
+        recommend = False
+        warnings.append(
+            f"Priced out — the read is a {rec.grade}, but at {rec.odds:+d} "
+            f"Kelly sizes it at 0.00u: the book's number already matches "
+            f"ours. Tracked on paper, never staked.")
     if config.block_live_games and game_has_started(game):
         recommend = False
         warnings.append("Game already started — this is a pre-game model and "

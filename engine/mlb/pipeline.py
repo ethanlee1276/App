@@ -351,6 +351,27 @@ NEAR_EDGE_FRACTION = 0.70
 NEAR_QUALITY_FLOOR = 58.0
 
 
+def _is_priced_out(r: dict) -> bool:
+    """Graded, but Kelly sized it at zero — the read was good and the price
+    was not. Distinct from a Pass (the read itself failed) and from a
+    near-miss (the edge fell short of the tier bar)."""
+    # The key must be PRESENT. A dict that simply carries no stake_units
+    # has not been sized at all, and treating "absent" as "Kelly refused"
+    # swallowed every ordinary near-miss into this bucket — the existing
+    # near-miss test caught it. Priced out means the sizer ran and returned
+    # nothing, not that nobody asked it.
+    if "stake_units" not in r:
+        return False
+    return (r.get("grade") not in (None, "", "Pass")
+            and float(r.get("stake_units") or 0) <= 0)
+
+
+def priced_out(recommendations: list[dict]) -> list[dict]:
+    """Tonight's picks the model liked and Kelly refused."""
+    return [r for r in recommendations
+            if _is_priced_out(r) and r.get("has_market") is not False]
+
+
 def near_misses(recommendations: list[dict], limit: int = 10) -> list[dict]:
     """The props just UNDER the bar tonight — the ones a looser model
     would have picked. Real-priced, credible, calibration-open Tier 1/2
@@ -360,6 +381,12 @@ def near_misses(recommendations: list[dict], limit: int = 10) -> list[dict]:
     out = []
     for r in recommendations:
         if r.get("recommended") or r.get("has_market") is False:
+            continue
+        # A priced-out pick is a different population: it CLEARED the edge
+        # bar and lost to the vig, where a near-miss fell short of the bar
+        # itself. Mixing them makes the "should the gates be looser?" answer
+        # a blend of two unrelated questions, and double-journals the row.
+        if _is_priced_out(r):
             continue
         tier = r.get("tier", 2)
         if tier == 3 or r.get("market") == "home_runs":
@@ -541,6 +568,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "counts": {"props_analyzed": len(results), "recommended": len(recommended)},
         "gate_census": gate_census(results),
         "near_miss": near_misses(results),
+        "priced_out": priced_out(results),
         "config": {"min_confidence": config.min_confidence, "min_edge": config.min_edge},
         "games": [_game_to_dict(g) for g in slate.games],
         "recommendations": results,

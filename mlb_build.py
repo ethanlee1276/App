@@ -561,6 +561,13 @@ def main() -> None:
             if nm_logged:
                 print(f"Looser-gates sampler: {nm_logged} near-miss prop(s) "
                       f"paper-tracked — the 'should we loosen?' evidence.")
+            po_logged = ledger.log_priced_out(lconn, result)
+            if po_logged:
+                print(f"Priced-out sampler: {po_logged} graded pick(s) Kelly "
+                      f"sized at 0.00u — the read was good and the price was "
+                      f"not.\n  Paper-tracked at a flat stake, never staked: "
+                      f"if this bucket wins at those prices, the sizing is "
+                      f"too strict.")
             settled = ledger.settle_from_history(lconn, hist_connect(), sport="mlb")
             ledger.export_json(lconn, "web/data/record.json")
             if logged or ls_logged or st_logged or fm_logged or settled:
