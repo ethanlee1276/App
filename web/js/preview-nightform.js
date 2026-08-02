@@ -368,6 +368,7 @@
   }
 
   function strip(games) {
+    if (!$("#strip")) return;   // Recommended leads with the cards instead
     $("#strip").innerHTML = games.map(g => {
       const c = condOf(g);
       return `<div class="cell">
@@ -390,13 +391,13 @@
       ["Markets priced", String(analysed), "props and game bets the model gave a number to", ""],
       ["Recommended bets", String(recs.length), "cleared every approval gate", ""],
       ["Avg edge", signed(avg), "model probability vs the de-vigged book price",
-       avg >= 0 ? "amber" : "brick"],
+       avg >= 0 ? "good" : "brick"],
       ["Suggested exposure", `${stake.toFixed(2)}u`, "flat units, quarter-Kelly capped", ""],
     ];
     $("#summary").innerHTML = cells.map(([l, v, c, k]) =>
       `<div><div class="l">${l}</div><div class="v ${k}">${esc(v)}</div>
         <div class="c">${c}</div></div>`).join("");
-    $("#slate-n").textContent = `${(d.games || []).length} venue(s)`;
+    if ($("#slate-n")) $("#slate-n").textContent = `${(d.games || []).length} venue(s)`;
     $("#rec-n").textContent = `${recs.length} pick(s), ranked by quality`;
     $("#died-label").textContent =
       `Why only ${recs.length}? · where the other ${Math.max(0, analysed - recs.length)} died`;
@@ -519,17 +520,18 @@
   /* Spec §1.3 line by line, with where each field went. Rendered on the page
      so "did we lose anything" is answerable by reading rather than trusting. */
   const FIELD_MAP = [
+    ["Colour", "green/red = a NUMBER is favourable or against you; amber = a CONDITION is live or material. The spec routed wins through amber; overridden."],
     ["Player avatar", "dropped as a photo — replaced by the venue mark, which encodes conditions instead of decorating"],
     ["Matchup · position", "entry header, right-aligned"],
     ["Selection / book / price", "selection line, Archivo Narrow uppercase"],
     ["Letter grade badge", "amber 2px badge in the header row"],
     ["Projection vs line slider", "engraved ticks on one rule, bone = proj, amber = line"],
-    ["HIT PROB / EDGE / EV per unit", "EDGE is the 33px hero; the rest are key/value rows"],
-    ["0–10 score bar + readout", "amber bar under the hero with the numeric readout"],
+    ["HIT PROB / EDGE / EV per unit", "EDGE is the 33px hero in green/red; the rest are key/value rows"],
+    ["0–10 score bar + readout", "green bar under the hero with the numeric readout"],
     ["Recent-form trendline", "promoted to the past-performance table, with a conditions column"],
     ["Chip row 1 + 2", "one mono caption line under the selection"],
-    ["Reasoning ✓/✗ list", "footnote list, amber check / brick cross, drawn not typed"],
-    ["Venue diagram + wind dial", "engraved venue mark; wind drawn at true bearing"],
+    ["Reasoning ✓/✗ list", "footnote list, green check / red cross, drawn not typed"],
+    ["Venue cards + wind dial", "kept front and centre, first block on the page: live badge and clock, score, line summary, kickoff, situation line, engraved compass dial, per-game link, horizontal scroll"],
     ["Summary metric cards", "ruled columns, no card boxes"],
     ["Why only N? expander", "kept, restyled as editorial apparatus"],
     ["Tracked signals expander", "kept"],

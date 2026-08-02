@@ -42,8 +42,24 @@
   --graphite:#57524A; --graphite-2:#4A453C;
   --rule-heavy:#E8E4D9; --rule:#3A352C; --rule-soft:#23201A;
   --rule-hair:#1A1815; --rule-dot:#1F1D18;
-  --amber:#FFB000; --amber-dim:#4A3B14; --amber-wash:rgba(255,176,0,.12);
+  --amber:#FFB000; --amber-dim:#4A3B14; --amber-wash:rgba(255,176,0,.07);
   --brick:#E5484D; --brick-dim:#3A1A1C;
+  /* Result colour. The spec bans green outright and routes winning numbers
+     through amber; Ethan reads this board nightly and keeps green/red, so
+     that ruling is overridden here and amber's job narrows accordingly:
+
+        green / red   a NUMBER is favourable or against you — edge, EV,
+                      hits, wins, losses, CLV
+        amber         a CONDITION is live or material — the live badge,
+                      wind that moved a line, a roof, the active nav item
+
+     Two encodings that never competed anyway, and the split is sharper
+     than the single-accent version: on the old page every third figure was
+     amber, so amber had stopped meaning anything.
+
+     Slightly deeper than the site's current #34d399 because bone on
+     #08090B is a hotter background than the old near-black panel. */
+  --good:#33C77A; --good-dim:#123A26;
   --mast:"Bodoni Moda",Georgia,serif;
   --head:"Archivo Narrow","Arial Narrow",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,monospace;
@@ -60,6 +76,7 @@
   --rule-hair:#DED8C8; --rule-dot:#D2CBB9;
   --amber:#B87400; --amber-dim:#E0C58A; --amber-wash:rgba(184,116,0,.10);
   --brick:#C8102E; --brick-dim:#EFC9CF;
+  --good:#12734B; --good-dim:#C7E3D4;
 }
 
 *{box-sizing:border-box;border-radius:0!important;box-shadow:none!important}
@@ -95,7 +112,7 @@ body{margin:0;background:var(--ink);color:var(--bone);font-family:var(--head);
 .standing{display:flex;gap:22px;flex-wrap:wrap;padding:9px 0;
           border-bottom:1px solid var(--rule-soft);font-family:var(--mono);
           font-size:10.5px;letter-spacing:.05em;color:var(--bone-3)}
-.standing b{font-weight:600;color:var(--bone)}
+.standing b{font-weight:600;color:var(--good)}
 .standing .neg{color:var(--brick)}
 
 /* ── nav §6.3 ───────────────────────────────────────────────────────── */
@@ -121,8 +138,8 @@ nav a.on{color:var(--bone);border-bottom-color:var(--amber)}
 /* ── venue cards §1.3 — every field kept, re-cut as engraving ──────── */
 .scroller{overflow-x:auto;margin:14px 0 0;padding-bottom:4px}
 .vcards{display:flex;gap:0}
-.vcard{flex:0 0 330px;border-left:1px solid var(--rule-hair);padding:0 18px 0;
-       position:relative;display:flex;flex-direction:column}
+.vcard{flex:1 1 0;min-width:330px;border-left:1px solid var(--rule-hair);
+       padding:0 18px;position:relative;display:flex;flex-direction:column}
 .vcard:first-child{border-left:0;padding-left:0}
 .vcard.on{background:var(--ink-raised)}
 .vc-live{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;
@@ -131,6 +148,10 @@ nav a.on{color:var(--bone);border-bottom-color:var(--amber)}
   text-transform:uppercase}
 .vc-live i{width:5px;height:5px;background:var(--amber);display:block}
 .vc-art{position:relative}
+/* The mark is the card's hero, the way the coloured diagram is on the live
+   site — so it fills the card rather than sitting at a fixed 200px in the
+   middle of it. */
+.vc-art svg{width:100%;height:auto;max-height:200px;max-width:none}
 .vc-roof{position:absolute;top:6px;left:50%;transform:translateX(-50%);
   font-family:var(--head);font-weight:700;font-size:9px;letter-spacing:.24em;
   text-transform:uppercase;color:var(--amber)}
@@ -174,7 +195,7 @@ nav a.on{color:var(--bone);border-bottom-color:var(--amber)}
 .pr-bk,.pr-mt,.pr-q{color:var(--bone-3);margin-right:8px;font-size:10px}
 .pr-q{color:var(--graphite)}
 .pr-ev,.pr-u{font-family:var(--mono);font-weight:600;font-size:13px;text-align:right}
-.pr-ev{color:var(--amber)}
+.pr-ev{color:var(--good)}
 .play.sm{margin:0;padding:3px 8px;font-size:9.5px}
 .mkt{font-family:var(--mono);font-size:10px;color:var(--graphite);margin-right:12px;
   letter-spacing:.06em}
@@ -235,13 +256,13 @@ table.pp th{font-family:var(--mono);font-weight:400;font-size:10.5px;letter-spac
 table.pp th:first-child,table.pp td:first-child{text-align:left}
 table.pp td{font-family:var(--mono);font-size:10.5px;padding:2px 0;color:var(--bone-2);
             text-align:right;border-bottom:1px dotted var(--rule-dot)}
-table.pp td.hit{color:var(--amber)} table.pp td.miss{color:var(--bone-3)}
+table.pp td.hit{color:var(--good)} table.pp td.miss{color:var(--bone-3)}
 
 .reasons{list-style:none;margin:11px 0 0;padding:0}
 .reasons li{font-family:var(--mono);font-size:10.5px;line-height:1.72;color:var(--bone-2);
             padding-left:16px;position:relative}
 .reasons li::before{content:"";position:absolute;left:0;top:.42em;width:9px;height:9px;
-  background-color:var(--amber);
+  background-color:var(--good);
   -webkit-mask:var(--ic-check) no-repeat center/contain;
   mask:var(--ic-check) no-repeat center/contain}
 .reasons li.neg::before{background-color:var(--brick);
@@ -255,16 +276,16 @@ table.pp td.hit{color:var(--amber)} table.pp td.miss{color:var(--bone-3)}
 /* right rail */
 .rail{border-left:1px solid var(--rule-hair);padding-left:16px}
 .hero{font-family:var(--mono);font-weight:600;font-size:33px;letter-spacing:-.02em;
-      line-height:1;color:var(--amber)}
+      line-height:1;color:var(--good)}
 .hero.neg{color:var(--brick)}
 .hero-l{font-family:var(--head);font-weight:700;font-size:9px;letter-spacing:.22em;
         text-transform:uppercase;color:var(--graphite);margin-top:5px}
 .scorebar{margin:11px 0 3px;height:3px;background:var(--rule-hair)}
-.scorebar i{display:block;height:3px;background:var(--amber)}
+.scorebar i{display:block;height:3px;background:var(--good)}
 .kv{display:flex;justify-content:space-between;gap:10px;font-family:var(--mono);
     font-size:10.5px;padding:3px 0;color:var(--bone-3);border-bottom:1px dotted var(--rule-dot)}
 .kv b{font-weight:500;color:var(--bone)}
-.kv.hot b{color:var(--amber)}
+.kv.hot b{color:var(--good)}
 .rail .foot{font-family:var(--mono);font-size:10px;color:var(--graphite);margin-top:9px;line-height:1.6}
 .play{display:inline-block;margin-top:11px;border:1px solid var(--amber);color:var(--amber);
       background:none;padding:5px 13px;font-family:var(--head);font-weight:700;font-size:11px;
@@ -279,7 +300,7 @@ table.pp td.hit{color:var(--amber)} table.pp td.miss{color:var(--bone-3)}
             text-transform:uppercase;color:var(--graphite)}
 .metrics .v{font-family:var(--mono);font-weight:600;font-size:26px;letter-spacing:-.02em;
             margin:5px 0 3px}
-.metrics .v.amber{color:var(--amber)} .metrics .v.brick{color:var(--brick)}
+.metrics .v.good{color:var(--good)} .metrics .v.brick{color:var(--brick)}
 .metrics .c{font-family:var(--mono);font-size:10px;color:var(--graphite);line-height:1.5}
 
 /* expanders §1.3 */
@@ -366,23 +387,6 @@ footer .rg{margin-top:10px;border-left:2px solid var(--amber);padding-left:13px;
 
   <nav id="leagues"></nav>
   <nav class="sections" id="sections"></nav>
-</div>
-
-<div class="strip" id="strip"></div>
-
-<div class="wrap">
-  <div class="sect">
-    <h2>Tonight's slate</h2><span class="n" id="slate-n"></span>
-    <button class="why" data-note="n-slate">why<sup>†</sup></button>
-  </div>
-  <div class="note" id="n-slate" hidden>
-    Every venue on tonight's card, with the conditions the model actually
-    priced. A mark is drawn in amber only when that condition moved a number
-    for at least one play at that venue — dimness is information, not an
-    omission.
-  </div>
-
-  <div class="metrics" id="summary"></div>
 
   <div class="sect">
     <h2>This week's stadiums</h2>
@@ -395,6 +399,8 @@ footer .rg{margin-top:10px;border-left:2px solid var(--amber);padding-left:13px;
     actually moved a number — the compass keeps the exact bearing legible.
   </div>
   <div class="scroller"><div class="vcards" id="vcards"></div></div>
+
+  <div class="metrics" id="summary"></div>
 
   <div class="sect">
     <h2>Recommended</h2><span class="n" id="rec-n"></span>
