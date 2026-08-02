@@ -916,6 +916,80 @@ def test_tonights_bet_does_not_grade_against_a_game_nobody_has_played():
     assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "lost"
 
 
+def test_tonights_bet_never_grades_against_last_nights_stat_line():
+    """The hole the first fix left open, and the one that kept the bug alive.
+
+    Two mechanisms leave a bet with no stat row on its own date. The
+    date-shape drift (a 9pm Eastern game filed under yesterday in UTC) wants
+    the neighbour-day fallback; the ingest's withholding guard — which holds
+    back today's rows precisely BECAUSE the game has not been played — must
+    not get it. Nothing distinguished them, and the second case happens every
+    single evening: today withheld by design, the player logged yesterday
+    because baseball teams play most days. The fallback then graded tonight's
+    bet against last night's line, hours before first pitch.
+    """
+    from engine import db as hist_db
+    import datetime as _dt
+    today = _dt.date.today().isoformat()
+    y = (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
+    conn = _conn()
+    r = _result(sport="mlb", date=today)
+    r["recommendations"][0].update(player="Tonight Guy", market="total_bases",
+                                   side="OVER", line=1.5, odds=100)
+    ledger.log_recommendations(conn, r)
+
+    hist = hist_db.connect(":memory:")
+    # Yesterday: played and final, 0 total bases. Today: the slate is on the
+    # board with no score yet, and the stat row is correctly withheld.
+    hist_db.upsert_games(hist, [
+        {"sport": "mlb", "season": 2026, "period": y, "game_id": "ATL@NYM",
+         "home": "NYM", "away": "ATL", "home_score": 4, "away_score": 2,
+         "spread": 0.0, "total": None, "roof": "", "surface": "", "temp": None,
+         "wind": None, "extra": None},
+        {"sport": "mlb", "season": 2026, "period": today,
+         "game_id": "PHI@NYM", "home": "NYM", "away": "PHI",
+         "home_score": None, "away_score": None, "spread": 0.0, "total": None,
+         "roof": "", "surface": "", "temp": None, "wind": None, "extra": None}])
+    hist_db.upsert_player_logs(hist, [
+        {"sport": "mlb", "season": 2026, "period": y, "game_id": "g-y",
+         "player": "Tonight Guy", "team": "NYM", "opponent": "ATL",
+         "position": "C", "home": 1, "market": "total_bases", "value": 0.0}])
+
+    assert ledger.settle_from_history(conn, hist, sport="mlb") == 0
+    assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "open"
+
+
+def test_the_neighbour_day_repair_still_works_when_the_team_is_idle():
+    """The control. Kill the fallback outright and the UTC date-shape bug it
+    was built for comes straight back — thirty home-run bets dated 07-27
+    whose players are all logged on 07-26. It must still fire when the
+    team has no unfinished game on the bet's own date."""
+    from engine import db as hist_db
+    import datetime as _dt
+    today = _dt.date.today().isoformat()
+    y = (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
+    conn = _conn()
+    r = _result(sport="mlb", date=today)
+    r["recommendations"][0].update(player="Skew Guy", market="total_bases",
+                                   side="OVER", line=1.5, odds=100)
+    ledger.log_recommendations(conn, r)
+
+    hist = hist_db.connect(":memory:")
+    # The game was played last night; the team is NOT on today's slate.
+    hist_db.upsert_games(hist, [
+        {"sport": "mlb", "season": 2026, "period": y, "game_id": "ATL@NYM",
+         "home": "NYM", "away": "ATL", "home_score": 4, "away_score": 2,
+         "spread": 0.0, "total": None, "roof": "", "surface": "", "temp": None,
+         "wind": None, "extra": None}])
+    hist_db.upsert_player_logs(hist, [
+        {"sport": "mlb", "season": 2026, "period": y, "game_id": "g-y",
+         "player": "Skew Guy", "team": "NYM", "opponent": "ATL",
+         "position": "C", "home": 1, "market": "total_bases", "value": 3.0}])
+
+    assert ledger.settle_from_history(conn, hist, sport="mlb") == 1
+    assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "won"
+
+
 def test_a_settled_past_date_with_no_games_rows_still_grades():
     """The control for the guard above. Backfilled player logs predate the
     games table for whole seasons; requiring a final there would strand

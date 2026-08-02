@@ -134,6 +134,64 @@ def test_a_game_that_has_not_started_yet_is_the_loudest_case():
         ["Tonight Guy"]
 
 
+def _neighbour_fixture():
+    """A bet graded through the date-shape fallback while its own game was
+    still to be played: tonight's slate is on the board scoreless, the
+    player's only stat line is last night's."""
+    today = datetime.date.today().isoformat()
+    y = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    tmp = tempfile.mkdtemp()
+    h = db.connect(os.path.join(tmp, "h.db"))
+    l = ledger.connect(os.path.join(tmp, "l.db"))
+    h.execute("INSERT INTO games (sport,season,period,game_id,home,away,"
+              "home_score,away_score) VALUES ('mlb',2026,?,'ATL@NYM','NYM',"
+              "'ATL',4,2)", (y,))
+    h.execute("INSERT INTO games (sport,season,period,game_id,home,away,"
+              "home_score,away_score) VALUES ('mlb',2026,?,'PHI@NYM','NYM',"
+              "'PHI',NULL,NULL)", (today,))
+    h.execute("INSERT INTO player_game_logs (sport,season,period,game_id,"
+              "player,team,opponent,position,home,market,value) VALUES "
+              "('mlb',2026,?,'g-y','Tonight Guy','NYM','ATL','C',1,"
+              "'total_bases',0.0)", (y,))
+    h.commit()
+    l.execute("INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+              "odds,stake_units,stake_dollars,status,category,actual,"
+              "pnl_units,pnl_dollars) VALUES ('x','mlb',?,'Tonight Guy',"
+              "'total_bases','OVER',1.5,'FD',-110,0.5,5.0,'lost','main',0.0,"
+              "-0.5,-5.0)", (today,))
+    l.commit()
+    return l, h
+
+
+def test_it_finds_bets_graded_off_the_wrong_day_entirely():
+    """The audit's mirror of the settler's blind spot. A bet graded through
+    the date-shape fallback has NO stat row on its own date — the settler
+    reached back a day for it — so an audit that only looks at the bet's own
+    date skips exactly the bets it exists to reopen."""
+    l, h = _neighbour_fixture()
+    assert [r["player"] for r in ledger.premature_settles(l, h)] == \
+        ["Tonight Guy"]
+
+
+def test_repairing_one_of_those_leaves_last_nights_real_result_alone():
+    """The row the settler misused is a GENUINE result for the game it
+    belongs to. Deleting it — the right move for a partial in-progress line
+    — would destroy real history here."""
+    l, h = _neighbour_fixture()
+    ledger.repair_premature(l, h, apply=True)
+    assert l.execute("SELECT status FROM bets").fetchone()[0] == "open"
+    assert h.execute("SELECT COUNT(*) FROM player_game_logs").fetchone()[0] == 1
+
+
+def test_a_reopened_bet_does_not_get_regraded_the_same_way():
+    """The repair has to stick. Reopening a bet that the very next settle
+    grades again from the same wrong day is worse than leaving it alone."""
+    l, h = _neighbour_fixture()
+    ledger.repair_premature(l, h, apply=True)
+    assert ledger.settle_from_history(l, h, sport="mlb") == 0
+    assert l.execute("SELECT status FROM bets").fetchone()[0] == "open"
+
+
 def test_an_open_bet_is_not_a_candidate():
     l, h = _fixture()
     l.execute("UPDATE bets SET status='open'")

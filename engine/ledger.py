@@ -858,19 +858,46 @@ def premature_settles(conn, hist_conn) -> list[dict]:
         except Exception:
             continue
         if not rows:
-            continue                    # graded from something else entirely
+            # A bet graded through the DATE-SHAPE fallback has no row on its
+            # own date at all — the settler reached back a day for it. Those
+            # are the ones the fallback graded against last night's stat line
+            # while tonight's game had not started, so the audit has to look
+            # where the settler looked or it cannot see them. Without this it
+            # skipped exactly the bets the repair exists to reopen.
+            try:
+                rows, wargs = _neighbour_day_rows_raw(hist_conn, b, where,
+                                                      wargs)
+            except Exception:
+                continue
+            if not rows:
+                continue                # graded from something else entirely
+            # The team is playing on the bet's OWN date and has not finished:
+            # the grade came from the wrong game. _neighbour_day_rows now
+            # refuses this case going forward; this finds the ones already in
+            # the journal from when it did not.
+            _, own_args = _hist_where(b)
+            if _team_day_unfinished(hist_conn, where, own_args, rows[0]):
+                out.append(_suspect(b, rows[0]))
+            continue
         team = rows[0]["team"] if "team" in rows[0].keys() else ""
         if not _team_day_not_final(hist_conn, where, wargs, team):
             continue
-        out.append({
-            "id": b["id"], "sport": b["sport"], "date": b["date"],
-            "player": b["player"], "market": b["market"], "side": b["side"],
-            "line": b["line"], "category": b["category"], "team": team,
-            "status": b["status"], "actual": b["actual"],
-            "pnl_dollars": b["pnl_dollars"] or 0.0,
-            "pnl_units": b["pnl_units"] or 0.0,
-        })
+        out.append(_suspect(b, rows[0]))
     return out
+
+
+def _suspect(b, row) -> dict:
+    """One row of the premature-settle audit. Reports what it touched rather
+    than a count — this feeds a tool that edits a betting record."""
+    return {
+        "id": b["id"], "sport": b["sport"], "date": b["date"],
+        "player": b["player"], "market": b["market"], "side": b["side"],
+        "line": b["line"], "category": b["category"],
+        "team": (row["team"] if "team" in row.keys() else "") or "",
+        "status": b["status"], "actual": b["actual"],
+        "pnl_dollars": b["pnl_dollars"] or 0.0,
+        "pnl_units": b["pnl_units"] or 0.0,
+    }
 
 
 def repair_premature(conn, hist_conn, apply: bool = False) -> dict:
@@ -1096,12 +1123,20 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
     return out
 
 
-def _neighbour_day_rows(hist_conn, b, where: str, wargs: list):
-    """This player's stat rows on the day either side, when his own is empty.
+def _neighbour_day_rows_raw(hist_conn, b, where: str, wargs: list):
+    """This player's stat rows on the day before, when his own is empty.
 
     Returns ``(rows, wargs)`` — the args are handed back rewritten to the
     date that answered, so everything downstream (the doubleheader check,
     the day-finished guard) reasons about the right day.
+
+    RAW: no judgement about whether reaching back is legitimate. That lives
+    in ``_neighbour_day_rows``. The split exists because the settle path and
+    the repair path need opposite things from the same lookup — the settler
+    must refuse the illegitimate case, and the audit must be able to FIND
+    the bets a previous version of the settler graded that way. An audit
+    built on the guarded version cannot see them, which is exactly how the
+    repair tool came to be blind to the grades it exists to reopen.
     """
     import datetime as _dt
 
@@ -1134,7 +1169,57 @@ def _neighbour_day_rows(hist_conn, b, where: str, wargs: list):
                 f"FROM player_game_logs WHERE {where} AND market=?",
                 (*alt, b["market"]))
             if normalize_name(c["player"]) == target]
-    return (rows, alt) if rows else ([], wargs)
+    if not rows:
+        return [], wargs
+    return rows, alt
+
+
+def _neighbour_day_rows(hist_conn, b, where: str, wargs: list):
+    """The neighbour-day rows, but only when reaching back is legitimate.
+
+    THE REASON THE BET'S OWN DAY IS EMPTY DECIDES WHETHER THIS IS LEGAL.
+
+    Two mechanisms leave a bet with no stat row on its own date, and they
+    want opposite treatment:
+
+      * the date-shape drift — the game WAS played, and its box score is
+        filed one day back. Reaching back is the repair.
+      * the ingest's withholding guard — the game has NOT been played, so
+        the row is deliberately absent until the team's day is final.
+
+    Nothing distinguished them, and the second case happens every single
+    evening: today's rows are withheld by design, the player is logged
+    yesterday because baseball teams play most days, and this fallback then
+    graded TONIGHT'S bet against LAST NIGHT'S stat line, hours before first
+    pitch. The withholding guard was manufacturing the exact precondition
+    this fallback treats as evidence — the two fixes were undoing each
+    other, which is why the premature grades survived the first repair.
+
+    The neighbour row carries the team, and that is what the bet's own day
+    can be asked about: if the team is playing on the bet's own date and the
+    game has not finished, the bet is about THAT game and there is no
+    neighbour to find.
+
+    Deliberately the LOOSE check and not _too_early_to_grade. The strict arm
+    wants positive proof the team's day is final, and on a day the team does
+    not play there is no such proof to be had — demanding it refuses every
+    genuine date-shape repair, which is the bug this fallback exists to fix.
+    Positive evidence of a live game is the only thing that separates the
+    two cases here.
+
+    The limit, stated plainly: this leans on the slate ingest writing a
+    games row for tonight's fixtures before they finish. MLB does —
+    mlb_rows_from_slate writes them scoreless — and MLB is where the
+    premature grades were appearing. A sport that writes no row until a game
+    is final gets no protection from this line, and relies on the guard in
+    the settle loop instead.
+    """
+    rows, alt = _neighbour_day_rows_raw(hist_conn, b, where, wargs)
+    if not rows:
+        return [], wargs
+    if _team_day_unfinished(hist_conn, where, wargs, rows[0]):
+        return [], wargs
+    return rows, alt
 
 
 def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
