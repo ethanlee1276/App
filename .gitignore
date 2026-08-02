@@ -33,4 +33,10 @@ data/history.db
 *.db
 data/ledger.db
 data/backups/
+# Both forms on purpose. A trailing slash matches DIRECTORIES ONLY, and a
+# symlink is not a directory to git — so `node_modules/` alone let a symlink
+# named node_modules be committed, pointing at a scratchpad path that exists
+# on no other machine. That broke `git pull` for everyone else with
+# "Updating the following directories would lose untracked files".
+node_modules
 node_modules/

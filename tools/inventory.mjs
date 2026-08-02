@@ -32,6 +32,19 @@
  * Playwright's Chromium. Both live in the scratchpad; this file is in the
  * repo because the BASELINE has to be versioned alongside the code it
  * describes.
+ *
+ * Node resolves `playwright` by walking up from THIS file looking for
+ * node_modules, and ESM ignores NODE_PATH — so link the scratchpad's copy in
+ * before running:
+ *
+ *   ln -sfn "$SCRATCH/node_modules" node_modules
+ *
+ * That link must stay untracked. `.gitignore` lists node_modules BOTH with
+ * and without a trailing slash for exactly this reason: the trailing-slash
+ * form matches directories only, a symlink is not a directory to git, and
+ * the link duly got committed once — which broke `git pull` on every other
+ * machine, because it pointed at a scratchpad path that existed on none of
+ * them.
  */
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync } from 'fs';
