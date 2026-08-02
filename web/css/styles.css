@@ -808,6 +808,11 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .pz-rank { font-family: var(--font-mono); color: var(--text-mute);
   font-weight: 400; margin-right: 9px; }
 .pz-rank-title { margin-top: 24px; }
+.chip.pz-g-play { color: var(--good); border-color: rgba(51,199,122,.42); }
+.chip.pz-g-marginal { color: var(--brand); border-color: rgba(255,176,0,.42); }
+.chip.pz-g-short { color: var(--text-mute); }
+.pz-ticket:has(.pz-g-play) { --grade-color: var(--good); }
+.pz-ticket:has(.pz-g-marginal) { --grade-color: var(--brand); }
 .pz-runners-title { margin-top: 22px; }
 .pz-runners { list-style: none; margin: 0; padding: 0; }
 .pz-runners li {

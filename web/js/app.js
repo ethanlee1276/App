@@ -2034,7 +2034,10 @@ function parlayTicket(t, live) {
         <span class="pz-rank">#${t.rank}</span>
         Type ${escapeHtml(t.parlay_type)} · ${t.legs.length} legs</div></div>
       <div class="chips">
-        <span class="chip">${live ? "cleared all seven gates" : "did not clear"}</span>
+        <span class="chip pz-g-${t.grade}">${
+          t.grade === "play" ? "clears at any plausible price"
+          : t.grade === "marginal" ? "clears at a good price · check yours"
+          : "does not clear"}</span>
         <span class="chip stake">graded · 0.00u</span>
       </div>
     </div>
@@ -2091,9 +2094,11 @@ function parlayTicket(t, live) {
         <div class="v">${sign(t.naive_product_american)}</div></div>
       <div class="metric primary"><div class="k">You need at least</div>
         <div class="v">${sign(t.required_american)}</div></div>
-      <div class="metric"><div class="k">Best a book would pay</div>
+      <div class="metric"><div class="k">What a book might pay</div>
         <div class="v ${t.qualified ? "pos" : "neg"}">${sign(t.best_case_american)}</div>
-        ${t.shortfall_pct ? `<div class="pz-short">short by ${t.shortfall_pct}%</div>` : ""}</div>
+        <div class="pz-short">${t.shortfall_pct
+          ? `short by ${t.shortfall_pct}%`
+          : `to ${sign(t.likely_case_american)} at a stingy book`}</div></div>
     </div>
     <div class="pz-edge ${t.edge_at_ceiling_points > 0 ? "pos" : "neg"}">
       At that ceiling this ticket is
@@ -2103,10 +2108,17 @@ function parlayTicket(t, live) {
         : `<b>behind</b> the price. Even at the most generous number a book
            would plausibly offer, this loses money.`}
       That figure is what tonight's board is ranked on.</div>
-    <div class="pz-fine">Correlation tax on a same-game ticket runs
-      ${(t.correlation_tax_best_case * 100).toFixed(0)}–${(t.correlation_tax_worst_case * 100).toFixed(0)}%
-      against 4.3–4.8% on a side. That is what the structure costs you, and it
-      is why the book's quote sits below the legs multiplied together.</div>
+    <div class="pz-fine">Nobody publishes what they charge to combine legs, so
+      the two numbers above are a <b>band</b>, not a quote: this ticket is
+      measured against a book taking
+      ${(t.correlation_tax_best_case * 100).toFixed(0)}% and against one
+      taking ${(t.correlation_tax_worst_case * 100).toFixed(0)}%, versus the
+      4.3–4.8% a straight side costs. ${t.grade === "marginal"
+        ? `It clears the first and not the second — which makes this a question
+           about your book's actual number rather than about the model.`
+        : t.grade === "play"
+        ? `It clears both, so the price is not what stands between you and this
+           ticket.` : ""}</div>
 
     <div class="pz-sub">Dominance</div>
     <div class="pz-dominance">These same legs bet separately are worth

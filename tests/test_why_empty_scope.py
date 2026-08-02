@@ -102,11 +102,57 @@ def test_a_card_that_is_all_long_shots_says_so_and_stops():
 
 # --- end to end -------------------------------------------------------------
 def test_the_report_runs_and_keeps_home_runs_out_of_the_window():
-    import subprocess
-    p = subprocess.run([sys.executable, "launch.py", "--why-empty", "mlb"],
-                       cwd=ROOT, capture_output=True, text=True, timeout=120)
-    assert p.returncode == 0, p.stderr[-500:]
-    out = p.stdout
+    """The end-to-end check, against a board we WROTE rather than whichever
+    one happens to be on disk.
+
+    This used to shell out to `launch.py --why-empty mlb` in the repo root,
+    which reads web/data/mlb_recommendations.json. That file is the
+    deterministic sample slate on a dev checkout and a real live board on the
+    machine that runs the builds — so the test passed here and failed there,
+    reporting a code defect that was really a difference in tonight's
+    baseball. A test whose answer depends on which games were played is
+    measuring the schedule.
+    """
+    import json
+    import tempfile
+
+    root = tempfile.mkdtemp()
+    os.makedirs(os.path.join(root, "web", "data"), exist_ok=True)
+    # One long shot and one main-board candidate, both below the bar, so the
+    # report has something to say and the home run has somewhere to be
+    # wrongly listed if the scoping ever breaks.
+    board = {"date": "2026-08-02", "sport": "mlb",
+             "counts": {"props_analyzed": 2, "recommended": 0},
+             "games": [], "recommendations": [
+                 {"player": "Slugger", "team": "PHI", "opponent": "CHC",
+                  "market": "home_runs", "market_label": "Home Runs",
+                  "side": "OVER", "line": 0.5, "odds": 320, "edge": 0.09,
+                  "confidence": 5.0, "hit_prob": 0.28, "fair_prob": 0.24,
+                  "grade": "Pass", "quality": 40, "tier": 3,
+                  "recommended": False, "warnings": []},
+                 {"player": "Contact", "team": "PHI", "opponent": "CHC",
+                  "market": "total_bases", "market_label": "Total Bases",
+                  "side": "OVER", "line": 1.5, "odds": -110, "edge": 0.021,
+                  "confidence": 5.5, "hit_prob": 0.545, "fair_prob": 0.524,
+                  "grade": "Pass", "quality": 55, "tier": 2,
+                  "recommended": False, "warnings": []}]}
+    with open(os.path.join(root, "web", "data", "mlb_recommendations.json"),
+              "w", encoding="utf-8") as fh:
+        json.dump(board, fh)
+
+    import io
+    from contextlib import redirect_stdout
+    import launch
+    old_root = launch.ROOT
+    launch.ROOT = __import__("pathlib").Path(root)
+    buf = io.StringIO()
+    try:
+        with redirect_stdout(buf):
+            launch.why_empty("mlb")
+    finally:
+        launch.ROOT = old_root
+    out = buf.getvalue()
+
     assert "Long Shots board owns those by design" in out
     window = out[out.index("In the recommendable window"):]
     window = window[:window.index("Biggest net edges")]

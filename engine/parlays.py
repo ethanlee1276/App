@@ -116,8 +116,15 @@ KELLY_FRACTION_UFC = 0.10          # §10.1 tenth Kelly
 # two-leg same-game ticket far closer to the product. Stated separately now,
 # and still an assumption — measuring it by book is item 5 on the Appendix's
 # own backtest list.
-BEST_CASE_SGP_TAX = {2: 0.08, 3: 0.15}
-WORST_CASE_SGP_TAX = {2: 0.18, 3: 0.30}
+# The band, not a point estimate. §1.2's 15-30% is a THREE-leg figure; a
+# two-leg same-game ticket on lightly-correlated legs is priced far closer to
+# the straight product, and some books quote it at almost exactly the product.
+# The generous end is deliberately generous — it is the ceiling a ticket is
+# allowed to be measured against, and being stingy there rejects real
+# constructions on the strength of a number nobody has measured. Both ends
+# stay assumptions until item 5 of the Appendix's backtest list is run.
+BEST_CASE_SGP_TAX = {2: 0.04, 3: 0.12}
+WORST_CASE_SGP_TAX = {2: 0.15, 3: 0.30}
 # §1.2 quotes 4.3-4.8% hold on sides and totals. No book prices a same-game
 # ticket at better than its own correlated fair number less its ordinary
 # margin, so this floors how generous the ceiling above is allowed to get on
@@ -948,6 +955,7 @@ class Ticket:
     threshold: float = 0.0
     required_dec: float = 0.0
     best_case_dec: float = 0.0
+    likely_case_dec: float = 0.0
     ev_singles: float = 0.0
     ev_alternative: float = 0.0
     ev_parlay_at_required: float = 0.0
@@ -955,6 +963,7 @@ class Ticket:
     duplicate: bool = False
     restatement: bool = False
     verdict: str = ""
+    grade: str = "short"
     stake_if_promoted: float = 0.0
     edge_at_ceiling: float = 0.0
 
@@ -1110,10 +1119,17 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
     # is no correlation to tax. That is exactly why §0.3 says singles
     # dominate it, and why the tax only comes off the same-game price.
     if not same_game:
-        best_case = naive_dec
+        best_case = likely_case = naive_dec
     else:
         tax = BEST_CASE_SGP_TAX[2 if n <= 2 else 3]
         best_case = naive_dec * (1 - tax)
+        # The tax is an ASSUMPTION with a band, not a measurement, so the
+        # ceiling it produces has a band too. A ticket judged against a point
+        # estimate gets binned for missing by 2% — which is well inside the
+        # error of the number doing the judging. Carry both ends: the
+        # generous one is what a good book might quote, the harsh one is what
+        # a bad one will.
+        likely_case = naive_dec * (1 - WORST_CASE_SGP_TAX[2 if n <= 2 else 3])
         # §1.2's flat 15-30% band describes a typical SGP, and it is the
         # right ceiling for one: a book that taxed the full correlation
         # would be quoting far shorter than 70-85% of the naive product, so
@@ -1139,8 +1155,10 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
                       else joint_three(tuple(ps), tuple(fair)))
             if j_book > 0:
                 best_case = min(best_case, 1.0 / j_book)
+                likely_case = min(likely_case, 1.0 / j_book)
 
-    t = Ticket(sport=sport, legs=legs, modeled_joint=modeled,
+    t = Ticket(sport=sport, legs=legs, likely_case_dec=likely_case,
+               modeled_joint=modeled,
                independent_joint=independent, threshold=thr,
                required_dec=required, best_case_dec=best_case,
                ev_singles=ev_singles, ev_alternative=ev_alternative,
@@ -1162,6 +1180,21 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
     kelly = (modeled * required - 1.0) / b if b > 0 else 0.0
     t.stake_if_promoted = round(min(STAKE_CAP_U, max(0.0, kelly) * rules.kelly * 100), 2)
 
+    # Three verdicts, because there are three real answers.
+    #
+    #   PLAY      clears even at the harsh end of the tax band — worth betting
+    #             at any book that quotes the required number.
+    #   MARGINAL  clears at the generous end only. Whether this is a bet is
+    #             genuinely a question about YOUR book's quote, not about the
+    #             model, and the required price is the thing to go check.
+    #   SHORT     fails even at the generous end. Not a bet anywhere.
+    #
+    # Two states forced a ticket missing by 2% into the same bin as one
+    # missing by 40%, on the strength of a tax figure that is itself an
+    # assumption. That is false precision, and it read on the page as the
+    # site contradicting itself.
+    t.grade = ("play" if required <= likely_case
+               else "marginal" if required <= best_case else "short")
     if required > best_case:
         ceiling = (f"the most generous price a book would plausibly quote — "
                    f"the naive product less the "
@@ -1179,9 +1212,17 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
                f"{ev_singles:+.1%} bet separately, and §0.3 is not an opinion "
                f"— diversifying a fixed edge across independent bets raises "
                f"expected growth, so bet the singles."))
+    elif t.grade == "marginal":
+        t.verdict = (
+            f"Bet at {decimal_to_american(required):+d} or better — and that "
+            f"is a real question about your book rather than about the model. "
+            f"A generous same-game price on these legs is around "
+            f"{decimal_to_american(best_case):+d}; a stingy one is around "
+            f"{decimal_to_american(likely_case):+d}. It clears at the first "
+            f"and not the second, so go and look at the actual number.")
     else:
         t.verdict = (
-            f"Bet only at {decimal_to_american(required):+d} or better. We "
+            f"Bet at {decimal_to_american(required):+d} or better. We "
             f"cannot see the book's quote for this ticket, so this is the "
             f"number to check, not a claim about what is offered.")
     return t, ""
@@ -1341,16 +1382,19 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
         t.edge_at_ceiling = _edge_at_ceiling(t)
     tickets.sort(key=lambda t: (0 if t.parlay_type == "A" else 1,
                                 -t.edge_at_ceiling))
-    live = [t for t in tickets if t.required_dec <= t.best_case_dec]
+    live = [t for t in tickets if t.grade != "short"]
     # §0.2 prefers two legs to three among tickets that actually clear.
     live.sort(key=lambda t: (len(t.legs), -t.edge_at_ceiling))
 
     if live:
+        plays = [t for t in live if t.grade == "play"]
         out["verdict"] = (
-            f"{len(live)} ticket{'s' if len(live) > 1 else ''} cleared all "
-            f"seven gates — graded, not staked.")
-        # §10.2 caps the operation at one parlay per slate, so the rest are
-        # shown as ranked alternatives rather than as plays.
+            f"{len(plays)} ticket{'s' if len(plays) != 1 else ''} cleared "
+            f"every gate — graded, not staked."
+            if plays else
+            f"{len(live)} ticket{'s' if len(live) != 1 else ''} cleared the "
+            f"gates at a generous same-game price. Whether that is a bet "
+            f"depends on the number your book actually shows.")
         chosen = live[:rules.max_per_slate]
         rest = [t for t in tickets if t not in chosen][:SHORTLIST - len(chosen)]
         chosen += rest
@@ -1362,11 +1406,18 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
                 f"ranked below it.")
     else:
         chosen = tickets[:SHORTLIST]
-        out["verdict"] = "No qualifying parlay at current numbers."
+        # The page used to headline "No qualifying parlay at current numbers"
+        # and then render a ticket underneath it, which reads as the site
+        # arguing with itself. Say what is true of the thing actually shown:
+        # these ARE tonight's best constructions, and none of them clears.
+        out["verdict"] = (
+            "Tonight's best constructions, ranked — none of them clears the "
+            "bar at any price a book would plausibly offer."
+            if chosen else
+            "No parlay can be built from tonight's board.")
     out["shortlist"] = len(chosen)
 
-    out["tickets"] = [_publish(t, qualified=t.required_dec <= t.best_case_dec,
-                               rank=i + 1)
+    out["tickets"] = [_publish(t, qualified=t.grade != "short", rank=i + 1)
                       for i, t in enumerate(chosen)]
     # The clash ledger is the most useful thing on this page: it is the record
     # of which props were fighting each other and which §3 type settled it.
@@ -1432,6 +1483,8 @@ def _publish(t: Ticket, qualified: bool, rank: int = 1) -> dict:
         "rank": rank,
         "parlay_type": t.parlay_type,
         "qualified": qualified,
+        "grade": t.grade,                       # play | marginal | short
+        "likely_case_american": decimal_to_american(t.likely_case_dec),
         # §1.3 Test 1 evaluated at the price a book would plausibly quote —
         # the number the shortlist is ordered on, in points.
         "edge_at_ceiling_points": round(t.edge_at_ceiling * 100, 1),

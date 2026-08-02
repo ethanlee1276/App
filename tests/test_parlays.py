@@ -329,8 +329,9 @@ def test_the_dominance_test_kills_independent_legs_at_true_product_pricing():
     recs = [leg("WR", "GB", "CHI", "receptions", p=0.62, ev=0.127, odds=-122),
             leg("WR2", "NE", "NYJ", "receptions", p=0.62, ev=0.127, odds=-122)]
     out = run("nfl", recs, [game(), game("NYJ", "NE")])
-    assert out["verdict"].startswith("No qualifying parlay")
     t = out["tickets"][0]
+    assert t["grade"] == "short", (
+        "a cross-game ticket at true product pricing was published as a bet")
     assert t["parlay_type"] == "B"
     assert t["qualified"] is False
     assert t["required_dec"] > t["naive_product_dec"], (
@@ -475,7 +476,7 @@ def test_the_page_never_claims_to_know_a_price_it_cannot_see():
                        leg("SP B", "CHC", "PHI", "strikeouts", p=0.54,
                            side="UNDER", date="2026-08-02")],
                [game("PHI", "CHC", "2026-08-02")])
-    assert miss["tickets"][0]["qualified"] is False
+    assert miss["tickets"][0]["grade"] == "short"
     assert miss["tickets"][0]["shortfall_pct"] > 0
 
 
@@ -560,13 +561,16 @@ def test_the_screen_can_actually_fail():
     not."""
     good, g = clearing_fixture(), [game("PHI", "CHC", "2026-08-02")]
     out = run("mlb", good, g)
-    assert out["tickets"] and out["tickets"][0]["qualified"] is True
+    assert out["tickets"] and out["tickets"][0]["grade"] == "play"
 
-    # Same correlation, same probabilities, terrible prices: the legs are
-    # short enough that the naive product cannot reach what the gates demand.
-    bad = [dict(l, odds=-400, ev=0.005) for l in good]
-    out2 = run("mlb", bad, g)
-    assert out2["verdict"].startswith("No qualifying parlay"), out2["verdict"]
+    # And a pair with no mechanism between it — §1.1's +0.10 pace floor and
+    # nothing else — has to come back short at the same prices. If both ends
+    # of this produce the same answer, the screen is a constant and every
+    # rejection test in this file is measuring nothing.
+    thin = run2("nfl", [leg("RB", "GB", "CHI", "rush_yds", p=0.55),
+                        leg("WR", "CHI", "GB", "receptions", p=0.54)],
+                [], [game(favorite="GB", spread=3.0)])
+    assert thin["tickets"][0]["grade"] == "short", thin["tickets"][0]["grade"]
 
 
 # --- game lines as legs ------------------------------------------------------
@@ -886,7 +890,10 @@ def test_the_page_never_prints_a_book_price_as_though_we_had_one():
     CHECK, and the words have to say so."""
     block = _ticket_src()
     assert "You need at least" in block
-    assert "Best a book would pay" in block
+    assert "What a book might pay" in block
+    # A band, not a quote — the card has to show both ends or the harsher
+    # one is invisible and the generous one looks like a fact.
+    assert "likely_case_american" in block
     # And the ticket's own verdict text, which carries the disclaimer, is
     # rendered rather than dropped
     assert "escapeHtml(t.verdict)" in block
@@ -954,13 +961,18 @@ def test_the_board_is_ranked_even_when_nothing_clears():
             leg("C", "SEA", "TEX", "strikeouts", p=0.56, date="2026-08-02"),
             leg("D", "SEA", "TEX", "total_bases", p=0.55, date="2026-08-02")]
     out = run("mlb", recs, g)
-    assert out["verdict"].startswith("No qualifying parlay")
+    # The verdict has to describe the cards underneath it. Headlining "no
+    # qualifying parlay" over a rendered ticket reads as the site arguing
+    # with itself, which is exactly how it read.
+    assert "No qualifying" not in out["verdict"], out["verdict"]
     assert len(out["tickets"]) >= 2, "the board was ranked but not shown"
+    assert all(t["grade"] in ("play", "marginal", "short")
+               for t in out["tickets"])
     assert all(t["rank"] for t in out["tickets"])
-    # and each one says, in points, how far off it is
+    # and each one carries the numbers the ranking is built on
     for t in out["tickets"]:
         assert "edge_at_ceiling_points" in t
-        assert t["shortfall_pct"] > 0
+        assert t["required_american"] and t["best_case_american"]
 
 
 def test_a_board_with_no_two_legs_in_one_game_says_so():
@@ -1143,6 +1155,68 @@ def test_the_launch_refresh_runs_the_slate_cap():
     src = open(os.path.join(_ROOT, "launch.py"), encoding="utf-8").read()
     assert "_arbitrate_parlays(quiet=quiet)" in src
     assert "from engine.parlays import arbitrate_slate" in src
+
+
+# --- three grades, because there are three real answers ---------------------
+def test_a_ticket_is_graded_against_the_tax_band_not_a_point_estimate():
+    """Nobody publishes what a book charges to combine legs. Judging a ticket
+    against a single assumed tax gives that assumption a precision it has not
+    earned — a real construction missing by 2% landed in the same bin as one
+    missing by 40%.
+
+    Three states instead. PLAY clears even at the harsh end of the band.
+    MARGINAL clears at the generous end only, which makes it a question about
+    your book's actual quote rather than about the model. SHORT fails at both.
+    """
+    assert P.BEST_CASE_SGP_TAX[2] < P.WORST_CASE_SGP_TAX[2]
+    assert P.BEST_CASE_SGP_TAX[3] > P.BEST_CASE_SGP_TAX[2], (
+        "a three-leg ticket must be taxed harder than a pair")
+
+    g = [game("DET", "OAK", "2026-08-02", favorite="DET", spread=1.5)]
+
+    # The real ticket from Ethan's board: a hitter's UNDER against the
+    # opposing starter's strikeout OVER — §5.1's cleanest MLB correlation,
+    # correctly identified, and short of the bar by two percent.
+    marginal = run("mlb", [
+        leg("Bolte", "OAK", "DET", "hits", side="UNDER", p=0.398, odds=165,
+            date="2026-08-02"),
+        leg("Montero", "DET", "OAK", "strikeouts", p=0.481, odds=111,
+            date="2026-08-02")], g)["tickets"][0]
+    assert marginal["grade"] == "marginal", marginal["grade"]
+    assert marginal["qualified"] is True, (
+        "a construction that clears at a good price was binned entirely")
+    assert "your book" in marginal["verdict"]
+
+    # A pair whose only link is the pace floor is still refused, or the band
+    # has stopped discriminating and only widened the door.
+    n = [game(favorite="GB", spread=3.0)]
+    thin = run2("nfl", [leg("RB", "GB", "CHI", "rush_yds", p=0.55),
+                        leg("WR", "CHI", "GB", "receptions", p=0.54)], [], n)
+    assert thin["tickets"][0]["grade"] == "short"
+
+    # And the measured QB-to-WR1 link clears at both ends of the band.
+    strong = run2("nfl", [leg("QB", "GB", "CHI", "pass_yds", p=0.58, odds=-115),
+                          leg("WR1", "GB", "CHI", "receptions", p=0.56)], [], n)
+    assert strong["tickets"][0]["grade"] == "play"
+
+
+def test_the_verdict_never_contradicts_the_cards_below_it():
+    """The bug Ethan caught: the page headlined "No qualifying parlay at
+    current numbers" and then rendered a parlay underneath. Whatever the
+    verdict says, it has to be true of what is actually on screen."""
+    g = [game("DET", "OAK", "2026-08-02", favorite="DET", spread=1.5)]
+    thin = run("mlb", [leg("A", "OAK", "DET", "hits", p=0.52, date="2026-08-02"),
+                       leg("B", "OAK", "DET", "total_bases", p=0.52,
+                           date="2026-08-02")], g)
+    if thin["tickets"]:
+        assert "No qualifying parlay" not in thin["verdict"], (
+            "the page says nothing qualifies while showing a ticket")
+    live = run("mlb", [
+        leg("Bolte", "OAK", "DET", "hits", side="UNDER", p=0.398, odds=165,
+            date="2026-08-02"),
+        leg("Montero", "DET", "OAK", "strikeouts", p=0.481, odds=111,
+            date="2026-08-02")], g)
+    assert "cleared" in live["verdict"]
 
 
 if __name__ == "__main__":
