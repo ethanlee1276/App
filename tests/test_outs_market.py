@@ -74,6 +74,24 @@ def test_every_layer_that_keys_off_a_market_covers_outs():
         M.MLBWeather(temp_f=70, wind_mph=5, wind_dir_rel="out")).multipliers
 
 
+def test_a_prop_is_actually_built_for_outs():
+    """Registering a market in every lookup table is not the same as the
+    market existing.
+
+    The first pass at this wired OUTS through the models, the odds map, the
+    game-log ingest, the tier table and the dispersion floor — and never
+    added it to the slate builder, which creates exactly one prop per
+    probable starter. The market was present everywhere except the one place
+    that makes it real, so nothing would ever have been projected, priced or
+    ingested for it."""
+    import inspect
+    from engine.mlb.sources import statslogs
+    src = inspect.getsource(statslogs.build_live_slate)
+    assert "for mkt in (STRIKEOUTS, OUTS)" in src, (
+        "the slate builder still creates only the strikeout prop, so no outs "
+        "prop is ever built for a starter")
+
+
 def test_the_pitcher_stack_the_doc_calls_the_best_in_the_system_now_builds():
     """End to end: strikeouts over + outs over on one confirmed starter.
     §3 Type 5 bans same-player multi-prop and then carries an exception for

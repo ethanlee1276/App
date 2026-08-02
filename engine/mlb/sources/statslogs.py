@@ -350,11 +350,16 @@ def build_live_slate(date: str, season: int | None = None,
                 pp = teams.get("home" if team_ab == home_ab else "away", {}).get("probablePitcher")
                 if not pp:
                     continue
-                _add_prop(props, pp.get("id"), pp.get("fullName", "TBD"),
-                          team_ab, opp_ab, "SP", STRIKEOUTS, season,
-                          lineup_spot=1, bats="R",
-                          throws=pp.get("pitchHand", {}).get("code", "R"),
-                          log_limit=limit, game_number=prop_gn)
+                # Both pitcher markets, from one starter and one game log
+                # fetch. Registering OUTS in the market tables was not enough
+                # on its own — no prop was ever built for it, so the market
+                # existed everywhere except where it had to: on the slate.
+                for mkt in (STRIKEOUTS, OUTS):
+                    _add_prop(props, pp.get("id"), pp.get("fullName", "TBD"),
+                              team_ab, opp_ab, "SP", mkt, season,
+                              lineup_spot=1, bats="R",
+                              throws=pp.get("pitchHand", {}).get("code", "R"),
+                              log_limit=limit, game_number=prop_gn)
 
     return MLBSlate(date=date, games=games, props=props)
 
