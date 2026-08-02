@@ -1941,8 +1941,8 @@ function renderParlays() {
     return;
   }
 
-  const qualified = (z.tickets || []).filter((t) => t.qualified);
-  const near = (z.tickets || []).filter((t) => !t.qualified);
+  const tickets = z.tickets || [];
+  const qualified = tickets.filter((t) => t.qualified);
 
   host.innerHTML = `
     <div class="pz-doctrine">${escapeHtml(z.doctrine || "")}</div>
@@ -1954,8 +1954,13 @@ function renderParlays() {
       <span class="pz-mark">${icon("warn", 13)}</span>
       ${escapeHtml(z.probation_note || "")}
     </div>
-    ${qualified.map((t) => parlayTicket(t, true)).join("")}
-    ${near.map((t) => parlayTicket(t, false)).join("")}
+    ${tickets.length ? `<div class="pz-sub pz-rank-title">
+      ${qualified.length
+        ? "Tonight's board, ranked — the first is the play"
+        : "Tonight's board, ranked — best constructions available"}
+      </div>` : ""}
+    ${tickets.slice(0, 1).map((t) => parlayTicket(t, t.qualified)).join("")}
+    ${parlayRunnersUp(tickets.slice(1))}
     ${parlayLedger(z)}
     ${(z.notes || []).map((n) =>
         `<div class="pz-note">${escapeHtml(n)}</div>`).join("")}
@@ -1981,8 +1986,8 @@ function parlayTicket(t, live) {
   return `<div class="card pz-ticket${live ? "" : " pz-miss"}">
     <div class="card-head">
       <div class="card-id"><div class="player">
-        ${live ? "" : "Closest miss — "}Type ${escapeHtml(t.parlay_type)} ·
-        ${t.legs.length} legs</div></div>
+        <span class="pz-rank">#${t.rank}</span>
+        Type ${escapeHtml(t.parlay_type)} · ${t.legs.length} legs</div></div>
       <div class="chips">
         <span class="chip">${live ? "cleared all seven gates" : "did not clear"}</span>
         <span class="chip stake">graded · 0.00u</span>
@@ -2041,6 +2046,14 @@ function parlayTicket(t, live) {
         <div class="v ${t.qualified ? "pos" : "neg"}">${sign(t.best_case_american)}</div>
         ${t.shortfall_pct ? `<div class="pz-short">short by ${t.shortfall_pct}%</div>` : ""}</div>
     </div>
+    <div class="pz-edge ${t.edge_at_ceiling_points > 0 ? "pos" : "neg"}">
+      At that ceiling this ticket is
+      <b>${t.edge_at_ceiling_points > 0 ? "+" : ""}${t.edge_at_ceiling_points} points</b>
+      ${t.edge_at_ceiling_points > 0
+        ? `of edge — still short of the ${t.threshold_points}-point bar.`
+        : `<b>behind</b> the price. Even at the most generous number a book
+           would plausibly offer, this loses money.`}
+      That figure is what tonight's board is ranked on.</div>
     <div class="pz-fine">Correlation tax on a same-game ticket runs
       ${(t.correlation_tax_best_case * 100).toFixed(0)}–${(t.correlation_tax_worst_case * 100).toFixed(0)}%
       against 4.3–4.8% on a side. That is what the structure costs you, and it
@@ -2062,6 +2075,34 @@ function parlayTicket(t, live) {
       number is tracked so promotion day has something to promote; it is not
       a recommendation to bet it.</div>
   </div>`;
+}
+
+/* Ranks two and below, as rows rather than cards.
+   Four full tickets stacked ran to six thousand pixels of near-identical
+   blocks, which buries the one that matters. The top construction earns the
+   card; the rest earn a line each — enough to compare them on the numbers
+   the ranking uses and to click through in your head, and no more. */
+function parlayRunnersUp(rows) {
+  if (!rows.length) return "";
+  const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
+  return `<div class="pz-sub pz-runners-title">Also on the board</div>
+    <ul class="pz-runners">
+      ${rows.map((t) => `<li>
+        <span class="pz-rank">#${t.rank}</span>
+        <span class="pz-run-legs">${t.legs.map((l) =>
+          `${escapeHtml(l.player || "")} <i>${escapeHtml(l.side || "")}
+           ${escapeHtml(String(l.line ?? ""))}
+           ${escapeHtml(l.market_label || l.market || "")}</i>`).join(" + ")}</span>
+        <span class="pz-run-num">Type ${escapeHtml(t.parlay_type)}</span>
+        <span class="pz-run-num">ρ ${t.pairs.map((p) =>
+          `${p.rho >= 0 ? "+" : ""}${p.rho.toFixed(2)}`).join(" ")}</span>
+        <span class="pz-run-num ${t.edge_at_ceiling_points > 0 ? "" : "neg"}">
+          ${sign(t.edge_at_ceiling_points)} pts</span>
+        <span class="pz-run-num">need ${sign(t.required_american)}</span>
+        <span class="pz-run-num">${t.shortfall_pct
+          ? `short ${t.shortfall_pct}%` : "clears"}</span>
+      </li>`).join("")}
+    </ul>`;
 }
 
 /* The clash ledger. Every candidate that died, and the §3 type that killed

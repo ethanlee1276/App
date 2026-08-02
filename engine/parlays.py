@@ -100,6 +100,10 @@ from dataclasses import dataclass, field
 
 # --- §0.2 the hard ceiling, §1.3 the thresholds ------------------------------
 MAX_LEGS = 3
+# How many ranked constructions the page shows. One is a play (§10.2);
+# the rest are the board's best available, in order, so a reader can see
+# what tonight actually offered rather than only that nothing qualified.
+SHORTLIST = 4
 DOMINANCE_MULTIPLE = 1.25          # §1.3 Test 2, the variance premium
 STAKE_CAP_U = 1.0                  # §10.2 max 1.0% of bankroll; 1u == 1%
 KELLY_FRACTION = 0.125             # §10.1 eighth Kelly
@@ -888,6 +892,7 @@ class Ticket:
     duplicate: bool = False
     verdict: str = ""
     stake_if_promoted: float = 0.0
+    edge_at_ceiling: float = 0.0
 
 
 def _evaluate(sport: str, legs: list[dict], rules: SportRules,
@@ -1143,6 +1148,29 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
     for r in pool:
         by_game.setdefault(game_key(r), []).append(r)
 
+    # "We recommend eighteen props and cannot parlay any of them" needs an
+    # answer, and the answer is usually structural rather than a judgement.
+    # A correlated ticket needs two eligible legs IN ONE GAME. Baseball's
+    # board is one starter per game plus hitters, and §5 holds every hitter
+    # until the lineup is posted — so before first pitch each game contributes
+    # exactly one leg and there is no same-game pair on the whole slate, no
+    # matter how many props are recommended. That is worth saying out loud
+    # instead of leaving the reader to infer it from an empty page.
+    paired = sum(1 for rows in by_game.values() if len(rows) >= 2)
+    out["games_with_a_pair"] = paired
+    out["games_represented"] = len(by_game)
+    if pool and not paired:
+        out["notes"].append(
+            f"Tonight's {len(pool)} eligible leg(s) come from {len(by_game)} "
+            f"different game(s) — no single game has two. A correlated ticket "
+            f"needs two legs sharing one game, because the correlation IS the "
+            f"shared game; without that there is nothing to price but the "
+            f"straight product, and §0.3 shows singles beat that every time."
+            + (" In baseball this is usually the lineup rule (§5): hitters "
+               "stay ineligible until the card is posted, so before first "
+               "pitch each game offers only its starter." if sport == "mlb"
+               else ""))
+
     candidates: list[list[dict]] = []
     for rows in by_game.values():
         for k in (2, min(rules.max_legs, 3)):
@@ -1177,31 +1205,64 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
             continue
         tickets.append(t)
 
-    # §10.2 / §6.5: at most one parlay per slate, across all sports. Publish
-    # the one with the most room between what it needs and what a book might
-    # plausibly pay — and prefer two legs to three, per §0.2.
-    live = [t for t in tickets if t.required_dec <= t.best_case_dec]
-    live.sort(key=lambda t: (len(t.legs), -(t.best_case_dec / t.required_dec)))
-    chosen = live[:rules.max_per_slate]
-    if len(live) > len(chosen):
-        out["notes"].append(
-            f"{len(live) - len(chosen)} other ticket(s) cleared the gates too. "
-            f"They are not shown as plays: §10.2 caps the whole operation at "
-            f"one parlay per slate across all sports, and §0.2 prefers two "
-            f"legs to three, so the shortest ticket with the most room takes "
-            f"the slot.")
-    if not chosen:
-        # Nothing clears. Show the closest miss as the honest record of what
-        # was looked at — flagged as a miss, not offered as a play.
-        tickets.sort(key=lambda t: -(t.best_case_dec / t.required_dec))
-        chosen = tickets[:1]
-        out["verdict"] = "No qualifying parlay at current numbers."
-    else:
-        out["verdict"] = (f"{len(chosen)} ticket cleared all seven gates — "
-                          f"graded, not staked.")
+    # Rank the board, then say separately whether the top of it clears.
+    #
+    # These are two different questions and the page owes an answer to both.
+    # "Which of tonight's props parlay together best?" always has an answer as
+    # long as two legs survive the clash screen. "Does that ticket beat
+    # betting them as singles?" almost never does. Collapsing the two — 
+    # publishing nothing whenever the second answer is no — turns a page built
+    # to rank the board into a page that refuses to look at it.
+    #
+    # The old ranking was worse than useless: it sorted on
+    # best_case / required, and best_case has the correlation tax deducted for
+    # a same-game ticket and NOT for a cross-game one. So an uncorrelated pair
+    # from two different stadiums always looked closest to clearing, and the
+    # page led with a rho of +0.00 and the words "no shared mechanism" — the
+    # single construction §0.3 says is strictly dominated, presented as the
+    # best thing on the board.
+    #
+    # Rank instead on the edge each ticket would have at the price a book
+    # would plausibly quote. That is §1.3's Test 1 evaluated at the ceiling,
+    # it is directly comparable between tickets, and it charges a same-game
+    # ticket for its tax while crediting it for its correlation. Cross-game
+    # tickets sort below every same-game one regardless: §0.3 is not a
+    # preference, it is a proof, and a ticket with no mechanism has nothing to
+    # recommend it over the same legs bet separately.
+    def _edge_at_ceiling(t):
+        return t.modeled_joint - (1.0 / t.best_case_dec if t.best_case_dec else 1.0)
 
-    out["tickets"] = [_publish(t, qualified=t.required_dec <= t.best_case_dec)
-                      for t in chosen]
+    for t in tickets:
+        t.edge_at_ceiling = _edge_at_ceiling(t)
+    tickets.sort(key=lambda t: (0 if t.parlay_type == "A" else 1,
+                                -t.edge_at_ceiling))
+    live = [t for t in tickets if t.required_dec <= t.best_case_dec]
+    # §0.2 prefers two legs to three among tickets that actually clear.
+    live.sort(key=lambda t: (len(t.legs), -t.edge_at_ceiling))
+
+    if live:
+        out["verdict"] = (
+            f"{len(live)} ticket{'s' if len(live) > 1 else ''} cleared all "
+            f"seven gates — graded, not staked.")
+        # §10.2 caps the operation at one parlay per slate, so the rest are
+        # shown as ranked alternatives rather than as plays.
+        chosen = live[:rules.max_per_slate]
+        rest = [t for t in tickets if t not in chosen][:SHORTLIST - len(chosen)]
+        chosen += rest
+        if len(live) > rules.max_per_slate:
+            out["notes"].append(
+                f"{len(live) - rules.max_per_slate} other ticket(s) cleared "
+                f"too. §10.2 caps the whole operation at one parlay per slate "
+                f"across all sports, so only the first is a play; the rest are "
+                f"ranked below it.")
+    else:
+        chosen = tickets[:SHORTLIST]
+        out["verdict"] = "No qualifying parlay at current numbers."
+    out["shortlist"] = len(chosen)
+
+    out["tickets"] = [_publish(t, qualified=t.required_dec <= t.best_case_dec,
+                               rank=i + 1)
+                      for i, t in enumerate(chosen)]
     # The clash ledger is the most useful thing on this page: it is the record
     # of which props were fighting each other and which §3 type settled it.
     # One pair killed inside both a 2-leg and a 3-leg candidate produces the
@@ -1253,13 +1314,17 @@ def attach(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
     return slate
 
 
-def _publish(t: Ticket, qualified: bool) -> dict:
+def _publish(t: Ticket, qualified: bool, rank: int = 1) -> dict:
     """Shape one ticket the way §12 prints it and §11 logs it."""
     naive = math.prod(american_to_decimal(l.get("odds") or -110) for l in t.legs)
     return {
         "sport": t.sport,
+        "rank": rank,
         "parlay_type": t.parlay_type,
         "qualified": qualified,
+        # §1.3 Test 1 evaluated at the price a book would plausibly quote —
+        # the number the shortlist is ordered on, in points.
+        "edge_at_ceiling_points": round(t.edge_at_ceiling * 100, 1),
         "legs": [{
             "player": l.get("player"), "team": l.get("team"),
             "opponent": l.get("opponent"),

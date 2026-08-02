@@ -9,7 +9,7 @@ preservation contract. The prose contract says what must survive; this
 says what is actually there, and `node tools/inventory.mjs --diff
 docs/inventory-baseline.json` says whether it still is.
 
-**266 pages · 1428 distinct strings · 255 classes · 17 views × 8 sports × 2 widths**
+**266 pages · 1429 distinct strings · 256 classes · 17 views × 8 sports × 2 widths**
 
 ---
 
@@ -17,23 +17,23 @@ docs/inventory-baseline.json` says whether it still is.
 
 | View | Sports | Components | Explanatory prose | Expanders | Inputs |
 |---|---|---|---|---|---|
-| Recommended | 8/8 | 104 | 19 | 4 | 4 |
-| Live | 8/8 | 10 | 3 | 0 | 0 |
-| Edge Board | 8/8 | 15 | 6 | 0 | 0 |
-| Scanner / Market Scanner | 8/8 | 13 | 8 | 0 | 1 |
-| Long Shots | 8/8 | 61 | 10 | 0 | 4 |
-| parlays | 8/8 | 26 | 11 | 0 | 0 |
-| Trending | 8/8 | 44 | 4 | 0 | 4 |
-| Players | 8/8 | 56 | 3 | 0 | 5 |
-| Rosters | 8/8 | 31 | 6 | 0 | 8 |
-| Standings | 8/8 | 35 | 6 | 0 | 0 |
-| Record | 8/8 | 49 | 6 | 1 | 0 |
+| Recommended | 8/8 | 105 | 19 | 4 | 4 |
+| Live | 8/8 | 11 | 3 | 0 | 0 |
+| Edge Board | 8/8 | 16 | 6 | 0 | 0 |
+| Scanner / Market Scanner | 8/8 | 14 | 8 | 0 | 1 |
+| Long Shots | 8/8 | 62 | 10 | 0 | 4 |
+| parlays | 8/8 | 27 | 12 | 0 | 0 |
+| Trending | 8/8 | 45 | 4 | 0 | 4 |
+| Players | 8/8 | 57 | 3 | 0 | 5 |
+| Rosters | 8/8 | 32 | 6 | 0 | 8 |
+| Standings | 8/8 | 36 | 6 | 0 | 0 |
+| Record | 8/8 | 50 | 6 | 1 | 0 |
 | Polymarket / Informed Flow | 8/8 | 9 | 3 | 0 | 0 |
 | Fantasy | 8/8 | 9 | 3 | 0 | 0 |
 | UFC | 8/8 | 8 | 2 | 0 | 0 |
 | Reference (why) | 8/8 | 12 | 27 | 0 | 2 |
 | About | 8/8 | 15 | 25 | 0 | 0 |
-| Game board (no nav tab — reached from a venue card) | 5/8 | 82 | 14 | 0 | 0 |
+| Game board (no nav tab — reached from a venue card) | 5/8 | 83 | 14 | 0 | 0 |
 
 ---
 
@@ -54,13 +54,13 @@ in  is-live  k  labels  lean  legend
 line  line-dot  live  live-detail  live-dot  live-footer
 live-ribbon  loading  low  matchup  med  metric
 metrics  mini  ml-odds  mt  nav  nav-btn
-per  pfx  pick  play  player  pos
-primary  proj  proj-dot  projbar  range  reasons
-rec-disclose  reveal  sample  score  sfx  sm
-src-dot  stadium-wrap  stake  stats  status-badge  strong
-sub  subhead  subtitle  tile  tile-sub  tilt
-toggle  track  up  v  when  why-toggle
-wind  wind-wrap
+nav-indicator  per  pfx  pick  play  player
+pos  primary  proj  proj-dot  projbar  range
+reasons  rec-disclose  reveal  sample  score  sfx
+sm  src-dot  stadium-wrap  stake  stats  status-badge
+strong  sub  subhead  subtitle  tile  tile-sub
+tilt  toggle  track  up  v  when
+why-toggle  wind  wind-wrap
 ```
 
 **Expanders:** `Tracked signals tonight (2) — measurements, not picks` · `Tracked signals tonight (4) — measurements, not picks` · `Why only 1? — where the other props died` · `Why only 6? — where the other props died`
@@ -99,7 +99,7 @@ thing on screen that has to still be a thing on screen):
 
 ```
 card  from-right  idle  live-dot  loading  nav
-nav-btn  sample  src-dot  sub
+nav-btn  nav-indicator  sample  src-dot  sub
 ```
 
 **Explanatory prose — 3 passage(s), must survive
@@ -118,8 +118,8 @@ thing on screen that has to still be a thing on screen):
 
 ```
 card  drow  empty-slate  es-icon  from-right  idle
-live-dot  longshot-note  ls-row  nav  nav-btn  sample
-src-dot  sub  why-toggle
+live-dot  longshot-note  ls-row  nav  nav-btn  nav-indicator
+sample  src-dot  sub  why-toggle
 ```
 
 **Explanatory prose — 6 passage(s), must survive
@@ -141,8 +141,8 @@ thing on screen that has to still be a thing on screen):
 
 ```
 card  drow  from-right  idle  live-dot  loading
-ls-note  nav  nav-btn  sample  src-dot  sub
-why-toggle
+ls-note  nav  nav-btn  nav-indicator  sample  src-dot
+sub  why-toggle
 ```
 
 **Inputs:** `number`
@@ -173,11 +173,11 @@ conf-wrap  control  controls  drow  empty-slate  es-icon
 es-sub  es-title  from-right  gamebets-wrap  games-scroller  grade
 hero-games  idle  in  k  lean  live-dot
 longshot  longshot-note  ls-note  ls-primary  metric  metrics
-mini  ml-odds  nav  nav-btn  pfx  pick
-play  player  pos  primary  reasons  reveal
-sample  sfx  src-dot  stake  stats  sub
-subtitle  tile  tile-sub  toggle  v  warning
-why-toggle
+mini  ml-odds  nav  nav-btn  nav-indicator  pfx
+pick  play  player  pos  primary  reasons
+reveal  sample  sfx  src-dot  stake  stats
+sub  subtitle  tile  tile-sub  toggle  v
+warning  why-toggle
 ```
 
 **Inputs:** `1000` · `checkbox` · `number` · `range`
@@ -205,13 +205,13 @@ thing on screen that has to still be a thing on screen):
 
 ```
 empty-slate  es-icon  es-sub  es-title  from-right  idle
-in  live-dot  nav  nav-btn  pz-census  pz-doctrine
-pz-kill-who  pz-kill-why  pz-ledger  pz-ledger-title  pz-mark  pz-no
-pz-note  pz-probation  pz-sub  pz-verdict  reveal  sample
-src-dot  sub
+in  live-dot  nav  nav-btn  nav-indicator  pz-census
+pz-doctrine  pz-kill-who  pz-kill-why  pz-ledger  pz-ledger-title  pz-mark
+pz-no  pz-note  pz-probation  pz-sub  pz-verdict  reveal
+sample  src-dot  sub
 ```
 
-**Explanatory prose — 11 passage(s), must survive
+**Explanatory prose — 12 passage(s), must survive
 verbatim:**
 
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
@@ -223,6 +223,7 @@ verbatim:**
 - Screened 0 candidate tickets built from 1 eligible leg on tonight's board.
 - Screened 1 candidate ticket built from 2 eligible legs on tonight's board. 2 were killed for the reasons above.
 - This slate was built before the parlay screen ran. It will appear on the next refresh — nothing is wrong with the picks above it.
+- Tonight's 1 eligible leg(s) come from 1 different game(s) — no single game has two. A correlated ticket needs two legs sharing one game, because the correlation IS the shared game; without that there is nothing to price but the straight product, and §0.3 shows singles beat that every time. In baseball this is usually the lineup rule (§5): hitters stay ineligible until the card is posted, so before first pitch each game offers only its starter.
 - Type 2: Josh Jacobs + CHI ML — backing one team while betting the other's player over — the two legs pull against each other
 - wind 16 mph — §4.4 kills passing constructions outright regardless of edge
 
@@ -238,10 +239,10 @@ bankroll  bankroll-inputs  cards  colsub  control  controls
 cyan  empty  empty-slate  es-icon  es-sub  es-title
 from-right  gamebets-wrap  games-scroller  hero-games  idle  in
 k  live-dot  mini  mk  nav  nav-btn
-neg  nm  pfx  pos  reveal  sample
-sfx  src-dot  stats  sub  tile  tile-sub
-toggle  trank  trend-col  trend-grid  trow  v
-val  who
+nav-indicator  neg  nm  pfx  pos  reveal
+sample  sfx  src-dot  stats  sub  tile
+tile-sub  toggle  trank  trend-col  trend-grid  trow
+v  val  who
 ```
 
 **Inputs:** `1000` · `checkbox` · `number` · `range`
@@ -267,11 +268,11 @@ conf-wrap  control  controls  empty  empty-slate  es-icon
 es-sub  es-title  form-tile  form-tiles  from-right  gamebets-wrap
 games-scroller  grade  hero-games  hit  ico  idle
 in  k  lean  live-dot  log-table  meta
-miss  nav  nav-btn  nm  num  pass
-pfx  play  player-grid  pos  profile  profile-head
-profile-pick  profile-spark  reveal  sample  search-wrap  sfx
-src-dot  stats  strong  sub  tile  tile-sub
-toggle  v
+miss  nav  nav-btn  nav-indicator  nm  num
+pass  pfx  play  player-grid  pos  profile
+profile-head  profile-pick  profile-spark  reveal  sample  search-wrap
+sfx  src-dot  stats  strong  sub  tile
+tile-sub  toggle  v
 ```
 
 **Inputs:** `1000` · `Search a player… (e.g. Amon-Ra, Jacobs)` · `checkbox` · `number` · `range`
@@ -294,9 +295,9 @@ thing on screen that has to still be a thing on screen):
 bankroll  bankroll-inputs  cards  control  controls  empty-slate
 es-icon  es-sub  es-title  from-right  gamebets-wrap  games-scroller
 hero-games  ico  idle  k  live-dot  nav
-nav-btn  pfx  pos  sample  search-wrap  sfx
-src-dot  stats  tile  tile-sub  toggle  v
-why-toggle
+nav-btn  nav-indicator  pfx  pos  sample  search-wrap
+sfx  src-dot  stats  tile  tile-sub  toggle
+v  why-toggle
 ```
 
 **Inputs:** `1000` · `Search a team or a player… (e.g. 49ers, SF, Purdy)` · `Search a team or a player… (e.g. Celtics, BOS, Tatum)` · `Search a team or a player… (e.g. Liberty, NYL, Stewart)` · `Search a team or a player… (e.g. Yankees, NYY, Judge)` · `checkbox` · `number` · `range`
@@ -322,9 +323,9 @@ thing on screen that has to still be a thing on screen):
 bad  brk  brk-match  brk-matches  brk-round  brk-round-name
 brk-score  brk-side  brk-team  card  empty-slate  es-icon
 from-right  good  idle  live-dot  nav  nav-btn
-ros-teams  sample  src-dot  std-card  std-group  std-head
-std-mark  std-n  std-name  std-rank  std-rec  std-row
-std-wide  sub  tight  why-toggle  won
+nav-indicator  ros-teams  sample  src-dot  std-card  std-group
+std-head  std-mark  std-n  std-name  std-rank  std-rec
+std-row  std-wide  sub  tight  why-toggle  won
 ```
 
 **Explanatory prose — 6 passage(s), must survive
@@ -347,13 +348,13 @@ thing on screen that has to still be a thing on screen):
 ```
 card  empty-slate  es-icon  es-sub  es-title  from-right
 idle  k  lead  live-dot  loading  nav
-nav-btn  none  pos  rb-bar  rb-head  rb-labels
-rb-name  rb-net  rb-row  rb-rows  rb-wl  rec-bucket
-rec-buckets  rec-disclose  rec-kpis  rec-list  rec-scope  rec-scope-n
-rec-scopes  rec-stamp  rl-bet  rl-date  rl-icon  rl-main
-rl-odds  rl-pnl  rl-proc  rl-row  sample  src-dot
-stats  sub  tile  tile-sub  v  why-toggle
-won
+nav-btn  nav-indicator  none  pos  rb-bar  rb-head
+rb-labels  rb-name  rb-net  rb-row  rb-rows  rb-wl
+rec-bucket  rec-buckets  rec-disclose  rec-kpis  rec-list  rec-scope
+rec-scope-n  rec-scopes  rec-stamp  rl-bet  rl-date  rl-icon
+rl-main  rl-odds  rl-pnl  rl-proc  rl-row  sample
+src-dot  stats  sub  tile  tile-sub  v
+why-toggle  won
 ```
 
 **Expanders:** `What counts as a tracked bet`
@@ -528,13 +529,13 @@ gp-back  gp-cards  gp-chips  gp-hero  gp-meta  gp-stats
 gp-sub  gp-teams  grade  in  k  labels
 lean  legend  line  line-dot  live-dot  loading
 longshot  ls-primary  metric  metrics  mini  ml-odds
-nav  nav-btn  pick  pk-dim  pk-dims  pk-factor
-pk-factors  pk-facts  pk-fbar  pk-fk  pk-fv  pk-head
-pk-note  pk-panel  pk-plays  play  player  pos
-primary  proj  proj-dot  projbar  range  reasons
-reveal  s  sample  src-dot  stake  stats
-strong  sub  subtitle  tile  tile-sub  track
-up  v  warning  when
+nav  nav-btn  nav-indicator  pick  pk-dim  pk-dims
+pk-factor  pk-factors  pk-facts  pk-fbar  pk-fk  pk-fv
+pk-head  pk-note  pk-panel  pk-plays  play  player
+pos  primary  proj  proj-dot  projbar  range
+reasons  reveal  s  sample  src-dot  stake
+stats  strong  sub  subtitle  tile  tile-sub
+track  up  v  warning  when
 ```
 
 **Explanatory prose — 14 passage(s), must survive

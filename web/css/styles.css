@@ -789,6 +789,27 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .pz-joint, .pz-price { margin-top: 8px; }
 .pz-short { font-size: var(--fs-2xs); color: var(--text-mute); margin-top: 3px;
   letter-spacing: .3px; }
+.pz-rank { font-family: var(--font-mono); color: var(--text-mute);
+  font-weight: 400; margin-right: 9px; }
+.pz-rank-title { margin-top: 24px; }
+.pz-runners-title { margin-top: 22px; }
+.pz-runners { list-style: none; margin: 0; padding: 0; }
+.pz-runners li {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px;
+  padding: 11px 0; border-top: 1px solid var(--border-soft);
+  font-size: var(--fs-sm);
+}
+.pz-runners li:first-child { border-top: 0; }
+.pz-run-legs { flex: 1 1 22ch; min-width: 0; font-weight: 700; }
+.pz-run-legs i { color: var(--text-dim); font-style: normal; font-weight: 400; }
+.pz-run-num { color: var(--text-dim); font-variant-numeric: tabular-nums;
+  white-space: nowrap; }
+.pz-run-num.neg { color: var(--bad); }
+@media (max-width: 640px) { .pz-runners li { gap: 3px 14px; } }
+.pz-edge { font-size: var(--fs-sm); line-height: 1.65; max-width: 74ch;
+  margin: 10px 0 0; color: var(--text-dim); }
+.pz-edge.pos b { color: var(--text); }
+.pz-edge.neg b { color: var(--bad); }
 .pz-dominance, .pz-verdict-line, .pz-risk, .pz-stake {
   font-size: var(--fs-sm); line-height: 1.65; max-width: 74ch; margin: 8px 0 0;
 }

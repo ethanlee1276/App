@@ -420,7 +420,12 @@ def test_at_most_one_parlay_per_slate():
             date="2026-08-02")]
     out = run("mlb", recs, [game("PHI", "CHC", "2026-08-02"),
                             game("SEA", "TEX", "2026-08-02")])
-    assert len(out["tickets"]) <= 1
+    # The page shows a ranked shortlist so a reader can see what the board
+    # actually offered — but only the first is a PLAY. §10.2's cap is on what
+    # you bet, not on what you are allowed to look at.
+    plays = [t for t in out["tickets"] if t["qualified"] and t["rank"] == 1]
+    assert len(plays) <= 1
+    assert sum(1 for t in out["tickets"] if t["rank"] == 1) == 1
 
 
 # --- §9: UFC -----------------------------------------------------------------
@@ -885,3 +890,91 @@ if __name__ == "__main__":
         fn()
         print(f"  ok  {fn.__name__}")
     print(f"\n{len(fns)} tests passed.")
+
+
+# --- ranking the board ------------------------------------------------------
+def test_a_correlated_same_game_ticket_outranks_an_uncorrelated_one():
+    """The bug this replaced was not cosmetic. The old ranking sorted on
+    best_case / required, and best_case has the correlation tax deducted for
+    a same-game ticket and NOT for a cross-game one — so an uncorrelated pair
+    from two different stadiums always looked closest to clearing. The page
+    led with a rho of +0.00 and the words "no shared mechanism": the one
+    construction §0.3 proves is strictly dominated, presented as the best
+    thing on the board.
+
+    A ticket with a real mechanism has to rank above one with none, always.
+    """
+    g = [game("PHI", "CHC", "2026-08-02", favorite="PHI"),
+         game("SEA", "TEX", "2026-08-02", favorite="SEA")]
+    recs = [
+        # same game, a real mechanism
+        leg("Wheeler", "PHI", "CHC", "strikeouts", p=0.575, odds=-125,
+            date="2026-08-02"),
+        leg("Stott", "PHI", "CHC", "total_bases", p=0.51, odds=110,
+            date="2026-08-02"),
+        # different games, nothing shared
+        leg("Gilbert", "SEA", "TEX", "strikeouts", p=0.60, odds=-110,
+            date="2026-08-02"),
+    ]
+    out = run("mlb", recs, g)
+    assert out["tickets"], reasons(out)
+    assert out["tickets"][0]["parlay_type"] == "A", (
+        "a cross-game ticket outranked a correlated same-game one")
+    assert out["tickets"][0]["rank"] == 1
+
+
+def test_the_board_is_ranked_even_when_nothing_clears():
+    """Ethan's question, and the reason the page exists: "we recommend
+    eighteen props — show me the best way to parlay them." A page that
+    answers "nothing qualifies" and shows nothing has refused to do the job
+    it was built for. The gate verdict and the ranking are two different
+    answers and both are owed."""
+    g = [game("PHI", "CHC", "2026-08-02"), game("SEA", "TEX", "2026-08-02")]
+    recs = [leg("A", "PHI", "CHC", "strikeouts", p=0.56, date="2026-08-02"),
+            leg("B", "PHI", "CHC", "total_bases", p=0.55, date="2026-08-02"),
+            leg("C", "SEA", "TEX", "strikeouts", p=0.56, date="2026-08-02"),
+            leg("D", "SEA", "TEX", "total_bases", p=0.55, date="2026-08-02")]
+    out = run("mlb", recs, g)
+    assert out["verdict"].startswith("No qualifying parlay")
+    assert len(out["tickets"]) >= 2, "the board was ranked but not shown"
+    assert all(t["rank"] for t in out["tickets"])
+    # and each one says, in points, how far off it is
+    for t in out["tickets"]:
+        assert "edge_at_ceiling_points" in t
+        assert t["shortfall_pct"] > 0
+
+
+def test_a_board_with_no_two_legs_in_one_game_says_so():
+    """The honest answer to "eighteen props and no parlay" on most baseball
+    nights. A correlated ticket needs two legs sharing one game — the
+    correlation IS the shared game. Before lineups post, §5 holds every
+    hitter, so each game contributes exactly its starter and no same-game
+    pair exists on the whole slate no matter how long the board is."""
+    g = [game("PHI", "CHC", "2026-08-02", lineups_confirmed=False),
+         game("SEA", "TEX", "2026-08-02", lineups_confirmed=False),
+         game("NYM", "SF", "2026-08-02", lineups_confirmed=False)]
+    recs = [leg("SP1", "PHI", "CHC", "strikeouts", date="2026-08-02"),
+            leg("SP2", "SEA", "TEX", "strikeouts", date="2026-08-02"),
+            leg("SP3", "NYM", "SF", "strikeouts", date="2026-08-02")]
+    out = run("mlb", recs, g)
+    assert out["games_with_a_pair"] == 0
+    assert out["games_represented"] == 3
+    note = " ".join(out["notes"])
+    assert "no single game has two" in note
+    assert "lineup rule" in note, "baseball's actual reason went unstated"
+
+
+def test_the_shortlist_is_bounded():
+    """A ranked list is only useful if it is short. Every pair on a
+    nine-game board is over a hundred candidates."""
+    g, recs = [], []
+    for h, a in [("A1", "B1"), ("A2", "B2"), ("A3", "B3"), ("A4", "B4"),
+                 ("A5", "B5"), ("A6", "B6")]:
+        g.append(game(h, a, "2026-08-02"))
+        recs.append(leg(f"SP {h}", h, a, "strikeouts", p=0.57,
+                        date="2026-08-02"))
+        recs.append(leg(f"Bat {h}", h, a, "total_bases", p=0.53,
+                        date="2026-08-02"))
+    out = run("mlb", recs, g)
+    assert out["considered"] > 20, "not enough candidates to test the bound"
+    assert len(out["tickets"]) <= P.SHORTLIST
