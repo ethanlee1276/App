@@ -76,6 +76,24 @@ CREATE TABLE IF NOT EXISTS team_weeks (
     off_epa REAL, pass_epa REAL, rush_epa REAL, def_epa REAL, pace REAL,
     PRIMARY KEY (sport, season, period, team)
 );
+-- Every calibration sweep, kept. "Are we getting better?" was
+-- unanswerable: each run printed to a terminal and vanished, so a model
+-- change could be evaluated on the forward bet record (see MODEL_ERAS)
+-- but never on whether the PROBABILITIES improved — which is the thing
+-- the change was actually trying to fix, and the thing that moves years
+-- before a P&L sample gets large enough to say anything.
+--
+-- One row per market per run. `code` is the git SHA, so a jump in ECE
+-- can be tied to a commit instead of a memory.
+CREATE TABLE IF NOT EXISTS calibration_runs (
+    ts TEXT, code TEXT, sport TEXT, market TEXT,
+    n INTEGER, brier REAL, ece REAL,
+    base_rate REAL, skill REAL, hedged REAL,
+    bins TEXT, note TEXT,
+    PRIMARY KEY (ts, sport, market)
+);
+CREATE INDEX IF NOT EXISTS idx_calib_runs
+    ON calibration_runs (sport, market, ts);
 CREATE INDEX IF NOT EXISTS idx_odds_hist_lookup
     ON odds_history (sport, market, player, taken_at);
 CREATE INDEX IF NOT EXISTS idx_logs_lookup

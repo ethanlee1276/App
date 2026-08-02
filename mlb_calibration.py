@@ -61,6 +61,9 @@ def sweep(db_path: str, markets=MARKETS, min_history: int = 6,
                                  config=RuleConfig(), real_lines=real_lines)
         d = rep.__dict__ if hasattr(rep, "__dict__") else dict(rep)
         d["market"] = market
+        # Carry the report itself: skill()/sharpness live on the object and
+        # do not survive __dict__, and the history store needs them.
+        d["_report"] = rep
         rows.append(d)
     return rows
 
@@ -91,13 +94,66 @@ def _stock(db_path: str) -> dict:
     return {"logs": logs, "by_market": by_market, "odds": odds}
 
 
+def _show_trend(db_path: str) -> None:
+    """Every stored run, and whether the probabilities are getting better.
+
+    Direction is spelled out rather than left to the reader: ECE going DOWN
+    is an improvement, while half the numbers on this page improve by going
+    up. A sign confusion here would be read as a result.
+    """
+    from engine import calibhistory as _ch
+    conn = _db.connect(db_path)
+    t = _ch.trend(conn, "mlb")
+    if not t:
+        print("\nNo calibration runs stored yet.\n"
+              "  Nothing before today was recorded — every sweep printed to a "
+              "terminal and\n  vanished, so there is no history to compare "
+              "against. Run the sweep once and\n  it becomes the baseline:  "
+              "python3 mlb_calibration.py\n")
+        return
+    print(f"\nMLB calibration over time · {db_path}\n")
+    hdr = (f"{'market':<14}{'runs':>6}{'first ECE':>11}{'latest ECE':>12}"
+           f"{'move':>9}   {'first seen':<12}{'latest code':<14}")
+    print(hdr)
+    print("-" * len(hdr))
+    for m, d in sorted(t.items()):
+        f, l = d["first"], d["last"]
+        arrow = "better" if d["improved"] else (
+            "same" if abs(d["ece_delta"]) < 0.0005 else "WORSE")
+        print(f"{MARKET_LABELS.get(m, m)[:13]:<14}{d['runs']:>6}"
+              f"{f['ece']:>11.3f}{l['ece']:>12.3f}"
+              f"{d['ece_delta']:>+9.3f}   {str(f['ts'])[:10]:<12}"
+              f"{str(l['code'] or '?'):<14}  {arrow}")
+    single = [m for m, d in t.items() if d["runs"] < 2]
+    if single:
+        print(f"\n  {len(single)} market(s) have only one stored run — a "
+              f"baseline, not a trend.")
+    same = [m for m, d in t.items() if d["runs"] > 1 and d["same_code"]]
+    if same:
+        print(f"  {len(same)} market(s) moved without the code changing: "
+              f"that is more data, not a better model.")
+    print("\n  ECE falling = the stated probabilities are getting closer to "
+          "what happens.\n  Nothing before this feature existed was recorded "
+          "and none of it can be recovered.\n")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default="data/history.db")
     ap.add_argument("--min-history", type=int, default=6)
     ap.add_argument("--naive", action="store_true",
                     help="ignore harvested book lines (baseline pricing only)")
+    ap.add_argument("--no-save", action="store_true",
+                    help="do not append this run to the calibration history")
+    ap.add_argument("--trend", action="store_true",
+                    help="show stored runs over time instead of sweeping")
+    ap.add_argument("--note", default="",
+                    help="what changed since the last run (stored with it)")
     args = ap.parse_args()
+
+    if args.trend:
+        _show_trend(args.db)
+        return
 
     # What the DB actually holds, BEFORE the sweep. Without this the empty
     # case blamed --min-history for everything, including "there are no MLB
@@ -113,6 +169,19 @@ def main() -> None:
 
     rows = sweep(args.db, min_history=args.min_history,
                  use_real_lines=not args.naive)
+
+    # Kept, so "are we improving?" stops being a question nobody can answer.
+    # A sweep detects a 2-point calibration change in thousands of settled
+    # props today; the same change takes a season to surface in win-loss,
+    # because betting outcomes are mostly variance. Judging model changes on
+    # P&L alone is judging them on noise.
+    if not args.no_save:
+        from engine import calibhistory as _ch
+        conn = _db.connect(args.db)
+        for d in rows:
+            if _get(d, "n", default=0) and d.get("_report") is not None:
+                _ch.record(conn, "mlb", d["market"], d["_report"],
+                           note=args.note)
 
     print(f"\nMLB per-market calibration · walk-forward on {args.db}")
     print(f"  {stock['logs']:,} MLB log row(s) · {stock['odds']:,} harvested "
