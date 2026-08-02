@@ -975,12 +975,18 @@ def test_the_neighbour_day_repair_still_works_when_the_team_is_idle():
     ledger.log_recommendations(conn, r)
 
     hist = hist_db.connect(":memory:")
-    # The game was played last night; the team is NOT on today's slate.
+    # The game was played last night; the team is NOT on today's slate — but
+    # today's slate IS on the board, which is what makes "this team has no
+    # game today" a fact rather than an absence of information.
     hist_db.upsert_games(hist, [
         {"sport": "mlb", "season": 2026, "period": y, "game_id": "ATL@NYM",
          "home": "NYM", "away": "ATL", "home_score": 4, "away_score": 2,
          "spread": 0.0, "total": None, "roof": "", "surface": "", "temp": None,
-         "wind": None, "extra": None}])
+         "wind": None, "extra": None},
+        {"sport": "mlb", "season": 2026, "period": today,
+         "game_id": "SD@LAD", "home": "LAD", "away": "SD",
+         "home_score": None, "away_score": None, "spread": 0.0, "total": None,
+         "roof": "", "surface": "", "temp": None, "wind": None, "extra": None}])
     hist_db.upsert_player_logs(hist, [
         {"sport": "mlb", "season": 2026, "period": y, "game_id": "g-y",
          "player": "Skew Guy", "team": "NYM", "opponent": "ATL",
@@ -988,6 +994,36 @@ def test_the_neighbour_day_repair_still_works_when_the_team_is_idle():
 
     assert ledger.settle_from_history(conn, hist, sport="mlb") == 1
     assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "won"
+
+
+def test_a_day_we_cannot_see_is_never_treated_as_a_quiet_day():
+    """The hole the 152-row audit exposed. The team-is-playing check reads
+    the games table for the bet's own date — so if that day's slate was
+    never ingested, "no unfinished game" means "no information", and
+    reaching back a day would grade tonight's bet off last night again by a
+    different route. Inside the strict window, unknown is not permission."""
+    from engine import db as hist_db
+    import datetime as _dt
+    today = _dt.date.today().isoformat()
+    y = (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
+    conn = _conn()
+    r = _result(sport="mlb", date=today)
+    r["recommendations"][0].update(player="Blind Guy", market="total_bases",
+                                   side="OVER", line=1.5, odds=100)
+    ledger.log_recommendations(conn, r)
+    hist = hist_db.connect(":memory:")
+    # Yesterday final and ingested; TODAY has no games rows at all.
+    hist_db.upsert_games(hist, [
+        {"sport": "mlb", "season": 2026, "period": y, "game_id": "ATL@NYM",
+         "home": "NYM", "away": "ATL", "home_score": 4, "away_score": 2,
+         "spread": 0.0, "total": None, "roof": "", "surface": "", "temp": None,
+         "wind": None, "extra": None}])
+    hist_db.upsert_player_logs(hist, [
+        {"sport": "mlb", "season": 2026, "period": y, "game_id": "g-y",
+         "player": "Blind Guy", "team": "NYM", "opponent": "ATL",
+         "position": "C", "home": 1, "market": "total_bases", "value": 0.0}])
+    assert ledger.settle_from_history(conn, hist, sport="mlb") == 0
+    assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "open"
 
 
 def test_a_settled_past_date_with_no_games_rows_still_grades():

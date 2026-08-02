@@ -1219,6 +1219,18 @@ def _neighbour_day_rows(hist_conn, b, where: str, wargs: list):
         return [], wargs
     if _team_day_unfinished(hist_conn, where, wargs, rows[0]):
         return [], wargs
+    # And refuse when the bet's own day is invisible. The check above reads
+    # the games table for the bet's date; if the slate was never ingested
+    # there is nothing there to read, "no unfinished game" means "no
+    # information", and inside the strict window that is not a licence to
+    # reach back a day. Outside the window it is: an old date with no games
+    # rows is ordinary thin coverage, and refusing there would retire the
+    # date-shape repair for every backfilled season.
+    strict_from = (datetime.date.today()
+                   - datetime.timedelta(days=1)).isoformat()
+    if (str(b["date"] or "") >= strict_from
+            and not _day_was_ingested(hist_conn, where, wargs)):
+        return [], wargs
     return rows, alt
 
 
