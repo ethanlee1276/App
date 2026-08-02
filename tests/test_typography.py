@@ -42,15 +42,47 @@ def test_every_font_the_css_asks_for_is_actually_in_the_repo():
         assert os.path.getsize(path) > 4000, f"{name} looks truncated"
 
 
+def _font_refs_everywhere():
+    """Every file that can name a font file, not just the stylesheet.
+
+    This used to read styles.css alone, which was true right up until the
+    Night Form prototype landed with its own @font-face block and five new
+    faces. The rule it enforces — shipping a font is a claim that something
+    uses it — is unchanged; the search just has to cover everywhere a claim
+    can be made, or it starts reporting live fonts as dead weight."""
+    refs = set()
+    for base, _dirs, files in os.walk(os.path.join(ROOT, "web")):
+        for name in files:
+            if not name.endswith((".css", ".html", ".js")):
+                continue
+            with open(os.path.join(base, name), encoding="utf-8") as fh:
+                refs |= set(re.findall(r'url\("(?:\.\./)?fonts/([^"]+)"', fh.read()))
+    return refs
+
+
 def test_no_font_file_ships_that_nothing_can_match():
     """The italic serif sat here declared and unreachable: no element on
     any page was ever Instrument Serif AND italic, so the face never
     downloaded and the file was pure repo weight. Shipping a font is a
     claim that something uses it."""
-    refs = set(re.findall(r'url\("\.\./fonts/([^"]+)"', CSS))
+    refs = _font_refs_everywhere()
     on_disk = {f for f in os.listdir(os.path.join(ROOT, "web", "fonts"))
                if f.endswith(".woff2")}
-    assert on_disk == refs, f"unreferenced font files: {on_disk - refs}"
+    assert on_disk == refs, (
+        f"unreferenced font files: {sorted(on_disk - refs)}; "
+        f"referenced but missing: {sorted(refs - on_disk)}")
+
+
+def test_the_prototype_self_hosts_its_faces_like_the_rest_of_the_site():
+    """The redesign brings three new families. Loading them from a CDN
+    would break the promise the stylesheet opens with — that this renders
+    with the network unplugged — and would be invisible on a laptop that
+    has already cached them."""
+    page = _read("web", "preview-nightform.html")
+    assert "fonts.googleapis" not in page and "fonts.gstatic" not in page, \
+        "the prototype is fetching fonts from a CDN"
+    for family in ("Bodoni Moda", "Archivo Narrow", "IBM Plex Mono"):
+        assert f'font-family:"{family}"' in page, f"{family} is not declared"
 
 
 def test_the_header_comment_still_describes_what_ships():

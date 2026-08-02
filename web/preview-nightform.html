@@ -1,0 +1,356 @@
+<!--
+  NIGHT FORM — prototype of the Recommended page.
+
+  Standalone on purpose. It loads the SAME slate JSON the live site loads
+  and renders it with its own small renderer, so looking at the new
+  direction cannot break the working site. Nothing outside this file and
+  web/fonts/ changed to make it exist.
+
+  What it is for: deciding whether the direction is right before migrating
+  sixteen views into it. Every field in §1.3 of the redesign spec is here —
+  the field map at the bottom of the page lists them and says where each
+  one went, so "did we lose anything" is a question you can answer by
+  reading rather than by trusting.
+
+  Open at /preview-nightform.html?sport=nfl (or mlb, cfb, nba, wnba).
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Night Form — Recommended (prototype)</title>
+
+<style>
+/* ── fonts, self-hosted, latin subsets ──────────────────────────────── */
+@font-face { font-family:"Bodoni Moda"; src:url("fonts/bodoni-moda-900.woff2") format("woff2");
+             font-weight:900; font-display:swap; }
+@font-face { font-family:"Bodoni Moda"; src:url("fonts/bodoni-moda-700.woff2") format("woff2");
+             font-weight:700; font-display:swap; }
+@font-face { font-family:"Archivo Narrow"; src:url("fonts/archivo-narrow.woff2") format("woff2");
+             font-weight:400; font-display:swap; }
+@font-face { font-family:"Archivo Narrow"; src:url("fonts/archivo-narrow-700.woff2") format("woff2");
+             font-weight:700; font-display:swap; }
+@font-face { font-family:"IBM Plex Mono"; src:url("fonts/plex-mono.woff2") format("woff2");
+             font-weight:400; font-display:swap; }
+@font-face { font-family:"IBM Plex Mono"; src:url("fonts/plex-mono-500.woff2") format("woff2");
+             font-weight:500; font-display:swap; }
+@font-face { font-family:"IBM Plex Mono"; src:url("fonts/plex-mono-600.woff2") format("woff2");
+             font-weight:600; font-display:swap; }
+
+/* ── tokens, §3.1 ───────────────────────────────────────────────────── */
+:root {
+  --ink:#08090B; --ink-raised:#0B0C0F; --ink-panel:#101115;
+  --bone:#E8E4D9; --bone-2:#A8A090; --bone-3:#8A8375;
+  --graphite:#57524A; --graphite-2:#4A453C;
+  --rule-heavy:#E8E4D9; --rule:#3A352C; --rule-soft:#23201A;
+  --rule-hair:#1A1815; --rule-dot:#1F1D18;
+  --amber:#FFB000; --amber-dim:#4A3B14; --amber-wash:rgba(255,176,0,.12);
+  --brick:#E5484D; --brick-dim:#3A1A1C;
+  --mast:"Bodoni Moda",Georgia,serif;
+  --head:"Archivo Narrow","Arial Narrow",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+/* Light — derived from Appendix A Direction 03 "The Form", so the theme
+   toggle keeps working and both modes are the same design at inverted
+   value rather than two different products. Amber darkens to #B87400
+   because #FFB000 on paper fails contrast; brick is 03's own #C8102E. */
+:root[data-theme="light"] {
+  --ink:#F2EFE6; --ink-raised:#EAE6DA; --ink-panel:#E1DCCC;
+  --bone:#14120E; --bone-2:#3E3A31; --bone-3:#5C564A;
+  --graphite:#7A7263; --graphite-2:#918978;
+  --rule-heavy:#14120E; --rule:#B9B1A0; --rule-soft:#D2CBB9;
+  --rule-hair:#DED8C8; --rule-dot:#D2CBB9;
+  --amber:#B87400; --amber-dim:#E0C58A; --amber-wash:rgba(184,116,0,.10);
+  --brick:#C8102E; --brick-dim:#EFC9CF;
+}
+
+*{box-sizing:border-box;border-radius:0!important;box-shadow:none!important}
+body{margin:0;background:var(--ink);color:var(--bone);font-family:var(--head);
+     font-weight:400;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 26px 60px}
+
+/* ── masthead §6.2 ──────────────────────────────────────────────────── */
+.mast{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;
+      padding:22px 0 12px;flex-wrap:wrap}
+.mast-l{display:flex;gap:14px;align-items:center;min-width:0}
+.logo{flex:0 0 auto}
+.wordmark{font-family:var(--mast);font-weight:900;font-size:44px;line-height:.94;
+          letter-spacing:-.02em;color:var(--bone)}
+.wordmark .dot{color:var(--amber)}
+.sub{font-family:var(--head);font-weight:700;font-size:9.5px;letter-spacing:.32em;
+     text-transform:uppercase;color:var(--graphite);margin-top:6px}
+.mast-r{text-align:right;font-family:var(--head);font-weight:700;font-size:12.5px;
+        letter-spacing:.16em;text-transform:uppercase;line-height:1.9}
+.mast-r .ed{color:var(--graphite)}
+.mast-r .mono{font-family:var(--mono);font-weight:400;font-size:10.5px;
+              letter-spacing:.05em;text-transform:none;color:var(--bone-3)}
+.rule3{border-top:3px solid var(--rule-heavy);margin-bottom:0}
+
+/* data-mode pill §9 — promoted, never hidden */
+.mode{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--amber);
+      color:var(--amber);padding:3px 9px;font-family:var(--head);font-weight:700;
+      font-size:10px;letter-spacing:.18em;text-transform:uppercase}
+.mode i{width:6px;height:6px;background:var(--amber);display:block}
+.mode.live i{border-radius:0}
+
+/* standing record line §9 — publishing the losses is the argument */
+.standing{display:flex;gap:22px;flex-wrap:wrap;padding:9px 0;
+          border-bottom:1px solid var(--rule-soft);font-family:var(--mono);
+          font-size:10.5px;letter-spacing:.05em;color:var(--bone-3)}
+.standing b{font-weight:600;color:var(--bone)}
+.standing .neg{color:var(--brick)}
+
+/* ── nav §6.3 ───────────────────────────────────────────────────────── */
+nav{display:flex;gap:22px;flex-wrap:wrap;padding:11px 0;border-bottom:1px solid var(--rule-soft)}
+nav.sections{border-bottom:1px solid var(--rule)}
+nav a{font-family:var(--head);font-weight:700;font-size:12.5px;letter-spacing:.16em;
+      text-transform:uppercase;color:var(--graphite);text-decoration:none;
+      padding-bottom:7px;border-bottom:2px solid transparent}
+nav a:hover{color:var(--bone)}
+nav a.on{color:var(--bone);border-bottom-color:var(--amber)}
+
+/* ── conditions strip §6.5 ──────────────────────────────────────────── */
+.strip{display:flex;overflow-x:auto;border-bottom:1px solid var(--rule-soft);
+       background:var(--ink-raised)}
+.cell{flex:0 0 auto;display:flex;gap:11px;align-items:center;padding:13px 18px;
+      border-right:1px solid var(--rule-hair);min-width:0}
+.cell .nm{font-family:var(--head);font-weight:700;font-size:12px;letter-spacing:.08em;
+          text-transform:uppercase;white-space:nowrap}
+.cell .cond{font-family:var(--mono);font-size:10px;color:var(--bone-3);
+            letter-spacing:.04em;white-space:nowrap;margin-top:3px}
+.cell .cond .hot{color:var(--amber)}
+
+/* ── section headers + why? §6.7 ────────────────────────────────────── */
+.sect{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
+      margin:34px 0 0;padding-bottom:9px;border-bottom:1px solid var(--rule)}
+.sect h2{font-family:var(--head);font-weight:700;font-size:12.5px;letter-spacing:.16em;
+         text-transform:uppercase;margin:0;color:var(--bone)}
+.sect .n{font-family:var(--mono);font-size:10.5px;color:var(--graphite)}
+.why{background:none;border:0;padding:0;cursor:pointer;color:var(--amber);
+     font-family:var(--head);font-weight:700;font-size:12px;line-height:1}
+.why sup{font-size:13px}
+.note{border-left:2px solid var(--amber);padding:9px 0 9px 14px;margin:12px 0 0;
+      font-size:13.5px;line-height:1.62;color:var(--bone-2);max-width:70ch}
+.note[hidden]{display:none}
+
+/* ── the entry block §6.4 ───────────────────────────────────────────── */
+.entry{display:grid;grid-template-columns:96px 1fr 200px;gap:20px;
+       padding:16px 0;border-bottom:1px solid var(--rule-hair)}
+.gutter{text-align:center}
+.gutter .lab{font-family:var(--head);font-weight:700;font-size:9px;letter-spacing:.22em;
+             text-transform:uppercase;color:var(--graphite);margin-top:7px}
+.gutter .cnd{font-family:var(--mono);font-size:10px;color:var(--bone-3);margin-top:2px}
+.gutter .cnd .hot{color:var(--amber)}
+
+.ehead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.rot{font-family:var(--mono);font-weight:600;font-size:15px;color:var(--graphite)}
+.name{font-family:var(--mast);font-weight:700;font-size:22px;letter-spacing:-.01em}
+.match{font-family:var(--head);font-weight:700;font-size:11px;letter-spacing:.14em;
+       text-transform:uppercase;color:var(--bone-3);margin-left:auto}
+.grade{border:2px solid var(--amber);color:var(--amber);padding:1px 7px;
+       font-family:var(--head);font-weight:700;font-size:10.5px;letter-spacing:.14em;
+       text-transform:uppercase}
+.sel{font-family:var(--head);font-weight:700;font-size:14px;letter-spacing:.05em;
+     text-transform:uppercase;margin-top:6px}
+.sel .bk{color:var(--bone-3)}
+.cap{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;color:var(--bone-3);
+     margin-top:5px}
+
+/* projection vs line — two engraved ticks on one rule §6.4 */
+.projbar{margin:12px 0 2px;position:relative;height:22px}
+.projbar .track{position:absolute;top:9px;left:0;right:0;height:1px;background:var(--rule)}
+.projbar .tick{position:absolute;top:2px;width:1px;height:15px;background:var(--bone)}
+.projbar .tick.line{background:var(--amber);height:19px;top:0}
+.projbar .tl{position:absolute;top:-1px;font-family:var(--mono);font-size:9px;
+             color:var(--bone-3);transform:translateX(-50%);white-space:nowrap}
+.projleg{font-family:var(--mono);font-size:10px;color:var(--graphite);letter-spacing:.04em}
+.projleg .p{color:var(--bone)} .projleg .l{color:var(--amber)}
+
+/* past performance table — the recent-form trendline, promoted §6.4 */
+table.pp{width:100%;border-collapse:collapse;margin-top:11px}
+table.pp th{font-family:var(--mono);font-weight:400;font-size:10.5px;letter-spacing:.07em;
+            text-transform:uppercase;color:var(--graphite);text-align:right;
+            padding:0 0 4px;border-bottom:1px solid var(--rule)}
+table.pp th:first-child,table.pp td:first-child{text-align:left}
+table.pp td{font-family:var(--mono);font-size:10.5px;padding:2px 0;color:var(--bone-2);
+            text-align:right;border-bottom:1px dotted var(--rule-dot)}
+table.pp td.hit{color:var(--amber)} table.pp td.miss{color:var(--bone-3)}
+
+.reasons{list-style:none;margin:11px 0 0;padding:0}
+.reasons li{font-family:var(--mono);font-size:10.5px;line-height:1.72;color:var(--bone-2);
+            padding-left:16px;position:relative}
+.reasons li::before{content:"";position:absolute;left:0;top:.42em;width:9px;height:9px;
+  background-color:var(--amber);
+  -webkit-mask:var(--ic-check) no-repeat center/contain;
+  mask:var(--ic-check) no-repeat center/contain}
+.reasons li.neg::before{background-color:var(--brick);
+  -webkit-mask-image:var(--ic-cross);mask-image:var(--ic-cross)}
+.reasons li.neg{color:var(--bone-3)}
+:root{
+  --ic-check:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="%23000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3.4L13 4.6"/></svg>');
+  --ic-cross:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="%23000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>');
+}
+
+/* right rail */
+.rail{border-left:1px solid var(--rule-hair);padding-left:16px}
+.hero{font-family:var(--mono);font-weight:600;font-size:33px;letter-spacing:-.02em;
+      line-height:1;color:var(--amber)}
+.hero.neg{color:var(--brick)}
+.hero-l{font-family:var(--head);font-weight:700;font-size:9px;letter-spacing:.22em;
+        text-transform:uppercase;color:var(--graphite);margin-top:5px}
+.scorebar{margin:11px 0 3px;height:3px;background:var(--rule-hair)}
+.scorebar i{display:block;height:3px;background:var(--amber)}
+.kv{display:flex;justify-content:space-between;gap:10px;font-family:var(--mono);
+    font-size:10.5px;padding:3px 0;color:var(--bone-3);border-bottom:1px dotted var(--rule-dot)}
+.kv b{font-weight:500;color:var(--bone)}
+.kv.hot b{color:var(--amber)}
+.rail .foot{font-family:var(--mono);font-size:10px;color:var(--graphite);margin-top:9px;line-height:1.6}
+.play{display:inline-block;margin-top:11px;border:1px solid var(--amber);color:var(--amber);
+      background:none;padding:5px 13px;font-family:var(--head);font-weight:700;font-size:11px;
+      letter-spacing:.13em;text-transform:uppercase;cursor:pointer}
+.play:hover{background:var(--amber);color:var(--ink)}
+
+/* metric row §6.6 — ruled columns, no cards */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);margin:16px 0 0}
+.metrics>div{padding:0 18px;border-left:1px solid var(--rule-hair)}
+.metrics>div:first-child{padding-left:0;border-left:0}
+.metrics .l{font-family:var(--head);font-weight:700;font-size:9px;letter-spacing:.22em;
+            text-transform:uppercase;color:var(--graphite)}
+.metrics .v{font-family:var(--mono);font-weight:600;font-size:26px;letter-spacing:-.02em;
+            margin:5px 0 3px}
+.metrics .v.amber{color:var(--amber)} .metrics .v.brick{color:var(--brick)}
+.metrics .c{font-family:var(--mono);font-size:10px;color:var(--graphite);line-height:1.5}
+
+/* expanders §1.3 */
+details{border-left:2px solid var(--rule);padding-left:14px;margin-top:14px}
+summary{font-family:var(--head);font-weight:700;font-size:11.5px;letter-spacing:.12em;
+        text-transform:uppercase;color:var(--bone-2);cursor:pointer;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+ ";color:var(--amber)}
+details[open] summary::before{content:"– "}
+details p{font-size:13.5px;line-height:1.62;color:var(--bone-2);max-width:70ch}
+
+/* engraving classes §5.4 */
+.eng{fill:none;stroke:var(--bone);stroke-width:1.1}
+.eng-dim{fill:none;stroke:var(--graphite-2);stroke-width:1}
+.eng-hot{fill:none;stroke:var(--amber);stroke-width:1.4}
+.eng-hatch{fill:none;stroke:var(--rule);stroke-width:1}
+.eng-fill{fill:var(--ink-raised);stroke:none}
+.eng-amberfill{fill:var(--amber-wash);stroke:none}
+
+footer{border-top:1px solid var(--rule-soft);margin-top:40px;padding-top:16px;
+       font-size:13px;line-height:1.62;color:var(--bone-2);max-width:78ch}
+footer b{color:var(--bone)}
+footer .rg{margin-top:10px;border-left:2px solid var(--amber);padding-left:13px;color:var(--bone-2)}
+
+.toolbar{display:flex;gap:14px;align-items:center;padding:10px 0;flex-wrap:wrap;
+         font-family:var(--mono);font-size:10.5px;color:var(--graphite)}
+.toolbar button{background:none;border:1px solid var(--rule);color:var(--bone-2);
+  font-family:var(--head);font-weight:700;font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;padding:4px 10px;cursor:pointer}
+.toolbar button:hover{border-color:var(--bone);color:var(--bone)}
+
+@media (max-width:820px){
+  .wrap{padding:0 16px 50px}
+  .wordmark{font-size:34px}
+  .entry{grid-template-columns:56px 1fr;gap:14px}
+  .rail{grid-column:1/-1;border-left:0;border-top:1px solid var(--rule-hair);
+        padding-left:0;padding-top:12px;display:grid;grid-template-columns:1fr 1fr;
+        gap:0 18px;align-items:start}
+  .rail .heroblock{grid-column:1/-1}
+  .metrics{grid-template-columns:1fr 1fr;gap:16px 0}
+  .metrics>div:nth-child(3){padding-left:0;border-left:0}
+  .mast-r{text-align:left}
+}
+@media (prefers-reduced-motion:no-preference){
+  .mode.live i{animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.35}}
+}
+</style>
+
+<div class="wrap">
+  <div class="toolbar">
+    <button id="theme">Theme</button>
+    <span>sport</span>
+    <button data-sp="nfl">NFL</button><button data-sp="mlb">MLB</button>
+    <button data-sp="cfb">CFB</button><button data-sp="nba">NBA</button>
+    <span id="tb-note">prototype · nothing here writes to the live site</span>
+  </div>
+
+  <header class="mast">
+    <div class="mast-l">
+      <svg class="logo" width="46" height="34" viewBox="0 0 120 84" aria-hidden="true">
+        <ellipse cx="60" cy="42" rx="52" ry="34" fill="none"
+                 stroke="currentColor" stroke-width="8"/>
+      </svg>
+      <div>
+        <div class="wordmark">Qellys<span class="dot">·</span>Book</div>
+        <div class="sub" id="subtitle">—</div>
+      </div>
+    </div>
+    <div class="mast-r">
+      <div id="mast-date">—</div>
+      <div class="ed">The Nightly Edge Sheet · Late Edition</div>
+      <div class="mono" id="mast-fresh">—</div>
+      <div style="margin-top:6px"><span class="mode" id="mode"><i></i><span>—</span></span></div>
+    </div>
+  </header>
+  <div class="rule3"></div>
+
+  <div class="standing" id="standing"></div>
+
+  <nav id="leagues"></nav>
+  <nav class="sections" id="sections"></nav>
+</div>
+
+<div class="strip" id="strip"></div>
+
+<div class="wrap">
+  <div class="sect">
+    <h2>Tonight's slate</h2><span class="n" id="slate-n"></span>
+    <button class="why" data-note="n-slate">why<sup>†</sup></button>
+  </div>
+  <div class="note" id="n-slate" hidden>
+    Every venue on tonight's card, with the conditions the model actually
+    priced. A mark is drawn in amber only when that condition moved a number
+    for at least one play at that venue — dimness is information, not an
+    omission.
+  </div>
+
+  <div class="metrics" id="summary"></div>
+
+  <div class="sect">
+    <h2>Recommended</h2><span class="n" id="rec-n"></span>
+    <button class="why" data-note="n-rec">why<sup>†</sup></button>
+  </div>
+  <div class="note" id="n-rec" hidden>
+    Ranked by quality, never by payout. Every pick below journals at its real
+    book price the moment it appears and is graded against the final result on
+    the Record page.
+  </div>
+
+  <div id="entries"></div>
+
+  <details>
+    <summary id="died-label">Why only — · where the other props died</summary>
+    <p id="died-body"></p>
+  </details>
+  <details>
+    <summary id="sig-label">Tracked signals tonight · measurements, not picks</summary>
+    <p>Measurements the model is watching but not betting. They are recorded so
+       the claim can be checked later, and they never enter the record as bets.</p>
+  </details>
+
+  <div class="sect"><h2>Field map</h2>
+    <span class="n">every §1.3 field, and where it went</span></div>
+  <table class="pp" id="fieldmap"></table>
+
+  <footer>
+    <p><b>See the math. Know if it's working. Stay in the game.</b>
+      Model output, not betting advice — every number is a probability, never a
+      promise, and every pick is journaled and graded on the Record page. No
+      model wins every night; anyone who says otherwise is selling something.</p>
+    <p class="rg">21+. Please bet responsibly — never money you can't afford to
+      lose. Problem gambling help: call or text <b>1-800-GAMBLER</b> (US, 24/7).</p>
+  </footer>
+</div>
+
+<script src="js/preview-nightform.js"></script>
