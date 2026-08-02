@@ -33,3 +33,4 @@ data/history.db
 *.db
 data/ledger.db
 data/backups/
+node_modules/
