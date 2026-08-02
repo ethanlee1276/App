@@ -600,6 +600,13 @@ def main() -> None:
             print(f"⚠️  NBA journal skipped: {exc}")
         conn.close()
 
+    # §14: the parlay screen runs over the board that just cleared the
+    # singles gates. §7 defers to Scalpy 3.0 for the NBA; §8 tightens the
+    # WNBA hard — spread >= 9 kills favourite star props, Tier 3 is banned in
+    # any ticket, and cross-game tickets are banned outright.
+    from engine.parlays import attach
+    attach(out, args.league)
+
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(out, indent=2))

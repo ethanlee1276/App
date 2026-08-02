@@ -644,7 +644,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         if r["market"] == _HR:
             r["hr_featured"] = r["player"] in featured
 
-    return {
+    out = {
         "date": slate.date,
         "sport": "mlb",
         "generated_from": "mlb-sample-slate",
@@ -666,3 +666,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "injured_list": sorted(il_on_slate),
         "market_scan": _market_scan(results, ls_picks + ls_watch),
     }
+    # §14, and §5's lineup rule is enforced inside the screen: a hitter leg
+    # is ineligible until the card is posted.
+    from ..parlays import attach
+    return attach(out, "mlb")

@@ -327,7 +327,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
 
     recommended = [r for r in results if r["recommended"]]
     ls = _long_shots(slate, nfl_usage)
-    return {
+    out = {
         "date": slate.date,
         "generated_from": "sample-slate",
         "model": "learned" if model is not None else "rules",
@@ -346,6 +346,10 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         "market_scan": _market_scan(results, ls),
         "correlation": corr,
     }
+    # §14: the parlay screen runs last, over the board that just cleared the
+    # singles gates — never over candidates it invented for itself.
+    from .parlays import attach
+    return attach(out, "nfl")
 
 
 def _market_scan(results: list[dict], long_shots: list[dict] | None = None) -> dict:

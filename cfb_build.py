@@ -569,6 +569,12 @@ def main() -> None:
 
 
 def _write(out: dict, path: str) -> None:
+    # §14: screen the board for parlays last, over the plays that already
+    # cleared the singles gates. CFB carries the highest bar in the system —
+    # 8 points for three legs, one ticket per Saturday, and December closed
+    # entirely (§6.4) — all of which lives in engine/parlays.py.
+    from engine.parlays import attach
+    attach(out, "cfb")
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(out, indent=2))
