@@ -178,6 +178,37 @@ def test_the_passing_game_stack_is_priced_on_the_measurement():
     assert "measured" in rel.mechanism
 
 
+def test_the_mlb_priors_are_measured_on_the_live_history():
+    """§5.2 calls the pitcher stack the best construction in the system and
+    §5.1 bands its correlation at +0.20 to +0.35. Ethan's own history — 26,717
+    games — puts it at +0.268, which is the strongest confirmation any prior
+    in this module has received.
+
+    The lineup pairing came back at +0.186 against the same band: two bats in
+    one lineup move together slightly LESS than the doc assumes. A small miss,
+    but on 27,613 games a real one, and it makes the lineup stack a
+    fractionally harder ticket rather than an easier one — which is the
+    direction a measurement should be trusted in."""
+    stack = P.MEASURED["pitcher_vs_lineup"]
+    assert 0.20 <= stack[0] <= 0.35, "the measurement left §5.1's band"
+    assert stack[1] > 20000, "fitted on too thin a sample to prefer"
+
+    lineup = P.MEASURED["lineup_stack"]
+    assert lineup[0] < 0.20, (
+        "the lineup pairing measured below its band; pricing it at the band "
+        "would claim more correlation than the history shows")
+    assert lineup[1] > 20000
+
+    # and both reach the pricing path
+    a = dict(player="SP", team="PHI", opponent="CHC", market="strikeouts",
+             side="OVER", game_date="d")
+    b = dict(player="Bat", team="CHC", opponent="PHI", market="total_bases",
+             side="UNDER", game_date="d")
+    rel = P.relate("mlb", a, b)
+    assert rel.measured is True and rel.rho == stack[0]
+    assert "measured" in rel.mechanism
+
+
 def test_a_strong_measured_correlation_is_not_mistaken_for_a_duplicate():
     """The bug measuring the priors exposed.
 

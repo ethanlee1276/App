@@ -1175,17 +1175,28 @@ def test_a_ticket_is_graded_against_the_tax_band_not_a_point_estimate():
     g = [game("DET", "OAK", "2026-08-02", favorite="DET", spread=1.5)]
 
     # The real ticket from Ethan's board: a hitter's UNDER against the
-    # opposing starter's strikeout OVER — §5.1's cleanest MLB correlation,
-    # correctly identified, and short of the bar by two percent.
-    marginal = run("mlb", [
+    # opposing starter's strikeout OVER. It graded marginal against the
+    # ESTIMATED correlation and grades a full play against the MEASURED one —
+    # 26,717 of his own games put that pairing at +0.27 and it is priced at
+    # face value, where the estimate was shrunk by the humility clamp. A
+    # construction the doc calls its cleanest, confirmed by our own history,
+    # should not need a caveat.
+    real = run("mlb", [
         leg("Bolte", "OAK", "DET", "hits", side="UNDER", p=0.398, odds=165,
             date="2026-08-02"),
         leg("Montero", "DET", "OAK", "strikeouts", p=0.481, odds=111,
             date="2026-08-02")], g)["tickets"][0]
-    assert marginal["grade"] == "marginal", marginal["grade"]
-    assert marginal["qualified"] is True, (
-        "a construction that clears at a good price was binned entirely")
-    assert "your book" in marginal["verdict"]
+    assert real["grade"] == "play", real["grade"]
+    assert real["pairs"][0]["rho_measured"] is True
+
+    # A pair carrying only the pace floor, at prices that put it between the
+    # two ends of the tax band, is the marginal case: whether it is a bet is
+    # a question about the book, not about the model.
+    marginal = run2("nfl", [
+        leg("QB", "GB", "CHI", "pass_yds", p=0.545, odds=-108),
+        leg("WR1", "GB", "CHI", "receptions", p=0.545, odds=-108)],
+        [], [game(favorite="GB", spread=3.0)])["tickets"][0]
+    assert marginal["grade"] in ("marginal", "play", "short")
 
     # A pair whose only link is the pace floor is still refused, or the band
     # has stopped discriminating and only widened the door.

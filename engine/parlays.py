@@ -179,6 +179,17 @@ MEASURED: dict[str, tuple[float, int, str]] = {
     "possession_pie": (-0.560, 2848, "2026-08-02 · nfl 2021-2026"),
     # +0.356. "Leading teams run" lands inside its band on five seasons.
     "run_game_script": (0.356, 2848, "2026-08-02 · nfl 2021-2026"),
+    # -0.268 measured as strikeouts against the RUNS the lineup he faces
+    # scores; the leg we actually pair with is that lineup's total UNDER, so
+    # the sign flips and the pairing is +0.268. §5.1 bands it +0.20 to +0.35
+    # and calls it the cleanest MLB correlation — 26,717 games agree, which
+    # is the strongest confirmation any prior in this module has.
+    "pitcher_vs_lineup": (0.268, 26717, "2026-08-02 · mlb, live history"),
+    # +0.186 against a band of +0.20 to +0.35. Two bats in one lineup move
+    # together slightly LESS than the doc assumes — a small miss, but on
+    # 27,613 games it is a real one, and it makes §5.2's lineup stack a
+    # fractionally harder ticket to clear rather than an easier one.
+    "lineup_stack": (0.186, 27613, "2026-08-02 · mlb, live history"),
 }
 
 
@@ -666,10 +677,13 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
         # facing held down. §5.1 calls this the cleanest MLB correlation.
         if (sport == "mlb" and pf in PITCHER_FAMILIES and prop_up
                 and not line_up and line_team == (prop.get("opponent") or "").upper()):
-            return Relation(0.275, "strikeouts up and the lineup he is facing "
-                                  "held down — §5.1's cleanest MLB "
-                                  "correlation, and §5.2's pitcher stack",
-                            0, "ok")
+            r, meas = rho_for("pitcher_vs_lineup", 0.275)
+            return Relation(r, "strikeouts up and the lineup he is facing held "
+                               "down — §5.1's cleanest MLB correlation, and "
+                               "§5.2's pitcher stack" + (
+                                   f", measured at {r:+.2f} on "
+                                   f"{MEASURED['pitcher_vs_lineup'][1]:,} games"
+                                   if meas else ""), 0, "ok", measured=meas)
         if not own and line_up and prop_up and line_team == (prop.get("opponent") or "").upper():
             return Relation(-0.20, "backing a player over while betting the "
                                    "opposing offence over is not one story",
@@ -795,9 +809,14 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None) -> Relation:
                                        "side and get hit — §5.1 puts this at "
                                        "-0.25 to -0.40", 7, "kill")
             if facing and _side_up(pitcher) and not _side_up(hitter):
-                return Relation(0.275, "strikeouts up, the bats he is facing "
-                                      "down — one mechanism, §5.1's cleanest "
-                                      "MLB correlation", 0, "ok")
+                r, meas = rho_for("pitcher_vs_lineup", 0.275)
+                return Relation(r, "strikeouts up, the bats he is facing "
+                                   "down — one mechanism, §5.1's cleanest "
+                                   "MLB correlation" + (
+                                       f", measured at {r:+.2f} on "
+                                       f"{MEASURED['pitcher_vs_lineup'][1]:,} "
+                                       f"of our own games" if meas else ""),
+                                0, "ok", measured=meas)
     if same_team and {fa, fb} == {"pass", "catch"} and ua != ub:
         return Relation(-0.30, "a quarterback and his own receiver need "
                                "opposite passing games — §4.1 calls this "
@@ -822,8 +841,12 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None) -> Relation:
             # are: two hitters in one lineup face the same pitcher and the
             # same innings. §5.1 puts this at +0.20 to +0.35 — a permitted
             # construction, not a clash.
-            return Relation(0.275, "two bats in one lineup against one starter "
-                                  "— §5.1 puts this at +0.20 to +0.35", 0, "ok")
+            r, meas = rho_for("lineup_stack", 0.275)
+            return Relation(r, "two bats in one lineup against one starter — "
+                               "§5.1 puts this at +0.20 to +0.35" + (
+                                   f", and our own {MEASURED['lineup_stack'][1]:,} "
+                                   f"games put it at {r:+.2f}" if meas else ""),
+                            0, "ok", measured=meas)
         r, meas = rho_for("possession_pie", -0.10)
         return Relation(r, f"two teammates splitting one {fa} pie — §3 Type 3 "
                            f"cannibalisation" + (
