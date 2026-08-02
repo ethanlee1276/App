@@ -204,6 +204,47 @@ def test_there_is_a_probe_that_reports_what_each_endpoint_returns():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = open(os.path.join(root, "ingest.py"), encoding="utf-8").read()
     assert '"--probe"' in src and "args.probe" in src
+# --- events the book priced and we could not place --------------------------
+def test_an_unplaceable_event_is_recorded_not_silently_dropped():
+    """Three different failures used to share one `continue`, uncounted.
+
+    Downstream all anyone saw was a low events_used, and every prop in those
+    games landed in the "no real book price" bucket looking exactly like a
+    market the book never offered. Measured on a live WNBA board: 1 event
+    matched out of 4 games, 761 props reported unpriced, and nothing said
+    the other three had simply failed to map.
+    """
+    from engine.sources.oddsapi import OddsAttachResult
+    r = OddsAttachResult()
+    assert r.dropped_events == []
+
+
+def test_the_two_drop_causes_are_named_separately():
+    """They need opposite fixes. An unmapped NAME is a stale team table —
+    the league renamed or expanded and SPORT_CONFIG never heard. A mapped
+    pair that is not on the slate means our own abbreviations and the
+    table's values disagree, which is wiring, not data."""
+    import os
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "engine", "sources", "oddsapi.py"),
+        encoding="utf-8").read()
+    i = src.index("for ev in events:")
+    block = src[i:i + 2600]
+    assert '"team name not in the map"' in block
+    assert '"mapped, but that pair is not on our slate"' in block
+    # And the unmapped case must say WHICH name failed, or the report sends
+    # you back to diffing two tables by eye.
+    assert '"unmapped"' in block
+
+
+def test_the_build_surfaces_dropped_events_rather_than_burying_them():
+    import os
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "nba_build.py"), encoding="utf-8").read()
+    i = src.index("odds_note = (f\"matched {res.matched} props")
+    block = src[i:i + 1400]
+    assert "res.dropped_events" in block
+    assert "DROPPED" in block
 
 
 if __name__ == "__main__":

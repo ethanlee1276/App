@@ -415,6 +415,23 @@ def main() -> None:
                 odds_note = (f"matched {res.matched} props across "
                              f"{res.events_used} events"
                              + (" (cached)" if res.from_cache else ""))
+                # A game the book priced and we failed to place is a whole
+                # slate's worth of prices thrown away, and it is invisible
+                # downstream — its props land in "no real book price"
+                # looking exactly like markets the book never offered.
+                if res.dropped_events:
+                    odds_note += (f"; {len(res.dropped_events)} event(s) "
+                                  f"DROPPED — see the odds diagnosis")
+                    print(f"\n⚠️  {len(res.dropped_events)} priced event(s) "
+                          f"could not be placed on the slate:")
+                    for d in res.dropped_events:
+                        print(f"    {d['away']} @ {d['home']}  — {d['reason']}"
+                              + (f" (unmapped: {', '.join(d['unmapped'])})"
+                                 if d.get("unmapped") else "")
+                              + (f" (mapped to {'@'.join(d['mapped_to'])})"
+                                 if d.get("mapped_to") else ""))
+                    print(f"    Every prop in those games is counted under "
+                          f"'no real book price'.")
             except oddsapi.OddsAPIError as exc:
                 odds_note = f"odds unavailable: {exc}"
 

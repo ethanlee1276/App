@@ -742,6 +742,11 @@ class OddsAttachResult:
     # "no real book price" bucket looking like a market the book never
     # offered. Loud on purpose. Each entry: {prop, book, market}.
     name_misses: list = field(default_factory=list)
+    # Events the book HAS and we could not place on our slate. Every one of
+    # these is a whole game's worth of prices we never looked at, and its
+    # props are indistinguishable downstream from props the book never
+    # priced. Each entry: {reason, home, away, …}.
+    dropped_events: list = field(default_factory=list)
 
 
 def _name_key_loose(name: str) -> str:
@@ -872,7 +877,33 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     for ev in events:
         home = cfg["teams"].get(ev.get("home_team", ""))
         away = cfg["teams"].get(ev.get("away_team", ""))
-        if not home or not away or frozenset((home, away)) not in slate_pairs:
+        # An event we cannot place on the slate is dropped here, and it used
+        # to be dropped in silence — three different failures sharing one
+        # `continue`, none of them counted. Downstream all anyone saw was a
+        # low events_used, and every prop in those games landed in the "no
+        # real book price" bucket looking exactly like a market the book
+        # never offered. Measured on a WNBA board: 1 event matched out of 4
+        # games, 761 props reported as unpriced, and nothing anywhere said
+        # the other three games had simply failed to map.
+        #
+        # The two causes need opposite fixes, so they are named separately.
+        # An unmapped NAME is a stale team table — the league renamed or
+        # expanded and SPORT_CONFIG never heard. A mapped pair that is not
+        # on the slate means our own abbreviations and the table's disagree,
+        # which is a wiring bug, not a data one.
+        if not home or not away:
+            result.dropped_events.append(
+                {"reason": "team name not in the map",
+                 "home": ev.get("home_team", ""), "away": ev.get("away_team", ""),
+                 "unmapped": [n for n, m in ((ev.get("home_team", ""), home),
+                                             (ev.get("away_team", ""), away))
+                              if not m]})
+            continue
+        if frozenset((home, away)) not in slate_pairs:
+            result.dropped_events.append(
+                {"reason": "mapped, but that pair is not on our slate",
+                 "home": ev.get("home_team", ""), "away": ev.get("away_team", ""),
+                 "mapped_to": [away, home]})
             continue
         try:
             payload, quota = fetch_event_odds(ev["id"], key, markets=markets,
