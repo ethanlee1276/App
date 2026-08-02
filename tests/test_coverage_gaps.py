@@ -184,6 +184,113 @@ def test_a_long_list_collapses_rather_than_scrolling():
     assert len(db.coverage_gaps(c)) == 24
     src = open(os.path.join(ROOT, "ingest.py"), encoding="utf-8").read()
     assert "GAP_LIST_MAX" in src
+# --- what the first real run taught it --------------------------------------
+#
+# Against Ethan's live DB the first version returned 519 days and printed a
+# five-year repair walk. Both failures are pinned below.
+
+
+def test_spring_training_is_not_a_hole():
+    """The 519 were mostly this. Spring training is in the schedule and its
+    games have finals, but the ingest deliberately stores no player logs for
+    them — so every day from March 1st was reported, 14 games at a time.
+
+    The window comes from the DATA, not a calendar: a hardcoded "the season
+    starts in April" would be wrong the year the league moves opening day,
+    and would say nothing about a backfill that genuinely stopped in July.
+    """
+    c = _conn()
+    for d in ("2026-03-01", "2026-03-02", "2026-03-05"):
+        _game(c, d)                       # final, no logs — before the window
+    _full_day(c, "2026-04-01")
+    _full_day(c, "2026-08-02")
+    c.commit()
+    assert db.coverage_gaps(c) == []
+
+
+def test_a_hole_inside_the_logged_window_still_reports():
+    """The control for the test above. Restricting to the window must not
+    silence real holes in the middle of the season."""
+    c = _conn()
+    _full_day(c, "2026-04-01")
+    _game(c, "2026-07-30")                # final, no logs — inside the window
+    _full_day(c, "2026-08-02")
+    c.commit()
+    assert _kinds(c) == {"2026-07-30": "no_logs"}
+
+
+def test_a_season_with_no_logs_at_all_is_still_scanned():
+    """No window to speak of means no basis to exclude anything — a season
+    that was never ingested should not be silenced by its own absence."""
+    c = _conn()
+    _game(c, "2026-07-30")
+    c.commit()
+    assert _kinds(c) == {"2026-07-30": "no_logs"}
+
+
+def test_a_scoreless_past_day_is_marked_unrepairable():
+    """parse_results returns completed, SCORED games and nothing else, so a
+    scoreless row on a past date is a postponed, cancelled or suspended
+    fixture. Re-ingesting cannot fill it, and listing it beside a real hole
+    is what produced a five-year repair range for a handful of days."""
+    c = _conn()
+    _full_day(c, "2026-04-01")
+    _game(c, "2026-07-27", scored=False)
+    _full_day(c, "2026-08-02")
+    c.commit()
+    got = db.coverage_gaps(c)
+    assert [g["date"] for g in got] == ["2026-07-27"]
+    assert got[0]["repairable"] is False
+
+
+def test_missing_logs_are_marked_repairable():
+    c = _conn()
+    _full_day(c, "2026-04-01")
+    _game(c, "2026-07-30")
+    _full_day(c, "2026-08-02")
+    c.commit()
+    assert db.coverage_gaps(c)[0]["repairable"] is True
+
+
+def test_the_repair_range_is_built_from_repairable_days_only():
+    """The bug in one assertion: one real hole in July must not produce a
+    range starting at the first postponed game of the season."""
+    import io
+    import contextlib
+    import ingest as ing
+    c = _conn()
+    _full_day(c, "2026-04-01")
+    _game(c, "2026-04-02", scored=False)          # postponed, unrepairable
+    _game(c, "2026-07-30")                        # the actual hole
+    _full_day(c, "2026-08-02")
+    c.commit()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        ing.print_gaps(c)
+    out = buf.getvalue()
+    assert "--from 2026-07-30 --to 2026-07-30" in out
+    assert "2026-04-02" not in out.split("NEVER resolve")[0]
+
+
+def test_the_unrepairable_days_get_their_own_heading_and_remedy():
+    """Different cause, different fix. Merged into one list they made the
+    list unreadable and the repair command wrong."""
+    import io
+    import contextlib
+    import ingest as ing
+    c = _conn()
+    _full_day(c, "2026-04-01")
+    _game(c, "2026-07-27", scored=False)
+    _full_day(c, "2026-08-02")
+    c.commit()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        ing.print_gaps(c)
+    out = buf.getvalue()
+    assert "NEVER resolve" in out
+    assert "postponed" in out
+    # And it must not pretend a re-ingest is the answer for them.
+    assert "nothing a re-ingest would fill" in out
 
 
 if __name__ == "__main__":

@@ -112,22 +112,47 @@ def print_gaps(conn, sport: str = "mlb") -> None:
              "some_finals": "partial finals",
              "no_logs": "no player logs",
              "thin_logs": "thin player logs"}
-    kinds: dict[str, int] = {}
-    for g in gaps:
-        kinds[g["kind"]] = kinds.get(g["kind"], 0) + 1
-    tally = " · ".join(f"{label[k]} {n}" for k, n in sorted(kinds.items()))
-    print(f"\n  ⚠️  {len(gaps)} {sport.upper()} day(s) are half-ingested "
-          f"({tally}):")
-    for g in gaps[:GAP_LIST_MAX]:
-        print(f"      {g['date']}  {label[g['kind']]:<18} {g['detail']}")
-    if len(gaps) > GAP_LIST_MAX:
-        print(f"      … and {len(gaps) - GAP_LIST_MAX} more")
-    lo, hi = gaps[0]["date"], gaps[-1]["date"]
-    print(f"\n      Repair (FREE — statsapi.mlb.com needs no key, and the "
-          f"walk is resumable):")
-    print(f"        python3 ingest.py {sport} --from {lo} --to {hi}")
-    print(f"      Then settle whatever those days were holding open:")
-    print(f"        python3 launch.py --settle all")
+    fixable = [g for g in gaps if g["repairable"]]
+    stuck = [g for g in gaps if not g["repairable"]]
+
+    # THE REPAIRABLE ONES LEAD, and the range is built from them alone.
+    # Built from every gap it produced "--from 2021-03-01", a five-year walk
+    # for a handful of real holes — the two kinds have to be costed apart.
+    if fixable:
+        kinds: dict[str, int] = {}
+        for g in fixable:
+            kinds[g["kind"]] = kinds.get(g["kind"], 0) + 1
+        tally = " · ".join(f"{label[k]} {n}" for k, n in sorted(kinds.items()))
+        print(f"\n  ⚠️  {len(fixable)} {sport.upper()} day(s) a re-ingest "
+              f"would fill ({tally}):")
+        for g in fixable[:GAP_LIST_MAX]:
+            print(f"      {g['date']}  {label[g['kind']]:<18} {g['detail']}")
+        if len(fixable) > GAP_LIST_MAX:
+            print(f"      … and {len(fixable) - GAP_LIST_MAX} more")
+        lo, hi = fixable[0]["date"], fixable[-1]["date"]
+        print(f"\n      Repair (FREE — statsapi.mlb.com needs no key, and the "
+              f"walk is resumable):")
+        print(f"        python3 ingest.py {sport} --from {lo} --to {hi}")
+        print(f"      Then settle whatever those days were holding open:")
+        print(f"        python3 launch.py --settle all")
+    else:
+        print(f"  {sport.upper()} day coverage: nothing a re-ingest would fill")
+
+    # The rest get their own heading, because the remedy is different and
+    # putting them in the list above is what made that list unreadable.
+    if stuck:
+        print(f"\n  {len(stuck)} day(s) hold scoreless game rows that will "
+              f"NEVER resolve.")
+        print(f"      parse_results stores completed, scored games only, so "
+              f"these are postponed,")
+        print(f"      cancelled or suspended fixtures. Re-ingesting cannot "
+              f"fill them and the settle")
+        print(f"      guard already refuses to grade against them — they are "
+              f"inert, not urgent.")
+        for g in stuck[:4]:
+            print(f"      {g['date']}  {label[g['kind']]:<18} {g['detail']}")
+        if len(stuck) > 4:
+            print(f"      … and {len(stuck) - 4} more")
 
 
 

@@ -430,6 +430,25 @@ def coverage_gaps(conn, sport: str = "mlb", start: str | None = None,
     offseason all look like an empty day, and a report that cries wolf on
     every Monday in November stops being read. What is reported is a day the
     database itself says is half-finished.
+
+    TWO RESTRICTIONS, both learned from the first run against a real DB,
+    which returned 519 days and a five-year repair walk:
+
+    **Only inside each season's own logged window.** Spring training is in
+    the schedule and its games have finals, but the ingest deliberately
+    never stores player logs for them — so every day from March 1st was
+    reported as a hole, 14 games at a time. The window is taken from the
+    data rather than from a calendar: the first and last day of that season
+    that HAS logs. Anything outside it is scope, not absence.
+
+    **Only what a re-ingest can actually fill.** ``parse_results`` returns
+    completed, scored games and nothing else, so a scoreless row on a past
+    date is a postponed, cancelled or suspended game that will never be
+    scored. Running the ingest again cannot fix it, and listing it next to
+    a repairable hole under one heading is how a report sends someone on a
+    five-year walk for nothing. Those days are still returned, flagged
+    ``repairable=False``, so the caller can report them under their own
+    heading with their own remedy.
     """
     where = "sport=?"
     args: list = [sport]
@@ -440,32 +459,46 @@ def coverage_gaps(conn, sport: str = "mlb", start: str | None = None,
         where += " AND period<=?"
         args.append(end)
     rows = conn.execute(
-        f"SELECT period, COUNT(*) AS n, "
+        f"SELECT period, season, COUNT(*) AS n, "
         f"COALESCE(SUM(home_score IS NOT NULL), 0) AS fin "
-        f"FROM games WHERE {where} GROUP BY period ORDER BY period", args
-    ).fetchall()
+        f"FROM games WHERE {where} GROUP BY period, season ORDER BY period",
+        args).fetchall()
     logs = {r[0]: (r[1], r[2]) for r in conn.execute(
         f"SELECT period, COUNT(*), COUNT(DISTINCT player) "
         f"FROM player_game_logs WHERE {where} GROUP BY period", args)}
+    # The window each season's LOGS actually cover. Derived, not assumed:
+    # a hardcoded "regular season starts in April" would be wrong the year
+    # the league moves opening day, and would say nothing about a season
+    # whose backfill genuinely stopped in July.
+    window = {int(s): (lo, hi) for s, lo, hi in conn.execute(
+        f"SELECT season, MIN(period), MAX(period) FROM player_game_logs "
+        f"WHERE {where} GROUP BY season", args)}
     out: list[dict] = []
     for r in rows:
         day, n, fin = r["period"], int(r["n"] or 0), int(r["fin"] or 0)
+        lo, hi = window.get(int(r["season"] or 0), (None, None))
+        if lo and not (lo <= day <= hi):
+            continue                    # outside this season's logged scope
         n_logs, n_players = logs.get(day, (0, 0))
         if not fin:
-            kind, detail = "no_finals", f"{n} game(s) stored, none with a score"
+            kind, detail, ok = ("no_finals",
+                                f"{n} game(s) stored, none with a score", False)
         elif fin < n:
-            kind, detail = "some_finals", f"{fin} of {n} game(s) have a score"
+            kind, detail, ok = ("some_finals",
+                                f"{fin} of {n} game(s) have a score", False)
         elif not n_logs:
-            kind, detail = "no_logs", f"{n} final game(s), no player logs"
+            kind, detail, ok = ("no_logs",
+                                f"{n} final game(s), no player logs", True)
         elif n_players < THIN_DAY_PLAYERS:
-            kind, detail = "thin_logs", (f"{n_players} player(s) logged across "
-                                         f"{n} game(s) — a full slate stores "
-                                         f"several hundred")
+            kind, detail, ok = ("thin_logs",
+                                f"{n_players} player(s) logged across {n} "
+                                f"game(s) — a full slate stores several "
+                                f"hundred", True)
         else:
             continue
         out.append({"date": day, "kind": kind, "games": n, "finals": fin,
                     "log_rows": n_logs, "players": n_players,
-                    "detail": detail})
+                    "repairable": ok, "detail": detail})
     return out
 
 
