@@ -135,6 +135,34 @@ def bankroll(conn) -> float:
 LONGSHOT_MARKETS = {"home_runs", "anytime_td"}
 
 
+def journal_skip_reason(r: dict, only_recommended: bool = True) -> str | None:
+    """Why this recommendation will NOT be journaled — or None if it will.
+
+    The four conditions below used to live inline in the loop, which meant
+    the only way to find out why a pick shown on the board never reached
+    the journal was to read the loop and reason about it. A prop can be
+    displayed as recommended and still be skipped here, and when that
+    happens it is invisible everywhere downstream: no journal row, no
+    Record entry, and nothing on the Live tab while its game is running.
+
+    Naming it in one place lets --why-pick report the real reason instead
+    of a guess, and lets the loop below use the same function, so the
+    explanation cannot drift from the behaviour.
+    """
+    if only_recommended and not r.get("recommended"):
+        return f"not recommended (grade {r.get('grade', '?')})"
+    if r.get("has_market") is False:
+        return ("no real book price — the edge is against a proxy line, and "
+                "journaling it would put fictional P&L in the record")
+    if r.get("market") in LONGSHOT_MARKETS:
+        return f"{r.get('market')} is a long shot — journaled to its own bucket"
+    stake = float(r.get("stake_units", 0) or 0)
+    if stake <= 0:
+        return ("stake is 0.00u — Kelly says this price is not beatable at "
+                "our probability, so there is no bet to record")
+    return None
+
+
 def log_recommendations(conn, result: dict, only_recommended: bool = True) -> int:
     """Insert open bets from a pipeline result dict. Stake dollars are sized
     from the current bankroll: stake_units × unit_pct% × bankroll."""
@@ -144,22 +172,12 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
     now = datetime.datetime.utcnow().isoformat(timespec="seconds")
     n = 0
     for r in result.get("recommendations", []):
-        if only_recommended and not r.get("recommended"):
-            continue
-        # A proxy-priced "edge" isn't a price anyone can bet; journaling it
-        # would pollute the learning data with fictional P&L.
-        if r.get("has_market") is False:
-            continue
-        # Long shots live in their own bucket, even when they clear the
-        # main board's bar — see LONGSHOT_MARKETS.
-        if r.get("market") in LONGSHOT_MARKETS:
+        # One predicate, used by the loop AND by --why-pick, so the reason
+        # the report gives is the reason the code acted on. Proxy prices,
+        # long shots and zero stakes are all excluded; see the function.
+        if journal_skip_reason(r, only_recommended):
             continue
         stake_units = float(r.get("stake_units", 0) or 0)
-        # A zero-stake "pick" is not a bet — journaling it would pad the
-        # record with rows that can never win or lose a unit, making the
-        # W-L column describe something nobody wagered on.
-        if stake_units <= 0:
-            continue
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "

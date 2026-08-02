@@ -648,6 +648,130 @@ def why_live(sport: str = "mlb") -> None:
               "they settle.")
 
 
+def _goes_nowhere(skip: str) -> bool:
+    """Does this skip mean the pick lands in NO bucket at all?
+
+    Two of the four skips route the bet elsewhere rather than dropping it:
+    a long shot goes to its own journal, and a non-recommended prop may be
+    picked up by the near-miss sampler. Only a zero stake or a proxy price
+    means nothing anywhere will ever hold it — and that is the only case
+    worth shouting about."""
+    return "stake is 0.00u" in skip or "no real book price" in skip
+
+
+def why_pick(name: str, sport: str = "mlb") -> None:
+    """Trace ONE pick from the board to the Live tab, naming every gate.
+
+        python3 launch.py --why-pick "Carter Jensen"
+
+    "we still have props recommended from earlier that are live right now
+    but not showing on the live page" is two different failures wearing one
+    symptom, and --why-live can only see the second:
+
+      * the pick is on the board but never reached the JOURNAL — in which
+        case nothing downstream will ever show it, and the Live tab is
+        behaving correctly
+      * the pick is in the journal but did not map to a game
+
+    Reading the code to guess between those is how the last three rounds
+    went. This walks the actual row.
+    """
+    import json as _json
+    from engine import ledger as _led
+    from engine.ledger import journal_skip_reason
+    from engine.sources.oddsapi import normalize_name
+
+    path = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
+            "wnba": WNBA_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
+    try:
+        d = _json.loads(Path(path).read_text())
+    except Exception as exc:
+        print(f"can't read {path}: {exc}")
+        return
+
+    want = normalize_name(name)
+    recs = [r for r in (d.get("recommendations") or [])
+            if normalize_name(r.get("player", "")) == want]
+    shots = [r for r in (d.get("long_shots") or [])
+             if normalize_name(r.get("player", "")) == want]
+    live = [r for r in (d.get("live_picks") or [])
+            if normalize_name(r.get("player", "")) == want]
+
+    print(f"\nTracing “{name}” · {sport.upper()} slate {d.get('date', '?')}\n")
+    if not recs and not shots:
+        print(f"  NOT ON THE BUILT BOARD at all ({len(d.get('recommendations') or [])} "
+              f"analyzed prop(s) tonight).\n"
+              f"  Either the name is spelled differently in the feed, or his "
+              f"game is not on\n  this slate, or the board has rebuilt since "
+              f"you saw him. Check the spelling\n  the site shows and try "
+              f"again.")
+        return
+
+    conn = _led.connect()
+    for r in recs + shots:
+        mkt = r.get("market", "?")
+        print(f"  ── {r.get('market_label') or mkt} · "
+              f"{r.get('side', '?')} {r.get('line', '?')} ──")
+        print(f"     grade {r.get('grade', '?')} · confidence "
+              f"{r.get('confidence', 0)} · edge "
+              f"{float(r.get('edge') or 0) * 100:.2f}% · stake "
+              f"{r.get('stake_units', 0)}u · odds {r.get('odds', '?')}")
+        rec_flag = r.get("recommended")
+        print(f"     recommended on the board: {bool(rec_flag)}")
+
+        rows = [dict(x) for x in conn.execute(
+            "SELECT date, category, status, stake_units FROM bets "
+            "WHERE sport=? AND player=? AND market=?",
+            (sport, r.get("player"), mkt))]
+
+        skip = journal_skip_reason(r)
+        if skip:
+            print(f"     ✗ not on the MAIN board's journal — {skip}")
+            # A long shot is not missing; it is filed elsewhere, by
+            # log_longshots. Saying "the journal has no row for it" here
+            # would be a confident wrong answer about a bet sitting in the
+            # journal two lines below.
+            if rows:
+                for b in rows:
+                    print(f"     journal: {b['category']} · {b['date']} · "
+                          f"{b['status']} · {b['stake_units']}u")
+                shown = [x for x in live if x.get("market") == mkt]
+                if shown:
+                    print(f"     ✓ ON THE LIVE TAB — {shown[0].get('status')} "
+                          f"({shown[0].get('phase')})")
+                else:
+                    print("     ✗ not on the Live tab — run `--why-live` for "
+                          "the mapping reason.")
+            elif rec_flag and _goes_nowhere(skip):
+                print(f"       THIS IS THE GAP: the board shows it as a pick, "
+                      f"no bucket holds it,\n       so it can never appear on "
+                      f"the Live tab or the Record page.")
+            continue
+        print("     ✓ passes every journal gate")
+        if not rows:
+            print("     ✗ but there is NO journal row — the build that "
+                  "recommended it has not\n       journaled yet (journaling "
+                  "runs after the tracker in the same pass,\n       so a "
+                  "brand-new pick appears on the Live tab one cycle later).")
+            continue
+        for b in rows:
+            print(f"     journal: {b['category']} · {b['date']} · "
+                  f"{b['status']} · {b['stake_units']}u")
+        shown = [x for x in live if x.get("market") == mkt]
+        if shown:
+            x = shown[0]
+            print(f"     ✓ ON THE LIVE TAB — {x.get('status')} "
+                  f"({x.get('phase')})")
+        elif any(b["status"] == "open" for b in rows):
+            print("     ✗ open in the journal but NOT on the Live tab — run "
+                  "`--why-live` for the\n       mapping reason (team, "
+                  "opponent or doubleheader leg).")
+        else:
+            print("     — already settled, so it has left the Live tab by "
+                  "design.")
+    print()
+
+
 def _near_dates(date: str) -> set:
     """The neighbouring days the tracker also considers, so this report and
     the tracker agree about what 'today' means."""
@@ -2563,6 +2687,17 @@ def main() -> None:
         who = next((a.lower() for a in argv[i + 1:]
                     if not a.startswith("-")), "mlb")
         side_bias(who)
+        return
+    if "--why-pick" in argv:
+        i = argv.index("--why-pick")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        if not rest:
+            print('usage: python3 launch.py --why-pick "Player Name" [sport]')
+            return
+        sport = rest[-1].lower() if rest[-1].lower() in (
+            "mlb", "nfl", "nba", "wnba", "cfb") else "mlb"
+        who = " ".join(rest[:-1] if sport == rest[-1].lower() else rest)
+        why_pick(who, sport)
         return
     if "--why-live" in argv:
         i = argv.index("--why-live")
