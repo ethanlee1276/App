@@ -186,6 +186,34 @@ class OddsAPIError(RuntimeError):
     pass
 
 
+def _classify(url: str, cache_name: str) -> tuple[str, str, int, str]:
+    """(kind, sport, credits, detail) for one paid call.
+
+    Credits are the API's own billing rule — per market, per region — read off
+    the request that was actually sent, rather than an assumption about what a
+    build usually asks for. Historical calls carry a large multiplier that
+    only the-odds-api's meter knows exactly; the constant is the measured
+    figure from harvest_odds.py's own note.
+    """
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    markets = len([m for m in (q.get("markets") or [""])[0].split(",") if m])
+    regions = len([r for r in (q.get("regions") or ["us"])[0].split(",") if r])
+    per = max(1, markets) * max(1, regions)
+    hist = "/historical/" in url
+    if "events" in cache_name and "event_" not in cache_name:
+        kind, cost = ("hist_events" if hist else "live_events"), (10 if hist else 1)
+    elif "board" in cache_name:
+        kind, cost = ("hist_board" if hist else "live_board"), per * (5 if hist else 1)
+    else:
+        kind, cost = ("hist_event" if hist else "live_event"), per * (5 if hist else 1)
+    sport = ""
+    for token in cache_name.replace(".json", "").split("_"):
+        if token in ("nfl", "mlb", "nba", "wnba", "cfb", "ufc"):
+            sport = token
+            break
+    return kind, sport, cost, cache_name
+
+
 def _url_key(url: str) -> str:
     """The apiKey this URL is carrying, so a result can be attributed to the
     key that paid for it."""
@@ -395,8 +423,9 @@ def _request(url: str, cache_name: str, ttl: int = 300,
     # Record what the API says is left so the budgeter schedules against the
     # real account rather than an assumption.
     try:
-        from ..oddsbudget import record_quota
+        from ..oddsbudget import record_quota, log_spend
         record_quota(quota.remaining, quota.used, key=_url_key(url))
+        log_spend(*_classify(url, cache_name))
     except Exception:      # budgeting must never break a fetch
         pass
     return json.loads(body), quota

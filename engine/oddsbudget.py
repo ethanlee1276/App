@@ -134,6 +134,66 @@ def save(state: BudgetState, path: Path | str = STATE_PATH) -> None:
     path.write_text(json.dumps(state.to_dict(), indent=2))
 
 
+# --- the spend ledger --------------------------------------------------------
+# "What burned twenty thousand credits?" should be a question with an answer,
+# not an archaeology exercise. Ethan's plan emptied and the only evidence was
+# a cumulative counter and a directory of cache files with useful timestamps
+# and no prices on them. Every paid call appends one line here instead.
+SPEND_LOG = STATE_PATH.parent / "odds_spend.jsonl"
+
+# What one call costs, by kind. The API bills per market per region, so a live
+# event call asking for eight markets is eight credits. Historical calls are
+# billed at a large multiple — harvest_odds.py's own note says a full-market
+# historical call has MEASURED at 35-40, which is where the money went.
+CREDIT_COST = {"live_event": 8, "live_board": 8, "live_events": 1,
+               "hist_event": 38, "hist_events": 10}
+
+
+def log_spend(kind: str, sport: str = "", credits: int | None = None,
+              detail: str = "", path: Path | str | None = None) -> None:
+    """Append one paid call to the ledger. Never raises — accounting must not
+    be able to break a fetch."""
+    try:
+        f = Path(path or SPEND_LOG)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        row = {"ts": time.time(),
+               "iso": _dt.datetime.now().isoformat(timespec="seconds"),
+               "kind": kind, "sport": sport,
+               "credits": int(credits if credits is not None
+                              else CREDIT_COST.get(kind, 1)),
+               "detail": detail[:120]}
+        with f.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row) + "\n")
+    except Exception:
+        pass
+
+
+def read_spend(path: Path | str | None = None) -> list[dict]:
+    rows = []
+    f = Path(path or SPEND_LOG)
+    if not f.is_file():
+        return rows
+    for line in f.read_text(encoding="utf-8").splitlines():
+        try:
+            rows.append(json.loads(line))
+        except ValueError:
+            continue
+    return rows
+
+
+def spend_by_day(rows: list[dict] | None = None,
+                 path: Path | str | None = None) -> dict:
+    """{date: {kind: [calls, credits]}} — the answer to "what spent it"."""
+    out: dict = {}
+    for r in (rows if rows is not None else read_spend(path)):
+        day = str(r.get("iso", ""))[:10] or "?"
+        kind = r.get("kind", "?")
+        cell = out.setdefault(day, {}).setdefault(kind, [0, 0])
+        cell[0] += 1
+        cell[1] += int(r.get("credits", 0))
+    return out
+
+
 # --- the key ring ------------------------------------------------------------
 def fingerprint(key: str) -> str:
     """A short, stable, non-reversible id for a key.

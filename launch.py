@@ -2065,6 +2065,105 @@ def why_ufc(argv: list | None = None) -> None:
           "happens. A fight that fails now fails on its own merits.")
 
 
+def odds_audit() -> None:
+    """Where did the credits go?
+
+    Ethan's 20,000-credit plan emptied and the only evidence was a cumulative
+    counter that says how much is gone and nothing about what took it. That is
+    not a question anyone should have to reason about — it should be a
+    receipt.
+
+    Two sources, in order of trust. The spend ledger records every paid call
+    with its own billed cost and is exact from the moment it exists. Before
+    it existed there is only the cache directory: every successful paid call
+    wrote a file there, so the filenames say what KIND of call it was and the
+    modification times say when. That reconstruction cannot see the price, so
+    it prices each class at the documented rate and says it is estimating.
+    """
+    from engine import oddsbudget as ob
+    from engine.sources.fetch import CACHE_DIR
+    import datetime as _dt
+
+    print("\nWHERE THE ODDS CREDITS WENT\n")
+    st = ob.load()
+    ring = []
+    try:
+        from engine.sources.oddsapi import api_keys
+        ring = api_keys()
+    except Exception:
+        pass
+    print(f"  Pool now: {st.remaining:,} credit(s) across "
+          f"{len(ring) or 1} key(s) · {st.used:,} used on the last key seen")
+    if ring:
+        for k in ring:
+            ks = ob.key_state(k)
+            mark = "spent" if ob.key_is_spent(k) else "live "
+            rem = ks.get("remaining")
+            print(f"    {mark}  key {ob.fingerprint(k)}  "
+                  f"{'never called' if rem is None else f'{int(rem):,} left'}")
+
+    ledger = ob.spend_by_day()
+    if ledger:
+        print("\n  From the spend ledger (exact, per call):")
+        for day in sorted(ledger):
+            kinds = ledger[day]
+            total = sum(v[1] for v in kinds.values())
+            print(f"    {day}   {total:>6,} credit(s)")
+            for kind, (n, c) in sorted(kinds.items(), key=lambda t: -t[1][1]):
+                print(f"        {kind:<14} {n:>5} call(s)  {c:>6,} credit(s)")
+    else:
+        print("\n  The spend ledger is empty — it only records calls made "
+              "since it was added, so anything before that is below.")
+
+    # Reconstruction from the cache, for spend the ledger never saw.
+    buckets: dict = {}
+    try:
+        files = list(CACHE_DIR.glob("odds_*.json"))
+    except Exception:
+        files = []
+    for f in files:
+        day = _dt.date.fromtimestamp(f.stat().st_mtime).isoformat()
+        name = f.name
+        if name.startswith("odds_hist_event_"):
+            kind, cost = "hist_event", ob.CREDIT_COST["hist_event"]
+        elif name.startswith("odds_hist_events_"):
+            kind, cost = "hist_events", ob.CREDIT_COST["hist_events"]
+        elif name.startswith("odds_board_"):
+            kind, cost = "live_board", ob.CREDIT_COST["live_board"]
+        elif name.startswith("odds_events_"):
+            kind, cost = "live_events", ob.CREDIT_COST["live_events"]
+        else:
+            kind, cost = "live_event", ob.CREDIT_COST["live_event"]
+        cell = buckets.setdefault(day, {}).setdefault(kind, [0, 0])
+        cell[0] += 1
+        cell[1] += cost
+    if buckets:
+        print(f"\n  Reconstructed from {len(files):,} cache file(s) — a cache "
+              f"file is what a paid call leaves behind, so this counts CALLS\n"
+              f"  exactly and prices them at the documented rate. One cached\n"
+              f"  file can also stand for several re-reads that cost nothing.")
+        grand = 0
+        for day in sorted(buckets):
+            kinds = buckets[day]
+            total = sum(v[1] for v in kinds.values())
+            grand += total
+            print(f"    {day}   ~{total:>6,} credit(s)")
+            for kind, (n, c) in sorted(kinds.items(), key=lambda t: -t[1][1]):
+                print(f"        {kind:<14} {n:>5} call(s)  ~{c:>6,} credit(s)")
+        print(f"\n    Estimated total across the cache: ~{grand:,} credit(s)")
+        hist = sum(v.get("hist_event", [0, 0])[1] + v.get("hist_events", [0, 0])[1]
+                   for v in buckets.values())
+        if hist and grand:
+            print(f"    Historical harvesting accounts for ~{hist:,} of that "
+                  f"({hist / grand:.0%}).")
+            print("    A historical call is billed several times a live one, so "
+                  "a harvest\n    over a long date range empties a plan far "
+                  "faster than a season of\n    nightly builds. Cap it with "
+                  "`--budget N` on harvest_odds.py.")
+    else:
+        print("\n  No odds cache on this machine — nothing to reconstruct.")
+
+
 def why_many(sport: str = "mlb", days: int = 21) -> None:
     """The inverse of --why-empty: why is tonight's board BIGGER than usual?
 
@@ -2917,6 +3016,9 @@ def main() -> None:
                     if not a.startswith("-")), "mlb")
         why_live(who)
         return
+    if "--odds-audit" in argv:
+        odds_audit()
+        raise SystemExit(0)
     if "--why-many" in argv:
         i = argv.index("--why-many")
         sp = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else "mlb"

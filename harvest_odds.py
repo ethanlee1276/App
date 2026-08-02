@@ -44,6 +44,13 @@ def daterange(start: str, end: str):
         day += _dt.timedelta(days=1)
 
 
+# One plan is 20,000 credits and a full-market historical event call has
+# measured at 35-40 of them. This ceiling is roughly a two-day harvest of a
+# fifteen-game sport: enough to be useful in one sitting, small enough that a
+# mistyped date range cannot cost a month.
+DEFAULT_BUDGET = 1200
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Harvest historical odds into the DB.")
     ap.add_argument("sport", choices=["nfl", "mlb"])
@@ -62,9 +69,18 @@ def main() -> None:
                          "harvest INSTEAD of the defaults. Bypasses the "
                          "already-stored skip (those rows lack these books) and "
                          "never overwrites the stored shopped-best price.")
-    ap.add_argument("--budget", type=int, default=0,
-                    help="Hard stop after roughly this many credits are spent "
-                         "(measured from the API's own remaining-count; 0 = no cap).")
+    # DEFAULTS TO A CAP, not to unlimited. This flag used to default to 0,
+    # meaning "spend whatever it takes", on a command whose own dry-run text
+    # warns that one full-market historical call has measured at 35-40
+    # credits. A thirty-day harvest of a fifteen-game sport is roughly
+    # sixteen thousand credits — an entire plan, from one command, with no
+    # ceiling and one y/N prompt between it and the meter. That is how a
+    # 20,000-credit plan emptied in an afternoon. `--budget 0` still means no
+    # cap, but now you have to ask for it.
+    ap.add_argument("--budget", type=int, default=DEFAULT_BUDGET,
+                    help=f"Hard stop after roughly this many credits are spent "
+                         f"(measured from the API's own remaining-count). "
+                         f"Default {DEFAULT_BUDGET}; pass 0 for no cap.")
     ap.add_argument("--db", default=str(_db.DEFAULT_DB))
     ap.add_argument("--dry-run", action="store_true", help="Plan only; spend nothing")
     ap.add_argument("--yes", action="store_true", help="Skip the confirmation prompt")
@@ -90,7 +106,20 @@ def main() -> None:
         return
 
     if not args.yes:
-        print("This spends API credits (historical calls cost more than live ones).")
+        # Estimate before asking. "This spends credits" is not information; a
+        # number you can compare against your balance is.
+        per_call = 38 if not market_keys else max(4, len(market_keys) * 5)
+        est = len(days) * (10 + 15 * per_call)
+        from engine.oddsbudget import load as _bl
+        bal = _bl()
+        print(f"Estimated cost: ~{est:,} credit(s) "
+              f"({len(days)} day(s) x ~15 event(s) x ~{per_call} each).")
+        print(f"  Your pool right now: {bal.remaining:,} credit(s).")
+        if args.budget:
+            print(f"  Hard stop at {args.budget:,} credit(s) — raise with "
+                  f"--budget N, or --budget 0 for no cap.")
+        else:
+            print("  NO SPEND CAP — you passed --budget 0.")
         print(f"Continue harvesting {len(days)} day(s)? [y/N] ", end="")
         if input().strip().lower() not in ("y", "yes"):
             print("Aborted — nothing spent.")
