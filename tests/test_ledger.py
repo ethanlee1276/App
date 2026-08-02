@@ -877,6 +877,65 @@ def test_legacy_ambiguous_dh_bet_voids_only_when_day_final():
     assert b["status"] == "void" and b["pnl_units"] == 0
 
 
+def test_tonights_bet_does_not_grade_against_a_game_nobody_has_played():
+    """The Record page showed props marked LOST for games that had not
+    started.
+
+    The old guard asked "is there a game row without a final score?" — but
+    parse_results only writes games that FINISHED, so a game yet to start
+    has no row at all. The guard abstained on exactly the case it existed
+    to catch, and the settler graded tonight's props against a stat line of
+    zeros: every UNDER a winner, every OVER a loser, hours before first
+    pitch. Today the burden of proof runs the other way.
+    """
+    from engine import db as hist_db
+    import datetime as _dt
+    today = _dt.date.today().isoformat()
+    conn = _conn()
+    r = _result(sport="mlb", date=today)
+    r["recommendations"][0].update(player="Tonight Guy", market="total_bases",
+                                   side="OVER", line=1.5, odds=100)
+    ledger.log_recommendations(conn, r)
+    hist = hist_db.connect(":memory:")
+    # A zeroed line for a game with no games row — first pitch is hours off.
+    hist_db.upsert_player_logs(hist, [
+        {"sport": "mlb", "season": int(today[:4]), "period": today,
+         "game_id": f"Tonight Guy-{today}", "player": "Tonight Guy",
+         "team": "NYM", "opponent": "ATL", "position": "C", "home": 1,
+         "market": "total_bases", "value": 0.0}])
+    assert ledger.settle_from_history(conn, hist, sport="mlb") == 0
+    assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "open"
+
+    # Once the game is final and ingested, the same call grades it.
+    hist_db.upsert_games(hist, [
+        {"sport": "mlb", "season": int(today[:4]), "period": today,
+         "game_id": "ATL@NYM", "home": "NYM", "away": "ATL",
+         "home_score": 4, "away_score": 2, "spread": 0.0, "total": None,
+         "roof": "", "surface": "", "temp": None, "wind": None, "extra": None}])
+    assert ledger.settle_from_history(conn, hist, sport="mlb") == 1
+    assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "lost"
+
+
+def test_a_settled_past_date_with_no_games_rows_still_grades():
+    """The control for the guard above. Backfilled player logs predate the
+    games table for whole seasons; requiring a final there would strand
+    every one of those bets as open forever."""
+    from engine import db as hist_db
+    conn = _conn()
+    r = _result(sport="mlb", date="2026-07-24")
+    r["recommendations"][0].update(player="Old Guy", market="total_bases",
+                                   side="OVER", line=1.5, odds=100)
+    ledger.log_recommendations(conn, r)
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_player_logs(hist, [
+        {"sport": "mlb", "season": 2026, "period": "2026-07-24",
+         "game_id": "g", "player": "Old Guy", "team": "NYM",
+         "opponent": "ATL", "position": "C", "home": 1,
+         "market": "total_bases", "value": 3.0}])
+    assert ledger.settle_from_history(conn, hist, sport="mlb") == 1
+    assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "won"
+
+
 def test_dh_moneyline_grades_against_its_own_game():
     """Team markets had the same collapse: both legs shared one games row.
     With per-leg rows, a leg-2 moneyline grades on game 2's score, and a

@@ -751,6 +751,47 @@ def _team_day_unfinished(hist_conn, where, wargs, log_row) -> bool:
     return bool(tot) and fin < tot
 
 
+def _too_early_to_grade(hist_conn, where, wargs, log_row, bet_date: str) -> bool:
+    """Should this stat row be treated as evidence yet?
+
+    Two guards, because one signal was never enough:
+
+      * _team_day_unfinished — the team HAS a game row that day without a
+        final score. Positive evidence of a game in play. Catches nothing
+        when the row is missing entirely.
+      * that missing row is the actual bug. parse_results only writes games
+        that FINISHED, so a game not yet started has no row at all, the
+        first guard abstained, and the settler graded tonight's props
+        against a stat line of zeros — every UNDER a winner, every OVER a
+        loser, hours before first pitch. That is the wall of ticks and
+        crosses on the Record page for games nobody has played.
+
+    So on TODAY's and future dates the burden of proof flips: grade only
+    with positive confirmation that the team's day is final. A game that
+    has not started is, by definition, today or later — which is exactly
+    where the strict rule bites and nowhere else.
+
+    Older dates keep the permissive rule on purpose. Their games ARE over;
+    absence of a games row there means thin ingest coverage (backfilled
+    player logs predate the games table for whole seasons), and being
+    strict would strand every one of those bets as open forever. So the
+    strict window self-heals: a genuinely finished game that never got
+    ingested waits a day, then grades.
+
+    The window is today OR YESTERDAY because the two dates compared are not
+    on the same clock — a 9pm Eastern first pitch is already tomorrow in
+    UTC, so on a UTC box "today" turns strict off at the exact hour night
+    games are being played.
+    """
+    if _team_day_unfinished(hist_conn, where, wargs, log_row):
+        return True
+    strict_from = (datetime.date.today()
+                   - datetime.timedelta(days=1)).isoformat()
+    if str(bet_date or "") >= strict_from:
+        return not _team_day_final(hist_conn, where, wargs, log_row)
+    return False
+
+
 def _day_was_ingested(hist_conn, where: str, wargs: list) -> bool:
     """Does the history DB know anything about this day's games at all?
 
@@ -793,14 +834,23 @@ def premature_settles(conn, hist_conn) -> list[dict]:
 
     A row is suspect when its day WAS ingested, the player has a stat line
     for it, and the player's team has no game with a final score that day.
+
+    The day-ingested precondition is skipped inside the strict window (see
+    _too_early_to_grade). It exists so a date that predates the games table
+    doesn't flag its whole slate, but a graded bet on a game that has not
+    STARTED is the loudest version of this bug and produces no games rows
+    at all — the precondition was hiding exactly the rows worth showing.
     """
     out: list[dict] = []
+    strict_from = (datetime.date.today()
+                   - datetime.timedelta(days=1)).isoformat()
     for b in conn.execute(
             "SELECT * FROM bets WHERE status IN ('won','lost','push') "
             "ORDER BY date, player"):
         where, wargs = _hist_where(b)
         try:
-            if not _day_was_ingested(hist_conn, where, wargs):
+            if (str(b["date"] or "") < strict_from
+                    and not _day_was_ingested(hist_conn, where, wargs)):
                 continue
             rows = hist_conn.execute(
                 f"SELECT * FROM player_game_logs WHERE {where} AND player=? "
@@ -1205,7 +1255,13 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             rows, wargs = _neighbour_day_rows(hist_conn, b, where, wargs)
         if not rows:
             continue
-        if _team_day_unfinished(hist_conn, where, wargs, rows[0]):
+        # Confirm the game FINISHED — do not merely fail to prove it did not.
+        # On today's slate that means positive proof; see _too_early_to_grade.
+        # The cost is that a bet whose game genuinely finished but never got
+        # ingested stays OPEN rather than being graded — visible, honest,
+        # and surfaced by the doctor's stuck-bets check, where a wrong grade
+        # is invisible and permanent.
+        if _too_early_to_grade(hist_conn, where, wargs, rows[0], b["date"]):
             continue
         if len(rows) > 1:
             # DOUBLEHEADER day: one stat row per leg (game_id suffix -G2 on
@@ -1341,7 +1397,7 @@ def resettle_mismatches(conn, hist_conn) -> list[dict]:
             rows = [picked] if picked is not None else rows
         if len(rows) != 1:
             continue          # missing or ambiguous (doubleheader) — leave it
-        if _team_day_unfinished(hist_conn, where, wargs, rows[0]):
+        if _too_early_to_grade(hist_conn, where, wargs, rows[0], b["date"]):
             continue          # game still running — its numbers aren't evidence
         actual = float(rows[0]["value"])
         if b["actual"] is not None and abs(actual - float(b["actual"])) < 1e-9:

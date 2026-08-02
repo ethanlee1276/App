@@ -318,12 +318,21 @@ def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
     # evidence that it is over. Past dates keep the old permissive rule —
     # those games are finished by definition, and being strict there would
     # withhold every row of an ordinary backfill.
+    # The window is TODAY OR YESTERDAY, not today alone, because the two
+    # dates being compared are not on the same clock. A 9pm Eastern first
+    # pitch is already tomorrow in UTC, so on a UTC box the strict branch
+    # switched off at the exact hour night games are in progress: the slate
+    # said 08-01, date.today() said 08-02, and every partial line from the
+    # games then being played took the permissive branch straight into the
+    # history DB. One extra day of slack costs nothing — a backfill is of
+    # dates well past, and the permissive branch is there for backfills.
     import datetime as _dt2
-    today = _dt2.date.today().isoformat()
+    today = _dt2.date.today()
+    strict_from = (today - _dt2.timedelta(days=1)).isoformat()
     teams_in_play = set()
     for g in slate.games:
         st = str(_game_state(g)).lower()
-        unsafe = (st != "final") if date >= today else (st and st != "final")
+        unsafe = (st != "final") if date >= strict_from else (st and st != "final")
         if unsafe:
             teams_in_play.update((g.home, g.away))
     prows = []

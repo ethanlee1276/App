@@ -52,24 +52,30 @@ def test_pipeline_stamps_the_leg_on_the_card():
 
 
 def test_settle_refuses_ambiguous_doubleheader_days():
+    import datetime
     from engine import ledger, db
     lpath = os.path.join(tempfile.mkdtemp(), "led.db")
     lconn = ledger.connect(lpath)
     hist = db.connect(":memory:")
+    # A settled date outside the settler's strict window — inside it (today
+    # and yesterday, which straddle the UTC rollover on a night slate) the
+    # settler wants a final score on record before it grades anything, and
+    # this fixture is about the ambiguity rule, not that one.
+    day = (datetime.date.today() - datetime.timedelta(days=7)).isoformat()
 
     def _log(game_id, value):
         hist.execute(
             "INSERT INTO player_game_logs (sport, season, period, game_id, "
             "player, team, opponent, position, home, market, value) VALUES "
-            "('mlb', 2026, '2026-08-01', ?, 'Cal Raleigh', 'SEA', 'TEX', "
-            "'C', 1, 'total_bases', ?)", (game_id, value))
+            "('mlb', 2026, ?, ?, 'Cal Raleigh', 'SEA', 'TEX', "
+            "'C', 1, 'total_bases', ?)", (day, game_id, value))
 
     def _bet(player="Cal Raleigh", line=1.5):
         lconn.execute(
             "INSERT INTO bets (sport, date, player, market, side, line, odds, "
             "grade, stake_units, stake_dollars, status, category) VALUES "
-            "('mlb', '2026-08-01', ?, 'total_bases', 'OVER', ?, -110, 'A', "
-            "0.5, 5.0, 'open', 'main')", (player, line))
+            "('mlb', ?, ?, 'total_bases', 'OVER', ?, -110, 'A', "
+            "0.5, 5.0, 'open', 'main')", (day, player, line))
         lconn.commit()
 
     # Ambiguous: 3 TB in game one, 0 in game two — Over 1.5 wins one leg

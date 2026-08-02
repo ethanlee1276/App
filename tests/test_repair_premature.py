@@ -22,6 +22,7 @@ partial rows means the next settle reaches the same verdict from the same
 bad data.
 """
 
+import datetime
 import os
 import sys
 import tempfile
@@ -31,7 +32,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from engine import db, ledger
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-D = "2026-08-01"
+
+#: A settled date well OUTSIDE the strict window, computed rather than
+#: written down. Inside the window (today and yesterday, which straddle the
+#: UTC rollover on a night slate) the audit deliberately flags a missing
+#: final on its own, so a hard-coded date would have these fixtures testing
+#: one rule this week and the other rule next week.
+D = (datetime.date.today() - datetime.timedelta(days=7)).isoformat()
 
 
 def _fixture():
@@ -95,6 +102,36 @@ def test_a_day_that_was_never_ingested_is_not_evidence_of_anything():
               "0.1,10.0,'won','main',9.0)", (D,))
     l.commit()
     assert ledger.premature_settles(l, h) == []
+
+
+def test_a_game_that_has_not_started_yet_is_the_loudest_case():
+    """The regression Ethan reported: props marked LOST on the Record page
+    for games that had not been played.
+
+    A game that has not started produces no games row at all — parse_results
+    only writes finals — so the day-was-ingested precondition skipped the
+    whole slate, and the audit stayed silent about the one thing it was
+    built to find. Today and later, absence of a final is suspect on its
+    own; there is no innocent reading of it.
+    """
+    import datetime
+    today = datetime.date.today().isoformat()
+    tmp = tempfile.mkdtemp()
+    h = db.connect(os.path.join(tmp, "h.db"))
+    l = ledger.connect(os.path.join(tmp, "l.db"))
+    h.execute("INSERT INTO player_game_logs (sport,season,period,game_id,"
+              "player,team,opponent,position,home,market,value) VALUES "
+              "('mlb',2026,?,?,'Tonight Guy','KC','X','OF',1,'hits',0.0)",
+              (today, f"Tonight Guy-{today}"))
+    h.commit()
+    l.execute("INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+              "odds,stake_units,stake_dollars,status,category,actual,"
+              "pnl_units,pnl_dollars) VALUES ('x','mlb',?,'Tonight Guy',"
+              "'hits','OVER',0.5,'FD',-110,0.1,10.0,'lost','main',0.0,"
+              "-0.1,-10.0)", (today,))
+    l.commit()
+    assert [r["player"] for r in ledger.premature_settles(l, h)] == \
+        ["Tonight Guy"]
 
 
 def test_an_open_bet_is_not_a_candidate():
