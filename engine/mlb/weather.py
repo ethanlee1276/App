@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .models import MLBWeather, TOTAL_BASES, HITS, HOME_RUNS, STRIKEOUTS
+from .models import (MLBWeather, TOTAL_BASES, HITS, HOME_RUNS, STRIKEOUTS,
+                     OUTS)
 
 
 @dataclass
@@ -22,7 +23,8 @@ class WeatherEffect:
 
 
 def evaluate_weather(w: MLBWeather) -> WeatherEffect:
-    mult = {TOTAL_BASES: 1.0, HITS: 1.0, HOME_RUNS: 1.0, STRIKEOUTS: 1.0}
+    mult = {TOTAL_BASES: 1.0, HITS: 1.0, HOME_RUNS: 1.0, STRIKEOUTS: 1.0,
+            OUTS: 1.0}
     reasons: list[str] = []
     warnings: list[str] = []
 

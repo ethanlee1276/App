@@ -22,6 +22,7 @@ from ..quality import TIER_SHRINK, TIER_MIN_EDGE, letter, STAKE_CAP_U  # noqa: F
 # tiers when the odds feed carries them.)
 MLB_MARKET_TIER = {
     "strikeouts": 1,
+    "outs": 1,
     "total_bases": 2, "hits": 2,
     "home_runs": 3,
 }
@@ -29,6 +30,7 @@ MLB_MARKET_TIER = {
 # §9's examples, verbatim: outs LOW · 6+ Ks MEDIUM · 2+ TB HIGH · HR EXTREME.
 MLB_VOLATILITY = {
     "strikeouts": "MEDIUM",
+    "outs": "LOW",
     "total_bases": "HIGH", "hits": "HIGH",
     "home_runs": "EXTREME",
 }

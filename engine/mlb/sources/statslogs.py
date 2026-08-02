@@ -22,7 +22,7 @@ from ...sources.fetch import DataUnavailable
 from ..data_loader import MLBSlate
 from ..models import (
     MLBGame, MLBProp, MLBGameLog, Pitcher,
-    TOTAL_BASES, HITS, HOME_RUNS, STRIKEOUTS,
+    TOTAL_BASES, HITS, HOME_RUNS, STRIKEOUTS, OUTS,
 )
 from .mlbstats import (
     STATS_BASE, _get_json, TEAM_ID_ABBR, VENUE_PARK, PARK_COORDS, park_weather,
@@ -33,10 +33,15 @@ MARKET_GROUP = {
     TOTAL_BASES: "hitting", HITS: "hitting", HOME_RUNS: "hitting",
     "pa": "hitting",
     STRIKEOUTS: "pitching",
+    OUTS: "pitching",
 }
 MARKET_STAT = {
     TOTAL_BASES: "totalBases", HITS: "hits", HOME_RUNS: "homeRuns",
     STRIKEOUTS: "strikeOuts",
+    # Outs recorded is innings pitched x 3, and the API reports it
+    # directly — no reconstructing 6.1 IP into 19 outs and getting the
+    # thirds wrong.
+    OUTS: "outs",
     # Plate appearances: not a prop market — ingested so the opportunity
     # model can learn each hitter's real volume per game.
     "pa": "plateAppearances",

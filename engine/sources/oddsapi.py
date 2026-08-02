@@ -57,6 +57,7 @@ MLB_ODDS_TO_MARKET = {
     "batter_hits": "hits",
     "batter_home_runs": "home_runs",
     "pitcher_strikeouts": "strikeouts",
+    "pitcher_outs": "outs",
 }
 
 # Default books to shop, matching the project vision. Keys are The Odds API's.

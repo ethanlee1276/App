@@ -15,16 +15,18 @@ TOTAL_BASES = "total_bases"
 HITS = "hits"
 HOME_RUNS = "home_runs"
 STRIKEOUTS = "strikeouts"        # pitcher Ks
+OUTS = "outs"                    # outs recorded (innings pitched x 3)
 
 MARKET_LABELS = {
     TOTAL_BASES: "Total Bases",
     HITS: "Hits",
     HOME_RUNS: "Home Runs",
     STRIKEOUTS: "Strikeouts",
+    OUTS: "Outs Recorded",
 }
 
 HITTER_MARKETS = {TOTAL_BASES, HITS, HOME_RUNS}
-PITCHER_MARKETS = {STRIKEOUTS}
+PITCHER_MARKETS = {STRIKEOUTS, OUTS}
 
 
 @dataclass

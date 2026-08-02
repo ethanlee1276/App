@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .models import ParkProfile, TOTAL_BASES, HITS, HOME_RUNS, STRIKEOUTS
+from .models import (ParkProfile, TOTAL_BASES, HITS, HOME_RUNS, STRIKEOUTS,
+                     OUTS)
 
 # All 30 parks. Factors are directional approximations of published
 # multi-year park factors (1.0 = league average); the ML phase can refit them
@@ -295,7 +296,12 @@ class ParkEffect:
 
 
 def evaluate_park(park: ParkProfile) -> ParkEffect:
-    mult = {TOTAL_BASES: 1.0, HITS: 1.0, HOME_RUNS: 1.0, STRIKEOUTS: 1.0}
+    # Outs stays at 1.0 deliberately. A park moves how often contact goes
+    # for damage; how long a manager leaves his starter in is a bullpen and
+    # scoreboard decision, and inventing a park factor for it would be
+    # decoration.
+    mult = {TOTAL_BASES: 1.0, HITS: 1.0, HOME_RUNS: 1.0, STRIKEOUTS: 1.0,
+            OUTS: 1.0}
     reasons: list[str] = []
 
     # HR factor hits home-run props hardest and total bases partially.

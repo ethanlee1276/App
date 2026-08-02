@@ -18,7 +18,7 @@ from ..betting import (
 from ..calibrate import apply_temperature, correction_for, is_reliable
 from ..odds import expected_value
 from ..statmath import prob_over, clamp
-from .models import MLBProp, HOME_RUNS, STRIKEOUTS
+from .models import MLBProp, HOME_RUNS, STRIKEOUTS, PITCHER_MARKETS
 from .projection import MLBProjection
 
 
@@ -69,7 +69,7 @@ def _pitcher_certainty(prop: MLBProp, proj: MLBProjection, game=None) -> float:
     how well-sampled and steady his log is; for a hitter prop it is whether
     tonight's opposing probable is even KNOWN — an unconfirmed starter makes
     every opposing hitter number a guess about a matchup that may not exist."""
-    if prop.market == STRIKEOUTS:
+    if prop.market in PITCHER_MARKETS:
         sample_q = clamp(proj.form.sample_games / 8.0, 0.3, 1.0)
         cv = (proj.form.std / proj.form.mean) if proj.form.mean > 0 else 1.0
         var_q = clamp(0.28 / cv, 0.4, 1.0) if cv > 0 else 1.0
@@ -85,7 +85,7 @@ def _lineup_certainty(prop: MLBProp, game=None) -> float:
     the #2 hitter gets ~0.7 more PAs than the #7 hitter, so slot IS the
     projection. Pitcher props care less (the probable is the condition)."""
     confirmed = bool(getattr(game, "lineups_confirmed", True)) if game is not None else True
-    if prop.market == STRIKEOUTS:
+    if prop.market in PITCHER_MARKETS:
         return 1.0 if confirmed else 0.85
     if prop.lineup_spot and confirmed:
         return 1.0

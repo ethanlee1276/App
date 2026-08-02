@@ -14,7 +14,8 @@ from dataclasses import dataclass, field
 from ..form import compute_form, FormResult, MLB_WINDOW_WEIGHTS
 from ..models import GameLog
 from ..statmath import clamp
-from .models import MLBProp, MLBGame, TOTAL_BASES, HITS, HOME_RUNS, STRIKEOUTS
+from .models import (MLBProp, MLBGame, TOTAL_BASES, HITS, HOME_RUNS,
+                     STRIKEOUTS, OUTS)
 from .parks import get_park, evaluate_park, ParkEffect
 from .weather import evaluate_weather, WeatherEffect
 from .matchup import evaluate_matchup, MatchupEffect
@@ -27,6 +28,10 @@ CV_FLOOR = {
     HITS: 0.70,
     HOME_RUNS: 1.00,     # informational; HRs are priced with Poisson anyway
     STRIKEOUTS: 0.28,
+    # §9 rates outs LOW where 6+ Ks is MEDIUM: a starter is pulled by
+    # pitch count and score far more than by anything that varies
+    # night to night, so the distribution is tighter than his Ks.
+    OUTS: 0.20,
 }
 
 
@@ -98,6 +103,10 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None) -> MLBProject
     # environment nudges hitter counting stats a little. Unknown ump = 1.0.
     if prop.market == STRIKEOUTS:
         ump_mult = game.ump_k_factor
+    elif prop.market == OUTS:
+        # A wide zone helps a starter go deeper, but far less directly
+        # than it lifts his strikeout count — half the effect.
+        ump_mult = 1.0 + (game.ump_k_factor - 1.0) * 0.5
     elif prop.market in (HITS, TOTAL_BASES):
         ump_mult = 1.0 + (game.ump_run_factor - 1.0) * 0.5
     else:
