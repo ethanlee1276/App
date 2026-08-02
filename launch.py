@@ -1828,7 +1828,8 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
     "0 recommended" stops being a mystery and becomes a number you can
     point at."""
     import json as _json
-    from engine.betting import favourite_surcharge, net_edge
+    from engine.betting import BASE_THRESHOLDS, favourite_surcharge, net_edge
+    _GRADE_FLOOR = min(net_min for _, _, net_min in BASE_THRESHOLDS)
     rel = ("web/data/mlb_recommendations.json" if sport == "mlb"
            else "web/data/recommendations.json")
     p = ROOT / rel
@@ -1841,7 +1842,28 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
         return
 
     real = [r for r in recs if r.get("has_market") is not False]
-    print(f"{sport.upper()} board: {len(recs)} analyzed, {len(real)} with a real price\n")
+    # Home runs (Tier 3) are quarantined on the Long Shots board BY DESIGN
+    # — engine/mlb/pipeline.py skips them for the main board and counts
+    # them under census["longshot_board"]. Walking them through this funnel
+    # made 15 props that can never be main-board picks appear "in the
+    # recommendable window", and then manufactured a binding gate to
+    # explain why they were not picked. A report about the main board has
+    # to be about the main board.
+    def _is_longshot(r):
+        return r.get("tier") == 3 or r.get("market") in ("home_runs",
+                                                         "anytime_td")
+    shots = [r for r in real if _is_longshot(r)]
+    real = [r for r in real if not _is_longshot(r)]
+    print(f"{sport.upper()} board: {len(recs)} analyzed, "
+          f"{len(real) + len(shots)} with a real price\n")
+    if shots:
+        print(f"🎯 {len(shots)} of those are home runs — the Long Shots board "
+              f"owns those by design, and they are\n   excluded from "
+              f"everything below. See the Long Shots page for that funnel.\n")
+    if not real:
+        print("Every real-priced prop tonight is a long shot. The main board "
+              "has nothing to explain.")
+        return
 
     rows = []
     for r in real:
@@ -1851,7 +1873,14 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
             "label": f"{r.get('player','?')} {r.get('side','')} {r.get('line','')} "
                      f"{r.get('market','')}",
             "odds": odds, "net": net_edge(hit, odds),
-            "need": 0.003 + favourite_surcharge(odds),
+            # The grader's real floor, not a looser number of this
+            # report's own invention. It was hardcoded at 0.003 while
+            # _grade's lowest threshold ("Play") needs 0.010 — so the
+            # funnel cleared props at a bar the engine would reject, and
+            # then blamed "engine graded it" for killing them. A report
+            # that disagrees with the code it explains sends you hunting
+            # for a bug that is not there.
+            "need": _GRADE_FLOOR + favourite_surcharge(odds),
             "edge": float(r.get("edge") or 0),
             "conf": float(r.get("confidence") or 0),
             "grade": r.get("grade", "Pass"),
@@ -1886,8 +1915,8 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
         ("game hasn't started yet", lambda x: not x["started"]),
         ("engine graded it (grade ≠ Pass)", lambda x: x["grade"] != "Pass"),
         ("beats the price at all (net edge > 0)", lambda x: x["net"] > 0),
-        ("clears the graded bar (net ≥ 0.3pt + chalk surcharge)",
-         lambda x: x["net"] >= x["need"]),
+        (f"clears the graded bar (net ≥ {_GRADE_FLOOR*100:.1f}pt "
+         f"+ chalk surcharge)", lambda x: x["net"] >= x["need"]),
         (f"credible (edge ≤ {ceiling:.0%})", lambda x: x["edge"] <= ceiling),
         (f"confidence ≥ {min_conf}", lambda x: x["conf"] >= min_conf),
         (f"edge-vs-fair ≥ {min_edge:.0%} (slider)", lambda x: x["edge"] >= min_edge),
@@ -1944,6 +1973,95 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
     near = [x for x in rows if x["edge"] <= ceiling and x["net"] < x["need"]]
     show("Just missed the price bar (credible, but not enough edge):",
          sorted(near, key=lambda x: -(x["net"] - x["need"]))[:5])
+
+
+def side_bias(sport: str = "mlb") -> None:
+    """Is the model's disagreement with the market ONE-SIDED?
+
+    On a 591-prop card every one of the five biggest edges was an UNDER,
+    at 20-25%. Five is not a sample, so this counts the whole board.
+
+    The distinction matters because the two cases need opposite fixes. If
+    OVERs and UNDERs disagree with the market symmetrically, the model is
+    noisy and the credibility ceiling is doing its job catching outliers.
+    If the disagreement is one-sided, the model is BIASED — it is
+    systematically projecting low — and every "edge too big to believe" is
+    the same error appearing hundreds of times. A ceiling cannot fix that;
+    it just hides it, and hides it most on the props where the error is
+    largest.
+
+    Long shots are excluded, as everywhere else: they are their own board
+    with their own model.
+    """
+    import json as _json
+    from engine.betting import MARKET_SHRINK, MAX_CREDIBLE_EDGE
+    rel = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
+           "wnba": WNBA_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
+    try:
+        recs = _json.loads((ROOT / rel).read_text()).get("recommendations", [])
+    except (OSError, ValueError):
+        print(f"No board built yet at {rel} — start the launcher first.")
+        return
+    real = [r for r in recs if r.get("has_market") is not False
+            and r.get("tier") != 3
+            and r.get("market") not in ("home_runs", "anytime_td")]
+    if not real:
+        print("No real-priced main-board props on this card.")
+        return
+    ceiling = MAX_CREDIBLE_EDGE * MARKET_SHRINK
+
+    by: dict = {}
+    per_market: dict = {}
+    for r in real:
+        side = (r.get("side") or "?").upper()
+        e = float(r.get("edge") or 0)
+        d = by.setdefault(side, {"n": 0, "sum": 0.0, "over": 0})
+        d["n"] += 1
+        d["sum"] += e
+        if e > ceiling:
+            d["over"] += 1
+        m = per_market.setdefault(r.get("market", "?"),
+                                  {"OVER": 0, "UNDER": 0})
+        if side in m:
+            m[side] += 1
+
+    print(f"{sport.upper()} — model vs market, by side")
+    print(f"  {len(real)} real-priced main-board prop(s) · "
+          f"credibility ceiling {ceiling:.1%}\n")
+    print(f"  {'side':<8}{'n':>6}{'mean edge':>12}{'over ceiling':>15}{'rate':>8}")
+    for side, d in sorted(by.items()):
+        print(f"  {side:<8}{d['n']:>6}{d['sum'] / d['n'] * 100:>11.2f}%"
+              f"{d['over']:>15}{d['over'] / d['n']:>7.0%}")
+
+    o, u = by.get("OVER"), by.get("UNDER")
+    if not (o and u and o["n"] >= 30 and u["n"] >= 30):
+        print("\n  Too few on one side to call. This needs a full slate — "
+              "run it again on a night with a real board.")
+        return
+    ro, ru = o["over"] / o["n"], u["over"] / u["n"]
+    gap = abs(ro - ru)
+    print(f"\n  Unbiased, those two rates would be about equal. "
+          f"They are {ro:.0%} and {ru:.0%}.")
+    if gap < 0.10:
+        print("  → Symmetric. The ceiling is catching noise, which is its "
+              "job. No side bias to chase.")
+    else:
+        heavy = "UNDER" if ru > ro else "OVER"
+        print(f"  → ONE-SIDED, by {gap:.0%}. The model systematically favours "
+              f"{heavy}.\n"
+              f"    That is a projection error, not a market inefficiency, "
+              f"and the credibility\n"
+              f"    ceiling is hiding it — worst on exactly the props where "
+              f"it is largest.\n"
+              f"    Fix the projection; do not loosen the ceiling.")
+        print("\n  By market (where the skew lives):")
+        for m, c in sorted(per_market.items(),
+                           key=lambda kv: -(kv[1]["OVER"] + kv[1]["UNDER"])):
+            tot = c["OVER"] + c["UNDER"]
+            if tot < 10:
+                continue
+            print(f"    {m:<16} {c['OVER']:>4} over · {c['UNDER']:>4} under"
+                  f"   ({c['UNDER'] / tot:.0%} under)")
 
 
 def _settleable_days(open_days) -> list[str]:
@@ -2439,6 +2557,12 @@ def main() -> None:
                and not argv[i + 1].startswith("-") else None)
         for line in weighin_feed.probe(day):
             print(line)
+        return
+    if "--side-bias" in argv:
+        i = argv.index("--side-bias")
+        who = next((a.lower() for a in argv[i + 1:]
+                    if not a.startswith("-")), "mlb")
+        side_bias(who)
         return
     if "--why-live" in argv:
         i = argv.index("--why-live")
