@@ -333,7 +333,14 @@ async function load(quiet = false) {
     state.builtAt = Number.isFinite(t) ? t : null;
   };
   try {
-    const res = await fetch(`${meta.api}?${params}`);
+    // Cache-busted, and no-store. The poll URL was byte-identical on every
+    // refresh — same sport, same three slider values — so iOS Safari
+    // answered from its own cache and the page could sit on a board from
+    // twenty minutes ago while the timer fired happily every 30 seconds.
+    // Closing the tab and reopening it was the only thing that missed the
+    // cache, which is exactly the symptom.
+    const res = await fetch(`${meta.api}?${params}&_=${Date.now()}`,
+                            { cache: "no-store" });
     if (!res.ok) throw new Error("api");
     stampFrom(res);
     state.data = normalizeSlate(await res.json());
@@ -342,7 +349,8 @@ async function load(quiet = false) {
     // built). An honest empty slate beats an unhandled rejection that
     // strands the old sport's page on screen.
     try {
-      const res = await fetch(meta.fallback);
+      const res = await fetch(`${meta.fallback}?_=${Date.now()}`,
+                              { cache: "no-store" });
       if (!res.ok) throw new Error("fallback");
       stampFrom(res);
       state.data = normalizeSlate(await res.json());
@@ -359,6 +367,38 @@ async function load(quiet = false) {
   updateAgo();
 }
 
+/* Refresh the moment the page comes back, because a timer alone cannot.
+ *
+ * iOS Safari throttles setInterval hard when a tab is backgrounded and
+ * suspends it outright when the phone locks. Come back ten minutes later
+ * and the timer has not fired — and after a bfcache restore (swipe back,
+ * or reopening the tab) the page resumes frozen with its timers dead and
+ * no `load` event to restart them. The board then sits at whatever it was
+ * when you looked away, ageing, until the tab is closed and reopened.
+ *
+ * `visibilitychange` covers unlock and tab-switch; `pageshow` with
+ * `persisted` covers the bfcache restore that fires no other event. Both
+ * are needed — neither catches the other's case.
+ */
+const RETURN_REFRESH_AFTER_MS = 10000;
+
+function refreshOnReturn() {
+  if (state.static) return;
+  // A tab-switch storm should not become a request storm: if we loaded
+  // seconds ago, the data on screen is already the data on disk.
+  if (Date.now() - (state.lastLoad || 0) < RETURN_REFRESH_AFTER_MS) return;
+  load(true);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") refreshOnReturn();
+});
+window.addEventListener("pageshow", (e) => {
+  // persisted = restored from the back-forward cache with timers dead.
+  if (e.persisted) refreshOnReturn();
+});
+window.addEventListener("focus", refreshOnReturn);
+
 /* Poll for live updates every 30s while any game is in progress. */
 function manageAutoRefresh() {
   const hasLive = (state.data?.games || []).some((g) => (g.live || {}).state === "live");
@@ -370,10 +410,17 @@ function manageAutoRefresh() {
   // mid-tap — the "it enlarges when I switch sports" bug.
   if (el) el.style.display = "";
   state.livePolling = hasLive && !state.static;
-  if (state.livePolling) {
-    if (!state.refreshTimer) state.refreshTimer = setInterval(() => load(true), 30000);
-  } else {
+  // Poll ALWAYS, just slower when nothing is in progress. The board moves
+  // between builds even with no game on — new picks, settled bets, a paid
+  // odds pull — and stopping the timer entirely meant the page only ever
+  // aged, never updated, until it was reloaded by hand.
+  const every = state.livePolling ? 30000 : 120000;
+  if (state.static) {
     clearInterval(state.refreshTimer); state.refreshTimer = null;
+  } else if (state.refreshEvery !== every || !state.refreshTimer) {
+    clearInterval(state.refreshTimer);
+    state.refreshEvery = every;
+    state.refreshTimer = setInterval(() => load(true), every);
   }
   // The ticker runs regardless so the age stays honest between loads.
   if (!state.tickTimer) state.tickTimer = setInterval(updateAgo, 1000);
