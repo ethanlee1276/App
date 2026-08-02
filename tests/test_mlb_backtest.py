@@ -74,13 +74,6 @@ def test_real_lines_join_across_name_formats():
     assert "NAIVE baseline" in naive.summary()
 
 
-if __name__ == "__main__":
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn(); print(f"  ok  {fn.__name__}")
-    print(f"\n{len(fns)} tests passed.")
-
-
 def test_corrupt_book_pair_is_not_treated_as_a_price():
     """Harvested rows carry fabricated unders: Caesars quoting a home run
     at over +850 / under -110 implies 10.5% + 52.4% = 63%, i.e. the book
@@ -106,3 +99,10 @@ def test_corrupt_book_pair_is_not_treated_as_a_price():
     # …and with the fabricated under discarded the market is one-sided,
     # so the model cannot manufacture a 37% edge out of it.
     assert rep.n > 0
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")

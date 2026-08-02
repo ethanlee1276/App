@@ -116,13 +116,6 @@ def test_expensive_middles_are_rejected():
     assert scan["middles"] == []
 
 
-if __name__ == "__main__":
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn(); print(f"  ok  {fn.__name__}")
-    print(f"\n{len(fns)} tests passed.")
-
-
 def test_stale_quotes_flags_a_book_out_of_line_with_the_field():
     """The one Scanner section backed by a measured CLV result: a book
     pricing a side cheaper than every other book. Taking those beat the
@@ -221,3 +214,10 @@ def test_stale_quotes_dedupes_and_caps_the_board():
 
     # limit=0 returns everything, for callers that want the full set.
     assert len(stale_quotes(recs, limit=0)) == out[0]["total_found"]
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")

@@ -193,13 +193,6 @@ def test_pipeline_edges_are_sane():
         assert abs(r["edge"]) < 0.35   # no runaway edges
 
 
-if __name__ == "__main__":
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn(); print(f"  ok  {fn.__name__}")
-    print(f"\n{len(fns)} tests passed.")
-
-
 def test_home_run_projection_ignores_when_the_homers_happened():
     """Regression: recency blending on a rare 0/1 event turned WHEN a
     hitter homered into a ~43x projection swing (0.344 HR/game if it was
@@ -239,3 +232,10 @@ def test_home_run_projection_ignores_when_the_homers_happened():
 
     # A hitter with no homers at all sits below the 2-in-15 hitter.
     assert mean_for([0] * 15) < means[0]
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")

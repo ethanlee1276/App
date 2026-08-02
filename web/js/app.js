@@ -2061,10 +2061,16 @@ function parlayTicket(t, live) {
 
     <div class="pz-sub">Dominance</div>
     <div class="pz-dominance">These same legs bet separately are worth
-      <b>${(t.singles_alternative_ev * 100).toFixed(1)}%</b> in expectation. A
-      parlay has to beat that by ${t.dominance_required}× to be worth three
-      times the variance and one point of failure — if it only ties,
-      <b>bet the singles</b>.</div>
+      <b>${(t.singles_alternative_ev * 100).toFixed(1)}%</b> in expectation
+      across ${t.legs.length} units${t.parlay_type === "A"
+        ? `, or <b>${(t.singles_alternative_same_stake * 100).toFixed(1)}%</b>
+           for the one unit this ticket risks` : ""}. A parlay has to beat
+      that by ${t.dominance_required}× to be worth the variance and the
+      single point of failure — if it only ties, <b>bet the singles</b>.</div>
+    ${t.singles_beat_it ? `<div class="pz-edge neg">
+      <b>The singles were the better bet here.</b> This ticket is shown
+      because it is the best-constructed one on the board, not because it
+      beat betting these legs separately.</div>` : ""}
 
     <div class="pz-verdict-line">${escapeHtml(t.verdict)}</div>
     <div class="pz-risk"><span class="pz-mark">${icon("warn", 12)}</span>

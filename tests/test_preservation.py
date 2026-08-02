@@ -209,6 +209,37 @@ def test_the_why_chips_are_counted_across_the_site():
     assert total >= 50, f"only {total} why? chips render across the desktop site"
 
 
+def test_no_test_file_strands_tests_below_its_runner():
+    """A test that never runs is worse than no test: it reports success.
+
+    Every file here ends with an `if __name__ == "__main__"` block that
+    collects `globals()` and runs it. Anything appended BELOW that block is
+    defined after the block has already executed, so it is silently skipped
+    while the file prints a confident pass count. Eleven tests in
+    test_parlays.py sat there — every test of the ranking and the slate cap —
+    plus eight more across four other files, all green, none running.
+
+    Grep-level rule, checked for the whole suite at once, because the failure
+    mode is invisible from inside the file it happens in.
+    """
+    import re
+    here = os.path.dirname(os.path.abspath(__file__))
+    stranded = {}
+    for name in sorted(os.listdir(here)):
+        if not (name.startswith("test_") and name.endswith(".py")):
+            continue
+        src = open(os.path.join(here, name), encoding="utf-8").read()
+        marker = 'if __name__ == "__main__"'
+        if marker not in src:
+            continue
+        after = re.findall(r"^def (test_\w+)", src[src.index(marker):], re.M)
+        if after:
+            stranded[name] = after
+    assert not stranded, (
+        "tests defined below the __main__ runner never execute: "
+        + "; ".join(f"{k}: {', '.join(v)}" for k, v in stranded.items()))
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

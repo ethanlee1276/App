@@ -109,12 +109,15 @@ STAKE_CAP_U = 1.0                  # §10.2 max 1.0% of bankroll; 1u == 1%
 KELLY_FRACTION = 0.125             # §10.1 eighth Kelly
 KELLY_FRACTION_UFC = 0.10          # §10.1 tenth Kelly
 
-# §1.2: "typical effective hold on a 3-leg SGP: 15-30%". The generous end is
-# what we test against, because the question this answers is "could a book
-# EVER price this?" — and an optimistic answer to that question is the
-# conservative one for a screen whose job is to say no.
-BEST_CASE_SGP_TAX = 0.15
-WORST_CASE_SGP_TAX = 0.30
+# §1.2 quotes "typical effective hold on a 3-leg SGP: 15-30%". That is a
+# THREE-leg figure, and applying it to a two-leg ticket was an inherited
+# assumption of mine, flagged as one at the time and wrong in the direction
+# that matters: it charged every pair the tax of a triple. Books price a
+# two-leg same-game ticket far closer to the product. Stated separately now,
+# and still an assumption — measuring it by book is item 5 on the Appendix's
+# own backtest list.
+BEST_CASE_SGP_TAX = {2: 0.08, 3: 0.15}
+WORST_CASE_SGP_TAX = {2: 0.18, 3: 0.30}
 # §1.2 quotes 4.3-4.8% hold on sides and totals. No book prices a same-game
 # ticket at better than its own correlated fair number less its ordinary
 # margin, so this floors how generous the ceiling above is allowed to get on
@@ -149,13 +152,28 @@ RHO_SHRINK = 0.45
 
 @dataclass(frozen=True)
 class SportRules:
-    """Everything the per-sport sections change about the shared spine."""
+    """Everything the per-sport sections change about the shared spine.
+
+    THRESHOLDS ARE TUNED DOWN FROM THE DOC, AT THE OPERATOR'S DIRECTION.
+    §1.3 sets 5.0 / 6.0 / 8.0 points. At those bars, combined with a 3-leg
+    tax charged to 2-leg tickets and bottom-of-band priors, nothing this
+    board produces ever cleared — the page could rank tonight's props but
+    never call one a play. These sit at 2.0 / 3.0, and 2.5 / 4.0 for the
+    sports §6 and §9 hold higher, which preserves the doc's ordering while
+    letting a genuinely correlated construction with real edges through.
+
+    A 2.0-point bar on a ~33% joint is roughly a 6% relative edge, the same
+    order as the 2.5-3.0% post-haircut edge the singles engine demands on a
+    ~52% market. It is not a licence: the clash screen, the correlation-sign
+    gate and probation are unchanged, and every card still reports what the
+    same legs are worth bet separately.
+    """
 
     key: str
     name: str
     max_legs: int = MAX_LEGS
-    two_leg_points: float = 5.0
-    three_leg_points: float = 6.0
+    two_leg_points: float = 2.0
+    three_leg_points: float = 3.0
     kelly: float = KELLY_FRACTION
     # §3 Type 4: spread at or beyond which the favourite's player props are
     # ineligible for a ticket at all. None = the pairwise screen only.
@@ -176,8 +194,8 @@ RULES: dict[str, SportRules] = {
     "nfl": SportRules("nfl", "NFL", anchor_tier1=True, blowout_spread=10.0),
     # §6. Highest bar in the system: 8 points for three legs, and one ticket
     # per Saturday against a 60-game slate.
-    "cfb": SportRules("cfb", "College Football", three_leg_points=8.0,
-                      blowout_spread=17.0),
+    "cfb": SportRules("cfb", "College Football", two_leg_points=2.5,
+                      three_leg_points=4.0, blowout_spread=17.0),
     # §5. The lineup rule dominates; enforced per-leg in _leg_eligible.
     "mlb": SportRules("mlb", "MLB"),
     # §7. Scalpy 3.0 §7 governs; this adds Gate 6 and the gate ordering.
@@ -194,7 +212,8 @@ RULES: dict[str, SportRules] = {
     # inventing a market we do not model — and §9.2 points the same way:
     # most correct MMA correlations belong in a single method bet anyway.
     "ufc": SportRules(
-        "ufc", "UFC", max_legs=2, three_leg_points=8.0, kelly=KELLY_FRACTION_UFC,
+        "ufc", "UFC", max_legs=2, two_leg_points=2.5, three_leg_points=4.0,
+        kelly=KELLY_FRACTION_UFC,
         cross_game="banned",
         unavailable="§9.1 caps UFC at two legs in ONE fight, and the only "
                     "two-leg constructions §9.3 permits pair a winner with a "
@@ -512,7 +531,7 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
         if fams == {"teamtotal"} and not same_team:
             if ua == ub:
                 # Both teams over (or both under) is the pace bet, twice.
-                return Relation(0.30, "both teams' totals moving the same way "
+                return Relation(0.375, "both teams' totals moving the same way "
                                       "is one pace bet — §8.2 puts a pace-up "
                                       "game at +0.30 to +0.45", 6, "duplicate")
             # §5.3, banned by name: "legs from both sides of the same game's
@@ -524,7 +543,7 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
                                    "bans it by name", 2, "kill")
         if fams == {"teamtotal", "gametotal"}:
             if ua == ub:
-                return Relation(0.55, "a team total and the game total are "
+                return Relation(0.625, "a team total and the game total are "
                                       "near-restatements — §4.1/§5.1 put this "
                                       "at +0.55 to +0.70, so the ticket is "
                                       "really about 1.3 bets", 6, "duplicate")
@@ -547,12 +566,12 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
                                      "adjusted tempo and run/pass identity "
                                      "before a sign can be assigned, and this "
                                      "model does not carry them", 2, "kill")
-            return Relation(0.20, "a dog keeping pace does it by scoring — "
+            return Relation(0.275, "a dog keeping pace does it by scoring — "
                                   "§6.2 puts dog covers against the game total "
                                   "over at +0.20 to +0.35", 0, "ok")
         if fams == {"side", "teamtotal"}:
             if same_team and ua and ub:
-                return Relation(0.30, "the team that scores wins — §4.1 puts a "
+                return Relation(0.375, "the team that scores wins — §4.1 puts a "
                                       "team total over against its own side at "
                                       "+0.30 to +0.45", 0, "ok")
             if same_team:
@@ -599,7 +618,7 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
                                    "describe different games", 1, "kill")
         if own and line_up and prop_up:
             if pf in ("pass", "catch", "score", "bat", "rush"):
-                return Relation(0.30, "the player's production IS the team's "
+                return Relation(0.375, "the player's production IS the team's "
                                       "runs or points — §4.1/§5.1/§8.2 all put "
                                       "this at +0.30 or better", 0, "ok")
             return Relation(SAME_GAME_BASELINE_RHO,
@@ -608,7 +627,7 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
         # facing held down. §5.1 calls this the cleanest MLB correlation.
         if (sport == "mlb" and pf in PITCHER_FAMILIES and prop_up
                 and not line_up and line_team == (prop.get("opponent") or "").upper()):
-            return Relation(0.20, "strikeouts up and the lineup he is facing "
+            return Relation(0.275, "strikeouts up and the lineup he is facing "
                                   "held down — §5.1's cleanest MLB "
                                   "correlation, and §5.2's pitcher stack",
                             0, "ok")
@@ -632,11 +651,11 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
                                    f"§3 Type 4, the blowout that wins leg one "
                                    f"takes leg two off the field", 4, "kill")
         if pf == "rush" and prop_up:
-            return Relation(0.35, "leading teams run — §4.1 puts carries "
+            return Relation(0.425, "leading teams run — §4.1 puts carries "
                                   "against the team's own side at +0.35 to "
                                   "+0.50", 0, "ok")
         if sport == "mlb" and pf in PITCHER_FAMILIES and prop_up:
-            return Relation(0.20, "managers leave winners in — §5.1 puts outs "
+            return Relation(0.275, "managers leave winners in — §5.1 puts outs "
                                   "recorded against his team's line at +0.20 "
                                   "to +0.35", 0, "ok")
         if pf in ("pass", "catch") and prop_up:
@@ -644,7 +663,7 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
             # cover CAUSES the passing volume. On a favourite the same pairing
             # is only the weak generic link.
             if fav and fav != line_team:
-                return Relation(0.20, "the script that keeps a dog close is the "
+                return Relation(0.275, "the script that keeps a dog close is the "
                                       "script that makes it throw — §4.1 puts "
                                       "dog covers against dog pass-catcher "
                                       "overs at +0.20 to +0.35", 0, "ok")
@@ -701,7 +720,7 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None) -> Relation:
             # the low end of the nearest published pitcher band (§5.1's outs
             # over vs his team's ML, +0.20 to +0.35) rather than inventing a
             # larger number for the construction the doc likes most.
-            return Relation(0.20, "one arm, one mechanism, two markets moving "
+            return Relation(0.275, "one arm, one mechanism, two markets moving "
                                   "together — §5.2's pitcher stack, which books "
                                   "often price as if the pair were independent",
                             5, "ok")
@@ -737,7 +756,7 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None) -> Relation:
                                        "side and get hit — §5.1 puts this at "
                                        "-0.25 to -0.40", 7, "kill")
             if facing and _side_up(pitcher) and not _side_up(hitter):
-                return Relation(0.20, "strikeouts up, the bats he is facing "
+                return Relation(0.275, "strikeouts up, the bats he is facing "
                                       "down — one mechanism, §5.1's cleanest "
                                       "MLB correlation", 0, "ok")
     if same_team and {fa, fb} == {"pass", "catch"} and ua != ub:
@@ -764,7 +783,7 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None) -> Relation:
             # are: two hitters in one lineup face the same pitcher and the
             # same innings. §5.1 puts this at +0.20 to +0.35 — a permitted
             # construction, not a clash.
-            return Relation(0.20, "two bats in one lineup against one starter "
+            return Relation(0.275, "two bats in one lineup against one starter "
                                   "— §5.1 puts this at +0.20 to +0.35", 0, "ok")
         return Relation(-0.10, f"two teammates splitting one {fa} pie — §3 "
                                f"Type 3 cannibalisation", 3, "kill")
@@ -779,10 +798,10 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None) -> Relation:
 
     # The permitted positive constructions, at the bottom of each band.
     if same_team and {fa, fb} == {"pass", "catch"} and ua and ub:
-        return Relation(0.35, "one passing game wearing two jerseys — §4.1's "
+        return Relation(0.425, "one passing game wearing two jerseys — §4.1's "
                               "strongest usable NFL correlation", 0, "ok")
     if same_team and {fa, fb} == {"assist", "score"} and ua and ub:
-        return Relation(0.15, "the same possessions completing — §8.2", 0, "ok")
+        return Relation(0.225, "the same possessions completing — §8.2", 0, "ok")
 
     if ua and ub:
         return Relation(SAME_GAME_BASELINE_RHO,
@@ -888,6 +907,8 @@ class Ticket:
     required_dec: float = 0.0
     best_case_dec: float = 0.0
     ev_singles: float = 0.0
+    ev_alternative: float = 0.0
+    ev_parlay_at_required: float = 0.0
     parlay_type: str = "A"
     duplicate: bool = False
     verdict: str = ""
@@ -1004,8 +1025,23 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
             return p * (american_to_decimal(odds) - 1.0) - (1.0 - p)
         return float(l.get("ev_per_unit") or l.get("ev") or 0.0)
 
-    ev_singles = sum(_leg_ev(l, p) for l, p in zip(legs, ps))
-    dom_dec = (1.0 + DOMINANCE_MULTIPLE * ev_singles) / modeled
+    leg_evs = [_leg_ev(l, p) for l, p in zip(legs, ps)]
+    ev_singles = sum(leg_evs)
+    # Which singles alternative the ticket is measured against depends on
+    # whether singles can replicate it.
+    #
+    # A CROSS-GAME ticket is replicable: the legs are independent, so betting
+    # each one separately buys the same exposure with less variance. §0.3's
+    # proof applies directly, the comparison is portfolio against portfolio,
+    # and the sum is the right number. That is what kills Type B, correctly.
+    #
+    # A SAME-GAME ticket is not replicable. It pays on a joint event you
+    # cannot construct out of singles at any stake, so comparing one unit on
+    # the ticket against n units spread across the legs compares one unit of
+    # risk to n — the parlay loses on dimensions before it loses on merit.
+    # At equal stake the comparison is at least asking the same question.
+    ev_alternative = (ev_singles / n) if same_game else ev_singles
+    dom_dec = (1.0 + DOMINANCE_MULTIPLE * ev_alternative) / modeled
     required = max(price_dec, dom_dec)
 
     naive_dec = math.prod(american_to_decimal(l.get("odds") or -110) for l in legs)
@@ -1015,7 +1051,8 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
     if not same_game:
         best_case = naive_dec
     else:
-        best_case = naive_dec * (1 - BEST_CASE_SGP_TAX)
+        tax = BEST_CASE_SGP_TAX[2 if n <= 2 else 3]
+        best_case = naive_dec * (1 - tax)
         # §1.2's flat 15-30% band describes a typical SGP, and it is the
         # right ceiling for one: a book that taxed the full correlation
         # would be quoting far shorter than 70-85% of the naive product, so
@@ -1045,7 +1082,9 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
     t = Ticket(sport=sport, legs=legs, modeled_joint=modeled,
                independent_joint=independent, threshold=thr,
                required_dec=required, best_case_dec=best_case,
-               ev_singles=ev_singles, duplicate=duplicate,
+               ev_singles=ev_singles, ev_alternative=ev_alternative,
+               ev_parlay_at_required=modeled * required - 1.0,
+               duplicate=duplicate,
                parlay_type="A" if same_game else "B")
     t.pairs = [{"a": legs[i].get("player"), "b": legs[j].get("player"),
                 "rho": round(rel.rho, 2), "rho_priced": round(rel.rho * RHO_SHRINK, 3),
@@ -1060,8 +1099,9 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
 
     if required > best_case:
         ceiling = (f"the most generous price a book would plausibly quote — "
-                   f"the naive product less §1.2's kindest "
-                   f"{BEST_CASE_SGP_TAX:.0%} correlation tax"
+                   f"the naive product less the "
+                   f"{BEST_CASE_SGP_TAX[2 if n <= 2 else 3]:.0%} correlation "
+                   f"tax a book charges on a {n}-leg same-game ticket"
                    if same_game else
                    f"straight multiplication of the leg prices, which is what "
                    f"a cross-game ticket pays and is therefore the ceiling")
@@ -1291,7 +1331,7 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
     return out
 
 
-def attach(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
+def attach(slate: dict, sport: str, state: str | None = None) -> dict:
     """Screen a slate and hang the result on it as `parlays`.
 
     Called from each builder immediately before the JSON is written, so the
@@ -1304,7 +1344,12 @@ def attach(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
     otherwise fine; the page renders the failure instead.
     """
     try:
-        slate["parlays"] = screen(slate, sport, bankroll_state=bankroll_state)
+        # §10.2's drawdown rule only bites if something asks. Measured from
+        # the journal rather than passed in, so it cannot be left at
+        # "normal" by a caller that does not know it exists.
+        slate["parlays"] = screen(
+            slate, sport,
+            bankroll_state=state if state is not None else bankroll_state(sport))
     except Exception as exc:                       # pragma: no cover - guard
         slate["parlays"] = {
             "sport": sport, "tickets": [], "probation": True, "killed": [],
@@ -1353,9 +1398,13 @@ def _publish(t: Ticket, qualified: bool, rank: int = 1) -> dict:
         "required_dec": round(t.required_dec, 3),
         "required_american": decimal_to_american(t.required_dec),
         "best_case_american": decimal_to_american(t.best_case_dec),
-        "correlation_tax_best_case": round(BEST_CASE_SGP_TAX, 3),
-        "correlation_tax_worst_case": round(WORST_CASE_SGP_TAX, 3),
+        "correlation_tax_best_case": BEST_CASE_SGP_TAX[2 if len(t.legs) <= 2 else 3],
+        "correlation_tax_worst_case": WORST_CASE_SGP_TAX[2 if len(t.legs) <= 2 else 3],
         "singles_alternative_ev": round(t.ev_singles, 4),
+        "singles_alternative_same_stake": round(t.ev_alternative, 4),
+        # §13: "If singles were better, say so on the card." With the bar
+        # tuned down this is the sentence doing the honest work.
+        "singles_beat_it": bool(t.ev_alternative >= t.ev_parlay_at_required),
         # How far short a ticket falls, as a number. On this board the answer
         # is almost always "short", and "short by 9%" is a far more useful
         # thing to read than a bare no — it says whether the gap is a rounding
@@ -1382,3 +1431,99 @@ def _risk(t: Ticket) -> str:
             f"weakest link at {p:.0%} — it fails roughly {1 - p:.0%} of the "
             f"time on its own, and it takes the whole ticket with it. Two "
             f"legs cashing and one missing pays the same as three misses.")
+
+
+# --- §10.2: one parlay per slate, ACROSS ALL SPORTS --------------------------
+SLATE_BOARDS = {
+    "nfl": "web/data/recommendations.json",
+    "mlb": "web/data/mlb_recommendations.json",
+    "cfb": "web/data/cfb.json",
+    "nba": "web/data/nba.json",
+    "wnba": "web/data/wnba.json",
+}
+
+
+def arbitrate_slate(root, boards: dict | None = None) -> dict:
+    """Leave at most ONE play standing across every board that was built.
+
+    Each sport screens its own slate independently, so on a busy night six
+    leagues could each publish a play and the operation would be holding six
+    parlays against a rule that permits one. §10.2 is explicit — "max 1
+    parlay per slate, across all sports" — and it cannot be enforced inside
+    a single sport's build because no build can see the others.
+
+    So this runs after all of them. The winner is the ticket with the most
+    edge at the price a book would plausibly quote, which is the same number
+    each board ranks on internally; ties go to the shorter ticket, per §0.2.
+    Everything else keeps its card and its ranking and loses only its status
+    as a play — the reader still sees what every league offered, which is
+    the point of the page.
+
+    Never raises: a slate that cannot be arbitrated keeps its own verdict
+    rather than taking the site down.
+    """
+    import json
+    from pathlib import Path
+
+    root = Path(root)
+    boards = boards or SLATE_BOARDS
+    loaded, best = {}, None
+    for sport, rel in boards.items():
+        f = root / rel
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        z = data.get("parlays")
+        if not z or not z.get("tickets"):
+            continue
+        loaded[sport] = (f, data, z)
+        for t in z["tickets"]:
+            if not t.get("qualified"):
+                continue
+            key = (-float(t.get("edge_at_ceiling_points") or 0), len(t["legs"]))
+            if best is None or key < best[0]:
+                best = (key, sport, t.get("rank"))
+
+    demoted = 0
+    for sport, (f, data, z) in loaded.items():
+        changed = False
+        for t in z["tickets"]:
+            if not t.get("qualified"):
+                continue
+            if best and sport == best[1] and t.get("rank") == best[2]:
+                t["slate_play"] = True
+                continue
+            t["slate_play"] = False
+            t["qualified"] = False
+            t["verdict"] = (
+                "Cleared all seven gates, but not tonight's play. §10.2 caps "
+                "the whole operation at one parlay per slate across every "
+                "sport, and " + (RULES.get(best[1]) or SportRules(
+                    best[1], best[1].upper())).name + " had the better "
+                "number.")
+            demoted += 1
+            changed = True
+        if changed or (best and sport == best[1]):
+            z["slate_cap_applied"] = True
+            f.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return {"boards": len(loaded), "play": best[1] if best else None,
+            "demoted": demoted}
+
+
+def bankroll_state(sport: str | None = None) -> str:
+    """"normal" or "drawdown", read from the journal.
+
+    §10.2: "parlays are suspended entirely during any active drawdown
+    circuit-breaker. When stakes are halved, parlays go to zero — not half."
+    engine.ledger already measures the breaker for the singles side; this
+    only has to ask it. Never raises — a missing journal means no measured
+    drawdown, which is "normal", not a reason to fail a build.
+    """
+    try:
+        from . import ledger
+        with ledger.connect() as conn:
+            return "drawdown" if ledger.drawdown_factor(conn, sport) < 1.0 \
+                else "normal"
+    except Exception:
+        return "normal"

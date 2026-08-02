@@ -351,11 +351,16 @@ def test_the_required_price_is_higher_for_three_legs_than_for_two():
 
 
 def test_college_football_carries_the_highest_bar_in_the_system():
-    """§6: 8 points for a three-leg CFB ticket, not 6. Highest baseline
-    volatility, worst injury information."""
-    assert P.RULES["cfb"].threshold(3) == 0.08
-    assert P.RULES["nfl"].threshold(3) == 0.06
-    assert P.RULES["cfb"].threshold(2) == 0.05
+    """§6 holds CFB above every other sport: highest baseline volatility,
+    worst injury information. The absolute numbers are tuned down from the
+    doc's 5/6/8 at the operator's direction — what has to survive that
+    retune is the ORDERING, because the ordering is the judgement and the
+    numbers are the dial."""
+    for legs in (2, 3):
+        assert P.RULES["cfb"].threshold(legs) > P.RULES["nfl"].threshold(legs), legs
+        assert P.RULES["cfb"].threshold(legs) > P.RULES["mlb"].threshold(legs), legs
+    for sport in ("nfl", "mlb", "cfb", "nba", "wnba"):
+        assert P.RULES[sport].threshold(3) > P.RULES[sport].threshold(2), sport
 
 
 def test_no_ticket_ever_exceeds_three_legs():
@@ -465,10 +470,10 @@ def test_the_page_never_claims_to_know_a_price_it_cannot_see():
     assert "not derivable from the leg prices" in out["price_note"]
     # And a ticket that does NOT clear says how far short it fell, as a
     # number — "short by 9%" is a far more useful read than a bare no.
-    miss = run("mlb", [leg("Wheeler", "PHI", "CHC", "strikeouts", p=0.56,
+    miss = run("mlb", [leg("Bat A", "PHI", "CHC", "total_bases", p=0.55,
                            date="2026-08-02"),
-                       leg("Wheeler", "PHI", "CHC", "outs", p=0.55,
-                           date="2026-08-02")],
+                       leg("SP B", "CHC", "PHI", "strikeouts", p=0.54,
+                           side="UNDER", date="2026-08-02")],
                [game("PHI", "CHC", "2026-08-02")])
     assert miss["tickets"][0]["qualified"] is False
     assert miss["tickets"][0]["shortfall_pct"] > 0
@@ -482,8 +487,9 @@ def test_every_ticket_shows_the_singles_alternative_and_the_tax():
     t = run("mlb", clearing_fixture(),
             [game("PHI", "CHC", "2026-08-02")])["tickets"][0]
     assert t["singles_alternative_ev"] > 0
-    assert t["correlation_tax_best_case"] == P.BEST_CASE_SGP_TAX
-    assert t["correlation_tax_worst_case"] == P.WORST_CASE_SGP_TAX
+    n = 2 if len(t["legs"]) <= 2 else 3
+    assert t["correlation_tax_best_case"] == P.BEST_CASE_SGP_TAX[n]
+    assert t["correlation_tax_worst_case"] == P.WORST_CASE_SGP_TAX[n]
     assert t["naive_product_american"] and t["required_american"]
 
 
@@ -501,10 +507,13 @@ def test_the_correlation_tax_is_actually_taken_off_the_same_game_ceiling():
             [game("PHI", "CHC", "2026-08-02")])["tickets"][0]
     naive = t["naive_product_dec"]
     ceiling = P.american_to_decimal(t["best_case_american"])
-    assert abs(ceiling - naive * (1 - P.BEST_CASE_SGP_TAX)) < 0.02, (
+    assert abs(ceiling - naive * (1 - P.BEST_CASE_SGP_TAX[2])) < 0.02, (
         f"same-game ceiling {ceiling} is not the product {naive} less the "
-        f"{P.BEST_CASE_SGP_TAX:.0%} tax")
-    assert ceiling < naive - 0.2, "no tax was taken off at all"
+        f"{P.BEST_CASE_SGP_TAX[2]:.0%} two-leg tax")
+    assert ceiling < naive - 0.1, "no tax was taken off at all"
+    # A three-leg ticket is taxed harder than a pair. §1.2's 15-30% band is a
+    # THREE-leg figure; charging it to a pair was an inherited assumption.
+    assert P.BEST_CASE_SGP_TAX[3] > P.BEST_CASE_SGP_TAX[2]
 
     cross = [leg("WR", "GB", "CHI", "receptions", p=0.62, ev=0.127, odds=-122),
              leg("WR2", "NE", "NYJ", "receptions", p=0.62, ev=0.127, odds=-122)]
@@ -625,7 +634,8 @@ def test_the_pitcher_stacks_third_leg_is_the_opposing_team_total():
                [gline("team_total", "CHC", "PHI", "CHC", side="Under",
                       line=3.5, p=0.62, date="2026-08-02")], g)
     assert out["tickets"], reasons(out)
-    assert 0.20 in _rhos(out), _rhos(out)
+    # §5.1's band for this pairing is +0.20 to +0.35.
+    assert any(0.20 <= r <= 0.35 for r in _rhos(out)), _rhos(out)
     assert "cleanest MLB" in out["tickets"][0]["pairs"][0]["mechanism"]
 
 
@@ -640,7 +650,8 @@ def test_the_quarterback_and_his_receiver_are_not_a_duplicate():
                [], [game(favorite="GB", spread=3.0)])
     assert out["tickets"], reasons(out)
     pair = out["tickets"][0]["pairs"][0]
-    assert pair["rho"] == 0.35, pair
+    # §4.1's band for QB pass yards against WR1: +0.35 to +0.50.
+    assert 0.35 <= pair["rho"] <= 0.50, pair
     assert pair["clash"] == 0, "the strongest NFL correlation flagged as a clash"
 
 
@@ -654,11 +665,11 @@ def test_the_trailing_dog_mechanism_needs_to_know_who_the_dog_is():
     dog = run2("nfl", [leg("DogWR", "CHI", "GB", "receptions", p=0.63)],
                [gline("spread", "CHI", "CHI", "GB", line=3.0, p=0.58)],
                [game(favorite="GB", spread=3.0)])
-    assert 0.20 in _rhos(dog), _rhos(dog)
+    assert any(0.20 <= r <= 0.35 for r in _rhos(dog)), _rhos(dog)
     fav = run2("nfl", [leg("FavWR", "GB", "CHI", "receptions", p=0.63)],
                [gline("spread", "GB", "CHI", "GB", line=-3.0, p=0.58)],
                [game(favorite="GB", spread=3.0)])
-    assert 0.20 not in _rhos(fav), (
+    assert all(r < 0.20 for r in _rhos(fav)), (
         "a favourite's pass-catcher got the trailing-dog correlation")
 
 
@@ -692,7 +703,11 @@ def test_the_cfb_scheme_sign_is_refused_rather_than_guessed():
         gline("spread", "RICE", "UTSA", "RICE", line=6.0, p=0.60),
         gline("total", "", "UTSA", "RICE", side="Over", line=52.0, p=0.60)], g)
     assert dog["tickets"], reasons(dog)
-    assert 0.20 in _rhos(dog)
+    # §6.2 puts dog covers against the game total over at +0.20 to +0.35.
+    # Asserting the band rather than a literal: which point inside it we
+    # price at is a tuning dial, but leaving the band would be a claim about
+    # the world that the doc does not make.
+    assert any(0.20 <= r <= 0.35 for r in _rhos(dog)), _rhos(dog)
 
 
 def test_both_sides_of_one_run_environment_are_banned_by_name():
@@ -768,7 +783,7 @@ def test_the_book_ceiling_is_capped_on_a_near_duplicate_pair():
     t = out["tickets"][0]
     assert "duplicate" in t["clash_screen"]
     assert P.american_to_decimal(t["best_case_american"]) < \
-        t["naive_product_dec"] * (1 - P.BEST_CASE_SGP_TAX) - 0.3, (
+        t["naive_product_dec"] * (1 - P.BEST_CASE_SGP_TAX[2]) - 0.3, (
         "the duplicate ceiling was not capped below the flat-tax number")
     assert t["qualified"] is False, (
         "a moneyline and a spread on one team cleared the screen — that is "
@@ -884,12 +899,6 @@ def test_the_page_carries_the_singles_alternative_and_the_tax():
     assert "singles_alternative_ev" in block
 
 
-if __name__ == "__main__":
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn()
-        print(f"  ok  {fn.__name__}")
-    print(f"\n{len(fns)} tests passed.")
 
 
 # --- ranking the board ------------------------------------------------------
@@ -978,3 +987,167 @@ def test_the_shortlist_is_bounded():
     out = run("mlb", recs, g)
     assert out["considered"] > 20, "not enough candidates to test the bound"
     assert len(out["tickets"]) <= P.SHORTLIST
+
+
+# --- the retuned gates still have to say no ---------------------------------
+def test_a_pair_with_only_the_pace_floor_between_them_is_still_refused():
+    """The guard on the retune. §1.3's thresholds were tuned down at the
+    operator's direction so that genuinely correlated constructions can be
+    published as plays. The whole value of that is lost if the bar stops
+    discriminating — a pair whose only link is §1.1's +0.10 pace floor has no
+    mechanism worth paying a correlation tax for, and must still fail."""
+    thin = run2("nfl", [leg("RB", "GB", "CHI", "rush_yds", p=0.55),
+                        leg("WR", "CHI", "GB", "receptions", p=0.54)],
+                [], [game(favorite="GB", spread=3.0)])
+    assert thin["tickets"], reasons(thin)
+    assert thin["tickets"][0]["qualified"] is False, (
+        "a ticket carrying nothing but the pace floor was published as a play")
+
+    # ...while the constructions the doc names DO clear, or the retune
+    # achieved nothing. §4.1's strongest usable NFL correlation:
+    strong = run2("nfl", [leg("QB", "GB", "CHI", "pass_yds", p=0.58, odds=-115),
+                          leg("WR1", "GB", "CHI", "receptions", p=0.56)],
+                  [], [game(favorite="GB", spread=3.0)])
+    assert strong["tickets"][0]["qualified"] is True, (
+        "the doc's headline NFL construction still cannot be published")
+
+
+def test_the_same_stake_comparison_applies_only_where_singles_cannot_replicate():
+    """Which singles alternative a ticket is measured against turns on
+    whether singles can reproduce it.
+
+    Cross-game legs are independent, so betting them separately buys the same
+    exposure with less variance — §0.3's proof applies and the comparison is
+    the SUM. A same-game ticket pays on a joint event no combination of
+    singles can construct, so measuring one unit on it against n units spread
+    across the legs compares one unit of risk to n. If the same-stake reading
+    ever leaked onto cross-game tickets, Type B would start clearing and §0.3
+    would be broken."""
+    cross = run2("nfl", [leg("WR", "GB", "CHI", "receptions", p=0.62,
+                             odds=-122),
+                         leg("WR2", "NE", "NYJ", "receptions", p=0.62,
+                             odds=-122)],
+                 [], [game(), game("NYJ", "NE")])
+    t = cross["tickets"][0]
+    assert t["parlay_type"] == "B"
+    assert t["qualified"] is False, "a cross-game ticket cleared"
+    assert abs(t["singles_alternative_same_stake"]
+               - t["singles_alternative_ev"]) < 1e-9, (
+        "a cross-game ticket was measured at same stake")
+
+    same = run2("mlb", [leg("Bat A", "PHI", "CHC", "total_bases", p=0.55,
+                            odds=-105, date="2026-08-02"),
+                        leg("Bat B", "PHI", "CHC", "hits", p=0.54, odds=100,
+                            date="2026-08-02")],
+                [], [game("PHI", "CHC", "2026-08-02")])
+    st = same["tickets"][0]
+    assert st["singles_alternative_same_stake"] < st["singles_alternative_ev"]
+
+
+def test_the_card_says_so_when_the_singles_were_the_better_bet():
+    """§13's display rule, and with the bar tuned down it is the sentence
+    doing the honest work: "Every published ticket shows the
+    singles-alternative EV alongside the parlay EV. If singles were better,
+    say so on the card.\""""
+    out = run2("nfl", [leg("QB", "GB", "CHI", "pass_yds", p=0.58, odds=-115),
+                       leg("WR1", "GB", "CHI", "receptions", p=0.56)],
+               [], [game(favorite="GB", spread=3.0)])
+    t = out["tickets"][0]
+    assert "singles_beat_it" in t
+    assert "singles_alternative_same_stake" in t
+
+
+# --- §10.2 across every board -----------------------------------------------
+def test_the_slate_cap_leaves_one_play_standing_across_all_sports():
+    """§10.2: "Max 1 parlay per slate, across all sports." No single build
+    can enforce that, because no build can see the others — six leagues
+    screening independently can each publish a play and the operation ends
+    up holding six against a rule that permits one. The arbiter runs after
+    every board exists and leaves the best number standing."""
+    import json
+    import tempfile
+    root = __import__("pathlib").Path(tempfile.mkdtemp())
+    (root / "web" / "data").mkdir(parents=True)
+
+    def board(sport, edge):
+        return {"parlays": {"sport": sport, "tickets": [
+            {"rank": 1, "qualified": True, "edge_at_ceiling_points": edge,
+             "legs": [1, 2], "verdict": "Bet only at +200 or better."}]}}
+
+    (root / "web/data/recommendations.json").write_text(json.dumps(board("nfl", 5.0)))
+    (root / "web/data/mlb_recommendations.json").write_text(json.dumps(board("mlb", 3.2)))
+    r = P.arbitrate_slate(root)
+    assert r["play"] == "nfl", r          # the better number wins
+    assert r["demoted"] == 1
+
+    def ticket(f):
+        return json.loads((root / "web/data" / f).read_text())["parlays"]["tickets"][0]
+
+    assert ticket("recommendations.json")["slate_play"] is True
+    lost = ticket("mlb_recommendations.json")
+    assert lost["qualified"] is False
+    assert lost["slate_play"] is False
+    # It keeps its card and its ranking — the reader still sees what MLB
+    # offered. Only its status as the play is gone, and the card says why.
+    assert "§10.2" in lost["verdict"] and "NFL" in lost["verdict"]
+
+
+def test_the_slate_cap_never_takes_a_board_down():
+    """A missing or malformed board must not break the others, and a night
+    with nothing qualified anywhere is a normal night, not an error."""
+    import json
+    import tempfile
+    root = __import__("pathlib").Path(tempfile.mkdtemp())
+    (root / "web" / "data").mkdir(parents=True)
+    (root / "web/data/recommendations.json").write_text("{ not json")
+    (root / "web/data/mlb_recommendations.json").write_text(json.dumps(
+        {"parlays": {"sport": "mlb", "tickets": [
+            {"rank": 1, "qualified": False, "edge_at_ceiling_points": -1.0,
+             "legs": [1, 2], "verdict": "No qualifying parlay."}]}}))
+    r = P.arbitrate_slate(root)
+    assert r["play"] is None
+    assert r["demoted"] == 0
+
+
+def test_the_drawdown_state_is_measured_rather_than_assumed():
+    """§10.2: "parlays are suspended entirely during any active drawdown
+    circuit-breaker. When stakes are halved, parlays go to zero — not half."
+    The screen has always handled the drawdown state correctly; what was
+    missing is that nothing ever asked for it. attach() reads it from the
+    journal now, so a caller that does not know the rule exists cannot leave
+    it permanently at "normal"."""
+    import inspect
+    src = inspect.getsource(P.attach)
+    assert "bankroll_state(sport)" in src, (
+        "attach() no longer measures the drawdown state")
+    assert P.bankroll_state("mlb") in ("normal", "drawdown")
+
+    # and the suspension itself still bites
+    recs, g = clearing_fixture(), [game("PHI", "CHC", "2026-08-02")]
+    assert run("mlb", recs, g)["tickets"], "control: this publishes normally"
+    out = run("mlb", recs, g, bankroll_state="drawdown")
+    assert out["tickets"] == []
+
+
+def test_the_launch_refresh_runs_the_slate_cap():
+    src = open(os.path.join(_ROOT, "launch.py"), encoding="utf-8").read()
+    assert "_arbitrate_parlays(quiet=quiet)" in src
+    assert "from engine.parlays import arbitrate_slate" in src
+
+
+if __name__ == "__main__":
+    # Collect by scanning the SOURCE, not just globals(). Tests appended
+    # below this block get defined after it has already run, so they are
+    # silently never executed — eleven of them were, including every test of
+    # the ranking and the slate cap, while the file cheerfully reported
+    # "57 tests passed". A runner that cannot notice its own missing tests
+    # is the one thing in a test file that must not be taken on trust.
+    import re as _re
+    declared = _re.findall(r"^def (test_\w+)", open(__file__, encoding="utf-8").read(),
+                           _re.M)
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    missing = sorted(set(declared) - {f.__name__ for f in fns})
+    assert not missing, f"defined but never collected: {missing}"
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")

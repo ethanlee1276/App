@@ -504,6 +504,30 @@ def refresh_all(quiet: bool = False) -> None:
     refresh_ufc(quiet=quiet)
     refresh_sport_rosters(quiet=quiet)
     refresh_standings(quiet=quiet)
+    _arbitrate_parlays(quiet=quiet)
+
+
+def _arbitrate_parlays(quiet: bool = False) -> None:
+    """§10.2: one parlay per slate ACROSS ALL SPORTS.
+
+    Each league screens its own board and cannot see the others, so six
+    leagues can each publish a play and the operation ends up holding six
+    against a rule that permits one. This runs once all the boards exist and
+    leaves the single best number standing; the rest keep their cards and
+    their ranking and lose only their status as the play.
+    """
+    try:
+        from engine.parlays import arbitrate_slate
+        r = arbitrate_slate(ROOT)
+        if not quiet and r["boards"]:
+            if r["play"]:
+                print(f"  Parlay slate cap: {r['play'].upper()} takes the one "
+                      f"play; {r['demoted']} other(s) demoted.")
+            elif not quiet:
+                print("  Parlay slate cap: nothing qualified on any board.")
+    except Exception as exc:  # noqa: BLE001 — never take the site down
+        if not quiet:
+            print(f"  ⚠️  parlay slate cap skipped: {exc}")
 
 
 def _run_maintenance() -> None:

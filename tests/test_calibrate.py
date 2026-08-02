@@ -176,13 +176,6 @@ def test_disabled_context_suppresses_the_correction():
         cal.reset_cache()
 
 
-if __name__ == "__main__":
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn(); print(f"  ok  {fn.__name__}")
-    print(f"\n{len(fns)} tests passed.")
-
-
 def test_calibration_pairs_are_stated_on_the_over_side():
     """Regression: the fitted correction is applied to P(over the line),
     so the pairs it is fitted from must describe the same quantity.
@@ -275,3 +268,10 @@ def test_boundary_fit_is_flagged_but_never_applied():
         assert cal.correction_for("mlb", "hits", p) == (0.76, 0.04)
         assert cal.is_reliable("mlb", "hits", p) is True
     cal.reset_cache()
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")
