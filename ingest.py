@@ -83,6 +83,51 @@ def print_summary(conn) -> None:
             print(f"  ⚠️  odds start {lo} but player logs start {logs_lo} — "
                   f"run: python3 ingest.py mlb --from {lo} --to {logs_lo} "
                   f"(free) so those purchased lines join to settled games")
+    print_gaps(conn)
+
+
+#: How many holes to list before collapsing to a count. A wall of dates is
+#: not a report — the first few name the shape and the range repairs them all.
+GAP_LIST_MAX = 12
+
+
+def print_gaps(conn, sport: str = "mlb") -> None:
+    """Days inside the span that are half-ingested. Free to compute and free
+    to repair — statsapi.mlb.com is keyless, so nothing here spends credits.
+
+    The span line above says 2021 to 2026 and says nothing about the holes in
+    the middle, which is the failure that actually happens: a bet whose day
+    was never fully ingested cannot settle, sits open forever, and — before
+    the settle guards landed — could be graded against the wrong game.
+    """
+    try:
+        gaps = db.coverage_gaps(conn, sport)
+    except Exception as exc:                       # never break the summary
+        print(f"  (gap scan skipped: {exc})")
+        return
+    if not gaps:
+        print(f"  {sport.upper()} day coverage: no half-ingested days")
+        return
+    label = {"no_finals": "no final scores",
+             "some_finals": "partial finals",
+             "no_logs": "no player logs",
+             "thin_logs": "thin player logs"}
+    kinds: dict[str, int] = {}
+    for g in gaps:
+        kinds[g["kind"]] = kinds.get(g["kind"], 0) + 1
+    tally = " · ".join(f"{label[k]} {n}" for k, n in sorted(kinds.items()))
+    print(f"\n  ⚠️  {len(gaps)} {sport.upper()} day(s) are half-ingested "
+          f"({tally}):")
+    for g in gaps[:GAP_LIST_MAX]:
+        print(f"      {g['date']}  {label[g['kind']]:<18} {g['detail']}")
+    if len(gaps) > GAP_LIST_MAX:
+        print(f"      … and {len(gaps) - GAP_LIST_MAX} more")
+    lo, hi = gaps[0]["date"], gaps[-1]["date"]
+    print(f"\n      Repair (FREE — statsapi.mlb.com needs no key, and the "
+          f"walk is resumable):")
+    print(f"        python3 ingest.py {sport} --from {lo} --to {hi}")
+    print(f"      Then settle whatever those days were holding open:")
+    print(f"        python3 launch.py --settle all")
 
 
 

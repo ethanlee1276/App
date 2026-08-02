@@ -398,6 +398,77 @@ def sports_present(conn) -> list[str]:
     return list(CORE_SPORTS) + rest
 
 
+#: A day with fewer distinct players than this had a partial ingest. A full
+#: MLB slate stores several hundred; a handful means the log layer stopped
+#: part-way through, which looks identical to a quiet day from the outside.
+THIN_DAY_PLAYERS = 120
+
+
+def coverage_gaps(conn, sport: str = "mlb", start: str | None = None,
+                  end: str | None = None) -> list[dict]:
+    """Days INSIDE the stored span that are incomplete. Read-only, no network.
+
+    ``date_ranges`` reports first and last, which is the wrong shape for the
+    failure that actually happens. A span of 2021 to 2026 is printed with no
+    complaint while three days in the middle of it hold nothing — and those
+    holes are not cosmetic: a bet whose result was never ingested cannot
+    settle, and a day whose finals are missing is exactly the state that let
+    the settler grade props against the wrong game.
+
+    Four kinds of hole, named separately because they need different fixes:
+
+      * ``no_finals``  — games are stored for that day and none has a score.
+        The scores layer ran and came back empty.
+      * ``some_finals`` — some of the day's games have scores and some do not.
+        Usually a genuinely suspended game, occasionally a partial run.
+      * ``no_logs``    — the day's games are final but no player logs exist.
+        The scores layer worked and the log layer did not, which is the
+        expensive one: props have nothing to settle against.
+      * ``thin_logs``  — logs exist but from too few players to be a slate.
+
+    Empty days are NOT reported. Off days, the All-Star break and the
+    offseason all look like an empty day, and a report that cries wolf on
+    every Monday in November stops being read. What is reported is a day the
+    database itself says is half-finished.
+    """
+    where = "sport=?"
+    args: list = [sport]
+    if start:
+        where += " AND period>=?"
+        args.append(start)
+    if end:
+        where += " AND period<=?"
+        args.append(end)
+    rows = conn.execute(
+        f"SELECT period, COUNT(*) AS n, "
+        f"COALESCE(SUM(home_score IS NOT NULL), 0) AS fin "
+        f"FROM games WHERE {where} GROUP BY period ORDER BY period", args
+    ).fetchall()
+    logs = {r[0]: (r[1], r[2]) for r in conn.execute(
+        f"SELECT period, COUNT(*), COUNT(DISTINCT player) "
+        f"FROM player_game_logs WHERE {where} GROUP BY period", args)}
+    out: list[dict] = []
+    for r in rows:
+        day, n, fin = r["period"], int(r["n"] or 0), int(r["fin"] or 0)
+        n_logs, n_players = logs.get(day, (0, 0))
+        if not fin:
+            kind, detail = "no_finals", f"{n} game(s) stored, none with a score"
+        elif fin < n:
+            kind, detail = "some_finals", f"{fin} of {n} game(s) have a score"
+        elif not n_logs:
+            kind, detail = "no_logs", f"{n} final game(s), no player logs"
+        elif n_players < THIN_DAY_PLAYERS:
+            kind, detail = "thin_logs", (f"{n_players} player(s) logged across "
+                                         f"{n} game(s) — a full slate stores "
+                                         f"several hundred")
+        else:
+            continue
+        out.append({"date": day, "kind": kind, "games": n, "finals": fin,
+                    "log_rows": n_logs, "players": n_players,
+                    "detail": detail})
+    return out
+
+
 def summary(conn) -> dict:
     out: dict = {"games": {}, "scored_games": {}, "player_logs": {}, "seasons": {}}
     for sport in sports_present(conn):
