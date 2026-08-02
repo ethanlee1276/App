@@ -2041,6 +2041,93 @@ def why_ufc(argv: list | None = None) -> None:
           "happens. A fight that fails now fails on its own merits.")
 
 
+def why_many(sport: str = "mlb", days: int = 21) -> None:
+    """The inverse of --why-empty: why is tonight's board BIGGER than usual?
+
+    "We normally recommend about four a night" is a memory, and a memory is
+    not a baseline. This measures the nightly count from the journal itself,
+    so tonight's number gets compared against what actually happened rather
+    than against an impression — and then walks the gates to say which one
+    stopped holding.
+
+    The gate that swings an MLB count hardest is the lineup hold: hitter
+    props are blocked until the card is posted, so the board is quiet in the
+    morning and fills in the moment lineups drop. A count taken at 11am and
+    a count taken at 6pm are not the same measurement.
+    """
+    import json as _json
+    from collections import Counter
+    from engine import ledger
+
+    rel = ("web/data/mlb_recommendations.json" if sport == "mlb"
+           else "web/data/recommendations.json")
+    p = ROOT / rel
+    if not p.is_file():
+        print(f"No board built yet at {rel} — start the launcher first.")
+        return
+    board = _json.loads(p.read_text())
+    recs = board.get("recommendations", [])
+    live = [r for r in recs if r.get("recommended")]
+    print(f"\n  TONIGHT ({board.get('date', '?')})")
+    print(f"  {len(recs)} prop(s) priced · {len(live)} recommended\n")
+
+    # --- the baseline, measured ------------------------------------------
+    with ledger.connect() as conn:
+        rows = conn.execute(
+            "SELECT date, COUNT(*) n FROM bets WHERE sport=? AND category='main' "
+            "GROUP BY date ORDER BY date DESC LIMIT ?", (sport, days)).fetchall()
+    if rows:
+        counts = [r["n"] for r in rows]
+        counts_sorted = sorted(counts)
+        med = counts_sorted[len(counts_sorted) // 2]
+        print(f"  JOURNALLED PER NIGHT, last {len(counts)} slate(s) with picks")
+        print(f"  median {med} · min {min(counts)} · max {max(counts)}")
+        for r in rows[:8]:
+            bar = "#" * min(r["n"], 40)
+            print(f"    {r['date']}  {r['n']:>3}  {bar}")
+        if live and med:
+            print(f"\n  tonight is {len(live) / med:.1f}x the median night")
+        print()
+    else:
+        print(f"  No {sport} picks journalled yet — no baseline to compare "
+              f"against, so tonight's count cannot be called unusual.\n")
+
+    # --- what cleared, and what it cleared BY -----------------------------
+    if not live:
+        print("  Nothing recommended — run --why-empty instead.")
+        return
+    edges = sorted(r.get("edge", 0) for r in live)
+    confs = sorted(r.get("confidence", 0) for r in live)
+    stakes = [r.get("stake_units", 0) or 0 for r in live]
+    mid = len(edges) // 2
+    print("  WHAT CLEARED")
+    print(f"  edge        min {edges[0]:+.1%}  median {edges[mid]:+.1%}  max {edges[-1]:+.1%}")
+    print(f"  confidence  min {confs[0]:.1f}   median {confs[mid]:.1f}   max {confs[-1]:.1f}")
+    print(f"  exposure    {sum(stakes):.2f}u across {len(live)} pick(s)")
+    by_market = Counter(r.get("market_label") or r.get("market") for r in live)
+    by_grade = Counter(r.get("grade") for r in live)
+    by_game = Counter(f"{r.get('opponent','?')}" for r in live)
+    print(f"  markets     " + ", ".join(f"{k} {v}" for k, v in by_market.most_common()))
+    print(f"  grades      " + ", ".join(f"{k} {v}" for k, v in by_grade.most_common()))
+    print(f"  spread over {len(by_game)} matchup(s)\n")
+
+    # A board that is big because it is CONCENTRATED is a different problem
+    # from one that is big because the slate is big. Say which.
+    top_game, top_n = by_game.most_common(1)[0]
+    if top_n > max(3, len(live) * 0.4):
+        print(f"  ! {top_n} of {len(live)} picks come from one matchup ({top_game}).")
+        print(f"    Correlated exposure — check the correlation flags before "
+              f"treating these as {top_n} independent bets.\n")
+
+    # --- the gates, and how much room each pick had -----------------------
+    thin = [r for r in live if (r.get("stake_units") or 0) < 0.10]
+    if thin:
+        print(f"  {len(thin)} of {len(live)} size under 0.10u — they cleared "
+              f"the edge bar but Kelly barely wants them.\n")
+    print("  Run --why-pick \"<player>\" for the gate-by-gate on any one of "
+          "them.\n")
+
+
 def why_empty(sport: str = "mlb", min_conf: float = 6.0,
               min_edge: float = 0.02, max_juice: int = -350) -> None:
     """Explain an empty board: which gate is actually filtering everything.
@@ -2806,6 +2893,12 @@ def main() -> None:
                     if not a.startswith("-")), "mlb")
         why_live(who)
         return
+    if "--why-many" in argv:
+        i = argv.index("--why-many")
+        sp = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else "mlb"
+        why_many(sp)
+        return
+
     if "--why-empty" in argv:
         i = argv.index("--why-empty")
         sport = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else "mlb"
