@@ -111,6 +111,12 @@ KELLY_FRACTION_UFC = 0.10          # §10.1 tenth Kelly
 # conservative one for a screen whose job is to say no.
 BEST_CASE_SGP_TAX = 0.15
 WORST_CASE_SGP_TAX = 0.30
+# §1.2 quotes 4.3-4.8% hold on sides and totals. No book prices a same-game
+# ticket at better than its own correlated fair number less its ordinary
+# margin, so this floors how generous the ceiling above is allowed to get on
+# a strongly correlated pair, where a flat percentage of the naive product
+# stops describing anything real.
+MIN_BOOK_HOLD = 0.043
 
 # §1.1 / §7.2 / §8.2 all state the same floor: any two same-game overs carry
 # roughly +0.10 through shared pace and script. Nothing in one game is
@@ -207,13 +213,24 @@ FAMILY = {
     "total_bases": "bat", "hits": "bat", "home_runs": "bat",
     "pts": "score", "pra": "score", "ast": "assist", "reb": "board",
     "fg3m": "three", "stl": "stops", "blk": "stops",
+    # Game lines. Almost every construction the doc permits has one of these
+    # in it — §4.2's passing-game stack ends on a team total, §5.2's pitcher
+    # stack ends on the opposing team total, and §6.3's CFB ticket is two
+    # sides and a total with no player prop at all.
+    "moneyline": "side", "spread": "side",
+    "team_total": "teamtotal", "total": "gametotal",
 }
 TIER = {
     "receptions": 1, "pass_yds": 2, "rush_yds": 2, "rec_yds": 2,
     "anytime_td": 3,
     "strikeouts": 1, "outs": 1, "total_bases": 2, "hits": 2, "home_runs": 3,
     "reb": 1, "ast": 1, "pra": 1, "pts": 2, "fg3m": 3, "stl": 3, "blk": 3,
+    # Sides and totals are the most modelable markets on the board and the
+    # least variance-contaminated — tier tracks beatability, and these are
+    # the numbers a book prices most carefully and we price most carefully.
+    "moneyline": 1, "spread": 1, "team_total": 1, "total": 1,
 }
+GAME_FAMILIES = {"side", "teamtotal", "gametotal"}
 # §5.1: the pitcher and the hitters he faces share one set of pitches.
 PITCHER_FAMILIES = {"pitch"}
 HITTER_FAMILIES = {"bat"}
@@ -385,8 +402,57 @@ class Relation:
 
 
 def _side_up(leg: dict) -> bool:
-    """True when the leg wins as the underlying quantity goes UP."""
+    """True when the leg wins as the underlying quantity goes UP.
+
+    For a side (moneyline or spread) the quantity is the backed team's
+    result, and we only ever back one side — so a side leg always points up
+    for the team named on it. That is what makes "leading teams run" and
+    "trailing dogs throw" expressible at all.
+    """
+    if _family(leg) == "side":
+        return True
     return str(leg.get("side", "")).strip().upper().startswith("O")
+
+
+def _is_game_leg(leg: dict) -> bool:
+    return _family(leg) in GAME_FAMILIES
+
+
+def normalize_game_bet(b: dict, sport: str) -> dict:
+    """A game bet, shaped like a prop so one screen can hold both.
+
+    The two payloads disagree on names for the same ideas — `win_prob` vs
+    `hit_prob`, `date` vs `game_date`, home/away vs team/opponent — and a
+    screen that reads only one of them can never build the constructions the
+    doc actually permits. This translates rather than duplicating logic.
+    """
+    home, away = (b.get("home") or ""), (b.get("away") or "")
+    team = b.get("team") or ""
+    # A game total belongs to neither side. Filing it under the home team
+    # would make it look like a team leg to the same-team rules, which is
+    # exactly the Type 6 confusion §3 warns about.
+    opponent = (away if team == home else home) if team else ""
+    return {
+        "player": b.get("pick_label") or b.get("headline") or f"{away}@{home}",
+        "team": team, "opponent": opponent,
+        "market": b.get("market") or b.get("bet_type") or "",
+        "market_label": b.get("market_label") or "",
+        "side": b.get("side") or "",
+        "line": b.get("line"), "odds": b.get("odds"),
+        "book": b.get("book") or "",
+        "hit_prob": b.get("win_prob"), "ev_per_unit": b.get("ev_per_unit"),
+        "edge": b.get("edge"), "grade": b.get("grade"),
+        "game_date": b.get("date") or "",
+        "recommended": bool(b.get("recommended")),
+        "warnings": list(b.get("warnings") or []),
+        "headline": b.get("headline") or b.get("pick_label") or "",
+        "home": home, "away": away,
+        # The MLB game-bet layer flags its own numbers as not credible when
+        # the model disagrees with the market by more than the guard allows.
+        # A leg its own engine will not stand behind is not a parlay leg.
+        "credible": b.get("credible", True),
+        "volatility": "LOW", "tier": 1, "_game_leg": True,
+    }
 
 
 def _family(leg: dict) -> str:
@@ -404,8 +470,196 @@ def leg_tier(leg: dict) -> int:
 
 
 def game_key(leg: dict) -> tuple:
-    return (tuple(sorted((leg.get("team") or "", leg.get("opponent") or ""))),
-            leg.get("game_date") or "")
+    """Which game a leg belongs to.
+
+    A game TOTAL belongs to neither team, so its normalized `team` and
+    `opponent` are both empty — keyed off those alone every game total on
+    the slate would collide into one bucket and get screened against each
+    other. Prefer the explicit home/away when the leg carries it.
+    """
+    if leg.get("home") or leg.get("away"):
+        pair = (leg.get("home") or "", leg.get("away") or "")
+    else:
+        pair = (leg.get("team") or "", leg.get("opponent") or "")
+    return (tuple(sorted(pair)), leg.get("game_date") or "")
+
+
+def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation | None:
+    """Pairs where at least one leg is a side or a total.
+
+    Returns None when nothing here applies, so the caller falls through to
+    the player-only taxonomy. Every magnitude is the bottom of its published
+    band, same as everywhere else in this module.
+    """
+    fams = {fa, fb}
+
+    # --- two game lines in one game --------------------------------------
+    if fa in GAME_FAMILIES and fb in GAME_FAMILIES:
+        if fams == {"side"}:
+            if same_team:
+                # A moneyline and a spread on the same team are one opinion
+                # priced twice — the shortest ticket in the world wearing two
+                # legs. §3 Type 6, and an extreme case of it.
+                return Relation(0.80, "a side and a spread on the same team are "
+                                      "one opinion sold twice — §3 Type 6 at "
+                                      "its most extreme", 6, "duplicate")
+            return Relation(-0.90, "two sides of one game — they cannot both "
+                                   "win; §3 Type 1", 1, "kill")
+        if fams == {"teamtotal"} and not same_team:
+            if ua == ub:
+                # Both teams over (or both under) is the pace bet, twice.
+                return Relation(0.30, "both teams' totals moving the same way "
+                                      "is one pace bet — §8.2 puts a pace-up "
+                                      "game at +0.30 to +0.45", 6, "duplicate")
+            # §5.3, banned by name: "legs from both sides of the same game's
+            # run-scoring environment (one team's total over + other team's
+            # total under)".
+            return Relation(-0.20, "one team's total over against the other's "
+                                   "under is a bet on the same run-scoring "
+                                   "environment in both directions — §5.3 "
+                                   "bans it by name", 2, "kill")
+        if fams == {"teamtotal", "gametotal"}:
+            if ua == ub:
+                return Relation(0.55, "a team total and the game total are "
+                                      "near-restatements — §4.1/§5.1 put this "
+                                      "at +0.55 to +0.70, so the ticket is "
+                                      "really about 1.3 bets", 6, "duplicate")
+            return Relation(-0.55, "a team total and the game total pointing "
+                                   "opposite ways need the same game to score "
+                                   "twice and not score once", 2, "kill")
+        if fams == {"side", "gametotal"}:
+            # §6.1's scheme-sign rule. The sign is genuinely strong in BOTH
+            # directions depending on whether the favourite drains clock or
+            # plays fast, and the doc says getting it backwards is the most
+            # expensive CFB parlay error there is. We do not carry adjusted
+            # tempo, run/pass identity by down, or 4th-down aggressiveness for
+            # any league. Refusing beats guessing a sign on a large number.
+            fav = (game or {}).get("favorite") or ""
+            backed = a.get("team") if fa == "side" else b.get("team")
+            if fav and backed and fav.upper() == str(backed).upper():
+                return Relation(0.0, "a favourite covering correlates with the "
+                                     "under for a clock-draining team and the "
+                                     "over for a tempo team — §6.1 requires "
+                                     "adjusted tempo and run/pass identity "
+                                     "before a sign can be assigned, and this "
+                                     "model does not carry them", 2, "kill")
+            return Relation(0.20, "a dog keeping pace does it by scoring — "
+                                  "§6.2 puts dog covers against the game total "
+                                  "over at +0.20 to +0.35", 0, "ok")
+        if fams == {"side", "teamtotal"}:
+            if same_team and ua and ub:
+                return Relation(0.30, "the team that scores wins — §4.1 puts a "
+                                      "team total over against its own side at "
+                                      "+0.30 to +0.45", 0, "ok")
+            if same_team:
+                return Relation(-0.30, "backing a team while betting its own "
+                                       "total under — §3 Type 2, opposite "
+                                       "scripts", 2, "kill")
+            return Relation(-0.20, "backing one team while betting the other's "
+                                   "total over is two halves of a contradiction",
+                            2, "kill")
+        return None
+
+    # --- one game line, one player prop ----------------------------------
+    line, prop = (a, b) if fa in GAME_FAMILIES else (b, a)
+    lf = fa if fa in GAME_FAMILIES else fb
+    pf = fb if fa in GAME_FAMILIES else fa
+    line_up = _side_up(line)
+    prop_up = _side_up(prop)
+    prop_team = (prop.get("team") or "").upper()
+    line_team = (line.get("team") or "").upper()
+    own = bool(line_team) and line_team == prop_team
+
+    if lf == "gametotal":
+        # §5.1: strikeouts up wants fewer baserunners, the game total up wants
+        # more. Type 2, and one of the doc's named script clashes.
+        if sport == "mlb" and pf in PITCHER_FAMILIES and prop_up and line_up:
+            return Relation(-0.15, "strikeouts up and the game total up want "
+                                   "opposite innings — §5.1 Type 2", 2, "kill")
+        if prop_up and line_up:
+            return Relation(SAME_GAME_BASELINE_RHO,
+                            "a player over and the game total over share the "
+                            "same pace — §1.1's floor", 0, "ok")
+        if prop_up != line_up:
+            return Relation(-SAME_GAME_BASELINE_RHO,
+                            "a player over against the game total under is the "
+                            "pace link running the wrong way", 2, "kill")
+        return None
+
+    if lf == "teamtotal":
+        # §3 Type 1, stated in the doc's own example: "team under + that
+        # team's star way over". Not a correlation problem, a logic problem.
+        if own and line_up != prop_up and prop_up:
+            return Relation(-0.35, "a team's total under against that team's "
+                                   "own player over — §3 Type 1, the two legs "
+                                   "describe different games", 1, "kill")
+        if own and line_up and prop_up:
+            if pf in ("pass", "catch", "score", "bat", "rush"):
+                return Relation(0.30, "the player's production IS the team's "
+                                      "runs or points — §4.1/§5.1/§8.2 all put "
+                                      "this at +0.30 or better", 0, "ok")
+            return Relation(SAME_GAME_BASELINE_RHO,
+                            "same team, same direction — the pace floor", 0, "ok")
+        # The pitcher stack's third leg: strikeouts up, the lineup he is
+        # facing held down. §5.1 calls this the cleanest MLB correlation.
+        if (sport == "mlb" and pf in PITCHER_FAMILIES and prop_up
+                and not line_up and line_team == (prop.get("opponent") or "").upper()):
+            return Relation(0.20, "strikeouts up and the lineup he is facing "
+                                  "held down — §5.1's cleanest MLB "
+                                  "correlation, and §5.2's pitcher stack",
+                            0, "ok")
+        if not own and line_up and prop_up and line_team == (prop.get("opponent") or "").upper():
+            return Relation(-0.20, "backing a player over while betting the "
+                                   "opposing offence over is not one story",
+                            2, "kill")
+        return None
+
+    # lf == "side": a moneyline or spread next to a player prop.
+    if own:
+        # §3 Type 4, the most-missed clash in every sport. Handled per-leg in
+        # _leg_eligible against the slate's spread; this catches the pairing
+        # where the SIDE leg is the one laying the points.
+        spread = abs(float((game or {}).get("spread") or 0.0))
+        bar = (RULES.get(sport) or SportRules(sport, sport)).blowout_spread
+        fav = ((game or {}).get("favorite") or "").upper()
+        if bar is not None and fav == line_team and spread >= bar:
+            return Relation(-0.15, f"backing a favourite laying {spread:g} "
+                                   f"alongside that favourite's own starter — "
+                                   f"§3 Type 4, the blowout that wins leg one "
+                                   f"takes leg two off the field", 4, "kill")
+        if pf == "rush" and prop_up:
+            return Relation(0.35, "leading teams run — §4.1 puts carries "
+                                  "against the team's own side at +0.35 to "
+                                  "+0.50", 0, "ok")
+        if sport == "mlb" and pf in PITCHER_FAMILIES and prop_up:
+            return Relation(0.20, "managers leave winners in — §5.1 puts outs "
+                                  "recorded against his team's line at +0.20 "
+                                  "to +0.35", 0, "ok")
+        if pf in ("pass", "catch") and prop_up:
+            # §4.1's trailing-dog mechanism: the script that makes the dog
+            # cover CAUSES the passing volume. On a favourite the same pairing
+            # is only the weak generic link.
+            if fav and fav != line_team:
+                return Relation(0.20, "the script that keeps a dog close is the "
+                                      "script that makes it throw — §4.1 puts "
+                                      "dog covers against dog pass-catcher "
+                                      "overs at +0.20 to +0.35", 0, "ok")
+            return Relation(SAME_GAME_BASELINE_RHO,
+                            "same team, same direction — the pace floor", 0, "ok")
+        if prop_up:
+            return Relation(SAME_GAME_BASELINE_RHO,
+                            "same team, same direction — the pace floor", 0, "ok")
+        return Relation(-SAME_GAME_BASELINE_RHO,
+                        "backing a team while betting its own player under",
+                        2, "kill")
+    # Opposite team.
+    if prop_up:
+        return Relation(-SAME_GAME_BASELINE_RHO,
+                        "backing one team while betting the other's player "
+                        "over — the two legs pull against each other", 2, "kill")
+    return Relation(SAME_GAME_BASELINE_RHO,
+                    "backing a team while betting the other side's player "
+                    "under — the same story from both ends", 0, "ok")
 
 
 def relate(sport: str, a: dict, b: dict, game: dict | None = None) -> Relation:
@@ -456,6 +710,15 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None) -> Relation:
         # to kill, which is the gate that exists to kill it.
         return Relation(0.0, "different games — no shared mechanism", 0, "ok")
 
+    # --- pairs involving a game line ----------------------------------------
+    # These carry most of the doc's permitted constructions, so they are
+    # classified before the player-only rules rather than falling through to
+    # the same-game baseline.
+    if _is_game_leg(a) or _is_game_leg(b):
+        rel = _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team)
+        if rel is not None:
+            return rel
+
     # Type 7 — direct opposition. One leg winning IS the other losing.
     if sport == "mlb":
         pitcher, hitter = None, None
@@ -502,11 +765,13 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None) -> Relation:
         return Relation(-0.10, f"two teammates splitting one {fa} pie — §3 "
                                f"Type 3 cannibalisation", 3, "kill")
 
-    # Type 6 — hidden duplicate. Not incoherent; the opposite problem.
-    if same_team and ua == ub and {fa, fb} <= {"score", "catch", "pass"}:
-        return Relation(0.55, "near-restatements of one another — §3 Type 6, "
-                              "priced as a duplicate rather than counted as "
-                              "diversification", 6, "duplicate")
+    # §3's Type 6 examples are all team-total-against-game-total pairings,
+    # and those are classified in _relate_game_leg. A blanket player-prop
+    # duplicate rule here used to shadow the rule below it and price a
+    # quarterback next to his own receiver — §4.1's STRONGEST usable NFL
+    # correlation and the anchor of the passing-game stack — as a
+    # near-restatement to be penalised. Two players are not a restatement of
+    # each other.
 
     # The permitted positive constructions, at the bottom of each band.
     if same_team and {fa, fb} == {"pass", "catch"} and ua and ub:
@@ -553,6 +818,26 @@ def _leg_eligible(sport: str, leg: dict, game: dict | None,
         return f"carries a live warning: {leg['warnings'][0]}"
 
     g = game or {}
+    # A game leg its own engine will not stand behind. The MLB game-bet
+    # layer marks a price not credible when the model disagrees with the
+    # market by more than the guard allows — §0's rule that a leg which
+    # would not be a bet on its own is never a bet inside a parlay applies
+    # to that judgement too.
+    if leg.get("credible") is False:
+        return ("the game-bet layer flagged this price as not credible on its "
+                "own — §0: a leg that would not be a bet by itself is never a "
+                "bet inside a parlay")
+    # §5.4 / §4.4: weather overrides invalidate every total-linked leg, and a
+    # team total is total-linked by definition. "Re-run the gates from Gate
+    # 1 — do not patch a leg."
+    if _family(leg) in ("teamtotal", "gametotal"):
+        wind = float(((g.get("weather") or {}).get("wind_mph")) or 0.0)
+        roofed = str(g.get("roof", "")).lower() in ("dome", "closed", "retractable")
+        if sport == "mlb" and wind >= 12 and not roofed:
+            return (f"wind {wind:g} mph in an open park — §5.4 invalidates "
+                    f"every total-linked leg on the ticket")
+    # §3 Type 4 does not apply to a side: laying the points IS the bet. It
+    # applies to the player props standing behind it, which is checked below.
     # §5: the lineup rule dominates everything in baseball.
     if sport == "mlb" and _family(leg) in HITTER_FAMILIES:
         if not g.get("lineups_confirmed", False):
@@ -560,7 +845,7 @@ def _leg_eligible(sport: str, leg: dict, game: dict | None,
                     "unconfirmed hitter is not a conditional parlay, it is not "
                     "a bet")
     # §3 Type 4 / §8.1: the blowout that pulls the starters.
-    if rules.blowout_spread is not None:
+    if rules.blowout_spread is not None and not _is_game_leg(leg):
         spread = abs(float(g.get("spread") or 0.0))
         fav = (g.get("favorite") or "").upper()
         if spread >= rules.blowout_spread and fav and fav == (leg.get("team") or "").upper():
@@ -605,11 +890,18 @@ class Ticket:
     stake_if_promoted: float = 0.0
 
 
-def _evaluate(sport: str, legs: list[dict], rules: SportRules) -> tuple[Ticket | None, str]:
+def _evaluate(sport: str, legs: list[dict], rules: SportRules,
+              games: dict | None = None) -> tuple[Ticket | None, str]:
     """Run gates 2 through 6 on one candidate. Returns (ticket, kill reason)."""
     n = len(legs)
     idx = list(itertools.combinations(range(n), 2))
-    rels = [relate(sport, legs[i], legs[j]) for i, j in idx]
+    # The game matters. Every §3 Type 4 rule, §4.1's trailing-dog mechanism
+    # and §6.1's scheme-sign refusal all turn on who the favourite is and by
+    # how much — without it they silently never fire, and a ticket that
+    # should be killed reads as merely uncorrelated.
+    games = games or {}
+    rels = [relate(sport, legs[i], legs[j], games.get(game_key(legs[i])))
+            for i, j in idx]
 
     # Gate 2 — clash screen.
     for (i, j), rel in zip(idx, rels):
@@ -630,10 +922,18 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules) -> tuple[Ticket |
     # actually needs: told "no Tier 1 anchor" when the real problem is that
     # the ticket pairs a quarterback with his own running back, a reader
     # learns the wrong lesson.
-    if rules.anchor_tier1 and not any(leg_tier(l) == 1 for l in legs):
-        return None, ("§4 anchor rule: no Tier 1 volume market on this ticket. "
-                      "Tier 3 markets never anchor — those are the legs that "
-                      "turn a good process into a lottery ticket")
+    # §4's anchor rule names Tier 1 VOLUME markets — receptions, attempts,
+    # carries, completions. A side or a total anchors at least as well: they
+    # are the lowest-variance markets on the board, and §6.3's permitted CFB
+    # ticket is two sides and a total with no player prop in it at all. So
+    # the rule is "something steady has to carry this", not "a player prop
+    # has to carry this".
+    if rules.anchor_tier1 and not any(leg_tier(l) == 1 or _is_game_leg(l)
+                                      for l in legs):
+        return None, ("§4 anchor rule: nothing on this ticket is a Tier 1 "
+                      "volume market or a game line. Tier 3 markets never "
+                      "anchor — those are the legs that turn a good process "
+                      "into a lottery ticket")
     tier3 = sum(1 for l in legs if leg_tier(l) >= 3)
     if tier3 >= max(2, n if rules.tier3_allowed else 1):
         return None, (f"§4.3 / §8.4: {tier3} Tier 3 legs — high-volatility "
@@ -689,7 +989,17 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules) -> tuple[Ticket |
     # the true product, EV_parlay = prod(1+e_i) - 1, which exceeds sum(e_i)
     # only by the cross terms — never by 25%. The dominance test is
     # calibrated to kill exactly that ticket, so the sum is the reading.
-    ev_singles = sum(float(l.get("ev_per_unit") or l.get("ev") or 0.0) for l in legs)
+    # Derived from the same p and price the joint was built on, rather than
+    # read off the leg. Both sides of a comparison have to use one set of
+    # numbers or the ratio measures the gap between two models instead of
+    # the gap between two instruments. The stored field is the fallback.
+    def _leg_ev(l: dict, p: float) -> float:
+        odds = l.get("odds")
+        if odds:
+            return p * (american_to_decimal(odds) - 1.0) - (1.0 - p)
+        return float(l.get("ev_per_unit") or l.get("ev") or 0.0)
+
+    ev_singles = sum(_leg_ev(l, p) for l, p in zip(legs, ps))
     dom_dec = (1.0 + DOMINANCE_MULTIPLE * ev_singles) / modeled
     required = max(price_dec, dom_dec)
 
@@ -697,7 +1007,35 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules) -> tuple[Ticket |
     # A cross-game ticket is a straight multiplication at every book — there
     # is no correlation to tax. That is exactly why §0.3 says singles
     # dominate it, and why the tax only comes off the same-game price.
-    best_case = naive_dec * (1 - BEST_CASE_SGP_TAX) if same_game else naive_dec
+    if not same_game:
+        best_case = naive_dec
+    else:
+        best_case = naive_dec * (1 - BEST_CASE_SGP_TAX)
+        # §1.2's flat 15-30% band describes a typical SGP, and it is the
+        # right ceiling for one: a book that taxed the full correlation
+        # would be quoting far shorter than 70-85% of the naive product, so
+        # the band itself is evidence the book is NOT pricing correlation
+        # fully. That gap is what §0.3 Type A exists to exploit, and a
+        # ceiling derived from "the book knows at least as much as we do"
+        # would define Type A out of existence.
+        #
+        # It breaks down at the top of the range. A moneyline and a spread
+        # on the same team are nearly one bet, and no book pays 85% of the
+        # product for a pair that cashes together almost always. Left
+        # uncapped, that artifact was the ONLY two-leg ticket that ever
+        # cleared this screen — its single "yes" would have been its most
+        # duplicative candidate, at a price no book has ever offered.
+        #
+        # So the cap applies to duplicates only, where nothing is being
+        # exploited and the correlation is not in dispute: a book will never
+        # pay more than the correlated fair price. §3 Type 6's disposition
+        # is "priced, not celebrated", and this is what pricing it means.
+        if duplicate:
+            fair = [r.rho for r in rels]
+            j_book = (joint_two(ps[0], ps[1], fair[0]) if n == 2
+                      else joint_three(tuple(ps), tuple(fair)))
+            if j_book > 0:
+                best_case = min(best_case, 1.0 / j_book)
 
     t = Ticket(sport=sport, legs=legs, modeled_joint=modeled,
                independent_joint=independent, threshold=thr,
@@ -782,7 +1120,13 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
 
     games = {(tuple(sorted((g.get("away") or "", g.get("home") or ""))),
               g.get("date") or ""): g for g in slate.get("games") or []}
+    # Player props AND game lines. Almost every construction §4-§8 permits
+    # ends on a team total or a side, and CFB has no player props at all —
+    # its §6.3 ticket is two sides and a total. Screening one list only left
+    # the doc's own permitted constructions unbuildable.
     recs = [r for r in (slate.get("recommendations") or []) if r.get("recommended")]
+    recs += [normalize_game_bet(b, sport)
+             for b in (slate.get("game_bets") or []) if b.get("recommended")]
 
     pool: list[dict] = []
     for r in recs:
@@ -826,7 +1170,7 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
             continue
         seen.add(sig)
         out["considered"] += 1
-        t, why = _evaluate(sport, legs, rules)
+        t, why = _evaluate(sport, legs, rules, games)
         if t is None:
             out["killed"].append({"gate": 2, "leg": " + ".join(
                 str(l.get("player")) for l in legs), "reason": why})
@@ -947,6 +1291,13 @@ def _publish(t: Ticket, qualified: bool) -> dict:
         "correlation_tax_best_case": round(BEST_CASE_SGP_TAX, 3),
         "correlation_tax_worst_case": round(WORST_CASE_SGP_TAX, 3),
         "singles_alternative_ev": round(t.ev_singles, 4),
+        # How far short a ticket falls, as a number. On this board the answer
+        # is almost always "short", and "short by 9%" is a far more useful
+        # thing to read than a bare no — it says whether the gap is a rounding
+        # error or a canyon.
+        "shortfall_pct": (round((t.required_dec / t.best_case_dec - 1) * 100, 1)
+                          if t.best_case_dec > 0 and t.required_dec > t.best_case_dec
+                          else 0.0),
         "dominance_required": DOMINANCE_MULTIPLE,
         "stake_units": 0.0,                       # §13: graded, not staked
         "stake_if_promoted": t.stake_if_promoted,

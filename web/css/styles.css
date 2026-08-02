@@ -787,6 +787,8 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .pz-clash .ic { color: var(--good); vertical-align: -1px; margin-right: 5px; }
 
 .pz-joint, .pz-price { margin-top: 8px; }
+.pz-short { font-size: var(--fs-2xs); color: var(--text-mute); margin-top: 3px;
+  letter-spacing: .3px; }
 .pz-dominance, .pz-verdict-line, .pz-risk, .pz-stake {
   font-size: var(--fs-sm); line-height: 1.65; max-width: 74ch; margin: 8px 0 0;
 }

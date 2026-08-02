@@ -2038,7 +2038,8 @@ function parlayTicket(t, live) {
       <div class="metric primary"><div class="k">You need at least</div>
         <div class="v">${sign(t.required_american)}</div></div>
       <div class="metric"><div class="k">Best a book would pay</div>
-        <div class="v ${t.qualified ? "pos" : "neg"}">${sign(t.best_case_american)}</div></div>
+        <div class="v ${t.qualified ? "pos" : "neg"}">${sign(t.best_case_american)}</div>
+        ${t.shortfall_pct ? `<div class="pz-short">short by ${t.shortfall_pct}%</div>` : ""}</div>
     </div>
     <div class="pz-fine">Correlation tax on a same-game ticket runs
       ${(t.correlation_tax_best_case * 100).toFixed(0)}–${(t.correlation_tax_worst_case * 100).toFixed(0)}%

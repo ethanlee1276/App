@@ -33,8 +33,14 @@ from engine import parlays as P
 
 
 # --- fixtures ----------------------------------------------------------------
-def leg(player, team, opp, market, side="OVER", p=0.62, odds=-110, ev=0.04,
+def leg(player, team, opp, market, side="OVER", p=0.62, odds=-110, ev=None,
         date="2026-11-02", **kw):
+    # EV follows from the leg's own probability and price. Passing an
+    # unrelated number used to make fixtures look far more profitable than
+    # their probabilities said, which quietly turned rejection tests into
+    # tests of nothing.
+    if ev is None:
+        ev = p * (P.american_to_decimal(odds) - 1) - (1 - p)
     d = dict(player=player, team=team, opponent=opp, market=market,
              market_label=market.replace("_", " ").title(), side=side,
              line=1.5, odds=odds, hit_prob=p, ev_per_unit=ev,
@@ -59,6 +65,23 @@ def run(sport, recs, games=None, **kw):
 
 def reasons(out):
     return " || ".join(k["reason"] for k in out["killed"])
+
+
+def clearing_fixture():
+    """A ticket that DOES clear — deliberately outside anything this board
+    produces, and labelled as such.
+
+    With EV derived consistently from each leg's own probability and price,
+    no realistic slate clears the gates: at the correlation tax books charge,
+    a same-game ticket needs single-leg edges an order of magnitude past what
+    this engine finds. That is the doc working (§12, §14), not a bug — but it
+    means every rejection test above would pass on a screen hard-wired to
+    return nothing. This is the fixture that proves it is not.
+    """
+    return [leg("Ace", "PHI", "CHC", "strikeouts", p=0.86, odds=150,
+                date="2026-08-02"),
+            leg("Ace", "PHI", "CHC", "outs", p=0.85, odds=150,
+                date="2026-08-02")]
 
 
 # --- §1: the maths -----------------------------------------------------------
@@ -274,12 +297,9 @@ def test_the_pitcher_stack_survives_the_type_5_ban():
     ticket for a confirmed-active player. An announced starter is the
     cleanest instance of that in any sport. If this test fails, the screen
     has deleted the doc's favourite construction."""
-    recs = [leg("Wheeler", "PHI", "CHC", "strikeouts", p=0.66, odds=-120,
-                ev=0.05, date="2026-08-02"),
-            leg("Wheeler", "PHI", "CHC", "outs", p=0.63, odds=-105, ev=0.045,
-                date="2026-08-02")]
-    out = run("mlb", recs, [game("PHI", "CHC", "2026-08-02")])
+    out = run("mlb", clearing_fixture(), [game("PHI", "CHC", "2026-08-02")])
     assert out["tickets"], reasons(out)
+    assert "Type 5" not in reasons(out), "the pitcher stack was killed"
     assert out["tickets"][0]["qualified"] is True
 
 
@@ -353,12 +373,14 @@ def test_two_legs_are_preferred_to_three():
     """§0.2: "Two legs is the preferred structure and should be the majority
     of anything published." When both clear, the shorter ticket takes the
     slot."""
-    recs = [leg("QB", "PHI", "CHC", "strikeouts", p=0.66, date="2026-08-02"),
-            leg("Bat A", "PHI", "CHC", "total_bases", p=0.64, date="2026-08-02"),
-            leg("Bat B", "PHI", "CHC", "hits", p=0.63, date="2026-08-02")]
+    recs = clearing_fixture() + [
+        leg("Bat A", "PHI", "CHC", "total_bases", p=0.84, odds=150,
+            date="2026-08-02")]
     out = run("mlb", recs, [game("PHI", "CHC", "2026-08-02")])
-    if out["tickets"]:
-        assert len(out["tickets"][0]["legs"]) == 2
+    live = [t for t in out["tickets"] if t["qualified"]]
+    assert live, "the control fixture stopped clearing"
+    assert len(live[0]["legs"]) == 2, (
+        "a three-leg ticket took the slot while a two-leg one also cleared")
 
 
 # --- §10 / §13: staking and probation ----------------------------------------
@@ -366,9 +388,7 @@ def test_every_ticket_is_graded_and_never_staked():
     """§13: parlays enter under the same probation architecture as CFB and
     WNBA. Graded, not staked, until 100 tickets clear ROI, CLV and z — and
     the singles board clears its own bar first."""
-    recs = [leg("Wheeler", "PHI", "CHC", "strikeouts", p=0.66, date="2026-08-02"),
-            leg("Wheeler", "PHI", "CHC", "outs", p=0.63, date="2026-08-02")]
-    out = run("mlb", recs, [game("PHI", "CHC", "2026-08-02")])
+    out = run("mlb", clearing_fixture(), [game("PHI", "CHC", "2026-08-02")])
     assert out["probation"] is True
     assert out["tickets"], "expected the pitcher stack to publish"
     for t in out["tickets"]:
@@ -383,9 +403,7 @@ def test_a_drawdown_suspends_parlays_entirely_not_by_half():
     """§10.2: "When stakes are halved, parlays go to zero — not half. The
     drawdown state is the state in which you are most likely to reach for
     variance, and that is precisely when it is most expensive.\""""
-    recs = [leg("Wheeler", "PHI", "CHC", "strikeouts", p=0.70, date="2026-08-02"),
-            leg("Wheeler", "PHI", "CHC", "outs", p=0.70, date="2026-08-02")]
-    g = [game("PHI", "CHC", "2026-08-02")]
+    recs, g = clearing_fixture(), [game("PHI", "CHC", "2026-08-02")]
     assert run("mlb", recs, g)["tickets"], "control: this publishes normally"
     out = run("mlb", recs, g, bankroll_state="drawdown")
     assert out["tickets"] == []
@@ -395,10 +413,11 @@ def test_a_drawdown_suspends_parlays_entirely_not_by_half():
 def test_at_most_one_parlay_per_slate():
     """§10.2, and §6.5 tightens it to one per Saturday for CFB against a
     60-game board."""
-    recs = [leg("Wheeler", "PHI", "CHC", "strikeouts", p=0.68, date="2026-08-02"),
-            leg("Wheeler", "PHI", "CHC", "outs", p=0.67, date="2026-08-02"),
-            leg("deGrom", "TEX", "SEA", "strikeouts", p=0.68, date="2026-08-02"),
-            leg("deGrom", "TEX", "SEA", "outs", p=0.67, date="2026-08-02")]
+    recs = clearing_fixture() + [
+        leg("deGrom", "TEX", "SEA", "strikeouts", p=0.86, odds=150,
+            date="2026-08-02"),
+        leg("deGrom", "TEX", "SEA", "outs", p=0.85, odds=150,
+            date="2026-08-02")]
     out = run("mlb", recs, [game("PHI", "CHC", "2026-08-02"),
                             game("SEA", "TEX", "2026-08-02")])
     assert len(out["tickets"]) <= 1
@@ -435,11 +454,19 @@ def test_the_page_never_claims_to_know_a_price_it_cannot_see():
     """The honest core. No feed we ingest carries SGP quotes, and the
     correlation tax is the book's number. So the module publishes the price a
     ticket must BEAT, and says that is what it is doing."""
-    recs = [leg("Wheeler", "PHI", "CHC", "strikeouts", p=0.66, date="2026-08-02"),
-            leg("Wheeler", "PHI", "CHC", "outs", p=0.63, date="2026-08-02")]
-    out = run("mlb", recs, [game("PHI", "CHC", "2026-08-02")])
+    out = run("mlb", clearing_fixture(), [game("PHI", "CHC", "2026-08-02")])
+    assert out["tickets"][0]["qualified"] is True, "fixture no longer clears"
     assert "cannot see the book" in out["tickets"][0]["verdict"]
     assert "not derivable from the leg prices" in out["price_note"]
+    # And a ticket that does NOT clear says how far short it fell, as a
+    # number — "short by 9%" is a far more useful read than a bare no.
+    miss = run("mlb", [leg("Wheeler", "PHI", "CHC", "strikeouts", p=0.56,
+                           date="2026-08-02"),
+                       leg("Wheeler", "PHI", "CHC", "outs", p=0.55,
+                           date="2026-08-02")],
+               [game("PHI", "CHC", "2026-08-02")])
+    assert miss["tickets"][0]["qualified"] is False
+    assert miss["tickets"][0]["shortfall_pct"] > 0
 
 
 def test_every_ticket_shows_the_singles_alternative_and_the_tax():
@@ -447,9 +474,8 @@ def test_every_ticket_shows_the_singles_alternative_and_the_tax():
     shows the singles-alternative EV alongside the parlay EV" and "the
     correlation tax is displayed as a number on every ticket. Users should
     see what the structure costs them.\""""
-    recs = [leg("Wheeler", "PHI", "CHC", "strikeouts", p=0.66, date="2026-08-02"),
-            leg("Wheeler", "PHI", "CHC", "outs", p=0.63, date="2026-08-02")]
-    t = run("mlb", recs, [game("PHI", "CHC", "2026-08-02")])["tickets"][0]
+    t = run("mlb", clearing_fixture(),
+            [game("PHI", "CHC", "2026-08-02")])["tickets"][0]
     assert t["singles_alternative_ev"] > 0
     assert t["correlation_tax_best_case"] == P.BEST_CASE_SGP_TAX
     assert t["correlation_tax_worst_case"] == P.WORST_CASE_SGP_TAX
@@ -466,11 +492,8 @@ def test_the_correlation_tax_is_actually_taken_off_the_same_game_ceiling():
     Without this the screen quietly hands every SGP fifteen points it will
     never be offered, which is the single most expensive way this module
     could be wrong."""
-    same = [leg("Wheeler", "PHI", "CHC", "strikeouts", p=0.66, odds=-120,
-                date="2026-08-02"),
-            leg("Wheeler", "PHI", "CHC", "outs", p=0.63, odds=-105,
-                date="2026-08-02")]
-    t = run("mlb", same, [game("PHI", "CHC", "2026-08-02")])["tickets"][0]
+    t = run("mlb", clearing_fixture(),
+            [game("PHI", "CHC", "2026-08-02")])["tickets"][0]
     naive = t["naive_product_dec"]
     ceiling = P.american_to_decimal(t["best_case_american"])
     assert abs(ceiling - naive * (1 - P.BEST_CASE_SGP_TAX)) < 0.02, (
@@ -490,8 +513,10 @@ def test_the_correlation_tax_is_actually_taken_off_the_same_game_ceiling():
 def test_every_ticket_names_the_leg_most_likely_to_kill_it():
     """§12's last line is RISK: "the honest case against — which leg is most
     likely to kill it and why". The weakest leg by probability, named."""
-    recs = [leg("Strong", "PHI", "CHC", "strikeouts", p=0.72, date="2026-08-02"),
-            leg("Strong", "PHI", "CHC", "outs", p=0.55, date="2026-08-02")]
+    recs = [leg("Strong", "PHI", "CHC", "strikeouts", p=0.72, odds=150,
+                date="2026-08-02"),
+            leg("Strong", "PHI", "CHC", "outs", p=0.55, odds=150,
+                date="2026-08-02")]
     out = run("mlb", recs, [game("PHI", "CHC", "2026-08-02")])
     risk = out["tickets"][0]["risk"]
     assert "55%" in risk
@@ -519,11 +544,7 @@ def test_the_screen_can_actually_fail():
     measures nothing. §5.2's pitcher stack at healthy numbers must publish a
     qualified ticket — and the same legs at a price no book would pay must
     not."""
-    good = [leg("Wheeler", "PHI", "CHC", "strikeouts", p=0.70, odds=-130,
-                ev=0.06, date="2026-08-02"),
-            leg("Wheeler", "PHI", "CHC", "outs", p=0.68, odds=-125, ev=0.05,
-                date="2026-08-02")]
-    g = [game("PHI", "CHC", "2026-08-02")]
+    good, g = clearing_fixture(), [game("PHI", "CHC", "2026-08-02")]
     out = run("mlb", good, g)
     assert out["tickets"] and out["tickets"][0]["qualified"] is True
 
@@ -532,6 +553,256 @@ def test_the_screen_can_actually_fail():
     bad = [dict(l, odds=-400, ev=0.005) for l in good]
     out2 = run("mlb", bad, g)
     assert out2["verdict"].startswith("No qualifying parlay"), out2["verdict"]
+
+
+# --- game lines as legs ------------------------------------------------------
+# Almost every construction the doc permits ends on a team total or a side,
+# and §6.3's CFB ticket is two sides and a total with no player prop in it at
+# all. Screening player props alone left the doc's own permitted
+# constructions unbuildable, so these are the tests that say they build.
+def gline(market, team, home, away, side="", line=0.0, p=0.60, odds=-110,
+          ev=None, date="2026-11-02", **kw):
+    if ev is None:
+        ev = p * (P.american_to_decimal(odds) - 1) - (1 - p)
+    d = dict(market=market, bet_type=market, market_label=market, team=team,
+             home=home, away=away, side=side, line=line, odds=odds,
+             win_prob=p, ev_per_unit=ev, edge=0.04, grade="Play", date=date,
+             recommended=True,
+             pick_label=f"{team} {side or market} {line or ''}".strip(),
+             headline=f"{team} {side or market}".strip())
+    d.update(kw)
+    return d
+
+
+def run2(sport, recs, gbs, games):
+    return P.screen({"date": "2026-11-02", "games": games,
+                     "recommendations": recs, "game_bets": gbs}, sport)
+
+
+def _rhos(out):
+    return [p["rho"] for t in out["tickets"] for p in t["pairs"]]
+
+
+def test_a_team_total_can_be_a_leg_at_all():
+    """The floor for everything below it. If a game bet cannot enter the
+    pool, §4.2, §5.2, §6.3 and §8.3 are all unbuildable."""
+    out = run2("nfl", [leg("WR", "GB", "CHI", "receptions", p=0.64)],
+               [gline("team_total", "GB", "CHI", "GB", side="Over", line=24.5)],
+               [game(favorite="GB", spread=3.0)])
+    assert out["eligible_legs"] == 2, out["killed"]
+    assert out["considered"] >= 1
+
+
+def test_college_football_can_build_a_ticket_with_no_player_props():
+    """CFB emits `"recommendations": []` — it has no player projection layer
+    at all. §6.3's permitted ticket is two sides and one total from Tier 1
+    low-attention games. If game lines are not legs, the CFB Parlay Zone can
+    never show anything, ever."""
+    g = [game("TROY", "APP", "2026-11-02", favorite="APP", spread=2.5),
+         game("UTSA", "RICE", "2026-11-02", favorite="UTSA", spread=6.0)]
+    gbs = [gline("spread", "APP", "TROY", "APP", line=2.5, p=0.575),
+           gline("spread", "RICE", "UTSA", "RICE", line=6.0, p=0.575)]
+    out = run2("cfb", [], gbs, g)
+    assert out["eligible_legs"] == 2
+    assert out["considered"] >= 1, "no candidate formed from two sides"
+
+
+def test_the_pitcher_stacks_third_leg_is_the_opposing_team_total():
+    """§5.2: "SP strikeouts over + SP outs over + opposing team total under
+    ... the single best 3-leg construction in your entire system." §5.1 puts
+    that pairing at +0.20 to +0.35 and calls it the cleanest MLB
+    correlation. It has to be recognised as positive, not as two unrelated
+    bets on one game."""
+    g = [game("PHI", "CHC", "2026-08-02", favorite="PHI", spread=1.5)]
+    out = run2("mlb",
+               [leg("Wheeler", "PHI", "CHC", "strikeouts", p=0.67,
+                    date="2026-08-02")],
+               [gline("team_total", "CHC", "PHI", "CHC", side="Under",
+                      line=3.5, p=0.62, date="2026-08-02")], g)
+    assert out["tickets"], reasons(out)
+    assert 0.20 in _rhos(out), _rhos(out)
+    assert "cleanest MLB" in out["tickets"][0]["pairs"][0]["mechanism"]
+
+
+def test_the_quarterback_and_his_receiver_are_not_a_duplicate():
+    """§4.1 calls QB pass yards against WR1 receiving yards "the strongest
+    usable NFL correlation" at +0.35 to +0.50 — it is the anchor of §4.2's
+    passing-game stack. A blanket Type 6 rule once shadowed it and priced
+    the pair as a near-restatement to be penalised, which quietly deleted
+    the doc's headline NFL construction."""
+    out = run2("nfl", [leg("QB", "GB", "CHI", "pass_yds", p=0.65),
+                       leg("WR1", "GB", "CHI", "receptions", p=0.63)],
+               [], [game(favorite="GB", spread=3.0)])
+    assert out["tickets"], reasons(out)
+    pair = out["tickets"][0]["pairs"][0]
+    assert pair["rho"] == 0.35, pair
+    assert pair["clash"] == 0, "the strongest NFL correlation flagged as a clash"
+
+
+def test_the_trailing_dog_mechanism_needs_to_know_who_the_dog_is():
+    """§4.2 calls this "the strongest NFL construction because the script
+    that makes leg 1 win CAUSES legs 2 and 3". It is +0.20 to +0.35 on a
+    dog and only the generic pace floor on a favourite — so the rule is
+    dead unless the screen is told which team is laying the points. It once
+    was: the game was never passed to the classifier and every
+    favourite-dependent rule in the module silently never fired."""
+    dog = run2("nfl", [leg("DogWR", "CHI", "GB", "receptions", p=0.63)],
+               [gline("spread", "CHI", "CHI", "GB", line=3.0, p=0.58)],
+               [game(favorite="GB", spread=3.0)])
+    assert 0.20 in _rhos(dog), _rhos(dog)
+    fav = run2("nfl", [leg("FavWR", "GB", "CHI", "receptions", p=0.63)],
+               [gline("spread", "GB", "CHI", "GB", line=-3.0, p=0.58)],
+               [game(favorite="GB", spread=3.0)])
+    assert 0.20 not in _rhos(fav), (
+        "a favourite's pass-catcher got the trailing-dog correlation")
+
+
+def test_backing_a_favourite_kills_that_favourites_own_starter_props():
+    """§3 Type 4 and §4.3, from the side rather than from the prop: "any
+    construction pairing a favorite laying >= 10 with that favorite's
+    skill-position overs\"."""
+    out = run2("nfl", [leg("WR", "GB", "CHI", "receptions", p=0.63)],
+               [gline("spread", "GB", "CHI", "GB", line=-12.0, p=0.58)],
+               [game(favorite="GB", spread=12.0)])
+    assert "Type 4" in reasons(out)
+    assert not out["tickets"]
+
+
+def test_the_cfb_scheme_sign_is_refused_rather_than_guessed():
+    """§6.1: a big favourite covering correlates with the UNDER for a
+    methodical clock-draining team and with the OVER for a tempo team.
+    "Getting this backwards is the most expensive CFB parlay error, because
+    the correlation is genuinely strong in both directions — you are not
+    near zero, you are on the wrong side of a large number." The required
+    inputs are adjusted tempo, run/pass identity by down and 4th-down
+    aggressiveness. This model carries none of them, so the pairing is
+    killed. A dog against the total has one sign and survives."""
+    g = [game("UTSA", "RICE", favorite="UTSA", spread=6.0)]
+    fav = run2("cfb", [], [
+        gline("spread", "UTSA", "UTSA", "RICE", line=-6.0, p=0.60),
+        gline("total", "", "UTSA", "RICE", side="Under", line=52.0, p=0.60)], g)
+    assert "§6.1" in reasons(fav), reasons(fav)
+    assert not fav["tickets"]
+    dog = run2("cfb", [], [
+        gline("spread", "RICE", "UTSA", "RICE", line=6.0, p=0.60),
+        gline("total", "", "UTSA", "RICE", side="Over", line=52.0, p=0.60)], g)
+    assert dog["tickets"], reasons(dog)
+    assert 0.20 in _rhos(dog)
+
+
+def test_both_sides_of_one_run_environment_are_banned_by_name():
+    """§5.3: "legs from both sides of the same game's run-scoring
+    environment (one team's total over + other team's total under)\"."""
+    g = [game("PHI", "CHC", "2026-08-02")]
+    out = run2("mlb", [], [
+        gline("team_total", "PHI", "PHI", "CHC", side="Over", line=4.5,
+              date="2026-08-02"),
+        gline("team_total", "CHC", "PHI", "CHC", side="Under", line=3.5,
+              date="2026-08-02")], g)
+    assert "§5.3" in reasons(out)
+    assert not out["tickets"]
+
+
+def test_a_team_under_next_to_that_teams_own_player_over_is_type_1():
+    """§3 Type 1's own example: "team under + that team's star way over".
+    Not a correlation problem, a logic problem."""
+    out = run2("nfl", [leg("WR", "GB", "CHI", "receptions", p=0.63)],
+               [gline("team_total", "GB", "CHI", "GB", side="Under",
+                      line=17.5, p=0.60)], [game(favorite="GB", spread=3.0)])
+    assert "Type 1" in reasons(out)
+
+
+def test_a_side_and_a_spread_on_one_team_are_priced_as_one_bet():
+    """§3 Type 6 at its most extreme — one opinion sold twice. Allowed, but
+    priced as a duplicate and never counted as diversification."""
+    out = run2("nfl", [], [
+        gline("moneyline", "GB", "CHI", "GB", p=0.60),
+        gline("spread", "GB", "CHI", "GB", line=-3.0, p=0.60)],
+        [game(favorite="GB", spread=3.0)])
+    if out["tickets"]:
+        assert "duplicate" in out["tickets"][0]["clash_screen"]
+
+
+def test_two_sides_of_one_game_cannot_both_win():
+    out = run2("nfl", [], [
+        gline("moneyline", "GB", "CHI", "GB", p=0.60),
+        gline("moneyline", "CHI", "CHI", "GB", p=0.60)],
+        [game(favorite="GB", spread=3.0)])
+    assert "Type 1" in reasons(out)
+    assert not out["tickets"]
+
+
+def test_a_game_total_is_not_filed_under_a_team():
+    """A game total belongs to neither side. Keyed off team/opponent alone
+    every game total on the slate collides into one bucket and gets screened
+    against totals from other games as though they shared a stadium."""
+    a = P.normalize_game_bet(
+        gline("total", "", "CHI", "GB", side="Over", line=49.0), "nfl")
+    b = P.normalize_game_bet(
+        gline("total", "", "KC", "BUF", side="Over", line=51.0), "nfl")
+    assert P.game_key(a) != P.game_key(b), "two different games, one key"
+
+
+def test_the_book_ceiling_is_capped_on_a_near_duplicate_pair():
+    """§1.2's flat 15-30% tax is the right ceiling for an ordinary SGP — the
+    band itself is evidence the book is not pricing correlation fully, and
+    that gap is what §0.3 Type A exists to exploit. It falls apart at the
+    top of the range.
+
+    A moneyline and a spread on the same dog cash together almost always. No
+    book pays 85% of the naive product for that. Left uncapped it was the
+    ONLY two-leg ticket that ever cleared this screen — the one "yes" the
+    page could produce would have been its most duplicative candidate, at a
+    price nobody has ever offered. The cap applies to duplicates only, where
+    nothing is being exploited: a book will never pay above correlated fair.
+    """
+    g = [game(favorite="GB", spread=3.0)]
+    gbs = [gline("moneyline", "CHI", "CHI", "GB", p=0.44, odds=150),
+           gline("spread", "CHI", "CHI", "GB", line=3.0, p=0.44, odds=150)]
+    out = run2("nfl", [], gbs, g)
+    t = out["tickets"][0]
+    assert "duplicate" in t["clash_screen"]
+    assert P.american_to_decimal(t["best_case_american"]) < \
+        t["naive_product_dec"] * (1 - P.BEST_CASE_SGP_TAX) - 0.3, (
+        "the duplicate ceiling was not capped below the flat-tax number")
+    assert t["qualified"] is False, (
+        "a moneyline and a spread on one team cleared the screen — that is "
+        "the artifact this cap exists to remove")
+
+
+def test_the_singles_ev_is_derived_from_the_same_numbers_as_the_joint():
+    """Both sides of the dominance ratio have to use one set of numbers, or
+    it measures the gap between two models rather than the gap between two
+    instruments.
+
+    This is not pedantry. Fixtures once carried an `ev_per_unit` that did
+    not follow from their own probability and price, and the comparison
+    silently reported tickets as profitable that their own probabilities
+    said were not. Reading the stored field is the fallback, never the
+    source, whenever the leg carries a price.
+    """
+    legs = [leg("A", "GB", "CHI", "receptions", p=0.60, odds=-110,
+                ev=9.99),          # a stored field that is plainly nonsense
+            leg("B", "GB", "CHI", "pass_yds", p=0.60, odds=-110, ev=9.99)]
+    out = run2("nfl", legs, [], [game(favorite="GB", spread=3.0)])
+    got = out["tickets"][0]["singles_alternative_ev"]
+    want = 2 * (0.60 * (P.american_to_decimal(-110) - 1) - 0.40)
+    assert abs(got - want) < 1e-3, (
+        f"singles EV {got} came from the stored field, not from p and price "
+        f"({want})")
+
+
+def test_a_game_bet_its_own_engine_distrusts_is_not_a_leg():
+    """The MLB game-bet layer marks a price not credible when the model
+    disagrees with the market by more than the guard allows. §0: a leg that
+    would not be a bet on its own is never a bet inside a parlay."""
+    g = [game("PHI", "CHC", "2026-08-02")]
+    gb = gline("team_total", "CHC", "PHI", "CHC", side="Under", line=3.5,
+               date="2026-08-02", credible=False)
+    out = run2("mlb", [leg("Wheeler", "PHI", "CHC", "strikeouts", p=0.67,
+                           date="2026-08-02")], [gb], g)
+    assert "not credible" in reasons(out)
+    assert out["eligible_legs"] == 1
 
 
 # --- the page itself ---------------------------------------------------------

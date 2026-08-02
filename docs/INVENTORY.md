@@ -9,7 +9,7 @@ preservation contract. The prose contract says what must survive; this
 says what is actually there, and `node tools/inventory.mjs --diff
 docs/inventory-baseline.json` says whether it still is.
 
-**266 pages · 1425 distinct strings · 255 classes · 17 views × 8 sports × 2 widths**
+**266 pages · 1428 distinct strings · 255 classes · 17 views × 8 sports × 2 widths**
 
 ---
 
@@ -22,7 +22,7 @@ docs/inventory-baseline.json` says whether it still is.
 | Edge Board | 8/8 | 15 | 6 | 0 | 0 |
 | Scanner / Market Scanner | 8/8 | 13 | 8 | 0 | 1 |
 | Long Shots | 8/8 | 61 | 10 | 0 | 4 |
-| parlays | 8/8 | 26 | 9 | 0 | 0 |
+| parlays | 8/8 | 26 | 11 | 0 | 0 |
 | Trending | 8/8 | 44 | 4 | 0 | 4 |
 | Players | 8/8 | 56 | 3 | 0 | 5 |
 | Rosters | 8/8 | 31 | 6 | 0 | 8 |
@@ -211,17 +211,19 @@ pz-note  pz-probation  pz-sub  pz-verdict  reveal  sample
 src-dot  sub
 ```
 
-**Explanatory prose — 9 passage(s), must survive
+**Explanatory prose — 11 passage(s), must survive
 verbatim:**
 
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
 - A parlay is not a bet type, it is a pricing structure. It is only ever correct when that structure is mispriced — never because three plays look good together.
+- Every candidate on tonight's board died in the screen. §14 is the reason that is the normal result: a ticket has to survive a real, positive, mechanically explainable correlation before it is worth the tax, and almost nothing does.
 - Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
 - Nothing on tonight's board can even form a candidate: §14 says a ticket arrives only after every leg has independently earned a place as a single, and no single game has two eligible legs left.
 - Parlays are graded, never staked. The bar is 100 graded tickets clearing positive flat-stake ROI, aggregate leg-level CLV at or above zero, and z of at least 2 — and the singles board has to clear its own promotion bar first. Until then every ticket here is a tracked observation worth nothing.
 - Screened 0 candidate tickets built from 1 eligible leg on tonight's board.
-- Screened 0 candidate tickets built from 1 eligible leg on tonight's board. 1 was killed for the reasons above.
+- Screened 1 candidate ticket built from 2 eligible legs on tonight's board. 2 were killed for the reasons above.
 - This slate was built before the parlay screen ran. It will appear on the next refresh — nothing is wrong with the picks above it.
+- Type 2: Josh Jacobs + CHI ML — backing one team while betting the other's player over — the two legs pull against each other
 - wind 16 mph — §4.4 kills passing constructions outright regardless of edge
 
 ---
