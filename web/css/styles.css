@@ -699,6 +699,116 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .log-table td.num { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 .log-table .hit { color: var(--good); } .log-table .miss { color: var(--text-dim); }
 
+
+/* ---------------- Parlay Zone ----------------
+   Night Form: no shadows, no gradients, square corners, rules instead of
+   fills. The page's hierarchy is deliberate and inverted from every other
+   board on the site — the VERDICT is the hero, because on most nights the
+   verdict is the whole page, and a "no" that whispers reads as an error. */
+.pz-doctrine {
+  font-size: var(--fs-md); color: var(--text-dim); line-height: 1.6;
+  max-width: 62ch; padding: 0 0 14px; margin: 2px 0 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.pz-verdict {
+  display: flex; align-items: baseline; gap: 10px;
+  font-size: var(--fs-2xl); font-weight: 700; line-height: 1.35;
+  padding: 18px 0 16px; margin: 0 0 4px;
+  border-bottom: 3px solid var(--text);
+}
+.pz-verdict.pz-no { color: var(--text); }
+.pz-verdict.pz-yes { color: var(--good); border-bottom-color: var(--good); }
+.pz-verdict .pz-mark { flex: 0 0 auto; transform: translateY(1px); }
+.pz-probation, .pz-note {
+  display: flex; gap: 9px; align-items: flex-start;
+  font-size: var(--fs-sm); color: var(--text-dim); line-height: 1.6;
+  max-width: 72ch; padding: 12px 0; border-bottom: 1px solid var(--border-soft);
+}
+.pz-probation .pz-mark, .pz-risk .pz-mark { flex: 0 0 auto; margin-top: 2px; }
+.pz-census {
+  font-size: var(--fs-xs); color: var(--text-mute); padding: 14px 0 4px;
+  letter-spacing: .2px;
+}
+
+.pz-ticket { padding: 18px; margin: 16px 0; --grade-color: var(--text-dim); }
+.pz-ticket.pz-miss { --grade-color: var(--text-mute); opacity: .92; }
+.pz-ticket .card-head { margin-bottom: 12px; }
+
+/* The legs read as an agate block: a fixed grid so the numbers line up in
+   columns down the ticket, which is how a bettor scans a slip. */
+.pz-legs { list-style: none; margin: 0 0 6px; padding: 0; }
+.pz-legs li {
+  display: grid; gap: 3px 16px; align-items: baseline;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  padding: 10px 0; border-top: 1px solid var(--border-soft);
+  font-size: var(--fs-sm);
+}
+.pz-legs .pz-leg-name { font-weight: 700; }
+.pz-legs .pz-leg-mkt { color: var(--text-dim); }
+.pz-legs .pz-leg-nums {
+  text-align: right; font-variant-numeric: tabular-nums; color: var(--text-dim);
+  white-space: nowrap;
+}
+.pz-legs .pz-leg-nums i { color: var(--text-mute); font-style: normal; padding: 0 2px; }
+
+/* Correlation reads as a two-line block per pair, not a table. The
+   mechanism sentence is the point of the section and a table column
+   squeezed it into a four-word-wide gutter on the phone. */
+.pz-pairs, .pz-ledger { list-style: none; margin: 0; padding: 0; }
+.pz-pairs li, .pz-ledger li {
+  padding: 10px 0; border-top: 1px solid var(--border-soft);
+}
+.pz-pairs li:first-child, .pz-ledger li:first-child { border-top: 0; padding-top: 4px; }
+.pz-pair-head {
+  display: flex; flex-wrap: wrap; gap: 6px 16px;
+  justify-content: space-between; align-items: baseline;
+  font-size: var(--fs-sm);
+}
+.pz-pair-who { font-weight: 700; }
+.pz-pair-rho { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pz-pair-rho i { color: var(--text-mute); font-style: normal; font-weight: 400; }
+.pz-pair-why, .pz-kill-why {
+  font-size: var(--fs-xs); color: var(--text-dim); line-height: 1.6;
+  max-width: 78ch; margin-top: 3px;
+}
+.pz-kill-who { font-size: var(--fs-sm); font-weight: 700; }
+
+.pz-sub {
+  font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .6px;
+  font-weight: 600; color: var(--text-mute);
+  margin: 18px 0 6px; padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.pz-fine {
+  font-size: var(--fs-xs); color: var(--text-dim); line-height: 1.6;
+  max-width: 74ch; margin: 8px 0 2px;
+}
+.pz-clash { font-size: var(--fs-sm); color: var(--text-dim); padding: 2px 0 4px; }
+.pz-clash .ic { color: var(--good); vertical-align: -1px; margin-right: 5px; }
+
+.pz-joint, .pz-price { margin-top: 8px; }
+.pz-dominance, .pz-verdict-line, .pz-risk, .pz-stake {
+  font-size: var(--fs-sm); line-height: 1.65; max-width: 74ch; margin: 8px 0 0;
+}
+.pz-verdict-line {
+  font-size: var(--fs-md); font-weight: 600; color: var(--text);
+  border-left: 3px solid var(--text-dim); padding: 8px 0 8px 12px;
+  margin: 16px 0 0;
+}
+.pz-risk { display: flex; gap: 9px; color: var(--text-dim); }
+.pz-stake { color: var(--text-mute); font-size: var(--fs-xs); }
+.pz-ledger-title { margin-top: 26px; }
+
+/* Phone: the leg grid cannot hold five columns at 390px, so it folds to a
+   name/market row with the numbers beneath it rather than shrinking the
+   type past reading size. */
+@media (max-width: 640px) {
+  .pz-verdict { font-size: var(--fs-xl); }
+  .pz-legs li { grid-template-columns: 1fr; }
+  .pz-legs .pz-leg-nums { text-align: left; white-space: normal; }
+  .pz-pair-head { flex-direction: column; gap: 2px; }
+}
+
 .empty { color: var(--text-dim); text-align: center; padding: 50px; grid-column: 1 / -1; }
 
 /* ---------------- Footer ---------------- */

@@ -93,6 +93,7 @@
       <button class="nav-btn" data-view="edge" data-hint="every +EV price">Edge Board</button>
       <button class="nav-btn" data-view="scanner" data-hint="stale &amp; arb lines">Scanner</button>
       <button class="nav-btn" data-view="longshots" id="longshots-tab" data-hint="home-run darts">Long Shots</button>
+      <button class="nav-btn" data-view="parlays" data-hint="tickets, screened not built">Parlay Zone</button>
       <button class="nav-btn" data-view="trending" data-hint="form movers">Trending</button>
       <button class="nav-btn" data-view="players" data-hint="search a player">Players</button>
       <button class="nav-btn" data-view="rosters" data-hint="every team's roster">Rosters</button>
@@ -269,6 +270,18 @@
       </div>
       <div class="longshot-note" id="longshots-note"></div>
       <div class="cards" id="longshots"></div>
+    </section>
+
+    <!-- Parlay Zone. A screen, not a builder: the doctrine is that "no
+         qualifying parlay" is the normal output, so the page is designed
+         around saying that well rather than around a card that rarely
+         exists. The clash ledger below the ticket is the real content —
+         it is the record of which props were fighting each other. -->
+    <section class="view" id="view-parlays">
+      <div class="section-title" id="parlays-title">Parlay Zone
+        <span class="sub" id="parlays-sub">— screened, not built. Almost always the answer is no.</span>
+      </div>
+      <div id="parlays-body"></div>
     </section>
 
     <!-- Active rosters -->

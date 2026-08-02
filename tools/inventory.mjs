@@ -56,9 +56,9 @@ const BROWSER = process.env.QB_CHROMIUM
 /* Every view the app can reach, from VIEW_ORDER in web/js/app.js plus
    `game`, which has no nav tab of its own and is therefore the single
    easiest page on the site to forget. The redesign spec's own inventory
-   listed ten; there are sixteen. */
+   listed ten; there are seventeen. */
 export const VIEWS = ['recommended', 'live', 'edge', 'scanner', 'longshots',
-  'trending', 'players', 'rosters', 'standings', 'record', 'intel',
+  'parlays', 'trending', 'players', 'rosters', 'standings', 'record', 'intel',
   'fantasy', 'ufc', 'why', 'about', 'game'];
 export const SPORTS = ['nfl', 'cfb', 'mlb', 'nba', 'wnba', 'ufc',
   'polymarket', 'fantasy'];
@@ -91,6 +91,20 @@ export const norm = s => {
   return t;
 };
 
+/* Every page has to be a REAL navigation. Two URLs that differ only in
+   their fragment are a same-document navigation: the browser fires
+   hashchange and the app keeps running, so what gets recorded depends on
+   which view was up a moment earlier. That made the whole inventory
+   order-dependent — inserting one view into VIEWS shifted the sequence and
+   reported 111 phantom losses on CFB's hidden views, while the same URLs
+   loaded cold rendered identically before and after, four times each. The
+   nonce forces a document load per page, which is also the honest thing to
+   measure: the baseline should describe what a reader sees when they open
+   the page, not what survives from the page before it. */
+let nonce = 0;
+const url = (sport, hash, n) =>
+  `http://127.0.0.1:${PORT}/?sport=${sport}&_inv=${n}#${hash}`;
+
 async function harvest() {
   const b = await chromium.launch({ executablePath: BROWSER });
   const out = { views: VIEWS, sports: SPORTS, widths: WIDTHS, pages: {} };
@@ -105,8 +119,7 @@ async function harvest() {
          the redesign spec's own inventory omitted it entirely. */
       let hash = v;
       if (v === 'game') {
-        await p.goto(`http://127.0.0.1:${PORT}/?sport=${s}#recommended`,
-                     { waitUntil: 'networkidle' });
+        await p.goto(url(s, 'recommended', nonce++), { waitUntil: 'networkidle' });
         await p.waitForTimeout(200);
         const gid = await p.evaluate(() => {
           const g = (typeof state !== 'undefined' && state.data
@@ -118,8 +131,18 @@ async function harvest() {
         if (!gid) continue;              // sport has no games in this slate
         hash = `game/${encodeURIComponent(gid)}`;
       }
-      await p.goto(`http://127.0.0.1:${PORT}/?sport=${s}#${hash}`,
-                   { waitUntil: 'networkidle' });
+      await p.goto(url(s, hash, nonce++), { waitUntil: 'networkidle' });
+      /* A hidden view is routed twice — once by the hash handler on load,
+         when state.sport is still the default and HIDDEN_VIEWS therefore
+         says nothing is hidden, and again by applySport once the league's
+         slate lands and the tab turns out not to exist for this sport.
+         Snapshot between those two and you record whichever page happened
+         to be up. Wait for the sport to actually be applied. Standalone
+         modes (polymarket, fantasy) never set state.sport to their own
+         name, so this is a short ceiling, not a barrier. */
+      await p.waitForFunction(
+        (want) => typeof state !== 'undefined' && state.sport === want,
+        s, { timeout: 1200 }).catch(() => {});
       await p.waitForTimeout(240);
       const r = await p.evaluate(() => {
         const seen = new Set(), classes = new Set();

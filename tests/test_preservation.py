@@ -7,7 +7,7 @@ step would remove information, the redesign step is wrong."*
 
 That rule needs teeth. Two layers give it teeth:
 
-  1. `tools/inventory.mjs` renders all 16 views x 8 sports x 2 widths in a
+  1. `tools/inventory.mjs` renders all 17 views x 8 sports x 2 widths in a
      real browser and records every visible string, affordance and
      structural count into `docs/inventory-baseline.json` — 256 pages,
      3472 distinct strings. `--diff` reports anything that stopped
@@ -26,7 +26,7 @@ not wait for someone to remember to re-harvest.
 code rather than the site.** They are recorded here as tests so they cannot
 be re-lost:
 
-  - The spec lists **10** nav sections. The app has **16** views. `game`,
+  - The spec lists **10** nav sections. The app has **17** views. `game`,
     `intel`, `fantasy`, `ufc`, `why` and `about` are missing from it
     entirely — and `game` is a whole per-game board with 87 components and
     51 strings nothing else on the site renders.
@@ -96,9 +96,9 @@ def test_the_responsible_gambling_line_is_not_hidden():
 
 
 # --- the view list ----------------------------------------------------------
-VIEWS = ["recommended", "live", "edge", "scanner", "longshots", "trending",
-         "players", "rosters", "standings", "record", "intel", "fantasy",
-         "ufc", "why", "about"]
+VIEWS = ["recommended", "live", "edge", "scanner", "longshots", "parlays",
+         "trending", "players", "rosters", "standings", "record", "intel",
+         "fantasy", "ufc", "why", "about"]
 
 
 def test_every_view_still_exists():
@@ -128,6 +128,12 @@ def test_the_per_league_nav_configuration_is_intact():
     block = block[:block.index("};")]
     assert 'nba: ["longshots"]' in block, "NBA's Long Shots exclusion is gone"
     assert 'wnba: ["longshots"]' in block, "WNBA's Long Shots exclusion is gone"
+    # §9.1 caps UFC at two legs in one fight and every permitted construction
+    # needs a method/distance market we do not price. A tab that can only ever
+    # say so is worse than no tab.
+    for sport in ("ufc", "polymarket", "fantasy"):
+        assert f'{sport}: ["parlays"]' in block, (
+            f"{sport}'s Parlay Zone exclusion is gone")
     for v in ("longshots", "trending", "players", "rosters"):
         assert v in block.split("cfb:")[1], f"CFB's {v} exclusion is gone"
 

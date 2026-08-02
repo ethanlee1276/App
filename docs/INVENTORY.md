@@ -9,7 +9,7 @@ preservation contract. The prose contract says what must survive; this
 says what is actually there, and `node tools/inventory.mjs --diff
 docs/inventory-baseline.json` says whether it still is.
 
-**256 pages · 3472 distinct strings · 357 classes · 16 views × 8 sports × 2 widths**
+**266 pages · 1425 distinct strings · 255 classes · 17 views × 8 sports × 2 widths**
 
 ---
 
@@ -17,22 +17,23 @@ docs/inventory-baseline.json` says whether it still is.
 
 | View | Sports | Components | Explanatory prose | Expanders | Inputs |
 |---|---|---|---|---|---|
-| Recommended | 8/8 | 107 | 41 | 5 | 4 |
-| Live | 8/8 | 7 | 3 | 0 | 0 |
-| Edge Board | 8/8 | 10 | 6 | 0 | 0 |
-| Scanner / Market Scanner | 8/8 | 10 | 8 | 0 | 1 |
-| Long Shots | 8/8 | 42 | 15 | 0 | 1 |
-| Trending | 8/8 | 25 | 9 | 0 | 1 |
-| Players | 8/8 | 38 | 8 | 0 | 2 |
-| Rosters | 8/8 | 33 | 8 | 0 | 5 |
-| Standings | 8/8 | 31 | 3 | 0 | 0 |
-| Record | 8/8 | 53 | 20 | 1 | 0 |
-| Polymarket / Informed Flow | 8/8 | 41 | 12 | 0 | 0 |
-| Fantasy | 8/8 | 70 | 14 | 0 | 2 |
-| UFC | 8/8 | 53 | 10 | 1 | 0 |
-| Reference (why) | 8/8 | 10 | 28 | 0 | 2 |
-| About | 8/8 | 13 | 25 | 0 | 0 |
-| Game board (no nav tab — reached from a venue card) | 8/8 | 87 | 15 | 0 | 0 |
+| Recommended | 8/8 | 104 | 19 | 4 | 4 |
+| Live | 8/8 | 10 | 3 | 0 | 0 |
+| Edge Board | 8/8 | 15 | 6 | 0 | 0 |
+| Scanner / Market Scanner | 8/8 | 13 | 8 | 0 | 1 |
+| Long Shots | 8/8 | 61 | 10 | 0 | 4 |
+| parlays | 8/8 | 26 | 9 | 0 | 0 |
+| Trending | 8/8 | 44 | 4 | 0 | 4 |
+| Players | 8/8 | 56 | 3 | 0 | 5 |
+| Rosters | 8/8 | 31 | 6 | 0 | 8 |
+| Standings | 8/8 | 35 | 6 | 0 | 0 |
+| Record | 8/8 | 49 | 6 | 1 | 0 |
+| Polymarket / Informed Flow | 8/8 | 9 | 3 | 0 | 0 |
+| Fantasy | 8/8 | 9 | 3 | 0 | 0 |
+| UFC | 8/8 | 8 | 2 | 0 | 0 |
+| Reference (why) | 8/8 | 12 | 27 | 0 | 2 |
+| About | 8/8 | 15 | 25 | 0 | 0 |
+| Game board (no nav tab — reached from a venue card) | 5/8 | 82 | 14 | 0 | 0 |
 
 ---
 
@@ -43,70 +44,49 @@ thing on screen that has to still be a thing on screen):
 
 ```
 at  away  bankroll  bankroll-inputs  base  base-label
-book  books  card-head  card-id  cards  cfb-rank
+book  books  card  card-head  card-id  cards
 chip  chips  cond  conf-fill  conf-meter  conf-num
-conf-wrap  control  controls  dome  faded  game-card
-game-cta  game-info  game-sub  game-when  gamebet  gamebets-wrap
-games-scroller  gb-group  gb-group-label  gc-arrow  good  grade
-hero-games  hero-title  home  in  is-live  k
-labels  lean  legend  lf-chips  line  line-dot
-live  live-detail  live-dot  live-footer  live-ribbon  loading
-low  matchup  med  metric  metrics  mini
-ml-odds  mt  nav  nav-btn  neg  over
+conf-wrap  control  controls  dome  empty-slate  es-icon
+es-sub  es-title  game-card  game-cta  game-info  game-sub
+game-when  gamebet  gamebets-wrap  games-scroller  gb-group  gb-group-label
+gc-arrow  grade  hero-games  hero-title  home  idle
+in  is-live  k  labels  lean  legend
+line  line-dot  live  live-detail  live-dot  live-footer
+live-ribbon  loading  low  matchup  med  metric
+metrics  mini  ml-odds  mt  nav  nav-btn
 per  pfx  pick  play  player  pos
 primary  proj  proj-dot  projbar  range  reasons
 rec-disclose  reveal  sample  score  sfx  sm
 src-dot  stadium-wrap  stake  stats  status-badge  strong
-subhead  subtitle  tier-low  tier-marquee  tile  tile-sub
-tilt  toggle  total-badge  track  under  up
-v  when  why-toggle  wind  wind-wrap
+sub  subhead  subtitle  tile  tile-sub  tilt
+toggle  track  up  v  when  why-toggle
+wind  wind-wrap
 ```
 
-**Expanders:** `Tracked signals tonight (4) — measurements, not picks` · `Why only 11? — where the other props died` · `Why only 1? — where the other props died` · `Why only 3? — where the other props died` · `Why only 5? — where the other props died`
+**Expanders:** `Tracked signals tonight (2) — measurements, not picks` · `Tracked signals tonight (4) — measurements, not picks` · `Why only 1? — where the other props died` · `Why only 6? — where the other props died`
 
 **Inputs:** `1000` · `checkbox` · `number` · `range`
 
-**Explanatory prose — 41 passage(s), must survive
+**Explanatory prose — 19 passage(s), must survive
 verbatim:**
 
 - 10 more analyzed prop(s) not shown — held (unconfirmed lineup, edge below the bar, or no real price yet) or featured elsewhere. Toggle “show non-recommended” to browse everything.
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- 3 more analyzed prop(s) not shown — held (unconfirmed lineup, edge below the bar, or no real price yet) or featured elsewhere. Toggle “show non-recommended” to browse everything.
-- 5 more analyzed prop(s) not shown — held (unconfirmed lineup, edge below the bar, or no real price yet) or featured elsewhere. Toggle “show non-recommended” to browse everything.
-- 9 more analyzed prop(s) not shown — held (unconfirmed lineup, edge below the bar, or no real price yet) or featured elsewhere. Toggle “show non-recommended” to browse everything.
-- Aaron Judge OVER 0.5 Home Runs +305 (FanDuel) — the field prices it +277
-- Aaron Judge UNDER 0.5 Home Runs -364 (BetMGM) — the field prices it -397
 - Amon-Ra St. Brown OVER 0.5 Anytime TD -97 (FanDuel) — the field prices it -107
-- Attention tier: low — 25% of the raw edge held back as model error, leaving +21.5% against a 2.5% bar
-- Attention tier: low — 25% of the raw edge held back as model error, leaving +23.3% against a 2.5% bar
-- Attention tier: low — 25% of the raw edge held back as model error, leaving +25.5% against a 2.5% bar
-- Attention tier: low — 25% of the raw edge held back as model error, leaving +3.4% against a 2.5% bar
-- Attention tier: low — 25% of the raw edge held back as model error, leaving +3.5% against a 2.5% bar
-- Attention tier: low — 25% of the raw edge held back as model error, leaving +4.2% against a 2.5% bar
-- Attention tier: low — 25% of the raw edge held back as model error, leaving +4.6% against a 2.5% bar
-- Attention tier: low — 25% of the raw edge held back as model error, leaving +6.8% against a 2.5% bar
-- Attention tier: low — 25% of the raw edge held back as model error, leaving +7.0% against a 2.5% bar
-- Attention tier: low — 25% of the raw edge held back as model error, leaving +8.9% against a 2.5% bar
-- Attention tier: marquee — 50% of the raw edge held back as model error, leaving +8.8% against a 4.0% bar
 - Bryce Harper OVER 0.5 Home Runs +400 (FanDuel) — the field prices it +372
-- CONDITIONAL — APP and GAST status unconfirmed — the starter-to-backup gap in CFB is routinely 4–7+ points, so the whole game reprices
-- CONDITIONAL — BOIS and SDSU status unconfirmed — the starter-to-backup gap in CFB is routinely 4–7+ points, so the whole game reprices
-- CONDITIONAL — OSU and MICH status unconfirmed — the starter-to-backup gap in CFB is routinely 4–7+ points, so the whole game reprices
-- CONDITIONAL — TOL and BGSU status unconfirmed — the starter-to-backup gap in CFB is routinely 4–7+ points, so the whole game reprices
 - Favorable defensive matchup — opponent ranked 27th vs the run (+10% vs avg)
+- If is running, it builds every sport on its next refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.
 - Jahmyr Gibbs OVER 0.5 Anytime TD -103 (FanDuel) — the field prices it -113
 - Josh Jacobs OVER 0.5 Anytime TD -139 (FanDuel) — the field prices it -149
+- Model margin +0.1 vs the KC -2.5 line — BUF +2.5 (+3.5% edge after the market haircut)
 - Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- Model projects BUF for 24.1 points vs the 22 team total — Over (+8.7% edge)
-- Model projects CHI for 21.1 points vs the 18 team total — Over (+12.8% edge)
-- Model projects KC for 22.6 points vs the 25 team total — Under (+10.0% edge)
-- No props clear the current thresholds. Loosen the sliders or enable “show non-recommended”.
-- One standard deviation of recruiting talent is worth 5.4 net points a game, fitted on 402 completed team-seasons (r=0.61). It carries ~25% of a Week-1 projection and decays toward 5% by November, because by then a team's own results have answered the question.
-- Same count as the tile above, ranked by quality. The journal so far: 111-117 (-7.1% ROI) — every pick below is graded there nightly. Every journaled bet is tracked on the tab through settlement.
-- Scoring form: CHI off -1.0 / def +1.0, GB off +2.0 / def -0.5 (pts/game vs avg)
+- Model projects BUF for 24.1 points vs the 22 team total — Over (+4.4% edge after the market haircut)
+- Model projects KC for 22.6 points vs the 25 team total — Under (+5.0% edge after the market haircut)
+- Model sides UNDER — the mean is 9.05 but a few big games inflate it; his actual game log clears 8.5 less often than the price implies
+- Model win probability 37% vs book's 33% — a +4.2% edge on CHI after the market haircut
+- Same count as the tile above, ranked by quality. The journal so far: 1-0 (+90.9% ROI) — every pick below is graded there nightly. Every journaled bet is tracked on the tab through settlement.
 - These are NOT recommendations. They're the signal families the site paper-tracks in quarantined Record buckets — each has a fixed promotion bar, and none is money tonight.
-- Tuning inherited from the NBA model and NOT yet fitted to WNBA results. Minutes-denominated values are scaled to the 40-minute game; the fitted ones (margin SD, blowout curves, stat spreads, gate thresholds) are the NBA's. Picks are journaled and graded on probation — they do not count as bets until the bucket clears the promotion bar. Everything below is priced and journaled exactly as a live board would be, so the record it builds is real — it just doesn't stake anything until that record clears the promotion bar (the numbers are the NBA model's for now).
-- cleared every gate · BONUS: theScore Bet is lagging the field at -102 — take the cheaper price
+- Wind 16 mph — real passing downgrade; pass yardage and deep-target props shaded down
 - one book lagging the field — beat the close 64.8% of 30k quotes · paper-tracked at 0.1u
 - strict HR tier (+11% ROI over its first 214) · tracked in the long-shot bucket, never a headline pick
 
@@ -118,8 +98,8 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-from-right  live  loading  nav  nav-btn  sample
-src-dot
+card  from-right  idle  live-dot  loading  nav
+nav-btn  sample  src-dot  sub
 ```
 
 **Explanatory prose — 3 passage(s), must survive
@@ -137,8 +117,9 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-drow  from-right  live  longshot-note  ls-row  nav
-nav-btn  sample  src-dot  why-toggle
+card  drow  empty-slate  es-icon  from-right  idle
+live-dot  longshot-note  ls-row  nav  nav-btn  sample
+src-dot  sub  why-toggle
 ```
 
 **Explanatory prose — 6 passage(s), must survive
@@ -146,10 +127,10 @@ verbatim:**
 
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
 - Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- clear your current sliders · 11 market(s) priced against a real book number. One side of every two-way market always prices positive — the two sides' edges sum to zero by construction — so the length of this list is not a signal. Checked = a tracked bet; everything else is a watchlist.
-- clear your current sliders · 18 market(s) priced against a real book number. One side of every two-way market always prices positive — the two sides' edges sum to zero by construction — so the length of this list is not a signal. Checked = a tracked bet; everything else is a watchlist.
-- clear your current sliders · 3 market(s) priced against a real book number. One side of every two-way market always prices positive — the two sides' edges sum to zero by construction — so the length of this list is not a signal. Checked = a tracked bet; everything else is a watchlist.
-- clear your current sliders · 6 market(s) priced against a real book number. One side of every two-way market always prices positive — the two sides' edges sum to zero by construction — so the length of this list is not a signal. Checked = a tracked bet; everything else is a watchlist.
+- The Edge Board lists every bet whose real price beats the model's probability — including small edges and long odds that don't clear the Recommended bar. Expected value is honest math, not a guarantee: a +5% EV bet still loses often; the edge shows up over hundreds of bets.
+- Waiting on real sportsbook prices — picks are never recommended against placeholder lines. The board fills automatically as real prices arrive.
+- clear your current sliders · 15 market(s) priced against a real book number. One side of every two-way market always prices positive — the two sides' edges sum to zero by construction — so the length of this list is not a signal. Checked = a tracked bet; everything else is a watchlist.
+- clear your current sliders · 4 market(s) priced against a real book number. One side of every two-way market always prices positive — the two sides' edges sum to zero by construction — so the length of this list is not a signal. Checked = a tracked bet; everything else is a watchlist.
 
 ---
 
@@ -159,8 +140,9 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-drow  from-right  live  loading  ls-note  nav
-nav-btn  sample  src-dot  why-toggle
+card  drow  from-right  idle  live-dot  loading
+ls-note  nav  nav-btn  sample  src-dot  sub
+why-toggle
 ```
 
 **Inputs:** `number`
@@ -185,29 +167,28 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-book  card-head  card-id  cards  chip  chips
-conf-fill  conf-meter  conf-num  conf-wrap  drow  from-right
-grade  in  k  lean  live  loading
+bankroll  bankroll-inputs  book  card  card-head  card-id
+cards  chip  chips  conf-fill  conf-meter  conf-num
+conf-wrap  control  controls  drow  empty-slate  es-icon
+es-sub  es-title  from-right  gamebets-wrap  games-scroller  grade
+hero-games  idle  in  k  lean  live-dot
 longshot  longshot-note  ls-note  ls-primary  metric  metrics
-mini  ml-odds  nav  nav-btn  pick  play
-player  pos  primary  reasons  reveal  sample
-src-dot  stake  subtitle  v  warning  why-toggle
+mini  ml-odds  nav  nav-btn  pfx  pick
+play  player  pos  primary  reasons  reveal
+sample  sfx  src-dot  stake  stats  sub
+subtitle  tile  tile-sub  toggle  v  warning
+why-toggle
 ```
 
-**Inputs:** `number`
+**Inputs:** `1000` · `checkbox` · `number` · `range`
 
-**Explanatory prose — 15 passage(s), must survive
+**Explanatory prose — 10 passage(s), must survive
 verbatim:**
 
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
 - Baseline from 0.12 HR/game over 25 games; 4.4 expected plate appearances batting 3
+- If is running, it builds every sport on its next refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.
 - Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- No arbitrage pairs right now. Real arbs across legal US books appear a few times a week and last minutes — this scanner checks every refresh.
-- No book is currently out of line with the field. This fills in as books update at different speeds — most often right after lineups post.
-- No middle windows open — books currently agree on every line. Gaps open when one book moves before the others.
-- No plus-money quotes on today's board — main props or long shots. That's the cheap place to be.
-- Nothing sharp-flagged right now. Sharp-anchor picks appear when a soft book's price beats the sharp book's fair value; steam appears when several books re-price together inside an hour.
-- Positive-EV bets live on the and pages — that's the model's job. This page needs no model: it's the books disagreeing with each other. Arbitrage and middle prices move fast; verify at the book before betting. Books limit accounts that only arb — mix it into normal betting.
 - Red-zone usage inferred from overall opportunity share (play-by-play not ingested) — the biggest source of error here
 - Rockies vs Yankees · Coors Field plays big for home runs (+22% HR factor)
 - Share of team TDs from 0.62 TD/game over 8 games, blended with the RB baseline
@@ -217,33 +198,59 @@ verbatim:**
 
 ---
 
+## parlays  `#parlays`
+
+**Components** (CSS classes unique to this view — each is a
+thing on screen that has to still be a thing on screen):
+
+```
+empty-slate  es-icon  es-sub  es-title  from-right  idle
+in  live-dot  nav  nav-btn  pz-census  pz-doctrine
+pz-kill-who  pz-kill-why  pz-ledger  pz-ledger-title  pz-mark  pz-no
+pz-note  pz-probation  pz-sub  pz-verdict  reveal  sample
+src-dot  sub
+```
+
+**Explanatory prose — 9 passage(s), must survive
+verbatim:**
+
+- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
+- A parlay is not a bet type, it is a pricing structure. It is only ever correct when that structure is mispriced — never because three plays look good together.
+- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
+- Nothing on tonight's board can even form a candidate: §14 says a ticket arrives only after every leg has independently earned a place as a single, and no single game has two eligible legs left.
+- Parlays are graded, never staked. The bar is 100 graded tickets clearing positive flat-stake ROI, aggregate leg-level CLV at or above zero, and z of at least 2 — and the singles board has to clear its own promotion bar first. Until then every ticket here is a tracked observation worth nothing.
+- Screened 0 candidate tickets built from 1 eligible leg on tonight's board.
+- Screened 0 candidate tickets built from 1 eligible leg on tonight's board. 1 was killed for the reasons above.
+- This slate was built before the parlay screen ran. It will appear on the next refresh — nothing is wrong with the picks above it.
+- wind 16 mph — §4.4 kills passing constructions outright regardless of edge
+
+---
+
 ## Trending  `#trending`
 
 **Components** (CSS classes unique to this view — each is a
 thing on screen that has to still be a thing on screen):
 
 ```
-colsub  cyan  empty  from-right  in  live
-loading  ls-note  mini  mk  nav  nav-btn
-neg  nm  pos  reveal  sample  src-dot
-trank  trend-col  trend-grid  trow  val  who
-why-toggle
+bankroll  bankroll-inputs  cards  colsub  control  controls
+cyan  empty  empty-slate  es-icon  es-sub  es-title
+from-right  gamebets-wrap  games-scroller  hero-games  idle  in
+k  live-dot  mini  mk  nav  nav-btn
+neg  nm  pfx  pos  reveal  sample
+sfx  src-dot  stats  sub  tile  tile-sub
+toggle  trank  trend-col  trend-grid  trow  v
+val  who
 ```
 
-**Inputs:** `number`
+**Inputs:** `1000` · `checkbox` · `number` · `range`
 
-**Explanatory prose — 9 passage(s), must survive
+**Explanatory prose — 4 passage(s), must survive
 verbatim:**
 
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
+- If is running, it builds every sport on its next refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.
 - Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
 - Model vs the sportsbook line — a big edge is not automatically a play; the approval gates decide
-- No arbitrage pairs right now. Real arbs across legal US books appear a few times a week and last minutes — this scanner checks every refresh.
-- No book is currently out of line with the field. This fills in as books update at different speeds — most often right after lineups post.
-- No middle windows open — books currently agree on every line. Gaps open when one book moves before the others.
-- No plus-money quotes on today's board — main props or long shots. That's the cheap place to be.
-- Nothing sharp-flagged right now. Sharp-anchor picks appear when a soft book's price beats the sharp book's fair value; steam appears when several books re-price together inside an hour.
-- Positive-EV bets live on the and pages — that's the model's job. This page needs no model: it's the books disagreeing with each other. Arbitrage and middle prices move fast; verify at the book before betting. Books limit accounts that only arb — mix it into normal betting.
 
 ---
 
@@ -253,28 +260,26 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-conf-fill  conf-meter  conf-num  conf-wrap  form-tile  form-tiles
-from-right  grade  hit  ico  in  k
-lbl  lean  live  loading  log-table  ls-note
-meta  miss  nav  nav-btn  nm  num
-pass  play  player-grid  profile  profile-head  profile-pick
-profile-spark  reveal  sample  search-wrap  src-dot  strong
-v  why-toggle
+bankroll  bankroll-inputs  cards  conf-fill  conf-meter  conf-num
+conf-wrap  control  controls  empty  empty-slate  es-icon
+es-sub  es-title  form-tile  form-tiles  from-right  gamebets-wrap
+games-scroller  grade  hero-games  hit  ico  idle
+in  k  lean  live-dot  log-table  meta
+miss  nav  nav-btn  nm  num  pass
+pfx  play  player-grid  pos  profile  profile-head
+profile-pick  profile-spark  reveal  sample  search-wrap  sfx
+src-dot  stats  strong  sub  tile  tile-sub
+toggle  v
 ```
 
-**Inputs:** `Search a player… (e.g. Amon-Ra, Jacobs)` · `number`
+**Inputs:** `1000` · `Search a player… (e.g. Amon-Ra, Jacobs)` · `checkbox` · `number` · `range`
 
-**Explanatory prose — 8 passage(s), must survive
+**Explanatory prose — 3 passage(s), must survive
 verbatim:**
 
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
+- If is running, it builds every sport on its next refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.
 - Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- No arbitrage pairs right now. Real arbs across legal US books appear a few times a week and last minutes — this scanner checks every refresh.
-- No book is currently out of line with the field. This fills in as books update at different speeds — most often right after lineups post.
-- No middle windows open — books currently agree on every line. Gaps open when one book moves before the others.
-- No plus-money quotes on today's board — main props or long shots. That's the cheap place to be.
-- Nothing sharp-flagged right now. Sharp-anchor picks appear when a soft book's price beats the sharp book's fair value; steam appears when several books re-price together inside an hour.
-- Positive-EV bets live on the and pages — that's the model's job. This page needs no model: it's the books disagreeing with each other. Arbitrage and middle prices move fast; verify at the book before betting. Books limit accounts that only arb — mix it into normal betting.
 
 ---
 
@@ -284,27 +289,25 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-chip  down  from-right  ico  live  loading
-ls-note  nav  nav-btn  open  out  ros-card
-ros-group  ros-group-n  ros-head  ros-mark  ros-move  ros-move-date
-ros-move-name  ros-move-teams  ros-n  ros-name  ros-pos  ros-row
-ros-slot  ros-team  ros-team-n  ros-team-name  ros-teams  sample
-search-wrap  src-dot  why-toggle
+bankroll  bankroll-inputs  cards  control  controls  empty-slate
+es-icon  es-sub  es-title  from-right  gamebets-wrap  games-scroller
+hero-games  ico  idle  k  live-dot  nav
+nav-btn  pfx  pos  sample  search-wrap  sfx
+src-dot  stats  tile  tile-sub  toggle  v
+why-toggle
 ```
 
-**Inputs:** `Search a team or a player… (e.g. 49ers, SF, Purdy)` · `Search a team or a player… (e.g. Celtics, BOS, Tatum)` · `Search a team or a player… (e.g. Liberty, NYL, Stewart)` · `Search a team or a player… (e.g. Yankees, NYY, Judge)` · `number`
+**Inputs:** `1000` · `Search a team or a player… (e.g. 49ers, SF, Purdy)` · `Search a team or a player… (e.g. Celtics, BOS, Tatum)` · `Search a team or a player… (e.g. Liberty, NYL, Stewart)` · `Search a team or a player… (e.g. Yankees, NYY, Judge)` · `checkbox` · `number` · `range`
 
-**Explanatory prose — 8 passage(s), must survive
+**Explanatory prose — 6 passage(s), must survive
 verbatim:**
 
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
+- If is running, it builds every sport on its next refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.
 - Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- No arbitrage pairs right now. Real arbs across legal US books appear a few times a week and last minutes — this scanner checks every refresh.
-- No book is currently out of line with the field. This fills in as books update at different speeds — most often right after lineups post.
-- No middle windows open — books currently agree on every line. Gaps open when one book moves before the others.
-- No plus-money quotes on today's board — main props or long shots. That's the cheap place to be.
-- Nothing sharp-flagged right now. Sharp-anchor picks appear when a soft book's price beats the sharp book's fair value; steam appears when several books re-price together inside an hour.
-- Positive-EV bets live on the and pages — that's the model's job. This page needs no model: it's the books disagreeing with each other. Arbitrage and middle prices move fast; verify at the book before betting. Books limit accounts that only arb — mix it into normal betting.
+- No MLB game logs on file for 2025. Rosters here are built from who actually appeared, so they fill in with the history ingest: python3 ingest.py mlb --seasons 2025
+- No NBA game logs on file for 2024. Rosters here are built from who actually appeared, so they fill in with the history ingest: python3 ingest.py nba --seasons 2024
+- No WNBA game logs on file for 2025. Rosters here are built from who actually appeared, so they fill in with the history ingest: python3 ingest.py wnba --seasons 2025
 
 ---
 
@@ -315,19 +318,22 @@ thing on screen that has to still be a thing on screen):
 
 ```
 bad  brk  brk-match  brk-matches  brk-round  brk-round-name
-brk-score  brk-side  brk-team  from-right  good  live
-ls-note  nav  nav-btn  ros-teams  sample  src-dot
-std-card  std-group  std-head  std-mark  std-n  std-name
-std-rank  std-rec  std-row  std-wide  tight  why-toggle
-won
+brk-score  brk-side  brk-team  card  empty-slate  es-icon
+from-right  good  idle  live-dot  nav  nav-btn
+ros-teams  sample  src-dot  std-card  std-group  std-head
+std-mark  std-n  std-name  std-rank  std-rec  std-row
+std-wide  sub  tight  why-toggle  won
 ```
 
-**Explanatory prose — 3 passage(s), must survive
+**Explanatory prose — 6 passage(s), must survive
 verbatim:**
 
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
 - Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- The postseason has not started — or its games are not ingested yet. This chart is drawn from games that were actually played, so it stays empty until they are.
+- No finished MLB games on file for 2026. Standings are counted from our own results: python3 ingest.py mlb --seasons 2026
+- No finished NBA games on file for 2025. Standings are counted from our own results: python3 ingest.py nba --seasons 2025
+- No finished WNBA games on file for 2026. Standings are counted from our own results: python3 ingest.py wnba --seasons 2026
+- The 2026 CFB season has not started yet — first games 2026-08-15. Standings count our own results, so this table fills itself in as the season is played.
 
 ---
 
@@ -337,42 +343,28 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-bad  from-right  has-clv  k  lead  live
-loading  lost  nav  nav-btn  neg  pos
-rb-bar  rb-clv  rb-head  rb-labels  rb-name  rb-net
-rb-row  rb-rows  rb-wl  rc-foot  rc-head  rc-net
-rc-span  rec-bucket  rec-buckets  rec-chart  rec-disclose  rec-kpis
-rec-list  rec-scope  rec-scope-n  rec-scopes  rec-stamp  rl-bet
-rl-date  rl-icon  rl-main  rl-odds  rl-pnl  rl-proc
-rl-row  sample  src-dot  stats  tile  tile-sub
-unit  v  warn  why-toggle  won
+card  empty-slate  es-icon  es-sub  es-title  from-right
+idle  k  lead  live-dot  loading  nav
+nav-btn  none  pos  rb-bar  rb-head  rb-labels
+rb-name  rb-net  rb-row  rb-rows  rb-wl  rec-bucket
+rec-buckets  rec-disclose  rec-kpis  rec-list  rec-scope  rec-scope-n
+rec-scopes  rec-stamp  rl-bet  rl-date  rl-icon  rl-main
+rl-odds  rl-pnl  rl-proc  rl-row  sample  src-dot
+stats  sub  tile  tile-sub  v  why-toggle
+won
 ```
 
 **Expanders:** `What counts as a tracked bet`
 
-**Explanatory prose — 20 passage(s), must survive
+**Explanatory prose — 6 passage(s), must survive
 verbatim:**
 
-- 12 settled pick(s) for wnba — results this small are mostly luck. Judge the model after 100+, and judge the process by CLV before that.
+- 1 settled pick(s) for mlb — results this small are mostly luck. Judge the model after 100+, and judge the process by CLV before that.
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- 40 settled pick(s) for nba — results this small are mostly luck. Judge the model after 100+, and judge the process by CLV before that.
-- 6 settled pick(s) for cfb — results this small are mostly luck. Judge the model after 100+, and judge the process by CLV before that.
-- 80 settled pick(s) for nfl — results this small are mostly luck. Judge the model after 100+, and judge the process by CLV before that.
-- 90 settled pick(s) for mlb — results this small are mostly luck. Judge the model after 100+, and judge the process by CLV before that.
-- Era note: 12 of these 12 graded picks predate the model re-tune (2026-07-29) — the misses above were mostly earned by gates that no longer exist. The current model gets its own chart here once ~50 of its picks settle (0 so far). The nightly calibration refit already feeds these misses back into the model's tempering.
-- Era note: 40 of these 40 graded picks predate the model re-tune (2026-07-29) — the misses above were mostly earned by gates that no longer exist. The current model gets its own chart here once ~50 of its picks settle (0 so far). The nightly calibration refit already feeds these misses back into the model's tempering.
-- Era note: 6 of these 6 graded picks predate the model re-tune (2026-07-29) — the misses above were mostly earned by gates that no longer exist. The current model gets its own chart here once ~50 of its picks settle (0 so far). The nightly calibration refit already feeds these misses back into the model's tempering.
-- Era note: 80 of these 80 graded picks predate the model re-tune (2026-07-29) — the misses above were mostly earned by gates that no longer exist. The current model gets its own chart here once ~50 of its picks settle (0 so far). The nightly calibration refit already feeds these misses back into the model's tempering.
-- Era note: 90 of these 90 graded picks predate the model re-tune (2026-07-29) — the misses above were mostly earned by gates that no longer exist. The current model gets its own chart here once ~50 of its picks settle (0 so far). The nightly calibration refit already feeds these misses back into the model's tempering.
-- Forecast test: the de-vigged market's Brier score (0.2489) still beats the model's (0.2496) on our own picks. Shown anyway — a site that hides this number is a tout with a website.
-- Forecast test: the de-vigged market's Brier score (0.2509) still beats the model's (0.2536) on our own picks. Shown anyway — a site that hides this number is a tout with a website.
-- Forecast test: the de-vigged market's Brier score (0.2524) still beats the model's (0.2566) on our own picks. Shown anyway — a site that hides this number is a tout with a website.
-- Forecast test: the de-vigged market's Brier score (0.2554) still beats the model's (0.2626) on our own picks. Shown anyway — a site that hides this number is a tout with a website.
-- Forecast test: the model's Brier score (0.2336) beats the de-vigged market's (0.2409) on the same bets — lower is better. That's the whole claim of this site in one number.
-- Hover a dot for that day's bets. Flat units — every pick weighted by its stake, no bankroll compounding.
 - Journals every bet — the same count the "Recommended bets" tile shows on each sport's board: player props plus game bets (moneyline, spread & totals, sharp-anchor and model alike) — at the real book price shown when it was recommended. One entry per player & market per day. Long Shots and stale-line flags are tracked in their own buckets at a flat 0.1u — never mixed into this record — and the Edge Board is a watchlist, not tracked bets.
 - Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- Updated 2026-08-01T14:39:54 · settles automatically as results are ingested each day.
+- This board has not recommended a bet that reached a result. It fills itself in — every pick is journaled at its real price the moment it is made, and grades when the games settle.
+- Updated <timestamp> · settles automatically as results are ingested each day.
 
 ---
 
@@ -382,32 +374,16 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-book  card-head  card-id  cards  chip  chips
-dl-main  dl-num  dl-rank  dl-row  end  from-right
-has-active  implied  k  live  metric  metrics
-neg  pick  player  pm-avatar  pm-band  pm-market
-pm-q  pm-status  pm-title  pm-wallet  pos  primary
-score-ring  src-dot  stats  strong  subtitle  tile
-v  vol  wallet  why-toggle  wide
+empty-slate  es-icon  es-sub  es-title  from-right  has-active
+idle  live-dot  why-toggle
 ```
 
-**Links:** `0x0282…f80e` · `0x1862…6c57` · `0x3871…5410` · `0x69c5aa` · `0x749d…801b` · `0x8b46…948d` · `0xc877…160a` · `0xfc2f…8c66` · `Champions League winner 2026-27` · `Democratic nominee for the 2028 presidential election` · `PolyKing` · `Premier League top scorer 2026-27`
-
-**Explanatory prose — 12 passage(s), must survive
+**Explanatory prose — 3 passage(s), must survive
 verbatim:**
 
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- BUY Yes · $15,881 @ 76¢ · Will SpaceX launch Starship to orbit again in Q3? · <elapsed> ago
-- BUY Yes · $18,387 @ 18¢ · Champions League winner 2026-27 · <elapsed> ago
-- BUY Yes · $41,979 @ 69¢ · Will the Fed cut rates at the September 2026 meeting? · <elapsed> ago
-- BUY Yes · $47,999 @ 44¢ · Democratic nominee for the 2028 presidential election · <elapsed> ago
-- BUY Yes · $76,796 @ 25¢ · Democratic nominee for the 2028 presidential election · <elapsed> ago
-- BUY Yes · $86,921 @ 46¢ · Champions League winner 2026-27 · <elapsed> ago
 - Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- The promotion bar is fixed and public: . If the signal (or one wallet, or one score band) clears it, this box flips to a recommendation. Until then, every flag below is a tracked observation — not a play.
-- This page detects large anomalous trades ("informed flow") and to find out whether following that money actually wins. So far, over graded flags: hit 56.6% vs 54.5% implied, -1.4% flat-stake ROI, z 0.33 — statistically indistinguishable from the market price. Not enough to bet on.
-- Wallet-age signal matures as the tape accrues (it cannot be backfilled). Kalshi omitted: no public trader identity. Analyzing public flow is market research; what the CFTC prosecutes (2026) is trading on information hold a duty to keep confidential.
-- — by realized profit over the last 30 days (Polymarket public leaderboard)
+- The launcher pulls Polymarket's public market list and trade tape on every refresh (free, no key needed). If this persists, the machine may not be able to reach gamma-api.polymarket.com.
 
 ---
 
@@ -417,39 +393,16 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-btn  card-head  card-id  cards  chip  chip-suffix
-dim  dk-draftday  dk-moved  dk-pn  dk-posbody  dk-poscard
-dk-posrow  dk-pp  dk-pr  dk-pt  dk-row  dk-slrow
-dk-tier  dk-tierlabel  dl-main  dl-num  dl-rank  dl-row
-dl-sub  down  ff-bar  ff-bar-h  ff-head  ff-more
-ff-n  ff-name  ff-pos  ff-row  ff-table  ff-who
-from-right  has-active  k  lead  live  ls-note
-metric  metrics  mute  neg  os-arrow  os-before
-os-body  os-card  os-now  os-rookies  os-row  os-team
-player  pm-status  pos  primary  rz  src-dot
-stats  strong  subtitle  tile  trend  up
-v  warning  why-toggle  wide
+empty-slate  es-icon  es-sub  es-title  from-right  has-active
+idle  live-dot  why-toggle
 ```
 
-**Inputs:** `Sleeper username` · `https://sleeper.com/draft/nfl/… or draft ID`
-
-**Explanatory prose — 14 passage(s), must survive
+**Explanatory prose — 3 passage(s), must survive
 verbatim:**
 
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- Expected points are fit from this season's own data (league value per target and per carry by position) — volume-based, so a player can legitimately sustain a positive gap; only gaps beyond ~1.5 PPG are flagged. Updated 2026-07-27 08:12.
-- Expected points value every opportunity by WHERE it happened — his say the production is coming.
-- Free and read-only: see YOUR roster's usage trends, trade flags, and who's unrostered in YOUR league. No password — just your Sleeper username.
-- Home team should control script — lean their backfield and the road team's pass volume.
 - Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- Paste your Sleeper draft link (or its ID) once the draft room opens. Taken players cross off everywhere on this page and the best-available list stays current.
-- Projections are last season's volume run forward — the board knows nothing about rookies (they are not on it), coaching changes, or free agency. Draft by tier, not rank. VORP is points over the best freely-available player at the same position.
-- Scoring above what his situations support — beyond the ~1.5 PPG a good player sustains.
-- Shares are of TEAM volume: targets for WR/TE/QB, carries for RB. The delta column is the money — a riser at 42% beats a flat 60%.
-- their stats came from a different offense — flagged, never re-projected
-- — the gaps are the information: inside a tier the differences are noise
-- 🔄 BAL has a new head coach (Jesse Minter) — last season's tendencies (PROE included) may not carry
-- 🔄 MIA has a new head coach (Jeff Hafley) — last season's tendencies (PROE included) may not carry
+- Run `python3 ingest.py nfl` once — usage rows (targets, carries, air yards, PPR points) ride along with the normal player-log ingest, then this page fills automatically.
 
 ---
 
@@ -459,32 +412,15 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-card-head  cards  chip  chips  cond  fc-cover
-fc-meta  fc-name  fc-stats  from-right  k  lf-absorbed
-lf-age  lf-bar  lf-card  lf-chips  lf-fighter  lf-head
-lf-name  lf-pair  lf-region  lf-region-n  lf-region-name  live
-ls-note  metric  metrics  mute  player  pm-status
-pos  primary  sr-e  sr-m  sr-o  sr-s
-src-dot  stats  subtitle  tight  tile  ufc-corner
-ufc-edge-row  ufc-shop  ufc-shop-row  ufc-vs  up  v
-vs-sep  warn  warning  why-toggle  wide
+empty-slate  es-icon  es-sub  es-title  from-right  idle
+live-dot  why-toggle
 ```
 
-**Expanders:** `Every market this fight implies (12) — shop the unpriced ones`
-
-**Explanatory prose — 10 passage(s), must survive
+**Explanatory prose — 2 passage(s), must survive
 verbatim:**
 
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- 25-foot cage — less room to retreat, so pressure and wrestling gain and finishes rise · 2,001 ft — no meaningful cardio tax
-- Dossiers draft themselves: run before a card, then review the numbers it prints (red flags block bets until you confirm or delete them). The model refuses any fight missing a dossier. Updated 2026-07-31T22:00:00.
-- KILL IF: missed weight, late replacement, or visible cut damage at weigh-ins → automatic void
 - Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- Style: counter striker vs defensively loose aggressor — the highest KO-probability matchup in the sport · Judging: Alpha Cruz — volume-over-damage offence scores inconsistently · hold 4.3% · stake 0.3u · needs 5.0%
-- Style: wrestler vs poor TDD — control decision or GnP TKO · hold 5.1% · stake 0.24u · needs 4.0%
-- UFC Apex, Las Vegas — cage size and altitude are applied to every method and distance price on this card.
-- edge -2.1% < 6.0% over break-even 46.5% (thin data — prelim/debut/short-notice bar); EV -4.5% < +5%
-- — 1 fight(s) · priced, run through the model, and rejected by the clamp or the gate
 
 ---
 
@@ -494,13 +430,13 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-btn  calc-in  from-right  ghost  has-active  k
-stats  tile  v  why-toggle
+btn  calc-in  card  from-right  ghost  has-active
+k  stats  sub  tile  v  why-toggle
 ```
 
 **Inputs:** `number` · `select-one`
 
-**Explanatory prose — 28 passage(s), must survive
+**Explanatory prose — 27 passage(s), must survive
 verbatim:**
 
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
@@ -528,7 +464,6 @@ verbatim:**
 - This is why books push parlays: at standard −110 juice each leg keeps ~4.5% hold, and a parlay charges it on every leg at once. Correlated same-game legs can flip this — but the books price those separately for exactly that reason.
 - Where the three agree, trust the number. Where they split, the truth is in the range — that honesty is the feature. Every board on this site prices edges against de-vigged probabilities, never raw juice.
 - Win % left blank, so each leg is valued at its price with a standard 4.8% overround removed — what the leg is really worth. Enter your own probabilities to test a specific edge.
-- the market still forecasts our picks better (Brier 0.2552 vs 0.2517) — shown anyway, because hiding it would make us a tout
 - — the singles are the better bet — the parlay multiplies the book's margin into every leg.
 - — these numbers come from the actual journal, right now, losses included.
 
@@ -540,9 +475,9 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-about-body  about-card  about-lede  about-list  cards  from-right
-has-active  in  ls-note  player  reveal  why-toggle
-wide
+about-body  about-card  about-lede  about-list  card  cards
+from-right  has-active  in  ls-note  player  reveal
+sub  why-toggle  wide
 ```
 
 **Links:** `begambleaware.org` · `gamblersanonymous.org` · `ncpgambling.org`
@@ -584,40 +519,38 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-book  books  btn  card-head  card-id  cards
-chip  chips  conf-fill  conf-meter  conf-num  conf-wrap
-empty-slate  es-icon  es-sub  es-title  from-left  gamebet
-ghost  gp-art  gp-at  gp-back  gp-cards  gp-chips
-gp-hero  gp-meta  gp-stats  gp-sub  gp-teams  grade
-in  k  labels  lean  legend  line
-line-dot  live  loading  longshot  ls-primary  metric
-metrics  mini  ml-odds  nav  nav-btn  neg
-over  pick  pk-dim  pk-dims  pk-factor  pk-factors
-pk-facts  pk-fbar  pk-fk  pk-fv  pk-head  pk-note
-pk-panel  pk-plays  play  player  pos  primary
-proj  proj-dot  projbar  range  reasons  reveal
-s  sample  src-dot  stake  stats  strong
-subtitle  tile  tile-sub  total-badge  track  up
-v  warning  when
+book  books  btn  card  card-head  card-id
+cards  chip  chips  conf-fill  conf-meter  conf-num
+conf-wrap  from-left  gamebet  ghost  gp-art  gp-at
+gp-back  gp-cards  gp-chips  gp-hero  gp-meta  gp-stats
+gp-sub  gp-teams  grade  in  k  labels
+lean  legend  line  line-dot  live-dot  loading
+longshot  ls-primary  metric  metrics  mini  ml-odds
+nav  nav-btn  pick  pk-dim  pk-dims  pk-factor
+pk-factors  pk-facts  pk-fbar  pk-fk  pk-fv  pk-head
+pk-note  pk-panel  pk-plays  play  player  pos
+primary  proj  proj-dot  projbar  range  reasons
+reveal  s  sample  src-dot  stake  stats
+strong  sub  subtitle  tile  tile-sub  track
+up  v  warning  when
 ```
 
-**Explanatory prose — 15 passage(s), must survive
+**Explanatory prose — 14 passage(s), must survive
 verbatim:**
 
-- 1 more analyzed prop in this game is held (edge below the bar, no real price, or lineup unconfirmed).
 - 2 more analyzed props in this game are held (edge below the bar, no real price, or lineup unconfirmed).
 - 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
 - 3 more analyzed props in this game are held (edge below the bar, no real price, or lineup unconfirmed).
 - Baseline from 0.12 HR/game over 25 games; 4.4 expected plate appearances batting 3
-- Either the model passes on everything here, or books haven't posted prices for it yet.
 - Favorable defensive matchup — opponent ranked 27th vs the run (+10% vs avg)
 - Football fields are the same size everywhere, so a venue's effect is almost entirely its environment — indoors vs outdoors first, then altitude. The live weather above is the number that moves a total.
 - Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- Model projects CHI for 21.1 points vs the 18 team total — Over (+12.8% edge)
+- Model sides UNDER — the mean is 9.05 but a few big games inflate it; his actual game log clears 8.5 less often than the price implies
+- Model win probability 37% vs book's 33% — a +4.2% edge on CHI after the market haircut
 - Red-zone usage inferred from overall opportunity share (play-by-play not ingested) — the biggest source of error here
-- Scoring form: CHI off -1.0 / def +1.0, GB off +2.0 / def -0.5 (pts/game vs avg)
 - Share of team TDs from 0.62 TD/game over 8 games, blended with the RB baseline
 - The most weather-dependent park in baseball. Wind off Lake Michigan blowing out turns it into a launching pad; blowing in, the same park plays like a pitcher's park. Check the wind before anything else here.
+- Wind 16 mph — real passing downgrade; pass yardage and deep-target props shaded down
 - Wind off Lake Michigan is the story — swirling and hard to predict, and the single biggest reason kickers and passing games underperform here.
 
 ---

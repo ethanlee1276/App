@@ -534,6 +534,80 @@ def test_the_screen_can_actually_fail():
     assert out2["verdict"].startswith("No qualifying parlay"), out2["verdict"]
 
 
+# --- the page itself ---------------------------------------------------------
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+APP = open(os.path.join(_ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+HTML = open(os.path.join(_ROOT, "web", "index.html"), encoding="utf-8").read()
+
+
+def _ticket_src():
+    """The parlayTicket template, with its line wrapping collapsed. Copy in
+    a template literal breaks wherever the source line ended, so a
+    substring check against the sentence a reader sees fails for reasons
+    that have nothing to do with the sentence being there."""
+    b = APP[APP.index("function parlayTicket("):]
+    return " ".join(b[:b.index("\n/* The clash ledger")].split())
+
+
+def test_the_parlay_zone_is_a_real_page_on_the_sports_that_have_one():
+    """A nav tab, a container, a renderer, and a place in the route order.
+    Miss any one and the tab is a dead link."""
+    assert 'data-view="parlays"' in HTML
+    assert 'id="view-parlays"' in HTML
+    assert 'id="parlays-body"' in HTML
+    assert '"parlays"' in APP.split("const VIEW_ORDER")[1].split("]")[0]
+    assert "function renderParlays(" in APP
+    assert "renderParlays();" in APP, "the renderer is never called"
+
+
+def test_the_sports_with_no_screen_hide_the_tab_rather_than_faking_one():
+    """§9.1's UFC ruling, and the two standalone boards that carry no props
+    at all. A tab that can only ever say "nothing here" is worse than no
+    tab — that is the same call already made for CFB's roster pages."""
+    block = APP[APP.index("const HIDDEN_VIEWS = {"):]
+    block = block[:block.index("};")]
+    for sport in ("ufc", "polymarket", "fantasy"):
+        assert f'{sport}: ["parlays"]' in block, sport
+
+
+def test_the_page_shows_no_stake_and_says_why():
+    """§13. The card carries a stake line and it has to read zero, with the
+    counterfactual labelled as a counterfactual — a number shown without
+    that sentence is an invitation to bet it."""
+    block = _ticket_src()
+    assert 'graded · 0.00u' in block
+    assert "not a recommendation to bet it" in block
+    assert "eighth-Kelly" in block
+
+
+def test_the_page_never_prints_a_book_price_as_though_we_had_one():
+    """The module's central honesty. The card's price row is a number to
+    CHECK, and the words have to say so."""
+    block = _ticket_src()
+    assert "You need at least" in block
+    assert "Best a book would pay" in block
+    # And the ticket's own verdict text, which carries the disclaimer, is
+    # rendered rather than dropped
+    assert "escapeHtml(t.verdict)" in block
+
+
+def test_the_page_shows_the_kill_ledger():
+    """The reason Ethan asked for this page: which props are fighting each
+    other. A verdict with no ledger under it answers nothing."""
+    assert "function parlayLedger(" in APP
+    assert "What was screened out, and why" in APP
+    assert "parlayLedger(z)" in APP
+
+
+def test_the_page_carries_the_singles_alternative_and_the_tax():
+    """§13's display requirements have to survive on the page, not only in
+    the payload."""
+    block = _ticket_src()
+    assert "bet the singles" in block
+    assert "correlation_tax_best_case" in block
+    assert "singles_alternative_ev" in block
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -870,11 +870,19 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
         dedup.append(k)
     out["killed"] = dedup
     if not tickets:
+        # Two different nothings, and conflating them is misleading. Either
+        # the board never had two eligible legs in one game to begin with, or
+        # it did and the clash screen took every pair. The first is a quiet
+        # slate; the second is the screen doing its job.
         out["notes"].append(
             "Nothing on tonight's board can even form a candidate: §14 says a "
             "ticket arrives only after every leg has independently earned a "
-            "place as a single, and after the clash screen there is no "
-            "positively correlated pair left in a single game.")
+            "place as a single, and no single game has two eligible legs left."
+            if not out["considered"] else
+            "Every candidate on tonight's board died in the screen. §14 is the "
+            "reason that is the normal result: a ticket has to survive a real, "
+            "positive, mechanically explainable correlation before it is worth "
+            "the tax, and almost nothing does.")
     return out
 
 

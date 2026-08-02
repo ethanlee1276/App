@@ -81,6 +81,13 @@ const SPORT_META = {
 const HIDDEN_VIEWS = {
   nba: ["longshots"],
   wnba: ["longshots"],
+  // §9.1 caps UFC at two legs in ONE fight, and every construction §9.3
+  // permits pairs a winner with a method, distance or round-group market.
+  // We price fight winners and nothing else, so there is no pair to screen
+  // and a tab that can only ever say so is worse than no tab.
+  ufc: ["parlays"],
+  polymarket: ["parlays"],
+  fantasy: ["parlays"],
   // CFB has 134 programs and no free player-level feed. A roster tab that
   // can only ever say "no data" is worse than no tab.
   cfb: ["longshots", "trending", "players", "rosters"],
@@ -650,6 +657,7 @@ function renderAll() {
   renderEdgeBoard();
   renderScanner();
   renderLongShots();
+  renderParlays();
   renderTrending();
   renderPlayers();
   // A deep link into a game lands before the slate has loaded, and the
@@ -1896,6 +1904,179 @@ function renderLongShots() {
   host.innerHTML = picks.map(longShotCard).join("") + watchlistHTML(watch, mlb);
   fillMeters(host);
   revealChildren(host);
+}
+
+/* ============================================================
+   Parlay Zone — a screen, not a builder (docs/PARLAY_MODEL.md)
+   ============================================================
+   The page is designed around the sentence it prints most often. §12 of the
+   parlay model is explicit: "No qualifying parlay at current numbers" should
+   be the most common output by a wide margin, and on a 12-game slate
+   publishing that sentence IS the system working. So the verdict leads, the
+   ticket is secondary, and the clash ledger below it carries the weight —
+   that ledger is the answer to "which of tonight's props are fighting each
+   other", which is the question this page exists to answer.
+
+   Two things this page must never do. It must never show a parlay price as
+   though we know one: no feed we ingest carries same-game-parlay quotes, so
+   every ticket publishes the price it must BEAT and says that is what it is
+   doing. And it must never show a stake: §13 puts parlays on the same
+   probation as CFB and WNBA — graded, never staked, until 100 tickets clear
+   ROI, CLV and z, and until the singles board clears its own bar first. */
+function renderParlays() {
+  const host = document.getElementById("parlays-body");
+  if (!host) return;
+  const z = state.data.parlays;
+
+  /* A slate built before this module existed, or by a builder that has no
+     screen wired in, has no `parlays` key at all. Saying so beats rendering
+     an empty page that looks like a clean night. */
+  if (!z) {
+    host.innerHTML = `<div class="empty-slate">
+      <div class="es-icon">${icon("dash", 30)}</div>
+      <div class="es-title">No parlay screen on this board</div>
+      <div class="es-sub">This slate was built before the parlay screen ran.
+        It will appear on the next refresh — nothing is wrong with the picks
+        above it.</div></div>`;
+    return;
+  }
+
+  const qualified = (z.tickets || []).filter((t) => t.qualified);
+  const near = (z.tickets || []).filter((t) => !t.qualified);
+
+  host.innerHTML = `
+    <div class="pz-doctrine">${escapeHtml(z.doctrine || "")}</div>
+    <div class="pz-verdict ${qualified.length ? "pz-yes" : "pz-no"}">
+      <span class="pz-mark">${icon(qualified.length ? "check" : "cross", 15)}</span>
+      ${escapeHtml(z.verdict || "")}
+    </div>
+    <div class="pz-probation">
+      <span class="pz-mark">${icon("warn", 13)}</span>
+      ${escapeHtml(z.probation_note || "")}
+    </div>
+    ${qualified.map((t) => parlayTicket(t, true)).join("")}
+    ${near.map((t) => parlayTicket(t, false)).join("")}
+    ${parlayLedger(z)}
+    ${(z.notes || []).map((n) =>
+        `<div class="pz-note">${escapeHtml(n)}</div>`).join("")}
+    <div class="pz-census">
+      Screened ${z.considered} candidate ${z.considered === 1 ? "ticket" : "tickets"}
+      built from ${z.eligible_legs} eligible ${z.eligible_legs === 1 ? "leg" : "legs"}
+      on tonight's board.
+      ${z.killed && z.killed.length
+        ? `${z.killed.length} ${z.killed.length === 1 ? "was" : "were"} killed
+           for the reasons above.` : ""}
+    </div>`;
+  revealChildren(host);
+}
+
+/* One ticket, laid out the way §12 prints it: legs, then the correlation
+   that justifies the structure, then the clash screen, then the three
+   joints side by side, then the price it has to beat — and last the honest
+   case against it. `live` false means this is the closest miss on the
+   board, shown as a record of what was looked at rather than as a play. */
+function parlayTicket(t, live) {
+  const pct = (x) => `${(x * 100).toFixed(1)}%`;
+  const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
+  return `<div class="card pz-ticket${live ? "" : " pz-miss"}">
+    <div class="card-head">
+      <div class="card-id"><div class="player">
+        ${live ? "" : "Closest miss — "}Type ${escapeHtml(t.parlay_type)} ·
+        ${t.legs.length} legs</div></div>
+      <div class="chips">
+        <span class="chip">${live ? "cleared all seven gates" : "did not clear"}</span>
+        <span class="chip stake">graded · 0.00u</span>
+      </div>
+    </div>
+
+    <ol class="pz-legs">
+      ${t.legs.map((l) => `<li>
+        <span class="pz-leg-name">${escapeHtml(l.player || "")}</span>
+        <span class="pz-leg-mkt">${escapeHtml(l.side || "")} ${escapeHtml(String(l.line ?? ""))}
+          ${escapeHtml(l.market_label || l.market || "")}</span>
+        <span class="pz-leg-nums">${sign(l.odds)}${l.book ? ` · ${escapeHtml(l.book)}` : ""}
+          <i>·</i> p ${pct(l.p_final)} <i>·</i> Tier ${l.tier}</span>
+      </li>`).join("")}
+    </ol>
+
+    <div class="pz-sub">Correlation</div>
+    <ul class="pz-pairs">
+      ${t.pairs.map((p) => `<li>
+        <div class="pz-pair-head">
+          <span class="pz-pair-who">${escapeHtml(p.a || "")} ↔ ${escapeHtml(p.b || "")}</span>
+          <span class="pz-pair-rho">ρ ${p.rho >= 0 ? "+" : ""}${p.rho.toFixed(2)}
+            <i>→ priced ${p.rho_priced >= 0 ? "+" : ""}${p.rho_priced.toFixed(3)}</i></span>
+        </div>
+        <div class="pz-pair-why">${escapeHtml(p.mechanism || "")}</div>
+      </li>`).join("")}
+    </ul>
+    <div class="pz-fine">The published ρ is the model doc's prior. The priced ρ
+      is that prior after the same humility clamp this engine applies to every
+      raw edge — those magnitudes are professional estimates, not measured
+      constants, and pricing them at face value would invent edge out of a
+      guess.</div>
+
+    <div class="pz-sub">Clash screen</div>
+    <div class="pz-clash">${icon("check", 12)} ${escapeHtml(t.clash_screen)}</div>
+
+    <div class="pz-sub">Joint probability</div>
+    <div class="metrics pz-joint">
+      <div class="metric"><div class="k">Independent product</div>
+        <div class="v">${pct(t.independent_joint)}</div></div>
+      <div class="metric primary"><div class="k">Conditional chain</div>
+        <div class="v">${pct(t.modeled_joint)}</div></div>
+      <div class="metric"><div class="k">Threshold</div>
+        <div class="v">${t.threshold_points.toFixed(1)} pts</div></div>
+    </div>
+    <div class="pz-fine">Never the product. §1.1: independence is a claim
+      about the world, and inside one game it is almost always false.</div>
+
+    <div class="pz-sub">Price</div>
+    <div class="metrics pz-price">
+      <div class="metric"><div class="k">Legs multiplied</div>
+        <div class="v">${sign(t.naive_product_american)}</div></div>
+      <div class="metric primary"><div class="k">You need at least</div>
+        <div class="v">${sign(t.required_american)}</div></div>
+      <div class="metric"><div class="k">Best a book would pay</div>
+        <div class="v ${t.qualified ? "pos" : "neg"}">${sign(t.best_case_american)}</div></div>
+    </div>
+    <div class="pz-fine">Correlation tax on a same-game ticket runs
+      ${(t.correlation_tax_best_case * 100).toFixed(0)}–${(t.correlation_tax_worst_case * 100).toFixed(0)}%
+      against 4.3–4.8% on a side. That is what the structure costs you, and it
+      is why the book's quote sits below the legs multiplied together.</div>
+
+    <div class="pz-sub">Dominance</div>
+    <div class="pz-dominance">These same legs bet separately are worth
+      <b>${(t.singles_alternative_ev * 100).toFixed(1)}%</b> in expectation. A
+      parlay has to beat that by ${t.dominance_required}× to be worth three
+      times the variance and one point of failure — if it only ties,
+      <b>bet the singles</b>.</div>
+
+    <div class="pz-verdict-line">${escapeHtml(t.verdict)}</div>
+    <div class="pz-risk"><span class="pz-mark">${icon("warn", 12)}</span>
+      ${escapeHtml(t.risk)}</div>
+    <div class="pz-stake">Stake <b>0.00u</b> — graded, not staked.
+      At the required price an eighth-Kelly stake would have been
+      ${t.stake_if_promoted.toFixed(2)}u, capped at 1.0% of bankroll. That
+      number is tracked so promotion day has something to promote; it is not
+      a recommendation to bet it.</div>
+  </div>`;
+}
+
+/* The clash ledger. Every candidate that died, and the §3 type that killed
+   it. This is the part of the page worth reading on a night with no ticket:
+   it is the record of which of tonight's props cannot sit next to which,
+   and why — a bare count would teach nobody anything. */
+function parlayLedger(z) {
+  const rows = z.killed || [];
+  if (!rows.length) return "";
+  return `<div class="pz-sub pz-ledger-title">What was screened out, and why</div>
+    <ul class="pz-ledger">
+      ${rows.map((k) => `<li>
+        <div class="pz-kill-who">${escapeHtml(String(k.leg || ""))}</div>
+        <div class="pz-kill-why">${escapeHtml(k.reason || "")}</div>
+      </li>`).join("")}
+    </ul>`;
 }
 
 function longshotEmptyReason(mlb) {
@@ -5864,7 +6045,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "trending", "players", "rosters", "standings", "record", "intel", "fantasy", "ufc", "why", "about"];
+const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "parlays", "trending", "players", "rosters", "standings", "record", "intel", "fantasy", "ufc", "why", "about"];
 
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
