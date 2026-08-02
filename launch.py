@@ -648,6 +648,35 @@ def why_live(sport: str = "mlb") -> None:
               "they settle.")
 
 
+def _live_status(live: list, market: str, rows: list) -> None:
+    """Say why this bet is or is not on the Live tab.
+
+    The first version told a SETTLED bet to "run --why-live for the mapping
+    reason". There is nothing to map: the Live tab shows open bets, the bet
+    had already graded, and it left by design. Sending someone to hunt a
+    mapping bug for a bet that simply won is the same confidently-wrong
+    answer this whole family of reports exists to stop producing.
+    """
+    shown = [x for x in live if x.get("market") == market]
+    if shown:
+        x = shown[0]
+        print(f"     ✓ ON THE LIVE TAB — {x.get('status')} ({x.get('phase')})")
+        return
+    graded = [b for b in rows if b["status"] in ("won", "lost", "push")]
+    if graded and not any(b["status"] == "open" for b in rows):
+        last = graded[-1]
+        print(f"     — SETTLED ({last['status']}) on {last['date']}, so it "
+              f"left the Live tab by design.\n       It is on the Record "
+              f"page. The Live tab only ever holds OPEN bets.")
+        return
+    if any(b["status"] == "open" for b in rows):
+        print("     ✗ open in the journal but NOT on the Live tab — run "
+              "`--why-live` for the\n       mapping reason (team, opponent "
+              "or doubleheader leg).")
+        return
+    print("     ✗ no journal row in any bucket.")
+
+
 def _goes_nowhere(skip: str) -> bool:
     """Does this skip mean the pick lands in NO bucket at all?
 
@@ -735,13 +764,7 @@ def why_pick(name: str, sport: str = "mlb") -> None:
                 for b in rows:
                     print(f"     journal: {b['category']} · {b['date']} · "
                           f"{b['status']} · {b['stake_units']}u")
-                shown = [x for x in live if x.get("market") == mkt]
-                if shown:
-                    print(f"     ✓ ON THE LIVE TAB — {shown[0].get('status')} "
-                          f"({shown[0].get('phase')})")
-                else:
-                    print("     ✗ not on the Live tab — run `--why-live` for "
-                          "the mapping reason.")
+                _live_status(live, mkt, rows)
             elif rec_flag and _goes_nowhere(skip):
                 print(f"       THIS IS THE GAP: the board shows it as a pick, "
                       f"no bucket holds it,\n       so it can never appear on "
@@ -757,18 +780,7 @@ def why_pick(name: str, sport: str = "mlb") -> None:
         for b in rows:
             print(f"     journal: {b['category']} · {b['date']} · "
                   f"{b['status']} · {b['stake_units']}u")
-        shown = [x for x in live if x.get("market") == mkt]
-        if shown:
-            x = shown[0]
-            print(f"     ✓ ON THE LIVE TAB — {x.get('status')} "
-                  f"({x.get('phase')})")
-        elif any(b["status"] == "open" for b in rows):
-            print("     ✗ open in the journal but NOT on the Live tab — run "
-                  "`--why-live` for the\n       mapping reason (team, "
-                  "opponent or doubleheader leg).")
-        else:
-            print("     — already settled, so it has left the Live tab by "
-                  "design.")
+        _live_status(live, mkt, rows)
     print()
 
 

@@ -170,6 +170,61 @@ def test_it_is_wired_to_a_flag():
     assert "why_pick(who, sport)" in SRC
 
 
+# --- a settled bet is not a missing bet -------------------------------------
+def test_a_settled_bet_is_reported_as_settled_not_sent_hunting():
+    """Ethan's real trace ended with:
+
+        journal: main · 2026-08-01 · won · 0.11u
+        ✗ not on the Live tab — run `--why-live` for the mapping reason.
+
+    There was nothing to map. The Live tab holds OPEN bets, the bet had
+    graded, and it left by design. Telling someone to hunt a mapping bug
+    for a bet that simply won is the same confidently-wrong answer this
+    whole family of reports exists to stop producing."""
+    import io, contextlib
+    from launch import _live_status
+    rows = [{"date": "2026-08-01", "category": "main", "status": "won",
+             "stake_units": 0.11}]
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        _live_status([], "total_bases", rows)
+    out = buf.getvalue()
+    assert "SETTLED (won)" in out
+    assert "why-live" not in out
+
+
+def test_an_open_unmapped_bet_still_points_at_the_mapping_report():
+    """The control: the ONE case where --why-live is the right next step
+    must still say so."""
+    import io, contextlib
+    from launch import _live_status
+    rows = [{"date": "2026-08-01", "category": "main", "status": "open",
+             "stake_units": 1.0}]
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        _live_status([], "total_bases", rows)
+    assert "why-live" in buf.getvalue()
+
+
+def test_a_bet_on_the_live_tab_says_so_before_anything_else():
+    import io, contextlib
+    from launch import _live_status
+    live = [{"market": "total_bases", "status": "cleared", "phase": "live"}]
+    rows = [{"date": "2026-08-01", "category": "main", "status": "open",
+             "stake_units": 1.0}]
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        _live_status(live, "total_bases", rows)
+    out = buf.getvalue()
+    assert "ON THE LIVE TAB" in out and "cleared" in out
+
+
+def test_both_report_paths_share_one_verdict_function():
+    """The skip path and the passes-every-gate path each printed their own
+    version, and only one of them knew about settled bets."""
+    assert SRC.count("_live_status(live, mkt, rows)") == 2
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

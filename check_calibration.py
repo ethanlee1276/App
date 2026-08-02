@@ -39,9 +39,33 @@ def main() -> None:
 
     print(f"\nTemperatures the engine resolves ({len(raw)} stored):")
     any_applied = False
+    uncorrected: list[tuple[str, str, str]] = []
     for sport, market in MARKETS:
         t = cal.temperature_for(sport, market, path)
         if t == 1.0:
+            # A market resolving to "no correction" used to be skipped
+            # silently, so the reader saw "4 stored" and three lines and
+            # concluded every market was handled. The one omitted from
+            # Ethan's run was home runs — the market with ECE 0.278, whose
+            # fit had FAILED. That is the single most important line on the
+            # page and it was the one that did not print.
+            # load() returns (temperature, intercept) TUPLES, not
+            # Calibration objects — an attribute check here silently
+            # evaluates False for every market and the boundary case, the
+            # one worth printing, disappears again.
+            stored = raw.get(f"{sport}:{market}")
+            if stored is None:
+                uncorrected.append((sport, market, "never fitted"))
+            elif stored[0] in (cal.GRID_MIN, cal.GRID_MAX):
+                uncorrected.append((
+                    sport, market,
+                    f"fit FAILED — landed on the edge of the search range "
+                    f"(T={stored[0]}); the data wanted a bigger correction "
+                    f"than the search allows, so nothing is applied and the "
+                    f"market is flagged unreliable"))
+            else:
+                uncorrected.append((sport, market,
+                                    "fitted at T=1.0 — no correction needed"))
             continue
         any_applied = True
         sample = 0.66
@@ -49,6 +73,11 @@ def main() -> None:
         direction = "pulled toward 50%" if t > 1 else "sharpened"
         print(f"  {sport}:{market:14} T = {t:<5} → a stated {sample:.0%} becomes "
               f"{corrected:.0%}  ({direction})")
+
+    if uncorrected:
+        print("\nMarkets running with NO correction:")
+        for sport, market, why in uncorrected:
+            print(f"  {sport}:{market:14} {why}")
 
     if not any_applied:
         print("  (every market resolves to T = 1.0 — no correction is being applied)")
