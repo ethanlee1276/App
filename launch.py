@@ -530,6 +530,44 @@ def _run_autosettle() -> None:
         print(f"  ⚠️  auto-settle failed: {exc}")
 
 
+def _run_doctor(force: bool = False) -> int:
+    """Once a day, say out loud whether anything is wrong.
+
+    The health check has to run HERE, on the laptop, and not in a scheduled
+    cloud session — because the databases are gitignored. A fresh clone has
+    no journal and no stats, so a remote check would be reporting on a
+    machine it cannot see. This is the machine with the data.
+
+    Once per calendar day, printed into the terminal that is already open,
+    and silent when everything is fine. A daily line that says "all clear"
+    every morning trains you to stop reading it."""
+    try:
+        import doctor
+        from engine.maintenance import STATE_PATH, _load_state, _save_state
+        today = _dt.date.today().isoformat()
+        state = _load_state(STATE_PATH)
+        if not force and state.get("last_doctor_day") == today:
+            return 0
+        # The suite takes minutes and the refresh loop is on a 60s cycle;
+        # a nightly `run_tests.py` here would stall the site's data.
+        rep = doctor.run(skip_tests=True)
+        state["last_doctor_day"] = today
+        _save_state(STATE_PATH, state)
+        bad = [c for c in rep.checks if c["status"] != "ok"]
+        if bad:
+            mark = {"warn": "⚠️ ", "fail": "❌"}
+            print(f"\n  Health check — {len(bad)} thing(s) need attention:")
+            for c in bad:
+                print(f"    {mark[c['status']]} {c['check']}: {c['detail']}")
+                if c["fix"]:
+                    print(f"       ↳ {c['fix']}")
+            print("    (full report: python3 doctor.py)\n")
+        return rep.verdict
+    except Exception as exc:  # noqa: BLE001 — a check must never stop the site
+        print(f"  ⚠️  health check failed: {exc}")
+        return 0
+
+
 def weigh_in_cli(argv: list) -> None:
     """Record a weigh-in, or show what the current card is missing.
 
@@ -1064,6 +1102,8 @@ def _background_refresher(interval: int) -> None:
         _run_maintenance()
         # Closes out tonight's games as they end, rather than tomorrow.
         _run_autosettle()
+        # Once a day, and only when something is wrong.
+        _run_doctor()
         refresh_all(quiet=True)
 
 
@@ -2111,6 +2151,9 @@ def main() -> None:
     if "--check" in argv:
         preflight()
         return
+    if "--doctor" in argv:
+        import doctor
+        sys.exit(doctor.main([a for a in argv if a != "--doctor"]))
     if "--weigh-in" in argv:
         weigh_in_cli(argv)
         return

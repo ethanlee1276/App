@@ -155,6 +155,105 @@ def test_the_slate_window_survives_a_closed_laptop_overnight():
     assert doctor.STALE_SLATE_H >= 6
 
 
+# --- the machine the check is running ON ------------------------------------
+def test_a_machine_with_no_databases_says_so_instead_of_reporting_clean():
+    """The databases are gitignored. A fresh clone — CI, a scheduled cloud
+    session — has neither, and `connect()` will happily create an empty one.
+    Every data check would then report "0 open bets, no problems found",
+    which is not a pass: it is a monitor confidently describing a machine it
+    cannot see. That is strictly worse than saying nothing."""
+    import tempfile
+    from engine import db, ledger
+    keep = (db.DEFAULT_DB, ledger.DEFAULT_DB)
+    tmp = tempfile.mkdtemp()
+    try:
+        db.DEFAULT_DB = os.path.join(tmp, "h.db")
+        ledger.DEFAULT_DB = os.path.join(tmp, "l.db")
+        assert doctor.has_history() is False
+        assert doctor.has_journal() is False
+        rep = doctor.run(skip_tests=True)
+        by = {c["check"]: c for c in rep.checks}
+        for name in ("stuck bets", "results ingest", "bet journal",
+                     "record page"):
+            assert "no " in by[name]["detail"] and "machine" in by[name]["detail"], \
+                f"{name} reported a verdict on data it does not have"
+            assert by[name]["status"] != doctor.OK, \
+                f"{name} passed without looking at anything"
+    finally:
+        db.DEFAULT_DB, ledger.DEFAULT_DB = keep
+
+
+def test_an_empty_database_file_is_not_mistaken_for_a_real_one():
+    """sqlite creates a valid, tiny, empty DB on first connect. Checking
+    existence alone would call that "history present"."""
+    import tempfile
+    from engine import db
+    keep = db.DEFAULT_DB
+    tmp = tempfile.mkdtemp()
+    try:
+        p = os.path.join(tmp, "h.db")
+        db.DEFAULT_DB = p
+        # Passed explicitly: connect()'s default argument was bound at import
+        # time, so reassigning the module constant does not redirect it.
+        db.connect(p)                     # creates the schema, no rows
+        assert os.path.exists(p)
+        assert doctor.has_history() is False
+    finally:
+        db.DEFAULT_DB = keep
+
+
+# --- the launcher wiring ----------------------------------------------------
+def _launch():
+    return open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+
+
+def test_the_launcher_runs_the_check_itself_once_a_day():
+    """Nobody runs a diagnostic every morning by hand — that is why the nine
+    flags this composes were only ever used after something broke."""
+    src = _launch()
+    fn = src[src.index("def _background_refresher("):]
+    fn = fn[:fn.index("\n\n\n")]
+    assert "_run_doctor()" in fn
+
+
+def test_the_daily_check_is_silent_when_nothing_is_wrong():
+    """A line that says "all clear" every morning trains you to stop
+    reading the line."""
+    src = _launch()
+    i = src.index("def _run_doctor(")
+    block = src[i:i + 1800]
+    assert 'bad = [c for c in rep.checks if c["status"] != "ok"]' in block
+    assert "if bad:" in block
+
+
+def test_the_daily_check_does_not_run_the_test_suite_in_the_refresh_loop():
+    """The suite takes minutes; the refresh cycle is 60 seconds."""
+    src = _launch()
+    i = src.index("def _run_doctor(")
+    assert "skip_tests=True" in src[i:i + 1800]
+
+
+def test_the_daily_check_throttles_to_one_run_per_calendar_day():
+    src = _launch()
+    i = src.index("def _run_doctor(")
+    block = src[i:i + 1800]
+    assert 'state.get("last_doctor_day") == today' in block
+    assert 'state["last_doctor_day"] = today' in block
+
+
+def test_a_broken_health_check_cannot_take_the_site_down():
+    src = _launch()
+    i = src.index("def _run_doctor(")
+    block = src[i:i + 1800]
+    assert "except Exception as exc:" in block
+    assert "return 0" in block[block.index("except Exception as exc:"):]
+
+
+def test_it_is_reachable_by_hand_too():
+    src = _launch()
+    assert 'if "--doctor" in argv:' in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

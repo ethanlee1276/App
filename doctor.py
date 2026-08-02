@@ -46,6 +46,38 @@ STALE_LOGS_D = 2
 LOW_CREDITS = 2000
 
 
+def _no_data(what: str) -> str:
+    return (f"no {what} on this machine — this check needs the machine that "
+            f"runs the builds")
+
+
+def has_history() -> bool:
+    """Is there a real stats DB here, or would connect() invent an empty one?
+
+    This matters more than it looks. The databases are gitignored, so a
+    fresh clone — a CI box, a scheduled cloud session — has neither. Every
+    data check would then run against a database sqlite creates on the spot
+    and report "0 open bets, no problems found", which is not a pass. It is
+    a health monitor confidently describing a machine it cannot see.
+    """
+    from engine import db
+    p = Path(db.DEFAULT_DB)
+    return p.exists() and p.stat().st_size > 1_000_000
+
+
+def has_journal() -> bool:
+    from engine import ledger
+    p = Path(ledger.DEFAULT_DB)
+    if not p.exists():
+        return False
+    try:
+        from engine import ledger as _l
+        return _l.connect().execute(
+            "SELECT COUNT(*) FROM bets").fetchone()[0] > 0
+    except Exception:
+        return False
+
+
 class Report:
     def __init__(self):
         self.checks: list[dict] = []
@@ -93,6 +125,9 @@ def check_tests(rep):
 def check_stuck_bets(rep):
     @_check(rep, "stuck bets")
     def _():
+        if not (has_journal() and has_history()):
+            rep.add("stuck bets", WARN, _no_data("bet journal"))
+            return
         from engine import db, ledger
         today = _dt.date.today().isoformat()
         rows = ledger.why_open(ledger.connect(), db.connect(), today)
@@ -116,6 +151,9 @@ def check_stuck_bets(rep):
 def check_slate_freshness(rep):
     @_check(rep, "site data")
     def _():
+        if not (ROOT / "web" / "data").is_dir():
+            rep.add("site data", WARN, _no_data("built slates"))
+            return
         now = time.time()
         stale, missing = [], []
         wanted = {"mlb_recommendations.json": "MLB",
@@ -147,6 +185,9 @@ def check_slate_freshness(rep):
 def check_ingest_freshness(rep):
     @_check(rep, "results ingest")
     def _():
+        if not has_history():
+            rep.add("results ingest", WARN, _no_data("stats database"))
+            return
         from engine import db
         h = db.connect()
         today = _dt.date.today()
@@ -202,6 +243,9 @@ def check_odds_budget(rep):
 def check_journal_sanity(rep):
     @_check(rep, "bet journal")
     def _():
+        if not has_journal():
+            rep.add("bet journal", WARN, _no_data("bet journal"))
+            return
         from engine import ledger
         c = ledger.connect()
         problems = []
@@ -231,6 +275,9 @@ def check_journal_sanity(rep):
 def check_record_page(rep):
     @_check(rep, "record page")
     def _():
+        if not has_journal():
+            rep.add("record page", WARN, _no_data("bet journal"))
+            return
         from engine import ledger
         p = ROOT / "web" / "data" / "record.json"
         if not p.exists():
