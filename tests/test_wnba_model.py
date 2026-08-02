@@ -296,6 +296,75 @@ def test_a_tier_three_prop_is_harder_to_recommend_on_the_page_too():
         # Same numbers, a bar more than three times as high.
         assert as_wnba[0]["edge"] == as_nba[0]["edge"]
         assert not (as_wnba[0]["recommended"] and not as_nba[0]["recommended"])
+# --- the door has to stay open ----------------------------------------------
+#
+# This is a GUARD, not a preference. It asserts nothing about where the bars
+# belong — only that the pairing of clamp and gate leaves a reachable window
+# at standard juice. Decided 2026-08-02: the bars stay where they are and an
+# empty board is a correct output. What must never happen again is the bars
+# closing the door ARITHMETICALLY while still reading like a live filter.
+#
+# It has happened once. The 2026-07-29 retune found the previous pairing
+# (w=0.28, gate 3.0pts) mathematically closed — the largest edge the model
+# could EVER produce was 0.9pts over a -110 break-even against a 3.0pt
+# requirement, so no line and no price could yield a pick. That was found by
+# hand, months late, by grid search. This runs the same search every commit.
+
+
+def _window(odds: int, hold: float = 0.045):
+    """(lo, hi) disagreement with de-vigged fair that can actually be bet."""
+    from engine.nba import prob as P
+    be = P.break_even(odds)
+    fair = be - hold / 2.0
+    lo = hi = None
+    d = 0.0
+    while d <= 0.30:
+        p_final = fair + P.CLAMP_W_DEFAULT * d
+        dec = P._dec(odds)
+        ev = p_final * (dec - 1.0) - (1.0 - p_final)
+        ok = (p_final - be >= P.GATE_EDGE_PTS and ev >= P.GATE_MIN_EV
+              and odds >= P.GATE_WORST_PRICE and d < P.CLAMP_KILL_DIFF)
+        if ok:
+            lo = d if lo is None else lo
+            hi = d
+        d += 0.0005
+    return lo, hi
+
+
+def test_the_gate_and_the_clamp_leave_a_reachable_window():
+    """A bar the model cannot reach at ANY price is not a strict filter, it
+    is an off switch that looks like a filter."""
+    for odds in (-150, -130, -120, -110, -105, 100, 120, 150, 200):
+        lo, hi = _window(odds)
+        assert lo is not None, f"door CLOSED at {odds}: no disagreement clears"
+        assert hi > lo, f"window has no width at {odds}"
+
+
+def test_the_window_sits_below_the_kill_threshold_not_across_it():
+    """The clamp kills a 12-point disagreement as "an input is wrong". If the
+    bettable window ran past that line the two rules would be contradicting
+    each other on the same prop."""
+    from engine.nba import prob as P
+    for odds in (-110, 100, 150):
+        _, hi = _window(odds)
+        assert hi < P.CLAMP_KILL_DIFF
+
+
+def test_the_windows_narrowness_is_recorded_where_it_can_be_seen():
+    """MEASURED 2026-08-02, and deliberately asserted rather than described:
+    a pick needs the model to disagree with the de-vigged market by roughly
+    9.5 to 11.9 points, a band about 2.4 points wide sitting immediately
+    below the kill line. So the board only ever bets its most EXTREME
+    disagreements, which is backwards, and a WNBA slate that night split 49
+    below the window / 8 killed above it / 0 inside.
+
+    If a future change widens this a lot, that is a real loosening and this
+    test should fail so it is a decision rather than a side effect.
+    """
+    lo, hi = _window(-110)
+    assert 0.085 <= lo <= 0.105, lo
+    assert 0.115 <= hi < 0.120, hi
+    assert (hi - lo) < 0.04, "window widened — was this meant to be a loosening?"
 
 
 if __name__ == "__main__":
