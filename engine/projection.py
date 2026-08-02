@@ -40,10 +40,17 @@ class Projection:
     reasons: list[str] = field(default_factory=list)
 
 
-def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None) -> Projection:
+def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
+                     context: dict | None = None) -> Projection:
+    """``context`` (NFL Phase 2) carries measured team tendency:
+    ``{"profiles": {team: profile}, "league": {...}}`` from
+    engine.teamcontext. Absent = the model prices exactly as before, which
+    is what makes the whole layer A/B-testable against the backtest
+    baseline instead of shipped on faith."""
     form = compute_form(prop.logs, prop.career_avg, prop.vs_opponent_avg)
 
-    matchup = evaluate_matchup(prop, opponent_team.defense, game)
+    matchup = evaluate_matchup(prop, opponent_team.defense, game,
+                               measured_context=bool(context))
     weather = evaluate_weather(game.weather)
     injury = evaluate_injuries(prop, game.injuries)
 
@@ -55,6 +62,24 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None) ->
         matchup.multiplier * weather_mult * injury.multiplier,
         0.85, 1.18,
     )
+
+    # Measured team tendency — pace, pass rate, offensive efficiency. Kept
+    # OUTSIDE rule_mult's clamp on purpose: that clamp exists to stop the
+    # hand-tuned factors compounding, and this is a different kind of
+    # input with its own bound. Folding it in would make a fast, pass-heavy
+    # offence indistinguishable from a merely favourable matchup.
+    ctx_mult, ctx_reasons = 1.0, []
+    if context:
+        from .teamcontext import context_multiplier, drift_multiplier
+        team = prop.team
+        if context.get("mode") == "drift":
+            ctx_mult, ctx_reasons = drift_multiplier(
+                (context.get("profiles") or {}).get(team),
+                (context.get("baseline") or {}).get(team), prop.market)
+        else:
+            ctx_mult, ctx_reasons = context_multiplier(
+                (context.get("profiles") or {}).get(team),
+                context.get("league") or {}, prop.market)
 
     reasons: list[str] = []
     if model is not None and model.has(prop.market):
@@ -72,16 +97,18 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None) ->
     # Recency shade: a sustained hot/cold streak pulls the projection toward
     # recent form (bounded in form.py), so the model stops leaning on stale
     # early-season numbers for a player who has cooled off.
-    mean = form.mean * total_mult * form.trend_mult
+    mean = form.mean * total_mult * form.trend_mult * ctx_mult
 
     # Uncertainty: never below the market-typical variance floor, and it grows
     # as we push further from the player's own baseline.
     cv_floor = CV_FLOOR.get(prop.market, 0.35) * max(form.mean, 1.0)
     base_std = max(form.std, cv_floor)
-    adj_std = base_std * (1.0 + 0.5 * abs(total_mult - 1.0))
+    adj_std = base_std * (1.0 + 0.5 * abs(total_mult - 1.0)
+                          + 0.5 * abs(ctx_mult - 1.0))
     if form.sample_games < 4:
         adj_std *= 1.20
 
+    reasons += ctx_reasons
     reasons += matchup.reasons
     reasons += weather.reasons
     reasons += injury.reasons

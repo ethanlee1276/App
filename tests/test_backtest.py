@@ -109,7 +109,11 @@ def test_backtest_driver_walk_forward():
     saved = (nv.load_weekly_stats, nv.build_slate, pl.run_slate)
     nv.load_weekly_stats = lambda season: stats
     nv.build_slate = lambda season, w, upto_week=None: object()
-    pl.run_slate = lambda slate, config=None, model=None, allow_synthetic_line=False: {"recommendations": [{
+    # **kw, so adding a pipeline argument does not break the double. This
+    # stub pinned run_slate's exact signature and failed the moment Phase 2
+    # threaded team_context through — a test asserting on a call shape it
+    # does not care about.
+    pl.run_slate = lambda slate, config=None, **kw: {"recommendations": [{
         "player": "RB One", "market": "rush_yds", "line": 70.0, "odds": -110,
         "hit_prob": 0.6, "projection": 82.0, "recommended": True, "stake_units": 1.0,
     }]}

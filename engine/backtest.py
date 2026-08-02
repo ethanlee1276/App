@@ -380,7 +380,7 @@ def settle_recommendations(recommendations: list[dict],
     return out
 
 
-def backtest_from_stats(season: int, weeks, config=None, model=None) -> BacktestReport:
+def backtest_from_stats(season: int, weeks, config=None, model=None, use_team_context: bool = False, team_context_mode: str = "level") -> BacktestReport:
     """Walk-forward backtest over real nflverse weeks.
 
     For each week, projections are built from prior weeks only, then settled
@@ -398,13 +398,35 @@ def backtest_from_stats(season: int, weeks, config=None, model=None) -> Backtest
     config = config or RuleConfig()
     stats = load_weekly_stats(season)
 
+    # NFL Phase 2. Team context is rebuilt for EVERY week from weeks
+    # STRICTLY BEFORE it. Reusing one season-average profile across the
+    # loop would let week 8 price itself with week 15's numbers — the
+    # backtest would look excellent and none of it would survive contact
+    # with a live Sunday, because in week 8 those games have not happened.
+    ctx_by_week: dict[int, dict] = {}
+    if use_team_context:
+        from . import db as _db
+        from .teamcontext import league_means, profiles_through
+        _hc = _db.connect()
+        for w in weeks:
+            profs = profiles_through(_hc, season, f"{int(w):03d}")
+            if profs:
+                ctx_by_week[w] = {"profiles": profs,
+                                  "league": league_means(profs),
+                                  "mode": team_context_mode}
+                if team_context_mode == "drift":
+                    from .teamcontext import drift_reference
+                    ctx_by_week[w]["baseline"] = drift_reference(
+                        _hc, season, f"{int(w):03d}")
+
     all_settled: list[SettledProp] = []
     for w in weeks:
         try:
             slate = build_slate(season, w, upto_week=w)
         except Exception:
             continue
-        result = run_slate(slate, config, model=model, allow_synthetic_line=True)
+        result = run_slate(slate, config, model=model, allow_synthetic_line=True,
+                           team_context=ctx_by_week.get(w))
 
         actuals: dict[tuple[str, str], float] = {}
         for row in stats:

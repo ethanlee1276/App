@@ -39,6 +39,13 @@ def main() -> None:
     ap.add_argument("--min-confidence", type=float, default=6.0)
     ap.add_argument("--min-edge", type=float, default=0.02)
     ap.add_argument("--model", default=None, help="Path to a trained model JSON (uses learned projections).")
+    ap.add_argument("--team-context", action="store_true",
+                    help="NFL Phase 2: price with measured pace / PROE / "
+                         "offensive EPA, rebuilt walk-forward for each week.")
+    ap.add_argument("--context-mode", default="level", choices=("level", "drift"),
+                    help="level = tendency vs the league; drift = the team vs "
+                         "its OWN season, i.e. only what player form has not "
+                         "already absorbed.")
     args = ap.parse_args()
 
     weeks = parse_weeks(args.weeks)
@@ -50,7 +57,9 @@ def main() -> None:
         model = MultiplierModel.load(args.model)
 
     try:
-        report = backtest_from_stats(args.season, weeks, config, model=model)
+        report = backtest_from_stats(args.season, weeks, config, model=model,
+                                     use_team_context=args.team_context,
+                                     team_context_mode=args.context_mode)
     except DataUnavailable as exc:
         print("⚠️  Backtest needs weekly stats.\n")
         print(exc)

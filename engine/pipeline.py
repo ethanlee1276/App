@@ -209,7 +209,7 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
 
 def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
               model=None, allow_synthetic_line: bool = False,
-              nfl_usage: dict | None = None) -> dict:
+              nfl_usage: dict | None = None, team_context: dict | None = None) -> dict:
     """``allow_synthetic_line`` is for the backtest harness, which prices
     against a naive baseline line on purpose (see engine.betting.temper_edge).
     ``nfl_usage`` carries measured red-zone/snap roles (engine.nflusage)."""
@@ -221,7 +221,8 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     for prop in slate.props:
         game = slate.game_for(prop)
         opponent = slate.team(prop.opponent)
-        proj = build_projection(prop, game, opponent, model=model)
+        proj = build_projection(prop, game, opponent, model=model,
+                                context=team_context)
         rec = evaluate_prop(prop, proj, allow_synthetic_line=allow_synthetic_line,
                             game=game)
         decision = apply_rules(rec, prop, game, config)

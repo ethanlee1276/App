@@ -49,7 +49,16 @@ def _ord(n: int) -> str:
     return {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
 
 
-def evaluate_matchup(prop: Prop, defense: DefenseProfile, game: Game) -> MatchupEffect:
+def evaluate_matchup(prop: Prop, defense: DefenseProfile, game: Game,
+                     measured_context: bool = False) -> MatchupEffect:
+    """``measured_context`` says the caller is ALSO pricing engine.teamcontext
+    (NFL Phase 2). Two of the adjustments below are hand-tuned stand-ins for
+    exactly what that layer measures — the spread-derived game script
+    approximates the team's pass rate, and the total-derived play bump
+    approximates its pace — so running both stacks a measurement on top of a
+    guess at the same effect. When the measured version is present these
+    stand down; the DEFENSIVE factor always stays, because nothing in
+    teamcontext prices the opponent."""
     mult = 1.0
     reasons: list[str] = []
 
@@ -65,6 +74,10 @@ def evaluate_matchup(prop: Prop, defense: DefenseProfile, game: Game) -> Matchup
     # late (helps RB rush), while a big underdog throws more (helps pass game).
     is_home = prop.team == game.home
     team_spread = game.spread if is_home else -game.spread   # negative = favored
+
+    if measured_context:
+        # PROE and pace are being priced for real; stop guessing at them.
+        return MatchupEffect(multiplier=mult, reasons=reasons)
 
     if prop.market == RUSH_YDS:
         if team_spread <= -4:
