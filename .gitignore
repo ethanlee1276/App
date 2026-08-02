@@ -21,7 +21,15 @@ data/cache/
 data/models/
 
 # Local API keys — never commit these
+# Every shape of the secrets file, not just the exact name. An editor's
+# backup holds the same keys as the original: nano writes secrets.local.save
+# on an interrupted edit, vim writes .swp and ~, and a hand-made copy is
+# usually secrets.local.bak. One of those sat untracked-but-visible in this
+# repo with two live API keys in it, one `git add -A` from a public push.
 secrets.local
+secrets.local.*
+secrets.local~
+*.local.save
 
 # OS / editor
 .DS_Store
@@ -40,3 +48,9 @@ data/backups/
 # "Updating the following directories would lose untracked files".
 node_modules
 node_modules/
+
+# Node is only ever used by tools/inventory.mjs, which resolves Playwright
+# from a scratchpad symlink. A package.json in the repo root is a leftover of
+# an npm run in the wrong directory, not a dependency of this project.
+package.json
+package-lock.json

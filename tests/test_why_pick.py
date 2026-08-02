@@ -27,6 +27,7 @@ said 0.3pt and the engine's said 1.0pt.
 
 import json
 import os
+import pathlib
 import shutil
 import subprocess
 import sys
@@ -103,23 +104,45 @@ def test_a_non_recommended_prop_is_not_reported_as_stranded():
 
 
 # --- end to end -------------------------------------------------------------
-def _with_board(extra_rec):
-    """Run --why-pick against a board carrying one injected row, then put
-    the real board back."""
-    backup = tempfile.mktemp(suffix=".json")
-    shutil.copy(BOARD, backup)
+def _with_board(extra_rec, others=None):
+    """Run --why-pick against a board we WROTE, in a throwaway root.
+
+    This used to copy the real web/data board aside, append a row, run
+    launch.py in the repo, and copy the original back. Two things wrong with
+    that. It EDITS the live board — on the machine that runs the builds, with
+    launch.py possibly mid-refresh — and its answer depends on whatever
+    happened to be on that board, so it passed against a dev checkout's
+    sample slate and failed against a real one. The board is the fixture
+    here; there is no reason to borrow a real one.
+    """
+    import io
+    from contextlib import redirect_stdout
+    import launch
+
+    root = tempfile.mkdtemp()
+    os.makedirs(os.path.join(root, "web", "data"), exist_ok=True)
+    board = {"date": "2026-08-02", "sport": "mlb",
+             "counts": {"props_analyzed": 1, "recommended": 1},
+             "games": [], "game_bets": [],
+             "recommendations": list(others or []) + [extra_rec]}
+    with open(os.path.join(root, "web", "data", "mlb_recommendations.json"),
+              "w", encoding="utf-8") as fh:
+        json.dump(board, fh)
+
+    # why_pick reads MLB_OUT, which is a RELATIVE path — so the working
+    # directory is what selects the board, not launch.ROOT. Patching the
+    # wrong one reads the real board and quietly reports it as missing.
+    old_cwd, old_root = os.getcwd(), launch.ROOT
+    buf = io.StringIO()
     try:
-        d = json.loads(open(BOARD, encoding="utf-8").read())
-        d["recommendations"].append(extra_rec)
-        open(BOARD, "w", encoding="utf-8").write(json.dumps(d))
-        p = subprocess.run([sys.executable, "launch.py", "--why-pick",
-                            extra_rec["player"]], cwd=ROOT,
-                           capture_output=True, text=True, timeout=300)
-        assert p.returncode == 0, p.stderr[-400:]
-        return p.stdout
+        os.chdir(root)
+        launch.ROOT = pathlib.Path(root)
+        with redirect_stdout(buf):
+            launch.why_pick(extra_rec["player"])
     finally:
-        shutil.copy(backup, BOARD)
-        os.unlink(backup)
+        os.chdir(old_cwd)
+        launch.ROOT = old_root
+    return buf.getvalue()
 
 
 def test_the_reported_case_is_reproduced_and_explained():
@@ -150,12 +173,27 @@ def test_a_properly_staked_pick_does_not_trigger_the_warning():
 
 
 def test_an_unknown_name_says_so_rather_than_reporting_nothing():
-    p = subprocess.run([sys.executable, "launch.py", "--why-pick",
-                        "Nobody At All"], cwd=ROOT, capture_output=True,
-                       text=True, timeout=300)
-    assert p.returncode == 0
-    assert "NOT ON THE BUILT BOARD" in p.stdout
-    assert "spelled differently" in p.stdout
+    import io
+    from contextlib import redirect_stdout
+    import launch
+
+    root = tempfile.mkdtemp()
+    os.makedirs(os.path.join(root, "web", "data"), exist_ok=True)
+    with open(os.path.join(root, "web", "data", "mlb_recommendations.json"),
+              "w", encoding="utf-8") as fh:
+        json.dump({"date": "2026-08-02", "sport": "mlb", "games": [],
+                   "recommendations": []}, fh)
+    old_cwd, old_root, buf = os.getcwd(), launch.ROOT, io.StringIO()
+    try:
+        os.chdir(root)
+        launch.ROOT = pathlib.Path(root)
+        with redirect_stdout(buf):
+            launch.why_pick("Nobody At All")
+    finally:
+        os.chdir(old_cwd)
+        launch.ROOT = old_root
+    assert "NOT ON THE BUILT BOARD" in buf.getvalue()
+    assert "spelled differently" in buf.getvalue()
 
 
 def test_it_never_writes_to_the_journal():

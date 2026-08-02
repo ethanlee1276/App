@@ -209,6 +209,50 @@ def test_the_why_chips_are_counted_across_the_site():
     assert total >= 50, f"only {total} why? chips render across the desktop site"
 
 
+def test_no_test_reads_the_live_board_or_the_real_database():
+    """Three separate tests passed here and failed on the machine that runs
+    the builds, all for the same reason: they read state that belongs to a
+    machine rather than to the repo.
+
+      * test_why_empty_scope shelled out and read whatever board was on disk
+      * test_mlb_quality asserted a hard pick count from a pipeline that
+        consults a locally-fitted calibration file
+      * test_why_pick copied the REAL board aside, edited it, and put it back
+        — on the machine that runs the builds, with launch.py possibly
+        mid-refresh
+
+    Each looked like a code defect and was really a difference in tonight's
+    games. A test is allowed to touch these paths; it is not allowed to touch
+    them without building its own copy first, and tempfile is the tell.
+    """
+    import re
+    here = os.path.dirname(os.path.abspath(__file__))
+    # The path has to be USED, not merely mentioned. A test that asserts a
+    # string is absent from launch.py's source names the path without ever
+    # opening it, and flagging that is noise that gets a guard switched off.
+    live = re.compile(r'"web",\s*"data"|web/data|DEFAULT_DB|calibration\.json')
+    uses = re.compile(r'open\(|read_text|json\.load|connect\(|cwd=_?ROOT')
+    offenders = {}
+    for name in sorted(os.listdir(here)):
+        if not (name.startswith("test_") and name.endswith(".py")):
+            continue
+        src = open(os.path.join(here, name), encoding="utf-8").read()
+        hits = [ln for ln in src.splitlines()
+                if live.search(ln) and uses.search(ln)]
+        if not hits:
+            continue
+        # A fixture of its own is the licence. tempfile/mkdtemp means the
+        # test wrote the thing it is about to read; calibrate.disabled()
+        # means it switched the machine-local input off deliberately.
+        if ("tempfile" in src or "mkdtemp" in src
+                or "calibrate.disabled" in src or "calibrate import" in src):
+            continue
+        offenders[name] = "touches live data with no fixture of its own"
+    assert not offenders, (
+        "these tests read machine-local state directly, so they measure the "
+        "machine: " + "; ".join(f"{k} — {v}" for k, v in offenders.items()))
+
+
 def test_no_test_file_strands_tests_below_its_runner():
     """A test that never runs is worse than no test: it reports success.
 

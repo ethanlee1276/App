@@ -100,9 +100,20 @@ def test_offense_stack_is_flagged_as_combined_exposure():
 
 def test_sample_slate_recommends_one_tier1_play():
     """The demo slate embodies the spec: pass on nearly everything, bet the
-    one Tier-1 strikeout prop that clears every gate — no leans anywhere."""
+    one Tier-1 strikeout prop that clears every gate — no leans anywhere.
+
+    Run with calibration OFF. `is_reliable` reads a fitted file from
+    data/models, so on a machine that has fitted its own temperatures the
+    pipeline closes different markets and the sample slate produces a
+    different count — this asserted a hard `== 1` and failed on Ethan's
+    laptop while passing on a dev checkout with no fit. The slate is a
+    fixture; the fit is machine-local state; a test that mixes them is
+    measuring the machine.
+    """
     from engine.mlb.pipeline import run_mlb_slate
-    out = run_mlb_slate("data/mlb_sample_slate.json")
+    from engine import calibrate
+    with calibrate.disabled():
+        out = run_mlb_slate("data/mlb_sample_slate.json")
     recs = out["recommendations"]
     on = [r for r in recs if r["recommended"]]
     assert len(on) == 1 and on[0]["tier"] == 1
