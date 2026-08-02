@@ -1129,13 +1129,32 @@ function censusFunnelHTML() {
     // Hoops: the two the build drops before the model ever sees them.
     no_history: "no stored game log for this player yet",
     props_built: "props built from history" };
-  const rows = Object.entries(gc)
-    .filter(([k, v]) => typeof v === "number" && v > 0
-      && k !== "recommended" && k !== "calibration_markets")
-    .map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px;
-        padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:var(--fs-sm)">
-      <span style="color:var(--text-mute)">${escapeHtml(names[k] || k)}</span>
-      <span style="font-weight:700">${v}</span></div>`).join("");
+  // TWO STAGES, not one list. The first two buckets are dropped by the BUILD
+  // before the model runs; everything else is a prop the model priced and
+  // then rejected. Merged into one column they read as contradictory — a
+  // WNBA board showing "26 props analyzed" above "no real book price 761"
+  // looks like 761 of 26, when it is really 787 built → 26 priced → 0 clear.
+  const PRE = ["no_history", "no_real_price"];
+  const line = ([k, v]) => `<div style="display:flex;justify-content:space-between;
+      gap:10px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05);
+      font-size:var(--fs-sm)">
+    <span style="color:var(--text-mute)">${escapeHtml(names[k] || k)}</span>
+    <span style="font-weight:700">${v}</span></div>`;
+  const live = Object.entries(gc).filter(([k, v]) => typeof v === "number"
+    && v > 0 && k !== "recommended" && k !== "calibration_markets");
+  const pre = live.filter(([k]) => PRE.includes(k));
+  const gates = live.filter(([k]) => !PRE.includes(k));
+  const reached = gates.reduce((n, [, v]) => n + v, 0)
+    + (Number(gc.recommended) || 0);
+  const sub = (t) => `<div style="font-size:var(--fs-xs);letter-spacing:.06em;
+      text-transform:uppercase;color:var(--text-mute);margin:8px 0 2px">${t}</div>`;
+  const rows = !live.length ? "" : [
+    pre.length ? sub("Never reached the model") + pre.map(line).join("") : "",
+    gates.length
+      ? sub(`Priced and rejected — ${reached} prop(s) reached the model`)
+        + gates.map(line).join("")
+      : "",
+  ].join("");
   const closed = (gc.calibration_markets || []).length
     ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--warn)">Closed by calibration:
        ${gc.calibration_markets.map(escapeHtml).join(", ")} — the nightly refit reopens
