@@ -2132,6 +2132,17 @@ def sport_report(conn, sport: str) -> dict:
 MIN_GRADED_FOR_SIGNAL = 30
 
 
+def _parlay_report(conn) -> dict:
+    """The parlay bucket, or an empty one. Imported here rather than at the
+    top so parlayledger stays a leaf module — it reads this file's tables and
+    reuses its CLV, and a top-level import either way would be a cycle."""
+    try:
+        from . import parlayledger
+        return parlayledger.report(conn)
+    except Exception:          # never let the parlay bucket break the record
+        return {"graded": 0, "open": 0, "probation": True}
+
+
 def export_json(conn, path) -> None:
     """Write the journal's performance to a JSON file the website renders.
 
@@ -2162,6 +2173,10 @@ def export_json(conn, path) -> None:
         # chart is dominated by picks from gates that no longer exist.
         "calibration_era": calibration(conn, since=MODEL_ERAS[-1]["start"]),
         "account_health": account_health(conn),
+        # §13: the parlay record is reported SEPARATELY and never blended.
+        # Its own key, its own tables, its own notional — nothing above this
+        # line moves when a ticket settles.
+        "parlays": _parlay_report(conn),
     }
     p = _Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)

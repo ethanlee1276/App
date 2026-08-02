@@ -505,6 +505,34 @@ def refresh_all(quiet: bool = False) -> None:
     refresh_sport_rosters(quiet=quiet)
     refresh_standings(quiet=quiet)
     _arbitrate_parlays(quiet=quiet)
+    _journal_parlays(quiet=quiet)
+
+
+def _journal_parlays(quiet: bool = False) -> None:
+    """§11: log tonight's tickets. Runs after the arbitration, not before.
+
+    The arbitration is what decides which single ticket §10.2 would have
+    allowed, and it can only run once every board exists — so journaling
+    ahead of it would record every night's play as "not the play".
+
+    Re-entrant by design: this fires on every 60s refresh, and log_board
+    keys on the legs themselves, so a ticket journals once per slate no
+    matter how many times the board is rebuilt around it.
+    """
+    try:
+        from engine import ledger as _led, parlayledger
+        conn = _led.connect()
+        r = parlayledger.journal_built_boards(conn, ROOT)
+        conn.close()
+        if not quiet and r["journaled"]:
+            print(f"  Parlay journal: {r['journaled']} new ticket(s) tracked "
+                  f"(graded, never staked).")
+        if not quiet:
+            for s in r["skipped"]:
+                print(f"  ⚠️  parlay journal skipped {s}")
+    except Exception as exc:  # noqa: BLE001 — never take the site down
+        if not quiet:
+            print(f"  ⚠️  parlay journal skipped: {exc}")
 
 
 def _arbitrate_parlays(quiet: bool = False) -> None:
@@ -2671,6 +2699,17 @@ def settle_now(day: str | None = None) -> None:
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠️  results ingest failed: {exc}")
     n = ledger.settle_from_history(lconn, hconn)
+    # Parlay tickets grade off their legs' verdicts in the singles journal,
+    # so this has to run AFTER the settle above or every ticket would find
+    # its legs still open and wait another day for no reason.
+    try:
+        from engine import parlayledger
+        pr = parlayledger.settle(lconn)
+        if pr["settled"] or pr["waiting"]:
+            print(f"  parlays: graded {pr['settled']}, "
+                  f"{pr['waiting']} waiting on legs")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  parlay settle skipped: {exc}")
     ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
     after = counts(lconn)
     print(f"  journal: settled {n} pick(s)")

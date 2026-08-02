@@ -1661,6 +1661,31 @@ select.calc-in { width: auto; font-weight: 600; }
 .rl-odds { text-align: right; font-size: var(--fs-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .rl-pnl { text-align: right; font-weight: 700; font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
 .rl-pnl.pos { color: var(--good); } .rl-pnl.neg { color: var(--bad); }
+/* Parlay tickets reuse .rl-row, but a ticket has something a single bet
+   does not: legs. .rl-row is a six-column GRID, so a legs element added as
+   a sixth child lands in the 72px P&L column and renders each leg as a
+   vertical stack of one-word lines. It spans the full row instead, set
+   under the ticket line at the same indent as .rl-main. */
+.rl-row.has-legs { row-gap: 4px; }
+.pl-legs {
+  grid-column: 1 / -1; padding-left: 32px;
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  font-size: var(--fs-xs); color: var(--text-mute);
+}
+.pl-leg { white-space: nowrap; }
+.pl-leg.lost { opacity: .6; }
+.pl-mark { font-weight: 800; margin-right: 3px; }
+.pl-leg.won .pl-mark { color: var(--good); }
+.pl-leg.lost .pl-mark { color: var(--bad); }
+.pl-verdict { padding: 10px 16px 10px 14px; font-size: var(--fs-sm);
+  border-bottom: 1px solid var(--border-soft); }
+.pl-codes { padding: 9px 16px 9px 14px;
+  border-top: 1px solid var(--border-soft); }
+.pl-conds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pl-cond { font-size: var(--fs-xs); color: var(--text-mute);
+  border: 1px solid var(--border); padding: 3px 8px; }
+.pl-cond.met { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+
 .rec-stamp { color: var(--text-mute); font-size: var(--fs-sm); margin-top: 14px; }
 
 

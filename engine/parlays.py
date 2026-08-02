@@ -1546,6 +1546,10 @@ def _publish(t: Ticket, qualified: bool, rank: int = 1) -> dict:
         "correlation_tax_worst_case": WORST_CASE_SGP_TAX[2 if len(t.legs) <= 2 else 3],
         "singles_alternative_ev": round(t.ev_singles, 4),
         "singles_alternative_same_stake": round(t.ev_alternative, 4),
+        # §11 logs a dominance_ratio, which needs BOTH sides of the compare.
+        # Publishing only the singles side left the journal able to record
+        # what we gave up but not what we got for it.
+        "ev_parlay_at_required": round(t.ev_parlay_at_required, 4),
         # §13: "If singles were better, say so on the card." With the bar
         # tuned down this is the sentence doing the honest work.
         "singles_beat_it": bool(t.ev_alternative >= t.ev_parlay_at_required),

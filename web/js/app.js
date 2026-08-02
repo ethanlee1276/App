@@ -2824,6 +2824,98 @@ function recEraSection(er) {
     </div>`;
 }
 
+/* The parlay bucket. §13 is explicit that this is reported separately and
+   never blended, so it gets its own section, its own notional and its own
+   ROI — and it leads with the one sentence that matters while the module is
+   on probation: whether the same legs bet singly would have done better. */
+function recParlaySection(pz) {
+  if (!pz || (!pz.graded && !pz.open)) return "";
+  const pr = pz.promotion || {};
+  const sc = pz.singles_comparison || {};
+  const cond = (ok, label) =>
+    `<span class="pl-cond${ok ? " met" : ""}">${ok ? icon("check") : icon("dash")}
+      ${escapeHtml(label)}</span>`;
+  // The honest headline. If flat singles on the same legs beat the tickets,
+  // that IS the finding, and it should not need reconstructing from a table.
+  const verdict = sc.n
+    ? `<div class="pl-verdict" style="color:var(--${
+        sc.singles_better ? "warn" : "good"})">
+       Across ${sc.n} graded ticket(s): parlays
+       <strong>${sc.parlay_units >= 0 ? "+" : ""}${sc.parlay_units.toFixed(2)}u</strong>,
+       the same legs bet singly
+       <strong>${sc.singles_units >= 0 ? "+" : ""}${sc.singles_units.toFixed(2)}u</strong>.
+       ${sc.singles_better
+         ? "Singles were better — the structure is costing money."
+         : "The structure has paid for itself so far."}</div>`
+    : "";
+  const codes = (pz.loss_codes || []).length
+    ? `<div class="pl-codes">${pz.loss_codes.map((c) =>
+        `<span class="chip">${escapeHtml(c.code)} ×${c.n}</span>`).join(" ")}</div>`
+    : "";
+  const rows = (pz.recent || []).map((t) => {
+    const pnl = t.pnl_units || 0;
+    const won = t.status === "won";
+    const vd = t.status === "void";
+    const legs = (t.legs || []).map((l) => {
+      const s = l.status === "won" ? "won" : l.status === "lost" ? "lost" : "push";
+      return `<span class="pl-leg ${s}"><span class="pl-mark">${
+        l.status === "won" ? icon("check")
+          : l.status === "lost" ? icon("cross") : icon("dash")}</span>${
+        escapeHtml(l.player || "")} ${escapeHtml(l.side || "")} ${l.line ?? ""}
+        <span style="opacity:.6">${escapeHtml(l.market || "")}</span></span>`;
+    }).join("");
+    return `<div class="rl-row has-legs ${vd ? "push" : won ? "won" : "lost"}">
+      <span class="rl-icon">${vd ? icon("dash") : won ? icon("check") : icon("cross")}</span>
+      <span class="rl-date">${escapeHtml(t.date || "")}</span>
+      <span class="rl-main"><strong>${escapeHtml((t.sport || "").toUpperCase())}
+        ${(t.legs || []).length}-leg</strong>
+        <span class="rl-bet">Type ${escapeHtml(t.parlay_type || "A")} ·
+        ${escapeHtml(t.grade || "")}${t.was_play ? " · slate play" : ""}</span></span>
+      <span class="rl-proc"></span>
+      <span class="rl-odds">${t.assumed_american == null ? "—"
+        : american(t.assumed_american)}</span>
+      <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
+      <span class="pl-legs">${legs}</span>
+    </div>`;
+  }).join("");
+  return `
+    <div class="section-title">Parlays — graded, never staked
+      <span class="sub">— on probation until 100 tickets clear the bar. Never
+      mixed into the record above.</span></div>
+    ${recDisclosure("Why these stake nothing", `${escapeHtml(pr.note || "")}
+      Every ticket here is graded at a flat one-unit notional so the ROI means
+      something, and at a zero real stake so the account never moves. Tickets
+      we <em>declined</em> are journaled too — recording only the ones that
+      cleared would measure the gates on the handful of nights they said yes,
+      and never test the no. Prices are an assumption, not a quote: no odds
+      feed we ingest carries same-game-parlay prices, so each ticket is graded
+      at the modelled likely-case price and labelled as such.`)}
+    <div class="stats rec-kpis">
+      ${recTile("Flat-stake ROI",
+                (pz.roi >= 0 ? "+" : "") + ((pz.roi || 0) * 100).toFixed(1) + "%",
+                `${pz.net_units >= 0 ? "+" : ""}${(pz.net_units || 0).toFixed(2)}u notional`,
+                { lead: true, tone: toneOf(pz.roi) })}
+      ${recTile("Ticket record", `${pz.wins || 0}-${pz.losses || 0}`,
+                `${pz.open || 0} open · ${pz.voided || 0} void`)}
+      ${recTile("Probation", `${pr.tickets_have || 0}/${pr.tickets_required || 100}`,
+                "graded tickets before anything is staked")}
+      ${recTile("Leg CLV", pz.avg_leg_clv == null ? "—"
+                  : (pz.avg_leg_clv >= 0 ? "+" : "") + pz.avg_leg_clv.toFixed(2),
+                pz.leg_clv_n ? `across ${pz.leg_clv_n} legs` : "accrues as legs settle",
+                { tone: toneOf(pz.avg_leg_clv) })}
+    </div>
+    <div class="pl-conds">
+      ${cond(pr.tickets_have >= pr.tickets_required,
+             `${pr.tickets_required || 100} graded tickets`)}
+      ${cond(pr.roi_positive, "positive flat-stake ROI")}
+      ${cond(pr.clv_non_negative, "leg CLV at or above zero")}
+      ${cond(pr.z_clears, `z ≥ ${pr.z_required || 2}${
+        pz.z == null ? "" : ` (now ${pz.z.toFixed(2)})`}`)}
+    </div>
+    <div class="card" style="padding:0;margin-top:12px">${verdict}${rows ||
+      `<p class="loading" style="padding:12px">No ticket has settled yet — accrues from tonight's board.</p>`}${codes}</div>`;
+}
+
 function recLongshotSection(ls) {
   // Show whenever EITHER bucket has data — after the watchlist split the
   // picks record can be tiny while the calibration sample is huge.
@@ -3337,6 +3429,7 @@ async function renderRecord() {
     ${recCalibrationSection(src.calibration, src.calibration_era)}
     ${scoped ? "" : recHealthSection(d.account_health)}
     ${scoped ? "" : recLongshotSection(d.longshots)}
+    ${scoped ? "" : recParlaySection(d.parlays)}
     ${scoped ? "" : recStaleSection(d.stale_flags)}
     ${scoped ? "" : recFormSection(d.form_sampler)}
     ${scoped ? "" : recLooseSection(d.loose_sampler)}
