@@ -214,8 +214,23 @@ def main() -> None:
         roi = _get(d, "roi", default=0.0)
         used = _get(d, "used_real_lines", default=0)
         winpct = (wins / bets * 100) if bets else 0.0
+        # Home runs are quarantined on the Long Shots board, which runs a
+        # DIFFERENT model (engine/mlb/homeruns.py). This sweep walks the
+        # generic prop model over them — a market it never bets, which is
+        # why the row always reports 0 bets. Its ECE is real and it is
+        # about a model nobody uses.
+        #
+        # Left in rather than hidden, because the fit derived from these
+        # errors is what pushed mlb:home_runs to the edge of the search
+        # grid, and correction_for's refusal to apply a boundary fit is the
+        # only thing stopping that correction from being handed to the good
+        # model. But labelled, because unlabelled it reads as "the home-run
+        # model is broken" — which it is not, and which cost two rounds of
+        # chasing before hr_backtest.py measured the real one at ECE 0.011.
+        note = ("   ← generic model, NOT the Long Shots board "
+                "(see hr_backtest.py)" if d["market"] == "home_runs" else "")
         print(f"{label:<14}{n:>8,}{brier:>9.4f}{ece:>8.3f}"
-              f"{bets:>7}{winpct:>6.1f}%{roi:>+8.1%}{used:>12,}")
+              f"{bets:>7}{winpct:>6.1f}%{roi:>+8.1%}{used:>12,}{note}")
 
     # The distinction that decides whether any of this is real: bets priced
     # against a harvested BOOK line are the only ones that answer "would
