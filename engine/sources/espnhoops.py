@@ -79,7 +79,15 @@ def parse_scoreboard(payload: dict) -> list[dict]:
         comp = (ev.get("competitions") or [{}])[0]
         home = away = None
         for c in comp.get("competitors", []) or []:
-            side = {"abbr": ((c.get("team") or {}).get("abbreviation") or "").strip(),
+            # The display name rides along with the abbreviation. The odds
+            # feed names teams in full ("Los Angeles Sparks") and this feed
+            # names them by ESPN's own short code, so something has to hold
+            # both halves of that join — and a hand-written table of the
+            # league's abbreviations is the thing that rots every time a
+            # team is added or renamed.
+            t = c.get("team") or {}
+            side = {"abbr": (t.get("abbreviation") or "").strip(),
+                    "name": (t.get("displayName") or t.get("name") or "").strip(),
                     "score": _num(c.get("score"))}
             if c.get("homeAway") == "home":
                 home = side
@@ -92,6 +100,7 @@ def parse_scoreboard(payload: dict) -> list[dict]:
         out.append({
             "game_id": str(ev.get("id") or ""),
             "home": home["abbr"], "away": away["abbr"],
+            "home_name": home["name"], "away_name": away["name"],
             "home_score": home["score"] if completed else None,
             "away_score": away["score"] if completed else None,
             "completed": completed,
@@ -236,6 +245,8 @@ def parse_schedule_day(_schedule: dict, date: str,
     except DataUnavailable:
         return []
     return [{"game_id": g["game_id"], "home": g["home"], "away": g["away"],
+             "home_name": g.get("home_name", ""),
+             "away_name": g.get("away_name", ""),
              "kickoff": g.get("kickoff", ""),
              "home_score": g["home_score"], "away_score": g["away_score"]}
             for g in games]

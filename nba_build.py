@@ -31,8 +31,12 @@ SLATE_MARKETS = ("pts", "reb", "ast", "fg3m", "pra")
 
 
 class _Game:
-    def __init__(self, home, away, kickoff):
+    def __init__(self, home, away, kickoff, home_name="", away_name=""):
         self.home, self.away, self.kickoff = home, away, kickoff
+        # The schedule feed's own full team names, carried so the odds
+        # adapter can join on them instead of on a hand-written table of
+        # abbreviations that disagrees with this feed's.
+        self.home_name, self.away_name = home_name, away_name
         self.live = None
         self.spread = None
         self.home_ml = self.away_ml = 0
@@ -377,7 +381,8 @@ def main() -> None:
         hist = player_history(conn, teams, sport=args.league,
                               seasons=recent_seasons(args.league, args.date))
 
-        slate = _Slate([_Game(g["home"], g["away"], g["kickoff"])
+        slate = _Slate([_Game(g["home"], g["away"], g["kickoff"],
+                              g.get("home_name", ""), g.get("away_name", ""))
                         for g in games], [])
         for player, h in hist.items():
             if len(h["minutes"]) >= 3:

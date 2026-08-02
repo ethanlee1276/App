@@ -749,6 +749,17 @@ class OddsAttachResult:
     dropped_events: list = field(default_factory=list)
 
 
+def _team_key(name: str) -> str:
+    """A team name reduced to what two feeds can be expected to agree on.
+
+    Case, punctuation and spacing only. Deliberately NOT clever: dropping
+    the city or matching on the nickname alone would collide the moment a
+    league has a Los Angeles Sparks and a Los Angeles Lakers, and a join
+    that is wrong is worse than one that misses.
+    """
+    return "".join(c for c in (name or "").lower() if c.isalnum())
+
+
 def _name_key_loose(name: str) -> str:
     """First initial + last name — the shape that survives the disagreements
     normalize_name can't fix: nicknames ("Mike"/"Michael"), dropped middle
@@ -874,9 +885,35 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     # Build a combined line index for the events that belong to this slate.
     index: dict[tuple[str, str], list[SportsbookLine]] = {}
     menu: dict[tuple[str, str], dict] = {}
+    # THE SLATE'S OWN NAMES BEAT THE STATIC TABLE.
+    #
+    # SPORT_CONFIG carries a hand-written {full name: abbreviation} map per
+    # league, and it has to agree with whatever the schedule feed calls the
+    # same teams. For the WNBA it did not: the table used league-style codes
+    # (LVA, NYL, GSV) and the ESPN schedule uses ESPN's own, so every event
+    # mapped to a pair that was not on our slate and all five games were
+    # dropped. 761 props reported as unpriced, on a night the book had
+    # priced every game.
+    #
+    # A table maintained by hand against a feed that renames and expands is
+    # the wrong shape for this. cfb_build already reached that conclusion —
+    # "134 schools is the kind of table that rots the moment a conference
+    # reshuffles" — and builds its map from the feed instead. This does the
+    # same wherever the schedule carries team names: the join runs feed-name
+    # to feed-abbreviation, so the two halves cannot disagree.
+    slate_names: dict[str, str] = {}
+    for g in slate.games:
+        for nm, ab in ((getattr(g, "home_name", ""), g.home),
+                       (getattr(g, "away_name", ""), g.away)):
+            if nm and ab:
+                slate_names[_team_key(nm)] = ab
+
+    def _abbr(name: str) -> str | None:
+        return slate_names.get(_team_key(name)) or cfg["teams"].get(name)
+
     for ev in events:
-        home = cfg["teams"].get(ev.get("home_team", ""))
-        away = cfg["teams"].get(ev.get("away_team", ""))
+        home = _abbr(ev.get("home_team", ""))
+        away = _abbr(ev.get("away_team", ""))
         # An event we cannot place on the slate is dropped here, and it used
         # to be dropped in silence — three different failures sharing one
         # `continue`, none of them counted. Downstream all anyone saw was a

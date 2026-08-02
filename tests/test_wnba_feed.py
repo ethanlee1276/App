@@ -245,6 +245,55 @@ def test_the_build_surfaces_dropped_events_rather_than_burying_them():
     block = src[i:i + 1400]
     assert "res.dropped_events" in block
     assert "DROPPED" in block
+# --- the join that actually places an event on the slate --------------------
+def test_the_slates_own_names_beat_the_static_abbreviation_table():
+    """The WNBA bug, in one assertion.
+
+    SPORT_CONFIG's hand-written table used league-style codes (LVA, NYL,
+    GSV); the ESPN schedule the slate is built from uses ESPN's own. Every
+    event mapped to a pair that was not on the slate, all five games were
+    dropped, and 761 props were reported unpriced on a night the book had
+    priced every one of them.
+
+    The schedule feed carries both halves of the join — the name the odds
+    feed uses and the abbreviation the slate uses — so the map is built from
+    it rather than maintained by hand against it.
+    """
+    from types import SimpleNamespace as NS
+    from engine.sources import oddsapi
+
+    slate_names = {}
+    g = NS(home="LV", away="ATL", home_name="Las Vegas Aces",
+           away_name="Atlanta Dream")
+    for nm, ab in ((g.home_name, g.home), (g.away_name, g.away)):
+        slate_names[oddsapi._team_key(nm)] = ab
+
+    # The static table says LVA. The slate says LV. The slate wins.
+    assert oddsapi.WNBA_TEAM_ABBR["Las Vegas Aces"] == "LVA"
+    assert slate_names[oddsapi._team_key("Las Vegas Aces")] == "LV"
+
+
+def test_the_team_key_ignores_only_case_and_punctuation():
+    """Not clever on purpose. Dropping the city or matching the nickname
+    alone collides the moment a league has a Los Angeles Sparks and a Los
+    Angeles Lakers, and a join that is WRONG is worse than one that misses.
+    """
+    from engine.sources.oddsapi import _team_key
+    assert _team_key("Los Angeles Sparks") == _team_key("los angeles sparks")
+    assert _team_key("L.A. Sparks ") == _team_key("LA Sparks")
+    assert _team_key("Los Angeles Sparks") != _team_key("Los Angeles Lakers")
+    assert _team_key("") == ""
+
+
+def test_the_static_table_still_answers_when_the_feed_has_no_names():
+    """MLB and NFL slates carry no team names, and their tables are correct.
+    The runtime map is a preference, not a replacement."""
+    import os
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "engine", "sources", "oddsapi.py"),
+        encoding="utf-8").read()
+    i = src.index("def _abbr(name: str)")
+    assert 'cfg["teams"].get(name)' in src[i:i + 200]
 
 
 if __name__ == "__main__":
