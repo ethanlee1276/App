@@ -35,13 +35,22 @@ def _avg(vals):
     return round(sum(vals) / len(vals), 2) if vals else None
 
 
-def _long_shots(slate) -> tuple[list[dict], list[dict], dict]:
-    """Home-run board: (strict value picks, most-likely-tonight watchlist,
-    diagnosis).
+#: How many rows the Long Shots board carries, total. Value picks first,
+#: topped up from the most-likely ranking. Three is the whole board — the
+#: page used to print every real-priced home run on the slate below the
+#: picks, which is two hundred names most nights.
+LONGSHOT_BOARD = 3
+
+
+def _long_shots(slate) -> tuple[list[dict], list[dict], dict, list[dict]]:
+    """Home-run board: (value picks, top-up watchlist, diagnosis, full pool).
 
     Picks apply the odds window + edge bar; the watchlist ranks every
     real-priced HR over by model probability so the page always answers
     "who could go deep tonight" even when no price clears the value bar.
+
+    The fourth return is the UNTRIMMED pool, for the market scanner only.
+    It is deliberately not the same list the site or the journal sees.
 
     The diagnosis counts survivors at each gate of the funnel — lineups →
     0.5-line quote → real book → believable plus-money price — so an empty
@@ -75,14 +84,25 @@ def _long_shots(slate) -> tuple[list[dict], list[dict], dict]:
         recent_by_player[prop.player] = [g.value for g in prop.logs][:12]
         candidates.append({"prop": prop, "game": game, "odds": best.over_odds,
                            "book": best.book, "under_odds": best.under_odds})
-    # Top THREE picks — the same three the Recommended page features. The
-    # watchlist is unlimited: every real-priced home run belongs on the
-    # Long Shots page, ranked by the model's probability.
+    # Top THREE picks — the same three the Recommended page features.
     picks = [p.to_dict() for p in build_hr_longshots(candidates, limit=3,
                                                      per_team=2)]
     for d in picks:
         d["recent_values"] = recent_by_player.get(d.get("player", ""), [])
-    watch = hr_watchlist(candidates, limit=None)
+    # The watchlist is computed in full and TRIMMED before it leaves here.
+    #
+    # It used to ship unlimited, on the reasoning that every real-priced
+    # home run belongs on the Long Shots page. In practice that is a wall of
+    # two hundred names a night, and it was being journaled too: a couple
+    # hundred rows an evening in a bucket nobody reads, which is most of the
+    # journal by volume and all of the noise in it. The board shows three.
+    #
+    # The full list stays alive inside this function because the market
+    # scanner reads it — a scanner reporting "no plus-money props" while the
+    # site carries +400 home runs is contradicting itself, and that is a
+    # different page answering a different question.
+    watch_all = hr_watchlist(candidates, limit=None)
+    watch = watch_all
     # Stamp lineup state on every row. The board may SHOW a projected
     # hitter (with the caveat), but the journal must not BET him: on rest
     # days a third of projected names never start, and each one becomes a
@@ -90,9 +110,15 @@ def _long_shots(slate) -> tuple[list[dict], list[dict], dict]:
     # journaled long shots were projected players who sat.
     confirmed = {c["prop"].player: bool(getattr(c["game"], "lineups_confirmed", True))
                  for c in candidates}
-    for d in picks + watch:
+    for d in picks + watch_all:
         d["lineup_confirmed"] = confirmed.get(d.get("player", ""), True)
-    return picks, watch, diag
+    # Trim to what tops the board up to three. Zero picks means three from
+    # the most-likely ranking; three picks means none. Either way the page
+    # is three rows, which is what "the top three long shots" means.
+    have = {d.get("player") for d in picks}
+    watch = [w for w in watch_all
+             if w.get("player") not in have][:max(0, LONGSHOT_BOARD - len(picks))]
+    return picks, watch, diag, watch_all
 
 
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
@@ -623,23 +649,18 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
 
     recommended = [r for r in results if r["recommended"]]
 
-    ls_picks, ls_watch, ls_diag = _long_shots(slate)
+    ls_picks, ls_watch, ls_diag, ls_pool = _long_shots(slate)
     if il_on_slate:
         # The HR board runs on the same projected lineups — an IL'd hitter
         # must not sit on a "most likely tonight" list.
         ls_picks = [p for p in ls_picks if p.get("player") not in il_on_slate]
         ls_watch = [w for w in ls_watch if w.get("player") not in il_on_slate]
-    # Home runs are long shots by nature, so the full HR board lives on the
-    # Long Shots page. The Recommended page features only the TOP THREE —
-    # the value picks first, topped up from the watchlist's most-likely
-    # ranking — stamped here so both pages agree on which three.
+        ls_pool = [w for w in ls_pool if w.get("player") not in il_on_slate]
+    # The Long Shots page and the Recommended page show the SAME three, and
+    # there is no fourth. Value picks first, topped up from the most-likely
+    # ranking; stamped here so both pages agree on which three.
     from .models import HOME_RUNS as _HR
-    featured = [d.get("player") for d in ls_picks][:3]
-    for w in ls_watch:
-        if len(featured) >= 3:
-            break
-        if w["player"] not in featured:
-            featured.append(w["player"])
+    featured = [d.get("player") for d in ls_picks + ls_watch][:LONGSHOT_BOARD]
     for r in results:
         if r["market"] == _HR:
             r["hr_featured"] = r["player"] in featured
@@ -664,7 +685,10 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         # Who on this slate is on the IL right now — the site's receipts
         # for why a familiar name is missing from every list tonight.
         "injured_list": sorted(il_on_slate),
-        "market_scan": _market_scan(results, ls_picks + ls_watch),
+        # The scanner gets the FULL pool, not the trimmed board: a scanner
+        # reporting "no plus-money props" while the site carries +400 home
+        # runs would be contradicting its own page.
+        "market_scan": _market_scan(results, ls_picks + ls_pool),
     }
     # §14, and §5's lineup rule is enforced inside the screen: a hitter leg
     # is ineligible until the card is posted.

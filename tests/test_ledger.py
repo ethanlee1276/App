@@ -311,33 +311,33 @@ def _ls_result(**over):
     return base
 
 
-def test_longshots_journal_separately_with_no_bankroll_impact():
+def test_the_watchlist_is_never_journaled():
+    """The board's three picks are the record. The watchlist — every
+    real-priced homer on the slate — used to journal alongside them at a
+    couple of hundred rows a night, which was most of the journal by volume
+    and all of the noise in it: every audit, settle pass and stuck-bet
+    report came back a wall of names nobody had bet."""
     conn = _conn()
     ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
-    # Picks + watchlist, deduped; proxy prices refused.
-    assert ledger.log_longshots(conn, _ls_result()) == 2
-    assert ledger.log_longshots(conn, _ls_result()) == 0    # idempotent
-    # The main record does not see them at all — and the RECORD bucket sees
-    # only the pick; the watchlist name journals in its own bucket.
-    assert ledger.performance(conn)["open"] == 0
+    assert ledger.log_longshots(conn, _ls_result()) == 1     # the pick, alone
+    assert ledger.log_longshots(conn, _ls_result()) == 0     # idempotent
+    assert ledger.performance(conn)["open"] == 0             # never the record
     assert ledger.performance(conn, category="longshot")["open"] == 1
-    assert ledger.performance(conn, category="longshot_watch")["open"] == 1
+    assert ledger.performance(conn, category="longshot_watch")["open"] == 0
+    assert {r["player"] for r in conn.execute("SELECT player FROM bets")} \
+        == {"Slugger"}
 
-    # Slugger homers (+320 at 0.1u = +0.32u); Watch Guy doesn't (-0.1u).
-    ledger.settle(conn, {("Slugger", "home_runs"): 1.0,
-                         ("Watch Guy", "home_runs"): 0.0})
-    assert ledger.bankroll(conn) == 1000.0                  # zero dollar exposure
+
+def test_a_journaled_longshot_still_carries_no_dollar_exposure():
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    ledger.log_longshots(conn, _ls_result())
+    ledger.settle(conn, {("Slugger", "home_runs"): 1.0})
+    assert ledger.bankroll(conn) == 1000.0
     ls = ledger.longshot_report(conn)
-    # Record = the pick only. Watch Guy's miss must NOT drag the W-L.
     assert ls["wins"] == 1 and ls["losses"] == 0
-    assert abs(ls["net_units"] - 0.32) < 1e-9
-    assert ls["watch"] == {"graded": 1, "wins": 0, "net_units": -0.1,
-                           "roi": -1.0, "open": 0}
-    # Calibration readout spans BOTH buckets: model avg vs implied vs actual.
-    assert ls["calibration_n"] == 2
-    assert abs(ls["avg_model_prob"] - 0.195) < 1e-9
-    assert ls["actual_hit_rate"] == 0.5
-    assert ls["recent"][0]["player"] == "Slugger"           # picks only
+    assert abs(ls["net_units"] - 0.32) < 1e-9                # +320 at 0.1u
+    assert ls["recent"][0]["player"] == "Slugger"
     # Main performance and curve stay untouched.
     assert ledger.performance(conn)["settled"] == 0
     assert ledger.pnl_curve(conn) == []
@@ -381,7 +381,7 @@ def test_home_run_pick_lands_only_in_the_longshot_bucket():
     r["recommendations"][0].update(player="Slugger", market="home_runs",
                                    line=0.5, odds=320)
     assert ledger.log_recommendations(conn, r) == 0
-    assert ledger.log_longshots(conn, _ls_result()) == 2
+    assert ledger.log_longshots(conn, _ls_result()) == 1
     rows = conn.execute("SELECT category FROM bets WHERE player='Slugger'").fetchall()
     assert [r["category"] for r in rows] == ["longshot"]
 
@@ -430,7 +430,7 @@ def test_migration_adds_category_and_keeps_rows():
     assert row["category"] == "main" and row["status"] == "won"
     assert ledger.performance(conn)["wins"] == 1
     # Same player/market/date now journals in the longshot bucket too.
-    assert ledger.log_longshots(conn, _ls_result(date="2026-07-25")) == 2
+    assert ledger.log_longshots(conn, _ls_result(date="2026-07-25")) == 1
 
 
 def test_summary_renders():
@@ -539,10 +539,10 @@ def test_longshot_home_runs_settle_from_ingested_logs():
     result = {
         "sport": "mlb", "date": "2026-07-26",
         "long_shots": [{"player": "Aaron Judge", "market": "home_runs",
-                        "odds": 320, "book": "FanDuel", "model_prob": 0.28}],
-        "longshot_watch": [{"player": "Mike Trout", "market": "home_runs",
-                            "odds": 450, "book": "DraftKings",
-                            "model_prob": 0.19}],
+                        "odds": 320, "book": "FanDuel", "model_prob": 0.28},
+                       {"player": "Mike Trout", "market": "home_runs",
+                        "odds": 450, "book": "DraftKings",
+                        "model_prob": 0.19}],
     }
     assert ledger.log_longshots(conn, result) == 2
     start_roll = ledger.bankroll(conn)
@@ -559,18 +559,14 @@ def test_longshot_home_runs_settle_from_ingested_logs():
     assert ledger.settle_from_history(conn, hist) == 2
 
     picks = {r["player"]: r for r in ledger.recent_settled(conn, category="longshot")}
-    watch = {r["player"]: r for r in
-             ledger.recent_settled(conn, category="longshot_watch")}
     assert picks["Aaron Judge"]["status"] == "won"
-    assert watch["Mike Trout"]["status"] == "lost"
+    assert picks["Mike Trout"]["status"] == "lost"
     # Flat 0.1u at +320 → +0.32u; measurement only, zero dollars at risk.
     assert abs(picks["Aaron Judge"]["pnl_units"] - 0.32) < 1e-6
     assert ledger.bankroll(conn) == start_roll
     lr = ledger.longshot_report(conn)
-    # Record = the pick; the watchlist name grades in its own bucket.
-    assert lr["settled"] == 1 and lr["open"] == 0 and lr["wins"] == 1
-    assert lr["watch"]["graded"] == 1 and lr["watch"]["wins"] == 0
-    assert lr["actual_hit_rate"] == 0.5          # calibration spans both
+    assert lr["settled"] == 2 and lr["open"] == 0 and lr["wins"] == 1
+    assert lr["actual_hit_rate"] == 0.5
     # And none of it leaks into the headline record.
     assert ledger.performance(conn)["settled"] == 0
 
@@ -772,7 +768,7 @@ def test_log_longshots_skips_projected_lineups():
     """A projected hitter is a guess about who plays, not a bet. The board
     shows him with the caveat; the journal waits for confirmation."""
     conn = _conn()
-    result = {"sport": "mlb", "date": "2026-07-27", "long_shots": [], "longshot_watch": [
+    result = {"sport": "mlb", "date": "2026-07-27", "long_shots": [
         {"player": "Confirmed Guy", "odds": 400, "book": "FanDuel",
          "model_prob": 0.2, "lineup_confirmed": True},
         {"player": "Projected Guy", "odds": 400, "book": "FanDuel",

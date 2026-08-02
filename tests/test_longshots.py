@@ -289,6 +289,52 @@ def test_impossible_under_never_inflates_the_devig():
     assert implied_ok < american_to_prob(-430)
 
 
+# --- the board is three rows, and there is no fourth ------------------------
+def _built():
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from engine.mlb.pipeline import run_mlb_slate
+    return run_mlb_slate("data/mlb_sample_slate.json")
+
+
+def test_the_long_shot_board_never_exceeds_three_rows():
+    """It used to ship every real-priced home run on the slate — two hundred
+    names most nights, below the three that were actually recommended. The
+    three were the point; the wall buried them."""
+    from engine.mlb.pipeline import LONGSHOT_BOARD
+    d = _built()
+    assert LONGSHOT_BOARD == 3
+    assert len(d["long_shots"]) + len(d["longshot_watch"]) <= LONGSHOT_BOARD
+
+
+def test_the_top_up_rows_never_duplicate_a_pick():
+    d = _built()
+    picks = {r.get("player") for r in d["long_shots"]}
+    assert not (picks & {r.get("player") for r in d["longshot_watch"]})
+
+
+def test_the_scanner_still_sees_the_whole_pool():
+    """The trim is a publishing decision, not a data one. A scanner
+    reporting "no plus-money props" while the site carries +400 home runs
+    would be contradicting its own page — so it reads the untrimmed pool,
+    which must therefore be able to exceed the board."""
+    d = _built()
+    n = len((d.get("market_scan") or {}).get("longshots") or [])
+    assert n > len(d["long_shots"]) + len(d["longshot_watch"])
+
+
+def test_the_recommended_page_features_the_same_three():
+    """Both pages read hr_featured off the same stamp. Two lists computed
+    separately would eventually disagree about which three."""
+    d = _built()
+    board = {r.get("player") for r in d["long_shots"] + d["longshot_watch"]}
+    featured = {r["player"] for r in d["recommendations"]
+                if r.get("hr_featured")}
+    assert featured <= board
+    assert len(featured) <= 3
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

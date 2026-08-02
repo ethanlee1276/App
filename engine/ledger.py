@@ -251,26 +251,33 @@ SETTLEABLE_LONGSHOTS = {"home_runs", "anytime_td"}
 
 
 def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
-    """Journal the Long Shots board — picks and watchlist in SEPARATE buckets.
+    """Journal the Long Shots board — the board's picks, and nothing else.
 
-    The picks (three per night at most — the bets the board actually
-    recommends) go to ``category='longshot'``: that is the record the Record
-    page scores. The watchlist — EVERY real-priced HR on the slate, often
-    100+ names — goes to ``category='longshot_watch'``: a calibration sample
-    only ("does the model's claimed probability beat the market's implied
-    one?"), never a record. One bucket used to hold both, and that made the
-    Long Shots W-L describe the dart board instead of the picks: journal a
-    couple hundred homers a night and a handful always land.
+    The board is three rows: the value picks, topped up from the
+    most-likely ranking. Those go to ``category='longshot'`` at a small flat
+    stake with zero dollar exposure, and that is the record the Record page
+    scores.
 
-    Both buckets track at a small flat stake with ZERO dollar exposure.
+    THE WATCHLIST IS NO LONGER JOURNALED. It used to write every
+    real-priced home run on the slate to ``category='longshot_watch'`` as a
+    calibration sample — a couple of hundred rows a night, which was most of
+    the journal by volume and all of the noise in it. The measurement it
+    bought (does the model's claimed probability beat the market's implied
+    one?) is real but it was never worth two hundred rows an evening in a
+    bucket nobody reads, and it made every audit, every settle pass and
+    every stuck-bet report a wall of names.
+
+    What that costs, stated plainly: the long-shot calibration sample now
+    grows three a night instead of two hundred, so it will take far longer
+    to say anything about the HR model's probabilities. Existing
+    longshot_watch rows are left alone — they are real measurements already
+    taken — but nothing adds to them.
     """
     sport = result.get("sport", "mlb")
     date = result.get("date", "")
     now = datetime.datetime.utcnow().isoformat(timespec="seconds")
     n = _journal_longshot_rows(conn, result.get("long_shots") or [],
                                sport, date, now, "longshot", flat_stake)
-    n += _journal_longshot_rows(conn, result.get("longshot_watch") or [],
-                                sport, date, now, "longshot_watch", flat_stake)
     conn.commit()
     return n
 

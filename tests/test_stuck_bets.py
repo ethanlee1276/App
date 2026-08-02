@@ -284,9 +284,9 @@ def test_a_longshot_is_journaled_under_its_own_games_date():
     settle. The row already carried game_date; the journal ignored it."""
     lconn = ledger.connect(os.path.join(tempfile.mkdtemp(), "l.db"))
     ledger.log_longshots(lconn, {"sport": "mlb", "date": "2026-07-27",
-        "longshot_watch": [{"player": "Cal Raleigh", "market": "home_runs",
-                            "odds": 400, "book": "FanDuel",
-                            "game_date": "2026-07-26", "model_prob": 0.2}]})
+        "long_shots": [{"player": "Cal Raleigh", "market": "home_runs",
+                        "odds": 400, "book": "FanDuel",
+                        "game_date": "2026-07-26", "model_prob": 0.2}]})
     got = lconn.execute("SELECT date FROM bets").fetchone()[0]
     assert got == "2026-07-26", got
 
@@ -294,9 +294,9 @@ def test_a_longshot_is_journaled_under_its_own_games_date():
 def test_a_row_with_no_game_date_still_uses_the_slate():
     lconn = ledger.connect(os.path.join(tempfile.mkdtemp(), "l.db"))
     ledger.log_longshots(lconn, {"sport": "mlb", "date": "2026-07-27",
-        "longshot_watch": [{"player": "No Date", "market": "home_runs",
-                            "odds": 400, "book": "FanDuel",
-                            "model_prob": 0.2}]})
+        "long_shots": [{"player": "No Date", "market": "home_runs",
+                        "odds": 400, "book": "FanDuel",
+                        "model_prob": 0.2}]})
     assert lconn.execute("SELECT date FROM bets").fetchone()[0] == "2026-07-27"
 
 

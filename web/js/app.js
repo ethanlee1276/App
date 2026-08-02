@@ -1930,13 +1930,17 @@ function renderLongShots() {
     ? "— home runs, priced on contact quality, park & weather"
     : "— anytime touchdowns, priced on opportunity not hype";
 
+  // The board is three rows and there is no fourth. It used to list every
+  // real-priced home run on the slate below the picks — two hundred names
+  // most nights, which buried the three that were actually recommended.
   const watch = state.data.longshot_watch || [];
   if (!picks.length) {
     host.innerHTML = watchlistHTML(watch, mlb);
     note.innerHTML = watch.length
-      ? `<div class="ls-note">No price clears the strict <b>value</b> bar right now —
-         but the model still ranks tonight's most likely ${mlb ? "home runs" : "scorers"} below,
-         with the price shown honestly so you can see what the book charges for them.</div>`
+      ? `<div class="ls-note">No price clears the strict <b>value</b> bar tonight, so
+         these are the model's most likely ${mlb ? "home runs" : "scorers"} instead, with
+         the price shown honestly. They are <b>not</b> value picks and are not journaled
+         as bets — read them as insight, not as a card.</div>`
       : `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <div class="es-title">No ${mlb ? "home-run" : "touchdown"} board right now</div>
       <div class="es-sub">${escapeHtml(longshotEmptyReason(mlb))}</div></div>`;
@@ -1944,8 +1948,9 @@ function renderLongShots() {
   }
   note.innerHTML = `<div class="ls-note">Top ${picks.length} pick(s), ranked by
     <b>edge</b>, never by payout — the same ${picks.length === 1 ? "one" : picks.length}
-    featured on the Recommended page. Every other real-priced
-    ${mlb ? "home run" : "scorer"} is ranked below.</div>`;
+    featured on the Recommended page.${watch.length ? ` Topped up to three with the
+    model's most likely ${mlb ? "home run" : "scorer"}${watch.length > 1 ? "s" : ""},
+    shown for context and not journaled as bets.` : ""}</div>`;
   host.innerHTML = picks.map(longShotCard).join("") + watchlistHTML(watch, mlb);
   fillMeters(host);
   revealChildren(host);
@@ -2932,12 +2937,13 @@ function recLongshotSection(ls) {
          Model above books AND actual above implied = the board finds real value.</div>` : "";
   const watch = ls.watch && (ls.watch.graded || ls.watch.open)
     ? `<div style="opacity:.7;font-size:.9em;padding:8px 14px;border-top:1px solid rgba(128,128,128,.15)">
-         Watchlist sample — every real-priced homer on the slate, tracked purely to
-         tune the model: <strong>${ls.watch.wins}/${ls.watch.graded}</strong> graded
-         (${ls.watch.open} open), flat-stake
+         Watchlist sample — <b>closed, no longer growing</b>. This tracked every
+         real-priced homer on the slate to tune the model, at a couple of hundred rows a
+         night, and it was more journal than the picks it was meant to inform.
+         Final: <strong>${ls.watch.wins}/${ls.watch.graded}</strong> graded
+         (${ls.watch.open} still open), flat-stake
          <strong>${ls.watch.roi >= 0 ? "+" : ""}${(ls.watch.roi * 100).toFixed(1)}% ROI</strong>.
-         Track a couple hundred homers a night and some always land — that's why this
-         sample feeds the calibration line above but never the record.</div>` : "";
+         It never entered the record above.</div>` : "";
   // Same row component as the main settled list, so it inherits the same
   // alignment and the same phone treatment instead of clipping mid-word.
   const rows = (ls.recent || []).map((b) => {
