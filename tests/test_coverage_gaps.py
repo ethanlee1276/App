@@ -23,6 +23,11 @@ from engine import db
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def ing_repair(gaps):
+    import ingest as ing
+    return ing.repair_command("mlb", gaps)
+
+
 def _conn():
     return db.connect(os.path.join(tempfile.mkdtemp(), "h.db"))
 
@@ -43,7 +48,7 @@ def _logs(c, day, n, gid="g1"):
 
 def _full_day(c, day):
     _game(c, day)
-    _logs(c, day, db.THIN_DAY_PLAYERS + 50)
+    _logs(c, day, db.THIN_PLAYERS_PER_GAME * 3)
 
 
 def _kinds(c):
@@ -81,13 +86,29 @@ def test_finals_without_player_logs_is_the_expensive_one():
 
 
 def test_a_handful_of_players_is_not_a_slate():
-    """A full MLB day stores several hundred. Nine is a run that stopped
-    part-way, and from the outside it looks exactly like a quiet day."""
+    """A real fixture logs 20-30 distinct players once the bullpen and the
+    bench are counted. Two is a run that stopped part-way, and from the
+    outside it looks exactly like a quiet day."""
     c = _conn()
-    _game(c, "2026-07-31")
-    _logs(c, "2026-07-31", 9)
+    for i in range(13):
+        _game(c, "2026-07-31", f"g{i}")
+    _logs(c, "2026-07-31", 25)              # 1.9 a game
     c.commit()
     assert _kinds(c) == {"2026-07-31": "thin_logs"}
+
+
+def test_a_small_but_COMPLETE_day_is_not_thin():
+    """The absolute threshold's own bug. 77 players across 3 games is 26 a
+    game — a complete ingest of a quiet Monday — and an absolute bar of 120
+    called it a hole. Eleven of the eighteen days the first version reported
+    as thin were this, and each one sent a repair walk after nothing."""
+    c = _conn()
+    for i in range(3):
+        _game(c, "2026-06-07", f"g{i}")
+    _logs(c, "2026-06-07", 77)
+    _full_day(c, "2026-08-02")
+    c.commit()
+    assert db.coverage_gaps(c) == []
 
 
 # --- and the things it must NOT flag ----------------------------------------
@@ -164,9 +185,29 @@ def test_the_repair_command_is_named_as_free():
     i = src.index("def print_gaps(")
     block = src[i:i + 2600]
     assert "FREE" in block and "no key" in block
-    assert "python3 ingest.py {sport} --from {lo} --to {hi}" in block
+    assert "repair_command(sport, fixable)" in block
     # And the follow-up, because re-ingesting alone leaves the bets open.
     assert "--settle all" in block
+
+
+def test_a_few_scattered_days_get_named_not_ranged():
+    """22 holes spread over five seasons became "--from 2021-06-07 --to
+    2026-07-16" — 1,867 days of requests to fix 22. Free of credits is not
+    free of an afternoon."""
+    cmd = ing_repair([{"date": "2021-06-07"}, {"date": "2024-03-20"},
+                      {"date": "2026-07-16"}])
+    assert "--dates 2021-06-07,2024-03-20,2026-07-16" in cmd
+    assert "--from" not in cmd
+
+
+def test_a_long_contiguous_outage_gets_a_range():
+    """The other direction. Past the threshold a range genuinely is the
+    smaller ask, and a comma list of 400 dates is not a command."""
+    days = [{"date": f"2026-05-{d:02d}"} for d in range(1, 29)]
+    days += [{"date": f"2026-06-{d:02d}"} for d in range(1, 29)]
+    cmd = ing_repair(days)
+    assert "--from 2026-05-01 --to 2026-06-28" in cmd
+    assert "--dates" not in cmd
 
 
 def test_a_clean_database_says_so_rather_than_going_quiet():
@@ -268,7 +309,7 @@ def test_the_repair_range_is_built_from_repairable_days_only():
     with contextlib.redirect_stdout(buf):
         ing.print_gaps(c)
     out = buf.getvalue()
-    assert "--from 2026-07-30 --to 2026-07-30" in out
+    assert "--dates 2026-07-30" in out
     assert "2026-04-02" not in out.split("NEVER resolve")[0]
 
 

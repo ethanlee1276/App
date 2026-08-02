@@ -90,6 +90,28 @@ def print_summary(conn) -> None:
 #: not a report — the first few name the shape and the range repairs them all.
 GAP_LIST_MAX = 12
 
+#: Above this many holes, name a RANGE rather than every date. Below it,
+#: name the dates: 22 holes scattered over five years became
+#: "--from 2021-06-07 --to 2026-07-16", which is 1,867 days of requests to
+#: fix 22. Free of credits is not free of an afternoon.
+GAP_RANGE_ABOVE = 40
+
+
+def repair_command(sport: str, gaps: list) -> str:
+    """The narrowest command that fixes exactly these days.
+
+    ``--dates`` when the holes are few and scattered, ``--from/--to`` when
+    there are enough of them that a range is genuinely the smaller ask. The
+    first version always emitted a range, which is right for a contiguous
+    outage and absurd for a handful of days spread across five seasons.
+    """
+    days = [g["date"] for g in gaps]
+    if not days:
+        return ""
+    if len(days) > GAP_RANGE_ABOVE:
+        return f"python3 ingest.py {sport} --from {days[0]} --to {days[-1]}"
+    return f"python3 ingest.py {sport} --dates {','.join(days)}"
+
 
 def print_gaps(conn, sport: str = "mlb") -> None:
     """Days inside the span that are half-ingested. Free to compute and free
@@ -129,10 +151,9 @@ def print_gaps(conn, sport: str = "mlb") -> None:
             print(f"      {g['date']}  {label[g['kind']]:<18} {g['detail']}")
         if len(fixable) > GAP_LIST_MAX:
             print(f"      … and {len(fixable) - GAP_LIST_MAX} more")
-        lo, hi = fixable[0]["date"], fixable[-1]["date"]
         print(f"\n      Repair (FREE — statsapi.mlb.com needs no key, and the "
               f"walk is resumable):")
-        print(f"        python3 ingest.py {sport} --from {lo} --to {hi}")
+        print(f"        {repair_command(sport, fixable)}")
         print(f"      Then settle whatever those days were holding open:")
         print(f"        python3 launch.py --settle all")
     else:

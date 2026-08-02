@@ -398,10 +398,17 @@ def sports_present(conn) -> list[str]:
     return list(CORE_SPORTS) + rest
 
 
-#: A day with fewer distinct players than this had a partial ingest. A full
-#: MLB slate stores several hundred; a handful means the log layer stopped
-#: part-way through, which looks identical to a quiet day from the outside.
-THIN_DAY_PLAYERS = 120
+#: Distinct players PER GAME below which a day's log layer clearly stopped
+#: part-way. Per game, not per day: the first version used an absolute 120
+#: and flagged eleven days that were simply small slates — 77 players across
+#: 3 games is 26 a game, which is a complete ingest of a quiet Monday, and
+#: reporting it as a hole sent a repair walk after nothing.
+#:
+#: A real MLB game logs roughly 20-30 distinct players across both sides once
+#: the bullpen and the bench are counted. The floor is set well under that so
+#: only an unambiguous shortfall trips it: the days this catches run at 2 a
+#: game, which is one real fixture logged among a dozen exhibition ones.
+THIN_PLAYERS_PER_GAME = 12
 
 
 def coverage_gaps(conn, sport: str = "mlb", start: str | None = None,
@@ -489,11 +496,11 @@ def coverage_gaps(conn, sport: str = "mlb", start: str | None = None,
         elif not n_logs:
             kind, detail, ok = ("no_logs",
                                 f"{n} final game(s), no player logs", True)
-        elif n_players < THIN_DAY_PLAYERS:
+        elif n and n_players / n < THIN_PLAYERS_PER_GAME:
             kind, detail, ok = ("thin_logs",
-                                f"{n_players} player(s) logged across {n} "
-                                f"game(s) — a full slate stores several "
-                                f"hundred", True)
+                                f"{n_players} player(s) across {n} game(s) — "
+                                f"{n_players / n:.1f} a game, against the "
+                                f"20-30 a real fixture logs", True)
         else:
             continue
         out.append({"date": day, "kind": kind, "games": n, "finals": fin,
