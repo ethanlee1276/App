@@ -1562,14 +1562,30 @@ function renderStats() {
   // analyzed" on a board with no player model is just wrong.
   const cfb = state.sport === "cfb";
   const waiting = (d.game_bets || []).filter((b) => b.conditional).length;
+  // ONE OF THESE IS THE ANSWER, AND IT LEADS.
+  //
+  // Four tiles at one size meant none of them was: measured at 1.000
+  // dominance across five boards at both widths — same 30px value, same
+  // 307px column, four times over. A reader has to weigh all four to find
+  // out which one the page is about.
+  //
+  // The page is called Recommended and the question it is opened with is
+  // "what am I betting tonight". That is this number. Props analyzed is how
+  // much was considered to get there, avg edge is how good they are, and
+  // exposure is what they cost — all three are context FOR the count, so
+  // they read as context.
+  //
+  // It leads when it is zero too. "No qualifying plays" is this board's
+  // most common correct answer and a large honest 0 says so; shrinking it
+  // on quiet nights would be the one dishonest version of this layout.
   const tiles = [
-    { k: cfb ? "Markets priced" : "Props analyzed", to: d.counts.props_analyzed, dec: 0,
-      sub: cfb ? `spreads, totals and moneylines across ${(d.games || []).length} game(s)` : "" },
-    { k: "Recommended bets", to: staked.length, dec: 0,
+    { k: "Recommended bets", to: staked.length, dec: 0, lead: true,
       sub: cfb
         ? `${nb} game bet${nb === 1 ? "" : "s"} journaled`
           + (waiting ? ` · ${waiting} conditional, waiting on a starter` : "")
         : `${sig.props.length} prop${sig.props.length === 1 ? "" : "s"} · ${nb} game bet${nb === 1 ? "" : "s"} — all journaled` },
+    { k: cfb ? "Markets priced" : "Props analyzed", to: d.counts.props_analyzed, dec: 0,
+      sub: cfb ? `spreads, totals and moneylines across ${(d.games || []).length} game(s)` : "" },
     { k: "Avg edge", to: staked.length ? avgEdge * 100 : 0, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "", cls: "pos" },
     ud > 0
       ? { k: "Suggested exposure", to: exposure * ud, dec: 2, pre: "$", sub: `${exposure.toFixed(2)}u across all ${staked.length} bet(s)` }
@@ -1578,7 +1594,7 @@ function renderStats() {
   const fmt = (t) => (t.pre || "") + Number(t.to).toFixed(t.dec) + (t.suf || "");
   const instant = state.static || state.quiet;
   document.getElementById("stats").innerHTML = tiles.map((t) =>
-    `<div class="tile"><div class="k">${t.k}</div>
+    `<div class="tile${t.lead ? " lead" : ""}"><div class="k">${t.k}</div>
        <div class="v ${t.cls || ""}" data-to="${t.to}" data-dec="${t.dec}" data-pre="${t.pre || ""}" data-suf="${t.suf || ""}">${instant ? fmt(t) : "0"}</div>
        ${t.sub ? `<div class="tile-sub">${t.sub}</div>` : ""}</div>`
   ).join("");

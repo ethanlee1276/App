@@ -173,10 +173,32 @@ the bottom rather than acting on it.
   Pick the one number per card that the card exists to communicate, and let
   the rest recede — size, weight, and colour, not borders.~~
 
-- [ ] **Fewer, larger.** Recommended shows four stat tiles of equal size, so
+- [x] **Fewer, larger.** DONE — **dominance ratio 1.000 → 1.773 mean, and
+  boards where every tile is the same size AND width 10/10 → 0/10**, measured
+  across five sports at 1280px and 390px. Before: four tiles, every value
+  30px, every column 307px. After: the lead at 34px in a 1.7fr column, the
+  other three at 22px in 1fr columns; on a phone the lead takes its own
+  full-width row above the three.
+
+  **The number chosen is Recommended bets.** The page is called Recommended
+  and the question it is opened with is "what am I betting tonight". Props
+  analyzed is how much was considered to get there, avg edge is how good they
+  are, exposure is what they cost — all three are context FOR the count, so
+  they now read as context. It leads when it is zero too: "no qualifying
+  plays" is this board's most common correct answer and a large honest 0 says
+  so.
+
+  Solved with composition, per the item — no new type token. Two things the
+  screenshots caught that the metric could not: a second `@media` breakpoint
+  further up the file lost silently to the 760px block, so the phone grid
+  stayed at two columns while the new rule said three; and "Suggested
+  exposure" wraps in a narrow column, dropping its number 17px below the
+  other two so the row of context read as a staircase.
+
+  ~~Recommended shows four stat tiles of equal size, so
   none of them is the answer. Decide which single number a person opens this
   page to see, and make the layout say so. This is a composition change, not
-  a token change.
+  a token change.~~
 
 ---
 

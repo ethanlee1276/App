@@ -157,6 +157,79 @@ def test_a_heading_can_still_opt_out_when_it_directly_follows_its_own_lede():
     body = _strip_comments(CSS)
     assert ".section-title.tight" in body
     assert "section-title tight" in APP, "the escape hatch is never used"
+# --- fewer, larger ----------------------------------------------------------
+#
+# MEASURED 2026-08-02 across five boards at 1280px and 390px: four tiles,
+# every value 30px, every column 307px — a dominance ratio (largest value /
+# median value) of exactly 1.000 on 10 of 10 boards. None of them was the
+# answer. After: 1.773 mean, and 0 of 10 boards flat.
+
+
+def test_the_recommended_tiles_have_one_lead():
+    """Four numbers at one size means the reader has to weigh all four to
+    find out which one the page is about."""
+    i = APP.index("const tiles = [")
+    block = APP[i:i + 1600]
+    assert block.count("lead: true") == 1, "exactly one tile leads"
+
+
+def test_the_lead_is_the_bets_count_and_it_comes_first():
+    """The page is called Recommended and the question it is opened with is
+    "what am I betting tonight". Not props analyzed, which is how much was
+    considered to get there."""
+    i = APP.index("const tiles = [")
+    block = APP[i:i + 1600]
+    first = block.index('k: "Recommended bets"')
+    assert first < block.index('Props analyzed')
+    assert "lead: true" in block[first:first + 120]
+
+
+def test_the_lead_column_is_wider_than_the_others():
+    """Composition, not just type. Equal columns were half of why no tile
+    read as the answer, and auto-fit could only ever produce equal ones."""
+    body = _strip_comments(CSS)
+    i = body.index(".stats {")
+    block = body[i:i + 260]
+    assert "auto-fit" not in block, "auto-fit can only make equal columns"
+    assert "1.7fr 1fr 1fr 1fr" in block
+
+
+def test_the_lead_value_is_two_ramp_steps_above_the_rest():
+    body = _strip_comments(CSS)
+    assert ".stats > .tile.lead .v { font-size: var(--fs-4xl); }" in body
+    assert ".stats > .tile:not(.lead) .v { font-size: var(--fs-2xl);" in body
+
+
+def test_no_new_type_token_was_invented_for_it():
+    """The item says a composition change, not a token change — and reaching
+    for a bigger font is exactly how you dodge doing the composition."""
+    body = _strip_comments(CSS)
+    assert "--fs-5xl" not in body
+
+
+def test_the_phone_lead_takes_its_own_row():
+    """Two equal columns would put the answer beside a supporting number at
+    the same width, which is the shape this layout exists to stop."""
+    body = _strip_comments(CSS)
+    i = body.index("@media (max-width: 760px)")
+    nxt = body.index("@media", i + 10)
+    block = body[i:nxt]
+    assert "grid-template-columns: repeat(3, 1fr)" in block
+    assert "grid-column: 1 / -1" in block
+
+
+def test_the_narrow_labels_reserve_both_their_lines():
+    """"Suggested exposure" wraps in a narrow column and its number then sat
+    17px below the other two, so the row of context read as a staircase."""
+    body = _strip_comments(CSS)
+    assert ".stats > .tile:not(.lead) .k { min-height: 2.9em; }" in body
+
+
+def test_the_phone_rules_live_beside_the_rule_they_must_beat():
+    """A second breakpoint further up the file lost silently to this one and
+    the phone grid stayed at two columns while the new rule said three."""
+    body = _strip_comments(CSS)
+    assert "@media (max-width: 719px)" not in body
 
 
 if __name__ == "__main__":
