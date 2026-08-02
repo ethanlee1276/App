@@ -206,7 +206,11 @@ function windGauge(weather, opts = {}) {
       <svg width="${size}" height="${size}" viewBox="0 0 92 92">
         <circle cx="46" cy="46" r="40" fill="#141b33" stroke="#2b365a" stroke-width="2"/>
         <path d="M22 52 a24 20 0 0 1 48 0 z" fill="#1d2647" stroke="#3a4a7a" stroke-width="1.5"/>
-        <text x="46" y="44" text-anchor="middle" font-size="15">🏟️</text>
+        <!-- A diamond under the roof, not a stadium glyph inside a stadium:
+             the arc above IS the dome, so repeating it here just read as an
+             eye at render size. Screenshotted before and after. -->
+        <path d="M46 37 L53 44 L46 51 L39 44 z" fill="none" stroke="#7f8dc4"
+              stroke-width="1.6" stroke-linejoin="round"/>
         <text x="46" y="66" text-anchor="middle" font-size="9" fill="#9aa6c9" font-family="system-ui">DOME</text>
       </svg>
     </div>`;
@@ -394,8 +398,12 @@ function ballpark(game, opts = {}) {
   const altBadge = (game.altitude_ft || 0) >= 3000 ? `
     <g>
       <rect x="8" y="128" width="70" height="15" rx="7.5" fill="#0c1020" opacity="0.72"/>
-      <text class="num" x="43" y="139" text-anchor="middle" font-size="8.5" font-weight="700"
-            fill="#8a6cff">⛰ ${(game.altitude_ft / 1000).toFixed(1)}k ft</text>
+      <g transform="translate(12,131.6) scale(0.62)" fill="none" stroke="#8a6cff"
+         stroke-width="2.2" stroke-linejoin="round">
+        <path d="M1.4 12.9L5.9 5.3l3 4.7 1.9-2.9 3.8 5.8z"/>
+      </g>
+      <text class="num" x="50" y="139" text-anchor="middle" font-size="8.5" font-weight="700"
+            fill="#8a6cff">${(game.altitude_ft / 1000).toFixed(1)}k ft</text>
     </g>` : "";
   const roofOverlay = covered ? `
     <ellipse cx="120" cy="82" rx="104" ry="64" fill="url(#${uid}roof)" opacity="0.78"/>

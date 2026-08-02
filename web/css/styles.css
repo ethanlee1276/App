@@ -90,6 +90,13 @@
   --good: #34d399;
   --warn: #d9a548;
   --bad: #f0616d;
+  /* The two status marks the STYLESHEET draws. Same geometry as the check
+     and cross in ICON_PATHS (web/js/app.js) — if one moves, move both. Used
+     as a mask, so the paint inside the URI is irrelevant; the element's
+     background-color is what shows. Kept on :root so the light theme
+     inherits them rather than redeclaring the geometry. */
+  --ic-check: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="%23000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3.4L13 4.6"/></svg>');
+  --ic-cross: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="%23000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>');
   /* The UFC method bar needs six distinguishable segments and the palette
      above offers five. It used to reach for var(--violet, #a78bfa) — a
      token that does not exist, falling through to Tailwind's violet-400
@@ -519,9 +526,30 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 
 .reasons { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 .reasons li { font-size: var(--fs-sm); color: var(--text-body); padding-left: 22px; position: relative; }
-.reasons li::before { content: "✓"; position: absolute; left: 0; color: var(--good); font-weight: 800; }
-/* Factors working AGAINST the bet: red ✗, never a green check. */
-.reasons li.neg::before { content: "✗"; color: var(--bad); }
+/* These two are the most-rendered status marks on the site — one per reason
+   bullet, on every card, on every page — and they were text characters, so
+   they changed shape on every platform and sat on the text baseline instead
+   of on the line they label.
+
+   They are the SAME strokes as icon() in web/js/app.js, carried as a mask
+   rather than a background so `background-color` still drives the colour and
+   the green/red split survives the theme swap. A mask ignores the SVG's own
+   paint, which is why the stroke colour inside the data URI is arbitrary.
+
+   Note for the next audit: a Playwright census that walks TEXT NODES cannot
+   see generated content, so these two survived a 176-page sweep that
+   reported zero. Grep `content:` in the stylesheet as well. */
+.reasons li::before {
+  content: ""; position: absolute; left: 0; top: .25em;
+  width: 12px; height: 12px; background-color: var(--good);
+  -webkit-mask: var(--ic-check) no-repeat center / contain;
+  mask: var(--ic-check) no-repeat center / contain;
+}
+/* Factors working AGAINST the bet: red cross, never a green check. */
+.reasons li.neg::before {
+  background-color: var(--bad);
+  -webkit-mask-image: var(--ic-cross); mask-image: var(--ic-cross);
+}
 .reasons li.neg { color: var(--text-dim); }
 .warning { background: rgba(251, 90, 106, .1); border: 1px solid rgba(251, 90, 106, .32); color: #ffc4ca; font-size: var(--fs-sm); padding: 9px 11px; border-radius: var(--radius-sm); }
 
@@ -2494,3 +2522,9 @@ select.calc-in { width: auto; font-weight: 600; }
 .rec-scope.active .rec-scope-n { opacity: .9; }
 
 @media (pointer: coarse) { .rec-scope { min-height: 42px; } }
+
+
+/* Drawn icons sit ON the text baseline. An emoji is a character and rides
+   the baseline for free; an inline <svg> is a replaced element and sits on
+   it, which puts it a couple of pixels low next to its own label. */
+.ic { vertical-align: -0.14em; flex-shrink: 0; }

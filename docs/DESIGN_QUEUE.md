@@ -17,6 +17,17 @@ indistinguishable from no design change.
    the scratchpad pattern used throughout this repo: a fixture server over
    `web/`, Chromium via Playwright at `/opt/pw-browsers/`, and a script that
    counts what actually *renders* rather than what the stylesheet claims.
+
+   **Two rules the emoji item paid for.** Sweep *every* sport, not two: a
+   two-sport census reported zero leaks while 42 were rendering elsewhere.
+   And walking DOM text nodes does not see `::before { content: … }` — check
+   `getComputedStyle(el, '::before').content` too, or grep the stylesheet.
+   Both blind spots let real defects through a sweep that came back clean.
+
+   **Measure the BEFORE on the same instrument.** Serve `git show HEAD:…`
+   from a second port and run the identical script against both. A before
+   number from a narrower script and an after number from a wider one is
+   not a delta.
 3. Make the change. Re-measure. **The number has to move**, and you have to
    say what it moved to.
 4. Screenshot at 390px and 1280px. Look at them. A measurement that improves
@@ -57,7 +68,40 @@ the bottom rather than acting on it.
   *Constraint:* the 11px caps section labels and the mono number sizes were
   both deliberate. Do not flatten them into the body ramp.~~
 
-- [ ] **Emoji are not an icon set.** 42 emoji-bearing text nodes carry real
+- [x] **Emoji are not an icon set.** DONE — **2352 → 506 rendered
+  occurrences, 26 → 13 distinct**, measured over 176 pages (8 sports × 11
+  views × 2 widths). Every glyph the item named is now at zero: 🗓 (240),
+  ✓ (178+650), 🌙 (176), ✕ (134), ⚠ (90), 🔍 (42), ✗ (16+108), 🏟, ⛰,
+  🛒, ⏳, ➖, ✅, ⛔, 🔴, ☁. 6146 drawn icons render in their place.
+
+  **The item's number was low, and the reason matters more than the fix.**
+  It counted 42 emoji-bearing *text nodes*. Two whole classes were
+  invisible to that instrument:
+  1. `content: "✓"` in the stylesheet — generated content is not a text
+     node. Those two rules alone rendered **758 times**, more than every
+     emoji on the Recommended page combined, and they survived a 176-page
+     sweep that reported clean. They are now masked SVG, so
+     `background-color` still drives the green/red split and the light
+     theme.
+  2. A census over two sports reported **zero literal leaks** while
+     **42** were rendering on the other six — `<svg …>` printed as visible
+     angle brackets, because `gameContext` handed an icon-bearing string to
+     `escapeHtml`. Breadth is not optional; `tests/test_icons.py` now
+     catches both classes at source level with a lexer, plus a negative
+     control proving the detector can fail.
+
+  Two icons were drawn wrong and only the **screenshots** said so: a bowl
+  seen from above (two concentric ellipses) reads unmistakably as an **eye**
+  at 13px. Made that same mistake twice — the venue chip and the dome wind
+  gauge — and caught it both times at step 4, never at step 3.
+
+  Deliberately left, so a later pass does not "fix" them: arrows (→,
+  typography between two numbers), the sport logos, the 34px empty-state
+  and About-page pictograms, and the lucky-clover chip (a tone choice; the
+  drawn set is deliberately austere). `test_the_illustration_exemption_is_narrow`
+  bounds that allowance so it cannot quietly grow.
+
+  ~~42 emoji-bearing text nodes carry real
   meaning right now — 🏟️ ⛰ 📅 🔴 ✓ ✕. They render differently on every
   platform, they cannot take the page's colour, and they are the single
   loudest "assembled quickly" signal left. Replace the load-bearing ones
@@ -66,7 +110,7 @@ the bottom rather than acting on it.
   appear most and matter most.
   *Constraint:* do not import an icon library. Lucide-in-a-pastel-circle is
   the exact thing the audit was checking for; trading one tell for another
-  is not progress.
+  is not progress.~~
 
 - [ ] **Density contrast inside a card.** Section spacing now has three
   levels (34 / 14 / 0). Inside a card everything is still evenly spaced, so

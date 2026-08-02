@@ -201,6 +201,63 @@ function reasonLI(x) {
   return `<li class="${NEG_REASON.test(x) ? "neg" : ""}">${escapeHtml(x)}</li>`;
 }
 
+/* ---------------------------------------------------------------------
+   Icons, drawn rather than typed.
+
+   The audit counted 18 distinct emoji doing real work on this page. Three
+   problems with that, and only the third is about taste: they render as a
+   different glyph on every platform (a ✓ on Android is not the ✓ on iOS),
+   they cannot take the page's colour so a "won" tick is the same shade as
+   a "lost" cross, and a status mark that is really a text character sits
+   on the text baseline and drifts as the type ramp moves around it.
+
+   These are strokes on a 16-unit grid using currentColor, so they inherit
+   the colour of whatever says them — green on a win, red on a loss — and
+   line up on the baseline the same way at every size. Deliberately NOT an
+   icon library: Lucide-in-a-pastel-circle is the exact tell the audit was
+   looking for, and trading one for another is not progress.
+
+   Arrows are left alone on purpose. "890 → 1 recommended" is punctuation
+   between two numbers, not an icon, and drawing it would be worse.
+   -------------------------------------------------------------------- */
+const ICON_PATHS = {
+  check: '<path d="M3 8.5l3.2 3.4L13 4.6"/>',
+  cross: '<path d="M4 4l8 8M12 4l-8 8"/>',
+  dash: '<path d="M3.4 8h9.2"/>',
+  // The one filled mark. A live indicator is not a glyph you read, it is a
+  // thing you notice in peripheral vision, and an outline dot does not.
+  dot: '<circle cx="8" cy="8" r="3.6" fill="currentColor" stroke="none"/>',
+  warn: '<path d="M8 2.2L14.6 13.4H1.4z"/><path d="M8 6.6v3.1"/>'
+        + '<path d="M8 11.6v.1"/>',
+  search: '<circle cx="7.2" cy="7.2" r="4.3"/><path d="M10.4 10.4L14 14"/>',
+  calendar: '<rect x="2.2" y="3.4" width="11.6" height="10.4" rx="1.6"/>'
+            + '<path d="M2.2 6.6h11.6M5.4 2.2v2.4M10.6 2.2v2.4"/>',
+  clock: '<circle cx="8" cy="8" r="6"/><path d="M8 4.3V8.2l2.6 1.6"/>',
+  cloud: '<path d="M4.6 12.4a3 3 0 01.2-6 4 4 0 017.6.9 2.6 2.6 0 01-.5 5.1z"/>',
+  // A roof over a ground line. The first attempt was a bowl seen from
+  // above — two concentric ellipses — which at 13px reads unmistakably as
+  // an EYE. Only the screenshot said so; the geometry looked fine written
+  // down. Same mistake was made twice, here and in the dome wind gauge.
+  stadium: '<path d="M2.2 12.5h11.6"/><path d="M2.7 12.5a5.3 4.6 0 0110.6 0"/>'
+           + '<path d="M6.4 12.5V9.2h3.2v3.3"/>',
+  mountain: '<path d="M1.4 12.9L5.9 5.3l3 4.7 1.9-2.9 3.8 5.8z"/>',
+  // "3 books · best DK" is a price-shopping claim, so it wears a price tag.
+  tag: '<path d="M8.6 1.9H14v5.4l-6.5 6.5a1.3 1.3 0 01-1.9 0L2.1 10.3a1.3 1.3 0 010-1.9z"/>'
+       + '<path d="M11.2 4.8v.01"/>',
+  moon: '<path d="M13.2 9.6A5.6 5.6 0 016.4 2.8a5.8 5.8 0 106.8 6.8z"/>',
+  sun: '<circle cx="8" cy="8" r="3.1"/>'
+       + '<path d="M8 1.4v1.6M8 13v1.6M1.4 8h1.6M13 8h1.6'
+       + 'M3.3 3.3l1.2 1.2M11.5 11.5l1.2 1.2M12.7 3.3l-1.2 1.2M4.5 11.5l-1.2 1.2"/>',
+};
+
+function icon(name, size = 13) {
+  const d = ICON_PATHS[name];
+  if (!d) return "";
+  return `<svg class="ic" viewBox="0 0 16 16" width="${size}" height="${size}"
+    fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+    stroke-linejoin="round" aria-hidden="true" focusable="false">${d}</svg>`;
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -276,7 +333,9 @@ function enableTilt(container) {
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   const btn = document.getElementById("theme-toggle");
-  if (btn) btn.textContent = theme === "light" ? "☀️" : "🌙";
+  // innerHTML, not textContent: an SVG is markup. Left as textContent this
+  // would print the literal tag string into the button.
+  if (btn) btn.innerHTML = icon(theme === "light" ? "sun" : "moon", 17);
   try { localStorage.setItem("ge-theme", theme); } catch (e) {}
 }
 function initTheme() {
@@ -1054,7 +1113,7 @@ function renderLivePicks() {
   if (trackerErr) {
     // A broken tracker must say so — an empty space reads as "no bets".
     host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-top:8px">
-      <p style="margin:0;font-size:var(--fs-md)">⚠️ Open-bet tracker hit an error this build:
+      <p style="margin:0;font-size:var(--fs-md)">${icon('warn')} Open-bet tracker hit an error this build:
       <code>${escapeHtml(trackerErr)}</code> — open bets still settle normally; see the Record page.</p></div>`;
     return;
   }
@@ -1094,19 +1153,19 @@ function renderLivePicks() {
     && !onBoard.has(`${norm(r.player)}|${norm(r.market)}`);
   const statusBits = (r) => {
     if (r.status === "cleared")
-      return `<span style="color:var(--good);font-weight:800">✓ CLEARED</span>
+      return `<span style="color:var(--good);font-weight:800">${icon('check')} CLEARED</span>
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${r.current} so far — over ${r.line} is locked</span>`;
     if (r.status === "busted")
-      return `<span style="color:var(--bad);font-weight:800">✕ BUSTED</span>
+      return `<span style="color:var(--bad);font-weight:800">${icon('cross')} BUSTED</span>
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${r.current} already — under ${r.line} can't cash</span>`;
     if (r.status === "won_pending")
-      return `<span style="color:var(--good);font-weight:800">✓ WON</span>
+      return `<span style="color:var(--good);font-weight:800">${icon('check')} WON</span>
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${ml(r) ? "final" : `finished at ${r.current}`} — settles officially overnight</span>`;
     if (r.status === "lost_pending")
-      return `<span style="color:var(--bad);font-weight:800">✕ LOST</span>
+      return `<span style="color:var(--bad);font-weight:800">${icon('cross')} LOST</span>
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${ml(r) ? "final" : `finished at ${r.current}`} — settles officially overnight</span>`;
     if (r.status === "push_pending")
-      return `<span style="font-weight:800">➖ PUSH</span>
+      return `<span style="font-weight:800">${icon('dash')} PUSH</span>
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">landed exactly on ${r.line}</span>`;
     if (r.status === "final_pending")
       return `<span style="color:var(--text-mute);font-weight:700">FINAL</span>
@@ -1188,7 +1247,9 @@ function renderLivePicks() {
   const nLive = rows.filter((r) => r.phase === "live").length;
 
   host.innerHTML = `
-    <div class="section-title">${nLive ? "🔴" : "📌"} Open bets
+    <div class="section-title">${nLive
+        ? `<span style="color:var(--bad)">${icon('dot')}</span>`
+        : `<span style="color:var(--brand)">${icon('dot')}</span>`} Open bets
       <span class="sub">— every journaled bet on today's card: live with real-time progress,
       finished awaiting the official settle, or waiting on first pitch. Never new in-play
       bets — everything here was placed pre-game.</span></div>
@@ -1205,7 +1266,7 @@ function renderLivePicks() {
             <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${gameLine(r.game)}</span>
             ${situationLine(r)}
             ${offBoard(r) ? `<span style="display:block;font-size:var(--fs-xs);color:var(--warn);margin-top:2px">
-              ⚠ the price has moved off the bar since this was journaled — riding at
+              ${icon('warn')} the price has moved off the bar since this was journaled — riding at
               ${american(r.odds)} as placed (also listed under Tonight's Picks).</span>` : ""}
             ${progressBar(r)}
           </span>
@@ -1328,7 +1389,7 @@ function gameBetCard(r) {
   // worth, and it is deliberately NOT in the stake chip — nothing here has
   // been wagered.
   const condChip = r.conditional
-    ? `<span class="chip cond" title="${escapeHtml((r.conditions_pending || []).join(" · "))}">⏳ Conditional`
+    ? `<span class="chip cond" title="${escapeHtml((r.conditions_pending || []).join(" · "))}">${icon('clock')} Conditional`
       + (r.stake_if_confirmed_units > 0
         ? ` · ${r.stake_if_confirmed_units.toFixed(2)}u if confirmed` : "")
       + `</span>` : "";
@@ -1366,7 +1427,7 @@ function gameBetCard(r) {
         <div class="card-id">${mark}
           <div>
             <div class="player">${title}</div>
-            <div class="subtitle">${escapeHtml(r.matchup)}${whenLabel(r.date, r.kickoff) ? ` · 🗓️ ${escapeHtml(whenLabel(r.date, r.kickoff))}` : ""}</div>
+            <div class="subtitle">${escapeHtml(r.matchup)}${whenLabel(r.date, r.kickoff) ? ` · ${icon('calendar')} ${escapeHtml(whenLabel(r.date, r.kickoff))}` : ""}</div>
             <div class="pick">${sub}</div>
           </div>
         </div>
@@ -1490,28 +1551,35 @@ function gameCard(g) {
   const cond = nba ? "Indoor hardwood"
     : cfb ? (g.indoor ? "Indoor" : "Outdoor · weather not pulled")
     : w.dome ? "Indoor" : `${Math.round(w.temp_f)}°F · ${windTxt}`;
+  // `sub` is now MARKUP, not text, because two of its parts are drawn icons.
+  // It used to be handed to escapeHtml at the point of use, which is correct
+  // for text and turns an <svg> into visible angle brackets — the exact
+  // failure a census over 8 sports found and a census over 2 could not. So
+  // the escaping moves here, onto the individual DATA parts, and the caller
+  // interpolates the result raw. Anything appended below must escape itself.
+  const esc = escapeHtml;
   let sub;
   if (cfb) {
     const bits = [];
-    if (g.attention_tier) bits.push(`${g.attention_tier} attention`);
+    if (g.attention_tier) bits.push(`${esc(g.attention_tier)} attention`);
     if (g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
-    if (g.spread != null) bits.push(`${teamName(g.spread < 0 ? g.home : g.away)} ${-Math.abs(g.spread)}`);
-    if (!g.qb_confirmed) bits.push("⚠ QB unconfirmed");
+    if (g.spread != null) bits.push(`${esc(teamName(g.spread < 0 ? g.home : g.away))} ${-Math.abs(g.spread)}`);
+    if (!g.qb_confirmed) bits.push(`${icon('warn')} QB unconfirmed`);
     sub = bits.join(" · ") || "line not posted yet";
   } else if (nba) {
     const bits = [];
     if (g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
-    if (g.spread) bits.push(`${teamName(g.spread < 0 ? g.home : g.away)} ${-Math.abs(g.spread)}`);
+    if (g.spread) bits.push(`${esc(teamName(g.spread < 0 ? g.home : g.away))} ${-Math.abs(g.spread)}`);
     sub = bits.join(" · ") || "lines post closer to tip-off";
   } else if (mlb) {
     const bits = [`O/U ${g.total.toFixed(1)}`];
-    if (g.park_name) bits.unshift(g.park_name);
-    if (g.doubleheader) bits.unshift(`⚾ DH Game ${g.game_number || 1}`);
-    if (g.lineups_confirmed === false) bits.push("⚠ lineups pending");
+    if (g.park_name) bits.unshift(esc(g.park_name));
+    if (g.doubleheader) bits.unshift(`⚾ DH Game ${esc(g.game_number || 1)}`);
+    if (g.lineups_confirmed === false) bits.push(`${icon('warn')} lineups pending`);
     sub = bits.join(" · ");
   } else {
     const favTxt = (g.favorite && g.spread != null)
-      ? `${teamName(g.favorite)} −${Math.abs(g.spread).toFixed(1)}` : "";
+      ? `${esc(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}` : "";
     const ouTxt = g.total != null ? `O/U ${g.total.toFixed(1)}` : "line not posted yet";
     sub = [favTxt, ouTxt].filter(Boolean).join(" · ");
   }
@@ -1565,8 +1633,8 @@ function gameCard(g) {
           <span class="mt away">${teamMark(g.away, 18)} ${ranked("away")}${escapeHtml(teamName(g.away))} ${score("away")}</span>
           <span class="at">@</span>
           <span class="mt home">${teamMark(g.home, 18)} ${ranked("home")}${escapeHtml(teamName(g.home))} ${score("home")}</span></div>
-        <div class="game-sub">${escapeHtml(sub)}</div>
-        ${whenLabel(g.date, g.kickoff) ? `<div class="game-when">🗓️ ${escapeHtml(whenLabel(g.date, g.kickoff))}</div>` : ""}
+        <div class="game-sub">${sub}</div>
+        ${whenLabel(g.date, g.kickoff) ? `<div class="game-when">${icon('calendar')} ${escapeHtml(whenLabel(g.date, g.kickoff))}</div>` : ""}
         ${isLive && !mlb ? liveDetail : ""}
       </div>
       ${footer}
@@ -1722,7 +1790,7 @@ function trendChip(r) {
 }
 function booksChip(r) {
   const n = (r.all_lines || []).length;
-  return n <= 1 ? "" : `<span class="chip books">🛒 ${n} books · best ${escapeHtml(r.book)}</span>`;
+  return n <= 1 ? "" : `<span class="chip books">${icon('tag')} ${n} books · best ${escapeHtml(r.book)}</span>`;
 }
 function moveChip(r) {
   const m = r.line_move;
@@ -1754,7 +1822,7 @@ function cardHTML(r) {
   const reasons = (r.reasons || []).map(reasonLI).join("");
   const corr = (r.correlations || []).map((c) =>
     `<div class="warning" style="border-color:var(--cyan)">🔗 ${escapeHtml(c)}</div>`).join("");
-  const warnings = (r.warnings || []).map((w) => `<div class="warning">⚠️ ${escapeHtml(w)}</div>`).join("");
+  const warnings = (r.warnings || []).map((w) => `<div class="warning">${icon('warn')} ${escapeHtml(w)}</div>`).join("");
   const ud = unitDollars();
   const stakeTxt = ud > 0
     ? `Stake ${money(stakeDollars(r.stake_units))} · ${r.stake_units.toFixed(2)}u`
@@ -1888,7 +1956,7 @@ function longShotCard(r) {
   const reasons = (r.reasons || []).filter((x) => x !== r.primary_reason)
     .slice(0, 6).map(reasonLI).join("");
   const caveats = (r.caveats || [])
-    .map((c) => `<div class="warning">⚠️ ${escapeHtml(c)}</div>`).join("");
+    .map((c) => `<div class="warning">${icon('warn')} ${escapeHtml(c)}</div>`).join("");
   const oppLabel = state.sport === "mlb" ? "Expected PAs" : "RZ chances";
   return `
     <article class="card longshot" style="--grade-color:${gradeColor(r.grade)}">
@@ -2019,10 +2087,10 @@ function stadiumPanel(g) {
     <div class="pk-head">${escapeHtml(s.name)}<span class="pk-facts">${escapeHtml(facts)}</span></div>
     <div class="chips" style="margin-top:8px">
       <span class="chip ${indoors ? "books" : ""}">${indoors
-        ? (s.roof === "dome" ? "🏟️ Fixed dome" : "🏟️ Retractable roof")
-        : "☁️ Open air"}</span>
+        ? (s.roof === "dome" ? `${icon('stadium')} Fixed dome` : `${icon('stadium')} Retractable roof`)
+        : `${icon('cloud')} Open air`}</span>
       ${s.altitude_ft >= 2000
-        ? `<span class="chip up" title="Thin air adds kicking range and lets the ball carry">⛰️ ${s.altitude_ft.toLocaleString()} ft</span>`
+        ? `<span class="chip up" title="Thin air adds kicking range and lets the ball carry">${icon('mountain')} ${s.altitude_ft.toLocaleString()} ft</span>`
         : ""}
       <span class="chip">${s.surface === "turf" ? "Turf" : "Grass"}</span>
     </div>
@@ -2112,7 +2180,7 @@ function renderGamePage() {
             : nba && g.spread ? `<span class="chip">${escapeHtml(teamName(g.spread < 0 ? g.home : g.away))} −${Math.abs(g.spread).toFixed(1)}</span>` : ""}
           <span class="chip">${escapeHtml(cond)}</span>
           ${g.roof ? `<span class="chip">roof ${escapeHtml(g.roof)}</span>` : ""}
-          ${g.lineups_confirmed === false ? `<span class="chip down">⚠ lineups pending</span>` : ""}
+          ${g.lineups_confirmed === false ? `<span class="chip down">${icon('warn')} lineups pending</span>` : ""}
         </div>
         ${mlb ? parkPanel(g) : nba ? "" : stadiumPanel(g)}
       </div>
@@ -2184,7 +2252,7 @@ function renderTrending() {
       // Say whether each edge actually IS a bet, so this column can never
       // contradict the Recommended page.
       tag: (r) => passesFilters(r)
-        ? `<span style="color:var(--good)">✓ recommended</span>`
+        ? `<span style="color:var(--good)">${icon('check')} recommended</span>`
         : `<span style="opacity:.55">pass — didn't clear the gates</span>` },
   ];
   const host = document.getElementById("trending");
@@ -2488,7 +2556,7 @@ function recLongshotSection(ls) {
     const push = b.status === "push";
     const pnl = b.pnl_units || 0;
     return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
-      <span class="rl-icon">${push ? "➖" : won ? "✓" : "✕"}</span>
+      <span class="rl-icon">${push ? icon('dash') : won ? icon('check') : icon('cross')}</span>
       <span class="rl-date">${escapeHtml(b.date || "")}</span>
       <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
         <span class="rl-bet">${escapeHtml(b.market_label || "HR")}</span></span>
@@ -2540,8 +2608,8 @@ function calBucketRows(buckets) {
   return (buckets || []).map((b) => {
     const off = Math.abs(b.actual - b.predicted);
     const flag = b.n < 20 ? `<span style="opacity:.5">n=${b.n} — too early</span>`
-      : b.in_band ? `<span style="color:var(--good)">✓ within noise (n=${b.n})</span>`
-      : `<span style="color:var(--warn)">⚠️ off by ${(off * 100).toFixed(0)} pts (n=${b.n})</span>`;
+      : b.in_band ? `<span style="color:var(--good)">${icon('check')} within noise (n=${b.n})</span>`
+      : `<span style="color:var(--warn)">${icon('warn')} off by ${(off * 100).toFixed(0)} pts (n=${b.n})</span>`;
     const bar = (v, color) => `<span style="display:inline-block;height:8px;border-radius:4px;
         width:${Math.max(2, v * 100)}px;background:${color};vertical-align:middle"></span>`;
     return `<div style="display:flex;gap:12px;align-items:center;padding:7px 14px;
@@ -2633,7 +2701,7 @@ function recUfcSection(u) {
     const won = b.status === "won";
     const pnl = b.pnl_units || 0;
     return `<div class="rl-row ${won ? "won" : "lost"}">
-      <span class="rl-icon">${won ? "✓" : "✕"}</span>
+      <span class="rl-icon">${won ? icon('check') : icon('cross')}</span>
       <span class="rl-date">${escapeHtml(b.date || "")}</span>
       <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
         <span class="rl-bet">moneyline</span></span>
@@ -2676,7 +2744,7 @@ function recLooseSection(lo) {
     const push = b.status === "push";
     const pnl = b.pnl_units || 0;
     return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
-      <span class="rl-icon">${push ? "➖" : won ? "✓" : "✕"}</span>
+      <span class="rl-icon">${push ? icon('dash') : won ? icon('check') : icon('cross')}</span>
       <span class="rl-date">${escapeHtml(b.date || "")}</span>
       <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
         <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
@@ -2712,7 +2780,7 @@ function recPolymarketSection(v) {
   const pctv = (x) => `${(x * 100).toFixed(1)}%`;
   const rows = (v.recent || []).map((b) => `
     <div class="rl-row ${b.won ? "won" : "lost"}">
-      <span class="rl-icon">${b.won ? "✓" : "✕"}</span>
+      <span class="rl-icon">${b.won ? icon('check') : icon('cross')}</span>
       <span class="rl-date">${escapeHtml(b.resolved || "")}</span>
       <span class="rl-main"><strong>${escapeHtml(b.side)} ${escapeHtml(b.outcome)}</strong>
         <span class="rl-bet">${escapeHtml(b.market)}</span></span>
@@ -2844,7 +2912,7 @@ async function renderRecord() {
        never really bets. Run <code>python3 launch.py --resize-unstaked</code> to stake
        them at a flat 0.1u and fold the profit (or loss) they produced back in.</p>` : "";
   const small = o.settled < 100
-    ? `<p class="loading" style="margin-top:10px">⚠️ ${o.settled} settled pick(s)${
+    ? `<p class="loading" style="margin-top:10px">${icon('warn')} ${o.settled} settled pick(s)${
        scoped ? ` for ${escapeHtml((SPORT_META[scope] || {}).name || scope)}` : ""} —
        results this small are mostly luck. Judge the model after 100+, and judge
        the process by CLV before that.</p>` : "";
@@ -2860,7 +2928,7 @@ async function renderRecord() {
                 { lead: true, tone: o.avg_clv == null ? "" : toneOf(o.avg_clv) })}
       ${recTile("Record", `${o.wins}-${o.losses}-${o.pushes}`, `${o.open} open · ${o.settled} settled`)}
       ${recTile("Win rate", (o.win_rate * 100).toFixed(1) + "%", "break-even ≈ 52.4% at −110")}
-      ${recTile("Process", nProc ? `${pr.good || 0}✓ ${pr.bad || 0}✗` : "—",
+      ${recTile("Process", nProc ? `${pr.good || 0}${icon('check')} ${pr.bad || 0}${icon('cross')}` : "—",
                 // The count is the point. This grades a bet against the
                 // CLOSING line, so it can only speak for the picks where a
                 // close was captured — which is a small slice. Without the
@@ -2913,7 +2981,7 @@ async function renderRecord() {
           procChip = `<span class="rl-proc ${b.clv >= 0 ? "good" : "bad"}"
             title="Closing-line value — how far the market moved our way after the bet">${b.clv >= 0 ? "+" : ""}${b.clv.toFixed(1)} CLV</span>`;
         return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
-          <span class="rl-icon">${push ? "➖" : won ? "✓" : "✕"}</span>
+          <span class="rl-icon">${push ? icon('dash') : won ? icon('check') : icon('cross')}</span>
           <span class="rl-date">${escapeHtml(b.date || "")}</span>
           <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
             <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
@@ -2959,7 +3027,7 @@ function recFormSection(fm) {
     const won = b.status === "won";
     const pnl = b.pnl_units || 0;
     return `<div class="rl-row ${won ? "won" : "lost"}">
-      <span class="rl-icon">${won ? "✓" : "✕"}</span>
+      <span class="rl-icon">${won ? icon('check') : icon('cross')}</span>
       <span class="rl-date">${escapeHtml(b.date || "")}</span>
       <span class="rl-main"><strong>${escapeHtml(teamName(b.player))}</strong>
         <span class="rl-bet">hot-team moneyline</span></span>
@@ -3010,7 +3078,7 @@ function recStaleSection(st) {
     const push = b.status === "push";
     const pnl = b.pnl_units || 0;
     return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
-      <span class="rl-icon">${push ? "➖" : won ? "✓" : "✕"}</span>
+      <span class="rl-icon">${push ? icon('dash') : won ? icon('check') : icon('cross')}</span>
       <span class="rl-date">${escapeHtml(b.date || "")}</span>
       <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
         <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
@@ -3096,7 +3164,7 @@ function edgeBoardRows() {
       label: `${r.player} · ${r.side} ${r.line} ${r.market_label}`,
       sub: `${r.book || ""} · ${teamName(r.team)} vs ${teamName(r.opponent)}`,
       odds: r.odds, model: r.hit_prob, implied: r.fair_prob,
-      // ✅ means "on the Recommended page RIGHT NOW", so it must apply the
+      // The check means "on the Recommended page RIGHT NOW", so it must apply the
       // user's sliders — the build-time flag can disagree with them.
       ev: r.ev_per_unit, grade: r.grade, rec: passesFilters(r),
     }));
@@ -3122,7 +3190,7 @@ function edgeRowHTML(r, i) {
       ${(r.model * 100).toFixed(0)}% vs ${(r.implied * 100).toFixed(0)}%</span>
     <span style="min-width:70px;text-align:right;color:var(--green,#3ddc84)">
       +${evPct}% EV</span>
-    <span style="min-width:86px;text-align:right;opacity:.75">${r.rec ? "✅ " : ""}${escapeHtml(r.grade || "")}</span>
+    <span style="min-width:86px;text-align:right;opacity:.75">${r.rec ? `${icon('check')} ` : ""}${escapeHtml(r.grade || "")}</span>
   </div>`;
 }
 
@@ -3148,13 +3216,13 @@ function renderEdgeBoard() {
      sum to exactly ZERO — one side is always non-negative, whatever the
      model thinks. A full board is the count of markets priced, not evidence
      of anything, and reading it as a haul is the single easiest way to talk
-     yourself into a bad night. The ✅ count is the number that means
+     yourself into a bad night. The checked count is the number that means
      something, so lead with it. */
-  const plays = rows.filter((r) => r.rec).length;   // same flag the ✅ uses
+  const plays = rows.filter((r) => r.rec).length;   // same flag the check uses
   note.innerHTML = `<b>${plays}</b> clear your current sliders · ${rows.length}
     market(s) priced against a real book number. One side of every two-way
     market always prices positive — the two sides' edges sum to zero by
-    construction — so the length of this list is not a signal. ✅ = a tracked
+    construction — so the length of this list is not a signal. Checked = a tracked
     bet; everything else is a watchlist.`;
   host.innerHTML = EDGE_BANDS.map(([title, test]) => {
     const band = rows.filter((r) => test(r.odds));
@@ -3274,7 +3342,7 @@ function renderScanner() {
         const so = stake * a.stake_over_pct, su = stake * (1 - a.stake_over_pct);
         const ret = stake * a.profit_pct;
         const suspect = a.suspect
-          ? `<span style="display:block;color:var(--warn,#e8b33e);font-size:.85em">⚠️ 5%+ edge — likely a stale line or void risk; verify at both books</span>` : "";
+          ? `<span style="display:block;color:var(--warn,#e8b33e);font-size:.85em">${icon('warn')} 5%+ edge — likely a stale line or void risk; verify at both books</span>` : "";
         return scanPairRow(a,
           `<span style="color:var(--good,#3ddc84);font-weight:700">+${(a.profit_pct * 100).toFixed(2)}% · $${ret.toFixed(2)} locked</span>
            <span style="display:block;opacity:.7;font-size:.85em">$${so.toFixed(0)} Over / $${su.toFixed(0)} Under</span>${suspect}`);
@@ -3909,11 +3977,11 @@ function offseasonHTML(off) {
     return Number.isFinite(ms) ? ms / 36e5 : null;   // hours
   })();
   const rosterNote = !off.rosters_live ? `
-    <div class="warning" style="margin-bottom:12px">⚠️ Roster feed unreachable on the last
+    <div class="warning" style="margin-bottom:12px">${icon('warn')} Roster feed unreachable on the last
       build — team moves and rookies may be missing here until the next refresh.
       Coaching changes still current (they come from the schedule file).</div>`
     : syncAge != null && syncAge > 48 ? `
-    <div class="warning" style="margin-bottom:12px">⚠️ Rosters last synced
+    <div class="warning" style="margin-bottom:12px">${icon('warn')} Rosters last synced
       ${escapeHtml(off.rosters_synced_at)} — over ${Math.floor(syncAge / 24)} days ago
       (the live pull has been failing and a cached copy is serving). Trades since then
       won't show until the feed comes back.</div>`
@@ -4266,7 +4334,7 @@ async function renderRosters() {
   // One match is unambiguous — open it instead of making you tap again.
   const open = shown.length === 1 ? shown[0] : _rosterOpen;
   const stale = d.feed === "unavailable"
-    ? `<div class="warning" style="margin-bottom:12px">⚠️ ${escapeHtml(d.note || "")}</div>` : "";
+    ? `<div class="warning" style="margin-bottom:12px">${icon('warn')} ${escapeHtml(d.note || "")}</div>` : "";
   // Team changes come from diffing daily roster snapshots, which only the
   // NFL feed produces. Showing an empty "recent moves" panel for a sport
   // that cannot detect one would read as "no trades happened".
@@ -4308,7 +4376,7 @@ function draftKitHTML(kit) {
       <span class="dl-rank">${i + 1}</span>
       <span class="dl-main"><strong>${escapeHtml(r.player)}</strong>
         <span class="dl-sub">${escapeHtml(r.position)}${r.pos_rank} · ${nflName(r.team)}
-          · ${r.games} gm${r.small_sample ? " ⚠ small sample" : ""}${moveNote(r)}</span></span>
+          · ${r.games} gm${r.small_sample ? ` ${icon('warn')} small sample` : ""}${moveNote(r)}</span></span>
       <span class="dk-tier" style="color:${tierColor(r.tier)}">T${r.tier}</span>
       <span class="dl-num" title="projected PPR points per game">${r.proj}</span>
       <span class="dl-num strong pos" title="points per game over the best freely-available ${escapeHtml(r.position)}">+${r.vorp}</span>
@@ -4479,7 +4547,7 @@ function pmSignalProven(v) {
 function intelVerdict(v) {
   const pctv = (x) => `${(x * 100).toFixed(1)}%`;
   const body = pmSignalProven(v)
-    ? `<div style="font-weight:800;font-size:var(--fs-xl);color:var(--good)">✅ The signal has earned
+    ? `<div style="font-weight:800;font-size:var(--fs-xl);color:var(--good)">${icon('check')} The signal has earned
          recommendation status</div>
        <p style="margin:8px 0 0">Graded flags beat their entry prices over ${v.graded} resolutions
        (hit ${pctv(v.hit_rate)} vs ${pctv(v.avg_implied)} implied, ${v.roi >= 0 ? "+" : ""}${pctv(v.roi)} ROI,
@@ -4566,7 +4634,7 @@ function sleeperConnectHTML(msg) {
         border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-family:inherit"/>
       <button class="btn" id="sleeper-connect">Connect</button>
     </div>
-    ${msg ? `<div class="warning" style="margin-top:10px">⚠️ ${escapeHtml(msg)}</div>` : ""}
+    ${msg ? `<div class="warning" style="margin-top:10px">${icon('warn')} ${escapeHtml(msg)}</div>` : ""}
   </div>`;
 }
 
@@ -4711,9 +4779,9 @@ function weighInHTML(wi) {
     if (!st) return "";
     const n = escapeHtml(st.name || "?");
     if (st.state === "missed") {
-      return `<span class="chip down">${n} ⛔ ${st.weight} (+${st.over} over)</span>`;
+      return `<span class="chip down">${n} ${icon('cross')} ${st.weight} (+${st.over} over)</span>`;
     }
-    if (st.state === "made") return `<span class="chip up">${n} ✅ ${st.weight}</span>`;
+    if (st.state === "made") return `<span class="chip up">${n} ${icon('check')} ${st.weight}</span>`;
     if (st.state === "unknown_division") {
       return `<span class="chip">${n} ${st.weight} · catchweight, no limit</span>`;
     }
@@ -4859,7 +4927,7 @@ async function renderLiveFights(host) {
       <span class="sub">— ${escapeHtml(d.disclaimer || "")}</span></div>
     <div class="lf-age ${stale ? "warn" : ""}">${
       ageS == null ? "" : stale
-        ? `⚠️ these numbers last changed ${ageS}s ago — the feed has stopped moving`
+        ? `${icon('warn')} these numbers last changed ${ageS}s ago — the feed has stopped moving`
         : `updated ${ageS}s ago`}</div>
     ${live.map((b) => liveBoutHTML(b, stale)).join("")}
     ${/* Each card already explains its own missing-target case, so the
@@ -4978,7 +5046,7 @@ async function renderUFC() {
         ${(p.style_notes || []).map(escapeHtml).join(" · ")} · hold ${(p.hold * 100).toFixed(1)}%
         · stake ${p.stake_units}u${p.required_edge ? ` · needs ${(p.required_edge * 100).toFixed(1)}%` : ""}</div>
       ${(p.environment && (p.environment.why || []).length)
-        ? `<div style="margin-top:6px;color:var(--text-mute);font-size:var(--fs-sm)">🏟️ ${
+        ? `<div style="margin-top:6px;color:var(--text-mute);font-size:var(--fs-sm)">${icon('stadium')} ${
             escapeHtml([(p.environment.cage || {}).note, (p.environment.altitude || {}).note]
               .filter(Boolean).join(" · "))}</div>` : ""}
       ${board.length ? `<details class="ufc-shop"><summary>Every market this fight implies (${board.length}) — shop the unpriced ones</summary>
@@ -5061,14 +5129,14 @@ async function renderUFC() {
           the tightest in the system</div></div>
     </div>
     ${(d.correlation_flags || []).length ? `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
-        <div class="player">⚠️ Correlation on this card</div>
+        <div class="player">${icon('warn')} Correlation on this card</div>
         <ul class="reasons">${(d.correlation_flags || []).map((f) =>
           `<li class="neg">${escapeHtml(f)}</li>`).join("")}</ul></div>` : ""}
     ${d.card_venue && d.card_venue.venue
-      ? `<div class="ls-note" style="margin-bottom:12px">🏟️ ${escapeHtml(d.card_venue.venue)}${
+      ? `<div class="ls-note" style="margin-bottom:12px">${icon('stadium')} ${escapeHtml(d.card_venue.venue)}${
           d.card_venue.city ? `, ${escapeHtml(d.card_venue.city)}` : ""} — cage size and altitude
           are applied to every method and distance price on this card.</div>`
-      : `<div class="ls-note" style="margin-bottom:12px">🏟️ Venue not set, so cage size and altitude
+      : `<div class="ls-note" style="margin-bottom:12px">${icon('stadium')} Venue not set, so cage size and altitude
           are unchecked — a 25-foot cage raises finishes and altitude pushes them later.
           Set it with <code>python3 launch.py --card-venue "UFC Apex" "Las Vegas"</code>.</div>`}
     ${(() => {
@@ -5127,14 +5195,14 @@ async function renderUFC() {
       if (!w) return "";
       if (w.missed) {
         return `<div class="card" style="border-left:3px solid var(--bad);margin-bottom:12px">
-          <div class="player">⛔ ${w.missed} fighter(s) missed weight</div>
+          <div class="player">${icon('cross')} ${w.missed} fighter(s) missed weight</div>
           <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:4px">Their fights are
           gated off the pick list automatically — that is what KILL IF always said and now
           enforces. ${w.unrecorded} weigh-in(s) still unrecorded.</div></div>`;
       }
       if (w.unrecorded) {
         return `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
-          <div class="player">⏳ ${w.unrecorded} weigh-in(s) not recorded yet</div>
+          <div class="player">${icon('clock')} ${w.unrecorded} weigh-in(s) not recorded yet</div>
           <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:4px">Fighters weigh in the
           morning before the card, and the site pulls the results on its own once they publish —
           nothing for you to do. Until then these fights are graded <em>without</em> the fight-week
@@ -5142,7 +5210,7 @@ async function renderUFC() {
           A miss, when one lands, gates that fight on the next build.</div></div>`;
       }
       return `<div class="card" style="border-left:3px solid var(--good);margin-bottom:12px">
-        <div class="player">✅ Weigh-ins complete — ${w.made} on weight, none missed</div></div>`;
+        <div class="player">${icon('check')} Weigh-ins complete — ${w.made} on weight, none missed</div></div>`;
     })()}
     ${d.no_qualifying ? `<div class="card"><div class="player">No qualifying plays on this card.</div>
         <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:6px">Most fights on any card
@@ -5446,7 +5514,7 @@ function renderAbout() {
     <div class="section-title">The honest part
       <span class="sub">— please read this bit properly</span></div>
     <div class="cards wide">
-      ${card("⚠️ Anything can happen. Genuinely anything.", `
+      ${card(`${icon('warn')} Anything can happen. Genuinely anything.`, `
         <p>Sports are random and betting is gambling. A 90% favourite loses
         one time in ten, and that one time can be tonight, and it can happen
         three nights in a row. A quarterback rolls an ankle on the first
@@ -5580,8 +5648,11 @@ async function renderWhy() {
         young — every pick logs automatically and this strip fills with real,
         ungroomed numbers.</p>`;
 
-  const pillar = (icon, title, body) => `<div class="card" style="padding:16px">
-    <div style="font-size:1.6em">${icon}</div>
+  // Named `glyph`, not `icon`: a parameter called icon SHADOWS the drawing
+  // helper for the whole body, so the next person to reach for a real icon
+  // inside a pillar would get a silent string interpolation instead.
+  const pillar = (glyph, title, body) => `<div class="card" style="padding:16px">
+    <div style="font-size:1.6em">${glyph}</div>
     <h3 style="margin:6px 0 6px">${title}</h3>
     <p style="color:var(--text-body);font-size:.92em;margin:0">${body}</p></div>`;
 
