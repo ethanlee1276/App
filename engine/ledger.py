@@ -751,6 +751,124 @@ def _team_day_unfinished(hist_conn, where, wargs, log_row) -> bool:
     return bool(tot) and fin < tot
 
 
+def _day_was_ingested(hist_conn, where: str, wargs: list) -> bool:
+    """Does the history DB know anything about this day's games at all?
+
+    Without this the audit below flags everything. A date with no game rows
+    tells us nothing — the day may predate the games table, or belong to a
+    sport that never stored scores. Absence of THIS team's final is only
+    evidence when the day itself was ingested.
+    """
+    return bool(hist_conn.execute(
+        f"SELECT COUNT(*) FROM games WHERE {where}", wargs).fetchone()[0])
+
+
+def _team_day_not_final(hist_conn, where: str, wargs: list, team: str) -> bool:
+    """True unless this team has a game with a FINAL SCORE that day.
+
+    Deliberately stricter than _team_day_unfinished, which abstains when
+    there are no game rows for the team. That abstention is the whole
+    problem: parse_results only stores FINAL games, so a game in progress
+    has no row at all, the guard returned False, and the settler graded
+    against a partial stat line. For a repair pass the burden of proof runs
+    the other way — confirm the game finished, or treat the grade as
+    suspect.
+    """
+    if not team:
+        return False
+    n = hist_conn.execute(
+        f"SELECT COUNT(*) FROM games WHERE {where} AND (home=? OR away=?) "
+        f"AND home_score IS NOT NULL", (*wargs, team, team)).fetchone()[0]
+    return not n
+
+
+def premature_settles(conn, hist_conn) -> list[dict]:
+    """Bets graded against a game that had not finished. Read-only.
+
+    The ingest used to store partial stat lines from games in progress (see
+    engine/ingest.py — the withholding guard read a field nobody filled), so
+    the settler could grade a bet mid-game. An OVER already past its line
+    lands on the right answer early; an UNDER grades as WON in the fourth
+    inning and then the man doubles.
+
+    A row is suspect when its day WAS ingested, the player has a stat line
+    for it, and the player's team has no game with a final score that day.
+    """
+    out: list[dict] = []
+    for b in conn.execute(
+            "SELECT * FROM bets WHERE status IN ('won','lost','push') "
+            "ORDER BY date, player"):
+        where, wargs = _hist_where(b)
+        try:
+            if not _day_was_ingested(hist_conn, where, wargs):
+                continue
+            rows = hist_conn.execute(
+                f"SELECT * FROM player_game_logs WHERE {where} AND player=? "
+                f"AND market=?", (*wargs, b["player"], b["market"])).fetchall()
+        except Exception:
+            continue
+        if not rows:
+            continue                    # graded from something else entirely
+        team = rows[0]["team"] if "team" in rows[0].keys() else ""
+        if not _team_day_not_final(hist_conn, where, wargs, team):
+            continue
+        out.append({
+            "id": b["id"], "sport": b["sport"], "date": b["date"],
+            "player": b["player"], "market": b["market"], "side": b["side"],
+            "line": b["line"], "category": b["category"], "team": team,
+            "status": b["status"], "actual": b["actual"],
+            "pnl_dollars": b["pnl_dollars"] or 0.0,
+            "pnl_units": b["pnl_units"] or 0.0,
+        })
+    return out
+
+
+def repair_premature(conn, hist_conn, apply: bool = False) -> dict:
+    """Reopen prematurely graded bets and drop the partial rows they used.
+
+    Dry by default. Applying does three things in one transaction, and all
+    three are required:
+
+      * the bet returns to 'open' with its result fields cleared;
+      * the bankroll is REVERSED by that bet's dollars, because _settle_one
+        advanced it — reopening without this leaves phantom P&L behind;
+      * the partial stat rows are deleted, because a re-settle would
+        otherwise reach the same verdict from the same bad data.
+
+    Returns what it did (or would do), never a bare count: this edits a
+    betting record, and "47 rows repaired" is not something anyone can
+    check afterwards.
+    """
+    rows = premature_settles(conn, hist_conn)
+    plan = {"suspect": rows, "applied": bool(apply),
+            "bankroll_before": bankroll(conn),
+            "dollars_reversed": round(sum(r["pnl_dollars"] for r in rows), 2),
+            "logs_deleted": 0}
+    if not apply or not rows:
+        plan["bankroll_after"] = plan["bankroll_before"] - (
+            plan["dollars_reversed"] if rows else 0.0)
+        return plan
+    for r in rows:
+        conn.execute(
+            "UPDATE bets SET status='open', actual=NULL, pnl_units=NULL, "
+            "pnl_dollars=NULL WHERE id=?", (r["id"],))
+        b = conn.execute("SELECT * FROM bets WHERE id=?", (r["id"],)).fetchone()
+        where, wargs = _hist_where(b)
+        try:
+            cur = hist_conn.execute(
+                f"DELETE FROM player_game_logs WHERE {where} AND player=? "
+                f"AND market=?", (*wargs, r["player"], r["market"]))
+            plan["logs_deleted"] += cur.rowcount
+        except Exception:
+            pass
+    set_cfg(conn, "bankroll",
+            round(plan["bankroll_before"] - plan["dollars_reversed"], 2))
+    conn.commit()
+    hist_conn.commit()
+    plan["bankroll_after"] = bankroll(conn)
+    return plan
+
+
 def _snapshot_closes() -> dict:
     """``{(normalized player, market, date): closing line}`` from the free
     line-move snapshots. The fallback CLV source: harvested odds_history

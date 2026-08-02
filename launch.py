@@ -677,6 +677,92 @@ def _live_status(live: list, market: str, rows: list) -> None:
     print("     ✗ no journal row in any bucket.")
 
 
+def repair_premature_cli(argv: list) -> None:
+    """List — and optionally undo — bets graded before their game ended.
+
+        python3 launch.py --repair-premature            # dry run, lists only
+        python3 launch.py --repair-premature --apply    # actually repairs
+
+    Dry by default and loudly so. This edits a betting record: it reopens
+    bets, reverses the bankroll those bets moved, and deletes the partial
+    stat rows they were graded against. None of that is recoverable from
+    the app, so --apply takes a backup first.
+    """
+    from engine import db as _db, ledger as _led
+    lconn, hconn = _led.connect(), _db.connect()
+    apply = "--apply" in argv
+
+    plan = _led.repair_premature(lconn, hconn, apply=False)
+    rows = plan["suspect"]
+    if not rows:
+        print("\nNo prematurely graded bets found.\n"
+              "  Every settled bet's game has a final score stored for that "
+              "day.\n")
+        return
+
+    print(f"\n{len(rows)} bet(s) graded against a game with no final score "
+          f"that day:\n")
+    hdr = (f"  {'date':<12}{'player':<22}{'market':<13}{'side':<6}"
+           f"{'line':>6}{'graded':>8}{'$':>9}  bucket")
+    print(hdr)
+    print("  " + "-" * (len(hdr) - 2))
+    for r in rows:
+        print(f"  {str(r['date']):<12}{str(r['player'])[:21]:<22}"
+              f"{str(r['market'])[:12]:<13}{str(r['side']):<6}"
+              f"{r['line']:>6}{r['status']:>8}{r['pnl_dollars']:>9.2f}"
+              f"  {r['category']}")
+
+    unders = [r for r in rows if str(r["side"]).upper() == "UNDER"]
+    print(f"\n  {len(unders)} of these are UNDERs — the ones most likely to "
+          f"be flatly WRONG.\n  An over already past its line grades early "
+          f"but correctly; an under graded\n  in the fourth inning is a "
+          f"result that had not happened yet.")
+    print(f"\n  Bankroll now      ${plan['bankroll_before']:,.2f}")
+    print(f"  Would reverse     ${plan['dollars_reversed']:,.2f}")
+    print(f"  Bankroll after    ${plan['bankroll_after']:,.2f}")
+
+    if not apply:
+        print("\n  DRY RUN — nothing was changed.\n"
+              "  Re-run with --apply to reopen these bets, reverse that "
+              "bankroll, and delete\n  the partial stat rows they graded "
+              "against. They will settle normally once\n  the games finish "
+              "and the results are ingested.\n")
+        return
+
+    backup = _backup_before_repair()
+    print(f"\n  Backup written: {backup}" if backup else
+          "\n  ⚠️  Backup FAILED — stopping rather than editing the journal "
+          "with no way back.")
+    if not backup:
+        return
+    done = _led.repair_premature(lconn, hconn, apply=True)
+    print(f"  Reopened {len(done['suspect'])} bet(s), deleted "
+          f"{done['logs_deleted']} partial stat row(s).")
+    print(f"  Bankroll ${done['bankroll_before']:,.2f} → "
+          f"${done['bankroll_after']:,.2f}")
+    print("\n  Re-ingest once tonight's games are final, then settle:\n"
+          "    python3 ingest.py mlb --seasons "
+          f"{_dt.date.today().year}\n"
+          "    python3 launch.py --settle all\n")
+
+
+def _backup_before_repair():
+    """Copy both databases somewhere safe. Returns the directory or None."""
+    import shutil
+    from engine import db as _db, ledger as _led
+    try:
+        stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        dest = ROOT / "data" / "backups" / f"pre-repair-{stamp}"
+        dest.mkdir(parents=True, exist_ok=True)
+        for src in (Path(_led.DEFAULT_DB), Path(_db.DEFAULT_DB)):
+            if src.is_file():
+                shutil.copy2(src, dest / src.name)
+        return dest
+    except Exception as exc:  # noqa: BLE001
+        print(f"  backup failed: {exc}")
+        return None
+
+
 def _goes_nowhere(skip: str) -> bool:
     """Does this skip mean the pick lands in NO bucket at all?
 
@@ -2699,6 +2785,9 @@ def main() -> None:
         who = next((a.lower() for a in argv[i + 1:]
                     if not a.startswith("-")), "mlb")
         side_bias(who)
+        return
+    if "--repair-premature" in argv:
+        repair_premature_cli(argv)
         return
     if "--why-pick" in argv:
         i = argv.index("--why-pick")
