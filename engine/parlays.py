@@ -149,6 +149,37 @@ SAME_GAME_BASELINE_RHO = 0.10
 # points of edge invented out of an estimate.
 RHO_SHRINK = 0.45
 
+# --- measured, and therefore preferred --------------------------------------
+# engine/corrfit.py fits these against our own history. Where a pairing has
+# been measured on a real sample, the measurement replaces the estimate and
+# the shrink comes off with it: the humility clamp exists because the priors
+# are guesses, and it has nothing to apologise for once a number is counted
+# rather than assumed. Provenance travels with each entry so a stale fit is
+# visible rather than inherited.
+#
+# Re-fit with:  python3 -m engine.corrfit --sport nfl
+MEASURED: dict[str, tuple[float, int, str]] = {
+    # +0.637 against a published band of +0.35 to +0.50. The doc's headline
+    # NFL correlation is stronger than the doc claims, which means §4.2's
+    # passing-game stack was being priced as a worse ticket than it is.
+    "qb_passing_game": (0.637, 2844, "2026-08-02 · nfl 2021-2026"),
+    # -0.560 as a PARTIAL correlation holding the team's total receiving
+    # yards fixed. Raw it reads +0.70, because both receivers rise with the
+    # size of the passing game; the cannibalisation §3 Type 3 describes is
+    # what is left after that is taken out. The published band is -0.10 to
+    # +0.10, so the possession pie bites five times harder than the estimate
+    # and Type 3's kill-by-default is more right than it knew.
+    "possession_pie": (-0.560, 2848, "2026-08-02 · nfl 2021-2026"),
+    # +0.356. "Leading teams run" lands inside its band on five seasons.
+    "run_game_script": (0.356, 2848, "2026-08-02 · nfl 2021-2026"),
+}
+
+
+def rho_for(name: str, prior: float) -> tuple[float, bool]:
+    """(value, measured?) — the measurement when we have one, else the prior."""
+    hit = MEASURED.get(name)
+    return (hit[0], True) if hit else (prior, False)
+
 
 @dataclass(frozen=True)
 class SportRules:
@@ -422,6 +453,7 @@ class Relation:
     mechanism: str
     clash: int = 0
     verdict: str = "ok"          # "ok" | "duplicate" | "kill"
+    measured: bool = False       # counted, not estimated
 
 
 def _side_up(leg: dict) -> bool:
@@ -785,8 +817,12 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None) -> Relation:
             # construction, not a clash.
             return Relation(0.275, "two bats in one lineup against one starter "
                                   "— §5.1 puts this at +0.20 to +0.35", 0, "ok")
-        return Relation(-0.10, f"two teammates splitting one {fa} pie — §3 "
-                               f"Type 3 cannibalisation", 3, "kill")
+        r, meas = rho_for("possession_pie", -0.10)
+        return Relation(r, f"two teammates splitting one {fa} pie — §3 Type 3 "
+                           f"cannibalisation" + (
+                               f", measured at {r:+.2f} once the size of the "
+                               f"passing game is held fixed" if meas else ""),
+                        3, "kill", measured=meas)
 
     # §3's Type 6 examples are all team-total-against-game-total pairings,
     # and those are classified in _relate_game_leg. A blanket player-prop
@@ -798,8 +834,14 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None) -> Relation:
 
     # The permitted positive constructions, at the bottom of each band.
     if same_team and {fa, fb} == {"pass", "catch"} and ua and ub:
-        return Relation(0.425, "one passing game wearing two jerseys — §4.1's "
-                              "strongest usable NFL correlation", 0, "ok")
+        r, meas = rho_for("qb_passing_game", 0.425)
+        return Relation(r, "one passing game wearing two jerseys — §4.1's "
+                           "strongest usable NFL correlation, and measured at "
+                           f"{r:+.2f} on {MEASURED['qb_passing_game'][1]:,} of "
+                           f"our own games" if meas else
+                           "one passing game wearing two jerseys — §4.1's "
+                           "strongest usable NFL correlation", 0, "ok",
+                        measured=meas)
     if same_team and {fa, fb} == {"assist", "score"} and ua and ub:
         return Relation(0.225, "the same possessions completing — §8.2", 0, "ok")
 
@@ -911,6 +953,7 @@ class Ticket:
     ev_parlay_at_required: float = 0.0
     parlay_type: str = "A"
     duplicate: bool = False
+    restatement: bool = False
     verdict: str = ""
     stake_if_promoted: float = 0.0
     edge_at_ceiling: float = 0.0
@@ -983,14 +1026,32 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
     # §3 Type 6 — a duplicate pair means the ticket is really about 1.3 bets,
     # so it is priced at the shorter ticket's bar and never counted as
     # diversification.
-    duplicate = any(r.verdict == "duplicate" or r.rho > 0.50 for r in rels)
+    # Two different jobs that were sharing one flag, and measuring the priors
+    # is what exposed it.
+    #
+    # §3 Type 6 says a pair correlating above +0.50 should be treated as one
+    # leg FOR THRESHOLD PURPOSES — a rho test, exactly as written. Separately,
+    # a genuine restatement (a moneyline and a spread on the same team) must
+    # have its book ceiling capped at correlated fair, because no book pays
+    # 85% of the product on a pair that cashes together almost always.
+    #
+    # One flag did both, so the moment the QB-to-WR1 link was measured at
+    # +0.64 instead of the estimated +0.43, §4.2's headline construction
+    # tripped a cap written for near-identical bets and stopped clearing. A
+    # quarterback and his receiver are two players having two different
+    # games; that they correlate strongly is the reason to bet them together,
+    # not evidence that they are the same bet.
+    duplicate = any(r.rho > 0.50 for r in rels)          # §3's threshold rule
+    restatement = any(r.verdict == "duplicate" for r in rels)   # the ceiling
 
     # Gate 4 — joint probability via the conditional chain, never the product.
     ps = [float(l.get("hit_prob") or l.get("p_final") or 0.0) for l in legs]
     if min(ps) <= 0.0:
         return None, "Gate 4: a leg carries no modelled probability"
     independent = math.prod(ps)
-    priced = [r.rho * RHO_SHRINK for r in rels]
+    # The clamp is humility about an ESTIMATE. A counted number has nothing
+    # to be humble about, so a measured rho is priced at face value.
+    priced = [r.rho if r.measured else r.rho * RHO_SHRINK for r in rels]
     if n == 2:
         modeled = joint_two(ps[0], ps[1], priced[0])
     else:
@@ -1072,7 +1133,7 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
         # exploited and the correlation is not in dispute: a book will never
         # pay more than the correlated fair price. §3 Type 6's disposition
         # is "priced, not celebrated", and this is what pricing it means.
-        if duplicate:
+        if restatement:
             fair = [r.rho for r in rels]
             j_book = (joint_two(ps[0], ps[1], fair[0]) if n == 2
                       else joint_three(tuple(ps), tuple(fair)))
@@ -1083,11 +1144,15 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
                independent_joint=independent, threshold=thr,
                required_dec=required, best_case_dec=best_case,
                ev_singles=ev_singles, ev_alternative=ev_alternative,
+               restatement=restatement,
                ev_parlay_at_required=modeled * required - 1.0,
                duplicate=duplicate,
                parlay_type="A" if same_game else "B")
     t.pairs = [{"a": legs[i].get("player"), "b": legs[j].get("player"),
-                "rho": round(rel.rho, 2), "rho_priced": round(rel.rho * RHO_SHRINK, 3),
+                "rho": round(rel.rho, 2),
+                "rho_priced": round(rel.rho if rel.measured
+                                    else rel.rho * RHO_SHRINK, 3),
+                "rho_measured": rel.measured,
                 "mechanism": rel.mechanism, "clash": rel.clash}
                for (i, j), rel in zip(idx, rels)]
 
@@ -1382,10 +1447,13 @@ def _publish(t: Ticket, qualified: bool, rank: int = 1) -> dict:
             "headline": l.get("headline"),
         } for l in t.legs],
         "pairs": t.pairs,
-        "clash_screen": ("Types 1-7 checked · cleared"
-                         if not t.duplicate else
-                         "Types 1-7 checked · Type 6 duplicate priced in, not "
-                         "counted as diversification"),
+        "clash_screen": (
+            "Types 1-7 checked · Type 6 restatement priced in, not counted as "
+            "diversification" if t.restatement else
+            "Types 1-7 checked · cleared, and held to the shorter ticket's bar "
+            "because a pair correlating above +0.50 is not two independent "
+            "bets (§3 Type 6)" if t.duplicate else
+            "Types 1-7 checked · cleared"),
         "independent_joint": round(t.independent_joint, 4),
         "modeled_joint": round(t.modeled_joint, 4),
         "independent_american": decimal_to_american(1 / t.independent_joint)

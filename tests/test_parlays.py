@@ -650,9 +650,16 @@ def test_the_quarterback_and_his_receiver_are_not_a_duplicate():
                [], [game(favorite="GB", spread=3.0)])
     assert out["tickets"], reasons(out)
     pair = out["tickets"][0]["pairs"][0]
-    # §4.1's band for QB pass yards against WR1: +0.35 to +0.50.
-    assert 0.35 <= pair["rho"] <= 0.50, pair
+    # §4.1 bands this at +0.35 to +0.50; five seasons of our own games put it
+    # at +0.64, and a measurement beats an estimate. What must hold either
+    # way is that it is strongly POSITIVE and carries no clash — a
+    # quarterback and his receiver are two players having two different
+    # games, and that they move together is the reason to bet them as a pair
+    # rather than evidence that they are the same bet.
+    assert pair["rho"] >= 0.35, pair
     assert pair["clash"] == 0, "the strongest NFL correlation flagged as a clash"
+    assert out["tickets"][0]["qualified"] is True, (
+        "the doc's headline NFL construction cannot be published")
 
 
 def test_the_trailing_dog_mechanism_needs_to_know_who_the_dog_is():
@@ -740,7 +747,10 @@ def test_a_side_and_a_spread_on_one_team_are_priced_as_one_bet():
         gline("spread", "GB", "CHI", "GB", line=-3.0, p=0.60)],
         [game(favorite="GB", spread=3.0)])
     if out["tickets"]:
-        assert "duplicate" in out["tickets"][0]["clash_screen"]
+        # "restatement" is the word the card uses now. A rho above +0.50
+        # triggers §3's THRESHOLD rule and says so separately; only a genuine
+        # near-identical bet gets its ceiling capped, which is what this is.
+        assert "restatement" in out["tickets"][0]["clash_screen"]
 
 
 def test_two_sides_of_one_game_cannot_both_win():
@@ -781,7 +791,7 @@ def test_the_book_ceiling_is_capped_on_a_near_duplicate_pair():
            gline("spread", "CHI", "CHI", "GB", line=3.0, p=0.44, odds=150)]
     out = run2("nfl", [], gbs, g)
     t = out["tickets"][0]
-    assert "duplicate" in t["clash_screen"]
+    assert "restatement" in t["clash_screen"]
     assert P.american_to_decimal(t["best_case_american"]) < \
         t["naive_product_dec"] * (1 - P.BEST_CASE_SGP_TAX[2]) - 0.3, (
         "the duplicate ceiling was not capped below the flat-tax number")

@@ -2060,11 +2060,15 @@ function parlayTicket(t, live) {
         <div class="pz-pair-why">${escapeHtml(p.mechanism || "")}</div>
       </li>`).join("")}
     </ul>
-    <div class="pz-fine">The published ρ is the model doc's prior. The priced ρ
-      is that prior after the same humility clamp this engine applies to every
-      raw edge — those magnitudes are professional estimates, not measured
-      constants, and pricing them at face value would invent edge out of a
-      guess.</div>
+    <div class="pz-fine">${t.pairs.some((p) => p.rho_measured)
+      ? `A ρ marked <b>measured</b> was counted on our own game history rather
+         than taken from the model doc, so it is priced at face value: the
+         humility clamp exists because a prior is a guess, and a counted
+         number has nothing to be humble about. `
+      : ""}The published ρ is the doc's prior; the priced ρ is that prior after
+      the clamp this engine applies to every raw edge. Those magnitudes are
+      professional estimates, not measured constants, and pricing an estimate
+      at face value would invent edge out of a guess.</div>
 
     <div class="pz-sub">Clash screen</div>
     <div class="pz-clash">${icon("check", 12)} ${escapeHtml(t.clash_screen)}</div>
