@@ -191,6 +191,79 @@ def test_the_why_chips_read_as_apparatus_not_as_disabled_buttons():
     assert ".why-toggle::after" in _nc(), "the dagger is gone"
 
 
+# --- §3.4 motion, and §3.1 accent discipline --------------------------------
+def test_no_entrance_animations_or_scroll_reveals():
+    """§3.4 names them: "Forbidden: scroll reveals, entrance animations,
+    parallax, skeleton shimmer, anything above 500ms."
+
+    A rendered audit found 55-61 animated elements on every view — every
+    card fading up 16px on a stagger, a sparkline drawing itself over 1.1s,
+    a projection bar growing from zero, and 27 sparkline endpoints pinging
+    forever. A betting board is read in a hurry; content that arrives late
+    is content you scrolled past."""
+    body = _nc()
+    for gone in ("@keyframes viewIn", "@keyframes draw", "@keyframes growW"):
+        assert gone not in body, f"{gone} is back"
+    reveal = re.search(r"\.reveal, \.reveal\.in \{([^}]*)\}", body)
+    assert reveal and "transition: none" in reveal.group(1), \
+        "the staggered scroll reveal is back"
+    # ALL matching blocks, not the first. These selectors appear twice — a
+    # geometry rule and a motion rule — and `re.search` finds the geometry
+    # one, so this asserted on source order rather than on what renders. The
+    # same mistake broke a type-ramp test on `.section-title` once already.
+    for dead in (".spark-pulse", ".proj-dot, .line-dot"):
+        blocks = re.findall(re.escape(dead) + r"\s*\{([^}]*)\}", body)
+        assert blocks, f"{dead} has no rule at all"
+        assert any("animation: none" in b for b in blocks), \
+            f"{dead} animates again"
+
+
+def test_the_permitted_motion_survived():
+    """A negative control. §3.4 PERMITS the live dot pulse and the wind
+    stream, and a test that just banned every animation would pass by
+    deleting the two things the spec asked to keep."""
+    body = _nc()
+    # Anchored on a word boundary. The loose substring form passed when the
+    # rule was renamed to `livePulseGONE`, which is exactly the deletion the
+    # control exists to catch.
+    for name in ("livePulse", "windflow"):
+        assert re.search(rf"@keyframes {name}\b", body), \
+            f"the permitted {name} animation was deleted"
+
+
+def test_amber_is_not_used_for_grades_stakes_or_confidence():
+    """§3.1: "If a screen has more than ~8 amber elements visible, something
+    is being decorated rather than encoded."
+
+    The Recommended page measured 41. The three biggest contributors were
+    all category errors against our own rule (REDESIGN_DECISIONS.md §1):
+    amber marks a CONDITION as live or material, and a grade is a verdict, a
+    stake is a number, and a confidence bar is a number whose LENGTH already
+    says the same thing. 41 -> 21, and what is left is live games."""
+    body = _nc()
+    play = re.findall(r"\.grade\.play \{([^}]*)\}", body)
+    assert play and all("var(--brand)" not in b and "var(--warn)" not in b
+                        for b in play), "PLAY badges are amber again"
+    stake = re.search(r"\.chip\.stake \{([^}]*)\}", body).group(1)
+    assert "var(--brand)" not in stake, "the stake chip is amber again"
+    assert "var(--warn)" not in APP[APP.index("function confMeter("):
+                                    APP.index("function confMeter(") + 700], \
+        "the confidence bar is amber again"
+
+
+def test_the_standing_record_is_in_the_masthead():
+    """§9, and Ethan asked for it directly. It reads from the SAME journal
+    the Record page reads, because two renderings of one number drift and a
+    masthead that disagrees with the Record page is worse than none."""
+    assert 'id="standing-record"' in HTML
+    assert "async function renderStandingRecord()" in APP
+    fn = APP[APP.index("async function renderStandingRecord()"):]
+    fn = fn[:fn.index("\nasync function renderRecord(")]
+    assert "loadRecordOnce()" in fn, "it reads a second source"
+    assert "no settled picks yet" in fn, \
+        "an empty journal would print 0.0%, which is a claim it cannot make"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

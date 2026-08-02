@@ -1778,7 +1778,14 @@ function projBar(r) {
 
 function confMeter(r) {
   const w = `${(r.confidence / 10) * 100}%`;
-  const color = r.confidence >= 8.5 ? "var(--good)" : r.confidence >= 7 ? "var(--cyan)" : r.confidence >= 5.5 ? "var(--warn)" : "var(--text-mute)";
+  /* No amber. Confidence is a NUMBER, and amber in this palette means a
+     CONDITION is live or material — four amber confidence bars on one board
+     were four amber elements saying nothing about conditions. The bar's
+     LENGTH already encodes the value; colour was doing the same job twice,
+     so it does the one thing length cannot and marks the top of the range. */
+  const color = r.confidence >= 8.5 ? "var(--good)"
+    : r.confidence >= 7 ? "var(--text)"
+    : r.confidence >= 5.5 ? "var(--text-dim)" : "var(--text-mute)";
   return `<div class="conf-wrap"><div class="conf-meter"><div class="conf-fill" data-w="${w}" style="background:${color}"></div></div>
     <div class="conf-num">${r.confidence.toFixed(1)}/10</div></div>`;
 }
@@ -2845,6 +2852,47 @@ function bindRecordScopes(host) {
       _recordScope = b.dataset.scope;
       renderRecord();
     }));
+}
+
+/* §9 — the standing record line under the masthead.
+
+   "Every tout site hides this; doing the opposite is the positioning." So
+   it reads from the SAME journal the Record page reads (loadRecordOnce) —
+   two renderings of one number can drift, and a masthead that disagrees
+   with the Record page would be worse than no masthead line at all.
+
+   It is deliberately quiet type in a loud position. A figure that shouts on
+   a good night shouts on a bad one, and the claim being made is that this
+   one is always there, not that it is good. */
+async function renderStandingRecord() {
+  const el = document.getElementById("standing-record");
+  if (!el) return;
+  let rec;
+  try {
+    rec = await loadRecordOnce();
+  } catch (e) {
+    return;                       // no journal yet: the line stays absent
+  }
+  const o = (rec && rec.overall) || {};
+  if (!o.settled) {
+    // Nothing graded yet. Say so rather than printing 0.0% — a zero here
+    // reads as "we broke even", which is a claim, and this has none to make.
+    el.innerHTML = `<span class="lbl">Record</span>
+      <span>no settled picks yet — every pick is journaled at its real book
+      price and graded here</span>`;
+    return;
+  }
+  const roi = o.roi || 0;
+  const neg = roi < 0;
+  el.innerHTML = `
+    <span class="lbl">Running ROI</span>
+    <b class="${neg ? "neg" : ""}">${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}%</b>
+    <span>${(o.net_units >= 0 ? "+" : "")}${(o.net_units || 0).toFixed(2)}u on
+      ${(o.units_staked || 0).toFixed(1)}u staked</span>
+    <span class="lbl">Record</span>
+    <b class="${neg ? "neg" : ""}">${o.wins || 0}-${o.losses || 0}-${o.pushes || 0}</b>
+    <span>${o.settled} settled${o.open ? ` · ${o.open} open` : ""}</span>
+    <span>Every pick journaled at its real book price and graded in public.</span>`;
 }
 
 async function renderRecord() {
@@ -6217,4 +6265,7 @@ initMobileMenu();
 initMoreMenu();
 initHeaderTuck();
 requestAnimationFrame(moveIndicator);
+// §9: the standing record is masthead chrome, not a page — it renders once
+// at boot and is independent of which view or sport is showing.
+renderStandingRecord();
 load();

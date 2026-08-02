@@ -74,6 +74,15 @@ const VOLATILE = [
   [/\b\d+(\.\d+)?\s*(s|sec|secs|seconds|m|min|mins|minutes|h|hr|hrs|hours|d|day|days)\s+ago\b/gi,
    '<elapsed> ago'],
   [/\bUpdated\s+<elapsed>\s+ago\b/gi, 'Updated <elapsed> ago'],
+  /* The freshness chip has TWO mutually exclusive texts — "Updated <t> ago"
+     while fresh, "Stale — built <t> ago" once it ages past the threshold —
+     so a baseline taken while fresh reports the fresh string LOST when
+     re-harvested later the same day. Nothing was lost; the build simply got
+     older. What has to survive the redesign is that the site still says how
+     fresh it is, not which side of the threshold it was on at harvest time.
+     Same for an absolute ISO build stamp. */
+  [/\b(?:Updated|Stale\s*[—-]\s*built)\b[^·.]*<elapsed> ago/gi, '<freshness>'],
+  [/\bUpdated\s+\d{4}-\d\d-\d\dT[\d:]+/g, 'Updated <timestamp>'],
 ];
 
 export const norm = s => {
