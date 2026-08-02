@@ -73,6 +73,24 @@ def _get(d, *names, default=None):
     return default
 
 
+def _stock(db_path: str) -> dict:
+    """What is in the DB, counted rather than assumed."""
+    from engine import db as _db
+    conn = _db.connect(db_path)
+    logs = conn.execute("SELECT COUNT(*) FROM player_game_logs "
+                        "WHERE sport='mlb'").fetchone()[0]
+    by_market: dict = {}
+    for r in conn.execute("SELECT market, COUNT(*) n FROM player_game_logs "
+                          "WHERE sport='mlb' GROUP BY market"):
+        by_market[r[0]] = r[1]
+    try:
+        odds = conn.execute("SELECT COUNT(*) FROM odds_history "
+                            "WHERE sport='mlb'").fetchone()[0]
+    except Exception:
+        odds = 0
+    return {"logs": logs, "by_market": by_market, "odds": odds}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default="data/history.db")
@@ -81,10 +99,30 @@ def main() -> None:
                     help="ignore harvested book lines (baseline pricing only)")
     args = ap.parse_args()
 
+    # What the DB actually holds, BEFORE the sweep. Without this the empty
+    # case blamed --min-history for everything, including "there are no MLB
+    # logs at all" — a confident wrong reason, which is worse than none,
+    # because it sends you tuning a knob that was never the problem.
+    stock = _stock(args.db)
+    if not stock["logs"]:
+        print(f"\nNo MLB player game logs in {args.db}.\n"
+              f"  Nothing to calibrate against — the sweep would report an "
+              f"empty table for every market.\n"
+              f"  Fix: python3 ingest.py mlb --seasons <year>\n")
+        return
+
     rows = sweep(args.db, min_history=args.min_history,
                  use_real_lines=not args.naive)
 
-    print(f"\nMLB per-market calibration · walk-forward on {args.db}\n")
+    print(f"\nMLB per-market calibration · walk-forward on {args.db}")
+    print(f"  {stock['logs']:,} MLB log row(s) · {stock['odds']:,} harvested "
+          f"book line(s)")
+    if not stock["odds"] and not args.naive:
+        print("  ⚠️  No harvested odds, so the ROI column below is predictive "
+              "skill only.\n      ECE and Brier are unaffected — they grade "
+              "against OUTCOMES, not lines.\n      To price against real "
+              "books: python3 harvest_odds.py mlb --from <d> --to <d>")
+    print()
     hdr = (f"{'market':<14}{'props':>8}{'Brier':>9}{'ECE':>8}"
            f"{'bets':>7}{'win%':>7}{'ROI':>9}{'real lines':>12}")
     print(hdr)
@@ -93,7 +131,12 @@ def main() -> None:
         label = MARKET_LABELS.get(d["market"], d["market"])[:13]
         n = _get(d, "n", default=0)
         if not n:
-            print(f"{label:<14}{'—':>8}   (no rows — try a wider --min-history)")
+            have = stock["by_market"].get(d["market"], 0)
+            why = (f"(no {label.lower()} rows stored at all)" if not have
+                   else f"({have:,} row(s) stored, none with "
+                        f"{args.min_history + 1}+ prior games — "
+                        f"try --min-history {max(1, args.min_history - 3)})")
+            print(f"{label:<14}{'—':>8}   {why}")
             continue
         brier = _get(d, "brier", default=float("nan"))
         ece = _get(d, "ece", default=float("nan"))
