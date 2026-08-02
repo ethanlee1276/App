@@ -585,8 +585,15 @@ def why_live(sport: str = "mlb") -> None:
     for r in shots:
         idx.setdefault((normalize_name(r.get("player", "")), r.get("market", "")),
                        "long shots")
-    shown = {(normalize_name(r.get("player", "")), r.get("market", ""))
-             for r in live}
+    # Keyed on the BUCKET too. The same player can hold a bet in two
+    # buckets at once — a long shot and a stale-line flag on the same
+    # homer — and matching on name+market alone reported the excluded one
+    # as shown, which is the exact kind of confident wrong line this
+    # report exists to prevent.
+    def _key(r):
+        return (normalize_name(r.get("player", "")), r.get("market", ""),
+                r.get("category", "main"))
+    shown = {_key(r) for r in live}
     # If the payload has no live_picks KEY at all, it was written by a build
     # that predates the tracker. Every "not shown" below would then be this
     # one fact wearing five different explanations — so say it once and stop.
@@ -601,8 +608,7 @@ def why_live(sport: str = "mlb") -> None:
         by_cat.setdefault(b["category"], []).append(b)
     print(f"  {len(rows)} open bet(s) in the journal, by bucket:")
     for cat, bs in sorted(by_cat.items()):
-        n_shown = sum(1 for b in bs
-                      if (normalize_name(b["player"]), b["market"]) in shown)
+        n_shown = sum(1 for b in bs if _key(b) in shown)
         flag = "" if cat in ("main", "longshot") else \
             "   ← not eligible for the Live tab by design"
         print(f"    {cat:<16} {len(bs):>4} open · {n_shown} on the Live tab{flag}")
@@ -613,27 +619,26 @@ def why_live(sport: str = "mlb") -> None:
     print(hdr)
     print("    " + "-" * (len(hdr) - 4))
     for b in rows:
-        key = (normalize_name(b["player"]), b["market"])
+        key = _key(b)
+        idx_key = key[:2]
         if key in shown:
-            row = next(r for r in live if (normalize_name(r["player"]),
-                                           r["market"]) == key)
+            row = next(r for r in live if _key(r) == key)
             verdict = f"SHOWN — {row['status']} ({row['phase']})"
         elif b["category"] not in ("main", "longshot"):
             verdict = "excluded — bucket is not tracked live"
         elif b["date"] != date and b["date"] not in _near_dates(date):
             verdict = f"excluded — journaled {b['date']}, slate is {date}"
-        elif key not in idx:
+        elif idx_key not in idx:
             verdict = ("NOT ON EITHER BOARD — the build no longer carries this "
                        "player+market, so it can't be placed on a game")
         else:
-            verdict = (f"on the {idx[key]} board but not tracked — no game "
+            verdict = (f"on the {idx[idx_key]} board but not tracked — no game "
                        f"matched (team/opponent, or the doubleheader leg)")
         print(f"    {str(b['player'])[:21]:<22} {b['market'][:12]:<13} "
               f"{b['category'][:14]:<15} {b['date']:<11} {verdict}")
 
     main_open = len(by_cat.get("main", []))
-    main_shown = sum(1 for b in by_cat.get("main", [])
-                     if (normalize_name(b["player"]), b["market"]) in shown)
+    main_shown = sum(1 for b in by_cat.get("main", []) if _key(b) in shown)
     print(f"\n  Player props (category 'main'): {main_open} open, "
           f"{main_shown} on the Live tab.")
     if main_open == 0:

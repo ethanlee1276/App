@@ -72,7 +72,7 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             "line": float(b.get("line") or 0),
             "odds": b.get("odds"), "stake_units": b.get("stake_units") or 0,
             "current": None, "status": "unmapped", "phase": "upcoming",
-            "team": "", "game": {},
+            "team": "", "game": {}, "category": b.get("category", "main"),
         }
 
     out = []
@@ -163,6 +163,12 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             "side": side, "line": line,
             "odds": b.get("odds"), "stake_units": b.get("stake_units") or 0,
             "current": current, "status": status, "phase": phase,
+            # Which journal bucket this came from. The same player can hold a
+            # bet in two buckets at once — a long shot and a stale-line flag
+            # on the same homer — so name + market alone does not identify a
+            # row, and anything reconciling this list against the journal
+            # will silently mismatch without it.
+            "category": b.get("category", "main"),
             "team": (rec or {}).get("team", b.get("player", "")),
             "game": {"home": g.get("home"), "away": g.get("away"),
                      "game_number": g.get("game_number", 1),

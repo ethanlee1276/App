@@ -131,6 +131,52 @@ def test_it_defaults_to_baseball_but_takes_a_sport():
     assert "argv[i + 1:]" in b
 
 
+def test_the_same_player_in_two_buckets_is_two_different_rows():
+    """Ethan's journal held Sal Stewart's homer as BOTH a long shot and a
+    stale-line flag. Matching on name+market alone reported the excluded
+    stale row as "SHOWN — tracking (live)" — a confident wrong line, in the
+    report whose entire job is not producing those."""
+    b = _block()
+    assert "def _key(r):" in b
+    assert 'r.get("category", "main")' in b
+    # ...and the board index stays a two-part key, because the boards do
+    # not have categories.
+    assert "idx_key = key[:2]" in b
+
+
+def test_the_tracker_emits_the_bucket_so_the_report_can_use_it():
+    from engine.livepicks import assemble_live_picks
+    game = {"home": "PHI", "away": "CHC", "game_number": 1,
+            "date": "2026-08-01",
+            "live": {"state": "live", "home_score": 1, "away_score": 0}}
+    pick = {"player": "A B", "team": "PHI", "opponent": "CHC",
+            "market": "home_runs", "market_label": "Home Runs"}
+    bet = {"player": "A B", "market": "home_runs", "side": "OVER",
+           "line": 0.5, "odds": 400, "stake_units": 0.1,
+           "category": "longshot"}
+    rows = assemble_live_picks([bet], [], [game], {}, [pick])
+    assert rows[0]["category"] == "longshot"
+
+
+def test_an_unmappable_bet_still_carries_its_bucket():
+    """The unmapped path builds its row separately and used to drop every
+    field the mapped path added."""
+    from engine.livepicks import assemble_live_picks
+    bet = {"player": "Nobody", "market": "hits", "side": "OVER", "line": 1.5,
+           "odds": -110, "stake_units": 1.0, "category": "loose"}
+    rows = assemble_live_picks([bet], [], [], {})
+    assert rows[0]["status"] == "unmapped"
+    assert rows[0]["category"] == "loose"
+
+
+def test_a_bet_with_no_bucket_recorded_defaults_to_the_main_board():
+    from engine.livepicks import assemble_live_picks
+    bet = {"player": "Nobody", "market": "hits", "side": "OVER", "line": 1.5,
+           "odds": -110, "stake_units": 1.0}
+    rows = assemble_live_picks([bet], [], [], {})
+    assert rows[0]["category"] == "main"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
