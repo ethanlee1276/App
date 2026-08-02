@@ -294,6 +294,46 @@ def test_the_static_table_still_answers_when_the_feed_has_no_names():
         encoding="utf-8").read()
     i = src.index("def _abbr(name: str)")
     assert 'cfg["teams"].get(name)' in src[i:i + 200]
+def test_a_later_days_game_is_not_reported_as_a_drop():
+    """list_events has NO date filter — it returns every upcoming fixture
+    for the sport. So a four-game slate is matched against tomorrow's and
+    Thursday's games too, and those are supposed to miss.
+
+    Reporting them turned a correct result into three alarming lines, which
+    is how a diagnostic stops being read.
+    """
+    import os
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "engine", "sources", "oddsapi.py"),
+        encoding="utf-8").read()
+    i = src.index("def _other_day(ev)")
+    assert "commence_time" in src[i:i + 200]
+    # And the drop report must consult it before recording a fault.
+    j = src.index('"mapped, but that pair is not on our slate"')
+    assert "_other_day(ev)" in src[j - 400:j]
+
+
+def test_the_slate_day_window_spans_the_utc_rollover():
+    """Kickoffs are UTC and a 7pm Eastern tip is already tomorrow there, so
+    a one-day window would reject the slate's own late games."""
+    import os
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "engine", "sources", "oddsapi.py"),
+        encoding="utf-8").read()
+    i = src.index("slate_days: set[str] = set()")
+    assert "(-1, 0, 1)" in src[i:i + 500]
+
+
+def test_a_cached_rebuild_says_when_it_had_no_prices_to_read():
+    """The join improving and the join doing nothing look identical on a
+    cached run: the newly-matched events place on the slate and then vanish
+    one line later because nobody ever paid for them."""
+    from engine.sources.oddsapi import OddsAttachResult
+    assert OddsAttachResult().cache_misses == 0
+    import os
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "nba_build.py"), encoding="utf-8").read()
+    assert "res.cache_misses" in src
 
 
 if __name__ == "__main__":

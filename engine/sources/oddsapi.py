@@ -747,6 +747,15 @@ class OddsAttachResult:
     # props are indistinguishable downstream from props the book never
     # priced. Each entry: {reason, home, away, …}.
     dropped_events: list = field(default_factory=list)
+    # Events for a DIFFERENT day. list_events has no date filter, so a
+    # four-game slate is matched against every upcoming fixture. Counted,
+    # never reported as a fault — they are supposed to miss.
+    other_day_events: int = 0
+    # Events that DID place on the slate but had no cached payload, in
+    # cache_only mode. Without this a cached rebuild looks identical whether
+    # the join improved or not: the events match, then vanish one line later
+    # because nobody ever paid for them.
+    cache_misses: int = 0
 
 
 def _team_key(name: str) -> str:
@@ -911,6 +920,31 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     def _abbr(name: str) -> str | None:
         return slate_names.get(_team_key(name)) or cfg["teams"].get(name)
 
+    # WHICH DAYS THIS SLATE COVERS. list_events returns every UPCOMING event
+    # for the sport with no date filter, so a four-game slate is matched
+    # against a list that also holds tomorrow's and Thursday's games. Those
+    # are not on our slate and are not supposed to be — reporting them as
+    # dropped turns a correct result into three alarming lines, which is how
+    # a diagnostic stops being read.
+    #
+    # A day either side, because kickoffs are UTC and a 7pm Eastern tip is
+    # already tomorrow there.
+    import datetime as _dt
+    slate_days: set[str] = set()
+    for g in slate.games:
+        k = str(getattr(g, "kickoff", "") or "")[:10]
+        if len(k) == 10:
+            try:
+                d = _dt.date.fromisoformat(k)
+            except ValueError:
+                continue
+            slate_days |= {(d + _dt.timedelta(days=n)).isoformat()
+                           for n in (-1, 0, 1)}
+
+    def _other_day(ev) -> bool:
+        c = str(ev.get("commence_time") or "")[:10]
+        return bool(slate_days) and len(c) == 10 and c not in slate_days
+
     for ev in events:
         home = _abbr(ev.get("home_team", ""))
         away = _abbr(ev.get("away_team", ""))
@@ -937,10 +971,16 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                               if not m]})
             continue
         if frozenset((home, away)) not in slate_pairs:
-            result.dropped_events.append(
-                {"reason": "mapped, but that pair is not on our slate",
-                 "home": ev.get("home_team", ""), "away": ev.get("away_team", ""),
-                 "mapped_to": [away, home]})
+            # A later date's game is not a fault, so it is not reported as
+            # one. Only a pair that should be on THIS slate and is not.
+            if not _other_day(ev):
+                result.dropped_events.append(
+                    {"reason": "mapped, but that pair is not on our slate",
+                     "home": ev.get("home_team", ""),
+                     "away": ev.get("away_team", ""),
+                     "mapped_to": [away, home]})
+            else:
+                result.other_day_events += 1
             continue
         try:
             payload, quota = fetch_event_odds(ev["id"], key, markets=markets,
@@ -948,7 +988,12 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                                               cache_only=cache_only)
         except OddsAPIError:
             if cache_only:
-                continue         # this event was never paid for — skip, free
+                # Never paid for, so there is nothing on disk. Counted: a
+                # cached rebuild otherwise looks identical whether the
+                # event join improved or not, because the newly-matched
+                # events match and then disappear on this line.
+                result.cache_misses += 1
+                continue
             raise
         result.quota = quota
         result.events_used += 1

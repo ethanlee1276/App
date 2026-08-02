@@ -424,6 +424,17 @@ def main() -> None:
                 # slate's worth of prices thrown away, and it is invisible
                 # downstream — its props land in "no real book price"
                 # looking exactly like markets the book never offered.
+                # A cached rebuild with no payload for the newly-matched
+                # events looks exactly like a rebuild where nothing
+                # improved — the events place on the slate and then vanish
+                # because nobody ever paid for them. Say which it was.
+                if res.cache_misses:
+                    odds_note += (f"; {res.cache_misses} matched event(s) "
+                                  f"have no cached prices")
+                    print(f"\n  {res.cache_misses} event(s) matched the slate "
+                          f"but were never paid for, so there are no cached "
+                          f"prices to read.\n  Their props stay in 'no real "
+                          f"book price' until the next live pull.")
                 if res.dropped_events:
                     odds_note += (f"; {len(res.dropped_events)} event(s) "
                                   f"DROPPED — see the odds diagnosis")
