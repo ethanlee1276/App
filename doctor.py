@@ -241,9 +241,25 @@ def check_odds_budget(rep):
             return
         per_day = remaining / max(1, days)
         status = OK if remaining > LOW_CREDITS else WARN
+        # With a key ring attached, "how many credits" is a property of the
+        # POOL and the interesting detail is how many plans are still alive.
+        # One empty key beside a full one is a healthy operation, and a
+        # headline that only reported the empty one sent the last reader
+        # looking for a second computer.
+        try:
+            from engine.sources.oddsapi import api_keys
+            ring = api_keys()
+        except Exception:
+            ring = []
+        ringnote = ""
+        if len(ring) > 1:
+            live = sum(1 for k in ring if not ob.key_is_spent(k))
+            ringnote = f" · {live} of {len(ring)} key(s) still have credits"
+            if live:
+                status = OK if remaining > LOW_CREDITS else status
         rep.add("odds budget", status,
                 f"{remaining:,} credit(s) left · {days} day(s) in the month "
-                f"· {per_day:,.0f}/day available",
+                f"· {per_day:,.0f}/day available{ringnote}",
                 "python3 launch.py --odds-doctor" if status != OK else "")
 
 

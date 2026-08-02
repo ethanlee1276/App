@@ -186,15 +186,104 @@ class OddsAPIError(RuntimeError):
     pass
 
 
+def _url_key(url: str) -> str:
+    """The apiKey this URL is carrying, so a result can be attributed to the
+    key that paid for it."""
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    return (q.get("apiKey") or [""])[0]
+
+
+def _with_key(url: str, key: str) -> str:
+    """The same request, billed to a different key."""
+    parts = urllib.parse.urlparse(url)
+    q = urllib.parse.parse_qs(parts.query)
+    q["apiKey"] = [key]
+    return urllib.parse.urlunparse(
+        parts._replace(query=urllib.parse.urlencode(q, doseq=True)))
+
+
+def _next_key(after: str) -> str | None:
+    """The next key on the ring with credits left, or None if that was the
+    last one."""
+    ring = api_keys()
+    try:
+        from ..oddsbudget import key_is_spent
+    except Exception:
+        return None
+    try:
+        start = ring.index(after) + 1
+    except ValueError:
+        start = 0
+    for k in ring[start:]:
+        if not key_is_spent(k):
+            return k
+    return None
+
+
+def api_keys(explicit: str | None = None) -> list[str]:
+    """Every key we can pay with, in the order to try them.
+
+    A plan is a fixed monthly allowance, and running two of them is the
+    cheapest way to double it — so the key is a RING rather than a single
+    value. Accepted forms, all optional beyond the first::
+
+        ODDS_API_KEY=aaa                 # the primary
+        ODDS_API_KEY_2=bbb               # ...and as many numbered spares
+        ODDS_API_KEY_3=ccc               #    as you like
+        ODDS_API_KEYS=aaa,bbb,ccc        # or the whole ring on one line
+
+    Order is the order given: the primary first, then 2, 3, and so on. An
+    explicit key passed in code wins outright, because a caller asking for a
+    specific key means it.
+    """
+    load_local_secrets()
+    if explicit:
+        return [explicit]
+    ring: list[str] = []
+    primary = os.environ.get("ODDS_API_KEY")
+    if primary:
+        ring.append(primary.strip())
+    for extra in (os.environ.get("ODDS_API_KEYS") or "").split(","):
+        if extra.strip():
+            ring.append(extra.strip())
+    i = 2
+    while True:
+        nxt = os.environ.get(f"ODDS_API_KEY_{i}")
+        if not nxt:
+            break
+        ring.append(nxt.strip())
+        i += 1
+    seen, ordered = set(), []
+    for k in ring:                       # first mention wins, no duplicates
+        if k not in seen:
+            seen.add(k)
+            ordered.append(k)
+    return ordered
+
+
 def get_api_key(explicit: str | None = None) -> str:
-    load_local_secrets()  # pull ODDS_API_KEY from secrets.local if present
-    key = explicit or os.environ.get("ODDS_API_KEY")
-    if not key:
+    """The key to spend next: the first on the ring with credits left.
+
+    A key we have never called is not spent — unknown is not zero. If every
+    key is known to be empty this still returns the first, so the caller gets
+    the API's own "out of credits" answer rather than a guess from a state
+    file that may be a month stale.
+    """
+    ring = api_keys(explicit)
+    if not ring:
         raise OddsAPIError(
-            "No Odds API key. Set ODDS_API_KEY in the environment or pass "
-            "api_key=... — get a free key at https://the-odds-api.com."
+            "No Odds API key. Set ODDS_API_KEY in the environment or in "
+            "secrets.local (ODDS_API_KEY_2, _3 … add spares) — get a free "
+            "key at https://the-odds-api.com."
         )
-    return key
+    try:
+        from ..oddsbudget import key_is_spent
+        for k in ring:
+            if not key_is_spent(k):
+                return k
+    except Exception:                    # budgeting must never block a fetch
+        pass
+    return ring[0]
 
 
 # --- name matching ----------------------------------------------------------
@@ -274,16 +363,25 @@ def _request(url: str, cache_name: str, ttl: int = 300,
             # record it explicitly — otherwise the budgeter keeps believing the
             # assumed balance and retries a call that cannot succeed.
             if "OUT_OF_USAGE_CREDITS" in detail or "quota has been reached" in detail:
+                spent = _url_key(url)
                 try:
-                    from ..oddsbudget import record_quota
-                    record_quota(0, None)
+                    from ..oddsbudget import mark_key_spent
+                    mark_key_spent(spent)
                 except Exception:
                     pass
+                # A ring exists so that one empty plan is not the end of the
+                # night. Swap in the next key with credits and retry the same
+                # request — the call cost nothing, because it was refused.
+                nxt = _next_key(spent)
+                if nxt:
+                    return _request(_with_key(url, nxt), cache_name, ttl=ttl,
+                                    timeout=timeout, cache_only=cache_only)
                 raise OddsAPIError(
-                    "Odds API monthly quota is exhausted. Real book lines are "
-                    "unavailable until the plan resets; scores, projections and "
-                    "the rest of the app keep working. See the-odds-api.com for "
-                    "your reset date or a larger plan."
+                    "Every Odds API key is out of credits. Real book lines are "
+                    "unavailable until a plan resets; scores, projections and "
+                    "the rest of the app keep working. Add another key as "
+                    "ODDS_API_KEY_2 in secrets.local, or see the-odds-api.com "
+                    "for your reset date."
                 ) from exc
             raise OddsAPIError(f"Odds API auth/quota error {exc.code}: {detail}") from exc
         raise OddsAPIError(f"Odds API HTTP {exc.code}: {detail}") from exc
@@ -298,7 +396,7 @@ def _request(url: str, cache_name: str, ttl: int = 300,
     # real account rather than an assumption.
     try:
         from ..oddsbudget import record_quota
-        record_quota(quota.remaining, quota.used)
+        record_quota(quota.remaining, quota.used, key=_url_key(url))
     except Exception:      # budgeting must never break a fetch
         pass
     return json.loads(body), quota

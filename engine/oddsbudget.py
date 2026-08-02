@@ -62,6 +62,10 @@ SPARSE_INTERVAL = 12 * 3600
 
 @dataclass
 class BudgetState:
+    # The POOL, not one plan. With more than one key attached this is the sum
+    # of what every unspent key has left — the pacer is deciding whether the
+    # operation can afford a pull, and the operation can afford it if any key
+    # can pay for it.
     remaining: int = ASSUMED_MONTHLY
     used: int = 0
     last_refresh_ts: float = 0.0
@@ -76,6 +80,10 @@ class BudgetState:
     # NFL board would never get a paid pull of its own. The credit BUDGET
     # stays shared (it's one API plan); only the pacing clock splits.
     sport_last_refresh: dict = field(default_factory=dict)
+    # Per-key quota, keyed by a short fingerprint rather than the key itself —
+    # this file is not a place to write a secret, even a gitignored one.
+    # {fingerprint: {"remaining": int, "used": int, "spent_ts": float}}
+    keys: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -113,6 +121,8 @@ def load(path: Path | str = STATE_PATH) -> BudgetState:
             last_seen_iso=str(raw.get("last_seen_iso", "")),
             retry_after_ts=float(raw.get("retry_after_ts", 0.0)),
             sport_last_refresh=per_sport,
+            keys={str(k): dict(v) for k, v in (raw.get("keys") or {}).items()
+                  if isinstance(v, dict)},
         )
     except (ValueError, OSError, TypeError):
         return BudgetState()
@@ -124,9 +134,88 @@ def save(state: BudgetState, path: Path | str = STATE_PATH) -> None:
     path.write_text(json.dumps(state.to_dict(), indent=2))
 
 
-def record_quota(remaining, used=None, path: Path | str = STATE_PATH) -> BudgetState:
+# --- the key ring ------------------------------------------------------------
+def fingerprint(key: str) -> str:
+    """A short, stable, non-reversible id for a key.
+
+    The state file lives in a gitignored cache directory, which is not the
+    same as being a safe place to write a secret. A fingerprint is enough to
+    tell two keys apart and useless to anyone who reads it.
+    """
+    import hashlib
+    return hashlib.sha256((key or "").encode("utf-8")).hexdigest()[:8]
+
+
+# These three resolve STATE_PATH at CALL time, not in the signature. A
+# default argument binds once, when the function is defined, so
+# `path=STATE_PATH` cannot be redirected by reassigning the module attribute
+# — which is exactly how a test (and a caller wanting a different state file)
+# would try to redirect it, and it would silently keep writing to the real
+# one. The same trap cost a whole test file its meaning earlier in this
+# project; it is not a hypothetical.
+def key_state(key: str, path: Path | str | None = None) -> dict:
+    return load(path or STATE_PATH).keys.get(fingerprint(key), {})
+
+
+def key_is_spent(key: str, path: Path | str | None = None) -> bool:
+    """True when this key has nothing left.
+
+    A key that has never been used is NOT spent — unknown is not zero, and
+    treating it as zero would refuse to try a key that might be full.
+    """
+    st = key_state(key, path or STATE_PATH)
+    if st.get("spent_ts"):
+        return True
+    rem = st.get("remaining")
+    return rem is not None and int(rem) <= 0
+
+
+def mark_key_spent(key: str, path: Path | str | None = None) -> BudgetState:
+    """Record that the API refused this key for want of credits."""
+    path = path or STATE_PATH
+    state = load(path)
+    fp = fingerprint(key)
+    entry = dict(state.keys.get(fp, {}))
+    entry.update(remaining=0, spent_ts=time.time())
+    state.keys[fp] = entry
+    state.remaining = _pool_remaining(state)
+    save(state, path)
+    return state
+
+
+def _pool_remaining(state: BudgetState) -> int:
+    """What the whole ring has left.
+
+    Keys we have never called contribute nothing to the sum — counting an
+    unmeasured key as a full plan would let the pacer spend against credits
+    that may not exist. The ring is still TRIED in full; only the arithmetic
+    is conservative.
+    """
+    known = [int(v.get("remaining", 0)) for v in state.keys.values()
+             if v.get("remaining") is not None]
+    return max(0, sum(known)) if known else state.remaining
+
+
+def record_quota(remaining, used=None, path: Path | str = STATE_PATH,
+                 key: str | None = None) -> BudgetState:
     """Store the quota the API just reported. Non-numeric values are ignored."""
     state = load(path)
+    if key:
+        fp = fingerprint(key)
+        entry = dict(state.keys.get(fp, {}))
+        try:
+            entry["remaining"] = int(remaining)
+            if int(remaining) > 0:
+                entry.pop("spent_ts", None)
+        except (TypeError, ValueError):
+            pass
+        try:
+            entry["used"] = int(used)
+        except (TypeError, ValueError):
+            pass
+        state.keys[fp] = entry
+        save(state, path)
+        state = load(path)
     try:
         state.remaining = int(remaining)
     except (TypeError, ValueError):
@@ -135,6 +224,12 @@ def record_quota(remaining, used=None, path: Path | str = STATE_PATH) -> BudgetS
         state.used = int(used)
     except (TypeError, ValueError):
         pass
+    # With a ring attached, the headline balance is the POOL. One key
+    # reporting zero must not read as "the operation is out of credits" while
+    # a second key sits untouched — that is the whole point of the ring, and
+    # the pacer only ever looks at this number.
+    if state.keys:
+        state.remaining = _pool_remaining(state)
     state.last_seen_iso = _dt.datetime.now().isoformat(timespec="seconds")
     save(state, path)
     return state

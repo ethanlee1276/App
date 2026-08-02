@@ -3,6 +3,8 @@
 Put your keys in ``secrets.local`` at the project root, one per line::
 
     ODDS_API_KEY=your_key_here
+    ODDS_API_KEY_2=a_second_plans_key      # optional spare, tried when the
+    ODDS_API_KEY_3=a_third                 # one above runs out of credits
 
 That file is gitignored, so your keys stay on your machine and never get
 committed or pushed. Values already set in the real environment win, so you can
