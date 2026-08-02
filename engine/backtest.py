@@ -121,12 +121,51 @@ class BacktestReport:
     # keeps the subset that actually answers "did we beat the book" visible.
     segments: dict = field(default_factory=dict)
 
+    def skill(self) -> dict | None:
+        """Brier is meaningless without the number it has to beat.
+
+        "Brier 0.2373" reads like a score out of something. It is not. The
+        bar is what you would score by ignoring the model entirely and
+        predicting the base rate every time — p(1−p) — and on a 57% market
+        that is 0.245. Beating it by 0.008 is a very different claim from
+        the one "Brier 0.2373, ECE 0.024" appears to make.
+
+        SHARPNESS is the other half, and calibration hides it completely. A
+        model that answers "about 50%" to everything is perfectly
+        calibrated and perfectly useless, and it shows up here as a large
+        share of forecasts hugging the base rate. That matters directly for
+        betting: an unsharp model disagrees with a confident market by a
+        lot, in both directions, and every one of those disagreements looks
+        like an edge without being one.
+        """
+        pairs = [(p, o) for p, o in self.pairs if p is not None and o is not None]
+        if len(pairs) < 100:
+            return None
+        base = sum(o for _, o in pairs) / len(pairs)
+        base_brier = base * (1 - base)
+        if base_brier <= 0:
+            return None
+        near = sum(1 for p, _ in pairs if abs(p - base) <= 0.05)
+        return {"n": len(pairs), "base_rate": base, "base_brier": base_brier,
+                "skill": 1 - self.brier / base_brier,
+                "hedged": near / len(pairs)}
+
     def summary(self) -> str:
         lines = [
             f"Backtest over {self.n} settled props",
             f"  Projection  MAE {self.mae:.2f}   RMSE {self.rmse:.2f}",
             f"  Calibration Brier {self.brier:.4f}   ECE {self.ece:.3f}",
         ]
+        sk = self.skill()
+        if sk:
+            lines.append(
+                f"  Skill       base rate {sk['base_rate']:.1%} → "
+                f"always-guess Brier {sk['base_brier']:.4f}; "
+                f"model beats it by {sk['skill']:+.1%}")
+            lines.append(
+                f"  Sharpness   {sk['hedged']:.0%} of forecasts sit within "
+                f"5pts of the base rate"
+                + ("  ← hedging, not forecasting" if sk["hedged"] > 0.5 else ""))
         for b in self.bins:
             if b.n:
                 lines.append(f"    p {b.lo:.1f}-{b.hi:.1f}: predicted {b.mean_pred:.0%} "
