@@ -266,6 +266,21 @@ def _dh_game_id(g) -> str:
     return f"{g.away}@{g.home}" + (f"-G{gn}" if gn > 1 else "")
 
 
+def _game_state(g) -> str:
+    """This game's state, from whichever field the builder actually filled.
+
+    ``g.live`` is set by attach_live, which only the site build calls, so in
+    the ingest it is always None. ``build_live_slate`` does know the state —
+    it reads abstractGameState off the schedule — so the builder stamps it
+    on the game as ``sched_state`` and this prefers that. Empty means
+    genuinely unknown, and the caller decides what unknown implies.
+    """
+    live = getattr(g, "live", None)
+    if live is not None and getattr(live, "state", ""):
+        return str(live.state)
+    return str(getattr(g, "sched_state", "") or "")
+
+
 def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
     """Game + player-log rows from a live MLB slate. Player logs use the game
     index within the season as the sortable period."""
@@ -286,10 +301,30 @@ def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
     # ingested partial row is enough for the settler to grade tonight's
     # bet mid-game (the premature "lost" bug). Same-date log rows for
     # these teams are withheld until the team's day is truly final.
+    #
+    # This guard was dead for its entire life. It reads ``g.live``, which is
+    # populated by ``attach_live`` — called ONLY by mlb_build.py, never by
+    # the ingest. So ``st`` was always "", the `if st and ...` was always
+    # False, and teams_in_play was always empty: every partial line from a
+    # game in progress went straight into the history DB, where the settler
+    # graded tonight's bets against it. An OVER already past its line grades
+    # early, which merely looks wrong; an UNDER grades as a WIN in the
+    # fourth inning and then the man doubles.
+    #
+    # Two changes. The state is now read from the schedule the builder
+    # already fetched rather than from a field nobody set. And on TODAY's
+    # slate the default flips: a game we cannot positively confirm as final
+    # is treated as in play. Absence of evidence that a game is over is not
+    # evidence that it is over. Past dates keep the old permissive rule —
+    # those games are finished by definition, and being strict there would
+    # withhold every row of an ordinary backfill.
+    import datetime as _dt2
+    today = _dt2.date.today().isoformat()
     teams_in_play = set()
     for g in slate.games:
-        st = (getattr(g, "live", None) and getattr(g.live, "state", "")) or ""
-        if st and st != "final":
+        st = str(_game_state(g)).lower()
+        unsafe = (st != "final") if date >= today else (st and st != "final")
+        if unsafe:
             teams_in_play.update((g.home, g.away))
     prows = []
     # Doubleheader stat lines: a player has TWO same-date log entries and

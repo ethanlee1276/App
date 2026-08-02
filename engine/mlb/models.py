@@ -127,6 +127,13 @@ class MLBGame:
     weather: MLBWeather = field(default_factory=MLBWeather)
     lineups_confirmed: bool = True
     live: Optional["object"] = None            # engine.models.LiveStatus
+    # The schedule's own abstractGameState, lowercased ("final", "live",
+    # "preview"), stamped by build_live_slate. ``live`` above is richer but
+    # is only filled by attach_live, which the site build calls and the
+    # ingest does not — so anything that must know whether a game is over
+    # WITHOUT the live overlay reads this instead. Empty = genuinely
+    # unknown, which is not the same as "over".
+    sched_state: str = ""
     # starting pitcher and bullpen rank (1 best .. 30 worst) per team
     pitchers: dict[str, Pitcher] = field(default_factory=dict)
     bullpen_rank: dict[str, int] = field(default_factory=dict)

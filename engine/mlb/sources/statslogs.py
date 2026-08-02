@@ -297,6 +297,16 @@ def build_live_slate(date: str, season: int | None = None,
                 leg.doubleheader = True
     finals = {id(game): (g.get("status", {}).get("abstractGameState") == "Final")
               for g, game, *_rest in raw}
+    # Stamp the schedule's own state onto the game. It was already being read
+    # here and then thrown away, so the only consumer that knew whether a
+    # game was over was this function. The ingest's "don't store a partial
+    # stat line from a game in progress" guard reads g.live, which is filled
+    # by attach_live — called only by the site build — so in the ingest it
+    # was always None and the guard never fired once. Every in-progress line
+    # went into the history DB and the settler graded live bets against it.
+    for g, game, *_rest in raw:
+        game.sched_state = str(
+            (g.get("status", {}) or {}).get("abstractGameState") or "").lower()
     for pair, legs in by_pair.items():
         pg = next((x for x in legs if not finals.get(id(x))), legs[0])
         prop_games.add(id(pg))
