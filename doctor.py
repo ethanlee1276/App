@@ -1,0 +1,316 @@
+#!/usr/bin/env python3
+"""One command that answers "is anything wrong?" — and exits nonzero if so.
+
+The diagnostics already existed, scattered across nine launcher flags:
+--check, --stuck, --data-audit, --odds-doctor, --coverage, --why-empty.
+Each answers one question well, and running all nine by hand every morning
+is a thing nobody does. So they were only ever run AFTER something looked
+broken — which is the one time a health check is too late to help.
+
+This composes them into a single pass with a verdict. Every check is
+independent and wrapped: a check that throws reports itself as a failed
+check rather than taking the run down with it, because a health monitor
+that goes silent when it breaks is worse than no monitor at all.
+
+    python3 doctor.py              # full pass, human-readable
+    python3 doctor.py --quiet      # findings only — nothing if all clear
+    python3 doctor.py --json       # machine-readable, for an agent
+    python3 doctor.py --skip-tests # the slow one, when iterating
+
+Exit codes: 0 all clear · 1 warnings only · 2 something needs a human.
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).parent
+sys.path.insert(0, str(ROOT))
+
+OK, WARN, FAIL = "ok", "warn", "fail"
+_RANK = {OK: 0, WARN: 1, FAIL: 2}
+
+# A slate JSON older than this means the launcher is not running. Six hours
+# clears an overnight gap on a laptop that was closed, without letting a
+# genuinely dead refresh loop hide for a full day.
+STALE_SLATE_H = 6
+# Player logs this far behind for a sport with recent games means the
+# ingest is not keeping up. Two days survives a normal off-day.
+STALE_LOGS_D = 2
+# Below this many credits, a busy evening can run the month dry.
+LOW_CREDITS = 2000
+
+
+class Report:
+    def __init__(self):
+        self.checks: list[dict] = []
+
+    def add(self, name, status, detail, fix=""):
+        self.checks.append({"check": name, "status": status,
+                            "detail": detail, "fix": fix})
+
+    @property
+    def verdict(self):
+        return max((_RANK[c["status"]] for c in self.checks), default=0)
+
+
+def _check(rep, name):
+    """Decorator-ish helper: run a check, and turn a crash INTO a finding.
+
+    A bare try/except that swallows would make a broken check look healthy,
+    which is the specific failure mode that makes monitoring worthless."""
+    def run(fn):
+        try:
+            fn()
+        except Exception as exc:
+            rep.add(name, FAIL, f"the check itself failed: {exc!r}",
+                    "this is a bug in doctor.py, not necessarily in the app")
+    return run
+
+
+# --- checks -----------------------------------------------------------------
+def check_tests(rep):
+    @_check(rep, "test suite")
+    def _():
+        p = subprocess.run([sys.executable, "run_tests.py"], cwd=ROOT,
+                           capture_output=True, text=True, timeout=900)
+        tail = (p.stdout or "").strip().splitlines()
+        last = tail[-1] if tail else "(no output)"
+        if p.returncode == 0:
+            rep.add("test suite", OK, last)
+        else:
+            bad = [l.strip() for l in tail if "❌" in l or "FAIL" in l]
+            rep.add("test suite", FAIL,
+                    f"{last} · {len(bad)} failing file(s): {', '.join(bad[:5])}",
+                    "python3 run_tests.py")
+
+
+def check_stuck_bets(rep):
+    @_check(rep, "stuck bets")
+    def _():
+        from engine import db, ledger
+        today = _dt.date.today().isoformat()
+        rows = ledger.why_open(ledger.connect(), db.connect(), today)
+        if not rows:
+            rep.add("stuck bets", OK,
+                    "no open pick is older than the settle window")
+            return
+        by = {}
+        for r in rows:
+            by[r["reason"]] = by.get(r["reason"], 0) + 1
+        why = " · ".join(f"{n} {k}" for k, n in
+                         sorted(by.items(), key=lambda x: -x[1]))
+        # "no results ingested" is fixable by a command; the rest usually
+        # mean a scratch or a name mismatch and need eyes.
+        only_ingest = set(by) == {"no results ingested"}
+        rep.add("stuck bets", WARN if only_ingest else FAIL,
+                f"{len(rows)} open pick(s) whose day is done — {why}",
+                "python3 launch.py --stuck")
+
+
+def check_slate_freshness(rep):
+    @_check(rep, "site data")
+    def _():
+        now = time.time()
+        stale, missing = [], []
+        wanted = {"mlb_recommendations.json": "MLB",
+                  "recommendations.json": "NFL",
+                  "nba.json": "NBA", "wnba.json": "WNBA",
+                  "cfb.json": "CFB", "ufc.json": "UFC"}
+        for fn, label in wanted.items():
+            p = ROOT / "web" / "data" / fn
+            if not p.exists():
+                missing.append(label)
+                continue
+            age_h = (now - p.stat().st_mtime) / 3600
+            if age_h > STALE_SLATE_H:
+                stale.append(f"{label} {age_h:.0f}h")
+        if not stale and not missing:
+            rep.add("site data", OK, "every slate rebuilt within "
+                                     f"{STALE_SLATE_H}h")
+            return
+        bits = []
+        if stale:
+            bits.append("stale: " + ", ".join(stale))
+        if missing:
+            bits.append("never built: " + ", ".join(missing))
+        # Missing is normal out of season; stale means the loop stopped.
+        rep.add("site data", WARN if not stale else FAIL, " · ".join(bits),
+                "is `python3 launch.py` still running?")
+
+
+def check_ingest_freshness(rep):
+    @_check(rep, "results ingest")
+    def _():
+        from engine import db
+        h = db.connect()
+        today = _dt.date.today()
+        behind = []
+        # The column is `period`, not `date` — for MLB/NBA it holds the game
+        # date, for NFL a week label like "2026-W1". Anything that is not a
+        # calendar date is skipped rather than string-compared, which is the
+        # mistake that once made --stuck hide every football bet.
+        for r in h.execute(
+                "SELECT sport, MAX(period) d FROM games "
+                "WHERE home_score IS NOT NULL GROUP BY sport"):
+            try:
+                last = _dt.date.fromisoformat(r["d"])
+            except (ValueError, TypeError):
+                continue
+            gap = (today - last).days
+            # Only a complaint if that sport has games scheduled since the
+            # last stored final — otherwise it is simply the off-season.
+            since = h.execute(
+                "SELECT COUNT(*) FROM games WHERE sport=? AND period>? "
+                "AND period<=?",
+                (r["sport"], r["d"], today.isoformat())).fetchone()[0]
+            if gap > STALE_LOGS_D and since:
+                behind.append(f"{r['sport'].upper()} last final {r['d']} "
+                              f"({gap}d ago, {since} game(s) since)")
+        if behind:
+            rep.add("results ingest", FAIL, " · ".join(behind),
+                    "python3 ingest.py <sport> --seasons <yr>")
+        else:
+            rep.add("results ingest", OK,
+                    "every in-season sport has finals through its last game")
+
+
+def check_odds_budget(rep):
+    @_check(rep, "odds budget")
+    def _():
+        from engine import oddsbudget as ob
+        st = ob.load()
+        remaining = getattr(st, "remaining", None)
+        days = ob.days_left_in_month()
+        if remaining is None:
+            rep.add("odds budget", WARN, "no quota recorded yet — the next "
+                    "paid pull will read it", "python3 launch.py --odds-doctor")
+            return
+        per_day = remaining / max(1, days)
+        status = OK if remaining > LOW_CREDITS else WARN
+        rep.add("odds budget", status,
+                f"{remaining:,} credit(s) left · {days} day(s) in the month "
+                f"· {per_day:,.0f}/day available",
+                "python3 launch.py --odds-doctor" if status != OK else "")
+
+
+def check_journal_sanity(rep):
+    @_check(rep, "bet journal")
+    def _():
+        from engine import ledger
+        c = ledger.connect()
+        problems = []
+        n_open = c.execute(
+            "SELECT COUNT(*) FROM bets WHERE status='open'").fetchone()[0]
+        neg = c.execute(
+            "SELECT COUNT(*) FROM bets WHERE stake_units < 0").fetchone()[0]
+        if neg:
+            problems.append(f"{neg} bet(s) with a negative stake")
+        noodds = c.execute(
+            "SELECT COUNT(*) FROM bets WHERE odds IS NULL "
+            "AND status!='open'").fetchone()[0]
+        if noodds:
+            problems.append(f"{noodds} settled bet(s) with no price — "
+                            "their P&L is guesswork")
+        bank = ledger.bankroll(c)
+        if bank <= 0:
+            problems.append(f"bankroll is ${bank:,.2f}")
+        if problems:
+            rep.add("bet journal", FAIL, " · ".join(problems),
+                    "python3 launch.py --data-audit")
+        else:
+            rep.add("bet journal", OK,
+                    f"{n_open} open · bankroll ${bank:,.2f} · no bad rows")
+
+
+def check_record_page(rep):
+    @_check(rep, "record page")
+    def _():
+        from engine import ledger
+        p = ROOT / "web" / "data" / "record.json"
+        if not p.exists():
+            rep.add("record page", FAIL, "record.json has never been written",
+                    "python3 launch.py --settle all")
+            return
+        d = json.loads(p.read_text(encoding="utf-8"))
+        c = ledger.connect()
+        settled = c.execute("SELECT COUNT(*) FROM bets WHERE "
+                            "status IN ('won','lost','push') "
+                            "AND category='main'").fetchone()[0]
+        shown = ((d.get("overall") or {}).get("settled")
+                 or (d.get("performance") or {}).get("settled"))
+        age_h = (time.time() - p.stat().st_mtime) / 3600
+        if shown is not None and shown != settled:
+            rep.add("record page", FAIL,
+                    f"the page shows {shown} settled bet(s), the journal has "
+                    f"{settled} — the export is behind",
+                    "python3 launch.py --settle all")
+        else:
+            rep.add("record page", OK,
+                    f"{settled} settled bet(s), written {age_h:.0f}h ago")
+
+
+def check_git(rep):
+    @_check(rep, "git")
+    def _():
+        p = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT,
+                           capture_output=True, text=True, timeout=60)
+        dirty = [l for l in p.stdout.splitlines() if l.strip()]
+        # Data files change every build; they are not "uncommitted work".
+        code = [l for l in dirty if not l.split()[-1].startswith("web/data/")
+                and not l.split()[-1].startswith("data/")]
+        if code:
+            rep.add("git", WARN, f"{len(code)} uncommitted code file(s): "
+                    + ", ".join(l.split()[-1] for l in code[:4]),
+                    "git status")
+        else:
+            rep.add("git", OK, "no uncommitted code changes")
+
+
+CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
+          check_ingest_freshness, check_odds_budget, check_journal_sanity,
+          check_record_page, check_git]
+
+
+def run(skip_tests: bool = False) -> Report:
+    rep = Report()
+    for fn in CHECKS:
+        if skip_tests and fn is check_tests:
+            continue
+        fn(rep)
+    return rep
+
+
+def main(argv: list[str]) -> int:
+    rep = run(skip_tests="--skip-tests" in argv)
+    if "--json" in argv:
+        print(json.dumps({"verdict": ["ok", "warn", "fail"][rep.verdict],
+                          "checks": rep.checks}, indent=2))
+        return rep.verdict
+
+    quiet = "--quiet" in argv
+    mark = {OK: "✅", WARN: "⚠️ ", FAIL: "❌"}
+    rows = [c for c in rep.checks if not quiet or c["status"] != OK]
+    if not quiet:
+        print(f"Qellys Book — health check · "
+              f"{_dt.datetime.now():%a %b %-d, %-I:%M %p}\n")
+    for c in rows:
+        print(f"{mark[c['status']]} {c['check']:<16} {c['detail']}")
+        if c["fix"] and c["status"] != OK:
+            print(f"   ↳ {c['fix']}")
+    if rep.verdict == 0:
+        if not quiet:
+            print("\nAll clear.")
+    else:
+        n = sum(1 for c in rep.checks if c["status"] != OK)
+        print(f"\n{n} thing(s) need attention.")
+    return rep.verdict
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
