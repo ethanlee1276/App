@@ -365,6 +365,25 @@ blending there. Rendered under "The recipe itself, refit" on the Record
 page, including "default kept" rows: a dial the record examined and left
 alone is a result.
 
+### BUILT 2026-08-03 — player memory (`engine/playerfit.py`)
+
+Rung three: learn WHO the blend misreads. Per player and market, one
+multiplicative correction on the projected mean — the accumulated ratio
+of what he produced to what the model projected, shrunk toward 1.0 by
+evidence (40 games of prior strength) and clamped to ±15%, with the
+clamp re-enforced at read so a hand-edited store cannot be obeyed. The
+mechanism must earn adoption per market: applying corrections CAUSALLY
+(each game's correction computed strictly from that player's earlier
+games — out-of-sample at every row) must beat the uncorrected model's
+walk-forward Brier by the standard margin on the standard sample.
+"Memory off" ships on the page as a result. The ledger accumulates the
+RAW blend's projections — the correction divided back out — or the
+memory would learn to correct itself and spiral. Home runs excluded:
+the rare-event empirical-Bayes rate already is a per-player learner.
+
+Run order across the ladder's fitters, each shaping the model the next
+one measures: `formfit.py` → `playerfit.py` → `calibrate.py`.
+
 ### WON'T — a language model anywhere in the pricing path
 
 Not a capability judgement, a structural one. We just finished publishing a

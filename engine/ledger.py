@@ -2225,6 +2225,14 @@ def self_tuning_report(hist_conn=None) -> dict:
         out["weights"] = ff.report(ff.DEFAULT_PATH)
     except Exception:                              # noqa: BLE001
         out["weights"] = []
+    # Rung three: per-player memory (engine/playerfit.py) — who the blend
+    # misreads, with "memory off" rows shipped too: a memory the record
+    # tried and rejected is part of the story.
+    try:
+        from . import playerfit as pfit
+        out["players"] = pfit.report(pfit.DEFAULT_PATH)
+    except Exception:                              # noqa: BLE001
+        out["players"] = []
     if hist_conn is not None:
         try:
             from . import calibhistory as ch

@@ -3497,6 +3497,26 @@ function recSelfTuningSection(st) {
       run; the record moves it only by beating the spec curve in a walk-forward
       test, and a dial it examined and left alone says so.</span></div>
     <div class="card" style="padding:0">${weightRows}</div>`;
+  const playerRows = (st.players || []).map((p) => `
+    <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
+        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+      <span class="chip">${escapeHtml((p.sport || "").toUpperCase())}</span>
+      <span style="min-width:100px">${escapeHtml(p.market || "")}</span>
+      <span style="flex:1;min-width:140px;color:${p.adopted ? "var(--warn)" : "var(--good)"}">${escapeHtml(p.reading || "")}</span>
+      ${(p.top || []).length ? `<span style="opacity:.75">${(p.top || [])
+        .map((t) => `${escapeHtml(t.player)} ×${(t.mult ?? 1).toFixed(2)}`)
+        .join(" · ")}</span>` : ""}
+      <span style="opacity:.5;font-variant-numeric:tabular-nums">n=${(p.samples ?? 0).toLocaleString()}</span>
+      ${p.adopted && p.brier_baseline != null && p.brier_corrected != null
+        ? `<span style="opacity:.6;font-variant-numeric:tabular-nums" title="Walk-forward Brier, memory off → on; each game's correction knew only earlier games">${p.brier_baseline.toFixed(4)} → ${p.brier_corrected.toFixed(4)}</span>` : ""}
+    </div>`).join("");
+  const playersBlock = !playerRows ? "" : `
+    <div class="section-title">Player memory
+      <span class="sub">— who the blend persistently misreads. Each correction is
+      shrunk by evidence and capped at ±15%, and the memory only switches on for
+      a market when remembering players out-predicted forgetting them in a
+      causal walk-forward test — "memory off" is a result, not a failure.</span></div>
+    <div class="card" style="padding:0">${playerRows}</div>`;
   const trendRows = Object.entries(st.trend || {}).flatMap(([sport, mkts]) =>
     Object.entries(mkts).map(([mk, t]) => `
       <div style="display:flex;gap:12px;align-items:baseline;padding:6px 14px;
@@ -3524,6 +3544,7 @@ function recSelfTuningSection(st) {
     </div>
     <div class="card" style="padding:0">${rows}</div>
     ${weightsBlock}
+    ${playersBlock}
     ${trendRows ? `<div class="section-title">Is it getting better?
         <span class="sub">— the same measurement over time, each sweep stamped with the commit
         that produced it, so a move ties to a change rather than to a memory.</span></div>

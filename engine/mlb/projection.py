@@ -82,7 +82,8 @@ def _rare_event_rate(prop: MLBProp, form: FormResult) -> float:
 
 
 def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None,
-                         form_weights: dict | None = None) -> MLBProjection:
+                         form_weights: dict | None = None,
+                         player_mult: float | None = None) -> MLBProjection:
     # Shared recent-form blend (last 1/3/5/10 + season + career + vs pitcher).
     logs = [GameLog(week=g.game, opponent=g.opponent, value=g.value, home=g.home)
             for g in prop.logs]
@@ -156,7 +157,14 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None,
         # streak of one homer in three games is noise, not form.
         base_mean = _rare_event_rate(prop, form)
         trend_mult = 1.0
-    mean = base_mean * total_mult * trend_mult
+    # Player memory (engine/playerfit.py): the record's earned correction
+    # for players the blend persistently misreads. An explicit
+    # ``player_mult`` (the fitter's causal walk, or the baseline's 1.0)
+    # always wins — the fitter must never read the store it is refitting.
+    if player_mult is None:
+        from ..playerfit import mult_for
+        player_mult = mult_for("mlb", prop.market, prop.player)
+    mean = base_mean * total_mult * trend_mult * player_mult
 
     cv_floor = CV_FLOOR.get(prop.market, 0.6) * max(base_mean, 0.1)
     base_std = max(form.std, cv_floor)
@@ -166,6 +174,10 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None,
 
     reasons: list[str] = []
     reasons += learned_reason
+    if abs(player_mult - 1.0) >= 0.02:
+        direction = "high" if player_mult < 1.0 else "low"
+        reasons.append(f"Player memory: the record shows the blend runs "
+                       f"{direction} on him — corrected ×{player_mult:.2f}")
     reasons += statcast_reasons
     if abs(ump_mult - 1.0) >= 0.02 and game.plate_umpire:
         direction = "elevates" if ump_mult > 1 else "suppresses"
