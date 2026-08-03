@@ -3312,6 +3312,95 @@ function calScoreBlock(cal) {
       website.</p>${disagree}</div>`;
 }
 
+/* Calibration split by market and by horizon.
+
+   The aggregate is the honest headline, and it is also where a real defect
+   hides: a model three points hot on one market and three cold on another
+   averages to a line that looks perfect. Measured on a test board, an
+   aggregate ECE of 7.4 points covered one market sitting dead on the
+   diagonal and another twenty points hot.
+
+   Behind a disclosure because it is diagnostic, not the answer — and
+   because a page that opens with eleven charts has no headline at all. */
+function calSplitRow(label, c) {
+  const ece = c.ece == null ? "—" : (c.ece * 100).toFixed(1) + " pts";
+  const tone = c.ece == null ? "" : c.ece <= 0.03 ? "var(--good)"
+    : c.ece <= 0.07 ? "var(--warn)" : "var(--bad)";
+  return `<div style="display:flex;gap:12px;align-items:baseline;padding:6px 0;
+      border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em">
+    <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+                 white-space:nowrap">${escapeHtml(label)}</span>
+    <span style="opacity:.5;font-variant-numeric:tabular-nums">n=${c.n}</span>
+    <span style="min-width:74px;text-align:right;color:${tone};
+                 font-variant-numeric:tabular-nums">${ece}</span>
+  </div>`;
+}
+
+function recCalibrationSplits(s) {
+  if (!s) return "";
+  // Raw market keys, as recBucketTable already shows them a few sections up.
+  // Two names for one market on one page is worse than one ugly name.
+  const mk = (s.markets || []).map((c) => calSplitRow(c.market, c)).join("");
+  const hz = (s.horizons || []).map((c) => calSplitRow(c.label, c)).join("");
+  if (!mk && !hz) return "";
+  const held = s.markets_held_back
+    ? `<p style="margin:6px 0 0;font-size:.82em;opacity:.55">
+        ${s.markets_held_back} more market(s) haven't reached ${s.min_n} graded
+        picks. They're in the headline number above — they just can't carry a
+        row of their own yet, because the band would be wider than any miss it
+        could show.</p>` : "";
+  // Degenerate means fewer than two buckets clear the bar — so the rows are
+  // worth showing but a COMPARISON between them is not yet supported. The
+  // first draft of this copy said "every pick resolves the day it was
+  // published" while a 1–3 day row sat underneath it, which is the kind of
+  // sentence that quietly teaches a reader to stop trusting the captions.
+  const hzBlock = !hz ? "" : s.horizon_degenerate
+    ? `<div class="section-title">By horizon</div>
+       <p style="margin:0;font-size:.85em;opacity:.6">Only one horizon has
+         reached ${s.min_n} graded picks, so there is nothing to compare
+         against yet — read these as counts, not as a trend. Calibration is
+         known to decay the further out you forecast, and this will say
+         something real once futures start settling.</p>${hz}`
+    : `<div class="section-title">By horizon
+         <span class="sub">— calibration decays the further out you forecast.</span></div>
+       ${hz}`;
+  return recDisclosure("Calibration by market and horizon", `
+    <p style="margin:0 0 8px;font-size:.85em;opacity:.7">Distance from the
+      diagonal, per slice. The headline number can look clean while covering a
+      market that runs hot and one that runs cold — they average out, and the
+      average is the one figure that cannot show it.</p>
+    ${mk ? `<div class="section-title">By market</div>${mk}${held}` : ""}
+    ${hzBlock}`);
+}
+
+/* The forecast log. "Permanent and time-stamped" is a promise until it is
+   checkable; this is what makes it checkable. */
+function recForecastLog(f) {
+  if (!f || !f.n) return "";
+  if (!f.ok) {
+    return `<div class="card" style="padding:12px 14px;margin-top:12px;
+        border-color:var(--bad)">
+      <strong style="color:var(--bad)">Forecast log broken at #${f.broken_at}.</strong>
+      <p style="margin:6px 0 0;font-size:.87em">Entries up to
+        #${f.verified_through} still verify; everything after that one is no
+        longer provable. Shown rather than hidden — a tamper-evident log that
+        hides its own alarm is decoration.</p></div>`;
+  }
+  return `<div class="card" style="padding:12px 14px;margin-top:12px">
+    <div style="font-size:.8em;letter-spacing:.04em;text-transform:uppercase;
+                opacity:.55">Forecast log · ${f.n.toLocaleString()} sealed</div>
+    <div style="font-family:var(--font-mono);font-size:.8em;word-break:break-all;
+                margin-top:4px;opacity:.85">${escapeHtml(f.head || "")}</div>
+    <p style="margin:6px 0 0;font-size:.84em;opacity:.62">Every pick is hashed
+      together with the hash before it, so editing or deleting any past
+      forecast changes every hash after it and the chain reports where. The
+      log holds only what was CLAIMED — never the result, the P&amp;L or the
+      closing line, which arrive later and would mean writing into a row
+      that is supposed to be frozen. Write this number down: if it ever
+      covers a different past, that is detectable rather than deniable.</p>
+  </div>`;
+}
+
 function recCalibrationSection(cal, era) {
   if (!cal || !cal.n || !(cal.buckets || []).length) return "";
   const rows = calBucketRows(cal.buckets);
@@ -3744,6 +3833,8 @@ async function renderRecord() {
           rather than repeating an unscoped number under a sport's name. */
       scoped ? "" : recEraSection(d.model_eras)}
     ${recCalibrationSection(src.calibration, src.calibration_era)}
+    ${scoped ? "" : recCalibrationSplits(d.calibration_splits)}
+    ${scoped ? "" : recForecastLog(d.forecast_log)}
     ${scoped ? "" : recHealthSection(d.account_health)}
     ${scoped ? "" : recLongshotSection(d.longshots)}
     ${scoped ? "" : recParlaySection(d.parlays)}

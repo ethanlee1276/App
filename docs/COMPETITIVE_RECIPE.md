@@ -131,9 +131,9 @@ than bankroll management.
 | **Log loss** | HAVE (2026-08-03) | the study names Brier *and* log loss; only Brier existed |
 | **Expected Calibration Error, published** | HAVE (2026-08-03) | ECE existed offline in `engine/backtest.py` and was never in the payload the site reads |
 | **Reliability diagram against the diagonal** | HAVE (2026-08-03) | the bucket bars were a table; a reliability diagram is a curve you compare to y=x |
-| Calibration by market | MISSING | the study: calibration degrades on thin markets |
-| Calibration by time horizon | MISSING | now that Futures ships, this matters — a season-long forecast and a tonight forecast should not share a chart |
-| Immutable, publicly hashed forecast log | MISSING | pre-registration so past forecasts cannot be quietly deleted |
+| Calibration by market | HAVE (2026-08-03) | `calibration_splits`, `engine/ledger.py`. A test board with aggregate ECE of 7.4 points covered one market on the diagonal and one twenty points hot. |
+| Calibration by time horizon | HAVE (2026-08-03) | same. Buckets at 0 / 1–3 / 4–14 / 15+ days; reports `horizon_degenerate` when fewer than two buckets clear the sample bar, rather than drawing a one-bar chart. |
+| Immutable, publicly hashed forecast log | HAVE (2026-08-03) | `forecast_log` table, `seal_forecasts` / `verify_forecast_log`. Each row's hash covers the row and the hash before it; the head is published on the Record page. |
 
 ### Data differentiators
 
@@ -228,10 +228,8 @@ In the study's own staging, and roughly in the order the study argues for:
 
 1. ~~**Product mix in the longevity score**~~ — built 2026-08-03.
 2. ~~**Say what longevity cannot know.**~~ — built 2026-08-03.
-3. **Calibration by market and by horizon** (Stage 2b). Now that Futures
-   ships, a season forecast and a tonight forecast share a chart and should
-   not.
-4. **Immutable hashed forecast log** (Stage 2b).
+3. ~~**Calibration by market and by horizon**~~ — built 2026-08-03.
+4. ~~**Immutable hashed forecast log**~~ — built 2026-08-03.
 5. **Kalshi as a pricing source, then cross-market edge vs traditional
    books** (Stage 2a). The largest piece of genuinely new work, and the one
    with real regulatory uncertainty attached.

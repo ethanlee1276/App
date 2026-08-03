@@ -506,7 +506,37 @@ def refresh_all(quiet: bool = False) -> None:
     refresh_standings(quiet=quiet)
     _arbitrate_parlays(quiet=quiet)
     _journal_parlays(quiet=quiet)
+    _seal_forecasts(quiet=quiet)
     _run_futures(quiet=quiet)
+
+
+def _seal_forecasts(quiet: bool = False) -> None:
+    """Chain tonight's picks into the forecast log — LAST, after everything
+    that journals a bet has run.
+
+    A sweep rather than a hook on each INSERT. Eight-plus places write a
+    bet and a new one appears every time a sport does; a per-site hook is
+    one somebody forgets, and a forecast log with a hole in it is worse
+    than none, because it still looks complete. This cannot be forgotten
+    and it is idempotent.
+    """
+    try:
+        from engine import ledger as _led
+        conn = _led.connect()
+        n = _led.seal_forecasts(conn)
+        v = _led.verify_forecast_log(conn)
+        conn.close()
+        if not quiet and n:
+            print(f"  forecast log   : +{n} sealed, {v['n']} total, "
+                  f"head {(v['head'] or '')[:12]}")
+        if not v["ok"]:
+            # Loud regardless of quiet: this is the one failure on the site
+            # that means a published claim is no longer provable.
+            print(f"  ⚠️  FORECAST LOG BROKEN at #{v['broken_at']} — "
+                  f"verified through #{v.get('verified_through')}")
+    except Exception as exc:                           # noqa: BLE001
+        if not quiet:
+            print(f"  ⚠️  forecast log seal failed: {exc}")
 
 
 def _journal_parlays(quiet: bool = False) -> None:

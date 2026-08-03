@@ -55,7 +55,31 @@ CREATE TABLE IF NOT EXISTS bets (
 );
 """
 
-SCHEMA = _BETS_TABLE + """
+#: The forecast log: what we said, when we said it, chained.
+#:
+#: "Permanent and time-stamped" is a promise until it is checkable. This
+#: makes it checkable. Each row's hash covers the row's own content AND the
+#: previous row's hash, so editing or deleting any past forecast changes
+#: every hash after it — and `verify_forecast_log` finds the first break.
+#: Publishing the head hash is what turns that into a public commitment:
+#: a reader who wrote down last week's head can prove nothing before it
+#: moved.
+#:
+#: It stores the FORECAST ONLY — never the outcome, the P&L or the closing
+#: line. Those arrive later and would have to be written into a row that is
+#: supposed to be frozen. The bets table remains the mutable record of what
+#: happened; this is the immutable record of what was claimed beforehand.
+_FORECAST_LOG = """
+CREATE TABLE IF NOT EXISTS forecast_log (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    sealed_ts TEXT, bet_id INTEGER UNIQUE,
+    ts TEXT, sport TEXT, date TEXT, player TEXT, market TEXT, side TEXT,
+    line REAL, odds INTEGER, hit_prob REAL, category TEXT,
+    prev_hash TEXT, hash TEXT
+);
+"""
+
+SCHEMA = _BETS_TABLE + _FORECAST_LOG + """
 CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
 """
 
@@ -1826,6 +1850,29 @@ def recent_settled(conn, limit: int = 30, category: str = "main",
     return out
 
 
+#: A split has to earn its own chart. Below this many graded picks the
+#: confidence band is wider than any miss it could show, so the row would
+#: report noise with the authority of a measurement. The aggregate already
+#: covers those bets — they are not dropped, just not given a headline.
+SPLIT_MIN_N = 40
+
+#: Days from journaling a pick to the event it resolves on. `ts` carries a
+#: full timestamp and `date` is the slate day, so both are cut to a day
+#: before subtracting — otherwise a pick published at 6pm for tomorrow's
+#: game measures 0.75 days and floors to zero.
+_HORIZON_SQL = "CAST(julianday(date) - julianday(substr(ts, 1, 10)) AS INTEGER)"
+
+#: Horizon buckets, in days. Open-ended at the top because a futures bet has
+#: no natural ceiling — and the label is chosen so a board where everything
+#: lands in one bucket reads as "we only bet tonight", which is true and
+#: worth knowing, rather than as a broken chart.
+HORIZON_BUCKETS = [
+    ("Same day", 0, 1),
+    ("1–3 days", 1, 4),
+    ("4–14 days", 4, 15),
+    ("15+ days", 15, None),
+]
+
 #: Log loss is unbounded at the ends — a 0% forecast on something that
 #: happened costs infinity, which would make one row swallow the whole
 #: score and turn an honesty metric into a single-row lottery. Clamping to
@@ -1842,7 +1889,9 @@ def _log_loss_one(p: float, won: float) -> float:
 
 
 def calibration(conn, category: str = "main", bucket_pts: int = 5,
-                since: str | None = None, sport: str | None = None) -> dict:
+                since: str | None = None, sport: str | None = None,
+                market: str | None = None,
+                horizon: tuple[int, int | None] | None = None) -> dict:
     """Predicted vs realized, in probability buckets — the public honesty page.
 
     Groups every settled won/lost bet by the model's claimed hit probability
@@ -1883,6 +1932,22 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5,
         # nobody should trust.
         q += " AND sport=?"
         args.append(sport)
+    if market:
+        # Per-market: the study's point is that calibration degrades on thin
+        # markets, and an aggregate hides exactly that. A model 3 points hot
+        # on total bases and 3 cold on strikeouts averages to a clean line.
+        q += " AND market=?"
+        args.append(market)
+    if horizon is not None:
+        # Days between journaling a pick and the event it resolves on. A
+        # tonight prop and a season-long futures bet answer different
+        # questions and should not share a chart.
+        lo, hi = horizon
+        q += " AND " + _HORIZON_SQL + " >= ?"
+        args.append(lo)
+        if hi is not None:
+            q += " AND " + _HORIZON_SQL + " < ?"
+            args.append(hi)
     rows = conn.execute(q, args).fetchall()
     nb = max(1, 100 // bucket_pts)
     buckets: list[dict] = [{"lo": i * bucket_pts, "hi": (i + 1) * bucket_pts,
@@ -1940,6 +2005,157 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5,
         "logloss_edge": (round(ll_market / n_market - ll_model / n, 4)
                          if n and n_market else None),
         "ece": round(ece, 4) if ece is not None else None,
+    }
+
+
+#: Fields the hash covers, in a fixed order. Order is part of the hash, so
+#: this tuple is a format version: changing it invalidates every hash after
+#: the change and the chain will read as broken from that point. Append a
+#: new log rather than editing this.
+FORECAST_FIELDS = ("bet_id", "ts", "sport", "date", "player", "market",
+                   "side", "line", "odds", "hit_prob", "category")
+
+#: The chain's anchor. A first row still needs something to hash against,
+#: and a literal beats an empty string because "" is also what a NULL
+#: prev_hash reads as after a bad migration.
+GENESIS_HASH = "qellys-forecast-log-v1"
+
+
+def _forecast_hash(prev_hash: str, row: dict) -> str:
+    """One row's link. Values are rendered with repr-free, locale-free
+    formatting so the same forecast hashes identically on any machine."""
+    import hashlib
+    parts = [prev_hash or GENESIS_HASH]
+    for f in FORECAST_FIELDS:
+        v = row.get(f)
+        parts.append("" if v is None else
+                     (f"{v:.6f}" if isinstance(v, float) else str(v)))
+    return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()
+
+
+def seal_forecasts(conn) -> int:
+    """Append every journaled pick not already in the log. Returns how many.
+
+    Called once after journaling rather than wired into each INSERT. There
+    are eight-plus places that write a bet, several of them per-sport, and
+    a new one gets added every time a sport does; a hook per site is a hook
+    that will be forgotten. A sweep cannot be forgotten, and it is
+    idempotent, so running it twice is free.
+
+    Ordered by bet id so the chain is deterministic: two runs over the same
+    journal produce the same head hash.
+    """
+    conn.executescript(_FORECAST_LOG)
+    head = conn.execute(
+        "SELECT hash FROM forecast_log ORDER BY seq DESC LIMIT 1").fetchone()
+    prev = head["hash"] if head else GENESIS_HASH
+    rows = conn.execute(
+        "SELECT b.id AS bet_id, b.ts, b.sport, b.date, b.player, b.market, "
+        "b.side, b.line, b.odds, b.hit_prob, b.category FROM bets b "
+        "LEFT JOIN forecast_log f ON f.bet_id = b.id "
+        "WHERE f.bet_id IS NULL ORDER BY b.id").fetchall()
+    n = 0
+    now = datetime.datetime.now().isoformat(timespec="seconds")
+    for r in rows:
+        d = dict(r)
+        h = _forecast_hash(prev, d)
+        conn.execute(
+            "INSERT OR IGNORE INTO forecast_log (sealed_ts, bet_id, ts, sport,"
+            " date, player, market, side, line, odds, hit_prob, category,"
+            " prev_hash, hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (now, d["bet_id"], d["ts"], d["sport"], d["date"], d["player"],
+             d["market"], d["side"], d["line"], d["odds"], d["hit_prob"],
+             d["category"], prev, h))
+        prev = h
+        n += 1
+    conn.commit()
+    return n
+
+
+def verify_forecast_log(conn) -> dict:
+    """Recompute every link. Reports the FIRST break, not just a boolean.
+
+    A chain that says only "broken" is nearly useless — the whole value is
+    knowing where, because everything before the break is still proven.
+    """
+    try:
+        rows = conn.execute(
+            "SELECT * FROM forecast_log ORDER BY seq").fetchall()
+    except Exception:                                  # noqa: BLE001
+        return {"ok": True, "n": 0, "head": None, "broken_at": None}
+    prev = GENESIS_HASH
+    for r in rows:
+        d = {f: r[f] for f in FORECAST_FIELDS}
+        if r["prev_hash"] != prev or _forecast_hash(prev, d) != r["hash"]:
+            return {"ok": False, "n": len(rows), "head": None,
+                    "broken_at": r["seq"], "verified_through": r["seq"] - 1}
+        prev = r["hash"]
+    return {"ok": True, "n": len(rows), "head": prev if rows else None,
+            "broken_at": None, "verified_through": len(rows)}
+
+
+def calibration_splits(conn, category: str = "main", since: str | None = None,
+                       sport: str | None = None, min_n: int = SPLIT_MIN_N) -> dict:
+    """Calibration broken out by market and by horizon.
+
+    The study's fifth lesson: calibration degrades on thin markets and on
+    long horizons, and an aggregate hides both. A model reading three points
+    hot on total bases and three cold on strikeouts averages to a line that
+    looks perfect and is not — the same argument that already split this
+    report by sport, applied one level down.
+
+    Two honesty rules, both about not over-claiming from a small board:
+
+      * a split needs ``min_n`` graded picks to get a row at all, and the
+        ones that don't clear it are COUNTED and reported rather than
+        silently dropped, so "we only show four of eleven markets" is
+        visible;
+      * if every pick lands in one horizon bucket, the horizon split is
+        returned with ``degenerate: True``. That is the true answer for a
+        board that only bets tonight, and it should read as a fact about our
+        betting rather than as a chart with one bar.
+    """
+    base = dict(category=category, since=since, sport=sport)
+
+    markets: list[dict] = []
+    q = ("SELECT market, COUNT(*) n FROM bets WHERE status IN ('won','lost') "
+         "AND category=? AND hit_prob IS NOT NULL")
+    args: list = [category]
+    if since:
+        q += " AND date >= ?"
+        args.append(since)
+    if sport:
+        q += " AND sport=?"
+        args.append(sport)
+    q += " GROUP BY market ORDER BY n DESC"
+    counts = conn.execute(q, args).fetchall()
+    held_back = 0
+    for r in counts:
+        if (r["n"] or 0) < min_n:
+            held_back += 1
+            continue
+        rep = calibration(conn, market=r["market"], **base)
+        if rep.get("n"):
+            rep["market"] = r["market"]
+            markets.append(rep)
+
+    horizons: list[dict] = []
+    for label, lo, hi in HORIZON_BUCKETS:
+        rep = calibration(conn, horizon=(lo, hi), **base)
+        if rep.get("n"):
+            rep["label"] = label
+            rep["lo_days"] = lo
+            rep["hi_days"] = hi
+            horizons.append(rep)
+    occupied = [h for h in horizons if h["n"] >= min_n]
+
+    return {
+        "markets": markets,
+        "markets_held_back": held_back,
+        "min_n": min_n,
+        "horizons": horizons,
+        # One bucket holding everything is not a distribution. Say so.
+        "horizon_degenerate": len(occupied) < 2,
     }
 
 
@@ -2375,6 +2591,13 @@ def export_json(conn, path) -> None:
         # The same chart scoped to the CURRENT model era — the all-time
         # chart is dominated by picks from gates that no longer exist.
         "calibration_era": calibration(conn, since=MODEL_ERAS[-1]["start"]),
+        # By market and by horizon: an aggregate hides a model that is hot
+        # on one market and cold on another, which is the pair of errors
+        # most worth finding.
+        "calibration_splits": calibration_splits(conn),
+        # Sealed first, so the published head covers everything journaled up
+        # to this export rather than lagging it by a run.
+        "forecast_log": (seal_forecasts(conn), verify_forecast_log(conn))[1],
         "account_health": account_health(conn),
         # §13: the parlay record is reported SEPARATELY and never blended.
         # Its own key, its own tables, its own notional — nothing above this
