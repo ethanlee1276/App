@@ -27,6 +27,15 @@ from .odds import american_to_decimal
 
 DEFAULT_DB = Path(__file__).resolve().parents[1] / "data" / "ledger.db"
 
+#: Markets that settle against a GAME rather than a player's stat line —
+#: the main lines. Everything not in here is a player prop.
+#:
+#: One list, two callers, on purpose. The settler needs it to know whether
+#: to look for a games row or a player log; account_health needs it to score
+#: product mix. A second copy would drift the day a market is added, and the
+#: failure would be silent in both places at once.
+GAME_MARKETS = ("moneyline", "total", "spread", "team_total")
+
 # ``category`` separates the headline record ('main' — picks we stand
 # behind) from measurement-only buckets ('longshot' — the HR board, tracked
 # to learn whether it finds value, never mixed into the record). It is part
@@ -1075,8 +1084,7 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
             continue
         where, wargs = _hist_where(b)
         extra: dict = {}
-        game_market = b["market"] in ("moneyline", "total", "spread",
-                                      "team_total")
+        game_market = b["market"] in GAME_MARKETS
         n_games = hist_conn.execute(
             f"SELECT COUNT(*) FROM games WHERE {where}", wargs).fetchone()[0]
         n_logs = hist_conn.execute(
@@ -1436,8 +1444,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     voided = 0
     for b in conn.execute(q, args).fetchall():
         # Team-level markets never void via the no-show rule — teams play.
-        if b["market"] in ("moneyline", "total", "spread", "team_total") \
-                or not b["date"]:
+        if b["market"] in GAME_MARKETS or not b["date"]:
             continue
         key = (b["sport"], b["date"])
         where, wargs = _hist_where(b)
@@ -1937,12 +1944,28 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5,
 
 
 # Account-health scoring weights — how much each behavior pattern
-# contributes to a book's 0–100 limit-risk estimate.
+# contributes to a book's 0–100 limit-risk estimate. They sum to 100.
 HEALTH_MIN_BETS = 5
-HEALTH_W_CLV = 45          # books limit closing-line beaters first
-HEALTH_W_CONCENTRATION = 25  # living in one low-limit prop market
-HEALTH_W_STAKES = 15       # precise, model-sized stakes read sharp
-HEALTH_W_VOLUME = 15       # sheer graded volume at one shop
+HEALTH_W_CLV = 40          # books limit closing-line beaters first
+HEALTH_W_CONCENTRATION = 20  # living in one low-limit prop market
+HEALTH_W_PROP_MIX = 15     # a book of nothing but props has no cover
+HEALTH_W_STAKES = 13       # precise, model-sized stakes read sharp
+HEALTH_W_VOLUME = 12       # sheer graded volume at one shop
+
+#: Signals a risk desk uses that this journal structurally cannot see. Named
+#: rather than omitted: a score that quietly drops four of seven inputs
+#: implies a completeness it does not have, and the reason each one is
+#: missing is different and worth saying.
+HEALTH_BLIND_SPOTS = [
+    ("Bet timing after a line move",
+     "we know when WE published a pick, not when you placed a bet — "
+     "deriving one from the other would be inventing a number"),
+    ("Promo and free-bet behavior", "not tracked; this tool takes no money"),
+    ("Deposit and withdrawal pattern", "same — no account is linked, by design"),
+    ("Device, IP and browser fingerprint",
+     "deliberately out of scope: watching these is how you'd be tempted to "
+     "spoof them, and that is account fraud rather than bankroll management"),
+]
 
 
 def account_health(conn) -> dict:
@@ -1977,6 +2000,16 @@ def account_health(conn) -> dict:
         top_market, top_n = max(mkts.items(), key=lambda kv: kv[1])
         conc = top_n / len(rows)
         conc_pts = conc * HEALTH_W_CONCENTRATION
+        # Product mix — share of volume in player props rather than main
+        # lines. A DIFFERENT signal from concentration, and the pair is why
+        # both are scored: "40% of volume is home runs" is concentration,
+        # "94% of volume is props" is mix, and a book spread evenly across
+        # eight prop markets scores clean on the first while being exactly
+        # the profile the study describes. Props and niche markets carry the
+        # lowest limits, so they are where limiting starts before it spreads.
+        prop_n = sum(1 for b in rows if (b["market"] or "") not in GAME_MARKETS)
+        prop_share = prop_n / len(rows)
+        mix_pts = prop_share * HEALTH_W_PROP_MIX
         # Stake pattern — fraction of dollar stakes that aren't round $5s.
         staked = [b["stake_dollars"] for b in rows if b["stake_dollars"]]
         sharp_stakes = (sum(1 for s in staked if abs(s / 5.0 - round(s / 5.0)) > 1e-9)
@@ -1985,7 +2018,7 @@ def account_health(conn) -> dict:
         # Volume exposure — graded bets at this one shop, saturating at 100.
         vol_pts = min(len(rows) / 100.0, 1.0) * HEALTH_W_VOLUME
 
-        score = round(clv_pts + conc_pts + stake_pts + vol_pts)
+        score = round(clv_pts + conc_pts + mix_pts + stake_pts + vol_pts)
         band = "low" if score < 35 else ("moderate" if score <= 65 else "elevated")
 
         drivers = []
@@ -1994,12 +2027,25 @@ def account_health(conn) -> dict:
                            + (" — the #1 pattern risk desks act on"
                               if beat_rate >= 0.55 else ""))
         drivers.append(f"{conc:.0%} of volume is {top_market}")
+        if prop_share >= 0.8:
+            drivers.append(f"{prop_share:.0%} of volume is player props — the "
+                           "lowest-limit markets on the board, and where "
+                           "limiting starts before it spreads")
+        elif prop_share <= 0.4:
+            drivers.append(f"{1 - prop_share:.0%} of volume is main lines, which "
+                           "is the deepest, most tolerant part of the book")
         if sharp_stakes > 0.5:
             drivers.append("stakes are precise model-sized amounts, not round numbers")
         actions = []
         if conc >= 0.5:
             actions.append(f"mix in main-line bets (sides/totals) so {top_market} "
                            f"isn't {conc:.0%} of your volume here")
+        elif prop_share >= 0.8:
+            # Only when concentration DIDN'T already say it — otherwise the
+            # card gives the same advice twice in two different sentences.
+            actions.append("add sides and totals — spread across eight prop "
+                           "markets still reads as an all-props account, and "
+                           "main lines are where a book has room to take you on")
         if sharp_stakes > 0.5:
             actions.append("round stakes to the nearest $5 — precision costs "
                            "almost nothing in EV and reads recreational")
@@ -2014,6 +2060,7 @@ def account_health(conn) -> dict:
             "beat_close_rate": round(beat_rate, 3) if beat_rate is not None else None,
             "avg_clv": round(sum(clvs) / len(clvs), 3) if clvs else None,
             "top_market": top_market, "concentration": round(conc, 3),
+            "prop_share": round(prop_share, 3),
             "sharp_stake_rate": round(sharp_stakes, 3),
             "drivers": drivers, "actions": actions})
     books.sort(key=lambda d: -d["score"])
@@ -2022,6 +2069,10 @@ def account_health(conn) -> dict:
         "disclaimer": ("Inferred from your own journaled betting patterns — "
                        "an estimate of how sharp your action looks, not "
                        "knowledge of any sportsbook's actual risk rules."),
+        # Shipped WITH the score, not buried under it. Four of the seven
+        # signals a risk desk uses are not in this number, and a reader who
+        # can't see which ones will over-trust it.
+        "blind_spots": [{"signal": s, "why": w} for s, w in HEALTH_BLIND_SPOTS],
     }
 
 

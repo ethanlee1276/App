@@ -597,6 +597,81 @@ def test_account_health_scores_books_from_own_patterns():
     assert h["books"][0]["book"] == "SharpBook"
 
 
+def test_product_mix_is_a_different_signal_from_concentration():
+    """The reason both are scored, stated as the case that separates them.
+
+    An account spread evenly across eight prop markets scores CLEAN on
+    concentration — no single market is more than an eighth of it — while
+    being exactly the all-props profile that gets limited first. One book
+    does that; the other puts the same volume through main lines, equally
+    unconcentrated. Concentration cannot tell them apart. Mix can."""
+    conn = _conn()
+    props = ["hits", "home_runs", "total_bases", "strikeouts",
+             "rush_yds", "rec_yds", "receptions", "pass_yds"]
+    for i, m in enumerate(props * 2):
+        _insert_settled(conn, f"P{i}", status="won", book="AllProps",
+                        market=m, closing=52.0, stake_dollars=25.0)
+    for i, m in enumerate((["moneyline", "total", "spread", "team_total"] * 4)):
+        _insert_settled(conn, f"M{i}", status="won", book="MainLines",
+                        market=m, closing=52.0, stake_dollars=25.0)
+
+    books = {b["book"]: b for b in ledger.account_health(conn)["books"]}
+    ap, ml = books["AllProps"], books["MainLines"]
+    assert ap["prop_share"] == 1.0 and ml["prop_share"] == 0.0
+    # Concentration genuinely cannot separate them — same bets per market.
+    assert abs(ap["concentration"] - 0.125) < 1e-9
+    assert abs(ml["concentration"] - 0.25) < 1e-9
+    # ...yet the all-props book scores higher, and the gap is the mix weight.
+    assert ap["score"] > ml["score"]
+    assert any("player props" in d for d in ap["drivers"])
+    assert any("main lines" in d for d in ml["drivers"])
+
+
+def test_the_all_props_advice_is_not_given_twice():
+    """Concentration and mix can both fire on one book, and both want to say
+    'add main lines'. Saying it in two sentences reads as a bug."""
+    conn = _conn()
+    for i in range(10):
+        _insert_settled(conn, f"H{i}", status="won", book="OneMarket",
+                        market="home_runs", closing=52.0, stake_dollars=25.0)
+    b = ledger.account_health(conn)["books"][0]
+    assert b["concentration"] == 1.0 and b["prop_share"] == 1.0
+    mainline_advice = [a for a in b["actions"] if "main" in a or "sides" in a]
+    assert len(mainline_advice) == 1, mainline_advice
+
+
+def test_the_score_names_what_it_cannot_see():
+    """Four of the seven signals a risk desk uses are not in this number.
+    Dropping them silently implies a completeness the score doesn't have."""
+    h = ledger.account_health(_conn())
+    spots = {s["signal"] for s in h["blind_spots"]}
+    assert len(spots) == 4
+    assert any("timing" in s for s in spots)
+    assert any("Promo" in s for s in spots)
+    # And the device/fingerprint one is a DECISION, not a limitation — the
+    # guardrail belongs on the page, not only in the docs.
+    device = next(s for s in h["blind_spots"] if "Device" in s["signal"])
+    assert "fraud" in device["why"]
+
+
+def test_the_health_weights_still_sum_to_one_hundred():
+    """The score is read as a 0–100 and banded at 35/65. Weights that no
+    longer total 100 would silently move every band."""
+    assert (ledger.HEALTH_W_CLV + ledger.HEALTH_W_CONCENTRATION
+            + ledger.HEALTH_W_PROP_MIX + ledger.HEALTH_W_STAKES
+            + ledger.HEALTH_W_VOLUME) == 100
+
+
+def test_the_game_market_list_has_exactly_one_definition():
+    """The settler uses it to decide whether to look for a games row or a
+    player log; account_health uses it to score mix. A second copy would
+    drift the day a market is added, and fail silently in both places."""
+    src = open(ledger.__file__, encoding="utf-8").read()
+    assert src.count('"moneyline", "total", "spread"') == 1
+    assert "GAME_MARKETS = (" in src
+    assert src.count("in GAME_MARKETS") >= 2
+
+
 def test_longshot_home_runs_settle_from_ingested_logs():
     """The HR board's whole point is measurement, which needs it to grade.
     A journaled home_runs longshot must settle off the same player_game_logs

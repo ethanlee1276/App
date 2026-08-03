@@ -48,7 +48,7 @@ is now table stakes shipped by a dozen tools at $20/month.
 | Pillar | Where we actually stand |
 |---|---|
 | **Radical transparency** | Furthest along. Calibration buckets with confidence bands, Brier against the de-vigged market on our own picks, era-scoped so a re-tune is judged on its own work, a permanent sweep history in `calibhistory.py`. Completed to the study's spec on 2026-08-03 — see below. |
-| **Account longevity** | The engine exists (`account_health`, `engine/ledger.py`) and scores four of the seven signals the study names. It is buried on the Record page and has never been seen with a real journal behind it. |
+| **Account longevity** | The engine exists (`account_health`, `engine/ledger.py`) and, since 2026-08-03, scores every signal this journal can honestly see — five of the study's seven — and names the rest on the page. Still buried on the Record page, and still never seen with a real journal behind it. |
 | **Exchange-native** | One venue, deeply: Polymarket informed flow. Kalshi, Novig and ProphetX are absent, and Novig/ProphetX did not exist as prediction markets when this site was designed. |
 
 ---
@@ -84,22 +84,26 @@ The study's Stage 1, and the signal list is the study's own.
 
 | Signal | Status | Where |
 |---|---|---|
-| CLV beat rate | HAVE | `HEALTH_W_CLV`, weight 45 |
-| Market concentration | HAVE | `HEALTH_W_CONCENTRATION`, weight 25 |
-| Stake-rounding profile | HAVE | `HEALTH_W_STAKES`, weight 15 |
-| Volume at one shop | HAVE | `HEALTH_W_VOLUME`, weight 15 |
-| Product mix (props vs main lines) | MISSING | computable from `market` today. Distinct from concentration: "94% props" and "40% of volume is home runs" are different tells and only the second is scored. |
+| CLV beat rate | HAVE | `HEALTH_W_CLV`, weight 40 |
+| Market concentration | HAVE | `HEALTH_W_CONCENTRATION`, weight 20 |
+| Stake-rounding profile | HAVE | `HEALTH_W_STAKES`, weight 13 |
+| Volume at one shop | HAVE | `HEALTH_W_VOLUME`, weight 12 |
+| Product mix (props vs main lines) | HAVE (2026-08-03) | `HEALTH_W_PROP_MIX`, weight 15. Distinct from concentration, and the test that proves it: a book spread evenly across eight prop markets scores clean on concentration while being exactly the all-props profile that gets limited first. |
 | Time-to-bet after a line move | MISSING | **and not honestly computable.** `bets.ts` is when *we* journaled a pick, not when a human placed a bet, and no line-move timestamp is joined per bet. Building this from `ts` would be inventing a number. |
 | Promo behavior | MISSING | not tracked, and cannot be — we take no money |
 | Deposit/withdrawal ratio | MISSING | same |
 | Per-book 0–100 score with named drivers | HAVE | `account_health` returns score, band, drivers, actions |
 | Concrete behavioral advice | HAVE | same — round stakes, diversify markets, open a second book |
+| Named blind spots on the page | HAVE (2026-08-03) | `HEALTH_BLIND_SPOTS` — four signals, each with why it is missing |
 | Seen with a real journal | **NO** | the published payload here is `books: []` |
 
-The honest read: three of the four remaining signals need data a
-non-transacting analytics tool structurally cannot have, which is a fine
-answer — it should be *said* on the page rather than quietly omitted. Product
-mix is the one real gap.
+The honest read: the three remaining signals need data a non-transacting
+analytics tool structurally cannot have, which is a fine answer — and as of
+2026-08-03 it is *said* on the page rather than quietly omitted, alongside a
+fourth we decline to collect on purpose. Device and browser fingerprinting is
+listed as out of scope with the reason attached: watching those signals is
+how you talk yourself into spoofing them, and that is account fraud rather
+than bankroll management.
 
 ### Pillar 2 — Exchange-native
 
@@ -222,11 +226,8 @@ same way Brier already was, so the comparison stays honest.
 
 In the study's own staging, and roughly in the order the study argues for:
 
-1. **Product mix in the longevity score** (Stage 1). Small, computable now.
-   The next thing to build.
-2. **Say what longevity cannot know.** Promo behavior and deposit ratios are
-   permanently out of reach for a tool that takes no money. The page should
-   say so.
+1. ~~**Product mix in the longevity score**~~ — built 2026-08-03.
+2. ~~**Say what longevity cannot know.**~~ — built 2026-08-03.
 3. **Calibration by market and by horizon** (Stage 2b). Now that Futures
    ships, a season forecast and a tonight forecast share a chart and should
    not.

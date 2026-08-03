@@ -3366,7 +3366,8 @@ function recHealthSection(h) {
       </div>
       <div style="font-size:.85em;color:var(--text-mute);margin-top:6px">
         ${b.bets} graded bets · beats the close ${b.beat_close_rate == null ? "—" : (b.beat_close_rate * 100).toFixed(0) + "%"}
-        · ${(b.concentration * 100).toFixed(0)}% in ${escapeHtml(b.top_market)}</div>
+        · ${(b.concentration * 100).toFixed(0)}% in ${escapeHtml(b.top_market)}${
+        b.prop_share == null ? "" : ` · ${(b.prop_share * 100).toFixed(0)}% props`}</div>
       ${(b.drivers || []).length ? `<ul style="margin:8px 0 0;padding-left:18px;font-size:.85em;color:var(--text-body)">
         ${b.drivers.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : ""}
       ${(b.actions || []).length ? `<div style="margin-top:8px;font-size:.85em">
@@ -3374,10 +3375,27 @@ function recHealthSection(h) {
         <ul style="margin:4px 0 0;padding-left:18px;color:var(--text-body)">
         ${b.actions.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : ""}
     </div>`).join("");
+  // What the score CANNOT see, shipped beside it. A number built from four
+  // of the seven signals a risk desk uses will be over-trusted by anyone who
+  // can't tell which four — and one of the omissions is a decision rather
+  // than a limitation, which is worth saying out loud.
+  const blind = !(h.blind_spots || []).length ? "" : `
+    <details style="margin-top:10px">
+      <summary style="cursor:pointer;font-size:.85em;color:var(--text-mute)">
+        What this score can't see — and why</summary>
+      <ul style="margin:8px 0 0;padding-left:18px;font-size:.85em;color:var(--text-body)">
+        ${h.blind_spots.map((s) => `<li><strong>${escapeHtml(s.signal)}</strong>
+          — ${escapeHtml(s.why)}</li>`).join("")}
+      </ul>
+      <p style="font-size:.83em;opacity:.6;margin:8px 0 0">Books watch all of
+        these. We score the four we can measure honestly and name the rest
+        rather than implying a completeness this doesn't have.</p>
+    </details>`;
   return `<div class="section-title">Account health
       <span class="sub">— books quietly limit winners; this estimates how limit-prone your action looks, per book.</span></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">${cards}</div>
-    <p style="opacity:.55;font-size:.82em;margin-top:8px">${escapeHtml(h.disclaimer || "")}</p>`;
+    <p style="opacity:.55;font-size:.82em;margin-top:8px">${escapeHtml(h.disclaimer || "")}</p>
+    ${blind}`;
 }
 
 /* UFC record — journaled fight picks in their own probation bucket,
