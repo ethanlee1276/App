@@ -394,6 +394,19 @@ def settle_open(log=print, state_path: Path | None = None,
                             f"({f['players']} corrected)")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  journal fit skipped: {exc}")
+            # The hypothesis lab's free step: every stored hypothesis
+            # re-earns its status against the grown journal. Arithmetic
+            # only — the paid propose step is CLI-invoked, never here.
+            try:
+                from . import hypotheses
+                hs = hypotheses.retest(lconn)
+                closed_h = [h for h in hs.get("hypotheses") or []
+                            if h.get("action") == "close"]
+                if closed_h:
+                    log(f"  hypotheses: {len(closed_h)} confirmed "
+                        "closure(s) enforcing — see the Record page")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  hypothesis retest skipped: {exc}")
         if settled or fixed or parlays_moved:
             ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
         if settled:

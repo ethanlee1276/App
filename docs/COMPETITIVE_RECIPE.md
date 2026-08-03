@@ -435,6 +435,23 @@ Where it fits instead is explanation, never a number: turning a pick's
 existing reason codes into prose. That path cannot move a probability, which
 is exactly why it is safe.
 
+**Amended 2026-08-03 — a second sanctioned lane: proposing.** The
+hypothesis lab (`engine/hypotheses.py`) lets a language model read the
+record's own summary and propose slice INTERSECTIONS worth testing — the
+combinations the miner's single-dimension sweep is provably blind to.
+Authority never moves: proposals are constrained to the miner's own menu
+of dimensions, convicted or acquitted by the same calibration z +
+Benjamini–Hochberg tribunal, re-earned every settle pass against the
+growing journal (the model saw the data before proposing, so first
+confirmations are provisional by construction), and enforced only
+through `losspatterns.veto` — the gate every sport's engine already
+consults. A confirmed hypothesis acts by becoming ordinary, tested
+arithmetic. The API call is one structured-output request to
+claude-opus-5 (raw HTTP, stdlib, per project doctrine), CLI-invoked
+only (`python3 hypotheses.py`), key in gitignored secrets.local; the
+nightly retest is free. The WON'T itself is unchanged: nothing an LLM
+writes can set a probability.
+
 ## What to distrust in the study
 
 The study flags its own weak sources and those flags are worth keeping in

@@ -308,4 +308,12 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
             scope = f"{sport} {f['market']}" if f.get("market") else sport
             return (f"The record shows a blind spot here: {scope}, "
                     f"{f['value']} — {f.get('reading', 'ran hot')}")
-    return None
+    # The hypothesis lab's confirmed closures enforce through this same
+    # gate — multi-dimension slices the single-dim miner never tests,
+    # proposed by the LLM and convicted by the same statistics. One door,
+    # so no engine needs to know the lab exists.
+    try:
+        from . import hypotheses as hyp
+        return hyp.blocked(sport, market, feats)
+    except Exception:                              # noqa: BLE001
+        return None

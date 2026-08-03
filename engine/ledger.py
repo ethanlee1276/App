@@ -2118,6 +2118,33 @@ def verify_forecast_log(conn) -> dict:
             "broken_at": None, "verified_through": len(rows)}
 
 
+def _hypothesis_lab_block() -> dict:
+    """The stored hypothesis-lab state, for export_json. Store-read only —
+    a missing store is the designed empty state, never a failure."""
+    try:
+        from . import hypotheses as hyp
+        store = hyp.load()
+        hyps = store.get("hypotheses") or []
+        return {
+            "generated": store.get("generated"),
+            "retested": store.get("retested"),
+            "model": store.get("model"),
+            "hypotheses": hyps,
+            "watchlist": store.get("watchlist") or [],
+            "n_confirmed": sum(1 for h in hyps
+                               if h.get("status") == "confirmed"),
+            "n_rejected": sum(1 for h in hyps
+                              if h.get("status") == "rejected"),
+            "n_collecting": sum(1 for h in hyps
+                                if h.get("status") == "collecting"),
+            "n_closed": sum(1 for h in hyps
+                            if h.get("action") == "close"),
+        }
+    except Exception:                              # noqa: BLE001
+        return {"hypotheses": [], "watchlist": [], "n_confirmed": 0,
+                "n_rejected": 0, "n_collecting": 0, "n_closed": 0}
+
+
 def _loss_patterns_block(conn) -> dict:
     """The miner's view of this journal, for export_json. Guarded like
     every other block: a mining failure must never cost the export."""
@@ -2764,6 +2791,10 @@ def export_json(conn, path) -> None:
         # the record it sits on; the persisted store the pick-time veto
         # reads is refreshed at settle time.
         "loss_patterns": _loss_patterns_block(conn),
+        # The hypothesis lab: LLM-proposed slice intersections and the
+        # tribunal's verdicts. Read from the store — the export never
+        # calls an API; the paid propose step is CLI-only.
+        "hypothesis_lab": _hypothesis_lab_block(),
         "account_health": account_health(conn),
         # §13: the parlay record is reported SEPARATELY and never blended.
         # Its own key, its own tables, its own notional — nothing above this

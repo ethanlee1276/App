@@ -2814,6 +2814,16 @@ def settle_now(day: str | None = None) -> None:
                       f"({f['players']} corrected)")
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠️  journal fit skipped: {exc}")
+    try:
+        from engine import hypotheses
+        hs = hypotheses.retest(lconn)
+        closed_h = [h for h in hs.get("hypotheses") or []
+                    if h.get("action") == "close"]
+        if closed_h:
+            print(f"  hypotheses: {len(closed_h)} confirmed closure(s) "
+                  "enforcing — see the Record page")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  hypothesis retest skipped: {exc}")
     ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
     after = counts(lconn)
     print(f"  journal: settled {n} pick(s)")

@@ -3617,6 +3617,72 @@ function recLossPatternsSection(lp) {
       anything that lands in it, and the veto's reason names this page.</p>`)}`;
 }
 
+function recHypothesisLab(hl) {
+  if (!hl) return "";
+  const hyps = hl.hypotheses || [];
+  const tone = (h) => h.action === "close" ? "var(--bad)"
+    : h.status === "confirmed" ? "var(--warn)"
+    : h.status === "rejected" ? "var(--good)" : "var(--text-mute)";
+  const glyph = (h) => h.status === "confirmed" ? icon("check")
+    : h.status === "rejected" ? icon("cross") : icon("dash");
+  const rows = hyps.map((h) => `
+    <div style="display:flex;gap:12px;align-items:baseline;padding:8px 14px;
+        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+      <span style="color:${tone(h)}">${glyph(h)}</span>
+      <span class="chip">${escapeHtml((h.sport || "").toUpperCase())}</span>
+      <span style="min-width:90px">${escapeHtml(h.market || "all markets")}</span>
+      <span style="flex:1;min-width:160px">${escapeHtml(h.claim || "")}
+        <span style="opacity:.55;display:block;font-size:.92em">${
+          Object.entries(h.dims || {}).map(([d, v]) => escapeHtml(String(v))).join(" × ")}</span></span>
+      <span style="color:${tone(h)}">${escapeHtml(h.reading
+        || (h.status === "collecting"
+            ? `collecting — ${(h.n ?? 0)} matching bets so far` : ""))}</span>
+      ${h.action === "close"
+        ? `<span class="chip" style="color:var(--bad)">vetoing picks</span>` : ""}
+    </div>`).join("");
+  const watch = (hl.watchlist || []).map((w) => `
+    <div style="padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.05);
+        font-size:.85em;color:var(--text-mute)">· ${escapeHtml(w)}</div>`).join("");
+  const empty = `
+    <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
+      The lab is idle. Add <code>ANTHROPIC_API_KEY</code> to secrets.local and
+      run <code>python3 hypotheses.py</code> — the model reads the record's own
+      summary and proposes slice intersections the miner doesn't test. Every
+      proposal faces the same statistics as everything else on this page;
+      nothing an AI writes here can ever set a probability.</p>`;
+  return `
+    <div class="section-title">The hypothesis lab
+      <span class="sub">— the one safe job for an AI that writes prose: propose.
+      A language model reads the record's summary and suggests loss patterns
+      built strictly from the miner's own tested dimensions — the intersections
+      no single-dimension sweep covers. The arithmetic disposes: same
+      calibration test, same false-discovery bar, re-earned against the growing
+      journal on every settle pass.</span></div>
+    <div class="stats">
+      <div class="tile"><div class="k">Confirmed</div><div class="v">${hl.n_confirmed ?? 0}</div>
+        <div class="tile-sub">survived the tribunal — so far</div></div>
+      <div class="tile"><div class="k">Rejected</div><div class="v">${hl.n_rejected ?? 0}</div>
+        <div class="tile-sub">a published result, not a failure</div></div>
+      <div class="tile"><div class="k">Collecting</div><div class="v">${hl.n_collecting ?? 0}</div>
+        <div class="tile-sub">under the ${hl.min_n ?? 40}-bet floor</div></div>
+      <div class="tile"><div class="k">Vetoing</div><div class="v">${hl.n_closed ?? 0}</div>
+        <div class="tile-sub">confirmed hot — blocking new picks</div></div>
+    </div>
+    <div class="card" style="padding:0">${rows || empty}${watch}</div>
+    ${recDisclosure("Why the AI only proposes", `
+      <p style="margin:0;font-size:.87em">The recorded rule stands: a language
+      model never sets a probability, because it cannot be re-run, swept, or
+      audited. Its one structural advantage is hypothesis generation — the
+      miner tests every single dimension of the record but never their
+      intersections, and a model that has read the summary can name the few
+      worth testing. So proposals are constrained to the miner's own menu of
+      dimensions, convicted or acquitted by the same statistics that govern
+      every number on this page, and re-tried nightly as new bets settle —
+      a confirmation that was luck decays on its own. The model saw the record
+      before proposing, which is exactly why first confirmations are treated
+      as provisional and re-earned forever after.</p>`)}`;
+}
+
 function recCalibrationSection(cal, era) {
   if (!cal || !cal.n || !(cal.buckets || []).length) return "";
   const rows = calBucketRows(cal.buckets);
@@ -4052,6 +4118,7 @@ async function renderRecord() {
     ${scoped ? "" : recCalibrationSplits(d.calibration_splits)}
     ${scoped ? "" : recSelfTuningSection(d.self_tuning)}
     ${scoped ? "" : recLossPatternsSection(d.loss_patterns)}
+    ${scoped ? "" : recHypothesisLab(d.hypothesis_lab)}
     ${scoped ? "" : recForecastLog(d.forecast_log)}
     ${scoped ? "" : recHealthSection(d.account_health)}
     ${scoped ? "" : recLongshotSection(d.longshots)}
