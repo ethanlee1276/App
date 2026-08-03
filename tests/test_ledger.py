@@ -205,6 +205,66 @@ def test_total_picks_journal_and_settle_from_scores():
     assert ledger.performance(conn)["net_units"] == 1.0
 
 
+def test_a_game_bet_graded_off_a_partial_score_is_repaired():
+    """The fourth premature-settle cause, end to end at the ledger.
+
+    The NBA schedule parser passed live in-progress scores into the games
+    table, so a total graded UNDER off a halftime 97 — and stayed wrong
+    forever, because resettle_mismatches exempted team markets on the
+    assumption that a scored games row could only ever mean a final. The
+    parser is fixed at the source; this pins the second layer: the repair
+    pass now audits game bets against the CURRENT games rows, so any grade
+    already poisoned by a partial heals the moment the real final lands.
+    """
+    from engine import db as hist_db
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    result = {"sport": "nba", "date": "2026-01-15", "recommendations": [],
+              "game_bets": [
+                  {"bet_type": "total", "recommended": True, "side": "Over",
+                   "line": 224.5, "odds": -110, "matchup": "GSW @ LAL",
+                   "win_prob": 0.55, "edge": 0.04, "confidence": 5.5,
+                   "grade": "Play", "stake_units": 1.0},
+                  {"bet_type": "moneyline", "recommended": True,
+                   "pick": "GSW", "side": "GSW", "line": 0.5, "odds": 120,
+                   "matchup": "GSW @ LAL", "win_prob": 0.55, "edge": 0.05,
+                   "confidence": 5.5, "grade": "Play", "stake_units": 1.0},
+              ]}
+    assert ledger.log_recommendations(conn, result) == 2
+
+    hist = hist_db.connect(":memory:")
+    partial = {"sport": "nba", "season": 2026, "period": "2026-01-15",
+               "game_id": "GSW@LAL", "home": "LAL", "away": "GSW",
+               "home_score": 52, "away_score": 45, "spread": 0.0,
+               "total": None, "roof": "dome", "surface": "court",
+               "temp": None, "wind": None, "extra": None}
+    hist_db.upsert_games(hist, [partial])
+    # The halftime score grades both bets — wrongly. Over 224.5 "loses" at
+    # 97 combined; the GSW moneyline "loses" at 45-52.
+    assert ledger.settle_from_history(conn, hist, sport="nba") == 2
+    t = conn.execute("SELECT * FROM bets WHERE market='total'").fetchone()
+    m = conn.execute("SELECT * FROM bets WHERE market='moneyline'").fetchone()
+    assert t["status"] == "lost" and t["actual"] == 97.0
+    assert m["status"] == "lost"
+
+    # The real final lands: 118-113, 231 combined, GSW wins outright.
+    hist_db.upsert_games(hist, [{**partial, "home_score": 113,
+                                 "away_score": 118}])
+    fixed = ledger.resettle_mismatches(conn, hist)
+    assert {(f["market"], f["was"], f["now"]) for f in fixed} == {
+        ("total", "lost", "won"), ("moneyline", "lost", "won")}
+    t = conn.execute("SELECT * FROM bets WHERE market='total'").fetchone()
+    m = conn.execute("SELECT * FROM bets WHERE market='moneyline'").fetchone()
+    assert t["status"] == "won" and t["actual"] == 231.0
+    assert m["status"] == "won" and m["actual"] == 1.0
+    # And the bankroll was restated with the corrected P&L, not stacked on
+    # top of the wrong one.
+    assert ledger.performance(conn)["net_units"] > 0
+
+    # Idempotent: a second pass finds nothing left to fix.
+    assert ledger.resettle_mismatches(conn, hist) == []
+
+
 def test_export_json_writes_the_site_record():
     import json, tempfile, os
     from pathlib import Path

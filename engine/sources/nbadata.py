@@ -40,20 +40,36 @@ def parse_minutes(pt: str) -> float:
 
 
 def parse_schedule_day(sched: dict, date: str) -> list[dict]:
-    """Games on a YYYY-MM-DD date: id, teams, final scores when played."""
+    """Games on a YYYY-MM-DD date: id, teams, final scores when played.
+
+    Scores carry ONLY when gameStatus is 3 (final). The CDN schedule updates
+    scores live, so an in-progress game arrives here with a real partial
+    score attached — and everything downstream treats a scored games row as
+    proof the game ended, because every other results parser in this repo
+    only emits finals (parse_results: "the history DB never learns from a
+    partial game"). The old `score or None` guard only caught the PRE-game
+    case, where the feed says 0: during a live game the partial score flowed
+    into the games table, moneylines and totals graded against it on the
+    next settle pass, and — since a scored row is also the finality evidence
+    `_team_day_final` looks for — the whole team-day unlocked for prop
+    grading while the game was still being played. WNBA imports this parser,
+    so the fix covers both leagues at the source.
+    """
     out = []
     for day in (sched.get("leagueSchedule", {}) or {}).get("gameDates", []) or []:
         for g in day.get("games", []) or []:
             if (g.get("gameDateEst") or "")[:10] != date:
                 continue
             home, away = g.get("homeTeam", {}) or {}, g.get("awayTeam", {}) or {}
+            status = g.get("gameStatus", 1)         # 1 sched · 2 live · 3 final
+            final = status == 3
             out.append({
                 "game_id": g.get("gameId", ""),
                 "home": home.get("teamTricode", ""),
                 "away": away.get("teamTricode", ""),
-                "home_score": home.get("score") or None,
-                "away_score": away.get("score") or None,
-                "status": g.get("gameStatus", 1),   # 3 = final
+                "home_score": (home.get("score") or None) if final else None,
+                "away_score": (away.get("score") or None) if final else None,
+                "status": status,
                 "kickoff": g.get("gameDateTimeUTC", ""),
             })
     return out

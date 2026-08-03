@@ -1273,6 +1273,55 @@ def _neighbour_day_rows(hist_conn, b, where: str, wargs: list):
     return rows, alt
 
 
+def _game_bet_evidence(hist_conn, b, where, wargs):
+    """Current games rows + the actual-function for a TEAM-market bet.
+
+    One definition, two callers — the settler and the repair pass — for the
+    same reason GAME_MARKETS is one tuple: these used to live only inside
+    ``settle_from_history``, which meant ``resettle_mismatches`` could not
+    re-derive a game bet's actual and had to exempt team markets on the
+    ASSUMPTION that "they only ever settle from final scores". The NBA
+    schedule parser broke that assumption (it passed live in-progress scores
+    into the games table), and the exemption turned a bad grade into a
+    permanent one: props graded off partial stats self-healed on the next
+    pass, game bets never did.
+    """
+    if b["market"] == "moneyline":
+        rows = hist_conn.execute(
+            f"SELECT home, away, home_score, away_score, game_id "
+            f"FROM games WHERE {where} AND (home=? OR away=?)",
+            (*wargs, b["player"], b["player"])).fetchall()
+
+        def actual(row):
+            pick_home = row["home"] == b["player"]
+            # Stored as line 0.5 / side OVER: actual 1.0 = pick won.
+            return 1.0 if ((row["home_score"] > row["away_score"])
+                           == pick_home) else 0.0
+        return rows, actual
+    if b["market"] == "total":
+        # player = the matchup key (AWAY@HOME); actual = combined score.
+        # LIKE catches doubleheader legs' -G suffixes.
+        rows = hist_conn.execute(
+            f"SELECT home, away, home_score, away_score, game_id "
+            f"FROM games WHERE {where} AND (game_id=? OR game_id LIKE ?)",
+            (*wargs, b["player"], b["player"] + "-G%")).fetchall()
+        return rows, (lambda r: float(r["home_score"]) + float(r["away_score"]))
+    # spread / team_total: player = the team; its own margin or score.
+    rows = hist_conn.execute(
+        f"SELECT home, away, home_score, away_score, game_id "
+        f"FROM games WHERE {where} AND (home=? OR away=?)",
+        (*wargs, b["player"], b["player"])).fetchall()
+
+    def actual(row):
+        home_side = row["home"] == b["player"]
+        if b["market"] == "spread":
+            return float((row["home_score"] - row["away_score"])
+                         if home_side
+                         else (row["away_score"] - row["home_score"]))
+        return float(row["home_score"] if home_side else row["away_score"])
+    return rows, actual
+
+
 def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     """Auto-settle open bets straight from the history database.
 
@@ -1294,19 +1343,9 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     settled = 0
     for b in conn.execute(q, args).fetchall():
         where, wargs = _hist_where(b)
-        if b["market"] == "moneyline":
-            # player = the team picked; the game's final score settles it.
-            g = hist_conn.execute(
-                f"SELECT home, away, home_score, away_score, game_id "
-                f"FROM games WHERE {where} AND (home=? OR away=?)",
-                (*wargs, b["player"], b["player"])).fetchall()
-
-            def _ml_actual(row):
-                pick_home = row["home"] == b["player"]
-                # Stored as line 0.5 / side OVER: actual 1.0 = pick won.
-                return 1.0 if ((row["home_score"] > row["away_score"])
-                               == pick_home) else 0.0
-            g, verdict = _pick_dh_game(g, b, _ml_actual)
+        if b["market"] in GAME_MARKETS:
+            rows, actual_fn = _game_bet_evidence(hist_conn, b, where, wargs)
+            g, verdict = _pick_dh_game(rows, b, actual_fn)
             if verdict == "void":
                 conn.execute("UPDATE bets SET status='void', pnl_units=0, "
                              "pnl_dollars=0 WHERE id=?", (b["id"],))
@@ -1314,52 +1353,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
                 continue
             if g is None:
                 continue
-            _settle_one(conn, b, _ml_actual(g), None)
-            settled += 1
-            continue
-        if b["market"] == "total":
-            # player = the matchup key (AWAY@HOME); actual = combined runs.
-            # LIKE catches doubleheader legs' -G suffixes.
-            g = hist_conn.execute(
-                f"SELECT home, away, home_score, away_score, game_id "
-                f"FROM games WHERE {where} AND (game_id=? OR game_id LIKE ?)",
-                (*wargs, b["player"], b["player"] + "-G%")).fetchall()
-            g, verdict = _pick_dh_game(
-                g, b, lambda r: float(r["home_score"]) + float(r["away_score"]))
-            if verdict == "void":
-                conn.execute("UPDATE bets SET status='void', pnl_units=0, "
-                             "pnl_dollars=0 WHERE id=?", (b["id"],))
-                settled += 1
-                continue
-            if g is None:
-                continue
-            _settle_one(conn, b, float(g["home_score"]) + float(g["away_score"]), None)
-            settled += 1
-            continue
-        if b["market"] in ("spread", "team_total"):
-            # player = the team; its own margin (spread) or score (team
-            # total) is the actual the grader compares to the stored line.
-            g = hist_conn.execute(
-                f"SELECT home, away, home_score, away_score, game_id "
-                f"FROM games WHERE {where} AND (home=? OR away=?)",
-                (*wargs, b["player"], b["player"])).fetchall()
-
-            def _team_actual(row):
-                home_side = row["home"] == b["player"]
-                if b["market"] == "spread":
-                    return float((row["home_score"] - row["away_score"])
-                                 if home_side
-                                 else (row["away_score"] - row["home_score"]))
-                return float(row["home_score"] if home_side else row["away_score"])
-            g, verdict = _pick_dh_game(g, b, _team_actual)
-            if verdict == "void":
-                conn.execute("UPDATE bets SET status='void', pnl_units=0, "
-                             "pnl_dollars=0 WHERE id=?", (b["id"],))
-                settled += 1
-                continue
-            if g is None:
-                continue
-            _settle_one(conn, b, _team_actual(g), None)
+            _settle_one(conn, b, actual_fn(g), None)
             settled += 1
             continue
         rows = hist_conn.execute(
@@ -1504,15 +1498,45 @@ def resettle_mismatches(conn, hist_conn) -> list[dict]:
     real final numbers land, this pass finds every settled bet whose stat
     row now disagrees with the actual it was graded on, re-grades it
     side-aware, restates its P&L and the bankroll, and reports what moved.
-    Idempotent — a clean journal is a no-op. Team markets are exempt: they
-    only ever settle from final scores.
+    Idempotent — a clean journal is a no-op.
+
+    Team markets are audited too, against the CURRENT games rows. They were
+    exempt here for years, on the reasoning that "they only ever settle from
+    final scores" — which was an assumption about the parsers, not a
+    property of the settler, and the NBA schedule parser broke it by passing
+    live in-progress scores into the games table. A total graded UNDER off a
+    halftime 97 stayed wrong FOREVER under the exemption, because the very
+    pass built to heal partial-data grades refused to look at it.
     """
     from .sources.oddsapi import normalize_name
     fixed = []
+    marks = ", ".join("?" for _ in GAME_MARKETS)
     for b in conn.execute(
-            "SELECT * FROM bets WHERE status IN ('won','lost','push') "
-            "AND market NOT IN ('moneyline','total','spread','team_total')"
-            ).fetchall():
+            f"SELECT * FROM bets WHERE status IN ('won','lost','push') "
+            f"AND market IN ({marks})", GAME_MARKETS).fetchall():
+        where, wargs = _hist_where(b)
+        rows, actual_fn = _game_bet_evidence(hist_conn, b, where, wargs)
+        g, _verdict = _pick_dh_game(rows, b, actual_fn)
+        if g is None:
+            # No final row to audit against — a game mid-play, a dropped
+            # postponement, an ambiguous doubleheader. Correcting needs
+            # evidence; absence is not it.
+            continue
+        actual = actual_fn(g)
+        if b["actual"] is not None and abs(actual - float(b["actual"])) < 1e-9:
+            continue          # graded on the number that stands — correct
+        status, pnl_u = _grade_side_aware(b, actual)
+        pnl_d = round(pnl_u / b["stake_units"] * b["stake_dollars"], 2) \
+            if b["stake_units"] else 0.0
+        conn.execute(
+            "UPDATE bets SET status=?, actual=?, pnl_units=?, pnl_dollars=? "
+            "WHERE id=?", (status, actual, round(pnl_u, 4), pnl_d, b["id"]))
+        fixed.append({"date": b["date"], "player": b["player"],
+                      "market": b["market"], "was": b["status"], "now": status,
+                      "actual": actual})
+    for b in conn.execute(
+            f"SELECT * FROM bets WHERE status IN ('won','lost','push') "
+            f"AND market NOT IN ({marks})", GAME_MARKETS).fetchall():
         where, wargs = _hist_where(b)
         rows = hist_conn.execute(
             f"SELECT value, team, game_id FROM player_game_logs WHERE {where} "

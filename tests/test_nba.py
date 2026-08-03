@@ -173,6 +173,53 @@ def test_nba_cdn_parsers():
     assert games[0]["home"] == "BOS" and games[0]["home_score"] == 112
     assert parse_schedule_day(sched, "2026-01-14") == []
 
+
+def test_a_live_games_partial_score_never_leaves_the_parser():
+    """The premature-settle bug's fourth cause, pinned at its source.
+
+    The CDN schedule updates scores LIVE: a game in the third quarter
+    arrives with gameStatus 2 and a real partial score. Everything
+    downstream treats a scored games row as proof the game ended — game
+    bets grade against it on the next settle pass, and _team_day_final
+    reads it as license to grade the team's whole day — so the only safe
+    contract is the one every other results parser here already keeps:
+    scores carry when the game is FINAL, and not one second before.
+
+    The old `score or None` guard caught only the PRE-game case, where the
+    feed says 0. A halftime 52-45 sailed through it, moneylines and totals
+    graded mid-game, and the repair pass never corrected them because team
+    markets were exempt from it. WNBA imports this parser, so this test
+    covers both leagues.
+    """
+    from engine.sources.nbadata import parse_schedule_day
+    day = {"leagueSchedule": {"gameDates": [{"games": [
+        # In progress, third quarter — the dangerous shape.
+        {"gameId": "0022500002", "gameDateEst": "2026-01-15T00:00:00Z",
+         "gameStatus": 2, "gameDateTimeUTC": "2026-01-16T00:30:00Z",
+         "homeTeam": {"teamTricode": "LAL", "score": 52},
+         "awayTeam": {"teamTricode": "GSW", "score": 45}},
+        # Scheduled, feed says 0-0 — the case the old guard did catch.
+        {"gameId": "0022500003", "gameDateEst": "2026-01-15T00:00:00Z",
+         "gameStatus": 1, "gameDateTimeUTC": "2026-01-16T03:00:00Z",
+         "homeTeam": {"teamTricode": "DEN", "score": 0},
+         "awayTeam": {"teamTricode": "PHX", "score": 0}},
+        # Final — the only shape allowed to carry a score.
+        {"gameId": "0022500004", "gameDateEst": "2026-01-15T00:00:00Z",
+         "gameStatus": 3, "gameDateTimeUTC": "2026-01-16T00:00:00Z",
+         "homeTeam": {"teamTricode": "MIL", "score": 118},
+         "awayTeam": {"teamTricode": "CHI", "score": 109}}]}]}}
+    by_id = {g["game_id"]: g for g in parse_schedule_day(day, "2026-01-15")}
+    live, sched_g, final = (by_id["0022500002"], by_id["0022500003"],
+                            by_id["0022500004"])
+    assert live["home_score"] is None and live["away_score"] is None
+    assert sched_g["home_score"] is None and sched_g["away_score"] is None
+    assert final["home_score"] == 118 and final["away_score"] == 109
+    # Status still rides along so the log-ingest gate keeps working.
+    assert live["status"] == 2 and final["status"] == 3
+
+
+def test_nba_cdn_boxscore_parser():
+    from engine.sources.nbadata import parse_boxscore, log_rows
     box = {"game": {
         "homeTeam": {"teamTricode": "BOS", "players": [
             {"name": "Jay Star", "starter": "1", "statistics": {
