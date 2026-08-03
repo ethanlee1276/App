@@ -412,6 +412,46 @@ def parse_transactions(data: dict) -> list[dict]:
     return out
 
 
+def fetch_active_rosters(ttl: int = 21600) -> dict:
+    """{team_abbr: [{name, position, number, status, person_id}]} — every
+    club's ACTIVE roster, one request.
+
+    The hydrate parameter folds all thirty rosters into a single response,
+    so a daily refresh costs one keyless call rather than thirty. TTL six
+    hours: a trade-deadline move shows up the same afternoon, which is the
+    whole reason this exists — the rosters page used to be built from our
+    own game logs, where a player joins his new club only after he has
+    PLAYED for it and we have ingested that game, and where a reliever
+    never appears at all because relievers get no props and therefore no
+    log rows. "Who is on the team" is a question the league answers
+    directly; deriving it from appearances was answering a different
+    question and calling it the same one.
+    """
+    data = _get_json(
+        f"{STATS_BASE}/teams?sportId=1&hydrate=roster(person)",
+        "mlb_active_rosters.json", ttl=ttl)
+    out: dict[str, list] = {}
+    for t in data.get("teams", []) or []:
+        ab = TEAM_ID_ABBR.get(t.get("id"),
+                              (t.get("abbreviation") or "").upper())
+        if not ab:
+            continue
+        players = []
+        for e in ((t.get("roster") or {}).get("roster") or []):
+            person = e.get("person") or {}
+            pos = ((e.get("position") or {}).get("abbreviation") or "").upper()
+            players.append({
+                "name": person.get("fullName", ""),
+                "position": pos,
+                "number": e.get("jerseyNumber") or None,
+                "status": ((e.get("status") or {}).get("description") or ""),
+                "person_id": person.get("id") or 0,
+            })
+        if players:
+            out[ab] = players
+    return out
+
+
 def fetch_transactions(start: str, end: str, ttl: int = 21600) -> list[dict]:
     """Roster transactions over a date range — one free request covers all
     30 teams' IL placements/activations, trades, recalls and options."""

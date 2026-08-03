@@ -170,6 +170,117 @@ def test_the_launcher_builds_them():
     assert "refresh_sport_rosters(" in fn, "never called from the refresh loop"
 
 
+# --- the league feed, and the half of the roster appearances lost ------------
+def _feed():
+    """fetch_active_rosters()'s shape, straight off the hydrated endpoint."""
+    return {
+        "LAD": [
+            {"name": "New Trade Arm", "position": "RP", "number": "99",
+             "status": "Active", "person_id": 1},
+            {"name": "Ace Starter", "position": "SP", "number": "22",
+             "status": "Active", "person_id": 2},
+            {"name": "Franchise Bat", "position": "RF", "number": "50",
+             "status": "Active", "person_id": 3},
+            {"name": "Hurt Guy", "position": "C", "number": "16",
+             "status": "Injured List (10-day)", "person_id": 4},
+        ],
+    }
+
+
+def test_the_league_feed_lists_pitchers_the_appearance_page_never_could():
+    """An MLB "appearance" was a plate-appearance row, and in the
+    universal-DH era pitchers never bat — so no pitcher ever qualified for
+    the roster page, and a trade-deadline reliever was invisible twice
+    over: no pa rows ever, and no appearances at all for his new club
+    until he plays AND the game is ingested. The league's own roster
+    answers "who is on the team" directly."""
+    out = R.mlb_feed_rosters(_feed())
+    lad = out["teams"]["LAD"]
+    names = [p["player"] for p in lad["players"]]
+    assert "New Trade Arm" in names            # the Dodgers pickup, day one
+    assert "Ace Starter" in names
+    positions = {p["player"]: p["position"] for p in lad["players"]}
+    assert positions["New Trade Arm"] == "RP"
+    # Pitchers lead the page — they are the half that was lost.
+    assert lad["players"][0]["position"] in ("SP", "P", "RP", "TWP")
+
+
+def test_an_injured_list_status_rides_along_rather_than_hiding_the_player():
+    out = R.mlb_feed_rosters(_feed())
+    hurt = next(p for p in out["teams"]["LAD"]["players"]
+                if p["player"] == "Hurt Guy")
+    assert hurt["unavailable"] is True
+    assert "Injured" in hurt["status"]
+    assert out["teams"]["LAD"]["unavailable"] == 1
+
+
+def test_measured_games_decorate_the_feed_and_count_both_halves():
+    """Playing time stays the measured column — pa rows for hitters, outs
+    rows for pitchers, because no single market sees both halves."""
+    conn = connect(":memory:")
+    upsert_player_logs(conn, [
+        _log("Franchise Bat", "LAD", f"2026-07-{d:02d}") for d in range(1, 21)
+    ] + [
+        _log("Ace Starter", "LAD", f"2026-07-{d:02d}", market="outs", pos="SP")
+        for d in range(1, 5)
+    ])
+    games = R.mlb_games_by_player(conn, seasons=[2026])
+    assert games[("LAD", "Franchise Bat")] == 20
+    assert games[("LAD", "Ace Starter")] == 4
+    out = R.mlb_feed_rosters(_feed(), games)
+    by = {p["player"]: p for p in out["teams"]["LAD"]["players"]}
+    assert by["Franchise Bat"]["games"] == 20
+    assert by["Ace Starter"]["games"] == 4
+    assert by["New Trade Arm"]["games"] == 0   # listed anyway — that is the fix
+
+
+def test_the_build_prefers_the_league_feed_and_falls_back_to_appearances():
+    """Feed up: source says league. Feed down: the appearance page returns,
+    clearly labelled, exactly as before."""
+    import rosters_build as RB
+    from engine.mlb.sources import mlbstats
+
+    conn = connect(":memory:")
+    upsert_player_logs(conn, [_log("Log Only Guy", "LAD", "2026-07-01")])
+
+    orig = mlbstats.fetch_active_rosters
+    mlbstats.fetch_active_rosters = lambda ttl=21600: _feed()
+    try:
+        out = RB.payload_for(conn, "mlb", today="2026-08-03")
+    finally:
+        mlbstats.fetch_active_rosters = orig
+    assert out["source"] == "league"
+    assert "New Trade Arm" in [p["player"]
+                               for p in out["teams"]["LAD"]["players"]]
+
+    def _down(ttl=21600):
+        raise RuntimeError("egress blocked")
+    mlbstats.fetch_active_rosters = _down
+    try:
+        out = RB.payload_for(conn, "mlb", today="2026-08-03")
+    finally:
+        mlbstats.fetch_active_rosters = orig
+    assert out["source"] == "appearances"
+    assert "Log Only Guy" in [p["player"]
+                              for p in out["teams"]["LAD"]["players"]]
+
+
+def test_the_player_search_falls_back_to_the_roster_directory():
+    """Searching a reliever used to return a bare "no players match", which
+    read as "never heard of him". The pool is tonight's prop board — a
+    profile IS a prop card — so a miss now consults the roster payload and
+    says who he is, where he plays, and why there is no card."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    app = open(os.path.join(root, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    body = app[app.index("async function renderPlayers"):]
+    body = body[:body.index("\nfunction profileHTML")]
+    assert "rosterMatches(q)" in body
+    assert "No prop on tonight's board" in " ".join(body.split())
+    assert "async function rosterMatches" in app
+    assert "function openRoster" in app
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

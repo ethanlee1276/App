@@ -145,6 +145,74 @@ STALE_DAYS = {"mlb": 14, "nba": 21, "wnba": 21}
 # a hitter once per stat line.
 APPEARANCE_MARKET = {"mlb": "pa", "nba": "min", "wnba": "min"}
 
+#: MLB positions in page order. Pitchers first — they are half the roster
+#: and the half the appearance-built page silently lost: an "appearance"
+#: was a plate-appearance row, and in the universal-DH era pitchers never
+#: bat, so no pitcher ever qualified.
+MLB_POSITION_ORDER = {"SP": 0, "P": 1, "RP": 2, "TWP": 3, "C": 4, "1B": 5,
+                      "2B": 6, "3B": 7, "SS": 8, "IF": 9, "LF": 10, "CF": 11,
+                      "RF": 12, "OF": 13, "DH": 14}
+
+
+def mlb_feed_rosters(feed: dict, games_by_player: dict | None = None) -> dict:
+    """The league's own active rosters, in the page's payload shape.
+
+    ``feed`` is fetch_active_rosters()'s output. ``games_by_player`` (from
+    our logs) decorates each man with how often he has actually appeared —
+    playing time stays the measured column, the league feed just stops it
+    from also deciding EXISTENCE. An injured-list status rides along the
+    way depth-chart feeds' statuses do on the NFL page.
+    """
+    games = games_by_player or {}
+    teams: dict[str, dict] = {}
+    for ab, players in (feed or {}).items():
+        rows = []
+        for p in players:
+            status = p.get("status") or ""
+            unavailable = "injured" in status.lower()
+            rows.append({
+                "player": p.get("name", ""),
+                "team": ab,
+                "position": (p.get("position") or "").upper(),
+                "depth_pos": (p.get("position") or "").upper(),
+                "depth_order": None,
+                "status": status if unavailable else "",
+                "unavailable": unavailable,
+                "rookie": False,
+                "years_exp": None,
+                "number": p.get("number"),
+                "age": None,
+                "games": int(games.get((ab, p.get("name", "")), 0)),
+                "last_seen": "",
+            })
+        rows.sort(key=lambda r: (MLB_POSITION_ORDER.get(r["position"], 99),
+                                 -r["games"], r["player"]))
+        teams[ab] = {
+            "players": rows,
+            "count": len(rows),
+            "unavailable": sum(1 for r in rows if r["unavailable"]),
+            "rookies": 0,
+        }
+    return {"teams": teams, "team_count": len(teams),
+            "player_count": sum(t["count"] for t in teams.values())}
+
+
+def mlb_games_by_player(conn, seasons: list[int] | None = None) -> dict:
+    """{(team, player): games appeared} across BOTH halves of the roster —
+    plate appearances for hitters, recorded outs for pitchers. Two markets
+    because no single market sees both: pitchers do not bat and hitters do
+    not pitch."""
+    q = ("SELECT player, team, COUNT(*) AS n FROM player_game_logs "
+         "WHERE sport='mlb' AND market IN ('pa', 'outs') "
+         "AND team IS NOT NULL AND team != ''")
+    args: list = []
+    if seasons:
+        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args += list(seasons)
+    q += " GROUP BY player, team"
+    return {(r["team"], r["player"]): int(r["n"])
+            for r in conn.execute(q, args)}
+
 
 def from_game_logs(conn, sport: str, seasons: list[int] | None = None,
                    today: str | None = None) -> dict:

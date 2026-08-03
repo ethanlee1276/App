@@ -2758,7 +2758,7 @@ function trendRow(r, i, col) {
 /* ============================================================
    Players view — search + profile
    ============================================================ */
-function renderPlayers() {
+async function renderPlayers() {
   const q = state.search.trim().toLowerCase();
   let recs = state.data.recommendations;
   if (q) recs = recs.filter((r) => r.player.toLowerCase().includes(q));
@@ -2767,12 +2767,60 @@ function renderPlayers() {
   const players = recs.filter((r) => (seen.has(r.player) ? false : seen.add(r.player)));
   const host = document.getElementById("players");
   if (!players.length) {
+    /* A profile is a prop card, so this pool is tonight's board — and a
+       reliever who just got traded has no prop tonight. Searching him used
+       to return a bare "no players match", which read as "we've never
+       heard of him". Fall back to the roster directory: say who he is,
+       where he plays, and why there is no card. */
+    const misses = q ? await rosterMatches(q) : [];
+    if (misses.length) {
+      host.innerHTML = `
+        <div class="empty" style="margin-bottom:12px">No prop on tonight's board for
+          “${escapeHtml(state.search)}” — profiles here are prop cards.
+          On the roster${misses.length > 1 ? "s" : ""}:</div>
+        ${misses.map((m) => `
+          <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
+            ${playerAvatar(m.player, m.team, { size: 40 })}
+            <div style="flex:1;min-width:0">
+              <strong>${escapeHtml(m.player)}</strong>
+              <div style="font-size:.85em;color:var(--text-mute)">
+                ${teamMark(m.team, 14)} ${escapeHtml(teamName(m.team))}
+                · ${escapeHtml(m.position || "—")}
+                ${m.games ? `· ${m.games} game(s) logged` : ""}
+                ${m.status ? `· ${escapeHtml(m.status)}` : ""}</div>
+            </div>
+            <button class="btn" onclick="openRoster('${escapeHtml(m.team)}')">Roster</button>
+          </div>`).join("")}`;
+      return;
+    }
     host.innerHTML = `<div class="empty">No players match “${escapeHtml(state.search)}”.</div>`;
     return;
   }
   host.innerHTML = players.map(profileHTML).join("");
   fillMeters(host);
   revealChildren(host);
+}
+
+async function rosterMatches(q) {
+  const d = await loadRosters(state.sport);
+  const out = [];
+  for (const t of Object.values(d.teams || {})) {
+    for (const p of t.players || []) {
+      if ((p.player || "").toLowerCase().includes(q)) out.push(p);
+    }
+  }
+  out.sort((a, b) => (b.games || 0) - (a.games || 0)
+    || a.player.localeCompare(b.player));
+  return out.slice(0, 12);
+}
+
+function openRoster(team) {
+  switchView("rosters");
+  const search = document.getElementById("roster-search");
+  if (search) {
+    search.value = team;
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+  }
 }
 
 function profileHTML(r) {
@@ -4920,9 +4968,9 @@ const ROSTER_COPY = {
   nfl: "— every team as it stands today, ordered by the coaching staff's own "
      + "depth chart. Players who are unavailable (IR, PUP, suspended) are listed "
      + "with their status rather than quietly removed.",
-  mlb: "— built from who has actually appeared for each club this season, most "
-     + "games first. That is a record of who played, not a copy of a roster page: "
-     + "it is what our own game logs know, and it refreshes with them.",
+  mlb: "— the league's own active rosters, refreshed through the day, pitchers "
+     + "first. The games column is measured from our own logs: playing time is "
+     + "still the depth chart, the league feed just decides who exists.",
   nba: "— built from who has actually appeared for each club this season, most "
      + "minutes-logged games first. Measured playing time is the depth chart here, "
      + "rather than somebody's published guess at one.",

@@ -54,6 +54,30 @@ OUT_DIR = Path("web/data")
 def payload_for(conn, sport: str, today: str | None = None) -> dict:
     day = today or datetime.date.today().isoformat()
     season = season_of(sport, day)
+    if sport == "mlb":
+        # The league's own active rosters, one keyless request for all
+        # thirty clubs, six-hour cache. The appearance-built page below
+        # stays as the FALLBACK — it answered "who is on the team" with
+        # "who has batted in our logs", which meant a trade-deadline
+        # pitcher was invisible twice over: pitchers never bat (no pa
+        # rows), and a new arrival has no appearances for his new club
+        # until he plays AND we ingest it.
+        try:
+            from engine.mlb.sources.mlbstats import fetch_active_rosters
+            feed = fetch_active_rosters()
+            out = _r.mlb_feed_rosters(
+                feed, _r.mlb_games_by_player(conn, seasons=[season]))
+            if out["player_count"]:
+                out.update({
+                    "sport": sport, "season": season,
+                    "generated_at": datetime.datetime.now()
+                    .isoformat(timespec="seconds"),
+                    "feed": "live", "source": "league",
+                    "note": "",
+                })
+                return out
+        except Exception:                          # noqa: BLE001
+            pass                                   # feed down → appearances
     # This season, falling back to last: in the first weeks of a year the
     # current season has barely any appearances on file, and an empty
     # roster page is worse than a slightly stale one that says its date.
