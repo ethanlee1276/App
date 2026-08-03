@@ -55,7 +55,8 @@ def _norm_name(name: str) -> str:
 def settled_props_from_logs(entries: list[dict], market: str,
                             min_history: int = 8, limit: int = 40,
                             config: RuleConfig | None = None, model=None,
-                            real_lines: dict | None = None
+                            real_lines: dict | None = None,
+                            form_weights: dict | None = None
                             ) -> tuple[list[SettledProp], int]:
     """The walk-forward itself, returning the per-prop settled rows.
 
@@ -123,7 +124,8 @@ def settled_props_from_logs(entries: list[dict], market: str,
                 market=market, logs=logs, career_avg=career, vs_pitcher_avg=None,
                 lines=[book_line], lineup_spot=spot,
             )
-            proj = build_mlb_projection(prop, game, model=model)
+            proj = build_mlb_projection(prop, game, model=model,
+                                        form_weights=form_weights)
             # The naive line above IS the baseline we're measuring against, so
             # the live "placeholder line" guard doesn't apply here.
             rec = evaluate_mlb_prop(prop, proj, allow_synthetic_line=True)
@@ -141,11 +143,13 @@ def settled_props_from_logs(entries: list[dict], market: str,
 
 def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
                        limit: int = 40, config: RuleConfig | None = None,
-                       model=None, real_lines: dict | None = None) -> BacktestReport:
+                       model=None, real_lines: dict | None = None,
+                       form_weights: dict | None = None) -> BacktestReport:
     """Walk forward and aggregate — see ``settled_props_from_logs``."""
     settled, real_used = settled_props_from_logs(
         entries, market, min_history=min_history, limit=limit,
-        config=config, model=model, real_lines=real_lines)
+        config=config, model=model, real_lines=real_lines,
+        form_weights=form_weights)
     report = evaluate(settled)
     report.used_real_lines = real_used
     report.total_priced = len(settled)

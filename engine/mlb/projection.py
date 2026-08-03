@@ -81,7 +81,8 @@ def _rare_event_rate(prop: MLBProp, form: FormResult) -> float:
     return (k * prior + observed) / (k + n)
 
 
-def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None) -> MLBProjection:
+def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None,
+                         form_weights: dict | None = None) -> MLBProjection:
     # Shared recent-form blend (last 1/3/5/10 + season + career + vs pitcher).
     logs = [GameLog(week=g.game, opponent=g.opponent, value=g.value, home=g.home)
             for g in prop.logs]
@@ -89,8 +90,17 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None) -> MLBProject
     # ~40% on the last week, ~30% on the fortnight, 20% season, 10% vs this
     # pitcher — because a hot baseball week is mostly noise, and most
     # batter-vs-pitcher history is an anecdote, not evidence.
+    #
+    # That spec curve is the DEFAULT, not the law: engine/formfit.py fits a
+    # recency dial per market by walk-forward Brier, and a fit that beat
+    # the spec by enough, on enough settled predictions, is adopted here.
+    # An explicit ``form_weights`` (the fitter trying candidates) always
+    # wins — the fitter must never read the store it is refitting.
+    if form_weights is None:
+        from ..formfit import weights_for
+        form_weights = weights_for("mlb", prop.market)
     form = compute_form(logs, prop.career_avg, prop.vs_pitcher_avg,
-                        weights=MLB_WINDOW_WEIGHTS)
+                        weights=form_weights or MLB_WINDOW_WEIGHTS)
 
     park = evaluate_park(get_park(game.park))
     weather = evaluate_weather(game.weather)

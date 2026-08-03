@@ -2217,6 +2217,14 @@ def self_tuning_report(hist_conn=None) -> dict:
             .isoformat(timespec="seconds")
     except OSError:
         pass
+    # Rung two: the recency-dial fits (engine/formfit.py) — the model's
+    # own recipe, refit from outcomes. "Default kept" rows ship too: a
+    # dial the record examined and left alone is part of the story.
+    try:
+        from . import formfit as ff
+        out["weights"] = ff.report(ff.DEFAULT_PATH)
+    except Exception:                              # noqa: BLE001
+        out["weights"] = []
     if hist_conn is not None:
         try:
             from . import calibhistory as ch

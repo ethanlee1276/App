@@ -3479,6 +3479,24 @@ function recSelfTuningSection(st) {
       ${m.brier_before != null && m.brier_after != null && m.brier_after < m.brier_before
         ? `<span style="opacity:.6;font-variant-numeric:tabular-nums" title="Brier before → after the correction, on held-out outcomes">${m.brier_before.toFixed(4)} → ${m.brier_after.toFixed(4)}</span>` : ""}
     </div>`).join("");
+  const weightRows = (st.weights || []).map((w) => `
+    <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
+        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+      <span class="chip">${escapeHtml((w.sport || "").toUpperCase())}</span>
+      <span style="flex:1;min-width:120px">${escapeHtml(w.market || "")}</span>
+      <span style="font-variant-numeric:tabular-nums" title="The recency dial: 0 is the hand-tuned spec curve, positive leans on recent form, negative on the long run. Moves only when the record beats the spec by a real margin.">dial ${(w.r ?? 0) >= 0 ? "+" : ""}${(w.r ?? 0).toFixed(1)}</span>
+      <span style="color:${w.at_boundary ? "var(--bad)" : w.adopted ? "var(--warn)" : "var(--good)"}">${escapeHtml(w.reading || "")}</span>
+      <span style="opacity:.5;font-variant-numeric:tabular-nums">n=${(w.samples ?? 0).toLocaleString()}</span>
+      ${w.adopted && w.brier_default != null && w.brier_fitted != null
+        ? `<span style="opacity:.6;font-variant-numeric:tabular-nums" title="Walk-forward Brier, spec curve → fitted curve">${w.brier_default.toFixed(4)} → ${w.brier_fitted.toFixed(4)}</span>` : ""}
+    </div>`).join("");
+  const weightsBlock = !weightRows ? "" : `
+    <div class="section-title">The recipe itself, refit
+      <span class="sub">— not just the confidence: the blend a projection is built
+      from. One dial per market decides how much recent form outweighs the long
+      run; the record moves it only by beating the spec curve in a walk-forward
+      test, and a dial it examined and left alone says so.</span></div>
+    <div class="card" style="padding:0">${weightRows}</div>`;
   const trendRows = Object.entries(st.trend || {}).flatMap(([sport, mkts]) =>
     Object.entries(mkts).map(([mk, t]) => `
       <div style="display:flex;gap:12px;align-items:baseline;padding:6px 14px;
@@ -3505,6 +3523,7 @@ function recSelfTuningSection(st) {
         <div class="tile-sub">markets whose calibration error is falling</div></div>
     </div>
     <div class="card" style="padding:0">${rows}</div>
+    ${weightsBlock}
     ${trendRows ? `<div class="section-title">Is it getting better?
         <span class="sub">— the same measurement over time, each sweep stamped with the commit
         that produced it, so a move ties to a change rather than to a memory.</span></div>

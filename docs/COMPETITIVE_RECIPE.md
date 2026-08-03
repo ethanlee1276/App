@@ -345,6 +345,26 @@ gate already lives). Extending the veto to the other engines, and mining
 the quarter-million-prop backtest DB rather than just the live journal,
 are the two named next steps.
 
+### BUILT 2026-08-03 — the recency dial (`engine/formfit.py`)
+
+Rung two: the model's own recipe learns, not just its confidence. The
+projection's window weights (how much a player's number leans on his last
+week vs his long run) came from the spec; now `formfit.py` fits one dial
+per market by walk-forward Brier on raw probabilities — 0 is exactly the
+spec curve, ±1 the hot/steady anchors, every stop a normalized blend. One
+parameter rather than seven free weights, because seven knobs on one
+season of data is an overfitting machine. A move is ADOPTED only when it
+beats the spec curve by ≥0.0005 Brier on ≥200 walk-forward samples; ties
+break toward the spec; a dial at the grid edge is flagged the way a
+boundary temperature is. The fitter passes every candidate curve
+explicitly so it can never read the store it is refitting, and the CLI
+orders the loop correctly: weights first, then `calibrate.py`, because
+the temperature is a correction for the model that will actually run.
+Home runs are excluded — the rare-event path already replaced form
+blending there. Rendered under "The recipe itself, refit" on the Record
+page, including "default kept" rows: a dial the record examined and left
+alone is a result.
+
 ### WON'T — a language model anywhere in the pricing path
 
 Not a capability judgement, a structural one. We just finished publishing a
