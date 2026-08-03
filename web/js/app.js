@@ -3196,16 +3196,137 @@ function calBucketRows(buckets) {
   }).join("");
 }
 
+/* The reliability diagram — the bucket rows above as a picture.
+
+   The rows are honest but they are a table, and a table hides the one thing
+   this chart exists to show: the DIRECTION and SHAPE of the error. A model
+   that runs hot everywhere sits entirely below the diagonal, which is a
+   tempering problem with a one-line fix. A model that is hot on favourites
+   and cold on longshots crosses the diagonal, which is a different problem
+   entirely — and in a list of numbers the two look identical.
+
+   Dot area is proportional to bucket population, not radius, because radius
+   scaling triples the apparent weight of a bucket that is three times
+   bigger. Whiskers are the same ±1.96·√(p(1−p)/n) band the rows use: a dot
+   whose whisker crosses the diagonal has not missed, it just has not
+   spoken yet. */
+function reliabilityDiagram(buckets) {
+  const pts = (buckets || []).filter((b) => b.n > 0);
+  if (pts.length < 2) return "";
+  // Square plot with headroom above it. The "perfect" label belongs at the
+  // top end of the diagonal, which is also where a well-calibrated model's
+  // biggest favourites sit — inside the box it lands on a dot. padT buys it
+  // a line of its own without squashing the plot into a rectangle.
+  const w = 320, pad = 34, padT = 48;
+  const span = w - pad * 2;
+  const h = padT + span + pad;
+  const x = (v) => pad + v * span;
+  const y = (v) => padT + (1 - v) * span;
+  const maxN = Math.max(...pts.map((b) => b.n));
+  const tick = (v) => `
+    <line x1="${x(v)}" y1="${h - pad}" x2="${x(v)}" y2="${h - pad + 4}"
+          stroke="currentColor" opacity=".35"/>
+    <text x="${x(v)}" y="${h - pad + 15}" text-anchor="middle" font-size="9"
+          fill="currentColor" opacity=".45">${(v * 100).toFixed(0)}</text>
+    <line x1="${pad - 4}" y1="${y(v)}" x2="${pad}" y2="${y(v)}"
+          stroke="currentColor" opacity=".35"/>
+    <text x="${pad - 7}" y="${y(v) + 3}" text-anchor="end" font-size="9"
+          fill="currentColor" opacity=".45">${(v * 100).toFixed(0)}</text>`;
+  const dots = pts.map((b) => {
+    const r = 3 + 7 * Math.sqrt(b.n / maxN);
+    const col = b.n < 20 ? "var(--text-mute)"
+      : b.in_band ? "var(--good)" : "var(--warn)";
+    const lo = Math.max(0, b.actual - b.ci), hi = Math.min(1, b.actual + b.ci);
+    return `<line x1="${x(b.predicted).toFixed(1)}" y1="${y(lo).toFixed(1)}"
+                  x2="${x(b.predicted).toFixed(1)}" y2="${y(hi).toFixed(1)}"
+                  stroke="${col}" stroke-width="1.5" opacity=".55"/>
+      <circle cx="${x(b.predicted).toFixed(1)}" cy="${y(b.actual).toFixed(1)}"
+              r="${r.toFixed(1)}" fill="${col}" fill-opacity=".75" stroke="${col}">
+        <title>Said ${(b.predicted * 100).toFixed(0)}%, hit ${(b.actual * 100).toFixed(0)}% — ${b.n} bets</title>
+      </circle>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:340px;height:auto;display:block;margin:0 auto"
+       role="img" aria-label="Reliability diagram: forecast probability against realized hit rate">
+    <rect x="${pad}" y="${padT}" width="${span}" height="${span}" fill="none"
+          stroke="currentColor" opacity=".12"/>
+    <line x1="${x(0)}" y1="${y(0)}" x2="${x(1)}" y2="${y(1)}" stroke="currentColor"
+          stroke-width="1" stroke-dasharray="4 4" opacity=".4"/>
+    <text x="${x(1)}" y="${y(1) - 8}" text-anchor="end" font-size="9"
+          fill="currentColor" opacity=".45">perfect</text>
+    ${[0, 0.25, 0.5, 0.75, 1].map(tick).join("")}
+    ${dots}
+    <text x="${w / 2}" y="${h - 4}" text-anchor="middle" font-size="10"
+          fill="currentColor" opacity=".55">model said (%)</text>
+    <text x="11" y="${h / 2}" text-anchor="middle" font-size="10" fill="currentColor"
+          opacity=".55" transform="rotate(-90 11 ${h / 2})">actually hit (%)</text>
+  </svg>`;
+}
+
+/* Brier and log loss, side by side, each against the de-vigged market on the
+   same picks. Two strictly proper rules rather than one, because they
+   disagree in a way that is itself informative: Brier charges 0.90 for a
+   confident miss and log loss charges 3.00, so a model that wins on Brier
+   and loses on log loss is paying for rare, loud, wrong calls. */
+function scoreRule(label, model, market, edge, note) {
+  if (edge == null) return "";
+  const good = edge > 0;
+  return `<div style="flex:1;min-width:170px">
+    <div style="font-size:.78em;letter-spacing:.04em;text-transform:uppercase;
+                opacity:.55;margin-bottom:3px">${escapeHtml(label)}</div>
+    <div style="font-size:1.05em;font-variant-numeric:tabular-nums">
+      <span style="color:var(--${good ? "good" : "warn"})">${model}</span>
+      <span style="opacity:.45"> vs ${market} market</span></div>
+    <div style="font-size:.8em;opacity:.6;margin-top:2px">${escapeHtml(note)}</div>
+  </div>`;
+}
+
+function calScoreBlock(cal) {
+  const cards = [
+    scoreRule("Brier", cal.brier_model, cal.brier_market, cal.brier_edge,
+              cal.brier_edge > 0 ? "we forecast our own picks better"
+                                 : "the market forecasts our picks better"),
+    scoreRule("Log loss", cal.logloss_model, cal.logloss_market, cal.logloss_edge,
+              cal.logloss_edge > 0 ? "and it holds under the harsher rule"
+                                   : "the confident calls are where it costs"),
+  ].filter(Boolean).join("");
+  if (!cards) return "";
+  const ece = cal.ece == null ? "" : `<div style="flex:1;min-width:170px">
+    <div style="font-size:.78em;letter-spacing:.04em;text-transform:uppercase;
+                opacity:.55;margin-bottom:3px">Calibration error</div>
+    <div style="font-size:1.05em;font-variant-numeric:tabular-nums">${(cal.ece * 100).toFixed(1)} pts</div>
+    <div style="font-size:.8em;opacity:.6;margin-top:2px">average distance from the diagonal</div>
+  </div>`;
+  const disagree = (cal.brier_edge != null && cal.logloss_edge != null
+                    && (cal.brier_edge > 0) !== (cal.logloss_edge > 0))
+    ? `<p style="margin:10px 0 0;font-size:.85em;color:var(--warn)">The two rules
+        disagree. Both are strictly proper, so this is not a contradiction — it
+        means the gap between us and the market is concentrated in the
+        confident calls rather than spread across the book. Log loss is the
+        one that punishes those, so it is the one to believe.</p>` : "";
+  return `<div style="padding:12px 14px;border-top:1px solid rgba(255,255,255,.06)">
+    <div style="display:flex;gap:18px;flex-wrap:wrap">${cards}${ece}</div>
+    <p style="margin:10px 0 0;font-size:.85em;opacity:.62">Lower is better for both.
+      Scored against the de-vigged closing price on the same bets — if we can't
+      out-forecast the close on our own selections, the edge story is fiction.
+      Shown either way, because a site that hides this number is a tout with a
+      website.</p>${disagree}</div>`;
+}
+
 function recCalibrationSection(cal, era) {
   if (!cal || !cal.n || !(cal.buckets || []).length) return "";
   const rows = calBucketRows(cal.buckets);
-  const brier = cal.brier_edge == null ? "" : cal.brier_edge > 0
-    ? `<p style="padding:10px 14px;margin:0;font-size:.88em;color:var(--good)">Forecast test: the model's Brier score
-       (${cal.brier_model}) beats the de-vigged market's (${cal.brier_market}) on the same bets — lower is better.
-       That's the whole claim of this site in one number.</p>`
-    : `<p style="padding:10px 14px;margin:0;font-size:.88em;color:var(--warn)">Forecast test: the de-vigged market's Brier score
-       (${cal.brier_market}) still beats the model's (${cal.brier_model}) on our own picks. Shown anyway —
-       a site that hides this number is a tout with a website.</p>`;
+  const brier = calScoreBlock(cal);
+  const diagram = reliabilityDiagram(cal.buckets);
+  const diagramBlock = !diagram ? "" : `
+    <div style="padding:14px 14px 4px;border-top:1px solid rgba(255,255,255,.06)">
+      ${diagram}
+      <p style="margin:8px auto 10px;max-width:420px;font-size:.83em;opacity:.6;text-align:center">
+        Each dot is one probability bucket; its area is how many bets sit in it, and
+        the whisker is the same sample-size band as the rows above. On the dashed
+        line means the number meant what it said. Below it we ran hot, above it we
+        ran cold, and a line that crosses is two different problems wearing one
+        average.</p>
+    </div>`;
   // Era scoping: the all-time chart is dominated by picks from RETIRED
   // gates. Until the current model has a real sample, say so; after ~50
   // graded, give it its own chart.
@@ -3222,17 +3343,12 @@ function recCalibrationSection(cal, era) {
     <div class="section-title">Current model only
       <span class="sub">— the same test, restricted to picks graded since the
       ${escapeHtml((era || {}).since || "")} re-tune (n=${eraN}).</span></div>
-    <div class="card" style="padding:0">${calBucketRows(era.buckets)}${
-      era.brier_edge == null ? "" : era.brier_edge > 0
-        ? `<p style="padding:10px 14px;margin:0;font-size:.88em;color:var(--good)">Current era Brier:
-           model ${era.brier_model} vs market ${era.brier_market} — the re-tuned model out-forecasts
-           the de-vigged close on its own picks.</p>`
-        : `<p style="padding:10px 14px;margin:0;font-size:.88em;color:var(--warn)">Current era Brier:
-           market ${era.brier_market} still beats model ${era.brier_model} — the re-tune hasn't
-           earned the claim yet.</p>`}</div>` : "";
+    <div class="card" style="padding:0">${calBucketRows(era.buckets)}
+      <div style="padding:14px 14px 4px;border-top:1px solid rgba(255,255,255,.06)">
+        ${reliabilityDiagram(era.buckets)}</div>${calScoreBlock(era)}</div>` : "";
   return `<div class="section-title">Calibration — did "60%" mean 60%?
       <span class="sub">— every settled pick, bucketed by the model's claimed probability.</span></div>
-    <div class="card" style="padding:0">${rows}${brier}${eraNote}</div>
+    <div class="card" style="padding:0">${rows}${diagramBlock}${brier}${eraNote}</div>
     ${eraBlock}`;
 }
 

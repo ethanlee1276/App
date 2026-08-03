@@ -1819,6 +1819,21 @@ def recent_settled(conn, limit: int = 30, category: str = "main",
     return out
 
 
+#: Log loss is unbounded at the ends — a 0% forecast on something that
+#: happened costs infinity, which would make one row swallow the whole
+#: score and turn an honesty metric into a single-row lottery. Clamping to
+#: 1e-4 caps the worst single bet at ~9.2, which is severe enough to hurt
+#: and finite enough to average.
+LOGLOSS_CLAMP = 1e-4
+
+
+def _log_loss_one(p: float, won: float) -> float:
+    """Cost of one forecast under the logarithmic rule."""
+    import math
+    p = min(max(p, LOGLOSS_CLAMP), 1.0 - LOGLOSS_CLAMP)
+    return -(won * math.log(p) + (1.0 - won) * math.log(1.0 - p))
+
+
 def calibration(conn, category: str = "main", bucket_pts: int = 5,
                 since: str | None = None, sport: str | None = None) -> dict:
     """Predicted vs realized, in probability buckets — the public honesty page.
@@ -1829,7 +1844,22 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5,
     as verdicts. Also scores the model's Brier against the market's own fair
     probability ON THE SAME BETS (fair = hit_prob − edge, since edge was
     stored as model-minus-fair at bet time): if we can't out-forecast the
-    de-vigged close on our own selections, the edge story is fiction."""
+    de-vigged close on our own selections, the edge story is fiction.
+
+    Brier is reported alongside LOG LOSS, and the pair is the point. Both are
+    strictly proper — neither can be gamed by shading probabilities toward
+    50% — but they punish a confident miss very differently. Say 95% and be
+    wrong: Brier charges 0.90, log loss charges 3.00. A model that is nearly
+    right most nights and catastrophically wrong occasionally looks fine on
+    Brier alone, and that is exactly the failure mode that empties a
+    bankroll. Publishing only the gentler number is a choice, so we publish
+    both.
+
+    ECE — the average distance from the diagonal, weighted by how many bets
+    sit in each bucket — is the one number that summarises the reliability
+    diagram. It answers "when this model says a number, how far off is it
+    typically", which neither Brier nor log loss answers, because both mix
+    calibration together with resolution."""
     from math import sqrt
     q = ("SELECT hit_prob, edge, status FROM bets "
          "WHERE status IN ('won','lost') AND category=? AND hit_prob IS NOT NULL")
@@ -1852,6 +1882,8 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5,
                             "n": 0, "_p": 0.0, "_w": 0} for i in range(nb)]
     se_model = 0.0
     se_market = 0.0
+    ll_model = 0.0
+    ll_market = 0.0
     n_market = 0
     for r in rows:
         p = min(max(float(r["hit_prob"]), 0.0), 1.0)
@@ -1861,9 +1893,11 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5,
         b["_p"] += p
         b["_w"] += won
         se_model += (p - won) ** 2
+        ll_model += _log_loss_one(p, won)
         if r["edge"] is not None:
             fair = min(max(p - float(r["edge"]), 0.01), 0.99)
             se_market += (fair - won) ** 2
+            ll_market += _log_loss_one(fair, won)
             n_market += 1
     out_buckets = []
     for b in buckets:
@@ -1877,6 +1911,11 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5,
             "predicted": round(pred, 4), "actual": round(act, 4),
             "ci": round(ci, 4), "in_band": abs(act - pred) <= ci})
     n = len(rows)
+    # ECE over the buckets we actually have. Weighted by bucket population,
+    # so a five-bet bucket miles off the diagonal cannot outvote a
+    # thousand-bet bucket sitting on it.
+    ece = (sum(b["n"] * abs(b["actual"] - b["predicted"]) for b in out_buckets) / n
+           if n and out_buckets else None)
     return {
         "n": n, "bucket_pts": bucket_pts, "buckets": out_buckets, "since": since,
         "brier_model": round(se_model / n, 4) if n else None,
@@ -1885,6 +1924,15 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5,
         # its own picks; negative = the market knew better.
         "brier_edge": (round(se_market / n_market - se_model / n, 4)
                        if n and n_market else None),
+        # Same comparison under the harsher proper rule. The two can and do
+        # disagree — that disagreement is a finding, not a bug: it means the
+        # gap between model and market is concentrated in the confident
+        # tails rather than spread evenly across the book.
+        "logloss_model": round(ll_model / n, 4) if n else None,
+        "logloss_market": round(ll_market / n_market, 4) if n_market else None,
+        "logloss_edge": (round(ll_market / n_market - ll_model / n, 4)
+                         if n and n_market else None),
+        "ece": round(ece, 4) if ece is not None else None,
     }
 
 

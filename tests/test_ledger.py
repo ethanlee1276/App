@@ -501,6 +501,75 @@ def test_calibration_buckets_and_brier_vs_market():
     assert ledger.calibration(conn)["n"] == 4
 
 
+def test_log_loss_punishes_the_confident_miss_far_harder_than_brier():
+    """Why both proper rules are published rather than the gentler one.
+
+    Nineteen right at 95% and one wrong. Brier charges 0.9025 for the miss,
+    log loss charges 3.00 — a factor of more than three. A model that is
+    nearly right most nights and catastrophically wrong occasionally reads
+    fine on Brier alone, and that is exactly the shape that empties a
+    bankroll."""
+    import math
+    conn = _conn()
+    for i in range(19):
+        _insert_settled(conn, f"Hit{i}", status="won", hit_prob=0.95, edge=0.05)
+    _insert_settled(conn, "Miss", status="lost", hit_prob=0.95, edge=0.05)
+    c = ledger.calibration(conn)
+    assert c["n"] == 20
+    assert abs(c["brier_model"] - (19 * 0.05 ** 2 + 0.95 ** 2) / 20) < 1e-9
+    expect_ll = (19 * -math.log(0.95) + -math.log(0.05)) / 20
+    assert abs(c["logloss_model"] - round(expect_ll, 4)) < 1e-4
+    # The single miss costs 0.90 of Brier and 3.00 of log loss.
+    assert 0.95 ** 2 < 1.0 < -math.log(0.05)
+
+
+def test_log_loss_is_scored_against_the_market_on_the_same_bets():
+    """Same comparison Brier already made, or the number is decoration."""
+    conn = _conn()
+    for i, st in enumerate(("won", "won", "won", "lost")):
+        _insert_settled(conn, f"P{i}", status=st, hit_prob=0.60, edge=0.05)
+    c = ledger.calibration(conn)
+    assert c["logloss_market"] is not None
+    assert c["logloss_edge"] == round(c["logloss_market"] - c["logloss_model"], 4)
+
+
+def test_log_loss_is_clamped_so_one_row_cannot_swallow_the_score():
+    """A 0% forecast on something that happened costs infinity under the raw
+    rule, which would turn an honesty metric into a single-row lottery."""
+    import math
+    conn = _conn()
+    _insert_settled(conn, "Impossible", status="won", hit_prob=0.0, edge=0.05)
+    c = ledger.calibration(conn)
+    assert c["logloss_model"] is not None
+    assert math.isfinite(c["logloss_model"])
+    assert c["logloss_model"] == round(-math.log(ledger.LOGLOSS_CLAMP), 4)
+
+
+def test_ece_is_zero_on_a_perfectly_calibrated_book():
+    conn = _conn()
+    # 60% claimed, 60% realized — ten bets, six winners, one bucket.
+    for i in range(10):
+        _insert_settled(conn, f"C{i}", status="won" if i < 6 else "lost",
+                        hit_prob=0.60, edge=0.05)
+    assert ledger.calibration(conn)["ece"] == 0.0
+
+
+def test_ece_weights_buckets_by_population():
+    """A five-bet bucket miles off the diagonal must not outvote a large one
+    sitting on it. Ten bets at 60% that hit 60% (error 0), plus two bets at
+    20% that both hit (error 0.80) -> 2/12 * 0.80 = 0.1333."""
+    conn = _conn()
+    for i in range(10):
+        _insert_settled(conn, f"Big{i}", status="won" if i < 6 else "lost",
+                        hit_prob=0.60, edge=0.05)
+    for i in range(2):
+        _insert_settled(conn, f"Small{i}", status="won", hit_prob=0.20, edge=0.05)
+    c = ledger.calibration(conn)
+    assert abs(c["ece"] - (2 / 12) * 0.80) < 1e-3
+    # And the unweighted average would have been 0.40 — three times higher.
+    assert c["ece"] < 0.20
+
+
 def test_account_health_scores_books_from_own_patterns():
     conn = _conn()
     # SharpBook: 6 bets, always beat the close, all one market, odd stakes.
