@@ -2782,6 +2782,13 @@ def settle_now(day: str | None = None) -> None:
         if pr["settled"] or pr["waiting"]:
             print(f"  parlays: graded {pr['settled']}, "
                   f"{pr['waiting']} waiting on legs")
+        # And the mirror of resettle_mismatches: when a single moved (a
+        # partial-data grade healed, or repair-premature reopened it), any
+        # settled ticket resting on it re-grades or reopens with it.
+        rp = parlayledger.resettle(lconn)
+        if rp["fixed"] or rp["reopened"]:
+            print(f"  ⚠️  parlays re-audited: {len(rp['fixed'])} re-graded, "
+                  f"{rp['reopened']} reopened with their legs")
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠️  parlay settle skipped: {exc}")
     ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")

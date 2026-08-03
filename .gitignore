@@ -54,3 +54,10 @@ node_modules/
 # an npm run in the wrong directory, not a dependency of this project.
 package.json
 package-lock.json
+
+# Generated UFC reference data — ufc_dossiers.py and the card/gym scrapers
+# write these beside the DBs. Same rule as every other data/ artifact: the
+# build regenerates them, so they never belong in the repo.
+data/ufc_cards.json
+data/ufc_dossiers.json
+data/ufc_gyms.json

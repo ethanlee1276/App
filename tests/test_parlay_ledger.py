@@ -624,6 +624,95 @@ def test_the_slate_play_flag_survives_into_the_journal():
     assert conn.execute("SELECT was_play FROM parlays").fetchone()[0] == 1
 
 
+
+# --- the repair pass ---------------------------------------------------------
+def test_a_ticket_killed_by_a_leg_that_heals_heals_with_it():
+    """The settle docstring promises the parlay record can never disagree
+    with the singles journal its legs live in — and then only ever reads
+    OPEN tickets, so the promise held exactly until a settled single moved.
+    A leg graded lost off a partial NBA score killed the ticket; when
+    resettle_mismatches healed the leg to won, the ticket stayed lost
+    forever, wearing a LEG_ONE_KILLED_IT code about a loss that no longer
+    exists."""
+    conn = _conn()
+    parlayledger.log_board(conn, _board())
+    _single(conn, "Alpha Guy", status="won", actual=3.0)
+    _single(conn, "Beta Guy", status="lost", actual=0.0)
+    parlayledger.settle(conn)
+    p = conn.execute("SELECT * FROM parlays").fetchone()
+    assert p["status"] == "lost" and p["loss_code"] == "LEG_ONE_KILLED_IT"
+
+    # The singles repair pass flips the leg: the "0 total bases" was a
+    # partial line, the real final cleared it.
+    conn.execute("UPDATE bets SET status='won', actual=2.0 "
+                 "WHERE player='Beta Guy'")
+    conn.commit()
+    r = parlayledger.resettle(conn)
+    assert len(r["fixed"]) == 1 and r["fixed"][0]["was"] == "lost"
+    p = conn.execute("SELECT * FROM parlays").fetchone()
+    assert p["status"] == "won" and p["pnl_units"] > 0
+    assert p["loss_code"] is None
+    leg = conn.execute("SELECT status FROM parlay_legs WHERE player="
+                       "'Beta Guy'").fetchone()
+    assert leg["status"] == "won"
+    # Idempotent: nothing moves twice.
+    r2 = parlayledger.resettle(conn)
+    assert r2["fixed"] == [] and r2["reopened"] == 0
+
+
+def test_a_reopened_leg_reopens_the_ticket():
+    """repair-premature can reopen a single outright. A ticket whose
+    verdict rests on a bet that no longer has one goes back to open and
+    waits for the ordinary settle, exactly like the leg does."""
+    conn = _conn()
+    parlayledger.log_board(conn, _board())
+    _single(conn, "Alpha Guy", status="won", actual=3.0)
+    _single(conn, "Beta Guy", status="lost", actual=0.0)
+    parlayledger.settle(conn)
+    conn.execute("UPDATE bets SET status='open', actual=NULL "
+                 "WHERE player='Beta Guy'")
+    conn.commit()
+    r = parlayledger.resettle(conn)
+    assert r["reopened"] == 1
+    p = conn.execute("SELECT * FROM parlays").fetchone()
+    assert p["status"] == "open" and p["pnl_units"] is None
+    assert p["loss_code"] is None and p["settled_ts"] is None
+    # And once the leg really lands, the ordinary settle takes it again.
+    conn.execute("UPDATE bets SET status='won', actual=2.0 "
+                 "WHERE player='Beta Guy'")
+    conn.commit()
+    assert parlayledger.settle(conn)["settled"] == 1
+    assert conn.execute("SELECT status FROM parlays").fetchone()[0] == "won"
+
+
+def test_a_clean_table_is_a_no_op():
+    conn = _conn()
+    parlayledger.log_board(conn, _board())
+    _single(conn, "Alpha Guy", status="won", actual=3.0)
+    _single(conn, "Beta Guy", status="won", actual=2.0)
+    parlayledger.settle(conn)
+    r = parlayledger.resettle(conn)
+    assert r["fixed"] == [] and r["reopened"] == 0
+
+
+def test_the_autosettle_grades_tickets_not_just_singles():
+    """Tickets journal nightly; settling them lived only in the manual
+    --settle handler, so they sat 'waiting' until someone happened to run
+    it. The every-refresh auto-settle is what actually keeps the journal
+    current — the tickets belong to it. Pinned at the source so the wiring
+    cannot quietly fall out."""
+    import os as _os
+    root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    src = open(_os.path.join(root, "engine", "maintenance.py"),
+               encoding="utf-8").read()
+    block = src[src.index("def settle_open("):]
+    block = block[:block.index("\ndef ", 1)]
+    assert "parlayledger" in block, "auto-settle no longer grades tickets"
+    assert "parlayledger.settle(" in block.replace(" ", "")\
+        .replace("pr=", "") or "pr = parlayledger.settle" in block
+    assert "resettle" in block
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

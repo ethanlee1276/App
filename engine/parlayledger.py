@@ -311,6 +311,71 @@ def settle(conn) -> dict:
     return {"settled": len(graded), "waiting": waiting, "tickets": graded}
 
 
+def resettle(conn) -> dict:
+    """Re-audit SETTLED tickets against their legs' CURRENT singles verdicts.
+
+    The settle above promises "the parlay record can never disagree with the
+    record its own legs are in" — and then only ever reads OPEN tickets, so
+    the promise held exactly until a settled single moved. Singles move for
+    two legitimate reasons: ``resettle_mismatches`` re-grades one that was
+    settled off partial data (the premature-settle repairs), and
+    ``--repair-premature`` can reopen one outright. A ticket killed by a leg
+    that later healed to a win stayed lost forever, wearing a
+    LEG_ONE_KILLED_IT code about a loss that no longer exists.
+
+    Mirrors the singles repair pass exactly: legs re-read, tickets whose leg
+    verdicts moved re-graded in place, a ticket with a leg back OPEN
+    reopened so the ordinary settle can take it again. Idempotent; a clean
+    table is a no-op. No bankroll to restate — tickets are notional (§13).
+    """
+    ensure_schema(conn)
+    from .ledger import _bet_clv
+    fixed, reopened = [], 0
+    for p in conn.execute("SELECT * FROM parlays WHERE status IN "
+                          "('won','lost','void') ORDER BY date, id").fetchall():
+        legs = conn.execute("SELECT * FROM parlay_legs WHERE parlay_id=? "
+                            "ORDER BY leg_no", (p["id"],)).fetchall()
+        if not legs:
+            continue
+        resolved, back_open = [], False
+        for leg in legs:
+            b = _matching_bet(conn, p, leg)
+            if b is None or b["status"] == "open":
+                back_open = True
+                break
+            resolved.append((leg, b))
+        if back_open:
+            # A leg was reopened (repair-premature). The ticket's verdict
+            # rests on a bet that no longer has one — reopen it too and let
+            # the ordinary settle grade it when the leg really lands.
+            conn.execute(
+                "UPDATE parlays SET status='open', pnl_units=NULL, "
+                "legs_won=NULL, legs_lost=NULL, legs_void=NULL, "
+                "singles_pnl_units=NULL, loss_code=NULL, loss_codes=NULL, "
+                "settled_ts=NULL WHERE id=?", (p["id"],))
+            conn.execute("UPDATE parlay_legs SET status='open', actual=NULL, "
+                         "closing_line=NULL, clv=NULL WHERE parlay_id=?",
+                         (p["id"],))
+            reopened += 1
+            continue
+        moved = [leg for leg, b in resolved
+                 if (leg["status"] or "open") != b["status"]]
+        if not moved:
+            continue
+        for leg, b in resolved:
+            conn.execute(
+                "UPDATE parlay_legs SET status=?, actual=?, closing_line=?, "
+                "clv=? WHERE id=?",
+                (b["status"], b["actual"], b["closing_line"],
+                 _bet_clv(b), leg["id"]))
+        was = p["status"]
+        out = _grade_ticket(conn, p, resolved)
+        if out["status"] != was:
+            fixed.append({**out, "was": was})
+    conn.commit()
+    return {"fixed": fixed, "reopened": reopened}
+
+
 def _matching_bet(conn, p, leg):
     """The singles-journal row this leg was taken from.
 

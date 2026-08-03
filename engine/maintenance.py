@@ -348,7 +348,26 @@ def settle_open(log=print, state_path: Path | None = None,
                 "stats: " + "; ".join(
                     f"{f['player']} {f['market']} {f['was']}→{f['now']}"
                     for f in fixed[:5]))
-        if settled or fixed:
+        # Parlay tickets grade off their legs' verdicts in the singles
+        # journal — AFTER the settle above, or every ticket finds its legs
+        # still open. This used to live only in the manual --settle handler,
+        # so tickets journaled nightly and then sat "waiting" until someone
+        # happened to run that command by hand. The auto-settle is the thing
+        # that actually keeps the journal current; the tickets belong to it.
+        parlays_moved = 0
+        try:
+            from . import parlayledger
+            pr = parlayledger.settle(lconn)
+            rp = parlayledger.resettle(lconn)
+            parlays_moved = pr["settled"] + len(rp["fixed"]) + rp["reopened"]
+            if pr["settled"]:
+                log(f"  parlays: graded {pr['settled']} ticket(s)")
+            if rp["fixed"] or rp["reopened"]:
+                log(f"  ⚠️  parlays re-audited: {len(rp['fixed'])} re-graded,"
+                    f" {rp['reopened']} reopened with their legs")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  parlay settle skipped: {exc}")
+        if settled or fixed or parlays_moved:
             ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
         if settled:
             log(f"  settled {settled} pick(s) from {res['games']} finished "
