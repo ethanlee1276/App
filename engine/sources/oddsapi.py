@@ -182,6 +182,32 @@ SPORT_CONFIG = {
 }
 
 
+# --- futures ----------------------------------------------------------------
+#
+# Futures live under their OWN sport keys, not as a market on the league's
+# board — "who wins the World Series" is a different endpoint from "tonight's
+# Mets game". One market, one region, so `_classify` bills each of these at
+# ONE credit per call. Four sports pulled once a week is four credits a week,
+# about seventeen a month, against a 20,000-credit plan.
+#
+# That cheapness is the entire reason this is safe to automate, and it is
+# also fragile: adding a second market or a second region to this call
+# doubles it, and adding a per-event loop would multiply it by thirty. There
+# is a test asserting the request stays one market and one region.
+FUTURES_KEYS = {
+    "nfl": "americanfootball_nfl_super_bowl_winner",
+    "mlb": "baseball_mlb_world_series_winner",
+    "nba": "basketball_nba_championship_winner",
+    "cfb": "americanfootball_ncaaf_championship_winner",
+}
+
+#: A week. Futures are the slowest market a book runs — a division number
+#: posted in March can sit untouched through a July injury — so pulling one
+#: more often buys nothing and spends every time. The cache TTL IS the
+#: cadence: within a week the call never reaches the wire.
+FUTURES_TTL = 7 * 86400
+
+
 class OddsAPIError(RuntimeError):
     pass
 
@@ -469,6 +495,82 @@ def fetch_sport_odds(sport: str, api_key: str | None = None,
     data, quota = _request(url, f"odds_board_{sport}.json", ttl=ttl,
                            cache_only=cache_only)
     return (data if isinstance(data, list) else []), quota
+
+
+def fetch_outrights(sport: str, api_key: str | None = None,
+                    ttl: int = FUTURES_TTL, cache_only: bool = False
+                    ) -> tuple[list, Quota]:
+    """One league's championship futures, in one request.
+
+    Deliberately narrow: a single market and a single region, which is what
+    keeps this at one credit. The bookmaker list is NOT pinned — futures are
+    posted by fewer books than game lines, and asking for a fixed five can
+    come back empty while three others are pricing it.
+    """
+    key = get_api_key(api_key)
+    sport_key = FUTURES_KEYS.get(sport)
+    if not sport_key:
+        return [], Quota()
+    params = {"apiKey": key, "regions": "us", "markets": "outrights",
+              "oddsFormat": "american"}
+    url = f"{ODDS_BASE}/sports/{sport_key}/odds?{urllib.parse.urlencode(params)}"
+    data, quota = _request(url, f"odds_board_futures_{sport}.json", ttl=ttl,
+                           cache_only=cache_only)
+    return (data if isinstance(data, list) else []), quota
+
+
+def parse_outrights(payload: list, teams: dict | None = None) -> dict:
+    """``{team: {"odds", "book", "implied"}}`` — the best price per team.
+
+    Books name a futures runner in full ("Los Angeles Dodgers"), so the
+    league's name map converts it to the abbreviation the rest of the
+    system uses. A runner we cannot map is DROPPED rather than guessed at:
+    a mis-mapped futures price is attached to the wrong team's projection,
+    which is worse than showing no price at all.
+    """
+    teams = teams or {}
+    best: dict[str, dict] = {}
+    for event in payload or []:
+        for bk in event.get("bookmakers", []) or []:
+            for mkt in bk.get("markets", []) or []:
+                if mkt.get("key") != "outrights":
+                    continue
+                for o in mkt.get("outcomes", []) or []:
+                    name = o.get("name") or ""
+                    abbr = teams.get(name) or _futures_abbr(name, teams)
+                    price = o.get("price")
+                    if not abbr or price is None:
+                        continue
+                    price = int(price)
+                    cur = best.get(abbr)
+                    # Best price for the bettor: the longest number.
+                    if cur is None or _dec(price) > _dec(cur["odds"]):
+                        best[abbr] = {"odds": price,
+                                      "book": bk.get("title") or bk.get("key", ""),
+                                      "implied": round(1.0 / _dec(price), 4)}
+    return best
+
+
+def _dec(american: int) -> float:
+    a = int(american)
+    return 1.0 + (a / 100.0 if a > 0 else 100.0 / abs(a))
+
+
+def _futures_abbr(name: str, teams: dict) -> str:
+    """Last-resort match on a normalised team name.
+
+    College football has no static map at all and the pro leagues rename
+    the odd franchise, so an exact-key lookup alone would silently drop
+    runners. Still exact once normalised — nothing fuzzy, because a futures
+    price on the wrong team is worse than no price.
+    """
+    def key(s: str) -> str:
+        return "".join(c for c in (s or "").lower() if c.isalnum())
+    want = key(name)
+    for full, abbr in teams.items():
+        if key(full) == want:
+            return abbr
+    return ""
 
 
 def fetch_event_odds(event_id: str, api_key: str | None = None,

@@ -218,14 +218,27 @@ def test_project_runs_the_season_and_carries_the_caveat_through():
     assert abs(sum(t["p_title"] for t in out["teams"]) - 1.0) < len(out["teams"]) * 5e-5
 
 
-def test_nothing_here_spends_an_odds_credit():
-    """Every source in this module is keyless — statsapi, the NBA's CDN,
-    nflverse, ESPN. A futures board can be rebuilt as often as anyone likes
-    for nothing, and that is a property worth pinning after a 20k burn."""
+def test_the_model_half_never_touches_the_meter():
+    """Ratings, records and fixtures come from keyless sources — statsapi,
+    the NBA's CDN, nflverse, ESPN — so the projection itself can be rebuilt
+    as often as anyone likes for nothing.
+
+    This test used to assert that oddsapi was not importable from this
+    module at all. That was true until prices were added and is now wrong:
+    the invariant is not "no odds", it is that ONLY title_prices reaches
+    them, and that it cannot go to the wire unless asked.
+    """
     src = open(os.path.join(ROOT, "engine", "futuresdata.py"),
                encoding="utf-8").read()
-    for banned in ("oddsapi", "ODDS_API_KEY", "get_api_key", "oddshistory"):
-        assert banned not in src, f"{banned} would put this on the meter"
+    for name in ("_mlb_fixtures", "_nba_fixtures", "_nfl_fixtures",
+                 "_cfb_fixtures", "blended_ratings", "records",
+                 "player_season_totals"):
+        i = src.index(f"def {name}(")
+        body = src[i:src.index("\ndef ", i + 1)]
+        assert "oddsapi" not in body, f"{name} would put the model on the meter"
+    # And the one function that does touch it is the one that says so.
+    i = src.index("def title_prices(")
+    assert "oddsapi" in src[i:src.index("\ndef ", i + 1)]
 # --- player season totals from the logs we already have ---------------------
 def _logs(c, rows, season=2026, market="home_runs"):
     for player, team, values in rows:
@@ -307,6 +320,128 @@ def test_a_team_with_no_games_left_projects_only_what_is_banked():
                                   team_games_left={})[0]
     assert row["mean"] == row["banked"] == 12
     assert row["sd"] == 0.0
+# --- the price side, and what it is allowed to cost -------------------------
+def test_one_futures_pull_is_one_credit():
+    """The entire reason this is safe to automate. _classify bills a board
+    call at markets x regions, so a single market in a single region is one
+    credit — four sports weekly is four credits a week against a plan of
+    twenty thousand.
+
+    Adding a second market or a second region doubles it; a per-event loop
+    would multiply it by thirty. This test is the thing standing between
+    "seventeen credits a month" and another burn.
+    """
+    from engine.sources import oddsapi
+    src = open(os.path.join(ROOT, "engine", "sources", "oddsapi.py"),
+               encoding="utf-8").read()
+    i = src.index("def fetch_outrights(")
+    block = src[i:i + 1200]
+    assert '"regions": "us"' in block, "one region"
+    assert '"markets": "outrights"' in block, "one market"
+    assert "," not in block.split('"markets": "')[1].split('"')[0]
+    # And it is a BOARD call, so _classify prices it per market x region.
+    assert "odds_board_futures_" in block
+    kind, _, cost, _ = oddsapi._classify(
+        "https://x/v4/sports/k/odds?markets=outrights&regions=us",
+        "odds_board_futures_mlb.json")
+    assert (kind, cost) == ("live_board", 1)
+
+
+def test_a_week_is_the_cadence_and_the_cache_enforces_it():
+    """Futures are the slowest market a book runs. Pulling one more often
+    buys nothing and spends every time."""
+    from engine.sources import oddsapi
+    assert oddsapi.FUTURES_TTL == 7 * 86400
+
+
+def test_a_build_cannot_spend_by_accident():
+    """title_prices defaults to cache-only and project() defaults live_odds
+    off. Something has to ASK to go to the wire — a board that silently
+    spent every time it rebuilt is exactly the failure that burned 20,000
+    credits."""
+    src = open(os.path.join(ROOT, "engine", "futuresdata.py"),
+               encoding="utf-8").read()
+    assert "def title_prices(sport: str, cache_only: bool = True)" in src
+    assert "live_odds: bool = False" in src
+    i = src.index("if prices:")
+    assert "cache_only=not live_odds" in src[i:i + 200]
+
+
+def test_every_futures_sport_has_a_key():
+    from engine.sources.oddsapi import FUTURES_KEYS
+    assert set(FUTURES_KEYS) == {"nfl", "mlb", "nba", "cfb"}
+
+
+def test_the_best_price_for_the_bettor_wins():
+    from engine.sources.oddsapi import parse_outrights
+    payload = [{"bookmakers": [
+        {"title": "Shorty", "markets": [{"key": "outrights", "outcomes": [
+            {"name": "New York Mets", "price": 500}]}]},
+        {"title": "Longy", "markets": [{"key": "outrights", "outcomes": [
+            {"name": "New York Mets", "price": 800}]}]},
+    ]}]
+    got = parse_outrights(payload, {"New York Mets": "NYM"})
+    assert got["NYM"]["odds"] == 800 and got["NYM"]["book"] == "Longy"
+    assert abs(got["NYM"]["implied"] - 1 / 9) < 1e-3
+
+
+def test_a_runner_we_cannot_map_is_dropped_not_guessed():
+    """A futures price attached to the wrong team's projection is worse than
+    no price at all — it would show as an edge on a team nobody priced."""
+    from engine.sources.oddsapi import parse_outrights
+    payload = [{"bookmakers": [{"title": "B", "markets": [
+        {"key": "outrights", "outcomes": [
+            {"name": "New York Mets", "price": 500},
+            {"name": "Some Relocated Club", "price": 2500}]}]}]}]
+    got = parse_outrights(payload, {"New York Mets": "NYM"})
+    assert set(got) == {"NYM"}
+
+
+def test_a_renamed_team_still_matches_once_normalised():
+    from engine.sources.oddsapi import parse_outrights
+    payload = [{"bookmakers": [{"title": "B", "markets": [
+        {"key": "outrights", "outcomes": [
+            {"name": "st. louis cardinals", "price": 900}]}]}]}]
+    got = parse_outrights(payload, {"St. Louis Cardinals": "STL"})
+    assert got["STL"]["odds"] == 900
+
+
+def test_no_prices_still_produces_a_board():
+    """The model is the product; the price is a comparison bolted on. A
+    futures board with no prices is still a futures board."""
+    c = _hist(seasons=((2025, 40),))
+    from engine.divisions import MLB
+    teams = list(MLB)
+    orig = FD.FIXTURES["mlb"]
+    FD.FIXTURES["mlb"] = lambda _s: [FD.Fixture(teams[0], teams[1])]
+    orig_p = FD.title_prices
+    FD.title_prices = lambda *a, **k: {}
+    try:
+        out = FD.project(c, "mlb", season=2026, trials=50)
+    finally:
+        FD.FIXTURES["mlb"] = orig
+        FD.title_prices = orig_p
+    assert out["teams"] and out["priced"] == 0
+    assert "title_edge_pts" not in out["teams"][0]
+
+
+def test_the_edge_is_the_model_minus_the_book():
+    c = _hist(seasons=((2025, 40),))
+    from engine.divisions import MLB
+    teams = list(MLB)
+    orig = FD.FIXTURES["mlb"]
+    FD.FIXTURES["mlb"] = lambda _s: [FD.Fixture(teams[0], teams[1])]
+    orig_p = FD.title_prices
+    FD.title_prices = lambda *a, **k: {
+        teams[0]: {"odds": 900, "book": "B", "implied": 0.10}}
+    try:
+        out = FD.project(c, "mlb", season=2026, trials=200)
+    finally:
+        FD.FIXTURES["mlb"] = orig
+        FD.title_prices = orig_p
+    row = {t["team"]: t for t in out["teams"]}[teams[0]]
+    assert row["title_implied"] == 0.10
+    assert abs(row["title_edge_pts"] - (row["p_title"] - 0.10) * 100) < 0.11
 
 
 if __name__ == "__main__":

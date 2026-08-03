@@ -294,9 +294,36 @@ def games_left_by_team(fixtures: list) -> dict:
     return out
 
 
+def title_prices(sport: str, cache_only: bool = True) -> dict:
+    """``{team: {"odds", "book", "implied"}}`` for the championship market.
+
+    ``cache_only`` DEFAULTS TO TRUE, which is the safety property worth
+    stating: a build cannot spend by accident. Something has to ask for a
+    live pull explicitly, and the cache TTL is a week, so even then the
+    call only reaches the wire once every seven days.
+
+    Never raises — a futures board with no prices is still a futures board,
+    and it is the model that is the product here.
+    """
+    try:
+        from .sources import oddsapi
+        payload, _ = oddsapi.fetch_outrights(sport, cache_only=cache_only)
+        cfg = oddsapi.SPORT_CONFIG.get(sport) or {}
+        return oddsapi.parse_outrights(payload, cfg.get("teams") or {})
+    except Exception:                              # noqa: BLE001
+        return {}
+
+
 def project(conn, sport: str, season: int | None = None, trials: int = 20000,
-            conferences: dict | None = None) -> dict:
-    """Build the inputs and run the season. The one call a builder needs."""
+            conferences: dict | None = None, prices: bool = True,
+            live_odds: bool = False) -> dict:
+    """Build the inputs and run the season. The one call a builder needs.
+
+    ``live_odds`` is off by default. The model is the product; the price is
+    a comparison bolted on afterwards, and a board that silently spent a
+    credit every time it rebuilt would be exactly the failure that burned
+    20,000 of them.
+    """
     from .futures import simulate
     data = build(conn, sport, season=season, conferences=conferences)
     out = simulate(sport, data["ratings"], data["records"], data["fixtures"],
@@ -304,5 +331,24 @@ def project(conn, sport: str, season: int | None = None, trials: int = 20000,
     out.update(season=data["season"], note=data["note"],
                prior_share=data["prior_share"],
                games_played=data["games_played"],
-               fixtures_remaining=len(data["fixtures"]))
+               fixtures_remaining=len(data["fixtures"]),
+               games_left=games_left_by_team(data["fixtures"]))
+
+    if prices:
+        mkt = title_prices(sport, cache_only=not live_odds)
+        out["priced"] = len(mkt)
+        for row in out["teams"]:
+            p = mkt.get(row["team"])
+            if not p:
+                continue
+            row["title_odds"] = p["odds"]
+            row["title_book"] = p["book"]
+            row["title_implied"] = p["implied"]
+            # THE WHOLE POINT, IN ONE FIELD. A book's futures number can be
+            # months old; ours is re-simulated from tonight's ratings. The
+            # gap is the claim, and it is stated in points of probability
+            # rather than as a recommendation — a season-long edge is not
+            # the same object as a tonight edge and should not be dressed
+            # in the same clothes.
+            row["title_edge_pts"] = round((row["p_title"] - p["implied"]) * 100, 1)
     return out
