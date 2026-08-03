@@ -139,7 +139,11 @@ def test_a_settle_writes_the_record_page():
     src = open(os.path.join(ROOT, "engine", "maintenance.py"),
                encoding="utf-8").read()
     i = src.index("def settle_open(")
-    block = src[i:i + 4000]
+    # To the next top-level def, not a fixed character count — a fixed
+    # window silently shrinks as the function above it grows, and this
+    # assertion once failed only because new code pushed the line past
+    # character 4000.
+    block = src[i:src.index("\ndef ", i + 1)]
     assert 'export_json(lconn, ROOT / "web" / "data" / "record.json")' in block
 
 

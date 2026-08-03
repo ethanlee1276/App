@@ -16,6 +16,7 @@ from ..betting import (
     pick_side, temper_edge,
 )
 from ..calibrate import apply_temperature, correction_for, is_reliable
+from ..losspatterns import veto as lp_veto
 from ..odds import expected_value
 from ..statmath import prob_over, clamp
 from .models import MLBProp, HOME_RUNS, STRIKEOUTS, PITCHER_MARKETS
@@ -159,10 +160,16 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     #                at standard juice and silently overrode them.
     #  quality     — below 70 is no bet, not a lean (§10)
     calibration_ok = is_reliable("mlb", prop.market)
+    # One level finer than the market gate above: the loss-pattern miner
+    # closes SLICES (a side, a price band) whose stated probabilities
+    # systematically missed, under false-discovery control. Same contract
+    # as a boundary temperature — the record itself refuses the bet.
+    pattern_block = lp_veto("mlb", prop.market, side=side, odds=best.odds,
+                            prob=hit, book=best.book, horizon_days=0)
     tier = mlb_tier(prop.market)
     min_edge = mlb_tier_min_edge(prop.market)
-    gate_ok = (credible and calibration_ok and has_market
-               and edge >= min_edge
+    gate_ok = (credible and calibration_ok and pattern_block is None
+               and has_market and edge >= min_edge
                and net > favourite_surcharge(best.odds))
     grade = letter(quality) if gate_ok else "Pass"
     fraction = 0.5 if (grade == "A+" and tier == 1) else 0.25
@@ -170,6 +177,8 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
              if grade != "Pass" else 0.0)
 
     reasons = list(proj.reasons)
+    if pattern_block:
+        reasons.insert(0, pattern_block)
     if not calibration_ok:
         reasons.insert(0, "This market's calibration fit hit the edge of its "
                           "search range — the model can't price it reliably, "

@@ -3522,6 +3522,61 @@ function recSelfTuningSection(st) {
       structurally cannot copy.</p>`)}`;
 }
 
+function recLossPatternsSection(lp) {
+  if (!lp || !(lp.n_records ?? 0)) return "";
+  const tone = (f) => f.action === "close" ? "var(--bad)"
+    : (f.gap_pts ?? 0) > 0 ? "var(--warn)" : "var(--text-mute)";
+  const rows = (lp.findings || []).map((f) => `
+    <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
+        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+      <span class="chip">${escapeHtml((f.sport || "").toUpperCase())}</span>
+      <span style="min-width:100px">${escapeHtml(f.market || "all markets")}</span>
+      <span style="flex:1;min-width:140px;font-weight:600">${escapeHtml(f.value || "")}</span>
+      <span style="color:${tone(f)}">${escapeHtml(f.reading || "")}</span>
+      ${f.action === "close"
+        ? `<span class="chip" style="color:var(--bad)">vetoing picks</span>` : ""}
+    </div>`).join("");
+  const empty = (lp.tested ?? 0) > 0 ? `
+    <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
+      Scanned ${lp.tested} slice${lp.tested === 1 ? "" : "s"} of
+      ${(lp.n_records ?? 0).toLocaleString()} graded bets — nothing survives
+      false-discovery control yet. Patterns that look real on small samples
+      usually aren't, and a bar that bends to make the page interesting
+      stops meaning anything. The bar stays.</p>` : `
+    <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
+      Not enough graded bets in any one slice yet — a slice is only tested
+      at ${lp.min_n ?? 40}+ settled picks. Every night's grades feed this.</p>`;
+  return `
+    <div class="section-title">Learning from losses
+      <span class="sub">— the miner slices every graded bet by side, price band,
+      stated probability, horizon and book, hunting pockets where the model's
+      claims systematically missed. A pocket that runs hot enough closes itself
+      and blocks new picks — the same self-closure markets already live under,
+      one level finer.</span></div>
+    <div class="stats">
+      <div class="tile"><div class="k">Record mined</div><div class="v">${(lp.n_records ?? 0).toLocaleString()}</div>
+        <div class="tile-sub">graded bets, re-mined after every settle</div></div>
+      <div class="tile"><div class="k">Slices tested</div><div class="v">${lp.tested ?? 0}</div></div>
+      <div class="tile"><div class="k">Patterns found</div><div class="v">${(lp.findings || []).length}</div>
+        <div class="tile-sub">survivors of false-discovery control</div></div>
+      <div class="tile"><div class="k">Self-closed</div><div class="v">${(lp.closed || []).length}</div>
+        <div class="tile-sub">slices now vetoing new picks</div></div>
+    </div>
+    <div class="card" style="padding:0">${rows || empty}</div>
+    ${recDisclosure("How this avoids fake trends", `
+      <p style="margin:0;font-size:.87em">Every "trends" tab in this industry
+      is a pattern-hallucination machine: slice one record forty ways and luck
+      alone hands you two impressive streaks. Two disciplines here. First, a
+      slice is judged on whether the model's own stated probabilities missed
+      reality (said 64%, hit 51%) — not on win rate, which would flag every
+      honest longshot bucket. Second, every slice tested enters a
+      Benjamini–Hochberg false-discovery correction, and only survivors are
+      findings — the flagged set is expected to be at most
+      ${Math.round(((lp.alpha ?? 0.05) * 100))}% luck. A pattern that clears
+      both bars closes its slice automatically; the pick engines refuse
+      anything that lands in it, and the veto's reason names this page.</p>`)}`;
+}
+
 function recCalibrationSection(cal, era) {
   if (!cal || !cal.n || !(cal.buckets || []).length) return "";
   const rows = calBucketRows(cal.buckets);
@@ -3956,6 +4011,7 @@ async function renderRecord() {
     ${recCalibrationSection(src.calibration, src.calibration_era)}
     ${scoped ? "" : recCalibrationSplits(d.calibration_splits)}
     ${scoped ? "" : recSelfTuningSection(d.self_tuning)}
+    ${scoped ? "" : recLossPatternsSection(d.loss_patterns)}
     ${scoped ? "" : recForecastLog(d.forecast_log)}
     ${scoped ? "" : recHealthSection(d.account_health)}
     ${scoped ? "" : recLongshotSection(d.longshots)}

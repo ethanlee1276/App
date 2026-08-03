@@ -322,6 +322,29 @@ Ethan's machine, and integrating before that would put an unverified second
 opinion in front of a bettor. Cost is not the obstacle: 0.29s per lineup at
 20,000 trials, about 8.6s for a 15-game slate.
 
+### BUILT 2026-08-03 — the blind-spot miner (`engine/losspatterns.py`)
+
+The next rung of the self-tuning ladder. The temperature refit learns one
+dial per market; the miner learns WHERE the misses cluster: every graded
+bet is sliced by side, price band, stated-probability band, horizon and
+book, within each market and pooled per sport. A slice is a finding only
+when the model's own stated probabilities missed reality (calibration z,
+never raw win rate — win rate would flag every honest longshot bucket)
+AND it survives Benjamini–Hochberg false-discovery control over every
+slice tested. Surviving slices that ran ≥5 points hot close themselves,
+and `veto()` blocks new picks landing in them at the same gate where
+`is_reliable()` sits — pooled sport-level slices may point ("watch") but
+never convict, because one bad pocket drags a clean aggregate under. The
+banding is one definition shared by miner and veto, so enforcement can
+never drift from evidence. Re-mined on every settle pass; rendered on the
+Record page under "Learning from losses" with the empty state stating the
+discipline out loud.
+
+Enforcement wiring today: the MLB prop engine (where every other fitted
+gate already lives). Extending the veto to the other engines, and mining
+the quarter-million-prop backtest DB rather than just the live journal,
+are the two named next steps.
+
 ### WON'T — a language model anywhere in the pricing path
 
 Not a capability judgement, a structural one. We just finished publishing a

@@ -2791,6 +2791,17 @@ def settle_now(day: str | None = None) -> None:
                   f"{rp['reopened']} reopened with their legs")
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠️  parlay settle skipped: {exc}")
+    # The learning step: fresh grades re-mine the journal for loss
+    # patterns, so a slice that just crossed the evidence bar vetoes
+    # picks on the next build.
+    try:
+        from engine import losspatterns
+        lp = losspatterns.refresh(lconn)
+        if lp["closed"]:
+            print(f"  loss patterns: {len(lp['closed'])} slice(s) "
+                  "self-closed — see the Record page")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  loss-pattern mining skipped: {exc}")
     ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
     after = counts(lconn)
     print(f"  journal: settled {n} pick(s)")

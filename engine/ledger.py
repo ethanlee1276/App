@@ -2118,6 +2118,16 @@ def verify_forecast_log(conn) -> dict:
             "broken_at": None, "verified_through": len(rows)}
 
 
+def _loss_patterns_block(conn) -> dict:
+    """The miner's view of this journal, for export_json. Guarded like
+    every other block: a mining failure must never cost the export."""
+    try:
+        from . import losspatterns as lp
+        return lp.mine(lp.records_from_ledger(conn))
+    except Exception:                              # noqa: BLE001
+        return {"n_records": 0, "tested": 0, "findings": [], "closed": []}
+
+
 def _self_tuning_block() -> dict:
     """self_tuning_report with its own history connection, for export_json.
 
@@ -2732,6 +2742,12 @@ def export_json(conn, path) -> None:
         # a missing stats DB (CI, fresh clone) yields an empty block, never
         # a failed export.
         "self_tuning": _self_tuning_block(),
+        # The blind-spot miner: slices of the record whose stated
+        # probabilities systematically missed, under false-discovery
+        # control. Mined fresh from THIS journal so the page always shows
+        # the record it sits on; the persisted store the pick-time veto
+        # reads is refreshed at settle time.
+        "loss_patterns": _loss_patterns_block(conn),
         "account_health": account_health(conn),
         # §13: the parlay record is reported SEPARATELY and never blended.
         # Its own key, its own tables, its own notional — nothing above this
