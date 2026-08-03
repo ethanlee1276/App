@@ -243,6 +243,64 @@ In the study's own staging, and roughly in the order the study argues for:
 Deep links, promo tracking, travel/rest and tax reporting are real gaps with
 no pillar attached; they are commodity features and they can wait.
 
+## Added 2026-08-03 — game-script simulation, and where AI does not go
+
+Ethan, brainstorming after the Futures build: could the Monte Carlo run
+against individual bets, and could the site learn from its own record without
+a human in the loop?
+
+**The learning loop already exists**, and it is worth writing down because it
+is easy to look at and not see:
+
+* `engine/calibrate.py` fits a temperature `T` nightly against settled
+  outcomes, minimising Brier. `T > 1` means the model was over-confident and
+  every probability gets pulled toward 50%. One parameter, so it cannot
+  overfit a few thousand props the way a flexible curve would.
+* `is_reliable()` in `engine/mlb/pipeline.py` **closes a market by itself**
+  when its fit is bad, and the census names which ones. No human decides
+  that, and the Recommended page says "closed by calibration: Total Bases"
+  rather than silently dropping 197 props.
+* `engine/calibhistory.py` stamps each sweep with a git SHA, so "are we
+  improving" has an answer that ties to a commit.
+* The probation → promotion bar (100+ graded, z ≥ 2) is the same idea applied
+  to a whole market rather than a probability.
+
+So the self-adjusting architecture is not missing. What is missing is the
+piece below.
+
+### MISSING — per-game Monte Carlo (game-script simulation)
+
+Props today are priced from closed-form per-player distributions. The only
+simulation in the codebase is season-level (`engine/futures.py`,
+`engine/playoffs.py`). Simulating the GAME — lineup turning over, score
+state, bullpen usage, game flow — and reading every prop off the same
+simulated games would buy one thing closed-form pricing structurally cannot:
+
+**the joint distribution, for free.** `engine/correlation.py` currently
+estimates leg correlation from fitted priors backtested against our history
+(task #52). A shared game sim produces the correlation directly, because both
+legs came out of the same simulated game. That is the honest foundation under
+the Parlay Zone, and it is also the missing input to the Stage 3
+covariance-across-simultaneous-positions item above. Unabated's "prop
+simulator" is this feature; nothing else on the matrix has it.
+
+Cost is the open question and it is not small: season sims are per-league and
+run daily, whereas this would be per-game and per-slate.
+
+### WON'T — a language model anywhere in the pricing path
+
+Not a capability judgement, a structural one. We just finished publishing a
+reliability diagram, Brier, log loss and ECE against the de-vigged close. All
+of that rests on the model being **reproducible and temperature-scalable**: we
+can re-run a sweep over 295,627 props, fit one parameter, and show the curve
+move. A language model in the pricing path cannot be temperature-scaled, does
+not reproduce run to run, and cannot be swept historically — so it would take
+the one pillar competitors structurally cannot copy and hand it back.
+
+Where it fits instead is explanation, never a number: turning a pick's
+existing reason codes into prose. That path cannot move a probability, which
+is exactly why it is safe.
+
 ## What to distrust in the study
 
 The study flags its own weak sources and those flags are worth keeping in

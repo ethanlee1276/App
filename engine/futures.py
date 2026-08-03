@@ -226,6 +226,28 @@ def simulate(sport: str, ratings: dict, records: dict,
     Seeded by default so two runs of the same board agree. A futures page
     whose numbers jitter by a point every refresh reads as noise even when
     the model is stable, and nobody can tell a real move from the sampler.
+
+    WHY 20,000 AND NOT MORE. Measured on a realistic 30-team MLB board with
+    780 games left, re-seeding and reading the spread — that spread IS the
+    sampler error, since nothing else changes between runs:
+
+        trials     title prob sd (mean / worst team)   seconds/run
+         5,000            0.143pp / 0.496pp                0.8
+        20,000            0.077pp / 0.359pp                3.8
+       100,000            0.037pp / 0.186pp               18.0
+
+    Five times the work halves the noise, exactly as 1/sqrt(N) promises. The
+    reason not to spend it is the other column. Nudging each team's rating by
+    ±0.03 — LESS uncertainty than our ratings actually carry, about one win
+    in a hundred and ten — moves the same probabilities by 0.216pp on
+    average and 0.970pp at worst. At a still-modest ±0.08 it is 0.555pp and
+    2.399pp.
+
+    So model error is three to seven times the sampler error at 20,000, and
+    raising trials sharpens the fourth significant figure of a number whose
+    second is uncertain. It would also take a four-sport build from about 15
+    seconds to 72. If these numbers ever need revisiting, revisit them when
+    the RATINGS get better, not when the CPU does.
     """
     rng = random.Random(seed)
     played_n = {t: sum(records.get(t, (0, 0))) for t in records}
