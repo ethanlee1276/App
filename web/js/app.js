@@ -4443,23 +4443,73 @@ function setStandaloneSource(label, dateLabel) {
   if (dt && dateLabel) dt.textContent = dateLabel;
 }
 
+/* The Kalshi board: the exchange's probability beside ours, per game.
+
+   The one honest advantage an exchange has over a sportsbook as a DATA
+   source: its mid IS the market's probability. A book's line carries the
+   book's margin and has to be de-vigged on an assumption; a two-sided
+   order book's midpoint is the market clearing price of the claim itself.
+   So the board states three numbers per matched game — Kalshi's, ours, and
+   the gap in points — and where a leg is missing it says which, because a
+   price with no comparison is still information. */
+function kalshiSectionHTML(k) {
+  if (!k) return "";
+  const rows = (k.rows || []).map((r) => {
+    const edge = r.edge_pts == null ? `<span style="opacity:.45">—</span>`
+      : `<span style="color:var(--${r.edge_pts > 0 ? "good" : "bad"});font-weight:700">
+           ${r.edge_pts > 0 ? "+" : ""}${r.edge_pts} pts</span>`;
+    const basis = r.price_basis === "last_trade"
+      ? ` <span class="chip" title="One side of the book is empty — this is the last trade, not a two-sided mid">last trade</span>` : "";
+    return `<div class="kx-row">
+      <span class="kx-sport chip">${escapeHtml((r.sport || "").toUpperCase())}</span>
+      <span class="kx-title" title="${escapeHtml(r.title)}">${escapeHtml(r.title)}
+        ${r.matchup ? `<span class="kx-match">· ${escapeHtml(r.matchup)}</span>` : ""}${basis}</span>
+      <span class="kx-num kx-k" title="Kalshi mid — the exchange's own probability">${(r.prob * 100).toFixed(0)}%</span>
+      <span class="kx-num kx-m" title="Our model's probability for the same claim">${r.model_p == null ? "—" : (r.model_p * 100).toFixed(0) + "%"}</span>
+      <span class="kx-num kx-e">${edge}</span>
+      <span class="kx-vol" title="24h volume">$${Number(r.volume_24h || 0).toLocaleString()}</span>
+    </div>`;
+  }).join("");
+  const empty = (k.rows || []).length ? "" : `
+    <p class="loading" style="padding:12px">${escapeHtml(k.note
+      || "No open sports markets seen on the last pull — the board fills as Kalshi lists games.")}</p>`;
+  return `
+    <div class="section-title">Kalshi board
+      <span class="sub">— CFTC-regulated event contracts, all fifty states. The mid of a
+      two-sided book is the market's probability with no vig to strip; "edge" is our model
+      minus that, in points, and only appears where both numbers exist.</span></div>
+    <div class="stats">
+      <div class="tile"><div class="k">Sports markets</div><div class="v">${k.n_markets || 0}</div></div>
+      <div class="tile"><div class="k">Matched to tonight</div><div class="v">${k.n_matched || 0}</div></div>
+      <div class="tile"><div class="k">With a model number</div><div class="v">${k.n_modeled || 0}</div></div>
+      <div class="tile"><div class="k">Tape stored</div><div class="v">${((k.tape || {}).stored_total || 0).toLocaleString()}</div>
+        <div class="tile-sub">snapshots — order books can't be backfilled</div></div>
+    </div>
+    <div class="card kx-table" style="padding:0">${rows}${empty}</div>`;
+}
+
 async function renderIntel() {
   const host = document.getElementById("intel-body");
   if (!host) return;
-  let d = null;
+  let d = null, kx = null;
   try {
     const res = await fetch("data/predmarkets.json?t=" + Date.now());
     if (res.ok) d = await res.json();
   } catch (e) {}
+  try {
+    const res = await fetch("data/kalshi.json?t=" + Date.now());
+    if (res.ok) kx = await res.json();
+  } catch (e) {}
   if (!d || (!(d.flow || []).length && !(d.markets || []).length)) {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
       <div class="es-title">No prediction-market data yet</div>
-      <div class="es-sub">The launcher pulls Polymarket's public market list and trade
-      tape on every refresh (free, no key needed). If this persists, the machine may not
-      be able to reach gamma-api.polymarket.com.</div></div>`;
+      <div class="es-sub">The launcher pulls Kalshi's order books and Polymarket's public
+      market list and trade tape on every refresh (free, no key needed). If this persists,
+      the machine may not be able to reach the venues.</div></div>`
+      + kalshiSectionHTML(kx);
     return;
   }
-  setStandaloneSource("Polymarket public market + tape feeds", "Polymarket · live venue data");
+  setStandaloneSource("Kalshi + Polymarket public feeds", "Prediction markets · live venue data");
   const tape = d.tape || {};
   const proven = pmSignalProven(d.validation);
   const cents = (p) => p == null ? "—" : `${(p * 100).toFixed(0)}¢`;
@@ -4575,9 +4625,11 @@ async function renderIntel() {
     <div class="section-title">Top markets
       <span class="sub">— live markets by 24h volume · YES price · resolution date</span></div>
     <div class="card" style="padding:0">${marketRows}</div>
+    ${kalshiSectionHTML(kx)}
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Wallet-age signal
-      matures as the tape accrues (it cannot be backfilled). Kalshi omitted: no public
-      trader identity. Analyzing public flow is market research; what the CFTC prosecutes
+      matures as the tape accrues (it cannot be backfilled). Kalshi carries no public
+      trader identity, which is why it appears above as a PRICE and not as flow.
+      Analyzing public flow is market research; what the CFTC prosecutes
       (2026) is trading on information <i>you</i> hold a duty to keep confidential.</p>`;
 }
 

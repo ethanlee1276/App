@@ -111,9 +111,9 @@ than bankroll management.
 |---|---|---|
 | Polymarket informed flow (public wallets, trade tape) | HAVE | `engine/predmarket.py`, `pm_build.py` |
 | Own stored tape, appended every build | HAVE | `engine/predmarket.py` — "a year of tape is the moat" |
-| Kalshi order book as a pricing source | MISSING | a deliberate deferral, written down in `predmarket.py`: Kalshi publishes no trader identity, so the *flow forensics* module would be thinner. That reasoning does not apply to using Kalshi as a **price**, which is a different feature and is not built. |
+| Kalshi order book as a pricing source | HAVE (2026-08-03) | `engine/sources/kalshi.py` — keyless public API, mid-of-book as the fair (no vig to strip), snapshot tape from day one, and a cross-market board on the Prediction Markets page: Kalshi's probability beside the model's, gap in points, only where both exist. Enters as a PRICE, never as flow — `predmarket.py`'s no-trader-identity reasoning still stands and a test forbids the adapter growing wallet-shaped functions. Awaiting first live pull on Ethan's machine. |
 | Novig / ProphetX | MISSING | both received CFTC designation in June 2026, after this site's exchange work |
-| Cross-market edge: exchange fair value vs traditional book | MISSING | the actual Stage 2 deliverable |
+| Cross-market edge: exchange fair value vs traditional book | PARTIAL (2026-08-03) | exchange-vs-MODEL ships (the Kalshi board); exchange-vs-de-vigged-BOOK is the remaining leg, and the inputs (cached book odds) already exist |
 | Sporttrade | WON'T | exited sports betting entirely, May–June 2026 |
 
 ### Pillar 3 — Radical transparency
@@ -230,9 +230,8 @@ In the study's own staging, and roughly in the order the study argues for:
 2. ~~**Say what longevity cannot know.**~~ — built 2026-08-03.
 3. ~~**Calibration by market and by horizon**~~ — built 2026-08-03.
 4. ~~**Immutable hashed forecast log**~~ — built 2026-08-03.
-5. **Kalshi as a pricing source, then cross-market edge vs traditional
-   books** (Stage 2a). The largest piece of genuinely new work, and the one
-   with real regulatory uncertainty attached.
+5. ~~**Kalshi as a pricing source**~~ — built 2026-08-03; the
+   exchange-vs-book leg of the cross-market edge remains.
 6. **NFL and NBA officiating-crew tendencies** (data). The study's biggest
    claimed data edge, and the one whose effect sizes are the least
    independently verified.

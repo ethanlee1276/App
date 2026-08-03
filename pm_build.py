@@ -21,11 +21,97 @@ from engine import predmarket as pm
 from engine.db import connect
 from engine.sources.fetch import DataUnavailable
 
+#: Where each sport's built slate lives — the games and moneyline
+#: probabilities the Kalshi board compares against. Read from disk rather
+#: than recomputed: pm builds AFTER the sport refreshes in launch.py's
+#: cycle, so these are minutes old at worst, and rebuilding engines here
+#: would double every build for a comparison column.
+SLATE_FILES = {"nfl": "recommendations.json",
+               "mlb": "mlb_recommendations.json",
+               "nba": "nba.json", "wnba": "wnba.json", "cfb": "cfb.json"}
+
+
+def _names_by_abbr(sport: str) -> dict:
+    try:
+        from engine.sources.oddsapi import SPORT_CONFIG
+        teams = (SPORT_CONFIG.get(sport) or {}).get("teams") or {}
+        return {ab: nm for nm, ab in teams.items()}
+    except Exception:                              # noqa: BLE001
+        return {}
+
+
+def _tonights_games_and_probs(data_dir: Path):
+    """(games_by_sport, model_probs) from the already-built slates.
+
+    model_probs is {(sport, "AWY@HOM"): P(home wins)} — converted from each
+    moneyline's pick-relative win_prob, because the Kalshi matcher needs one
+    fixed convention and "probability of the pick" flips team every game.
+    """
+    games_by_sport, model_probs = {}, {}
+    for sport, fname in SLATE_FILES.items():
+        try:
+            d = json.loads((data_dir / fname).read_text())
+        except Exception:                          # noqa: BLE001
+            continue
+        names = _names_by_abbr(sport)
+        rows = []
+        for g in d.get("games", []) or []:
+            rows.append({"home": g.get("home", ""), "away": g.get("away", ""),
+                         "home_name": names.get(g.get("home", ""), ""),
+                         "away_name": names.get(g.get("away", ""), "")})
+        if rows:
+            games_by_sport[sport] = rows
+        for b in d.get("game_bets", []) or []:
+            if b.get("bet_type") != "moneyline" or b.get("win_prob") is None:
+                continue
+            key = f"{b.get('away', '')}@{b.get('home', '')}"
+            p = float(b["win_prob"])
+            model_probs[(sport, key)] = p if b.get("pick_is_home") else 1 - p
+    return games_by_sport, model_probs
+
+
+def build_kalshi(out_path: Path, data_dir: Path) -> None:
+    """The second venue, in its own failure domain.
+
+    Kalshi being down must not cost the Polymarket build and vice versa —
+    they are different hosts with different outages. When the feed is
+    unreachable and a previous board exists, the previous board stands
+    (same "keep last data" contract as the Polymarket path); with no
+    previous board the page gets an honest note instead of silence.
+    """
+    from engine.sources import kalshi as kx
+    try:
+        markets = kx.parse_markets(kx.fetch_markets())
+    except DataUnavailable as exc:
+        if out_path.exists():
+            print(f"⚠️  Kalshi unreachable — keeping last board.\n   {exc}")
+            return
+        out_path.write_text(json.dumps({
+            "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+            "venue": "kalshi", "rows": [], "n_markets": 0, "n_matched": 0,
+            "n_modeled": 0, "sports_seen": [],
+            "note": "Kalshi feed unreachable from this machine"}, indent=2))
+        return
+    conn = connect()
+    kx.store_snapshot(conn, markets)
+    games_by_sport, model_probs = _tonights_games_and_probs(data_dir)
+    out = kx.board(markets, games_by_sport, model_probs)
+    stored = conn.execute(
+        "SELECT COUNT(*) FROM kalshi_snapshots").fetchone()[0]
+    out["tape"] = {"stored_total": stored}
+    out_path.write_text(json.dumps(out, indent=2))
+    print(f"Kalshi: {out['n_markets']} sports market(s), "
+          f"{out['n_matched']} matched to tonight, "
+          f"{out['n_modeled']} with a model number · tape {stored:,}")
+
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="web/data/predmarkets.json")
     args = ap.parse_args()
+
+    out_dir = Path(args.out).parent
+    build_kalshi(out_dir / "kalshi.json", out_dir)
 
     try:
         markets = pm.parse_markets(pm.fetch_markets())

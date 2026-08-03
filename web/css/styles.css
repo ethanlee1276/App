@@ -3282,3 +3282,37 @@ select.calc-in { width: auto; font-weight: 600; }
   .brand { padding-bottom: 0; border-bottom: 0; }
   .slate-meta, .standing { padding-top: 0; }
 }
+
+/* The Kalshi board. Six cells: sport chip, the market's own title (the one
+   unbounded column, so it takes the flexible track and the ellipsis),
+   Kalshi's probability, ours, the gap, volume. Numbers right-aligned and
+   tabular so a column of them reads as a column. */
+.kx-row {
+  display: grid; align-items: center; gap: 10px;
+  grid-template-columns: 52px minmax(0, 1fr) 52px 52px 74px 84px;
+  padding: 8px 14px; border-bottom: 1px solid var(--border-soft);
+}
+.kx-row:last-child { border-bottom: 0; }
+.kx-title { min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-size: var(--fs-sm); }
+.kx-match { color: var(--text-mute); }
+.kx-num { text-align: right; font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm); }
+.kx-vol { text-align: right; color: var(--text-mute);
+  font-variant-numeric: tabular-nums; font-size: var(--fs-xs); }
+@media (max-width: 760px) {
+  /* The title gets its own line; the numbers share a second. Volume drops —
+     on a phone the edge is the story and the row was six columns of 60px. */
+  .kx-row { grid-template-columns: 52px 1fr 1fr 1fr;
+    grid-template-areas: "sport title title title" ".  k m e"; row-gap: 4px; }
+  .kx-sport { grid-area: sport; }
+  .kx-title { grid-area: title; white-space: normal; }
+  /* Named, never positional: every cell here is a <span>, and
+     :nth-of-type counts TAGS — the sport chip is span number one, so
+     positional rules grab the wrong cells or none. The futures table
+     already paid for this exact lesson. */
+  .kx-k { grid-area: k; text-align: left; }
+  .kx-m { grid-area: m; text-align: left; }
+  .kx-e { grid-area: e; text-align: left; }
+  .kx-vol { display: none; }
+}
