@@ -193,9 +193,35 @@ def build(conn, sport: str, season: int | None = None,
     and a feed that is down must not take the sport with it — the caller
     gets an empty fixture list and a note saying why, which renders as "no
     projection" rather than as a broken page.
+
+    THE OFFSEASON ROLLS FORWARD. ``season_of`` answers "which season does
+    this date belong to" — and in August that is the NFL season that just
+    ended, because the label has to key game logs consistently right up to
+    kickoff. A futures board is asking a different question: "which season
+    is there left to project?" Answering it with the finished one produced
+    an empty board reading "the season is over" while 272 published,
+    unplayed 2026 fixtures sat in the games table — for the NFL from
+    February to September, CFB to mid-August and the NBA to mid-October,
+    which is to say three of the four boards were empty exactly when a
+    futures market is most alive. When the calendar season has nothing left
+    and the caller didn't pin one, the NEXT season's schedule is probed and
+    taken if published; its ratings blend to ~100% prior, so the existing
+    prior_share note labels the board a preseason prior by itself.
     """
-    day = _dt.date.today().isoformat()
-    season = season if season is not None else season_of(sport, day)
+    if season is None:
+        day = _dt.date.today().isoformat()
+        season = season_of(sport, day)
+        out = _build_season(conn, sport, season, conferences)
+        if not out["fixtures"]:
+            ahead = _build_season(conn, sport, season + 1, conferences)
+            if ahead["fixtures"]:
+                return ahead
+        return out
+    return _build_season(conn, sport, season, conferences)
+
+
+def _build_season(conn, sport: str, season: int,
+                  conferences: dict | None = None) -> dict:
     ratings, prior_share, played = blended_ratings(conn, sport, season)
     recs = records(conn, sport, season, conferences=conferences)
     try:

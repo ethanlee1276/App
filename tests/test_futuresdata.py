@@ -444,6 +444,77 @@ def test_the_edge_is_the_model_minus_the_book():
     assert abs(row["title_edge_pts"] - (row["p_title"] - 0.10) * 100) < 0.11
 
 
+
+# --- the offseason rolls forward ---------------------------------------------
+def test_the_offseason_board_rolls_forward_to_the_published_next_season():
+    """season_of answers "which season does this date belong to" — and in
+    August that is the NFL season that just ENDED, because the label has to
+    key game logs consistently right up to kickoff. A futures board asks a
+    different question: which season is there left to project? Answering it
+    with the finished one produced an empty board reading "the season is
+    over" while 272 published, unplayed 2026 fixtures sat in the games
+    table — and left three of the four boards empty for the whole
+    offseason, exactly when a futures market is most alive.
+
+    Measured after the fix on the real NFL DB: 32 teams, 272 fixtures,
+    season 2026, prior_share 1.0, and every conservation law holding —
+    title probs 1.0000, conferences 2.0004, divisions 8.0001, playoff
+    berths 14.0000, mean projected wins 8.51 on a 17-game season."""
+    from engine.mlb.models import MLBGame  # noqa: F401 (import guard only)
+
+    class _Fx:
+        __slots__ = ("home", "away")
+
+        def __init__(self, h, a):
+            self.home, self.away = h, a
+
+    c = _hist(seasons=((2025, 40),))       # 2025 complete, nothing in 2026
+    calendar = FD.season_of("mlb", __import__("datetime").date.today().isoformat())
+    orig = FD.FIXTURES["mlb"]
+    # The calendar season has nothing left; the next one has a schedule.
+    FD.FIXTURES["mlb"] = (lambda s: [] if s == calendar
+                          else [_Fx("NYY", "BOS"), _Fx("LAD", "SF")])
+    try:
+        out = FD.build(c, "mlb")           # no season pinned — the live path
+    finally:
+        FD.FIXTURES["mlb"] = orig
+    assert out["season"] == calendar + 1
+    assert len(out["fixtures"]) == 2
+    # A rolled-forward board is all prior, and it says so in words.
+    assert out["prior_share"] == 1.0
+    assert "prior, not a projection" in out["note"]
+
+
+def test_an_explicitly_pinned_season_never_rolls_forward():
+    """A caller who names a season means that season. Rolling a backtest of
+    2024 forward to 2025 because 2024 is finished would answer a question
+    nobody asked."""
+    c = _hist(seasons=((2025, 40),))
+    orig = FD.FIXTURES["mlb"]
+    FD.FIXTURES["mlb"] = lambda s: []
+    try:
+        out = FD.build(c, "mlb", season=2025)
+    finally:
+        FD.FIXTURES["mlb"] = orig
+    assert out["season"] == 2025
+    assert out["fixtures"] == []
+    assert "season is over" in out["note"] or "not published" in out["note"]
+
+
+def test_a_wholly_unpublished_future_stays_an_honest_empty_board():
+    """Both the calendar season and the next have nothing: the note stands,
+    the board renders as "no projection", nothing invents a schedule."""
+    c = _hist(seasons=((2025, 40),))
+    orig = FD.FIXTURES["mlb"]
+    FD.FIXTURES["mlb"] = lambda s: []
+    try:
+        out = FD.build(c, "mlb")
+    finally:
+        FD.FIXTURES["mlb"] = orig
+    assert out["fixtures"] == []
+    assert "season is over" in out["note"] or "not published" in out["note"]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
