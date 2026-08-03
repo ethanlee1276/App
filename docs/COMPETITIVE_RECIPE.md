@@ -285,8 +285,60 @@ the Parlay Zone, and it is also the missing input to the Stage 3
 covariance-across-simultaneous-positions item above. Unabated's "prop
 simulator" is this feature; nothing else on the matrix has it.
 
-Cost is the open question and it is not small: season sims are per-league and
-run daily, whereas this would be per-game and per-slate.
+**Cost was measured on 2026-08-03 and it is not the blocker.** That sentence
+replaces an earlier one here that guessed it would be — recorded rather than
+edited away, because guessing at cost is how a feature gets shelved for a
+reason that was never true.
+
+A plate-appearance-level sim, in pure Python, with the lookups the real thing
+needs (per-batter outcome tables blended against the pitcher, a bullpen change
+in the 7th, joint bookkeeping across legs):
+
+| | one game | 15-game MLB slate | + NFL/NBA (~27 games) |
+|---|---|---|---|
+| 5,000 trials | 0.09s | 1.3s | 2.3s |
+| 20,000 trials | 0.34s | 5.1s | 9.2s |
+
+For scale, the futures sim is 15 seconds for four leagues and runs daily. The
+realistic version cost only 1.2× a stripped-down toy, so the arithmetic per
+plate appearance is not where the time goes.
+
+### What the work actually is: the input layer
+
+The blocker is shape, not speed. `build_mlb_projection` returns an
+`MLBProjection` — a **mean and std for one prop**. A PA-level sim needs a
+**per-batter-vs-pitcher outcome table**: P(K), P(BB), P(1B), P(2B), P(3B),
+P(HR). Those are different objects, and the second cannot be recovered from
+the first — "expected total bases 1.34, sd 1.1" does not tell you how often
+he strikes out.
+
+So the build is roughly:
+
+1. **A PA outcome model per batter-pitcher pair.** The ingredients exist
+   (`engine/form.py`, `engine/matchup.py`, `engine/mlb/projection.py`, park
+   and weather effects, Statcast) but they are combined today into a
+   per-prop mean rather than an outcome distribution. This is the real work
+   and the only part with modelling risk.
+2. **The game loop.** Lineup order, three outs, nine innings, bullpen usage.
+   Cheap, measured above, and mostly bookkeeping.
+3. **Read every prop off the same simulated games.** Marginals *and* joints
+   fall out together.
+
+### The gate before it ships
+
+The sim must reproduce the marginals we already trust. If it says a hitter's
+P(1+ hits) is 62% and the current closed-form projection says 58%, one of
+them is wrong, and shipping both would put two numbers for the same question
+on one page. Reconciling that is the acceptance test, not a follow-up — and
+it is also the cheapest way to discover a bug in either model.
+
+Only after they agree on the marginals is the joint distribution worth
+anything: that is the whole payoff, because leg correlation then comes out of
+the sim directly instead of from the priors backtested in task #52, and it
+becomes the missing input to the Stage 3 covariance work.
+
+**Not started.** Sized, costed, and gated — no code beyond the throwaway
+probes.
 
 ### WON'T — a language model anywhere in the pricing path
 
