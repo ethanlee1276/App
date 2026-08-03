@@ -127,12 +127,18 @@ def test_the_per_league_nav_configuration_is_intact():
     block = APP[APP.index("const HIDDEN_VIEWS = {"):]
     block = block[:block.index("};")]
     assert 'nba: ["longshots"]' in block, "NBA's Long Shots exclusion is gone"
-    assert 'wnba: ["longshots"]' in block, "WNBA's Long Shots exclusion is gone"
+    # Membership rather than the exact list: the WNBA also has no futures
+    # board, and an equality check fails whenever an unrelated tab joins the
+    # exclusion, which looks like this preservation rule breaking when it
+    # has not.
+    wnba = [l for l in block.splitlines() if l.strip().startswith("wnba:")]
+    assert wnba and '"longshots"' in wnba[0], "WNBA's Long Shots exclusion is gone"
     # §9.1 caps UFC at two legs in one fight and every permitted construction
     # needs a method/distance market we do not price. A tab that can only ever
     # say so is worse than no tab.
     for sport in ("ufc", "polymarket", "fantasy"):
-        assert f'{sport}: ["parlays"]' in block, (
+        line = [l for l in block.splitlines() if l.strip().startswith(f"{sport}:")]
+        assert line and '"parlays"' in line[0], (
             f"{sport}'s Parlay Zone exclusion is gone")
     for v in ("longshots", "trending", "players", "rosters"):
         assert v in block.split("cfb:")[1], f"CFB's {v} exclusion is gone"

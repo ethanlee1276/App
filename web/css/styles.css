@@ -1708,6 +1708,83 @@ select.calc-in { width: auto; font-weight: 600; }
   border: 1px solid var(--border); padding: 3px 8px; }
 .pl-cond.met { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
 
+/* ---------------- Futures ----------------
+   A season table, so it is set as one: fixed columns, tabular figures, and
+   the rule doing the dividing rather than a box per row. The two probability
+   columns a reader actually scans (title, and the edge when we have a price)
+   are the only ones that carry weight. */
+.fx-prior {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 12px 14px; margin-bottom: 14px;
+  border-left: 3px solid var(--warn); background: var(--panel);
+  font-size: var(--fs-sm); color: var(--text-dim); line-height: 1.55;
+}
+.fx-prior b { color: var(--warn); }
+
+/* Capped, because the slack in a grid has to land somewhere and a full-width
+   table put it all in the group column — the abbreviation alone at the far
+   left, a canyon, then the numbers. A season table wants its figures near
+   their names. */
+.fx-table { overflow-x: auto; max-width: 860px; }
+.fx-row {
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: 54px minmax(0, 1fr) 62px 88px 54px 62px 58px;
+  padding: 8px 16px 8px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  font-variant-numeric: tabular-nums; font-size: var(--fs-sm);
+  min-width: 560px;
+}
+.fx-table.priced .fx-row {
+  grid-template-columns: 54px minmax(0, 1fr) 62px 88px 54px 62px 58px 66px 54px;
+  min-width: 680px;
+}
+.fx-row:last-child { border-bottom: none; }
+.fx-head {
+  color: var(--text-mute); font-size: var(--fs-xs); text-transform: uppercase;
+  letter-spacing: .7px; font-weight: 600; border-bottom: 1px solid var(--border);
+}
+.fx-team { font-weight: 700; font-size: var(--fs-md); }
+.fx-grp { color: var(--text-mute); font-size: var(--fs-xs);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-rec, .fx-proj, .fx-div, .fx-po, .fx-ttl, .fx-odds, .fx-edge { text-align: right; }
+.fx-rec { color: var(--text-dim); }
+.fx-proj { color: var(--text); }
+/* The band is the honest half of a projection — one number for a season is a
+   forecast pretending to be a fact — so it sits with the number, quieter. */
+.fx-band { color: var(--text-mute); font-size: var(--fs-xs); margin-left: 4px; }
+.fx-div, .fx-po { color: var(--text-dim); }
+/* The title number is what the page is for; the other two are context. */
+.fx-ttl { color: var(--text-dim); }
+.fx-row:not(.fx-head) .fx-ttl { color: var(--text); font-weight: 700; }
+.fx-odds { color: var(--text-dim); }
+.fx-edge { font-weight: 700; }
+.fx-edge.pos { color: var(--good); } .fx-edge.neg { color: var(--bad); }
+.fx-note { color: var(--text-mute); font-size: var(--fs-sm);
+  margin: 10px 0 0; line-height: 1.55; max-width: 68ch; }
+
+.fx-market { margin-top: 14px; border-top: 1px solid var(--border-soft); }
+.fx-market-head {
+  font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .7px;
+  font-weight: 700; color: var(--text-dim); padding: 12px 0 6px;
+}
+.fx-prow {
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 48px 52px 96px 48px 92px;
+  padding: 6px 0; border-bottom: 1px dotted var(--border-soft);
+  font-variant-numeric: tabular-nums; font-size: var(--fs-sm);
+}
+.fx-pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-pteam { color: var(--text-mute); font-size: var(--fs-xs); }
+.fx-pnow, .fx-pproj, .fx-pav, .fx-pp { text-align: right; }
+.fx-pnow { color: var(--text-mute); }
+.fx-pav { color: var(--text-mute); font-size: var(--fs-xs); }
+.fx-pp { color: var(--text-dim); font-size: var(--fs-xs); }
+.fx-pp.pos { color: var(--good); }
+
+/* The narrow-screen rules for this table sit in the 760px block further
+   down, beside the other phone rules, rather than opening one more
+   breakpoint of the same width for it. */
+
 .rec-stamp { color: var(--text-mute); font-size: var(--fs-sm); margin-top: 14px; }
 
 
@@ -2319,6 +2396,22 @@ select.calc-in { width: auto; font-weight: 600; }
      two, so the row of context read as a staircase. Reserving both lines
      puts every value back on one baseline. */
   #stats > .tile:not(.lead) .k { min-height: 2.9em; }
+
+  /* The group and the raw record are the first things to go — a phone reader
+     scanning a futures table wants the projection and the title number. */
+  /* HIDE EXACTLY AS MANY CELLS AS THE TRACK COUNT DROPS. The columns are
+     named rather than selected by position: every cell here is a <span>, so
+     :nth-of-type counted tags and matched the GROUP cell instead of the
+     second percentage — the playoff column never hid, seven cells went into
+     five tracks, and every row's edge wrapped onto a line of its own. */
+  .fx-row { grid-template-columns: 46px minmax(0, 1fr) 56px 56px; min-width: 0; }
+  .fx-table.priced .fx-row {
+    grid-template-columns: 44px minmax(0, 1fr) 52px 50px; min-width: 0;
+  }
+  .fx-grp, .fx-rec, .fx-po { display: none; }
+  .fx-table.priced .fx-odds, .fx-table.priced .fx-div { display: none; }
+  .fx-prow { grid-template-columns: minmax(0, 1fr) 46px 84px 44px; }
+  .fx-pteam, .fx-pp { display: none; }
   .cards { grid-template-columns: 1fr; }
   .controls { gap: 16px; padding: 14px; }
   .control { min-width: 100%; }

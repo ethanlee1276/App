@@ -80,14 +80,20 @@ const SPORT_META = {
    have?" is one question and it should have one answer. */
 const HIDDEN_VIEWS = {
   nba: ["longshots"],
-  wnba: ["longshots"],
+  // The WNBA has no futures board: engine/futures.py has a shape for it but
+  // futures_build.py does not run it, because there is no outrights key for
+  // the league and its season is nearly over by the time this ships.
+  wnba: ["longshots", "futures"],
   // §9.1 caps UFC at two legs in ONE fight, and every construction §9.3
   // permits pairs a winner with a method, distance or round-group market.
   // We price fight winners and nothing else, so there is no pair to screen
   // and a tab that can only ever say so is worse than no tab.
-  ufc: ["parlays"],
-  polymarket: ["parlays"],
-  fantasy: ["parlays"],
+  // Futures are a SEASON market. A fight card, a prediction market and a
+  // fantasy draft do not have one, and a tab that can only ever say so is
+  // worse than no tab.
+  ufc: ["parlays", "futures"],
+  polymarket: ["parlays", "futures"],
+  fantasy: ["parlays", "futures"],
   // CFB has 134 programs and no free player-level feed. A roster tab that
   // can only ever say "no data" is worse than no tab.
   cfb: ["longshots", "trending", "players", "rosters"],
@@ -716,6 +722,142 @@ function renderAll() {
   // badge, and it looks like the switch silently failed.
   if (state.view === "rosters") renderRosters();
   if (state.view === "standings") renderStandings();
+  if (state.view === "futures") renderFutures();
+}
+
+/* ============================================================
+   Futures — the whole season, played out
+   ============================================================
+   The one page here that is about months rather than tonight, and it has to
+   say two things the others never do.
+
+   These probabilities come from simulating the remaining schedule twenty
+   thousand times, not from reading a price. That is the point: a book posts
+   futures earliest and revisits them least, so a number rebuilt from
+   tonight's ratings is often looking at a months-old quote. Where we have a
+   price the gap is shown; where we do not, the probability stands on its
+   own, exactly as the Parlay Zone publishes a required price rather than
+   inventing a quote.
+
+   And in the preseason every rating is last season's. `prior_share` says how
+   much, and the banner says it in words, because a division number in
+   August is a prior wearing a projection's clothes and nothing about the
+   figure itself communicates that. */
+let _futuresCache = {};
+
+async function renderFutures() {
+  const host = document.getElementById("futures-body");
+  if (!host) return;
+  const sport = state.sport;
+  let d = _futuresCache[sport];
+  if (d === undefined) {
+    host.innerHTML = `<p class="loading">Simulating the season…</p>`;
+    try {
+      const res = await fetch(`data/futures_${sport}.json?t=` + Date.now());
+      d = res.ok ? await res.json() : null;
+    } catch (e) { d = null; }
+    _futuresCache[sport] = d;
+  }
+  if (state.view !== "futures" || state.sport !== sport) return;
+
+  const teams = (d && d.teams) || [];
+  if (!teams.length) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
+      <div class="es-title">No season to project</div>
+      <div class="es-sub">${escapeHtml((d && d.note)
+        || "This sport has no futures board yet — run futures_build.py to make one.")}</div></div>`;
+    return;
+  }
+  host.innerHTML = futuresDoctrine(d) + futuresTeamTable(d) + futuresTotals(d)
+    + `<p class="rec-stamp">Built ${escapeHtml(d.generated_at || "")}
+       · ${d.fixtures_remaining || 0} game(s) left to play
+       · ${(d.trials || 0).toLocaleString()} simulations.</p>`;
+  revealChildren(host);
+}
+
+/* The two caveats, and the preseason one is not a footnote. */
+function futuresDoctrine(d) {
+  const prior = Number(d.prior_share || 0);
+  const warn = prior >= 0.5
+    ? `<div class="fx-prior">${icon("warn")} <b>${(prior * 100).toFixed(0)}% of this is last season.</b>
+       ${escapeHtml(d.note || "")}. Read it as a prior, not a projection —
+       these numbers are real arithmetic on stale inputs, and they will be
+       replaced by this year's evidence within a few weeks of kickoff.</div>`
+    : "";
+  return `${warn}${recDisclosure("How these numbers are made", `${escapeHtml(d.doctrine || "")}
+    Each remaining game is one draw from the two teams' ratings plus home
+    advantage; wins accumulate, division winners are the most wins, the
+    playoff field fills per the league's own shape, and the bracket is played
+    out game by game. Assumed, and worth knowing: ratings hold for the rest
+    of the season — no injuries, no trades, no regression — every game is
+    independent, and home advantage is one constant per sport.`)}`;
+}
+
+function futuresTeamTable(d) {
+  const priced = (d.teams || []).some((t) => t.title_odds != null);
+  const rows = (d.teams || []).slice(0, 20).map((t) => {
+    const edge = t.title_edge_pts;
+    const eCls = edge == null ? "" : edge > 0 ? "pos" : edge < 0 ? "neg" : "";
+    return `<div class="fx-row">
+      <span class="fx-team">${escapeHtml(t.team)}</span>
+      <span class="fx-grp">${escapeHtml(t.conference || "")}${t.division ? " " + escapeHtml(t.division) : ""}</span>
+      <span class="fx-rec">${t.wins}-${t.losses}</span>
+      <span class="fx-proj">${t.proj_wins.toFixed(1)}
+        <span class="fx-band">${t.proj_wins_lo}–${t.proj_wins_hi}</span></span>
+      <span class="fx-div">${fxPct(t.p_division)}</span>
+      <span class="fx-po">${fxPct(t.p_playoffs)}</span>
+      <span class="fx-ttl">${fxPct(t.p_title)}</span>
+      ${priced ? `<span class="fx-odds">${t.title_odds == null ? "—" : american(t.title_odds)}</span>
+      <span class="fx-edge ${eCls}">${edge == null ? "" : (edge > 0 ? "+" : "") + edge.toFixed(1)}</span>` : ""}
+    </div>`;
+  }).join("");
+  return `
+    <div class="section-title">Season outlook
+      <span class="sub">— projected wins with a 10th–90th band, and how often each
+      finish happens across ${(d.trials || 0).toLocaleString()} simulated seasons.</span></div>
+    <div class="card fx-table${priced ? " priced" : ""}" style="padding:0">
+      <div class="fx-row fx-head">
+        <span class="fx-team">Team</span><span class="fx-grp">Group</span>
+        <span class="fx-rec">W-L</span><span class="fx-proj">Proj</span>
+        <span class="fx-div">Div</span><span class="fx-po">Playoff</span>
+        <span class="fx-ttl">Title</span>
+        ${priced ? `<span class="fx-odds">Book</span><span class="fx-edge">Edge</span>` : ""}
+      </div>${rows}</div>
+    ${priced ? `<p class="fx-note">Edge is our simulated probability minus the
+      book's implied one, in points. A book posts futures early and revisits
+      them rarely, so a positive number here is usually a stale quote rather
+      than a disagreement about the team.</p>`
+      : `<p class="fx-note">No book price attached. The probability stands on its
+      own — what the season looks like from here, whatever anyone is charging
+      for it.</p>`}`;
+}
+
+/* Futures percentages round differently from the site's `pct`: a 3% title
+   chance needs its decimal and a 68% division chance does not, and a table
+   of "3.0%" next to "68.0%" reads as false precision on the big number. */
+const fxPct = (p) => (p == null ? "—" : (p * 100).toFixed(p >= 0.1 ? 0 : 1) + "%");
+
+function futuresTotals(d) {
+  const blocks = (d.season_totals || []).filter((m) => (m.players || []).length);
+  if (!blocks.length) return "";
+  return `
+    <div class="section-title">Season totals
+      <span class="sub">— each player's rate so far, times the games his team has
+      left, with the games he actually plays taken into account.</span></div>
+    ${blocks.map((m) => `
+      <div class="fx-market">
+        <div class="fx-market-head">${escapeHtml(m.label)}</div>
+        ${m.players.map((p) => `<div class="fx-prow">
+          <span class="fx-pname">${escapeHtml(p.player)}</span>
+          <span class="fx-pteam">${escapeHtml(p.team || "")}</span>
+          <span class="fx-pnow">${p.banked}</span>
+          <span class="fx-pproj"><b>${p.mean}</b>
+            <span class="fx-band">±${p.sd}</span></span>
+          <span class="fx-pav" title="Share of his team's games he has actually played">${(p.availability * 100).toFixed(0)}%</span>
+          ${p.line == null ? `<span class="fx-pp"></span>`
+            : `<span class="fx-pp ${p.p_over >= 0.5 ? "pos" : ""}">${fxPct(p.p_over)} o${p.line}</span>`}
+        </div>`).join("")}
+      </div>`).join("")}`;
 }
 
 /* ============================================================
@@ -6288,7 +6430,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "parlays", "trending", "players", "rosters", "standings", "record", "intel", "fantasy", "ufc", "why", "about"];
+const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "parlays", "futures", "trending", "players", "rosters", "standings", "record", "intel", "fantasy", "ufc", "why", "about"];
 
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);

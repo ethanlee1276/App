@@ -94,6 +94,7 @@
       <button class="nav-btn" data-view="scanner" data-hint="stale &amp; arb lines">Scanner</button>
       <button class="nav-btn" data-view="longshots" id="longshots-tab" data-hint="home-run darts">Long Shots</button>
       <button class="nav-btn" data-view="parlays" data-hint="tickets, screened not built">Parlay Zone</button>
+      <button class="nav-btn" data-view="futures" data-hint="the whole season, simulated">Futures</button>
       <button class="nav-btn" data-view="trending" data-hint="form movers">Trending</button>
       <button class="nav-btn" data-view="players" data-hint="search a player">Players</button>
       <button class="nav-btn" data-view="rosters" data-hint="every team's roster">Rosters</button>
@@ -282,6 +283,18 @@
         <span class="sub" id="parlays-sub">— screened, not built. Almost always the answer is no.</span>
       </div>
       <div id="parlays-body"></div>
+    </section>
+
+    <!-- Futures. The one page here that is about months rather than tonight,
+         and it has to say so twice: these numbers come from simulating the
+         rest of the season rather than from reading a price, and in the
+         preseason they rest entirely on last year. Both caveats ride in the
+         payload so every surface inherits the same wording. -->
+    <section class="view" id="view-futures">
+      <div class="section-title" id="futures-title">Futures
+        <span class="sub" id="futures-sub">— the rest of the season, played out twenty thousand times.</span>
+      </div>
+      <div id="futures-body"></div>
     </section>
 
     <!-- Active rosters -->

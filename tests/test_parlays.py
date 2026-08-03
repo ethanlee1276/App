@@ -872,7 +872,12 @@ def test_the_sports_with_no_screen_hide_the_tab_rather_than_faking_one():
     block = APP[APP.index("const HIDDEN_VIEWS = {"):]
     block = block[:block.index("};")]
     for sport in ("ufc", "polymarket", "fantasy"):
-        assert f'{sport}: ["parlays"]' in block, sport
+        # Membership, not an exact list. These sports hide OTHER tabs too —
+        # ufc and friends also have no season to project — and an equality
+        # check here fails every time an unrelated tab is added, which reads
+        # as this rule breaking when nothing about it has changed.
+        line = [l for l in block.splitlines() if l.strip().startswith(f"{sport}:")]
+        assert line and '"parlays"' in line[0], sport
 
 
 def test_the_page_shows_no_stake_and_says_why():

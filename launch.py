@@ -506,6 +506,7 @@ def refresh_all(quiet: bool = False) -> None:
     refresh_standings(quiet=quiet)
     _arbitrate_parlays(quiet=quiet)
     _journal_parlays(quiet=quiet)
+    _run_futures(quiet=quiet)
 
 
 def _journal_parlays(quiet: bool = False) -> None:
@@ -566,6 +567,49 @@ def _run_maintenance() -> None:
         run_if_due()
     except Exception as exc:  # noqa: BLE001 — chores must never take the site down
         print(f"  ⚠️  daily maintenance failed: {exc}")
+
+
+#: Futures move over weeks, and a full MLB season at 20,000 trials takes
+#: 3.6 seconds. Four sports on the 60-second loop would burn fourteen
+#: seconds of every minute re-answering a question whose answer barely
+#: changes. Once a day is generous.
+FUTURES_EVERY_HOURS = 24
+
+
+def _run_futures(quiet: bool = False) -> None:
+    """Rebuild the futures boards, at most once a day.
+
+    Free: the simulation reads the history DB and the schedule feeds, all
+    of them keyless. Prices are NOT pulled here — futures_build.py --odds
+    does that, one credit per sport, and its cache TTL is a week. A page
+    rebuild must never be able to spend.
+    """
+    import time
+    stamp = ROOT / "web" / "data" / ".futures_built"
+    try:
+        if stamp.exists() and (time.time() - stamp.stat().st_mtime) < \
+                FUTURES_EVERY_HOURS * 3600:
+            return
+        import futures_build
+        from engine import db as _hdb
+        conn = _hdb.connect()
+        try:
+            for sport in futures_build.SPORTS:
+                try:
+                    data = futures_build.build(sport, conn, live_odds=False)
+                except Exception:                   # noqa: BLE001
+                    continue
+                (futures_build.OUT / f"futures_{sport}.json").write_text(
+                    json.dumps(data, indent=2))
+        finally:
+            conn.close()
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(time.strftime("%Y-%m-%dT%H:%M:%S"))
+        if not quiet:
+            print("  Futures: season projections rebuilt (free).")
+    except Exception as exc:  # noqa: BLE001 — never take the site down
+        if not quiet:
+            print(f"  ⚠️  futures rebuild skipped: {exc}")
 
 
 def _run_autosettle() -> None:
