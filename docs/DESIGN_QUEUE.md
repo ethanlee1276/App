@@ -188,8 +188,14 @@ the bottom rather than acting on it.
   plays" is this board's most common correct answer and a large honest 0 says
   so.
 
-  Solved with composition, per the item — no new type token. Two things the
-  screenshots caught that the metric could not: a second `@media` breakpoint
+  Solved with composition, per the item — no new type token. Scoped to
+  `#stats`: the first version styled the shared `.stats` class, which
+  eleven containers use — the Record page's eight KPI rows among them — so
+  pinning it to four tracks pushed the Record page's fifth tile onto a
+  second row as an orphaned box, on desktop and phone both. A test now
+  forbids writing a lead rule against the bare class.
+
+  Two more things the screenshots caught that the metric could not: a second `@media` breakpoint
   further up the file lost silently to the 760px block, so the phone grid
   stayed at two columns while the new rule said three; and "Suggested
   exposure" wraps in a narrow column, dropping its number 17px below the

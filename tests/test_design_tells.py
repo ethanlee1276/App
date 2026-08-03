@@ -188,16 +188,29 @@ def test_the_lead_column_is_wider_than_the_others():
     """Composition, not just type. Equal columns were half of why no tile
     read as the answer, and auto-fit could only ever produce equal ones."""
     body = _strip_comments(CSS)
-    i = body.index(".stats {")
-    block = body[i:i + 260]
-    assert "auto-fit" not in block, "auto-fit can only make equal columns"
-    assert "1.7fr 1fr 1fr 1fr" in block
+    assert "#stats { grid-template-columns: 1.7fr 1fr 1fr 1fr; }" in body
+
+
+def test_the_lead_layout_never_touches_the_shared_stats_class():
+    """`.stats` is used by eleven containers — the Record page's eight KPI
+    rows, the game panel, and more — carrying anything from three to five
+    tiles. Pinning it to four tracks pushed the Record page's fifth tile
+    onto a second row, where it read as an orphaned box on desktop AND on
+    the phone. Every rule for the Recommended lead is scoped to #stats,
+    which is that one container.
+    """
+    body = _strip_comments(CSS)
+    i = body.index(".stats { display: grid;")
+    assert "auto-fit" in body[i:i + 160], "the shared grid must stay auto-fit"
+    # And no lead rule may be written against the bare class.
+    for sel in (".stats > .tile.lead", ".stats > .tile:not(.lead)"):
+        assert sel not in body, f"{sel} leaks the lead layout to every user"
 
 
 def test_the_lead_value_is_two_ramp_steps_above_the_rest():
     body = _strip_comments(CSS)
-    assert ".stats > .tile.lead .v { font-size: var(--fs-4xl); }" in body
-    assert ".stats > .tile:not(.lead) .v { font-size: var(--fs-2xl);" in body
+    assert "#stats > .tile.lead .v { font-size: var(--fs-4xl); }" in body
+    assert "#stats > .tile:not(.lead) .v { font-size: var(--fs-2xl);" in body
 
 
 def test_no_new_type_token_was_invented_for_it():
@@ -214,15 +227,17 @@ def test_the_phone_lead_takes_its_own_row():
     i = body.index("@media (max-width: 760px)")
     nxt = body.index("@media", i + 10)
     block = body[i:nxt]
-    assert "grid-template-columns: repeat(3, 1fr)" in block
+    assert "#stats { grid-template-columns: repeat(3, 1fr)" in block
     assert "grid-column: 1 / -1" in block
+    # The shared class keeps its own two-column phone grid.
+    assert ".stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }" in block
 
 
 def test_the_narrow_labels_reserve_both_their_lines():
     """"Suggested exposure" wraps in a narrow column and its number then sat
     17px below the other two, so the row of context read as a staircase."""
     body = _strip_comments(CSS)
-    assert ".stats > .tile:not(.lead) .k { min-height: 2.9em; }" in body
+    assert "#stats > .tile:not(.lead) .k { min-height: 2.9em; }" in body
 
 
 def test_the_phone_rules_live_beside_the_rule_they_must_beat():

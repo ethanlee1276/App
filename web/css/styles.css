@@ -334,14 +334,18 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
 .section-title .sub { color: var(--text-mute); font-weight: 500; font-size: var(--fs-sm); }
 
 /* ---------------- Stat tiles ---------------- */
+/* `.stats` is SHARED — the Record page's eight KPI rows, the game-panel
+   stats and more all reuse it, with anything from three to five tiles. It
+   stays auto-fit for exactly that reason: pinning it to four tracks pushed
+   the Record page's fifth tile onto a second row, where it read as an
+   orphaned box. The Recommended lead layout below is scoped to #stats,
+   which is that one container and nothing else. */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(168px, 100%), 1fr)); gap: 0; margin-bottom: 20px; }
+
 /* The lead column is wider AND its number is bigger — composition first,
    size second. Four equal columns was the shape that made none of them the
-   answer; auto-fit could only ever produce equal columns, so the track list
-   is now explicit and the first track is the wide one. */
-.stats {
-  display: grid; grid-template-columns: 1.7fr 1fr 1fr 1fr;
-  gap: 0; margin-bottom: 20px;
-}
+   answer, and auto-fit can only ever produce equal columns. */
+#stats { grid-template-columns: 1.7fr 1fr 1fr 1fr; }
 /* §6.6. No card, no background, no border box — a row of columns divided
    by a single vertical rule. Four equal bordered tiles with a big number
    in each is item 6 on the anti-pattern list, and it was the shape this
@@ -360,9 +364,9 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
 /* The answer, and the context for it. Two steps apart on the existing ramp
    — no new token, because the item is a composition change and inventing a
    bigger size is the way to dodge doing one. */
-.stats > .tile.lead .v { font-size: var(--fs-4xl); }
-.stats > .tile:not(.lead) .v { font-size: var(--fs-2xl); color: var(--text-dim); }
-.stats > .tile:not(.lead) .v.pos { color: var(--good); }
+#stats > .tile.lead .v { font-size: var(--fs-4xl); }
+#stats > .tile:not(.lead) .v { font-size: var(--fs-2xl); color: var(--text-dim); }
+#stats > .tile:not(.lead) .v.pos { color: var(--good); }
 
 /* The narrow-screen half of this lives in the 760px block further down,
    beside the rule it has to beat. Adding a second breakpoint here made two
@@ -2300,20 +2304,21 @@ select.calc-in { width: auto; font-weight: 600; }
      context share the row below. Two equal columns would put the answer
      beside a supporting number at the same width, which is the shape this
      layout exists to stop. */
-  .stats { grid-template-columns: repeat(3, 1fr); gap: 10px 0; }
+  .stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .tile .v { font-size: var(--fs-2xl); }
-  .stats > .tile.lead .v { font-size: var(--fs-3xl); }
-  .stats > .tile:not(.lead) .v { font-size: var(--fs-lg); }
-  .stats > .tile.lead {
+  #stats { grid-template-columns: repeat(3, 1fr); gap: 10px 0; }
+  #stats > .tile.lead .v { font-size: var(--fs-3xl); }
+  #stats > .tile:not(.lead) .v { font-size: var(--fs-lg); }
+  #stats > .tile.lead {
     grid-column: 1 / -1; border-left: 0; padding-left: 0;
     padding-bottom: 12px; border-bottom: 1px solid var(--border-soft);
   }
-  .stats > .tile.lead + .tile { border-left: 0; padding-left: 0; }
+  #stats > .tile.lead + .tile { border-left: 0; padding-left: 0; }
   /* Three narrow columns, and one of the labels wraps to two lines —
      "Suggested exposure" did, and its number then sat 17px below the other
      two, so the row of context read as a staircase. Reserving both lines
      puts every value back on one baseline. */
-  .stats > .tile:not(.lead) .k { min-height: 2.9em; }
+  #stats > .tile:not(.lead) .k { min-height: 2.9em; }
   .cards { grid-template-columns: 1fr; }
   .controls { gap: 16px; padding: 14px; }
   .control { min-width: 100%; }
