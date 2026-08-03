@@ -49,7 +49,7 @@ is now table stakes shipped by a dozen tools at $20/month.
 |---|---|
 | **Radical transparency** | Furthest along. Calibration buckets with confidence bands, Brier against the de-vigged market on our own picks, era-scoped so a re-tune is judged on its own work, a permanent sweep history in `calibhistory.py`. Completed to the study's spec on 2026-08-03 — see below. |
 | **Account longevity** | The engine exists (`account_health`, `engine/ledger.py`) and, since 2026-08-03, scores every signal this journal can honestly see — five of the study's seven — and names the rest on the page. Still buried on the Record page, and still never seen with a real journal behind it. |
-| **Exchange-native** | One venue, deeply: Polymarket informed flow. Kalshi, Novig and ProphetX are absent, and Novig/ProphetX did not exist as prediction markets when this site was designed. |
+| **Exchange-native** | Two venues, two lenses since 2026-08-03: Polymarket read as informed FLOW (public wallets), Kalshi read as PRICE (a CFTC-regulated order book's mid is the market's probability, no vig to strip), with a cross-market board putting the exchange's number beside the model's. Novig and ProphetX remain absent — both got CFTC designation in June 2026, after this site's exchange work. |
 
 ---
 
