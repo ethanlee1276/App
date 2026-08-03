@@ -31,11 +31,16 @@ import argparse
 from engine import calibrate as _cal
 from engine import db as _db
 from engine import formfit as ff
-from engine.form import MLB_WINDOW_WEIGHTS
-from engine.mlb.models import MARKET_LABELS
+from engine.mlb.models import MARKET_LABELS as _MLB_LABELS
+from engine.models import MARKET_LABELS as _GEN_LABELS
 
-# No home_runs — see the module docstring.
-MLB_MARKETS = ["total_bases", "hits", "strikeouts"]
+MARKET_LABELS = {**_GEN_LABELS, **_MLB_LABELS}
+# No home_runs (rare-event path replaced form blending) and no
+# anytime_td (same reason, NFL's rare-event market).
+SPORT_MARKETS = {
+    "mlb": ["total_bases", "hits", "strikeouts"],
+    "nfl": ["pass_yds", "rush_yds", "rec_yds", "receptions"],
+}
 
 
 def main() -> None:
@@ -43,9 +48,12 @@ def main() -> None:
         description="Fit the recency dial from real outcomes.")
     ap.add_argument("--from-db", dest="db", default=str(_db.DEFAULT_DB),
                     help="history DB to learn from (default: data/history.db)")
+    ap.add_argument("--sport", default="mlb", choices=sorted(SPORT_MARKETS),
+                    help="which sport's dial to fit (default: mlb)")
     ap.add_argument("--market", default=None, help="fit a single market only")
-    ap.add_argument("--min-history", type=int, default=8,
-                    help="games of history before a player is projected")
+    ap.add_argument("--min-history", type=int, default=None,
+                    help="games of history before a player is projected "
+                         "(default: the sport's own floor)")
     ap.add_argument("--show", action="store_true",
                     help="print the current fits and exit")
     args = ap.parse_args()
@@ -60,20 +68,22 @@ def main() -> None:
         return
 
     conn = _db.connect(args.db)
-    markets = [args.market] if args.market else MLB_MARKETS
+    sport = args.sport
+    markets = [args.market] if args.market else SPORT_MARKETS[sport]
+    min_games = (args.min_history or (8 if sport == "mlb" else 4)) + 2
 
     fits: dict[str, ff.FormFit] = {}
-    print(f"Fitting the recency dial from {args.db}")
+    print(f"Fitting the {sport} recency dial from {args.db}")
     print(f"(one walk-forward per grid point — {len(ff.GRID)} per market; "
           "this is the slow fit)\n")
     for market in markets:
         label = MARKET_LABELS.get(market, market)
-        entries = _db.entries_for_market(conn, "mlb", market,
-                                         min_games=args.min_history + 2)
+        entries = _db.entries_for_market(conn, sport, market,
+                                         min_games=min_games)
         if not entries:
             print(f"  {label:16} skipped — no player history in the DB")
             continue
-        f = ff.fit(entries, market, MLB_WINDOW_WEIGHTS,
+        f = ff.fit(entries, market, sport=sport,
                    min_history=args.min_history)
         if f is None:
             print(f"  {label:16} skipped — no settled predictions")
@@ -82,7 +92,7 @@ def main() -> None:
               f"Brier {f.brier_default:.4f} → {f.brier_fitted:.4f}   "
               f"r = {f.r:+.1f}")
         print(f"  {'':16} {f.verdict}")
-        fits[f"mlb:{market}"] = f
+        fits[f"{sport}:{market}"] = f
 
     if not fits:
         print("\nNothing fitted. Ingest history first, e.g.:\n"

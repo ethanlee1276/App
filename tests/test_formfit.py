@@ -163,7 +163,8 @@ def test_the_projection_applies_an_adopted_curve_and_an_override_beats_it():
 # --- the CLI and the page ----------------------------------------------------
 def test_the_cli_excludes_home_runs_and_orders_the_refits():
     src = open(os.path.join(ROOT, "formfit.py"), encoding="utf-8").read()
-    assert '"home_runs"' not in src.split("MLB_MARKETS")[1].split("]")[0]
+    mlb_list = src.split('"mlb": [')[1].split("]")[0]
+    assert '"home_runs"' not in mlb_list
     # Adopting weights changes the model; the temperature must be refit
     # on the model that will actually run.
     assert "calibrate.py" in src and "refit its temperature" in src

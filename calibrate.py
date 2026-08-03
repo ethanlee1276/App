@@ -25,24 +25,33 @@ import argparse
 
 from engine import calibrate as cal
 from engine import db as _db
-from engine.mlb.backtest import backtest_from_logs
-from engine.mlb.models import MARKET_LABELS
+from engine.logwalk import walk
+from engine.mlb.models import MARKET_LABELS as _MLB_LABELS
+from engine.models import MARKET_LABELS as _GEN_LABELS
 
-MLB_MARKETS = ["total_bases", "hits", "home_runs", "strikeouts"]
+MARKET_LABELS = {**_GEN_LABELS, **_MLB_LABELS}
+SPORT_MARKETS = {
+    "mlb": ["total_bases", "hits", "home_runs", "strikeouts"],
+    "nfl": ["pass_yds", "rush_yds", "rec_yds", "receptions"],
+}
+MLB_MARKETS = SPORT_MARKETS["mlb"]        # kept for older callers
 
 
-def fit_market(conn, market: str, min_history: int, min_samples: int):
-    entries = _db.entries_for_market(conn, "mlb", market, min_games=min_history + 2)
+def fit_market(conn, market: str, min_history, min_samples: int,
+               sport: str = "mlb"):
+    entries = _db.entries_for_market(
+        conn, sport, market,
+        min_games=(min_history or (8 if sport == "mlb" else 4)) + 2)
     if not entries:
         return None, "no player history in the DB for this market"
     # Fit on the model's RAW probabilities. With the existing calibration still
     # applied, each run would learn a correction for already-corrected input and
     # then apply it to raw input, compounding every time it's re-run.
     with cal.disabled():
-        report = backtest_from_logs(entries, market, min_history=min_history)
+        report = walk(sport, entries, market, min_history=min_history)
     if not report.pairs:
         return None, "no settled predictions (need more games per player)"
-    c = cal.fit(report.pairs, sport="mlb", market=market, min_samples=min_samples)
+    c = cal.fit(report.pairs, sport=sport, market=market, min_samples=min_samples)
     return (c, report), None
 
 
@@ -50,9 +59,12 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Fit probability calibration from real outcomes.")
     ap.add_argument("--from-db", dest="db", default=str(_db.DEFAULT_DB),
                     help="history DB to learn from (default: data/history.db)")
+    ap.add_argument("--sport", default="mlb", choices=sorted(SPORT_MARKETS),
+                    help="which sport to fit (default: mlb)")
     ap.add_argument("--market", default=None, help="fit a single market only")
-    ap.add_argument("--min-history", type=int, default=8,
-                    help="games of history before a player is projected")
+    ap.add_argument("--min-history", type=int, default=None,
+                    help="games of history before a player is projected "
+                         "(default: the sport's own floor)")
     ap.add_argument("--min-samples", type=int, default=200,
                     help="settled props required before a correction is trusted")
     ap.add_argument("--show", action="store_true", help="print the current calibration and exit")
@@ -69,13 +81,15 @@ def main() -> None:
         return
 
     conn = _db.connect(args.db)
-    markets = [args.market] if args.market else MLB_MARKETS
+    sport = args.sport
+    markets = [args.market] if args.market else SPORT_MARKETS[sport]
 
     fitted: dict[str, cal.Calibration] = {}
-    print(f"Fitting calibration from {args.db}\n")
+    print(f"Fitting {sport} calibration from {args.db}\n")
     for market in markets:
         label = MARKET_LABELS.get(market, market)
-        got, err = fit_market(conn, market, args.min_history, args.min_samples)
+        got, err = fit_market(conn, market, args.min_history,
+                              args.min_samples, sport=sport)
         if err:
             print(f"  {label:16} skipped — {err}")
             continue
@@ -92,7 +106,7 @@ def main() -> None:
             if c.at_boundary:
                 print(f"  {'':16} ⚠️  fit hit the edge of the search range — treat "
                       f"this market's model as unreliable, not merely miscalibrated")
-        fitted[f"mlb:{market}"] = c
+        fitted[f"{sport}:{market}"] = c
 
     if not fitted:
         print("\nNothing fitted. Ingest history first, e.g.:\n"

@@ -379,6 +379,21 @@ def settle_open(log=print, state_path: Path | None = None,
                         "self-closed — see the Record page")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  loss-pattern mining skipped: {exc}")
+            # The journal fitters: temperature + player memory for every
+            # sport with no deep-history harness (hoops, college, UFC).
+            # A sport crosses its 200-bet floor the night it happens.
+            try:
+                from . import journalfit
+                jf = journalfit.refresh(lconn)
+                for f in jf["temperatures"]["fitted"]:
+                    log(f"  journal fit: {f['key']} temperature "
+                        f"T={f['temperature']} on {f['n']} settled bets")
+                for f in jf["memory"]["fitted"]:
+                    if f["adopted"]:
+                        log(f"  journal fit: {f['key']} player memory on "
+                            f"({f['players']} corrected)")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  journal fit skipped: {exc}")
         if settled or fixed or parlays_moved:
             ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
         if settled:

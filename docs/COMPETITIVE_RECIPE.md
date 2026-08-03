@@ -384,6 +384,43 @@ the rare-event empirical-Bayes rate already is a per-player learner.
 Run order across the ladder's fitters, each shaping the model the next
 one measures: `formfit.py` → `playerfit.py` → `calibrate.py`.
 
+### BUILT 2026-08-03 — the ladder extended to every sport
+
+The four rungs stopped being an MLB feature. What changed, per seam:
+
+* **The generic engine** (NFL, and any log sport that adopts it) threads
+  ``sport`` through every store lookup. Two latent defects died in the
+  process: `evaluate_prop` hardcoded `correction_for("nfl", …)` — harmless
+  only while nothing else priced through it and nothing else had a fit —
+  and it consulted no `is_reliable` gate at all. It now carries all four
+  verdicts, in parity with the MLB gate.
+* **The hoops gate** (`engine/nba/pipeline.py`, NBA + WNBA via
+  ``tune.key``) applies the temperature before the side is chosen, closes
+  boundary-fit markets, vetoes closed slices, and multiplies player
+  memory into ``rate × minutes``. **The college gate** does the same for
+  its plays. League keys never cross: a WNBA fit cannot touch the NBA.
+* **One harness door** — `engine/logwalk.py` walks any generic-engine
+  sport forward; `logwalk.walk` picks MLB's own harness for MLB. The
+  three deep-fitter CLIs take `--sport` (NFL fits today; its history is
+  already in the DB).
+* **The journal fitter** (`engine/journalfit.py`) covers sports with no
+  deep harness (NBA, WNBA, CFB, UFC): temperatures from journaled claims
+  and player memory from journaled (projection, actual), both floor-gated
+  at 200 settled bets per market, both run on every settle pass, both
+  merge-safe. Temperatures fit ONLY keys with no stored correction —
+  post-correction claims would compound — so refits belong to the deep
+  fitters or a future since-timestamp composition, and that boundary is
+  deliberate.
+* **Store hygiene**: all three saves merge instead of replacing (one
+  sport's run used to erase every other sport's keys), and
+  `correction_for`/`is_reliable` resolve DEFAULT_PATH at call time (the
+  frozen-default trap's sixth appearance).
+
+The recency dial fits where a window blend exists (MLB, NFL). The hoops
+and college models have no window blend to dial — their models are
+minutes×rate and ratings — so rung two is structurally N/A there, stated
+rather than faked.
+
 ### WON'T — a language model anywhere in the pricing path
 
 Not a capability judgement, a structural one. We just finished publishing a

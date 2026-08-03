@@ -41,13 +41,24 @@ class Projection:
 
 
 def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
-                     context: dict | None = None) -> Projection:
+                     context: dict | None = None, sport: str = "nfl",
+                     form_weights: dict | None = None,
+                     player_mult: float | None = None) -> Projection:
     """``context`` (NFL Phase 2) carries measured team tendency:
     ``{"profiles": {team: profile}, "league": {...}}`` from
     engine.teamcontext. Absent = the model prices exactly as before, which
     is what makes the whole layer A/B-testable against the backtest
-    baseline instead of shipped on faith."""
-    form = compute_form(prop.logs, prop.career_avg, prop.vs_opponent_avg)
+    baseline instead of shipped on faith.
+
+    ``sport`` keys the self-tuning stores. ``form_weights`` /
+    ``player_mult`` are the fitters' explicit candidates and always beat
+    the stores — a fitter must never read the store it is refitting
+    (see engine/mlb/projection.py, the same contract)."""
+    if form_weights is None:
+        from .formfit import weights_for
+        form_weights = weights_for(sport, prop.market)
+    form = compute_form(prop.logs, prop.career_avg, prop.vs_opponent_avg,
+                        weights=form_weights)
 
     matchup = evaluate_matchup(prop, opponent_team.defense, game,
                                measured_context=bool(context))
@@ -97,7 +108,13 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     # Recency shade: a sustained hot/cold streak pulls the projection toward
     # recent form (bounded in form.py), so the model stops leaning on stale
     # early-season numbers for a player who has cooled off.
-    mean = form.mean * total_mult * form.trend_mult * ctx_mult
+    #
+    # Player memory (engine/playerfit.py): the record's earned correction
+    # for players the blend persistently misreads.
+    if player_mult is None:
+        from .playerfit import mult_for
+        player_mult = mult_for(sport, prop.market, prop.player)
+    mean = form.mean * total_mult * form.trend_mult * ctx_mult * player_mult
 
     # Uncertainty: never below the market-typical variance floor, and it grows
     # as we push further from the player's own baseline.
@@ -108,6 +125,10 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     if form.sample_games < 4:
         adj_std *= 1.20
 
+    if abs(player_mult - 1.0) >= 0.02:
+        direction = "high" if player_mult < 1.0 else "low"
+        reasons.append(f"Player memory: the record shows the blend runs "
+                       f"{direction} on him — corrected ×{player_mult:.2f}")
     reasons += ctx_reasons
     reasons += matchup.reasons
     reasons += weather.reasons

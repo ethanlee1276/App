@@ -3507,8 +3507,8 @@ function recSelfTuningSection(st) {
         .map((t) => `${escapeHtml(t.player)} ×${(t.mult ?? 1).toFixed(2)}`)
         .join(" · ")}</span>` : ""}
       <span style="opacity:.5;font-variant-numeric:tabular-nums">n=${(p.samples ?? 0).toLocaleString()}</span>
-      ${p.adopted && p.brier_baseline != null && p.brier_corrected != null
-        ? `<span style="opacity:.6;font-variant-numeric:tabular-nums" title="Walk-forward Brier, memory off → on; each game's correction knew only earlier games">${p.brier_baseline.toFixed(4)} → ${p.brier_corrected.toFixed(4)}</span>` : ""}
+      ${p.adopted && (p.score_baseline ?? p.brier_baseline) != null && (p.score_corrected ?? p.brier_corrected) != null
+        ? `<span style="opacity:.6;font-variant-numeric:tabular-nums" title="Walk-forward ${escapeHtml(p.score_label || "Brier")}, memory off → on; each bet's correction knew only earlier bets">${(p.score_baseline ?? p.brier_baseline).toFixed(4)} → ${(p.score_corrected ?? p.brier_corrected).toFixed(4)}</span>` : ""}
     </div>`).join("");
   const playersBlock = !playerRows ? "" : `
     <div class="section-title">Player memory

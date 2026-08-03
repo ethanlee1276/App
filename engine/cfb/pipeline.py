@@ -77,7 +77,12 @@ def evaluate_play(play: dict) -> dict:
     market = play.get("market", "side")
     tier = attention_tier(game)
     odds, opp_odds = int(play["odds"]), int(play["opposing_odds"])
-    p_model = float(play["p_model"])
+    # Temperature (engine/calibrate.py): the shared layer produced this
+    # probability; the college record corrects it. Keyed "cfb" so a fit
+    # for this sport's claims never leaks anywhere else.
+    from ..calibrate import apply_temperature, correction_for
+    _t, _b = correction_for("cfb", market)
+    p_model = apply_temperature(float(play["p_model"]), _t, _b)
 
     p_market, _ = devig(odds, opp_odds)
     raw = p_model - p_market
@@ -108,6 +113,19 @@ def evaluate_play(play: dict) -> dict:
         },
         "risks": play.get("risks") or [],
     }
+
+    # The other two self-tuning gates, in parity with every engine.
+    from ..calibrate import is_reliable
+    from ..losspatterns import veto as lp_veto
+    if not is_reliable("cfb", market):
+        return {**base, "kind": "pass", "grade": 0, "grade_label": "Pass",
+                "why": ("this market's calibration fit hit the edge of its "
+                        "search range — closed by its own fit")}
+    _block = lp_veto("cfb", market, side=play.get("side"), odds=odds,
+                     prob=p_model, book=play.get("book"), horizon_days=0)
+    if _block:
+        return {**base, "kind": "pass", "grade": 0, "grade_label": "Pass",
+                "why": _block}
 
     if cut < bar:
         return {**base, "kind": "pass", "grade": 0, "grade_label": "Pass",

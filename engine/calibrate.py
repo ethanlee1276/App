@@ -180,10 +180,21 @@ def fit(pairs: list[tuple[float, int]], sport: str = "", market: str = "",
 
 # --- persistence ------------------------------------------------------------
 def save(calibrations: dict[str, Calibration], path: Path | str = DEFAULT_PATH) -> Path:
-    """Persist ``{"<sport>:<market>": Calibration}`` as JSON."""
+    """Merge ``{"<sport>:<market>": Calibration}`` into the JSON store.
+
+    Merge, not replace: the file is shared by every sport's fitter (the
+    MLB deep fit, the NFL walk, the journal fitter's hoops/college keys),
+    and one sport's run must not erase corrections it never fitted."""
     path = Path(path)
+    try:
+        stored = json.loads(path.read_text()) if path.is_file() else {}
+        if not isinstance(stored, dict):
+            stored = {}
+    except (ValueError, OSError):
+        stored = {}
+    stored.update({k: c.to_dict() for k, c in calibrations.items()})
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({k: c.to_dict() for k, c in calibrations.items()}, indent=2))
+    path.write_text(json.dumps(stored, indent=2))
     return path
 
 
@@ -240,13 +251,17 @@ class disabled:
 
 
 def correction_for(sport: str, market: str,
-                   path: Path | str = DEFAULT_PATH) -> tuple[float, float]:
-    """Look up ``(temperature, intercept)``, defaulting to no correction."""
+                   path: Path | str | None = None) -> tuple[float, float]:
+    """Look up ``(temperature, intercept)``, defaulting to no correction.
+
+    ``path=None`` resolves DEFAULT_PATH at CALL time — a default argument
+    binds at import, so a repointed store (tests, tools) was silently
+    ignored. Sixth appearance of this exact trap in the codebase."""
     global _cache
     if not _enabled:
         return (1.0, 0.0)
     if _cache is None:
-        _cache = load(path)
+        _cache = load(DEFAULT_PATH if path is None else path)
     temp, bias = _cache.get(f"{sport}:{market}", _cache.get(sport, (1.0, 0.0)))
     if temp in (GRID_MIN, GRID_MAX):
         # A boundary fit is the search failing, not a correction. Applying
@@ -260,7 +275,7 @@ def correction_for(sport: str, market: str,
 
 
 def is_reliable(sport: str, market: str,
-                path: Path | str = DEFAULT_PATH) -> bool:
+                path: Path | str | None = None) -> bool:
     """False when this market's fit ran to the edge of the search range.
 
     A boundary fit means the data wanted a bigger correction than the
@@ -275,7 +290,7 @@ def is_reliable(sport: str, market: str,
         return True
     global _cache
     if _cache is None:
-        _cache = load(path)
+        _cache = load(DEFAULT_PATH if path is None else path)
     # Read the STORED value, not correction_for() — that neutralises a
     # boundary fit before returning it, which would hide exactly the
     # condition this function exists to report.

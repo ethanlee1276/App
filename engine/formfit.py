@@ -118,24 +118,33 @@ class FormFit:
                 "fitted": _dt.datetime.now().isoformat(timespec="seconds")}
 
 
-def fit(entries: list[dict], market: str, base: dict,
-        min_history: int = 8, sport: str = "mlb") -> FormFit | None:
+def base_for(sport: str) -> dict:
+    """The sport's hand-tuned spec curve — the dial's zero point."""
+    from .form import WINDOW_WEIGHTS, MLB_WINDOW_WEIGHTS
+    return MLB_WINDOW_WEIGHTS if sport == "mlb" else WINDOW_WEIGHTS
+
+
+def fit(entries: list[dict], market: str, base: dict | None = None,
+        min_history: int | None = None, sport: str = "mlb") -> FormFit | None:
     """Grid-search the dial by walk-forward Brier on raw probabilities.
 
     ``entries`` are the same player histories calibrate.py fits from. One
     backtest per grid point — this is the expensive fit (≈21× a
     temperature fit), which is why it runs from a CLI/nightly chore and
-    never inside a page build.
+    never inside a page build. The harness comes from ``logwalk.walk``,
+    so any sport with game logs and an engine fits through the same door.
     """
     from . import calibrate as cal
-    from .mlb.backtest import backtest_from_logs
+    from .logwalk import walk
 
+    if base is None:
+        base = base_for(sport)
     scores: dict[float, tuple[float, int]] = {}
     with cal.disabled():
         for r in GRID:
-            report = backtest_from_logs(entries, market,
-                                        min_history=min_history,
-                                        form_weights=family(base, r))
+            report = walk(sport, entries, market,
+                          min_history=min_history,
+                          form_weights=family(base, r))
             if not report.pairs:
                 return None
             scores[r] = (_brier(report.pairs), len(report.pairs))
@@ -156,10 +165,19 @@ def fit(entries: list[dict], market: str, base: dict,
 
 # --- persistence and the projection-time lookup ------------------------------
 def save(fits: dict[str, FormFit], path=None) -> Path:
+    """Merge these fits into the store. Merge, not replace: the store is
+    shared by every sport, and an NFL fitting run must not erase the MLB
+    keys it never looked at."""
     p = Path(path if path is not None else DEFAULT_PATH)
+    try:
+        stored = json.loads(p.read_text()) if p.is_file() else {}
+        if not isinstance(stored, dict):
+            stored = {}
+    except (ValueError, OSError):
+        stored = {}
+    stored.update({k: f.to_dict() for k, f in fits.items()})
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({k: f.to_dict() for k, f in fits.items()},
-                            indent=1))
+    p.write_text(json.dumps(stored, indent=1))
     return p
 
 

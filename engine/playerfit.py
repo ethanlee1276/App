@@ -105,7 +105,7 @@ def _brier(pairs) -> float:
     return sum((p - won) ** 2 for p, won in pairs) / len(pairs)
 
 
-def fit(entries: list[dict], market: str, min_history: int = 8,
+def fit(entries: list[dict], market: str, min_history: int | None = None,
         sport: str = "mlb") -> PlayerFit | None:
     """Two walk-forwards: uncorrected, and corrected with each game's
     multiplier computed strictly from that player's EARLIER games. The
@@ -116,7 +116,7 @@ def fit(entries: list[dict], market: str, min_history: int = 8,
     live store is built from at the end.
     """
     from . import calibrate as cal
-    from .mlb.backtest import backtest_from_logs
+    from .logwalk import walk
 
     ledger: dict[str, dict] = {}      # per player: running sums, causal
 
@@ -133,13 +133,12 @@ def fit(entries: list[dict], market: str, min_history: int = 8,
         s["n"] += 1
 
     with cal.disabled():
-        base = backtest_from_logs(entries, market, min_history=min_history,
-                                  player_adjust=lambda name: 1.0)
+        base = walk(sport, entries, market, min_history=min_history,
+                    player_adjust=lambda name: 1.0)
         if not base.pairs:
             return None
-        corrected = backtest_from_logs(
-            entries, market, min_history=min_history,
-            player_adjust=causal_mult, player_record=record)
+        corrected = walk(sport, entries, market, min_history=min_history,
+                         player_adjust=causal_mult, player_record=record)
 
     brier_base = _brier(base.pairs)
     brier_corr = _brier(corrected.pairs)
@@ -164,10 +163,19 @@ def fit(entries: list[dict], market: str, min_history: int = 8,
 
 # --- persistence and the projection-time lookup ------------------------------
 def save(fits: dict[str, PlayerFit], path=None) -> Path:
+    """Merge these fits into the store. Merge, not replace: the store is
+    shared by every sport (deep fitters AND the journal fitter), and one
+    sport's run must not erase keys it never looked at."""
     p = Path(path if path is not None else DEFAULT_PATH)
+    try:
+        stored = json.loads(p.read_text()) if p.is_file() else {}
+        if not isinstance(stored, dict):
+            stored = {}
+    except (ValueError, OSError):
+        stored = {}
+    stored.update({k: f.to_dict() for k, f in fits.items()})
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({k: f.to_dict() for k, f in fits.items()},
-                            indent=1))
+    p.write_text(json.dumps(stored, indent=1))
     return p
 
 
@@ -228,6 +236,7 @@ def report(path=None) -> list[dict]:
               "games": int(r.get("games", 0))}
              for n, r in players.items() if isinstance(r, dict)),
             key=lambda r: -abs(r["mult"] - 1.0))[:4]
+        journal = d.get("basis") == "journal-mae"
         out.append({
             "sport": d.get("sport") or sport,
             "market": d.get("market") or market or key,
@@ -235,6 +244,13 @@ def report(path=None) -> list[dict]:
             "samples": int(d.get("samples", 0) or 0),
             "brier_baseline": d.get("brier_baseline"),
             "brier_corrected": d.get("brier_corrected"),
+            # Journal-fitted entries score by projection MAE, not Brier —
+            # the page must label the number it shows, not borrow a name.
+            "score_label": "proj error" if journal else "Brier",
+            "score_baseline": (d.get("mae_baseline") if journal
+                               else d.get("brier_baseline")),
+            "score_corrected": (d.get("mae_corrected") if journal
+                                else d.get("brier_corrected")),
             "n_players": len(players),
             "top": worst,
             "fitted": d.get("fitted"),

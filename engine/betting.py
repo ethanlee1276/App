@@ -256,15 +256,22 @@ def _kelly_stake(model_prob: float, odds: int, fraction: float = 0.25,
 
 def evaluate_prop(prop: Prop, proj: Projection,
                   allow_synthetic_line: bool = False,
-                  game=None) -> Recommendation:
+                  game=None, sport: str = "nfl") -> Recommendation:
     """§3's procedure end to end: shop the line, devig, price the
     distribution, haircut by tier, gate on the tier minimum, grade 0–100,
     size with fractional Kelly. ``game`` supplies the spread for the
-    game-script component of the grade (None → neutral)."""
+    game-script component of the grade (None → neutral).
+
+    ``sport`` keys every self-tuning store. It was once hardcoded "nfl"
+    here — harmless while only NFL priced through this path and nothing
+    else had a fitted correction, and a silent cross-sport leak the day
+    either stopped being true."""
     from .quality import (tier_shrink, tier_min_edge, market_tier,
                           volatility as market_volatility, quality_score,
                           letter as quality_letter, STAKE_CAP_U)
-    temp, bias = correction_for("nfl", prop.market)
+    from .calibrate import is_reliable
+    from .losspatterns import veto as lp_veto
+    temp, bias = correction_for(sport, prop.market)
 
     def p_over_at(line: float) -> float:
         if prop.market == RECEPTIONS:
@@ -316,9 +323,17 @@ def evaluate_prop(prop: Prop, proj: Projection,
     #              overrode the §3 bars — the same double-charging disease
     #              as the old quality scaling, one layer down.
     #  quality   — below 70 is no bet, not a lean (§10)
+    # Two more gates, in parity with the MLB engine:
+    #  calibration — a fit at its search boundary closed this market
+    #  pattern     — the loss-pattern miner closed this SLICE (a side, a
+    #                price band) under false-discovery control
+    calibration_ok = is_reliable(sport, prop.market)
+    pattern_block = lp_veto(sport, prop.market, side=side, odds=best.odds,
+                            prob=hit, book=best.book, horizon_days=0)
     tier = market_tier(prop.market)
     min_edge = tier_min_edge(prop.market)
     gate_ok = (credible and has_market
+               and calibration_ok and pattern_block is None
                and edge >= min_edge
                and net > favourite_surcharge(best.odds))
     grade = quality_letter(quality) if gate_ok else "Pass"
@@ -327,6 +342,12 @@ def evaluate_prop(prop: Prop, proj: Projection,
              if grade != "Pass" else 0.0)
 
     reasons = list(proj.reasons)
+    if pattern_block:
+        reasons.insert(0, pattern_block)
+    if not calibration_ok:
+        reasons.insert(0, "This market's calibration fit hit the edge of its "
+                          "search range — the model can't price it reliably, "
+                          "so nothing here is bettable until it's fixed")
     if not credible:
         reasons.insert(0, "No credible market edge — line unavailable or price looks off")
     elif side == "UNDER":

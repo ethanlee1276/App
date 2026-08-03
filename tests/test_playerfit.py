@@ -165,7 +165,8 @@ def test_the_projection_applies_the_memory_and_says_so():
 # --- the CLI and the page ----------------------------------------------------
 def test_the_cli_excludes_home_runs_and_orders_the_refits():
     src = open(os.path.join(ROOT, "playerfit.py"), encoding="utf-8").read()
-    assert '"home_runs"' not in src.split("MLB_MARKETS")[1].split("]")[0]
+    mlb_list = src.split('"mlb": [')[1].split("]")[0]
+    assert '"home_runs"' not in mlb_list
     assert "calibrate.py" in src and "refit its temperature" in src
 
 

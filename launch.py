@@ -2802,6 +2802,18 @@ def settle_now(day: str | None = None) -> None:
                   "self-closed — see the Record page")
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠️  loss-pattern mining skipped: {exc}")
+    try:
+        from engine import journalfit
+        jf = journalfit.refresh(lconn)
+        for f in jf["temperatures"]["fitted"]:
+            print(f"  journal fit: {f['key']} temperature "
+                  f"T={f['temperature']} on {f['n']} settled bets")
+        for f in jf["memory"]["fitted"]:
+            if f["adopted"]:
+                print(f"  journal fit: {f['key']} player memory on "
+                      f"({f['players']} corrected)")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  journal fit skipped: {exc}")
     ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
     after = counts(lconn)
     print(f"  journal: settled {n} pick(s)")

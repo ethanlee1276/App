@@ -32,10 +32,16 @@ import argparse
 from engine import calibrate as _cal
 from engine import db as _db
 from engine import playerfit as pf
-from engine.mlb.models import MARKET_LABELS
+from engine.mlb.models import MARKET_LABELS as _MLB_LABELS
+from engine.models import MARKET_LABELS as _GEN_LABELS
 
-# No home_runs — see the module docstring.
-MLB_MARKETS = ["total_bases", "hits", "strikeouts", "outs"]
+MARKET_LABELS = {**_GEN_LABELS, **_MLB_LABELS}
+# No home_runs / anytime_td — the rare-event paths are already
+# per-player learners.
+SPORT_MARKETS = {
+    "mlb": ["total_bases", "hits", "strikeouts", "outs"],
+    "nfl": ["pass_yds", "rush_yds", "rec_yds", "receptions"],
+}
 
 
 def main() -> None:
@@ -43,9 +49,12 @@ def main() -> None:
         description="Fit per-player corrections from real outcomes.")
     ap.add_argument("--from-db", dest="db", default=str(_db.DEFAULT_DB),
                     help="history DB to learn from (default: data/history.db)")
+    ap.add_argument("--sport", default="mlb", choices=sorted(SPORT_MARKETS),
+                    help="which sport's memory to fit (default: mlb)")
     ap.add_argument("--market", default=None, help="fit a single market only")
-    ap.add_argument("--min-history", type=int, default=8,
-                    help="games of history before a player is projected")
+    ap.add_argument("--min-history", type=int, default=None,
+                    help="games of history before a player is projected "
+                         "(default: the sport's own floor)")
     ap.add_argument("--show", action="store_true",
                     help="print the current memory and exit")
     args = ap.parse_args()
@@ -63,25 +72,27 @@ def main() -> None:
         return
 
     conn = _db.connect(args.db)
-    markets = [args.market] if args.market else MLB_MARKETS
+    sport = args.sport
+    markets = [args.market] if args.market else SPORT_MARKETS[sport]
+    min_games = (args.min_history or (8 if sport == "mlb" else 4)) + 2
 
     fits: dict[str, pf.PlayerFit] = {}
-    print(f"Fitting player memory from {args.db}\n")
+    print(f"Fitting {sport} player memory from {args.db}\n")
     for market in markets:
         label = MARKET_LABELS.get(market, market)
-        entries = _db.entries_for_market(conn, "mlb", market,
-                                         min_games=args.min_history + 2)
+        entries = _db.entries_for_market(conn, sport, market,
+                                         min_games=min_games)
         if not entries:
             print(f"  {label:16} skipped — no player history in the DB")
             continue
-        f = pf.fit(entries, market, min_history=args.min_history)
+        f = pf.fit(entries, market, min_history=args.min_history, sport=sport)
         if f is None:
             print(f"  {label:16} skipped — no settled predictions")
             continue
         print(f"  {label:16} {f.samples:>6,} settled   "
               f"Brier {f.brier_baseline:.4f} → {f.brier_corrected:.4f}")
         print(f"  {'':16} {f.verdict}")
-        fits[f"mlb:{market}"] = f
+        fits[f"{sport}:{market}"] = f
 
     if not fits:
         print("\nNothing fitted. Ingest history first, e.g.:\n"

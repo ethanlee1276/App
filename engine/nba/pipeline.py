@@ -69,11 +69,22 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
                                prop.get("rest", "1day"),
                                recent_high=max(minutes) if minutes else None,
                                tune=tune)
-    proj = round(rate * proj_min, 2)
+    # Player memory (engine/playerfit.py): the record's earned correction
+    # for players this model persistently misreads — same store, same
+    # restraints (shrinkage, ±15% clamp, causal adoption) as every sport.
+    from ..playerfit import mult_for as pf_mult
+    pmult = pf_mult(tune.key, stat, prop["player"])
+    proj = round(rate * proj_min * pmult, 2)
 
     over_odds, under_odds = int(prop["over_odds"]), int(prop["under_odds"])
     line = float(prop["line"])
-    p_model_over = p_over(stat, proj, line, tune)
+    # Temperature (engine/calibrate.py), applied BEFORE the side is chosen
+    # — an uncalibrated probability would still decide OVER vs UNDER (see
+    # engine/mlb/betting.py, the same doctrine). Keyed by tune.key, so the
+    # WNBA's fit never leaks onto the NBA or the reverse.
+    from ..calibrate import apply_temperature, correction_for
+    _t, _b = correction_for(tune.key, stat)
+    p_model_over = apply_temperature(p_over(stat, proj, line, tune), _t, _b)
     mkt_over, mkt_under = devig(over_odds, under_odds)
     hold = market_hold(over_odds, under_odds)
 
@@ -94,6 +105,18 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     fails = approval_gate(p_final, odds, hold, grade,
                           high_hold_market=stat == "fg3m",
                           stat=stat, tune=tune)
+    # The other two self-tuning gates, in parity with every engine: a
+    # market whose calibration fit ran to its boundary closed itself, and
+    # the loss-pattern miner's closed slices veto matching picks.
+    from ..calibrate import is_reliable
+    from ..losspatterns import veto as lp_veto
+    if not is_reliable(tune.key, stat):
+        fails = fails + ["this market's calibration fit hit the edge of its "
+                         "search range — closed by its own fit"]
+    _block = lp_veto(tune.key, stat, side=side, odds=odds, prob=p_final,
+                     book=prop.get("book"), horizon_days=0)
+    if _block:
+        fails = fails + [_block]
     need = required_edge(stat, hold, tune, high_hold_market=stat == "fg3m")
     tier = (tune.market_tier or {}).get(stat, 2)
     # §8 — the five context components, each a restatement of something
