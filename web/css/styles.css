@@ -2389,8 +2389,22 @@ select.calc-in { width: auto; font-weight: 600; }
   /* Each meta span gets its OWN area — several grid items assigned to a
      shared area don't flow side by side, they stack on top of each other
      (the overlapping-text bug). */
-  .rl-row {
-    grid-template-columns: 20px auto auto minmax(0, 1fr) 72px;
+  /* `.pm-rows .rl-row` is listed explicitly because it is a two-class
+     selector and this one is a single class — a media query adds no
+     specificity, so the desktop six-column template won here and fought a
+     five-area layout: the 1fr column computed to 0px and the trader name
+     landed on top of the price. Matching its specificity is the fix. The
+     alternative — wrapping the desktop rule in a min-width block of its
+     own — opens the duplicate-breakpoint trap that test_header_density
+     slices on. */
+  /* The FLEXIBLE track is proc, not odds. With `auto auto minmax(0,1fr)`
+     across date/proc/odds, a long trader handle took everything an `auto`
+     track would give it and squeezed odds to a measured 0px — so the price
+     rendered underneath the name. The price is three characters and never
+     needs to flex; the name is the only thing here whose length is
+     unbounded, so it gets the track that can shrink. */
+  .rl-row, .pm-rows .rl-row {
+    grid-template-columns: 20px auto minmax(0, 1fr) auto 72px;
     grid-template-areas: "icon main main main pnl"
                          ".    date proc odds .";
     row-gap: 3px; padding: 10px 12px 10px 11px;
@@ -2399,7 +2413,15 @@ select.calc-in { width: auto; font-weight: 600; }
   .rl-main { grid-area: main; white-space: normal; }
   .rl-pnl { grid-area: pnl; }
   .rl-date { grid-area: date; }
-  .rl-proc { grid-area: proc; white-space: normal; }
+  /* Wrapping, not clipping — a phone row has vertical room and no hover to
+     reveal a title. `overflow-wrap: anywhere` because a wallet address or a
+     handle like "monkeymashingkeyboard" is a single unbreakable token, and
+     `white-space: normal` alone will not break one: it overflowed the track
+     intact and ran across the price. */
+  .rl-proc {
+    grid-area: proc; white-space: normal;
+    overflow: visible; overflow-wrap: anywhere;
+  }
   .rl-odds { grid-area: odds; }
   .rl-date, .rl-proc, .rl-odds { text-align: left; justify-self: start; }
   .rl-date::after { content: " ·"; opacity: .4; }

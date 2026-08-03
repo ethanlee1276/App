@@ -323,6 +323,41 @@ def test_a_wallet_shaped_name_is_shortened_whichever_field_it_arrived_in():
     assert "name || shortWallet(" not in _strip_js(APP)
 
 
+def test_the_phone_row_gives_the_flexible_track_to_the_name_not_the_price():
+    """A media query adds no specificity, so `.pm-rows .rl-row` (two
+    classes) beat the phone's `.rl-row` (one) and imposed the desktop
+    six-column template on a five-area layout: the 1fr column computed to
+    0px and the trader name rendered on top of the price. Matching the
+    specificity is the fix.
+
+    And within the phone template the flexible track is proc, not odds: a
+    price is three characters and never flexes, while a handle is the only
+    thing here whose length is unbounded."""
+    body = _strip_comments(CSS)
+    i = body.index("@media (max-width: 760px)")
+    block = body[i:body.index("@media", i + 30)]
+    assert ".rl-row, .pm-rows .rl-row {" in block, \
+        "the phone template loses to the Polymarket override"
+    rule = block[block.index(".rl-row, .pm-rows .rl-row {"):]
+    cols = rule[rule.index("grid-template-columns:"):rule.index(";")]
+    # proc is the third area in ". date proc odds ." — third track flexes.
+    assert "20px auto minmax(0, 1fr) auto 72px" in cols, cols
+
+
+def test_a_long_handle_breaks_on_a_phone_instead_of_running_over_the_price():
+    """`white-space: normal` alone will not break "monkeymashingkeyboard"
+    or a wallet address — they are single unbreakable tokens, and they
+    overflowed the track intact."""
+    body = _strip_comments(CSS)
+    i = body.index("@media (max-width: 760px)")
+    block = body[i:body.index("@media", i + 30)]
+    j = block.index(".rl-proc {")
+    rule = block[j:block.index("}", j)]
+    assert "overflow-wrap: anywhere" in rule
+    # And it must not ALSO clip: a phone has no hover to reveal a title.
+    assert "overflow: visible" in rule
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
