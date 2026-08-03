@@ -2118,6 +2118,111 @@ def verify_forecast_log(conn) -> dict:
             "broken_at": None, "verified_through": len(rows)}
 
 
+def _self_tuning_block() -> dict:
+    """self_tuning_report with its own history connection, for export_json.
+
+    Guarded because export runs everywhere — settle passes, CI, fresh
+    clones with no stats DB. sqlite would invent an empty file on connect,
+    which is harmless here (trend simply returns nothing), but a raise
+    must never cost the record export."""
+    try:
+        from . import db as hist_db
+        h = hist_db.connect()
+        try:
+            return self_tuning_report(h)
+        finally:
+            h.close()
+    except Exception:                              # noqa: BLE001
+        return self_tuning_report(None)
+
+
+def self_tuning_report(hist_conn=None) -> dict:
+    """The learning loop, made visible.
+
+    Everything reported here already happens nightly with no human in it:
+    ``calibrate.fit`` reads every settled bet, refits one temperature per
+    market (T > 1 pulls probabilities toward 50% — the model ran hot;
+    T < 1 pushes them out — it ran shy), a fit that runs to the edge of its
+    search range closes that market by itself, and ``calibhistory`` stamps
+    every sweep with the commit that produced it so "is it getting better"
+    has an answer with causes attached.
+
+    None of that was on the site. A learning loop nobody can see is
+    indistinguishable from a static model — and worse, the honest answer to
+    "does this thing adjust to its own results?" was YES while every page
+    implied nothing of the sort. This block is that answer, rendered.
+    """
+    import json
+
+    from . import calibrate as cal
+    out = {"markets": [], "trend": {}, "last_refit": None,
+           "closed": [], "improving": 0, "tracked": 0}
+    # calibrate.load() is the runtime accessor and deliberately strips the
+    # stored file to {key: (temperature, intercept)} — all the correction
+    # path needs. This report needs the whole fit record (samples, Brier
+    # before/after), so it reads the file save() wrote. cal.DEFAULT_PATH is
+    # read at call time on purpose: a default argument freezes at import
+    # and silently ignores a repointed path (tests, tools).
+    stored: dict = {}
+    try:
+        p = Path(cal.DEFAULT_PATH)
+        if p.is_file():
+            raw = json.loads(p.read_text())
+            if isinstance(raw, dict):
+                stored = raw
+    except (ValueError, OSError):
+        stored = {}
+    for key, d in sorted(stored.items()):
+        if not isinstance(d, dict):
+            continue
+        try:
+            t = float(d["temperature"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        k_sport, _, k_market = key.partition(":")
+        sport = d.get("sport") or (k_sport if k_market else "")
+        market = d.get("market") or k_market or key
+        boundary = t <= cal.GRID_MIN + 1e-9 or t >= cal.GRID_MAX - 1e-9
+        if boundary:
+            # The fitter wanted a bigger correction than the search allows:
+            # its own way of saying "unreliable here, not merely
+            # miscalibrated". is_reliable() reads the same signal and the
+            # engines hard-pass the market — no human decided that.
+            out["closed"].append({"sport": sport, "market": market})
+        out["markets"].append({
+            "sport": sport, "market": market,
+            "temperature": round(t, 3),
+            "samples": int(d.get("samples", 0) or 0),
+            "brier_before": d.get("brier_before"),
+            "brier_after": d.get("brier_after"),
+            "at_boundary": boundary,
+            "reading": ("closed by its own fit" if boundary
+                        else "ran hot — tempered toward 50%" if t > 1.05
+                        else "ran shy — pushed outward" if t < 0.95
+                        else "clean"),
+        })
+    try:
+        mt = Path(cal.DEFAULT_PATH).stat().st_mtime
+        out["last_refit"] = datetime.datetime.fromtimestamp(mt)\
+            .isoformat(timespec="seconds")
+    except OSError:
+        pass
+    if hist_conn is not None:
+        try:
+            from . import calibhistory as ch
+            for sport in sorted({m["sport"] for m in out["markets"]
+                                 if m["sport"]} or {"mlb"}):
+                tr = ch.trend(hist_conn, sport)
+                if tr:
+                    out["trend"][sport] = tr
+                    out["improving"] += sum(1 for v in tr.values()
+                                            if v.get("improved"))
+                    out["tracked"] += len(tr)
+        except Exception:                          # noqa: BLE001
+            pass
+    return out
+
+
 def calibration_splits(conn, category: str = "main", since: str | None = None,
                        sport: str | None = None, min_n: int = SPLIT_MIN_N) -> dict:
     """Calibration broken out by market and by horizon.
@@ -2622,6 +2727,11 @@ def export_json(conn, path) -> None:
         # Sealed first, so the published head covers everything journaled up
         # to this export rather than lagging it by a run.
         "forecast_log": (seal_forecasts(conn), verify_forecast_log(conn))[1],
+        # The learning loop, rendered: nightly temperatures, self-closed
+        # markets, and the sweep trend. Own history connection, own guard —
+        # a missing stats DB (CI, fresh clone) yields an empty block, never
+        # a failed export.
+        "self_tuning": _self_tuning_block(),
         "account_health": account_health(conn),
         # §13: the parlay record is reported SEPARATELY and never blended.
         # Its own key, its own tables, its own notional — nothing above this

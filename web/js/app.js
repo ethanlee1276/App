@@ -3456,6 +3456,72 @@ function recForecastLog(f) {
   </div>`;
 }
 
+/* The learning loop, on the page.
+
+   Everything here happens nightly with nobody touching a dial: the refit
+   reads every settled bet and turns one temperature per market, a fit that
+   runs to its search boundary closes the market by itself, and every sweep
+   is stamped with the commit that produced it. It was all real and all
+   invisible — and a learning loop nobody can see is indistinguishable from
+   a static model. */
+function recSelfTuningSection(st) {
+  if (!st || !(st.markets || []).length) return "";
+  const tone = (m) => m.at_boundary ? "var(--bad)"
+    : Math.abs(m.temperature - 1) > 0.05 ? "var(--warn)" : "var(--good)";
+  const rows = st.markets.map((m) => `
+    <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
+        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+      <span class="chip">${escapeHtml((m.sport || "").toUpperCase())}</span>
+      <span style="flex:1;min-width:120px">${escapeHtml(m.market)}</span>
+      <span style="font-variant-numeric:tabular-nums" title="Temperature: >1 pulls probabilities toward 50% (the model ran hot), <1 pushes them out (it ran shy)">T ${(m.temperature ?? 1).toFixed(2)}</span>
+      <span style="color:${tone(m)}">${escapeHtml(m.reading || "")}</span>
+      <span style="opacity:.5;font-variant-numeric:tabular-nums">n=${(m.samples ?? 0).toLocaleString()}</span>
+      ${m.brier_before != null && m.brier_after != null && m.brier_after < m.brier_before
+        ? `<span style="opacity:.6;font-variant-numeric:tabular-nums" title="Brier before → after the correction, on held-out outcomes">${m.brier_before.toFixed(4)} → ${m.brier_after.toFixed(4)}</span>` : ""}
+    </div>`).join("");
+  const trendRows = Object.entries(st.trend || {}).flatMap(([sport, mkts]) =>
+    Object.entries(mkts).map(([mk, t]) => `
+      <div style="display:flex;gap:12px;align-items:baseline;padding:6px 14px;
+          border-bottom:1px solid rgba(255,255,255,.05);font-size:.86em;flex-wrap:wrap">
+        <span class="chip">${escapeHtml(sport.toUpperCase())}</span>
+        <span style="flex:1;min-width:120px">${escapeHtml(mk)}</span>
+        <span style="font-variant-numeric:tabular-nums">ECE ${((t.first || {}).ece ?? 0).toFixed(3)}
+          → <span style="color:var(--${t.improved ? "good" : "warn"})">${((t.last || {}).ece ?? 0).toFixed(3)}</span></span>
+        <span style="opacity:.5">${t.runs} sweep${t.runs === 1 ? "" : "s"}${t.same_code ? "" : " · across code versions"}</span>
+      </div>`)).join("");
+  const lastRefit = st.last_refit ? st.last_refit.replace("T", " ") : "—";
+  return `
+    <div class="section-title">The model tunes itself
+      <span class="sub">— every settled bet feeds a nightly refit; nobody touches a dial.
+      This is the site's AI lane: arithmetic on outcomes, reproducible and auditable,
+      which is exactly why a chatbot never sets a probability here.</span></div>
+    <div class="stats">
+      <div class="tile"><div class="k">Last refit</div><div class="v" style="font-size:var(--fs-lg)">${escapeHtml(lastRefit)}</div>
+        <div class="tile-sub">runs itself after every settle</div></div>
+      <div class="tile"><div class="k">Markets tuned</div><div class="v">${st.markets.length}</div></div>
+      <div class="tile"><div class="k">Self-closed</div><div class="v">${(st.closed || []).length}</div>
+        <div class="tile-sub">a fit at its boundary shuts its own market</div></div>
+      <div class="tile"><div class="k">Improving</div><div class="v">${st.tracked ? `${st.improving}/${st.tracked}` : "—"}</div>
+        <div class="tile-sub">markets whose calibration error is falling</div></div>
+    </div>
+    <div class="card" style="padding:0">${rows}</div>
+    ${trendRows ? `<div class="section-title">Is it getting better?
+        <span class="sub">— the same measurement over time, each sweep stamped with the commit
+        that produced it, so a move ties to a change rather than to a memory.</span></div>
+      <div class="card" style="padding:0">${trendRows}</div>` : ""}
+    ${recDisclosure("Why no chatbot sets these numbers", `
+      <p style="margin:0;font-size:.87em">The refit is one parameter found by
+      arithmetic over every settled outcome. That makes it reproducible (the same
+      journal always yields the same temperature), auditable (each sweep is stored
+      with its commit), and honest (the reliability chart above shows exactly what
+      it did). A language model can do none of those: it does not reproduce run to
+      run, cannot be swept over a quarter-million historical props, and cannot be
+      temperature-scaled. So AI here means the system correcting itself from its
+      own record — and prose staying prose. The decision is recorded in the
+      competitive recipe, because it is the one pillar competitors who sell picks
+      structurally cannot copy.</p>`)}`;
+}
+
 function recCalibrationSection(cal, era) {
   if (!cal || !cal.n || !(cal.buckets || []).length) return "";
   const rows = calBucketRows(cal.buckets);
@@ -3889,6 +3955,7 @@ async function renderRecord() {
       scoped ? "" : recEraSection(d.model_eras)}
     ${recCalibrationSection(src.calibration, src.calibration_era)}
     ${scoped ? "" : recCalibrationSplits(d.calibration_splits)}
+    ${scoped ? "" : recSelfTuningSection(d.self_tuning)}
     ${scoped ? "" : recForecastLog(d.forecast_log)}
     ${scoped ? "" : recHealthSection(d.account_health)}
     ${scoped ? "" : recLongshotSection(d.longshots)}

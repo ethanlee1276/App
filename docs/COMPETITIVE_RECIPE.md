@@ -134,6 +134,7 @@ than bankroll management.
 | Calibration by market | HAVE (2026-08-03) | `calibration_splits`, `engine/ledger.py`. A test board with aggregate ECE of 7.4 points covered one market on the diagonal and one twenty points hot. |
 | Calibration by time horizon | HAVE (2026-08-03) | same. Buckets at 0 / 1–3 / 4–14 / 15+ days; reports `horizon_degenerate` when fewer than two buckets clear the sample bar, rather than drawing a one-bar chart. |
 | Immutable, publicly hashed forecast log | HAVE (2026-08-03) | `forecast_log` table, `seal_forecasts` / `verify_forecast_log`. Each row's hash covers the row and the hash before it; the head is published on the Record page. |
+| The self-tuning loop, visible on the site | HAVE (2026-08-03) | `self_tuning_report`, `engine/ledger.py` → "The model tunes itself" on the Record page. The nightly refit, per-market temperatures with plain-language verdicts, markets closed by their own boundary fits, and the ECE trend across commit-stamped sweeps were all real and all invisible — a learning loop nobody can see is indistinguishable from a static model. The section's disclosure states the WON'T below in public: the numbers come from arithmetic over the journal, never a language model. |
 
 ### Data differentiators
 
