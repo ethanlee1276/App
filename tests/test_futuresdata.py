@@ -226,6 +226,87 @@ def test_nothing_here_spends_an_odds_credit():
                encoding="utf-8").read()
     for banned in ("oddsapi", "ODDS_API_KEY", "get_api_key", "oddshistory"):
         assert banned not in src, f"{banned} would put this on the meter"
+# --- player season totals from the logs we already have ---------------------
+def _logs(c, rows, season=2026, market="home_runs"):
+    for player, team, values in rows:
+        for i, v in enumerate(values):
+            c.execute(
+                "INSERT OR REPLACE INTO player_game_logs (sport,season,period,"
+                "game_id,player,team,opponent,position,home,market,value) "
+                "VALUES ('mlb',?,?,?,?,?,'X','OF',1,?,?)",
+                (season, f"{season}-06-{i % 28 + 1:02d}", f"g{i}", player,
+                 team, market, float(v)))
+    c.commit()
+
+
+def test_a_players_rate_becomes_a_season_projection():
+    c = db.connect(os.path.join(tempfile.mkdtemp(), "h.db"))
+    _logs(c, [("Slugger", "NYM", [1, 0, 1, 0, 1, 0, 1, 0, 1, 0])])
+    out = FD.player_season_totals(c, "mlb", "home_runs", season=2026,
+                                  team_games_left={"NYM": 50})
+    assert out and out[0]["player"] == "Slugger"
+    row = out[0]
+    assert row["banked"] == 5 and row["games_played"] == 10
+    assert row["mean"] > row["banked"], "the rest of the season adds nothing"
+
+
+def test_a_hot_week_is_not_a_season_projection():
+    """The most confident wrong number this module could produce. Three
+    games at two a night projects a record no one has ever set."""
+    c = db.connect(os.path.join(tempfile.mkdtemp(), "h.db"))
+    _logs(c, [("Hot Guy", "NYM", [2, 2, 2])])
+    out = FD.player_season_totals(c, "mlb", "home_runs", season=2026,
+                                  team_games_left={"NYM": 50})
+    assert out == []
+    assert FD.MIN_GAMES_FOR_RATE >= 5
+
+
+def test_availability_comes_from_his_own_appearances():
+    """A player who has already missed a third of the year is telling us
+    something, and it is the only injury signal available without a feed."""
+    c = db.connect(os.path.join(tempfile.mkdtemp(), "h.db"))
+    # The team has played 20 games; the everyday man played all of them,
+    # the part-timer half.
+    _logs(c, [("Everyday", "NYM", [1] * 20), ("Part Timer", "NYM", [1] * 10)])
+    out = {r["player"]: r for r in FD.player_season_totals(
+        c, "mlb", "home_runs", season=2026, team_games_left={"NYM": 40})}
+    assert out["Everyday"]["availability"] == 1.0
+    assert out["Part Timer"]["availability"] < 0.6
+    # Same per-game rate, so the gap is availability and nothing else.
+    assert out["Everyday"]["mean"] > out["Part Timer"]["mean"]
+
+
+def test_a_line_attaches_a_probability_and_no_line_still_projects():
+    """"48 home runs, give or take 6" is worth publishing with no market
+    attached — that is the point of doing this from the schedule instead of
+    from a price."""
+    c = db.connect(os.path.join(tempfile.mkdtemp(), "h.db"))
+    _logs(c, [("Slugger", "NYM", [1, 0] * 10)])
+    plain = FD.player_season_totals(c, "mlb", "home_runs", season=2026,
+                                    team_games_left={"NYM": 50})[0]
+    assert plain["line"] is None and plain["p_over"] == 0.0
+    assert plain["mean"] > 0 and plain["sd"] > 0
+    priced = FD.player_season_totals(c, "mlb", "home_runs", season=2026,
+                                     team_games_left={"NYM": 50},
+                                     lines={"Slugger": 30.5})[0]
+    assert priced["line"] == 30.5 and 0 < priced["p_over"] < 1
+
+
+def test_games_left_comes_from_the_same_fixture_list_the_season_plays():
+    """Two halves of one board disagreeing about how much season is left is
+    the kind of defect nobody sees until a number is obviously wrong."""
+    fx = [FD.Fixture("NYM", "ATL"), FD.Fixture("ATL", "NYM"),
+          FD.Fixture("NYM", "PHI")]
+    assert FD.games_left_by_team(fx) == {"NYM": 3, "ATL": 2, "PHI": 1}
+
+
+def test_a_team_with_no_games_left_projects_only_what_is_banked():
+    c = db.connect(os.path.join(tempfile.mkdtemp(), "h.db"))
+    _logs(c, [("Done", "NYM", [1] * 12)])
+    row = FD.player_season_totals(c, "mlb", "home_runs", season=2026,
+                                  team_games_left={})[0]
+    assert row["mean"] == row["banked"] == 12
+    assert row["sd"] == 0.0
 
 
 if __name__ == "__main__":

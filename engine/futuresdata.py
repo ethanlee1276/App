@@ -220,6 +220,80 @@ def build(conn, sport: str, season: int | None = None,
             "prior_share": prior_share, "games_played": played, "note": note}
 
 
+#: Fewest games a player needs this season before his rate is used at all.
+#: Below it the sample is one hot week, and a season projection built on a
+#: hot week is the most confident wrong number this module could produce.
+MIN_GAMES_FOR_RATE = 8
+
+#: How many of the team's remaining games a player is assumed available
+#: for, when we have no injury feed to say otherwise. Taken from his own
+#: appearance rate so far — which is the honest estimate, since a player
+#: who has already missed a third of the year is telling us something.
+DEFAULT_AVAILABILITY = 0.92
+
+
+def player_season_totals(conn, sport: str, market: str, season: int | None = None,
+                         team_games_left: dict | None = None,
+                         lines: dict | None = None, limit: int = 40) -> list[dict]:
+    """Projected season totals for one market, best first.
+
+    ``team_games_left`` {team: games} comes from the same fixture list the
+    season simulation uses, so a player's remaining games and his team's
+    remaining games can never disagree.
+
+    ``lines`` {player: number} attaches a P(over) where a line is known.
+    Without one the projection still stands on its own — "48 home runs,
+    give or take 6" is a claim worth publishing with no market attached,
+    which is the whole point of doing this from the schedule rather than
+    from a price.
+    """
+    from .futures import season_total
+    day = _dt.date.today().isoformat()
+    season = season if season is not None else season_of(sport, day)
+    rows = conn.execute(
+        "SELECT player, team, COUNT(*) n, SUM(value) tot, "
+        "AVG(value) avg_v, AVG(value*value) avg_sq "
+        "FROM player_game_logs WHERE sport=? AND season=? AND market=? "
+        "GROUP BY player, team", (sport, season, market)).fetchall()
+    left = team_games_left or {}
+    # A team's games so far, so availability is measured against the games
+    # the player COULD have played rather than against a season length.
+    played = {t: n for t, n in conn.execute(
+        "SELECT team, COUNT(DISTINCT period || game_id) FROM player_game_logs "
+        "WHERE sport=? AND season=? GROUP BY team", (sport, season))}
+    out = []
+    for r in rows:
+        n = int(r["n"] or 0)
+        if n < MIN_GAMES_FOR_RATE:
+            continue
+        mu = float(r["avg_v"] or 0.0)
+        var = max(0.0, float(r["avg_sq"] or 0.0) - mu * mu)
+        team = r["team"] or ""
+        team_n = played.get(team, 0)
+        avail = (min(1.0, n / team_n) if team_n else DEFAULT_AVAILABILITY)
+        st = season_total(banked=float(r["tot"] or 0.0), per_game=mu,
+                          per_game_sd=var ** 0.5,
+                          games_left=int(left.get(team, 0)),
+                          availability=avail,
+                          line=(lines or {}).get(r["player"]))
+        st.player, st.team, st.market = r["player"], team, market
+        st.games_played = n
+        out.append(st.as_dict())
+    out.sort(key=lambda d: -d["mean"])
+    return out[:limit]
+
+
+def games_left_by_team(fixtures: list) -> dict:
+    """{team: remaining games} from the same fixture list the simulation
+    plays, so the two halves of a futures board cannot disagree about how
+    much season is left."""
+    out: dict[str, int] = {}
+    for f in fixtures:
+        out[f.home] = out.get(f.home, 0) + 1
+        out[f.away] = out.get(f.away, 0) + 1
+    return out
+
+
 def project(conn, sport: str, season: int | None = None, trials: int = 20000,
             conferences: dict | None = None) -> dict:
     """Build the inputs and run the season. The one call a builder needs."""

@@ -342,6 +342,76 @@ def simulate(sport: str, ratings: dict, records: dict,
     }
 
 
+@dataclass
+class SeasonTotal:
+    """A player's projected season total, as a distribution."""
+    player: str
+    team: str = ""
+    market: str = ""
+    banked: float = 0.0            # what he already has
+    games_played: int = 0
+    games_left: int = 0
+    per_game: float = 0.0
+    availability: float = 1.0      # share of his team's games he actually plays
+    mean: float = 0.0
+    sd: float = 0.0
+    p_over: float = 0.0            # at ``line``, when one is supplied
+    line: float | None = None
+
+    def as_dict(self) -> dict:
+        d = dict(self.__dict__)
+        for k in ("banked", "mean", "sd", "per_game"):
+            d[k] = round(d[k], 2)
+        d["availability"] = round(d["availability"], 3)
+        d["p_over"] = round(d["p_over"], 4)
+        return d
+
+
+def season_total(banked: float, per_game: float, per_game_sd: float,
+                 games_left: int, availability: float = 1.0,
+                 line: float | None = None) -> SeasonTotal:
+    """Where a season total lands, given a rate and the games left to play.
+
+    Each remaining game contributes the player's per-game number when he
+    plays and nothing when he does not, so availability enters the variance
+    as well as the mean. That second part is the one worth having: a
+    35-a-game scorer who misses a quarter of the season is not the same bet
+    as one who plays every night at 26, even though the means match.
+
+        E[game]   = a * mu
+        Var[game] = a * (sd^2 + mu^2) - (a * mu)^2
+
+    Summed over the remaining games and added to what is already banked.
+    Normal by the central limit theorem, which is fair for a season made of
+    dozens of games and would not be for one made of three.
+    """
+    a = min(1.0, max(0.0, availability))
+    n = max(0, int(games_left))
+    e_g = a * per_game
+    var_g = max(0.0, a * (per_game_sd ** 2 + per_game ** 2) - e_g ** 2)
+    mean = banked + n * e_g
+    sd = math.sqrt(n * var_g)
+    st = SeasonTotal(player="", banked=banked, games_left=n,
+                     per_game=per_game, availability=a, mean=mean, sd=sd,
+                     line=line)
+    if line is not None:
+        st.p_over = p_over_total(mean, sd, line)
+    return st
+
+
+def p_over_total(mean: float, sd: float, line: float) -> float:
+    """P(season total > line) under the normal approximation.
+
+    With no variance left — the season is over — this is a fact rather than
+    a forecast, and it answers 1 or 0 instead of dividing by zero.
+    """
+    if sd <= 1e-9:
+        return 1.0 if mean > line else 0.0
+    z = (line - mean) / sd
+    p = 1.0 - 0.5 * (1.0 + math.erf(z / math.sqrt(2)))
+    return min(0.999, max(0.001, p))
+
+
 def _prior_weight(records: dict, remaining: dict) -> float:
     """Share of the season still unplayed, across the league."""
     played = sum(w + l for w, l in records.values())

@@ -247,6 +247,58 @@ def test_a_team_with_games_left_but_none_played_still_counts():
                    _round_robin(teams), trials=100)
     assert {t["team"] for t in r["teams"]} == set(teams)
     assert r["prior_weight"] == 1.0
+# --- player season totals ---------------------------------------------------
+def test_a_season_total_is_what_is_banked_plus_what_is_left():
+    st = F.season_total(banked=30, per_game=0.4, per_game_sd=0.6,
+                        games_left=50, availability=1.0)
+    assert abs(st.mean - (30 + 50 * 0.4)) < 1e-9
+    assert st.sd > 0
+
+
+def test_missing_games_costs_more_than_the_mean_says():
+    """A 35-a-game scorer who misses a quarter of the season is not the same
+    bet as one who plays every night at 26, even though the means match.
+    Availability has to enter the VARIANCE, not just the mean — otherwise
+    the model prices those two identically."""
+    full = F.season_total(banked=0, per_game=1.0, per_game_sd=0.5,
+                          games_left=40, availability=1.0)
+    part = F.season_total(banked=0, per_game=1.0, per_game_sd=0.5,
+                          games_left=40, availability=0.6)
+    assert part.mean < full.mean
+    # Fewer expected games but MORE uncertainty per game played.
+    assert part.sd / part.mean > full.sd / full.mean
+
+
+def test_a_finished_season_is_a_fact_not_a_forecast():
+    """No games left means no variance, and the answer is 1 or 0 rather than
+    a division by zero dressed up as a probability."""
+    over = F.season_total(banked=44, per_game=0.3, per_game_sd=0.5,
+                          games_left=0, line=40.5)
+    under = F.season_total(banked=38, per_game=0.3, per_game_sd=0.5,
+                           games_left=0, line=40.5)
+    assert over.p_over == 1.0 and under.p_over == 0.0
+
+
+def test_the_over_probability_moves_the_right_way_with_the_line():
+    a = F.p_over_total(mean=46.0, sd=4.0, line=40.5)
+    b = F.p_over_total(mean=46.0, sd=4.0, line=50.5)
+    assert a > 0.5 > b
+
+
+def test_a_season_total_is_never_a_certainty_while_games_remain():
+    """Same rule as the team simulation: six months of baseball does not
+    produce a sure thing, and a page built on this must not imply one."""
+    p = F.p_over_total(mean=100.0, sd=3.0, line=1.0)
+    assert p <= 0.999
+    q = F.p_over_total(mean=1.0, sd=3.0, line=100.0)
+    assert q >= 0.001
+
+
+def test_availability_is_clamped_to_something_meaningful():
+    assert F.season_total(banked=0, per_game=1, per_game_sd=1, games_left=10,
+                          availability=5.0).availability == 1.0
+    assert F.season_total(banked=0, per_game=1, per_game_sd=1, games_left=10,
+                          availability=-1.0).availability == 0.0
 
 
 if __name__ == "__main__":
