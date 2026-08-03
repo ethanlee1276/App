@@ -151,6 +151,16 @@ class BatterRates:
     hr: float
     name: str = ""
     spot: int = 0
+    #: Was the projected (hits, total bases, home runs) triple valid
+    #: baseball? False means the three means cannot coexist — most often
+    #: total bases too low for the hits and homers claimed, e.g. a game
+    #: shape like "2 hits, 4 TB, 1 HR", which leaves zero bases for the
+    #: non-HR hit. The inversion clamps to the nearest VALID table, so the
+    #: rates are usable — but they cannot reproduce all three means, and a
+    #: reconciliation gate that includes them is grading the sim on a
+    #: question no table could answer. The flag exists so the caller can
+    #: route the finding where it belongs: at the projection engine.
+    consistent: bool = True
 
     def cumulative(self) -> list[float]:
         """Cumulative thresholds, in the order the sim draws them."""
@@ -190,9 +200,15 @@ def rates_from_means(hits: float, total_bases: float, home_runs: float,
     pa = max(float(pa), 1e-6)
     p_hr = max(0.0, home_runs / pa)
     p_hit = max(0.0, hits / pa)
+    consistent = home_runs <= hits + 1e-9
     p_hr = min(p_hr, p_hit)                    # a homer is a hit
     nonhr = max(0.0, p_hit - p_hr)
     bases_nonhr = max(0.0, (total_bases - 4.0 * home_runs) / pa)
+    # Each non-HR hit is worth at least one base and at most three. Outside
+    # that band the triple is not valid baseball and the clamps below are
+    # about to absorb the difference.
+    if bases_nonhr < nonhr - 1e-9 or bases_nonhr > 3.0 * nonhr + 1e-9:
+        consistent = False
     p_3b = nonhr * TRIPLE_SHARE
     # singles + doubles = nonhr - p_3b
     # singles + 2*doubles = bases_nonhr - 3*p_3b
@@ -209,7 +225,7 @@ def rates_from_means(hits: float, total_bases: float, home_runs: float,
         p_3b, p_hr = p_3b * scale, p_hr * scale
         p_out = 1.0 - (p_bb + p_1b + p_2b + p_3b + p_hr)
     return BatterRates(out=p_out, bb=p_bb, single=p_1b, double=p_2b,
-                       triple=p_3b, hr=p_hr)
+                       triple=p_3b, hr=p_hr, consistent=consistent)
 
 
 @dataclass
@@ -416,7 +432,8 @@ def _scale_reaching(b: BatterRates, k: float) -> BatterRates:
     return BatterRates(
         out=1.0 - (b.bb + b.single + b.double + b.triple + b.hr) * k,
         bb=b.bb * k, single=b.single * k, double=b.double * k,
-        triple=b.triple * k, hr=b.hr * k, name=b.name, spot=b.spot)
+        triple=b.triple * k, hr=b.hr * k, name=b.name, spot=b.spot,
+        consistent=b.consistent)
 
 
 def calibrate(rates: list[BatterRates], targets: dict,

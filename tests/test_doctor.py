@@ -298,6 +298,120 @@ def test_the_workflow_does_not_quietly_grow_a_dependency():
     assert "pip install" not in steps
 
 
+# --- the tripwires for the August bugs ---------------------------------------
+def test_the_new_invariant_checks_are_registered_in_both_lists():
+    """A check that exists but is not in CHECKS never runs; one missing
+    from DATA_CHECKS turns CI red on machines that have no journal. Both
+    registrations, or the tripwire is decoration."""
+    for fn in (doctor.check_premature_evidence, doctor.check_parlay_agreement,
+               doctor.check_forecast_log):
+        assert fn in doctor.CHECKS, fn.__name__
+        assert fn in doctor.DATA_CHECKS, fn.__name__
+
+
+def test_a_settled_game_bet_with_no_final_score_fails_grade_evidence():
+    """The fingerprint of the live-score leak: a game bet graded while its
+    games row has no final. The parser fix stops new ones; this fires if
+    any future feed reintroduces the leak."""
+    import tempfile
+    from engine import db, ledger
+
+    # Point both connects at throwaway files, run the check, restore.
+    tmp = tempfile.mkdtemp()
+    lpath, hpath = os.path.join(tmp, "l.db"), os.path.join(tmp, "h.db")
+    lc = ledger.connect(lpath)
+    lc.execute(
+        "INSERT INTO bets (ts,sport,date,player,market,side,line,book,odds,"
+        "stake_units,stake_dollars,status,category,actual) VALUES "
+        "('x','nba','2026-01-15','GSW@LAL','total','OVER',224.5,'DK',-110,"
+        "1.0,10.0,'lost','main',97.0)")
+    lc.commit()
+    db.connect(hpath)                    # empty history: no games row at all
+
+    # connect()'s default path binds at import, so patch the functions —
+    # not the constants they were built from.
+    orig_lc, orig_hc = ledger.connect, db.connect
+    orig_hj, orig_hh = doctor.has_journal, doctor.has_history
+    ledger.connect = lambda path=None: orig_lc(lpath)
+    db.connect = lambda path=None: orig_hc(hpath)
+    doctor.has_journal = doctor.has_history = lambda: True
+    try:
+        rep = doctor.Report()
+        doctor.check_premature_evidence(rep)
+    finally:
+        ledger.connect, db.connect = orig_lc, orig_hc
+        doctor.has_journal, doctor.has_history = orig_hj, orig_hh
+    row = next(r for r in rep.checks if r["check"] == "grade evidence")
+    assert row["status"] == doctor.FAIL
+    assert "no final score" in row["detail"]
+
+
+def test_a_ticket_disagreeing_with_its_legs_fails_parlay_agreement():
+    import tempfile
+    from engine import ledger, parlayledger
+
+    tmp = tempfile.mkdtemp()
+    lpath = os.path.join(tmp, "l.db")
+    lc = ledger.connect(lpath)
+    parlayledger.ensure_schema(lc)
+    lc.execute("INSERT INTO parlays (sport, date, status, parlay_type)"
+               " VALUES ('mlb','2026-07-24','lost','A')")
+    pid = lc.execute("SELECT id FROM parlays").fetchone()[0]
+    lc.execute("INSERT INTO parlay_legs (parlay_id, leg_no, player, market,"
+               " side, line, odds, status) VALUES (?,'1','Beta Guy',"
+               "'total_bases','OVER',1.5,-110,'lost')", (pid,))
+    # The single healed to won; the ticket still says its leg lost.
+    lc.execute("INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+               "odds,stake_units,stake_dollars,status,category) VALUES "
+               "('x','mlb','2026-07-24','Beta Guy','total_bases','OVER',1.5,"
+               "'DK',-110,0.5,5.0,'won','main')")
+    lc.commit()
+
+    orig_lc, orig_hj = ledger.connect, doctor.has_journal
+    ledger.connect = lambda path=None: orig_lc(lpath)
+    doctor.has_journal = lambda: True
+    try:
+        rep = doctor.Report()
+        doctor.check_parlay_agreement(rep)
+    finally:
+        ledger.connect, doctor.has_journal = orig_lc, orig_hj
+    row = next(r for r in rep.checks if r["check"] == "parlay agreement")
+    assert row["status"] == doctor.FAIL
+    assert "disagree" in row["detail"]
+
+
+def test_a_broken_forecast_chain_fails_the_doctor():
+    import datetime, tempfile
+    from engine import ledger
+
+    tmp = tempfile.mkdtemp()
+    lpath = os.path.join(tmp, "l.db")
+    lc = ledger.connect(lpath)
+    now = datetime.datetime.now().isoformat()
+    for i in range(4):
+        lc.execute("INSERT INTO bets (ts,sport,date,player,market,side,line,"
+                   "book,odds,hit_prob,edge,status) VALUES (?,'mlb',"
+                   "'2026-08-02',?,'hits','OVER',0.5,'DK',-110,0.6,0.05,"
+                   "'won')", (now, f"P{i}"))
+    lc.commit()
+    ledger.seal_forecasts(lc)
+    lc.execute("UPDATE forecast_log SET hit_prob=0.99 WHERE seq=2")
+    lc.commit()
+
+    orig_lc, orig_hj = ledger.connect, doctor.has_journal
+    ledger.connect = lambda path=None: orig_lc(lpath)
+    doctor.has_journal = lambda: True
+    try:
+        rep = doctor.Report()
+        doctor.check_forecast_log(rep)
+    finally:
+        ledger.connect, doctor.has_journal = orig_lc, orig_hj
+    row = next(r for r in rep.checks if r["check"] == "forecast log")
+    assert row["status"] == doctor.FAIL
+    assert "BROKEN at #2" in row["detail"]
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

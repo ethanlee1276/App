@@ -325,6 +325,112 @@ def check_record_page(rep):
                     f"{settled} settled bet(s), written {age_h:.0f}h ago")
 
 
+def check_premature_evidence(rep):
+    """Settled game bets must have a FINAL games row behind them.
+
+    The August premature-settle bug's fingerprint: the NBA schedule parser
+    passed live in-progress scores into the games table, game bets graded
+    against them, and nothing ever re-checked. The parser is fixed and the
+    repair pass now audits team markets — this is the tripwire that fires
+    if any future feed reintroduces the leak. A settled game bet whose
+    games row is scoreless (or missing) was graded on evidence that no
+    longer exists.
+    """
+    @_check(rep, "grade evidence")
+    def _():
+        if not (has_journal() and has_history()):
+            rep.add("grade evidence", WARN, _no_data("journal + history"))
+            return
+        from engine import db, ledger
+        c = ledger.connect()
+        h = db.connect()
+        marks = ", ".join("?" for _ in ledger.GAME_MARKETS)
+        bad = 0
+        for b in c.execute(
+                f"SELECT * FROM bets WHERE status IN ('won','lost','push') "
+                f"AND market IN ({marks})", ledger.GAME_MARKETS).fetchall():
+            where, wargs = ledger._hist_where(b)
+            rows, actual_fn = ledger._game_bet_evidence(h, b, where, wargs)
+            finals = [g for g in rows if g["home_score"] is not None]
+            if not finals:
+                bad += 1
+        if bad:
+            rep.add("grade evidence", FAIL,
+                    f"{bad} settled game bet(s) have no final score behind "
+                    f"them — graded off a partial or vanished games row",
+                    "python3 launch.py --settle all   (the repair pass "
+                    "re-audits team markets)")
+        else:
+            rep.add("grade evidence", OK,
+                    "every settled game bet has a final games row")
+
+
+def check_parlay_agreement(rep):
+    """The parlay record may never disagree with the singles its legs are in.
+
+    settle() promises it, resettle() now enforces it — this checks it, so a
+    regression in either shows up here rather than as a quietly wrong
+    Record page. A settled ticket whose stored leg verdicts differ from the
+    singles journal's current ones is exactly the healed-leg/dead-ticket
+    bug coming back.
+    """
+    @_check(rep, "parlay agreement")
+    def _():
+        if not has_journal():
+            rep.add("parlay agreement", WARN, _no_data("bet journal"))
+            return
+        from engine import ledger, parlayledger
+        c = ledger.connect()
+        parlayledger.ensure_schema(c)
+        stale = 0
+        for p in c.execute("SELECT * FROM parlays WHERE status IN "
+                           "('won','lost','void')").fetchall():
+            for leg in c.execute("SELECT * FROM parlay_legs WHERE parlay_id=?",
+                                 (p["id"],)).fetchall():
+                b = parlayledger._matching_bet(c, p, leg)
+                if b is not None and (leg["status"] or "open") != b["status"]:
+                    stale += 1
+                    break
+        if stale:
+            rep.add("parlay agreement", FAIL,
+                    f"{stale} settled ticket(s) disagree with the singles "
+                    f"journal their legs live in",
+                    "python3 launch.py --settle all   (runs the parlay "
+                    "re-audit)")
+        else:
+            rep.add("parlay agreement", OK,
+                    "every settled ticket matches its legs' singles verdicts")
+
+
+def check_forecast_log(rep):
+    """The hash chain must verify end to end.
+
+    A tamper-evident log that nobody verifies is decoration. A break means
+    a past forecast was edited or deleted — the one thing the transparency
+    pillar promises cannot happen silently.
+    """
+    @_check(rep, "forecast log")
+    def _():
+        if not has_journal():
+            rep.add("forecast log", WARN, _no_data("bet journal"))
+            return
+        from engine import ledger
+        c = ledger.connect()
+        v = ledger.verify_forecast_log(c)
+        if not v["n"]:
+            rep.add("forecast log", OK, "empty — seals on the next refresh")
+        elif v["ok"]:
+            rep.add("forecast log", OK,
+                    f"{v['n']:,} forecast(s) sealed · chain verifies · "
+                    f"head {(v['head'] or '')[:12]}")
+        else:
+            rep.add("forecast log", FAIL,
+                    f"chain BROKEN at #{v['broken_at']} — entries after "
+                    f"#{v.get('verified_through')} are no longer provable",
+                    "the log is append-only by design; a break means a row "
+                    "was edited or deleted underneath it")
+
+
 def check_git(rep):
     @_check(rep, "git")
     def _():
@@ -344,7 +450,8 @@ def check_git(rep):
 
 CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
           check_ingest_freshness, check_odds_budget, check_journal_sanity,
-          check_record_page, check_git]
+          check_record_page, check_premature_evidence, check_parlay_agreement,
+          check_forecast_log, check_git]
 
 # The checks that need the laptop's databases, budget state and built
 # slates. On a machine that has none of those — CI, a fresh clone — they
@@ -353,7 +460,9 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
 # red CI run means something is actually red.
 DATA_CHECKS = (check_stuck_bets, check_slate_freshness,
                check_ingest_freshness, check_odds_budget,
-               check_journal_sanity, check_record_page)
+               check_journal_sanity, check_record_page,
+               check_premature_evidence, check_parlay_agreement,
+               check_forecast_log)
 
 
 def run(skip_tests: bool = False, code_only: bool = False) -> Report:
