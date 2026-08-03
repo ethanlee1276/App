@@ -1,0 +1,544 @@
+"""Play tonight's game twenty thousand times, and read every prop off the
+same simulated games.
+
+WHY THIS EXISTS, WHEN CLOSED-FORM PRICING ALREADY WORKS
+
+It does not price a prop better. `build_mlb_projection` already produces a
+mean and a standard deviation per prop, tuned and calibrated against years
+of logs, and nothing here improves on that number. What it produces that a
+per-prop distribution structurally cannot is the JOINT: the chance two props
+in the same game both land.
+
+That matters because the Parlay Zone currently gets leg correlation from
+priors fitted against our own history (task #52) — a reasonable estimate of
+how two markets move together on average. A shared game sim does not
+estimate it. Both legs come out of the same simulated innings, so if a
+leadoff hitter's extra plate appearance is what gives the cleanup hitter his
+fifth, the sim knows, because it dealt both.
+
+THE INVERSION, WHICH IS THE WHOLE DESIGN
+
+The obvious way to build this is a new batter-versus-pitcher model, and it
+is the wrong way: it would produce a second set of marginals that disagree
+with the first, and a page showing two numbers for one question has a defect
+rather than a feature.
+
+So the rates are INVERTED out of the projections we already trust. Given a
+hitter's projected hits, total bases and home runs per game, plus how many
+plate appearances his lineup spot gets, there is a per-PA outcome table that
+reproduces exactly those three means. Solve for it and the sim agrees with
+the pricing engine by construction — leaving the joint distribution as the
+only new information, which is the only new information wanted.
+
+WHAT IS NOT MODELLED, ON PURPOSE
+
+Base-out state, pitcher fatigue as a function of pitch count, pinch hitters,
+and the fact that a rally gives the whole lineup an extra turn are all real.
+Only the last is captured, and it is captured because it falls out of the
+inning loop for free rather than because it was modelled. Everything else
+would need evidence this repo does not have, and a simulation that invents
+detail is a simulation that invents correlation.
+"""
+
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass, field
+
+from .models import HITS, HOME_RUNS, TOTAL_BASES
+
+#: Plate appearances by lineup spot, for a nine-inning game. The leadoff
+#: spot bats about three quarters of a turn more than the ninth over a
+#: season, and using one flat number for all nine would hand the bottom of
+#: the order the top's playing time — which inflates exactly the cheap props
+#: a longshot board is most tempted by.
+PA_BY_SPOT = {1: 4.65, 2: 4.55, 3: 4.45, 4: 4.35, 5: 4.25,
+              6: 4.15, 7: 4.05, 8: 3.95, 9: 3.85}
+PA_DEFAULT = 4.2
+
+#: Share of non-home-run hits that are triples. Triples are not projected
+#: separately anywhere in this engine and are too rare to infer per hitter,
+#: so they take a league constant; doubles then absorb whatever total-bases
+#: the solve still needs. Getting this wrong moves a hitter's total bases by
+#: hundredths.
+TRIPLE_SHARE = 0.022
+
+#: A batter has to reach base without it being a hit sometimes, or the sim
+#: ends innings faster than baseball does and everyone loses plate
+#: appearances. Walk rate is not projected per hitter either; league average
+#: is the honest default.
+LEAGUE_BB_RATE = 0.085
+
+#: Innings in a simulated game. Extras exist and are ignored: they occur in
+#: under a tenth of games and add a partial inning to both teams, which
+#: moves a per-game mean by less than the sampler's own noise.
+INNINGS = 9
+
+#: THE SHARED GAME LATENT, and the measurement that set it.
+#:
+#: The first working version of this module held every rate fixed across
+#: trials, so the only thing two hitters shared was lineup turnover: more
+#: baserunners, more plate appearances for everyone. That is a real channel
+#: and it produced a real, positive correlation — phi ≈ +0.034 across
+#: same-lineup pairs.
+#:
+#: It is also about a third of the truth. `engine/parlays.py` carries a
+#: MEASURED lineup_stack rho of +0.186 fitted on 27,613 real games, and run
+#: through this engine's own copula at these marginals that implies phi in
+#: the region of +0.11. A sim reproducing +0.034 is not capturing something
+#: baseball does.
+#:
+#: What it was missing is the thing parlays.py already names: "same-game
+#: correlation runs through one shared latent (game script, pace…)". Holding
+#: the pitcher fixed across trials assumes he is equally good every night.
+#: He is not, and neither is the wind or the zone — and every hitter in the
+#: lineup is exposed to the same draw. So each trial scales the whole
+#: lineup's reaching rates by one shared factor.
+#:
+#: The magnitude is SOLVED, not chosen: `calibrate_env_sd` sweeps it until
+#: the sim reproduces the measured correlation. That is the point — the
+#: dependence here is anchored to 27,613 games rather than invented by a
+#: simulation that would happily produce any number asked of it.
+#:
+#: The sweep, at 20,000 trials against a target phi of +0.1152 — the phi
+#: that the measured rho of +0.186 implies at these marginals, through this
+#: engine's own copula:
+#:
+#:     env_sd   phi       |err|    gate
+#:      0.00   +0.0434   0.0717   pass     (lineup turnover alone)
+#:      0.15   +0.0624   0.0528   pass
+#:      0.25   +0.0998   0.0153   pass
+#:      0.30   +0.1257   0.0105   pass
+#:      0.35   +0.1441   0.0289   pass
+#:      0.40   +0.1646   0.0494   pass
+#:
+#: 0.30 is the closest on absolute error, and 0.25 is the value, because the
+#: two miss in opposite directions and this engine has already decided which
+#: direction it accepts. `engine/parlays.py`, CONSERVATISM: "Understating
+#: correlation understates the joint, which raises the required price, which
+#: makes the screen pickier. When the numbers are guesses, that is the
+#: direction to be wrong in." 0.30 overstates; 0.25 understates by about 13%.
+#:
+#: Worth recording because the first version of this comment said 0.30 was
+#: unavailable because it FAILED the reconciliation gate. That was true
+#: against a gate which compared a flat relative tolerance and so was
+#: accidentally strict on rare markets — a 0.05-per-game home-run rate moves
+#: several percent between seeds. Once the gate learned to forgive the
+#: sampler's own noise, 0.30 passed, and the real reason to decline it
+#: turned out to be doctrine rather than arithmetic.
+ENV_SD = 0.25
+
+#: Clamp on the shared draw. A game where nobody can reach at all, or where
+#: every rate doubles, is not a bad night — it is a broken sample, and at
+#: the tails a multiplicative shock stops describing baseball.
+ENV_CLAMP = (0.35, 1.75)
+
+
+@dataclass
+class BatterRates:
+    """One hitter's per-plate-appearance outcome probabilities.
+
+    They sum to 1. ``out`` absorbs everything that is not a walk or a hit,
+    strikeouts included — the sim does not need to tell a strikeout from a
+    groundout for any hitter market this engine prices.
+    """
+
+    out: float
+    bb: float
+    single: float
+    double: float
+    triple: float
+    hr: float
+    name: str = ""
+    spot: int = 0
+
+    def cumulative(self) -> list[float]:
+        """Cumulative thresholds, in the order the sim draws them."""
+        acc, out = 0.0, []
+        for p in (self.out, self.bb, self.single, self.double,
+                  self.triple, self.hr):
+            acc += p
+            out.append(acc)
+        return out
+
+
+def expected_pa(spot: int) -> float:
+    return PA_BY_SPOT.get(spot, PA_DEFAULT)
+
+
+def rates_from_means(hits: float, total_bases: float, home_runs: float,
+                     pa: float, bb_rate: float = LEAGUE_BB_RATE) -> BatterRates:
+    """Invert three projected per-game means into one per-PA outcome table.
+
+    ``hits``, ``total_bases`` and ``home_runs`` are per GAME (what
+    build_mlb_projection produces); ``pa`` is how many plate appearances the
+    hitter's lineup spot gets. The solve:
+
+        hr/PA          = home_runs / pa
+        hit/PA         = hits / pa
+        non-HR hits    = hit/PA - hr/PA
+        bases from     = (total_bases - 4*home_runs) / pa
+          non-HR hits
+        triples        = TRIPLE_SHARE of non-HR hits
+        singles+doubles, and singles+2*doubles+3*triples, then solve.
+
+    Every clamp below is a place the arithmetic can be handed something
+    baseball cannot do — a total-bases projection lower than the hits
+    projection, say, which implies negative doubles. Clamping keeps the
+    table a valid distribution; the caller finds out via ``consistent``.
+    """
+    pa = max(float(pa), 1e-6)
+    p_hr = max(0.0, home_runs / pa)
+    p_hit = max(0.0, hits / pa)
+    p_hr = min(p_hr, p_hit)                    # a homer is a hit
+    nonhr = max(0.0, p_hit - p_hr)
+    bases_nonhr = max(0.0, (total_bases - 4.0 * home_runs) / pa)
+    p_3b = nonhr * TRIPLE_SHARE
+    # singles + doubles = nonhr - p_3b
+    # singles + 2*doubles = bases_nonhr - 3*p_3b
+    p_2b = (bases_nonhr - 3.0 * p_3b) - (nonhr - p_3b)
+    p_2b = min(max(p_2b, 0.0), max(0.0, nonhr - p_3b))
+    p_1b = max(0.0, nonhr - p_3b - p_2b)
+    p_bb = max(0.0, min(bb_rate, 1.0 - p_hit - 1e-9))
+    p_out = 1.0 - (p_bb + p_1b + p_2b + p_3b + p_hr)
+    if p_out < 0.0:
+        # More on-base events than plate appearances. Scale the reaching
+        # outcomes down together rather than picking one to sacrifice.
+        scale = (1.0 - 1e-6) / (p_bb + p_1b + p_2b + p_3b + p_hr)
+        p_bb, p_1b, p_2b = p_bb * scale, p_1b * scale, p_2b * scale
+        p_3b, p_hr = p_3b * scale, p_hr * scale
+        p_out = 1.0 - (p_bb + p_1b + p_2b + p_3b + p_hr)
+    return BatterRates(out=p_out, bb=p_bb, single=p_1b, double=p_2b,
+                       triple=p_3b, hr=p_hr)
+
+
+@dataclass
+class GameSim:
+    """Simulated per-batter outcome tallies, and the joints between them."""
+
+    trials: int
+    names: list[str] = field(default_factory=list)
+    #: name -> market -> {threshold: times cleared}
+    over: dict = field(default_factory=dict)
+    #: (name_a, market_a, line_a, name_b, market_b, line_b) -> times both hit
+    both: dict = field(default_factory=dict)
+    pa_mean: dict = field(default_factory=dict)
+    mean: dict = field(default_factory=dict)
+    #: Standard ERROR of each simulated mean. The gate needs it: a flat
+    #: relative tolerance is accidentally strict on a rare market, where a
+    #: 0.05-per-game home-run rate moves several percent on sampler noise
+    #: alone, and accidentally loose on a common one.
+    se: dict = field(default_factory=dict)
+
+    def p_over(self, name: str, market: str, line: float) -> float | None:
+        d = (self.over.get(name) or {}).get(market)
+        if not d:
+            return None
+        return d.get(_key(line), 0) / self.trials
+
+    def p_both(self, a: tuple, b: tuple) -> float | None:
+        """``a``/``b`` are (name, market, line). Order-independent."""
+        k = _pair_key(a, b)
+        v = self.both.get(k)
+        return None if v is None else v / self.trials
+
+    def correlation(self, a: tuple, b: tuple) -> float | None:
+        """Phi coefficient between two legs — the number the Parlay Zone
+        currently takes from a fitted prior."""
+        pa_ = self.p_over(*a)
+        pb = self.p_over(*b)
+        pab = self.p_both(a, b)
+        if pa_ is None or pb is None or pab is None:
+            return None
+        denom = (pa_ * (1 - pa_) * pb * (1 - pb)) ** 0.5
+        if denom <= 0:
+            return None
+        return (pab - pa_ * pb) / denom
+
+
+def _key(line: float) -> str:
+    return f"{float(line):.1f}"
+
+
+def _pair_key(a: tuple, b: tuple) -> tuple:
+    ka = (a[0], a[1], _key(a[2]))
+    kb = (b[0], b[1], _key(b[2]))
+    return (ka, kb) if ka <= kb else (kb, ka)
+
+
+#: What each outcome is worth, for the markets read off the sim.
+_BASES = (0, 0, 1, 2, 3, 4)          # out, bb, 1B, 2B, 3B, HR
+_IS_HIT = (0, 0, 1, 1, 1, 1)
+
+
+def simulate_lineup(rates: list[BatterRates], legs: list[tuple],
+                    trials: int = 20000, seed: int | None = 7,
+                    innings: int = INNINGS, env_sd: float = ENV_SD) -> GameSim:
+    """Bat one lineup ``trials`` times and tally the requested legs.
+
+    ``legs`` are (name, market, line) triples — the props actually on the
+    board. Only those are tallied, and every unordered pair of them gets a
+    joint count, because the joint is the reason this exists.
+
+    Seeded like the season simulator, and for the same reason: a page whose
+    numbers jitter every refresh reads as noise even when the model is
+    stable, and nobody can tell a real move from the sampler.
+    """
+    rng = random.Random(seed)
+    order = list(rates)
+    n = len(order)
+    if not n:
+        return GameSim(trials=0)
+    base = [b.cumulative() for b in order]
+    cums = base
+    idx_of = {b.name: i for i, b in enumerate(order)}
+
+    want: dict[int, list[tuple]] = {}
+    for name, market, line in legs:
+        i = idx_of.get(name)
+        if i is None:
+            continue
+        want.setdefault(i, []).append((market, float(line)))
+
+    sim = GameSim(trials=trials, names=[b.name for b in order])
+    hit_counts = [0] * n
+    tb_counts = [0] * n
+    hr_counts = [0] * n
+    pa_counts = [0] * n
+    hit_sq = [0] * n
+    tb_sq = [0] * n
+    hr_sq = [0] * n
+    over = {b.name: {} for b in order}
+    both: dict = {}
+
+    lo_env, hi_env = ENV_CLAMP
+    for _ in range(trials):
+        if env_sd > 0:
+            # One draw for the whole lineup: tonight's starter, tonight's
+            # wind, tonight's zone. Scaling the REACHING outcomes and
+            # letting `out` absorb the remainder keeps each table a valid
+            # distribution, and because the draw is centred on 1.0 the
+            # per-game means it produces stay put — checked by `reconcile`,
+            # which runs with the shock on.
+            g = min(hi_env, max(lo_env, rng.gauss(1.0, env_sd)))
+            cums = []
+            for b in order:
+                reach = (b.bb + b.single + b.double + b.triple + b.hr) * g
+                if reach >= 1.0:
+                    g_i = (1.0 - 1e-9) / (reach / g)
+                else:
+                    g_i = g
+                acc, c = 0.0, []
+                p_out = 1.0 - (b.bb + b.single + b.double + b.triple + b.hr) * g_i
+                for p in (p_out, b.bb * g_i, b.single * g_i, b.double * g_i,
+                          b.triple * g_i, b.hr * g_i):
+                    acc += p
+                    c.append(acc)
+                cums.append(c)
+        g_h = [0] * n
+        g_tb = [0] * n
+        g_hr = [0] * n
+        g_pa = [0] * n
+        spot = 0
+        for _inning in range(innings):
+            outs = 0
+            while outs < 3:
+                i = spot % n
+                spot += 1
+                g_pa[i] += 1
+                r = rng.random()
+                c = cums[i]
+                # Linear scan over six buckets beats bisect at this size and
+                # keeps the hot loop free of a function call.
+                k = 0
+                while k < 5 and r >= c[k]:
+                    k += 1
+                if k == 0:
+                    outs += 1
+                    continue
+                g_h[i] += _IS_HIT[k]
+                g_tb[i] += _BASES[k]
+                if k == 5:
+                    g_hr[i] += 1
+        for i in range(n):
+            hit_counts[i] += g_h[i]
+            tb_counts[i] += g_tb[i]
+            hr_counts[i] += g_hr[i]
+            pa_counts[i] += g_pa[i]
+            hit_sq[i] += g_h[i] * g_h[i]
+            tb_sq[i] += g_tb[i] * g_tb[i]
+            hr_sq[i] += g_hr[i] * g_hr[i]
+
+        # Which of tonight's actual legs cleared, this trial.
+        live = []
+        for i, wants in want.items():
+            got = {HITS: g_h[i], TOTAL_BASES: g_tb[i], HOME_RUNS: g_hr[i]}
+            for market, line in wants:
+                if got.get(market, 0) > line:
+                    live.append((order[i].name, market, line))
+                    d = over[order[i].name].setdefault(market, {})
+                    d[_key(line)] = d.get(_key(line), 0) + 1
+        for x in range(len(live)):
+            for y in range(x + 1, len(live)):
+                k2 = _pair_key(live[x], live[y])
+                both[k2] = both.get(k2, 0) + 1
+
+    sim.over = over
+    sim.both = both
+    for i, b in enumerate(order):
+        sim.pa_mean[b.name] = pa_counts[i] / trials
+        sim.mean[b.name] = {
+            HITS: hit_counts[i] / trials,
+            TOTAL_BASES: tb_counts[i] / trials,
+            HOME_RUNS: hr_counts[i] / trials,
+        }
+        sim.se[b.name] = {
+            m: _stderr(tot, sq, trials) for m, tot, sq in (
+                (HITS, hit_counts[i], hit_sq[i]),
+                (TOTAL_BASES, tb_counts[i], tb_sq[i]),
+                (HOME_RUNS, hr_counts[i], hr_sq[i]))}
+    return sim
+
+
+def _stderr(total: int, sq: int, trials: int) -> float:
+    if trials < 2:
+        return 0.0
+    mean = total / trials
+    var = max(0.0, sq / trials - mean * mean)
+    return (var / trials) ** 0.5
+
+
+def _scale_reaching(b: BatterRates, k: float) -> BatterRates:
+    """One hitter's table with every reaching outcome scaled by ``k``."""
+    reach = (b.bb + b.single + b.double + b.triple + b.hr) * k
+    if reach >= 1.0:
+        k *= (1.0 - 1e-9) / reach
+    return BatterRates(
+        out=1.0 - (b.bb + b.single + b.double + b.triple + b.hr) * k,
+        bb=b.bb * k, single=b.single * k, double=b.double * k,
+        triple=b.triple * k, hr=b.hr * k, name=b.name, spot=b.spot)
+
+
+def calibrate(rates: list[BatterRates], targets: dict,
+              trials: int = 8000, seed: int | None = 7,
+              env_sd: float = ENV_SD, rounds: int = 3) -> list[BatterRates]:
+    """Re-centre the rate tables so the SIMULATED means hit the projections.
+
+    The inversion in `rates_from_means` is exact per plate appearance, and
+    that is not the same as exact per game, for a reason worth stating: a
+    hitter's plate-appearance count is not a constant, it is a consequence.
+    Reaching base gives the whole lineup another turn, so a mean-1.0 shock
+    on the rates produces a mean-ABOVE-1.0 effect on counting stats, and the
+    drift grows with the shock. Measured: at ENV_SD 0.25 the marginals ran
+    7% hot, which fails `reconcile` — the sim quietly disagreeing with the
+    pricing engine, which is exactly the failure the gate exists to catch.
+
+    So the rates are fitted rather than derived: simulate, compare, scale
+    each hitter's reaching outcomes by target/simulated, repeat. Three
+    rounds is comfortably enough — the map is near-linear and the first
+    round removes most of it.
+
+    Uses a coarser trial count than the production run on purpose. This is
+    a fixed point being located, not a probability being published, and
+    8,000 trials finds it to well inside the tolerance the gate applies.
+    """
+    cur = list(rates)
+    for _ in range(max(1, rounds)):
+        sim = simulate_lineup(cur, [], trials=trials, seed=seed, env_sd=env_sd)
+        nxt = []
+        for b in cur:
+            got = sim.mean.get(b.name) or {}
+            want = targets.get(b.name) or {}
+            # Total bases carries the most information about the table's
+            # shape — it weights every outcome — so it drives the rescale.
+            have = got.get(TOTAL_BASES)
+            aim = want.get(TOTAL_BASES)
+            if not have or not aim:
+                nxt.append(b)
+                continue
+            nxt.append(_scale_reaching(b, min(2.0, max(0.5, aim / have))))
+        cur = nxt
+    return cur
+
+
+def calibrate_env_sd(rates: list[BatterRates], targets: dict,
+                     legs: list[tuple], pairs: list[tuple],
+                     target_phi: float, trials: int = 20000,
+                     seed: int | None = 7,
+                     grid: tuple = (0.0, 0.1, 0.2, 0.3, 0.4)) -> dict:
+    """Find the shared-latent width that reproduces a MEASURED correlation.
+
+    This is the honest anchor for the whole module. A simulation will
+    produce whatever dependence its parameters imply, so a correlation read
+    off one is worth nothing unless the parameter was set by something
+    outside the simulation. Here that something is
+    `engine/parlays.py` MEASURED["lineup_stack"] — 27,613 real games.
+
+    Returns the best grid point and the curve, so a caller can see whether
+    the target sat inside the range swept or the sweep ran out of room.
+    """
+    out = []
+    for sd in grid:
+        fitted = calibrate(rates, targets, env_sd=sd, seed=seed)
+        sim = simulate_lineup(fitted, legs, trials=trials, seed=seed, env_sd=sd)
+        phis = [p for p in (sim.correlation(a, b) for a, b in pairs)
+                if p is not None]
+        if not phis:
+            continue
+        got = sum(phis) / len(phis)
+        out.append({"env_sd": sd, "phi": round(got, 4),
+                    "err": round(abs(got - target_phi), 4),
+                    "reconcile": reconcile(sim, targets)})
+    if not out:
+        return {"best": None, "curve": []}
+    best = min(out, key=lambda d: d["err"])
+    return {"best": best, "curve": out, "target_phi": target_phi}
+
+
+#: How many standard errors of sampler noise the gate forgives before it
+#: calls a gap real. Two sigma: a difference smaller than that is a
+#: measurement about the trial count, not about the model.
+RECONCILE_SIGMA = 2.5
+
+
+def reconcile(sim: GameSim, targets: dict, tol: float = 0.06) -> dict:
+    """THE GATE. Do the sim's marginals match the projections it was built
+    from?
+
+    Nothing downstream may read a joint from a sim that fails this. Two
+    numbers for the same question on one page is a defect, and reconciling
+    them is also the cheapest way to find a bug in either model — the sim
+    disagreeing with the closed-form projection means one of them is wrong,
+    and which one is a question worth being forced to answer.
+
+    ``targets`` is name -> market -> projected per-game mean. ``tol`` is a
+    RELATIVE tolerance; the default is loose enough to absorb sampler noise
+    at 20,000 trials and the lineup-turnover effect (a hitter's realised
+    plate appearances depend on how often his team-mates reach, which the
+    per-spot constant only approximates), and tight enough that a genuine
+    inversion bug cannot hide behind it.
+    """
+    worst = 0.0
+    offenders = []
+    for name, markets in targets.items():
+        got = sim.mean.get(name) or {}
+        for market, want in markets.items():
+            have = got.get(market)
+            if have is None or want is None:
+                continue
+            scale = max(abs(want), 0.05)
+            rel = abs(have - want) / scale
+            # Forgive whichever is larger: the relative tolerance, or the
+            # sampler's own noise. Without the second term this gate is
+            # accidentally strict on rare markets — a 0.05-per-game home-run
+            # rate moves several percent between seeds at 6,000 trials, and
+            # failing on that reports the trial count as a model defect.
+            noise = RECONCILE_SIGMA * (sim.se.get(name, {}).get(market) or 0.0)
+            worst = max(worst, rel)
+            if abs(have - want) > max(tol * scale, noise):
+                offenders.append({"player": name, "market": market,
+                                  "projected": round(want, 4),
+                                  "simulated": round(have, 4),
+                                  "rel_error": round(rel, 4)})
+    return {"ok": not offenders, "worst_rel_error": round(worst, 4),
+            "tol": tol, "offenders": offenders}

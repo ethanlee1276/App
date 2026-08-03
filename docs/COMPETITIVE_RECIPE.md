@@ -267,76 +267,60 @@ is easy to look at and not see:
 So the self-adjusting architecture is not missing. What is missing is the
 piece below.
 
-### MISSING — per-game Monte Carlo (game-script simulation)
+### BUILT 2026-08-03 — per-game Monte Carlo (`engine/mlb/gamesim.py`)
 
-Props today are priced from closed-form per-player distributions. The only
-simulation in the codebase is season-level (`engine/futures.py`,
-`engine/playoffs.py`). Simulating the GAME — lineup turning over, score
-state, bullpen usage, game flow — and reading every prop off the same
-simulated games would buy one thing closed-form pricing structurally cannot:
+The engine and its gate. NOT yet wired into pricing — see below.
 
-**the joint distribution, for free.** `engine/correlation.py` currently
-estimates leg correlation from fitted priors backtested against our history
-(task #52). A shared game sim produces the correlation directly, because both
-legs came out of the same simulated game. That is the honest foundation under
-the Parlay Zone, and it is also the missing input to the Stage 3
-covariance-across-simultaneous-positions item above. Unabated's "prop
-simulator" is this feature; nothing else on the matrix has it.
+Props are still priced from closed-form distributions, and this does not
+change that or try to. What it adds is the **joint**: the chance two props in
+the same game both land, which a per-prop distribution structurally cannot
+produce.
 
-**Cost was measured on 2026-08-03 and it is not the blocker.** That sentence
-replaces an earlier one here that guessed it would be — recorded rather than
-edited away, because guessing at cost is how a feature gets shelved for a
-reason that was never true.
+**The design is an inversion.** Building a new batter-versus-pitcher model
+would have produced a second set of marginals disagreeing with the first, and
+a page showing two numbers for one question has a defect rather than a
+feature. So the per-plate-appearance outcome table is solved backwards out of
+the projections the pricing engine already produces — given a hitter's
+projected hits, total bases and home runs plus his lineup spot's plate
+appearances, exactly one table reproduces all three. The sim therefore agrees
+with the pricing engine by construction, leaving the joint as the only new
+information, which is the only new information wanted.
 
-A plate-appearance-level sim, in pure Python, with the lookups the real thing
-needs (per-batter outcome tables blended against the pitcher, a bullpen change
-in the 7th, joint bookkeeping across legs):
+**The gate.** `reconcile()` checks the simulated marginals against the
+projections, and nothing downstream may read a joint from a sim that fails
+it. Measured: worst relative error 2.9% against a 6% tolerance. There is a
+test that deliberately breaks the sim to prove the gate can fail.
 
-| | one game | 15-game MLB slate | + NFL/NBA (~27 games) |
-|---|---|---|---|
-| 5,000 trials | 0.09s | 1.3s | 2.3s |
-| 20,000 trials | 0.34s | 5.1s | 9.2s |
+**The correlation is anchored, not invented.** A simulation produces whatever
+dependence its parameters imply, so a correlation read off one is worth
+nothing unless the parameter came from outside the simulation. The first
+working version held every rate fixed across trials, so the only shared
+channel was lineup turnover, and it produced phi ≈ +0.034 — against a target
+of +0.115 implied by `parlays.py` MEASURED["lineup_stack"], fitted on 27,613
+real games. About a third of the truth. Adding the shared game latent that
+`parlays.py` already names (game script, pace, tonight's starter, tonight's
+zone) closes it, and its width was swept against that measurement rather
+than chosen.
 
-For scale, the futures sim is 15 seconds for four leagues and runs daily. The
-realistic version cost only 1.2× a stripped-down toy, so the arithmetic per
-plate appearance is not where the time goes.
+Two corrections worth keeping, since both were mine:
 
-### What the work actually is: the input layer
+* The chosen width was first justified as "0.30 fails the reconciliation
+  gate." It failed a gate comparing a flat relative tolerance, which is
+  accidentally strict on rare markets — a 0.05-per-game home-run rate moves
+  several percent between seeds. Once the gate learned to forgive the
+  sampler's own noise, 0.30 passed, and the real reason to decline it is
+  doctrine: 0.30 OVERSTATES the measured dependence and `parlays.py` is
+  explicit that understating is the direction to be wrong in.
+* The inversion is exact per plate appearance, which is not the same as
+  exact per game — reaching base gives the whole lineup another turn, so the
+  shared shock drifts counting stats upward, measured at 7%. The rates are
+  now fitted rather than derived.
 
-The blocker is shape, not speed. `build_mlb_projection` returns an
-`MLBProjection` — a **mean and std for one prop**. A PA-level sim needs a
-**per-batter-vs-pitcher outcome table**: P(K), P(BB), P(1B), P(2B), P(3B),
-P(HR). Those are different objects, and the second cannot be recovered from
-the first — "expected total bases 1.34, sd 1.1" does not tell you how often
-he strikes out.
-
-So the build is roughly:
-
-1. **A PA outcome model per batter-pitcher pair.** The ingredients exist
-   (`engine/form.py`, `engine/matchup.py`, `engine/mlb/projection.py`, park
-   and weather effects, Statcast) but they are combined today into a
-   per-prop mean rather than an outcome distribution. This is the real work
-   and the only part with modelling risk.
-2. **The game loop.** Lineup order, three outs, nine innings, bullpen usage.
-   Cheap, measured above, and mostly bookkeeping.
-3. **Read every prop off the same simulated games.** Marginals *and* joints
-   fall out together.
-
-### The gate before it ships
-
-The sim must reproduce the marginals we already trust. If it says a hitter's
-P(1+ hits) is 62% and the current closed-form projection says 58%, one of
-them is wrong, and shipping both would put two numbers for the same question
-on one page. Reconciling that is the acceptance test, not a follow-up — and
-it is also the cheapest way to discover a bug in either model.
-
-Only after they agree on the marginals is the joint distribution worth
-anything: that is the whole payoff, because leg correlation then comes out of
-the sim directly instead of from the priors backtested in task #52, and it
-becomes the missing input to the Stage 3 covariance work.
-
-**Not started.** Sized, costed, and gated — no code beyond the throwaway
-probes.
+**Not wired into pricing.** The reconciliation has only been run against a
+synthetic lineup in this container; the real check is against a live slate on
+Ethan's machine, and integrating before that would put an unverified second
+opinion in front of a bettor. Cost is not the obstacle: 0.29s per lineup at
+20,000 trials, about 8.6s for a 15-game slate.
 
 ### WON'T — a language model anywhere in the pricing path
 
