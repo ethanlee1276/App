@@ -3490,7 +3490,7 @@ function recPolymarketSection(v) {
       <span class="rl-date">${escapeHtml(b.resolved || "")}</span>
       <span class="rl-main"><strong>${escapeHtml(b.side)} ${escapeHtml(b.outcome)}</strong>
         <span class="rl-bet">${escapeHtml(b.market)}</span></span>
-      <span class="rl-proc">score ${b.score} · ${escapeHtml(b.name || shortWallet(b.wallet || ""))}</span>
+      <span class="rl-proc" title="${escapeHtml(traderLabel(b))}">score ${b.score} · ${escapeHtml(traderLabel(b))}</span>
       <span class="rl-odds">${b.price != null ? (b.price * 100).toFixed(0) + "¢" : ""}</span>
       <span class="rl-pnl ${toneOf(b.roi)}">${b.roi >= 0 ? "+" : ""}${(b.roi * 100).toFixed(0)}%</span>
     </div>`).join("");
@@ -3514,7 +3514,7 @@ function recPolymarketSection(v) {
                 v.z >= 2 ? "beating its prices" : "not yet distinguishable from price",
                 { tone: v.z >= 2 ? "pos" : "" })}
     </div>
-    <div class="card" style="padding:0;margin-top:12px">${rows ||
+    <div class="card pm-rows" style="padding:0;margin-top:12px">${rows ||
       `<p class="loading" style="padding:12px">Flags settle as their markets resolve.</p>`}</div>`;
 }
 
@@ -4171,6 +4171,24 @@ function shortWallet(w) {
   return w && w.length > 12 ? `${w.slice(0, 6)}…${w.slice(-4)}` : (w || "");
 }
 
+/* Who made the trade, in the width a table cell has.
+
+   Polymarket's `name` is a self-chosen display name, and plenty of traders
+   never set one — the API then hands back the wallet address in that field,
+   so `name || shortWallet(wallet)` took the branch that skips shortening and
+   rendered all 42 characters. Middle-truncating by CSS instead would give
+   "0x3DFb15…", which identifies nobody: the last four characters are how a
+   wallet is recognised, and they are the ones an ellipsis eats.
+
+   So: shorten anything address-SHAPED whichever field it arrived in, and
+   leave real handles alone for the ellipsis to handle if they run long. */
+const looksLikeWallet = (s) => /^0x[0-9a-fA-F]{6,}$/.test(s || "");
+
+function traderLabel(b) {
+  const raw = (b.name || b.wallet || "").trim();
+  return looksLikeWallet(raw) ? shortWallet(raw) : raw;
+}
+
 function pmSpark(series, w = 96, h = 30) {
   // 30-day cumulative P&L curve. Zero line dashed; color by where the
   // month ended.
@@ -4317,7 +4335,7 @@ async function renderIntel() {
             <span>${f.score}</span></div>
           <div>
             <div class="player"><a class="wallet" href="https://polymarket.com/profile/${escapeHtml(f.wallet)}"
-              target="_blank" rel="noopener" style="color:inherit">${escapeHtml(f.name || shortWallet(f.wallet))}</a></div>
+              target="_blank" rel="noopener" style="color:inherit">${escapeHtml(traderLabel(f))}</a></div>
             <div class="subtitle">${pmAgo(f.ts)} · ${f.wallet_trades} trade(s) on our tape</div>
             <div class="pick">${escapeHtml(f.side)} ${escapeHtml(f.outcome)}
               <span class="book">· ${usd(f.usd)}</span></div>
@@ -4348,7 +4366,7 @@ async function renderIntel() {
   }).join("");
 
   const traderCards = (d.top_traders || []).map((t) => {
-    const label = t.name || shortWallet(t.wallet);
+    const label = traderLabel(t);
     const initials = (t.name ? t.name.replace(/[^a-zA-Z0-9 ]/g, "").split(/\s+/)
       .map((w) => w[0]).slice(0, 2).join("") : t.wallet.slice(2, 4)) || "?";
     const last = (t.recent || [])[0];
@@ -5337,7 +5355,7 @@ function intelReportCard(v) {
   const wallets = (v.wallets || []).map((w) => `
     <div class="dl-row pm-wallet">
       <span class="dl-main"><a class="wallet" href="https://polymarket.com/profile/${escapeHtml(w.wallet)}" target="_blank"
-        rel="noopener" style="color:inherit;font-weight:600">${escapeHtml(w.name || shortWallet(w.wallet))}</a></span>
+        rel="noopener" style="color:inherit;font-weight:600">${escapeHtml(traderLabel(w))}</a></span>
       <span class="dl-num">${w.wins}-${w.n - w.wins}</span>
       <span class="dl-num implied">${pctv(w.hit_rate)} vs ${pctv(w.avg_implied)}</span>
       <span class="dl-num strong" title="calibration z — higher = less like luck">z ${w.z}</span>

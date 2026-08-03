@@ -351,11 +351,14 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
    in each is item 6 on the anti-pattern list, and it was the shape this
    page opened with. */
 .tile {
-  position: relative; overflow: hidden;
+  position: relative;
   background: none;
   border: 0; border-left: 1px solid var(--border-soft);
   padding: 2px 18px;
 }
+/* No `overflow: hidden` here. It was left behind when the tile's radial
+   wash was removed — nothing clips to the tile any more — and a text block
+   that silently truncates is worse than one that pushes its own box taller. */
 .stats > .tile:first-child { border-left: 0; padding-left: 0; }
 /* The tile's radial wash is gone with the tile. §8.7: gradient anything. */
 .tile .k { color: var(--text-mute); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .7px; font-weight: 600; }
@@ -1303,8 +1306,16 @@ td.num, .dl-num, .std-n, .pm-avatar, .clv-num, .odds,
 .btn:hover { border-color: var(--brand); filter: none; }
 .theme-toggle { box-shadow: none; }
 
-/* Cards: flat, hairline, tight. */
-.card, .game-card, .tile, .stat, .topplay {
+/* Cards: flat, hairline, tight.
+   `.tile` is deliberately NOT in this list. It declares its own treatment
+   ~950 lines up (§6.6: no background, no border box, just a single vertical
+   rule between columns) and this rule has the same specificity, so being
+   later it silently won and put the box back. The visible symptom was on
+   the Record page: every tile got a full border, `.stats > .tile:first-child`
+   stripped only the LEFT side, and the ROI tile ended up in a
+   three-sided box whose bottom edge sat 2px under its own sub-line —
+   inside `overflow: hidden`, so the text read as cut off. */
+.card, .game-card, .stat, .topplay {
   background: var(--panel);
   border: 1px solid var(--border-soft);
   box-shadow: none;
@@ -1677,7 +1688,22 @@ select.calc-in { width: auto; font-weight: 600; }
 .rl-date { color: var(--text-mute); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .rl-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-md); }
 .rl-bet { color: var(--text-mute); }
-.rl-proc { text-align: right; font-size: var(--fs-xs); white-space: nowrap; }
+/* min-width:0 + clip, for the same reason .rl-main has them. This column
+   holds free text — a Polymarket trader handle, which can be a 42-character
+   wallet address — inside a fixed 90px track. Without them the grid item
+   refuses to shrink below its content and the name renders straight across
+   the price and the P&L beside it. Measured at up to 225px of overhang. */
+.rl-proc {
+  text-align: right; font-size: var(--fs-xs); white-space: nowrap;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis;
+}
+/* The Polymarket table puts a NAME in this column, where every other table
+   puts a two-word verdict ("beat the close"). Clipping alone turned
+   "0x3DFb…eea1" into "0x3…", which identifies nobody — the last four
+   characters are how a wallet is recognised and they are exactly what the
+   ellipsis eats. So this one table gets a wider track, taken from the
+   1fr column, which has slack the fixed ones do not. */
+.pm-rows .rl-row { grid-template-columns: 20px 86px minmax(0, 1fr) 168px 56px 72px; }
 .rl-proc.good { color: var(--good); } .rl-proc.bad { color: var(--bad); }
 .rl-proc.warn { color: var(--warn); } .rl-proc.none { color: var(--text-mute); opacity: .55; }
 .rl-odds { text-align: right; font-size: var(--fs-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
@@ -2201,7 +2227,11 @@ select.calc-in { width: auto; font-weight: 600; }
     border-radius: 0; padding: 4px;
   }
   .menu-open .sport-group[data-group="leagues"] { order: 1; }
-  .menu-open .sport-group[data-group="tools"] { order: 3; }
+  /* Leagues, then Markets, then what's left under More. Five slots, so the
+     two new ones don't have to share an order value with anything. */
+  .menu-open .menu-head[data-head="markets"] { order: 2; margin-top: 8px; }
+  .menu-open .sport-group[data-group="markets"] { order: 3; }
+  .menu-open .sport-group[data-group="tools"] { order: 5; }
   /* Section labels. Two unlabelled grids of near-identical pills gave a
      newcomer no way to know one switches SPORT and the other switches
      PAGE — the single biggest confusion in this menu. */
@@ -2260,12 +2290,15 @@ select.calc-in { width: auto; font-weight: 600; }
   .nav-indicator { display: none; }     /* the panel marks the active tab */
   /* Label, leagues+tools, label, pages — then status chips last so they
      never split the menu in half. */
-  /* Inside the switcher: leagues, then the "More" divider, then the
-     standalone tools. Polymarket / Fantasy / Why Us are not sports and
-     shouldn't sit under a leagues heading. */
+  /* Inside the switcher: leagues, the Markets pair, then what's left under
+     More. Polymarket / Fantasy / Why Us are not sports and shouldn't sit
+     under a leagues heading — but Polymarket and Fantasy are somewhere you
+     go looking for a bet, so they get their own labelled card rather than
+     the bottom of the menu. */
   .menu-open .sport-btn[data-kind="league"] { order: 1; }
-  .menu-open .menu-head[data-head="more"] { order: 2; margin-top: 8px; }
-  .menu-open .sport-btn[data-kind="tool"] { order: 3; }
+  .menu-open .menu-head[data-head="markets"] { order: 2; margin-top: 8px; }
+  .menu-open .menu-head[data-head="more"] { order: 4; margin-top: 8px; }
+  .menu-open .sport-btn[data-kind="tool"] { order: 5; }
   .menu-open .menu-head[data-head="sport"] { order: 1; }
   .menu-open .sport-switch { order: 2; }
   .menu-open .menu-head[data-head="page"] { order: 3; }
@@ -2639,6 +2672,21 @@ select.calc-in { width: auto; font-weight: 600; }
    status row on one line again.
    ============================================================ */
 @media (min-width: 761px) {
+  /* The axis changes here. Polymarket and Fantasy sit in the same row as
+     the leagues because they are visited on the same rhythm, but a hairline
+     says they are a different KIND of thing — which is the whole reason
+     they are not simply appended to the league list. Desktop only: on a
+     phone the groups become separate labelled cards and the rule is noise.
+
+     Folded into THIS block rather than opening a second
+     `@media (min-width: 761px)`. A duplicate breakpoint has caused a
+     cascade collision here twice, and test_header_density slices the
+     stylesheet from the first match of this exact query — a third block
+     silently moved what that slice was reading. */
+  .sport-group[data-group="markets"] .sport-btn:first-child {
+    margin-left: 12px; padding-left: 16px;
+    border-left: 1px solid var(--border-soft);
+  }
   .sport-more { position: relative; display: inline-flex; }
   .sport-more .sport-group[data-group="tools"] {
     display: none;
@@ -2892,7 +2940,22 @@ select.calc-in { width: auto; font-weight: 600; }
    and the whole header to 244. Scrolling is not an option here: the More
    dropdown is absolutely positioned, and a scroll container would clip it
    open. So the buttons get tighter instead. Nothing is hidden and nothing
-   is squeezed to a stub — the emoji and the league name both survive. */
+   is squeezed to a stub — the emoji and the league name both survive.
+
+   UPDATE, since Polymarket and Fantasy joined the row: nine buttons no
+   longer fit here even tightened, and the band wraps to two rows again.
+   That is accepted rather than fixed. Measured at 900px with this block
+   already applied: 508px of buttons plus 140px of gaps against a 492px box
+   — 156px short, where taking eight gaps from 18px to 14px returns 32px.
+   Closing a gap that size means either shrinking the labels, which makes
+   the nav least readable on exactly the device that needed help, or taking
+   the width off the brand block, which re-opens the masthead layout this
+   section spent a whole pass settling.
+
+   And the wrap is good here: it breaks at the leagues/markets group
+   boundary, so the second row starts with Polymarket rather than orphaning
+   "UFC". It reads as grouping, not overflow. Checked by screenshot at
+   900px, not only by counting rows. */
 @media (min-width: 761px) and (max-width: 1023px) {
   .sport-switch .sport-btn { padding: 7px 8px; font-size: var(--fs-sm); gap: 4px; }
   .sport-group { gap: 3px; }

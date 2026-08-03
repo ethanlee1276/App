@@ -33,8 +33,26 @@ def _read(*parts):
 
 
 # --- the structure ----------------------------------------------------------
-def test_the_leagues_stay_visible_and_the_tools_do_not():
-    """The league is the primary axis; the tools are occasional."""
+def _group(html, name):
+    """One `.sport-group`'s markup, by data-group name."""
+    i = html.index(f'<div class="sport-group" data-group="{name}">')
+    return html[i:html.index("</div>", i)]
+
+
+def test_the_switcher_has_three_named_groups_and_nothing_loose():
+    """Leagues, then Markets, then what's left behind More.
+
+    The original split was leagues-visible / everything-else-hidden, because
+    seven equal-looking buttons where two behaved differently was the
+    confusion it was made to fix. Markets is the same idea taken one step
+    further rather than a reversal of it: Polymarket and Fantasy are places
+    you go looking for a bet on the same rhythm as a league, so hiding them
+    cost a click every session; Why Us and About are about the SITE and
+    belong exactly where they are.
+
+    What the test still enforces is the part that mattered — no button is
+    loose in the row. Every one is inside a named group.
+    """
     html = _read("web", "index.html")
     leagues = re.findall(r'data-sport="(\w+)" data-kind="league"', html)
     tools = re.findall(r'data-sport="(\w+)" data-kind="tool"', html)
@@ -43,11 +61,42 @@ def test_the_leagues_stay_visible_and_the_tools_do_not():
     # inside each sport rather than a tool you navigate away to.
     assert set(tools) == {"intel", "fantasy", "why", "about"}
     assert 'data-view="rosters"' in html, "the per-sport tab is missing"
-    # Every tool button must live inside the More wrapper.
+
+    for sport in leagues:
+        assert f'data-sport="{sport}"' in _group(html, "leagues"), sport
+    markets = _group(html, "markets")
+    for sport in ("intel", "fantasy"):
+        assert f'data-sport="{sport}"' in markets, f"{sport} left the row"
+    # Only the site-about pages stay behind the menu, and they stay inside
+    # the wrapper that positions the dropdown.
     more = html[html.index('id="sport-more"'):]
     more = more[:more.index("</div>\n      </div>")]
-    for tool in tools:
+    for tool in ("why", "about"):
         assert f'data-sport="{tool}"' in more, f"{tool} is loose in the row"
+    for sport in ("intel", "fantasy"):
+        assert f'data-sport="{sport}"' not in more, f"{sport} is still hidden"
+
+
+def test_the_markets_pair_is_separated_from_the_leagues_not_merged():
+    """Visible is not the same as 'a league'. A hairline before the first
+    markets button says the axis changed — without it this is the seven
+    equal buttons the group split was made to stop."""
+    css = _read("web", "css", "styles.css")
+    assert '.sport-group[data-group="markets"] .sport-btn:first-child' in css
+    rule = css[css.index('.sport-group[data-group="markets"] .sport-btn:first-child'):]
+    assert "border-left" in rule[:rule.index("}")]
+
+
+def test_the_markets_group_has_its_own_phone_card_and_slot():
+    """On a phone the groups become labelled cards. A group with no order
+    lands at 0 and jumps above the leagues it was meant to follow."""
+    html = _read("web", "index.html")
+    assert 'data-head="markets"' in html, "no heading for the phone card"
+    css = _read("web", "css", "styles.css")
+    for sel in ('.menu-open .menu-head[data-head="markets"]',
+                '.menu-open .sport-group[data-group="markets"]'):
+        assert sel in css, sel
+        assert "order:" in css[css.index(sel):css.index(sel) + 90], sel
 
 
 def test_the_more_menu_exists_and_is_wired():

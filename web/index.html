@@ -60,21 +60,38 @@
           <button class="sport-btn" data-sport="wnba" data-kind="league" title="WNBA — Scalpy probability engine, on probation">WNBA</button>
           <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC — Scalpy MMA engine">UFC</button>
         </div>
+        <!-- Markets, not leagues, and not "More" either.
+
+             Polymarket and Fantasy are places to find a bet, visited on the
+             same rhythm as a league — burying them behind a menu costs a
+             click every session and hides the module with the best record
+             on the site. But they are not ball games, and dropping them in
+             beside NFL and MLB is the exact mistake the leagues/tools split
+             was made to fix: seven equal-looking buttons where two of them
+             behave completely differently.
+
+             So they get their own group. `display: contents` on desktop, so
+             all nine buttons still flow as ONE row; a separator rule before
+             the first of them says the axis changed. Measured cost: the
+             switcher goes 382px → 537px at 1280px, which still leaves the
+             brand, the switcher and the status row on one line.
+
+             What stays behind "More" is now only what it should have been —
+             Why Us and About are about the SITE, not about tonight. -->
+        <div class="menu-head" data-head="markets" aria-hidden="true">Markets</div>
+        <div class="sport-group" data-group="markets">
+          <button class="sport-btn" data-sport="intel" data-kind="tool" title="Polymarket informed-flow intelligence">Polymarket</button>
+          <button class="sport-btn" data-sport="fantasy" data-kind="tool" title="Fantasy football — usage, scripts, buy-low">Fantasy</button>
+        </div>
         <div class="menu-head" data-head="more" aria-hidden="true">More</div>
         <!-- Six leagues stay visible because the league IS the primary axis
-             of the whole site. The five tools are visited occasionally, and
-             leaving them out here kept the switcher at 1,195px on desktop —
-             wide enough to push the status row and the page nav onto lines
-             of their own and hand a quarter of the screen to chrome. On a
-             phone this wrapper is display:contents, so the slide-down menu
-             renders exactly as it did. -->
+             of the whole site. On a phone this wrapper is display:contents,
+             so the slide-down menu renders exactly as it did. -->
         <div class="sport-more" id="sport-more">
           <button class="sport-btn more-toggle" id="more-toggle" type="button"
                   aria-expanded="false" aria-haspopup="true"
-                  title="Polymarket, Fantasy, Why Us, About">More</button>
+                  title="Why Us, About">More</button>
         <div class="sport-group" data-group="tools">
-          <button class="sport-btn" data-sport="intel" data-kind="tool" title="Polymarket informed-flow intelligence">Polymarket</button>
-          <button class="sport-btn" data-sport="fantasy" data-kind="tool" title="Fantasy football — usage, scripts, buy-low">Fantasy</button>
           <button class="sport-btn" data-sport="why" data-kind="tool" title="Why this beats a picks service — and the open math toolbox">Why Us</button>
           <button class="sport-btn" data-sport="about" data-kind="tool" title="What this site is, what it isn't, and the legal and responsible-gambling terms">About</button>
         </div>

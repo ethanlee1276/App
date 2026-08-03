@@ -20,6 +20,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+
+
+def _strip_js(text: str) -> str:
+    """JS with block and line comments removed, for negative assertions.
+    A comment that explains why a pattern is wrong necessarily contains the
+    pattern."""
+    import re as _re
+    text = _re.sub(r"/\*.*?\*/", "", text, flags=_re.S)
+    return _re.sub(r"^\s*//.*$", "", text, flags=_re.M)
 VIS = open(os.path.join(ROOT, "web", "js", "visuals.js"), encoding="utf-8").read()
 
 
@@ -245,6 +254,73 @@ def test_the_phone_rules_live_beside_the_rule_they_must_beat():
     the phone grid stayed at two columns while the new rule said three."""
     body = _strip_comments(CSS)
     assert "@media (max-width: 719px)" not in body
+
+
+# --- the cascade collision that put the box back ----------------------------
+def test_the_tile_is_not_in_the_shared_card_rule():
+    """§6.6 says a tile has no background and no border box — just a single
+    vertical rule between columns. That rule is declared at the top of the
+    stylesheet; ~950 lines later `.card, .game-card, .tile, .stat, .topplay`
+    re-added `background` and `border: 1px` at the SAME specificity, and
+    being later it won. Every tile on the site had a box.
+
+    The visible symptom was on the Record page: `.stats > .tile:first-child`
+    strips only the LEFT border, so the ROI tile sat in a three-sided box
+    whose bottom edge ran 2px under its own sub-line — inside
+    `overflow: hidden`, which read as the text being cut off.
+    """
+    body = _strip_comments(CSS)
+    i = body.index(".card, .game-card")
+    rule = body[i:body.index("{", i)]
+    assert ".tile" not in rule, "the shared card rule silently re-boxes .tile"
+
+
+def test_the_tile_does_not_clip_its_own_text():
+    """`overflow: hidden` was left behind when the tile's radial wash was
+    removed. Nothing clips to a tile any more, and a text block that
+    silently truncates is worse than one that pushes its box taller."""
+    body = _strip_comments(CSS)
+    i = body.index(".tile {")
+    assert "overflow: hidden" not in body[i:body.index("}", i)]
+
+
+# --- a name in a number's column --------------------------------------------
+def test_the_verdict_column_clips_instead_of_running_over_the_price():
+    """.rl-proc holds a two-word verdict in most tables and a Polymarket
+    trader handle in one — which can be a 42-character wallet address, in a
+    fixed 90px track. Without min-width:0 the grid item refuses to shrink
+    below its content and the name renders straight across the price and the
+    P&L. Measured at up to 225px of overhang."""
+    body = _strip_comments(CSS)
+    i = body.index(".rl-proc {")
+    rule = body[i:body.index("}", i)]
+    for prop in ("min-width: 0", "overflow: hidden", "text-overflow: ellipsis"):
+        assert prop in rule, prop
+
+
+def test_the_polymarket_table_widens_that_column_rather_than_ellipsizing_a_wallet():
+    """Clipping alone turned "0x3DFb…eea1" into "0x3…", which identifies
+    nobody — the last four characters are how a wallet is recognised and
+    they are exactly what an ellipsis eats."""
+    body = _strip_comments(CSS)
+    assert ".pm-rows .rl-row" in body
+    rule = body[body.index(".pm-rows .rl-row"):]
+    rule = rule[:rule.index("}")]
+    assert "grid-template-columns" in rule
+    assert 'class="card pm-rows"' in APP
+
+
+def test_a_wallet_shaped_name_is_shortened_whichever_field_it_arrived_in():
+    """Polymarket returns the address in `name` for traders who never set a
+    display name, so `name || shortWallet(wallet)` took the branch that
+    skips shortening and rendered all 42 characters."""
+    assert "function traderLabel(" in APP
+    assert "looksLikeWallet" in APP
+    # And nothing still takes the old un-shortened branch. Stripped of
+    # comments first: the paragraph explaining WHY that branch was wrong
+    # quotes it, and a naive search finds the explanation and calls it the
+    # defect. That exact mistake cost real time on a :nth-of-type rule.
+    assert "name || shortWallet(" not in _strip_js(APP)
 
 
 if __name__ == "__main__":
