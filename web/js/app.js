@@ -2959,7 +2959,14 @@ function recCurveChart(curve) {
   const last = curve[curve.length - 1];
   const color = last.cum_u >= 0 ? "var(--good,#3ddc84)" : "var(--bad,#ff6b7a)";
   const dots = curve.map((p, i) => {
-    const tip = `${p.date} · day ${p.day_u >= 0 ? "+" : ""}${p.day_u.toFixed(2)}u (${p.n} bet${p.n === 1 ? "" : "s"}) · running ${p.cum_u >= 0 ? "+" : ""}${p.cum_u.toFixed(2)}u`;
+    // day_u is derivable from the running total, so a payload without it
+    // gets the derived number instead of a TypeError. This mattered: a
+    // fixture missing the field crashed recCurveChart, and because the
+    // whole page is one template literal, the exception blanked EVERY
+    // section of the Record page — one optional field, zero pages.
+    const dayU = p.day_u != null ? p.day_u
+      : p.cum_u - (i ? curve[i - 1].cum_u : 0);
+    const tip = `${p.date} · day ${dayU >= 0 ? "+" : ""}${dayU.toFixed(2)}u (${p.n} bet${p.n === 1 ? "" : "s"}) · running ${p.cum_u >= 0 ? "+" : ""}${p.cum_u.toFixed(2)}u`;
     return `<circle cx="${x(i).toFixed(1)}" cy="${y(p.cum_u).toFixed(1)}" r="${i === curve.length - 1 ? 3.4 : 2.4}" fill="${color}"/>
       <circle cx="${x(i).toFixed(1)}" cy="${y(p.cum_u).toFixed(1)}" r="10" fill="transparent"
         style="pointer-events:all;cursor:pointer" data-tip="${escapeHtml(tip)}"/>`;

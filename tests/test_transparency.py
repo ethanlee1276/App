@@ -387,6 +387,19 @@ def test_the_head_hash_is_published():
     assert "f.head" in APP
 
 
+def test_a_missing_optional_field_cannot_blank_the_record_page():
+    """The whole Record page is one template literal, so an uncaught throw
+    in ANY section blanks EVERY section. A fixture without day_u proved it:
+    recCurveChart called toFixed on undefined and the entire page died —
+    calibration, health, parlays, all of it — over one derivable field in
+    one tooltip. The chart now derives day_u from the running total when
+    the payload omits it."""
+    body = _fn(APP, "recCurveChart")
+    assert "p.day_u != null" in body
+    assert "curve[i - 1].cum_u" in body
+    assert "p.day_u.toFixed" not in body
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
