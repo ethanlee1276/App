@@ -422,6 +422,11 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .matchup .at { color: var(--text-mute); font-weight: 500; }
 .matchup .away { color: var(--text-dim); }
 .game-sub { color: var(--text-mute); font-size: var(--fs-sm); margin-top: 2px; }
+/* Probable starters on the MLB ballpark card: one quiet line, the names a
+   shade brighter than the park facts so the arms read first. */
+.game-sub.starters { color: var(--text); opacity: .85; }
+.game-sub.starters .p-detail { color: var(--text-mute); font-size: .92em;
+  font-variant-numeric: tabular-nums; }
 .game-when { color: var(--text-dim); font-size: var(--fs-sm); font-weight: 600; margin-top: 3px; }
 .wind-wrap { display: flex; align-items: center; gap: 11px; padding: 7px 15px 13px; }
 .wind-wrap .cond { color: var(--text-dim); font-size: var(--fs-sm); }

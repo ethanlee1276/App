@@ -434,6 +434,18 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
             "surface": park.surface, "plays": park.plays,
         },
         "lineups_confirmed": g.lineups_confirmed,
+        # The probable starters, for the ballpark card — the first thing a
+        # bettor asks about a game the model already knows the answer to.
+        # Display fields only; the matchup math consumes g.pitchers itself.
+        "pitchers": {
+            side: {"name": getattr(p, "name", ""),
+                   "throws": getattr(p, "throws", ""),
+                   "xera": getattr(p, "xera", None),
+                   "k_rate": getattr(p, "k_rate", None)}
+            for side, p in (("home", g.pitchers.get(g.home)),
+                            ("away", g.pitchers.get(g.away)))
+            if p is not None and getattr(p, "name", "")
+        },
         # Real moneyline prices ride along (0 = not offered): the team-form
         # sampler journals the hot side at the price someone could bet.
         "home_ml": g.home_ml, "away_ml": g.away_ml,

@@ -1889,6 +1889,22 @@ function gameCard(g) {
     : isLive && mlb
     ? `<div class="wind-wrap live-footer">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span>${liveDetail}</div>`
     : `<div class="wind-wrap">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span></div>`;
+  // MLB: the probable starters, in the same away-@-home order as the
+  // matchup line — the first question a bettor asks about a game, and the
+  // model already knows the answer (it prices the matchup off these arms).
+  let starters = "";
+  if (mlb && g.pitchers && (g.pitchers.away || g.pitchers.home)) {
+    const pfmt = (p) => (p && p.name)
+      ? `${esc(p.name)}${p.throws || p.xera != null
+          ? ` <span class="p-detail">(${[p.throws ? esc(p.throws) + "HP" : "",
+              p.xera != null ? Number(p.xera).toFixed(2) + " xERA" : ""]
+              .filter(Boolean).join(" · ")})</span>` : ""}`
+      : "TBD";
+    starters = `<div class="game-sub starters"
+      title="Probable starters — throwing hand and expected ERA">
+      ${iconMark("dot", 10)}${pfmt(g.pitchers.away)}
+      <span class="at">@</span> ${pfmt(g.pitchers.home)}</div>`;
+  }
   // The strip is the hero of the page, so each card is also the door into
   // that game: role/tabindex make it a real control for keyboard and screen
   // readers, not just a div that happens to listen for clicks.
@@ -1903,6 +1919,7 @@ function gameCard(g) {
           <span class="mt away">${teamMark(g.away, 18)} ${ranked("away")}${escapeHtml(teamName(g.away))} ${score("away")}</span>
           <span class="at">@</span>
           <span class="mt home">${teamMark(g.home, 18)} ${ranked("home")}${escapeHtml(teamName(g.home))} ${score("home")}</span></div>
+        ${starters}
         <div class="game-sub">${sub}</div>
         ${whenLabel(g.date, g.kickoff) ? `<div class="game-when">${icon('calendar')} ${escapeHtml(whenLabel(g.date, g.kickoff))}</div>` : ""}
         ${isLive && !mlb ? liveDetail : ""}
