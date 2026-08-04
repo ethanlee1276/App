@@ -165,10 +165,18 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     # systematically missed, under false-discovery control. Same contract
     # as a boundary temperature — the record itself refuses the bet.
     from ..losspatterns import minutes_until
+    _env = {}
+    if game is not None:
+        # The same park/wind measurements the journal records — a closed
+        # "wind out hard" slice must be able to refuse the NEXT wind-out
+        # pick, not just explain the last one.
+        from .pipeline import _env_of
+        _env = _env_of(game)
     pattern_block = lp_veto("mlb", prop.market, side=side, odds=best.odds,
                             prob=hit, book=best.book, horizon_days=0,
                             lead_min=minutes_until(
-                                getattr(game, "kickoff", None)))
+                                getattr(game, "kickoff", None)),
+                            **_env)
     tier = mlb_tier(prop.market)
     min_edge = mlb_tier_min_edge(prop.market)
     gate_ok = (credible and calibration_ok and pattern_block is None

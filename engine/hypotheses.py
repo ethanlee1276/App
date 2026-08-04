@@ -79,10 +79,12 @@ MAX_HYPOTHESES = 8
 from .losspatterns import (ALPHA, CLOSE_GAP_PTS, MIN_N,  # noqa: E402
                            _bh, _slice_test)
 
-# "lead" is capture_lag — minutes from bet log to the game's start,
-# banded. The triage bench drafted it, the miner journals and slices it
-# for every sport, and listing it here lets the lab propose on it too.
-DIMS = ("side", "odds", "prob", "horizon", "book", "lead")
+# "lead" is capture_lag (minutes from bet log to the game's start) and
+# "park"/"wind" are hr_env (the park's HR band and the banded wind toward
+# center field at pick time). All three were drafted by the triage bench
+# from the lab's own watchlist, journaled by the miner, and listed here so
+# the lab can propose on them — its best ideas, made testable.
+DIMS = ("side", "odds", "prob", "horizon", "book", "lead", "park", "wind")
 
 
 class HypothesisUnavailable(RuntimeError):
@@ -174,10 +176,12 @@ SCHEMA = {
                     "horizon": {"type": ["string", "null"]},
                     "book": {"type": ["string", "null"]},
                     "lead": {"type": ["string", "null"]},
+                    "park": {"type": ["string", "null"]},
+                    "wind": {"type": ["string", "null"]},
                 },
                 "required": ["claim", "rationale", "sport", "market",
                              "side", "odds", "prob", "horizon", "book",
-                             "lead"],
+                             "lead", "park", "wind"],
                 "additionalProperties": False,
             },
         },

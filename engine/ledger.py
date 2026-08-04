@@ -126,9 +126,12 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     # misses the rotation pipeline is broken, and if the minutes were right
     # and the results weren't, it's efficiency or variance. No other pair
     # of columns separates those two failure modes.
-    # Minutes from bet log to the game's scheduled start — the capture_lag
-    # dimension. NULL = clock unknown at pick time (or pre-migration row).
-    for col in ("proj_minutes", "actual_minutes", "lead_min"):
+    # Minutes from bet log to the game's scheduled start (capture_lag) and
+    # the hr_env dimensions: the park's HR index, signed wind toward CF at
+    # pick time (+out/−in, NULL = unknown or indoors), and the roof state.
+    # NULL = unknown at pick time (or pre-migration row).
+    for col in ("proj_minutes", "actual_minutes", "lead_min", "park_hr",
+                "wind_out", "roofed"):
         try:
             conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
         except sqlite3.OperationalError:
@@ -235,8 +238,9 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
-            "stake_dollars, status, leg, proj_minutes, lead_min) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?)",
+            "stake_dollars, status, leg, proj_minutes, lead_min, park_hr, "
+            "wind_out, roofed) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?, ?)",
             (now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
              r["line"], r.get("book", ""), r.get("odds", -110), r.get("projection"),
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
@@ -251,7 +255,13 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # capture_lag: minutes to the game's scheduled start at log
              # time, from the rec's own clock or the board's games list.
              minutes_until(r.get("kickoff") or kick.get(r.get("team"))
-                           or kick.get(r.get("opponent")))))
+                           or kick.get(r.get("opponent"))),
+             # hr_env: the park's HR index and the wind toward CF at pick
+             # time — measured now, mined nightly, so "wind out at
+             # Wrigley" becomes a slice the tribunal can convict.
+             r.get("park_hr"), r.get("wind_out"),
+             1 if r.get("roofed") else 0 if r.get("roofed") is not None
+             else None))
         n += cur.rowcount
     # Recommended game bets journal too (sharp-anchor picks live or die by
     # forward results). Moneylines store player = the team picked, line 0.5,
@@ -382,8 +392,9 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
-            "stake_units, stake_dollars, status, category, lead_min) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?)",
+            "stake_units, stake_dollars, status, category, lead_min, "
+            "park_hr, wind_out, roofed) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?)",
             (now, sport, row_date, r["player"], market, "OVER", 0.5,
              r.get("book", ""), odds, None, r.get("model_prob"),
              r.get("edge", r.get("ev_per_unit")), r.get("confidence"),
@@ -391,7 +402,11 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
              # capture_lag matters MOST here: home runs are the volume, the
              # market that self-closed, and the tail price stale lines hurt.
              minutes_until(r.get("game_kickoff") or r.get("kickoff")
-                           or r.get("commence_time"))))
+                           or r.get("commence_time")),
+             # hr_env: this is the board park and wind exist to explain.
+             r.get("park_hr"), r.get("wind_out"),
+             1 if r.get("roofed") else 0 if r.get("roofed") is not None
+             else None))
         n += cur.rowcount
     return n
 

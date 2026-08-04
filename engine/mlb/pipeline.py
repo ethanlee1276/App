@@ -87,8 +87,13 @@ def _long_shots(slate) -> tuple[list[dict], list[dict], dict, list[dict]]:
     # Top THREE picks — the same three the Recommended page features.
     picks = [p.to_dict() for p in build_hr_longshots(candidates, limit=3,
                                                      per_team=2)]
+    # hr_env rides on every long-shot row — this is the exact board the
+    # park and wind dimensions exist to explain.
+    env_by_player = {c["prop"].player: _env_of(c["game"])
+                     for c in candidates}
     for d in picks:
         d["recent_values"] = recent_by_player.get(d.get("player", ""), [])
+        d.update(env_by_player.get(d.get("player", ""), {}))
     # The watchlist is computed in full and TRIMMED before it leaves here.
     #
     # It used to ship unlimited, on the reasoning that every real-priced
@@ -112,6 +117,8 @@ def _long_shots(slate) -> tuple[list[dict], list[dict], dict, list[dict]]:
                  for c in candidates}
     for d in picks + watch_all:
         d["lineup_confirmed"] = confirmed.get(d.get("player", ""), True)
+        if "park_hr" not in d:
+            d.update(env_by_player.get(d.get("player", ""), {}))
     # Trim to what tops the board up to three. Zero picks means three from
     # the most-likely ranking; three picks means none. Either way the page
     # is three rows, which is what "the top three long shots" means.
@@ -277,6 +284,22 @@ def _market_scan(results: list[dict], long_shots: list[dict] | None = None) -> d
                        "line": r.get("line", 0.5)})
     out["longshots"] = longshot_warnings(quotes)
     return out
+
+
+def _env_of(game) -> dict:
+    """The hr_env measurements at pick time: park HR index, signed wind
+    toward center field (+out/−in, None indoors), roof state. Journaled on
+    every MLB bet so the miner can slice "wind out at a boosting park"
+    under the same false-discovery control as everything else — the
+    hypothesis lab's top watchlist idea, made measurable."""
+    park = get_park(game.park)
+    w = game.weather
+    roofed = bool(w.roof_closed) or park.roof == "dome"
+    wo = (None if roofed
+          else 0.0 if w.wind_dir_rel == "cross"
+          else round(w.wind_mph, 1) if w.wind_dir_rel == "out"
+          else round(-w.wind_mph, 1))
+    return {"park_hr": park.hr_factor, "wind_out": wo, "roofed": roofed}
 
 
 def _rec_to_dict(rec, prop, decision, proj) -> dict:
@@ -668,6 +691,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         d["live"] = bool(game.live and game.live.state == "live")
         d["game_date"] = game.date
         d["game_kickoff"] = game.kickoff
+        d.update(_env_of(game))
         if getattr(game, "doubleheader", False):
             # Say WHICH game of the doubleheader this prop is for — on the
             # card, in the headline, everywhere.

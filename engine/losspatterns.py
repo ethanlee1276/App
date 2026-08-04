@@ -155,8 +155,55 @@ def minutes_until(start_iso, now=None) -> float | None:
     return round((start - now).total_seconds() / 60.0, 1)
 
 
+def park_band(hr_index, roofed=False) -> str | None:
+    """The park's home-run environment, banded per the triage spec.
+
+    A closed roof (or a fixed dome) is its own band — indoor baseball is
+    a different physics, and folding it into "neutral" would dilute both
+    pockets."""
+    if roofed:
+        return "roof closed/dome"
+    if hr_index is None:
+        return None
+    try:
+        idx = float(hr_index)
+    except (TypeError, ValueError):
+        return None
+    if idx < 0.90:
+        return "suppressing park"
+    if idx > 1.10:
+        return "boosting park"
+    return "neutral park"
+
+
+def wind_band(wind_out, roofed=False) -> str | None:
+    """Signed wind toward center field at pick time, banded.
+
+    ``wind_out`` is +mph blowing out, −mph blowing in, 0 for cross —
+    derived from the weather layer's park-relative classification (the
+    CF bearings live in engine/mlb/sources/mlbstats.py). Indoors there
+    is no wind dimension at all: the park band already says "roof", and
+    a duplicate band would double-count the same fact."""
+    if roofed or wind_out is None:
+        return None
+    try:
+        w = float(wind_out)
+    except (TypeError, ValueError):
+        return None
+    if w <= -8:
+        return "wind in hard"
+    if w <= -3:
+        return "wind in"
+    if w < 3:
+        return "calm/cross"
+    if w < 8:
+        return "wind out"
+    return "wind out hard"
+
+
 def features_of(side=None, odds=None, prob=None, book=None,
-                horizon_days=None, lead_min=None) -> dict:
+                horizon_days=None, lead_min=None, park_hr=None,
+                wind_out=None, roofed=False) -> dict:
     """The feature dict for one bet — mining and veto both come through
     here, so a pick is judged by exactly the dimensions it was mined on."""
     feats = {
@@ -166,6 +213,8 @@ def features_of(side=None, odds=None, prob=None, book=None,
         "horizon": horizon_band(horizon_days),
         "book": (str(book) or None) if book else None,
         "lead": lead_band(lead_min),
+        "park": park_band(park_hr, roofed),
+        "wind": wind_band(wind_out, roofed),
     }
     return {k: v for k, v in feats.items() if v is not None}
 
@@ -179,7 +228,8 @@ def records_from_ledger(conn) -> list[dict]:
     """
     rows = conn.execute(
         "SELECT sport, market, side, odds, hit_prob, book, date, ts, status, "
-        "lead_min FROM bets WHERE status IN ('won','lost')").fetchall()
+        "lead_min, park_hr, wind_out, roofed FROM bets "
+        "WHERE status IN ('won','lost')").fetchall()
     out = []
     for r in rows:
         p = r["hit_prob"]
@@ -195,7 +245,9 @@ def records_from_ledger(conn) -> list[dict]:
             "won": 1 if r["status"] == "won" else 0,
             "feats": features_of(side=r["side"], odds=r["odds"], prob=p,
                                  book=r["book"], horizon_days=horizon,
-                                 lead_min=r["lead_min"]),
+                                 lead_min=r["lead_min"], park_hr=r["park_hr"],
+                                 wind_out=r["wind_out"],
+                                 roofed=bool(r["roofed"])),
         })
     return out
 
@@ -340,8 +392,8 @@ def refresh(lconn, path=None) -> dict:
 
 
 def veto(sport: str, market: str, side=None, odds=None, prob=None,
-         book=None, horizon_days=None, lead_min=None, path=None
-         ) -> str | None:
+         book=None, horizon_days=None, lead_min=None, park_hr=None,
+         wind_out=None, roofed=False, path=None) -> str | None:
     """The reason this pick is blocked, or None.
 
     Consulted where is_reliable() is: a pick whose features land in a slice
@@ -352,7 +404,8 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
     matches a closure — honest ignorance, never a false block."""
     store = load(path)
     feats = features_of(side=side, odds=odds, prob=prob, book=book,
-                        horizon_days=horizon_days, lead_min=lead_min)
+                        horizon_days=horizon_days, lead_min=lead_min,
+                        park_hr=park_hr, wind_out=wind_out, roofed=roofed)
     for f in store.get("closed") or []:
         if f.get("sport") != sport:
             continue
