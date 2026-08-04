@@ -705,6 +705,7 @@ function renderAll() {
   renderGames();
   renderGameBets();
   renderIncentives();
+  renderRestWatch();
   renderRecommended();
   renderEdgeBoard();
   renderScanner();
@@ -1602,6 +1603,48 @@ function renderIncentives() {
       distance, and his real per-game pace — because a team feeds a player
       who is close, and the books are slow to price that. Picks touching a
       live chase say so on their card.</span></div>
+    <div class="card" style="padding:0">${body}</div>`;
+}
+
+function renderRestWatch() {
+  // NFL only: who is safe, who is dead, who might sit. Computed from our
+  // own finals with tiebreaker-free certainty rules — a board should be
+  // late before it is wrong — plus announced rests from the curated
+  // table. Announced rest gates matching props; computed statuses warn.
+  const host = document.getElementById("rest-watch");
+  if (!host) return;
+  const pic = (state.data || {}).playoff_picture;
+  if (state.sport !== "nfl" || !pic) { host.innerHTML = ""; return; }
+  const teams = pic.teams || {};
+  const rows = Object.entries(teams)
+    .filter(([, s]) => s.status !== "in the hunt" || s.risk)
+    .sort(([, a], [, b]) => (b.risk ? 1 : 0) - (a.risk ? 1 : 0)
+      || (b.wins ?? 0) - (a.wins ?? 0));
+  const tone = (s) => s.risk === "announced rest" ? "var(--bad)"
+    : s.risk ? "var(--warn)"
+    : s.status.startsWith("clinched") ? "var(--good)"
+    : s.status === "eliminated" ? "var(--text-mute)" : "var(--text)";
+  const body = rows.length ? rows.map(([t, s]) => `
+    <div style="display:flex;gap:12px;align-items:baseline;padding:8px 14px;
+        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+      <span class="chip">${escapeHtml(t)}</span>
+      <span style="min-width:80px;font-variant-numeric:tabular-nums">${s.wins}-${s.losses}${s.ties ? `-${s.ties}` : ""}</span>
+      <span style="flex:1;min-width:130px">${escapeHtml(s.status)}</span>
+      ${s.risk ? `<span class="chip" style="color:${tone(s)}">${escapeHtml(s.risk)}</span>` : ""}
+      ${s.note ? `<span style="color:var(--text-mute)">${escapeHtml(s.note)}</span>` : ""}
+    </div>`).join("")
+    : pic.active ? `
+    <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
+      No team has a certain status yet — every race is still live, and this
+      board would rather be late than wrong.</p>` : `
+    <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
+      ${escapeHtml(pic.note || "")}</p>`;
+  host.innerHTML = `
+    <div class="section-title">Rest watch
+      <span class="sub">— the playoff picture's usage risks. A clinched team
+      may rest starters, an eliminated one may shut veterans down, and an
+      announced rest flips its props to Pass on this board — a season-usage
+      prop on a benched rotation is a stale price, not an edge.</span></div>
     <div class="card" style="padding:0">${body}</div>`;
 }
 

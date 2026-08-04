@@ -364,6 +364,23 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         out["incentives"] = inc
     except Exception:                              # noqa: BLE001
         out["incentives"] = {"entries": [], "note": ""}
+    # The playoff picture — the incentive tracker's mirror. Clinched
+    # teams rest, eliminated teams shut down, and an ANNOUNCED rest flips
+    # matching props to Pass before the journal or the parlay screen can
+    # touch them. Computed statuses only ever warn; the certainty rules
+    # are tiebreaker-free by construction (engine/restwatch.py).
+    try:
+        from . import restwatch
+        from .db import connect as _hist_connect2
+        _hc2 = _hist_connect2()
+        try:
+            pic = restwatch.picture(_hc2)
+        finally:
+            _hc2.close()
+        restwatch.decorate(results, pic)
+        out["playoff_picture"] = pic
+    except Exception:                              # noqa: BLE001
+        out["playoff_picture"] = {"teams": {}, "active": False, "note": ""}
     # §14: the parlay screen runs last, over the board that just cleared the
     # singles gates — never over candidates it invented for itself.
     from .parlays import attach
