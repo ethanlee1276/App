@@ -47,7 +47,12 @@ KEEP_POSTMORTEMS = 30
 KEEP_BRIEFS = 12
 BRIEF_EVERY_DAYS = 7
 DEFAULT_CAP_USD = 5.00
-MAX_TOKENS = 2048
+# A ceiling, not a spend: billing is on tokens actually produced. 2048 was
+# a real-world truncation — the model THINKS before it writes, thinking
+# counts against max_tokens, and the triage bench's three specs came back
+# as JSON cut off mid-string. Headroom costs nothing; truncation costs a
+# billed call that returns garbage.
+MAX_TOKENS = 8192
 MAX_PACK_CHARS = 12000
 #: The diary narrates OUR bets. The measurement buckets (stale-line
 #: sampler, form sampler) are experiments, not picks, and narrating them
@@ -123,17 +128,21 @@ def _call(system: str, prompt: str, schema: dict, kind: str,
     stop = payload.get("stop_reason")
     if stop == "refusal":
         raise ProseUnavailable("the model declined the request")
+    # Truncation BEFORE parsing: a reply cut off at the ceiling is broken
+    # JSON, and reporting it as "unparseable" sends the reader debugging
+    # the schema when the fix is the ceiling. (Learned from a real run.)
+    if stop == "max_tokens":
+        raise ProseUnavailable(
+            "reply truncated at max_tokens — the ceiling is too low for "
+            "this prompt")
     text = next((b.get("text") for b in payload.get("content") or []
                  if b.get("type") == "text"), None)
     if not text:
         raise ProseUnavailable(f"no text in response (stop={stop})")
     try:
-        out = json.loads(text)
+        return json.loads(text)
     except ValueError as e:
         raise ProseUnavailable(f"unparseable reply: {e}") from e
-    if stop == "max_tokens":
-        raise ProseUnavailable("reply truncated at max_tokens")
-    return out
 
 
 # --- shared shape: headline / overall / one note per sport -------------------

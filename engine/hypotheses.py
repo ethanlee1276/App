@@ -66,7 +66,10 @@ PRICE_IN, PRICE_OUT = 5.00, 25.00
 DEFAULT_MODEL = "claude-opus-5"
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
-MAX_TOKENS = 4096
+# A ceiling, not a spend — billing is on tokens actually produced, and the
+# model's thinking counts against this. The first real run used 2,706 of
+# 4,096; the triage bench proved a too-low ceiling returns billed garbage.
+MAX_TOKENS = 8192
 #: Cap on the evidence pack, so a season of journal can never turn one
 #: nightly idea run into a five-dollar prompt.
 MAX_PACK_CHARS = 12000
@@ -300,6 +303,13 @@ def _parse_response(payload: dict) -> tuple[dict, dict]:
     stop = payload.get("stop_reason")
     if stop == "refusal":
         raise HypothesisUnavailable("the model declined the request")
+    # Truncation BEFORE parsing: a reply cut off at the ceiling is broken
+    # JSON, and "unparseable" sends the reader debugging the schema when
+    # the fix is the ceiling.
+    if stop == "max_tokens":
+        raise HypothesisUnavailable(
+            "reply truncated at max_tokens — the ceiling is too low for "
+            "this prompt")
     text = next((b.get("text") for b in payload.get("content") or []
                  if b.get("type") == "text"), None)
     if not text:
@@ -308,8 +318,6 @@ def _parse_response(payload: dict) -> tuple[dict, dict]:
         out = json.loads(text)
     except ValueError as e:
         raise HypothesisUnavailable(f"unparseable reply: {e}") from e
-    if stop == "max_tokens":
-        raise HypothesisUnavailable("reply truncated at max_tokens")
     return out, payload.get("usage") or {}
 
 
