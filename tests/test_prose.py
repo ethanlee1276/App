@@ -329,11 +329,35 @@ def test_the_page_renders_the_night_desk_on_every_scope():
 
 
 def test_the_triage_bench_requires_a_watchlist():
+    """…and the store it reads has to be OURS, not the machine's.
+
+    `triage_pack` calls `hyp.load()` with no path, which reads the real
+    lab store. On a laptop where the weekly propose has run there IS a
+    watchlist, so the guard under test never fires — and the call falls
+    straight through to `_call`, i.e. a live, paid API request from a
+    test. It only ever surfaced as a failure rather than a charge
+    because earlier tests in this file pop ANTHROPIC_API_KEY out of the
+    environment and `secrets._loaded` stops it being restored.
+
+    So: point the store at an empty temp file (guaranteeing the premise
+    the assertion depends on) and stub the caller (guaranteeing that a
+    future change to the guard cannot spend money from a test run).
+    """
+    import engine.hypotheses as _hyp
+    empty = _tmp("hypotheses.json")
+    json.dump({"hypotheses": [], "watchlist": []}, open(empty, "w"))
+    orig_load, orig_call = _hyp.load, P._call
+    spent = []
+    _hyp.load = lambda path=None: orig_load(empty)
+    P._call = lambda *a, **k: spent.append(1)
     try:
         P.triage(_journal())
         raise AssertionError("must refuse without a watchlist")
     except P.ProseUnavailable as e:
         assert "hypotheses.py" in str(e)
+    finally:
+        _hyp.load, P._call = orig_load, orig_call
+    assert not spent, "the triage bench must not call out without a watchlist"
 
 
 def test_the_cap_is_configurable_and_survives_garbage():
