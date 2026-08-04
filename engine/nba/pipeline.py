@@ -171,7 +171,8 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
                            / (_dec(odds) - 1.0))
         frac = min(stake, tune.cap_per_play)
     card["stake_fraction"] = frac
-    card["stake_units"] = round(frac * 20 * GRADE_STAKE[grade], 2)
+    from ..staking import to_units
+    card["stake_units"] = to_units(frac, odds, mult=GRADE_STAKE[grade])
     return {"kind": "pick", **card}
 
 
@@ -210,9 +211,11 @@ def run_nba_slate(props: list[dict], meta: dict | None = None,
     # constraint that actually binds.
     if tune.grade_weights:
         chosen = apply_exposure_caps(chosen, tune)
+        from ..staking import to_units
         for p in chosen:
-            p["stake_units"] = round(p.get("stake_fraction", 0.0) * 20
-                                     * GRADE_STAKE[p["minutes_grade"]], 2)
+            p["stake_units"] = to_units(p.get("stake_fraction", 0.0),
+                                        p.get("odds", -110),
+                                        mult=GRADE_STAKE[p["minutes_grade"]])
         chosen = [p for p in chosen if p["stake_units"] > 0]
 
     # Near-miss report: the 3 closest, with what would need to change.

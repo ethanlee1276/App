@@ -281,11 +281,14 @@ def approval_gate(p_final: float, odds: int, market: str,
 
 
 def stake_units(p: float, odds: int) -> float:
-    b = _dec_odds(odds) - 1.0
-    if b <= 0:
+    """Fifth Kelly under the spec's 2.5%-of-bankroll cap, converted on the
+    shared scale (1u = 1% of bankroll) with its price-band ceilings — a
+    live dog at +250 stakes a dime no matter how live the read."""
+    from ..staking import kelly_fraction, to_units
+    kelly = kelly_fraction(p, odds)
+    if kelly <= 0:
         return 0.0
-    kelly = max(0.0, (p * b - (1.0 - p)) / b)
-    return round(min(kelly * KELLY_FRACTION, STAKE_CAP) * 20, 2)
+    return to_units(min(kelly * KELLY_FRACTION, STAKE_CAP), odds)
 
 
 # --- card runner ------------------------------------------------------------

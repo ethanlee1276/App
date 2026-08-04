@@ -123,8 +123,10 @@ def test_gate_mma_rules():
     # old bar was unreachable under the clamp; see the welded-door test).
     assert any("edge" in f for f in approval_gate(0.570, -110, "method", [], 0))
     assert approval_gate(0.578, -110, "method", [], 0) == []
-    # One-fifth Kelly, capped at 2.5% of roll.
-    assert 0 < stake_units(0.62, -120) <= 0.5
+    # One-fifth Kelly, capped at 2.5% of roll — which on the shared scale
+    # (1u = 1% of bankroll, engine/staking.py) is 2.5u, not the 0.5u the
+    # old twenty-unit ruler displayed for the same real-money cap.
+    assert 0 < stake_units(0.62, -120) <= 2.5
 
 
 def test_evaluate_fight_paths():

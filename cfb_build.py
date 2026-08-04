@@ -30,6 +30,7 @@ import json
 from pathlib import Path
 
 from engine import gamebets, teamrates
+from engine.staking import to_units
 from engine.cfb import context as cfbcontext
 from engine.cfb import ratings as cfbratings
 from engine.cfb import status as cfbstatus
@@ -361,9 +362,9 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
         # alongside so the page can say what confirming the starter is
         # worth, but stake_units — the field the journal and every stake
         # chip read — stays zero until it is a bet.
-        "stake_units": round(stake_fraction * 20, 2),
-        "stake_if_confirmed_units": round(
-            (card.get("stake_if_confirmed") or 0.0) * 20, 2),
+        "stake_units": to_units(stake_fraction, card["odds"]),
+        "stake_if_confirmed_units": to_units(
+            card.get("stake_if_confirmed") or 0.0, card["odds"]),
         "grade": "Conditional" if conditional else card["grade_label"],
         "cfb_grade": card["grade"],
         "attention_tier": card["attention_tier"],

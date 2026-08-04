@@ -126,13 +126,15 @@ def _grade(confidence: float, edge: float) -> str:
 
 
 def _stake(model_prob: float, odds: int, fraction: float = 0.2) -> float:
-    """Fractional Kelly, capped hard. Long shots are high-variance, so the
-    Kelly fraction is smaller than the yardage-prop model uses."""
-    b = american_to_decimal(odds) - 1.0
-    if b <= 0:
+    """Fractional Kelly through the shared scale. Long shots live at the
+    prices where our probability estimates are least trustworthy, and the
+    shared price-band ceiling (0.1u at +200 and longer) is the point —
+    whatever Kelly thinks of a +450, it stakes a dime."""
+    from .staking import kelly_fraction, to_units
+    kelly = kelly_fraction(model_prob, odds)
+    if kelly <= 0:
         return 0.0
-    kelly = (b * model_prob - (1.0 - model_prob)) / b
-    return round(clamp(kelly * fraction, 0.0, 0.03) * 20, 2)
+    return to_units(clamp(kelly * fraction, 0.0, 0.03), odds)
 
 
 #: Hold assumed when only one side of a market is published.

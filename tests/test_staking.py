@@ -66,10 +66,14 @@ def test_positive_kelly_never_rounds_away_to_zero():
 
 
 def test_stake_scales_with_edge_and_stays_capped():
+    # On the 1u = 1% scale a solid edge REACHES the cap (that is the fix —
+    # the old ruler kept everything at pocket change), so the ordering is
+    # strict below the cap and flat at it.
     small = _kelly_stake(0.53, -110)
     mid = _kelly_stake(0.56, -110)
     big = _kelly_stake(0.75, -110)
-    assert MIN_STAKE_UNITS <= small < mid < big <= 1.0
+    assert MIN_STAKE_UNITS <= small < mid <= big <= 1.0
+    assert big == 1.0, "a strong edge at an ordinary price stakes the cap"
 
 
 def test_grade_ladder_requires_real_net_edge():
@@ -138,6 +142,90 @@ def test_confidence_does_not_penalise_underdogs():
     assert dog >= 6.0, dog
     # Bigger edge still scores higher; the ordering that matters survives.
     assert _confidence_score(0.045, 0.161, proj) > dog
+
+
+# --- one scale, priced for trust (engine/staking.py) ------------------------
+# The report that started this was read straight off the board: "we put .1
+# unit on home runs but then .1 units on regular -100 props." Two rulers —
+# the parlay spec's 1u = 1% and the prop paths' private ``* 20`` — plus no
+# price awareness at all, so a solid -110 play displayed next to a +475
+# dime at nearly the same size, and the ROI denominator inherited it.
+
+def test_a_solid_ordinary_prop_finally_stakes_a_real_unit():
+    """Quarter Kelly at p=.57 / -110 is ~2.4% of bankroll — the grade cap
+    (1u for an A) binds, and the board shows a unit, not pocket change."""
+    from engine.quality import STAKE_CAP_U
+    assert _kelly_stake(0.57, -110, 0.25, STAKE_CAP_U["A"]) == 1.0
+    assert _kelly_stake(0.60, -110, 0.5, STAKE_CAP_U["A+"]) == 2.0
+
+
+def test_a_longshot_is_a_dime_whatever_kelly_thinks():
+    """Kelly at long odds LIKES a big claimed edge (21% at +475 is a fat
+    fraction) — but that is exactly where our probabilities are least
+    trustworthy, per the home-run receipts (said 14%, hit 11%). The price
+    cap outranks the conviction."""
+    from engine import staking as S
+    from engine.quality import STAKE_CAP_U
+    assert _kelly_stake(0.24, 350, 0.25, STAKE_CAP_U["A"]) == 0.1
+    assert _kelly_stake(0.21, 475, 0.5, STAKE_CAP_U["A+"]) == 0.1
+    assert S.price_cap_units(200) == S.LONGSHOT_CAP_U
+    assert S.price_cap_units(150) == S.DOG_CAP_U
+    assert S.price_cap_units(119) == float("inf")
+
+
+def test_the_separation_ethan_asked_for_holds():
+    """"1 unit on the regular props and .1 on the homer props" — the
+    exact request, as arithmetic."""
+    from engine.quality import STAKE_CAP_U
+    regular = _kelly_stake(0.57, -105, 0.25, STAKE_CAP_U["A"])
+    homer = _kelly_stake(0.24, 350, 0.25, STAKE_CAP_U["A"])
+    assert regular == 1.0 and homer == 0.1
+
+
+def test_every_sport_converts_through_the_shared_scale():
+    """The ``* 20`` ruler must be gone from every stake path — it is how
+    two sports could disagree about what a unit means."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for path in ("engine/betting.py", "engine/longshots.py",
+                 "engine/ufc/model.py", "engine/nba/pipeline.py",
+                 "cfb_build.py"):
+        src = open(os.path.join(root, path), encoding="utf-8").read()
+        assert "* 20" not in src, f"{path} still converts on its own ruler"
+        assert "staking" in src, f"{path} does not use the shared scale"
+
+
+def test_ufc_lands_on_the_same_scale():
+    from engine.ufc.model import stake_units as ufc_stake
+    # Fifth Kelly under the spec's 2.5%-of-bankroll cap: a strong read
+    # stakes real units now, and a live dog at +250 stakes the dime.
+    assert ufc_stake(0.65, -150) == 2.5
+    assert ufc_stake(0.45, 250) == 0.1
+
+
+def test_the_longshot_engine_still_deals_dimes():
+    from engine.longshots import _stake
+    assert _stake(0.24, 350) == 0.1
+    assert _stake(0.10, 800) == 0.0                    # no edge → no bet
+
+
+def test_the_mult_downweights_and_zero_kills():
+    from engine import staking as S
+    a = S.to_units(0.02, -110, mult=1.0)
+    b = S.to_units(0.02, -110, mult=0.5)
+    assert b < a
+    assert S.to_units(0.02, -110, mult=0.0) == 0.0
+    assert S.to_units(0.0005, -110) == S.MIN_STAKE_UNITS
+
+
+def test_history_is_not_restated():
+    """The scale change reads honestly FORWARD; settled stakes are the
+    receipts of bets as they were made. Nothing in staking touches the
+    journal."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "engine", "staking.py"),
+               encoding="utf-8").read()
+    for banned in ("UPDATE", "INSERT", "sqlite", "ledger"):
+        assert banned not in src, banned
 
 
 if __name__ == "__main__":

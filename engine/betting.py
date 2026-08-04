@@ -237,21 +237,17 @@ def _kelly_stake(model_prob: float, odds: int, fraction: float = 0.25,
     §10: quarter Kelly is the default; half Kelly only for A+ plays in
     Tier 1 markets. The input is the POST-haircut probability — feeding raw
     model edge into Kelly would compound the same optimism twice.
-    ``cap_units`` is the per-grade bankroll cap (2u max on any single play).
+    ``cap_units`` is the per-grade cap (2u max on any single play).
+
+    The arithmetic lives in engine/staking.py — one scale (1u = 1% of
+    bankroll) and one set of price-band ceilings for every sport, because
+    this function's old private twenty-unit ruler is how a solid -110 play
+    and a home-run dime both displayed as pocket change.
 
     Zero has one meaning here: Kelly says this price is not beatable at
-    our estimated probability. Anything positive is floored at
-    ``MIN_STAKE_UNITS`` so a real edge never renders as 0.00u."""
-    from .odds import american_to_decimal
-    b = american_to_decimal(odds) - 1.0
-    if b <= 0:
-        return 0.0
-    q = 1.0 - model_prob
-    kelly = (b * model_prob - q) / b
-    if kelly <= 0:
-        return 0.0                      # below break-even AT THIS PRICE
-    stake = clamp(kelly * fraction, 0.0, cap_units * 0.05) * 20   # 5% Kelly → 1u
-    return round(max(stake, MIN_STAKE_UNITS), 2)
+    our estimated probability."""
+    from .staking import kelly_units
+    return kelly_units(model_prob, odds, fraction, cap_units)
 
 
 def evaluate_prop(prop: Prop, proj: Projection,
