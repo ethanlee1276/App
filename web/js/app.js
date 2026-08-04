@@ -704,6 +704,7 @@ function renderAll() {
   renderTeamForm();
   renderGames();
   renderGameBets();
+  renderIncentives();
   renderRecommended();
   renderEdgeBoard();
   renderScanner();
@@ -1564,6 +1565,45 @@ const GAMEBET_GROUPS = [
   ["moneyline", "Moneyline"], ["spread", "Spread"],
   ["total", "Game total"], ["team_total", "Team total"],
 ];
+
+function renderIncentives() {
+  // NFL only: contract-incentive chases — "needs 62 more receiving yards
+  // for $500,000" — measured against our own ingested season logs. Late
+  // in the year this is usage information the player's own sideline acts
+  // on; the tracker shows it, and matching prop cards carry the angle as
+  // a reason. It never moves a probability.
+  const host = document.getElementById("incentive-watch");
+  if (!host) return;
+  const inc = (state.data || {}).incentives;
+  if (state.sport !== "nfl" || !inc) { host.innerHTML = ""; return; }
+  const rows = inc.entries || [];
+  const money = (v) => v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M`
+    : `$${Math.round(v / 1000)}K`;
+  const tone = (s) => ({ "hit": "var(--good)", "on pace": "var(--cyan)",
+    "needs a push": "var(--warn)", "long shot": "var(--bad)",
+    "missed": "var(--text-mute)" }[s] || "var(--text-mute)");
+  const body = rows.length ? rows.map((r) => `
+    <div style="display:flex;gap:12px;align-items:baseline;padding:8px 14px;
+        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+      <span class="chip">${escapeHtml(r.team || "")}</span>
+      <span style="flex:1;min-width:150px;font-weight:600">${escapeHtml(r.player || "")}</span>
+      <span style="min-width:130px">${(r.total ?? 0).toLocaleString()} of ${(r.threshold ?? 0).toLocaleString()} ${escapeHtml(r.stat_label || "")}</span>
+      <span style="font-variant-numeric:tabular-nums" title="What he still needs, against his own per-game pace (${r.pace ?? "—"})">
+        ${r.need > 0 ? `needs ${r.need.toLocaleString()} in ${r.games_left} game(s)` : "done"}</span>
+      <span style="font-weight:700">${money(r.bonus_usd ?? 0)}</span>
+      <span class="chip" style="color:${tone(r.status)}">${escapeHtml(r.status || "")}</span>
+    </div>`).join("") : `
+    <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
+      ${escapeHtml(inc.note || "No incentive chases on file.")}</p>`;
+  host.innerHTML = `
+    <div class="section-title">Incentive watch
+      <span class="sub">— contract money on the line down the stretch. Each
+      chase is measured from our own ingested game logs — season total,
+      distance, and his real per-game pace — because a team feeds a player
+      who is close, and the books are slow to price that. Picks touching a
+      live chase say so on their card.</span></div>
+    <div class="card" style="padding:0">${body}</div>`;
+}
 
 function renderGameBets() {
   const bets = (state.data.game_bets || []).map((r) => ({ ...r, _ok: passesGameBet(r) }));

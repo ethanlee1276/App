@@ -346,6 +346,24 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         "market_scan": _market_scan(results, ls),
         "correlation": corr,
     }
+    # End-of-year incentive money: a hand-curated table of contract
+    # thresholds, measured against our own ingested season logs. It ships
+    # the tracker to the board and appends the angle to matching prop
+    # cards — a reason the human weighs, never a probability. Its own
+    # guard: a missing history DB (CI, fresh clone) costs the section,
+    # never the slate.
+    try:
+        from . import incentives
+        from .db import connect as _hist_connect
+        _hc = _hist_connect()
+        try:
+            inc = incentives.report(_hc)
+        finally:
+            _hc.close()
+        incentives.decorate(results, inc.get("entries") or [])
+        out["incentives"] = inc
+    except Exception:                              # noqa: BLE001
+        out["incentives"] = {"entries": [], "note": ""}
     # §14: the parlay screen runs last, over the board that just cleared the
     # singles gates — never over candidates it invented for itself.
     from .parlays import attach
