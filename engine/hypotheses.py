@@ -53,6 +53,14 @@ from pathlib import Path
 
 DEFAULT_PATH = Path("data/models/hypotheses.json")
 
+#: Every paid token, on the books. Lives beside the journal rather than in
+#: data/cache — the cache is prunable by design, and a spend ledger that a
+#: cleanup can silently erase is not a ledger.
+SPEND_PATH = Path("data/llm_spend.json")
+#: claude-opus-5, $ per million tokens — the source of every cost figure
+#: printed or stored anywhere in the app.
+PRICE_IN, PRICE_OUT = 5.00, 25.00
+
 #: The skill-current default. Override with QELLYS_LLM_MODEL in
 #: secrets.local; pricing note in the CLI assumes this model.
 DEFAULT_MODEL = "claude-opus-5"
@@ -192,6 +200,60 @@ def _model() -> str:
     return os.environ.get("QELLYS_LLM_MODEL") or DEFAULT_MODEL
 
 
+def cost_usd(usage: dict) -> float:
+    """Dollars for one call's token usage, at this model's list price."""
+    return (usage.get("input_tokens", 0) * PRICE_IN
+            + usage.get("output_tokens", 0) * PRICE_OUT) / 1_000_000
+
+
+def log_llm_spend(usage: dict, model: str, kind: str = "propose",
+                  path: Path | str | None = None) -> dict:
+    """Append one paid call to the spend ledger. Returns the entry.
+
+    Logged from the point the API RESPONDS, before any parsing — a refusal
+    or an unparseable reply is billed exactly like a good one, and a spend
+    log that only counts the successes understates the bill.
+    """
+    p = Path(path if path is not None else SPEND_PATH)
+    entry = {"ts": _dt.datetime.now().isoformat(timespec="seconds"),
+             "model": model, "kind": kind,
+             "input_tokens": int(usage.get("input_tokens") or 0),
+             "output_tokens": int(usage.get("output_tokens") or 0),
+             "cost_usd": round(cost_usd(usage), 6)}
+    try:
+        rows = json.loads(p.read_text()) if p.is_file() else []
+        if not isinstance(rows, list):
+            rows = []
+    except (ValueError, OSError):
+        rows = []
+    rows.append(entry)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(rows, indent=1))
+    return entry
+
+
+def llm_spend_report(path: Path | str | None = None) -> dict:
+    """Totals off the spend ledger: all-time and this calendar month."""
+    p = Path(path if path is not None else SPEND_PATH)
+    try:
+        rows = json.loads(p.read_text()) if p.is_file() else []
+        if not isinstance(rows, list):
+            rows = []
+    except (ValueError, OSError):
+        rows = []
+    month = _dt.date.today().isoformat()[:7]
+    m = [r for r in rows if str(r.get("ts", "")).startswith(month)]
+    return {
+        "runs": len(rows),
+        "total_usd": round(sum(float(r.get("cost_usd") or 0)
+                               for r in rows), 4),
+        "month_runs": len(m),
+        "month_usd": round(sum(float(r.get("cost_usd") or 0)
+                               for r in m), 4),
+        "last": rows[-1] if rows else None,
+    }
+
+
 def call_claude(prompt: str, api_key: str, model: str | None = None,
                 timeout: float = 180.0) -> tuple[dict, dict]:
     """One structured-output request. Returns (parsed_json, usage).
@@ -223,6 +285,13 @@ def call_claude(prompt: str, api_key: str, model: str | None = None,
         raise HypothesisUnavailable(f"API error {e.code}: {msg}") from e
     except Exception as e:                         # noqa: BLE001
         raise HypothesisUnavailable(f"network: {e}") from e
+    # On the books BEFORE parsing: these tokens are billed whether or not
+    # the reply survives the parser. Its own guard — a full disk must not
+    # turn a successful API call into a reported failure.
+    try:
+        log_llm_spend(payload.get("usage") or {}, body["model"])
+    except Exception:                              # noqa: BLE001
+        pass
     return _parse_response(payload)
 
 

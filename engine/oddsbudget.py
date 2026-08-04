@@ -114,7 +114,7 @@ def load(path: Path | str = STATE_PATH) -> BudgetState:
             # the legacy clock is MLB's clock. Without this seed MLB would
             # double-pull the moment the upgrade lands.
             per_sport = {"mlb": legacy}
-        return BudgetState(
+        state = BudgetState(
             remaining=int(raw.get("remaining", ASSUMED_MONTHLY)),
             used=int(raw.get("used", 0)),
             last_refresh_ts=legacy,
@@ -124,6 +124,13 @@ def load(path: Path | str = STATE_PATH) -> BudgetState:
             keys={str(k): dict(v) for k, v in (raw.get("keys") or {}).items()
                   if isinstance(v, dict)},
         )
+        # The headline is DERIVED, so re-derive it on every read. The
+        # stored number is whatever the last paid pull summed; after a key
+        # rotation it keeps a dead key's ghost in the pool until some pull
+        # happens to rewrite it — and the pacer spends against this number.
+        if state.keys:
+            state.remaining = _pool_remaining(state)
+        return state
     except (ValueError, OSError, TypeError):
         return BudgetState()
 
@@ -250,10 +257,37 @@ def _pool_remaining(state: BudgetState) -> int:
     unmeasured key as a full plan would let the pacer spend against credits
     that may not exist. The ring is still TRIED in full; only the arithmetic
     is conservative.
+
+    And only keys in the CURRENT ring count at all. A rotated or re-typed
+    key gets a new fingerprint, and the old fingerprint's last measurement
+    sits in this state file forever — summing it counted a dead plan's
+    ghost as live credits, which is how a drained 20k key plus a real ~19k
+    balance read as "38,314 left". When the ring cannot be read (no keys in
+    the environment), every stored key counts, because refusing to answer
+    would zero the pacer for no reason.
     """
-    known = [int(v.get("remaining", 0)) for v in state.keys.values()
+    try:
+        from .sources.oddsapi import api_keys
+        active = {fingerprint(k) for k in api_keys()}
+    except Exception:                              # noqa: BLE001
+        active = set()
+    entries = state.keys
+    if active:
+        entries = {fp: v for fp, v in entries.items() if fp in active}
+    known = [int(v.get("remaining", 0)) for v in entries.values()
              if v.get("remaining") is not None]
     return max(0, sum(known)) if known else state.remaining
+
+
+def pool_remaining(path: Path | str | None = None) -> int:
+    """The ring's live balance, recomputed at READ time.
+
+    The stored headline is whatever the last paid pull computed — a reader
+    consulting it after a key rotation repeats the stale sum until the next
+    pull happens to rewrite it. Anything REPORTING a balance (the doctor,
+    the audit) should ask this instead of ``state.remaining``.
+    """
+    return _pool_remaining(load(path or STATE_PATH))
 
 
 def record_quota(remaining, used=None, path: Path | str = STATE_PATH,
@@ -558,6 +592,6 @@ def summary(path: Path | str = STATE_PATH) -> str:
         return (f"Odds quota: not yet measured — assuming a free plan "
                 f"({ASSUMED_MONTHLY}/month, ~{daily_allowance(state)} today). "
                 f"The real figure is read from the API on the next odds call.")
-    return (f"Odds quota: {state.remaining} left, {state.used} used "
+    return (f"Odds quota: {_pool_remaining(state)} left, {state.used} used "
             f"(as of {state.last_seen_iso}) "
             f"· ~{daily_allowance(state)} affordable today")

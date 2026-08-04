@@ -302,9 +302,52 @@ def test_the_page_renders_the_lab_with_the_authority_stated():
 
 def test_the_cli_is_the_only_paid_step():
     src = open(os.path.join(ROOT, "hypotheses.py"), encoding="utf-8").read()
-    for needle in ("--show", "--retest", "--dry-run", "PRICE_IN",
-                   "secrets.local"):
+    for needle in ("--show", "--retest", "--dry-run", "--spend",
+                   "cost_usd", "secrets.local"):
         assert needle in src, needle
+
+
+# --- the spend ledger: every paid token, on the books ------------------------
+def test_every_paid_call_lands_in_the_spend_ledger():
+    p = os.path.join(tempfile.mkdtemp(), "spend.json")
+    e = hyp.log_llm_spend({"input_tokens": 1666, "output_tokens": 2706},
+                          "claude-opus-5", path=p)
+    assert abs(e["cost_usd"] - (1666 * 5.00 + 2706 * 25.00) / 1e6) < 1e-9
+    hyp.log_llm_spend({"input_tokens": 1000, "output_tokens": 100},
+                      "claude-opus-5", path=p)
+    r = hyp.llm_spend_report(p)
+    assert r["runs"] == 2 and r["month_runs"] == 2
+    assert r["total_usd"] == round(
+        e["cost_usd"] + (1000 * 5.00 + 100 * 25.00) / 1e6, 4)
+    assert r["last"]["output_tokens"] == 100
+
+
+def test_an_empty_ledger_reports_zero_not_a_crash():
+    r = hyp.llm_spend_report(os.path.join(tempfile.mkdtemp(), "none.json"))
+    assert r == {"runs": 0, "total_usd": 0, "month_runs": 0,
+                 "month_usd": 0, "last": None}
+
+
+def test_the_meter_runs_before_the_parser():
+    """A refusal or an unparseable reply is billed exactly like a good one —
+    a spend log that only counts the successes understates the bill."""
+    import inspect
+    src = inspect.getsource(hyp.call_claude)
+    assert "log_llm_spend" in src
+    assert src.index("log_llm_spend") < src.index("_parse_response")
+
+
+def test_the_spend_ledger_lives_outside_the_prunable_cache():
+    """data/cache is cleaned by design; a ledger a cleanup can silently
+    erase is not a ledger."""
+    assert "cache" not in str(hyp.SPEND_PATH)
+
+
+def test_the_doctor_reads_the_bill():
+    src = open(os.path.join(ROOT, "doctor.py"), encoding="utf-8").read()
+    assert "def check_llm_spend(" in src
+    assert src.count("check_llm_spend,") >= 2, \
+        "defined but missing from a check list"
 
 
 if __name__ == "__main__":

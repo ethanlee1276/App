@@ -28,9 +28,6 @@ import json
 from engine import hypotheses as hyp
 from engine import ledger
 
-# claude-opus-5, per million tokens — used only for the printed estimate.
-PRICE_IN, PRICE_OUT = 5.00, 25.00
-
 
 def _print_store(store: dict) -> None:
     hyps = store.get("hypotheses") or []
@@ -63,7 +60,26 @@ def main() -> None:
     ap.add_argument("--retest", action="store_true")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the evidence pack and exit — no API call")
+    ap.add_argument("--spend", action="store_true",
+                    help="what the lab has actually cost, from the ledger")
     args = ap.parse_args()
+
+    if args.spend:
+        r = hyp.llm_spend_report()
+        if not r["runs"]:
+            print("No paid calls logged yet. Every future run of "
+                  "`python3 hypotheses.py` records its tokens and cost to "
+                  f"{hyp.SPEND_PATH}.")
+            return
+        print(f"Anthropic spend (logged at {hyp.SPEND_PATH}):")
+        print(f"  this month: ${r['month_usd']:.2f} across "
+              f"{r['month_runs']} run(s)")
+        print(f"  all time:   ${r['total_usd']:.2f} across {r['runs']} run(s)")
+        last = r["last"]
+        print(f"  last run:   {last['ts']} · {last['model']} · "
+              f"{last['input_tokens']:,}/{last['output_tokens']:,} tokens "
+              f"· ${last['cost_usd']:.3f}")
+        return
 
     lconn = ledger.connect()
     if args.show:
@@ -84,11 +100,12 @@ def main() -> None:
         print(f"hypothesis lab unavailable: {e}")
         return
     usage = store.get("usage") or {}
-    cost = (usage.get("input_tokens", 0) * PRICE_IN
-            + usage.get("output_tokens", 0) * PRICE_OUT) / 1_000_000
     print(f"Model: {store.get('model')}  "
           f"tokens in/out: {usage.get('input_tokens', 0):,}/"
-          f"{usage.get('output_tokens', 0):,}  (~${cost:.3f})\n")
+          f"{usage.get('output_tokens', 0):,}  (~${hyp.cost_usd(usage):.3f})")
+    r = hyp.llm_spend_report()
+    print(f"Spend to date: ${r['month_usd']:.2f} this month across "
+          f"{r['month_runs']} run(s) — `--spend` for the ledger\n")
     _print_store(store)
     print("\nEvery stored hypothesis is re-tested free on each settle "
           "pass; confirmed hot closures veto picks through the same gate "

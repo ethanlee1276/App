@@ -120,6 +120,36 @@ def test_the_pool_holds_whichever_order_the_keys_were_measured_in():
         assert B.load(p).remaining == 20000, order
 
 
+def test_a_rotated_keys_ghost_does_not_double_the_pool():
+    """The real doctor read "38,314 credits left" off a drained 20k plan
+    plus a real ~19k balance. Rotating (or re-typing) a key mints a new
+    fingerprint, and the OLD fingerprint's last measurement sat in the
+    state file, still summed into the pool. Only keys in the CURRENT ring
+    may count — and the recount happens at load, so every reader heals."""
+    try:
+        _env(ODDS_API_KEY="newkey")
+        p = _budget()
+        B.record_quota(19000, 1000, p, key="oldkey")    # then rotated away
+        B.record_quota(19314, 1000, p, key="newkey")
+        assert B.load(p).remaining == 19314
+        assert B.pool_remaining(p) == 19314
+    finally:
+        _env()
+
+
+def test_without_a_ring_attached_every_stored_key_still_counts():
+    """A shell with no keys in its environment must not zero the pacer —
+    an unknown ring is not an empty ring."""
+    try:
+        _env()
+        p = _budget()
+        B.record_quota(6000, 0, p, key="aaa")
+        B.record_quota(7000, 0, p, key="bbb")
+        assert B.load(p).remaining == 13000
+    finally:
+        _env()
+
+
 def test_an_unmeasured_key_is_not_counted_as_a_full_plan():
     """The ring is TRIED in full; only the arithmetic is conservative.
     Counting a key we have never called as 20,000 credits would let the pacer

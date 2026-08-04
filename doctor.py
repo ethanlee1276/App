@@ -233,7 +233,10 @@ def check_odds_budget(rep):
             rep.add("odds budget", WARN, _no_data("odds-budget state"))
             return
         st = ob.load()
-        remaining = getattr(st, "remaining", None)
+        # Recomputed at read time, not the stored headline: the headline is
+        # whatever the LAST paid pull summed, and after a key rotation it
+        # keeps counting the dead key's ghost until some pull rewrites it.
+        remaining = ob.pool_remaining()
         days = ob.days_left_in_month()
         if remaining is None:
             rep.add("odds budget", WARN, "no quota recorded yet — the next "
@@ -261,6 +264,26 @@ def check_odds_budget(rep):
                 f"{remaining:,} credit(s) left · {days} day(s) in the month "
                 f"· {per_day:,.0f}/day available{ringnote}",
                 "python3 launch.py --odds-doctor" if status != OK else "")
+
+
+def check_llm_spend(rep):
+    """What the hypothesis lab has actually cost, from its own ledger.
+
+    Never a FAIL — money already spent is a fact to display, not a fault to
+    fix. The line exists so the bill is read in the same place as every
+    other operational number instead of being remembered."""
+    @_check(rep, "llm spend")
+    def _():
+        from engine import hypotheses as hyp
+        r = hyp.llm_spend_report()
+        if not r["runs"]:
+            rep.add("llm spend", OK, "no paid Anthropic calls logged — "
+                    "each `python3 hypotheses.py` run records itself")
+            return
+        rep.add("llm spend", OK,
+                f"${r['month_usd']:.2f} this month across {r['month_runs']} "
+                f"run(s) · ${r['total_usd']:.2f} all-time "
+                f"({r['runs']} run(s)) · `python3 hypotheses.py --spend`")
 
 
 def check_journal_sanity(rep):
@@ -461,9 +484,9 @@ def check_git(rep):
 
 
 CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
-          check_ingest_freshness, check_odds_budget, check_journal_sanity,
-          check_record_page, check_premature_evidence, check_parlay_agreement,
-          check_forecast_log, check_git]
+          check_ingest_freshness, check_odds_budget, check_llm_spend,
+          check_journal_sanity, check_record_page, check_premature_evidence,
+          check_parlay_agreement, check_forecast_log, check_git]
 
 # The checks that need the laptop's databases, budget state and built
 # slates. On a machine that has none of those — CI, a fresh clone — they
@@ -471,7 +494,7 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
 # noise that teaches you to ignore the run. --code-only drops them, so a
 # red CI run means something is actually red.
 DATA_CHECKS = (check_stuck_bets, check_slate_freshness,
-               check_ingest_freshness, check_odds_budget,
+               check_ingest_freshness, check_odds_budget, check_llm_spend,
                check_journal_sanity, check_record_page,
                check_premature_evidence, check_parlay_agreement,
                check_forecast_log)
