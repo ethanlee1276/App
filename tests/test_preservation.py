@@ -61,18 +61,22 @@ BASELINE = os.path.join(ROOT, "docs", "inventory-baseline.json")
 # --- copy that may never be quietly shrunk ----------------------------------
 # Spec §1.1 and §9: "stays verbatim and stays at current or greater
 # prominence. Do not let a visual pass quietly shrink any of it."
+# Reworded 2026-08-04 at the owner's direction — the old lines were clipped
+# slogans ("never money you can't afford to lose" had lost its verb) and
+# read as nonsense to a fresh visitor. The CONTENT contract is unchanged:
+# model-output-not-advice, graded in public, no model wins every night,
+# 21+, bet responsibly, and the helpline. These pins now hold the clear
+# wording to the same standard the old wording was held to.
 VERBATIM = [
-    "See the math. Know if it's working. Stay in the game.",
-    "Model output, not betting advice",
-    "every number is a probability, never a promise",
-    "every pick is journaled and graded on the Record page",
+    "This site publishes a model's estimates. It is not betting advice.",
+    "Every number here is a probability, not a promise.",
+    "graded in public on the Record page",
     "No model wins every night",
-    "anyone who says otherwise is selling something.",
-    "21+. Please bet responsibly",
-    "never money you can't afford to lose",
-    "Problem gambling help: call or text",
+    "be suspicious of anyone who claims theirs does",
+    "You must be 21 or older to bet.",
+    "never bet money you cannot afford to lose",
+    "free and confidential help is available 24/7 in the US",
     "1-800-GAMBLER",
-    "(US, 24/7)",
 ]
 
 
