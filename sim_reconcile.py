@@ -97,7 +97,7 @@ def _lineups(slate):
     return out
 
 
-def run(date: str) -> int:
+def run(date: str, dump_path: str | None = None) -> int:
     from engine.mlb.sources.statslogs import build_live_slate
     try:
         slate = build_live_slate(date)
@@ -106,6 +106,7 @@ def run(date: str) -> int:
         return 1
 
     lineups = _lineups(slate)
+    dump = {} if dump_path else None
     ran = failed = 0
     worst_overall = 0.0
     for (team, gn), cell in sorted(lineups.items()):
@@ -151,8 +152,31 @@ def run(date: str) -> int:
         if not rec["ok"]:
             failed += 1
             for o in rec["offenders"][:4]:
-                print(f"       {o['player']:<22} {o['market']:<12} "
-                      f"projected {o['projected']} simulated {o['simulated']}")
+                nm = o["player"]
+                spot = int(cell["spots"].get(nm) or 0)
+                pa_sim = (sim.pa_mean or {}).get(nm)
+                pa_want = G.expected_pa(spot)
+                pa_note = (f"  PA {pa_want:.2f}→{pa_sim:.2f}"
+                           if pa_sim else "")
+                print(f"       {nm:<22} {o['market']:<12} "
+                      f"projected {o['projected']} simulated {o['simulated']}"
+                      f"   (spot {spot}{pa_note})")
+            if dump is not None:
+                dump[f"{team}" + (f"-G{gn}" if gn > 1 else "")] = {
+                    "tol": rec["tol"], "worst": rec["worst_rel_error"],
+                    "hitters": {
+                        nm: {"spot": int(cell["spots"].get(nm) or 0),
+                             "projected": targets[nm],
+                             "simulated": {m: sim.mean.get(nm, {}).get(m)
+                                           for m in (HITS, TOTAL_BASES,
+                                                     HOME_RUNS)},
+                             "se": {m: (sim.se.get(nm) or {}).get(m)
+                                    for m in (HITS, TOTAL_BASES, HOME_RUNS)},
+                             "pa_expected": G.expected_pa(
+                                 int(cell["spots"].get(nm) or 0)),
+                             "pa_simulated": (sim.pa_mean or {}).get(nm)}
+                        for nm in targets},
+                }
 
     if not ran:
         print("nothing to reconcile — no lineup had "
@@ -165,6 +189,16 @@ def run(date: str) -> int:
         print(f"GATE FAILED on {failed} lineup(s). One of the two models is "
               "wrong about those hitters — resolve before the sim's joints "
               "feed anything a bettor sees.")
+        if dump is not None:
+            import json as _json
+            Path(dump_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(dump_path).write_text(_json.dumps(dump, indent=1))
+            print(f"Wrote the {len(dump)} failing lineup(s) to {dump_path} — "
+                  f"every hitter's three projected means, the sim's means and "
+                  f"standard errors, the batting spot and the assumed vs "
+                  f"realised plate appearances. That is the whole input to "
+                  f"the disagreement, so it can be diagnosed off the slate "
+                  f"instead of guessed at.")
         return 2
     print("GATE PASSES. The sim reproduces the board's own projections on "
           "live data — its joint distribution is now trustworthy input for "
@@ -175,4 +209,8 @@ def run(date: str) -> int:
 if __name__ == "__main__":
     date = next((a for a in sys.argv[1:] if not a.startswith("-")),
                 _dt.date.today().isoformat())
-    raise SystemExit(run(date))
+    _dump = next((a.split("=", 1)[1] for a in sys.argv[1:]
+                  if a.startswith("--dump=")), None)
+    if "--dump" in sys.argv[1:]:
+        _dump = _dump or "data/sim_gate_failures.json"
+    raise SystemExit(run(date, _dump))
