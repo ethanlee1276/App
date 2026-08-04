@@ -76,6 +76,19 @@ LEAGUE_HR_RATE = 0.13
 #: one. Small enough that it never manufactures a bet, large enough that
 #: the model never states an impossibility.
 MIN_RARE_EVENT_RATE = 0.01
+
+#: Most bases a NON-home-run hit may average in a projected trio. The
+#: coherence box below is derived from what is arithmetically possible
+#: (tb <= 3*hits + hr is "every non-HR hit was a triple"), and possible
+#: is a long way from real: the league runs about 1.35 bases per non-HR
+#: hit and a doubles-heavy slugger about 1.6. Trios near the arithmetic
+#: ceiling are what the sim gate kept failing on — measured on a live
+#: slate, a 0.847-hit projection carrying 2.387 total bases implies 2.44
+#: bases per non-HR hit, i.e. nearly every single was a triple. The
+#: inverter has to build a triple-heavy table for that, the sim cannot
+#: reproduce the hit COUNT from it, and the hitter came out 16% hot
+#: while his eight team-mates sat inside 1%.
+MAX_BASES_PER_NONHR_HIT = 1.9
 # Environment dampening for rare events. Park, weather, Statcast and
 # matchup HR effects are each estimated on the thinnest tail of the
 # data, and the long-shot board then SELECTS the props where they stack
@@ -146,9 +159,13 @@ def reconcile_triple(hits: float, tb: float, hr: float
         hr = max(0.0, cap)
         notes.append("HR capped so the hits/total-bases/HR trio is "
                      "possible baseball")
-    if tb > 3.0 * hits + hr + 1e-9:
-        tb = 3.0 * hits + hr            # more bases than the hits can carry
-        notes.append("total bases capped at what the hits can carry")
+    # Upper bound: REAL, not merely possible. See MAX_BASES_PER_NONHR_HIT.
+    c = MAX_BASES_PER_NONHR_HIT
+    ceiling = c * hits + (4.0 - c) * hr
+    if tb > ceiling + 1e-9:
+        tb = ceiling
+        notes.append(f"total bases capped at {c:.1f} bases per non-HR hit — "
+                     f"above that the trio needs a lineup of triples")
     return hr, tb, "; ".join(notes)
 
 

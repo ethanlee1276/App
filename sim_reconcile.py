@@ -139,7 +139,11 @@ def run(date: str, dump_path: str | None = None) -> int:
                   + ") — a projection-engine finding, excluded from the gate")
         if len(targets) < MIN_HITTERS:
             continue
-        rates.sort(key=lambda r: r.spot or 9)
+        # A real order is nine deep. Simulating the eight we could project
+        # cycles it 9/8 too fast and inflates everyone's plate appearances
+        # ~12%, which fails the gate for a reason that is ours, not the
+        # model's. The filler is never in `targets`, so it is never graded.
+        rates = G.pad_to_nine(sorted(rates, key=lambda r: r.spot or 9))
         fitted = G.calibrate(rates, targets)
         sim = G.simulate_lineup(fitted, [], trials=20000)
         rec = G.reconcile(sim, targets)

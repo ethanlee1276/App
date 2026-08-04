@@ -436,6 +436,37 @@ def _scale_reaching(b: BatterRates, k: float) -> BatterRates:
         consistent=b.consistent)
 
 
+#: A league-average filler bat, in per-game means. Only ever used to
+#: complete a short order — never graded, never priced.
+FILLER_MEANS = (0.85, 1.38, 0.11)
+
+
+def pad_to_nine(rates: list[BatterRates]) -> list[BatterRates]:
+    """Complete a short batting order with league-average filler.
+
+    A real lineup always has nine batters. When only eight are projected
+    — a pitcher's spot, a name the feed could not match — simulating the
+    eight we have cycles the order 9/8 too fast and hands every remaining
+    hitter about 12% more plate appearances than his spot actually gets.
+    Measured on a live slate: an eight-man Dodgers lineup put Ohtani at
+    5.24 PA against the 4.65 his spot assumes, and the whole lineup then
+    failed the reconcile gate for reasons that had nothing to do with the
+    projections.
+
+    The filler is deliberately absent from ``targets``, so it shapes the
+    turnover without ever being graded or bet.
+    """
+    have = {int(getattr(b, "spot", 0) or 0) for b in rates}
+    out = list(rates)
+    for spot in range(1, 10):
+        if spot in have:
+            continue
+        f = rates_from_means(*FILLER_MEANS, expected_pa(spot))
+        f.name, f.spot = f"_filler{spot}", spot
+        out.append(f)
+    return sorted(out, key=lambda b: b.spot or 9)
+
+
 def calibrate(rates: list[BatterRates], targets: dict,
               trials: int = 8000, seed: int | None = 7,
               env_sd: float = ENV_SD, rounds: int = 3) -> list[BatterRates]:

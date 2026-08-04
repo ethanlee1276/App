@@ -206,6 +206,41 @@ def test_reconciling_never_rounds_itself_back_out_of_the_box():
             assert bad not in src, f"{path} still rounds the reconciled trio"
 
 
+def test_a_short_order_is_padded_so_it_cycles_at_nine():
+    """A real lineup always has nine batters. Simulating the eight we
+    could project cycles the order 9/8 too fast and hands everyone ~12%
+    more plate appearances than his spot assumes — measured on a live
+    slate, an eight-man Dodgers order put its leadoff man at 5.24 PA
+    against 4.65, and the whole lineup failed the gate for a reason that
+    was ours rather than the model's. The filler never enters targets, so
+    it shapes the turnover and is never graded."""
+    from engine.mlb import gamesim as G
+    eight = []
+    for spot in range(1, 9):
+        r = G.rates_from_means(0.90, 1.45, 0.11, G.expected_pa(spot))
+        r.name, r.spot = f"bat{spot}", spot
+        eight.append(r)
+    padded = G.pad_to_nine(eight)
+    assert len(padded) == 9
+    assert sorted(b.spot for b in padded) == list(range(1, 10))
+    assert sum(1 for b in padded if b.name.startswith("_filler")) == 1
+    # The leadoff man's realised PA comes back toward what his spot assumes.
+    def pa(rates):
+        return G.simulate_lineup(rates, [], trials=20000).pa_mean["bat1"]
+    short, full = pa(eight), pa(padded)
+    assert short > full > G.expected_pa(1) - 0.5
+    assert abs(full - G.expected_pa(1)) < abs(short - G.expected_pa(1))
+    # A full nine is returned untouched.
+    assert len(G.pad_to_nine(padded)) == 9
+
+
+def test_the_gate_pads_before_it_fits():
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "sim_reconcile.py"), encoding="utf-8").read()
+    assert "pad_to_nine" in src
+    assert src.index("pad_to_nine") < src.index("G.calibrate(")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

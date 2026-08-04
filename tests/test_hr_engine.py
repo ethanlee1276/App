@@ -191,6 +191,39 @@ def test_a_measured_zero_career_is_not_an_unknown_career():
     assert slugger > 0.2
 
 
+def test_the_ceiling_is_real_baseball_not_merely_possible_baseball():
+    """tb <= 3*hits + hr is what ARITHMETIC allows — every non-HR hit a
+    triple. Real hitters run ~1.35 bases per non-HR hit and a
+    doubles-heavy slugger ~1.6. Trios near the arithmetic ceiling are
+    what the sim gate kept failing on: a live 0.847-hit projection
+    carrying 2.387 total bases implies 2.44 bases per non-HR hit, the
+    inverter builds a triple-heavy table for it, and the hitter simulated
+    16% hot while his eight team-mates sat inside 1%."""
+    from engine.mlb.projection import MAX_BASES_PER_NONHR_HIT as C
+
+    def bases_per_hit(h, tb, hr):
+        nhr, ntb, _ = reconcile_triple(h, tb, hr)
+        return (ntb - 4 * nhr) / max(h - nhr, 1e-9), ntb
+
+    # The two real offenders come back inside the ceiling.
+    for h, tb, hr in ((0.847, 2.387, 0.205), (1.368, 3.853, 0.223)):
+        bph, ntb = bases_per_hit(h, tb, hr)
+        assert bph <= C + 1e-6, (h, tb, hr, bph)
+        assert ntb < tb, "the ceiling should have moved it"
+    # An ordinary hitter is untouched.
+    _bph, ntb = bases_per_hit(0.90, 1.40, 0.10)
+    assert abs(ntb - 1.40) < 1e-9
+    # The ceiling never falls below the floor, whatever the trio.
+    import random
+    rng = random.Random(5)
+    for _ in range(2000):
+        h = rng.uniform(0.05, 2.0)
+        hr = rng.uniform(0.0, min(h, 0.6))
+        nhr, ntb, _ = reconcile_triple(h, rng.uniform(0.0, 5.0), hr)
+        assert ntb >= h - 1e-9, "total bases below the hits projection"
+        assert nhr <= h + 1e-9, "more homers than hits"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
