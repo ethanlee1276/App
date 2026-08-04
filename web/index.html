@@ -90,6 +90,7 @@
         <div class="menu-head" data-head="record" aria-hidden="true">The Book</div>
         <div class="sport-group" data-group="record">
           <button class="sport-btn" data-sport="record" data-kind="tool" title="Every pick journaled at its real price, graded in public — and the model that learns from it">Record</button>
+          <button class="sport-btn" data-sport="lab" data-kind="tool" title="The walk-forward backtests — does the model actually forecast better than guessing?">The Lab</button>
         </div>
         <div class="menu-head" data-head="more" aria-hidden="true">More</div>
         <!-- Six leagues stay visible because the league IS the primary axis
@@ -227,6 +228,18 @@
         against the final result. The receipts.</span>
       </div>
       <div id="record-body"></div>
+    </section>
+
+    <!-- The Lab — the walk-forward backtests, published. The Book grades
+         what we actually bet going forward; this grades the model itself
+         against stored history, which is the only evidence available
+         while the forward sample is still thin. -->
+    <section class="view" id="view-lab">
+      <div class="section-title">The Lab
+        <span class="sub">— every walk-forward replay of the production model against
+        stored history. Does it forecast better than guessing?</span>
+      </div>
+      <div id="lab-body"></div>
     </section>
 
     <!-- Edge Board -->

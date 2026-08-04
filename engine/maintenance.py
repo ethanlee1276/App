@@ -443,6 +443,16 @@ def settle_open(log=print, state_path: Path | None = None,
                 prose.weekly_lab(lconn, log)
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  prose lanes skipped: {exc}")
+            # The Lab: replay every walk-forward harness this machine's
+            # data supports and publish the result. Weekly on its own
+            # clock, CPU only — no API, no spend. It answers the one
+            # question the forward record cannot yet, on a thin sample:
+            # does the model forecast better than guessing?
+            try:
+                from . import lab
+                lab.run_if_due(hconn=hconn, log=log)
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  backtest lab skipped: {exc}")
         if settled or fixed or parlays_moved:
             ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
         if settled:

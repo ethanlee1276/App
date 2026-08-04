@@ -3327,3 +3327,22 @@ select.calc-in { width: auto; font-weight: 600; }
   .kx-e { grid-area: e; text-align: left; }
   .kx-vol { display: none; }
 }
+
+/* --- The Lab -------------------------------------------------------------
+   The backtest page. Its one visual job is keeping the reader from
+   confusing "the model forecasts well" with "we beat a book": the basis
+   chip is the loudest thing on each card, and a naive-basis card wears
+   the warning colour rather than the good one. */
+.lab-sport { margin-bottom: 26px; }
+.lab-card { padding: 14px; margin-bottom: 12px; }
+.lab-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.lab-head .mini { margin-left: auto; opacity: .7; }
+.chip.good { color: var(--good); border-color: rgba(47, 213, 140, .4); }
+.chip.warn { color: var(--warn); border-color: rgba(240, 180, 41, .45); }
+.lab-bins { margin-top: 12px; }
+/* The reliability bar: how far a bucket's real hit rate sat from what the
+   model claimed. Width is the gap, not the value — a long bar is always
+   bad news, in either direction. */
+.lab-bar { display: inline-block; height: 8px; min-width: 1px; border-radius: 0; background: var(--good); opacity: .55; }
+.lab-bar.neg { background: var(--bad); }
+.lab-bins td, .lab-bins th { white-space: nowrap; }

@@ -4190,6 +4190,191 @@ async function renderStandingRecord() {
     <span>Every pick journaled at its real book price and graded in public.</span>`;
 }
 
+/* The Lab — the walk-forward backtests, published.
+
+   The Book grades what we actually bet, going forward. This grades the
+   MODEL, replayed over stored history, which is the only evidence that
+   accrues faster than the forward sample. Two things it must never let
+   the reader believe:
+
+   1. That a big ROI against NAIVE baseline lines means we beat a book.
+      It means the model beats a trailing average — a different and much
+      weaker claim — so basis is stated on every row and a naive ROI is
+      rendered muted with the caveat attached.
+   2. That a good Brier is good. Brier has no natural scale; the bar is
+      what you'd score predicting the base rate every time. Skill (vs
+      that bar) leads, and hedging — forecasts huddling near the base
+      rate — is called out, because a model that answers "about 50%" to
+      everything is perfectly calibrated and perfectly useless. */
+/* Under this many backtest bets, ROI is noise wearing a percentage. The
+   harnesses say it in their own summaries ("ROI — last, and meaningless
+   under ~100 bets"); the page has to say it too, or the one number
+   everybody reads first is the one least entitled to be believed. */
+const LAB_ROI_MIN_BETS = 100;
+
+function labSkillTile(m) {
+  const sk = m.skill;
+  if (!sk) return recTile("Skill vs guessing", "—",
+    `needs 100+ graded forecasts (have ${m.n})`);
+  const beats = sk.skill > 0;
+  return recTile("Skill vs guessing",
+    `${sk.skill >= 0 ? "+" : ""}${(sk.skill * 100).toFixed(1)}%`,
+    `vs always saying ${(sk.base_rate * 100).toFixed(0)}% (the base rate)`,
+    { lead: true, tone: beats ? "pos" : "neg",
+      help: "Brier scored against the base-rate baseline. Positive = the "
+          + "model's probabilities carry information; negative = you would "
+          + "do better ignoring it." });
+}
+
+function labBins(m) {
+  const bins = (m.bins || []).filter((b) => b.n);
+  if (!bins.length) return "";
+  const rows = bins.map((b) => {
+    const gap = b.hit_rate - b.mean_pred;
+    const w = Math.min(100, Math.abs(gap) * 300);
+    return `<tr>
+      <td>${(b.lo * 100).toFixed(0)}–${(b.hi * 100).toFixed(0)}%</td>
+      <td class="num">${(b.mean_pred * 100).toFixed(0)}%</td>
+      <td class="num">${(b.hit_rate * 100).toFixed(0)}%</td>
+      <td class="num ${gap >= 0 ? "pos" : "neg"}">${gap >= 0 ? "+" : ""}${(gap * 100).toFixed(0)}</td>
+      <td><span class="lab-bar ${gap >= 0 ? "pos" : "neg"}" style="width:${w}%"></span></td>
+      <td class="num">${b.n.toLocaleString()}</td></tr>`;
+  }).join("");
+  return `<table class="agate lab-bins">
+    <thead><tr><th>Said</th><th class="num">Predicted</th><th class="num">Actual</th>
+      <th class="num">Gap</th><th></th><th class="num">n</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+function labPropCard(m, note) {
+  const naive = m.basis === "naive";
+  const sk = m.skill;
+  const hedged = sk && sk.hedged > 0.5;
+  // A backtest ROI under ~100 bets is noise wearing a percentage — the
+  // harnesses say so in their own summaries, so the page must not render
+  // it as a result. Below the bar it goes grey and says why.
+  const thin = m.n_bets < LAB_ROI_MIN_BETS;
+  // ROI is shown, but a naive-basis ROI is explicitly NOT an edge claim.
+  const roiSub = thin
+    ? `only ${m.n_bets} bets — under ${LAB_ROI_MIN_BETS} this is noise, not a result`
+    : m.basis === "book"
+      ? "priced against real harvested closes — market-relative"
+      : m.basis === "mixed"
+        ? `${m.used_real_lines.toLocaleString()} of ${m.total_priced.toLocaleString()} on real closes`
+        : "vs a naive baseline line — NOT an edge over a book";
+  const seg = Object.entries(m.segments || {}).map(([basis, g]) =>
+    `<tr><td>${basis === "book" ? "vs real book lines" : "vs naive baseline"}</td>
+      <td class="num">${g.n_bets}</td><td class="num">${g.wins}</td>
+      <td class="num">${g.win_rate != null ? (g.win_rate * 100).toFixed(1) + "%" : "—"}</td>
+      <td class="num ${toneOf(g.roi)}">${g.roi >= 0 ? "+" : ""}${(g.roi * 100).toFixed(1)}%</td>
+      <td class="num ${toneOf(g.net)}">${g.net >= 0 ? "+" : ""}${g.net.toFixed(2)}u</td></tr>`).join("");
+  return `<div class="card lab-card">
+    <div class="lab-head"><strong>${escapeHtml(m.label)}</strong>
+      <span class="chip ${naive ? "warn" : "good"}">${naive ? "naive lines" : m.basis === "mixed" ? "mixed basis" : "real closes"}</span>
+      <span class="mini">${m.n.toLocaleString()} settled props</span></div>
+    <div class="stats rec-kpis">
+      ${labSkillTile(m)}
+      ${recTile("Projection error", m.mae != null ? m.mae.toFixed(2) : "—",
+                "mean absolute, in stat units")}
+      ${recTile("Calibration", m.ece != null ? (m.ece * 100).toFixed(1) + "%" : "—",
+                `Brier ${m.brier != null ? m.brier.toFixed(4) : "—"}`,
+                { help: "Average gap between what it said and what happened." })}
+      ${recTile("Backtest ROI", m.n_bets ? `${m.roi >= 0 ? "+" : ""}${(m.roi * 100).toFixed(1)}%` : "—",
+                m.n_bets ? roiSub : "no bets cleared the gates",
+                { tone: (naive || thin) ? "" : toneOf(m.roi) })}
+    </div>
+    ${hedged ? `<div class="warning">${icon("warn")} ${(sk.hedged * 100).toFixed(0)}% of
+      forecasts sit within 5 points of the base rate — that is hedging, not
+      forecasting. A model that answers "about average" to everything scores
+      well on calibration and finds no edges worth betting.</div>` : ""}
+    ${naive && m.n_bets ? `<div class="warning">${icon("warn")} ${escapeHtml(note || "")}</div>` : ""}
+    ${labBins(m)}
+    ${seg ? `<table class="agate"><thead><tr><th>Priced against</th>
+      <th class="num">Bets</th><th class="num">Won</th><th class="num">Win%</th>
+      <th class="num">ROI</th><th class="num">Net</th></tr></thead>
+      <tbody>${seg}</tbody></table>` : ""}
+  </div>`;
+}
+
+function labGameTable(games) {
+  const rows = (games.markets || []).map((g) => `<tr>
+    <td>${escapeHtml(g.market)}</td>
+    <td class="num">${g.games_priced.toLocaleString()}</td>
+    <td class="num">${g.mae != null ? g.mae.toFixed(2) : "—"}</td>
+    <td class="num">${g.n_bets}</td>
+    <td class="num">${g.win_rate != null ? (g.win_rate * 100).toFixed(1) + "%" : "—"}</td>
+    <td class="num ${toneOf(g.roi)}">${g.roi != null ? (g.roi >= 0 ? "+" : "") + (g.roi * 100).toFixed(1) + "%" : "—"}</td>
+  </tr>`).join("");
+  if (!rows) return `<p class="mini" style="padding:4px 0">${escapeHtml(games.unavailable || "")}</p>`;
+  return `<table class="agate"><thead><tr><th>Market</th>
+    <th class="num">Games priced</th><th class="num">MAE vs close</th>
+    <th class="num">Bets</th><th class="num">Win%</th><th class="num">ROI</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function renderLab() {
+  const host = document.getElementById("lab-body");
+  if (!host) return;
+  let d = null;
+  try {
+    const res = await fetch("data/backtest.json?t=" + Date.now());
+    if (res.ok) d = await res.json();
+  } catch (e) {}
+  if (!d || !d.sports) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
+      <div class="es-title">No backtests published yet</div>
+      <div class="es-sub">The Lab replays the production model over stored history
+      once a week, automatically, as part of the nightly maintenance pass. It
+      appears here after the first run — or immediately with
+      <code>python3 backtest_lab.py --force</code>.</div></div>`;
+    return;
+  }
+  const order = ["mlb", "nfl", "cfb", "nba", "wnba", "ufc"];
+  const has = (sport) => {
+    const s = d.sports[sport];
+    return (s.props || {}).markets || ((s.game_lines || {}).markets);
+  };
+  const blocks = order.filter((s) => d.sports[s] && has(s)).map((sport) => {
+    const s = d.sports[sport];
+    const props = s.props || {}, games = s.game_lines || {};
+    const cards = (props.markets || []).map((m) => labPropCard(m, d.basis_note)).join("");
+    return `<div class="lab-sport">
+      <div class="section-title">${sport.toUpperCase()}
+        ${props.season ? `<span class="sub">— ${props.season} season</span>` : ""}</div>
+      ${cards || `<p class="mini">Player props — ${escapeHtml(props.unavailable || "nothing replayed")}</p>`}
+      <div class="mini" style="margin-top:10px;opacity:.75">Game lines (spread &amp; total),
+        graded against real closing numbers</div>
+      ${labGameTable(games)}
+    </div>`;
+  }).join("");
+  /* Sports with nothing replayed collapse into one honest table instead
+     of six near-empty sections. A gap stated once is information; a gap
+     restated six times over is what buries the page that has data. */
+  const gaps = order.filter((s) => d.sports[s] && !has(s)).map((sport) => {
+    const s = d.sports[sport];
+    return `<tr><td>${sport.toUpperCase()}</td>
+      <td>${escapeHtml((s.props || {}).unavailable || "—")}</td>
+      <td>${escapeHtml((s.game_lines || {}).unavailable || "—")}</td></tr>`;
+  }).join("");
+  const gapBlock = gaps ? `<div class="section-title">Not replayed yet
+      <span class="sub">— what each of these needs before it can appear above</span></div>
+    <table class="agate"><thead><tr><th>Sport</th><th>Player props</th>
+      <th>Game lines</th></tr></thead><tbody>${gaps}</tbody></table>` : "";
+  host.innerHTML = `
+    ${recDisclosure("What this page is, and what it isn't", `The Book grades the picks
+      we actually made, going forward. This page grades the <em>model</em>, by
+      replaying it over history it never saw at the time — projections for each
+      game are built only from games before it, then settled against what
+      actually happened. That is the only evidence that accrues faster than a
+      forward record, which is why it exists. It is also the easiest thing in
+      betting to fool yourself with: ${escapeHtml(d.basis_note)}`)}
+    ${blocks}
+    ${gapBlock}
+    <p class="mini" style="opacity:.6;margin-top:14px">Replayed automatically every
+      ${d.every_days} days as part of the maintenance pass · last run
+      ${escapeHtml((d.generated_at || "").replace("T", " "))}</p>`;
+}
+
 async function renderRecord() {
   const host = document.getElementById("record-body");
   if (!host) return;
@@ -4849,7 +5034,7 @@ function pmAgo(ts) {
    tools menu and made it mean the NFL and only the NFL. It is a tab
    inside each sport now. */
 const STANDALONE_MODES = ["intel", "fantasy", "ufc", "why", "about",
-                          "record"];
+                          "record", "lab"];
 
 // Header identity per standalone page — the tagline follows the ACTIVE
 // page. Before this, opening Polymarket from the MLB tab left a baseball
@@ -4860,6 +5045,7 @@ const STANDALONE_BRAND = {
   ufc: { tagline: "Scalpy MMA — dossier-gated fight model" },
   why: { tagline: "See the math. Know if it's working." },
   record: { tagline: "The Book — every pick journaled, graded, learned from" },
+  lab: { tagline: "The Lab — the model replayed against stored history" },
 };
 
 function enterStandaloneMode(name) {
@@ -7263,7 +7449,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "parlays", "futures", "trending", "players", "rosters", "standings", "record", "intel", "fantasy", "ufc", "why", "about"];
+const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "parlays", "futures", "trending", "players", "rosters", "standings", "record", "lab", "intel", "fantasy", "ufc", "why", "about"];
 
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -7288,6 +7474,7 @@ function switchView(name, push = false) {
   if (name === "rosters") renderRosters();
   if (name === "standings") renderStandings();
   if (name === "record") renderRecord();
+  if (name === "lab") renderLab();
   if (name === "intel") renderIntel();
   if (name === "fantasy") renderFantasy();
   if (name === "ufc") renderUFC();
