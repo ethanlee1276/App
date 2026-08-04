@@ -2642,6 +2642,10 @@ def show_stuck() -> None:
             print(f"          {r['date']}  {r['sport']:<5} "
                   f"{(r['player'] or '')[:26]:<26} {r['market']} "
                   f"({r['age_days']}d){near}")
+            # The settler repairs the one-day drift on its own; a bet still
+            # here means a guard refused, and the row must say which.
+            if r.get("repair"):
+                print(f"              ↳ {r['repair']}")
         if len(group) > 6:
             print(f"          … and {len(group) - 6} more")
         # How much of each day IS stored. A date with 30 players in it is a
@@ -2671,10 +2675,10 @@ def show_stuck() -> None:
             "closest name the feed has, when there is one).",
         "logged under the next day":
             "the player IS in the results, on the date beside this one — a "
-            "late first pitch that is already tomorrow in UTC. The bet's "
-            "slate date and the feed's game date disagree, which is a "
-            "boundary bug rather than a missing result. Tell me and I will "
-            "fix the join.",
+            "late first pitch that is already tomorrow in UTC. The settler "
+            "repairs that drift automatically, so a bet still sitting here "
+            "means one of the repair's guards refused — the ↳ line under "
+            "each bet names which one, and the command that clears it.",
         "day barely ingested":
             "the date has far too few players stored to conclude anything "
             "about one of them — the ingest for that day did not finish. "
@@ -2750,6 +2754,17 @@ def settle_now(day: str | None = None) -> None:
     before = counts(lconn)
     print(f"Settling {day} …")
     hconn = db.connect()
+    # A hoops bet filed under the wrong league can never meet its results.
+    # Re-file the unambiguous ones FIRST — the ingest below decides which
+    # sports to fetch from the bets' own labels, so relabeling after it
+    # would leave the right league un-ingested for another pass.
+    try:
+        moved = ledger.relabel_cross_league(lconn, hconn)
+        if moved:
+            print(f"  re-filed {moved} hoops bet(s) under the league that "
+                  f"actually played them")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  league relabel skipped: {exc}")
     try:
         # Every sport with an open pick that day, not just baseball. This
         # ingested MLB alone, so a WNBA or UFC pick had no stat line to be

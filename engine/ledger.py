@@ -1056,6 +1056,82 @@ def _logged_within(hist_conn, b, want: str, days: int = 1) -> str | None:
     return None
 
 
+def _date_shift_repair_note(hist_conn, b, found_on: str) -> str:
+    """Why the neighbour-day repair has not graded this bet, in one line.
+
+    "Logged under the next day" used to end with "tell me and I will fix
+    the join" — but the join HAS a repair, and seventeen bets sat behind it
+    anyway. The report and the repair share every guard below, so when a
+    bet is stuck the report names the exact guard refusing instead of
+    promising a fix that already shipped.
+    """
+    if found_on > str(b["date"] or ""):
+        # Logged the day AFTER the bet. No mechanism explains a bet dated
+        # before its own game — the UTC drift only ever pushes bets ahead.
+        # The likely truth is that his real game on the bet's date was
+        # never stored.
+        return (f"logged the day AFTER the bet — that direction is never "
+                f"the UTC drift; his game on {b['date']} was probably never "
+                f"stored. Re-ingest it: python3 ingest.py {b['sport']} "
+                f"--dates {b['date']} --refresh")
+    where, wargs = _hist_where(b)
+    rows, alt = _neighbour_day_rows_raw(hist_conn, b, where, wargs)
+    if not rows:
+        return (f"he is logged on {found_on}, but with no {b['market']} stat "
+                f"row — that market was not stored for that day. Re-ingest "
+                f"it: python3 ingest.py {b['sport']} --dates {found_on} "
+                f"--refresh")
+    if _team_day_unfinished(hist_conn, where, wargs, rows[0]):
+        return (f"{rows[0]['team']} has a game on {b['date']} with no final "
+                f"score stored, so the repair cannot rule out that the bet "
+                f"is about THAT game. Ingest the finals: python3 ingest.py "
+                f"{b['sport']} --dates {b['date']} --refresh")
+    strict_from = (datetime.date.today()
+                   - datetime.timedelta(days=1)).isoformat()
+    if (str(b["date"] or "") >= strict_from
+            and not _day_was_ingested(hist_conn, where, wargs)):
+        return ("too recent to reach back safely — the strict window lifts "
+                "in a day and it grades on the next pass")
+    if _too_early_to_grade(hist_conn, where, alt, rows[0], b["date"]):
+        return (f"cannot confirm the {found_on} game finished. Ingest that "
+                f"date's finals: python3 ingest.py {b['sport']} --dates "
+                f"{found_on} --refresh")
+    return ("nothing is refusing — the repair can grade this; run "
+            "python3 launch.py --settle all")
+
+
+def relabel_cross_league(conn, hist_conn) -> int:
+    """Re-file open hoops bets journaled under the other league's name.
+
+    The NBA build runs as BOTH leagues, and for a while it journaled every
+    pick as sport='nba' while the settle sweep read args.league — so WNBA
+    bets sat where no WNBA ingest could ever reach them, reported as "no
+    results ingested" on days the NBA does not even play. The build is
+    fixed; this repairs the rows it already wrote.
+
+    Strict on purpose: only OPEN bets, and only when the player appears in
+    exactly ONE league's game logs. A name in both pools (or neither) is
+    left alone — flipping on a guess would move the bet from one wrong
+    place to another.
+    """
+    from .sources.oddsapi import normalize_name
+    pools = {lg: {normalize_name(r[0]) for r in hist_conn.execute(
+        "SELECT DISTINCT player FROM player_game_logs WHERE sport=?", (lg,))}
+        for lg in ("nba", "wnba")}
+    moved = 0
+    for here, there in (("nba", "wnba"), ("wnba", "nba")):
+        for r in conn.execute(
+                "SELECT id, player FROM bets WHERE sport=? AND status='open' "
+                "AND player IS NOT NULL", (here,)).fetchall():
+            want = normalize_name(r["player"] or "")
+            if want and want in pools[there] and want not in pools[here]:
+                conn.execute("UPDATE bets SET sport=? WHERE id=?",
+                             (there, r["id"]))
+                moved += 1
+    conn.commit()
+    return moved
+
+
 def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
              ) -> list[dict]:
     """Every still-open bet whose day is done, and WHY it has not graded.
@@ -1148,6 +1224,8 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
                 found_on = _logged_within(hist_conn, b, want, days=1)
                 if found_on:
                     extra["logged_on"] = found_on
+                    extra["repair"] = _date_shift_repair_note(
+                        hist_conn, b, found_on)
                     reason = "logged under the next day"
                 elif len(names) < THIN_DAY_PLAYERS:
                     reason = "day barely ingested"

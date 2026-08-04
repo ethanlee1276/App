@@ -338,6 +338,17 @@ def settle_open(log=print, state_path: Path | None = None,
         # cache file) must not skip the settle below. Everything already in
         # the history DB can still grade tonight's bets — letting one bad
         # response strand the whole journal is how bets sat open for days.
+        # Re-file hoops bets journaled under the other league FIRST — a
+        # WNBA pick stored as 'nba' can never meet its results, and the
+        # ingest below decides which sports to fetch from the bets' own
+        # labels, so relabeling after it wastes a pass.
+        try:
+            moved = ledger.relabel_cross_league(lconn, hconn)
+            if moved:
+                log(f"  re-filed {moved} hoops bet(s) under the league "
+                    f"that actually played them")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  league relabel skipped: {exc}")
         res = ingest_for_open_bets(lconn, hconn, days, log)
         settled = ledger.settle_from_history(lconn, hconn)
         # Self-healing: any bet ever graded off a partial stat line gets

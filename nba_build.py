@@ -587,9 +587,11 @@ def main() -> None:
         except Exception as exc:
             print(f"⚠️  shared-schema layer skipped: {exc}")
 
-        # Journal picks + stale flags (sport='nba') so the Record page and
-        # the sampler grade them like every other module. Settles from our
-        # own ingested boxscores — flags journal even on a no-pick night.
+        # Journal picks + stale flags under the league that produced them —
+        # this build runs as BOTH leagues, and journaling "nba" while the
+        # settle sweep below reads args.league filed every WNBA pick where
+        # no results ingest could ever find it. Settles from our own
+        # ingested boxscores — flags journal even on a no-pick night.
         try:
             from engine import ledger
             lconn = ledger.connect()
@@ -615,20 +617,21 @@ def main() -> None:
                     if dd < 1.0:
                         for p in recs:
                             p["stake_units"] = round(p["stake_units"] * dd, 2)
-                        print("  ⚠️  Drawdown rule active — NBA stakes halved")
+                        print(f"  ⚠️  Drawdown rule active — "
+                              f"{args.league.upper()} stakes halved")
                 except Exception:
                     pass
                 n = ledger.log_recommendations(
-                    lconn, {"sport": "nba", "date": args.date,
+                    lconn, {"sport": args.league, "date": args.date,
                             "recommendations": recs})
             st = ledger.log_stale_flags(
-                lconn, {"sport": "nba", "date": args.date,
+                lconn, {"sport": args.league, "date": args.date,
                         "market_scan": out.get("market_scan") or {}})
             settled = ledger.settle_from_history(lconn, connect(), sport=args.league)
             if n or st or settled:
                 ledger.export_json(lconn, "web/data/record.json")
-                print(f"Journal: {n} NBA pick(s) + {st} stale flag(s) "
-                      f"logged, {settled} settled.")
+                print(f"Journal: {n} {args.league.upper()} pick(s) + {st} "
+                      f"stale flag(s) logged, {settled} settled.")
         except Exception as exc:
             print(f"⚠️  NBA journal skipped: {exc}")
         conn.close()

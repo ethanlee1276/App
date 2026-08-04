@@ -364,6 +364,92 @@ def test_the_bets_own_day_still_wins_when_it_has_the_log():
     assert ledger.settle_from_history(lconn, hconn) == 1
 
 
+# --- the repair's refusals are NAMED, not promised away ---------------------
+# Seventeen real home-run bets sat on "logged under the next day" while the
+# tip said "tell me and I will fix the join" — but the join already had its
+# repair, and the seventeen were stuck behind one of its guards. A report
+# that promises a fix that shipped weeks ago is worse than no report; each
+# row now names the guard that refused and the command that clears it.
+
+def test_a_missing_market_row_on_the_neighbour_day_is_named():
+    """He IS logged next door — but without this market's stat row, the
+    repair has nothing to grade against. Re-ingesting that day is the fix."""
+    lconn = _one_bet("Cal Raleigh", date="2026-07-27")
+    hconn = db.connect(":memory:")
+    _day(hconn, "2026-07-27", 278)
+    _day(hconn, "2026-07-26", 300, extra_names=("Cal Raleigh",))
+    r = ledger.why_open(lconn, hconn, D_NOW)[0]
+    assert r["reason"] == "logged under the next day"
+    assert "no home_runs stat row" in r["repair"]
+    assert "--dates 2026-07-26" in r["repair"]
+
+
+def test_an_unfinished_game_on_the_bets_own_date_is_named():
+    """The repair must refuse while the bet could be about its OWN day's
+    game — and the report says so, with the date whose finals to ingest."""
+    lconn = _one_bet("Cal Raleigh", date="2026-07-27")
+    hconn = db.connect(":memory:")
+    _day(hconn, "2026-07-27", 278)
+    db.upsert_player_logs(hconn, [{
+        "sport": "mlb", "season": 2026, "period": "2026-07-26",
+        "game_id": "gCR", "player": "Cal Raleigh", "team": "SEA",
+        "opponent": "NYY", "position": "S", "home": 1,
+        "market": "home_runs", "value": 1.0}])
+    db.upsert_games(hconn, [{
+        "sport": "mlb", "season": 2026, "period": "2026-07-27",
+        "game_id": "gO", "home": "SEA", "away": "NYY",
+        "home_score": None, "away_score": None, "spread": 0.0,
+        "total": None, "roof": "open", "surface": "grass",
+        "temp": None, "wind": None, "extra": ""}])
+    r = ledger.why_open(lconn, hconn, D_NOW)[0]
+    assert r["reason"] == "logged under the next day"
+    assert "no final score" in r["repair"]
+    assert "--dates 2026-07-27" in r["repair"]
+
+
+def test_a_repairable_bet_is_sent_to_the_settle_not_to_me():
+    lconn = _one_bet("Cal Raleigh", date="2026-07-27")
+    hconn = db.connect(":memory:")
+    _day(hconn, "2026-07-27", 278)
+    db.upsert_player_logs(hconn, [{
+        "sport": "mlb", "season": 2026, "period": "2026-07-26",
+        "game_id": "gCR", "player": "Cal Raleigh", "team": "SEA",
+        "opponent": "NYY", "position": "S", "home": 1,
+        "market": "home_runs", "value": 1.0}])
+    db.upsert_games(hconn, [{
+        "sport": "mlb", "season": 2026, "period": "2026-07-26",
+        "game_id": "gCR", "home": "SEA", "away": "NYY",
+        "home_score": 5, "away_score": 2, "spread": 0.0,
+        "total": None, "roof": "open", "surface": "grass",
+        "temp": None, "wind": None, "extra": ""}])
+    r = ledger.why_open(lconn, hconn, D_NOW)[0]
+    assert r["reason"] == "logged under the next day"
+    assert "--settle all" in r["repair"]
+
+
+def test_a_log_on_the_day_after_is_named_as_the_wrong_direction():
+    """The UTC drift only ever pushes a bet AHEAD of its box score. A log
+    on the day AFTER means his game on the bet's date was probably never
+    stored — a different repair, and the note must not point at the join."""
+    lconn = _one_bet("Cal Raleigh", date="2026-07-27")
+    hconn = db.connect(":memory:")
+    _day(hconn, "2026-07-27", 278)
+    _day(hconn, "2026-07-28", 368, extra_names=("Cal Raleigh",))
+    r = ledger.why_open(lconn, hconn, D_NOW)[0]
+    assert r["reason"] == "logged under the next day"
+    assert "day AFTER" in r["repair"]
+    assert "--dates 2026-07-27" in r["repair"]
+
+
+def test_the_stuck_report_prints_the_repair_line():
+    launch = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "launch.py"), encoding="utf-8").read()
+    fn = launch[launch.index("def show_stuck()"):launch.index("def settle_all()")]
+    assert 'r.get("repair")' in fn, "the refusal is computed but never shown"
+    assert "Tell me and I will fix the join" not in fn, \
+        "the tip still promises a fix that already shipped"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
