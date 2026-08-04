@@ -46,6 +46,13 @@ class SettledProp:
     hit_prob: float          # model's probability that THE BET IT MADE wins
     projection: float        # model's projected mean
     actual: float            # what actually happened
+    #: The model's UNTEMPERED probability for the side it backed. The
+    #: calibration fitter must learn on this, not on hit_prob — see the
+    #: pairs comment in evaluate(). None means "not recorded" (an older
+    #: caller, a fixture), NOT a probability of zero — the same
+    #: distinction that made the home-run prior read a measured .000
+    #: career as a missing one.
+    raw_prob: float | None = None
     recommended: bool = False
     stake_units: float = 1.0
     closing_line: float | None = None
@@ -263,20 +270,34 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
 
     # Calibration.
     r.bins, r.brier, r.ece = _calibration(settled, n_bins)
-    # Calibration pairs are stated on the OVER side, always.
+    # Calibration pairs are the model's RAW probability, stated on the
+    # OVER side, always. Both halves of that matter and each was a bug.
     #
-    # ``hit_prob`` is the probability of whichever side the model backed,
-    # but the fitted correction is applied to P(over the line) inside
-    # each evaluator. On a two-sided market the model picks both sides
-    # roughly evenly and the mismatch washes out; on a one-sided market
-    # it does not. Home runs are the pathological case: the model backs
-    # the under on essentially every prop, so the fit learned "the UNDER
-    # probability is understated" and then applied that to the OVER —
-    # leaving P(home run) 2.8× too high and the fitted ECE stuck at 0.16.
-    # Restating both sides as "did the over hit" makes the thing fitted
-    # and the thing corrected the same quantity.
-    r.pairs = [(s.hit_prob if (s.side or "OVER").upper() == "OVER"
-                else 1.0 - s.hit_prob, s.over_hit)
+    # The SIDE half: hit_prob is the probability of whichever side the
+    # model backed, while the fitted correction is applied to P(over the
+    # line) inside each evaluator. On a two-sided market the model picks
+    # both sides roughly evenly and the mismatch washes out; on a
+    # one-sided market it does not.
+    #
+    # The RAW half: hit_prob is also the TEMPERED probability — shrunk
+    # toward the market by temper_edge — and the correction is applied to
+    # the untempered one. Home runs are the pathological case for both.
+    # The model backs the under on essentially every prop, and against
+    # the backtest's synthetic 0.5 fair a raw 0.90 under shrinks to 0.62
+    # at the Tier 3 rate, which restates to P(over) = 0.38 against a real
+    # rate near 0.10. The fitter saw a 22-point optimistic lean that the
+    # projection did not have, pinned the temperature at the floor of its
+    # search range, and reported the market unreliable — while
+    # hr_diagnose, reading the raw probability directly, measured the
+    # same engine at 1.1x. Two tools disagreeing about one model was the
+    # tell: the fit was learning on a quantity nobody prices.
+    def _raw_over(s):
+        # `is None` = not recorded, so fall back to the tempered number
+        # rather than dropping the row. A raw 0.0 is a probability.
+        p = s.hit_prob if s.raw_prob is None else s.raw_prob
+        return p if (s.side or "OVER").upper() == "OVER" else 1.0 - p
+
+    r.pairs = [(_raw_over(s), s.over_hit)
                for s in settled if s.over_hit is not None]
 
     # Betting performance on recommended bets, overall and per pricing basis.
@@ -370,6 +391,7 @@ def settle_recommendations(recommendations: list[dict],
             line=rec["line"],
             odds=rec["odds"],
             hit_prob=rec["hit_prob"],
+            raw_prob=rec.get("raw_prob"),
             projection=rec["projection"],
             actual=actuals[key],
             recommended=rec["recommended"],

@@ -51,6 +51,9 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "proj_low": rec.proj_low,
         "proj_high": rec.proj_high,
         "hit_prob": rec.hit_prob,
+        # Untempered — the calibration fitter learns on this, never on the
+        # shrunk number (see engine/backtest.py's pairs comment).
+        "raw_prob": rec.raw_prob,
         "fair_prob": rec.fair_prob,
         "edge": rec.edge,
         "ev_per_unit": rec.ev_per_unit,

@@ -142,7 +142,8 @@ def settled_props_from_logs(entries: list[dict], market: str,
             decision = apply_mlb_rules(rec, prop, game, proj, config)
             settled.append(SettledProp(
                 player=e["name"], market=market, line=line, odds=rec.odds,
-                hit_prob=rec.hit_prob, projection=rec.projection, actual=actual,
+                hit_prob=rec.hit_prob, raw_prob=rec.raw_prob,
+                projection=rec.projection, actual=actual,
                 recommended=decision.recommend, stake_units=rec.stake_units,
                 side=rec.side, basis="book" if quote else "naive",
                 grade=rec.grade,

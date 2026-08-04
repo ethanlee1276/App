@@ -85,6 +85,14 @@ class Recommendation:
     # own proxy. There is nothing to have an edge *against* in that case, so the
     # edge is reported as zero rather than as a number that looks like alpha.
     has_market: bool = True
+    #: The model's UNTEMPERED probability for ``side``, before temper_edge
+    #: shrinks it toward the market. ``hit_prob`` above is what we BET on
+    #: and is the right number everywhere a price is involved; this is the
+    #: number the calibration fitter has to learn on, because the fitted
+    #: correction is applied to the raw probability inside the evaluator.
+    #: Fitting the tempered one and correcting the raw one is fitting a
+    #: different quantity than you correct — see engine/backtest.py.
+    raw_prob: float = 0.0
 
 
 def _confidence_score(edge: float, hit_prob: float, proj: Projection,
@@ -387,7 +395,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
         projection=round(proj.mean, 1),
         proj_low=round(proj.mean - proj.std, 1),
         proj_high=round(proj.mean + proj.std, 1),
-        hit_prob=round(hit, 4),
+        hit_prob=round(hit, 4), raw_prob=round(hit_raw, 6),
         fair_prob=round(fair, 4),
         edge=round(edge, 4),
         ev_per_unit=round(ev, 4),
