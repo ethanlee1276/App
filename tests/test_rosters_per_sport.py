@@ -281,6 +281,18 @@ def test_the_player_search_falls_back_to_the_roster_directory():
     assert "function openRoster" in app
 
 
+def test_the_cli_reports_the_source_the_payload_actually_used():
+    """The build line printed "from appearances" over every payload — so the
+    one machine where the league feed mattered read its own success as the
+    fallback, and the fallback as itself. The print must quote the blob."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "rosters_build.py"), encoding="utf-8").read()
+    body = src[src.index("def main("):]
+    assert "from {blob['source']}" in body
+    assert "from appearances)" not in body, \
+        "the source is hardcoded in the print again"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -142,9 +142,12 @@ def main() -> None:
         if blob["feed"] == "none":
             print(f"Rosters {sport.upper()}: no source — page explains why.")
         else:
+            # Name the source the payload ACTUALLY used — "from appearances"
+            # printed over a league-feed build hides the one fact this line
+            # exists to report: whether the trade-deadline fix is live.
             print(f"Rosters {sport.upper()}: {blob['team_count']} teams, "
                   f"{blob['player_count']:,} players "
-                  f"(season {blob.get('season')}, from appearances)"
+                  f"(season {blob.get('season')}, from {blob['source']})"
                   + (f" — {blob['note']}" if blob["note"] else ""))
 
 
