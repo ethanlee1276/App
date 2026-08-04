@@ -334,10 +334,19 @@ def evaluate_prop(prop: Prop, proj: Projection,
         _env = {"roofed": bool(_w.dome),
                 "wind_out": None if _w.dome
                 else round(float(_w.wind_mph or 0), 1)}
+    _rest_days = _body_clock = None
+    if sport in ("nfl", "cfb") and game is not None:
+        from .fatigue import state_for as _fatigue_state
+        _st = _fatigue_state(game, getattr(prop, "team", ""))
+        _rest_days, _body_clock = _st.get("rest_days"), _st.get("body_clock")
     pattern_block = lp_veto(sport, prop.market, side=side, odds=best.odds,
                             prob=hit, book=best.book, horizon_days=0,
                             lead_min=minutes_until(
                                 getattr(game, "kickoff", None)),
+                            # Schedule fatigue: the same bands the board
+                            # shows, so a convicted "short week" pocket
+                            # refuses the next matching pick.
+                            rest_days=_rest_days, body_clock=_body_clock,
                             **_env)
     tier = market_tier(prop.market)
     min_edge = tier_min_edge(prop.market)

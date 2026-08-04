@@ -406,6 +406,12 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         out["playoff_picture"] = pic
     except Exception:                              # noqa: BLE001
         out["playoff_picture"] = {"teams": {}, "active": False, "note": ""}
+    # Schedule fatigue: short weeks, byes and the body clock. §7's open
+    # item — the data was always in the schedule feed and nothing read
+    # it. Evidence and a journaled dimension, never a price (see
+    # engine/fatigue.py for why that order is deliberate).
+    from . import fatigue as _fatigue
+    out["fatigue"] = _fatigue.decorate(results, slate.games)
     # The outside view: what similar past spots actually did, counted off
     # the ingested logs with no distribution assumed. Evidence and a
     # divergence warning only — never a price input (see engine/comps.py).

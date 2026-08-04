@@ -134,7 +134,8 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     # NULL = unknown/not a batter prop) and whether the card was official
     # or projected — the PA half of every batter prop, journaled.
     for col in ("proj_minutes", "actual_minutes", "lead_min", "park_hr",
-                "wind_out", "roofed", "lineup_slot", "lineup_conf"):
+                "wind_out", "roofed", "lineup_slot", "lineup_conf",
+                "rest_days", "body_clock"):
         try:
             conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
         except sqlite3.OperationalError:
@@ -248,9 +249,10 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
             "stake_dollars, status, leg, proj_minutes, lead_min, park_hr, "
-            "wind_out, roofed, lineup_slot, lineup_conf) "
+            "wind_out, roofed, lineup_slot, lineup_conf, rest_days, "
+            "body_clock) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', "
-            "?, ?, ?, ?, ?, ?, ?, ?)",
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
              r["line"], r.get("book", ""), r.get("odds", -110), r.get("projection"),
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
@@ -275,7 +277,11 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # lineup_status: the PA half of a batter prop.
              r.get("lineup_slot"),
              1 if r.get("lineup_confirmed") else 0
-             if r.get("lineup_confirmed") is not None else None))
+             if r.get("lineup_confirmed") is not None else None,
+             # fatigue: days of rest and the kickoff hour on this team's
+             # own clock. Journaled so the miner can decide, on our record,
+             # whether a short week or a 10am body clock is a real pocket.
+             r.get("rest_days"), r.get("body_clock")))
         n += cur.rowcount
     # Recommended game bets journal too (sharp-anchor picks live or die by
     # forward results). Moneylines store player = the team picked, line 0.5,

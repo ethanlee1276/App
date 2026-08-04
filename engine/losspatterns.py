@@ -231,10 +231,38 @@ def lineup_band(slot, confirmed) -> str | None:
     return f"{'confirmed' if confirmed else 'projected'} {tier}"
 
 
+def rest_band(days) -> str | None:
+    """Days of rest at kickoff, banded. Football's schedule dimension:
+    a four-day Thursday turnaround and a fortnight off a bye are
+    different teams wearing the same logo. Delegates to engine.fatigue
+    so the board and the miner can never drift apart on where a band
+    starts."""
+    from .fatigue import rest_band as _band
+    return _band(days)
+
+
+def clock_band(hour) -> str | None:
+    """Kickoff on the team's OWN clock. A Pacific team in the 13:00 ET
+    window starts at 10:00 by its body clock; a London kickoff is earlier
+    still. Banded rather than continuous so a slice has a denominator."""
+    try:
+        h = float(hour)
+    except (TypeError, ValueError):
+        return None
+    if h <= 10:
+        return "body clock 10am or earlier"
+    if h <= 11:
+        return "body clock 11am"
+    if h >= 20:
+        return "body clock 8pm or later"
+    return None          # the ordinary middle of the day discriminates nothing
+
+
 def features_of(side=None, odds=None, prob=None, book=None,
                 horizon_days=None, lead_min=None, park_hr=None,
                 wind_out=None, roofed=False, lineup_slot=None,
-                lineup_conf=False, sport=None) -> dict:
+                lineup_conf=False, sport=None, rest_days=None,
+                body_clock=None) -> dict:
     """The feature dict for one bet — mining and veto both come through
     here, so a pick is judged by exactly the dimensions it was mined on."""
     feats = {
@@ -247,6 +275,8 @@ def features_of(side=None, odds=None, prob=None, book=None,
         "park": park_band(park_hr, roofed),
         "wind": wind_band(wind_out, roofed, sport),
         "slot": lineup_band(lineup_slot, bool(lineup_conf)),
+        "rest": rest_band(rest_days),
+        "clock": clock_band(body_clock),
     }
     return {k: v for k, v in feats.items() if v is not None}
 
@@ -260,7 +290,8 @@ def records_from_ledger(conn) -> list[dict]:
     """
     rows = conn.execute(
         "SELECT sport, market, side, odds, hit_prob, book, date, ts, status, "
-        "lead_min, park_hr, wind_out, roofed, lineup_slot, lineup_conf "
+        "lead_min, park_hr, wind_out, roofed, lineup_slot, lineup_conf, "
+        "rest_days, body_clock "
         "FROM bets WHERE status IN ('won','lost')").fetchall()
     out = []
     for r in rows:
@@ -282,6 +313,8 @@ def records_from_ledger(conn) -> list[dict]:
                                  roofed=bool(r["roofed"]),
                                  lineup_slot=r["lineup_slot"],
                                  lineup_conf=bool(r["lineup_conf"]),
+                                 rest_days=r["rest_days"],
+                                 body_clock=r["body_clock"],
                                  sport=r["sport"]),
         })
     return out
@@ -429,7 +462,7 @@ def refresh(lconn, path=None) -> dict:
 def veto(sport: str, market: str, side=None, odds=None, prob=None,
          book=None, horizon_days=None, lead_min=None, park_hr=None,
          wind_out=None, roofed=False, lineup_slot=None, lineup_conf=False,
-         path=None) -> str | None:
+         rest_days=None, body_clock=None, path=None) -> str | None:
     """The reason this pick is blocked, or None.
 
     Consulted where is_reliable() is: a pick whose features land in a slice
@@ -443,6 +476,7 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
                         horizon_days=horizon_days, lead_min=lead_min,
                         park_hr=park_hr, wind_out=wind_out, roofed=roofed,
                         lineup_slot=lineup_slot, lineup_conf=lineup_conf,
+                        rest_days=rest_days, body_clock=body_clock,
                         sport=sport)
     for f in store.get("closed") or []:
         if f.get("sport") != sport:

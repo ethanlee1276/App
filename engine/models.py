@@ -181,6 +181,14 @@ class Game:
     roof: str = ""               # dome | closed | outdoors | open (raw nflverse)
     surface: str = "grass"       # grass | fieldturf | ... (drives stadium color)
     live: Optional[LiveStatus] = None
+    # Schedule circumstance (engine/fatigue.py). Days since each team last
+    # played — 4 is a Thursday short week, 13+ is off a bye — plus whether
+    # the game is at a neutral site, which for the NFL means an
+    # international trip. 0 = not known (a slate built without schedule
+    # rows), which the fatigue layer reads as "say nothing".
+    home_rest: int = 0
+    away_rest: int = 0
+    neutral_site: bool = False
     # Moneyline: American odds per side (0 = not offered) and a team strength
     # rating in net points/game vs league average (0 = average). Drives the
     # game-level moneyline model in engine/gamebets.py.

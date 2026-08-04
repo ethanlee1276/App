@@ -161,7 +161,7 @@ def test_the_nfl_gate_hands_the_veto_its_weather():
     i = src.index("pattern_block = lp_veto(")
     before = src[max(0, i - 900):i]
     assert 'sport in ("nfl", "cfb")' in before
-    assert "**_env" in src[i:i + 500]
+    assert "**_env" in src[i:i + 800]
 
 
 def test_the_environment_coverage_matrix_is_honest():

@@ -112,6 +112,12 @@ def build_games(season: int, week: int) -> list[Game]:
             total=_f(r, "total_line", default=44.0),
             roof=_s(r, "roof"),
             surface=_s(r, "surface", default="grass"),
+            # Rest days come precomputed in the feed, which is better than
+            # deriving them: nflverse already accounts for byes, holiday
+            # games and the season opener.
+            home_rest=int(_f(r, "home_rest", default=0)),
+            away_rest=int(_f(r, "away_rest", default=0)),
+            neutral_site=_s(r, "location").lower() == "neutral",
         ))
     return games
 
