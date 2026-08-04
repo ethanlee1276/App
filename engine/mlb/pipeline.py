@@ -610,6 +610,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
     injured list — never a pick, whatever the projected lineup says — and
     recent activations, whose form window predates the injury."""
     from ..sources.oddsapi import normalize_name
+    from .models import HITS, TOTAL_BASES, HOME_RUNS
     from .transactions import just_returned
     if not isinstance(slate, MLBSlate):
         slate = load_mlb_slate(slate)
@@ -618,9 +619,37 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
 
     il_on_slate: set = set()
     results = []
+    # Two phases, because coherence is a property of a PLAYER, not a prop:
+    # build every projection first, force each batter's hits/total-bases/HR
+    # trio into the box real baseball allows (the reconcile gate measured
+    # ~40 impossible trios a night when each market projected alone), and
+    # only then evaluate — so the prices, the cards and the game sim all
+    # read the same, possible, numbers.
+    built = []
+    trio: dict = {}
     for prop in slate.props:
         game = slate.game_for(prop)
         proj = build_mlb_projection(prop, game, model=model)
+        built.append((prop, game, proj))
+        if prop.market in (HITS, TOTAL_BASES, HOME_RUNS):
+            key = (normalize_name(prop.player),
+                   getattr(game, "game_number", 1))
+            trio.setdefault(key, {})[prop.market] = proj
+    from .projection import reconcile_triple
+    for markets in trio.values():
+        if not all(m in markets for m in (HITS, TOTAL_BASES, HOME_RUNS)):
+            continue
+        h, t, r = markets[HITS], markets[TOTAL_BASES], markets[HOME_RUNS]
+        hr_new, tb_new, note = reconcile_triple(h.mean, t.mean, r.mean)
+        if not note:
+            continue
+        if abs(hr_new - r.mean) > 1e-9:
+            r.mean = round(hr_new, 4)
+            r.reasons.append(f"Coherence: {note}")
+        if abs(tb_new - t.mean) > 1e-9:
+            t.mean = round(tb_new, 4)
+            t.reasons.append(f"Coherence: {note}")
+    for prop, game, proj in built:
         rec = evaluate_mlb_prop(prop, proj, game=game)
         decision = apply_mlb_rules(rec, prop, game, proj, config)
         d = _rec_to_dict(rec, prop, decision, proj)

@@ -63,6 +63,22 @@ RARE_EVENT_MARKETS = {HOME_RUNS}
 # ~30 games of prior weight, one recent homer moves the estimate a
 # little, which is roughly what one homer is actually worth.
 RARE_EVENT_PRIOR_GAMES = 30.0
+# League-average HR per game for a lineup regular (~1.15 team HR/game
+# across nine spots). The prior of last resort: when a player has no
+# career rate on file, shrinking toward his own observed window is not
+# shrinking at all — a 3-HR fortnight stayed a 0.2/game projection, and
+# rookies without a career line were exactly the pool the receipts
+# caught running hot (said 14%, hit 11%).
+LEAGUE_HR_RATE = 0.13
+# Environment dampening for rare events. Park, weather, Statcast and
+# matchup HR effects are each estimated on the thinnest tail of the
+# data, and the long-shot board then SELECTS the props where they stack
+# — winner's curse by construction. Their compound claim is applied at
+# half strength (sqrt on the multiplier) and clamped tighter than the
+# quantity markets' band; the calibration boundary (T pinned at 0.40,
+# a 22-point optimistic lean) is the measured bill for full strength.
+RARE_EVENT_ENV_DAMP = 0.5
+RARE_EVENT_ENV_CLAMP = (0.85, 1.18)
 
 
 def _rare_event_rate(prop: MLBProp, form: FormResult) -> float:
@@ -70,15 +86,50 @@ def _rare_event_rate(prop: MLBProp, form: FormResult) -> float:
 
     Shrinks the observed per-game rate toward the player's career rate in
     proportion to how little evidence there is, instead of amplifying the
-    most recent game."""
+    most recent game. A player with NO career rate shrinks toward the
+    league rate — falling back to his own observed window made the prior
+    the noise it existed to damp."""
     vals = [g.value for g in prop.logs]
     n = len(vals)
     if not n:
         return form.mean
     observed = float(sum(vals))
-    prior = prop.career_avg if prop.career_avg else observed / n
+    prior = prop.career_avg if prop.career_avg else LEAGUE_HR_RATE
     k = RARE_EVENT_PRIOR_GAMES
     return (k * prior + observed) / (k + n)
+
+
+def reconcile_triple(hits: float, tb: float, hr: float
+                     ) -> tuple[float, float, str]:
+    """Force one batter's three means into the box real baseball allows.
+
+    The sim's inverter (gamesim.rates_from_means) proved the box on live
+    slates: a homer is a hit (hr ≤ hits) and total bases must cover the
+    hits and homers claimed (hits + 3·hr ≤ tb ≤ 3·hits + hr, since
+    E[TB] − E[H] − 3·E[HR] = E[2B] + 2·E[3B] ≥ 0). Each market's
+    projection is built alone, so multipliers could push the trio outside
+    the box — ~40 players a night on a real slate — and the reconcile
+    gate rightly called it a projection-engine finding.
+
+    Repairs move in ONE direction each: HR only ever comes DOWN (it is
+    the market the receipts show running hot) and TB only ever moves the
+    minimum the arithmetic demands. Hits — the best-calibrated of the
+    three — is never touched. Returns (hr, tb, note); note is "" when
+    the trio was already valid baseball.
+    """
+    notes = []
+    if tb < hits:
+        tb = hits                       # every hit is at least one base
+        notes.append("total bases floored at the hits projection")
+    cap = min(hits, (tb - hits) / 3.0)
+    if hr > cap + 1e-9:
+        hr = max(0.0, cap)
+        notes.append("HR capped so the hits/total-bases/HR trio is "
+                     "possible baseball")
+    if tb > 3.0 * hits + hr + 1e-9:
+        tb = 3.0 * hits + hr            # more bases than the hits can carry
+        notes.append("total bases capped at what the hits can carry")
+    return hr, tb, "; ".join(notes)
 
 
 def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None,
@@ -147,6 +198,13 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None,
         total_mult = clamp(park_mult * weather_mult * matchup.multiplier
                            * statcast_mult * ump_mult,
                            0.78, 1.28)
+    if prop.market in RARE_EVENT_MARKETS:
+        # Half-strength environment for rare events, learned path included
+        # — the tail is where every one of these effects is worst-measured
+        # and where the long-shot board's selection bites hardest. See
+        # RARE_EVENT_ENV_DAMP; the calibration boundary was the receipt.
+        lo, hi = RARE_EVENT_ENV_CLAMP
+        total_mult = clamp(total_mult ** RARE_EVENT_ENV_DAMP, lo, hi)
     # Recency shade toward recent form (bounded in form.py) — a cold bat's
     # number comes down instead of riding a stale season line.
     base_mean = form.mean
