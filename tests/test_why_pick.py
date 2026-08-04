@@ -118,6 +118,7 @@ def _with_board(extra_rec, others=None):
     import io
     from contextlib import redirect_stdout
     import launch
+    from engine import ledger as _led
 
     root = tempfile.mkdtemp()
     os.makedirs(os.path.join(root, "web", "data"), exist_ok=True)
@@ -132,16 +133,24 @@ def _with_board(extra_rec, others=None):
     # why_pick reads MLB_OUT, which is a RELATIVE path — so the working
     # directory is what selects the board, not launch.ROOT. Patching the
     # wrong one reads the real board and quietly reports it as missing.
+    # The JOURNAL is the opposite trap: ledger.DEFAULT_DB is absolute, so
+    # chdir alone still traces against the machine's REAL journal — which,
+    # on the machine that lived the original incident, HAS Carter Jensen
+    # rows, and the trace correctly reports them instead of "THIS IS THE
+    # GAP". The journal is a fixture here too.
     old_cwd, old_root = os.getcwd(), launch.ROOT
+    old_db = _led.DEFAULT_DB
     buf = io.StringIO()
     try:
         os.chdir(root)
         launch.ROOT = pathlib.Path(root)
+        _led.DEFAULT_DB = pathlib.Path(root) / "data" / "ledger.db"
         with redirect_stdout(buf):
             launch.why_pick(extra_rec["player"])
     finally:
         os.chdir(old_cwd)
         launch.ROOT = old_root
+        _led.DEFAULT_DB = old_db
     return buf.getvalue()
 
 

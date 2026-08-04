@@ -22,6 +22,11 @@ from engine.sources import oddsapi as O
 
 
 def _env(**kw):
+    # api_keys() reloads secrets.local, which on a real machine holds keys
+    # this pop just removed — mark it already-loaded so the fixture env is
+    # the ONLY env these tests see.
+    from engine import secrets as _sec
+    _sec._loaded = True
     for k in ("ODDS_API_KEY", "ODDS_API_KEY_2", "ODDS_API_KEY_3",
               "ODDS_API_KEYS"):
         os.environ.pop(k, None)

@@ -198,18 +198,23 @@ def test_the_portal_nets_out_both_directions():
 
 
 def test_no_key_degrades_honestly_instead_of_guessing():
+    # get_api_key() reloads secrets.local, which on a real machine holds the
+    # key and quietly restores what the pop removed — mark the file
+    # already-loaded so "no key" actually means no key, everywhere.
     import os as _os
+    from engine import secrets as _sec
     saved = _os.environ.pop("CFBD_API_KEY", None)
+    was_loaded = _sec._loaded
+    _sec._loaded = True
     try:
         try:
             cfbd.get_api_key()
-            raised = False
+            raise AssertionError("must raise without a key")
         except cfbd.CFBDUnavailable as exc:
-            raised = True
             assert "collegefootballdata.com/key" in str(exc)
             assert "September" in str(exc), "say what the absence actually costs"
-        assert raised or saved is not None
     finally:
+        _sec._loaded = was_loaded
         if saved is not None:
             _os.environ["CFBD_API_KEY"] = saved
 

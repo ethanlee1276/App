@@ -105,8 +105,10 @@ def _migrate(conn) -> None:
         "DROP TABLE bets_v1;")
 
 
-def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
-    path = Path(path)
+def connect(path: str | Path | None = None) -> sqlite3.Connection:
+    # DEFAULT_DB is resolved at call time, not bound at import — a test (or
+    # anything else) that repoints the module's DEFAULT_DB must actually win.
+    path = Path(path if path is not None else DEFAULT_DB)
     if str(path) != ":memory:":
         path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))

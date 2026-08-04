@@ -169,7 +169,14 @@ def test_the_request_matches_the_current_api_contract():
 
 
 def test_no_key_degrades_with_instructions_not_a_crash():
+    # Popping the env var is not enough: _api_key() reloads secrets.local,
+    # which on a real machine HOLDS the key and quietly puts it back — so
+    # this test passed on dev checkouts and failed exactly where the key
+    # was plugged in. Mark the file already-loaded so the pop sticks.
+    from engine import secrets as _sec
     keep = os.environ.pop("ANTHROPIC_API_KEY", None)
+    was_loaded = _sec._loaded
+    _sec._loaded = True
     try:
         conn = ledger.connect(":memory:")
         try:
@@ -178,6 +185,7 @@ def test_no_key_degrades_with_instructions_not_a_crash():
         except hyp.HypothesisUnavailable as e:
             assert "secrets.local" in str(e)
     finally:
+        _sec._loaded = was_loaded
         if keep is not None:
             os.environ["ANTHROPIC_API_KEY"] = keep
 
