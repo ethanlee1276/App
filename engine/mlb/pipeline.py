@@ -769,6 +769,11 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         # runs would be contradicting its own page.
         "market_scan": _market_scan(results, ls_picks + ls_pool),
     }
+    # The outside view: what similar past spots actually did, counted off
+    # the ingested logs with no distribution assumed. Evidence and a
+    # divergence warning only — never a price input (see engine/comps.py).
+    from ..pipeline import _attach_comps
+    out["comps"] = _attach_comps(results, "mlb")
     # §14, and §5's lineup rule is enforced inside the screen: a hitter leg
     # is ineligible until the card is posted.
     from ..parlays import attach

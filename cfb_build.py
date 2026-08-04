@@ -574,6 +574,10 @@ def _write(out: dict, path: str) -> None:
     # cleared the singles gates. CFB carries the highest bar in the system —
     # 8 points for three legs, one ticket per Saturday, and December closed
     # entirely (§6.4) — all of which lives in engine/parlays.py.
+    # The outside view: what similar past spots actually did, counted off
+    # CFB's own logs. Evidence only, never a price input.
+    from engine.pipeline import _attach_comps
+    out["comps"] = _attach_comps(out.get("recommendations") or [], "cfb")
     from engine.parlays import attach
     attach(out, "cfb")
     p = Path(path)

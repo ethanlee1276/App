@@ -640,6 +640,11 @@ def main() -> None:
     # singles gates. §7 defers to Scalpy 3.0 for the NBA; §8 tightens the
     # WNBA hard — spread >= 9 kills favourite star props, Tier 3 is banned in
     # any ticket, and cross-game tickets are banned outright.
+    # The outside view: what similar past spots actually did, counted off
+    # this LEAGUE's own logs (never the other's — a WNBA minute and an NBA
+    # minute are different units). Evidence only, never a price input.
+    from engine.pipeline import _attach_comps
+    out["comps"] = _attach_comps(out.get("recommendations") or [], args.league)
     from engine.parlays import attach
     attach(out, args.league)
 

@@ -406,10 +406,30 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         out["playoff_picture"] = pic
     except Exception:                              # noqa: BLE001
         out["playoff_picture"] = {"teams": {}, "active": False, "note": ""}
+    # The outside view: what similar past spots actually did, counted off
+    # the ingested logs with no distribution assumed. Evidence and a
+    # divergence warning only — never a price input (see engine/comps.py).
+    out["comps"] = _attach_comps(results, "nfl")
     # §14: the parlay screen runs last, over the board that just cleared the
     # singles gates — never over candidates it invented for itself.
     from .parlays import attach
     return attach(out, "nfl")
+
+
+def _attach_comps(results: list[dict], sport: str) -> dict:
+    """Decorate a board with historical comps. Own connection, own guard:
+    a missing history DB (CI, a fresh clone) costs the section, never the
+    slate — the same contract the incentive and rest blocks keep."""
+    try:
+        from . import comps
+        from .db import connect as _hist_connect
+        conn = _hist_connect()
+        try:
+            return comps.decorate(results, conn, sport)
+        finally:
+            conn.close()
+    except Exception:                              # noqa: BLE001
+        return {"matched": 0, "diverged": 0, "markets": []}
 
 
 def _market_scan(results: list[dict], long_shots: list[dict] | None = None) -> dict:
