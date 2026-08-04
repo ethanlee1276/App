@@ -131,21 +131,79 @@ def test_an_impossible_projected_triple_is_a_projection_finding_not_a_gate_fail(
     assert good.consistent is True
     # More homers than hits is the other impossible shape.
     assert G.rates_from_means(0.1, 1.0, 0.3, 4.4).consistent is False
-    # And a lineup full of impossible triples is "nothing to measure",
-    # never a vacuous pass and never a sim failure.
+    # A lineup of impossible triples used to be "nothing to measure":
+    # every hitter was flagged, dropped, and the slate fell under
+    # MIN_HITTERS. That was the harness reading the RAW projection engine
+    # while the board prices reconciled trios — so the same repair now
+    # runs first and these become measurable instead of unmeasurable.
+    # The flagging path above is still the truth for anything that
+    # reaches the gate incoherent; it just no longer has customers.
     import engine.mlb.sources.statslogs as SL
     slate = _full_slate()
     for p in slate.props:
         if p.market == TOTAL_BASES:
             for log in p.logs:
                 log.value = 0.5          # TB below hits everywhere
-    orig = SL.build_live_slate
-    SL.build_live_slate = lambda date: slate
-    try:
-        code = SR.run("2026-08-03")
-    finally:
-        SL.build_live_slate = orig
-    assert code == 1
+    lineups = SR._lineups(slate)
+    assert lineups, "the slate should still produce a lineup"
+    for cell in lineups.values():
+        for nm, mk in cell["hitters"].items():
+            if not all(m in mk for m in (HITS, TOTAL_BASES, HOME_RUNS)):
+                continue
+            spot = int(cell["spots"].get(nm) or 9)
+            r = G.rates_from_means(mk[HITS], mk[TOTAL_BASES], mk[HOME_RUNS],
+                                   G.expected_pa(spot))
+            assert r.consistent, \
+                f"{nm} reached the gate impossible: {mk}"
+
+
+def test_the_gate_reads_the_same_reconciled_trio_the_board_prices():
+    """The harness walked build_mlb_projection per market — the RAW
+    engine — while run_mlb_slate prices in two phases and runs
+    reconcile_triple over every (hits, TB, HR) trio first. So the gate
+    was grading a model nobody runs: on a live slate ~100 hitters a night
+    were reported "not valid baseball" and dropped, which pushed most
+    lineups under MIN_HITTERS and left two thirds of the league with no
+    verdict at all."""
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "sim_reconcile.py"), encoding="utf-8").read()
+    assert "reconcile_triple" in src
+    assert src.index("reconcile_triple") < src.index("def run(")
+
+
+def test_reconciling_never_rounds_itself_back_out_of_the_box():
+    """round(tb, 4) can land a hair BELOW the hits projection, which is
+    exactly the 'total bases below hits' inconsistency reconcile_triple
+    had just removed — a 1e-5 violation the sim's inverter checks to
+    1e-9 and correctly calls impossible. Both call sites assign the
+    returned floats untouched; this pins that they stay in the box."""
+    import random
+    from engine.mlb import gamesim as G
+    from engine.mlb.projection import reconcile_triple
+    rng = random.Random(9)
+    checked = 0
+    for _ in range(3000):
+        hits = rng.uniform(0.05, 1.9)
+        tb = hits * rng.uniform(0.4, 4.2)
+        hr = rng.uniform(0.0, 0.6)
+        pa = G.expected_pa(rng.randint(1, 9))
+        hr2, tb2, note = reconcile_triple(hits, tb, hr)
+        if not note:
+            continue
+        checked += 1
+        assert G.rates_from_means(hits, tb2, hr2, pa).consistent, \
+            f"reconciled trio still impossible: {hits} {tb2} {hr2}"
+    assert checked > 500, "the sweep should exercise real repairs"
+    # And the rounding that broke it is gone from both ASSIGNMENTS. Match
+    # the assignment rather than the bare call: both files discuss the
+    # removed rounding in comments, and grepping for the text alone fails
+    # on the explanation of the fix.
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for path in ("sim_reconcile.py", os.path.join("engine", "mlb", "pipeline.py")):
+        src = open(os.path.join(root, path), encoding="utf-8").read()
+        for bad in ("= round(tb_new, 4)", "= round(hr_new, 4)",
+                    "= round(hr, 4), round(tb, 4)"):
+            assert bad not in src, f"{path} still rounds the reconciled trio"
 
 
 if __name__ == "__main__":

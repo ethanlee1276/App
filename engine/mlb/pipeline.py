@@ -672,11 +672,16 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         hr_new, tb_new, note = reconcile_triple(h.mean, t.mean, r.mean)
         if not note:
             continue
+        # Assigned EXACTLY as returned, never re-rounded. round(tb, 4)
+        # can land a hair BELOW the hits projection, which re-creates the
+        # "total bases below hits" inconsistency reconcile_triple exists
+        # to remove — a 1e-5 violation, but the sim's inverter checks the
+        # box to 1e-9 and correctly called those triples impossible.
         if abs(hr_new - r.mean) > 1e-9:
-            r.mean = round(hr_new, 4)
+            r.mean = hr_new
             r.reasons.append(f"Coherence: {note}")
         if abs(tb_new - t.mean) > 1e-9:
-            t.mean = round(tb_new, 4)
+            t.mean = tb_new
             t.reasons.append(f"Coherence: {note}")
     for prop, game, proj in built:
         rec = evaluate_mlb_prop(prop, proj, game=game)

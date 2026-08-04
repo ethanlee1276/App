@@ -69,6 +69,31 @@ def _lineups(slate):
             continue
         cell["hitters"].setdefault(p.player, {})[p.market] = proj.mean
         cell["spots"][p.player] = p.lineup_spot
+    # Reconcile the triple exactly as the BOARD does before checking it.
+    #
+    # This walks build_mlb_projection per market, which is the raw
+    # projection engine — but run_mlb_slate prices in two phases, building
+    # every projection and then running reconcile_triple over each
+    # (hits, total bases, home runs) trio before anything is evaluated. So
+    # the numbers that actually ship are coherent, and reading the raw
+    # means here graded a model nobody runs: a hundred-odd hitters a night
+    # were reported as "not valid baseball" and DROPPED, which pushed most
+    # lineups under MIN_HITTERS and left two thirds of the league with no
+    # verdict at all. Same reconciliation, same order, same numbers.
+    from engine.mlb.projection import reconcile_triple
+    for cell in out.values():
+        for markets in cell["hitters"].values():
+            if not all(m in markets for m in (HITS, TOTAL_BASES, HOME_RUNS)):
+                continue
+            hr, tb, note = reconcile_triple(markets[HITS],
+                                            markets[TOTAL_BASES],
+                                            markets[HOME_RUNS])
+            if note:
+                # Assigned EXACTLY as returned. Rounding here re-broke the
+                # box: tb rounded to 4dp can land a hair below hits, and
+                # "total bases below the hits projection" is precisely the
+                # inconsistency reconcile_triple had just removed.
+                markets[HOME_RUNS], markets[TOTAL_BASES] = hr, tb
     return out
 
 
