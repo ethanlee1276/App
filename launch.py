@@ -261,8 +261,11 @@ def refresh_nfl(quiet: bool = False) -> bool:
     # sat unfetched with the coverage scan promising it "refreshes with
     # the launcher". It does now. The feed is free and cached, and
     # nfl_build already degrades to a warning when it cannot be reached,
-    # so this cannot cost a build.
-    args = ["nfl_build.py", str(season), str(week), "--out", out, "--injuries"]
+    # so this cannot cost a build. --depth rides along on the same terms:
+    # it refines the injury knock-on roles and powers the QB-dependency
+    # watch, and a missing chart feed costs a warning, never the build.
+    args = ["nfl_build.py", str(season), str(week), "--out", out,
+            "--injuries", "--depth"]
     spend = _slate_games(out) > 0 and _odds_affordable(out, quiet, sport="nfl")
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:

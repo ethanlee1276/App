@@ -15,6 +15,21 @@ from .models import (
 from .statmath import clamp
 
 
+# Game-script tilt from the spread, per point rather than a cliff. The
+# first version was a step function — nothing until 4 points, then a 5-6%
+# jump — which priced a 5.5-point favorite exactly like a pick'em and a
+# 6-point underdog exactly like a 14-point one. A 7-point underdog now
+# projects to trail and throw (+2.8% pass volume) and to shelve the run
+# (-4.2%); a touchdown favorite leans the other way. Rush moves more per
+# point than pass — trailing teams abandon the run faster than leading
+# teams abandon the pass. Bounded tight because the spread's information
+# mostly already lives in the defensive and context numbers; this is the
+# volume residue, not a second matchup model.
+SCRIPT_COEF_PASS = 0.004
+SCRIPT_COEF_RUSH = 0.006
+SCRIPT_CLAMP = (0.95, 1.05)
+
+
 @dataclass
 class MatchupEffect:
     multiplier: float
@@ -80,16 +95,19 @@ def evaluate_matchup(prop: Prop, defense: DefenseProfile, game: Game,
         return MatchupEffect(multiplier=mult, reasons=reasons)
 
     if prop.market == RUSH_YDS:
-        if team_spread <= -4:
-            mult *= 1.06
-            reasons.append(f"Team favored by {abs(team_spread):.0f} — positive rushing script")
-        elif team_spread >= 6:
-            mult *= 0.95
-            reasons.append("Team is an underdog — fewer rushing attempts likely")
-    if prop.market in {PASS_YDS, REC_YDS, RECEPTIONS}:
-        if team_spread >= 6:
-            mult *= 1.05
-            reasons.append("Underdog script — elevated pass volume")
+        script = clamp(1.0 - SCRIPT_COEF_RUSH * team_spread, *SCRIPT_CLAMP)
+    elif prop.market in {PASS_YDS, REC_YDS, RECEPTIONS}:
+        script = clamp(1.0 + SCRIPT_COEF_PASS * team_spread, *SCRIPT_CLAMP)
+    else:
+        script = 1.0
+    mult *= script
+    if abs(script - 1.0) >= 0.02:
+        role = "underdog" if team_spread > 0 else "favorite"
+        vol = "run volume" if prop.market == RUSH_YDS else "pass volume"
+        reasons.append(
+            f"Game script: {abs(team_spread):.1f}-pt {role} — projected "
+            f"{'trailing' if team_spread > 0 else 'leading'} script leans "
+            f"{vol} {'up' if script > 1.0 else 'down'} (×{script:.2f})")
 
     # High total => more plays, more production for everyone.
     if game.total >= 48:

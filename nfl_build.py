@@ -89,9 +89,12 @@ def main() -> None:
         except DataUnavailable as exc:
             print(f"\n⚠️  Injury feed unavailable — projecting without it.\n   {exc}")
 
+    qb_notes = None
     if args.depth:
         try:
-            from engine.sources.depthcharts import load_depth_charts, refine_injury_roles
+            from engine.sources.depthcharts import (load_depth_charts,
+                                                    refine_injury_roles,
+                                                    qb_dependency)
             rows = load_depth_charts(args.season)
             all_inj = [i for g in slate.games for i in g.injuries]
             dres = refine_injury_roles(all_inj, rows, args.week)
@@ -99,6 +102,13 @@ def main() -> None:
                   f"demoted {dres.demoted} backup(s).")
             for d in dres.details[:8]:
                 print(f"  · {d}")
+            # The QB-dependency watch: a new QB1 or a dinged incumbent
+            # stamps a warning on that team's pass-catcher props.
+            qb_notes = qb_dependency(rows, args.week, all_inj)
+            if qb_notes:
+                print(f"\nQB watch: {len(qb_notes)} team(s) flagged.")
+                for t, n in sorted(qb_notes.items()):
+                    print(f"  · {t}: {n}")
         except DataUnavailable as exc:
             print(f"\n⚠️  Depth charts unavailable — keeping report-derived roles.\n   {exc}")
 
@@ -190,7 +200,8 @@ def main() -> None:
     except Exception:
         nfl_usage = None
 
-    result = run_slate(slate, config, model=model, nfl_usage=nfl_usage)
+    result = run_slate(slate, config, model=model, nfl_usage=nfl_usage,
+                       team_notes=qb_notes)
 
     # §10 drawdown circuit-breaker: after a 10u peak-to-trough drawdown on
     # the settled journal, every stake is halved until the peak is recovered.

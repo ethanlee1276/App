@@ -33,6 +33,24 @@ from .touchdowns import RedZoneUsage
 RZ_WEEKS = 6
 SNAP_WEEKS = 5
 
+# --- the usage bridge's volume roles ----------------------------------------
+# Each yardage/catch market's OPPORTUNITY stat. Volume is stickier than
+# production week to week — coordinators hand out targets and carries on
+# purpose, while yards bounce — so the bridge estimates a player as
+# "recent volume × season-long per-opportunity efficiency" and lets the
+# projection blend that against observed outcomes by sample size.
+OPP_BY_MARKET = {
+    "receptions": "targets",
+    "rec_yds": "targets",
+    "rush_yds": "carries",
+    "pass_yds": "pass_att",
+}
+VOL_WEEKS = 4
+# Efficiency needs a real denominator: below these season totals a per-
+# opportunity rate is one screen pass wearing a trend costume, and the
+# player simply has no volume role rather than a junk one.
+MIN_EFF_OPPS = {"targets": 12, "carries": 20, "pass_att": 60}
+
 
 def latest_season(conn, market: str) -> int | None:
     row = conn.execute(
@@ -111,7 +129,57 @@ def snap_shares(conn, season: int | None = None) -> dict:
     return out
 
 
+def volume_roles(conn, season: int | None = None) -> dict:
+    """``{(initial, lastname, team): {market: role}}`` where each role is
+    ``{"opp_per_game", "eff", "opp_market", "n_weeks"}``.
+
+    The usage bridge's data: per outcome market, the player's average
+    opportunities over his most recent ``VOL_WEEKS`` weeks (the role he
+    holds NOW) times his season-long per-opportunity efficiency (the
+    stable rate) is a second baseline the projection can weigh against
+    thin or stale outcome logs. Players under ``MIN_EFF_OPPS`` season
+    opportunities get no role at all — an absent bridge, not a noisy one.
+    """
+    if season is None:
+        found = [latest_season(conn, m) for m in sorted(set(OPP_BY_MARKET.values()))]
+        found = [s for s in found if s is not None]
+        season = max(found) if found else None
+    if season is None:
+        return {}
+    markets = tuple(OPP_BY_MARKET) + tuple(sorted(set(OPP_BY_MARKET.values())))
+    per: dict = {}
+    for r in conn.execute(
+            "SELECT player, team, period, market, value FROM player_game_logs "
+            "WHERE sport='nfl' AND season=? AND market IN (%s)"
+            % ",".join("?" * len(markets)), (season, *markets)):
+        per.setdefault((r["player"], r["team"]), {}) \
+           .setdefault(r["period"], {})[r["market"]] = float(r["value"] or 0)
+
+    out: dict = {}
+    for (player, team), weeks in per.items():
+        roles: dict = {}
+        for market, opp in OPP_BY_MARKET.items():
+            with_opp = [w for w in weeks if opp in weeks[w]]
+            if len(with_opp) < 2:
+                continue
+            recent = sorted(with_opp, reverse=True)[:VOL_WEEKS]
+            opp_pg = sum(weeks[w][opp] for w in recent) / len(recent)
+            paired = [w for w in with_opp if market in weeks[w]]
+            tot_opp = sum(weeks[w][opp] for w in paired)
+            if tot_opp < MIN_EFF_OPPS[opp]:
+                continue
+            eff = sum(weeks[w][market] for w in paired) / tot_opp
+            roles[market] = {"opp_per_game": round(opp_pg, 2),
+                            "eff": round(eff, 3),
+                            "opp_market": opp,
+                            "n_weeks": len(with_opp)}
+        if roles:
+            out[_short_key(player, team)] = roles
+    return out
+
+
 def build_usage_maps(conn) -> dict:
-    """Both maps in one call — what nfl_build hands the pipeline. Empty
+    """All three maps in one call — what nfl_build hands the pipeline. Empty
     maps (nothing ingested yet) leave the model exactly as it was."""
-    return {"red_zone": red_zone_usage(conn), "snap": snap_shares(conn)}
+    return {"red_zone": red_zone_usage(conn), "snap": snap_shares(conn),
+            "volume": volume_roles(conn)}

@@ -28,6 +28,13 @@ CV_FLOOR = {
     "receptions": 0.34,
 }
 
+# Usage bridge: how many games of outcome logs it takes for observed form
+# to carry as much weight as the measured volume role. At zero logs the
+# measured role IS the baseline; by a full season, form outweighs it ~4:1.
+# (The game-script tilt lives in engine.matchup, which already owned the
+# spread and stands down when teamcontext measures pass rate for real.)
+USAGE_PRIOR_GAMES = 4
+
 
 @dataclass
 class Projection:
@@ -43,7 +50,8 @@ class Projection:
 def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                      context: dict | None = None, sport: str = "nfl",
                      form_weights: dict | None = None,
-                     player_mult: float | None = None) -> Projection:
+                     player_mult: float | None = None,
+                     usage: dict | None = None) -> Projection:
     """``context`` (NFL Phase 2) carries measured team tendency:
     ``{"profiles": {team: profile}, "league": {...}}`` from
     engine.teamcontext. Absent = the model prices exactly as before, which
@@ -53,7 +61,13 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     ``sport`` keys the self-tuning stores. ``form_weights`` /
     ``player_mult`` are the fitters' explicit candidates and always beat
     the stores — a fitter must never read the store it is refitting
-    (see engine/mlb/projection.py, the same contract)."""
+    (see engine/mlb/projection.py, the same contract).
+
+    ``usage`` is this player's measured volume role for this market
+    (engine.nflusage.volume_roles): recent opportunities per game and
+    season per-opportunity efficiency. Live boards pass it; the backtest
+    never does, so the fitted temperatures keep meaning what they meant
+    and journalfit audits the live drift."""
     if form_weights is None:
         from .formfit import weights_for
         form_weights = weights_for(sport, prop.market)
@@ -93,10 +107,35 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                 context.get("league") or {}, prop.market)
 
     reasons: list[str] = []
+
+    # Usage bridge: blend the form mean against "recent volume × season
+    # efficiency" by sample size — thin outcome logs lean on the measured
+    # role, a full season of outcomes speaks for itself. Absent usage
+    # (backtests, other sports, un-ingested players) leaves the baseline
+    # exactly form.mean.
+    mean_base = form.mean
+    if usage and usage.get("opp_per_game") and usage.get("eff"):
+        est = float(usage["opp_per_game"]) * float(usage["eff"])
+        if est > 0:
+            w = form.sample_games / (form.sample_games + USAGE_PRIOR_GAMES)
+            mean_base = w * form.mean + (1.0 - w) * est
+            if form.mean > 0 and abs(mean_base / form.mean - 1.0) >= 0.02:
+                per, unit = {
+                    "targets": ("targets/gm", "per target"),
+                    "carries": ("carries/gm", "per carry"),
+                    "pass_att": ("att/gm", "per attempt"),
+                }.get(usage.get("opp_market"), ("touches/gm", "per touch"))
+                reasons.append(
+                    f"Usage bridge: {float(usage['opp_per_game']):.1f} {per} "
+                    f"× {float(usage['eff']):.2f} {unit} — measured role says "
+                    f"{est:.1f}, weighted {1.0 - w:.0%} against form")
+
     if model is not None and model.has(prop.market):
-        # Learned magnitude replaces the hand-tuned matchup/weather multipliers;
-        # injuries stay on top (they're a separate, sparse signal the model
-        # isn't trained on). The rule modules still supply the reasons below.
+        # Learned magnitude replaces the hand-tuned matchup/weather multipliers
+        # (including the matchup module's game-script tilt — the feature
+        # vector already carries the spread); injuries stay on top (they're a
+        # separate, sparse signal the model isn't trained on). The rule
+        # modules still supply the reasons below.
         from .ml.features import extract_features, vectorize
         feat = vectorize(extract_features(prop, game, opponent_team.defense))
         learned = model.predict_multiplier(feat, prop.market)
@@ -114,11 +153,11 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     if player_mult is None:
         from .playerfit import mult_for
         player_mult = mult_for(sport, prop.market, prop.player)
-    mean = form.mean * total_mult * form.trend_mult * ctx_mult * player_mult
+    mean = mean_base * total_mult * form.trend_mult * ctx_mult * player_mult
 
     # Uncertainty: never below the market-typical variance floor, and it grows
     # as we push further from the player's own baseline.
-    cv_floor = CV_FLOOR.get(prop.market, 0.35) * max(form.mean, 1.0)
+    cv_floor = CV_FLOOR.get(prop.market, 0.35) * max(mean_base, 1.0)
     base_std = max(form.std, cv_floor)
     adj_std = base_std * (1.0 + 0.5 * abs(total_mult - 1.0)
                           + 0.5 * abs(ctx_mult - 1.0))

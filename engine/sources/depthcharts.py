@@ -87,6 +87,60 @@ def index_for_week(rows: list[dict], week: int) -> dict[tuple[str, str], tuple[s
     return idx
 
 
+def qb1_map(rows: list[dict], week: int) -> dict[str, str]:
+    """team -> that week's top-of-chart QB (lowest depth rank wins)."""
+    best: dict[str, tuple[int, str]] = {}
+    for r in rows:
+        if _s(r, "week") != str(week):
+            continue
+        if _s(r, "depth_position", "position").upper() != "QB":
+            continue
+        team = _s(r, "club_code", "team")
+        name = _s(r, "full_name", "player_name", "player_display_name")
+        if not team or not name:
+            continue
+        rank = int(_f(r, "depth_team", "depth", default=99))
+        if team not in best or rank < best[team][0]:
+            best[team] = (rank, name)
+    return {t: n for t, (_rk, n) in best.items()}
+
+
+# Designations that make the passing game's anchor unreliable — the injury
+# engine's own concern set plus the ruled-out tier.
+QB_CONCERN = {"QUESTIONABLE", "DOUBTFUL", "GTD", "OUT", "IR"}
+
+
+def qb_dependency(rows: list[dict], week: int,
+                  injuries: list[Injury]) -> dict[str, str]:
+    """team -> one-line warning when the passing game's anchor is shaky.
+
+    Fires on (a) a week-over-week QB1 change on the depth chart — a new
+    starter reshuffles the whole target tree, and every pass-catcher's
+    logs were earned under the old one — and (b) a concern-or-worse
+    designation on this week's QB1. A warning, never a gate: the injury
+    engine already blocks the QB's OWN props; this is the knock-on
+    honesty for everyone whose stat line rides on his arm. When both
+    fire, the injury wins the sentence — it is the sharper fact.
+    """
+    now = qb1_map(rows, week)
+    prev = qb1_map(rows, week - 1) if week > 1 else {}
+    status_of = {(i.team, normalize_name(i.player)): i.status
+                 for i in injuries or []}
+    notes: dict[str, str] = {}
+    for team, qb in now.items():
+        old = prev.get(team)
+        if old and normalize_name(old) != normalize_name(qb):
+            notes[team] = (f"QB dependency: {qb} takes over at QB1 (was "
+                           f"{old}) — the target tree was earned under a "
+                           f"different arm")
+        status = status_of.get((team, normalize_name(qb)))
+        if status in QB_CONCERN:
+            notes[team] = (f"QB dependency: QB1 {qb} is {status} — every "
+                           f"pass-catcher number here rides on his "
+                           f"availability")
+    return notes
+
+
 @dataclass
 class RefineResult:
     refined: int = 0

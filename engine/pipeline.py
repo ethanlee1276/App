@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .data_loader import load_slate, Slate
-from .models import MARKET_LABELS, live_to_dict
+from .models import MARKET_LABELS, live_to_dict, PASS_YDS, REC_YDS, RECEPTIONS
 from .projection import build_projection
 from .betting import evaluate_prop
 from .rules import apply_rules, RuleConfig, game_has_started
@@ -287,10 +287,15 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
 
 def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
               model=None, allow_synthetic_line: bool = False,
-              nfl_usage: dict | None = None, team_context: dict | None = None) -> dict:
+              nfl_usage: dict | None = None, team_context: dict | None = None,
+              team_notes: dict | None = None) -> dict:
     """``allow_synthetic_line`` is for the backtest harness, which prices
     against a naive baseline line on purpose (see engine.betting.temper_edge).
-    ``nfl_usage`` carries measured red-zone/snap roles (engine.nflusage)."""
+    ``nfl_usage`` carries measured red-zone/snap/volume roles
+    (engine.nflusage); the volume map feeds each prop's usage bridge.
+    ``team_notes`` maps team → a one-line QB-dependency warning
+    (engine.sources.depthcharts.qb_dependency), stamped on that team's
+    pass-catcher props — a warning the human weighs, never a gate."""
     if not isinstance(slate, Slate):
         slate = load_slate(slate)
     config = config or RuleConfig()
@@ -298,16 +303,27 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     # log carries a week but not a year, and January belongs to last season.
     _SLATE_DATE["date"] = str(getattr(slate, "date", "") or "")
 
+    from .fantasy import _short_key
+    vol_map = (nfl_usage or {}).get("volume") or {}
+
     results = []
     for prop in slate.props:
         game = slate.game_for(prop)
         opponent = slate.team(prop.opponent)
+        u = None
+        if vol_map:
+            u = (vol_map.get(_short_key(prop.player, prop.team)) or {}) \
+                .get(prop.market)
         proj = build_projection(prop, game, opponent, model=model,
-                                context=team_context)
+                                context=team_context, usage=u)
         rec = evaluate_prop(prop, proj, allow_synthetic_line=allow_synthetic_line,
                             game=game)
         decision = apply_rules(rec, prop, game, config)
         d = _rec_to_dict(rec, prop, decision, proj)
+        if team_notes and prop.market in (PASS_YDS, REC_YDS, RECEPTIONS):
+            note = team_notes.get(prop.team)
+            if note:
+                d["warnings"] = list(d["warnings"] or []) + [note]
         d["live"] = bool(game.live and game.live.state == "live")
         d["game_date"] = game.date
         d["game_kickoff"] = game.kickoff
