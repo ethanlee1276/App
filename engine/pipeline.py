@@ -311,6 +311,15 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         d["live"] = bool(game.live and game.live.state == "live")
         d["game_date"] = game.date
         d["game_kickoff"] = game.kickoff
+        # The environment dimension, football flavor: wind is MAGNITUDE
+        # here (no center field to blow out of — speed is what leans on
+        # the passing and kicking game) plus the dome flag. Journaled so
+        # the miner can slice "howling wind" pass-yards overs the same
+        # way it slices baseball's wind-out homers; the sport key keeps
+        # the two vocabularies from ever pooling.
+        w = game.weather
+        d["roofed"] = bool(w.dome)
+        d["wind_out"] = None if w.dome else round(float(w.wind_mph or 0), 1)
         results.append(d)
 
     # Rank: recommended bets first, then by confidence, then by edge.

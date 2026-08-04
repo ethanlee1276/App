@@ -176,20 +176,30 @@ def park_band(hr_index, roofed=False) -> str | None:
     return "neutral park"
 
 
-def wind_band(wind_out, roofed=False) -> str | None:
-    """Signed wind toward center field at pick time, banded.
+def wind_band(wind_out, roofed=False, sport=None) -> str | None:
+    """Wind at pick time, banded — with the sport deciding what wind MEANS.
 
-    ``wind_out`` is +mph blowing out, −mph blowing in, 0 for cross —
-    derived from the weather layer's park-relative classification (the
-    CF bearings live in engine/mlb/sources/mlbstats.py). Indoors there
-    is no wind dimension at all: the park band already says "roof", and
-    a duplicate band would double-count the same fact."""
+    Baseball's wind is SIGNED against the park's real center-field
+    bearing (+mph out, −mph in, 0 cross — the bearings live in
+    engine/mlb/sources/mlbstats.py): direction is the physics of a fly
+    ball. Football has no "out" — wind hurts the passing and kicking
+    game by MAGNITUDE — so nfl/cfb band on speed alone. Slices are keyed
+    by sport, so the two vocabularies can never pool. Indoors there is
+    no wind dimension at all: the park band already says "roof", and a
+    duplicate band would double-count the same fact."""
     if roofed or wind_out is None:
         return None
     try:
         w = float(wind_out)
     except (TypeError, ValueError):
         return None
+    if sport in ("nfl", "cfb"):
+        m = abs(w)
+        if m < 8:
+            return "calm (<8mph)"
+        if m < 15:
+            return "windy (8-15mph)"
+        return "howling (15mph+)"
     if w <= -8:
         return "wind in hard"
     if w <= -3:
@@ -224,7 +234,7 @@ def lineup_band(slot, confirmed) -> str | None:
 def features_of(side=None, odds=None, prob=None, book=None,
                 horizon_days=None, lead_min=None, park_hr=None,
                 wind_out=None, roofed=False, lineup_slot=None,
-                lineup_conf=False) -> dict:
+                lineup_conf=False, sport=None) -> dict:
     """The feature dict for one bet — mining and veto both come through
     here, so a pick is judged by exactly the dimensions it was mined on."""
     feats = {
@@ -235,7 +245,7 @@ def features_of(side=None, odds=None, prob=None, book=None,
         "book": (str(book) or None) if book else None,
         "lead": lead_band(lead_min),
         "park": park_band(park_hr, roofed),
-        "wind": wind_band(wind_out, roofed),
+        "wind": wind_band(wind_out, roofed, sport),
         "slot": lineup_band(lineup_slot, bool(lineup_conf)),
     }
     return {k: v for k, v in feats.items() if v is not None}
@@ -271,7 +281,8 @@ def records_from_ledger(conn) -> list[dict]:
                                  wind_out=r["wind_out"],
                                  roofed=bool(r["roofed"]),
                                  lineup_slot=r["lineup_slot"],
-                                 lineup_conf=bool(r["lineup_conf"])),
+                                 lineup_conf=bool(r["lineup_conf"]),
+                                 sport=r["sport"]),
         })
     return out
 
@@ -431,7 +442,8 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
     feats = features_of(side=side, odds=odds, prob=prob, book=book,
                         horizon_days=horizon_days, lead_min=lead_min,
                         park_hr=park_hr, wind_out=wind_out, roofed=roofed,
-                        lineup_slot=lineup_slot, lineup_conf=lineup_conf)
+                        lineup_slot=lineup_slot, lineup_conf=lineup_conf,
+                        sport=sport)
     for f in store.get("closed") or []:
         if f.get("sport") != sport:
             continue

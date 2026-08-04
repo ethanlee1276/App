@@ -325,10 +325,20 @@ def evaluate_prop(prop: Prop, proj: Projection,
     #                price band) under false-discovery control
     calibration_ok = is_reliable(sport, prop.market)
     from .losspatterns import minutes_until
+    # Football's environment, handed to the veto live: a closed "howling
+    # wind" slice must refuse the NEXT windy-night pass-yards over, not
+    # just explain the last one. Indoor = no wind dimension, honestly.
+    _env = {}
+    _w = getattr(game, "weather", None)
+    if sport in ("nfl", "cfb") and _w is not None:
+        _env = {"roofed": bool(_w.dome),
+                "wind_out": None if _w.dome
+                else round(float(_w.wind_mph or 0), 1)}
     pattern_block = lp_veto(sport, prop.market, side=side, odds=best.odds,
                             prob=hit, book=best.book, horizon_days=0,
                             lead_min=minutes_until(
-                                getattr(game, "kickoff", None)))
+                                getattr(game, "kickoff", None)),
+                            **_env)
     tier = market_tier(prop.market)
     min_edge = tier_min_edge(prop.market)
     gate_ok = (credible and has_market

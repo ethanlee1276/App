@@ -133,6 +133,57 @@ def test_the_mlb_gate_hands_the_veto_its_live_environment():
     assert "**_env" in src[i:i + 400]
 
 
+def test_football_wind_is_magnitude_and_baseball_wind_is_signed():
+    """The sport decides what wind MEANS. Baseball's is signed against the
+    park's center-field bearing; football has no "out" — speed is what
+    leans on the passing game. Slices are keyed by sport, so the two
+    vocabularies can never pool."""
+    assert lp.wind_band(10, sport="mlb") == "wind out hard"
+    assert lp.wind_band(10, sport="nfl") == "windy (8-15mph)"
+    assert lp.wind_band(18, sport="nfl") == "howling (15mph+)"
+    assert lp.wind_band(5, sport="cfb") == "calm (<8mph)"
+    assert lp.wind_band(10, roofed=True, sport="nfl") is None
+
+
+def test_the_nfl_board_journals_its_weather_too():
+    from engine.pipeline import run_slate
+    out = run_slate(os.path.join(ROOT, "data", "sample_slate.json"))
+    recs = out["recommendations"]
+    assert recs and all("roofed" in r and "wind_out" in r for r in recs)
+    for r in recs:
+        if r["roofed"]:
+            assert r["wind_out"] is None    # indoors has no wind dimension
+
+
+def test_the_nfl_gate_hands_the_veto_its_weather():
+    src = open(os.path.join(ROOT, "engine", "betting.py"),
+               encoding="utf-8").read()
+    i = src.index("pattern_block = lp_veto(")
+    before = src[max(0, i - 900):i]
+    assert 'sport in ("nfl", "cfb")' in before
+    assert "**_env" in src[i:i + 500]
+
+
+def test_the_environment_coverage_matrix_is_honest():
+    """Every sport gets exactly the environment physics supports — and
+    the N/As are decisions, not omissions. MLB: park index + signed wind.
+    NFL: dome + wind magnitude. CFB: gate wired, but its build pulls no
+    weather feed (documented on the board as 'weather not pulled'), so
+    rows band unknown until one exists. NBA/WNBA/UFC: indoor sports —
+    attaching a constant "roof" band to every bet would be a
+    non-discriminating slice, i.e. noise wearing a dimension's name."""
+    mlb_pipe = open(os.path.join(ROOT, "engine", "mlb", "pipeline.py"),
+                    encoding="utf-8").read()
+    nfl_pipe = open(os.path.join(ROOT, "engine", "pipeline.py"),
+                    encoding="utf-8").read()
+    nba_pipe = open(os.path.join(ROOT, "engine", "nba", "pipeline.py"),
+                    encoding="utf-8").read()
+    assert "_env_of(game)" in mlb_pipe
+    assert 'd["wind_out"]' in nfl_pipe
+    assert "wind_out" not in nba_pipe, \
+        "an indoor sport grew a wind dimension — that is noise, not data"
+
+
 def test_the_lab_can_propose_on_park_and_wind():
     from engine import hypotheses as hyp
     assert "park" in hyp.DIMS and "wind" in hyp.DIMS
