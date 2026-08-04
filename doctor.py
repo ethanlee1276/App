@@ -309,9 +309,17 @@ def check_record_page(rep):
             return
         d = json.loads(p.read_text(encoding="utf-8"))
         c = ledger.connect()
-        settled = c.execute("SELECT COUNT(*) FROM bets WHERE "
-                            "status IN ('won','lost','push') "
-                            "AND category='main'").fetchone()[0]
+        # Compare against the SAME number the page computes, not a private
+        # re-count. The page excludes zero-staked graded rows (they were
+        # never bets anyone could win a unit on — performance() reports
+        # them separately as "unstaked"), and a raw COUNT here read those
+        # 181 rows as "the export is behind" and prescribed a settle sweep
+        # that could re-run forever without reconciling anything.
+        settled = ledger.performance(c)["settled"]
+        unstaked = c.execute(
+            "SELECT COUNT(*) FROM bets WHERE status IN ('won','lost','push') "
+            "AND category='main' AND (stake_units IS NULL OR stake_units <= 0)"
+        ).fetchone()[0]
         shown = ((d.get("overall") or {}).get("settled")
                  or (d.get("performance") or {}).get("settled"))
         age_h = (time.time() - p.stat().st_mtime) / 3600
@@ -321,8 +329,12 @@ def check_record_page(rep):
                     f"{settled} — the export is behind",
                     "python3 launch.py --settle all")
         else:
+            note = (f" (+{unstaked} graded-but-unstaked, reported separately"
+                    f" — `--resize-unstaked` counts them at 0.1u)"
+                    if unstaked else "")
             rep.add("record page", OK,
-                    f"{settled} settled bet(s), written {age_h:.0f}h ago")
+                    f"{settled} settled bet(s), written {age_h:.0f}h ago"
+                    + note)
 
 
 def check_premature_evidence(rep):

@@ -122,6 +122,19 @@ def test_the_ingest_check_reads_the_column_that_exists():
     assert "MAX(date)" not in block
 
 
+def test_the_record_check_counts_the_way_the_page_counts():
+    """The page's performance() excludes zero-staked graded rows; the check
+    re-counted them raw, read 181 never-were-bets as "the export is behind",
+    and prescribed a settle sweep that could re-run forever without
+    reconciling anything. One basis: the check asks performance() itself."""
+    src = open(os.path.join(ROOT, "doctor.py"), encoding="utf-8").read()
+    i = src.index("def check_record_page(")
+    block = src[i:i + 2200]
+    assert 'ledger.performance(c)["settled"]' in block
+    assert '"AND category=\'main\'").fetchone()' not in block, \
+        "the raw un-predicated count is back"
+
+
 def test_an_off_season_sport_is_not_reported_as_a_stale_ingest():
     """The NBA is dark June to October. "last final 4 months ago" is the
     calendar, not a broken feed."""
