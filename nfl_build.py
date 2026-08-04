@@ -89,6 +89,32 @@ def main() -> None:
         except DataUnavailable as exc:
             print(f"\n⚠️  Injury feed unavailable — projecting without it.\n   {exc}")
 
+    # §5's reset rule: a traded player, a new head coach or a snap-share
+    # promotion makes the older games evidence about a job that no longer
+    # exists. Truncate to the post-reset sample before anything projects
+    # off it — "three games in the real current role beat twelve games in
+    # a role that no longer exists".
+    reset_report = {}
+    try:
+        from engine import reset as _reset
+        from engine.db import connect as _reset_connect
+        _rc = _reset_connect()
+        try:
+            reset_report = _reset.apply_to_slate(
+                slate, _rc, args.season, load_schedules())
+        finally:
+            _rc.close()
+        n_reset, n_held = len(reset_report["reset"]), len(reset_report["held"])
+        if n_reset or n_held:
+            print(f"\nSample resets: {n_reset} player(s) re-projected from "
+                  f"post-change games only, {n_held} flagged stale but too "
+                  f"thin to reset.")
+            for who, e in list(reset_report["reset"].items())[:6]:
+                print(f"  · {who}: {e['detail']} — kept {e['kept']}, "
+                      f"dropped {e['dropped']}")
+    except Exception as exc:                       # noqa: BLE001
+        print(f"\n⚠️  Reset rule skipped — projecting on full samples.\n   {exc}")
+
     qb_notes = None
     if args.depth:
         try:
@@ -202,6 +228,13 @@ def main() -> None:
 
     result = run_slate(slate, config, model=model, nfl_usage=nfl_usage,
                        team_notes=qb_notes)
+    # Say on each card what the sample rule did — the reset that was
+    # applied, or the stale sample that was too thin to reset.
+    if reset_report:
+        from engine import reset as _reset
+        _reset.decorate(result["recommendations"], reset_report)
+        result["sample_resets"] = {
+            k: v for k, v in reset_report.items() if k != "index"}
 
     # §10 drawdown circuit-breaker: after a 10u peak-to-trough drawdown on
     # the settled journal, every stake is halved until the peak is recovered.
