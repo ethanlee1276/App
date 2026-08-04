@@ -97,7 +97,8 @@ def _lineups(slate):
     return out
 
 
-def run(date: str, dump_path: str | None = None) -> int:
+def run(date: str, dump_path: str | None = None,
+        trials: int = 20000) -> int:
     from engine.mlb.sources.statslogs import build_live_slate
     try:
         slate = build_live_slate(date)
@@ -145,7 +146,7 @@ def run(date: str, dump_path: str | None = None) -> int:
         # model's. The filler is never in `targets`, so it is never graded.
         rates = G.pad_to_nine(sorted(rates, key=lambda r: r.spot or 9))
         fitted = G.calibrate(rates, targets)
-        sim = G.simulate_lineup(fitted, [], trials=20000)
+        sim = G.simulate_lineup(fitted, [], trials=trials)
         rec = G.reconcile(sim, targets)
         ran += 1
         worst_overall = max(worst_overall, rec["worst_rel_error"])
@@ -217,4 +218,11 @@ if __name__ == "__main__":
                   if a.startswith("--dump=")), None)
     if "--dump" in sys.argv[1:]:
         _dump = _dump or "data/sim_gate_failures.json"
-    raise SystemExit(run(date, _dump))
+    # A rare market is where a Monte Carlo is weakest: at 20,000 trials a
+    # 0.06 home-run mean carries ~3% relative sampler error, which is half
+    # the gate's tolerance before the model has said anything. Raising the
+    # count separates a real bias from the sampler — slower, so it stays
+    # opt-in rather than the nightly default.
+    _trials = next((int(a.split("=", 1)[1]) for a in sys.argv[1:]
+                    if a.startswith("--trials=")), 20000)
+    raise SystemExit(run(date, _dump, _trials))
