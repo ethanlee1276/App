@@ -427,6 +427,9 @@ def settle_open(log=print, state_path: Path | None = None,
                 from . import prose
                 prose.nightly(lconn, log)
                 prose.weekly(lconn, log)
+                # And the lab's paid propose, weekly under the same cap —
+                # the one recurring manual step, retired.
+                prose.weekly_lab(lconn, log)
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  prose lanes skipped: {exc}")
         if settled or fixed or parlays_moved:

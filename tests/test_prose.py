@@ -189,6 +189,73 @@ def test_a_failed_call_returns_a_status_instead_of_raising():
             os.environ.pop("ANTHROPIC_API_KEY", None)
 
 
+# --- the lab's weekly propose: the last manual chore, retired ----------------
+def test_the_lab_proposes_itself_weekly_under_the_cap():
+    from engine import hypotheses as hyp
+    keep_key = os.environ.get("ANTHROPIC_API_KEY")
+    os.environ["ANTHROPIC_API_KEY"] = "sk-test"
+    conn = _journal()
+    calls = []
+    orig = hyp.propose
+
+    def fake(lc, **kw):
+        calls.append(1)
+        return {"hypotheses": [], "last_proposed": TODAY}
+    hyp.propose = fake
+    keep_load = hyp.load
+    hyp.load = lambda path=None: {"last_proposed": ""}
+    try:
+        assert P.weekly_lab(conn, log=lambda *a: None) == "done"
+        assert len(calls) == 1
+        # A store proposed today holds the cadence.
+        hyp.load = lambda path=None: {"last_proposed": TODAY}
+        assert P.weekly_lab(conn, log=lambda *a: None) == "already"
+        assert len(calls) == 1
+    finally:
+        hyp.propose = orig
+        hyp.load = keep_load
+        if keep_key is None:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+
+
+def test_the_lab_cadence_respects_the_cap_and_the_missing_key():
+    from engine import hypotheses as hyp
+    from engine import secrets as _sec
+    keep = os.environ.pop("ANTHROPIC_API_KEY", None)
+    was = _sec._loaded
+    _sec._loaded = True
+    try:
+        assert P.weekly_lab(_journal(), log=lambda *a: None) == "no-key"
+    finally:
+        _sec._loaded = was
+        if keep is not None:
+            os.environ["ANTHROPIC_API_KEY"] = keep
+    os.environ["ANTHROPIC_API_KEY"] = "sk-test"
+    os.environ["QELLYS_LLM_CAP_USD"] = "0"
+    keep_load = hyp.load
+    hyp.load = lambda path=None: {"last_proposed": ""}
+    try:
+        assert P.weekly_lab(_journal(), log=lambda *a: None) == "capped"
+    finally:
+        hyp.load = keep_load
+        del os.environ["QELLYS_LLM_CAP_USD"]
+        if keep is None:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+
+
+def test_a_propose_stamps_the_store_so_the_cadence_can_hold():
+    from engine import hypotheses as hyp
+    import inspect
+    src = inspect.getsource(hyp.propose)
+    assert '"last_proposed"' in src
+
+
+def test_the_settle_passes_run_the_weekly_lab_too():
+    for fname in ("launch.py", os.path.join("engine", "maintenance.py")):
+        src = open(os.path.join(ROOT, fname), encoding="utf-8").read()
+        assert "prose.weekly_lab(lconn" in src, fname
+
+
 # --- the meter, the contract, the doctrine -----------------------------------
 def test_every_call_is_metered_before_it_is_parsed():
     import inspect

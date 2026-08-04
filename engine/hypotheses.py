@@ -499,6 +499,9 @@ def propose(lconn, api_key: str | None = None, model: str | None = None,
     hyps, watch = validate(raw, pack)
     tested = tribunal(hyps, lp.records_from_ledger(lconn))
     store = merge(load(path), tested, watch,
-                  {"model": model or _model(), "usage": usage})
+                  {"model": model or _model(), "usage": usage,
+                   # Stamped so the automatic weekly cadence (prose.weekly_lab)
+                   # can hold its interval without a second bookkeeping file.
+                   "last_proposed": _dt.date.today().isoformat()})
     save(store, path)
     return store

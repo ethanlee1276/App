@@ -442,6 +442,45 @@ def weekly(lconn, log=print, path: Path | str | None = None) -> str:
         return "failed"
 
 
+# --- the lab's weekly propose, automated under the same guards ---------------
+LAB_EVERY_DAYS = 7
+
+
+def weekly_lab(lconn, log=print) -> str:
+    """One paid propose per week, self-run: without it the lab only
+    re-tests old hypotheses and never gets new ones — a recurring manual
+    chore, which is exactly the thing this operation does not keep. Same
+    guard order and the same promise as the other automatic lanes: key,
+    fresh-enough store, cap, and never a raise into the settle pass."""
+    if not hyp._api_key():
+        return "no-key"
+    graded = lconn.execute(
+        "SELECT COUNT(*) FROM bets WHERE status IN ('won','lost','push')"
+    ).fetchone()[0]
+    if not graded:
+        return "nothing-graded"
+    store = hyp.load()
+    try:
+        last = _dt.date.fromisoformat(store.get("last_proposed") or "")
+        if (_dt.date.today() - last).days < LAB_EVERY_DAYS:
+            return "already"
+    except ValueError:
+        pass
+    if not under_cap():
+        log(f"  prose: lab propose paused — ${month_spent():.2f} of the "
+            f"${cap_usd():.2f} monthly LLM cap is spent")
+        return "capped"
+    try:
+        out = hyp.propose(lconn)
+        n = len(out.get("hypotheses") or [])
+        log(f"  hypothesis lab: weekly propose ran — {n} hypothesis(es) "
+            f"in the store, tribunal applied")
+        return "done"
+    except hyp.HypothesisUnavailable as exc:
+        log(f"  ⚠️  weekly propose skipped: {exc}")
+        return "failed"
+
+
 # --- lane three: the triage bench (CLI only, never automatic) ----------------
 SCHEMA_TRIAGE = {
     "type": "object",

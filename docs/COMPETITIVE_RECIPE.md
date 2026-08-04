@@ -447,10 +447,14 @@ confirmations are provisional by construction), and enforced only
 through `losspatterns.veto` — the gate every sport's engine already
 consults. A confirmed hypothesis acts by becoming ordinary, tested
 arithmetic. The API call is one structured-output request to
-claude-opus-5 (raw HTTP, stdlib, per project doctrine), CLI-invoked
-only (`python3 hypotheses.py`), key in gitignored secrets.local; the
-nightly retest is free. The WON'T itself is unchanged: nothing an LLM
-writes can set a probability.
+claude-opus-5 (raw HTTP, stdlib, per project doctrine), key in
+gitignored secrets.local; the nightly retest is free. Originally
+CLI-invoked only; since 2026-08-04 the propose step also runs itself
+weekly from the settle pass (`prose.weekly_lab`) under the same
+monthly spend cap as the prose lanes — a recurring manual step is an
+operational bug here, and the cap is what made retiring it safe. The
+WON'T itself is unchanged: nothing an LLM writes can set a
+probability.
 
 **Amended 2026-08-04 — the third and final sanctioned lane: narrating.**
 The prose lanes (`engine/prose.py`) are the "explanation, never a

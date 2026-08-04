@@ -6,9 +6,11 @@
     python3 hypotheses.py --retest       # free: re-try everything stored
     python3 hypotheses.py --dry-run      # print the evidence pack, call nothing
 
-This is the ONLY command in the entire learning loop that spends money:
-one structured-output request to claude-opus-5 (roughly a cent or two per
-run at current prices — the exact token usage prints after each call).
+The propose step spends money — one structured-output request to
+claude-opus-5 (the exact token usage and cost print after each call, and
+land on the spend ledger). It also runs itself weekly from the settle
+pass under the monthly LLM cap, so this command is for running it EARLY
+— after a big settle worth reasoning over — not a chore.
 Everything downstream is the same free arithmetic as the rest of the
 ladder: proposals are validated against the miner's own menu, tried by
 the same calibration z + false-discovery tribunal, re-tried every settle

@@ -2846,6 +2846,7 @@ def settle_now(day: str | None = None) -> None:
         from engine import prose
         prose.nightly(lconn, print)
         prose.weekly(lconn, print)
+        prose.weekly_lab(lconn, print)
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠️  prose lanes skipped: {exc}")
     ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
