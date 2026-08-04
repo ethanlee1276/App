@@ -87,13 +87,17 @@ def _long_shots(slate) -> tuple[list[dict], list[dict], dict, list[dict]]:
     # Top THREE picks — the same three the Recommended page features.
     picks = [p.to_dict() for p in build_hr_longshots(candidates, limit=3,
                                                      per_team=2)]
-    # hr_env rides on every long-shot row — this is the exact board the
-    # park and wind dimensions exist to explain.
+    # hr_env and the batting slot ride on every long-shot row — this is
+    # the exact board the park, wind and lineup dimensions exist to
+    # explain.
     env_by_player = {c["prop"].player: _env_of(c["game"])
                      for c in candidates}
+    slot_by_player = {c["prop"].player: int(c["prop"].lineup_spot or 0)
+                      for c in candidates}
     for d in picks:
         d["recent_values"] = recent_by_player.get(d.get("player", ""), [])
         d.update(env_by_player.get(d.get("player", ""), {}))
+        d["lineup_slot"] = slot_by_player.get(d.get("player", ""))
     # The watchlist is computed in full and TRIMMED before it leaves here.
     #
     # It used to ship unlimited, on the reasoning that every real-priced
@@ -119,6 +123,8 @@ def _long_shots(slate) -> tuple[list[dict], list[dict], dict, list[dict]]:
         d["lineup_confirmed"] = confirmed.get(d.get("player", ""), True)
         if "park_hr" not in d:
             d.update(env_by_player.get(d.get("player", ""), {}))
+        if "lineup_slot" not in d:
+            d["lineup_slot"] = slot_by_player.get(d.get("player", ""))
     # Trim to what tops the board up to three. Zero picks means three from
     # the most-likely ranking; three picks means none. Either way the page
     # is three rows, which is what "the top three long shots" means.
@@ -692,6 +698,14 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         d["game_date"] = game.date
         d["game_kickoff"] = game.kickoff
         d.update(_env_of(game))
+        # lineup_status: the batting slot and its certainty at pick time —
+        # the PA half of a batter prop. A pitcher prop has no slot, and
+        # NULL says so honestly.
+        from .models import PITCHER_MARKETS
+        if prop.market not in PITCHER_MARKETS:
+            d["lineup_slot"] = int(prop.lineup_spot or 0)
+            d["lineup_confirmed"] = bool(
+                getattr(game, "lineups_confirmed", True))
         if getattr(game, "doubleheader", False):
             # Say WHICH game of the doubleheader this prop is for — on the
             # card, in the headline, everywhere.

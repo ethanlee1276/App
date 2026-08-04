@@ -130,8 +130,11 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     # the hr_env dimensions: the park's HR index, signed wind toward CF at
     # pick time (+out/−in, NULL = unknown or indoors), and the roof state.
     # NULL = unknown at pick time (or pre-migration row).
+    # …plus lineup_status: the batting slot at pick time (0 = not listed,
+    # NULL = unknown/not a batter prop) and whether the card was official
+    # or projected — the PA half of every batter prop, journaled.
     for col in ("proj_minutes", "actual_minutes", "lead_min", "park_hr",
-                "wind_out", "roofed"):
+                "wind_out", "roofed", "lineup_slot", "lineup_conf"):
         try:
             conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
         except sqlite3.OperationalError:
@@ -239,8 +242,9 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
             "stake_dollars, status, leg, proj_minutes, lead_min, park_hr, "
-            "wind_out, roofed) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?, ?)",
+            "wind_out, roofed, lineup_slot, lineup_conf) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', "
+            "?, ?, ?, ?, ?, ?, ?, ?)",
             (now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
              r["line"], r.get("book", ""), r.get("odds", -110), r.get("projection"),
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
@@ -261,7 +265,11 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # Wrigley" becomes a slice the tribunal can convict.
              r.get("park_hr"), r.get("wind_out"),
              1 if r.get("roofed") else 0 if r.get("roofed") is not None
-             else None))
+             else None,
+             # lineup_status: the PA half of a batter prop.
+             r.get("lineup_slot"),
+             1 if r.get("lineup_confirmed") else 0
+             if r.get("lineup_confirmed") is not None else None))
         n += cur.rowcount
     # Recommended game bets journal too (sharp-anchor picks live or die by
     # forward results). Moneylines store player = the team picked, line 0.5,
@@ -393,8 +401,9 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category, lead_min, "
-            "park_hr, wind_out, roofed) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?)",
+            "park_hr, wind_out, roofed, lineup_slot, lineup_conf) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', "
+            "?, ?, ?, ?, ?, ?, ?)",
             (now, sport, row_date, r["player"], market, "OVER", 0.5,
              r.get("book", ""), odds, None, r.get("model_prob"),
              r.get("edge", r.get("ev_per_unit")), r.get("confidence"),
@@ -406,7 +415,10 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
              # hr_env: this is the board park and wind exist to explain.
              r.get("park_hr"), r.get("wind_out"),
              1 if r.get("roofed") else 0 if r.get("roofed") is not None
-             else None))
+             else None,
+             r.get("lineup_slot"),
+             1 if r.get("lineup_confirmed") else 0
+             if r.get("lineup_confirmed") is not None else None))
         n += cur.rowcount
     return n
 

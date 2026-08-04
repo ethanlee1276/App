@@ -172,6 +172,11 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         # pick, not just explain the last one.
         from .pipeline import _env_of
         _env = _env_of(game)
+    if prop.market not in PITCHER_MARKETS:
+        _env["lineup_slot"] = int(prop.lineup_spot or 0)
+        _env["lineup_conf"] = bool(
+            getattr(game, "lineups_confirmed", True)) if game is not None \
+            else False
     pattern_block = lp_veto("mlb", prop.market, side=side, odds=best.odds,
                             prob=hit, book=best.book, horizon_days=0,
                             lead_min=minutes_until(

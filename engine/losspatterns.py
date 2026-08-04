@@ -201,9 +201,30 @@ def wind_band(wind_out, roofed=False) -> str | None:
     return "wind out hard"
 
 
+def lineup_band(slot, confirmed) -> str | None:
+    """Batting slot and its certainty at pick time, banded per the triage
+    spec. Every batter-prop over is plate appearances times per-PA
+    production, and the slot is the PA half: a leadoff hitter gets about
+    one more trip than the nine-hole. "Projected" bets carry silent
+    scratch and demotion risk the price already reflects — if the gap
+    lives in the projected bands, the blind spot is timing, not the
+    hitting model."""
+    if slot is None:
+        return None
+    try:
+        s = int(slot)
+    except (TypeError, ValueError):
+        return None
+    if s <= 0:
+        return "not in lineup"
+    tier = "1-3" if s <= 3 else "4-6" if s <= 6 else "7-9"
+    return f"{'confirmed' if confirmed else 'projected'} {tier}"
+
+
 def features_of(side=None, odds=None, prob=None, book=None,
                 horizon_days=None, lead_min=None, park_hr=None,
-                wind_out=None, roofed=False) -> dict:
+                wind_out=None, roofed=False, lineup_slot=None,
+                lineup_conf=False) -> dict:
     """The feature dict for one bet — mining and veto both come through
     here, so a pick is judged by exactly the dimensions it was mined on."""
     feats = {
@@ -215,6 +236,7 @@ def features_of(side=None, odds=None, prob=None, book=None,
         "lead": lead_band(lead_min),
         "park": park_band(park_hr, roofed),
         "wind": wind_band(wind_out, roofed),
+        "slot": lineup_band(lineup_slot, bool(lineup_conf)),
     }
     return {k: v for k, v in feats.items() if v is not None}
 
@@ -228,8 +250,8 @@ def records_from_ledger(conn) -> list[dict]:
     """
     rows = conn.execute(
         "SELECT sport, market, side, odds, hit_prob, book, date, ts, status, "
-        "lead_min, park_hr, wind_out, roofed FROM bets "
-        "WHERE status IN ('won','lost')").fetchall()
+        "lead_min, park_hr, wind_out, roofed, lineup_slot, lineup_conf "
+        "FROM bets WHERE status IN ('won','lost')").fetchall()
     out = []
     for r in rows:
         p = r["hit_prob"]
@@ -247,7 +269,9 @@ def records_from_ledger(conn) -> list[dict]:
                                  book=r["book"], horizon_days=horizon,
                                  lead_min=r["lead_min"], park_hr=r["park_hr"],
                                  wind_out=r["wind_out"],
-                                 roofed=bool(r["roofed"])),
+                                 roofed=bool(r["roofed"]),
+                                 lineup_slot=r["lineup_slot"],
+                                 lineup_conf=bool(r["lineup_conf"])),
         })
     return out
 
@@ -393,7 +417,8 @@ def refresh(lconn, path=None) -> dict:
 
 def veto(sport: str, market: str, side=None, odds=None, prob=None,
          book=None, horizon_days=None, lead_min=None, park_hr=None,
-         wind_out=None, roofed=False, path=None) -> str | None:
+         wind_out=None, roofed=False, lineup_slot=None, lineup_conf=False,
+         path=None) -> str | None:
     """The reason this pick is blocked, or None.
 
     Consulted where is_reliable() is: a pick whose features land in a slice
@@ -405,7 +430,8 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
     store = load(path)
     feats = features_of(side=side, odds=odds, prob=prob, book=book,
                         horizon_days=horizon_days, lead_min=lead_min,
-                        park_hr=park_hr, wind_out=wind_out, roofed=roofed)
+                        park_hr=park_hr, wind_out=wind_out, roofed=roofed,
+                        lineup_slot=lineup_slot, lineup_conf=lineup_conf)
     for f in store.get("closed") or []:
         if f.get("sport") != sport:
             continue

@@ -84,7 +84,8 @@ from .losspatterns import (ALPHA, CLOSE_GAP_PTS, MIN_N,  # noqa: E402
 # center field at pick time). All three were drafted by the triage bench
 # from the lab's own watchlist, journaled by the miner, and listed here so
 # the lab can propose on them — its best ideas, made testable.
-DIMS = ("side", "odds", "prob", "horizon", "book", "lead", "park", "wind")
+DIMS = ("side", "odds", "prob", "horizon", "book", "lead", "park", "wind",
+        "slot")
 
 
 class HypothesisUnavailable(RuntimeError):
@@ -178,10 +179,11 @@ SCHEMA = {
                     "lead": {"type": ["string", "null"]},
                     "park": {"type": ["string", "null"]},
                     "wind": {"type": ["string", "null"]},
+                    "slot": {"type": ["string", "null"]},
                 },
                 "required": ["claim", "rationale", "sport", "market",
                              "side", "odds", "prob", "horizon", "book",
-                             "lead", "park", "wind"],
+                             "lead", "park", "wind", "slot"],
                 "additionalProperties": False,
             },
         },
