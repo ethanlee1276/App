@@ -2268,13 +2268,18 @@ def restated_performance(conn, sport: str | None = None) -> dict:
     A pick today's Kelly refuses at its journaled probability and price
     (the vig-eaten ones an old grader shipped) is EXCLUDED and counted,
     because today's model would not have made that bet at all.
+
+    MAIN only, exactly like performance(): the headline record describes
+    the picks the model stands behind, and the long-shot dimes have their
+    own bucket with their own scoreboard — blending them back in here
+    would re-create, in the restated view, the exact pollution the
+    buckets exist to prevent.
     """
     from .odds import american_to_decimal
     from .quality import STAKE_CAP_U
     from .staking import kelly_units
     q = ("SELECT sport, status, odds, hit_prob, grade FROM bets "
-         "WHERE status IN ('won','lost','push') AND category IN "
-         "('main','longshot')")
+         "WHERE status IN ('won','lost','push') AND category='main'")
     args: list = []
     if sport:
         q += " AND sport=?"

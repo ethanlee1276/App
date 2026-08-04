@@ -349,6 +349,17 @@ def settle_open(log=print, state_path: Path | None = None,
                     f"that actually played them")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  league relabel skipped: {exc}")
+        # Long-shot markets (home runs, anytime TDs) may NEVER sit in the
+        # headline record — the journal gate refuses them at the door, and
+        # this sweep re-files any stray that got in some other way, so the
+        # main record can only ever describe picks the model stands behind.
+        try:
+            strays = ledger.move_longshots_out_of_main(lconn)
+            if strays:
+                log(f"  re-filed {strays} long-shot bet(s) out of the "
+                    f"headline record into their own bucket")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  long-shot re-file skipped: {exc}")
         res = ingest_for_open_bets(lconn, hconn, days, log)
         settled = ledger.settle_from_history(lconn, hconn)
         # Self-healing: any bet ever graded off a partial stat line gets

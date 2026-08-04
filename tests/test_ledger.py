@@ -866,6 +866,39 @@ def test_repair_drops_duplicates_already_in_the_longshot_bucket():
     assert ledger.performance(conn)["settled"] == 0
 
 
+def test_the_repair_runs_itself_on_every_settle_pass():
+    """"Make sure they only go under the long shot record" cannot depend
+    on a human remembering --repair-journal. The journal gate refuses
+    long-shot markets at the door, and BOTH settle passes now sweep any
+    stray back out — main is self-healing, not merely defended."""
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for fname in ("launch.py", os.path.join("engine", "maintenance.py")):
+        src = open(os.path.join(root, fname), encoding="utf-8").read()
+        # In the settle path, not just the manual repair flag.
+        i = src.index("relabel_cross_league")
+        assert "move_longshots_out_of_main" in src[i:i + 1600], \
+            f"{fname}: the stray sweep is not beside the settle repairs"
+
+
+def test_the_restated_view_is_main_only_like_the_headline():
+    """The restated record answers "what would OUR record read at today's
+    sizing" — and "our record" is the main bucket, exactly as
+    performance() defines it. Blending the long-shot dimes back in would
+    re-create the pollution the buckets exist to prevent."""
+    conn = _conn()
+    _insert_settled(conn, "MainWin", status="won", market="hits", odds=-110)
+    conn.execute("UPDATE bets SET hit_prob=0.57 WHERE player='MainWin'")
+    conn.execute("INSERT INTO bets (sport,date,player,market,side,line,odds,"
+                 "hit_prob,stake_units,stake_dollars,status,pnl_units,"
+                 "category) VALUES ('mlb','2026-07-20','Dart','home_runs',"
+                 "'OVER',0.5,400,0.24,0.1,0,'won',0.4,'longshot')")
+    conn.commit()
+    r = ledger.restated_performance(conn)
+    assert r["settled"] == 1 and r["wins"] == 1, \
+        "the long-shot dart leaked into the restated main record"
+
+
 def test_export_json_carries_calibration_and_health():
     import json, tempfile
     from pathlib import Path

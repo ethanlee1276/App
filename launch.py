@@ -2765,6 +2765,15 @@ def settle_now(day: str | None = None) -> None:
                   f"actually played them")
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠️  league relabel skipped: {exc}")
+    # Long-shot markets may never sit in the headline record — re-file any
+    # stray so the main record only describes picks the model stands behind.
+    try:
+        strays = ledger.move_longshots_out_of_main(lconn)
+        if strays:
+            print(f"  re-filed {strays} long-shot bet(s) out of the "
+                  f"headline record into their own bucket")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  long-shot re-file skipped: {exc}")
     try:
         # Every sport with an open pick that day, not just baseball. This
         # ingested MLB alone, so a WNBA or UFC pick had no stat line to be
