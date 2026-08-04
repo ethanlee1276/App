@@ -82,9 +82,16 @@ def _hr_prop(career, hr_games, n=10):
 def test_a_player_with_no_career_rate_shrinks_to_the_league_not_himself():
     """prior = observed/n was a no-op disguised as shrinkage: a 4-homer
     fortnight stayed a 0.4/game projection for exactly the rookies the
-    receipts caught running hot."""
+    receipts caught running hot.
+
+    "No career rate" means None — genuinely not on file. This test used
+    to pass 0.0 for that, which is how the falsy check got written and
+    shipped: a MEASURED .000 career is not a missing one, and treating
+    it as missing handed the league average to every hitter who has
+    never homered.
+    """
     form = SimpleNamespace(mean=0.4)
-    rate = _rare_event_rate(_hr_prop(career=0.0, hr_games=4), form)
+    rate = _rare_event_rate(_hr_prop(career=None, hr_games=4), form)
     k = RARE_EVENT_PRIOR_GAMES
     assert abs(rate - (k * LEAGUE_HR_RATE + 4) / (k + 10)) < 1e-9
     assert rate < 0.21                          # nowhere near the raw 0.4
@@ -143,6 +150,45 @@ def test_no_built_board_ships_an_impossible_trio():
         assert hr <= h + 1e-6, player
         assert h + 3 * hr <= t + 1e-6, player
         assert t <= 3 * h + hr + 1e-6, player
+
+
+def test_a_measured_zero_career_is_not_an_unknown_career():
+    """`if career_avg else LEAGUE_HR_RATE` is falsy, and 0.0 is falsy —
+    so a hitter with a genuine .000 career had it overwritten by the
+    league average. Measured: he projected 0.056 HR/game while the SAME
+    hitter carrying a career 0.01 projected 0.004, i.e. thirteen times
+    more likely to homer for never having homered.
+
+    The zero-career population is most of a roster and all of a
+    walk-forward's early sample, which is why calibrate.py pinned this
+    market at the edge of its search range (T=0.4, a 22-point optimistic
+    lean over 293k player-games) while hr_diagnose — which filters to
+    "players with home-run history", the one population where this
+    cannot fire — reported the model healthy at 1.1x. Two tools
+    disagreeing about the same engine was the tell."""
+    from engine.mlb.projection import _rare_event_rate, MIN_RARE_EVENT_RATE
+
+    class _F:
+        mean = 0.0
+
+    def rate(career, vals):
+        logs = [MLBGameLog(game=i, opponent="X", value=v)
+                for i, v in enumerate(vals)]
+        p = MLBProp(player="P", team="A", opponent="B", position="2B",
+                    market=HOME_RUNS, logs=logs, career_avg=career,
+                    vs_pitcher_avg=None, lines=[])
+        return _rare_event_rate(p, _F)
+
+    never = rate(0.0, [0] * 40)
+    rarely = rate(0.01, [0] * 40)
+    average = rate(0.10, [0, 0, 1, 0, 0, 0, 0, 0, 1, 0] * 4)
+    slugger = rate(0.20, ([0, 1, 0, 0, 1, 0] * 6) + [1, 1])
+    # Monotone in the career rate — the inversion is what made it absurd.
+    assert never <= rarely <= average <= slugger
+    assert never < 0.02, "a .000 career must not inherit the league rate"
+    # …but never literally zero: the bottom of an order still runs into one.
+    assert never >= MIN_RARE_EVENT_RATE
+    assert slugger > 0.2
 
 
 if __name__ == "__main__":

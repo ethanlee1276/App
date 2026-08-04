@@ -70,6 +70,12 @@ RARE_EVENT_PRIOR_GAMES = 30.0
 # rookies without a career line were exactly the pool the receipts
 # caught running hot (said 14%, hit 11%).
 LEAGUE_HR_RATE = 0.13
+
+#: Floor under a rare-event rate. A hitter who has never homered is not
+#: a hitter who cannot: the bottom of a big-league order still runs into
+#: one. Small enough that it never manufactures a bet, large enough that
+#: the model never states an impossibility.
+MIN_RARE_EVENT_RATE = 0.01
 # Environment dampening for rare events. Park, weather, Statcast and
 # matchup HR effects are each estimated on the thinnest tail of the
 # data, and the long-shot board then SELECTS the props where they stack
@@ -86,17 +92,31 @@ def _rare_event_rate(prop: MLBProp, form: FormResult) -> float:
 
     Shrinks the observed per-game rate toward the player's career rate in
     proportion to how little evidence there is, instead of amplifying the
-    most recent game. A player with NO career rate shrinks toward the
-    league rate — falling back to his own observed window made the prior
-    the noise it existed to damp."""
+    most recent game. A player whose career rate is genuinely UNKNOWN
+    (None) shrinks toward the league rate — falling back to his own
+    observed window made the prior the noise it existed to damp. A career
+    rate of 0.0 is not unknown; see below."""
     vals = [g.value for g in prop.logs]
     n = len(vals)
     if not n:
         return form.mean
     observed = float(sum(vals))
-    prior = prop.career_avg if prop.career_avg else LEAGUE_HR_RATE
+    # `is None`, NOT falsiness. A career rate of 0.0 is a MEASUREMENT —
+    # this hitter has not homered — and the falsy test overwrote it with
+    # the league average, so a slap hitter with a genuine .000 career
+    # projected at 0.056 HR/game while the same hitter carrying 0.01
+    # projected at 0.004. Thirteen times more likely to homer for never
+    # having homered. The zero-career population is most of a roster and
+    # all of a walk-forward's early sample, which is why calibrate.py
+    # pinned this market at the edge of its search range while
+    # hr_diagnose — filtered to "players with home-run history", the one
+    # population where this cannot fire — reported the model healthy.
+    prior = prop.career_avg if prop.career_avg is not None else LEAGUE_HR_RATE
     k = RARE_EVENT_PRIOR_GAMES
-    return (k * prior + observed) / (k + n)
+    rate = (k * prior + observed) / (k + n)
+    # …and nobody in a major-league batting order is literally incapable
+    # of it, so the shrink is floored rather than allowed to reach zero.
+    return max(rate, MIN_RARE_EVENT_RATE)
 
 
 def reconcile_triple(hits: float, tb: float, hr: float
