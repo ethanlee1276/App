@@ -7,6 +7,15 @@ batting-order slot (plate-appearance volume).
 
 Pitchers (strikeout props): the opposing lineup's strikeout rate and the
 pitcher's own K%.
+
+Pitcher LENGTH (the outs market) is its own question and used to get no
+answer at all — `evaluate_matchup` routed hitters and strikeouts and
+returned a flat 1.0 for everything else, so the market built specifically
+to price how deep a starter goes had no matchup input whatsoever. What
+actually governs it is the pen behind him: a manager whose relievers
+threw nine innings across the last two nights rides his starter longer,
+which is the same measured workload the hitter path already prices from
+the other side.
 """
 
 from __future__ import annotations
@@ -15,7 +24,7 @@ from dataclasses import dataclass, field
 
 from .models import (
     MLBGame, MLBProp, Pitcher,
-    HITTER_MARKETS, STRIKEOUTS,
+    HITTER_MARKETS, STRIKEOUTS, OUTS,
 )
 from ..statmath import clamp
 
@@ -133,6 +142,19 @@ def _pitcher_matchup(prop: MLBProp, game: MLBGame) -> MatchupEffect:
         mult *= 1.03
         reasons.append(f"Elite swing-and-miss stuff ({me.k_rate:.0%} K rate)")
 
+    # His OWN pen's workload. The hitter path prices what a tired pen
+    # gives the opposition; this is what it asks of the man in front of
+    # it — no available relievers means a longer leash.
+    own = (game.bullpen_fatigue or {}).get(prop.team)
+    if own is not None:
+        from .bullpen import leash_factor
+        lf = leash_factor(own, market_is_outs=False)
+        if lf > 1.0:
+            mult *= lf
+            reasons.append(f"Own bullpen worked {own:.1f} weighted relief "
+                           f"innings over the last two days — a longer leash "
+                           f"than usual")
+
     # Measured streak reversion applies to K stretches too.
     if prop.streak_factor != 1.0:
         mult *= prop.streak_factor
@@ -142,11 +164,41 @@ def _pitcher_matchup(prop: MLBProp, game: MLBGame) -> MatchupEffect:
     return MatchupEffect(clamp(mult, 0.88, 1.12), reasons)
 
 
+def _length_matchup(prop: MLBProp, game: MLBGame) -> MatchupEffect:
+    """Outs recorded — how DEEP the start goes, which is a bullpen
+    question before it is a stuff question.
+
+    Deliberately narrow. The opposing lineup's K rate belongs to the
+    strikeout path and does not transfer here: strikeouts are the most
+    expensive outs a pitcher can record, so a high-K opponent lengthens
+    innings by pitch count as much as it shortens them by outs, and the
+    net sign is not obvious enough to price. The pen behind him is.
+    """
+    mult = 1.0
+    reasons: list[str] = []
+    own = (game.bullpen_fatigue or {}).get(prop.team)
+    if own is not None:
+        from .bullpen import leash_factor
+        lf = leash_factor(own, market_is_outs=True)
+        if lf > 1.0:
+            mult *= lf
+            reasons.append(f"Own bullpen worked {own:.1f} weighted relief "
+                           f"innings over the last two days — managers ride "
+                           f"the starter deeper with a short pen")
+    if prop.streak_factor != 1.0:
+        mult *= prop.streak_factor
+        if prop.streak_note:
+            reasons.append(prop.streak_note)
+    return MatchupEffect(clamp(mult, 0.90, 1.10), reasons)
+
+
 def evaluate_matchup(prop: MLBProp, game: MLBGame) -> MatchupEffect:
     if prop.market in HITTER_MARKETS:
         return _hitter_matchup(prop, game)
     if prop.market == STRIKEOUTS:
         return _pitcher_matchup(prop, game)
+    if prop.market == OUTS:
+        return _length_matchup(prop, game)
     return MatchupEffect(1.0)
 
 

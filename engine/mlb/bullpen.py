@@ -64,6 +64,37 @@ def fatigue_factor(score: float) -> float:
     return round(clamp(1.0 + (score - TIRED_MIN) * PER_INNING, 1.0, FACTOR_MAX), 3)
 
 
+#: The OTHER side of a tired pen, and the one this module originally
+#: missed. A manager with no available relievers rides his starter
+#: longer — that is the most reliably observable managerial behaviour in
+#: baseball, and it lands directly on the outs market. Outs move more
+#: than strikeouts because the extra work is innings, not stuff: a
+#: sixth and seventh inning add outs at the starter's ordinary rate,
+#: while his K rate per batter does not improve for being left in.
+LEASH_PER_INNING = 0.010
+LEASH_MAX = 1.05
+#: Strikeouts inherit the leash at half strength — more batters faced,
+#: same per-batter stuff, and a tiring starter's rate usually falls.
+LEASH_K_SHARE = 0.5
+
+
+def leash_factor(score: float, market_is_outs: bool = True) -> float:
+    """Own-pen workload → multiplier on the STARTER's own length.
+
+    Mirror image of :func:`fatigue_factor`: that one prices what a tired
+    pen gives the opposing HITTERS, this one prices what it asks of the
+    starter in front of it. Same shape, same discipline — flat until the
+    workload is clearly abnormal, then a bounded nudge.
+    """
+    if score is None or score < TIRED_MIN:
+        return 1.0
+    raw = (score - TIRED_MIN) * LEASH_PER_INNING
+    if not market_is_outs:
+        raw *= LEASH_K_SHARE
+    cap = LEASH_MAX if market_is_outs else 1.0 + (LEASH_MAX - 1.0) * LEASH_K_SHARE
+    return round(clamp(1.0 + raw, 1.0, cap), 3)
+
+
 def fatigue_score(team_id: int, date: str) -> float | None:
     """Weighted relief innings for a team over the two days before ``date``.
 

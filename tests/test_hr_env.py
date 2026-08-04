@@ -130,7 +130,7 @@ def test_the_mlb_gate_hands_the_veto_its_live_environment():
                encoding="utf-8").read()
     i = src.index("pattern_block = lp_veto(")
     assert "_env_of(game)" in src[max(0, i - 700):i]
-    assert "**_env" in src[i:i + 400]
+    assert "**_env" in src[i:i + 700]
 
 
 def test_football_wind_is_magnitude_and_baseball_wind_is_signed():

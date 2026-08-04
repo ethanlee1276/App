@@ -85,7 +85,7 @@ from .losspatterns import (ALPHA, CLOSE_GAP_PTS, MIN_N,  # noqa: E402
 # from the lab's own watchlist, journaled by the miner, and listed here so
 # the lab can propose on them — its best ideas, made testable.
 DIMS = ("side", "odds", "prob", "horizon", "book", "lead", "park", "wind",
-        "slot", "rest", "clock")
+        "slot", "rest", "clock", "pen_opp", "pen_own")
 
 
 class HypothesisUnavailable(RuntimeError):
@@ -182,11 +182,13 @@ SCHEMA = {
                     "slot": {"type": ["string", "null"]},
                     "rest": {"type": ["string", "null"]},
                     "clock": {"type": ["string", "null"]},
+                    "pen_opp": {"type": ["string", "null"]},
+                    "pen_own": {"type": ["string", "null"]},
                 },
                 "required": ["claim", "rationale", "sport", "market",
                              "side", "odds", "prob", "horizon", "book",
                              "lead", "park", "wind", "slot", "rest",
-                             "clock"],
+                             "clock", "pen_opp", "pen_own"],
                 "additionalProperties": False,
             },
         },

@@ -177,10 +177,17 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         _env["lineup_conf"] = bool(
             getattr(game, "lineups_confirmed", True)) if game is not None \
             else False
+    # Bullpen workload behind both sides — the same bands the board shows,
+    # so a convicted pocket refuses the NEXT matching pick. The backtest
+    # calls this with no game at all, which is an unmeasured pen rather
+    # than a fresh one.
+    _pen = (game.bullpen_fatigue or {}) if game is not None else {}
     pattern_block = lp_veto("mlb", prop.market, side=side, odds=best.odds,
                             prob=hit, book=best.book, horizon_days=0,
                             lead_min=minutes_until(
                                 getattr(game, "kickoff", None)),
+                            pen_own=_pen.get(prop.team),
+                            pen_opp=_pen.get(prop.opponent),
                             **_env)
     tier = mlb_tier(prop.market)
     min_edge = mlb_tier_min_edge(prop.market)

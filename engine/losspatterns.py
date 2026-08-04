@@ -258,11 +258,33 @@ def clock_band(hour) -> str | None:
     return None          # the ordinary middle of the day discriminates nothing
 
 
+def pen_band(score) -> str | None:
+    """Bullpen workload behind a pick, banded — weighted relief innings
+    over the two prior days (engine.mlb.bullpen). The multiplier this
+    dimension drives has shipped for a long time without anything able to
+    check it; banding it is what lets the record answer whether a tired
+    pen is worth what the model pays for it."""
+    try:
+        v = float(score)
+    except (TypeError, ValueError):
+        return None
+    if v < 0:
+        return None
+    from .mlb.bullpen import TIRED_MIN
+    if v < 3.0:
+        return "pen fresh"
+    if v < TIRED_MIN:
+        return "pen normal"
+    if v < TIRED_MIN + 4:
+        return "pen taxed"
+    return "pen gassed"
+
+
 def features_of(side=None, odds=None, prob=None, book=None,
                 horizon_days=None, lead_min=None, park_hr=None,
                 wind_out=None, roofed=False, lineup_slot=None,
                 lineup_conf=False, sport=None, rest_days=None,
-                body_clock=None) -> dict:
+                body_clock=None, pen_own=None, pen_opp=None) -> dict:
     """The feature dict for one bet — mining and veto both come through
     here, so a pick is judged by exactly the dimensions it was mined on."""
     feats = {
@@ -277,6 +299,11 @@ def features_of(side=None, odds=None, prob=None, book=None,
         "slot": lineup_band(lineup_slot, bool(lineup_conf)),
         "rest": rest_band(rest_days),
         "clock": clock_band(body_clock),
+        # Two separate dimensions on purpose: the opposing pen is what
+        # lifts a hitter's number, the own pen is what lengthens a
+        # starter's. Pooling them would average two opposite effects.
+        "pen_opp": pen_band(pen_opp),
+        "pen_own": pen_band(pen_own),
     }
     return {k: v for k, v in feats.items() if v is not None}
 
@@ -291,7 +318,7 @@ def records_from_ledger(conn) -> list[dict]:
     rows = conn.execute(
         "SELECT sport, market, side, odds, hit_prob, book, date, ts, status, "
         "lead_min, park_hr, wind_out, roofed, lineup_slot, lineup_conf, "
-        "rest_days, body_clock "
+        "rest_days, body_clock, pen_own, pen_opp "
         "FROM bets WHERE status IN ('won','lost')").fetchall()
     out = []
     for r in rows:
@@ -315,6 +342,7 @@ def records_from_ledger(conn) -> list[dict]:
                                  lineup_conf=bool(r["lineup_conf"]),
                                  rest_days=r["rest_days"],
                                  body_clock=r["body_clock"],
+                                 pen_own=r["pen_own"], pen_opp=r["pen_opp"],
                                  sport=r["sport"]),
         })
     return out
@@ -462,7 +490,8 @@ def refresh(lconn, path=None) -> dict:
 def veto(sport: str, market: str, side=None, odds=None, prob=None,
          book=None, horizon_days=None, lead_min=None, park_hr=None,
          wind_out=None, roofed=False, lineup_slot=None, lineup_conf=False,
-         rest_days=None, body_clock=None, path=None) -> str | None:
+         rest_days=None, body_clock=None, pen_own=None, pen_opp=None,
+         path=None) -> str | None:
     """The reason this pick is blocked, or None.
 
     Consulted where is_reliable() is: a pick whose features land in a slice
@@ -477,6 +506,7 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
                         park_hr=park_hr, wind_out=wind_out, roofed=roofed,
                         lineup_slot=lineup_slot, lineup_conf=lineup_conf,
                         rest_days=rest_days, body_clock=body_clock,
+                        pen_own=pen_own, pen_opp=pen_opp,
                         sport=sport)
     for f in store.get("closed") or []:
         if f.get("sport") != sport:

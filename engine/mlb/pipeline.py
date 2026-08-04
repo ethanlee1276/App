@@ -698,6 +698,14 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         d["game_date"] = game.date
         d["game_kickoff"] = game.kickoff
         d.update(_env_of(game))
+        # Bullpen workload at pick time, both sides. The opposing pen's
+        # tiredness already MOVES hitter numbers and the own pen's now
+        # moves the starter's length — but neither was ever journaled, so
+        # nothing could measure whether those multipliers are right. Now
+        # the miner can band and convict them like any other dimension.
+        _pen = game.bullpen_fatigue or {}
+        d["pen_own"] = _pen.get(prop.team)
+        d["pen_opp"] = _pen.get(prop.opponent)
         # lineup_status: the batting slot and its certainty at pick time —
         # the PA half of a batter prop. A pitcher prop has no slot, and
         # NULL says so honestly.

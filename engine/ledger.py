@@ -135,7 +135,7 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     # or projected — the PA half of every batter prop, journaled.
     for col in ("proj_minutes", "actual_minutes", "lead_min", "park_hr",
                 "wind_out", "roofed", "lineup_slot", "lineup_conf",
-                "rest_days", "body_clock"):
+                "rest_days", "body_clock", "pen_own", "pen_opp"):
         try:
             conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
         except sqlite3.OperationalError:
@@ -250,9 +250,9 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
             "stake_dollars, status, leg, proj_minutes, lead_min, park_hr, "
             "wind_out, roofed, lineup_slot, lineup_conf, rest_days, "
-            "body_clock) "
+            "body_clock, pen_own, pen_opp) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', "
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
              r["line"], r.get("book", ""), r.get("odds", -110), r.get("projection"),
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
@@ -281,7 +281,10 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # fatigue: days of rest and the kickoff hour on this team's
              # own clock. Journaled so the miner can decide, on our record,
              # whether a short week or a 10am body clock is a real pocket.
-             r.get("rest_days"), r.get("body_clock")))
+             r.get("rest_days"), r.get("body_clock"),
+             # bullpen: weighted relief innings behind this pick, both
+             # sides — the measurement the existing multiplier never had.
+             r.get("pen_own"), r.get("pen_opp")))
         n += cur.rowcount
     # Recommended game bets journal too (sharp-anchor picks live or die by
     # forward results). Moneylines store player = the team picked, line 0.5,
