@@ -249,8 +249,12 @@ def test_the_page_renders_the_miner_with_its_discipline_stated():
     # not-enough-data — a fresh journal must read as honest, not broken.
     assert "nothing survives" in fn and "Not enough graded bets" in fn
     assert 'if (!lp || !(lp.n_records ?? 0)) return ""' in fn
-    # Full-record view only, like the self-tuning section above it.
-    assert 'scoped ? "" : recLossPatternsSection(d.loss_patterns)' in app
+    # EVERY scope, filtered to the sport being viewed — with its own
+    # clean-sheet reading so an empty filter is a verdict, not a blank.
+    assert "recLossPatternsSection(d.loss_patterns, scoped ? scope : null)" \
+        in app
+    assert 'scoped ? "" : recLossPatternsSection' not in app
+    assert "No pattern involves" in fn
 
 
 if __name__ == "__main__":

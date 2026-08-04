@@ -297,7 +297,11 @@ def test_the_page_renders_the_lab_with_the_authority_stated():
                    "Why the AI only proposes",
                    "nothing an AI writes here can ever set a probability"):
         assert needle in fn, needle
-    assert 'scoped ? "" : recHypothesisLab(d.hypothesis_lab)' in app
+    # EVERY scope, filtered to the sport being viewed; the watchlist (free
+    # text, no sport field) stays on the combined view.
+    assert "recHypothesisLab(d.hypothesis_lab, scoped ? scope : null)" in app
+    assert 'scoped ? "" : recHypothesisLab' not in app
+    assert "No hypothesis touches" in fn
 
 
 def test_the_cli_is_the_only_paid_step():

@@ -3464,11 +3464,35 @@ function recForecastLog(f) {
    is stamped with the commit that produced it. It was all real and all
    invisible — and a learning loop nobody can see is indistinguishable from
    a static model. */
-function recSelfTuningSection(st) {
-  if (!st || !(st.markets || []).length) return "";
+function recSelfTuningSection(st, sport) {
+  // `sport` scopes the section to one league's own learning — the ladder
+  // fits every sport separately, so each sport's record page shows ITS
+  // rows rather than hiding the whole section behind the "All" scope
+  // (which is how the learning shipped invisible: the page always lands
+  // sport-scoped, and nobody clicks All).
+  if (!st) return "";
+  const only = (rows) => (rows || []).filter((r) => !sport || r.sport === sport);
+  const markets = only(st.markets);
+  const weights = only(st.weights);
+  const players = only(st.players);
+  const closed = only(st.closed);
+  const trendEntries = Object.entries(st.trend || {})
+    .filter(([sp]) => !sport || sp === sport);
+  if (!markets.length && !weights.length && !players.length
+      && !trendEntries.length) {
+    if (!sport) return "";
+    return `
+    <div class="section-title">The model tunes itself
+      <span class="sub">— every settled bet feeds a nightly refit; nobody touches a dial.</span></div>
+    <div class="card"><p style="margin:0;padding:12px 14px;font-size:.87em;color:var(--text-mute)">
+      Nothing tuned for ${escapeHtml(sport.toUpperCase())} yet. The fitters run
+      after every settle pass, on this sport's own settled bets only, and adopt
+      a correction only when it beats the spec in a walk-forward test — so this
+      fills in as its journal deepens.</p></div>`;
+  }
   const tone = (m) => m.at_boundary ? "var(--bad)"
     : Math.abs(m.temperature - 1) > 0.05 ? "var(--warn)" : "var(--good)";
-  const rows = st.markets.map((m) => `
+  const rows = markets.map((m) => `
     <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
         border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
       <span class="chip">${escapeHtml((m.sport || "").toUpperCase())}</span>
@@ -3479,7 +3503,7 @@ function recSelfTuningSection(st) {
       ${m.brier_before != null && m.brier_after != null && m.brier_after < m.brier_before
         ? `<span style="opacity:.6;font-variant-numeric:tabular-nums" title="Brier before → after the correction, on held-out outcomes">${m.brier_before.toFixed(4)} → ${m.brier_after.toFixed(4)}</span>` : ""}
     </div>`).join("");
-  const weightRows = (st.weights || []).map((w) => `
+  const weightRows = weights.map((w) => `
     <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
         border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
       <span class="chip">${escapeHtml((w.sport || "").toUpperCase())}</span>
@@ -3497,7 +3521,7 @@ function recSelfTuningSection(st) {
       run; the record moves it only by beating the spec curve in a walk-forward
       test, and a dial it examined and left alone says so.</span></div>
     <div class="card" style="padding:0">${weightRows}</div>`;
-  const playerRows = (st.players || []).map((p) => `
+  const playerRows = players.map((p) => `
     <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
         border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
       <span class="chip">${escapeHtml((p.sport || "").toUpperCase())}</span>
@@ -3517,11 +3541,11 @@ function recSelfTuningSection(st) {
       a market when remembering players out-predicted forgetting them in a
       causal walk-forward test — "memory off" is a result, not a failure.</span></div>
     <div class="card" style="padding:0">${playerRows}</div>`;
-  const trendRows = Object.entries(st.trend || {}).flatMap(([sport, mkts]) =>
+  const trendRows = trendEntries.flatMap(([sp, mkts]) =>
     Object.entries(mkts).map(([mk, t]) => `
       <div style="display:flex;gap:12px;align-items:baseline;padding:6px 14px;
           border-bottom:1px solid rgba(255,255,255,.05);font-size:.86em;flex-wrap:wrap">
-        <span class="chip">${escapeHtml(sport.toUpperCase())}</span>
+        <span class="chip">${escapeHtml(sp.toUpperCase())}</span>
         <span style="flex:1;min-width:120px">${escapeHtml(mk)}</span>
         <span style="font-variant-numeric:tabular-nums">ECE ${((t.first || {}).ece ?? 0).toFixed(3)}
           → <span style="color:var(--${t.improved ? "good" : "warn"})">${((t.last || {}).ece ?? 0).toFixed(3)}</span></span>
@@ -3536,10 +3560,14 @@ function recSelfTuningSection(st) {
     <div class="stats">
       <div class="tile"><div class="k">Last refit</div><div class="v" style="font-size:var(--fs-lg)">${escapeHtml(lastRefit)}</div>
         <div class="tile-sub">runs itself after every settle</div></div>
-      <div class="tile"><div class="k">Markets tuned</div><div class="v">${st.markets.length}</div></div>
-      <div class="tile"><div class="k">Self-closed</div><div class="v">${(st.closed || []).length}</div>
+      <div class="tile"><div class="k">Markets tuned</div><div class="v">${markets.length}</div></div>
+      <div class="tile"><div class="k">Self-closed</div><div class="v">${closed.length}</div>
         <div class="tile-sub">a fit at its boundary shuts its own market</div></div>
-      <div class="tile"><div class="k">Improving</div><div class="v">${st.tracked ? `${st.improving}/${st.tracked}` : "—"}</div>
+      <div class="tile"><div class="k">Improving</div><div class="v">${(() => {
+        const flat = trendEntries.flatMap(([, mkts]) => Object.values(mkts));
+        return flat.length
+          ? `${flat.filter((t) => t.improved).length}/${flat.length}` : "—";
+      })()}</div>
         <div class="tile-sub">markets whose calibration error is falling</div></div>
     </div>
     <div class="card" style="padding:0">${rows}</div>
@@ -3562,11 +3590,17 @@ function recSelfTuningSection(st) {
       structurally cannot copy.</p>`)}`;
 }
 
-function recLossPatternsSection(lp) {
+function recLossPatternsSection(lp, sport) {
   if (!lp || !(lp.n_records ?? 0)) return "";
+  // Sport scope: each league's page shows the patterns mined from ITS
+  // graded bets. The mining stats tiles stay whole-journal (one sweep
+  // covers every sport) and say so when scoped.
+  const findings = (lp.findings || [])
+    .filter((f) => !sport || f.sport === sport);
+  const closed = (lp.closed || []).filter((c) => !sport || c.sport === sport);
   const tone = (f) => f.action === "close" ? "var(--bad)"
     : (f.gap_pts ?? 0) > 0 ? "var(--warn)" : "var(--text-mute)";
-  const rows = (lp.findings || []).map((f) => `
+  const rows = findings.map((f) => `
     <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
         border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
       <span class="chip">${escapeHtml((f.sport || "").toUpperCase())}</span>
@@ -3576,7 +3610,11 @@ function recLossPatternsSection(lp) {
       ${f.action === "close"
         ? `<span class="chip" style="color:var(--bad)">vetoing picks</span>` : ""}
     </div>`).join("");
-  const empty = (lp.tested ?? 0) > 0 ? `
+  const empty = (sport && (lp.findings || []).length) ? `
+    <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
+      No pattern involves ${escapeHtml(sport.toUpperCase())} — its graded bets
+      are in every night's sweep, and a clean sheet here is the sweep's
+      verdict, not its absence.</p>` : (lp.tested ?? 0) > 0 ? `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
       Scanned ${lp.tested} slice${lp.tested === 1 ? "" : "s"} of
       ${(lp.n_records ?? 0).toLocaleString()} graded bets — nothing survives
@@ -3595,11 +3633,12 @@ function recLossPatternsSection(lp) {
       one level finer.</span></div>
     <div class="stats">
       <div class="tile"><div class="k">Record mined</div><div class="v">${(lp.n_records ?? 0).toLocaleString()}</div>
-        <div class="tile-sub">graded bets, re-mined after every settle</div></div>
-      <div class="tile"><div class="k">Slices tested</div><div class="v">${lp.tested ?? 0}</div></div>
-      <div class="tile"><div class="k">Patterns found</div><div class="v">${(lp.findings || []).length}</div>
-        <div class="tile-sub">survivors of false-discovery control</div></div>
-      <div class="tile"><div class="k">Self-closed</div><div class="v">${(lp.closed || []).length}</div>
+        <div class="tile-sub">graded bets${sport ? ", all sports" : ""}, re-mined after every settle</div></div>
+      <div class="tile"><div class="k">Slices tested</div><div class="v">${lp.tested ?? 0}</div>
+        ${sport ? `<div class="tile-sub">whole journal, one sweep</div>` : ""}</div>
+      <div class="tile"><div class="k">Patterns found</div><div class="v">${findings.length}</div>
+        <div class="tile-sub">survivors of false-discovery control${sport ? `, ${escapeHtml(sport.toUpperCase())}` : ""}</div></div>
+      <div class="tile"><div class="k">Self-closed</div><div class="v">${closed.length}</div>
         <div class="tile-sub">slices now vetoing new picks</div></div>
     </div>
     <div class="card" style="padding:0">${rows || empty}</div>
@@ -3617,9 +3656,14 @@ function recLossPatternsSection(lp) {
       anything that lands in it, and the veto's reason names this page.</p>`)}`;
 }
 
-function recHypothesisLab(hl) {
+function recHypothesisLab(hl, sport) {
   if (!hl) return "";
-  const hyps = hl.hypotheses || [];
+  // Sport scope: each league's page shows the hypotheses ABOUT it. The
+  // watchlist stays on the combined view — its ideas are free text with
+  // no sport field to filter on.
+  const hyps = (hl.hypotheses || [])
+    .filter((h) => !sport || h.sport === sport);
+  const n_of = (s) => hyps.filter((h) => h.status === s).length;
   const tone = (h) => h.action === "close" ? "var(--bad)"
     : h.status === "confirmed" ? "var(--warn)"
     : h.status === "rejected" ? "var(--good)" : "var(--text-mute)";
@@ -3640,10 +3684,14 @@ function recHypothesisLab(hl) {
       ${h.action === "close"
         ? `<span class="chip" style="color:var(--bad)">vetoing picks</span>` : ""}
     </div>`).join("");
-  const watch = (hl.watchlist || []).map((w) => `
+  const watch = sport ? "" : (hl.watchlist || []).map((w) => `
     <div style="padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.05);
         font-size:.85em;color:var(--text-mute)">· ${escapeHtml(w)}</div>`).join("");
-  const empty = `
+  const empty = (sport && (hl.hypotheses || []).length) ? `
+    <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
+      No hypothesis touches ${escapeHtml(sport.toUpperCase())} yet. The next
+      <code>python3 hypotheses.py</code> run reads every sport's record —
+      including this one — and proposes wherever the evidence points.</p>` : `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
       The lab is idle. Add <code>ANTHROPIC_API_KEY</code> to secrets.local and
       run <code>python3 hypotheses.py</code> — the model reads the record's own
@@ -3659,13 +3707,13 @@ function recHypothesisLab(hl) {
       calibration test, same false-discovery bar, re-earned against the growing
       journal on every settle pass.</span></div>
     <div class="stats">
-      <div class="tile"><div class="k">Confirmed</div><div class="v">${hl.n_confirmed ?? 0}</div>
+      <div class="tile"><div class="k">Confirmed</div><div class="v">${n_of("confirmed")}</div>
         <div class="tile-sub">survived the tribunal — so far</div></div>
-      <div class="tile"><div class="k">Rejected</div><div class="v">${hl.n_rejected ?? 0}</div>
+      <div class="tile"><div class="k">Rejected</div><div class="v">${n_of("rejected")}</div>
         <div class="tile-sub">a published result, not a failure</div></div>
-      <div class="tile"><div class="k">Collecting</div><div class="v">${hl.n_collecting ?? 0}</div>
+      <div class="tile"><div class="k">Collecting</div><div class="v">${n_of("collecting")}</div>
         <div class="tile-sub">under the ${hl.min_n ?? 40}-bet floor</div></div>
-      <div class="tile"><div class="k">Vetoing</div><div class="v">${hl.n_closed ?? 0}</div>
+      <div class="tile"><div class="k">Vetoing</div><div class="v">${hyps.filter((h) => h.action === "close").length}</div>
         <div class="tile-sub">confirmed hot — blocking new picks</div></div>
     </div>
     <div class="card" style="padding:0">${rows || empty}${watch}</div>
@@ -4015,12 +4063,19 @@ async function renderRecord() {
     return;
   }
   if (scoped && !o.settled && !o.open) {
+    // An empty journal is not an empty MODEL: the ladder can already be
+    // fitted for this sport from walk-forward history (the NFL's dials
+    // adopted before its first journaled bet). Show the learning below
+    // the empty state instead of hiding it behind the journal.
     host.innerHTML = scopeBar + `<div class="empty-slate"><div class="es-icon">${icon("book", 30)}</div>
       <div class="es-title">Nothing journaled for ${escapeHtml(
         (SPORT_META[scope] || {}).name || scope.toUpperCase())} yet</div>
       <div class="es-sub">This board has not recommended a bet that reached a
       result. It fills itself in — every pick is journaled at its real price
-      the moment it is made, and grades when the games settle.</div></div>`;
+      the moment it is made, and grades when the games settle.</div></div>`
+      + recSelfTuningSection(d.self_tuning, scope)
+      + recLossPatternsSection(d.loss_patterns, scope)
+      + recHypothesisLab(d.hypothesis_lab, scope);
     bindRecordScopes(host);
     return;
   }
@@ -4116,9 +4171,14 @@ async function renderRecord() {
       scoped ? "" : recEraSection(d.model_eras)}
     ${recCalibrationSection(src.calibration, src.calibration_era)}
     ${scoped ? "" : recCalibrationSplits(d.calibration_splits)}
-    ${scoped ? "" : recSelfTuningSection(d.self_tuning)}
-    ${scoped ? "" : recLossPatternsSection(d.loss_patterns)}
-    ${scoped ? "" : recHypothesisLab(d.hypothesis_lab)}
+    ${/* The learning ladder renders on EVERY scope, filtered to the
+          sport being viewed — each league fits on its own bets, so each
+          league's page shows its own learning. Hiding these behind "All"
+          is how the whole ladder shipped invisible: the record page
+          always lands sport-scoped. */""}
+    ${recSelfTuningSection(d.self_tuning, scoped ? scope : null)}
+    ${recLossPatternsSection(d.loss_patterns, scoped ? scope : null)}
+    ${recHypothesisLab(d.hypothesis_lab, scoped ? scope : null)}
     ${scoped ? "" : recForecastLog(d.forecast_log)}
     ${scoped ? "" : recHealthSection(d.account_health)}
     ${scoped ? "" : recLongshotSection(d.longshots)}

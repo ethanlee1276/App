@@ -184,19 +184,25 @@ def test_the_report_ships_in_the_record_export():
     assert '"self_tuning": _self_tuning_block()' in src
 
 
-def test_the_page_renders_the_loop_and_only_on_the_full_record():
+def test_the_page_renders_the_loop_on_every_scope():
     fn = _fn(APP, "recSelfTuningSection")
     for needle in ("The model tunes itself", "Last refit", "Markets tuned",
                    "Self-closed", "Improving", "Is it getting better?"):
         assert needle in fn, needle
-    # Scoped views (one sport's record) skip it: the loop is one system,
-    # not a per-sport stat.
-    assert 'scoped ? "" : recSelfTuningSection(d.self_tuning)' in APP
+    # On EVERY scope, filtered to the sport being viewed. Each league fits
+    # on its own bets, so each league's page shows its own learning —
+    # hiding this behind the "All" scope is how the whole ladder shipped
+    # invisible, because the record page always lands sport-scoped.
+    assert "recSelfTuningSection(d.self_tuning, scoped ? scope : null)" in APP
+    assert 'scoped ? "" : recSelfTuningSection' not in APP
+    assert "r.sport === sport" in fn, "the scope filter is gone"
 
 
 def test_an_empty_or_absent_block_renders_nothing_not_a_crash():
     fn = _fn(APP, "recSelfTuningSection")
-    assert 'if (!st || !(st.markets || []).length) return ""' in fn
+    assert 'if (!st) return ""' in fn
+    # A scoped sport with nothing learned yet says so instead of vanishing.
+    assert "Nothing tuned for" in fn
     # Field guards: a stale record.json without these fields must degrade,
     # not blank the page — the day_u lesson, applied before the bug.
     assert "(m.temperature ?? 1).toFixed" in fn
