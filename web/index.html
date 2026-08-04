@@ -83,6 +83,14 @@
           <button class="sport-btn" data-sport="intel" data-kind="tool" title="Prediction markets — Kalshi prices + Polymarket informed flow">Prediction Mkts</button>
           <button class="sport-btn" data-sport="fantasy" data-kind="tool" title="Fantasy football — usage, scripts, buy-low">Fantasy</button>
         </div>
+        <!-- The Book is neither a league nor a market — it is the receipts
+             for all of them, plus the whole learning loop, and it earned
+             its own front door: burying it twelfth in a sport's tab row
+             hid the one page every tout site refuses to have. -->
+        <div class="menu-head" data-head="record" aria-hidden="true">The Book</div>
+        <div class="sport-group" data-group="record">
+          <button class="sport-btn" data-sport="record" data-kind="tool" title="Every pick journaled at its real price, graded in public — and the model that learns from it">Record</button>
+        </div>
         <div class="menu-head" data-head="more" aria-hidden="true">More</div>
         <!-- Six leagues stay visible because the league IS the primary axis
              of the whole site. On a phone this wrapper is display:contents,
@@ -116,7 +124,9 @@
       <button class="nav-btn" data-view="players" data-hint="search a player">Players</button>
       <button class="nav-btn" data-view="rosters" data-hint="every team's roster">Rosters</button>
       <button class="nav-btn" data-view="standings" data-hint="records &amp; the bracket">Standings</button>
-      <button class="nav-btn" data-view="record" data-hint="how we're doing">Record</button>
+      <!-- Record moved OUT of this row: it is a standalone page now (the
+           switcher's "The Book" group), because it is cross-sport by
+           nature and holds the whole learning loop. -->
     </nav>
 
     <div class="slate-meta">

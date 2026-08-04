@@ -4742,7 +4742,8 @@ function pmAgo(ts) {
 /* Rosters used to live here, which put "who is on this team" behind a
    tools menu and made it mean the NFL and only the NFL. It is a tab
    inside each sport now. */
-const STANDALONE_MODES = ["intel", "fantasy", "ufc", "why", "about"];
+const STANDALONE_MODES = ["intel", "fantasy", "ufc", "why", "about",
+                          "record"];
 
 // Header identity per standalone page — the tagline follows the ACTIVE
 // page. Before this, opening Polymarket from the MLB tab left a baseball
@@ -4752,6 +4753,7 @@ const STANDALONE_BRAND = {
   fantasy: { tagline: "Fantasy football — usage, scripts, draft kit" },
   ufc: { tagline: "Scalpy MMA — dossier-gated fight model" },
   why: { tagline: "See the math. Know if it's working." },
+  record: { tagline: "The Book — every pick journaled, graded, learned from" },
 };
 
 function enterStandaloneMode(name) {
@@ -4770,6 +4772,10 @@ function enterStandaloneMode(name) {
   }
   // Fantasy is NFL — avatars must draw helmets even if MLB was selected.
   if (name === "fantasy") window.ACTIVE_SPORT = "nfl";
+  // The Book's front door opens on the WHOLE record — the cross-sport
+  // view where the learning ladder reads unscoped. The scope chips still
+  // narrow to a league, and a chip already chosen this session is kept.
+  if (name === "record" && !_recordScope) _recordScope = "all";
   switchView(name);
 }
 
@@ -7091,7 +7097,7 @@ async function renderWhy() {
     </div>`;
 
   const seeRec = document.getElementById("why-see-record");
-  if (seeRec) seeRec.addEventListener("click", () => { exitStandaloneMode(); switchView("record"); });
+  if (seeRec) seeRec.addEventListener("click", () => enterStandaloneMode("record"));
   [["dv-a", whyCalcDevig], ["dv-b", whyCalcDevig],
    ["ky-p", whyCalcKelly], ["ky-odds", whyCalcKelly], ["ky-roll", whyCalcKelly], ["ky-frac", whyCalcKelly],
    ["pl-o1", whyCalcParlay], ["pl-p1", whyCalcParlay], ["pl-o2", whyCalcParlay],

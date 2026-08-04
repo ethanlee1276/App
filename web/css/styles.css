@@ -2231,6 +2231,11 @@ select.calc-in { width: auto; font-weight: 600; }
      two new ones don't have to share an order value with anything. */
   .menu-open .menu-head[data-head="markets"] { order: 2; margin-top: 8px; }
   .menu-open .sport-group[data-group="markets"] { order: 3; }
+  /* The Book sits between Markets and the page list — same order value as
+     the markets group, and source order (it follows markets in the DOM)
+     settles the tie, exactly like the page-head at order 3 already does. */
+  .menu-open .menu-head[data-head="record"] { order: 3; margin-top: 8px; }
+  .menu-open .sport-group[data-group="record"] { order: 3; }
   .menu-open .sport-group[data-group="tools"] { order: 5; }
   /* Section labels. Two unlabelled grids of near-identical pills gave a
      newcomer no way to know one switches SPORT and the other switches
@@ -2705,7 +2710,8 @@ select.calc-in { width: auto; font-weight: 600; }
      cascade collision here twice, and test_header_density slices the
      stylesheet from the first match of this exact query — a third block
      silently moved what that slice was reading. */
-  .sport-group[data-group="markets"] .sport-btn:first-child {
+  .sport-group[data-group="markets"] .sport-btn:first-child,
+  .sport-group[data-group="record"] .sport-btn:first-child {
     margin-left: 12px; padding-left: 16px;
     border-left: 1px solid var(--border-soft);
   }

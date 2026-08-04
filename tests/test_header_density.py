@@ -59,7 +59,10 @@ def test_the_switcher_has_three_named_groups_and_nothing_loose():
     assert set(leagues) == {"nfl", "cfb", "mlb", "nba", "wnba", "ufc"}
     # Rosters is NOT here: a roster belongs to a league, so it is a tab
     # inside each sport rather than a tool you navigate away to.
-    assert set(tools) == {"intel", "fantasy", "why", "about"}
+    # "record" joined the tools when The Book was promoted out of the
+    # per-sport tab row: the receipts cover every sport plus the whole
+    # learning loop, which is exactly what a standalone page is for.
+    assert set(tools) == {"intel", "fantasy", "why", "about", "record"}
     assert 'data-view="rosters"' in html, "the per-sport tab is missing"
 
     for sport in leagues:
@@ -67,6 +70,8 @@ def test_the_switcher_has_three_named_groups_and_nothing_loose():
     markets = _group(html, "markets")
     for sport in ("intel", "fantasy"):
         assert f'data-sport="{sport}"' in markets, f"{sport} left the row"
+    assert 'data-sport="record"' in _group(html, "record"), \
+        "The Book left its own group"
     # Only the site-about pages stay behind the menu, and they stay inside
     # the wrapper that positions the dropdown.
     more = html[html.index('id="sport-more"'):]

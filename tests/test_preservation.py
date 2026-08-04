@@ -110,6 +110,26 @@ def test_every_view_still_exists():
     assert 'id="view-game"' in HTML, "the per-game board lost its container"
 
 
+def test_the_record_is_a_standalone_page_not_a_sport_tab():
+    """Promoted by request: the Record holds the receipts for every sport
+    plus the whole learning loop, and it was buried twelfth in each
+    sport's tab row. It now enters through the switcher's own "The Book"
+    group like Prediction Mkts and Fantasy do — and the tab row must NOT
+    grow it back, or the site has two doors disagreeing about what kind
+    of page it is."""
+    assert 'data-sport="record"' in HTML, "the switcher lost The Book"
+    assert 'data-group="record"' in HTML
+    assert '<button class="nav-btn" data-view="record"' not in HTML, \
+        "Record is back in the per-sport tab row"
+    assert '"record"' in APP.split("STANDALONE_MODES = ")[1][:120], \
+        "record is not a standalone mode"
+    # The front door opens on the WHOLE record — the cross-sport scope
+    # where the learning ladder reads unscoped.
+    assert '_recordScope = "all"' in APP
+    # And the masthead ROI link routes through the same standalone door.
+    assert 'enterStandaloneMode("record")' in APP
+
+
 def test_the_game_board_is_still_reachable():
     """It has no nav tab — it is opened from a venue card and addressed as
     #game/<date>_<away>@<home>. A redesign that rebuilds the venue cards
