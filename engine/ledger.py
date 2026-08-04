@@ -2225,6 +2225,17 @@ def _hypothesis_lab_block() -> dict:
                 "n_rejected": 0, "n_collecting": 0, "n_closed": 0}
 
 
+def _prose_block() -> dict:
+    """The prose lanes' stored output, for export_json. Store-read only —
+    the export path must never be able to spend a token — and guarded so a
+    missing store never costs the export."""
+    try:
+        from . import prose
+        return prose.site_block()
+    except Exception:                              # noqa: BLE001
+        return {}
+
+
 def _loss_patterns_block(conn) -> dict:
     """The miner's view of this journal, for export_json. Guarded like
     every other block: a mining failure must never cost the export."""
@@ -2875,6 +2886,10 @@ def export_json(conn, path) -> None:
         # tribunal's verdicts. Read from the store — the export never
         # calls an API; the paid propose step is CLI-only.
         "hypothesis_lab": _hypothesis_lab_block(),
+        # The prose lanes: the nightly postmortem and the weekly model
+        # brief, read from their stores — the paid calls happen in the
+        # settle pass (capped) and the CLI, never here.
+        "prose": _prose_block(),
         "account_health": account_health(conn),
         # §13: the parlay record is reported SEPARATELY and never blended.
         # Its own key, its own tables, its own notional — nothing above this

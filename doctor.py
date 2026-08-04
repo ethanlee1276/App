@@ -275,15 +275,21 @@ def check_llm_spend(rep):
     @_check(rep, "llm spend")
     def _():
         from engine import hypotheses as hyp
+        from engine import prose
         r = hyp.llm_spend_report()
+        cap = prose.cap_usd()
         if not r["runs"]:
             rep.add("llm spend", OK, "no paid Anthropic calls logged — "
-                    "each `python3 hypotheses.py` run records itself")
+                    f"the prose lanes and the lab record themselves, "
+                    f"capped at ${cap:.2f}/month")
             return
+        capnote = (" · CAPPED — automatic prose paused for the month"
+                   if not prose.under_cap() else "")
         rep.add("llm spend", OK,
-                f"${r['month_usd']:.2f} this month across {r['month_runs']} "
-                f"run(s) · ${r['total_usd']:.2f} all-time "
-                f"({r['runs']} run(s)) · `python3 hypotheses.py --spend`")
+                f"${r['month_usd']:.2f} of ${cap:.2f}/month across "
+                f"{r['month_runs']} run(s) · ${r['total_usd']:.2f} all-time "
+                f"({r['runs']} run(s)) · `python3 hypotheses.py --spend`"
+                + capnote)
 
 
 def check_journal_sanity(rep):

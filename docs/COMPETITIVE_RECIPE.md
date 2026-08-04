@@ -452,6 +452,23 @@ only (`python3 hypotheses.py`), key in gitignored secrets.local; the
 nightly retest is free. The WON'T itself is unchanged: nothing an LLM
 writes can set a probability.
 
+**Amended 2026-08-04 — the third and final sanctioned lane: narrating.**
+The prose lanes (`engine/prose.py`) are the "explanation, never a
+number" path above, built: a nightly postmortem of the graded card and
+a weekly brief on what the learning ladder did, each one structured
+call writing prose from the arithmetic's own numbers — plus a
+CLI-only triage bench that drafts specs for turning the lab's
+watchlist ideas into future miner dimensions. Coverage is structural
+across every tracked sport (mlb, nfl, cfb, nba, wnba, ufc): the packs
+enumerate the sports and validation back-fills any note the model
+skipped from the pack's own numbers. Spend is bounded by arithmetic,
+not discipline — the automatic lanes stand down for the month once the
+ledger (data/llm_spend.json) passes QELLYS_LLM_CAP_USD (default
+$5.00), and the export path can only read stores, never call. Three
+lanes — propose, narrate, and nothing else — and the WON'T still
+stands whole: no LLM output is ever a probability, a stake, or a
+gate.
+
 ## What to distrust in the study
 
 The study flags its own weak sources and those flags are worth keeping in

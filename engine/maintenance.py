@@ -418,6 +418,17 @@ def settle_open(log=print, state_path: Path | None = None,
                         "closure(s) enforcing — see the Record page")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  hypothesis retest skipped: {exc}")
+            # The prose lanes: nightly postmortem + weekly brief. These
+            # DO spend (pennies), so they carry their own guards — no
+            # key = silent skip, one entry per night/week, and they
+            # stand down for the month once the LLM cap is spent. They
+            # run before the export so the page ships tonight's column.
+            try:
+                from . import prose
+                prose.nightly(lconn, log)
+                prose.weekly(lconn, log)
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  prose lanes skipped: {exc}")
         if settled or fixed or parlays_moved:
             ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
         if settled:

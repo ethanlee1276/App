@@ -2839,6 +2839,15 @@ def settle_now(day: str | None = None) -> None:
                   "enforcing — see the Record page")
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠️  hypothesis retest skipped: {exc}")
+    # The prose lanes (nightly postmortem, weekly brief): pennies per
+    # call, so they guard themselves — no key = silent skip, one entry
+    # per night/week, and they stand down once the monthly cap is spent.
+    try:
+        from engine import prose
+        prose.nightly(lconn, print)
+        prose.weekly(lconn, print)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  prose lanes skipped: {exc}")
     ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
     after = counts(lconn)
     print(f"  journal: settled {n} pick(s)")

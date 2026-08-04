@@ -3464,6 +3464,49 @@ function recForecastLog(f) {
    is stamped with the commit that produced it. It was all real and all
    invisible — and a learning loop nobody can see is indistinguishable from
    a static model. */
+function recProseSection(pz, sport) {
+  // The prose lanes: the nightly postmortem and the weekly model brief.
+  // The LLM narrates numbers the arithmetic already produced — never a
+  // probability, never a pick. Scoped views show the sport's own
+  // paragraph; coverage is structural (the engine back-fills every sport
+  // it tracks), so a missing note means a missing night, not a mood.
+  if (!pz || (!pz.postmortem && !pz.brief)) return "";
+  const para = (e, missing) => {
+    if (!e) return "";
+    const note = sport ? ((e.by_sport || {})[sport] || missing) : e.overall;
+    const when = e.date || e.week_of || "";
+    return `
+      <div style="padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.05)">
+        <div style="font-weight:600;margin-bottom:4px">${escapeHtml(e.headline || "")}
+          <span style="opacity:.45;font-weight:400;font-size:.85em"> · ${escapeHtml(when)}</span></div>
+        <p style="margin:0;font-size:.9em;line-height:1.5">${escapeHtml(note || "")}</p>
+        ${!sport && Object.keys(e.by_sport || {}).length ? `
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+            ${Object.entries(e.by_sport).map(([sp, n]) => `
+              <div style="font-size:.85em;color:var(--text-mute)">
+                <span class="chip">${escapeHtml(sp.toUpperCase())}</span> ${escapeHtml(n)}</div>`).join("")}
+          </div>` : ""}
+      </div>`;
+  };
+  const capNote = pz.capped ? `
+    <p style="padding:8px 14px;margin:0;font-size:.82em;color:var(--text-mute)">
+      Paused for the month — the $${(pz.cap_usd ?? 5).toFixed(2)} LLM spend cap
+      is reached ($${(pz.month_usd ?? 0).toFixed(2)} used). The arithmetic
+      keeps learning either way; only the narration waits.</p>` : "";
+  return `
+    <div class="section-title">The night desk
+      <span class="sub">— the one other job an AI that writes prose gets here:
+      narrating. A nightly postmortem of what actually graded and a weekly
+      note on what the learning ladder did — written from the arithmetic's
+      own numbers, never setting one. Capped spend, every call on the
+      ledger.</span></div>
+    <div class="card" style="padding:0">
+      ${para(pz.postmortem, `No ${escapeHtml((sport || "").toUpperCase())} picks graded that night.`)}
+      ${para(pz.brief, `Quiet week for ${escapeHtml((sport || "").toUpperCase())}.`)}
+      ${capNote}
+    </div>`;
+}
+
 function recSelfTuningSection(st, sport) {
   // `sport` scopes the section to one league's own learning — the ladder
   // fits every sport separately, so each sport's record page shows ITS
@@ -4073,6 +4116,7 @@ async function renderRecord() {
       <div class="es-sub">This board has not recommended a bet that reached a
       result. It fills itself in — every pick is journaled at its real price
       the moment it is made, and grades when the games settle.</div></div>`
+      + recProseSection(d.prose, scope)
       + recSelfTuningSection(d.self_tuning, scope)
       + recLossPatternsSection(d.loss_patterns, scope)
       + recHypothesisLab(d.hypothesis_lab, scope);
@@ -4176,6 +4220,7 @@ async function renderRecord() {
           league's page shows its own learning. Hiding these behind "All"
           is how the whole ladder shipped invisible: the record page
           always lands sport-scoped. */""}
+    ${recProseSection(d.prose, scoped ? scope : null)}
     ${recSelfTuningSection(d.self_tuning, scoped ? scope : null)}
     ${recLossPatternsSection(d.loss_patterns, scoped ? scope : null)}
     ${recHypothesisLab(d.hypothesis_lab, scoped ? scope : null)}
