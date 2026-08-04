@@ -437,7 +437,14 @@ def fetch_active_rosters(ttl: int = 21600) -> dict:
         if not ab:
             continue
         players = []
-        for e in ((t.get("roster") or {}).get("roster") or []):
+        # The hydrated roster arrives as {"roster": [...]} on some API
+        # versions and as a bare list on others. Assuming the dict shape
+        # made the list shape raise AttributeError — which the builder's
+        # fallback swallowed, so every pitcher silently vanished from the
+        # page while the dict-shaped test fixture stayed green.
+        r = t.get("roster") or {}
+        entries = (r.get("roster") or []) if isinstance(r, dict) else r
+        for e in entries or []:
             person = e.get("person") or {}
             pos = ((e.get("position") or {}).get("abbreviation") or "").upper()
             players.append({

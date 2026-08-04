@@ -54,6 +54,7 @@ OUT_DIR = Path("web/data")
 def payload_for(conn, sport: str, today: str | None = None) -> dict:
     day = today or datetime.date.today().isoformat()
     season = season_of(sport, day)
+    feed_err = ""
     if sport == "mlb":
         # The league's own active rosters, one keyless request for all
         # thirty clubs, six-hour cache. The appearance-built page below
@@ -76,8 +77,13 @@ def payload_for(conn, sport: str, today: str | None = None) -> dict:
                     "note": "",
                 })
                 return out
-        except Exception:                          # noqa: BLE001
-            pass                                   # feed down → appearances
+            feed_err = "the league feed returned no players"
+        except Exception as exc:                   # noqa: BLE001
+            # Fall back to appearances — but CARRY THE REASON. Swallowing
+            # it here is how the page ran pitcher-less for days while the
+            # build printed success: nothing anywhere said the feed had
+            # failed, or why.
+            feed_err = f"the league feed failed ({type(exc).__name__}: {exc})"
     # This season, falling back to last: in the first weeks of a year the
     # current season has barely any appearances on file, and an empty
     # roster page is worse than a slightly stale one that says its date.
@@ -104,6 +110,13 @@ def payload_for(conn, sport: str, today: str | None = None) -> dict:
         out["note"] = (f"Showing the {used} season — no {season} appearances "
                        f"on file yet. It updates itself once games are played "
                        f"and ingested.")
+    if feed_err:
+        # Appearance mode has a known blind spot, and the page must own it:
+        # pitchers never bat, so they are absent HERE, not from the team.
+        out["note"] = (f"Built from appearances because {feed_err} — "
+                       f"pitchers don't bat, so they are missing from this "
+                       f"view until the league feed recovers. "
+                       + (out["note"] or "")).strip()
     return out
 
 

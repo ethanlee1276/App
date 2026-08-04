@@ -281,6 +281,55 @@ def test_the_player_search_falls_back_to_the_roster_directory():
     assert "function openRoster" in app
 
 
+def test_the_feed_parser_accepts_both_roster_shapes():
+    """The hydrated roster arrives as {"roster": [...]} on some statsapi
+    versions and as a bare list on others. The dict-only parse raised
+    AttributeError on the list shape, the builder's fallback swallowed it,
+    and the page ran pitcher-less while the dict-shaped fixture stayed
+    green — the exact live failure Ethan reported from his phone."""
+    from engine.mlb.sources import mlbstats as MS
+    entry = {"person": {"fullName": "List Shape Arm", "id": 9},
+             "position": {"abbreviation": "SP"},
+             "jerseyNumber": "11", "status": {"description": "Active"}}
+    for roster_field in ({"roster": [entry]}, [entry]):
+        payload = {"teams": [{"id": 119, "abbreviation": "LAD",
+                              "roster": roster_field}]}
+        keep = MS._get_json
+        MS._get_json = lambda *a, **k: payload
+        try:
+            out = MS.fetch_active_rosters()
+        finally:
+            MS._get_json = keep
+        assert any(p["name"] == "List Shape Arm"
+                   for p in out.get("LAD", [])), roster_field
+
+
+def test_a_feed_failure_is_named_on_the_page_not_swallowed():
+    """Days of a pitcher-less roster page traced to `except: pass` — the
+    feed was failing and nothing anywhere said so. The fallback still
+    works; now it says WHY it is the fallback, and names the blind spot
+    (pitchers don't bat) so the absence reads as a feed problem, not a
+    team change."""
+    import rosters_build as RB
+    from engine.mlb.sources import mlbstats
+
+    conn = connect(":memory:")
+    upsert_player_logs(conn, [_log("Log Only Guy", "LAD", "2026-07-01")])
+
+    def _down(ttl=21600):
+        raise RuntimeError("egress blocked")
+    orig = mlbstats.fetch_active_rosters
+    mlbstats.fetch_active_rosters = _down
+    try:
+        out = RB.payload_for(conn, "mlb", today="2026-08-03")
+    finally:
+        mlbstats.fetch_active_rosters = orig
+    assert out["source"] == "appearances"
+    assert "league feed failed" in out["note"]
+    assert "egress blocked" in out["note"]
+    assert "pitchers" in out["note"].lower()
+
+
 def test_the_cli_reports_the_source_the_payload_actually_used():
     """The build line printed "from appearances" over every payload — so the
     one machine where the league feed mattered read its own success as the
