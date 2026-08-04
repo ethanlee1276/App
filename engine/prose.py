@@ -171,8 +171,14 @@ Rules, all hard:
 - Use ONLY numbers present in the JSON. Never invent a stat, a score, a \
 price, or a reason the data does not carry.
 - Honest diary voice: losses are losses. No hype, no hedging, no advice, \
-no predictions, no "lock" talk. Note when a loss looks like variance on a \
-fine price and when the model's stated probability just missed.
+no predictions, no "lock" talk.
+- Lost picks carry a measured "cause" (variance | blowout | short run) \
+and, where the closing line was captured, a "process" verdict ("good" = \
+our number beat the close, "bad" = the market faded us). Open the \
+overall with the verdict those tags support: process losses are the \
+model's to own; variance losses that beat the close are the game's tax, \
+not an error. Use the tags exactly as given — never re-diagnose a \
+tagged loss into a different story.
 - Write one short note per sport that appears in the pack (its key in \
 by_sport), plus a 2-4 sentence overall paragraph and a headline under \
 80 characters.
@@ -259,11 +265,21 @@ def diary_date(lconn) -> str | None:
 
 
 def postmortem_pack(lconn, date: str) -> dict:
+    from .ledger import _bet_clv, process_grade
     rows = [dict(r) for r in lconn.execute(
         "SELECT sport, player, market, side, line, odds, status, "
-        "stake_units, pnl_units, hit_prob, category FROM bets "
+        "stake_units, pnl_units, hit_prob, category, closing_line, "
+        "loss_cause FROM bets "
         "WHERE date=? AND status IN ('won','lost','push','void') "
         "AND category IN (?,?,?)", (date, *DIARY_CATEGORIES))]
+    for r in rows:
+        # The evidence layer, computed before the writer ever sees the
+        # night: the settle pass's measured cause on each loss, and the
+        # closing line's verdict on the decision itself.
+        clv = _bet_clv(r)
+        r["clv"] = round(clv, 3) if clv is not None else None
+        r["process"] = process_grade(r)
+        r["cause"] = r.get("loss_cause") if r["status"] == "lost" else None
     by: dict[str, list] = {}
     for r in rows:
         by.setdefault(r["sport"], []).append(r)
@@ -279,9 +295,27 @@ def postmortem_pack(lconn, date: str) -> dict:
             "net_units": round(sum(b.get("pnl_units") or 0 for b in v), 2),
             "picks": [{k: b.get(k) for k in
                        ("player", "market", "side", "line", "odds", "status",
-                        "stake_units", "pnl_units", "hit_prob", "category")}
+                        "stake_units", "pnl_units", "hit_prob", "category",
+                        "clv", "process", "cause")}
                       for b in picks],
         }
+        lost = [b for b in v if b["status"] == "lost"]
+        if lost:
+            causes: dict[str, int] = {}
+            for b in lost:
+                key = (b.get("cause") or "untagged").split(" (")[0]
+                causes[key] = causes.get(key, 0) + 1
+            summary[sp]["loss_causes"] = causes
+        proc = {
+            "lost_beat_close": sum(1 for b in lost
+                                   if b.get("process") == "good"),
+            "lost_market_faded": sum(1 for b in lost
+                                     if b.get("process") == "bad"),
+            "won_market_faded": sum(1 for b in v if b["status"] == "won"
+                                    and b.get("process") == "bad"),
+        }
+        if any(proc.values()):
+            summary[sp]["process"] = proc
     pack = {"date": date, "sports": sorted(by), "by_sport": summary}
     # Trim the biggest sport's pick lists until the pack fits the cap.
     while len(json.dumps(pack)) > MAX_PACK_CHARS:

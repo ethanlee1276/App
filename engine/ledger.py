@@ -139,6 +139,12 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
             conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
         except sqlite3.OperationalError:
             pass
+    try:
+        # The measured cause of a loss (engine/causes.py): "blowout (…)",
+        # "short run (…)", or "variance". NULL = not yet swept.
+        conn.execute("ALTER TABLE bets ADD COLUMN loss_cause TEXT")
+    except sqlite3.OperationalError:
+        pass
     for k, v in DEFAULTS.items():
         conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
     conn.commit()
@@ -1621,6 +1627,14 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         voided += 1
 
     conn.commit()
+    # Tag each fresh loss with its measured cause (blowout / short run /
+    # variance) while the history rows are at hand — the nightly
+    # postmortem narrates these tags instead of guessing at causes.
+    try:
+        from .causes import backfill as _tag_loss_causes
+        _tag_loss_causes(conn, hist_conn)
+    except Exception:                              # noqa: BLE001
+        pass                 # a tagging hiccup must never block settling
     return settled + voided
 
 
@@ -1708,6 +1722,13 @@ def resettle_mismatches(conn, hist_conn) -> list[dict]:
     if fixed:
         conn.commit()
         recompute_bankroll(conn)
+        # A regrade can flip a loss either way: re-run the cause sweep so
+        # a new loss gets its tag and a reversed one loses its stale tag.
+        try:
+            from .causes import backfill as _tag_loss_causes
+            _tag_loss_causes(conn, hist_conn)
+        except Exception:                          # noqa: BLE001
+            pass
     return fixed
 
 
@@ -1990,7 +2011,7 @@ def recent_settled(conn, limit: int = 30, category: str = "main",
     Each row carries its side-aware CLV and process grade so the page can
     show "won but got lucky" / "lost but beat the close" honestly."""
     q = ("SELECT date, sport, player, market, side, line, odds, grade, status, "
-         "pnl_units, hit_prob, closing_line, stake_units FROM bets "
+         "pnl_units, hit_prob, closing_line, stake_units, loss_cause FROM bets "
          "WHERE status IN ('won','lost','push') AND category=? "
          "AND stake_units > 0")
     args: list = [category]
@@ -2005,6 +2026,7 @@ def recent_settled(conn, limit: int = 30, category: str = "main",
         c = _bet_clv(r)
         d["clv"] = round(c, 3) if c is not None else None
         d["process"] = process_grade(r)
+        d["cause"] = d.pop("loss_cause")
         out.append(d)
     return out
 

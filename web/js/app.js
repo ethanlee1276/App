@@ -4332,12 +4332,18 @@ async function renderRecord() {
         else if (b.clv != null)
           procChip = `<span class="rl-proc ${b.clv >= 0 ? "good" : "bad"}"
             title="Closing-line value — how far the market moved our way after the bet">${b.clv >= 0 ? "+" : ""}${b.clv.toFixed(1)} CLV</span>`;
+        // Cause chip: the settle pass's measured circumstance on a loss.
+        // Only the exceptional ones get a chip — "variance" is the story
+        // a lost row already tells by itself.
+        const causeChip = (b.status === "lost" && b.cause && !/^variance/.test(b.cause))
+          ? `<span class="rl-proc warn" title="Measured at settle from the ingested results — the circumstance, not an excuse">${escapeHtml(b.cause)}</span>`
+          : "";
         return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
           <span class="rl-icon">${push ? icon('dash') : won ? icon('check') : icon('cross')}</span>
           <span class="rl-date">${escapeHtml(b.date || "")}</span>
           <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
             <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
-          ${procChip}
+          ${procChip}${causeChip}
           <span class="rl-odds">${american(b.odds)}</span>
           <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
         </div>`;

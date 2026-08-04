@@ -581,7 +581,7 @@ have yet — listed honestly rather than faked).
 | §10 Bankroll caps | ✅ | 2u/play (A+ cap), 5u/game & 15u/slate with correlated bets counted together (`engine/correlation.py` `apply_exposure_caps`) |
 | §10 Drawdown rule | ✅ | `engine/ledger.py` `drawdown_factor` — 10u peak-to-trough halves every stake until recovery; applied at build time |
 | §11 CLV logging | ✅ | `engine/ledger.py`: line/price at bet, close capture, CLV, process grade, devigged prob, model prob, EV, market — per bet |
-| §11 Why won/lost | 🟡 | Process column separates "good bet lost" from "bad bet won" via CLV; freeform cause tagging (injury/blowout/variance) 📋 |
+| §11 Why won/lost | ✅ | Process column separates "good bet lost" from "bad bet won" via CLV; `engine/causes.py` tags every settled loss with its measured circumstance — blowout (final margin off the ingested scores, via the player's own result row), short run (journaled projected vs actual minutes, hoops), or variance — inside the settle pass, journaled on the row, chipped on The Book's receipts, and handed to the nightly postmortem so the prose narrates tags instead of guessing causes |
 | §11 Review cycle | ✅ | `edge_audit.py` + `backtest.py` + the Record page's bucket tables — the measured-evidence loop that already re-fit this model once |
 | §12 Historical similarity | 📋 | Historical DB exists (odds + results); comp-retrieval engine not built |
 | §13 Live betting | 📋 by design | `rules.block_live_games` — pre-game model refuses in-play prices; a live model is a separate future build, per the discipline clause |
