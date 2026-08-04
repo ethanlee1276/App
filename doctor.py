@@ -472,6 +472,42 @@ def check_forecast_log(rep):
                     "was edited or deleted underneath it")
 
 
+def check_clv_capture(rep):
+    """Are closing lines actually being captured, and are they pre-game?
+
+    CLV grades the decision the moment a game starts, which makes it the
+    fastest evidence the journal has — but only if the closes are real.
+    Two ways they aren't: no snapshot near first pitch (nothing captured)
+    or a snapshot taken DURING the game (the odds endpoint returns
+    in-play prices, so a late pull on a staggered slate re-prices games
+    already running). The second is silently worse — it doesn't leave a
+    gap, it fills one with fiction.
+    """
+    @_check(rep, "clv capture")
+    def _():
+        if not has_journal():
+            rep.add("clv capture", WARN, _no_data("bet journal"))
+            return
+        from engine import ledger
+        cov = ledger.clv_coverage(ledger.connect())
+        if not cov["settled"]:
+            rep.add("clv capture", OK, "no settled picks yet")
+            return
+        pct = cov["coverage"] * 100
+        ready = cov["ready_sports"]
+        detail = (f"{cov['with_close']:,} of {cov['settled']:,} settled picks "
+                  f"have a close ({pct:.0f}%)")
+        if ready:
+            detail += " · sized-on-CLV ready: " + ", ".join(ready)
+        if pct < 25:
+            rep.add("clv capture", WARN, detail,
+                    "closes come from the last PRE-GAME odds snapshot; if the "
+                    "pacer's pull lands before the pre-game window opens there "
+                    "is nothing near first pitch to capture")
+        else:
+            rep.add("clv capture", OK, detail)
+
+
 def check_git(rep):
     @_check(rep, "git")
     def _():
@@ -492,7 +528,8 @@ def check_git(rep):
 CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
           check_ingest_freshness, check_odds_budget, check_llm_spend,
           check_journal_sanity, check_record_page, check_premature_evidence,
-          check_parlay_agreement, check_forecast_log, check_git]
+          check_parlay_agreement, check_forecast_log, check_clv_capture,
+          check_git]
 
 # The checks that need the laptop's databases, budget state and built
 # slates. On a machine that has none of those — CI, a fresh clone — they
@@ -503,7 +540,7 @@ DATA_CHECKS = (check_stuck_bets, check_slate_freshness,
                check_ingest_freshness, check_odds_budget, check_llm_spend,
                check_journal_sanity, check_record_page,
                check_premature_evidence, check_parlay_agreement,
-               check_forecast_log)
+               check_forecast_log, check_clv_capture)
 
 
 def run(skip_tests: bool = False, code_only: bool = False) -> Report:

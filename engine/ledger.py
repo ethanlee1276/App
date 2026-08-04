@@ -1741,12 +1741,17 @@ def settle(conn, actuals: dict[tuple[str, str], float], sport: str | None = None
     ``closing`` supplies closing lines for CLV; when omitted they're derived
     automatically from the recorded line-move snapshots, so closing-line value
     accrues without any manual bookkeeping."""
+    dated: dict = {}
     if closing is None:
         try:
-            from .linemoves import load_history, closing_lines
-            closing = closing_lines(load_history())
+            # DATED snapshots, keyed (player, market, date). The undated map
+            # keys on (player, market) alone, which in a sport that plays
+            # every night resolves to the last price ever seen for that
+            # prop — a July bet could take August's line as its "close".
+            dated = _snapshot_closes()
         except Exception:      # never let CLV bookkeeping block settling
-            closing = {}
+            dated = {}
+        closing = {}
     q = "SELECT * FROM bets WHERE status='open'"
     args: list = []
     if sport:
@@ -1754,12 +1759,17 @@ def settle(conn, actuals: dict[tuple[str, str], float], sport: str | None = None
     if date:
         q += " AND date=?"; args.append(date)
 
+    from .sources.oddsapi import normalize_name
     settled = 0
     for b in conn.execute(q, args).fetchall():
         key = (b["player"], b["market"])
         if key not in actuals:
             continue
-        _settle_one(conn, b, float(actuals[key]), closing.get(key))
+        close = closing.get(key)
+        if close is None:
+            close = dated.get((normalize_name(b["player"]), b["market"],
+                               b["date"]))
+        _settle_one(conn, b, float(actuals[key]), close)
         settled += 1
     conn.commit()
     return settled
@@ -1790,6 +1800,49 @@ def process_grade(b) -> str | None:
     if clv > 0:
         return "good"
     return "flat" if clv == 0 else "bad"
+
+
+#: A slice needs this many bets WITH a captured close before its average
+#: CLV is worth acting on. Same order as the miner's MIN_N: below it the
+#: confidence band is wider than any signal the number could carry.
+CLV_MIN_N = 40
+
+
+def clv_coverage(conn, category: str = "main") -> dict:
+    """How much of the record actually has a closing line — per sport.
+
+    CLV is the fastest-accruing evidence a bettor has: it grades the
+    decision the moment the game starts, without waiting for the result.
+    That only holds if the closes are real and plentiful, so this reports
+    coverage before anything is built on top of it. ``ready`` says a
+    sport has cleared ``CLV_MIN_N`` captured closes — the bar for its
+    average to mean anything.
+    """
+    out: dict = {}
+    for sp in TRACKED_SPORTS:
+        bets = conn.execute(
+            "SELECT * FROM bets WHERE status IN ('won','lost','push') "
+            "AND category=? AND stake_units > 0 AND sport=?",
+            (category, sp)).fetchall()
+        if not bets:
+            continue
+        clvs = [c for c in (_bet_clv(b) for b in bets) if c is not None]
+        settled = len(bets)
+        out[sp] = {
+            "settled": settled,
+            "with_close": len(clvs),
+            "coverage": round(len(clvs) / settled, 3) if settled else 0.0,
+            "avg_clv": round(sum(clvs) / len(clvs), 3) if clvs else None,
+            "beat_close": (round(sum(1 for c in clvs if c > 0) / len(clvs), 3)
+                           if clvs else None),
+            "ready": len(clvs) >= CLV_MIN_N,
+        }
+    tot = sum(v["settled"] for v in out.values())
+    got = sum(v["with_close"] for v in out.values())
+    return {"by_sport": out, "settled": tot, "with_close": got,
+            "coverage": round(got / tot, 3) if tot else 0.0,
+            "min_n": CLV_MIN_N,
+            "ready_sports": sorted(s for s, v in out.items() if v["ready"])}
 
 
 def performance(conn, sport: str | None = None, category: str = "main") -> dict:
@@ -3036,6 +3089,9 @@ def export_json(conn, path) -> None:
                      "by_sport": {sp: restated_performance(conn, sp)
                                   for sp in TRACKED_SPORTS}},
         "account_health": account_health(conn),
+        # How much of the record has a real closing line behind it — the
+        # honest prerequisite for anything that wants to reason from CLV.
+        "clv_coverage": clv_coverage(conn),
         # §13: the parlay record is reported SEPARATELY and never blended.
         # Its own key, its own tables, its own notional — nothing above this
         # line moves when a ticket settles.

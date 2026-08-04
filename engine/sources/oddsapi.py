@@ -1168,6 +1168,10 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # Cached prices are re-reads of an already-recorded snapshot; only a
         # paid pull carries new line-movement information.
         from ..linemoves import record_snapshots
-        record_snapshots(slate.props)
+        # The slate comes along so each row carries its game's start time:
+        # this same call returns IN-PLAY prices for games already running
+        # (see this function's docstring), and an in-play price must never
+        # be mistaken for a closing line.
+        record_snapshots(slate.props, slate=slate)
 
     return result

@@ -27,26 +27,89 @@ from .sources.fetch import CACHE_DIR
 HISTORY_PATH = CACHE_DIR / "line_history.jsonl"
 
 
+def start_epoch(kickoff) -> float | None:
+    """A game's start as a UNIX timestamp, or None when it cannot be known.
+
+    Same rule as ``losspatterns.minutes_until``, for the same reason: a
+    full ISO stamp with a Z or offset is usable, a bare local clock like
+    "13:00" is not. Guessing a timezone onto a bare clock would silently
+    decide which snapshots count as pre-game, and a wrong guess there is
+    worse than no cut at all.
+    """
+    if not kickoff:
+        return None
+    import datetime as _dt
+    try:
+        start = _dt.datetime.fromisoformat(str(kickoff).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if start.tzinfo is None:
+        return None                 # a naive stamp is a clock, not an instant
+    return start.timestamp()
+
+
 # --- recording --------------------------------------------------------------
 def record_snapshots(props, ts: float | None = None,
-                     path: str | Path | None = None) -> int:
+                     path: str | Path | None = None,
+                     slate=None) -> int:
     """Append one row per (prop, book) with the current line. Skips proxy
-    lines — only real book numbers are worth tracking."""
+    lines — only real book numbers are worth tracking.
+
+    ``slate`` (when given) stamps each row with its game's start time, so
+    the close-picker can tell a pre-game price from an in-play one. The
+    odds adapter's own docstring is why this matters: *"during a live
+    game the event-odds endpoint returns current (in-play) prices"* — on
+    a staggered slate a late pull re-prices the games already underway,
+    and without a start stamp the last of those snapshots became the
+    "close" for a game that had been running for two hours.
+    """
     ts = ts if ts is not None else time.time()
     path = Path(path) if path else HISTORY_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     n = 0
     with path.open("a") as fh:
         for prop in props:
+            start = None
+            if slate is not None:
+                try:
+                    start = start_epoch(getattr(slate.game_for(prop),
+                                                "kickoff", None))
+                except Exception:                  # noqa: BLE001
+                    start = None       # a slate that cannot locate its own
+                                       # game must not cost the snapshot
             for ln in prop.lines:
                 if ln.book == "proxy":
                     continue
-                fh.write(json.dumps({
+                row = {
                     "ts": ts, "player": prop.player, "market": prop.market,
                     "book": ln.book, "line": ln.line, "over_odds": ln.over_odds,
-                }) + "\n")
+                }
+                if start is not None:
+                    row["start_ts"] = start
+                fh.write(json.dumps(row) + "\n")
                 n += 1
     return n
+
+
+def _pregame_only(items: list[dict]) -> list[dict]:
+    """Drop snapshots taken at or after the game started.
+
+    The start comes from the rows themselves, so one game has one start
+    even when only some of its snapshots carry the stamp (rows recorded
+    before this stamp existed carry none). No stamp anywhere = no cut:
+    legacy history keeps reading exactly as it always has rather than
+    being retroactively reinterpreted.
+    """
+    starts = [float(r["start_ts"]) for r in items
+              if r.get("start_ts") is not None]
+    if not starts:
+        return items
+    start = min(starts)
+    pre = [r for r in items if float(r.get("ts", 0)) < start]
+    # Every bet was placed on a pre-game price, so a key with nothing
+    # pre-game is a slate we only ever saw in play — it has no close to
+    # report, and inventing one from a live number is the bug being fixed.
+    return pre
 
 
 def load_history(path: str | Path | None = None) -> list[dict]:
@@ -76,19 +139,28 @@ def closing_lines_by_date(rows: list[dict]) -> dict:
     import datetime as _dt
     from .sources.oddsapi import normalize_name
 
-    grouped: dict[tuple, list[tuple[float, float]]] = {}
+    grouped: dict[tuple, list[dict]] = {}
     for r in rows:
         try:
             ts = float(r["ts"])
             date = _dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
             key = (normalize_name(r["player"]), r["market"], date)
-            grouped.setdefault(key, []).append((ts, float(r["line"])))
+            float(r["line"])                       # reject unusable rows early
+            grouped.setdefault(key, []).append(r)
         except (KeyError, TypeError, ValueError):
             continue
     out: dict = {}
-    for key, pts in grouped.items():
-        last = max(p[0] for p in pts)
-        out[key] = _median([ln for t, ln in pts if t == last])
+    for key, items in grouped.items():
+        # A price quoted after first pitch is not a closing line — see
+        # _pregame_only. Without this cut the last in-play re-price of a
+        # staggered slate became the "close", and every CLV computed off
+        # it was fiction dressed as evidence.
+        items = _pregame_only(items)
+        if not items:
+            continue
+        last = max(float(r["ts"]) for r in items)
+        out[key] = _median([float(r["line"]) for r in items
+                            if float(r["ts"]) == last])
     return out
 
 
@@ -131,6 +203,9 @@ def closing_lines(rows: list[dict], before_ts: float | None = None
         grouped.setdefault(key, []).append(r)
 
     for key, items in grouped.items():
+        items = _pregame_only(items)
+        if not items:
+            continue
         last_ts = max(float(r["ts"]) for r in items)
         at_close = [float(r["line"]) for r in items
                     if float(r["ts"]) == last_ts and r.get("line") is not None]
