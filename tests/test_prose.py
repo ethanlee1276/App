@@ -98,6 +98,18 @@ def test_the_weekly_brief_pack_lists_every_tracked_sport():
     assert set(by) == set(pack["sports"])
 
 
+def test_a_long_note_is_cut_at_a_sentence_never_mid_word():
+    """The real brief shipped an NFL paragraph ending "…Brier came ou" —
+    a hard slice at the cap. Notes end at sentences (or an honest …)."""
+    long = ("First sentence about the dials. " * 20
+            + "And then a trailing fragment that would be sliced")
+    cut = P._trim(long)
+    assert len(cut) <= P.NOTE_CAP
+    assert cut.endswith(".") or cut.endswith("…")
+    unbroken = "word " * 400                    # no sentence ends anywhere
+    assert P._trim(unbroken).endswith("…")
+
+
 # --- the guards: key, cap, cadence -------------------------------------------
 def test_no_key_is_a_silent_skip_never_a_crash():
     from engine import secrets as _sec

@@ -197,6 +197,24 @@ market hard-passes; an adopted dial reweights recent form) without \
 promising results. No advice, no predictions."""
 
 
+NOTE_CAP = 900
+
+
+def _trim(text, cap: int = NOTE_CAP) -> str:
+    """Cap a note at a SENTENCE boundary. A hard slice shipped a real NFL
+    paragraph ending "every corrected Brier came ou" — a cut that reads as
+    a bug is worse than a shorter note."""
+    t = str(text or "")
+    if len(t) <= cap:
+        return t
+    cut = t[:cap]
+    best = max(cut.rfind(". "), cut.rfind("! "), cut.rfind("? "),
+               cut.rfind(".\n"))
+    if best > cap // 2:
+        return cut[:best + 1].rstrip()
+    return cut.rsplit(" ", 1)[0].rstrip() + " …"
+
+
 def _ensure_coverage(out: dict, pack_sports: list[str],
                      fallback) -> dict[str, str]:
     """Every sport in the pack gets a note — the model's mood is not
@@ -205,8 +223,8 @@ def _ensure_coverage(out: dict, pack_sports: list[str],
     got = {}
     for row in (out.get("by_sport") or []):
         if isinstance(row, dict) and row.get("sport") in pack_sports:
-            got[row["sport"]] = str(row.get("note") or "")[:600]
-    return {sp: (got.get(sp) or str(fallback(sp))[:600])
+            got[row["sport"]] = _trim(row.get("note"))
+    return {sp: (got.get(sp) or _trim(fallback(sp)))
             for sp in pack_sports}
 
 
