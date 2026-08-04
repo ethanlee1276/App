@@ -113,8 +113,11 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     if not is_reliable(tune.key, stat):
         fails = fails + ["this market's calibration fit hit the edge of its "
                          "search range — closed by its own fit"]
+    from ..losspatterns import minutes_until
     _block = lp_veto(tune.key, stat, side=side, odds=odds, prob=p_final,
-                     book=prop.get("book"), horizon_days=0)
+                     book=prop.get("book"), horizon_days=0,
+                     lead_min=minutes_until(prop.get("kickoff")
+                                            or prop.get("commence_time")))
     if _block:
         fails = fails + [_block]
     need = required_edge(stat, hold, tune, high_hold_market=stat == "fg3m")

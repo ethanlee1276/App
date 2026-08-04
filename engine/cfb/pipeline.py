@@ -121,8 +121,10 @@ def evaluate_play(play: dict) -> dict:
         return {**base, "kind": "pass", "grade": 0, "grade_label": "Pass",
                 "why": ("this market's calibration fit hit the edge of its "
                         "search range — closed by its own fit")}
+    from ..losspatterns import minutes_until
     _block = lp_veto("cfb", market, side=play.get("side"), odds=odds,
-                     prob=p_model, book=play.get("book"), horizon_days=0)
+                     prob=p_model, book=play.get("book"), horizon_days=0,
+                     lead_min=minutes_until(play.get("kickoff")))
     if _block:
         return {**base, "kind": "pass", "grade": 0, "grade_label": "Pass",
                 "why": _block}

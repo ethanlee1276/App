@@ -3464,6 +3464,40 @@ function recForecastLog(f) {
    is stamped with the commit that produced it. It was all real and all
    invisible — and a learning loop nobody can see is indistinguishable from
    a static model. */
+function recRestatedSection(rs, sport) {
+  // The record re-sized on today's staking scale (1u = 1% of bankroll,
+  // grade caps, price-band ceilings). The official record stays the
+  // receipts of bets as they were made — this answers "what WOULD it
+  // read" without editing a settled row.
+  if (!rs) return "";
+  const r = sport ? (rs.by_sport || {})[sport] : rs.overall;
+  if (!r || !r.settled) return "";
+  const roi = (r.roi ?? 0) * 100;
+  const tone = (v) => v >= 0 ? "var(--good)" : "var(--bad)";
+  return `
+    <div class="section-title">At today's sizing
+      <span class="sub">— the same graded picks, re-staked by the current
+      model: 1u = 1% of bankroll, conviction plays near a unit, +200-or-longer
+      capped at a dime. The official record above is the receipts as bet;
+      this is what those picks would have returned under the sizing that now
+      governs the board.</span></div>
+    <div class="stats">
+      <div class="tile"><div class="k">Restated record</div>
+        <div class="v">${r.wins}-${r.losses}${r.pushes ? `-${r.pushes}` : ""}</div>
+        <div class="tile-sub">${(r.settled ?? 0).toLocaleString()} pick(s) re-sized</div></div>
+      <div class="tile"><div class="k">Units staked</div>
+        <div class="v">${(r.units_staked ?? 0).toLocaleString()}</div></div>
+      <div class="tile"><div class="k">Net units</div>
+        <div class="v" style="color:${tone(r.net_units ?? 0)}">${(r.net_units ?? 0) >= 0 ? "+" : ""}${(r.net_units ?? 0).toFixed(2)}</div></div>
+      <div class="tile"><div class="k">Restated ROI</div>
+        <div class="v" style="color:${tone(roi)}">${roi >= 0 ? "+" : ""}${roi.toFixed(1)}%</div>
+        <div class="tile-sub">weighted by conviction, not by ticket count</div></div>
+    </div>
+    ${r.excluded ? `<p class="loading" style="margin-top:8px">${r.excluded.toLocaleString()}
+      old pick(s) are excluded — at their journaled probability and price,
+      today's Kelly would not have made those bets at all.</p>` : ""}`;
+}
+
 function recProseSection(pz, sport) {
   // The prose lanes: the nightly postmortem and the weekly model brief.
   // The LLM narrates numbers the arithmetic already produced — never a
@@ -4116,6 +4150,7 @@ async function renderRecord() {
       <div class="es-sub">This board has not recommended a bet that reached a
       result. It fills itself in — every pick is journaled at its real price
       the moment it is made, and grades when the games settle.</div></div>`
+      + recRestatedSection(d.restated, scope)
       + recProseSection(d.prose, scope)
       + recSelfTuningSection(d.self_tuning, scope)
       + recLossPatternsSection(d.loss_patterns, scope)
@@ -4220,6 +4255,7 @@ async function renderRecord() {
           league's page shows its own learning. Hiding these behind "All"
           is how the whole ladder shipped invisible: the record page
           always lands sport-scoped. */""}
+    ${recRestatedSection(d.restated, scoped ? scope : null)}
     ${recProseSection(d.prose, scoped ? scope : null)}
     ${recSelfTuningSection(d.self_tuning, scoped ? scope : null)}
     ${recLossPatternsSection(d.loss_patterns, scoped ? scope : null)}

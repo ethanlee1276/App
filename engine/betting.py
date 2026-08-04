@@ -324,8 +324,11 @@ def evaluate_prop(prop: Prop, proj: Projection,
     #  pattern     — the loss-pattern miner closed this SLICE (a side, a
     #                price band) under false-discovery control
     calibration_ok = is_reliable(sport, prop.market)
+    from .losspatterns import minutes_until
     pattern_block = lp_veto(sport, prop.market, side=side, odds=best.odds,
-                            prob=hit, book=best.book, horizon_days=0)
+                            prob=hit, book=best.book, horizon_days=0,
+                            lead_min=minutes_until(
+                                getattr(game, "kickoff", None)))
     tier = market_tier(prop.market)
     min_edge = tier_min_edge(prop.market)
     gate_ok = (credible and has_market

@@ -126,7 +126,9 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     # misses the rotation pipeline is broken, and if the minutes were right
     # and the results weren't, it's efficiency or variance. No other pair
     # of columns separates those two failure modes.
-    for col in ("proj_minutes", "actual_minutes"):
+    # Minutes from bet log to the game's scheduled start — the capture_lag
+    # dimension. NULL = clock unknown at pick time (or pre-migration row).
+    for col in ("proj_minutes", "actual_minutes", "lead_min"):
         try:
             conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
         except sqlite3.OperationalError:
@@ -198,13 +200,30 @@ def journal_skip_reason(r: dict, only_recommended: bool = True) -> str | None:
     return None
 
 
+def _kickoff_map(result: dict) -> dict:
+    """team → kickoff stamp, from the result's own games list. Every
+    sport's board carries kickoffs (they come off the odds events), so
+    the capture_lag clock is derived HERE, once, for all of them."""
+    kick: dict = {}
+    for g in result.get("games") or []:
+        k = g.get("kickoff") or g.get("commence_time")
+        if not k:
+            continue
+        for side in ("home", "away"):
+            if g.get(side):
+                kick[g[side]] = k
+    return kick
+
+
 def log_recommendations(conn, result: dict, only_recommended: bool = True) -> int:
     """Insert open bets from a pipeline result dict. Stake dollars are sized
     from the current bankroll: stake_units × unit_pct% × bankroll."""
+    from .losspatterns import minutes_until
     sport = result.get("sport", "nfl")
     date = result.get("date", "")
     unit_dollars = float(get_cfg(conn, "unit_pct")) / 100.0 * bankroll(conn)
     now = datetime.datetime.utcnow().isoformat(timespec="seconds")
+    kick = _kickoff_map(result)
     n = 0
     for r in result.get("recommendations", []):
         # One predicate, used by the loop AND by --why-pick, so the reason
@@ -216,8 +235,8 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
-            "stake_dollars, status, leg, proj_minutes) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?)",
+            "stake_dollars, status, leg, proj_minutes, lead_min) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?)",
             (now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
              r["line"], r.get("book", ""), r.get("odds", -110), r.get("projection"),
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
@@ -228,7 +247,11 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # The minutes this bet assumed. Basketball props are minutes
              # bets wearing a stat's name; without this column a loss can't
              # be attributed to the rotation read or to the shooting.
-             r.get("proj_minutes")))
+             r.get("proj_minutes"),
+             # capture_lag: minutes to the game's scheduled start at log
+             # time, from the rec's own clock or the board's games list.
+             minutes_until(r.get("kickoff") or kick.get(r.get("team"))
+                           or kick.get(r.get("opponent")))))
         n += cur.rowcount
     # Recommended game bets journal too (sharp-anchor picks live or die by
     # forward results). Moneylines store player = the team picked, line 0.5,
@@ -355,15 +378,20 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
         # Measured on a real journal: thirty home-run bets dated 07-27 whose
         # players were every one of them logged on 07-26.
         row_date = str(r.get("game_date") or "").strip() or date
+        from .losspatterns import minutes_until
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
-            "stake_units, stake_dollars, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?)",
+            "stake_units, stake_dollars, status, category, lead_min) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?)",
             (now, sport, row_date, r["player"], market, "OVER", 0.5,
              r.get("book", ""), odds, None, r.get("model_prob"),
              r.get("edge", r.get("ev_per_unit")), r.get("confidence"),
-             r.get("grade", "Watch"), flat_stake, 0.0, category))
+             r.get("grade", "Watch"), flat_stake, 0.0, category,
+             # capture_lag matters MOST here: home runs are the volume, the
+             # market that self-closed, and the tail price stale lines hurt.
+             minutes_until(r.get("game_kickoff") or r.get("kickoff")
+                           or r.get("commence_time"))))
         n += cur.rowcount
     return n
 
@@ -2225,6 +2253,63 @@ def _hypothesis_lab_block() -> dict:
                 "n_rejected": 0, "n_collecting": 0, "n_closed": 0}
 
 
+def restated_performance(conn, sport: str | None = None) -> dict:
+    """The same graded picks, re-sized on TODAY's staking scale.
+
+    The official record is receipts — stakes as the bets were actually
+    made, including the era when every path sized off a twenty-unit
+    ruler and a conviction play weighed the same as a lottery ticket.
+    This view answers Ethan's question about that era honestly: what
+    would the record and ROI read if every settled pick had been staked
+    by the current model (1u = 1% of bankroll, grade caps, price-band
+    ceilings)? Read-only, computed fresh from journaled probability,
+    price and grade — history itself is never edited.
+
+    A pick today's Kelly refuses at its journaled probability and price
+    (the vig-eaten ones an old grader shipped) is EXCLUDED and counted,
+    because today's model would not have made that bet at all.
+    """
+    from .odds import american_to_decimal
+    from .quality import STAKE_CAP_U
+    from .staking import kelly_units
+    q = ("SELECT sport, status, odds, hit_prob, grade FROM bets "
+         "WHERE status IN ('won','lost','push') AND category IN "
+         "('main','longshot')")
+    args: list = []
+    if sport:
+        q += " AND sport=?"
+        args.append(sport)
+    wins = losses = pushes = excluded = 0
+    staked = net = 0.0
+    for b in conn.execute(q, args):
+        p, odds = b["hit_prob"], b["odds"]
+        if p is None or odds is None or not 0.0 < float(p) < 1.0:
+            excluded += 1
+            continue
+        grade = str(b["grade"] or "")
+        frac = 0.5 if grade == "A+" else 0.25
+        stake = kelly_units(float(p), int(odds), frac,
+                            STAKE_CAP_U.get(grade, 1.0))
+        if stake <= 0:
+            excluded += 1
+            continue
+        if b["status"] == "push":
+            pushes += 1
+            continue
+        staked += stake
+        if b["status"] == "won":
+            wins += 1
+            net += stake * (american_to_decimal(int(odds)) - 1.0)
+        else:
+            losses += 1
+            net -= stake
+    return {"settled": wins + losses + pushes, "wins": wins,
+            "losses": losses, "pushes": pushes,
+            "units_staked": round(staked, 2), "net_units": round(net, 2),
+            "roi": (net / staked) if staked else 0.0,
+            "excluded": excluded}
+
+
 def _prose_block() -> dict:
     """The prose lanes' stored output, for export_json. Store-read only —
     the export path must never be able to spend a token — and guarded so a
@@ -2890,6 +2975,12 @@ def export_json(conn, path) -> None:
         # brief, read from their stores — the paid calls happen in the
         # settle pass (capped) and the CLI, never here.
         "prose": _prose_block(),
+        # The record re-sized on today's staking scale — receipts above
+        # stay receipts; this answers "what WOULD it read" without ever
+        # editing a settled row.
+        "restated": {"overall": restated_performance(conn),
+                     "by_sport": {sp: restated_performance(conn, sp)
+                                  for sp in TRACKED_SPORTS}},
         "account_health": account_health(conn),
         # §13: the parlay record is reported SEPARATELY and never blended.
         # Its own key, its own tables, its own notional — nothing above this

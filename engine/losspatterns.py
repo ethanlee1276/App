@@ -107,8 +107,56 @@ def horizon_band(days) -> str | None:
     return "4+ days out"
 
 
+def lead_band(minutes) -> str | None:
+    """How far ahead of the game's start the bet was logged.
+
+    The capture_lag dimension, drafted by the triage bench and built for
+    every sport: the whole intraday information cascade — weather,
+    lineups, scratches, and the books' hardest repricing window (the last
+    ninety minutes) — lands between an early log and first pitch, and a
+    single 'same-day' horizon value could not see any of it.
+    """
+    if minutes is None:
+        return None
+    try:
+        m = float(minutes)
+    except (TypeError, ValueError):
+        return None
+    if m <= 0:
+        return "after start"
+    if m < 30:
+        return "<30m out"
+    if m < 90:
+        return "30-90m out"
+    if m < 180:
+        return "90m-3h out"
+    if m < 360:
+        return "3-6h out"
+    return "6h+ out"
+
+
+def minutes_until(start_iso, now=None) -> float | None:
+    """Minutes from ``now`` (UTC) to a kickoff/first-pitch stamp.
+
+    Tolerates the two shapes the boards actually carry: full ISO with a Z
+    or offset (usable) and a bare local clock like "13:00" (not — a clock
+    with no date is no lead time, and guessing one would band bets into
+    the wrong pocket)."""
+    if not start_iso:
+        return None
+    try:
+        start = _dt.datetime.fromisoformat(
+            str(start_iso).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if start.tzinfo is not None:
+        start = start.astimezone(_dt.timezone.utc).replace(tzinfo=None)
+    now = now or _dt.datetime.utcnow()
+    return round((start - now).total_seconds() / 60.0, 1)
+
+
 def features_of(side=None, odds=None, prob=None, book=None,
-                horizon_days=None) -> dict:
+                horizon_days=None, lead_min=None) -> dict:
     """The feature dict for one bet — mining and veto both come through
     here, so a pick is judged by exactly the dimensions it was mined on."""
     feats = {
@@ -117,6 +165,7 @@ def features_of(side=None, odds=None, prob=None, book=None,
         "prob": prob_band(prob),
         "horizon": horizon_band(horizon_days),
         "book": (str(book) or None) if book else None,
+        "lead": lead_band(lead_min),
     }
     return {k: v for k, v in feats.items() if v is not None}
 
@@ -129,8 +178,8 @@ def records_from_ledger(conn) -> list[dict]:
     rows, some game markets) cannot be calibration-tested and are skipped.
     """
     rows = conn.execute(
-        "SELECT sport, market, side, odds, hit_prob, book, date, ts, status "
-        "FROM bets WHERE status IN ('won','lost')").fetchall()
+        "SELECT sport, market, side, odds, hit_prob, book, date, ts, status, "
+        "lead_min FROM bets WHERE status IN ('won','lost')").fetchall()
     out = []
     for r in rows:
         p = r["hit_prob"]
@@ -145,7 +194,8 @@ def records_from_ledger(conn) -> list[dict]:
             "sport": r["sport"], "market": r["market"], "prob": float(p),
             "won": 1 if r["status"] == "won" else 0,
             "feats": features_of(side=r["side"], odds=r["odds"], prob=p,
-                                 book=r["book"], horizon_days=horizon),
+                                 book=r["book"], horizon_days=horizon,
+                                 lead_min=r["lead_min"]),
         })
     return out
 
@@ -290,15 +340,19 @@ def refresh(lconn, path=None) -> dict:
 
 
 def veto(sport: str, market: str, side=None, odds=None, prob=None,
-         book=None, horizon_days=None, path=None) -> str | None:
+         book=None, horizon_days=None, lead_min=None, path=None
+         ) -> str | None:
     """The reason this pick is blocked, or None.
 
     Consulted where is_reliable() is: a pick whose features land in a slice
     the miner closed gets refused, with the pattern spelled out — the same
-    self-closure contract markets already live under, one level finer."""
+    self-closure contract markets already live under, one level finer.
+    ``lead_min`` is minutes to the game's start at pick time; a gate that
+    does not know its clock passes None, and an unknown band never
+    matches a closure — honest ignorance, never a false block."""
     store = load(path)
     feats = features_of(side=side, odds=odds, prob=prob, book=book,
-                        horizon_days=horizon_days)
+                        horizon_days=horizon_days, lead_min=lead_min)
     for f in store.get("closed") or []:
         if f.get("sport") != sport:
             continue

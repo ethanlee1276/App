@@ -79,7 +79,10 @@ MAX_HYPOTHESES = 8
 from .losspatterns import (ALPHA, CLOSE_GAP_PTS, MIN_N,  # noqa: E402
                            _bh, _slice_test)
 
-DIMS = ("side", "odds", "prob", "horizon", "book")
+# "lead" is capture_lag — minutes from bet log to the game's start,
+# banded. The triage bench drafted it, the miner journals and slices it
+# for every sport, and listing it here lets the lab propose on it too.
+DIMS = ("side", "odds", "prob", "horizon", "book", "lead")
 
 
 class HypothesisUnavailable(RuntimeError):
@@ -170,9 +173,11 @@ SCHEMA = {
                     "prob": {"type": ["string", "null"]},
                     "horizon": {"type": ["string", "null"]},
                     "book": {"type": ["string", "null"]},
+                    "lead": {"type": ["string", "null"]},
                 },
                 "required": ["claim", "rationale", "sport", "market",
-                             "side", "odds", "prob", "horizon", "book"],
+                             "side", "odds", "prob", "horizon", "book",
+                             "lead"],
                 "additionalProperties": False,
             },
         },

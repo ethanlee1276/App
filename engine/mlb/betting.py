@@ -164,8 +164,11 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     # closes SLICES (a side, a price band) whose stated probabilities
     # systematically missed, under false-discovery control. Same contract
     # as a boundary temperature — the record itself refuses the bet.
+    from ..losspatterns import minutes_until
     pattern_block = lp_veto("mlb", prop.market, side=side, odds=best.odds,
-                            prob=hit, book=best.book, horizon_days=0)
+                            prob=hit, book=best.book, horizon_days=0,
+                            lead_min=minutes_until(
+                                getattr(game, "kickoff", None)))
     tier = mlb_tier(prop.market)
     min_edge = mlb_tier_min_edge(prop.market)
     gate_ok = (credible and calibration_ok and pattern_block is None
