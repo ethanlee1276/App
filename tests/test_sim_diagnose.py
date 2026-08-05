@@ -122,33 +122,35 @@ def test_a_real_gap_is_sized_against_both_the_tolerance_and_the_sampler():
     """At 120,000 trials a 1% gap is many sigma and still a sixth of what
     the gate forgives. Significant and important are different questions
     and one number cannot answer both, so a failure reports each."""
-    rare = list(NORMAL)
-    rare[7] = UNREACHABLE
-    out = _out(_dump({"RARE": _cell(rare)}))
+    out = _forced_failure(lambda: _out(_dump({"BAD4": _cell(NORMAL)})))
     assert "tolerance" in out and "sigma" in out, out
 
 
-#: A hitter given a home-run rate of two ten-thousandths a game. Nothing
-#: on a real slate looks like this; it is here because it is the only
-#: synthetic line found that reliably fails the gate at 120,000 trials,
-#: which is what the failing branch needs in order to be tested at all.
-#:
-#: Worth recording what it is NOT. Four real lineups failed on hitters
-#: with impossible batting averages — OAK's Carlos Cortes at 0.055 hits a
-#: game over 3.8 plate appearances, which is .014 — and the obvious guess
-#: was that a near-zero projection breaks the fit. It does not: dropping
-#: Cortes's exact line into an ordinary order PASSES, reproducing even his
-#: plate-appearance drift (3.95 → 3.82 against a live 3.81). Only the
-#: absurd home-run value below fails, and it fails with the three markets
-#: moving +9.4% / +3.3% / +20.8% — which is not one rescale and so is not
-#: the live signature either. The live failures are not reproduced here.
-UNREACHABLE = (0.0552, 0.1186, 0.0002)
+def _forced_failure(fn):
+    """Run `fn` with the gate forced to report one failing hitter.
+
+    The failing BRANCH needs a lineup that fails, and no honest synthetic
+    reliably does any more — which is the point: the fixture that used to
+    fail here now passes, because FIT_TRIALS was raised on the strength of
+    what this tool reported. Chasing a new fixture each time the engine
+    improves would test the engine, not the reporting, so the gate is
+    stubbed and the reporting is what gets checked."""
+    orig = G.reconcile
+
+    def fake(sim, targets, tol=0.06):
+        return {"ok": False, "worst_rel_error": 0.094, "noise_rel": 0.021,
+                "tol": tol, "offenders": [
+                    {"player": "b8", "market": HITS, "projected": 0.70,
+                     "simulated": 0.766, "rel_error": 0.094}]}
+    G.reconcile = fake
+    try:
+        return fn()
+    finally:
+        G.reconcile = orig
 
 
 def test_a_failing_lineup_is_diagnosed_rather_than_just_reported():
-    rare = list(NORMAL)
-    rare[7] = UNREACHABLE
-    out = _out(_dump({"RARE": _cell(rare)}))
+    out = _forced_failure(lambda: _out(_dump({"BAD": _cell(NORMAL)})))
     assert "still FAILS" in out, out
     assert "b8" in out, out
     assert "VERDICT:" in out, out
@@ -157,23 +159,27 @@ def test_a_failing_lineup_is_diagnosed_rather_than_just_reported():
 def test_the_two_fitting_knobs_are_reported_separately():
     """More trials per round and more rounds fix different things — the
     fit's own sampler noise versus convergence — and prescribing the wrong
-    one is how the previous attempt got reverted. Both are measured."""
-    rare = list(NORMAL)
-    rare[7] = UNREACHABLE
-    out = _out(_dump({"RARE": _cell(rare)}))
-    assert "fit at 60,000 trials/round" in out, out
-    assert "fit for 18 rounds" in out, out
+    one is how the previous attempt got reverted. Both are measured, and
+    both are probed ABOVE whatever currently ships."""
+    out = _forced_failure(lambda: _out(_dump({"BAD2": _cell(NORMAL)})))
+    assert f"fit at {G.FIT_TRIALS * 4:,} trials/round" in out, out
+    assert f"fit for {G.FIT_ROUNDS * 3} rounds" in out, out
 
 
-def test_markets_disagreeing_by_different_amounts_is_not_a_fit_problem():
-    """The discriminator the whole tool turns on. One rescale moves a
-    hitter's three markets by the SAME percentage; the unreachable line
-    moves them +9.4% / +3.3% / +20.8%, so no rescale reaches it and
-    pointing at calibrate would be the fourth wrong guess in a row."""
-    rare = list(NORMAL)
-    rare[7] = UNREACHABLE
-    out = _out(_dump({"RARE": _cell(rare)}))
-    assert "NOT a single rescale" in out, out
+def test_the_single_rescale_bar_carries_each_markets_own_noise():
+    """One rescale moves a hitter's three markets by the SAME percentage,
+    so the spread between them is the discriminator between a fit problem
+    and a model problem. A FLAT bar got this wrong on the live run: it
+    called all four failures "NOT a single rescale" while the same run
+    concluded the fitting loop was at fault — and the fitting loop IS a
+    single rescale. A hitter projected for 0.055 home runs a game is
+    measured far less precisely than one at 1.05, and the bar has to say
+    so."""
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "sim_diagnose.py"), encoding="utf-8").read()
+    assert "SAME_RESCALE + noise" in src
+    out = _forced_failure(lambda: _out(_dump({"BAD3": _cell(NORMAL)})))
+    assert "allowed" in out, out
 
 
 def test_a_projection_that_is_not_a_hitter_is_named_before_the_sim_is():

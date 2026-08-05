@@ -345,6 +345,39 @@ that failed — the container has no route to statsapi.mlb.com — so the
 league-wide number after it is Ethan's next `sim_reconcile.py` run, not a
 figure recorded here in advance.
 
+**The fit was also measuring too coarsely to act on what it measured.**
+Each round takes its step from a SAMPLED mean, so it scales a hitter's
+whole table by that round's sampler error along with the correction — and
+the last round's is never re-measured, so it ships. The error is relative,
+which makes it worst on the thinnest projections, i.e. the bottom of a real
+order. `sim_diagnose.py` on the live dump returned the same cause for all
+four survivors: re-fitting at more trials a round took them from
+−0.066/+0.106/−0.063/−0.068 to −0.016/+0.016/−0.037/−0.031, every one
+inside the gate. Sweeping trials per round against true post-fit bias found
+one plateau from 16,000 up and 8,000 as the only row off it — and only on
+the thin lineup, which is exactly the shape that was failing. `FIT_TRIALS`
+doubles to 16,000, which buys the whole available improvement.
+
+**And a bug in the inversion, found by arithmetic rather than by a run.**
+`rates_from_means` called a triple consistent up to three bases per non-HR
+hit, which is true of baseball and false of this table: a single is one
+base and a double is two, so an order of nothing but doubles reaches 2.0,
+and only triples pass it — but triples are a league constant here because
+they are too rare to infer per hitter. With doubles capped at every
+remaining non-HR hit the solve tops out at `2 + TRIPLE_SHARE` = 2.022.
+Everything between that and 3.0 was admitted as valid baseball and then
+under-delivered silently: 19% light on total bases at 2.5 bases per hit,
+30% at 2.9. Those triples are now flagged like every other impossible one
+and routed at the projection engine.
+
+Stated precisely, because it would be easy to oversell: this changes
+nothing on the live path today. `reconcile_triple` already caps total bases
+at 1.9 per non-HR hit, comfortably under 2.022, so every triple arriving
+through pricing was already inside the corrected bound — and the signatures
+of the four live failures do not match this one anyway. The gap was for
+callers inverting raw projections directly, and it is closed now rather
+than left to be rediscovered if that cap ever moves.
+
 **And a fourth finding the gate produced rather than suffered.** With the
 overshoot gone, 26 of 30 live lineups reconcile and the four that do not
 share something the sim did not cause: the offending hitter is projected

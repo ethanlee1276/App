@@ -73,6 +73,42 @@ def test_an_impossible_projection_still_yields_a_valid_table():
     assert abs(sum(parts) - 1.0) < 1e-9
 
 
+def test_a_triple_the_table_cannot_deliver_is_flagged_not_swallowed():
+    """The consistency bound used to read "at most three bases per non-HR
+    hit", which is true of baseball and false of this table. A single is
+    one base and a double is two, so an order of nothing but doubles
+    reaches 2.0; only triples pass it, and triples are a league constant
+    here because they are too rare to infer per hitter. With doubles
+    capped at every remaining non-HR hit the solve tops out at
+    2 + TRIPLE_SHARE.
+
+    Everything between that and 3.0 was reported as valid baseball and
+    then quietly under-delivered — 19% light on total bases at 2.5 bases
+    per hit, 30% at 2.9 — and the gate would blame a model for it."""
+    ceiling = 2.0 + G.TRIPLE_SHARE
+    pa, hits = 4.25, 0.90
+
+    def delivered(r):
+        return (r.single + 2 * r.double + 3 * r.triple + 4 * r.hr) * pa
+
+    # At or below the ceiling: consistent, and it really does deliver.
+    for c in (1.5, 1.9, 2.0, ceiling):
+        r = G.rates_from_means(hits, c * hits, 0.0, pa)
+        assert r.consistent, c
+        assert abs(delivered(r) - c * hits) < 1e-6, (c, delivered(r))
+
+    # Above it: flagged, so the harness routes it at the projection engine
+    # instead of handing the sim a question no table can answer.
+    for c in (2.2, 2.5, 2.9):
+        assert not G.rates_from_means(hits, c * hits, 0.0, pa).consistent, c
+
+    # And the table is still a valid distribution either way.
+    for c in (0.5, 2.5, 5.0):
+        parts = G.rates_from_means(hits, c * hits, 0.0, pa)
+        assert abs(sum((parts.out, parts.bb, parts.single, parts.double,
+                        parts.triple, parts.hr)) - 1.0) < 1e-9
+
+
 def test_the_bottom_of_the_order_bats_less_than_the_top():
     """One flat plate-appearance number hands the ninth spot the leadoff
     spot's playing time, which inflates exactly the cheap props a longshot
@@ -159,6 +195,49 @@ def test_a_strong_lineup_reconciles_at_all():
     """The gate itself, on the order that used to fail it."""
     rates, targets = _strong()
     sim = G.simulate_lineup(G.calibrate(rates, targets), [], trials=20000)
+    assert G.reconcile(sim, targets)["ok"], G.reconcile(sim, targets)
+
+
+#: The sub-.100 bats the live gate actually failed on — OAK's and TEX's
+#: bottom three, as projected. They are not plausible hitters, which is a
+#: projection-engine finding in its own right, but they are what the fit
+#: has to cope with tonight.
+THIN = [(nm, h, tb, hr) for (nm, _, _, _), (h, tb, hr) in zip(
+    LINEUP, [(1.05, 1.72, 0.14), (0.98, 1.60, 0.12), (1.02, 1.95, 0.22),
+             (0.95, 1.90, 0.26), (0.88, 1.55, 0.17), (0.82, 1.34, 0.12),
+             (0.3174, 0.5100, 0.030), (0.0552, 0.1186, 0.005),
+             (0.2097, 0.3100, 0.012)])]
+
+
+def test_the_fit_measures_well_enough_to_act_on_what_it_measured():
+    """REGRESSION, and the second half of what the live gate found.
+
+    Every round computes its step from a SAMPLED mean, so it scales a
+    hitter's whole table by that round's sampler error as well as by the
+    correction — and the last round's is never re-measured, so it ships.
+    The error is relative, which makes it worst on the thinnest
+    projections: the bottom of a batting order absorbs the most.
+
+    At 8,000 trials a round this left the real bottom-of-order bats out
+    around 4%, and four live lineups failed on exactly them."""
+    rates, targets = [], {}
+    for i, (nm, h, tb, hr) in enumerate(THIN, start=1):
+        r = G.rates_from_means(h, tb, hr, G.expected_pa(i))
+        r.name, r.spot = nm, i
+        rates.append(r)
+        targets[nm] = {HITS: h, TOTAL_BASES: tb, HOME_RUNS: hr}
+
+    def worst_tb(fitted):
+        # Total bases only: it is what the fit targets, and it is resolved
+        # well enough here to be about the fit rather than the evaluation.
+        sim = G.simulate_lineup(fitted, [], trials=60000, seed=909)
+        return max(abs(sim.mean[n][TOTAL_BASES] / w[TOTAL_BASES] - 1)
+                   for n, w in targets.items())
+
+    assert G.FIT_TRIALS >= 16000, "8,000 is what the live gate caught"
+    assert worst_tb(G.calibrate(rates, targets)) < 0.03
+    # And the thin order is the shape that needed it — the gate passes.
+    sim = G.simulate_lineup(G.calibrate(rates, targets), [], trials=40000)
     assert G.reconcile(sim, targets)["ok"], G.reconcile(sim, targets)
 
 

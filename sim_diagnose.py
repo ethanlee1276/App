@@ -202,21 +202,38 @@ def diagnose(label: str, cell: dict) -> dict:
     # model problem.
     per = devs[name]
     spread = max(per.values()) - min(per.values()) if len(per) == 3 else 9.9
-    one_rescale = spread <= SAME_RESCALE
+    # The bar has to carry each market's OWN noise, not a flat number. A
+    # hitter projected for 0.055 home runs a game is measured far less
+    # precisely than one projected for 1.05 hits, so three markets can
+    # scatter several percent around a single shared rescale purely on the
+    # evaluation sampler. A flat 0.015 called every live failure "NOT a
+    # single rescale" while the same run concluded the fitting loop was at
+    # fault — and the fitting loop IS a single rescale, so the tool was
+    # contradicting itself.
+    noise = 3.0 * max((sim.se.get(name, {}).get(m) or 0.0) / max(w, 1e-9)
+                      for m, w in targets[name].items())
+    bar = SAME_RESCALE + noise
+    one_rescale = spread <= bar
     print(f"  {name}'s three markets: "
           + "  ".join(f"{m[:4]} {per[m]:+.3f}" for m in MARKETS if m in per)
-          + f"   (spread {spread:.3f} — "
+          + f"   (spread {spread:.3f} vs {bar:.3f} allowed — "
           + ("one rescale of his whole table)" if one_rescale
              else "NOT a single rescale)"))
 
     # More trials in the fit, same rounds: isolates the fit's own noise.
-    _, rich = _run(rates, targets, trials=60000)
+    # Kept a multiple ABOVE the shipping default rather than a fixed
+    # number — this probe is only informative while it is measuring
+    # better than what ships, and FIT_TRIALS has already been raised once
+    # because of what this probe reported.
+    rich_trials = G.FIT_TRIALS * 4
+    _, rich = _run(rates, targets, trials=rich_trials)
     d_rich = rich.get(name, {}).get(market, 0.0)
     # More rounds, same trials: isolates convergence.
-    _, longer = _run(rates, targets, rounds=18)
+    _, longer = _run(rates, targets, rounds=G.FIT_ROUNDS * 3)
     d_long = longer.get(name, {}).get(market, 0.0)
-    print(f"  same hitter, fit at 60,000 trials/round: {d_rich:+.3f}")
-    print(f"  same hitter, fit for 18 rounds:          {d_long:+.3f}")
+    print(f"  same hitter, fit at {rich_trials:,} trials/round: {d_rich:+.3f}")
+    print(f"  same hitter, fit for {G.FIT_ROUNDS * 3} rounds: "
+          f"{d_long:+.3f}")
 
     # "Fixed" means inside the tolerance the gate applies, same standard as
     # everywhere else here — and materially better than shipping, so a

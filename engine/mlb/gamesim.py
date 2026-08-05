@@ -212,10 +212,35 @@ def rates_from_means(hits: float, total_bases: float, home_runs: float,
     p_hr = min(p_hr, p_hit)                    # a homer is a hit
     nonhr = max(0.0, p_hit - p_hr)
     bases_nonhr = max(0.0, (total_bases - 4.0 * home_runs) / pa)
-    # Each non-HR hit is worth at least one base and at most three. Outside
-    # that band the triple is not valid baseball and the clamps below are
-    # about to absorb the difference.
-    if bases_nonhr < nonhr - 1e-9 or bases_nonhr > 3.0 * nonhr + 1e-9:
+    # Each non-HR hit is worth at least one base, and at most what THIS
+    # table can actually deliver. That ceiling is not three.
+    #
+    # A single is one base and a double is two, so an order made entirely
+    # of doubles reaches 2.0; only triples go past it, and triples are a
+    # league constant here (TRIPLE_SHARE) because they are too rare to
+    # infer per hitter. With doubles capped at every remaining non-HR hit,
+    # the most the solve below can produce is
+    #     2*(nonhr - p_3b) + 3*p_3b  =  nonhr * (2 + TRIPLE_SHARE)
+    # and the bound used to read 3.0. Everything in between was reported
+    # as valid baseball and then quietly under-delivered: measured, a
+    # hitter projected for 2.5 bases per non-HR hit came out 19% light on
+    # total bases, and 30% at 2.9. The gate would then report a
+    # disagreement neither model caused.
+    #
+    # Above the ceiling is not a sim finding either. Reaching it needs most
+    # of a hitter's extra-base hits to be triples, which no projection
+    # should be claiming — so it is flagged like every other impossible
+    # triple and routed at the projection engine.
+    #
+    # Nothing on the board reaches it today: `reconcile_triple` already
+    # caps total bases at MAX_BASES_PER_NONHR_HIT = 1.9, comfortably under
+    # 2.022, so every triple arriving here through the pricing path is
+    # already inside this bound. The gap was for callers that invert raw
+    # projections directly, and it is closed here rather than left to be
+    # rediscovered if that cap ever moves.
+    max_bases_per_hit = 2.0 + TRIPLE_SHARE
+    if (bases_nonhr < nonhr - 1e-9
+            or bases_nonhr > max_bases_per_hit * nonhr + 1e-9):
         consistent = False
     p_3b = nonhr * TRIPLE_SHARE
     # singles + doubles = nonhr - p_3b
@@ -532,9 +557,42 @@ FIT_DAMP = 0.6
 #: only column with no cell worse than 0.4%.
 FIT_ROUNDS = 6
 
+#: Trials per fitting round, and the reason it is not smaller.
+#:
+#: Every round computes its step from a SAMPLED mean, so it scales a
+#: hitter's whole table by that round's sampler error as well as by the
+#: correction — and the last round's is never re-measured. The noise
+#: therefore lands in the shipped rates. It is worst exactly where it is
+#: least affordable: a hitter projected for 0.119 total bases a game is
+#: measured ten times less precisely, in relative terms, than one at 1.9,
+#: so the bottom of a real batting order absorbs the most.
+#:
+#: This ran at 8,000, and the live gate found it. With the overshoot fixed,
+#: four lineups still failed, and `sim_diagnose.py` on the dump reported
+#: the same cause for all four — re-fitting at 60,000 trials a round took
+#: the offending hitters from -0.066/+0.106/-0.063/-0.068 to
+#: -0.016/+0.016/-0.037/-0.031, every one of them inside the gate.
+#:
+#: 60,000 is not the value, because it is 7.5x the cost for no gain over
+#: the knee. Sweeping trials per round against the TRUE post-fit bias in
+#: total bases (250,000-trial evaluation, averaged over three fit seeds,
+#: worst hitter in the lineup) — where "thin" carries the real sub-.100
+#: bats the live failures were found on:
+#:
+#:     trials/round   total cost   ordinary    thin     hot
+#:        8,000          48,000      0.020    0.043    0.018
+#:       16,000          96,000      0.011    0.018    0.011
+#:       25,000         150,000      0.014    0.020    0.014
+#:       40,000         240,000      0.012    0.021    0.009
+#:
+#: Everything from 16,000 up is one plateau; 8,000 is the only row off it,
+#: and only the thin lineup notices, which is precisely the shape that was
+#: failing. Doubling buys the whole improvement available.
+FIT_TRIALS = 16000
+
 
 def calibrate(rates: list[BatterRates], targets: dict,
-              trials: int = 8000, seed: int | None = 7,
+              trials: int = FIT_TRIALS, seed: int | None = 7,
               env_sd: float = ENV_SD, rounds: int = FIT_ROUNDS,
               damp: float = FIT_DAMP) -> list[BatterRates]:
     """Re-centre the rate tables so the SIMULATED means hit the projections.
@@ -554,15 +612,14 @@ def calibrate(rates: list[BatterRates], targets: dict,
     makes the fit necessary also makes the obvious step overshoot — see
     FIT_DAMP, which carries the measurement.
 
-    Each round is deliberately coarse. This is a fixed point being located,
-    not a probability being published, so 8,000 trials per round is enough
-    — but not free, and what it costs is worth naming: the step is computed
-    from a sampled mean, so every round scales a hitter's whole table by
-    that round's sampler error as well as by the correction. Damping
-    attenuates the noise it injects along with the overshoot. What survives
-    is small and was measured rather than assumed: on the reconcile
-    harness's own nine-man slate the fitted table's true bias, read at
-    400,000 trials, is -0.13% on average and -2.3% at the worst hitter.
+    Each round is coarser than the production run, but not as coarse as it
+    once was, and the reason is worth naming: the step is computed from a
+    SAMPLED mean, so every round scales a hitter's whole table by that
+    round's sampler error as well as by the correction, and the last
+    round's is never re-measured. Damping attenuates the noise it injects
+    along with the overshoot, but it does not remove it, and the cheapest
+    remaining lever is simply measuring better — see FIT_TRIALS, which
+    carries what the live gate cost before it was raised.
     """
     cur = list(rates)
     for _ in range(max(1, rounds)):
