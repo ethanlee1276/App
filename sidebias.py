@@ -201,27 +201,62 @@ def report(rows: list[dict], min_n: int = MIN_N) -> int:
         print("    of each other, well inside the noise. Whatever is costing")
         print("    money, the evidence does not put it on the side choice.")
 
-    # Per market, so a lean isolated to one market is visible as such.
+    # Per market — EVERY market, not only the ones with enough on both
+    # sides. Showing the testable ones and silently dropping the rest let
+    # the aggregate be driven by bets that never appeared: on the real
+    # journal the table printed hits +0.9% and total_bases -7.6% under an
+    # aggregate of -9.7%, and the 40 bets it had dropped carried -36.7%.
+    # A reader would have concluded the lean was in total_bases. It was not.
     by_market: dict = defaultdict(list)
     for b in rows:
         by_market[b["market"] or "?"].append(b)
-    eligible = [(m, rs) for m, rs in by_market.items()
-                if len(_split(rs)[0]) >= min_n and len(_split(rs)[1]) >= min_n]
-    if eligible:
-        print()
-        print("=" * 74)
-        print("BY MARKET")
-        print("=" * 74)
-        print(f"  {'market':<18}{'over n':>8}{'gap':>9}{'under n':>9}"
-              f"{'gap':>9}{'diff':>9}{'z':>7}")
+    print()
+    print("=" * 74)
+    print("BY MARKET")
+    print("=" * 74)
+    print(f"  {'market':<18}{'over n':>8}{'gap':>9}{'under n':>9}"
+          f"{'gap':>9}{'diff':>9}{'z':>7}")
+    print("  " + "-" * 68)
+    testable = []
+    thin_rows: list[dict] = []
+    for m, rs in sorted(by_market.items()):
+        o, u = _split(rs)
+        go, gu = calibration_gap(o), calibration_gap(u)
+        am = asymmetry(go, gu)
+        ok = go["n"] >= min_n and gu["n"] >= min_n
+        if ok:
+            testable.append((m, am))
+        else:
+            thin_rows += rs
+        print(f"  {m[:17]:<18}{go['n']:>8}{go['gap']:>+9.1%}"
+              f"{gu['n']:>9}{gu['gap']:>+9.1%}{am['diff']:>+9.1%}"
+              + (f"{am['z']:>+7.2f}" if ok else f"{'thin':>7}"))
+    if thin_rows:
+        to, tu = _split(thin_rows)
+        gto, gtu = calibration_gap(to), calibration_gap(tu)
+        atm = asymmetry(gto, gtu)
         print("  " + "-" * 68)
-        for m, rs in sorted(eligible):
-            o, u = _split(rs)
-            go, gu = calibration_gap(o), calibration_gap(u)
-            am = asymmetry(go, gu)
-            print(f"  {m[:17]:<18}{go['n']:>8}{go['gap']:>+9.1%}"
-                  f"{gu['n']:>9}{gu['gap']:>+9.1%}{am['diff']:>+9.1%}"
-                  f"{am['z']:>+7.2f}")
+        print(f"  {'(all thin, pooled)':<18}{gto['n']:>8}{gto['gap']:>+9.1%}"
+              f"{gtu['n']:>9}{gtu['gap']:>+9.1%}{atm['diff']:>+9.1%}"
+              f"{atm['z']:>+7.2f}")
+
+    # Simpson's check. If the whole book leans harder than any market in
+    # it, the lean is not a property of those markets — it is composition,
+    # or it is concentrated somewhere the per-market rows are too thin to
+    # test. Either way the aggregate is the wrong place to act.
+    if testable:
+        comp = [am["diff"] for _, am in testable]
+        if a["diff"] < min(comp) - 1e-9 or a["diff"] > max(comp) + 1e-9:
+            print()
+            print("  ⚠  The book-wide asymmetry "
+                  f"({a['diff']:+.1%}) sits OUTSIDE the range")
+            print(f"     of every market that could be tested "
+                  f"({min(comp):+.1%} to {max(comp):+.1%}).")
+            print("     A whole that leans harder than any of its parts is not")
+            print("     those parts leaning. Read the pooled thin row above:")
+            print("     that is where the book-wide number is coming from, and")
+            print("     it is a handful of bets in markets too small to test")
+            print("     — not a property of the model's side choice at large.")
     return 0
 
 

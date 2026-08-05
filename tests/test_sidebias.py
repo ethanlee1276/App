@@ -204,6 +204,51 @@ def test_the_explainer_names_both_fitters_and_how_they_differ():
     assert "intercept" in sb.EXPLAIN
 
 
+def test_every_market_is_listed_even_when_it_cannot_be_tested():
+    """Showing only the testable markets let the aggregate be driven by
+    bets that never appeared on the page.
+
+    On the real journal the table printed hits +0.9% and total_bases -7.6%
+    under a book-wide -9.7%, and the 40 bets it had silently dropped
+    carried -36.7%. A reader would have concluded the lean lived in
+    total_bases. It did not — it lived entirely in what the table hid.
+    """
+    rows = (side_book("OVER", 60, 0.58, 0.50, "hits")
+            + side_book("UNDER", 40, 0.58, 0.52, "hits")
+            + side_book("OVER", 8, 0.58, 0.10, "strikeouts")
+            + side_book("UNDER", 6, 0.58, 0.90, "strikeouts"))
+    out = _run(rows)
+    assert "strikeouts" in out, "a market too thin to test was hidden"
+    assert "thin" in out
+    assert "(all thin, pooled)" in out
+
+
+def test_a_book_leaning_harder_than_any_of_its_markets_is_flagged():
+    """Simpson's check. A whole that leans harder than every part is not
+    those parts leaning, and acting on the aggregate would aim at the
+    wrong market."""
+    rows = (side_book("OVER", 60, 0.58, 0.55, "hits")
+            + side_book("UNDER", 40, 0.58, 0.56, "hits")
+            + side_book("OVER", 60, 0.58, 0.54, "total_bases")
+            + side_book("UNDER", 40, 0.58, 0.55, "total_bases")
+            # The thin market carrying the whole signal.
+            + side_book("OVER", 15, 0.58, 0.10, "strikeouts")
+            + side_book("UNDER", 10, 0.58, 0.95, "strikeouts"))
+    out = _run(rows)
+    assert "sits OUTSIDE the range" in out
+    assert "not those parts leaning" in out
+
+
+def test_no_simpson_warning_when_the_book_sits_inside_its_markets():
+    """It must be able to stay quiet, or the warning means nothing."""
+    rows = (side_book("OVER", 60, 0.58, 0.45, "hits")
+            + side_book("UNDER", 40, 0.58, 0.58, "hits")
+            + side_book("OVER", 60, 0.58, 0.46, "total_bases")
+            + side_book("UNDER", 40, 0.58, 0.57, "total_bases"))
+    out = _run(rows)
+    assert "sits OUTSIDE the range" not in out
+
+
 def test_an_empty_journal_does_not_divide_by_zero():
     assert sb.report([]) == 0
     s = sb.calibration_gap([])
