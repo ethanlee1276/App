@@ -738,11 +738,18 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
                     "under — the same story from both ends", 0, "ok")
 
 
-def relate(sport: str, a: dict, b: dict, game: dict | None = None) -> Relation:
+def relate(sport: str, a: dict, b: dict, game: dict | None = None,
+           joints: dict | None = None) -> Relation:
     """Classify a pair of legs against §3's taxonomy and §4-8's prior tables.
 
     Ordered most-fatal first: a pair that is both a Type 5 and a Type 3 is a
     Type 5, because that is the disposition that kills it.
+
+    ``joints`` is tonight's simulated joint distribution, when there is one
+    (engine/mlb/simjoint). It is consulted for exactly one construction —
+    two bats in one MLB lineup — and only when the sim reconciled against
+    the projections it was inverted from. Everything else, and every
+    lineup that failed that gate, keeps the measured prior.
     """
     same_game = game_key(a) == game_key(b)
     same_team = (a.get("team") or "_a") == (b.get("team") or "_b")
@@ -842,6 +849,17 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None) -> Relation:
             # same innings. §5.1 puts this at +0.20 to +0.35 — a permitted
             # construction, not a clash.
             r, meas = rho_for("lineup_stack", 0.275)
+            # Tonight's own lineup, if the sim reconciled. This is the one
+            # place in the whole taxonomy where the dependence can be
+            # OBSERVED rather than estimated: both legs come out of the
+            # same simulated innings, so the leadoff-and-two pair and the
+            # leadoff-and-eight pair stop being priced identically.
+            from .mlb.simjoint import rho_for as _sim_rho
+            hit = _sim_rho(joints, a, b, r)
+            if hit is not None:
+                return Relation(hit[0], "two bats in one lineup against one "
+                                        f"starter — {hit[1]}", 0, "ok",
+                                measured=True)
             return Relation(r, "two bats in one lineup against one starter — "
                                "§5.1 puts this at +0.20 to +0.35" + (
                                    f", and our own {MEASURED['lineup_stack'][1]:,} "
@@ -992,7 +1010,8 @@ class Ticket:
 
 
 def _evaluate(sport: str, legs: list[dict], rules: SportRules,
-              games: dict | None = None) -> tuple[Ticket | None, str]:
+              games: dict | None = None,
+              joints: dict | None = None) -> tuple[Ticket | None, str]:
     """Run gates 2 through 6 on one candidate. Returns (ticket, kill reason)."""
     n = len(legs)
     idx = list(itertools.combinations(range(n), 2))
@@ -1001,7 +1020,8 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
     # how much — without it they silently never fire, and a ticket that
     # should be killed reads as merely uncorrelated.
     games = games or {}
-    rels = [relate(sport, legs[i], legs[j], games.get(game_key(legs[i])))
+    rels = [relate(sport, legs[i], legs[j], games.get(game_key(legs[i])),
+                   joints)
             for i, j in idx]
 
     # Gate 2 — clash screen.
@@ -1251,11 +1271,18 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
     return t, ""
 
 
-def screen(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
+def screen(slate: dict, sport: str, bankroll_state: str = "normal",
+           joints: dict | None = None) -> dict:
     """Screen a built slate for parlays. Returns the Parlay Zone payload.
 
     `bankroll_state` is the drawdown circuit-breaker: §10.2 says parlays go to
     zero during a drawdown, not to half.
+
+    `joints` is tonight's simulated joint distribution when the caller has
+    one (engine/mlb/simjoint.build). It refines exactly one construction —
+    two bats in one MLB lineup — and only for lineups whose sim reconciled
+    against the projections it was inverted from. Absent or gated out, every
+    pair keeps the measured prior and nothing about the screen changes.
     """
     rules = RULES.get(sport) or SportRules(sport, sport.upper())
     out: dict = {
@@ -1367,7 +1394,7 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
             continue
         seen.add(sig)
         out["considered"] += 1
-        t, why = _evaluate(sport, legs, rules, games)
+        t, why = _evaluate(sport, legs, rules, games, joints)
         if t is None:
             out["killed"].append({"gate": 2, "leg": " + ".join(
                 str(l.get("player")) for l in legs), "reason": why})
@@ -1470,7 +1497,8 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal") -> dict:
     return out
 
 
-def attach(slate: dict, sport: str, state: str | None = None) -> dict:
+def attach(slate: dict, sport: str, state: str | None = None,
+           joints: dict | None = None) -> dict:
     """Screen a slate and hang the result on it as `parlays`.
 
     Called from each builder immediately before the JSON is written, so the
@@ -1488,7 +1516,8 @@ def attach(slate: dict, sport: str, state: str | None = None) -> dict:
         # "normal" by a caller that does not know it exists.
         slate["parlays"] = screen(
             slate, sport,
-            bankroll_state=state if state is not None else bankroll_state(sport))
+            bankroll_state=state if state is not None else bankroll_state(sport),
+            joints=joints)
     except Exception as exc:                       # pragma: no cover - guard
         slate["parlays"] = {
             "sport": sport, "tickets": [], "probation": True, "killed": [],

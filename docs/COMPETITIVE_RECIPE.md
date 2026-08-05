@@ -448,9 +448,45 @@ fit's own noise, convergence, a real disagreement), reports the
 single-rescale signature that distinguishes a fitting problem from a model
 one, and flags an impossible projection before it discusses the sim at all.
 
-**Not wired into pricing.** Still task #60, and now unblocked rather than
-blocked. Cost is not the obstacle: 0.29s per lineup at 20,000 trials, about
-8.6s for a 15-game slate.
+### BUILT 2026-08-05 — the sim reaches pricing (`engine/mlb/simjoint.py`)
+
+Task #60, opened when the Monte Carlo was built and shut until the gate
+passed all thirty live lineups.
+
+**What it replaces.** The Parlay Zone prices a pair through a Gaussian
+copula that needs one number per pair. For two bats in one lineup that
+number was `MEASURED["lineup_stack"]` — +0.186, honestly fitted on 27,613
+games, and *the same for every pair*. The leadoff hitter and the number two
+bat back to back, so one reaching is literally what gives the other his
+extra turn; leadoff-and-eight share far less. A league average prices both
+identically, and the ticket a bettor is offered is one specific pair. The
+sim deals both legs out of the same simulated innings, so it observes the
+dependence rather than assuming it — the only new information it was ever
+built to produce.
+
+**The gate is the whole precondition.** Every lineup is reconciled first,
+and one that fails contributes nothing: its pairs keep the prior, silently.
+A sim that cannot reproduce the projections it was inverted from has no
+standing to describe their joint.
+
+**The translation is solved, not assumed.** The sim reports P(both legs
+win); the copula speaks latent correlation. Those are different numbers at
+these marginals, so `solve_rho` bisects `joint_two` — quoting phi as rho
+would have been a silent error.
+
+**Conservatism is inherited, not re-argued.** `parlays.py` says understating
+correlation is the direction to be wrong in. The naive move is to clamp the
+sim's number down again — but `ENV_SD` is already 0.25 where 0.30 fits the
+measurement better, chosen because 0.25 misses low. Clamping here would pay
+the same toll twice.
+
+**What it declines.** Strikeouts, outs and every game line (the sim does not
+tally them); UNDER legs (the joint of two complements is not the complement
+of the joint); two legs on different teams; any lineup under six projected
+hitters; and any solved rho more than 0.35 from the prior — 27,613 games
+against one night's model, so a gap that size is a finding to chase rather
+than a number to bet. Cost stays proportional: only lineups that two
+candidate legs actually share are simulated at all.
 
 ### BUILT 2026-08-03 — the blind-spot miner (`engine/losspatterns.py`)
 

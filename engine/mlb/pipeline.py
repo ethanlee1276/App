@@ -789,5 +789,24 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
     out["comps"] = _attach_comps(results, "mlb")
     # §14, and §5's lineup rule is enforced inside the screen: a hitter leg
     # is ineligible until the card is posted.
+    #
+    # Task #60. The screen prices a pair through a copula that needs one
+    # correlation, and for two bats in one lineup that number has always
+    # been a league average — the same +0.186 for the leadoff-and-two pair
+    # as for leadoff-and-eight, when the first two bat back to back and one
+    # reaching is literally what gives the other his extra turn. The game
+    # sim deals both legs out of the same innings, so it OBSERVES that
+    # instead of assuming it.
+    #
+    # Only for lineups whose sim reconciles against the projections it was
+    # inverted from, and never fatally: build() catches its own trouble and
+    # an empty result means every pair keeps the prior, which is exactly
+    # what shipped before this line existed.
+    joints = None
+    try:
+        from .simjoint import build as _build_joints
+        joints = _build_joints(slate, results)
+    except Exception:                                       # noqa: BLE001
+        joints = None
     from ..parlays import attach
-    return attach(out, "mlb")
+    return attach(out, "mlb", joints=joints)
