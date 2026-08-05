@@ -44,9 +44,38 @@ MIN_MAE_GAIN_REL = 0.005
 
 def _settled(lconn) -> list:
     return lconn.execute(
-        "SELECT sport, market, player, hit_prob, projection, actual, status "
-        "FROM bets WHERE status IN ('won','lost') "
+        "SELECT sport, market, player, side, hit_prob, projection, actual, "
+        "status FROM bets WHERE status IN ('won','lost') "
         "ORDER BY ts, rowid").fetchall()
+
+
+def as_over(p, side: str | None, status: str) -> tuple[float, int] | None:
+    """Restate one settled bet as (P(over), did the over land).
+
+    The fit has to run on ONE quantity. Pairing each bet's own hit_prob
+    with won/lost does not: an over claiming 0.58 and an under claiming
+    0.58 land in the same bucket as the same number, though one is a claim
+    that the over hits and the other a claim that it does not.
+
+    That is not cosmetic. The intercept is the only parameter in
+    apply_temperature that can push a model off one side, and a model
+    leaning over contributes a negative calibration gap on its overs and a
+    positive one on its unders — which cancel. The fit built to catch a
+    directional lean was blind to it by construction, and would report a
+    leaning market as calibrated.
+
+    engine/backtest.py's deep fit has always converted first; this is the
+    journal fit being brought into line with it.
+    """
+    if p is None or not 0.0 < float(p) < 1.0:
+        return None
+    p = float(p)
+    won = status == "won"
+    if (side or "OVER").upper() == "OVER":
+        return (p, 1 if won else 0)
+    # An UNDER bet: its claim is that the over does NOT land, so P(over) is
+    # the complement, and the bet winning means the over missed.
+    return (1.0 - p, 0 if won else 1)
 
 
 def fit_temperatures(lconn, path=None, min_samples: int = MIN_SAMPLES,
@@ -63,11 +92,13 @@ def fit_temperatures(lconn, path=None, min_samples: int = MIN_SAMPLES,
 
     groups: dict[tuple, list] = {}
     for r in _settled(lconn):
-        p = r["hit_prob"]
-        if p is None or not 0.0 < float(p) < 1.0:
+        # Restated as P(over) so the fit runs on one quantity — see
+        # as_over. A won UNDER is an over that did NOT land, and pairing
+        # it as a win made a directional lean invisible to the intercept.
+        pair = as_over(r["hit_prob"], r["side"], r["status"])
+        if pair is None:
             continue
-        groups.setdefault((r["sport"], r["market"]), []).append(
-            (float(p), 1 if r["status"] == "won" else 0))
+        groups.setdefault((r["sport"], r["market"]), []).append(pair)
 
     out = {"fitted": [], "owned": [], "collecting": []}
     wrote = False
