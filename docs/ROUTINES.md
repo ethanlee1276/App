@@ -171,3 +171,40 @@ It is deliberately the dumb half. It cannot tell whether `engine/rules.py`
 really implements a forcing rule; it can tell you the constant that row
 names was renamed three weeks ago. Nobody was ever going to check that by
 hand, and the maps are what get believed.
+
+`lineupwatch.py` is the other one — and unlike the two Routines above it
+must run on the laptop, not in a fired session, because a fired session
+can reach neither `statsapi.mlb.com` nor the odds feed.
+
+§5 holds every MLB hitter prop until its lineup is posted, and the parlay
+screen fails closed on it. So an afternoon board carries one leg per game
+— the starting pitcher — no same-game pair exists anywhere on the slate,
+and the Parlay Zone has nothing to offer but cross-game constructions that
+§0.3 proves singles beat. A 1pm build and a 5pm build are different boards
+from the same data, and remembering which one you are looking at is
+exactly the chore that should not depend on remembering.
+
+    python3 lineupwatch.py --check      # report, never build
+    python3 lineupwatch.py              # build if cards have posted
+    python3 lineupwatch.py --watch      # poll until the slate is set
+
+The design rests on one asymmetry: **lineups are free, rebuilds are not.**
+Cards come from `statsapi.mlb.com`, which is unmetered; only the rebuild
+spends Odds API credits. So it polls as often as is useful (`--every`,
+floored at the boxscore cache's own 5-minute TTL — below that it re-reads
+one file and learns nothing) and builds as rarely as is useful:
+
+* `--min-gap` (25m) — cards trickle out over an hour or more. Rebuilding
+  on each one spends a day's credits to reach the board one build at the
+  end would have produced.
+* `--max-builds` (3) — a ceiling per run, so a pathological night cannot
+  drain the budget. Checked BEFORE the gap, or a run at its ceiling
+  reports a wait that will never end.
+
+The trigger is cards posted **since the board was built**, never an
+absolute count — otherwise every poll after the first rebuilds forever.
+`decide()` is pure and tested without a network or a clock; the API half
+is a thin wrapper on purpose.
+
+Run it once when you sit down, or leave `--watch` going through the
+afternoon. Either way the board you read is the board the cards support.
