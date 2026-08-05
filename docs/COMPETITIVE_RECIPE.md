@@ -345,6 +345,31 @@ that failed — the container has no route to statsapi.mlb.com — so the
 league-wide number after it is Ethan's next `sim_reconcile.py` run, not a
 figure recorded here in advance.
 
+**And a fourth finding the gate produced rather than suffered.** With the
+overshoot gone, 26 of 30 live lineups reconcile and the four that do not
+share something the sim did not cause: the offending hitter is projected
+for a batting average no hitter can have. Carlos Cortes at 0.055 hits a
+game over 3.8 plate appearances is **.014**; Justin Foscue is .030; Taylor
+Ward is .122. Those are the numbers the BOARD prices from, so this matters
+well beyond the reconciliation — and nothing currently excludes them.
+`sample_q` in `engine/mlb/betting.py` shades confidence for a thin log
+(floor 0.3) but confidence weighting cannot repair a central estimate that
+is structurally wrong. Open question for Ethan rather than a unilateral
+filter, since it changes what reaches the board.
+
+**`sim_diagnose.py`** exists because this took too many round trips. The
+gate needs a live feed, so every "what is wrong with those lineups" cost a
+run on Ethan's machine, a paste, a guess here, and a change. Three of those
+guesses were confidently wrong — plate appearances, lineup heterogeneity,
+more fitting rounds — and a fourth shipped a fix that had to be reverted
+for breaking a lineup nobody had checked. The dump already carried every
+hitter's projected means and batting spot, which is a complete input to the
+whole chain, so a failing lineup can now be rebuilt and re-run anywhere.
+It separates the four causes that call for opposite fixes (the sampler, the
+fit's own noise, convergence, a real disagreement), reports the
+single-rescale signature that distinguishes a fitting problem from a model
+one, and flags an impossible projection before it discusses the sim at all.
+
 **Not wired into pricing.** Still task #60, and now unblocked rather than
 blocked. Cost is not the obstacle: 0.29s per lineup at 20,000 trials, about
 8.6s for a 15-game slate.
