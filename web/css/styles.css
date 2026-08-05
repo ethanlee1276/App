@@ -855,30 +855,55 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .pz-ticket:has(.pz-g-play) { --grade-color: var(--good); }
 .pz-ticket:has(.pz-g-marginal) { --grade-color: var(--brand); }
 .pz-runners-title { margin-top: 22px; }
-.pz-runners { list-style: none; margin: 0; padding: 0; }
-.pz-runners li {
+.pz-runners { margin: 0; padding: 0; }
+/* Each ranked ticket is its whole card, folded behind its summary row. The
+   summary keeps the row's exact layout so opening one does not move the
+   numbers a reader was comparing. */
+.pz-runner > summary {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px;
   padding: 11px 0; border-top: 1px solid var(--border-soft);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-sm); cursor: pointer; list-style: none;
 }
-.pz-runners li:first-child { border-top: 0; }
+.pz-runner:first-child > summary { border-top: 0; }
+.pz-runner > summary::-webkit-details-marker { display: none; }
+/* The affordance, drawn rather than relying on the native triangle, which
+   is inconsistent across engines and cannot be coloured. */
+.pz-runner > summary::after {
+  content: ""; flex: 0 0 auto; width: 7px; height: 7px; margin-left: auto;
+  border-right: 1.6px solid var(--text-mute);
+  border-bottom: 1.6px solid var(--text-mute);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform .18s ease;
+}
+.pz-runner[open] > summary::after { transform: rotate(-135deg) translate(-3px, -3px); }
+.pz-runner > summary:hover { color: var(--text); }
+/* Square, like every other focus ring here — the design system has no
+   rounded containers and a focus state is not an exception to it. */
+.pz-runner > summary:focus-visible {
+  outline: 2px solid var(--brand); outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pz-runner > summary::after { transition: none; }
+}
+/* A folded card carries the ticket's own margins, so trim the doubling. */
+.pz-runner > .pz-ticket { margin-top: 4px; }
 .pz-run-legs { flex: 1 1 22ch; min-width: 0; font-weight: 700; }
 .pz-run-legs i { color: var(--text-dim); font-style: normal; font-weight: 400; }
 .pz-run-num { color: var(--text-dim); font-variant-numeric: tabular-nums;
   white-space: nowrap; }
 .pz-run-num.neg { color: var(--bad); }
 /* A ticket that cleared every gate and lost only to the one-per-slate cap.
-   It sits in the runners-up list because it is not tonight's play, but it
-   is not a near-miss either — the rail marks it as a ticket that passed,
-   and its reason gets a full line rather than a column. */
-.pz-runners li.pz-demoted {
+   It sits below the play because it is not tonight's play, but it is not a
+   near-miss either — the rail marks it as a ticket that passed, and its
+   reason gets a full line rather than a column. */
+.pz-runner.pz-demoted > summary {
   border-left: 2px solid var(--good); padding-left: 12px;
 }
 .pz-run-why {
-  flex: 1 0 100%; color: var(--text-mute); font-size: var(--fs-xs);
-  line-height: 1.55; max-width: 74ch;
+  color: var(--text-mute); font-size: var(--fs-xs);
+  line-height: 1.55; max-width: 74ch; padding: 8px 0 0;
 }
-@media (max-width: 640px) { .pz-runners li { gap: 3px 14px; } }
+@media (max-width: 640px) { .pz-runner > summary { gap: 3px 14px; } }
 .pz-edge { font-size: var(--fs-sm); line-height: 1.65; max-width: 74ch;
   margin: 10px 0 0; color: var(--text-dim); }
 .pz-edge.pos b { color: var(--text); }

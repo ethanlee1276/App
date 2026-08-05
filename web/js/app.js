@@ -2438,44 +2438,64 @@ function parlayTicket(t, live) {
   </div>`;
 }
 
-/* Ranks two and below, as rows rather than cards.
-   Four full tickets stacked ran to six thousand pixels of near-identical
-   blocks, which buries the one that matters. The top construction earns the
-   card; the rest earn a line each — enough to compare them on the numbers
-   the ranking uses and to click through in your head, and no more. */
+/* A ticket that cleared all seven gates and lost only to §10.2's
+   one-per-slate cap is NOT the same animal as one that failed on merit.
+   These rendered identically — same row, same weight, the demoted one
+   reading a bare "clears" next to tickets that missed by 30%. The arbiter
+   already writes that ticket its own verdict naming the sport that took
+   the slot; nothing displayed it. */
+const pzDemoted = (t) => t.slate_play === false && t.grade !== "short";
+
+/* One summary line: the numbers the ranking is actually computed on, in
+   the order a reader compares them. Doubles as the <summary> of the
+   collapsible card below, so the row and the card can never disagree. */
+function parlayRunnerRow(t) {
+  const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
+  return `<span class="pz-rank">#${t.rank}</span>
+    <span class="pz-run-legs">${t.legs.map((l) =>
+      `${escapeHtml(l.player || "")} <i>${escapeHtml(l.side || "")}
+       ${escapeHtml(String(l.line ?? ""))}
+       ${escapeHtml(l.market_label || l.market || "")}</i>`).join(" + ")}</span>
+    <span class="pz-run-num">Type ${escapeHtml(t.parlay_type)}</span>
+    <span class="pz-run-num">ρ ${t.pairs.map((p) =>
+      `${p.rho >= 0 ? "+" : ""}${p.rho.toFixed(2)}`).join(" ")}</span>
+    <span class="pz-run-num ${t.edge_at_ceiling_points > 0 ? "" : "neg"}">
+      ${sign(t.edge_at_ceiling_points)} pts</span>
+    <span class="pz-run-num">need ${sign(t.required_american)}</span>
+    <span class="pz-run-num">${t.shortfall_pct
+      ? `short ${t.shortfall_pct}%`
+      : pzDemoted(t) ? "cleared — capped" : "clears"}</span>`;
+}
+
+/* Ranks two and below, in full — but folded.
+ *
+ * Four full tickets stacked ran to six thousand pixels of near-identical
+ * blocks, which buried the one that matters; that is why these were rows
+ * for a while. Rows lost the other half of the point: the correlation, the
+ * mechanism sentence, the clash screen and the dominance arithmetic are
+ * the reason a construction is ranked where it is, and a line of numbers
+ * cannot carry them.
+ *
+ * So every ticket now gets its whole card, behind a <details> whose summary
+ * IS the old row. Open by default when the ticket CLEARED — tonight that is
+ * the one the slate cap demoted, which a reader has an obvious reason to
+ * inspect — and folded when it did not, because a ticket that loses money
+ * at the most generous price a book would quote has earned a line, not a
+ * screen. Native <details>: it survives with JS broken and it is keyboard
+ * operable without writing either behaviour by hand. */
 function parlayRunnersUp(rows) {
   if (!rows.length) return "";
-  const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
-  // A ticket that cleared all seven gates and lost only to §10.2's
-  // one-per-slate cap is NOT the same animal as one that failed on merit,
-  // and this list used to render them identically — same weight, same row,
-  // the demoted one reading a bare "clears" next to tickets that missed by
-  // 30%. The arbiter already writes that ticket its own verdict explaining
-  // which sport took the slot; nothing displayed it. So a reader saw one
-  // card and a flat list, and had no way to tell that the second row was a
-  // ticket the engine would have played on any other night.
-  const demoted = (t) => t.slate_play === false && t.grade !== "short";
   return `<div class="pz-sub pz-runners-title">Also on the board</div>
-    <ul class="pz-runners">
-      ${rows.map((t) => `<li class="${demoted(t) ? "pz-demoted" : ""}">
-        <span class="pz-rank">#${t.rank}</span>
-        <span class="pz-run-legs">${t.legs.map((l) =>
-          `${escapeHtml(l.player || "")} <i>${escapeHtml(l.side || "")}
-           ${escapeHtml(String(l.line ?? ""))}
-           ${escapeHtml(l.market_label || l.market || "")}</i>`).join(" + ")}</span>
-        <span class="pz-run-num">Type ${escapeHtml(t.parlay_type)}</span>
-        <span class="pz-run-num">ρ ${t.pairs.map((p) =>
-          `${p.rho >= 0 ? "+" : ""}${p.rho.toFixed(2)}`).join(" ")}</span>
-        <span class="pz-run-num ${t.edge_at_ceiling_points > 0 ? "" : "neg"}">
-          ${sign(t.edge_at_ceiling_points)} pts</span>
-        <span class="pz-run-num">need ${sign(t.required_american)}</span>
-        <span class="pz-run-num">${t.shortfall_pct
-          ? `short ${t.shortfall_pct}%`
-          : demoted(t) ? "cleared — capped" : "clears"}</span>
-        ${demoted(t) && t.verdict
-          ? `<span class="pz-run-why">${escapeHtml(t.verdict)}</span>` : ""}
-      </li>`).join("")}
-    </ul>`;
+    <div class="pz-runners">
+      ${rows.map((t) => `
+      <details class="pz-runner${pzDemoted(t) ? " pz-demoted" : ""}"
+               ${t.grade !== "short" ? "open" : ""}>
+        <summary>${parlayRunnerRow(t)}</summary>
+        ${pzDemoted(t) && t.verdict
+          ? `<div class="pz-run-why">${escapeHtml(t.verdict)}</div>` : ""}
+        ${parlayTicket(t, t.qualified)}
+      </details>`).join("")}
+    </div>`;
 }
 
 /* The clash ledger. Every candidate that died, and the §3 type that killed

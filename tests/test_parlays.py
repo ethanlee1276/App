@@ -1064,14 +1064,55 @@ def test_a_ticket_demoted_by_the_slate_cap_reads_differently_from_a_miss():
     to see that the second row was a ticket the engine would have played on
     any other night.
     """
-    i = APP.index("function parlayRunnersUp")
-    fn = APP[i:APP.find("\nfunction ", i + 1)]
-    assert "slate_play === false" in fn, "demotion is not distinguished at all"
+    assert "const pzDemoted" in APP, "demotion is not distinguished at all"
+    i = APP.index("const pzDemoted")
+    decl = APP[i:APP.index("\n", i)]
+    assert "slate_play === false" in decl
     # Demotion is about the CAP, never about grade — a short ticket that
     # somehow carried the flag must not be dressed up as one that cleared.
-    assert 't.grade !== "short"' in fn
-    assert "cleared — capped" in fn
-    assert "t.verdict" in fn, "the arbiter's explanation is still unrendered"
+    assert 't.grade !== "short"' in decl
+    row = _fn_body("function parlayRunnerRow")
+    assert "cleared — capped" in row
+    up = _fn_body("function parlayRunnersUp")
+    assert "t.verdict" in up, "the arbiter's explanation is still unrendered"
+
+
+def _fn_body(sig: str) -> str:
+    i = APP.index(sig)
+    j = APP.find("\nfunction ", i + 1)
+    return APP[i:j if j > 0 else len(APP)]
+
+
+def test_every_ranked_ticket_is_available_in_full_not_just_the_top_one():
+    """Four tickets are screened and published; one used to be readable.
+
+    Ranks two and below rendered as a line of numbers, which cannot carry
+    the reason a construction is ranked where it is — the correlation, the
+    mechanism sentence, the clash screen, the dominance arithmetic. Stacking
+    four full cards was the other failure: six thousand pixels of
+    near-identical blocks, burying the one that matters.
+
+    So each ranked ticket gets its whole card behind a native <details>,
+    open when it cleared and folded when it did not.
+    """
+    up = _fn_body("function parlayRunnersUp")
+    assert "<details" in up and "<summary>" in up
+    assert "parlayTicket(t, t.qualified)" in up, \
+        "the runners-up still render as summaries only"
+    # Open for a ticket that cleared, folded for one that did not.
+    assert 't.grade !== "short" ? "open" : ""' in up
+    # The summary and the card must come from one place, or the row and the
+    # card it opens can drift apart.
+    assert "parlayRunnerRow(t)" in up
+
+    # Native <details> so it survives with JS broken and is keyboard
+    # operable without hand-written behaviour — but the marker is drawn,
+    # and a drawn affordance needs a visible focus state.
+    css = open(os.path.join(_ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    assert ".pz-runner > summary::after" in css, "no expand affordance"
+    assert ".pz-runner > summary:focus-visible" in css, "not keyboard visible"
+    assert "prefers-reduced-motion" in css
 
 
 def test_the_shortlist_is_bounded():
