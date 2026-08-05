@@ -44,7 +44,24 @@ def _journal(**cols):
     return path, orig
 
 
-def _run(path, orig):
+def _run(path, orig, stores=None):
+    """Run the check against a temp journal AND empty rung stores.
+
+    The stores matter as much as the journal. The first version of this
+    read the machine's REAL formfit/playerfit/hypotheses files, so it
+    passed on a fresh clone and failed on the laptop that had actually
+    learned something — the same mistake test_prose.py made when it
+    reached for the live hypothesis store and fell through to a paid API
+    call. A test whose verdict depends on how much the owner has bet is
+    not testing the code.
+    """
+    from engine import losspatterns as lp, formfit, playerfit, hypotheses
+    stores = stores or {}
+    saved = (lp.load, formfit._load, playerfit._load, hypotheses.load)
+    lp.load = lambda *a, **k: stores.get("miner", {})
+    formfit._load = lambda *a, **k: stores.get("formfit", {})
+    playerfit._load = lambda *a, **k: stores.get("playerfit", {})
+    hypotheses.load = lambda *a, **k: stores.get("lab", {})
     ledger.connect = lambda *a, **k: orig(path)
     had = doctor.has_journal
     doctor.has_journal = lambda: True
@@ -53,6 +70,7 @@ def _run(path, orig):
         doctor.check_learning(rep)
         return rep.checks[0]
     finally:
+        (lp.load, formfit._load, playerfit._load, hypotheses.load) = saved
         ledger.connect = orig
         doctor.has_journal = had
 
@@ -98,6 +116,60 @@ def test_an_empty_journal_is_not_a_failure():
     row = _run(path, orig)
     assert row["status"] == doctor.OK
     assert "nothing to learn from yet" in row["detail"]
+
+
+def test_a_rung_that_has_learned_something_is_named():
+    path, orig = _journal(**{d: (1.0 if d != "loss_cause" else "blowout")
+                             for d in DIMS})
+    row = _run(path, orig, stores={
+        "miner": {"findings": [{"dim": "park_hr"}], "closed": [{"dim": "slot"}]},
+        "formfit": {"mlb|hits": {"r": 0.4}, "nfl|rec_yds": {"r": 0.2}},
+        "lab": {"hypotheses": [{"id": 1}], "watchlist": ["a", "b"]}})
+    assert row["status"] == doctor.OK, row
+    assert "miner: 1 open, 1 convicted" in row["detail"], row["detail"]
+    assert "recency dial: 2 fitted" in row["detail"], row["detail"]
+    assert "hypothesis lab: 1 live, 2 watched" in row["detail"], row["detail"]
+    assert "no rung has convicted" not in row["detail"]
+
+
+def test_a_store_that_cannot_be_read_is_reported_not_swallowed():
+    """THE bug this check shipped with for one commit. It called `load` on
+    every rung; formfit and playerfit expose `_load`, so the getattr
+    raised, a bare except ate it, and the check announced "no rung has
+    convicted anything yet" on a laptop where two rungs were full.
+
+    Silence looking like health is the exact failure this check exists to
+    catch, so it is not allowed to commit it."""
+    from engine import formfit
+
+    def boom(*a, **k):
+        raise AttributeError("no such loader")
+
+    path, orig = _journal(**{d: (1.0 if d != "loss_cause" else "blowout")
+                             for d in DIMS})
+    saved = formfit._load
+    formfit._load = boom
+    try:
+        # _run re-patches, so break it from inside the stores instead.
+        row = _run(path, orig)
+        clean = row["status"]
+    finally:
+        formfit._load = saved
+    assert clean == doctor.OK          # patched stores are readable
+    # And with a genuinely broken loader the check must warn, not go quiet.
+    rep = doctor.Report()
+    ledger.connect = lambda *a, **k: orig(path)
+    had, hl = doctor.has_journal, formfit._load
+    doctor.has_journal = lambda: True
+    formfit._load = boom
+    try:
+        doctor.check_learning(rep)
+    finally:
+        ledger.connect, doctor.has_journal, formfit._load = orig, had, hl
+    row = rep.checks[0]
+    assert row["status"] == doctor.WARN, row
+    assert "could not read" in row["fix"], row["fix"]
+    assert "recency dial" in row["fix"], row["fix"]
 
 
 def test_the_check_is_registered_and_marked_as_needing_the_laptop():

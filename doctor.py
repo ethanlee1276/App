@@ -554,32 +554,50 @@ def check_learning(rep):
         dead = [d for d, n in filled.items() if not n]
 
         # OUTPUT: anything any rung has actually fitted or found.
-        found = []
-        try:
-            from engine import losspatterns as lp
-            store = lp.load()
+        #
+        # A store that cannot be READ is reported, never swallowed. The
+        # first version of this check called `load` on every rung; formfit
+        # and playerfit expose `_load`, so the getattr raised, a bare
+        # except ate it, and the check announced "no rung has convicted
+        # anything yet" on a machine where two rungs were full. That is
+        # precisely the silence-looks-like-health failure this exists to
+        # catch, built into the thing catching it.
+        found, unreadable = [], []
+
+        def _rung(label, fn):
+            try:
+                return fn()
+            except Exception as exc:                       # noqa: BLE001
+                unreadable.append(f"{label} ({type(exc).__name__})")
+                return None
+
+        store = _rung("blind-spot miner",
+                      lambda: __import__("engine.losspatterns",
+                                         fromlist=["load"]).load())
+        if store is not None:
             f = len(store.get("findings") or [])
             c = len(store.get("closed") or [])
             if f or c:
                 found.append(f"miner: {f} open, {c} convicted")
-        except Exception:                                  # noqa: BLE001
-            pass
-        for label, mod, fn in (("recency dial", "engine.formfit", "load"),
-                               ("player memory", "engine.playerfit", "load")):
-            try:
-                store = getattr(__import__(mod, fromlist=["load"]), fn)()
-                n = sum(len(v) for v in store.values()) if isinstance(store, dict) else 0
-                if n:
-                    found.append(f"{label}: {n} fitted")
-            except Exception:                              # noqa: BLE001
-                pass
-        try:
-            import hypotheses as hyp
-            watch = len((hyp.load() or {}).get("watchlist") or [])
-            if watch:
-                found.append(f"hypothesis lab: {watch} on the watchlist")
-        except Exception:                                  # noqa: BLE001
-            pass
+
+        for label, mod in (("recency dial", "engine.formfit"),
+                           ("player memory", "engine.playerfit")):
+            store = _rung(label, lambda m=mod: __import__(
+                m, fromlist=["_load"])._load())
+            if isinstance(store, dict) and store:
+                n = sum(len(v) if isinstance(v, dict) else 1
+                        for v in store.values())
+                found.append(f"{label}: {n} fitted")
+
+        store = _rung("hypothesis lab",
+                      lambda: __import__("engine.hypotheses",
+                                         fromlist=["load"]).load())
+        if isinstance(store, dict):
+            n_live = len(store.get("hypotheses") or [])
+            n_watch = len(store.get("watchlist") or [])
+            if n_live or n_watch:
+                found.append(f"hypothesis lab: {n_live} live, "
+                             f"{n_watch} watched")
 
         detail = (f"{total:,} journaled picks · {len(live)}/{len(dims)} "
                   f"mineable dimensions carrying data")
@@ -588,7 +606,12 @@ def check_learning(rep):
         else:
             detail += " · no rung has convicted anything yet"
 
-        if missing_col:
+        if unreadable:
+            rep.add("learning ladder", WARN, detail,
+                    "could not read: " + ", ".join(unreadable)
+                    + " — the rung may be full and reporting as empty, which "
+                      "is the one thing this check must never do quietly")
+        elif missing_col:
             rep.add("learning ladder", WARN, detail,
                     "missing column(s): " + ", ".join(missing_col)
                     + " — run any build once; ledger.connect() migrates")
