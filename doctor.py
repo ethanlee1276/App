@@ -508,6 +508,99 @@ def check_clv_capture(rep):
             rep.add("clv capture", OK, detail)
 
 
+def check_learning(rep):
+    """Is the learning ladder actually recording, and has it learned anything?
+
+    Four rungs run off the journal — the blind-spot miner, the recency
+    dial, the per-player memory and the hypothesis lab — and every one of
+    them is silent when it has nothing. Silence is indistinguishable from
+    "not wired up", which is the whole problem: a ladder that quietly
+    stopped feeding would look exactly like a ladder with no findings yet.
+
+    So this reports the two things separately. INPUT is whether the
+    journal is carrying the circumstance dimensions the rungs mine — a bet
+    logged without them can never be convicted of anything. OUTPUT is
+    whether any rung has produced a fitted number or a finding. Input
+    without output is normal and early. Output without input is impossible,
+    and input going to zero after it was non-zero is the failure worth
+    catching.
+    """
+    @_check(rep, "learning ladder")
+    def _():
+        if not has_journal():
+            rep.add("learning ladder", WARN, _no_data("bet journal"))
+            return
+        from engine import ledger
+        conn = ledger.connect()
+        # The dimensions the miner bands. Each is journaled by a different
+        # part of the board, so a column that is entirely NULL points at
+        # one pipeline rather than at the ladder.
+        dims = ("lead_min", "park_hr", "wind_out", "lineup_slot",
+                "rest_days", "body_clock", "pen_own", "pen_opp", "loss_cause")
+        have = {c[1] for c in conn.execute("PRAGMA table_info(bets)")}
+        total = conn.execute("SELECT COUNT(*) FROM bets").fetchone()[0]
+        if not total:
+            rep.add("learning ladder", OK, "journal is empty — nothing to learn from yet")
+            return
+        filled, missing_col = {}, []
+        for d in dims:
+            if d not in have:
+                missing_col.append(d)
+                continue
+            n = conn.execute(
+                f"SELECT COUNT(*) FROM bets WHERE {d} IS NOT NULL").fetchone()[0]
+            filled[d] = n
+        live = [d for d, n in filled.items() if n]
+        dead = [d for d, n in filled.items() if not n]
+
+        # OUTPUT: anything any rung has actually fitted or found.
+        found = []
+        try:
+            from engine import losspatterns as lp
+            store = lp.load()
+            f = len(store.get("findings") or [])
+            c = len(store.get("closed") or [])
+            if f or c:
+                found.append(f"miner: {f} open, {c} convicted")
+        except Exception:                                  # noqa: BLE001
+            pass
+        for label, mod, fn in (("recency dial", "engine.formfit", "load"),
+                               ("player memory", "engine.playerfit", "load")):
+            try:
+                store = getattr(__import__(mod, fromlist=["load"]), fn)()
+                n = sum(len(v) for v in store.values()) if isinstance(store, dict) else 0
+                if n:
+                    found.append(f"{label}: {n} fitted")
+            except Exception:                              # noqa: BLE001
+                pass
+        try:
+            import hypotheses as hyp
+            watch = len((hyp.load() or {}).get("watchlist") or [])
+            if watch:
+                found.append(f"hypothesis lab: {watch} on the watchlist")
+        except Exception:                                  # noqa: BLE001
+            pass
+
+        detail = (f"{total:,} journaled picks · {len(live)}/{len(dims)} "
+                  f"mineable dimensions carrying data")
+        if found:
+            detail += " · " + "; ".join(found)
+        else:
+            detail += " · no rung has convicted anything yet"
+
+        if missing_col:
+            rep.add("learning ladder", WARN, detail,
+                    "missing column(s): " + ", ".join(missing_col)
+                    + " — run any build once; ledger.connect() migrates")
+        elif dead:
+            rep.add("learning ladder", WARN, detail,
+                    "always-NULL: " + ", ".join(dead)
+                    + " — those pipelines are not journaling their dimension, "
+                      "so the miner can never convict on it")
+        else:
+            rep.add("learning ladder", OK, detail)
+
+
 def check_git(rep):
     @_check(rep, "git")
     def _():
@@ -529,7 +622,7 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
           check_ingest_freshness, check_odds_budget, check_llm_spend,
           check_journal_sanity, check_record_page, check_premature_evidence,
           check_parlay_agreement, check_forecast_log, check_clv_capture,
-          check_git]
+          check_learning, check_git]
 
 # The checks that need the laptop's databases, budget state and built
 # slates. On a machine that has none of those — CI, a fresh clone — they
@@ -540,7 +633,7 @@ DATA_CHECKS = (check_stuck_bets, check_slate_freshness,
                check_ingest_freshness, check_odds_budget, check_llm_spend,
                check_journal_sanity, check_record_page,
                check_premature_evidence, check_parlay_agreement,
-               check_forecast_log, check_clv_capture)
+               check_forecast_log, check_clv_capture, check_learning)
 
 
 def run(skip_tests: bool = False, code_only: bool = False) -> Report:

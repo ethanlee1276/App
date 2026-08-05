@@ -241,10 +241,14 @@ def diagnose(label: str, cell: dict) -> dict:
     fixed = lambda x: abs(x) < tol and abs(x) < abs(d) / 2      # noqa: E731
 
     if fixed(d_rich) and not fixed(d_long):
-        verdict = ("the fit's own sampler noise. calibrate computes its step "
-                   "from an 8,000-trial mean and the last round's error is "
-                   "never re-measured — raise its trial count, not its "
-                   "rounds.")
+        verdict = (f"the fit's own sampler noise. calibrate computes its step "
+                   f"from a {G.FIT_TRIALS:,}-trial mean and the last round's "
+                   f"error is never re-measured — raise its trial count, not "
+                   f"its rounds. Check the hitter's projection first, though: "
+                   f"the noise is RELATIVE, so a tiny projected mean carries "
+                   f"more of it at any trial count, and buying precision is "
+                   f"the wrong fix for a number that should not have been "
+                   f"that small.")
     elif fixed(d_long) and not fixed(d_rich):
         verdict = ("convergence. The fit has not reached its fixed point on "
                    "this lineup — raise FIT_ROUNDS.")
