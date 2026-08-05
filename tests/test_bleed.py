@@ -149,7 +149,7 @@ def _run(rows, **kw):
 def test_the_report_leads_with_significance_before_any_slice():
     out = _run(book(105, 111))
     assert out.index("NOT SIGNIFICANT") < out.index("SLICES")
-    assert "settled bets to clear two sigma" in out
+    assert "settled bets to reach two sigma" in " ".join(out.split())
 
 
 def test_the_report_refuses_to_convict_a_coin_flip_sliced_many_ways():
@@ -205,6 +205,71 @@ def test_a_slice_that_is_the_whole_book_is_not_a_second_finding():
 
 
 # --- units vs win rate, which are different questions ------------------------
+def test_a_significant_rate_with_a_quiet_units_test_is_not_read_as_fine():
+    """The real journal's shape, and the one that must not be mishandled.
+
+    Win rate is 3.2 sigma under what the prices require; the units test is
+    only 1.4 because stakes vary and varying stakes add P&L variance that
+    says nothing about pick quality. Reporting "NOT SIGNIFICANT" off the
+    units test alone told a book whose picking IS provably below the bar
+    that its record proved nothing.
+    """
+    import random
+    rnd = random.Random(1)
+    rows = []
+    # 108-119 at short prices, sized the way Kelly sizes: mostly small with
+    # a few large. Seeded, so the divergence is fixed rather than lucky.
+    for i in range(227):
+        rows.append(bet("won" if i < 108 else "lost", odds=-140,
+                        stake=rnd.choice([0.05, 0.05, 0.05, 0.1, 0.1, 0.8])))
+    s = bleed.measure(rows)
+    assert s["z_rate"] < -2, s["z_rate"]
+    assert abs(s["z"]) < abs(s["z_rate"]), "stake variance did not damp units"
+    # Flattened: the copy wraps across print() calls, and a test that
+    # breaks on rewrapping is a test of the line breaks.
+    out = " ".join(_run(rows).split())
+    assert "SIGNIFICANT ON WIN RATE" in out
+    assert "one finding, not two contradictory ones" in out
+    assert "Do not read that as the model being fine" in out
+    assert "NOT SIGNIFICANT on either" not in out
+
+
+def test_the_bets_needed_line_matches_the_test_it_describes():
+    """It read "needs about 93 settled bets ... there are 227" directly
+    under a NOT SIGNIFICANT verdict — the projection came from the win-rate
+    gap while the verdict came from the units test, so the page contradicted
+    itself in three lines."""
+    # Only printed when NEITHER test is significant, so it can never again
+    # sit under a verdict driven by the other one.
+    out = _run(book(52, 48))
+    if "NOT SIGNIFICANT on either" in out:
+        i = out.index("needs about")
+        n = int(out[i:].split()[2].replace(",", ""))
+        assert n > 227, "a gap needing fewer bets than we have is significant"
+
+
+def test_either_test_can_convict_and_the_label_says_which():
+    rate_only = {"z": 0.5, "z_rate": -4.0}
+    unit_only = {"z": -4.0, "z_rate": 0.5}
+    both = {"z": -4.0, "z_rate": -4.0}
+    neither = {"z": -1.0, "z_rate": -1.0}
+    assert bleed._bar(rate_only, 3.0) == "CONVICTS (rate)"
+    assert bleed._bar(unit_only, 3.0) == "CONVICTS (units)"
+    assert bleed._bar(both, 3.0) == "CONVICTS"
+    assert bleed._bar(neither, 3.0) == ""
+
+
+def test_the_bar_accounts_for_running_two_tests_per_slice():
+    """Correcting for the slices and not for the tests halves the bar."""
+    rows = []
+    for m in ("hits", "total_bases", "strikeouts", "outs"):
+        rows += book(14, 14, market=m)
+    out = _run(rows)
+    cuts = bleed.slices(rows, bleed.MIN_N)
+    assert f"|z| ≥ {bleed.sidak_z(2 * len(cuts)):.2f}" in out
+    assert "×2 tests" in out
+
+
 def test_the_two_z_scores_can_disagree_and_both_are_shown():
     """A book that wins its long prices and loses its short ones can sit
     under the required win RATE while making money. Reporting only the rate

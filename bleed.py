@@ -268,7 +268,29 @@ def slices(rows: list[dict], min_n: int) -> list[tuple]:
 
 # --- reporting ---------------------------------------------------------------
 def _bar(s: dict, bar: float) -> str:
-    return "CONVICTS" if abs(s["z"]) >= bar else ""
+    """Either test clearing the bar convicts, and the label says which.
+
+    They answer different questions and a slice can fail one without the
+    other, so requiring both would let a real break hide behind stake
+    variance. The bar is raised for the doubled number of looks in
+    return — see `report`.
+    """
+    rate, unit = abs(s["z_rate"]) >= bar, abs(s["z"]) >= bar
+    if rate and unit:
+        return "CONVICTS"
+    if rate:
+        return "CONVICTS (rate)"
+    if unit:
+        return "CONVICTS (units)"
+    return ""
+
+
+def bets_needed(win_rate: float, be: float) -> float:
+    """Settled bets for a win-rate gap this size to reach |z| = 2."""
+    gap = abs(win_rate - be)
+    if gap < 1e-9:
+        return float("inf")
+    return (2 * math.sqrt(be * (1 - be)) / gap) ** 2
 
 
 def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
@@ -285,16 +307,38 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
           f"{top['breakeven']:.1%} implied by the prices actually taken")
     print(f"  z on units {top['z']:+.2f}   ·   z on win rate "
           f"{top['z_rate']:+.2f}")
-    if abs(top["z"]) < 2:
-        gap = abs(top["win_rate"] - top["breakeven"])
-        need = ((2 * math.sqrt(top["breakeven"] * (1 - top["breakeven"]))
-                 / gap) ** 2) if gap > 1e-9 else float("inf")
-        print(f"\n  → NOT SIGNIFICANT. A gap this size needs about "
-              f"{need:,.0f} settled bets to clear two sigma; there are "
-              f"{top['n']}.")
-        print("    The record cannot yet tell a broken model from a bad run.")
+    rate_sig, unit_sig = abs(top["z_rate"]) >= 2, abs(top["z"]) >= 2
+    print()
+    if rate_sig and unit_sig:
+        print("  → SIGNIFICANT on both. The model picks below the rate these")
+        print("    prices require, and the bankroll shows it.")
+    elif rate_sig and not unit_sig:
+        # The reading that needs saying out loud, because the two numbers
+        # look like a contradiction and are not.
+        print("  → SIGNIFICANT ON WIN RATE, not on units — and that is one")
+        print("    finding, not two contradictory ones.")
+        print()
+        print("    The picks land well short of what these prices require:")
+        print(f"    {top['win_rate']:.1%} against {top['breakeven']:.1%}, "
+              f"z {top['z_rate']:+.2f}. That is a statement about the MODEL,")
+        print("    and it is the one that is significant.")
+        print()
+        print("    The units test is quieter because stakes vary, and varying")
+        print("    stakes add variance to the P&L that has nothing to do with")
+        print("    pick quality. It is asking a different question — 'is the")
+        print("    bankroll provably down' — and on this many bets it cannot")
+        print("    yet say. Do not read that as the model being fine.")
+    elif unit_sig and not rate_sig:
+        print("  → SIGNIFICANT ON UNITS, not on win rate. The picks land")
+        print("    about as often as the prices require, but the losses are")
+        print("    landing on the bigger stakes. That is a sizing problem")
+        print("    rather than a picking one.")
     else:
-        print("\n  → SIGNIFICANT at two sigma on the headline.")
+        need = bets_needed(top["win_rate"], top["breakeven"])
+        print(f"  → NOT SIGNIFICANT on either test. A win-rate gap this size")
+        print(f"    needs about {need:,.0f} settled bets to reach two sigma; "
+              f"there are {top['n']}.")
+        print("    The record cannot yet tell a broken model from a bad run.")
     # A break-even far above -110 means the book is buying short prices,
     # and that changes what the win rate has to be before it means
     # anything. Worth saying, because 47.6% reads as unlucky against 52.4%
@@ -335,23 +379,26 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
             print("    better. No edge visible here, and none being given up.")
 
     cuts = slices(rows, min_n)
-    bar = sidak_z(len(cuts), alpha)
+    # Two tests per slice, so two looks per slice. Correcting for the
+    # slices and not for the tests would quietly halve the bar.
+    bar = sidak_z(2 * len(cuts), alpha)
     print()
     print("=" * 74)
-    print(f"SLICES — {len(cuts)} tested, so the bar is |z| ≥ {bar:.2f}")
-    print(f"(a single look would be 1.96; {len(cuts)} looks at "
+    print(f"SLICES — {len(cuts)} cut ×2 tests, so the bar is |z| ≥ {bar:.2f}")
+    print(f"(a single look would be 1.96; {2 * len(cuts)} looks at "
           f"{alpha:.0%} family-wise is {bar:.2f})")
     print("=" * 74)
-    print(f"  {'slice':<34}{'n':>5}{'W-L':>10}{'ROI':>9}{'z':>7}{'CLV':>8}")
+    print(f"  {'slice':<32}{'n':>5}{'W-L':>9}{'ROI':>8}"
+          f"{'z:un':>7}{'z:rate':>8}{'CLV':>7}")
     print("  " + "-" * 74)
-    cuts.sort(key=lambda c: (c[0], -abs(c[2]["z"])))
+    cuts.sort(key=lambda c: (c[0], -max(abs(c[2]["z"]), abs(c[2]["z_rate"]))))
     convicted = []
     for dim, bucket, s in cuts:
         clv = f"{s['clv']:+.2f}" if s["clv"] is not None else "—"
         flag = _bar(s, bar)
         wl = f"{s['wins']}-{s['losses']}"
-        print(f"  {(dim + ' · ' + str(bucket))[:33]:<34}{s['n']:>5}{wl:>10}"
-              f"{s['roi']:>+9.1%}{s['z']:>+7.2f}{clv:>8}"
+        print(f"  {(dim + ' · ' + str(bucket))[:31]:<32}{s['n']:>5}{wl:>9}"
+              f"{s['roi']:>+8.1%}{s['z']:>+7.2f}{s['z_rate']:>+8.2f}{clv:>7}"
               + (f"  {flag}" if flag else ""))
         if flag:
             convicted.append((dim, bucket, s))
@@ -377,10 +424,14 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
         print("  the noise. Turning off the worst-looking one would be fitting")
         print("  the last two months of variance.")
     else:
-        for dim, bucket, s in sorted(convicted, key=lambda c: -abs(c[2]["z"])):
+        for dim, bucket, s in sorted(
+                convicted,
+                key=lambda c: -max(abs(c[2]["z"]), abs(c[2]["z_rate"]))):
             print(f"  {dim} · {bucket}: {s['n']} bets, {s['roi']:+.1%}, "
-                  f"z {s['z']:+.2f}")
-            print(f"     survives a bar set for {len(cuts)} simultaneous looks")
+                  f"z {s['z']:+.2f} on units / {s['z_rate']:+.2f} on rate "
+                  f"— {_bar(s, bar)}")
+            print(f"     survives a bar set for {2 * len(cuts)} "
+                  f"simultaneous looks")
     for dim, bucket, s in whole:
         print(f"\n  ({dim} · {bucket} also clears, but it is {s['n']} of "
               f"{top['n']} bets —")
