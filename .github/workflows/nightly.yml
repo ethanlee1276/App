@@ -46,6 +46,15 @@ jobs:
       - name: Health check
         run: python3 doctor.py --code-only --skip-tests
 
+      # Do the docs still describe the code? Each model doc ends with an
+      # implementation map, and its ✅ rows are the only place this system
+      # states what it has finished. They are prose, so nothing stops them
+      # rotting — a constant renamed during a fix leaves the row citing a
+      # name that is gone, and the map then reads as authoritative while
+      # being wrong. Cheap to check, and never checked by a human.
+      - name: Implementation map matches the code
+        run: python3 mapcheck.py
+
       # The suite passes on a clone with no databases — verified before
       # this workflow was written. If that stops being true, the failure
       # belongs here, loudly, and not in a surprise on someone's laptop.
