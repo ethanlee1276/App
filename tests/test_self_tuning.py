@@ -237,6 +237,26 @@ def test_the_refit_stamp_does_not_claim_to_move_on_every_settle():
     assert "left alone" in flat.lower()
 
 
+def test_a_rejected_player_memory_still_shows_what_it_scored():
+    """"memory off — didn't help" is a verdict; the page must show the
+    evidence for it on the SAME row.
+
+    The scores used to render only when the memory was adopted, so the one
+    reading a person actually questions — off — was the one with no number
+    beside it. Losing by 0.00001 and losing by 0.05 looked identical, and a
+    bare "didn't help" reads like the fit never ran rather than like it ran
+    and returned a clean negative. Both numbers are stored either way, so
+    this was hiding, not missing.
+    """
+    fn = _fn(APP, "recSelfTuningSection")
+    body = fn[fn.index("const playerScore"):fn.index("const playerRows")]
+    assert "p.adopted" not in body, "the scores are gated on adoption again"
+    assert "score_baseline" in body and "score_corrected" in body
+    # And it must say which direction the number moved — lower is better
+    # for both Brier and projection error, which nobody should have to know.
+    assert "memory scored better" in body and "memory scored worse" in body
+
+
 def test_the_page_explains_the_dial_in_both_directions():
     fn = _fn(APP, "recSelfTuningSection")
     flat = " ".join(fn.split())

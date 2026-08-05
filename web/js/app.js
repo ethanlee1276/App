@@ -3698,6 +3698,28 @@ function recSelfTuningSection(st, sport) {
       run; the record moves it only by beating the spec curve in a walk-forward
       test, and a dial it examined and left alone says so.</span></div>
     <div class="card" style="padding:0">${weightRows}</div>`;
+  // The two walk-forward scores, shown whether the memory was adopted or
+  // NOT. This used to render only on adopted rows, which meant a market
+  // reading "memory off — didn't help" showed the verdict and hid the
+  // evidence for it — you could not tell a memory that lost by a hair from
+  // one that lost by a mile, and "didn't help" on its own reads like the
+  // fit never ran. Both numbers are stored either way (playerfit.fit
+  // computes them before it checks adoption), so there was nothing to
+  // fetch — only something to stop hiding.
+  const playerScore = (p) => {
+    const before = p.score_baseline ?? p.brier_baseline;
+    const after = p.score_corrected ?? p.brier_corrected;
+    if (before == null || after == null) return "";
+    const label = p.score_label || "Brier";
+    // Lower is better for both Brier and projection error, so a fall is
+    // the memory helping. Say which way it went in words — a reader should
+    // not have to know that to read the row.
+    const gain = before - after;
+    const verdict = gain > 0 ? "memory scored better"
+      : gain < 0 ? "memory scored worse" : "no difference";
+    return `<span style="opacity:.6;font-variant-numeric:tabular-nums"
+      title="Walk-forward ${escapeHtml(label)}, memory off → on: ${escapeHtml(verdict)} by ${Math.abs(gain).toFixed(5)}. Lower is better. Each bet's correction knew only that player's EARLIER games, so this is out-of-sample at every row. The memory switches on only when it wins by at least 0.0005.">${before.toFixed(4)} → ${after.toFixed(4)}</span>`;
+  };
   const playerRows = players.map((p) => `
     <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
         border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
@@ -3708,8 +3730,7 @@ function recSelfTuningSection(st, sport) {
         .map((t) => `${escapeHtml(t.player)} ×${(t.mult ?? 1).toFixed(2)}`)
         .join(" · ")}</span>` : ""}
       <span style="opacity:.5;font-variant-numeric:tabular-nums">n=${(p.samples ?? 0).toLocaleString()}</span>
-      ${p.adopted && (p.score_baseline ?? p.brier_baseline) != null && (p.score_corrected ?? p.brier_corrected) != null
-        ? `<span style="opacity:.6;font-variant-numeric:tabular-nums" title="Walk-forward ${escapeHtml(p.score_label || "Brier")}, memory off → on; each bet's correction knew only earlier bets">${(p.score_baseline ?? p.brier_baseline).toFixed(4)} → ${(p.score_corrected ?? p.brier_corrected).toFixed(4)}</span>` : ""}
+      ${playerScore(p)}
     </div>`).join("");
   const playersBlock = !playerRows ? "" : `
     <div class="section-title">Player memory
