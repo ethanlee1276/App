@@ -358,6 +358,61 @@ def test_a_long_handle_breaks_on_a_phone_instead_of_running_over_the_price():
     assert "overflow: visible" in rule
 
 
+def test_the_projection_legend_names_the_dot_it_is_actually_beside():
+    """A legend's whole job is saying which marker is which, and this one
+    was painted from a different token than the markers.
+
+    `.legend .proj::before` read var(--brand) while the dot it labels reads
+    var(--text) — and since --brand and --warn are the same amber, the
+    legend rendered TWO amber bullets for a track carrying one amber dot
+    and one bone dot. Anyone matching them up got the projection and the
+    line backwards. Caught on a phone screenshot, not by a test.
+
+    Pinned as an identity between the marker and its swatch, so a future
+    palette change cannot separate them again."""
+    body = _strip_comments(CSS)
+
+    def token_of(selector):
+        """The token that PAINTS this selector.
+
+        Scans every rule the selector appears in, because the dots share a
+        geometry rule (`.proj-dot, .line-dot { position… }`) that carries
+        no colour at all — taking the first match found that one and
+        reported the component as unpainted."""
+        out, i = None, body.find(selector)
+        while i != -1:
+            rule = body[i:body.index("}", i)]
+            m = re.search(r"(?:background|color):\s*var\((--[\w-]+)\)", rule)
+            if m:
+                out = m.group(1)
+                break
+            i = body.find(selector, i + 1)
+        assert out, selector
+        return out
+
+    assert token_of(".proj-dot {") == token_of(".legend .proj::before")
+    assert token_of(".line-dot {") == token_of(".legend .line::before")
+    # And the two series must not be the same colour as each other, or the
+    # legend is useless however consistent it is.
+    assert token_of(".proj-dot {") != token_of(".line-dot {")
+
+
+def test_the_two_projbar_series_resolve_to_different_hexes():
+    """Consistent tokens are not enough: --brand and --warn are literally
+    the same amber, so two DIFFERENT token names can still paint one
+    colour. The dots have to be distinguishable on the screen."""
+    def hex_for(token, block):
+        m = re.search(rf"{token}:\s*(#[0-9A-Fa-f]{{3,8}})", block)
+        return m.group(1).lower() if m else None
+
+    body = _strip_comments(CSS)
+    # The dark theme block is the :root default in this sheet.
+    root = body[body.index(":root"):body.index("}", body.index(":root"))]
+    proj, line = hex_for("--text", root), hex_for("--warn", root)
+    assert proj and line, (proj, line)
+    assert proj != line, (proj, line)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
