@@ -640,8 +640,18 @@ def reconcile(sim: GameSim, targets: dict, tol: float = 0.06) -> dict:
     plate appearances depend on how often his team-mates reach, which the
     per-spot constant only approximates), and tight enough that a genuine
     inversion bug cannot hide behind it.
+
+    ``worst_rel_error`` is the largest RAW relative gap, forgiven ones
+    included, so it can legitimately exceed ``tol`` on a passing lineup —
+    which looks like a broken tool unless the reason is to hand. So
+    ``noise_rel`` comes back too: the sampler's own relative error on the
+    market where it is largest, at this trial count. A worst error under
+    that is a statement about how long the simulation ran, not about
+    either model. Both numbers are needed to read the verdict, because
+    the verdict is a comparison between them.
     """
     worst = 0.0
+    noise_rel = 0.0
     offenders = []
     for name, markets in targets.items():
         got = sim.mean.get(name) or {}
@@ -651,6 +661,8 @@ def reconcile(sim: GameSim, targets: dict, tol: float = 0.06) -> dict:
                 continue
             scale = max(abs(want), 0.05)
             rel = abs(have - want) / scale
+            noise_rel = max(noise_rel, RECONCILE_SIGMA * (
+                sim.se.get(name, {}).get(market) or 0.0) / scale)
             # Forgive whichever is larger: the relative tolerance, or the
             # sampler's own noise. Without the second term this gate is
             # accidentally strict on rare markets — a 0.05-per-game home-run
@@ -664,4 +676,5 @@ def reconcile(sim: GameSim, targets: dict, tol: float = 0.06) -> dict:
                                   "simulated": round(have, 4),
                                   "rel_error": round(rel, 4)})
     return {"ok": not offenders, "worst_rel_error": round(worst, 4),
+            "noise_rel": round(noise_rel, 4),
             "tol": tol, "offenders": offenders}

@@ -110,6 +110,10 @@ def run(date: str, dump_path: str | None = None,
     dump = {} if dump_path else None
     ran = failed = 0
     worst_overall = 0.0
+    #: Projected per-game mean of every market that failed, league-wide.
+    #: A rare market and a common one fail for very different reasons and
+    #: the summary should be able to tell them apart.
+    small: list[float] = []
     for (team, gn), cell in sorted(lineups.items()):
         full = {nm: mk for nm, mk in cell["hitters"].items()
                 if all(m in mk for m in (HITS, TOTAL_BASES, HOME_RUNS))}
@@ -152,10 +156,22 @@ def run(date: str, dump_path: str | None = None,
         worst_overall = max(worst_overall, rec["worst_rel_error"])
         tag = "✅" if rec["ok"] else "❌"
         label = f"{team}" + (f" (G{gn})" if gn > 1 else "")
+        # A passing lineup can carry a worst error above the tolerance: the
+        # gate forgives whichever is larger, the tolerance or the sampler's
+        # own noise, and on a 0.04-per-game home-run rate the second is much
+        # the larger. Printing the raw number beside a green tick with no
+        # explanation reads as a broken tool, so say which bound applied.
+        note = ""
+        if rec["worst_rel_error"] > rec["tol"]:
+            note = (f" — within the sampler's own ±{rec['noise_rel']:.3f} "
+                    f"at {trials:,} trials"
+                    if rec["ok"] else
+                    f" · sampler ±{rec['noise_rel']:.3f}")
         print(f"  {tag} {label:<10} {len(full)} hitters · worst rel error "
-              f"{rec['worst_rel_error']:.3f} (tol {rec['tol']})")
+              f"{rec['worst_rel_error']:.3f} (tol {rec['tol']}){note}")
         if not rec["ok"]:
             failed += 1
+            small.extend(abs(float(o["projected"])) for o in rec["offenders"])
             for o in rec["offenders"][:4]:
                 nm = o["player"]
                 spot = int(cell["spots"].get(nm) or 0)
@@ -194,6 +210,32 @@ def run(date: str, dump_path: str | None = None,
         print(f"GATE FAILED on {failed} lineup(s). One of the two models is "
               "wrong about those hitters — resolve before the sim's joints "
               "feed anything a bettor sees.")
+        # Before believing that, check whether the trial count could have
+        # produced it. A count with per-game mean mu carries roughly
+        # 1/sqrt(mu*T) relative sampler error, and this gate takes the MAX
+        # over every hitter and market on the slate — hundreds of
+        # comparisons — so the largest is out near three sigma by
+        # construction. Rearranged, a mean needs mu*T above about 3000
+        # before a 6% gap means anything, which at 20,000 trials is every
+        # market under ~0.15 a game. Those are exactly the props a rare
+        # market produces, so the arithmetic is worth printing rather than
+        # leaving for someone to rediscover.
+        thin = [m for m in small if m * trials < 3000]
+        if thin:
+            mu = min(thin)
+            need = int(3000 / max(mu, 1e-9) / 10000 + 1) * 10000
+            which = (f"all {len(thin)} offending markets are"
+                     if len(thin) == len(small) > 1 else
+                     "the offending market is" if len(small) == 1 else
+                     f"{len(thin)} of the {len(small)} offending markets are")
+            print(f"  …but {which} too thin to have been measured at this "
+                  f"trial count. The rarest is {mu:.3f} a game, carrying "
+                  f"~{100 / (mu * trials) ** 0.5:.1f}% sampler error at one "
+                  f"sigma — and the number above is the LARGEST of several "
+                  f"hundred comparisons, so three times that is ordinary.")
+            print(f"  Re-run with --trials={need} before believing any of "
+                  f"them: that is where the sampler stops being the "
+                  f"loudest thing in the measurement.")
         if dump is not None:
             import json as _json
             Path(dump_path).parent.mkdir(parents=True, exist_ok=True)

@@ -15,6 +15,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import sim_reconcile as SR                                    # noqa: E402
+from engine.mlb import gamesim as G                           # noqa: E402
 from engine.mlb.models import (HITS, HOME_RUNS, TOTAL_BASES,  # noqa: E402
                                MLBGame, MLBGameLog, MLBProp)
 from engine.mlb.data_loader import MLBSlate                   # noqa: E402
@@ -94,6 +95,80 @@ def test_the_gate_passes_end_to_end_on_a_full_synthetic_slate(monkey=None):
     finally:
         SL.build_live_slate = orig
     assert code == 0
+
+
+def test_a_pass_whose_worst_error_beats_the_tolerance_explains_itself():
+    """`✅ OAK 9 hitters · worst rel error 0.092 (tol 0.06)` came off a real
+    run and reads as a broken tool. It is not: the gate forgives whichever
+    is larger, the flat tolerance or the sampler's own noise, and on a
+    0.04-per-game home-run rate the second is much the larger. The number
+    that makes the verdict legible has to be printed next to it."""
+    import io
+    import contextlib
+    import engine.mlb.sources.statslogs as SL
+    orig = SL.build_live_slate
+    SL.build_live_slate = lambda date: _full_slate()
+    try:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            SR.run("2026-08-03", trials=2000)      # deliberately far too few
+    finally:
+        SL.build_live_slate = orig
+    out = buf.getvalue()
+    assert "sampler" in out, out
+    # And the noise band is a real number the caller can act on.
+    assert "±0." in out or "--trials=" in out, out
+
+
+def test_a_failure_on_a_thin_market_says_so_instead_of_blaming_a_model():
+    """The gate takes the max over every hitter and market on the slate —
+    hundreds of comparisons — so the largest is out near three sigma by
+    construction, and on a 0.045-per-game home run that is most of the
+    tolerance before either model has said anything. Announcing "one of the
+    two models is wrong" without that arithmetic sends someone hunting a
+    bug in a projection engine that is fine."""
+    import io
+    import contextlib
+    import engine.mlb.sources.statslogs as SL
+
+    orig_slate, orig_rec = SL.build_live_slate, G.reconcile
+    SL.build_live_slate = lambda date: _full_slate()
+    # A failure on a genuinely rare market, which is the case that misleads.
+    G.reconcile = lambda sim, targets, tol=0.06: {
+        "ok": False, "worst_rel_error": 0.076, "noise_rel": 0.071, "tol": tol,
+        "offenders": [{"player": "Hitter 1", "market": HOME_RUNS,
+                       "projected": 0.045, "simulated": 0.041,
+                       "rel_error": 0.076}]}
+    try:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = SR.run("2026-08-03", trials=20000)
+    finally:
+        SL.build_live_slate, G.reconcile = orig_slate, orig_rec
+    out = buf.getvalue()
+    assert code == 2                      # still a failure, not explained away
+    assert "0.045 a game" in out, out
+    assert "sampler error" in out, out
+    assert "--trials=" in out, out
+
+
+def test_the_noise_band_comes_back_with_the_verdict():
+    """A gate that reports only the gap cannot be read. `noise_rel` is the
+    sampler's own relative error where it is largest, so `worst_rel_error`
+    under it is a statement about the trial count rather than the model."""
+    rates, targets = [], {}
+    for i, (nm, h, tb, hr) in enumerate(
+            [(f"H{i}", 0.9, 1.5, 0.04) for i in range(9)], start=1):
+        r = G.rates_from_means(h, tb, hr, G.expected_pa(i))
+        r.name, r.spot = nm, i
+        rates.append(r)
+        targets[nm] = {HITS: h, TOTAL_BASES: tb, HOME_RUNS: hr}
+    few = G.reconcile(G.simulate_lineup(rates, [], trials=2000), targets)
+    many = G.reconcile(G.simulate_lineup(rates, [], trials=40000), targets)
+    assert few["noise_rel"] > many["noise_rel"] > 0.0
+    # Rare markets are where it bites: home runs at 0.04 a game move several
+    # percent between seeds while total bases barely stir.
+    assert few["noise_rel"] > few["tol"]
 
 
 def test_a_thin_slate_is_nothing_to_measure_not_a_pass():
