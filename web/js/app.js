@@ -2446,9 +2446,18 @@ function parlayTicket(t, live) {
 function parlayRunnersUp(rows) {
   if (!rows.length) return "";
   const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
+  // A ticket that cleared all seven gates and lost only to §10.2's
+  // one-per-slate cap is NOT the same animal as one that failed on merit,
+  // and this list used to render them identically — same weight, same row,
+  // the demoted one reading a bare "clears" next to tickets that missed by
+  // 30%. The arbiter already writes that ticket its own verdict explaining
+  // which sport took the slot; nothing displayed it. So a reader saw one
+  // card and a flat list, and had no way to tell that the second row was a
+  // ticket the engine would have played on any other night.
+  const demoted = (t) => t.slate_play === false && t.grade !== "short";
   return `<div class="pz-sub pz-runners-title">Also on the board</div>
     <ul class="pz-runners">
-      ${rows.map((t) => `<li>
+      ${rows.map((t) => `<li class="${demoted(t) ? "pz-demoted" : ""}">
         <span class="pz-rank">#${t.rank}</span>
         <span class="pz-run-legs">${t.legs.map((l) =>
           `${escapeHtml(l.player || "")} <i>${escapeHtml(l.side || "")}
@@ -2461,7 +2470,10 @@ function parlayRunnersUp(rows) {
           ${sign(t.edge_at_ceiling_points)} pts</span>
         <span class="pz-run-num">need ${sign(t.required_american)}</span>
         <span class="pz-run-num">${t.shortfall_pct
-          ? `short ${t.shortfall_pct}%` : "clears"}</span>
+          ? `short ${t.shortfall_pct}%`
+          : demoted(t) ? "cleared — capped" : "clears"}</span>
+        ${demoted(t) && t.verdict
+          ? `<span class="pz-run-why">${escapeHtml(t.verdict)}</span>` : ""}
       </li>`).join("")}
     </ul>`;
 }

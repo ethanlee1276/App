@@ -1052,6 +1052,28 @@ def test_a_slate_with_a_posted_lineup_can_build_a_same_game_ticket():
         "a posted lineup produced no same-game construction"
 
 
+def test_a_ticket_demoted_by_the_slate_cap_reads_differently_from_a_miss():
+    """§10.2 caps the whole operation at one parlay per slate across every
+    sport, so a ticket can clear all seven gates and still not be the play.
+
+    The runners-up list rendered that ticket exactly like one that failed on
+    merit — same row, same weight, a bare "clears" sitting next to tickets
+    missing by thirty percent. The arbiter already writes the demoted ticket
+    its own verdict naming the sport that took the slot; nothing displayed
+    it. So the page showed one card and a flat list, and a reader had no way
+    to see that the second row was a ticket the engine would have played on
+    any other night.
+    """
+    i = APP.index("function parlayRunnersUp")
+    fn = APP[i:APP.find("\nfunction ", i + 1)]
+    assert "slate_play === false" in fn, "demotion is not distinguished at all"
+    # Demotion is about the CAP, never about grade — a short ticket that
+    # somehow carried the flag must not be dressed up as one that cleared.
+    assert 't.grade !== "short"' in fn
+    assert "cleared — capped" in fn
+    assert "t.verdict" in fn, "the arbiter's explanation is still unrendered"
+
+
 def test_the_shortlist_is_bounded():
     """A ranked list is only useful if it is short. Every pair on a
     nine-game board is over a hundred candidates."""

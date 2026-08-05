@@ -867,6 +867,17 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .pz-run-num { color: var(--text-dim); font-variant-numeric: tabular-nums;
   white-space: nowrap; }
 .pz-run-num.neg { color: var(--bad); }
+/* A ticket that cleared every gate and lost only to the one-per-slate cap.
+   It sits in the runners-up list because it is not tonight's play, but it
+   is not a near-miss either — the rail marks it as a ticket that passed,
+   and its reason gets a full line rather than a column. */
+.pz-runners li.pz-demoted {
+  border-left: 2px solid var(--good); padding-left: 12px;
+}
+.pz-run-why {
+  flex: 1 0 100%; color: var(--text-mute); font-size: var(--fs-xs);
+  line-height: 1.55; max-width: 74ch;
+}
 @media (max-width: 640px) { .pz-runners li { gap: 3px 14px; } }
 .pz-edge { font-size: var(--fs-sm); line-height: 1.65; max-width: 74ch;
   margin: 10px 0 0; color: var(--text-dim); }
