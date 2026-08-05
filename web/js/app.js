@@ -2277,6 +2277,18 @@ function renderParlays() {
       <span class="pz-mark">${icon(qualified.length ? "check" : "cross", 15)}</span>
       ${escapeHtml(z.verdict || "")}
     </div>
+    ${/* The answer to "why is there nothing here", directly under the
+          verdict that raises the question. This used to render only in the
+          notes list at the very BOTTOM of the page — below every ticket
+          card, the runners-up and the ledger — so the explanation sat
+          underneath the thing it explains. Scrolling from the top you hit
+          "#1 does not clear", read a card about a ticket that was never
+          going to qualify, and never reached the sentence saying why the
+          board had nothing better to offer. */ ""}
+    ${z.structural ? `<div class="pz-note pz-structural">
+      <span class="pz-mark">${icon("search", 13)}</span>
+      ${escapeHtml(z.structural)}
+    </div>` : ""}
     <div class="pz-probation">
       <span class="pz-mark">${icon("warn", 13)}</span>
       ${escapeHtml(z.probation_note || "")}
@@ -2289,7 +2301,7 @@ function renderParlays() {
     ${tickets.slice(0, 1).map((t) => parlayTicket(t, t.qualified)).join("")}
     ${parlayRunnersUp(tickets.slice(1))}
     ${parlayLedger(z)}
-    ${(z.notes || []).map((n) =>
+    ${(z.notes || []).filter((n) => n !== z.structural).map((n) =>
         `<div class="pz-note">${escapeHtml(n)}</div>`).join("")}
     <div class="pz-census">
       Screened ${z.considered} candidate ${z.considered === 1 ? "ticket" : "tickets"}

@@ -1355,17 +1355,36 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal",
     paired = sum(1 for rows in by_game.values() if len(rows) >= 2)
     out["games_with_a_pair"] = paired
     out["games_represented"] = len(by_game)
+    # How many of tonight's games have posted a card. In baseball this is
+    # the number that decides whether a same-game ticket is CONSTRUCTIBLE at
+    # all, so "nothing qualified" can be reported as a clock reading rather
+    # than as a verdict on the board.
+    all_games = list(slate.get("games") or [])
+    posted = sum(1 for g in all_games if g.get("lineups_confirmed"))
+    out["games_total"] = len(all_games)
+    out["lineups_posted"] = posted
     if pool and not paired:
-        out["notes"].append(
+        note = (
             f"Tonight's {len(pool)} eligible leg(s) come from {len(by_game)} "
             f"different game(s) — no single game has two. A correlated ticket "
             f"needs two legs sharing one game, because the correlation IS the "
             f"shared game; without that there is nothing to price but the "
-            f"straight product, and §0.3 shows singles beat that every time."
-            + (" In baseball this is usually the lineup rule (§5): hitters "
-               "stay ineligible until the card is posted, so before first "
-               "pitch each game offers only its starter." if sport == "mlb"
-               else ""))
+            f"straight product, and §0.3 shows singles beat that every time.")
+        if sport == "mlb":
+            note += (
+                f" In baseball that is the lineup rule (§5): hitters stay "
+                f"ineligible until the card is posted, so before first pitch "
+                f"each game offers only its starting pitcher. "
+                f"{posted} of {len(all_games)} game(s) have posted a lineup. "
+                f"This is a clock reading, not a verdict — rebuild once the "
+                f"cards are out and the same-game constructions appear.")
+        out["notes"].append(note)
+        # The same sentence, flagged as THE answer to "why is nothing here".
+        # It used to render only in the notes list at the very bottom of the
+        # page, underneath every ticket card, the runners-up and the ledger —
+        # so the explanation sat below the thing it explains, and a reader
+        # scrolling from the top hit "#1 does not clear" and stopped there.
+        out["structural"] = note
 
     candidates: list[list[dict]] = []
     for rows in by_game.values():

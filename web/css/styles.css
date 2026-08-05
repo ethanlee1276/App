@@ -778,6 +778,10 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   max-width: 72ch; padding: 12px 0; border-bottom: 1px solid var(--border-soft);
 }
 .pz-probation .pz-mark, .pz-risk .pz-mark { flex: 0 0 auto; margin-top: 2px; }
+/* The structural note answers the verdict directly above it, so it reads
+   at full text weight rather than as the dimmed footnotes at the bottom. */
+.pz-note.pz-structural { color: var(--text); }
+.pz-note.pz-structural .pz-mark { flex: 0 0 auto; margin-top: 2px; color: var(--brand); }
 .pz-census {
   font-size: var(--fs-xs); color: var(--text-mute); padding: 14px 0 4px;
   letter-spacing: .2px;

@@ -998,6 +998,58 @@ def test_a_board_with_no_two_legs_in_one_game_says_so():
     note = " ".join(out["notes"])
     assert "no single game has two" in note
     assert "lineup rule" in note, "baseball's actual reason went unstated"
+    # The lineup census, so "nothing qualified" reads as a clock rather than
+    # a verdict on the board.
+    assert (out["lineups_posted"], out["games_total"]) == (0, 3)
+    assert "0 of 3 game(s) have posted a lineup" in note
+    assert "clock reading" in note
+
+
+def test_the_structural_reason_is_flagged_for_the_top_of_the_page():
+    """The answer to "why is there nothing here" must not sit BELOW the
+    tickets it explains.
+
+    It rendered only in the notes list at the bottom of the Parlay Zone —
+    under every ticket card, the runners-up and the ledger. Scrolling from
+    the top you met "#1 does not clear", read a card about a ticket that was
+    never going to qualify, and never reached the sentence saying why the
+    board had nothing better. The engine now flags that one note so the page
+    can lift it under the verdict, and the page must not print it twice.
+    """
+    g = [game("PHI", "CHC", "2026-08-02", lineups_confirmed=False),
+         game("SEA", "TEX", "2026-08-02", lineups_confirmed=False)]
+    recs = [leg("SP1", "PHI", "CHC", "strikeouts", date="2026-08-02"),
+            leg("SP2", "SEA", "TEX", "strikeouts", date="2026-08-02")]
+    out = run("mlb", recs, g)
+    assert out["structural"] in out["notes"], \
+        "the flagged note must still be one OF the notes, not a second copy"
+
+    i = APP.index("function renderParlays()")
+    fn = APP[i:APP.find("\nfunction ", i + 1)]
+    assert "z.structural" in fn, "the page never lifts the structural note"
+    # Above the ticket list…
+    assert fn.index("z.structural") < fn.index("parlayTicket(t"), \
+        "the explanation still renders after the thing it explains"
+    # …and de-duplicated out of the footnotes at the bottom.
+    assert "filter((n) => n !== z.structural)" in fn
+
+
+def test_a_slate_with_a_posted_lineup_can_build_a_same_game_ticket():
+    """The positive control for the note above — otherwise "no same-game
+    pair" could be a screen that simply never builds one.
+
+    Confirm the card and the hitters become eligible, a Type A construction
+    appears, and it is judged on price rather than killed on structure.
+    """
+    g = [game("PHI", "CHC", "2026-08-02", lineups_confirmed=True)]
+    recs = [leg("SP1", "PHI", "CHC", "strikeouts", p=0.57, date="2026-08-02"),
+            leg("Bat1", "PHI", "CHC", "total_bases", p=0.55, date="2026-08-02"),
+            leg("Bat2", "PHI", "CHC", "hits", p=0.62, date="2026-08-02")]
+    out = run("mlb", recs, g)
+    assert out["games_with_a_pair"] == 1
+    assert not out.get("structural"), "structural note fired with a pair on the board"
+    assert any(t["parlay_type"] == "A" for t in out["tickets"]), \
+        "a posted lineup produced no same-game construction"
 
 
 def test_the_shortlist_is_bounded():
