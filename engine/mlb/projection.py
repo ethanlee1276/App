@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..form import compute_form, FormResult, MLB_WINDOW_WEIGHTS
+from ..form import (compute_form, FormResult, MLB_WINDOW_WEIGHTS,
+                    CAREER_PRIOR_GAMES)
 from ..models import GameLog
 from ..statmath import clamp
 from .models import (MLBProp, MLBGame, TOTAL_BASES, HITS, HOME_RUNS,
@@ -188,8 +189,18 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None,
     if form_weights is None:
         from ..formfit import weights_for
         form_weights = weights_for("mlb", prop.market)
+    # Shrink toward the season-to-date rate by how much of a season there
+    # is. MLB_WINDOW_WEIGHTS gives "career" a weight of zero and that was
+    # correct while career_avg was the mean of the same fifteen logs the
+    # blend was already weighting — an anchor made of the thing it was
+    # supposed to anchor. Now that career_avg spans the whole season, the
+    # blend gets a floor, and thin logs stop projecting a hitter at a .014
+    # batting average because he had a quiet week.
     form = compute_form(logs, prop.career_avg, prop.vs_pitcher_avg,
-                        weights=form_weights or MLB_WINDOW_WEIGHTS)
+                        weights=form_weights or MLB_WINDOW_WEIGHTS,
+                        prior=prop.career_avg,
+                        prior_n=int(getattr(prop, "career_games", 0) or 0),
+                        prior_games=CAREER_PRIOR_GAMES)
 
     park = evaluate_park(get_park(game.park))
     weather = evaluate_weather(game.weather)

@@ -216,6 +216,13 @@ class MLBProp:
     career_avg: float
     vs_pitcher_avg: Optional[float]      # career average vs today's starter
     lines: list                          # engine.models.SportsbookLine
+    #: How many games ``career_avg`` was measured over. It is the whole
+    #: season-to-date, not the fifteen-game form window, and it is the only
+    #: thing that says how much to trust a hitter's own numbers: a rate off
+    #: 140 games is evidence, the same rate off four is barely a rumour.
+    #: 0 means unknown, and the shrink then treats the anchor as unusable
+    #: rather than assuming it is solid.
+    career_games: int = 0
     person_id: int = 0                   # MLB Stats API id (splits lookups)
     bats: str = "R"                      # hitter handedness ("L"/"R"/"S")
     throws: str = "R"                    # pitcher handedness (SP props)

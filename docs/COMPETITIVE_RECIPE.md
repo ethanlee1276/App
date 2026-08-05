@@ -378,6 +378,51 @@ of the four live failures do not match this one anyway. The gap was for
 callers inverting raw projections directly, and it is closed now rather
 than left to be rediscovered if that cap ever moves.
 
+### The finding that outlived the gate — thin samples had no floor
+
+Across three live runs the gate kept failing on hitters whose projected
+per-game hits, over the plate appearances their batting spot gets, implied
+batting averages no hitter can have: Cortes **.014**, Foscue **.030**,
+Peters **.060**, Lopez **.053**, Walton **.078**. Those are the numbers the
+BOARD prices from, so this outlives the reconciliation entirely.
+
+The cause is that every look-back window in `compute_form` is an average of
+the SAME games, so weighting them differently cannot rescue a short log —
+and `MLB_WINDOW_WEIGHTS` gives "career" a weight of zero, leaving nothing
+underneath. A .250 hitter with three quiet games projected at **.000**.
+
+That zero was correct for what `career_avg` actually was: MLB built it as
+the mean of the same fifteen logs the blend was about to weight — an anchor
+made out of the thing it was supposed to anchor. So the fix needed a real
+number first, and the gameLog response already contained one:
+`parse_game_log` was truncating season-to-date at fifteen games, and
+parsing the cached response a second time costs no request. `career_avg`
+now spans the season and carries `career_games` alongside it.
+
+The blend then shrinks toward it by how thin the window is, `w = n/(n+k)`.
+Measured, in implied batting average:
+
+| case | was | now |
+|---|---|---|
+| hitless 3 games, .250 regular | .000 | .177 |
+| the Cortes shape (1-for-4) | .085 | .182 |
+| 1-for-6 | .048 | .145 |
+| regular, 15 logged, on form | .216 | .234 |
+| season no longer than the window | .078 | .078 (stands down) |
+
+`k = 8` is half a form window and is scoped to the defect. The textbook
+empirical-Bayes value for batting rates is nearer 40 — within-player
+variance over between-player variance — which would leave every MLB hitter
+at a quarter his own form and three quarters his season line, replacing the
+recency curve §6 specifies on an argument nobody has run against this
+book's record. That is a bigger claim than this fix is making, and it is
+worth measuring before it moves.
+
+Two things deliberately NOT done: no other sport was re-priced (NFL, CFB,
+NBA and WNBA carry the same gap, and that is a separate decision), and
+`k` was not fitted against real logs, because the build container's history
+DB carries NFL only.
+
 **And a fourth finding the gate produced rather than suffered.** With the
 overshoot gone, 26 of 30 live lineups reconcile and the four that do not
 share something the sim did not cause: the offending hitter is projected

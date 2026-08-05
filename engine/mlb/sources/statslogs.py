@@ -371,17 +371,33 @@ def _add_prop(props, person_id, name, team, opp, position, market, season,
         return
     group = MARKET_GROUP[market]
     try:
-        logs = parse_game_log(fetch_game_log(person_id, group, season), market,
-                              limit=log_limit)
+        raw = fetch_game_log(person_id, group, season)
+        logs = parse_game_log(raw, market, limit=log_limit)
+        # The SAME response, uncapped. `career_avg` used to be the mean of
+        # the fifteen logs directly above it — the identical sample the
+        # form blend was about to weight, so it carried no information the
+        # blend did not already have, and MLB_WINDOW_WEIGHTS gave it a
+        # weight of zero accordingly. That left nothing anchoring a thin
+        # log: a hitter with three quiet games projected at three quiet
+        # games, and the live sim gate found several at batting averages
+        # under .100 — one at .014.
+        #
+        # gameLog always returns season-to-date, so the anchor was already
+        # in hand and being thrown away. Parsing the cached response a
+        # second time costs no request.
+        season_logs = parse_game_log(raw, market, limit=None)
     except DataUnavailable:
         return
     if len(logs) < 3:
         return
     recent = [g.value for g in logs[:5]]
     baseline = sum(recent) / len(recent)
+    season_vals = [g.value for g in season_logs] or [g.value for g in logs]
     props.append(MLBProp(
         player=name, team=team, opponent=opp, position=position, market=market,
-        logs=logs, career_avg=round(sum(g.value for g in logs) / len(logs), 3),
+        logs=logs,
+        career_avg=round(sum(season_vals) / len(season_vals), 3),
+        career_games=len(season_vals),
         vs_pitcher_avg=None,
         lines=[SportsbookLine(book="proxy", line=_proxy_line(baseline, market),
                               over_odds=-110, under_odds=-110)],
