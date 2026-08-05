@@ -3660,10 +3660,10 @@ function recSelfTuningSection(st, sport) {
     if (!sport) return "";
     return `
     <div class="section-title">The model tunes itself
-      <span class="sub">— every settled bet feeds a nightly refit; nobody touches a dial.</span></div>
+      <span class="sub">— settled bets fit the dials; nobody turns one by hand.</span></div>
     <div class="card"><p style="margin:0;padding:12px 14px;font-size:.87em;color:var(--text-mute)">
       Nothing tuned for ${escapeHtml(sport.toUpperCase())} yet. The fitters run
-      after every settle pass, on this sport's own settled bets only, and adopt
+      on every settle pass, on this sport's own settled bets only, and adopt
       a correction only when it beats the spec in a walk-forward test — so this
       fills in as its journal deepens.</p></div>`;
   }
@@ -3731,12 +3731,22 @@ function recSelfTuningSection(st, sport) {
   const lastRefit = st.last_refit ? st.last_refit.replace("T", " ") : "—";
   return `
     <div class="section-title">The model tunes itself
-      <span class="sub">— every settled bet feeds a nightly refit; nobody touches a dial.
-      This is the site's AI lane: arithmetic on outcomes, reproducible and auditable,
-      which is exactly why a chatbot never sets a probability here.</span></div>
+      <span class="sub">— a market is fitted once it clears 200 settled bets, and then
+      LEFT ALONE. This is the site's AI lane: arithmetic on outcomes, reproducible and
+      auditable, which is exactly why a chatbot never sets a probability here.</span></div>
     <div class="stats">
-      <div class="tile"><div class="k">Last refit</div><div class="v" style="font-size:var(--fs-lg)">${escapeHtml(lastRefit)}</div>
-        <div class="tile-sub">runs itself after every settle</div></div>
+      <!-- This said "runs itself after every settle", which was not true and
+           read as a broken feature when the date sat still for a day. The
+           fitter DOES run after every settle; it deliberately skips any
+           market it has already corrected, because those bets' outcomes
+           were produced under the correction and refitting on them would
+           compound. So the stamp only moves when a market is fitted for the
+           FIRST time. Saying so is the difference between a frozen number
+           that looks broken and one that looks finished. -->
+      <div class="tile"><div class="k">Last new fit</div><div class="v" style="font-size:var(--fs-lg)">${escapeHtml(lastRefit)}</div>
+        <div class="tile-sub">moves when a market is fitted for the first time —
+          a corrected market is then left alone, since its later results
+          were produced under that correction</div></div>
       <div class="tile"><div class="k">Markets tuned</div><div class="v">${markets.length}</div></div>
       <div class="tile"><div class="k">Self-closed</div><div class="v">${closed.length}</div>
         <div class="tile-sub">a fit at its boundary shuts its own market</div></div>

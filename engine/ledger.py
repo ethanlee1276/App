@@ -133,9 +133,25 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     # …plus lineup_status: the batting slot at pick time (0 = not listed,
     # NULL = unknown/not a batter prop) and whether the card was official
     # or projected — the PA half of every batter prop, journaled.
+    # …plus the three columns that make a corrected market refittable.
+    # hit_prob is the claim AFTER both corrections — the calibration
+    # temperature and the shrink toward the market — so a temperature
+    # refitted on it would be a correction learned from corrected claims.
+    # raw_prob is the same claim before the market shrink, and cal_temp /
+    # cal_bias are the correction that was live when the row was logged;
+    # calibrate.undo_temperature inverts the pair exactly. Captured now so
+    # the history exists whenever that refit is actually wanted.
+    #
+    # The contract for any future refit is `cal_temp IS NOT NULL`: a row
+    # that records its correction can be un-corrected, and one that does
+    # not, cannot. NULL means pre-migration, or one of the paper-track
+    # buckets (pricedout / loose / longshot), which write their own
+    # inserts and do not capture this. Those rows are excluded rather than
+    # assumed uncorrected — assuming is how the compounding starts.
     for col in ("proj_minutes", "actual_minutes", "lead_min", "park_hr",
                 "wind_out", "roofed", "lineup_slot", "lineup_conf",
-                "rest_days", "body_clock", "pen_own", "pen_opp"):
+                "rest_days", "body_clock", "pen_own", "pen_opp",
+                "raw_prob", "cal_temp", "cal_bias"):
         try:
             conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
         except sqlite3.OperationalError:
@@ -232,6 +248,7 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
     """Insert open bets from a pipeline result dict. Stake dollars are sized
     from the current bankroll: stake_units × unit_pct% × bankroll."""
     from .losspatterns import minutes_until
+    from .calibrate import correction_for as cal_correction
     sport = result.get("sport", "nfl")
     date = result.get("date", "")
     unit_dollars = float(get_cfg(conn, "unit_pct")) / 100.0 * bankroll(conn)
@@ -245,14 +262,18 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         if journal_skip_reason(r, only_recommended):
             continue
         stake_units = float(r.get("stake_units", 0) or 0)
+        # Read the correction HERE, in the same process that just priced
+        # the pick, so what lands in the row is what was actually applied
+        # rather than whatever the store holds by the time it settles.
+        temp, bias = cal_correction(sport, r["market"])
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
             "stake_dollars, status, leg, proj_minutes, lead_min, park_hr, "
             "wind_out, roofed, lineup_slot, lineup_conf, rest_days, "
-            "body_clock, pen_own, pen_opp) "
+            "body_clock, pen_own, pen_opp, raw_prob, cal_temp, cal_bias) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', "
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
              r["line"], r.get("book", ""), r.get("odds", -110), r.get("projection"),
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
@@ -284,7 +305,12 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              r.get("rest_days"), r.get("body_clock"),
              # bullpen: weighted relief innings behind this pick, both
              # sides — the measurement the existing multiplier never had.
-             r.get("pen_own"), r.get("pen_opp")))
+             r.get("pen_own"), r.get("pen_opp"),
+             # The claim before the market shrink, and the correction that
+             # produced it. Together they invert (calibrate.undo_temperature)
+             # back to the model's own uncorrected number — the only pairs a
+             # refit of an already-corrected market could honestly learn on.
+             r.get("raw_prob"), temp, bias))
         n += cur.rowcount
     # Recommended game bets journal too (sharp-anchor picks live or die by
     # forward results). Moneylines store player = the team picked, line 0.5,

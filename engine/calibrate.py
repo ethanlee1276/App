@@ -65,6 +65,37 @@ def apply_temperature(p: float, temperature: float, intercept: float = 0.0) -> f
     return scaled / (1.0 + scaled)
 
 
+def undo_temperature(p: float, temperature: float,
+                     intercept: float = 0.0) -> float:
+    """The exact inverse of :func:`apply_temperature`.
+
+    ``logit(p) = temperature * (logit(p') - intercept)``
+
+    This exists so a corrected market can be refitted honestly. Once a
+    correction ships, every later journal row is post-correction, and
+    fitting a temperature on post-correction claims learns a correction
+    for an already-corrected number and compounds — which is why
+    journalfit.fit_temperatures leaves owned keys alone. Recovering the
+    model's own claim removes that objection: un-correct each row with
+    the correction that was live when the bet was logged, and the whole
+    history becomes one clean sample of the uncorrected model again.
+
+    Round-trips to within floating-point error, so an un-correct followed
+    by a re-correct is a no-op. The clamp in apply_temperature is the one
+    lossy step: a claim outside [1e-6, 1-1e-6] does not come back.
+    """
+    if temperature <= 0:
+        return p
+    p = min(max(p, 1e-6), 1.0 - 1e-6)
+    if temperature == 1.0 and intercept == 0.0:
+        return p
+    scaled = p / (1.0 - p)
+    if intercept:
+        scaled /= math.exp(intercept)
+    odds = scaled ** temperature
+    return odds / (1.0 + odds)
+
+
 def brier(pairs: list[tuple[float, int]], temperature: float = 1.0,
           intercept: float = 0.0) -> float:
     """Mean squared error of predicted probabilities against 0/1 outcomes."""

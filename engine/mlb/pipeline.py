@@ -319,6 +319,19 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "side": rec.side, "book": rec.book, "line": rec.line, "odds": rec.odds,
         "projection": rec.projection, "proj_low": rec.proj_low, "proj_high": rec.proj_high,
         "hit_prob": rec.hit_prob, "fair_prob": rec.fair_prob,
+        # The probability before the shrink toward the market — NOT before
+        # calibration, which p_over_at has already applied by this point.
+        # engine/pipeline.py has always shipped this on the NFL path and
+        # MLB dropped it, which matters more than it looks: `hit_prob` is
+        # post-correction, so a market already carrying a temperature
+        # cannot be refitted from the journal without compounding its own
+        # correction — which is exactly why journalfit freezes a market
+        # once it owns it. This number plus the correction the journal
+        # stores beside it inverts back to the model's own claim, and that
+        # is what a later refit could honestly learn on. Captured now so
+        # the history exists when that decision is taken; nothing reads it
+        # yet, and no market has been unfrozen.
+        "raw_prob": rec.raw_prob,
         "edge": rec.edge, "ev_per_unit": rec.ev_per_unit,
         "confidence": rec.confidence, "stake_units": rec.stake_units,
         "grade": rec.grade, "has_market": rec.has_market, "trend": rec.trend,

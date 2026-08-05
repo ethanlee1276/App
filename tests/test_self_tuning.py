@@ -186,7 +186,7 @@ def test_the_report_ships_in_the_record_export():
 
 def test_the_page_renders_the_loop_on_every_scope():
     fn = _fn(APP, "recSelfTuningSection")
-    for needle in ("The model tunes itself", "Last refit", "Markets tuned",
+    for needle in ("The model tunes itself", "Last new fit", "Markets tuned",
                    "Self-closed", "Improving", "Is it getting better?"):
         assert needle in fn, needle
     # On EVERY scope, filtered to the sport being viewed. Each league fits
@@ -207,6 +207,34 @@ def test_an_empty_or_absent_block_renders_nothing_not_a_crash():
     # not blank the page — the day_u lesson, applied before the bug.
     assert "(m.temperature ?? 1).toFixed" in fn
     assert "(m.samples ?? 0).toLocaleString" in fn
+
+
+def test_the_refit_stamp_does_not_claim_to_move_on_every_settle():
+    """The caption used to read "runs itself after every settle". It doesn't.
+
+    The stamp is the calibration store's mtime, and journalfit.fit_temperatures
+    writes that file only when it fits a key it does not already own — a
+    corrected market is deliberately skipped, because its later journal rows
+    were produced under the correction. So on a book whose markets are all
+    fitted, the date sits still forever, and the old copy made a finished
+    feature read as a broken one. This pins the two halves together: the page
+    describes the freeze, and the fitter still implements it.
+    """
+    import inspect
+
+    from engine import journalfit
+    src = inspect.getsource(journalfit.fit_temperatures)
+    assert "if key in stored:" in src, "the freeze is gone; the copy now lies"
+
+    # Strip the HTML comments first: one of them quotes the old wording on
+    # purpose, so the record of the bug survives without tripping the check
+    # that the bug is gone.
+    import re
+    fn = re.sub(r"<!--.*?-->", "", _fn(APP, "recSelfTuningSection"), flags=re.S)
+    flat = " ".join(fn.split())
+    assert "after every settle" not in flat
+    assert "fitted for the first time" in flat
+    assert "left alone" in flat.lower()
 
 
 def test_the_page_explains_the_dial_in_both_directions():

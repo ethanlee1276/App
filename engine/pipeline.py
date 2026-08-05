@@ -51,8 +51,13 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "proj_low": rec.proj_low,
         "proj_high": rec.proj_high,
         "hit_prob": rec.hit_prob,
-        # Untempered — the calibration fitter learns on this, never on the
-        # shrunk number (see engine/backtest.py's pairs comment).
+        # The claim BEFORE the shrink toward the market — what the fitter
+        # learns on, never the shrunk number (see engine/backtest.py's
+        # pairs comment). Not the model's uncorrected claim: live, the
+        # calibration temperature has already been applied by the time
+        # pick_side sees it, which is why the journal stores the
+        # correction beside this number (engine/ledger.py) so
+        # calibrate.undo_temperature can strip it back off.
         "raw_prob": rec.raw_prob,
         "fair_prob": rec.fair_prob,
         "edge": rec.edge,
