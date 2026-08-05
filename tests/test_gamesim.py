@@ -103,6 +103,74 @@ def test_the_gate_actually_fails_when_the_sim_is_wrong():
     assert rec["worst_rel_error"] > rec["tol"]
 
 
+#: A GOOD lineup — every hitter half again league average. The bug this
+#: section pins is invisible on an average order and severe here, because
+#: the feedback that causes it grows with how often the lineup reaches
+#: base. Measured across seven evaluation seeds: the damped fit passes the
+#: gate on all seven with no offender, the full-gain fit fails all seven
+#: with six to fifteen.
+STRONG = [(nm, h * 1.5, tb * 1.5, hr * 1.5) for nm, h, tb, hr in LINEUP]
+
+
+def _strong():
+    rates, targets = [], {}
+    for i, (nm, h, tb, hr) in enumerate(STRONG, start=1):
+        r = G.rates_from_means(h, tb, hr, G.expected_pa(i))
+        r.name, r.spot = nm, i
+        rates.append(r)
+        targets[nm] = {HITS: h, TOTAL_BASES: tb, HOME_RUNS: hr}
+    return rates, targets
+
+
+def _mean_bias(fitted, targets, trials=40000):
+    """Average relative error in simulated total bases, at enough trials
+    that the sampler is not what is being measured."""
+    sim = G.simulate_lineup(fitted, [], trials=trials, seed=101)
+    devs = [sim.mean[nm][TOTAL_BASES] / w[TOTAL_BASES] - 1.0
+            for nm, w in targets.items()]
+    return sum(devs) / len(devs)
+
+
+def test_the_fitting_step_is_damped_because_the_response_is_not_linear():
+    """REGRESSION, and it cost a dozen live lineups.
+
+    The obvious step is `target/simulated` — came in 10% light, scale up
+    10%. It assumes the response is linear, and the entire reason this
+    function exists is that it is not: reaching base lengthens the inning,
+    which gives the whole lineup another turn, so the response to k is
+    nearer k**(1+eps). A full-gain step therefore overshoots, and on a good
+    lineup — where eps is largest — it corrected a 24.3% overshoot into a
+    5.6% UNDERSHOOT and left it there.
+
+    That is what the live gate had been reporting for weeks: real lineups
+    failing with all three of a hitter's markets off by the same percentage
+    in the same direction, which is one rescale applied to his whole table,
+    not three bad projections."""
+    rates, targets = _strong()
+    assert G.FIT_DAMP < 1.0, "a full-gain step is the bug"
+    damped = _mean_bias(G.calibrate(rates, targets), targets)
+    full = _mean_bias(G.calibrate(rates, targets, rounds=3, damp=1.0), targets)
+    assert abs(damped) < 0.02, damped
+    assert full < -0.03, full          # overshot: corrected past the target
+    assert abs(damped) < abs(full) / 2
+
+
+def test_a_strong_lineup_reconciles_at_all():
+    """The gate itself, on the order that used to fail it."""
+    rates, targets = _strong()
+    sim = G.simulate_lineup(G.calibrate(rates, targets), [], trials=20000)
+    assert G.reconcile(sim, targets)["ok"], G.reconcile(sim, targets)
+
+
+def test_damping_does_not_cost_the_ordinary_lineup_anything():
+    """The control, and the reason this is the second attempt at the fix.
+
+    A previous pass at the same failure was reverted because it repaired
+    the strong lineup by breaking a balanced one. Any change to the fitting
+    step has to be checked against an average order before it ships."""
+    assert abs(_mean_bias(G.calibrate(_rates(), _targets()), _targets())) < 0.02
+
+
 def test_calibration_pulls_a_drifted_sim_back_onto_its_targets():
     """The inversion is exact per plate appearance and that is not the same
     as exact per game: reaching base gives the whole lineup another turn, so

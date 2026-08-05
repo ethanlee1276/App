@@ -302,7 +302,7 @@ real games. About a third of the truth. Adding the shared game latent that
 zone) closes it, and its width was swept against that measurement rather
 than chosen.
 
-Two corrections worth keeping, since both were mine:
+Three corrections worth keeping, since all three were mine:
 
 * The chosen width was first justified as "0.30 fails the reconciliation
   gate." It failed a gate comparing a flat relative tolerance, which is
@@ -315,12 +315,39 @@ Two corrections worth keeping, since both were mine:
   exact per game — reaching base gives the whole lineup another turn, so the
   shared shock drifts counting stats upward, measured at 7%. The rates are
   now fitted rather than derived.
+* And the fit itself was wrong, which the live slate is what found. The
+  step was `target/simulated` — came in 10% light, scale up 10% — which
+  assumes a linear response, when the entire reason the fit exists is that
+  the response is not linear. Scaling a hitter's reaching rates lengthens
+  the inning, which hands the whole lineup another turn, so the response to
+  `k` is nearer `k**(1+eps)` and a full-gain step overshoots by about `eps`
+  times the error it was correcting. `eps` grows with how often the lineup
+  reaches, so this was invisible on an average order and severe on a good
+  one: a lineup half again league average went into the fit 24.3% hot and
+  came out 5.6% COLD, corrected past the target and left there. The step is
+  now damped (`FIT_DAMP`), which carries the sweep that set it.
 
-**Not wired into pricing.** The reconciliation has only been run against a
-synthetic lineup in this container; the real check is against a live slate on
-Ethan's machine, and integrating before that would put an unverified second
-opinion in front of a bettor. Cost is not the obstacle: 0.29s per lineup at
-20,000 trials, about 8.6s for a 15-game slate.
+**What the live slate was worth.** Three separate defects, none of which the
+synthetic lineup could have shown, and only the third was in the sim:
+
+1. the harness graded raw per-market projections instead of the coherent
+   triple `run_mlb_slate` actually prices, so a hundred-odd hitters a night
+   were dropped as "not valid baseball" and two thirds of the league got no
+   verdict at all (10 lineups reconciled, not 30);
+2. short orders were simulated at the length the feed supplied, cycling 9/8
+   too fast and inflating every remaining hitter's plate appearances ~12%
+   (`pad_to_nine`);
+3. the overshoot above.
+
+Worst relative error across the league went 0.189 → 0.087 as the first two
+landed. The third is verified against synthetic orders spanning the range
+that failed — the container has no route to statsapi.mlb.com — so the
+league-wide number after it is Ethan's next `sim_reconcile.py` run, not a
+figure recorded here in advance.
+
+**Not wired into pricing.** Still task #60, and now unblocked rather than
+blocked. Cost is not the obstacle: 0.29s per lineup at 20,000 trials, about
+8.6s for a 15-game slate.
 
 ### BUILT 2026-08-03 — the blind-spot miner (`engine/losspatterns.py`)
 

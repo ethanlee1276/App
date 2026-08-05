@@ -126,6 +126,14 @@ INNINGS = 9
 #: several percent between seeds. Once the gate learned to forgive the
 #: sampler's own noise, 0.30 passed, and the real reason to decline it
 #: turned out to be doctrine rather than arithmetic.
+#:
+#: Re-swept after FIT_DAMP changed the fitting step this sweep runs
+#: through. Every phi above reproduces within sampler noise (0.25 → +0.1024,
+#: 0.30 → +0.1250), so neither the value nor the argument for it moves. One
+#: verdict did: 0.40 now FAILS the gate where it passed before. It was
+#: never a candidate, and the direction is the expected one — a shock that
+#: wide is where a lineup-wide rescale has the least chance of landing all
+#: nine hitters at once.
 ENV_SD = 0.25
 
 #: Clamp on the shared draw. A game where nobody can reach at all, or where
@@ -467,9 +475,68 @@ def pad_to_nine(rates: list[BatterRates]) -> list[BatterRates]:
     return sorted(out, key=lambda b: b.spot or 9)
 
 
+#: UNDER-RELAXATION on the fitting step, and the measurement that set it.
+#:
+#: The naive step is `k = target / simulated`: the hitter's number came in
+#: 10% light, so scale his reaching outcomes up 10%. That step assumes the
+#: response is linear, and it is not — which is the same fact this whole
+#: function exists because of. Scaling a hitter's reaching rates by k does
+#: not move his total bases by k, because reaching base also lengthens the
+#: inning, which hands the WHOLE lineup another turn. The response is
+#: nearer k**(1+eps), so a full-gain step overshoots by roughly eps times
+#: the error it was correcting, and when eps approaches 1 the loop stops
+#: contracting and starts ringing.
+#:
+#: eps grows with how often the lineup reaches, so this is invisible on an
+#: average order and severe on a good one. Measured as the TRUE post-fit
+#: bias in mean total bases, 150,000 trials per cell, a nine-man order
+#: scaled off league average (1.00), and `damp` as the exponent applied to
+#: the step, k = (target/simulated) ** damp:
+#:
+#:     lineup   damp 1.0/3   damp 0.8/3   damp 0.7/3   damp 0.6/3   0.6/6
+#:      0.65      -0.9%        +0.1%        -0.0%        +0.0%      +0.0%
+#:      0.80      -0.4%        -0.1%        +0.1%        +0.5%      +0.2%
+#:      1.00      +0.2%        +0.1%        +0.2%        +0.3%      +0.4%
+#:      1.15      -0.9%        -0.4%        -0.8%        -0.0%      -0.2%
+#:      1.30      -5.0%        +0.5%        -0.1%        -0.6%      +0.0%
+#:      1.50      -6.8%        -0.9%        -0.8%        +0.7%      -0.3%
+#:
+#: The first column is what shipped, and the bottom two rows are the bug:
+#: a strong lineup went into the fit 17.8% hot and came out 5.0% COLD,
+#: having been corrected past the target and left there. That is what the
+#: live gate was reporting — a dozen real lineups failing with every one of
+#: a hitter's three markets off by the same percentage in the same
+#: direction, which is the signature of a single rescale applied to his
+#: whole table rather than anything wrong with the projections.
+#:
+#: Three RAGGED orders — every spot scaled independently, since a real
+#: lineup is not one flat multiple of league average — were run through the
+#: same sweep and are the reason the top rows are in the table at all. A
+#: previous attempt at this same failure was reverted because it repaired
+#: the strong lineup by breaking a balanced one, so a control is not
+#: optional here. Worst |mean| over all nine cases: 6.8% at damp 1.0/3,
+#: 0.4% at 0.6/6.
+#:
+#: 0.6 is the fitted optimum where it matters: backing the observed
+#: contraction out of the 1.30 row gives eps around 0.65, and the exact
+#: step for that is 1/(1+eps) = 0.61. Milder damping also works over the
+#: range measured, and 0.6 is preferred because it stays comfortable on
+#: extrapolation — at an eps of 1.2, beyond anything tested here, 0.8 is
+#: still barely converging while 0.6 is nowhere near the boundary.
+FIT_DAMP = 0.6
+
+#: Rounds of the fitting loop. Raised with the damping, and by it: a damped
+#: step deliberately corrects less per round, so the regimes with weak
+#: feedback — where the old full-gain step was already fine — need more
+#: passes to walk in. Six is chosen off the same sweep, where 0.6/6 is the
+#: only column with no cell worse than 0.4%.
+FIT_ROUNDS = 6
+
+
 def calibrate(rates: list[BatterRates], targets: dict,
               trials: int = 8000, seed: int | None = 7,
-              env_sd: float = ENV_SD, rounds: int = 3) -> list[BatterRates]:
+              env_sd: float = ENV_SD, rounds: int = FIT_ROUNDS,
+              damp: float = FIT_DAMP) -> list[BatterRates]:
     """Re-centre the rate tables so the SIMULATED means hit the projections.
 
     The inversion in `rates_from_means` is exact per plate appearance, and
@@ -482,13 +549,20 @@ def calibrate(rates: list[BatterRates], targets: dict,
     pricing engine, which is exactly the failure the gate exists to catch.
 
     So the rates are fitted rather than derived: simulate, compare, scale
-    each hitter's reaching outcomes by target/simulated, repeat. Three
-    rounds is comfortably enough — the map is near-linear and the first
-    round removes most of it.
+    each hitter's reaching outcomes toward target/simulated, repeat. The
+    step is DAMPED rather than full-gain, because the same feedback that
+    makes the fit necessary also makes the obvious step overshoot — see
+    FIT_DAMP, which carries the measurement.
 
-    Uses a coarser trial count than the production run on purpose. This is
-    a fixed point being located, not a probability being published, and
-    8,000 trials finds it to well inside the tolerance the gate applies.
+    Each round is deliberately coarse. This is a fixed point being located,
+    not a probability being published, so 8,000 trials per round is enough
+    — but not free, and what it costs is worth naming: the step is computed
+    from a sampled mean, so every round scales a hitter's whole table by
+    that round's sampler error as well as by the correction. Damping
+    attenuates the noise it injects along with the overshoot. What survives
+    is small and was measured rather than assumed: on the reconcile
+    harness's own nine-man slate the fitted table's true bias, read at
+    400,000 trials, is -0.13% on average and -2.3% at the worst hitter.
     """
     cur = list(rates)
     for _ in range(max(1, rounds)):
@@ -504,7 +578,8 @@ def calibrate(rates: list[BatterRates], targets: dict,
             if not have or not aim:
                 nxt.append(b)
                 continue
-            nxt.append(_scale_reaching(b, min(2.0, max(0.5, aim / have))))
+            step = (aim / have) ** damp
+            nxt.append(_scale_reaching(b, min(2.0, max(0.5, step))))
         cur = nxt
     return cur
 

@@ -72,13 +72,25 @@ def test_the_gate_passes_end_to_end_on_a_full_synthetic_slate(monkey=None):
     """run() wired whole: slate → projections → inversion → calibrate →
     simulate → reconcile → exit 0. The projections here come from
     build_mlb_projection itself, so this exercises the exact pipeline the
-    laptop run will."""
+    laptop run will.
+
+    Run at more trials than the nightly default, deliberately. The claim
+    here is about the WIRING, and at 20,000 trials this assertion was
+    partly about the random number generator instead: these synthetic logs
+    give all nine hitters 0.21 home runs a game, and the gate takes the
+    max over 27 comparisons (nine hitters, three markets), so the rarest
+    market's sampler noise lands a ~2-sigma draw on top of the tolerance
+    more often than it has any business doing. Measured on this slate —
+    the fitted table's TRUE bias at 400,000 trials is -0.13% mean and
+    -2.3% worst, while the 20,000-trial verdict swung between 0.023 and
+    0.061 across five seeds and tripped the 0.06 tolerance on one of them.
+    At 50,000 the same five seeds top out at 0.039."""
     orig = None
     import engine.mlb.sources.statslogs as SL
     orig = SL.build_live_slate
     SL.build_live_slate = lambda date: _full_slate()
     try:
-        code = SR.run("2026-08-03")
+        code = SR.run("2026-08-03", trials=50000)
     finally:
         SL.build_live_slate = orig
     assert code == 0
