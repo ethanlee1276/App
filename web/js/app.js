@@ -3680,16 +3680,42 @@ function recSelfTuningSection(st, sport) {
       ${m.brier_before != null && m.brier_after != null && m.brier_after < m.brier_before
         ? `<span style="opacity:.6;font-variant-numeric:tabular-nums" title="Brier before → after the correction, on held-out outcomes">${m.brier_before.toFixed(4)} → ${m.brier_after.toFixed(4)}</span>` : ""}
     </div>`).join("");
+  // A dial resting at ±1.0 is NOT "the search range was too small". r
+  // interpolates toward a named endpoint curve, so +1.0 is that curve
+  // exactly; one step past it puts a negative weight on vs_opp, which
+  // would mean subtracting a player's own history from his projection.
+  // The grid cannot widen. What the edge means depends entirely on
+  // whether the dial was adopted, so the row has to say which:
+  //   adopted  → the model wants a hotter recipe than this family holds,
+  //              and the anchor itself is what to revisit. Red.
+  //   not      → nothing was applied, and `plateau` says how many dial
+  //              settings tied the winner. Most of them tying means the
+  //              surface is flat and the argmin landed on an edge because
+  //              argmins land somewhere. That is not a defect, and
+  //              painting it red sent people looking for a bug.
+  const dialTone = (w) => w.adopted
+    ? (w.at_boundary ? "var(--bad)" : "var(--warn)") : "var(--good)";
+  const dialNote = (w) => {
+    if (!w.at_boundary || !w.grid_n) return "";
+    const flat = w.plateau >= Math.max(2, w.grid_n * 0.5);
+    const txt = w.adopted
+      ? `at the family's edge — the anchor curve is the thing to revisit, not the grid`
+      : flat
+        ? `${w.plateau}/${w.grid_n} dial settings tied — flat surface, the edge is where the search landed`
+        : `${w.plateau}/${w.grid_n} tied — a real slope, but under the adoption bar`;
+    return `<span style="opacity:.55;font-size:.92em">${escapeHtml(txt)}</span>`;
+  };
   const weightRows = weights.map((w) => `
     <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
         border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
       <span class="chip">${escapeHtml((w.sport || "").toUpperCase())}</span>
       <span style="flex:1;min-width:120px">${escapeHtml(w.market || "")}</span>
-      <span style="font-variant-numeric:tabular-nums" title="The recency dial: 0 is the hand-tuned spec curve, positive leans on recent form, negative on the long run. Moves only when the record beats the spec by a real margin.">dial ${(w.r ?? 0) >= 0 ? "+" : ""}${(w.r ?? 0).toFixed(1)}</span>
-      <span style="color:${w.at_boundary ? "var(--bad)" : w.adopted ? "var(--warn)" : "var(--good)"}">${escapeHtml(w.reading || "")}</span>
+      <span style="font-variant-numeric:tabular-nums" title="The recency dial: 0 is the hand-tuned spec curve, positive leans on recent form, negative on the long run. ±1.0 is the end of the family, not the end of a search range. Moves only when the record beats the spec by a real margin.">dial ${(w.r ?? 0) >= 0 ? "+" : ""}${(w.r ?? 0).toFixed(1)}</span>
+      <span style="color:${dialTone(w)}">${escapeHtml(w.reading || "")}</span>
+      ${dialNote(w)}
       <span style="opacity:.5;font-variant-numeric:tabular-nums">n=${(w.samples ?? 0).toLocaleString()}</span>
-      ${w.adopted && w.brier_default != null && w.brier_fitted != null
-        ? `<span style="opacity:.6;font-variant-numeric:tabular-nums" title="Walk-forward Brier, spec curve → fitted curve">${w.brier_default.toFixed(4)} → ${w.brier_fitted.toFixed(4)}</span>` : ""}
+      ${w.brier_default != null && w.brier_fitted != null
+        ? `<span style="opacity:.6;font-variant-numeric:tabular-nums" title="Walk-forward Brier, spec curve → best curve on the grid. Lower is better; the dial is applied only when it wins by 0.0005 or more. Shown whether or not it was adopted — the margin IS the reason for the verdict.">${w.brier_default.toFixed(4)} → ${w.brier_fitted.toFixed(4)}</span>` : ""}
     </div>`).join("");
   const weightsBlock = !weightRows ? "" : `
     <div class="section-title">The recipe itself, refit

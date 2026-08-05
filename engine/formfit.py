@@ -24,6 +24,20 @@ temperature fit — each game projected only from earlier games, scored by
 Brier on the model's RAW probabilities (calibration disabled, or we'd fit
 a recipe for an already-corrected model and compound).
 
+**±1.0 is a wall, not a search cap.** ``r`` interpolates between the spec
+curve and a named endpoint, so ``r = +1.0`` IS :data:`ANCHOR_HOT`
+exactly — there is no "further" to go. Extrapolating past it is an affine
+combination with a negative coefficient on the base curve, and the first
+step out (r = 1.1 on the MLB curve) already drives ``vs_opp`` to −0.01: a
+negative weight means subtracting a player's own history from his
+projection, which is not a stronger lean on recent form, it is nonsense.
+``family`` clamps for that reason. So a dial resting at ±1.0 must never be
+read as "widen the grid". The two readings that ARE available: if the fit
+was adopted, the model wants a hotter recipe than this family contains and
+:data:`ANCHOR_HOT` itself is the thing to revisit; if it was not adopted —
+and :attr:`FormFit.plateau` says most of the grid tied — the surface is
+flat and the argmin simply landed on an edge, which is what argmins do.
+
 **Adoption is earned, not automatic.** A fitted dial is stored but only
 APPLIED when it beat the spec curve by at least :data:`MIN_GAIN` Brier on
 at least :data:`MIN_SAMPLES` settled predictions. In-sample argmin of a
@@ -93,15 +107,41 @@ class FormFit:
     brier_fitted: float         # best curve on the grid
     adopted: bool               # did it EARN application?
     weights: dict               # the curve the dial produces
+    curve: dict = dataclasses.field(default_factory=dict)   # r -> Brier
 
     @property
     def at_boundary(self) -> bool:
         return abs(self.r) >= GRID[-1] - 1e-9
 
     @property
+    def plateau(self) -> int:
+        """How many grid points score within MIN_GAIN of the best.
+
+        The argmin alone cannot say whether a dial MEANT it. A search over
+        21 points always returns a winner, and on a flat surface the winner
+        is wherever the noise happened to dip — the edges as readily as the
+        middle. This is the honest counterweight: 21 of 21 within the
+        adoption margin means the curve barely responds to the dial and the
+        argmin is decoration; 2 of 21 means there is a real slope.
+
+        Zero when the curve was not recorded (a fit from an older store).
+        """
+        if not self.curve:
+            return 0
+        best = min(self.curve.values())
+        return sum(1 for v in self.curve.values() if v - best < MIN_GAIN)
+
+    @property
     def verdict(self) -> str:
         if not self.adopted:
-            return "default kept — the spec curve was not beaten by enough to matter"
+            s = "default kept — the spec curve was not beaten by enough to matter"
+            if self.at_boundary and self.plateau:
+                # An unadopted boundary is not the dial straining at a
+                # limit — nothing was applied. Say which it is.
+                s += (f"; the argmin sat at the grid edge, but {self.plateau} "
+                      f"of {len(self.curve)} dial settings scored within the "
+                      f"same margin, so that is where a flat search landed")
+            return s
         lean = "recent form" if self.r > 0 else "the long run"
         s = f"the record moved the dial {self.r:+.1f} toward {lean}"
         if self.at_boundary:
@@ -115,6 +155,14 @@ class FormFit:
                 "brier_default": round(self.brier_default, 5),
                 "brier_fitted": round(self.brier_fitted, 5),
                 "adopted": self.adopted, "weights": self.weights,
+                # The whole Brier-vs-dial curve, not just its argmin. The
+                # fit already computes all 21 points and used to throw 20
+                # of them away, which left "dial +1.0, at the edge"
+                # unreadable: a dial pressed hard against the wall and a
+                # flat surface whose argmin happened to land there look
+                # identical from the winner alone. Costs nothing to keep.
+                "curve": {str(k): round(v, 6)
+                          for k, v in sorted(self.curve.items())},
                 "fitted": _dt.datetime.now().isoformat(timespec="seconds")}
 
 
@@ -160,7 +208,8 @@ def fit(entries: list[dict], market: str, base: dict | None = None,
     return FormFit(sport=sport, market=market, r=best_r, samples=samples,
                    brier_default=brier_default, brier_fitted=brier_fitted,
                    adopted=adopted,
-                   weights=family(base, best_r) if adopted else dict(base))
+                   weights=family(base, best_r) if adopted else dict(base),
+                   curve={r: b for r, (b, _) in scores.items()})
 
 
 # --- persistence and the projection-time lookup ------------------------------
@@ -231,6 +280,14 @@ def report(path=None) -> list[dict]:
             continue
         sport, _, market = key.partition(":")
         r = float(d.get("r", 0.0) or 0.0)
+        curve = d.get("curve") if isinstance(d.get("curve"), dict) else {}
+        vals = []
+        for v in curve.values():
+            try:
+                vals.append(float(v))
+            except (TypeError, ValueError):
+                pass
+        best = min(vals) if vals else None
         out.append({
             "sport": d.get("sport") or sport,
             "market": d.get("market") or market or key,
@@ -239,6 +296,13 @@ def report(path=None) -> list[dict]:
             "brier_default": d.get("brier_default"),
             "brier_fitted": d.get("brier_fitted"),
             "at_boundary": abs(r) >= GRID[-1] - 1e-9,
+            # How many dial settings tied the winner, and out of how many.
+            # Without this the argmin cannot be told from a coin flip on a
+            # flat surface — see FormFit.plateau. 0/0 = fitted before the
+            # curve was recorded; the page must not read that as a verdict.
+            "plateau": (sum(1 for v in vals if v - best < MIN_GAIN)
+                        if best is not None else 0),
+            "grid_n": len(vals),
             "fitted": d.get("fitted"),
             "reading": ("leans on recent form" if d.get("adopted") and r > 0
                         else "leans on the long run" if d.get("adopted")

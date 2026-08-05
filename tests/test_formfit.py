@@ -189,6 +189,89 @@ def test_the_dial_ships_with_the_self_tuning_story():
         ff.DEFAULT_PATH, cal.DEFAULT_PATH = keep_ff, keep_cal
 
 
+def test_the_dial_grid_cannot_be_widened_past_its_anchor():
+    """±1.0 is the end of the FAMILY, not the end of a search range.
+
+    A dial resting at the edge looks like a search that ran out of room,
+    and the reflex is to widen the grid. It cannot be widened: r=+1.0 IS
+    ANCHOR_HOT, so anything beyond it is an affine combination with a
+    negative coefficient on the spec curve, and the very first step out
+    puts a negative weight on vs_opp — "subtract this player's record
+    against this opponent from his projection", which is not a stronger
+    lean on recent form. This pins the wall so nobody widens it later.
+    """
+    def unclamped(r):
+        t = abs(r)
+        return {k: (1 - t) * BASE.get(k, 0.0) + t * ff.ANCHOR_HOT.get(k, 0.0)
+                for k in set(BASE) | set(ff.ANCHOR_HOT)}
+
+    assert all(v >= 0 for v in unclamped(1.0).values())
+    bad = {k: v for k, v in unclamped(1.1).items() if v < 0}
+    assert bad, "extrapolation past the anchor no longer breaks — recheck the wall"
+    assert "vs_opp" in bad
+    # The sum still comes to 1, which is exactly the trap: a curve can look
+    # like a valid blend and still be subtracting a window.
+    assert abs(sum(unclamped(1.1).values()) - 1.0) < 1e-9
+
+
+def test_the_fit_keeps_the_whole_curve_not_just_its_winner():
+    """The argmin alone cannot say whether the dial meant it.
+
+    A 21-point search always returns a winner; on a flat surface that
+    winner is wherever noise dipped, and edges are as likely as anywhere.
+    The fit already evaluates every grid point, so keeping them is free —
+    and it is the difference between a readable verdict and a mystery.
+    """
+    fit = ff.fit(_ramp_entries(), "hits", BASE)
+    assert fit is not None
+    assert len(fit.curve) == len(ff.GRID)
+    assert set(fit.curve) == set(ff.GRID)
+    # The winner in the curve must BE the reported winner.
+    assert min(fit.curve, key=lambda r: (fit.curve[r], abs(r))) == fit.r
+    assert abs(fit.curve[fit.r] - fit.brier_fitted) < 1e-12
+    assert abs(fit.curve[0.0] - fit.brier_default) < 1e-12
+    # …and it survives the round trip through the store.
+    assert fit.to_dict()["curve"]["1.0"] == round(fit.curve[1.0], 6)
+
+
+def test_a_flat_surface_reports_how_many_settings_tied():
+    """plateau is the counterweight to the argmin."""
+    flat = ff.FormFit(sport="mlb", market="hits", r=1.0, samples=5000,
+                      brier_default=0.2000, brier_fitted=0.19999,
+                      adopted=False, weights=dict(BASE),
+                      curve={r: 0.2 for r in ff.GRID})
+    assert flat.plateau == len(ff.GRID)
+    assert "flat search landed" in flat.verdict
+    # A real slope: only the winner is inside the margin.
+    sloped = ff.FormFit(sport="mlb", market="hits", r=1.0, samples=5000,
+                        brier_default=0.2000, brier_fitted=0.1900,
+                        adopted=True, weights=dict(BASE),
+                        curve={r: 0.20 - 0.01 * (r == 1.0) for r in ff.GRID})
+    assert sloped.plateau == 1
+    # An adopted boundary keeps the upstream warning; it is a real signal.
+    assert "AT THE GRID EDGE" in sloped.verdict
+    # An old store with no curve must not fake a verdict.
+    bare = ff.FormFit(sport="mlb", market="hits", r=1.0, samples=5000,
+                      brier_default=0.2, brier_fitted=0.2, adopted=False,
+                      weights=dict(BASE))
+    assert bare.plateau == 0
+    assert "flat search landed" not in bare.verdict
+
+
+def test_an_unadopted_dial_shows_the_margin_that_rejected_it():
+    """Same defect as the player-memory rows: the verdict was shown and
+    the evidence behind it was gated on adoption, so the only row anyone
+    questions — "default kept" — was the one with no number on it."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    i = app.index("const weightRows")
+    body = app[i:app.index("const weightsBlock")]
+    assert "w.adopted &&" not in body, "the Brier pair is gated again"
+    assert "w.brier_default != null" in body
+    # A boundary that was never applied must not be painted as a fault.
+    assert "dialTone" in body and "dialNote" in body
+
+
 def test_the_page_renders_the_recipe_rows_with_guards():
     app = open(os.path.join(ROOT, "web", "js", "app.js"),
                encoding="utf-8").read()
