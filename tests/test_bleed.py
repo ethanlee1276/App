@@ -178,6 +178,80 @@ def test_a_real_structural_break_survives_the_corrected_bar():
     assert "Nothing." not in tail
 
 
+def test_loss_cause_is_never_a_slice():
+    """It is only written on bets that LOST, so every bucket it makes is
+    0-N by construction: -100% ROI at an enormous z, a tautology wearing
+    the clothes of the strongest finding on the page. On a real journal it
+    printed "loss cause · variance: 118 bets, -100.0%, z -12.37" above two
+    findings that were actually true."""
+    assert "loss cause" not in bleed.DIMENSIONS
+    rows = ([bet("lost", loss_cause="variance") for _ in range(60)]
+            + [bet("won") for _ in range(60)])
+    out = _run(rows)
+    assert "loss cause" not in out
+    assert "-100.0%" not in out
+
+
+def test_a_slice_that_is_the_whole_book_is_not_a_second_finding():
+    """"sport · mlb" on a book that is 96% baseball convicts for exactly
+    the reason the headline does, and reads as independent confirmation of
+    itself."""
+    rows = book(20, 130, sport="mlb")
+    out = _run(rows)
+    tail = out[out.index("WHAT THE RECORD WILL SUPPORT"):]
+    assert "headline relabelled" in tail
+    assert "survives a bar set" not in tail, \
+        "a whole-book slice was reported as a finding"
+
+
+# --- units vs win rate, which are different questions ------------------------
+def test_the_two_z_scores_can_disagree_and_both_are_shown():
+    """A book that wins its long prices and loses its short ones can sit
+    under the required win RATE while making money. Reporting only the rate
+    would call that book broken."""
+    # Wins the +400s well above their 20% bar, loses the -400s below their
+    # 80% bar. Profitable overall; well under the required win rate.
+    rows = book(14, 26, odds=400) + book(28, 32, odds=-400)
+    s = bleed.measure(rows)
+    assert s["roi"] > 0, "fixture is not actually profitable"
+    assert s["z_rate"] < -2 < s["z"], (s["z_rate"], s["z"])
+    out = _run(rows)
+    assert "z on units" in out and "z on win rate" in out
+
+
+def test_the_units_test_uses_each_bet_s_own_price():
+    """Under the null every bet is fairly priced, so profit has mean zero.
+    A fairly-priced book must therefore score near zero, whatever its odds
+    mix — if it does not, the variance term is wrong."""
+    for odds in (-300, -110, 250):
+        be = bleed.breakeven(odds)
+        n = 4000
+        wins = round(be * n)
+        z = bleed.roi_z(book(wins, n - wins, odds=odds))
+        assert abs(z) < 0.5, (odds, z)
+
+
+def test_clv_ties_are_counted_apart_from_losses():
+    """A line that never moved is not the market running us over. Folding
+    ties into "did not beat" reported 16% on a book that was mostly flat."""
+    rows = ([bet(close=1.5, line=1.5) for _ in range(60)]      # tied
+            + [bet(close=2.0, line=1.5) for _ in range(20)]    # beat
+            + [bet(close=1.0, line=1.5) for _ in range(20)])   # behind
+    s = bleed.measure(rows)
+    assert abs(s["clv_tied"] - 0.6) < 1e-9
+    assert abs(s["clv_beat"] - 0.2) < 1e-9
+    assert abs(s["clv_behind"] - 0.2) < 1e-9
+    assert abs(s["clv_beat"] + s["clv_tied"] + s["clv_behind"] - 1.0) < 1e-9
+
+
+def test_a_short_priced_book_is_told_its_breakeven_is_not_52_percent():
+    """47.6% reads as unlucky against 52.4% and as a different problem
+    entirely against 58%."""
+    out = _run(book(108, 119, odds=-200))
+    assert "Note the break-even" in out
+    assert "not the 52.4%" in out
+
+
 def test_an_empty_journal_says_so_instead_of_dividing_by_zero():
     assert bleed.report([]) == 0
     s = bleed.measure([])

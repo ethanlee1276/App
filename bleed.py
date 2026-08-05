@@ -87,12 +87,46 @@ def breakeven(odds: float) -> float:
     return (100.0 / (o + 100.0)) if o > 0 else (-o / (-o + 100.0))
 
 
-def wilson_z(wins: float, n: int, expected: float) -> float:
-    """Standardised gap between the observed and required win rate."""
-    if n <= 0 or not 0 < expected < 1:
-        return 0.0
-    se = math.sqrt(expected * (1 - expected) / n)
-    return ((wins / n) - expected) / se if se else 0.0
+def decimal(odds: float) -> float:
+    o = float(odds)
+    return 1.0 + (o / 100.0 if o > 0 else 100.0 / -o)
+
+
+def rate_z(rows: list[dict]) -> float:
+    """Did we win as OFTEN as the prices require?
+
+    Poisson-binomial, not a mean-rate approximation: each bet has its own
+    break-even, so the variance is the sum of p(1-p) over the bets actually
+    made. On a book mixing -300 favourites with +150 dogs the two differ
+    enough to move a verdict.
+    """
+    num = var = 0.0
+    for b in rows:
+        be = breakeven(b.get("odds") or -110)
+        num += (1.0 if b["status"] == "won" else 0.0) - be
+        var += be * (1.0 - be)
+    return num / math.sqrt(var) if var > 0 else 0.0
+
+
+def roi_z(rows: list[dict]) -> float:
+    """Did we win as MUCH as the prices require? The test on units.
+
+    This is the one that matters, and it is not the same question. A book
+    that wins its long prices and loses its short ones can sit under the
+    required win RATE while making money, and the reverse. Under the null
+    each bet is fairly priced, so profit has mean zero and variance
+    stake² · (p·b² + (1-p)) with p the break-even and b the payout.
+    """
+    num = var = 0.0
+    for b in rows:
+        stake = float(b.get("stake_units") or 0)
+        if stake <= 0:
+            continue
+        be = breakeven(b.get("odds") or -110)
+        payout = decimal(b.get("odds") or -110) - 1.0
+        num += float(b.get("pnl_units") or 0)
+        var += (stake ** 2) * (be * payout ** 2 + (1.0 - be))
+    return num / math.sqrt(var) if var > 0 else 0.0
 
 
 # --- the journal -------------------------------------------------------------
@@ -160,7 +194,12 @@ DIMENSIONS = {
     "grade":       lambda b: b.get("grade") or "?",
     "price":       odds_bucket,
     "claimed p":   prob_bucket,
-    "loss cause":  lambda b: b.get("loss_cause") or None,
+    # loss_cause is deliberately NOT a slice. It is only ever written on a
+    # bet that lost, so every bucket it makes is 0-N by construction and
+    # scores -100% ROI at an enormous z — a tautology wearing the clothes
+    # of the strongest finding on the page. It belongs in a breakdown of
+    # the losses (which lost to variance, which to a blowout), never in a
+    # comparison against bets that won.
     "lineup slot": lambda b: (None if b.get("lineup_slot") is None else
                               f"slot {int(float(b['lineup_slot']))}"),
     "park HR":     lambda b: _bucketed(b, "park_hr", [(0.95, "pitchers'"),
@@ -197,10 +236,18 @@ def measure(rows: list[dict]) -> dict:
         "pnl": pnl, "staked": staked,
         "win_rate": (wins / n) if n else 0.0,
         "breakeven": exp,
-        "z": wilson_z(wins, n, exp),
+        # Two different questions, reported separately because they can
+        # disagree: often enough, and by enough.
+        "z": roi_z(rows),
+        "z_rate": rate_z(rows),
         "clv": (sum(clvs) / len(clvs)) if clvs else None,
         "clv_n": len(clvs),
+        # Beat / tied / behind, kept apart. A line that never moved is not a
+        # loss, and folding ties into "did not beat" made a book that mostly
+        # takes the closing number look like one the market runs over.
         "clv_beat": (sum(1 for c in clvs if c > 0) / len(clvs)) if clvs else None,
+        "clv_tied": (sum(1 for c in clvs if c == 0) / len(clvs)) if clvs else None,
+        "clv_behind": (sum(1 for c in clvs if c < 0) / len(clvs)) if clvs else None,
     }
 
 
@@ -236,7 +283,8 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
           f"{top['pnl']:+.2f}u on {top['staked']:.1f}u  ·  ROI {top['roi']:+.1%}")
     print(f"  win rate {top['win_rate']:.1%} against a break-even of "
           f"{top['breakeven']:.1%} implied by the prices actually taken")
-    print(f"  z = {top['z']:+.2f}")
+    print(f"  z on units {top['z']:+.2f}   ·   z on win rate "
+          f"{top['z_rate']:+.2f}")
     if abs(top["z"]) < 2:
         gap = abs(top["win_rate"] - top["breakeven"])
         need = ((2 * math.sqrt(top["breakeven"] * (1 - top["breakeven"]))
@@ -247,6 +295,14 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
         print("    The record cannot yet tell a broken model from a bad run.")
     else:
         print("\n  → SIGNIFICANT at two sigma on the headline.")
+    # A break-even far above -110 means the book is buying short prices,
+    # and that changes what the win rate has to be before it means
+    # anything. Worth saying, because 47.6% reads as unlucky against 52.4%
+    # and as a different problem entirely against 58%.
+    if top["breakeven"] > 0.55:
+        print(f"\n  Note the break-even: {top['breakeven']:.1%}, not the 52.4% a")
+        print(f"  -110 book would need. These are short prices, so they have to")
+        print(f"  land far more often just to stay level.")
 
     print()
     print("=" * 74)
@@ -259,8 +315,12 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
     else:
         cov = top["clv_n"] / top["n"]
         print(f"  {top['clv_n']} of {top['n']} bets have a close ({cov:.0%})")
-        print(f"  average CLV {top['clv']:+.3f} line points  ·  "
-              f"beat the close on {top['clv_beat']:.0%}")
+        print(f"  average CLV {top['clv']:+.3f} line points")
+        print(f"  beat {top['clv_beat']:.0%}  ·  tied {top['clv_tied']:.0%}"
+              f"  ·  behind {top['clv_behind']:.0%}")
+        if top["clv_tied"] and top["clv_tied"] > 0.3:
+            print(f"    ({top['clv_tied']:.0%} of lines never moved at all — "
+                  f"those are ties, not losses)")
         if top["clv"] > 0.01:
             print("\n  → Positive CLV with a negative ROI is the signature of")
             print("    a book that is priced right and running bad. That is a")
@@ -296,6 +356,13 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
         if flag:
             convicted.append((dim, bucket, s))
 
+    # A slice covering nearly the whole book is the headline wearing a
+    # label. "sport · mlb" on a book that is 96% baseball convicts for the
+    # same reason the headline does and adds nothing — worse, it reads as
+    # an independent confirmation of itself.
+    whole = [c for c in convicted if c[2]["n"] >= 0.9 * top["n"]]
+    convicted = [c for c in convicted if c not in whole]
+
     print()
     print("=" * 74)
     print("WHAT THE RECORD WILL SUPPORT")
@@ -314,6 +381,10 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
             print(f"  {dim} · {bucket}: {s['n']} bets, {s['roi']:+.1%}, "
                   f"z {s['z']:+.2f}")
             print(f"     survives a bar set for {len(cuts)} simultaneous looks")
+    for dim, bucket, s in whole:
+        print(f"\n  ({dim} · {bucket} also clears, but it is {s['n']} of "
+              f"{top['n']} bets —")
+        print("   that is the headline relabelled, not a second finding.)")
     return 0
 
 
