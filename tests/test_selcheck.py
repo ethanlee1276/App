@@ -337,6 +337,52 @@ def test_across_declines_on_a_thin_side():
     assert "Need 60" in buf.getvalue()
     assert "WINNER" not in buf.getvalue().upper()
 
+
+def test_an_underpowered_adjustment_is_not_called_composition():
+    """The real run's shape, and the note that got it wrong.
+
+    Raw +12.7% became adjusted +8.5% — two thirds of the effect intact —
+    and the z fell under 2 only because stratifying dropped 301 of 809
+    bets. Reporting that as "composition explains it" points at the
+    opposite action from "collect more bets".
+    """
+    import contextlib
+    import io
+    r = {"sel": {"n": 247, "claimed": .579, "landed": .457, "gap": .122, "se": .031},
+         "rej": {"n": 562, "claimed": .593, "landed": .598, "gap": -.005, "se": .0195},
+         "raw": {"diff": .127, "se": .0366},
+         "adjusted": {"diff": .085, "se": .0455},
+         "strata": [{}] * 6, "covered": 508}
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        sc._across_note(r, 809)
+    out = buf.getvalue()
+    assert "UNDER-POWERED" in out
+    assert "explains it" not in out
+
+
+def test_a_real_composition_effect_is_still_called_out():
+    import contextlib
+    import io
+    r = {"raw": {"diff": .127, "se": .0366},
+         "adjusted": {"diff": .012, "se": .0455}}
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        sc._across_note(r, 809)
+    out = buf.getvalue()
+    assert "Composition" in out and "UNDER-POWERED" not in out
+
+
+def test_book_is_not_in_the_strata():
+    """Book is a mediator, not a confounder: a prop clears the bar BECAUSE
+    a book hung an out-of-line price, so adjusting for book subtracts the
+    effect being measured. The docstring has to keep saying so, because the
+    balance table makes it look like an obvious thing to add."""
+    import inspect
+    src = inspect.getsource(sc.across)
+    assert "mediator" in src
+    assert '"book"' not in src.split('"""')[2], "book crept into the strata key"
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

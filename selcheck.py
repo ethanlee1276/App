@@ -217,6 +217,23 @@ def across(sel: list[dict], rej: list[dict]) -> dict:
 
     It is still observational. The gate is not a coin flip and nothing here
     randomised anything.
+
+    **BOOK IS DELIBERATELY NOT IN THE STRATA, and this is the one thing a
+    future reader will want to change.** The balance table shows a violent
+    book imbalance — on the real journal, ESPN BET was 76 selected against
+    0 rejected, theScore Bet 13 against 214 — and that looks exactly like a
+    confound crying out to be adjusted away.
+
+    It is not a confound. It is the mechanism. A prop clears the bar
+    BECAUSE some book hung a price out of line with the field; the book
+    that offers the best number is the book that gets the bet over the
+    threshold. Book therefore sits on the causal path between the gate and
+    the outcome — a mediator, not a confounder — and adjusting for a
+    mediator subtracts the very effect being measured.
+
+    Market and claim level are different: some markets are simply harder to
+    forecast, and that has nothing to do with the gate, so they are
+    adjusted for.
     """
     a, b = _stats(sel), _stats(rej)
     raw_d = a["gap"] - b["gap"]
@@ -266,6 +283,30 @@ def balance(sel: list[dict], rej: list[dict], key) -> list[dict]:
     return sorted(out, key=lambda r: -(r["n_sel"] + r["n_rej"]))
 
 
+def _across_note(r: dict, total: int) -> None:
+    """Composition, or just too few bets? Reported off the point
+    estimate rather than off whether a z crossed two."""
+    z = r["raw"]["diff"] / r["raw"]["se"] if r["raw"]["se"] else 0.0
+    za = (r["adjusted"]["diff"] / r["adjusted"]["se"]
+          if r.get("adjusted") and r["adjusted"]["se"] else None)
+    if za is None or abs(z) < 2.0 or abs(za) >= 2.0:
+        return
+    keep = (abs(r["adjusted"]["diff"]) / abs(r["raw"]["diff"])
+            if r["raw"]["diff"] else 0.0)
+    print()
+    if keep < 0.35:
+        print(f"  NOTE: adjusting kept only {keep:.0%} of the raw difference.")
+        print("  Composition — which markets and which claim levels land on")
+        print("  each side — is doing most of the work, not the gate.")
+    else:
+        print(f"  NOTE: adjusting kept {keep:.0%} of the raw difference "
+              f"({r['adjusted']['diff']:+.1%} against {r['raw']['diff']:+.1%}),")
+        print("  so the significance went with the sample, not the effect.")
+        print("  This is UNDER-POWERED, not explained away — a distinction")
+        print("  worth being strict about, because the two point in opposite")
+        print("  directions on what to do next. More bets, not a new theory.")
+
+
 def report_across(sel: list[dict], rej: list[dict]) -> int:
     if len(sel) < 60 or len(rej) < 60:
         print(f"Need 60 settled on both sides; have {len(sel)} selected "
@@ -292,6 +333,16 @@ def report_across(sel: list[dict], rej: list[dict]) -> int:
         za = None
         print("  within-strata        no stratum has enough on both sides")
     print()
+    # Coverage first: stratifying throws away every bet in a stratum too
+    # thin on one side, and that loss is why an adjusted estimate can keep
+    # most of its size and still lose its significance.
+    if r["adjusted"]:
+        dropped = (len(sel) + len(rej)) - r["covered"]
+        if dropped:
+            print(f"  {dropped:,} of {len(sel) + len(rej):,} bets "
+                  f"({dropped / (len(sel) + len(rej)):.0%}) sit in strata too "
+                  f"thin on one side to contribute.")
+            print()
     verdict = za if za is not None else z
     if verdict >= 2.0:
         print("  → THE GATE IS SELECTING THE WORSE BETS. Rejected props are")
@@ -307,11 +358,7 @@ def report_across(sel: list[dict], rej: list[dict]) -> int:
     else:
         print("  → NOT SEPARABLE on this sample. The two sides are not")
         print("    distinguishable, so the boundary shows nothing either way.")
-    if r["adjusted"] and abs(z) >= 2.0 and abs(za) < 2.0:
-        print()
-        print("  NOTE: the raw difference is significant and the adjusted one")
-        print("  is not. That means composition — which markets and which")
-        print("  claim levels land on each side — explains it, not the gate.")
+    _across_note(r, len(sel) + len(rej))
     print()
 
     print("=" * 74)
