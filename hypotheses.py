@@ -41,7 +41,13 @@ def _print_store(store: dict) -> None:
         scope = f"{h['sport']}:{h.get('market') or 'all markets'}"
         mark = {"confirmed": "✓", "rejected": "✗",
                 "collecting": "…"}.get(h.get("status"), "?")
-        print(f"  {mark} [{scope}] {dims}")
+        # Provenance, because the tribunal treats these identically and a
+        # reader should not have to assume every claim here came from the
+        # model. "analysis" means someone read the journal and wrote it
+        # down; it earns exactly the same amount of trust, which is none
+        # until the arithmetic says otherwise.
+        src = " ·analysis" if h.get("origin") == "analysis" else ""
+        print(f"  {mark} [{scope}]{src} {dims}")
         print(f"     {h.get('claim', '')}")
         if h.get("reading"):
             print(f"     {h['reading']}"
@@ -64,6 +70,17 @@ def main() -> None:
                     help="print the evidence pack and exit — no API call")
     ap.add_argument("--spend", action="store_true",
                     help="what the lab has actually cost, from the ledger")
+    ap.add_argument("--register", metavar="SPORT:MARKET", nargs="+",
+                    help="enter a hypothesis reached by ANALYSIS rather than "
+                         "by the model — no API call. Give one or more "
+                         "sport:market scopes plus --dim; they face the same "
+                         "tribunal and are marked origin=analysis. Use "
+                         "sport:* for a whole sport.")
+    ap.add_argument("--dim", action="append", metavar="NAME=VALUE",
+                    default=[], help="dimension to slice on, repeatable "
+                                     f"(one of: {', '.join(hyp.DIMS)})")
+    ap.add_argument("--claim", default="", help="what is being asserted")
+    ap.add_argument("--rationale", default="", help="why it is worth testing")
     args = ap.parse_args()
 
     if args.spend:
@@ -84,6 +101,35 @@ def main() -> None:
         return
 
     lconn = ledger.connect()
+    if args.register:
+        dims = {}
+        for kv in args.dim:
+            if "=" not in kv:
+                print(f"--dim wants NAME=VALUE (got {kv!r})")
+                return
+            k, _, v = kv.partition("=")
+            if k not in hyp.DIMS:
+                print(f"'{k}' is not a journaled dimension. "
+                      f"One of: {', '.join(hyp.DIMS)}")
+                return
+            dims[k] = v
+        if not dims:
+            print("--register needs at least one --dim; a hypothesis about "
+                  "everything is not testable.")
+            return
+        hyps = []
+        for scope in args.register:
+            sport, _, market = scope.partition(":")
+            hyps.append({"sport": sport,
+                         "market": None if market in ("", "*") else market,
+                         "dims": dims, "claim": args.claim,
+                         "rationale": args.rationale})
+        store = hyp.register(lconn, hyps)
+        print(f"Registered {len(hyps)} hypothesis/es (origin=analysis). "
+              f"They now face the same tribunal as the model's own, and "
+              f"are re-tested free on every settle pass.\n")
+        _print_store(store)
+        return
     if args.show:
         _print_store(hyp.load())
         return

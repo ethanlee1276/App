@@ -221,6 +221,96 @@ def test_retest_re_earns_status_as_the_journal_grows():
     assert h["first_proposed"] == "2026-08-01"     # identity survives
 
 
+def _bets(conn, n, market, side, said, wins, odds=-160):
+    for i in range(n):
+        conn.execute(
+            "INSERT INTO bets (ts, sport, date, player, market, side, line,"
+            " book, odds, hit_prob, status, category) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("2026-08-01T10:00:00", "mlb", f"2026-07-{i % 28 + 1:02d}",
+             f"{market}{side}{i}", market, side, 1.5, "dk", odds, said,
+             "won" if i < wins else "lost", "main"))
+    conn.commit()
+
+
+# --- hypotheses reached by analysis rather than by the model -----------------
+def test_a_hand_registered_hypothesis_faces_the_same_tribunal():
+    """A claim reached by reading the journal is the same KIND of object as
+    one the model proposed — a slice, testable by the same arithmetic — and
+    belongs in the lab rather than in a chat log. It gets no head start:
+    below the floor it collects, and it only confirms on the same z + BH
+    discipline as everything else."""
+    conn = ledger.connect(":memory:")
+    path = tempfile.mktemp(suffix=".json")
+    st = hyp.register(conn, [{
+        "sport": "mlb", "market": "strikeouts", "dims": {"side": "OVER"},
+        "claim": "pitcher strikeout overs are mispriced on innings",
+        "rationale": "sidebias"}], path)
+    h = st["hypotheses"][0]
+    assert h["status"] == "collecting", "registration granted a free verdict"
+    assert h["origin"] == "analysis"
+
+    _bets(conn, 60, "strikeouts", "OVER", 0.65, 27)
+    h = hyp.retest(conn, path)["hypotheses"][0]
+    assert h["status"] == "confirmed" and h["action"] == "close"
+
+
+def test_registration_survives_a_retest_with_its_provenance():
+    """origin has to ride along through retest, or every settle pass
+    launders an analysis-derived claim into an unattributed one."""
+    conn = ledger.connect(":memory:")
+    path = tempfile.mktemp(suffix=".json")
+    hyp.register(conn, [_hyp({"side": "OVER"}, market="outs") |
+                        {"origin": "ignored"}], path)
+    for _ in range(3):
+        st = hyp.retest(conn, path)
+    assert st["hypotheses"][0]["origin"] == "analysis"
+
+
+def test_registration_refuses_a_slice_of_everything():
+    conn = ledger.connect(":memory:")
+    path = tempfile.mktemp(suffix=".json")
+    st = hyp.register(conn, [{"sport": "mlb", "market": "hits", "dims": {}}],
+                      path)
+    assert not (st.get("hypotheses") or []), "an untestable claim was stored"
+
+
+def test_registration_refuses_a_dimension_the_miner_never_journals():
+    """The menu exists to stop the MODEL inventing a band. A hand-written
+    hypothesis is held to the same vocabulary — otherwise the tribunal is
+    handed a dimension it cannot match on and the claim collects forever."""
+    conn = ledger.connect(":memory:")
+    path = tempfile.mktemp(suffix=".json")
+    st = hyp.register(conn, [{"sport": "mlb", "market": "hits",
+                              "dims": {"vibes": "good"}}], path)
+    assert not (st.get("hypotheses") or [])
+
+
+def test_a_registered_and_a_proposed_hypothesis_are_tested_together():
+    """One family, one false-discovery correction. Registering by hand must
+    not create a second, easier door — the BH bar is set by the whole
+    family or it means nothing."""
+    conn = ledger.connect(":memory:")
+    path = tempfile.mktemp(suffix=".json")
+    hyp.save({"hypotheses": [dict(_hyp({"side": "UNDER"}, market="hits"),
+                                  first_proposed="2026-08-01")]}, path)
+    hyp.register(conn, [{"sport": "mlb", "market": "outs",
+                         "dims": {"side": "OVER"}, "claim": "c"}], path)
+    st = hyp.load(path)
+    assert len(st["hypotheses"]) == 2
+    origins = {h.get("origin") for h in st["hypotheses"]}
+    assert origins == {None, "analysis"}, origins
+
+
+def test_the_page_and_cli_disclose_provenance():
+    cli = open(os.path.join(ROOT, "hypotheses.py"), encoding="utf-8").read()
+    assert '"analysis"' in cli and "·analysis" in cli
+    assert "--register" in cli
+    # A hypothesis about everything is not testable, and the CLI says so
+    # rather than storing one.
+    assert "at least one --dim" in cli
+
+
 def test_enforcement_flows_only_through_the_shared_gate():
     """losspatterns.veto is the one door every sport's engine consults —
     a confirmed hot hypothesis blocks through it, with the claim named."""

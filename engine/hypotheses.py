@@ -467,6 +467,43 @@ def merge(store: dict, new_hyps: list[dict], watch: list[str],
             "watchlist": watch if watch else store.get("watchlist") or []}
 
 
+#: Where a hypothesis came from. The tribunal treats them identically —
+#: that is the point — but the page and the store should not pretend a
+#: number derived at a desk was proposed by the model, or the reverse.
+ORIGINS = ("llm", "analysis")
+
+
+def register(lconn, hyps: list[dict], path=None) -> dict:
+    """Enter hand-derived hypotheses into the lab, without an API call.
+
+    The lab's usual door is the LLM: evidence pack in, proposals out,
+    tribunal. But a hypothesis reached by reading the journal directly is
+    the same KIND of object — a claim about a slice, testable by the same
+    arithmetic — and it should face the same tribunal rather than living
+    in someone's head or a chat log. The only asymmetry worth keeping is
+    provenance, so these carry origin="analysis".
+
+    Validated against DIMS rather than the LLM's menu: the menu exists to
+    stop the model inventing a band the tribunal has never seen, and a
+    hypothesis written here is written against the same vocabulary on
+    purpose. A dim outside DIMS is still refused.
+    """
+    clean = []
+    for h in hyps:
+        dims = {d: v for d, v in (h.get("dims") or {}).items() if d in DIMS}
+        if not dims or not h.get("sport"):
+            continue                       # a slice of everything is nothing
+        clean.append({"claim": str(h.get("claim", ""))[:200],
+                      "rationale": str(h.get("rationale", ""))[:400],
+                      "sport": h["sport"], "market": h.get("market"),
+                      "dims": dims, "origin": "analysis"})
+    if not clean:
+        return load(path)
+    store = merge(load(path), clean, [], {})
+    save(store, path)
+    return retest(lconn, path)
+
+
 def retest(lconn, path=None) -> dict:
     """The free nightly step: every stored hypothesis re-earns its status
     against the grown journal. This is what keeps the double-dip honest —
@@ -477,8 +514,10 @@ def retest(lconn, path=None) -> dict:
     if not hyps:
         return store
     records = lp.records_from_ledger(lconn)
+    # `origin` rides along, or every retest would launder an
+    # analysis-derived hypothesis into an unattributed one.
     kept = [{k: h[k] for k in ("claim", "rationale", "sport", "market",
-                               "dims", "first_proposed") if k in h}
+                               "dims", "first_proposed", "origin") if k in h}
             for h in hyps]
     store = dict(store)
     store["hypotheses"] = tribunal(kept, records)
