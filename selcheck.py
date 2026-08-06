@@ -344,6 +344,137 @@ def balance(sel: list[dict], rej: list[dict], key) -> list[dict]:
     return sorted(out, key=lambda r: -(r["n_sel"] + r["n_rej"]))
 
 
+#: A book needs this many settled bets on a side before its own gap is
+#: worth quoting. Below it the per-book row is noise wearing a number.
+MIN_BOOK_N = 25
+
+
+def within_book(sel: list[dict], rej: list[dict]) -> dict:
+    """Selected minus rejected, pooled WITHIN book. A floor, not an estimate.
+
+    This is deliberately not one of :data:`SCHEMES`, and the distinction is
+    the whole reason the function exists separately.
+
+    Book is a mediator: a prop clears the bar because some book hung a price
+    out of line, so conditioning on book removes the part of selection that
+    operates through book choice. The number this returns is therefore
+    biased TOWARD ZERO by construction, and quoting it as "the adjusted
+    effect" would understate the thing being measured. It cannot be added to
+    the scheme table without lying about what that table means.
+
+    What it is good for is one specific question, which §9 of the proposal
+    names as a reason to abandon the whole correction: *is the gap just one
+    book?* If the difference survives inside books, book composition is not
+    the explanation. If it vanishes, the answer is genuinely ambiguous —
+    mediated selection and a broken price feed both predict exactly that —
+    and the next step is the feed, not a shrink.
+    """
+    return stratified(sel, rej, "within book", lambda r: (r.get("book") or "?",))
+
+
+def book_split(sel: list[dict], rej: list[dict]) -> dict:
+    """The selected side cut by whether its book has a rejected counterpart.
+
+    The imbalance that motivates this: on the real journal ESPN BET was 76
+    selected against 0 rejected. A book with no rejected bets contributes
+    nothing to any within-book comparison, and its selected bets are being
+    compared against prices from entirely different books. If the over-claim
+    lives there and not in the paired books, the finding is about a price
+    feed rather than about the gate.
+    """
+    paired = {b for b in {r.get("book") or "?" for r in sel}
+              if sum(1 for r in rej if (r.get("book") or "?") == b) > 0}
+    inside = [r for r in sel if (r.get("book") or "?") in paired]
+    outside = [r for r in sel if (r.get("book") or "?") not in paired]
+    return {"paired": sorted(paired),
+            "inside": _stats(inside) if inside else None,
+            "outside": _stats(outside) if outside else None,
+            "n_inside": len(inside), "n_outside": len(outside)}
+
+
+def report_books(sel: list[dict], rej: list[dict]) -> None:
+    print("=" * 74)
+    print("IS IT ONE BOOK? — the abandon condition, tested")
+    print("=" * 74)
+    print("  Book is a MEDIATOR, so nothing here is an adjusted estimate.")
+    print("  A prop clears the bar because a book hung a price out of line;")
+    print("  conditioning on book removes part of the effect on purpose.")
+    print("  These numbers answer one question only: is the gap everywhere,")
+    print("  or is it one book's prices?")
+    print()
+
+    def _cell(side) -> str:
+        """Fixed width, so a two-digit gap cannot shove the columns apart."""
+        if len(side) < MIN_BOOK_N:
+            return f"{len(side):>4}  {'—':>7}  {'—':>7}"
+        st = _stats(side)
+        return (f"{len(side):>4}  {st['claimed']:>7.1%}  "
+                f"{st['gap']:>+7.1%}")
+
+    books = sorted({(r.get("book") or "?") for r in sel + rej})
+    head = f"{'n':>4}  {'claimed':>7}  {'gap':>7}"
+    print(f"  {'':18} {'selected':^22}   {'rejected':^22}")
+    print(f"  {'':18} {head}   {head}")
+    print("  " + "-" * 62)
+    for b in books:
+        s = [r for r in sel if (r.get("book") or "?") == b]
+        j = [r for r in rej if (r.get("book") or "?") == b]
+        print(f"  {b[:18]:18} {_cell(s)}   {_cell(j)}")
+    print()
+    print(f"  A side under {MIN_BOOK_N} bets is left blank rather than quoted.")
+    print()
+
+    w = within_book(sel, rej)
+    sp = book_split(sel, rej)
+    if w["diff"] is not None:
+        zs = w["diff"] / w["se"] if w["se"] else 0.0
+        print(f"  within book (a FLOOR)  {w['diff']:+8.1%}    "
+              f"±{2 * w['se']:.1%}   z {zs:+.2f}   "
+              f"covered {w['covered'] / (len(sel) + len(rej)):.0%}")
+        print()
+        if zs >= 2.0:
+            print("  → NOT ONE BOOK. The difference survives inside books, and")
+            print("    it survives an adjustment that is rigged against it.")
+            print("    Book composition is not the explanation.")
+        elif abs(zs) < 2.0:
+            print("  → AMBIGUOUS, and this is the honest reading. Mediated")
+            print("    selection and a single mispriced feed both predict a")
+            print("    within-book difference that fades. This test cannot")
+            print("    separate them; only checking the prices can.")
+    else:
+        print("  within book — no book has enough on both sides to compare.")
+        print("  That alone is the finding: the two groups barely share a")
+        print("  price source, so 'selected vs rejected' is partly")
+        print("  'one book vs another'.")
+    print()
+
+    io, oo = sp["inside"], sp["outside"]
+    if oo and sp["n_outside"] >= MIN_BOOK_N:
+        print("  selected bets at books that ALSO appear in rejected:")
+        if io:
+            print(f"    {sp['n_inside']:4} bets   gap {io['gap']:+6.1%} "
+                  f"±{2 * io['se']:.1%}")
+        else:
+            print("    none — every selected bet is at an unpaired book")
+        print("  selected bets at books with NO rejected counterpart:")
+        print(f"    {sp['n_outside']:4} bets   gap {oo['gap']:+6.1%} "
+              f"±{2 * oo['se']:.1%}")
+        print()
+        if io:
+            d = oo["gap"] - io["gap"]
+            se = math.sqrt(io["se"] ** 2 + oo["se"] ** 2)
+            zd = d / se if se else 0.0
+            print(f"    difference {d:+.1%} ±{2 * se:.1%}  z {zd:+.2f}")
+            if zd >= 2.0:
+                print("    → the over-claim is CONCENTRATED in books that never")
+                print("      appear on the rejected side. Check those price")
+                print("      feeds before fitting any correction.")
+            else:
+                print("    → the over-claim is not concentrated there. The")
+                print("      unpaired books are not carrying the finding.")
+    print()
+
+
 def _across_note(r: dict, total: int) -> None:
     """Composition, or just too few bets? Reported off the point
     estimate rather than off whether a z crossed two."""
@@ -457,6 +588,7 @@ def report_across(sel: list[dict], rej: list[dict]) -> int:
             print(f"    {str(row['key'])[:20]:22} {row['p_sel']:7.0%}   "
                   f"{row['p_rej']:8.0%}   ({row['n_sel']}/{row['n_rej']})")
         print()
+    report_books(sel, rej)
     return 0
 
 

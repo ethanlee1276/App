@@ -437,6 +437,84 @@ def test_stability_declines_to_speak_on_one_scheme():
     assert sc.stability([{"name": "raw (no adjustment)", "diff": 0.1, "se": 0.02},
                          {"name": "market", "diff": 0.1, "se": 0.02}])["stable"] is None
 
+
+# --- is it one book? the abandon condition ----------------------------------
+def _bk(book, p, n, land, cat="main"):
+    return [{"sport": "mlb", "market": "total_bases", "side": "OVER",
+             "odds": -110, "book": book, "hit_prob": p, "edge": 0.04,
+             "category": cat,
+             "status": "won" if i < round(n * land) else "lost"}
+            for i in range(n)]
+
+
+def test_within_book_is_not_promoted_into_the_scheme_table():
+    """It is biased toward zero by construction — book is on the causal
+    path. Quoting it beside the honest adjustments would understate the
+    effect while looking like a stricter version of it."""
+    assert all("book" not in name for name, _ in sc.SCHEMES)
+    import inspect
+    src = inspect.getsource(sc.within_book)
+    assert "floor" in src.lower() and "toward zero" in src.lower()
+
+
+def test_a_gap_present_in_every_book_survives_the_within_book_floor():
+    sel = sum([_bk(b, 0.58, n, 0.46) for b, n in
+               (("ESPN BET", 76), ("DraftKings", 49), ("BetMGM", 48),
+                ("Hard Rock", 38))], [])
+    rej = sum([_bk(b, 0.59, n, 0.60, "loose") for b, n in
+               (("theScore Bet", 215), ("Hard Rock", 146),
+                ("DraftKings", 116), ("BetMGM", 66))], [])
+    w = sc.within_book(sel, rej)
+    assert w["diff"] is not None
+    assert w["diff"] / w["se"] >= 2.0, w
+
+
+def test_a_gap_living_in_one_unpaired_book_is_localised_not_generalised():
+    """The §9 abandon condition. If the over-claim is one book that never
+    appears on the rejected side, the finding is about a price feed and a
+    global shrink is the wrong instrument."""
+    sel = _bk("ESPN BET", 0.58, 76, 0.20)
+    sel += sum([_bk(b, 0.58, n, 0.585) for b, n in
+                (("DraftKings", 49), ("BetMGM", 48), ("Hard Rock", 38))], [])
+    rej = sum([_bk(b, 0.59, n, 0.60, "loose") for b, n in
+               (("theScore Bet", 215), ("Hard Rock", 146),
+                ("DraftKings", 116), ("BetMGM", 66))], [])
+    sp = sc.book_split(sel, rej)
+    assert sp["n_outside"] == 76 and "ESPN BET" not in sp["paired"]
+    assert sp["outside"]["gap"] > 0.30            # the bad feed
+    assert abs(sp["inside"]["gap"]) < 0.05        # everything else is clean
+    # …and the floor correctly refuses to confirm on this data
+    w = sc.within_book(sel, rej)
+    assert w["diff"] is None or abs(w["diff"] / w["se"]) < 2.0
+
+
+def test_a_book_too_thin_to_quote_is_left_blank():
+    """A five-bet book has no gap worth printing, and printing one invites
+    reading it."""
+    import contextlib
+    import io as _io
+    sel = _bk("Tiny", 0.58, 5, 0.40) + _bk("DraftKings", 0.58, 120, 0.46)
+    rej = _bk("DraftKings", 0.59, 200, 0.60, "loose")
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        sc.report_books(sel, rej)
+    line = [x for x in buf.getvalue().split("\n") if x.strip().startswith("Tiny")]
+    assert line and line[0].count("—") == 4, line
+
+
+def test_the_book_section_never_claims_to_be_an_adjustment():
+    import contextlib
+    import io as _io
+    sel = _bk("DraftKings", 0.58, 120, 0.46)
+    rej = _bk("DraftKings", 0.59, 200, 0.60, "loose")
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        sc.report_books(sel, rej)
+    out = buf.getvalue()
+    assert "MEDIATOR" in out
+    assert "nothing here is an adjusted estimate" in out
+    assert "FLOOR" in out
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

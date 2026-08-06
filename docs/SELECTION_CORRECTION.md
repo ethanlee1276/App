@@ -178,6 +178,15 @@ before it happens, rather than discovering it on a Tuesday.
   all — `bookcheck`'s field reconstruction is currently too noisy to rule
   this out (its field spread is 23.33%, five times the effect it measures).
 
+  **This is now testable.** `selcheck --across` reports a per-book gap
+  table, a within-book pooled difference, and the selected side split by
+  whether its book appears on the rejected side at all. The within-book
+  number is a FLOOR, not an estimate: book is a mediator, so conditioning
+  on it removes part of the effect deliberately. Read it one way only — if
+  the difference survives inside books, composition is not the
+  explanation; if it fades, mediated selection and a broken price feed
+  both predict that and the test cannot separate them.
+
 ## 10. Order
 
 1. `selcheck.py` — the edge-bucket test. Diagnostic only, ships nothing.
