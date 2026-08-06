@@ -216,14 +216,117 @@ def test_refitting_on_corrected_claims_destroys_the_correction():
     assert abs(honest - first) < 1e-6, (honest, first)
 
 
-def test_nothing_unfroze_a_market():
-    """journalfit still owns-and-skips. The capture changed no behaviour."""
+def test_the_unfreeze_un_corrects_before_it_refits():
+    """This test used to assert the OPPOSITE, and the change is the point.
+
+    It read `test_nothing_unfroze_a_market` and pinned the skip in place, so
+    that unfreezing could only ever be a deliberate act rather than an
+    accident. The act has now been taken: guardfit measured a ~12-point
+    over-claim at every price band, which a frozen correction can never
+    learn away, and the two halves this file proves are what make the
+    unfreeze safe.
+
+    What must never come back is the NAIVE refit. Fitting on corrected
+    claims and storing the result replaces a working correction with ~1.0 —
+    demonstrated on real fitted numbers in the test above. So the guard is
+    no longer "does it skip" but "does it un-correct first".
+    """
     import inspect
 
     from engine import journalfit
     src = inspect.getsource(journalfit.fit_temperatures)
-    assert "if key in stored:" in src
-    assert 'out["owned"].append' in src
+    assert "as_over_raw" in src, (
+        "the refit must go through as_over_raw, which removes the live "
+        "correction; as_over alone fits on corrected claims and destroys "
+        "the correction it overwrites"
+    )
+    assert "_correction_for" in src, (
+        "each row needs the correction that was live when IT was logged, "
+        "decided per row — a per-key assumption un-corrects rows that "
+        "predate the fit and invents a correction they never carried"
+    )
+    # And the skip is genuinely gone, so a key can deepen.
+    assert 'out["owned"].append' not in src
+
+
+def test_a_refit_recovers_the_true_distortion_a_frozen_fit_could_not():
+    """End to end, on the shape the real journal has.
+
+    An over-confident model, a correction fitted early on the first 200
+    settled bets, then hundreds more logged UNDER that correction. The
+    frozen behaviour keeps the early answer forever; the refit uses all of
+    them and lands on the true distortion.
+    """
+    import json
+    import sqlite3
+    import tempfile
+    from pathlib import Path
+
+    from engine import journalfit as jf
+
+    rng = random.Random(3)
+    TRUE_T = 1.75
+
+    def draw():
+        raw = rng.uniform(0.35, 0.85)
+        return raw, 1 if rng.random() < cal.apply_temperature(raw, TRUE_T) else 0
+
+    d = Path(tempfile.mkdtemp())
+    store = d / "cal.json"
+    conn = sqlite3.connect(d / "l.db")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE bets (sport TEXT, market TEXT, player TEXT, "
+                 "side TEXT, hit_prob REAL, projection REAL, actual REAL, "
+                 "status TEXT, ts TEXT, cal_temp REAL, cal_bias REAL)")
+
+    early = [draw() for _ in range(200)]
+    first = cal.fit([(p, o) for p, o in early], sport="mlb", market="strikeouts")
+    assert 1.5 < first.temperature < 2.0, first.temperature
+    store.write_text(json.dumps(
+        {"mlb:strikeouts": dict(first.to_dict(), fitted_at="2026-01-01")}))
+
+    rows = [("mlb", "strikeouts", "X", "OVER", p, None, None,
+             "won" if o else "lost", "2025-06-01", None, None) for p, o in early]
+    for _ in range(600):
+        raw, o = draw()
+        rows.append(("mlb", "strikeouts", "X", "OVER",
+                     cal.apply_temperature(raw, first.temperature, first.intercept),
+                     None, None, "won" if o else "lost", "2026-03-01", None, None))
+    conn.executemany("INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows)
+    conn.commit()
+
+    out = jf.fit_temperatures(conn, path=store, dry_run=True)
+    assert len(out["refitted"]) == 1, out
+    r = out["refitted"][0]
+    assert r["n"] == 800, r["n"]
+    # Rows are split by when they were logged, not lumped together.
+    assert r["provenance"] == {"logged": 0, "stamped": 600, "raw": 200}, r["provenance"]
+    # The refit lands near the true distortion…
+    assert abs(r["temperature"] - TRUE_T) < 0.25, r["temperature"]
+
+    # …where the naive refit — the one this whole design exists to avoid —
+    # would have replaced a working correction with almost nothing.
+    naive = cal.fit_temperature(
+        [jf.as_over(x[4], "OVER", x[7]) for x in rows], min_samples=200)
+    assert naive < 1.35, naive
+    assert abs(naive - r["temperature"]) > 0.3, (naive, r["temperature"])
+
+
+def test_a_row_that_predates_the_correction_is_left_alone():
+    """Un-correcting a row that was never corrected would invent a
+    correction it never carried, and inflate the refit."""
+    from engine import journalfit as jf
+
+    entry = {"temperature": 1.8, "intercept": 0.1}
+    old = {"cal_temp": None, "cal_bias": None, "ts": "2025-01-01"}
+    new = {"cal_temp": None, "cal_bias": None, "ts": "2026-06-01"}
+    logged = {"cal_temp": 2.2, "cal_bias": -0.05, "ts": "2026-06-01"}
+
+    assert jf._correction_for(old, entry, "2026-01-01") == (None, "raw")
+    assert jf._correction_for(new, entry, "2026-01-01") == ((1.8, 0.1), "stamped")
+    # The row's own stamp always wins over the store's — the store holds
+    # today's correction, the row holds the one it was actually priced under.
+    assert jf._correction_for(logged, entry, "2026-01-01") == ((2.2, -0.05), "logged")
 
 
 if __name__ == "__main__":

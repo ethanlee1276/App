@@ -154,6 +154,12 @@ class Calibration:
     brier_after: float = 0.0
     market: str = ""
     sport: str = ""
+    #: When this correction was fitted, ISO date. Every journal row logged
+    #: after it was priced UNDER it, and every row before it was not — which
+    #: is the single fact a refit needs in order to un-correct the right
+    #: rows and leave the rest alone. It was missing, so the first refit has
+    #: to infer it from the store's mtime; nothing fitted from here on does.
+    fitted_at: str = ""
 
     @property
     def at_boundary(self) -> bool:
@@ -195,6 +201,7 @@ class Calibration:
             "brier_before": round(self.brier_before, 5),
             "brier_after": round(self.brier_after, 5),
             "market": self.market, "sport": self.sport,
+            "fitted_at": self.fitted_at,
         }
 
 

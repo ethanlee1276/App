@@ -25,6 +25,20 @@ def _print_block(name: str, res: dict) -> None:
         print(f"  fitted    {f['key']:22} n={f['n']:,}  " +
               (f"T={f['temperature']}" if "temperature" in f
                else f"adopted={f['adopted']} players={f['players']}"))
+    for f in res.get("refitted", []):
+        pv = f.get("provenance", {})
+        arrow = f"T {f['was_temperature']} → {f['temperature']}"
+        print(f"  REFIT     {f['key']:22} n={f['n']:,}  {arrow}")
+        print(f"            was fitted on {f['was_samples']:,} bets; "
+              f"b {f.get('was_intercept', 0):+.3f} → {f['intercept']:+.3f}")
+        print(f"            Brier {f['brier_before']} → {f['brier_after']}"
+              + ("   AT SEARCH BOUNDARY" if f["at_boundary"] else ""))
+        print(f"            rows un-corrected: {pv.get('logged', 0)} from the "
+              f"row's own stamp, {pv.get('stamped', 0)} from the store's, "
+              f"{pv.get('raw', 0)} already raw")
+        if f.get("stamp_inferred"):
+            print("            (store had no fitted_at — the split above was "
+                  "inferred from its mtime, so this refit is conservative)")
     for f in res["owned"]:
         print(f"  owned     {f['key']:22} (a deeper fitter holds this key)")
     for f in res["collecting"]:

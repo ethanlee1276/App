@@ -186,7 +186,7 @@ def test_the_report_ships_in_the_record_export():
 
 def test_the_page_renders_the_loop_on_every_scope():
     fn = _fn(APP, "recSelfTuningSection")
-    for needle in ("The model tunes itself", "Last new fit", "Markets tuned",
+    for needle in ("The model tunes itself", "Last fit", "Markets tuned",
                    "Self-closed", "Improving", "Is it getting better?"):
         assert needle in fn, needle
     # On EVERY scope, filtered to the sport being viewed. Each league fits
@@ -209,22 +209,28 @@ def test_an_empty_or_absent_block_renders_nothing_not_a_crash():
     assert "(m.samples ?? 0).toLocaleString" in fn
 
 
-def test_the_refit_stamp_does_not_claim_to_move_on_every_settle():
-    """The caption used to read "runs itself after every settle". It doesn't.
+def test_the_refit_caption_matches_what_the_fitter_now_does():
+    """This caption has tracked the fitter through two states, and has to
+    keep tracking it.
 
-    The stamp is the calibration store's mtime, and journalfit.fit_temperatures
-    writes that file only when it fits a key it does not already own — a
-    corrected market is deliberately skipped, because its later journal rows
-    were produced under the correction. So on a book whose markets are all
-    fitted, the date sits still forever, and the old copy made a finished
-    feature read as a broken one. This pins the two halves together: the page
-    describes the freeze, and the fitter still implements it.
+    It first read "runs itself after every settle", which was untrue. It was
+    corrected to say the stamp moved only on a market's FIRST fit — accurate
+    while the fitter skipped any market it had already corrected. That skip
+    is gone: a refit un-corrects each row by whatever was live when it was
+    logged, so every market refits from the whole journal and the stamp
+    moves whenever one learns something.
+
+    So the copy must no longer describe a freeze, and the fitter must no
+    longer implement one. Both halves, pinned together, in both directions.
     """
     import inspect
 
     from engine import journalfit
     src = inspect.getsource(journalfit.fit_temperatures)
-    assert "if key in stored:" in src, "the freeze is gone; the copy now lies"
+    assert 'out["owned"].append' not in src, (
+        "the fitter froze corrected markets again; the copy now lies"
+    )
+    assert "as_over_raw" in src, "a refit that does not un-correct is not a refit"
 
     # Strip the HTML comments first: one of them quotes the old wording on
     # purpose, so the record of the bug survives without tripping the check
@@ -233,8 +239,18 @@ def test_the_refit_stamp_does_not_claim_to_move_on_every_settle():
     fn = re.sub(r"<!--.*?-->", "", _fn(APP, "recSelfTuningSection"), flags=re.S)
     flat = " ".join(fn.split())
     assert "after every settle" not in flat
-    assert "fitted for the first time" in flat
-    assert "left alone" in flat.lower()
+    # The freeze is gone, so the copy that described it must be gone too.
+    assert "fitted for the first time" not in flat
+    # Specifically the freeze's own wording. Not a bare "left alone" — the
+    # recency-dial copy in the same block legitimately says a dial was
+    # "examined and left alone", which is a different feature entirely.
+    assert "corrected market is then left alone" not in flat
+    assert "refit" in flat.lower(), "the caption must say what now happens"
+    assert "un-corrected" in flat.lower(), (
+        "the un-correction is the whole reason a refit is safe; a caption "
+        "that says 'we refit every night' without it describes the naive "
+        "version, which destroys the correction"
+    )
 
 
 def test_a_rejected_player_memory_still_shows_what_it_scored():

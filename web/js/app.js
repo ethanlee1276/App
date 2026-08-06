@@ -3837,22 +3837,29 @@ function recSelfTuningSection(st, sport) {
   const lastRefit = st.last_refit ? st.last_refit.replace("T", " ") : "—";
   return `
     <div class="section-title">The model tunes itself
-      <span class="sub">— a market is fitted once it clears 200 settled bets, and then
-      LEFT ALONE. This is the site's AI lane: arithmetic on outcomes, reproducible and
-      auditable, which is exactly why a chatbot never sets a probability here.</span></div>
+      <span class="sub">— a market is fitted once it clears 200 settled bets, and
+      REFITTED from every settled bet after that. This is the site's AI lane:
+      arithmetic on outcomes, reproducible and auditable, which is exactly why a
+      chatbot never sets a probability here.</span></div>
     <div class="stats">
-      <!-- This said "runs itself after every settle", which was not true and
-           read as a broken feature when the date sat still for a day. The
-           fitter DOES run after every settle; it deliberately skips any
-           market it has already corrected, because those bets' outcomes
-           were produced under the correction and refitting on them would
-           compound. So the stamp only moves when a market is fitted for the
-           FIRST time. Saying so is the difference between a frozen number
-           that looks broken and one that looks finished. -->
-      <div class="tile"><div class="k">Last new fit</div><div class="v" style="font-size:var(--fs-lg)">${escapeHtml(lastRefit)}</div>
-        <div class="tile-sub">moves when a market is fitted for the first time —
-          a corrected market is then left alone, since its later results
-          were produced under that correction</div></div>
+      <!-- The history of this caption is worth keeping, because it tracked a
+           real defect for as long as the defect existed.
+
+           It first said "runs itself after every settle", which was untrue.
+           It was corrected to say the stamp only moves on a market's FIRST
+           fit — accurate, because the fitter skipped any market it had
+           already corrected: those bets were priced UNDER the correction and
+           refitting on them naively replaces a working number with ~1.0.
+
+           That skip is now gone. A refit un-corrects each row by whatever was
+           live when it was logged, so the whole journal is fittable and the
+           stamp moves whenever any market learns something. The freeze was
+           never the goal; it was the price of not having the inverse wired
+           up. -->
+      <div class="tile"><div class="k">Last fit</div><div class="v" style="font-size:var(--fs-lg)">${escapeHtml(lastRefit)}</div>
+        <div class="tile-sub">every market refits from the whole journal —
+          each bet's claim is un-corrected by whatever was live when it was
+          placed, so a correction can deepen instead of freezing</div></div>
       <div class="tile"><div class="k">Markets tuned</div><div class="v">${markets.length}</div></div>
       <div class="tile"><div class="k">Self-closed</div><div class="v">${closed.length}</div>
         <div class="tile-sub">a fit at its boundary shuts its own market</div></div>

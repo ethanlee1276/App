@@ -200,10 +200,24 @@ def test_journal_temperatures_fit_merge_and_never_compound():
     assert t["fitted"][0]["temperature"] > 1.5      # said 65%, hit 50%
     stored = json.load(open(path))
     assert stored["mlb:hits"]["temperature"] == 1.1  # merge, not replace
-    # Second run: the key exists, its journal rows are now
-    # post-correction — owned, never refit here.
+    first = t["fitted"][0]["temperature"]
+
+    # Second run: the key exists now, so it REFITS rather than being skipped.
+    # Every row here was logged before the correction was fitted, so every
+    # row is already the model's own claim and nothing is un-corrected — the
+    # refit therefore has to land on the same answer. That is the
+    # non-compounding property, tested where it actually bites: a fitter
+    # that double-counted would climb on the second pass.
     t2 = jf.fit_temperatures(conn, path=path)
-    assert t2["fitted"] == [] and [x["key"] for x in t2["owned"]] == ["wnba:pts"]
+    assert t2["fitted"] == [], t2["fitted"]
+    assert [x["key"] for x in t2["refitted"]] == ["wnba:pts"]
+    again = t2["refitted"][0]
+    assert again["temperature"] == first, (again["temperature"], first)
+    assert again["provenance"]["raw"] == again["n"], again["provenance"]
+
+    # And a third pass does not drift either.
+    t3 = jf.fit_temperatures(conn, path=path)
+    assert t3["refitted"][0]["temperature"] == first
 
 
 def test_journal_temperatures_respect_the_floor():
