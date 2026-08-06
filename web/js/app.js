@@ -4304,6 +4304,47 @@ async function renderStandingRecord() {
     <b class="${neg ? "neg" : ""}">${o.wins || 0}-${o.losses || 0}-${o.pushes || 0}</b>
     <span>${o.settled} settled${o.open ? ` · ${o.open} open` : ""}</span>
     <span>Every pick journaled at its real book price and graded in public.</span>`;
+  // The one-line version carries the same claim. Filled from the same
+  // object, so the two can never disagree — the full masthead and the
+  // brief one are two renderings of one fact, not two facts.
+  const brief = document.getElementById("mb-rec");
+  if (brief) {
+    brief.textContent =
+      `${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}%  ·  ` +
+      `${o.wins || 0}-${o.losses || 0}${o.pushes ? `-${o.pushes}` : ""}`;
+    brief.classList.toggle("neg", neg);
+  }
+}
+
+/* The masthead runs its full pitch once.
+ *
+ * It is ~790px on a phone — mark, wordmark, tagline, running ROI, record,
+ * the journaling promise, the status chips — doing real work for a
+ * first-time reader and none at all for the fifth visit, ahead of the
+ * picks, every load. So it shows in full, marks itself seen, and collapses
+ * to one line from then on. The line expands the whole block back, so a
+ * reader who wants the pitch again can have it; nothing is removed.
+ *
+ * The flag is written on the FIRST load rather than on leaving, because a
+ * reader who bounces has still seen it, and because there is no reliable
+ * moment on the way out to write anything. */
+function initMasthead() {
+  const btn = document.getElementById("masthead-brief");
+  if (!btn) return;
+  try {
+    if (!localStorage.getItem("qb-seen-intro"))
+      localStorage.setItem("qb-seen-intro", String(Date.now()));
+  } catch (e) {}
+  /* A toggle has to toggle. The expanded state keeps this same button —
+     collapsed to a quiet "Hide" under the full block — rather than
+     removing it, because a control that vanishes on activation strands
+     the reader in the state they just left AND throws away keyboard
+     focus mid-interaction. */
+  btn.addEventListener("click", () => {
+    const open = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", open ? "false" : "true");
+    btn.title = open ? "Show the full masthead" : "Hide the full masthead";
+  });
 }
 
 /* The Lab — the walk-forward backtests, published.
@@ -8000,4 +8041,5 @@ if (document.fonts && document.fonts.ready) {
 // §9: the standing record is masthead chrome, not a page — it renders once
 // at boot and is independent of which view or sport is showing.
 renderStandingRecord();
+initMasthead();
 load();

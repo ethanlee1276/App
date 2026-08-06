@@ -2868,14 +2868,22 @@ select.calc-in { width: auto; font-weight: 600; }
      why ordering it against `.menu-toggle` did nothing and margin-left:auto
      did nothing — neither is a flex sibling of anything here. It simply
      takes the fourth column restored above. */
-  #theme-toggle { position: static; }
+  /* `relative`, not `static` — and the difference is not cosmetic. This
+     rule is an ID (1,0,0) and beat the `.slate-meta .theme-toggle`
+     declaration below (0,2,0), so the toggle was genuinely unpositioned.
+     Its 44px reach pseudo-element then resolved against the nearest
+     positioned ancestor, which is the sticky `.topbar` — so the invisible
+     hit target sat 44x44 in the DEAD CENTRE of the header on every phone
+     view, swallowing taps on whatever happened to be there.
+     `relative` lays out identically to `static` (no offsets are set) and
+     makes the toggle the containing block its own pseudo needs. */
+  #theme-toggle { position: relative; }
   /* Tighter gap and a slightly smaller toggle: giving the toggle its own
      column costs the date ~48px, and "Sat, Jun …" truncating the month is
      a worse trade than 6px of breathing room. 36px still clears the 36px
      touch floor for a control sitting inside a larger tappable row. */
   .slate-meta { gap: 6px; flex-wrap: nowrap; overflow: hidden; }
-  .slate-meta .theme-toggle { width: 36px; height: 36px; font-size: var(--fs-xl);
-    position: relative; }
+  .slate-meta .theme-toggle { width: 36px; height: 36px; font-size: var(--fs-xl); }
   /* The BOX shrinks, the reach does not — same trick the "why?" pill uses.
      36px is under Apple's 44px minimum, and a control you have to aim at
      is a control you stop using. */
@@ -3417,3 +3425,100 @@ select.calc-in { width: auto; font-weight: 600; }
 .lab-bar { display: inline-block; height: 8px; min-width: 1px; border-radius: 0; background: var(--good); opacity: .55; }
 .lab-bar.neg { background: var(--bad); }
 .lab-bins td, .lab-bins th { white-space: nowrap; }
+
+
+/* ============================================================
+   The masthead, after you have met it
+   ============================================================
+   Measured on an iPhone 13, the full masthead is ~790px: mark, wordmark,
+   tagline, running ROI, record, the journaling promise, and the status
+   chips. More than a phone screen of "what this is and why trust it",
+   ahead of the picks, on every single load.
+
+   That block is doing a real job for a first-time reader and no job at
+   all for the fifth visit. So it runs once. After that the same two facts
+   — what this is, and what the record is — sit on one line, and the full
+   block is one tap away. Nothing is removed; the pitch is just not
+   re-delivered to someone who has heard it.
+
+   Keyed off <html class="intro-seen">, set before first paint.
+
+   Only below 1248px, and that number is measured, not chosen for
+   tidiness. Above it the header lays the identity and the status row out
+   side by side, so removing the wordmark buys nothing: the picks sat at
+   369px with the full masthead and 370px without it. Trading the name of
+   the site for negative one pixel is not a trade. Below it the header is
+   stacked and the saving is real — 43px at 1024, 54px at 760, 105px on a
+   phone — which is where the complaint came from. */
+.masthead-brief { display: none; }
+
+@media (max-width: 1247px) {
+
+/* Hidden only while the brief line is COLLAPSED, rather than hidden and
+   then un-hidden. `display: revert` was the obvious way to bring them
+   back and it is wrong: both the `none` and the original `flex` are
+   author-origin declarations, so reverting drops the whole author origin
+   and lands on the UA default — `.brand-home` came back as an inline <a>,
+   which stacked the mark above the wordmark and ran the record into one
+   paragraph. Expanded has to be pixel-identical to a first visit, so the
+   rule simply must not match there. */
+:root.intro-seen:not(:has(.masthead-brief[aria-expanded="true"])) .brand-home,
+:root.intro-seen:not(:has(.masthead-brief[aria-expanded="true"])) .standing {
+  display: none;
+}
+
+:root.intro-seen .masthead-brief {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 10px 0; background: none; border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-dim); cursor: pointer; text-align: left;
+  font: inherit;
+}
+.masthead-brief .mb-mark { flex: 0 0 auto; width: 20px; height: 20px; }
+.masthead-brief .mb-mark svg {
+  width: 100%; height: 100%; stroke: var(--brand); stroke-width: 3.5;
+}
+.masthead-brief .mb-name {
+  font-family: var(--font-display); font-size: var(--fs-md);
+  color: var(--text); letter-spacing: .01em;
+}
+/* The record is the point of the line — it is the one claim this site
+   makes that a picks service will not. Numeric font so it lines up with
+   every other figure on the page. */
+.masthead-brief .mb-rec {
+  margin-left: auto; font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm); letter-spacing: .02em;
+  /* Same colour rule as the full masthead's ROI. A running record that
+     reads neutral whether it is up or down is the one presentation this
+     site cannot make — a losing number has to look like one. */
+  color: var(--good);
+}
+.masthead-brief .mb-rec.neg { color: var(--bad); }
+.masthead-brief:hover .mb-name { color: var(--brand); }
+
+/* Expanded again, by tap: the full block comes back — the same state a
+   first visit is in — and this button stays, demoted to a "Hide" at the
+   end of the header. It does NOT disappear. A control that removes itself
+   on activation leaves no way back without a reload, and drops keyboard
+   focus onto nothing at the moment it is being used. */
+.masthead-brief .mb-hide { display: none; }
+:root.intro-seen .masthead-brief[aria-expanded="true"] {
+  /* Past .slate-meta's order:10, so it closes the header instead of
+     opening it — the full masthead is the identity now, and this is only
+     the way out of it. */
+  order: 11; padding: 4px 0 0; border-bottom: 0;
+  font-size: var(--fs-2xs); letter-spacing: .16em; text-transform: uppercase;
+}
+:root.intro-seen .masthead-brief[aria-expanded="true"] .mb-mark,
+:root.intro-seen .masthead-brief[aria-expanded="true"] .mb-name,
+:root.intro-seen .masthead-brief[aria-expanded="true"] .mb-rec {
+  display: none;
+}
+:root.intro-seen .masthead-brief[aria-expanded="true"] .mb-hide {
+  display: inline; margin-left: auto;
+}
+:root.intro-seen .masthead-brief[aria-expanded="true"]:hover .mb-hide {
+  color: var(--brand);
+}
+
+} /* end @media (max-width: 1247px) — the compact masthead */

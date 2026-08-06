@@ -10,6 +10,15 @@
   <meta name="apple-mobile-web-app-title" content="Qellys Book" />
   <meta name="theme-color" content="#0f1420" />
   <link rel="stylesheet" href="css/styles.css" />
+  <!-- Decided BEFORE first paint, or the full masthead renders and then
+       collapses — a 790px jump on every load, which is worse than the
+       problem it fixes. Same reason a theme flag goes here. -->
+  <script>
+    try {
+      if (localStorage.getItem("qb-seen-intro"))
+        document.documentElement.classList.add("intro-seen");
+    } catch (e) {}
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -143,6 +152,25 @@
          restating it. -->
     <a class="standing" id="standing-record" href="#record"
        title="Every pick journaled at its real book price and graded in public"></a>
+    <!-- Shown only once the intro has been seen. It carries the same two
+         facts the full masthead leads with — what this is, and what the
+         record is — on one line, and expands the full block back. Nothing
+         is hidden permanently: a first-time reader gets the whole pitch,
+         and anyone who has had it gets their screen back. -->
+    <button class="masthead-brief" id="masthead-brief" type="button"
+            aria-expanded="false"
+            title="Show the full masthead">
+      <span class="mb-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
+          <ellipse cx="24" cy="24" rx="17" ry="11.5" />
+        </svg>
+      </span>
+      <span class="mb-name">Qellys Book</span>
+      <span class="mb-rec" id="mb-rec"></span>
+      <!-- Only rendered in the expanded state, where this same button is
+           the way back. -->
+      <span class="mb-hide">Hide</span>
+    </button>
   </header>
 
   <main>
