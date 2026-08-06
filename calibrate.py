@@ -22,6 +22,7 @@ Ingest real history first, e.g.:
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 
 from engine import calibrate as cal
 from engine import db as _db
@@ -94,6 +95,12 @@ def main() -> None:
             print(f"  {label:16} skipped — {err}")
             continue
         c, report = got
+        # Stamp who fitted this and when. The journal fitter reads the basis
+        # to decide what it may refit, and an unstamped entry is treated as
+        # this fitter's — correct for the ones already on disk, but only a
+        # stamp makes it true rather than assumed.
+        c.basis = cal.BASIS_HISTORY
+        c.fitted_at = _dt.date.today().isoformat()
         print(f"  {label:16} {c.samples:>5} settled   "
               f"Brier {c.brier_before:.4f} → {c.brier_after:.4f}   "
               f"T = {c.temperature}  bias = {c.intercept:+.2f}")

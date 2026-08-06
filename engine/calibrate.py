@@ -40,6 +40,10 @@ DEFAULT_PATH = Path(__file__).parent.parent / "data" / "models" / "calibration.j
 _GRID = [round(0.40 + 0.02 * i, 2) for i in range(281)]
 GRID_MIN, GRID_MAX = _GRID[0], _GRID[-1]
 
+#: The two fitters that write this store, named so an entry can say which
+#: one made it. journalfit.BASIS is the other half of the pair.
+BASIS_HISTORY = "history"
+
 
 def apply_temperature(p: float, temperature: float, intercept: float = 0.0) -> float:
     """Rescale a probability in log-odds space.
@@ -160,6 +164,16 @@ class Calibration:
     #: rows and leave the rest alone. It was missing, so the first refit has
     #: to infer it from the store's mtime; nothing fitted from here on does.
     fitted_at: str = ""
+    #: WHICH fitter produced this, and it is load-bearing. Two of them write
+    #: to this one store: the deep fitter (calibrate.py) on hundreds of
+    #: thousands of ingested player-game outcomes, and the journal fitter
+    #: (journalfit.py) on a few hundred settled bets. They are not
+    #: interchangeable and the journal one must never overwrite the other —
+    #: 479 bets replacing 282,862 samples is a loss of three orders of
+    #: magnitude of evidence. An entry with no basis is treated as NOT the
+    #: journal fitter's, because the ones already on disk are the deep
+    #: fitter's and guessing the other way is the expensive mistake.
+    basis: str = ""
 
     @property
     def at_boundary(self) -> bool:
@@ -201,7 +215,7 @@ class Calibration:
             "brier_before": round(self.brier_before, 5),
             "brier_after": round(self.brier_after, 5),
             "market": self.market, "sport": self.sport,
-            "fitted_at": self.fitted_at,
+            "fitted_at": self.fitted_at, "basis": self.basis,
         }
 
 

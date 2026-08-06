@@ -245,8 +245,17 @@ def test_the_unfreeze_un_corrects_before_it_refits():
         "decided per row — a per-key assumption un-corrects rows that "
         "predate the fit and invents a correction they never carried"
     )
-    # And the skip is genuinely gone, so a key can deepen.
-    assert 'out["owned"].append' not in src
+    # `owned` still exists, and must: it is now the DEEP fitter's keys, not
+    # this fitter's own. What must not come back is skipping a key merely
+    # because it has been fitted before — the ownership test has to read the
+    # basis, so that "already corrected" and "somebody else's correction"
+    # stop being the same branch. Conflating them is what froze this fitter
+    # for months, and un-conflating them wrong is what nearly overwrote
+    # 282,862 samples with 479.
+    assert 'was.get("basis")' in src, (
+        "ownership must be decided by WHO fitted the key, not by whether it "
+        "has been fitted"
+    )
 
 
 def test_a_refit_recovers_the_true_distortion_a_frozen_fit_could_not():
@@ -283,7 +292,8 @@ def test_a_refit_recovers_the_true_distortion_a_frozen_fit_could_not():
     first = cal.fit([(p, o) for p, o in early], sport="mlb", market="strikeouts")
     assert 1.5 < first.temperature < 2.0, first.temperature
     store.write_text(json.dumps(
-        {"mlb:strikeouts": dict(first.to_dict(), fitted_at="2026-01-01")}))
+        {"mlb:strikeouts": dict(first.to_dict(), fitted_at="2026-01-01",
+                                basis=jf.BASIS)}))
 
     rows = [("mlb", "strikeouts", "X", "OVER", p, None, None,
              "won" if o else "lost", "2025-06-01", None, None) for p, o in early]
@@ -310,6 +320,94 @@ def test_a_refit_recovers_the_true_distortion_a_frozen_fit_could_not():
         [jf.as_over(x[4], "OVER", x[7]) for x in rows], min_samples=200)
     assert naive < 1.35, naive
     assert abs(naive - r["temperature"]) > 0.3, (naive, r["temperature"])
+
+
+def test_the_deep_fitters_work_is_never_refitted_from_the_journal():
+    """The bug the first dry run caught, before it shipped.
+
+    calibrate.py and journalfit.py write to the SAME store. The deep fitter
+    walks the ingested history DB and produces corrections on hundreds of
+    thousands of player-game outcomes; this fitter has a few hundred settled
+    bets. The first cut of the unfreeze refitted every stored key, which on
+    a real book meant offering to replace a fit on 282,862 samples with one
+    on 479 — three orders of magnitude of evidence, gone.
+
+    A missing basis counts as NOT the journal fitter's, because every entry
+    written before the field existed belongs to the deep fitter. The two
+    mistakes are not symmetric: declining to refit our own key costs one
+    release, refitting someone else's destroys the best evidence there is.
+    """
+    import json
+    import sqlite3
+    import tempfile
+    from pathlib import Path
+
+    from engine import journalfit as jf
+
+    rng = random.Random(5)
+    d = Path(tempfile.mkdtemp())
+    store = d / "cal.json"
+    conn = sqlite3.connect(d / "l.db")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE bets (sport TEXT, market TEXT, player TEXT, "
+                 "side TEXT, hit_prob REAL, projection REAL, actual REAL, "
+                 "status TEXT, ts TEXT, cal_temp REAL, cal_bias REAL)")
+    conn.executemany(
+        "INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        [("mlb", "hits", "X", "OVER", rng.uniform(.4, .8), None, None,
+          "won" if rng.random() < .45 else "lost", "2026-05-01", None, None)
+         for _ in range(600)])
+    conn.commit()
+
+    deep = {"temperature": 1.42, "intercept": 0.04, "samples": 282862,
+            "market": "hits", "sport": "mlb"}
+    for entry in (deep, dict(deep, basis="history"), dict(deep, basis="")):
+        store.write_text(json.dumps({"mlb:hits": entry}))
+        out = jf.fit_temperatures(conn, path=store, dry_run=True)
+        assert out["refitted"] == [], entry
+        assert [x["key"] for x in out["owned"]] == ["mlb:hits"], entry
+        # And it says how lopsided the trade would have been.
+        assert out["owned"][0]["samples"] == 282862
+        assert out["owned"][0]["journal_n"] == 600
+
+    # Its own key, by contrast, is refittable.
+    store.write_text(json.dumps({"mlb:hits": dict(deep, basis=jf.BASIS)}))
+    out = jf.fit_temperatures(conn, path=store, dry_run=True)
+    assert [x["key"] for x in out["refitted"]] == ["mlb:hits"]
+
+
+def test_a_new_journal_fit_stamps_itself_as_one():
+    """Otherwise the very next pass reads its own work as the deep
+    fitter's and refuses to touch it — the freeze back by another door."""
+    import sqlite3
+    import tempfile
+    from pathlib import Path
+
+    from engine import journalfit as jf
+
+    rng = random.Random(9)
+    d = Path(tempfile.mkdtemp())
+    store = d / "cal.json"
+    conn = sqlite3.connect(d / "l.db")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE bets (sport TEXT, market TEXT, player TEXT, "
+                 "side TEXT, hit_prob REAL, projection REAL, actual REAL, "
+                 "status TEXT, ts TEXT, cal_temp REAL, cal_bias REAL)")
+    conn.executemany(
+        "INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        [("wnba", "pts", "X", "OVER", 0.65, None, None,
+          "won" if rng.random() < .5 else "lost", "2026-05-01", None, None)
+         for _ in range(260)])
+    conn.commit()
+
+    jf.fit_temperatures(conn, path=store)          # writes
+    import json
+    entry = json.loads(store.read_text())["wnba:pts"]
+    assert entry["basis"] == jf.BASIS
+    assert entry["fitted_at"], "a new fit must stamp when it happened"
+    # Second pass sees its own work and refits it rather than owning it.
+    out = jf.fit_temperatures(conn, path=store, dry_run=True)
+    assert [x["key"] for x in out["refitted"]] == ["wnba:pts"]
 
 
 def test_a_row_that_predates_the_correction_is_left_alone():

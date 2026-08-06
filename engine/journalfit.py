@@ -37,6 +37,11 @@ import json
 from pathlib import Path
 
 MIN_SAMPLES = 200
+
+#: Marks a correction as this fitter's own, so a later pass can tell it
+#: apart from the deep fitter's work in the same store. See the ownership
+#: check in fit_temperatures.
+BASIS = "journal"
 #: Relative MAE improvement the causal memory test must show. Projection
 #: error is in stat units, so the bar is relative where playerfit's Brier
 #: bar could be absolute.
@@ -185,6 +190,24 @@ def fit_temperatures(lconn, path=None, min_samples: int = MIN_SAMPLES,
     for (sport, market), pairs in sorted(groups.items()):
         key = f"{sport}:{market}"
         was = stored.get(key)
+        # Only this fitter's own corrections are refittable. The store is
+        # shared: calibrate.py fits the same keys from ingested history and
+        # writes here too, on hundreds of thousands of player-game outcomes
+        # against this fitter's few hundred settled bets. Refitting one of
+        # those would replace 282,862 samples with 479 — which is exactly
+        # what the first cut of this change did, and what the dry run caught
+        # before it shipped.
+        #
+        # A missing basis counts as NOT ours. Every entry already on disk
+        # predates the field and belongs to the deep fitter, and the two
+        # possible mistakes here are not symmetric: declining to refit our
+        # own key costs one release, refitting someone else's destroys the
+        # best evidence in the system.
+        if was is not None and was.get("basis") != BASIS:
+            out["owned"].append({"key": key, "samples": was.get("samples"),
+                                 "basis": was.get("basis") or "history",
+                                 "journal_n": len(pairs)})
+            continue
         if len(pairs) < min_samples:
             out["collecting"].append({"key": key, "n": len(pairs),
                                       "need": min_samples})
@@ -192,6 +215,7 @@ def fit_temperatures(lconn, path=None, min_samples: int = MIN_SAMPLES,
         c = cal.fit(pairs, sport=sport, market=market,
                     min_samples=min_samples)
         c.fitted_at = today
+        c.basis = BASIS
         row = {"key": key, "n": c.samples,
                "temperature": c.temperature,
                "intercept": c.intercept,

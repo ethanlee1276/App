@@ -227,8 +227,12 @@ def test_the_refit_caption_matches_what_the_fitter_now_does():
 
     from engine import journalfit
     src = inspect.getsource(journalfit.fit_temperatures)
-    assert 'out["owned"].append' not in src, (
-        "the fitter froze corrected markets again; the copy now lies"
+    assert 'was.get("basis")' in src, (
+        "the fitter went back to freezing a market merely because it had "
+        "been fitted before; the copy now lies. `owned` is still correct "
+        "for the DEEP fitter's keys — calibrate.py writes the same store "
+        "from hundreds of thousands of ingested outcomes — but this "
+        "fitter's own corrections must stay refittable."
     )
     assert "as_over_raw" in src, "a refit that does not un-correct is not a refit"
 

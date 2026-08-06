@@ -40,7 +40,12 @@ def _print_block(name: str, res: dict) -> None:
             print("            (store had no fitted_at — the split above was "
                   "inferred from its mtime, so this refit is conservative)")
     for f in res["owned"]:
-        print(f"  owned     {f['key']:22} (a deeper fitter holds this key)")
+        n = f.get("samples")
+        why = (f"{f.get('basis', 'history')} fit on {n:,} samples"
+               if isinstance(n, int) and n else "a deeper fitter holds this key")
+        extra = (f"; journal has {f['journal_n']:,}"
+                 if isinstance(f.get("journal_n"), int) else "")
+        print(f"  owned     {f['key']:22} ({why}{extra})")
     for f in res["collecting"]:
         print(f"  collecting {f['key']:21} {f['n']}/{f['need']} settled bets")
     if not any(res.values()):
