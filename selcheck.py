@@ -77,10 +77,17 @@ TARGET_BUCKETS = 5
 MIN_BUCKET_N = 20
 #: Below this many settled bets, no verdict is offered at all.
 MIN_TOTAL_N = 150
+#: Selected vs rejected: the categories the --across test compares. `main`
+#: is the published board; `loose` is the near-miss bucket — props that were
+#: priced by the same model on the same night and did NOT clear the gate.
+SELECTED, REJECTED = "main", "loose"
+#: A stratum needs this many bets on BOTH sides before it can contribute a
+#: within-stratum difference.
+MIN_STRATUM = 12
 
 
 def load(conn, sport=None, category="main") -> list[dict]:
-    q = ("SELECT sport, market, side, odds, hit_prob, edge, status, category "
+    q = ("SELECT sport, market, side, odds, book, hit_prob, edge, status, category "
          "FROM bets WHERE status IN ('won','lost') "
          "AND hit_prob IS NOT NULL AND edge IS NOT NULL")
     args: list = []
@@ -175,6 +182,150 @@ def fit_line(bs: list[dict]) -> dict:
             "level": my, "at_edge": mx,
             "intercept_at_zero": my - slope * mx,
             "bands": len(pts), "n": sum(b["n"] for b in pts)}
+
+
+def _band(b: dict) -> float:
+    """The bet's own claimed probability, in 10-point bands.
+
+    Stratifying on the CLAIM rather than on the price, because the claim is
+    what the gap is measured against and a 55% claim at -110 and at -130
+    are the same forecast being scored.
+    """
+    return math.floor(float(b["hit_prob"]) * 10) / 10.0
+
+
+def across(sel: list[dict], rej: list[dict]) -> dict:
+    """Selected vs rejected: does the gate itself pick the worse bets?
+
+    This is the comparison that has the leverage, and it took a real run to
+    see it. Testing the slope WITHIN the selected board looks inside a band
+    only 2.4-7% wide, where the curse is roughly constant; the winner's
+    curse shows up at the selection BOUNDARY. `loose` is the near-miss
+    bucket — the same model, the same night, the same markets, priced and
+    then rejected by the gate — so the two differ by the gate and little
+    else. That makes it as close to a control as this journal contains.
+
+    Two numbers are returned and the second is the one to trust:
+
+      * `raw` — the straight difference in gap. Simple, and confounded if
+        the two groups differ in composition.
+      * `adjusted` — the same difference computed WITHIN strata of
+        (market, claimed-probability band) and pooled by inverse variance.
+        If the gate is merely picking different markets or different price
+        points, this collapses; if it survives, composition is not the
+        explanation.
+
+    It is still observational. The gate is not a coin flip and nothing here
+    randomised anything.
+    """
+    a, b = _stats(sel), _stats(rej)
+    raw_d = a["gap"] - b["gap"]
+    raw_se = math.sqrt(a["se"] ** 2 + b["se"] ** 2)
+
+    groups: dict = {}
+    for r in sel:
+        groups.setdefault((r["market"], _band(r)), ([], []))[0].append(r)
+    for r in rej:
+        groups.setdefault((r["market"], _band(r)), ([], []))[1].append(r)
+
+    strata, num, den = [], 0.0, 0.0
+    for (mkt, band), (s, j) in sorted(groups.items()):
+        if len(s) < MIN_STRATUM or len(j) < MIN_STRATUM:
+            continue
+        sa, sb = _stats(s), _stats(j)
+        d = sa["gap"] - sb["gap"]
+        v = sa["se"] ** 2 + sb["se"] ** 2
+        if v <= 0:
+            continue
+        strata.append({"market": mkt, "band": band, "n_sel": len(s),
+                       "n_rej": len(j), "diff": d, "se": math.sqrt(v)})
+        num += d / v
+        den += 1.0 / v
+    adj = {"diff": num / den, "se": math.sqrt(1.0 / den)} if den else None
+    return {"sel": a, "rej": b, "raw": {"diff": raw_d, "se": raw_se},
+            "adjusted": adj, "strata": strata,
+            "covered": sum(s["n_sel"] + s["n_rej"] for s in strata)}
+
+
+def balance(sel: list[dict], rej: list[dict], key) -> list[dict]:
+    """Share of each group by some attribute — the confound check.
+
+    If the gate systematically routes one market or one book into the
+    selected side, then "selected bets are worse" could just be "that
+    market is worse", and the adjusted difference above is what settles it.
+    This table is how you SEE that rather than trusting the adjustment.
+    """
+    ks = sorted({key(r) for r in sel} | {key(r) for r in rej})
+    out = []
+    for k in ks:
+        ns = sum(1 for r in sel if key(r) == k)
+        nj = sum(1 for r in rej if key(r) == k)
+        out.append({"key": k, "n_sel": ns, "n_rej": nj,
+                    "p_sel": ns / len(sel) if sel else 0.0,
+                    "p_rej": nj / len(rej) if rej else 0.0})
+    return sorted(out, key=lambda r: -(r["n_sel"] + r["n_rej"]))
+
+
+def report_across(sel: list[dict], rej: list[dict]) -> int:
+    if len(sel) < 60 or len(rej) < 60:
+        print(f"Need 60 settled on both sides; have {len(sel)} selected "
+              f"and {len(rej)} rejected.")
+        return 0
+    r = across(sel, rej)
+    print("=" * 74)
+    print("SELECTED vs REJECTED — does the gate pick the worse bets?")
+    print("=" * 74)
+    for label, s in (("selected (main)", r["sel"]), ("rejected (loose)", r["rej"])):
+        print(f"  {label:20} {s['n']:5} bets   claimed {s['claimed']:6.1%}   "
+              f"landed {s['landed']:6.1%}   gap {s['gap']:+6.1%} ±{2 * s['se']:.1%}")
+    z = r["raw"]["diff"] / r["raw"]["se"] if r["raw"]["se"] else 0.0
+    print()
+    print(f"  raw difference       {r['raw']['diff']:+.1%}  "
+          f"±{2 * r['raw']['se']:.1%} (2σ)   z {z:+.2f}")
+    if r["adjusted"]:
+        za = r["adjusted"]["diff"] / r["adjusted"]["se"]
+        print(f"  within-strata        {r['adjusted']['diff']:+.1%}  "
+              f"±{2 * r['adjusted']['se']:.1%} (2σ)   z {za:+.2f}")
+        print(f"    pooled over {len(r['strata'])} (market × claim band) strata "
+              f"covering {r['covered']:,} of {len(sel) + len(rej):,} bets")
+    else:
+        za = None
+        print("  within-strata        no stratum has enough on both sides")
+    print()
+    verdict = za if za is not None else z
+    if verdict >= 2.0:
+        print("  → THE GATE IS SELECTING THE WORSE BETS. Rejected props are")
+        print("    better calibrated than the ones that cleared, on the same")
+        print("    model and the same nights. That is the winner's curse at")
+        print("    the boundary, and it survives adjusting for which markets")
+        print("    and which claim levels each side contains.")
+        print("    A selection correction is justified — fitted on THIS")
+        print("    difference, not on the within-band slope.")
+    elif verdict <= -2.0:
+        print("  → THE GATE IS WORKING. Selected bets beat rejected ones.")
+        print("    Whatever the over-claim is, the gate is not its cause.")
+    else:
+        print("  → NOT SEPARABLE on this sample. The two sides are not")
+        print("    distinguishable, so the boundary shows nothing either way.")
+    if r["adjusted"] and abs(z) >= 2.0 and abs(za) < 2.0:
+        print()
+        print("  NOTE: the raw difference is significant and the adjusted one")
+        print("  is not. That means composition — which markets and which")
+        print("  claim levels land on each side — explains it, not the gate.")
+    print()
+
+    print("=" * 74)
+    print("WHAT EACH SIDE IS MADE OF — the confound, shown not assumed")
+    print("=" * 74)
+    for name, key in (("market", lambda r: r["market"]),
+                      ("book", lambda r: (r.get("book") or "?"))):
+        print(f"  by {name}:")
+        print(f"    {'':22} selected   rejected")
+        for row in balance(sel, rej, key)[:8]:
+            print(f"    {str(row['key'])[:20]:22} {row['p_sel']:7.0%}   "
+                  f"{row['p_rej']:8.0%}   ({row['n_sel']}/{row['n_rej']})")
+        print()
+    return 0
 
 
 def by_market(rows: list[dict]) -> list[dict]:
@@ -303,8 +454,18 @@ def main(argv: list) -> int:
     p.add_argument("--sport", default="mlb", help="sport, or 'all'")
     p.add_argument("--category", default="main",
                    help="journal category, or 'all'")
+    p.add_argument("--across", action="store_true",
+                   help=f"compare {SELECTED!r} (selected) against "
+                        f"{REJECTED!r} (rejected by the gate)")
     a = p.parse_args(argv)
     conn = ledger.connect()
+    if a.across:
+        # Both sides at once, then split — one query, one set of filters,
+        # so the two groups cannot differ by how they were fetched.
+        rows = load(conn, sport=a.sport, category="all")
+        sel = [r for r in rows if (r.get("category") or "") == SELECTED]
+        rej = [r for r in rows if (r.get("category") or "") == REJECTED]
+        return report_across(sel, rej)
     rows = load(conn, sport=a.sport, category=a.category)
 
     # NEVER pool categories. `bets.edge` is two different quantities: on a

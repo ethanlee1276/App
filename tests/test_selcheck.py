@@ -18,6 +18,7 @@ import os
 import random
 import sqlite3
 import sys
+import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -158,14 +159,14 @@ def test_the_query_only_takes_settled_bets_that_carry_both_numbers():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.execute("CREATE TABLE bets (sport TEXT, market TEXT, side TEXT, "
-                 "odds INTEGER, hit_prob REAL, edge REAL, status TEXT, "
-                 "category TEXT)")
-    conn.executemany("INSERT INTO bets VALUES (?,?,?,?,?,?,?,?)", [
-        ("mlb", "k", "OVER", -110, 0.6, 0.05, "won", "main"),
-        ("mlb", "k", "OVER", -110, 0.6, None, "won", "main"),   # no edge
-        ("mlb", "k", "OVER", -110, None, 0.05, "won", "main"),  # no claim
-        ("mlb", "k", "OVER", -110, 0.6, 0.05, "open", "main"),  # unsettled
-        ("nfl", "r", "OVER", -110, 0.6, 0.05, "won", "main"),   # other sport
+                 "odds INTEGER, book TEXT, hit_prob REAL, edge REAL, "
+                 "status TEXT, category TEXT)")
+    conn.executemany("INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?)", [
+        ("mlb", "k", "OVER", -110, "dk", 0.6, 0.05, "won", "main"),
+        ("mlb", "k", "OVER", -110, "dk", 0.6, None, "won", "main"),   # no edge
+        ("mlb", "k", "OVER", -110, "dk", None, 0.05, "won", "main"),  # no claim
+        ("mlb", "k", "OVER", -110, "dk", 0.6, 0.05, "open", "main"),  # unsettled
+        ("nfl", "r", "OVER", -110, "dk", 0.6, 0.05, "won", "main"),   # other
     ])
     assert len(sc.load(conn, sport="mlb")) == 1
     assert len(sc.load(conn, sport="all")) == 2
@@ -264,6 +265,77 @@ def test_the_market_table_carries_a_relative_gap():
     # home runs must show the LARGER relative miss despite smaller points
     hr = [l for l in out.splitlines() if "home_runs" in l][0]
     assert hr.strip().endswith("%")
+
+
+# --- selected vs rejected: the test that actually had leverage -------------
+def _pair(market, claim, sel_rate, rej_rate, n=200, book="dk"):
+    # crc32, NOT hash(): Python randomises string hashing per process, so a
+    # hash()-seeded fixture is a different fixture every run. This test
+    # passed three times and failed the next three before that was caught.
+    rng = random.Random(zlib.crc32(f"{market}|{book}".encode()))
+    mk = lambda rate, cat: [
+        {"sport": "mlb", "market": market, "side": "OVER", "odds": -110,
+         "book": book, "hit_prob": claim, "edge": 0.04, "category": cat,
+         "status": "won" if rng.random() < rate else "lost"} for _ in range(n)]
+    return mk(sel_rate, "main"), mk(rej_rate, "loose")
+
+
+def test_a_gate_that_picks_the_worse_bets_is_caught():
+    """The real journal's shape: rejected props calibrated, selected ones
+    twelve points hot, same model and same nights."""
+    sel, rej = _pair("hits", 0.58, 0.46, 0.58, n=400)
+    r = sc.across(sel, rej)
+    assert r["raw"]["diff"] > 0.08
+    assert r["raw"]["diff"] / r["raw"]["se"] > 2.0
+    assert r["adjusted"] is not None
+    assert r["adjusted"]["diff"] / r["adjusted"]["se"] > 2.0
+
+
+def test_a_gate_that_works_is_not_called_a_curse():
+    sel, rej = _pair("hits", 0.58, 0.62, 0.50, n=400)
+    r = sc.across(sel, rej)
+    assert r["raw"]["diff"] / r["raw"]["se"] < -2.0
+
+
+def test_composition_alone_does_not_survive_the_adjustment():
+    """The confound this test exists to rule out.
+
+    Both markets are equally calibrated WITHIN themselves — no gate effect
+    at all — but the gate routes a market with a low hit rate mostly into
+    the selected side. The raw difference is large and meaningless; the
+    within-strata difference has to collapse, or the whole comparison is
+    worthless.
+    """
+    hard_s, hard_r = _pair("home_runs", 0.30, 0.20, 0.20, n=300)
+    easy_s, easy_r = _pair("hits", 0.60, 0.60, 0.60, n=300)
+    # selected is mostly the hard market, rejected mostly the easy one
+    sel = hard_s + easy_s[:40]
+    rej = hard_r[:40] + easy_r
+    r = sc.across(sel, rej)
+    assert abs(r["raw"]["diff"]) > 0.03, "fixture did not create a confound"
+    assert r["adjusted"] is not None
+    za = r["adjusted"]["diff"] / r["adjusted"]["se"]
+    assert abs(za) < 2.0, (r["adjusted"], za)
+
+
+def test_the_balance_table_shows_the_mix():
+    sel, rej = _pair("hits", 0.58, 0.46, 0.58, n=100)
+    other_s, other_r = _pair("home_runs", 0.30, 0.25, 0.25, n=100)
+    b = sc.balance(sel + other_s, rej, lambda r: r["market"])
+    by = {r["key"]: r for r in b}
+    assert by["home_runs"]["n_sel"] == 100 and by["home_runs"]["n_rej"] == 0
+    assert abs(by["hits"]["p_rej"] - 1.0) < 1e-9
+
+
+def test_across_declines_on_a_thin_side():
+    import contextlib
+    import io
+    sel, rej = _pair("hits", 0.58, 0.46, 0.58, n=20)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        sc.report_across(sel, rej)
+    assert "Need 60" in buf.getvalue()
+    assert "WINNER" not in buf.getvalue().upper()
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
