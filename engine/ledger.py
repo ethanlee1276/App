@@ -148,10 +148,17 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     # buckets (pricedout / loose / longshot), which write their own
     # inserts and do not capture this. Those rows are excluded rather than
     # assumed uncorrected — assuming is how the compounding starts.
+    # …and closing_odds, which is what makes CLV work at all on a book like
+    # this one. closing_line measures movement in LINE points, and a
+    # home-run prop is quoted OVER 0.5 and closes at 0.5 — it cannot move.
+    # On a journal that is two-thirds home runs, 84% of CLV readings were
+    # ties by construction and the average was computed off whatever few
+    # markets happened to have a movable line. Those markets move on PRICE,
+    # the snapshots have carried it all along, and nothing read it.
     for col in ("proj_minutes", "actual_minutes", "lead_min", "park_hr",
                 "wind_out", "roofed", "lineup_slot", "lineup_conf",
                 "rest_days", "body_clock", "pen_own", "pen_opp",
-                "raw_prob", "cal_temp", "cal_bias"):
+                "raw_prob", "cal_temp", "cal_bias", "closing_odds"):
         try:
             conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
         except sqlite3.OperationalError:
@@ -797,15 +804,18 @@ def _grade_side_aware(b, actual: float) -> tuple[str, float]:
 
 
 def _settle_one(conn, b, actual: float, closing_line: float | None,
-                actual_minutes: float | None = None) -> None:
+                actual_minutes: float | None = None,
+                closing_odds: float | None = None) -> None:
     """Grade one open bet and advance the bankroll."""
     status, pnl_u = _grade_side_aware(b, actual)
     pnl_d = round(pnl_u / b["stake_units"] * b["stake_dollars"], 2) if b["stake_units"] else 0.0
     conn.execute(
         "UPDATE bets SET status=?, actual=?, pnl_units=?, pnl_dollars=?, "
-        "closing_line=?, actual_minutes=? WHERE id=?",
+        "closing_line=?, actual_minutes=?, closing_odds=? WHERE id=?",
         (status, actual, round(pnl_u, 4), pnl_d, closing_line,
-         actual_minutes, b["id"]))
+         actual_minutes,
+         int(closing_odds) if closing_odds is not None else None,
+         b["id"]))
     set_cfg(conn, "bankroll", round(bankroll(conn) + pnl_d, 2))
 
 
@@ -1092,6 +1102,21 @@ def _snapshot_closes() -> dict:
     try:
         from .linemoves import load_history, closing_lines_by_date
         return closing_lines_by_date(load_history())
+    except Exception:            # never let CLV bookkeeping block settling
+        return {}
+
+
+def _snapshot_close_odds() -> dict:
+    """``{(normalized player, market, date): closing OVER price}``.
+
+    The price companion to :func:`_snapshot_closes`. Same free source, and
+    the one that makes CLV mean anything on a fixed-line market: a
+    home-run prop's LINE closes at 0.5 every night, so line CLV there is a
+    zero that says nothing, while the price moves all evening.
+    """
+    try:
+        from .linemoves import load_history, closing_odds_by_date
+        return closing_odds_by_date(load_history())
     except Exception:            # never let CLV bookkeeping block settling
         return {}
 
@@ -1610,6 +1635,13 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
                 closes_cache["_snapshots"] = _snapshot_closes()
             close_line = closes_cache["_snapshots"].get(
                 (normalize_name(b["player"]), b["market"], b["date"]))
+        # The closing PRICE, which is the only thing that moves on a
+        # fixed-line market. Captured from the same snapshots, so it costs
+        # nothing and accrues on every pull that was already paid for.
+        if "_snapshot_odds" not in closes_cache:
+            closes_cache["_snapshot_odds"] = _snapshot_close_odds()
+        close_odds = closes_cache["_snapshot_odds"].get(
+            (normalize_name(b["player"]), b["market"], b["date"]))
         # Capture the minutes actually played alongside the result, so the
         # journal can answer "did we lose because the rotation read was
         # wrong, or because she shot 3-for-12?" — the one question that
@@ -1623,7 +1655,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             if m:
                 actual_minutes = float(m["value"])
         _settle_one(conn, b, float(row["value"]), close_line,
-                    actual_minutes=actual_minutes)
+                    actual_minutes=actual_minutes, closing_odds=close_odds)
         settled += 1
 
     # --- Void the no-shows ---------------------------------------------
@@ -1822,6 +1854,49 @@ def _bet_clv(b) -> float | None:
     return move if (b["side"] or "OVER").upper() == "OVER" else -move
 
 
+def _bet_price_clv(b) -> float | None:
+    """CLV in PROBABILITY POINTS, from the price rather than the line.
+
+    The measurement line-based CLV cannot make. A home-run prop is quoted
+    OVER 0.5 and closes at 0.5 — the line is incapable of moving, so its
+    CLV is 0 forever and the whole market is invisible to the instrument.
+    Those props move on price, and a home-run over taken at +400 that
+    closes at +350 was a good bet by exactly the evidence CLV exists to
+    give.
+
+    Positive means the market moved TOWARD our side after we bet: the
+    closing price is shorter than the one we took, so we got the better
+    number. Stated in implied-probability points so it is comparable
+    across prices — 2 points at +400 and 2 points at −150 are the same
+    amount of having been right, where "50 cents of odds" is not.
+
+    OVER bets only, and that limit is real rather than laziness. The
+    snapshots record the OVER price, so for an under we would have to
+    compare the under price we took against ``1 − P(over at close)`` — and
+    those are not the same quantity, because the vig means an over and an
+    under at one book do not sum to 1. The difference is the hold, roughly
+    4–5 points, which would swamp a CLV signal measured in single points.
+    Returning None is the honest answer until the taken over price is
+    journaled alongside; overs are 85% of this book and all of the
+    home-run board, which is the part the line-based measure was blind to.
+    """
+    if (b["side"] or "OVER").upper() != "OVER":
+        return None
+    try:
+        close = b["closing_odds"]
+    except (KeyError, IndexError):
+        return None                      # pre-migration row
+    if close is None or not b["odds"]:
+        return None
+    from .odds import american_to_prob
+    try:
+        took = american_to_prob(int(b["odds"]))
+        closed = american_to_prob(int(close))
+    except (TypeError, ValueError):
+        return None
+    return closed - took
+
+
 def process_grade(b) -> str | None:
     """Grade the DECISION, not the outcome.
 
@@ -1930,6 +2005,7 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
     net_u = sum(b["pnl_units"] or 0 for b in bets)
     net_d = sum(b["pnl_dollars"] or 0 for b in bets)
     clvs = [c for c in (_bet_clv(b) for b in bets) if c is not None]
+    pclvs = [c for c in (_bet_price_clv(b) for b in bets) if c is not None]
     # Process record: of the bets where we know the close, how many were
     # good decisions regardless of result — plus the two honesty counters
     # (wins that got lucky, losses that were still good bets).
@@ -1990,6 +2066,17 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
             ((category, sport) if sport else (category,))).fetchone()[0],
         "unstaked": unstaked,
         "avg_clv": (sum(clvs) / len(clvs)) if clvs else None,
+        # CLV coverage, because an average over 44% of the book is not a
+        # book-wide number and was reading as one.
+        "clv_n": len(clvs),
+        # …and the price version, in probability points. On a fixed-line
+        # market this is the ONLY CLV there is: the line closes where it
+        # opened every night, so avg_clv reads 0 and says nothing, while
+        # the price moved all evening. Reported apart rather than mixed —
+        # line points and probability points are different units and
+        # averaging them together would be arithmetic on two things.
+        "avg_price_clv": (sum(pclvs) / len(pclvs)) if pclvs else None,
+        "price_clv_n": len(pclvs),
         "process": process,
         "by_grade": bucket("grade"), "by_market": bucket("market"),
         "by_side": bucket("side"), "by_book": bucket("book"),

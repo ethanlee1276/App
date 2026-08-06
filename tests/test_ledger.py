@@ -1803,6 +1803,72 @@ def test_the_page_prints_the_measured_breakeven_not_a_constant():
     assert "o.breakeven == null" in tile
 
 
+# --- CLV that can see a fixed-line market ------------------------------------
+def test_price_clv_measures_what_the_line_cannot():
+    """A home-run prop is quoted OVER 0.5 and closes at 0.5. Its line is
+    incapable of moving, so line CLV reads 0 forever and the whole market —
+    two thirds of this journal — is invisible to the instrument. Those
+    props move on PRICE, and the snapshots have carried it all along."""
+    took_better = {"side": "OVER", "odds": 400, "closing_odds": 350}
+    took_worse = {"side": "OVER", "odds": 400, "closing_odds": 500}
+    flat = {"side": "OVER", "odds": 300, "closing_odds": 300}
+    # Closing SHORTER than we took = the market came to us.
+    assert ledger._bet_price_clv(took_better) > 0
+    assert ledger._bet_price_clv(took_worse) < 0
+    assert ledger._bet_price_clv(flat) == 0.0
+    # In probability points, so +400→+350 and −150→−170 are comparable.
+    assert abs(ledger._bet_price_clv(took_better) - 0.0222) < 0.001
+
+
+def test_price_clv_declines_to_guess_on_an_under():
+    """The snapshots record the OVER price. Measuring an under against
+    1 − P(over at close) compares two different quantities: the vig means
+    an over and an under at one book do not sum to 1, and that hold is
+    4–5 points — enough to swamp a CLV signal measured in single points.
+    None is the honest answer until the taken over price is journaled."""
+    assert ledger._bet_price_clv(
+        {"side": "UNDER", "odds": -140, "closing_odds": 400}) is None
+
+
+def test_price_clv_survives_a_row_that_predates_the_column():
+    for bad in ({"side": "OVER", "odds": 400},
+                {"side": "OVER", "odds": 400, "closing_odds": None},
+                {"side": "OVER", "odds": 0, "closing_odds": 400}):
+        assert ledger._bet_price_clv(bad) is None
+
+
+def test_the_two_clvs_are_reported_apart_and_never_averaged_together():
+    """Line points and probability points are different units. Mixing them
+    would be arithmetic on two things that are not the same thing."""
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    for i, (took, close) in enumerate([(400, 350), (400, 500), (250, 200)] * 10):
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+            "odds,hit_prob,status,category,stake_units,pnl_units,"
+            "closing_line,closing_odds) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("2026-08-01T10:00:00", "mlb", "2026-08-01", f"P{i}", "home_runs",
+             "OVER", 0.5, "dk", took, 0.2, "lost", "main", 0.1, -0.1,
+             0.5, close))
+    conn.commit()
+    p = ledger.performance(conn)
+    # The line never moved, so the line measure is a zero that says nothing…
+    assert p["avg_clv"] == 0.0 and p["clv_n"] == 30
+    # …while the price measure has a real reading on the same bets.
+    assert p["avg_price_clv"] != 0.0 and p["price_clv_n"] == 30
+
+
+def test_the_closing_price_comes_from_the_free_snapshots():
+    """Same source as the line close: it accrues on pulls already paid for,
+    so seeing a fixed-line market costs no extra credits."""
+    import inspect
+    from engine import linemoves
+    src = inspect.getsource(linemoves.closing_odds_by_date)
+    assert "over_odds" in src
+    assert "_pregame_only" in src, "an in-play re-price could become the close"
+    assert "_median" in src, "one outlier book could define the close"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

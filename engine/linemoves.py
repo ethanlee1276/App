@@ -164,6 +164,49 @@ def closing_lines_by_date(rows: list[dict]) -> dict:
     return out
 
 
+def closing_odds_by_date(rows: list[dict]) -> dict:
+    """``{(normalized player, market, YYYY-MM-DD): closing OVER price}``.
+
+    The companion to :func:`closing_lines_by_date`, and the reason it had
+    to exist: on a fixed-line market the line never moves, so line-based
+    CLV reads 0 forever — and home-run props are quoted OVER 0.5 and close
+    at 0.5, every single time. On a journal that is two-thirds home runs
+    that is not "no edge given up", it is an instrument that cannot see.
+
+    Those markets move on PRICE. A home-run over taken at +400 and closing
+    at +350 was a good bet by exactly the evidence CLV exists to provide,
+    and the snapshots have carried `over_odds` all along without anything
+    reading it.
+
+    Same close-picking discipline as the line version: pre-game snapshots
+    only, last instant of the day, median across the books quoted at it.
+    """
+    import datetime as _dt
+    from .sources.oddsapi import normalize_name
+
+    grouped: dict[tuple, list[dict]] = {}
+    for r in rows:
+        try:
+            ts = float(r["ts"])
+            if r.get("over_odds") in (None, ""):
+                continue
+            int(r["over_odds"])                    # reject unusable rows early
+            date = _dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+            grouped.setdefault(
+                (normalize_name(r["player"]), r["market"], date), []).append(r)
+        except (KeyError, TypeError, ValueError):
+            continue
+    out: dict = {}
+    for key, items in grouped.items():
+        items = _pregame_only(items)
+        if not items:
+            continue
+        last = max(float(r["ts"]) for r in items)
+        out[key] = _median([float(r["over_odds"]) for r in items
+                            if float(r["ts"]) == last])
+    return out
+
+
 def todays_rows(rows: list[dict], now: float | None = None) -> list[dict]:
     """Only snapshots taken since local midnight.
 

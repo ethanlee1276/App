@@ -4562,8 +4562,21 @@ async function renderRecord() {
                 `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`,
                 { lead: true, tone: toneOf(o.roi) })}
       ${recTile("Avg CLV", o.avg_clv == null ? "—" : (o.avg_clv >= 0 ? "+" : "") + o.avg_clv.toFixed(2) + ' <span class="unit">pts</span>',
-                o.avg_clv == null ? "accrues as daily closes are captured" : "beat the close = sharp process",
+                o.avg_clv == null ? "accrues as daily closes are captured"
+                  : `line movement on ${o.clv_n ?? 0} bet${o.clv_n === 1 ? "" : "s"} — 0.00 where the line cannot move`,
                 { lead: true, tone: o.avg_clv == null ? "" : toneOf(o.avg_clv) })}
+      ${/* The price tile, which is the ONLY CLV a fixed-line market has.
+            A home-run prop is quoted OVER 0.5 and closes at 0.5, so the
+            line tile beside this one reads 0.00 for two thirds of the
+            book and says nothing — while the price moved all evening.
+            Kept as its own tile rather than folded in: line points and
+            probability points are different units, and averaging them
+            together would be arithmetic on two different things. */ ""}
+      ${o.avg_price_clv == null ? "" : recTile(
+          "Price CLV",
+          (o.avg_price_clv >= 0 ? "+" : "") + (o.avg_price_clv * 100).toFixed(2) + ' <span class="unit">pts</span>',
+          `how the PRICE moved on ${o.price_clv_n ?? 0} over${o.price_clv_n === 1 ? "" : "s"} — the only CLV a 0.5 line has`,
+          { lead: true, tone: toneOf(o.avg_price_clv) })}
       ${recTile("Record", `${o.wins}-${o.losses}-${o.pushes}`, `${o.open} open · ${o.settled} settled`)}
       ${/* The break-even is read off the prices this book ACTUALLY took,
             not assumed to be -110. A book that buys short prices needs far
