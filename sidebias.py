@@ -94,10 +94,21 @@ def asymmetry(over: dict, under: dict) -> dict:
 
 
 def load(conn, sport=None, market=None, category="main"):
+    """Settled bets carrying a claim. `category="all"` drops the filter.
+
+    'main' is the default because it is the record with real money in it.
+    But the miner and the hypothesis lab pool every category — on this
+    journal that is 3,134 rows against 227 — so the lab can confirm a
+    pattern these tools never see. "all" is how to look at the same book
+    it does.
+    """
     q = ("SELECT sport, market, side, hit_prob, status, projection, actual, "
-         "line, odds FROM bets WHERE status IN ('won','lost') AND category=? "
+         "line, odds, category FROM bets WHERE status IN ('won','lost') "
          "AND hit_prob IS NOT NULL")
-    args = [category]
+    args = []
+    if category != "all":
+        q += " AND category=?"
+        args.append(category)
     if sport:
         q += " AND sport=?"
         args.append(sport)
@@ -342,7 +353,8 @@ def main(argv: list) -> int:
     p = argparse.ArgumentParser(description="Is the model leaning on a side?")
     p.add_argument("--sport")
     p.add_argument("--market")
-    p.add_argument("--category", default="main")
+    p.add_argument("--category", default="main",
+                   help="main (default), longshot, pricedout, loose — or 'all' to pool every bucket the way the miner and the hypothesis lab do")
     p.add_argument("--min-n", type=int, default=MIN_N)
     p.add_argument("--db")
     p.add_argument("--explain", action="store_true",

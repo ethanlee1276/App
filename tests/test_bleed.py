@@ -21,6 +21,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import bleed                                                  # noqa: E402
+from engine import ledger                                     # noqa: E402
 
 
 def bet(status="won", odds=-110, stake=1.0, market="hits", book="FanDuel",
@@ -321,6 +322,54 @@ def test_an_empty_journal_says_so_instead_of_dividing_by_zero():
     assert bleed.report([]) == 0
     s = bleed.measure([])
     assert s["n"] == 0 and s["roi"] == 0.0 and s["z"] == 0.0
+
+
+# --- which book are we even looking at ---------------------------------------
+def test_the_default_scope_is_the_real_money_record():
+    """'main' is the only bucket with real stakes and a real ROI. The paper
+    buckets — pricedout, loose, longshot — are flat-stake observations, and
+    pooling them into a P&L would report a number nobody wagered."""
+    import inspect
+    src = inspect.getsource(bleed.load)
+    assert 'category="main"' in src
+
+
+def test_category_all_pools_every_bucket_the_way_the_miner_does():
+    """engine/losspatterns.records_from_ledger has NO category filter, so
+    the miner and the hypothesis lab read every bucket pooled — on the real
+    journal that is 3,134 rows against the 227 these tools default to. The
+    lab can therefore confirm a pattern bleed never sees, and the two
+    disagreeing is confusing rather than informative unless you can look at
+    the same book it does."""
+    import inspect
+    from engine import losspatterns as lp
+    assert "category" not in inspect.getsource(lp.records_from_ledger)
+
+    conn = ledger.connect(":memory:")
+    for i in range(60):
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+            "odds,hit_prob,status,category,stake_units,pnl_units) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("2026-08-01T10:00:00", "mlb", "2026-08-01", f"P{i}", "hits",
+             "OVER", 1.5, "dk", -110, 0.6, "won" if i < 30 else "lost",
+             "main" if i < 30 else "longshot", 1.0, 0.9 if i < 30 else -1.0))
+    conn.commit()
+    assert len(bleed.load(conn)) == 30
+    assert len(bleed.load(conn, category="all")) == 60
+
+
+def test_the_bucket_is_a_slice_so_the_pooling_can_be_tested():
+    """The question the comparison exists for: do the paper buckets
+    calibrate like the real one? The fitters pool them, so if they do not,
+    a correction fitted on the pool fits neither population."""
+    assert "bucket" in bleed.DIMENSIONS
+    rows = ([bet("won", market="hits") | {"category": "main"} for _ in range(30)]
+            + [bet("lost", market="hits") | {"category": "longshot"}
+               for _ in range(30)])
+    cuts = bleed.slices(rows, min_n=25)
+    buckets = {b for d, b, _ in cuts if d == "bucket"}
+    assert buckets == {"main", "longshot"}, buckets
 
 
 if __name__ == "__main__":

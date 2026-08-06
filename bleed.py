@@ -131,12 +131,23 @@ def roi_z(rows: list[dict]) -> float:
 
 # --- the journal -------------------------------------------------------------
 def load(conn, sport=None, category="main", since=None) -> list[dict]:
+    """Settled bets. `category="all"` drops the filter.
+
+    The default is 'main' on purpose: that is the record with real money
+    and a real ROI, and it is the only one whose P&L means anything. But
+    the miner and the hypothesis lab read every category pooled, so the
+    two see different books — on this journal, 227 bets against 3,134 —
+    and "all" is how you compare them rather than wondering.
+    """
     q = ("SELECT sport, date, player, market, side, line, book, odds, grade, "
-         "status, pnl_units, stake_units, hit_prob, closing_line, "
+         "status, pnl_units, stake_units, hit_prob, closing_line, category, "
          "loss_cause, lineup_slot, park_hr, wind_out, roofed, lead_min, "
          "rest_days, body_clock, pen_own, pen_opp "
-         "FROM bets WHERE status IN ('won','lost') AND category=?")
-    args: list = [category]
+         "FROM bets WHERE status IN ('won','lost')")
+    args: list = []
+    if category != "all":
+        q += " AND category=?"
+        args.append(category)
     if sport:
         q += " AND sport=?"
         args.append(sport)
@@ -189,6 +200,11 @@ def _bucketed(b, col, edges, unit=""):
 DIMENSIONS = {
     "sport":       lambda b: b.get("sport") or "?",
     "market":      lambda b: b.get("market") or "?",
+    # Only meaningful under --category all, where it answers the question
+    # that comparison exists for: do the paper-track buckets calibrate
+    # like the real one? The fitters pool them, so if they do not, a
+    # correction fitted on the pool fits neither population.
+    "bucket":      lambda b: b.get("category") or None,
     "side":        lambda b: (b.get("side") or "?").upper(),
     "book":        lambda b: (b.get("book") or "?") or "(none)",
     "grade":       lambda b: b.get("grade") or "?",
@@ -442,7 +458,8 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
 def main(argv: list) -> int:
     p = argparse.ArgumentParser(description="Where the record is bleeding.")
     p.add_argument("--sport")
-    p.add_argument("--category", default="main")
+    p.add_argument("--category", default="main",
+                   help="main (default), longshot, pricedout, loose — or 'all' to pool every bucket the way the miner and the hypothesis lab do")
     p.add_argument("--since", help="only bets dated on or after (YYYY-MM-DD)")
     p.add_argument("--min-n", type=int, default=MIN_N,
                    help=f"slice floor (default {MIN_N})")
