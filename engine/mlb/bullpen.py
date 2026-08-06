@@ -107,6 +107,28 @@ def leash_factor(score: float, market_is_outs: bool = True) -> float:
     on every settle pass; if it hardens, THIS is the function to revisit,
     and the question to ask is whether "pen fresh" deserves a factor
     below 1.0 rather than the same 1.000 an ordinary pen gets.
+
+    **The obvious next step has since been measured, and it lost.** The
+    reason to care about the leash at all is the two-part story: a
+    pitcher's stat is a RATE times a LENGTH, the manager sets the length,
+    so model the length and the rest follows. `ratecheck.py` walked that
+    forward over 6,792 real starts across 255 pitchers and found:
+
+      * length is the STABLE term, not the volatile one — strikeouts per
+        out varies 46.8% between starts, outs recorded only 26.6%. The
+        premise is backwards.
+      * projecting rate x predicted-length is WORSE than projecting the
+        total directly (MAE 1.733 vs 1.727, z -3.02). Significant, though
+        the effect is a third of a percent.
+      * a PERFECT length prediction would be worth 0.166 MAE — real
+        headroom, about 10% — but past length captures -4% of it.
+
+    So do not rebuild the decomposition on past length; that path is
+    closed by its own walk-forward. The 0.166 stands as a standing note:
+    if a length predictor ever arrives from somewhere else (pitch counts,
+    times-through-order, the pen state this module already scores), it is
+    worth re-testing against that bound. "Use his last few starts" is
+    measurably worse than not bothering.
     """
     if score is None or score < TIRED_MIN:
         return 1.0
