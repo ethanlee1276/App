@@ -358,6 +358,66 @@ def bets_needed(win_rate: float, be: float) -> float:
     return (2 * math.sqrt(be * (1 - be)) / gap) ** 2
 
 
+def split_report(rows: list[dict], on: str) -> int:
+    """Is the recent stretch a BREAK, or the same book running bad?
+
+    A P&L curve that drifts for eleven slates and then falls off a cliff
+    invites one reading — "something changed" — and the eye is terrible at
+    telling that from an ordinary run of losses at the end of a short
+    sample. Losses cluster; they always look like a cliff from the right
+    edge.
+
+    So this splits the journal on a date and tests the DIFFERENCE between
+    the two halves rather than eyeballing the shape. Same discipline as
+    the rest of the file: each half judged against the break-even its own
+    prices imply, and the comparison standardised by both halves' error.
+    """
+    before = [b for b in rows if str(b.get("date") or "") < on]
+    after = [b for b in rows if str(b.get("date") or "") >= on]
+    print("=" * 74)
+    print(f"BEFORE {on}  vs  {on} ONWARD")
+    print("=" * 74)
+    if not before or not after:
+        print(f"  One side is empty ({len(before)} before, {len(after)} after)."
+              f" Nothing to compare.")
+        return 0
+    a, b = measure(before), measure(after)
+    for label, s in (("before", a), (f"{on}+", b)):
+        print(f"  {label:<10}{s['n']:>5} bets  {s['wins']}-{s['losses']}  "
+              f"ROI {s['roi']:>+7.1%}  win {s['win_rate']:>5.1%} vs "
+              f"break-even {s['breakeven']:.1%}  z {s['z_rate']:>+5.2f}")
+
+    # The two-sample test. Each half's win-rate surplus over its own
+    # break-even, differenced, standardised by the errors added in
+    # quadrature — so a split that merely rearranged the same book scores
+    # near zero however different the two ROIs look.
+    def surplus(s, rs):
+        var = sum(be * (1 - be) for be in
+                  (breakeven(r.get("odds") or -110) for r in rs))
+        return (s["win_rate"] - s["breakeven"],
+                math.sqrt(var) / len(rs) if rs else 0.0)
+
+    (ga, sea), (gb, seb) = surplus(a, before), surplus(b, after)
+    se = math.sqrt(sea ** 2 + seb ** 2)
+    z = ((gb - ga) / se) if se else 0.0
+    print()
+    print(f"  surplus over break-even: {ga:+.1%} before, {gb:+.1%} after")
+    print(f"  difference {gb - ga:+.1%}   z = {z:+.2f}")
+    print()
+    if abs(z) >= 2:
+        worse = "worse" if z < 0 else "better"
+        print(f"  → A REAL BREAK. The later stretch is {worse} than the")
+        print("    earlier one by more than the two samples' noise allows.")
+        print("    Something changed; look for what shipped around that date.")
+    else:
+        print("  → NOT A BREAK. The two halves are the same book within")
+        print("    their own error. A curve that drifts and then drops looks")
+        print("    like a cliff from the right-hand edge, and losses cluster")
+        print("    — that shape is what an ordinary bad run looks like on a")
+        print("    short sample, not evidence that anything changed.")
+    return 0
+
+
 def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
     if not rows:
         print("No settled bets match. Nothing to measure.")
@@ -547,6 +607,10 @@ def main(argv: list) -> int:
     p.add_argument("--category", default="main",
                    help="main (default), longshot, pricedout, loose — or 'all' to pool every bucket the way the miner and the hypothesis lab do")
     p.add_argument("--since", help="only bets dated on or after (YYYY-MM-DD)")
+    p.add_argument("--split", metavar="YYYY-MM-DD",
+                   help="test the stretch from this date against everything "
+                        "before it — 'did something break' rather than 'does "
+                        "the curve look bad'")
     p.add_argument("--min-n", type=int, default=MIN_N,
                    help=f"slice floor (default {MIN_N})")
     p.add_argument("--alpha", type=float, default=ALPHA)
@@ -556,6 +620,8 @@ def main(argv: list) -> int:
     from engine import ledger
     conn = ledger.connect(a.db) if a.db else ledger.connect()
     rows = load(conn, a.sport, a.category, a.since)
+    if a.split:
+        return split_report(rows, a.split)
     return report(rows, a.min_n, a.alpha)
 
 

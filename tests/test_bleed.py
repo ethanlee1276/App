@@ -490,6 +490,58 @@ def test_a_book_of_movable_lines_still_gets_its_verdict():
     assert "Positive CLV" in out or "CLV is flat" in out
 
 
+# --- cliff or bad run --------------------------------------------------------
+def _dated(d, w, l, odds=-160):
+    return ([bet("won", odds=odds, stake=0.2) | {"date": d} for _ in range(w)]
+            + [bet("lost", odds=odds, stake=0.2) | {"date": d} for _ in range(l)])
+
+
+def _split_out(rows, on):
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        bleed.split_report(rows, on)
+    return " ".join(buf.getvalue().split())
+
+
+def test_a_bad_run_at_the_end_is_not_called_a_break():
+    """The eye is terrible at this. A curve that drifts for eleven slates
+    and drops at the twelfth reads as "something changed", but losses
+    cluster and that shape is what an ordinary bad run looks like from the
+    right-hand edge. The test is on the DIFFERENCE between the halves, not
+    on how the tail looks."""
+    rows = _dated("2026-07-26", 60, 65) + _dated("2026-08-03", 25, 30)
+    out = _split_out(rows, "2026-08-01")
+    assert "NOT A BREAK" in out
+    assert "losses cluster" in out
+
+
+def test_a_genuine_break_is_found():
+    """The positive control — otherwise "not a break" is a function that
+    always says no."""
+    rows = _dated("2026-07-26", 75, 50) + _dated("2026-08-03", 10, 45)
+    out = _split_out(rows, "2026-08-01")
+    assert "A REAL BREAK" in out
+    assert "look for what shipped" in out
+
+
+def test_each_half_is_judged_against_its_own_prices():
+    """A split where the later stretch simply bought shorter prices is not
+    a break. Comparing raw win rates would call it one."""
+    rows = (_dated("2026-07-26", 50, 50, odds=110)     # break-even 47.6%
+            + _dated("2026-08-03", 62, 38, odds=-160))  # break-even 61.5%
+    out = _split_out(rows, "2026-08-01")
+    assert "NOT A BREAK" in out, out
+
+
+def test_an_empty_side_says_so_rather_than_dividing_by_zero():
+    rows = _dated("2026-07-26", 10, 10)
+    out = _split_out(rows, "2026-08-01")
+    assert "One side is empty" in out
+    assert bleed.split_report(rows, "2026-08-01") == 0
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
