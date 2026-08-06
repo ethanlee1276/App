@@ -71,6 +71,43 @@ def test_matchup_boosts_hitters_against_a_gassed_pen():
     assert not any("tired arms" in r for r in e_fresh.reasons)
 
 
+def test_the_leash_can_only_ever_lengthen_a_start():
+    """Pinned as a PROPERTY, not endorsed as correct.
+
+    leash_factor floors at 1.0, so a tired pen lengthens a start and a
+    fresh one cannot shorten it — "pen fresh" and "pen normal" produce the
+    identical 1.000. Every adjustment available to this function pushes a
+    pitcher projection UP, and the journal has measured a matching
+    asymmetry (pitcher OVERS -24.9%, pitcher UNDERS +9.1% on 29 bets).
+
+    29 bets convicts nothing, so the behaviour is unchanged and the claim
+    lives in the hypothesis lab. This test exists so that if someone later
+    makes the factor two-sided, it is a deliberate act with this comment
+    in front of them rather than an accident.
+    """
+    from engine.mlb.bullpen import TIRED_MIN, leash_factor
+
+    for score in (0.0, 1.0, 2.9, 3.0, 5.0, TIRED_MIN - 0.1):
+        for outs in (True, False):
+            assert leash_factor(score, market_is_outs=outs) == 1.0, score
+    # Above the bar it lifts, and never below 1.0 at any input.
+    assert leash_factor(TIRED_MIN + 4) > 1.0
+    assert all(leash_factor(s) >= 1.0 for s in range(0, 30))
+    # A fresh pen and an ordinary one are indistinguishable to it.
+    assert leash_factor(0.0) == leash_factor(5.0)
+
+
+def test_the_asymmetry_is_recorded_where_someone_would_look():
+    """A structural property with a betting consequence that nothing in the
+    code mentions is one that gets rediscovered the expensive way."""
+    import inspect
+
+    from engine.mlb import bullpen
+    doc = inspect.getdoc(bullpen.leash_factor)
+    assert "one-directional" in doc
+    assert "hypothesis lab" in doc, "no pointer to where the claim is tracked"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

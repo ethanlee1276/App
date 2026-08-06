@@ -85,6 +85,28 @@ def leash_factor(score: float, market_is_outs: bool = True) -> float:
     pen gives the opposing HITTERS, this one prices what it asks of the
     starter in front of it. Same shape, same discipline — flat until the
     workload is clearly abnormal, then a bounded nudge.
+
+    **This factor is one-directional, and that is worth stating.** The
+    clamp floors it at 1.0, so a tired pen can lengthen a start and a
+    FRESH pen cannot shorten one — a manager with a full bullpen and a
+    manager with an ordinary one produce the identical 1.000. Every
+    adjustment this function can make pushes a pitcher projection UP.
+
+    That is a defensible reading (the tired-pen effect is the reliably
+    observable one; the rested-pen effect is real but weaker and less
+    certain) and it is not being changed here. But it has a betting
+    consequence that showed up in the record, so it is written down: on
+    2026-08-06 the journal measured pitcher-market OVERS missing their
+    claimed probability by 24.9% while pitcher UNDERS BEAT theirs by 9.1%
+    — a 34-point asymmetry on 29 bets, against 3.9 points across 187
+    hitter-market bets. A model that can only ever raise a pitcher
+    projection is exactly what that pattern would look like.
+
+    29 bets convicts nothing (z -1.66), so nothing here moves on it. The
+    claim is registered in the hypothesis lab instead and re-tested free
+    on every settle pass; if it hardens, THIS is the function to revisit,
+    and the question to ask is whether "pen fresh" deserves a factor
+    below 1.0 rather than the same 1.000 an ordinary pen gets.
     """
     if score is None or score < TIRED_MIN:
         return 1.0
