@@ -554,3 +554,107 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
         return hyp.blocked(sport, market, feats)
     except Exception:                              # noqa: BLE001
         return None
+
+
+# --- looking at it before it bites -------------------------------------------
+def _format(result: dict) -> str:
+    """The miner's own findings, in the order they would act.
+
+    This exists because a closure is a PRICING change: a slice that closes
+    starts refusing bets on the next build, and the house rule is that you
+    see which slices close before the veto goes live. Reading the JSON is
+    not the same as reading it — the numbers that decide are `said`, `hit`,
+    the two bars, and which one crossed.
+    """
+    fs = result.get("findings") or []
+    out = [
+        "=" * 78,
+        "WHAT THE JOURNAL SAYS ABOUT ITS OWN LOSSES",
+        "=" * 78,
+        f"  {result.get('n_records', 0):,} graded bets   "
+        f"{result.get('tested', 0):,} slices big enough to test (n >= "
+        f"{result.get('min_n')})   FDR {result.get('alpha')}",
+        f"  bars: {CLOSE_GAP_PTS:.0f} points absolute  OR  "
+        f"{CLOSE_GAP_REL:.0%} of the claim",
+        "",
+    ]
+    if not fs:
+        # An empty journal and a clean one print the same table unless the
+        # two are told apart, and they mean opposite things: one is "no
+        # slice missed by more than luck explains", the other is "this
+        # machine has no record to mine".
+        if not result.get("tested"):
+            out += ["  Nothing was TESTED. Either the journal is empty on",
+                    "  this machine, or no slice reached the minimum sample —",
+                    "  this is not a verdict about the model.", ""]
+        else:
+            out += ["  Nothing survived false-discovery control. That is a",
+                    "  result, not an error: no slice missed by more than luck",
+                    "  explains.", ""]
+        return "\n".join(out)
+
+    out += ["  act    sport market            slice                       "
+            "  n   said    hit   gap   rel",
+            "  " + "-" * 74]
+    for f in fs:
+        mk = f.get("market") or "(all markets)"
+        sl = f"{f.get('dim')}={f.get('value')}"
+        out.append(
+            f"  {f['action']:5}  {f['sport']:5} {mk:16.16}  {sl:26.26} "
+            f"{f['n']:5}  {f['said']:5.1%}  {f['hit']:5.1%}  "
+            f"{f['gap_pts']:+5.1f}  {f.get('gap_rel', 0):+5.0%}")
+
+    closed = [f for f in fs if f["action"] == "close"]
+    out += ["", "=" * 78,
+            f"WOULD CLOSE: {len(closed)} of {len(fs)}", "=" * 78]
+    if not closed:
+        out += ["  No slice reaches either bar. The veto stays empty and no",
+                "  pick is refused.", ""]
+    for f in closed:
+        scope = f"{f['sport']} {f['market']}" if f.get("market") else f["sport"]
+        which = ("both bars" if f["gap_pts"] >= CLOSE_GAP_PTS
+                 and f.get("gap_rel", 0) >= CLOSE_GAP_REL
+                 else "the absolute bar" if f["gap_pts"] >= CLOSE_GAP_PTS
+                 else "the relative bar")
+        out += [f"  * {scope}, {f['dim']}={f['value']}  (crossed {which})",
+                f"      {f.get('reading', '')}",
+                f"      every new pick landing here is refused"]
+    out += ["", "  Nothing above has been written. Re-run with --apply to",
+            "  persist, or let the nightly settle pass do it.", ""]
+    return "\n".join(out)
+
+
+def main(argv=None) -> int:
+    import argparse
+    import sys as _sys
+
+    p = argparse.ArgumentParser(
+        description="Mine the journal for the patterns behind the losses.")
+    p.add_argument("--sport", default=None,
+                   help="show only this sport's findings")
+    p.add_argument("--min-n", type=int, default=None,
+                   help=f"smallest slice to test (default {MIN_N})")
+    p.add_argument("--alpha", type=float, default=None,
+                   help=f"false-discovery rate (default {ALPHA})")
+    p.add_argument("--apply", action="store_true",
+                   help="write the result to the store the veto reads")
+    a = p.parse_args(argv if argv is not None else _sys.argv[1:])
+
+    from . import ledger
+    result = mine(records_from_ledger(ledger.connect()),
+                  min_n=a.min_n, alpha=a.alpha)
+    shown = dict(result)
+    if a.sport:
+        shown["findings"] = [f for f in result["findings"]
+                             if f["sport"] == a.sport]
+    print(_format(shown))
+    if a.apply:
+        # Always the FULL result — filtering is a reading convenience and
+        # must never narrow what the veto enforces.
+        print(f"  wrote {save(result)}")
+    return 0
+
+
+if __name__ == "__main__":
+    import sys as _s
+    _s.exit(main())

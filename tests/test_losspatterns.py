@@ -257,6 +257,59 @@ def test_the_page_renders_the_miner_with_its_discipline_stated():
     assert "No pattern involves" in fn
 
 
+
+# --- the preview: a closure is a pricing change, so it must be readable ------
+def test_the_preview_names_which_bar_a_closure_crossed():
+    """A slice that closes on three points contradicts the documented
+    five-point rule unless the reading says the relative bar fired."""
+    r = lp.mine(recs("mlb", "home_runs", {"side": "over"}, 0.15, 228, 1900))
+    text = lp._format(r)
+    assert "the relative bar" in text
+    assert "WOULD CLOSE: 1" in text
+    assert "every new pick landing here is refused" in text
+
+
+def test_the_preview_writes_nothing_and_says_so():
+    r = lp.mine(recs("mlb", "home_runs", {"side": "over"}, 0.15, 228, 1900))
+    text = lp._format(r)
+    assert "Nothing above has been written" in text
+    assert "--apply" in text
+
+
+def test_an_empty_journal_is_not_reported_as_a_clean_one():
+    """Opposite meanings, identical table. `tested` is what tells them
+    apart — a machine with no ledger must not read as a model that
+    survived scrutiny."""
+    empty = lp._format(lp.mine([]))
+    assert "Nothing was TESTED" in empty
+    assert "not a verdict about the model" in empty
+    assert "survived false-discovery control" not in empty
+
+    # …and a journal that WAS tested and came back clean still says so.
+    clean = lp.mine(recs("mlb", "strikeouts", {"side": "over"}, 0.58, 232, 400))
+    assert clean["tested"] > 0
+    assert "Nothing survived false-discovery control" in lp._format(clean)
+
+
+def test_a_sport_filter_never_narrows_what_gets_enforced():
+    """Filtering is a reading convenience. If it could reach the store the
+    veto loads, looking at one sport would silently un-close another."""
+    import inspect
+    src = inspect.getsource(lp.main)
+    assert "shown[\"findings\"]" in src, "the filter must build a COPY"
+    assert "save(result)" in src, "…and --apply must persist the full result"
+    assert "save(shown)" not in src
+
+
+def test_the_pooled_slice_stays_watch_in_the_preview():
+    """The guard that predates the relative bar, seen through the output
+    a human actually reads."""
+    r = lp.mine(recs("mlb", "home_runs", {"side": "over"}, 0.15, 228, 1900))
+    pooled = [f for f in r["findings"] if f["market"] is None]
+    assert pooled and all(f["action"] == "watch" for f in pooled)
+    assert "(all markets)" in lp._format(r)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
