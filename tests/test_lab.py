@@ -181,20 +181,28 @@ def test_the_page_refuses_to_headline_a_thin_or_naive_roi():
     baseline nobody could have bet. Both must reach the reader."""
     app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     assert "LAB_ROI_MIN_BETS = 100" in app
+    # The whole function, not a fixed byte window — a window measures how
+    # long the comments are, which is not a property worth pinning.
     i = app.index("function labPropCard")
-    card = app[i:i + 3000]
+    card = app[i:app.index("\nfunction ", i + 1)]
     assert "noise, not a result" in card
     assert "NOT an edge over a book" in card
     # A muted tone on both, so the colour never says "result" either.
-    assert "(naive || thin) ? \"\" : toneOf(m.roi)" in card
+    # Tone is taken from whatever the HEADLINE shows — which on a mixed
+    # basis is the book-priced segment, not the blend.
+    assert '(naive || thin) ? "" : toneOf(headline.roi)' in card
 
 
 def test_the_page_calls_out_a_hedging_model():
     """Perfect calibration with no sharpness is the failure that looks like
     success — a model answering "about average" to everything."""
     app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    # The whole function, not a fixed byte window from its start — a window
+    # measures how long the comments are, and this one broke the first time
+    # the card grew an explanatory block.
     i = app.index("function labPropCard")
-    assert "hedging, not" in app[i:i + 3000]
+    j = app.index("\nfunction ", i + 1)
+    assert "hedging, not" in app[i:j]
 
 
 def test_the_maintenance_pass_runs_the_lab():

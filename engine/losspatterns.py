@@ -54,6 +54,12 @@ ALPHA = 0.05
 #: Below it, a real miss is still a "watch" — worth showing, not worth
 #: refusing bets over.
 CLOSE_GAP_PTS = 5.0
+#: …or this share of the claim itself. A market claiming 15% cannot miss by
+#: five points without being catastrophically wrong, so an absolute-only bar
+#: is unreachable for every low-probability book and merely lenient for
+#: every high-probability one. A fifth of the claim is the same severity
+#: wherever it lands: 15% -> 12% closes, and so does 60% -> 48%.
+CLOSE_GAP_REL = 0.20
 
 
 # --- the bands: one definition, used by miner and veto alike -----------------
@@ -426,14 +432,36 @@ def mine(records: list[dict], min_n: int | None = None,
         # every market, so one bad pocket drags the aggregate under —
         # closing it would veto clean picks in markets that did nothing
         # wrong. Pooled slices point; specific slices convict.
-        hot = t["gap_pts"] >= CLOSE_GAP_PTS and t["market"] is not None
+        # Absolute OR relative, and the second one is why anything closes.
+        #
+        # A five-point bar cannot work across markets whose base rates run
+        # from 12% to 60%. Home runs said 15% and hit 12% over 1,863 bets:
+        # three points, so it never reached the bar — but that is a FIFTH
+        # of the claim, on a sample big enough to put it near z 3.6, and it
+        # survived false-discovery control. Measured on the real journal,
+        # ten slices were found and none could close, every one of them a
+        # low-probability market missing by less than five points because
+        # its claims are barely above five points to begin with.
+        #
+        # The same absolute-vs-relative fault sits in selcheck's by-market
+        # table: +2.9 points on a 14.7% claim is a fifth of it, +3.3 on a
+        # 58.9% claim is a twentieth, and ranking them together compares
+        # nothing.
+        rel = (t["gap_pts"] / 100.0) / t["said"] if t.get("said") else 0.0
+        t["gap_rel"] = round(rel, 4)
+        hot = (t["gap_pts"] >= CLOSE_GAP_PTS or rel >= CLOSE_GAP_REL) \
+            and t["market"] is not None
         t["action"] = "close" if hot else "watch"
         t["reading"] = (
             f"said {t['said']:.0%}, hit {t['hit']:.0%} over {t['n']} bets — "
-            + ("ran hot; this slice closed itself" if hot
+            + (("ran hot; this slice closed itself"
+                + (f" ({rel:.0%} of the claim)" if t["gap_pts"] < CLOSE_GAP_PTS
+                   else "")) if hot
                else "ran hot pooled across markets — the specific slice decides closures"
                if t["gap_pts"] >= CLOSE_GAP_PTS
-               else "ran hot — under the closure bar, watching" if t["gap_pts"] > 0
+               else (f"ran hot — {t['gap_pts']:.0f}pts and {rel:.0%} of the "
+                     f"claim, both under the bar, watching")
+               if t["gap_pts"] > 0
                else "ran cold — money left on the table, not a danger"))
         findings.append(t)
     findings.sort(key=lambda f: (f["action"] != "close", f["q"]))

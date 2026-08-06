@@ -4417,14 +4417,35 @@ function labPropCard(m, note) {
   // A backtest ROI under ~100 bets is noise wearing a percentage — the
   // harnesses say so in their own summaries, so the page must not render
   // it as a result. Below the bar it goes grey and says why.
-  const thin = m.n_bets < LAB_ROI_MIN_BETS;
-  // ROI is shown, but a naive-basis ROI is explicitly NOT an edge claim.
-  const roiSub = thin
-    ? `only ${m.n_bets} bets — under ${LAB_ROI_MIN_BETS} this is noise, not a result`
-    : m.basis === "book"
-      ? "priced against real harvested closes — market-relative"
-      : m.basis === "mixed"
-        ? `${m.used_real_lines.toLocaleString()} of ${m.total_priced.toLocaleString()} on real closes`
+  /* On a MIXED basis the headline used to be the blended ROI, and that was
+     the single most misleading number on the site.
+
+     Measured on the real board: total_bases blended to +2.7% — and its own
+     segment table underneath read 25,145 bets vs a naive baseline against
+     277 vs real book lines. The blend is 99% naive by bet count, so the
+     green +2.7% WAS the naive number, sitting over a subtitle that said
+     "8,485 of 293,479 on real closes" and coloured as though it were an
+     edge over a market. Strikeouts did the same: +4.6% blended, -0.3% on
+     the 102 bets that met a real price.
+
+     The book-priced segment is the only market-relative figure there is,
+     so it leads. If it is too thin to mean anything it says so and stays
+     grey, which is the honest reading of 277 bets — rather than borrowing
+     confidence from 25,145 bets against a trailing average. */
+  const bookSeg = (m.segments || {}).book;
+  const mixed = m.basis === "mixed";
+  const headline = mixed && bookSeg ? bookSeg : { roi: m.roi, n_bets: m.n_bets };
+  const thin = (headline.n_bets || 0) < LAB_ROI_MIN_BETS;
+  const roiSub = mixed
+    ? (bookSeg
+        ? `${bookSeg.n_bets.toLocaleString()} bets met a real close`
+          + (thin ? ` — under ${LAB_ROI_MIN_BETS}, noise not a result`
+                  : " — market-relative")
+        : "no bet met a real close — nothing here is market-relative")
+    : thin
+      ? `only ${m.n_bets} bets — under ${LAB_ROI_MIN_BETS} this is noise, not a result`
+      : m.basis === "book"
+        ? "priced against real harvested closes — market-relative"
         : "vs a naive baseline line — NOT an edge over a book";
   const seg = Object.entries(m.segments || {}).map(([basis, g]) =>
     `<tr><td>${basis === "book" ? "vs real book lines" : "vs naive baseline"}</td>
@@ -4443,9 +4464,12 @@ function labPropCard(m, note) {
       ${recTile("Calibration", m.ece != null ? (m.ece * 100).toFixed(1) + "%" : "—",
                 `Brier ${m.brier != null ? m.brier.toFixed(4) : "—"}`,
                 { help: "Average gap between what it said and what happened." })}
-      ${recTile("Backtest ROI", m.n_bets ? `${m.roi >= 0 ? "+" : ""}${(m.roi * 100).toFixed(1)}%` : "—",
+      ${recTile(mixed ? "ROI vs real closes" : "Backtest ROI",
+                headline.n_bets
+                  ? `${headline.roi >= 0 ? "+" : ""}${(headline.roi * 100).toFixed(1)}%`
+                  : "—",
                 m.n_bets ? roiSub : "no bets cleared the gates",
-                { tone: (naive || thin) ? "" : toneOf(m.roi) })}
+                { tone: (naive || thin) ? "" : toneOf(headline.roi) })}
     </div>
     ${hedged ? `<div class="warning">${icon("warn")} ${(sk.hedged * 100).toFixed(0)}% of
       forecasts sit within 5 points of the base rate — that is hedging, not
