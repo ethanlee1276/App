@@ -178,6 +178,30 @@
 
 * { box-sizing: border-box; }
 
+/* Keyboard focus, everywhere, once.
+   ============================================================
+   Six elements on the whole site had a focus-visible ring, against forty
+   buttons — including the sport bar and the page nav, which is how the
+   site is used. Tabbing through it showed nothing moving: no way to tell
+   where you were, and no way to drive it without a mouse.
+
+   :focus-visible rather than :focus, so a mouse click does not leave a
+   ring behind — that is the reason focus outlines got removed from the
+   web in the first place, and the modern selector fixes the actual
+   complaint without taking the affordance away from anyone using a
+   keyboard.
+
+   Square, and offset rather than inset: the design system has no rounded
+   containers, and an outline that overlaps its own control reads as a
+   border rather than as focus. */
+:where(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+/* The nav sits tight against its own underline, so its ring needs room to
+   clear the indicator rather than sitting on top of it. */
+.nav-btn:focus-visible, .sport-btn:focus-visible { outline-offset: 4px; }
+
 html {
   scroll-behavior: smooth;
   /* iOS Safari "text autosizing": it inflates font sizes inside blocks it

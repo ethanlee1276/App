@@ -413,6 +413,52 @@ def test_the_two_projbar_series_resolve_to_different_hexes():
     assert proj != line, (proj, line)
 
 
+def test_every_control_has_a_visible_keyboard_focus():
+    """Six elements had a focus ring against forty buttons — including the
+    sport bar and the page nav, which is how the site is used. Tabbing
+    through it showed nothing moving.
+
+    :focus-visible, not :focus, so a mouse click leaves no ring behind —
+    that is the complaint outlines were stripped from the web over, and
+    the modern selector answers it without taking the affordance from
+    anyone on a keyboard.
+    """
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    assert ":where(a, button, summary, input, select, textarea, " \
+           "[tabindex]):focus-visible" in css, "no global focus ring"
+    # Square and offset: no rounded containers anywhere, and an inset
+    # outline reads as a border rather than as focus.
+    i = css.index(":where(a, button, summary")
+    rule = css[i:i + 200]
+    assert "outline-offset" in rule
+    assert "border-radius" not in rule
+
+
+def test_the_selected_nav_is_announced_and_not_only_drawn():
+    """The nav carried its selection in a CSS class alone, which assistive
+    tech cannot see — a screen reader read the bar as eight identical
+    buttons with no way to tell which board you were on.
+
+    aria-current, not role="tab": that needs no roving tabindex or
+    arrow-key contract, so it cannot be half-implemented into something
+    worse than no ARIA at all.
+    """
+    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    assert "function setSelected" in app
+    assert 'setAttribute("aria-current", "page")' in app
+    assert 'removeAttribute("aria-current")' in app
+    # Every place the active class is set goes through it, or the state
+    # and its announcement drift apart.
+    import re
+    stray = re.findall(r'classList\.toggle\("active"[^)]*(?:nav-btn|sport-btn)',
+                       app)
+    assert not stray, stray
+    for call in ("setSelected(b,", "setSelected(x,"):
+        assert call in app
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

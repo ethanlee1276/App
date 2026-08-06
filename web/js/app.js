@@ -174,9 +174,24 @@ function applySport() {
   if (gt) gt.innerHTML = `${escapeHtml(meta.gamesTitle)}`
     + (meta.gamesSub ? ` <span class="sub">— ${escapeHtml(meta.gamesSub)}</span>` : "");
   document.querySelectorAll(".sport-btn").forEach((b) =>
-    b.classList.toggle("active",
-                       !!b.dataset.sport && b.dataset.sport === state.sport));
+    setSelected(b, !!b.dataset.sport && b.dataset.sport === state.sport));
   markMoreMenu();
+}
+
+
+/* Selected state, announced as well as drawn.
+ *
+ * The nav and sport buttons carried their selection in a CSS class only.
+ * A class is invisible to assistive tech, so a screen reader read the whole
+ * bar as eight identical buttons with no way to tell which board you were
+ * on — and these are the controls the site is used through. `aria-current`
+ * is the honest marking for "this one is the page you are on": it needs no
+ * roving tabindex or arrow-key contract the way role="tab" would, so it
+ * cannot be half-implemented into something worse than nothing. */
+function setSelected(el, on) {
+  el.classList.toggle("active", on);
+  if (on) el.setAttribute("aria-current", "page");
+  else el.removeAttribute("aria-current");
 }
 
 /* ---------------- formatting helpers ---------------- */
@@ -5175,7 +5190,7 @@ const STANDALONE_BRAND = {
 
 function enterStandaloneMode(name) {
   document.querySelectorAll(".sport-btn").forEach((x) =>
-    x.classList.toggle("active", !!x.dataset.sport && x.dataset.sport === name));
+    setSelected(x, !!x.dataset.sport && x.dataset.sport === name));
   const nav = document.getElementById("nav");
   if (nav) nav.style.display = "none";
   // …and its menu label with it: a "PAGE" header over an empty space is
@@ -5202,8 +5217,7 @@ function exitStandaloneMode() {
   const phead = document.querySelector('.menu-head[data-head="page"]');
   if (phead) phead.style.display = "";
   document.querySelectorAll(".sport-btn").forEach((x) =>
-    x.classList.toggle("active",
-                       !!x.dataset.sport && x.dataset.sport === state.sport));
+    setSelected(x, !!x.dataset.sport && x.dataset.sport === state.sport));
   markMoreMenu();
   // Restore the sport's own tagline along with its nav. (The Q tile is
   // constant now, so only the words change.)
@@ -7588,7 +7602,7 @@ function switchView(name, push = false) {
   // The game view has no tab of its own — it belongs to the board it came
   // from, so Recommended stays lit while you're inside a game.
   const lit = name === "game" ? "recommended" : name;
-  document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === lit));
+  document.querySelectorAll(".nav-btn").forEach((b) => setSelected(b, b.dataset.view === lit));
   if (name === "game") {
     renderGamePage();
     if (state.gameId) history.replaceState(null, "", `#game/${encodeURIComponent(state.gameId)}`);
