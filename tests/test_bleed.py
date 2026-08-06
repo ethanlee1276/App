@@ -372,6 +372,48 @@ def test_the_bucket_is_a_slice_so_the_pooling_can_be_tested():
     assert buckets == {"main", "longshot"}, buckets
 
 
+def test_the_slice_bands_are_the_miner_s_own():
+    """One vocabulary, so a number seen here can be tested there.
+
+    This file used to band the circumstance dimensions itself, and the
+    bands did not match: "rested" was under 2 weighted relief innings where
+    the miner's "pen fresh" is under 3. That is not cosmetic. A finding
+    read off this report gets registered in the hypothesis lab, which
+    speaks the miner's vocabulary — and a slice named here that does not
+    exist there produces a hypothesis matching nothing, collecting at 0/40
+    forever while looking like missing data rather than a mistranslation.
+    """
+    from engine import losspatterns as lp
+    for value, dim in ((4.0, "pen own"), (4.0, "pen opp")):
+        assert bleed.DIMENSIONS[dim]({dim.replace(" ", "_"): value}) == \
+            lp.pen_band(value)
+    assert bleed.DIMENSIONS["claimed p"]({"hit_prob": 0.65}) == lp.prob_band(0.65)
+    assert bleed.DIMENSIONS["capture lag"]({"lead_min": 30}) == lp.lead_band(30)
+    assert bleed.DIMENSIONS["rest"]({"rest_days": 1}) == lp.rest_band(1)
+    # And no dimension may invent a band the miner has never seen.
+    banders = {"claimed p": lp.prob_band, "capture lag": lp.lead_band,
+               "rest": lp.rest_band, "clock": lp.clock_band,
+               "pen own": lp.pen_band, "pen opp": lp.pen_band,
+               "horizon": lp.horizon_band}
+    for name in banders:
+        assert name in bleed.DIMENSIONS, name
+
+
+def test_every_journaled_dimension_the_lab_can_test_is_sliceable_here():
+    """If the lab can register a hypothesis on a dimension, this report has
+    to be able to show it — otherwise the tool that FINDS things and the
+    tool that TESTS them disagree about what exists."""
+    from engine.hypotheses import DIMS
+    covered = {"side", "odds", "prob", "horizon", "book", "lead", "park",
+               "wind", "slot", "rest", "clock", "pen_opp", "pen_own"}
+    assert set(DIMS) == covered, "DIMS moved; recheck bleed's coverage"
+    here = set(bleed.DIMENSIONS)
+    for want in ("side", "book", "price", "claimed p", "horizon", "capture lag",
+                 "park", "wind", "lineup", "rest", "clock", "pen own",
+                 "pen opp"):
+        assert want in here, want
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

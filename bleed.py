@@ -141,8 +141,8 @@ def load(conn, sport=None, category="main", since=None) -> list[dict]:
     """
     q = ("SELECT sport, date, player, market, side, line, book, odds, grade, "
          "status, pnl_units, stake_units, hit_prob, closing_line, category, "
-         "loss_cause, lineup_slot, park_hr, wind_out, roofed, lead_min, "
-         "rest_days, body_clock, pen_own, pen_opp "
+         "ts, loss_cause, lineup_slot, lineup_conf, park_hr, wind_out, "
+         "roofed, lead_min, rest_days, body_clock, pen_own, pen_opp "
          "FROM bets WHERE status IN ('won','lost')")
     args: list = []
     if category != "all":
@@ -154,7 +154,18 @@ def load(conn, sport=None, category="main", since=None) -> list[dict]:
     if since:
         q += " AND date>=?"
         args.append(since)
-    return [dict(r) for r in conn.execute(q + " ORDER BY date, id", args)]
+    rows = [dict(r) for r in conn.execute(q + " ORDER BY date, id", args)]
+    # horizon is derived the same way the miner derives it: days from the
+    # bet being logged to the game being played.
+    import datetime as _dt
+    for b in rows:
+        try:
+            b["horizon_days"] = (_dt.date.fromisoformat(b["date"])
+                                 - _dt.date.fromisoformat(
+                                     str(b["ts"])[:10])).days
+        except (TypeError, ValueError):
+            b["horizon_days"] = None
+    return rows
 
 
 def clv_of(b: dict) -> float | None:
@@ -186,15 +197,25 @@ def prob_bucket(b) -> str:
             else "prob 60-70%" if p < 0.7 else "prob ≥ 70%")
 
 
-def _bucketed(b, col, edges, unit=""):
-    v = b.get(col)
-    if v is None:
-        return None
-    v = float(v)
-    for hi, label in edges:
-        if v < hi:
-            return f"{col} {label}{unit}"
-    return f"{col} {edges[-1][1]}+{unit}"
+# The circumstance dimensions come from engine/losspatterns, banded by the
+# MINER'S OWN functions rather than by edges invented here.
+#
+# This file used to band them itself, and the bands did not match: "rested"
+# was under 2 weighted relief innings where the miner's "pen fresh" is
+# under 3. That is not a cosmetic difference. A finding read off this
+# report gets registered in the hypothesis lab, which speaks the miner's
+# vocabulary, and a slice named here that does not exist there produces a
+# hypothesis matching nothing — it collects at 0/40 forever and looks like
+# missing data rather than a mistranslation.
+#
+# One vocabulary, so a number seen here can be tested there.
+from engine.losspatterns import (clock_band, horizon_band,  # noqa: E402
+                                 lead_band, lineup_band, park_band,
+                                 pen_band, prob_band, rest_band, wind_band)
+
+
+def _roofed(b) -> bool:
+    return bool(b.get("roofed"))
 
 
 DIMENSIONS = {
@@ -209,30 +230,27 @@ DIMENSIONS = {
     "book":        lambda b: (b.get("book") or "?") or "(none)",
     "grade":       lambda b: b.get("grade") or "?",
     "price":       odds_bucket,
-    "claimed p":   prob_bucket,
+    "claimed p":   lambda b: prob_band(b.get("hit_prob")),
     # loss_cause is deliberately NOT a slice. It is only ever written on a
     # bet that lost, so every bucket it makes is 0-N by construction and
     # scores -100% ROI at an enormous z — a tautology wearing the clothes
     # of the strongest finding on the page. It belongs in a breakdown of
     # the losses (which lost to variance, which to a blowout), never in a
     # comparison against bets that won.
-    "lineup slot": lambda b: (None if b.get("lineup_slot") is None else
-                              f"slot {int(float(b['lineup_slot']))}"),
-    "park HR":     lambda b: _bucketed(b, "park_hr", [(0.95, "pitchers'"),
-                                                      (1.05, "neutral"),
-                                                      (99, "hitters'")]),
-    "wind":        lambda b: _bucketed(b, "wind_out", [(-4, "blowing in"),
-                                                       (4, "calm"),
-                                                       (99, "blowing out")]),
+    "lineup":      lambda b: lineup_band(b.get("lineup_slot"),
+                                         bool(b.get("lineup_conf"))),
+    "park":        lambda b: park_band(b.get("park_hr"), _roofed(b)),
+    "wind":        lambda b: wind_band(b.get("wind_out"), _roofed(b),
+                                       b.get("sport")),
     "roof":        lambda b: (None if b.get("roofed") is None
                               else "roof closed" if float(b["roofed"]) else
                               "open air"),
-    "capture lag": lambda b: _bucketed(b, "lead_min", [(60, "< 1h to first pitch"),
-                                                       (240, "1-4h out"),
-                                                       (1e9, "> 4h out")]),
-    "bullpen own": lambda b: _bucketed(b, "pen_own", [(2, "rested"),
-                                                      (5, "used"),
-                                                      (1e9, "gassed")]),
+    "capture lag": lambda b: lead_band(b.get("lead_min")),
+    "horizon":     lambda b: horizon_band(b.get("horizon_days")),
+    "rest":        lambda b: rest_band(b.get("rest_days")),
+    "clock":       lambda b: clock_band(b.get("body_clock")),
+    "pen own":     lambda b: pen_band(b.get("pen_own")),
+    "pen opp":     lambda b: pen_band(b.get("pen_opp")),
 }
 
 
