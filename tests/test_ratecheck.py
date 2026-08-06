@@ -114,9 +114,12 @@ def test_the_two_stats_come_from_the_same_start():
     """Joined on game_id, not two averages that never met. A rate built
     from one game's strikeouts and another's outs is not a rate."""
     import inspect
-    src = inspect.getsource(rc.load_starts)
-    assert "a.game_id = b.game_id" in src
-    assert "a.player = b.player" in src
+    # Order-agnostic: the join was rewritten to lead with the indexed side,
+    # and which name sits left of the equals sign is not the property this
+    # test is about.
+    flat = " ".join(inspect.getsource(rc.load_starts).split())
+    assert ("b.game_id = a.game_id" in flat or "a.game_id = b.game_id" in flat)
+    assert ("b.player = a.player" in flat or "a.player = b.player" in flat)
 
 
 def test_a_start_with_no_outs_is_not_a_rate():
@@ -145,6 +148,41 @@ def test_it_never_edits_the_projection():
     assert "write_text" not in src
     assert "MLB_WINDOW_WEIGHTS =" not in src
 
+
+
+def test_the_join_is_scoped_to_one_sport_and_can_use_an_index():
+    """Two faults in one missing predicate, and the second one is why
+    ratecheck could sit there forever on a real history.
+
+    Correctness: without `b.sport`, an outs row from ANY sport that happens
+    to share a game_id and a player joins to an MLB strikeout line, and the
+    rate is computed over a length from somebody else's game.
+
+    Speed: every index on player_game_logs leads with (sport, market). Omit
+    the sport and none of them can be used for the inner lookup, so the
+    join falls back to scanning the table once per outer row. SQLite
+    sometimes rescues that with a transient automatic index — which is
+    exactly why the same script is instant on one database and appears to
+    hang on another, since the planner's choice depends on statistics an
+    un-ANALYZEd file does not have.
+    """
+    import inspect
+    src = inspect.getsource(rc.load_starts)
+    flat = " ".join(src.split())
+    assert "b.sport = a.sport" in flat, (
+        "the self-join must be scoped to one sport, for correctness and so "
+        "that (sport, market, ...) indexes are usable at all"
+    )
+
+
+def test_the_history_schema_indexes_the_game_level_join():
+    """The join keys on (sport, market, game_id, player) and nothing else
+    in the schema leads with game_id, so this index is what makes the
+    lookup deterministic rather than dependent on the planner's mood."""
+    from engine import db as hist_db
+    flat = " ".join(hist_db.SCHEMA.split())
+    assert "idx_logs_game" in flat
+    assert "player_game_logs (sport, market, game_id, player)" in flat
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

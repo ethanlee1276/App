@@ -115,6 +115,17 @@ CREATE INDEX IF NOT EXISTS idx_umpires_game
     ON game_umpires (sport, period, game_id);
 CREATE INDEX IF NOT EXISTS idx_logs_period
     ON player_game_logs (sport, market, period, player);
+-- Joining a player's game log to ANOTHER market's log for the same game —
+-- strikeouts to outs, so a rate and the length it was recorded over come
+-- from one start rather than from two averages that never met. Both
+-- indexes above lead with (sport, market) and then player or period, so
+-- the game_id lookup had nothing to use and the join degraded to a scan
+-- of the whole table per outer row. SQLite sometimes rescues that with an
+-- automatic transient index, which is why it is fast on some databases
+-- and hangs on others; the planner's choice depends on statistics an
+-- un-ANALYZEd file does not have. This makes it deterministic.
+CREATE INDEX IF NOT EXISTS idx_logs_game
+    ON player_game_logs (sport, market, game_id, player);
 """
 
 GAME_COLS = ["sport", "season", "period", "game_id", "home", "away",

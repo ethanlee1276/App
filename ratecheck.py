@@ -71,12 +71,19 @@ def load_starts(conn, market: str = "strikeouts") -> dict:
     Joined on game_id, so the value and the length come from the same
     start rather than from two averages that never met.
     """
+    # `b.sport` is not decoration. Without it the join matches an outs row
+    # from ANY sport that shares a game_id and player, and it also leaves
+    # the inner lookup with no usable index — every index on this table
+    # leads with (sport, market), so omitting the sport means none of them
+    # can be used and SQLite falls back to scanning the whole table once
+    # per outer row. On a real history that is the difference between a
+    # second and never finishing.
     rows = conn.execute(
         "SELECT a.player, a.period, a.game_id, a.value AS v, b.value AS outs "
         "FROM player_game_logs a "
         "JOIN player_game_logs b "
-        "  ON a.game_id = b.game_id AND a.player = b.player "
-        " AND b.market = 'outs' "
+        "  ON b.sport = a.sport AND b.market = 'outs' "
+        " AND b.game_id = a.game_id AND b.player = a.player "
         "WHERE a.sport='mlb' AND a.market=? "
         "ORDER BY a.player, a.period, a.game_id", (market,)).fetchall()
     out: dict = {}
