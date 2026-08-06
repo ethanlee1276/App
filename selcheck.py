@@ -137,10 +137,14 @@ def buckets(rows: list[dict], target: int = TARGET_BUCKETS) -> list[dict]:
 def fit_line(bs: list[dict]) -> dict:
     """Weighted least squares of gap on claimed edge, WITH an intercept.
 
-    The intercept is the level — how hot the claim runs at zero edge — and
-    the slope is the selection effect. Forcing the line through the origin
-    would hand the whole level to the slope and manufacture the very
-    finding this script is meant to be able to reject.
+    The level and the slope are reported apart. Forcing the line through
+    the origin would hand the whole level to the slope and manufacture the
+    very finding this script is meant to be able to reject — which is
+    exactly what guardfit did one script over.
+
+    `level` is quoted at the CENTRE of the observed edges, not at zero,
+    because zero is outside the data and an extrapolated intercept swings
+    with a slope that may not be significant.
     """
     pts = [b for b in bs if b["n"] >= MIN_BUCKET_N and b["se"] > 0]
     if len(pts) < 3:
@@ -158,8 +162,18 @@ def fit_line(bs: list[dict]) -> dict:
                 "n": sum(b["n"] for b in pts)}
     sxy = sum(wi * (xi - mx) * (yi - my) for wi, xi, yi in zip(w, x, y))
     slope = sxy / sxx
+    # `level` is the gap at the CENTRE of the observed edges, not at zero.
+    #
+    # Zero is outside the data — the board's bar means no bet is placed
+    # under about 2.4% claimed edge — so a regression intercept there is an
+    # extrapolation, and it swings with a slope that is not significant.
+    # On the real journal it read +26.4% against an actual average gap of
+    # +12.1%, because a non-significant slope of -3.56 was extended back
+    # across four points of edge nobody ever bet. Printed as "the level
+    # itself, and real", that is a number someone could act on.
     return {"slope": slope, "se": math.sqrt(1.0 / sxx),
-            "intercept": my - slope * mx,
+            "level": my, "at_edge": mx,
+            "intercept_at_zero": my - slope * mx,
             "bands": len(pts), "n": sum(b["n"] for b in pts)}
 
 
@@ -217,7 +231,8 @@ def report(rows: list[dict]) -> int:
         return 0
     z = f["slope"] / f["se"] if f["se"] else 0.0
     span = bs[-1]["edge"] - bs[0]["edge"]
-    print(f"  level  (gap at zero claimed edge)   {f['intercept']:+.1%}")
+    print(f"  level  (average gap, at {f['at_edge']:.1%} claimed edge)  "
+          f"{f['level']:+.1%}")
     print(f"  slope  (extra gap per point of edge) {f['slope']:+.2f}  "
           f"±{2 * f['se']:.2f} (2σ)   z {z:+.2f}")
     print(f"  on {f['n']:,} bets in {f['bands']} buckets")
@@ -244,7 +259,8 @@ def report(rows: list[dict]) -> int:
         print("    flat in claimed edge, which is what a LEVEL error from")
         print("    somewhere else looks like — stale lines, the de-vig,")
         print("    grading, or a market shrink that is too weak.")
-        print(f"    (The level itself is {f['intercept']:+.1%} and real.)")
+        print(f"    (The level is {f['level']:+.1%} and IS significant —")
+        print("     that part is not in doubt, only its cause.)")
         print()
         print("    But read the resolution line above before calling it dead.")
         print("    At this sample size the test misses a genuinely selected")

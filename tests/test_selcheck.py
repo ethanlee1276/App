@@ -47,7 +47,7 @@ def test_a_flat_gap_is_reported_as_not_selection():
     z = f["slope"] / f["se"]
     assert abs(z) < 2.0, (f["slope"], z)
     # …and the level is still recovered, because it is real.
-    assert 0.09 < f["intercept"] < 0.15, f["intercept"]
+    assert 0.09 < f["level"] < 0.15, f["level"]
 
 
 def test_a_gap_that_grows_with_claimed_edge_reads_as_selection():
@@ -81,7 +81,7 @@ def test_the_line_is_not_forced_through_the_origin():
     rows = _rows([(0.01, 0.60, 0.48, 400), (0.03, 0.60, 0.48, 400),
                   (0.05, 0.60, 0.48, 400), (0.10, 0.60, 0.48, 400)])
     f = sc.fit_line(sc.buckets(rows))
-    assert f["intercept"] > 0.05, "the level vanished into the slope"
+    assert f["level"] > 0.05, "the level vanished into the slope"
     assert abs(f["slope"]) < 2.0, "a flat gap produced a large slope"
     import inspect
     src = inspect.getsource(sc.fit_line)
@@ -194,6 +194,30 @@ def test_it_reports_what_it_could_not_have_seen():
     if "NOT PROVEN" in out:
         assert "no evidence for, not evidence against." in out
         assert "do not close the question" in out.lower()
+
+
+def test_the_level_is_quoted_inside_the_data_not_extrapolated_to_zero():
+    """The real run printed "(The level itself is +26.4% and real.)" when
+    the actual average gap was +12.1%.
+
+    No bet is placed under about 2.4% claimed edge — the board's bar sees
+    to that — so a regression intercept at zero is an extrapolation four
+    points beyond anything observed, and it swings with a slope of -3.56
+    that was not significant (z -0.66). Quoted as real, it is a number
+    someone could act on.
+    """
+    rng = random.Random(31)
+    rows = [{"sport": "mlb", "market": "m", "side": "OVER", "odds": -110,
+             "hit_prob": 0.58, "edge": rng.uniform(0.024, 0.07),
+             "status": "won" if rng.random() < 0.46 else "lost"}
+            for _ in range(247)]
+    f = sc.fit_line(sc.buckets(rows))
+    # The level sits where the bets are…
+    assert 0.024 <= f["at_edge"] <= 0.07, f["at_edge"]
+    # …and equals the weighted average gap, which is what "the level" means.
+    assert abs(f["level"] - 0.12) < 0.06, f["level"]
+    # The extrapolated value is still available, just not the headline.
+    assert "intercept_at_zero" in f
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
