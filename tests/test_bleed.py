@@ -71,7 +71,7 @@ def test_slices_below_the_floor_are_never_tested_at_all():
     inflate the bar for the slices that are real either."""
     rows = book(4, 4) + book(30, 30, market="total_bases")
     cuts = bleed.slices(rows, min_n=25)
-    markets = {b for d, b, _ in cuts if d == "market"}
+    markets = {b for d, b, _s, _m in cuts if d == "market"}
     assert markets == {"total_bases"}, markets
 
 
@@ -368,7 +368,7 @@ def test_the_bucket_is_a_slice_so_the_pooling_can_be_tested():
             + [bet("lost", market="hits") | {"category": "longshot"}
                for _ in range(30)])
     cuts = bleed.slices(rows, min_n=25)
-    buckets = {b for d, b, _ in cuts if d == "bucket"}
+    buckets = {b for d, b, _s, _m in cuts if d == "bucket"}
     assert buckets == {"main", "longshot"}, buckets
 
 
@@ -412,6 +412,82 @@ def test_every_journaled_dimension_the_lab_can_test_is_sliceable_here():
                  "park", "wind", "lineup", "rest", "clock", "pen own",
                  "pen opp"):
         assert want in here, want
+
+
+# --- one population, six labels ----------------------------------------------
+def test_nested_findings_collapse_to_the_tightest_one():
+    """Six convictions came out of the real journal and were one fact.
+
+    longshot_watch (1578) subset home_runs (1811) subset plus-money (1920)
+    subset prob<50% (2060) subset OVER (2412) — and the first two were
+    byte-identical, because the bucket and the grade are aliases. Printed as
+    six findings each "surviving a bar set for 90 simultaneous looks", one
+    fact reads as a mountain of independent evidence.
+    """
+    rows = ([bet("lost", odds=400, market="home_runs", side="OVER",
+                 stake=0.1, hit_prob=0.12) for _ in range(300)]
+            + [bet("won", odds=-110, market="hits", stake=1.0)
+               for _ in range(150)]
+            + [bet("lost", odds=-110, market="hits", stake=1.0)
+               for _ in range(150)])
+    out = _run(rows)
+    tail = out[out.index("WHAT THE RECORD WILL SUPPORT"):]
+    # home_runs and plus-money are the same 300 bets; only one is a finding.
+    assert tail.count("survives a bar set") == 1, tail
+    assert "SAME BETS seen through" in tail
+    assert "identical to" in tail or "contains" in tail
+
+
+def test_the_dedupe_keeps_the_smallest_of_a_nested_chain():
+    """The tightest true statement is the useful one — "this market" beats
+    "every bet that happens to contain this market"."""
+    small = ("market", "home_runs", {"z": -5.0, "z_rate": -5.0, "n": 100},
+             frozenset(range(100)))
+    mid = ("price", "plus money", {"z": -4.0, "z_rate": -4.0, "n": 150},
+           frozenset(range(150)))
+    big = ("side", "OVER", {"z": -3.5, "z_rate": -3.5, "n": 200},
+           frozenset(range(200)))
+    kept, echoes = bleed._dedupe([big, small, mid])
+    assert [k[1] for k in kept] == ["home_runs"]
+    assert {e[0][1] for e in echoes} == {"plus money", "OVER"}
+
+
+def test_two_disjoint_findings_both_survive():
+    """Collapsing must not eat genuinely independent evidence."""
+    a = ("market", "home_runs", {"z": -5.0, "z_rate": -5.0, "n": 100},
+         frozenset(range(100)))
+    b = ("market", "outs", {"z": -4.0, "z_rate": -4.0, "n": 60},
+         frozenset(range(200, 260)))
+    kept, echoes = bleed._dedupe([a, b])
+    assert len(kept) == 2 and not echoes
+
+
+# --- CLV on a line that cannot move ------------------------------------------
+def test_a_book_of_unmovable_lines_gets_no_clv_verdict():
+    """The reading that was actively wrong. Home runs are quoted OVER 0.5
+    and close at 0.5, so 84% of closes tie BY CONSTRUCTION; the surviving
+    average came off a handful of movable markets and the page read it as
+    "priced right, keep betting" over a book that is two-thirds home runs.
+    """
+    rows = ([bet("lost", market="home_runs", line=0.5, close=0.5, odds=400,
+                 stake=0.1) for _ in range(180)]
+            + [bet("won", market="hits", line=1.5, close=2.0, stake=1.0)
+               for _ in range(20)])
+    out = _run(rows)
+    assert "NO USABLE CLV READING" in out
+    assert "the wrong instrument" in out
+    # And it must NOT also tell you to keep betting.
+    assert "reason to keep betting" not in out
+
+
+def test_a_book_of_movable_lines_still_gets_its_verdict():
+    """The guard has to stay quiet when the instrument does fit, or CLV —
+    the fastest signal available — goes dark on every book."""
+    rows = [bet("lost" if i % 2 else "won", market="hits", line=1.5,
+                close=2.0, stake=1.0) for i in range(120)]
+    out = _run(rows)
+    assert "NO USABLE CLV READING" not in out
+    assert "Positive CLV" in out or "CLV is flat" in out
 
 
 if __name__ == "__main__":

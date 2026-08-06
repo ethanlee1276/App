@@ -286,7 +286,13 @@ def measure(rows: list[dict]) -> dict:
 
 
 def slices(rows: list[dict], min_n: int) -> list[tuple]:
-    """(dimension, bucket, stats) for every bucket at or above the floor."""
+    """(dimension, bucket, stats, members) for every bucket at the floor.
+
+    `members` is the frozen set of row ids in the slice, kept so findings
+    can be compared by MEMBERSHIP rather than by name — see `_dedupe`.
+    """
+    for i, b in enumerate(rows):
+        b.setdefault("_i", i)
     out = []
     for dim, key in DIMENSIONS.items():
         groups: dict = defaultdict(list)
@@ -296,8 +302,33 @@ def slices(rows: list[dict], min_n: int) -> list[tuple]:
                 groups[k].append(b)
         for bucket, rs in groups.items():
             if len(rs) >= min_n:
-                out.append((dim, bucket, measure(rs)))
+                out.append((dim, bucket, measure(rs),
+                            frozenset(b["_i"] for b in rs)))
     return out
+
+
+def _dedupe(convicted: list[tuple]) -> tuple[list, list]:
+    """Split findings into distinct ones and restatements of those.
+
+    Six convictions came out of one real journal — longshot_watch (1578),
+    Watch (1578), home_runs (1811), plus-money (1920), prob<50% (2060),
+    OVER (2412) — and they are one population seen through six labels:
+    each is a subset of the next, and the first two are byte-identical
+    because the bucket and the grade are aliases. Printing them as six
+    findings, each "surviving a bar set for 90 simultaneous looks", makes
+    one fact look like a mountain of independent evidence.
+
+    Kept: the smallest slice of each nested chain — the tightest true
+    statement. Everything that contains it is a restatement, and is
+    reported as such rather than as a second finding.
+    """
+    kept: list[tuple] = []
+    echoes: list[tuple] = []
+    for c in sorted(convicted, key=lambda c: len(c[3])):
+        cover = next((k for k in kept if k[3] <= c[3]), None)
+        (echoes if cover else kept).append(
+            (c, cover) if cover else c)
+    return kept, echoes
 
 
 # --- reporting ---------------------------------------------------------------
@@ -386,6 +417,20 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
     print("=" * 74)
     print("CLV — the faster instrument")
     print("=" * 74)
+
+    # CLV here is measured in LINE points, and a market whose line cannot
+    # move has none to measure. A home run prop is quoted OVER 0.5 and
+    # closes at 0.5 forever, so on a book that is two-thirds home runs the
+    # tie rate is a fact about the MARKET, not about our timing — and the
+    # surviving average is computed off the handful of bets whose line
+    # could move at all. Reading "positive CLV, keep betting" off that is
+    # reading a number that was never about this book.
+    flat = sum(1 for b in rows
+               if b.get("closing_line") is not None
+               and b.get("line") is not None
+               and float(b["closing_line"]) == float(b["line"]))
+    flat_share = (flat / top["clv_n"]) if top["clv_n"] else 0.0
+
     if not top["clv_n"]:
         print("  No closing lines captured. CLV is the signal that converges")
         print("  fastest at this sample size, and without it the only")
@@ -396,10 +441,22 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
         print(f"  average CLV {top['clv']:+.3f} line points")
         print(f"  beat {top['clv_beat']:.0%}  ·  tied {top['clv_tied']:.0%}"
               f"  ·  behind {top['clv_behind']:.0%}")
-        if top["clv_tied"] and top["clv_tied"] > 0.3:
-            print(f"    ({top['clv_tied']:.0%} of lines never moved at all — "
-                  f"those are ties, not losses)")
-        if top["clv"] > 0.01:
+        if flat_share > 0.5:
+            movers = top["clv_n"] - flat
+            print()
+            print(f"  ⚠  {flat} of {top['clv_n']} closes are on lines that did")
+            print("     not move AT ALL. Some markets cannot move — a home-run")
+            print("     prop is quoted OVER 0.5 and closes at 0.5 — so the")
+            print(f"     average above is the verdict of {movers} bets, not")
+            print(f"     {top['clv_n']}, and it is not a book-wide reading.")
+            print("     Those markets move on PRICE while the line stands")
+            print("     still; CLV in line points is the wrong instrument.")
+            print()
+            print("  → NO USABLE CLV READING. Too much of this book sits in")
+            print("    markets whose line cannot move, so there is no verdict")
+            print("    here either way — not 'priced right', not 'behind the")
+            print("    market'. The instrument does not fit the book.")
+        elif top["clv"] > 0.01:
             print("\n  → Positive CLV with a negative ROI is the signature of")
             print("    a book that is priced right and running bad. That is a")
             print("    reason to keep betting, not to change the model.")
@@ -427,7 +484,7 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
     print("  " + "-" * 74)
     cuts.sort(key=lambda c: (c[0], -max(abs(c[2]["z"]), abs(c[2]["z_rate"]))))
     convicted = []
-    for dim, bucket, s in cuts:
+    for dim, bucket, s, members in cuts:
         clv = f"{s['clv']:+.2f}" if s["clv"] is not None else "—"
         flag = _bar(s, bar)
         wl = f"{s['wins']}-{s['losses']}"
@@ -435,7 +492,7 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
               f"{s['roi']:>+8.1%}{s['z']:>+7.2f}{s['z_rate']:>+8.2f}{clv:>7}"
               + (f"  {flag}" if flag else ""))
         if flag:
-            convicted.append((dim, bucket, s))
+            convicted.append((dim, bucket, s, members))
 
     # A slice covering nearly the whole book is the headline wearing a
     # label. "sport · mlb" on a book that is 96% baseball convicts for the
@@ -443,12 +500,13 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
     # an independent confirmation of itself.
     whole = [c for c in convicted if c[2]["n"] >= 0.9 * top["n"]]
     convicted = [c for c in convicted if c not in whole]
+    findings, echoes = _dedupe(convicted)
 
     print()
     print("=" * 74)
     print("WHAT THE RECORD WILL SUPPORT")
     print("=" * 74)
-    if not convicted:
+    if not findings:
         print(f"  Nothing. No slice clears |z| ≥ {bar:.2f}, which is what the")
         print("  bar has to be once you look this many times.")
         print()
@@ -458,15 +516,25 @@ def report(rows: list[dict], min_n: int = MIN_N, alpha: float = ALPHA) -> int:
         print("  the noise. Turning off the worst-looking one would be fitting")
         print("  the last two months of variance.")
     else:
-        for dim, bucket, s in sorted(
-                convicted,
+        for dim, bucket, s, _m in sorted(
+                findings,
                 key=lambda c: -max(abs(c[2]["z"]), abs(c[2]["z_rate"]))):
             print(f"  {dim} · {bucket}: {s['n']} bets, {s['roi']:+.1%}, "
                   f"z {s['z']:+.2f} on units / {s['z_rate']:+.2f} on rate "
                   f"— {_bar(s, bar)}")
             print(f"     survives a bar set for {2 * len(cuts)} "
                   f"simultaneous looks")
-    for dim, bucket, s in whole:
+    if echoes:
+        print()
+        print("  These also cleared, and are the SAME BETS seen through")
+        print("  another label — each one contains a finding above it, so")
+        print("  none is independent evidence of anything:")
+        for (dim, bucket, s, m), (cd, cb, cs, cm) in sorted(
+                echoes, key=lambda e: len(e[0][3])):
+            same = "identical to" if len(m) == len(cm) else "contains"
+            print(f"    {dim} · {bucket} ({s['n']} bets) — {same} "
+                  f"{cd} · {cb} ({cs['n']})")
+    for dim, bucket, s, _m in whole:
         print(f"\n  ({dim} · {bucket} also clears, but it is {s['n']} of "
               f"{top['n']} bets —")
         print("   that is the headline relabelled, not a second finding.)")
