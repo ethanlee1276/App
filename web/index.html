@@ -8,7 +8,41 @@
   <!-- iOS ignores SVG icons; this is what "Add to Home Screen" uses. -->
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Qellys Book" />
-  <meta name="theme-color" content="#0f1420" />
+  <!-- Matches --bg. It said #0f1420 through the whole Night Form redesign,
+       which is the OLD panel colour — so the phone painted its chrome a
+       different near-black to the page under it. -->
+  <meta name="theme-color" content="#08090B" />
+
+  <!-- What a shared link looks like before anyone arrives.
+       ================================================================
+       og-card.png is rendered from og-card.html by the real stylesheet,
+       the real fonts and the real Overhead, so the preview cannot drift
+       from the site. It carries no live numbers on purpose — see the note
+       in that file.
+
+       The URLs here are RELATIVE, and that is deliberate rather than
+       unfinished. The site is not hosted anywhere yet; it is served by
+       `python3 launch.py` from a local directory, so there is no origin
+       to write. A guessed or placeholder domain would resolve to nothing
+       and be worse than no tag at all. Every major scraper resolves a
+       relative og:image against the page it found it on, so these start
+       working the moment the site has an address, whatever that address
+       turns out to be. If X ever refuses the card, the fix is to stamp an
+       absolute origin at deploy — not to invent one now. -->
+  <meta name="description" content="A multi-sport betting model that shows its work. Every pick is journaled at the real book price it was found at and graded in public — including the losing ones. MLB, NFL, college football, NBA, WNBA, UFC and prediction markets." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Qellys Book" />
+  <meta property="og:title" content="Qellys Book — a betting model that shows its work" />
+  <meta property="og:description" content="Every pick journaled at its real book price and graded in public, including the losing ones. MLB, NFL, CFB, NBA, WNBA, UFC and prediction markets." />
+  <meta property="og:image" content="og-card.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Qellys Book — an engraved overhead plan of Coors Field showing its altitude and home-run factor" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Qellys Book — a betting model that shows its work" />
+  <meta name="twitter:description" content="Every pick journaled at its real book price and graded in public, including the losing ones." />
+  <meta name="twitter:image" content="og-card.png" />
+
   <link rel="stylesheet" href="css/styles.css" />
   <!-- Decided BEFORE first paint, or the full masthead renders and then
        collapses — a 790px jump on every load, which is worse than the
