@@ -117,21 +117,50 @@ are hidden (`.stadium path.mow`).
 
 ---
 
-## 4. Open — do not close this quietly
+## 4. The sports with no building — answered
 
-**Three sports have no Overhead.** UFC, Polymarket and Kalshi have no
-venue. Right now that is fine, because they have no venue cards either.
-It stops being fine the moment the Overhead becomes the masthead, the
-favicon, the loading state and the social card — which is the whole point
-of naming it.
+This section used to say three markets had no Overhead and the gap was
+unresolved. It is resolved, and the rule that resolves it is one line:
 
-This needs an answer before the Overhead is promoted to those surfaces,
-and the answer is probably not "draw an octagon". The honest question is
-what the plan view of a *market* is when there is no building: the
-Overhead names an encoding, so the extension should be an encoding, not a
-picture of a room.
+> **Draw the space a price is set in, to scale, with the conditions in the
+> corners. What changes is what counts as space.**
 
-Unresolved. Flagged here rather than solved badly.
+**UFC has a building after all, and the first instinct was wrong.** The
+note here used to say "the answer is probably not draw an octagon,"
+reasoning that an octagon is a constant and a constant carries no data.
+`engine/ufc/environment.py` says otherwise: the promotion's own facility
+uses a **25-foot** cage and arena events use **30**. Less space means
+fewer places to retreat to, so pressure fighters and wrestlers gain,
+out-fighters lose, and finishes go up — and the model already prices it.
+
+That makes the cage exactly as data-bearing as an outfield arc: a building
+whose dimensions vary and whose variation moves the number. `octagon()`
+draws it to scale, so an Apex card is visibly tighter than an arena card.
+Altitude takes the bottom-left plaque, as it does on the ballpark; cage
+size takes the bottom-right, where the park factor goes; rounds take the
+top line, where roof state goes. Same grammar, different building.
+
+**Prediction markets have no room, so the space is the probability line.**
+For Polymarket and Kalshi the thing a price is set *in* is the market, and
+its plan view is the 0–100 rule. `marketRule()` draws every market on the
+board as a segment from the exchange's number to ours. **Length is
+disagreement.** A board we agree with is a row of ticks; a board we
+disagree with violently is a row of long bars, readable before a single
+figure is.
+
+One drawing for the whole board, not one per row — the Kalshi board is an
+agate table and a venue-sized diagram on every line would bury it. It also
+makes the shape novel rather than generic, which is the property a
+visualisation needs before it can become recognisable at all.
+
+### Still open
+
+The Overhead is not yet on the masthead, the favicon, the loading state or
+a social card, which was the reason the coverage gap mattered. Those
+surfaces are the next question, and the honest blocker is that the site is
+not hosted anywhere — `python3 launch.py` serves it locally and
+`web/index.html` carries no `og:` tags at all. Static card first, dynamic
+per-game rendering only once there is somewhere to render it.
 
 ---
 

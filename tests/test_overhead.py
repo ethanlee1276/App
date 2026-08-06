@@ -68,8 +68,20 @@ def _fn_body(js, name):
     return js[i:min(ends)] if ends else js[i:]
 
 
-# The three renderers, and the class each one puts on its <svg>.
-RENDERERS = {"stadium": "stadium", "ballpark": "stadium", "court": "field"}
+# Every renderer, and the class each one puts on its <svg>.
+#
+# `octagon` and `marketRule` are the answer to the question §4 of the
+# constitution used to leave open: what the Overhead is for a sport with no
+# building. UFC turned out to HAVE one — the promotion's own facility uses
+# a 25-foot cage and arenas use 30, a difference the model already prices —
+# so it gets a venue drawing like everyone else. Prediction markets have no
+# room at all, so the space a price is set in is the probability line, and
+# that is what gets drawn.
+#
+# They are in this dict so the coverage test below governs them too. A new
+# Overhead that is not listed here is a drawing nothing checks.
+RENDERERS = {"stadium": "stadium", "ballpark": "stadium", "court": "field",
+             "octagon": "stadium", "marketRule": "stadium"}
 
 # Emitted by every renderer but deliberately unstyled by the engraving
 # layer: <defs> and its gradient children paint nothing once fills are
@@ -199,11 +211,53 @@ def test_the_constitution_exists_and_names_the_asset():
     assert "the Overhead" in doc
     for section in ("What is LOCKED", "What VARIES"):
         assert section in doc, f"the constitution lost its `{section}` section"
-    # The open question must stay open and visible, not get quietly closed.
-    assert "UFC, Polymarket and Kalshi have no" in doc, (
-        "the three sports with no venue are the unresolved part of this "
-        "asset; if that line goes, the gap has been forgotten rather than "
-        "solved"
+    # The rule that covers every sport, including the ones with no room.
+    assert "Draw the space a price is set in" in doc, (
+        "the constitution lost the one line that decides what an Overhead "
+        "is for a market with no building"
+    )
+    # And the next gap has to stay visible the way the last one did.
+    assert "Still open" in doc, (
+        "an asset with nothing open is an asset nobody is looking at; the "
+        "surfaces the Overhead is not on yet belong in this file"
+    )
+
+
+def test_the_cage_is_drawn_to_scale():
+    """The whole reason UFC gets a venue drawing rather than an exemption.
+
+    A 25-foot cage and a 30-foot cage have to be visibly different sizes,
+    or the octagon is decoration — a constant shape carrying no data, which
+    is what this was first assumed to be. The model prices the difference;
+    the drawing has to show it.
+    """
+    js = _read("web", "js", "visuals.js")
+    body = _fn_body(js, "octagon")
+    assert "CAGE_R" in body, "the octagon must size itself from the cage"
+    m = re.search(r"CAGE_R\s*=\s*\{([^}]*)\}", js)
+    assert m, "no CAGE_R table"
+    radii = dict(re.findall(r"(\d+)\s*:\s*(\d+)", m.group(1)))
+    assert set(radii) == {"25", "30"}, "the two real cage sizes, per environment.py"
+    assert int(radii["25"]) < int(radii["30"]), (
+        "the small cage must draw smaller — otherwise the drawing says the "
+        "two venues are the same and the model says they are not"
+    )
+
+
+def test_the_market_rule_stays_clear_of_the_locked_corners():
+    """The plaques own y=128 in every Overhead and that is locked.
+
+    The first layout put the probability axis on y=118 with its numbers on
+    y=133, which ran the scale straight through both plaques.
+    """
+    js = _read("web", "js", "visuals.js")
+    body = _fn_body(js, "marketRule")
+    m = re.search(r"AXIS\s*=\s*(\d+)", body)
+    assert m, "marketRule must name its axis position"
+    axis = int(m.group(1))
+    assert axis + 13 < 128, (
+        f"the axis at y={axis} puts its labels at y={axis + 13}, on top of "
+        "the plaques at y=128"
     )
 
 

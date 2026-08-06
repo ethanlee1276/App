@@ -481,6 +481,147 @@ function ballpark(game, opts = {}) {
   </svg>`;
 }
 
+/* ---------------- The Overhead, where there is no building ---------------
+ *
+ * See docs/THE_OVERHEAD.md. The Overhead is a plan view of the space a
+ * price is set in. For MLB, NFL, CFB, NBA and WNBA that space is a
+ * building, so the drawing is the building. Two of our markets have no
+ * building, and they need the same asset rather than an exemption from it.
+ *
+ * The rule that decides both: draw the space, to scale, with the
+ * conditions in the corners. What changes is what counts as space.
+ */
+
+/* UFC — the cage, at its real size.
+ *
+ * The first instinct was that an octagon is a constant and therefore
+ * carries no data, which would make it decoration. That was wrong, and
+ * engine/ufc/environment.py is why: the promotion's own facility uses a
+ * 25-foot cage and arena events use 30. Less space means fewer places to
+ * retreat to, so pressure fighters and wrestlers gain, out-fighters lose,
+ * and finishes go up — a fact knowable from the venue name before a single
+ * stat is consulted, and one the model already prices.
+ *
+ * So the octagon IS data-bearing, on exactly the same terms as an outfield
+ * arc: it is a building whose dimensions vary and whose variation moves
+ * the number. Drawn to scale, an Apex card is visibly smaller than an
+ * arena card, which is the whole point. */
+const CAGE_R = { 30: 52, 25: 43 };   // viewBox units per real foot, 240x150
+
+function octagon(bout, opts = {}) {
+  const w = opts.w || 240, h = opts.h || 150;
+  const env = bout.environment || {};
+  const cage = env.cage || {};
+  const alt = env.altitude || {};
+  const feet = cage.feet === 25 || cage.feet === 30 ? cage.feet : 30;
+  const r = CAGE_R[feet];
+  const cx = 120, cy = 80;
+
+  // Eight vertices, flat side facing the reader — the orientation every
+  // broadcast uses, so it reads as a cage and not as a stop sign.
+  const pts = Array.from({ length: 8 }, (_, i) => {
+    const a = (Math.PI / 4) * i + Math.PI / 8;
+    return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+  });
+  const ring = (k) => "M" + pts.map(([x, y]) =>
+    `${(cx + (x - cx) * k).toFixed(1)} ${(cy + (y - cy) * k).toFixed(1)}`).join("L") + "Z";
+
+  /* Rounds sit where the roof state sits on a stadium: a categorical fact
+     about the contest, top-centre, above the venue name. Five rounds is
+     a different distribution, not a longer version of the same one. */
+  const rounds = bout.rounds === 5 || bout.title_fight
+    ? `<text x="120" y="26" text-anchor="middle" font-size="9">5 ROUNDS${
+        bout.title_fight ? " · TITLE" : ""}</text>` : "";
+
+  /* Plaques in the locked corners — altitude bottom-left exactly as the
+     ballpark puts it, the varying dimension bottom-right where the park
+     factor goes. */
+  const plaque = (x, label) => `
+    <g><rect x="${x}" y="128" width="70" height="15"/>
+      <text class="num" x="${x + 35}" y="139" text-anchor="middle" font-size="8.5">${label}</text></g>`;
+
+  return `
+  <svg class="stadium" width="${w}" height="${h}" viewBox="0 0 240 150"
+       preserveAspectRatio="xMidYMid meet" role="img"
+       aria-label="${escapeAttr(bout.venue || "Octagon")}, ${feet}-foot cage">
+    <rect x="0" y="0" width="240" height="150"/>
+    <path d="${ring(1)}"/>
+    <path d="${ring(0.88)}"/>
+    <circle cx="${cx}" cy="${cy}" r="9"/>
+    ${/* y=60, not the ballpark's 52: the cage's inner ring tops out at ~38
+          and a label on 52 lay across it. Inside the cage is the same
+          place the park name sits — the open part of the playing
+          surface — so the grammar holds, the number moves. */""}
+    <text x="120" y="60" text-anchor="middle" font-size="8.5">${escapeAttr(bout.venue || "")}</text>
+    ${rounds}
+    ${alt.known && alt.meaningful ? plaque(8, `${(alt.feet / 1000).toFixed(1)}k ft`) : ""}
+    ${cage.known ? plaque(162, `CAGE ${feet}FT`) : ""}
+  </svg>`;
+}
+
+/* Prediction markets — the space is the probability line.
+ *
+ * Polymarket and Kalshi have no room to draw. What a price is set IN there
+ * is the market itself, so the plan view is the 0-100 rule, and every
+ * market on the board is a segment from the exchange's number to ours.
+ * Length is disagreement. A board with no edges is a row of dots; a board
+ * we disagree with violently is a row of long bars, at a glance, before a
+ * single figure is read.
+ *
+ * This is deliberately ONE drawing for the whole board rather than one per
+ * row: the Kalshi board is an agate table and a venue-card-sized diagram
+ * on every line would bury it. It also makes the shape novel rather than
+ * generic, which is the property the research says a visualisation needs
+ * before it can become a recognisable asset. */
+const RULE_ROWS = 8;                 // fits 240x150 at a legible pitch
+
+function marketRule(rows, opts = {}) {
+  const w = opts.w || 240, h = opts.h || 150;
+  const all = (rows || []).filter((r) => r && r.prob != null);
+  const shown = all.slice(0, RULE_ROWS);
+  const x = (p) => 24 + Math.max(0, Math.min(1, p)) * 192;
+  /* The whole rule finishes above y=126: the plaques own the bottom
+     corners at y=128 in every Overhead, and that is locked. A first pass
+     put the axis on 118 with its numbers on 133, which ran the scale
+     straight through both plaques. */
+  const y = (i) => 38 + i * 7.5;
+  const AXIS = 104;
+
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((p) => `
+    <line x1="${x(p)}" y1="${AXIS}" x2="${x(p)}" y2="${AXIS + 4}"/>
+    <text x="${x(p)}" y="${AXIS + 13}" text-anchor="middle" font-size="7.5">${p * 100}</text>`).join("");
+
+  /* Market end is an open tick, ours is the mark. Where we have no number
+     the row is just the exchange's tick — an honest blank rather than a
+     segment of length zero, which would read as agreement. */
+  const bars = shown.map((r, i) => {
+    const a = x(r.prob), b = r.model_p == null ? null : x(r.model_p);
+    return `<g>
+      <line x1="${a}" y1="${y(i)}" x2="${a}" y2="${y(i) + 4.5}"/>
+      ${b == null ? "" : `<line x1="${a}" y1="${y(i) + 2.25}" x2="${b}" y2="${y(i) + 2.25}"/>
+      <path d="M${b} ${y(i)} L${b + 2.4} ${y(i) + 2.25} L${b} ${y(i) + 4.5} L${b - 2.4} ${y(i) + 2.25} Z"/>`}
+    </g>`;
+  }).join("");
+
+  const vol = all.reduce((s, r) => s + (Number(r.volume_24h) || 0), 0);
+  const plaque = (px, label) => `
+    <g><rect x="${px}" y="128" width="70" height="15"/>
+      <text class="num" x="${px + 35}" y="139" text-anchor="middle" font-size="8.5">${label}</text></g>`;
+
+  return `
+  <svg class="stadium" width="${w}" height="${h}" viewBox="0 0 240 150"
+       preserveAspectRatio="xMidYMid meet" role="img"
+       aria-label="${all.length} markets, exchange probability against ours">
+    <rect x="0" y="0" width="240" height="150"/>
+    <text x="120" y="26" text-anchor="middle" font-size="8.5">${escapeAttr(opts.title || "THE BOARD")}</text>
+    <line x1="24" y1="${AXIS}" x2="216" y2="${AXIS}"/>
+    ${ticks}
+    ${bars}
+    ${plaque(8, `${all.length} MKT`)}
+    ${vol ? plaque(162, `$${vol >= 1000 ? (vol / 1000).toFixed(0) + "k" : vol}`) : ""}
+  </svg>`;
+}
+
 /* ---------------- Mini base-state diamond (MLB live) --------------------- */
 function baseDiamond(bases, outs, opts = {}) {
   const size = opts.size || 46;

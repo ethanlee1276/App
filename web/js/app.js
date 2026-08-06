@@ -5327,6 +5327,15 @@ function kalshiSectionHTML(k) {
       <span class="sub">— CFTC-regulated event contracts, all fifty states. The mid of a
       two-sided book is the market's probability with no vig to strip; "edge" is our model
       minus that, in points, and only appears where both numbers exist.</span></div>
+    ${/* The Overhead for a market that has no building: the space a price
+          is set in IS the probability line. One drawing for the whole
+          board rather than one per row — the Kalshi board is an agate
+          table and a venue-sized diagram on every line would bury it.
+          Each market is a segment from the exchange's number to ours, so
+          length is disagreement and the shape of the night is readable
+          before a single figure is. */""}
+    ${(k.rows || []).length
+      ? `<div class="kx-overhead">${marketRule(k.rows, { title: "KALSHI BOARD" })}</div>` : ""}
     <div class="stats">
       <div class="tile"><div class="k">Sports markets</div><div class="v">${k.n_markets || 0}</div></div>
       <div class="tile"><div class="k">Matched to tonight</div><div class="v">${k.n_matched || 0}</div></div>
@@ -6858,6 +6867,17 @@ async function renderUFC() {
       <div style="margin-top:8px;color:var(--text-body);font-size:var(--fs-sm)">
         ${(p.style_notes || []).map(escapeHtml).join(" · ")} · hold ${(p.hold * 100).toFixed(1)}%
         · stake ${p.stake_units}u${p.required_edge ? ` · needs ${(p.required_edge * 100).toFixed(1)}%` : ""}</div>
+      ${/* The Overhead — see docs/THE_OVERHEAD.md. UFC has a building
+            after all: the promotion's own facility uses a 25-foot cage
+            and arenas use 30, which the model already prices. Drawn to
+            scale, so an Apex card is visibly tighter than an arena card.
+            The prose stays underneath it — the drawing is the glance,
+            the sentence is the reason. */""}
+      ${(p.environment && ((p.environment.cage || {}).known || (p.environment.altitude || {}).known))
+        ? `<div class="ufc-overhead">${octagon({
+             venue: p.environment.venue || "",
+             rounds: p.rounds, title_fight: p.title_fight,
+             environment: p.environment })}</div>` : ""}
       ${(p.environment && (p.environment.why || []).length)
         ? `<div style="margin-top:6px;color:var(--text-mute);font-size:var(--fs-sm)">${icon('stadium')} ${
             escapeHtml([(p.environment.cage || {}).note, (p.environment.altitude || {}).note]

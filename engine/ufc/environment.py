@@ -137,7 +137,13 @@ def distribution_shift(venue: str, city: str) -> dict:
         lift += ALTITUDE_FINISH_LIFT
         why.append(f"altitude {alt['feet']:,} ft (+late finishes)")
     lift = max(-MAX_ENV_SHIFT, min(MAX_ENV_SHIFT, lift))
-    return {"finish_lift": round(lift, 4), "cage": cage, "altitude": alt,
+    # The venue and city travel with the reading. Both were already the
+    # INPUTS to every number in here, and leaving them out meant the card
+    # could state the cage size and the cardio tax without ever naming the
+    # building they came from — and meant the Overhead, which draws that
+    # building, had nothing to label it with.
+    return {"venue": venue, "city": city,
+            "finish_lift": round(lift, 4), "cage": cage, "altitude": alt,
             "why": why,
             "fitted": False,
             "note": ("Environment adjustments are documented priors, not "

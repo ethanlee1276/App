@@ -3551,3 +3551,21 @@ select.calc-in { width: auto; font-weight: 600; }
 }
 
 } /* end @media (max-width: 1247px) — the compact masthead */
+
+
+/* The Overhead, where it sits outside a venue card.
+   ------------------------------------------------------------------
+   Same drawing, same 240x150, on the two surfaces that are not the
+   Recommended scroller: a UFC pick card and the Kalshi board's header.
+   Both get the art's own hairline frame rather than the card's, so the
+   Overhead reads as a plate set into the page — the same relationship
+   the venue cards already have. */
+.ufc-overhead, .kx-overhead {
+  margin-top: 10px; border: 1px solid var(--border-soft);
+  background: var(--bg-2); line-height: 0;
+}
+.ufc-overhead svg, .kx-overhead svg { width: 100%; height: auto; display: block; }
+/* On the board it is a header, so it gets the width of one tile rather
+   than the whole table — a 900px-wide probability rule is a chart, and
+   this is a mark. */
+.kx-overhead { max-width: 280px; margin-bottom: 10px; }
