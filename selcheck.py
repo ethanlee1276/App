@@ -63,9 +63,16 @@ import sys
 
 from engine import ledger
 
-#: Edge buckets, in points of claimed edge. The board's own bar sits near
-#: 2-3 points, so the interesting range is narrow and the buckets are too.
-EDGE_EDGES = [0.0, 0.02, 0.04, 0.06, 0.09, 0.13, 1.0]
+#: Buckets are QUANTILES of the observed edge, not fixed cut points.
+#:
+#: The first cut used fixed bands (0-2, 2-4, 4-6, 6-9, …) and on the real
+#: journal it could not run: 242 of 243 bets sat inside 2-6% claimed edge
+#: and one sat above, so only two bands cleared the floor and a line needs
+#: three. The board's bar decides where its edges live, and a test whose
+#: resolution is chosen in advance has no leverage wherever that turns out
+#: to be. Splitting the observed distribution instead puts the same number
+#: of bets in every bucket wherever it sits, which is what the slope needs.
+TARGET_BUCKETS = 5
 #: A bucket thinner than this is printed but never fitted.
 MIN_BUCKET_N = 20
 #: Below this many settled bets, no verdict is offered at all.
@@ -103,18 +110,25 @@ def _stats(rs: list[dict]) -> dict:
             "se": (math.sqrt(var) / n) if var > 0 else 0.0}
 
 
-def buckets(rows: list[dict]) -> list[dict]:
-    groups: dict = {}
-    for b in rows:
-        e = float(b["edge"])
-        for lo, hi in zip(EDGE_EDGES, EDGE_EDGES[1:]):
-            if lo <= e < hi:
-                groups.setdefault((lo, hi), []).append(b)
-                break
+def buckets(rows: list[dict], target: int = TARGET_BUCKETS) -> list[dict]:
+    """Equal-count buckets over the observed edge, sorted low to high.
+
+    The count per bucket is chosen so none falls under MIN_BUCKET_N — a
+    thin bucket is a wide error bar, and a wide error bar at the end of the
+    range is exactly where a spurious slope comes from.
+    """
+    ordered = sorted(rows, key=lambda b: float(b["edge"]))
+    if not ordered:
+        return []
+    k = max(1, min(target, len(ordered) // MIN_BUCKET_N))
+    size = len(ordered) / k
     out = []
-    for (lo, hi), rs in sorted(groups.items()):
+    for i in range(k):
+        rs = ordered[int(round(i * size)):int(round((i + 1) * size))]
+        if not rs:
+            continue
         s = _stats(rs)
-        s.update({"lo": lo, "hi": hi,
+        s.update({"lo": float(rs[0]["edge"]), "hi": float(rs[-1]["edge"]),
                   "edge": sum(float(b["edge"]) for b in rs) / len(rs)})
         out.append(s)
     return out
@@ -173,12 +187,12 @@ def report(rows: list[dict]) -> int:
     print("=" * 74)
     print("THE GAP, BY HOW MUCH EDGE WE THOUGHT WE HAD")
     print("=" * 74)
-    print("  claimed edge      n   claimed   landed      gap       ±")
-    print("  " + "-" * 60)
+    print("  claimed edge        n   claimed   landed      gap       ±")
+    print("  " + "-" * 62)
     for b in bs:
-        hi = "+" if b["hi"] >= 1.0 else f"–{b['hi'] * 100:.0f}%"
+        rng = f"{b['lo'] * 100:.1f}–{b['hi'] * 100:.1f}%"
         thin = "  (thin)" if b["n"] < MIN_BUCKET_N else ""
-        print(f"  {b['lo'] * 100:4.0f}%{hi:<6} {b['n']:6}   "
+        print(f"  {rng:<14} {b['n']:6}   "
               f"{b['claimed']:6.1%}   {b['landed']:6.1%}   "
               f"{b['gap']:+6.1%}   {2 * b['se']:5.1%}{thin}")
     print()
@@ -193,13 +207,28 @@ def report(rows: list[dict]) -> int:
     print("=" * 74)
     if f["slope"] is None:
         print(f"  Not enough buckets clear {MIN_BUCKET_N} bets to fit a line "
-              f"({f['bands']} usable). No verdict.")
+              f"({f['bands']} usable). No verdict on selection.")
+        print()
+        # NOT a return. The by-market check below is an independent
+        # prediction and stays readable when this one cannot run — the
+        # first cut returned here and printed nothing else, which threw
+        # away the half of the evidence that was still available.
+        _markets(rows)
         return 0
     z = f["slope"] / f["se"] if f["se"] else 0.0
+    span = bs[-1]["edge"] - bs[0]["edge"]
     print(f"  level  (gap at zero claimed edge)   {f['intercept']:+.1%}")
     print(f"  slope  (extra gap per point of edge) {f['slope']:+.2f}  "
           f"±{2 * f['se']:.2f} (2σ)   z {z:+.2f}")
     print(f"  on {f['n']:,} bets in {f['bands']} buckets")
+    # What this sample could and could not have seen. Simulated on null
+    # data the |z|>=2 rule fires 4.7% of the time, which is right — but at
+    # this n it also MISSES a real effect about half the time, so a flat
+    # answer is much weaker evidence than a positive one and must not be
+    # read as an all-clear.
+    print(f"  smallest slope this sample could resolve: "
+          f"{2 * f['se']:.2f}, which is {2 * f['se'] * span:+.1%} of gap "
+          f"across the observed edge range")
     print()
     if z >= 2.0:
         print("  → CONSISTENT WITH SELECTION. The gap widens where we")
@@ -211,30 +240,42 @@ def report(rows: list[dict]) -> int:
         print("    which selection cannot produce. Something else is wrong,")
         print("    and a selection shrink would be the wrong instrument.")
     else:
-        print("  → NOT SELECTION, on this evidence. The gap is flat in")
-        print("    claimed edge, so the over-claim is a LEVEL error coming")
-        print("    from somewhere else — stale lines, the de-vig, grading,")
-        print("    or a market shrink that is too weak. Do not build the")
-        print("    correction in docs/SELECTION_CORRECTION.md; go find it.")
+        print("  → NOT PROVEN, and this is the weak direction. The gap is")
+        print("    flat in claimed edge, which is what a LEVEL error from")
+        print("    somewhere else looks like — stale lines, the de-vig,")
+        print("    grading, or a market shrink that is too weak.")
         print(f"    (The level itself is {f['intercept']:+.1%} and real.)")
+        print()
+        print("    But read the resolution line above before calling it dead.")
+        print("    At this sample size the test misses a genuinely selected")
+        print("    book about half the time. Flat here is")
+        print("    no evidence for, not evidence against.")
+        print("    So: do not build the correction on this, and")
+        print("    do not close the question either.")
+        print("    Chase the level, and re-run as bets accrue.")
     print()
 
-    ms = by_market(rows)
-    if ms:
-        print("=" * 74)
-        print("THE SECOND PREDICTION — widest where the model is least sure")
-        print("=" * 74)
-        print("  market                     n   claimed   landed      gap")
-        print("  " + "-" * 58)
-        for m in ms:
-            print(f"  {m['key']:22} {m['n']:6}   {m['claimed']:6.1%}   "
-                  f"{m['landed']:6.1%}   {m['gap']:+6.1%}")
-        print()
-        print("  ratecheck measured pitcher strikeout RATE swinging 46.8%")
-        print("  between starts — the noisiest thing the model estimates.")
-        print("  Selection predicts pitcher markets sit at the top of this")
-        print("  table. If they do not, that is evidence against it.")
+    _markets(rows)
     return 0
+
+
+def _markets(rows: list[dict]) -> None:
+    ms = by_market(rows)
+    if not ms:
+        return
+    print("=" * 74)
+    print("THE SECOND PREDICTION — widest where the model is least sure")
+    print("=" * 74)
+    print("  market                     n   claimed   landed      gap")
+    print("  " + "-" * 58)
+    for m in ms:
+        print(f"  {m['key']:22} {m['n']:6}   {m['claimed']:6.1%}   "
+              f"{m['landed']:6.1%}   {m['gap']:+6.1%}")
+    print()
+    print("  ratecheck measured pitcher strikeout RATE swinging 46.8%")
+    print("  between starts — the noisiest thing the model estimates.")
+    print("  Selection predicts pitcher markets sit at the top of this")
+    print("  table. If they do not, that is evidence against it.")
 
 
 def main(argv: list) -> int:

@@ -102,12 +102,40 @@ def test_the_error_bar_is_poisson_binomial_not_pooled():
     assert s["se"] < pooled, (s["se"], pooled)
 
 
-def test_a_thin_bucket_is_shown_but_never_fitted():
+def test_no_bucket_is_ever_thin():
+    """Equal-count buckets, so a wide error bar cannot appear at the end of
+    the range — which is exactly where a spurious slope would come from.
+
+    The fixed-band version this replaced put 242 of the real journal's 243
+    bets into two bands and one lone bet into a third, whose ±95.6% error
+    bar carried a +64.6% gap. Nothing useful can be fitted through that.
+    """
     rows = _rows([(0.01, 0.60, 0.48, 300), (0.03, 0.60, 0.48, 300),
                   (0.05, 0.60, 0.48, 300), (0.10, 0.60, 0.48, 5)])
     bs = sc.buckets(rows)
-    assert any(b["n"] == 5 for b in bs), "the thin bucket vanished from the table"
-    assert sc.fit_line(bs)["bands"] == 3, "a 5-bet bucket was fitted"
+    assert min(b["n"] for b in bs) >= sc.MIN_BUCKET_N, [b["n"] for b in bs]
+    assert sum(b["n"] for b in bs) == len(rows)
+    assert sc.fit_line(bs)["bands"] == len(bs)
+
+
+def test_it_finds_resolution_where_the_edges_actually_are():
+    """The real journal's failure, reproduced.
+
+    Every bet sat between 2% and 6% claimed edge — the board's bar decides
+    that, not the test — and fixed bands at 0/2/4/6/9 gave only two usable
+    buckets where a line needs three. Splitting the observed distribution
+    puts the same count in each bucket wherever it sits.
+    """
+    rng = random.Random(4)
+    rows = [{"sport": "mlb", "market": "strikeouts", "side": "OVER",
+             "odds": -110, "hit_prob": 0.58, "edge": rng.uniform(0.02, 0.06),
+             "status": "won" if rng.random() < 0.465 else "lost"}
+            for _ in range(243)]
+    bs = sc.buckets(rows)
+    assert len(bs) == sc.TARGET_BUCKETS, [b["n"] for b in bs]
+    assert sc.fit_line(bs)["slope"] is not None, "still cannot fit"
+    # The buckets have to actually span the range, not sit on top of it.
+    assert bs[-1]["edge"] - bs[0]["edge"] > 0.02, [b["edge"] for b in bs]
 
 
 def test_every_bet_lands_in_exactly_one_bucket():
@@ -142,6 +170,30 @@ def test_the_query_only_takes_settled_bets_that_carry_both_numbers():
     assert len(sc.load(conn, sport="mlb")) == 1
     assert len(sc.load(conn, sport="all")) == 2
 
+
+
+def test_it_reports_what_it_could_not_have_seen():
+    """A flat answer at this sample size is weak, and the output has to say
+    so. Simulated on null data the |z|>=2 rule fires 4.7% of the time —
+    correct — but at 243 bets it also MISSES a real slope of +5 about half
+    the time. A verdict that reads "not selection" without its own
+    resolution beside it invites closing a live question.
+    """
+    import contextlib
+    import io
+    rng = random.Random(21)
+    rows = [{"sport": "mlb", "market": "strikeouts", "side": "OVER",
+             "odds": -110, "hit_prob": 0.58, "edge": rng.uniform(0.02, 0.06),
+             "status": "won" if rng.random() < 0.465 else "lost"}
+            for _ in range(243)]
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        sc.report(rows)
+    out = buf.getvalue()
+    assert "smallest slope this sample could resolve" in out
+    if "NOT PROVEN" in out:
+        assert "no evidence for, not evidence against." in out
+        assert "do not close the question" in out.lower()
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
