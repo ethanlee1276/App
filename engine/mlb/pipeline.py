@@ -332,6 +332,10 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         # the history exists when that decision is taken; nothing reads it
         # yet, and no market has been unfrozen.
         "raw_prob": rec.raw_prob,
+        # The field's fair at pick time, beside the book we shopped
+        # to. Evidence only; nothing prices from it yet.
+        "fair_consensus": rec.fair_consensus,
+        "consensus_books": rec.consensus_books,
         "edge": rec.edge, "ev_per_unit": rec.ev_per_unit,
         "confidence": rec.confidence, "stake_units": rec.stake_units,
         "grade": rec.grade, "has_market": rec.has_market, "trend": rec.trend,

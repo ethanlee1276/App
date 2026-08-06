@@ -59,6 +59,10 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         # correction beside this number (engine/ledger.py) so
         # calibrate.undo_temperature can strip it back off.
         "raw_prob": rec.raw_prob,
+        # The field's fair at pick time, beside the book we shopped
+        # to. Evidence only; nothing prices from it yet.
+        "fair_consensus": rec.fair_consensus,
+        "consensus_books": rec.consensus_books,
         "fair_prob": rec.fair_prob,
         "edge": rec.edge,
         "ev_per_unit": rec.ev_per_unit,

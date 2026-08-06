@@ -65,6 +65,52 @@ class BestLine:
     fair_prob: float      # de-vigged implied probability at this book
 
 
+#: A field of fewer than this many books is not a consensus, it is a
+#: coincidence. Below it :func:`consensus_fair` returns None rather than
+#: a number that would read as the market's opinion.
+MIN_CONSENSUS_BOOKS = 3
+
+
+def consensus_fair(lines: list[SportsbookLine], line: float | None = None
+                   ) -> tuple[float, int] | None:
+    """The FIELD's de-vigged fair for the over, and how many books it is.
+
+    ``best_over_line`` de-vigs the book being bet, which makes the
+    benchmark move with the outlier: the further out of line a price is,
+    the more likely it is selected AND the lower its own fair, so the edge
+    grows with the outlier before the model has said anything. That is a
+    structural loop, and this is the number that closes it — the market's
+    opinion, taken from every book quoting the same number rather than
+    from the one we happened to shop to.
+
+    Median, not mean: one stale book should not define a field, which is
+    the same reason the close-picker uses one.
+
+    ``line`` restricts the field to books quoting that number, because a
+    fair at 1.5 and a fair at 2.5 are opinions about different events and
+    averaging them is not a consensus about either.
+
+    NOTHING PRICES FROM THIS YET. It is journaled as evidence so the
+    question "would measuring against the field have been better?" can be
+    answered from the record instead of argued about. See bookcheck.py.
+    """
+    fairs = []
+    for ln in lines:
+        if (ln.book or "").lower() == "proxy":
+            continue                      # a proxy is not a market opinion
+        if line is not None and ln.line != line:
+            continue
+        fair_over, _ = devig_two_way(ln.over_odds, ln.under_odds)
+        if 0.0 < fair_over < 1.0:
+            fairs.append(fair_over)
+    if len(fairs) < MIN_CONSENSUS_BOOKS:
+        return None
+    fairs.sort()
+    n = len(fairs)
+    med = fairs[n // 2] if n % 2 else (fairs[n // 2 - 1] + fairs[n // 2]) / 2.0
+    return med, n
+
+
 def best_over_line(lines: list[SportsbookLine]) -> BestLine:
     """Pick the most bettor-friendly OVER line across books.
 

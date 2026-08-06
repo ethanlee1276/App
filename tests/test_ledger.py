@@ -1869,6 +1869,69 @@ def test_the_closing_price_comes_from_the_free_snapshots():
     assert "_median" in src, "one outlier book could define the close"
 
 
+def test_the_field_is_journaled_beside_the_book_we_shopped_to():
+    """`edge` is measured against the book being BET (engine/odds.
+    best_over_line de-vigs that book's own quote), so the benchmark moves
+    with the outlier: shopping selects the price furthest from the field,
+    and that same price defines fair. Whether it costs anything is a
+    question for the record — and the record can only answer it if the
+    field was captured when the pick was made. Reconstructing it later
+    from snapshots is a looser number."""
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    ledger.log_recommendations(conn, {"sport": "mlb", "date": "2026-08-06",
+        "recommendations": [{
+            "player": "A", "market": "hits", "side": "OVER", "line": 1.5,
+            "book": "dk", "odds": -110, "projection": 1.8, "hit_prob": 0.56,
+            "raw_prob": 0.62, "edge": 0.05, "confidence": 7, "grade": "B",
+            "stake_units": 1.0, "recommended": True,
+            "fair_consensus": 0.512, "consensus_books": 5}]})
+    r = conn.execute(
+        "SELECT fair_consensus, consensus_books FROM bets").fetchone()
+    assert abs(r["fair_consensus"] - 0.512) < 1e-9
+    assert r["consensus_books"] == 5
+
+
+def test_a_pick_with_no_field_journals_null_rather_than_a_guess():
+    """Fewer than three books is not a consensus. NULL says "we could not
+    see a field here", which a later analysis must be able to exclude —
+    a fabricated one would look like evidence."""
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    ledger.log_recommendations(conn, {"sport": "mlb", "date": "2026-08-06",
+        "recommendations": [{
+            "player": "B", "market": "hits", "side": "OVER", "line": 1.5,
+            "book": "dk", "odds": -110, "hit_prob": 0.56, "edge": 0.05,
+            "confidence": 7, "grade": "B", "stake_units": 1.0,
+            "recommended": True}]})
+    r = conn.execute(
+        "SELECT fair_consensus, consensus_books FROM bets").fetchone()
+    assert r["fair_consensus"] is None
+    assert r["consensus_books"] is None or r["consensus_books"] == 0
+
+
+def test_nothing_prices_from_the_field_yet():
+    """Evidence, not pricing. The edge that gates and sizes a bet still
+    comes from the taken book — changing that moves every number on the
+    board and belongs behind the measurement, not in front of it."""
+    import inspect
+    from engine import betting
+    from engine.mlb import betting as mlb_betting
+    for mod in (betting.evaluate_prop, mlb_betting.evaluate_mlb_prop):
+        src = inspect.getsource(mod)
+        assert "consensus_fair(prop.lines" in src, "the field is not captured"
+        # The field is read once and carried onto the Recommendation. It
+        # must not appear anywhere a decision is made — the gate, the
+        # stake and the grade all still run off `edge` against the taken
+        # book, which is what makes this evidence rather than a change.
+        head = src.split("_field = consensus_fair")[0]
+        assert "_field" not in head, "the field reached a decision"
+        for decision in ("gate_ok = ", "stake = ", "grade = "):
+            line = next((ln for ln in src.splitlines()
+                         if ln.strip().startswith(decision)), "")
+            assert "_field" not in line and "consensus" not in line, decision
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

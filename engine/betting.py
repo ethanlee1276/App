@@ -12,7 +12,8 @@ from dataclasses import dataclass, field
 
 from .models import Prop, RECEPTIONS
 from .projection import Projection
-from .odds import best_over_line, best_under_line, devig_two_way, expected_value
+from .odds import (best_over_line, best_under_line, consensus_fair,
+                   devig_two_way, expected_value)
 from .statmath import prob_over, prob_over_discrete, clamp
 from .calibrate import apply_temperature, correction_for
 
@@ -93,6 +94,18 @@ class Recommendation:
     #: Fitting the tempered one and correcting the raw one is fitting a
     #: different quantity than you correct — see engine/backtest.py.
     raw_prob: float = 0.0
+    #: The FIELD's de-vigged fair for the over, and how many books it is,
+    #: at pick time. Evidence only — nothing prices from it.
+    #:
+    #: `fair_prob` above is de-vigged from the book being bet, so the
+    #: benchmark moves with the outlier: shopping selects the price
+    #: furthest from the field, and that same price defines what "fair"
+    #: means. Whether that costs anything is a question for the record,
+    #: and the record can only answer it if the field is captured at the
+    #: moment the pick was made — reconstructing it afterwards from
+    #: snapshots is a different, looser number. See bookcheck.py.
+    fair_consensus: float | None = None
+    consensus_books: int = 0
 
 
 def _confidence_score(edge: float, hit_prob: float, proj: Projection,
@@ -383,6 +396,12 @@ def evaluate_prop(prop: Prop, proj: Projection,
                        f"({min_edge:.1%} post-haircut) — pass, not a lean")
     reasons.extend(quality_notes)
 
+    # The field's opinion at pick time, captured beside the book we
+    # shopped to. Restricted to books quoting the SAME number, since
+    # a fair at 1.5 and a fair at 2.5 are opinions about different
+    # events. Evidence only — see Recommendation.fair_consensus.
+    _field = consensus_fair(prop.lines, best.line)
+
     return Recommendation(
         player=prop.player,
         team=prop.team,
@@ -397,6 +416,8 @@ def evaluate_prop(prop: Prop, proj: Projection,
         proj_high=round(proj.mean + proj.std, 1),
         hit_prob=round(hit, 4), raw_prob=round(hit_raw, 6),
         fair_prob=round(fair, 4),
+        fair_consensus=(round(_field[0], 4) if _field else None),
+        consensus_books=(_field[1] if _field else 0),
         edge=round(edge, 4),
         ev_per_unit=round(ev, 4),
         confidence=confidence,

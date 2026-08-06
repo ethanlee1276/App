@@ -17,7 +17,7 @@ from ..betting import (
 )
 from ..calibrate import apply_temperature, correction_for, is_reliable
 from ..losspatterns import veto as lp_veto
-from ..odds import expected_value
+from ..odds import consensus_fair, expected_value
 from ..statmath import prob_over, clamp
 from .models import MLBProp, HOME_RUNS, STRIKEOUTS, PITCHER_MARKETS
 from .projection import MLBProjection
@@ -223,6 +223,12 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
                        f"({min_edge:.1%} post-haircut) — pass, not a lean")
     reasons.extend(quality_notes)
 
+    # The field's opinion at pick time, captured beside the book we
+    # shopped to. Restricted to books quoting the SAME number, since
+    # a fair at 1.5 and a fair at 2.5 are opinions about different
+    # events. Evidence only — see Recommendation.fair_consensus.
+    _field = consensus_fair(prop.lines, best.line)
+
     return Recommendation(
         player=prop.player, team=prop.team, opponent=prop.opponent,
         market=prop.market, side=side,
@@ -232,6 +238,8 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         proj_high=round(proj.mean + proj.std, 2),
         hit_prob=round(hit, 4), raw_prob=round(hit_raw, 6),
         fair_prob=round(fair, 4),
+        fair_consensus=(round(_field[0], 4) if _field else None),
+        consensus_books=(_field[1] if _field else 0),
         edge=round(edge, 4), ev_per_unit=round(ev, 4),
         confidence=confidence, stake_units=round(stake, 2), grade=grade,
         reasons=reasons, trend=proj.form.trend,

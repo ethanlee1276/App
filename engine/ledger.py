@@ -158,7 +158,13 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     for col in ("proj_minutes", "actual_minutes", "lead_min", "park_hr",
                 "wind_out", "roofed", "lineup_slot", "lineup_conf",
                 "rest_days", "body_clock", "pen_own", "pen_opp",
-                "raw_prob", "cal_temp", "cal_bias", "closing_odds"):
+                "raw_prob", "cal_temp", "cal_bias", "closing_odds",
+                # The FIELD's fair at pick time, and how many books it
+                # was. `edge` is measured against the book we shopped
+                # to, which moves the benchmark with the outlier; this
+                # is what it would have been measured against instead.
+                # Evidence only — nothing prices from it. bookcheck.py.
+                "fair_consensus", "consensus_books"):
         try:
             conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
         except sqlite3.OperationalError:
@@ -278,9 +284,10 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
             "stake_dollars, status, leg, proj_minutes, lead_min, park_hr, "
             "wind_out, roofed, lineup_slot, lineup_conf, rest_days, "
-            "body_clock, pen_own, pen_opp, raw_prob, cal_temp, cal_bias) "
+            "body_clock, pen_own, pen_opp, raw_prob, cal_temp, cal_bias, "
+            "fair_consensus, consensus_books) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', "
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
              r["line"], r.get("book", ""), r.get("odds", -110), r.get("projection"),
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
@@ -317,7 +324,9 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # produced it. Together they invert (calibrate.undo_temperature)
              # back to the model's own uncorrected number — the only pairs a
              # refit of an already-corrected market could honestly learn on.
-             r.get("raw_prob"), temp, bias))
+             r.get("raw_prob"), temp, bias,
+             # The field at pick time, beside the book we shopped to.
+             r.get("fair_consensus"), r.get("consensus_books")))
         n += cur.rowcount
     # Recommended game bets journal too (sharp-anchor picks live or die by
     # forward results). Moneylines store player = the team picked, line 0.5,
