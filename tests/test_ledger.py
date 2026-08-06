@@ -1741,6 +1741,68 @@ def test_near_misses_pick_only_the_just_under_bar():
     assert "quality 63/70" in nm[0]["missed_by"]
 
 
+def test_the_breakeven_comes_from_the_prices_actually_taken():
+    """The record page printed "break-even ≈ 52.4% at −110" beside the win
+    rate, whatever the book was made of.
+
+    That is the right number only for a book of −110s. This journal buys
+    short prices: its real bar is near 58%, so a 47.0% win rate read as
+    five points short when it was ten — the site flattering the record on
+    the one figure a bettor checks first.
+    """
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    for i in range(100):
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+            "odds,hit_prob,status,category,stake_units,pnl_units) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("2026-08-01T10:00:00", "mlb", "2026-08-01", f"P{i}", "hits",
+             "OVER", 1.5, "dk", -200, 0.6, "won" if i < 47 else "lost",
+             "main", 1.0, 0.5 if i < 47 else -1.0))
+    conn.commit()
+    p = ledger.performance(conn)
+    assert abs(p["win_rate"] - 0.47) < 1e-9
+    # -200 needs 66.7%, not 52.4%.
+    assert abs(p["breakeven"] - 0.6667) < 0.001
+
+
+def test_the_breakeven_follows_a_plus_money_book_too():
+    """A book of dogs needs LESS than 52.4%, and calling that book losing
+    would be the same error in the other direction."""
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    for i in range(60):
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+            "odds,hit_prob,status,category,stake_units,pnl_units) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("2026-08-01T10:00:00", "mlb", "2026-08-01", f"P{i}", "hits",
+             "OVER", 1.5, "dk", 150, 0.45, "won" if i < 27 else "lost",
+             "main", 1.0, 1.5 if i < 27 else -1.0))
+    conn.commit()
+    p = ledger.performance(conn)
+    assert abs(p["breakeven"] - 0.40) < 0.001
+    assert p["win_rate"] > p["breakeven"], "a profitable dog book read as losing"
+
+
+def test_an_empty_book_reports_no_breakeven_rather_than_a_default():
+    p = ledger.performance(_conn())
+    assert p["breakeven"] is None
+
+
+def test_the_page_prints_the_measured_breakeven_not_a_constant():
+    app = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "web", "js", "app.js"),
+        encoding="utf-8").read()
+    i = app.index('recTile("Win rate"')
+    tile = app[i:i + 500]
+    assert "o.breakeven" in tile, "the tile still hardcodes a break-even"
+    assert "at the prices taken" in tile
+    # The -110 wording survives only as the no-odds fallback.
+    assert "o.breakeven == null" in tile
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

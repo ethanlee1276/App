@@ -1880,6 +1880,29 @@ def clv_coverage(conn, category: str = "main") -> dict:
             "ready_sports": sorted(s for s, v in out.items() if v["ready"])}
 
 
+def implied_breakeven(odds) -> float | None:
+    """The win rate one American price needs just to break even."""
+    try:
+        o = float(odds)
+    except (TypeError, ValueError):
+        return None
+    if not o:
+        return None
+    return (100.0 / (o + 100.0)) if o > 0 else (-o / (-o + 100.0))
+
+
+def _book_breakeven(bets) -> float | None:
+    """The average break-even across the prices a book actually took.
+
+    Not a −110 assumption. A book of −200 favourites needs 66.7% and a
+    book of +150 dogs needs 40%, and printing 52.4% beside either is a
+    statement about a book nobody made.
+    """
+    rates = [r for r in (implied_breakeven(b["odds"]) for b in bets
+                         if b["status"] != "push") if r is not None]
+    return (sum(rates) / len(rates)) if rates else None
+
+
 def performance(conn, sport: str | None = None, category: str = "main") -> dict:
     # ``stake_units > 0`` everywhere below: rows staked at zero were never
     # bets (an old grading bug shipped picks the vig had already eaten).
@@ -1943,6 +1966,14 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
     return {
         "settled": len(bets), "wins": wins, "losses": losses, "pushes": pushes,
         "win_rate": (wins / graded) if graded else 0.0,
+        # The win rate this book ACTUALLY has to clear, averaged over each
+        # bet's own price. The page used to print a flat "break-even ≈
+        # 52.4% at −110" beside it, which is the right number only for a
+        # book of −110s. A book that buys short prices needs far more: on
+        # this journal the real bar is around 58%, so 47% read as five
+        # points short when it was ten. That is the site being reassuring
+        # and wrong about the one number a bettor checks first.
+        "breakeven": _book_breakeven(bets),
         "units_staked": round(staked_u, 2), "net_units": round(net_u, 2),
         "roi": (net_u / staked_u) if staked_u else 0.0,
         "net_dollars": round(net_d, 2),

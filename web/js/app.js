@@ -4565,7 +4565,18 @@ async function renderRecord() {
                 o.avg_clv == null ? "accrues as daily closes are captured" : "beat the close = sharp process",
                 { lead: true, tone: o.avg_clv == null ? "" : toneOf(o.avg_clv) })}
       ${recTile("Record", `${o.wins}-${o.losses}-${o.pushes}`, `${o.open} open · ${o.settled} settled`)}
-      ${recTile("Win rate", (o.win_rate * 100).toFixed(1) + "%", "break-even ≈ 52.4% at −110")}
+      ${/* The break-even is read off the prices this book ACTUALLY took,
+            not assumed to be -110. A book that buys short prices needs far
+            more than 52.4%: on the MLB journal the real bar is near 58%,
+            so a 47% win rate read as five points short when it was ten.
+            The flat number flattered the record on the one figure a
+            bettor checks first. Falls back to the -110 wording only when
+            no odds are available to average. */ ""}
+      ${recTile("Win rate", (o.win_rate * 100).toFixed(1) + "%",
+                o.breakeven == null
+                  ? "break-even ≈ 52.4% at −110"
+                  : `break-even ${(o.breakeven * 100).toFixed(1)}% at the prices taken`,
+                { tone: o.breakeven != null && o.win_rate < o.breakeven ? "bad" : "" })}
       ${recTile("Process", nProc ? `${pr.good || 0}${icon('check')} ${pr.bad || 0}${icon('cross')}` : "—",
                 // The count is the point. This grades a bet against the
                 // CLOSING line, so it can only speak for the picks where a
