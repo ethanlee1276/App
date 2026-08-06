@@ -148,18 +148,29 @@
   <main>
     <!-- Recommended -->
     <section class="view active" id="view-recommended">
-      <div class="section-title hero-title" id="games-title">Tonight's ballparks
-        <span class="sub">— real park shapes, roof state, live wind and the home-run
-        factor each one is playing to right now</span>
-      </div>
-      <div class="games-scroller hero-games" id="games"></div>
+      <!-- ORDER: the picks come first.
+           Measured on an iPhone 13, the old order put "Tonight's picks" at
+           1030px — 1.6 full screens below the fold — on the page that gets
+           opened first every day. Everything above it was masthead, then
+           753px of stadium diagrams: context, rendered ahead of the
+           product. The complaint was that the site felt cramped; it was
+           not cramped, the thing you came for was buried.
 
+           The ballparks are still here and still worth having. They are
+           what a pick is priced INTO, so they read better as the answer to
+           "why that number" than as the first thing on the page. -->
       <div id="probation-note"></div>
       <div id="talent-note"></div>
 
       <div class="stats" id="stats"></div>
 
       <div id="best-bets"></div>
+
+      <div class="section-title hero-title" id="games-title">Tonight's ballparks
+        <span class="sub">— real park shapes, roof state, live wind and the home-run
+        factor each one is playing to right now</span>
+      </div>
+      <div class="games-scroller hero-games" id="games"></div>
 
       <div id="team-form"></div>
 

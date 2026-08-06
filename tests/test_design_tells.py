@@ -459,6 +459,29 @@ def test_the_selected_nav_is_announced_and_not_only_drawn():
         assert call in app
 
 
+def test_the_picks_come_before_the_scenery():
+    """Measured on an iPhone 13: "Tonight's picks" sat at 1030px — 1.6 full
+    screens below the fold — on the page that gets opened first every day.
+    Above it was the masthead, then 753px of stadium diagrams.
+
+    That is what "the site feels cramped" actually was. Not density: the
+    thing you came for was buried under context. Reordered, the picks land
+    at 471px, on the first screen. The ballparks are still there and still
+    worth having — they are what a pick is priced INTO, so they read
+    better as the answer to "why that number" than as the front page.
+    """
+    html = open(os.path.join(ROOT, "web", "index.html"),
+                encoding="utf-8").read()
+    view = html[html.index('id="view-recommended"'):]
+    view = view[:view.index('id="view-', 10)] if 'id="view-' in view[10:] else view
+    picks = view.index('id="best-bets"')
+    parks = view.index('id="games-title"')
+    assert picks < parks, "the scenery is back in front of the product"
+    # The counts tile leads, because a board's first answer is how many
+    # picks there are — including when the answer is none.
+    assert view.index('id="stats"') < parks
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
