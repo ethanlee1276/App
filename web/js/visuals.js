@@ -438,8 +438,14 @@ function ballpark(game, opts = {}) {
           fill="url(#${uid}stand)" stroke="${shade(home.primary, -40)}" stroke-width="2"/>
     <!-- field: outfield grass fan -->
     <path d="M120 132 L34 60 A116 92 0 0 1 206 60 Z" fill="${grass}"/>
+    ${/* Mow stripes. Classed so the engraving layer can drop them: as FILLED
+          wedges at 18% they read as faint stripes, but engraved — outline
+          only — each one becomes an arc plus two radii, and five of those
+          radiating from the plate is a cat's cradle over the infield. The
+          football field's stripes survive the same treatment because they
+          are rectangles, which outline into parallel lines. */""}
     ${Array.from({ length: 5 }, (_, i) =>
-      `<path d="M120 132 L${44 + i * 16} ${56 - i * 2} A116 92 0 0 1 ${72 + i * 20} 34 Z"
+      `<path class="mow" d="M120 132 L${44 + i * 16} ${56 - i * 2} A116 92 0 0 1 ${72 + i * 20} 34 Z"
          fill="${grassDark}" opacity="0.18"/>`).join("")}
     <!-- outfield wall -->
     <path d="M34 60 A116 92 0 0 1 206 60" fill="none"

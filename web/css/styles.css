@@ -3233,6 +3233,35 @@ select.calc-in { width: auto; font-weight: 600; }
 
 .field path { fill: none; stroke: var(--text-mute); stroke-width: 1.1; opacity: 1; }
 
+/* …and the same for `.stadium`, which is the rule that was missing.
+   Measured: the NFL bowl is built from 31 <line>, 10 <circle>, 2 <ellipse>
+   and 10 <rect>, so every rule above caught it and it engraved perfectly.
+   The MLB ballpark draws its stands, outfield fan, mow stripes, wall,
+   infield dirt, infield grass and plate as THIRTEEN <path> elements — and
+   nothing here matched a path under `.stadium`. Computed fills came back
+   rgb(31,125,65) and rgb(42,157,84): the raw greens out of visuals.js.
+   So the entire re-skin slid off the one sport on the board that opens
+   first, and the Overhead's own grammar was being followed by two
+   renderers out of three.
+   `.stadium g[stroke] path` above is more specific, so the goalposts,
+   base paths and altitude glyph keep their existing treatment. */
+.stadium path { fill: none; stroke: var(--text-mute); stroke-width: 1.1; opacity: 1; }
+/* Decoration, and the one thing here that carries no data — see the note
+   in ballpark(). The outfield arc and the foul lines already give the fan
+   its radial structure. */
+.stadium path.mow { display: none; }
+
+/* Plaques (HR factor, altitude) and the bases sit inside <g>, so the
+   direct-child rect rule never reached them either — they kept a filled
+   navy pill. Hairline box, square corners: `rx` is a CSS geometry
+   property, which is the only way to unset an rx="7.5" written on the
+   element without editing the drawing code. */
+.stadium g rect { fill: none; stroke: var(--border); stroke-width: 1; opacity: 1; }
+/* Zero radius is a house rule everywhere else in Night Form; the art was
+   the one place still drawing rounded corners (rx="6" on the NFL field
+   and end zones, rx="7.5" on the plaques). */
+.stadium rect, .field rect { rx: 0; ry: 0; }
+
 /* Every label on the art is bone at one weight. The old art set them in
    white, in the team's ideal-contrast colour, and at four opacities. */
 .stadium text, .field text {
