@@ -383,6 +383,60 @@ def test_book_is_not_in_the_strata():
     assert "mediator" in src
     assert '"book"' not in src.split('"""')[2], "book crept into the strata key"
 
+
+# --- sensitivity: is the answer a property of the data or of the cells? ----
+def test_a_real_effect_holds_across_every_scheme():
+    """One adjusted number is one analyst's choice of strata. An effect
+    that is really there should barely move from coarse to fine."""
+    sel, rej = _pair("hits", 0.58, 0.46, 0.58, n=400)
+    s2, r2 = _pair("total_bases", 0.62, 0.50, 0.62, n=400)
+    r = sc.across(sel + s2, rej + r2)
+    got = [x for x in r["schemes"] if x["diff"] is not None]
+    assert len(got) == 1 + len(sc.SCHEMES), [x["name"] for x in got]
+    st = sc.stability(r["schemes"])
+    assert st["stable"] is True, st
+    assert st["one_sign"]
+
+
+def test_a_cell_artifact_is_caught_by_the_spread():
+    """Two markets, each perfectly calibrated inside itself, with the gate
+    routing the low-base-rate one to the selected side. Raw is large;
+    controlling for market must kill it, so the schemes disagree."""
+    # The minority side needs enough rows to MEASURE zero: at 40 its own
+    # error bar is +-7.7%, so "no within-market difference" is untestable
+    # there and the first version of this test failed on its own noise.
+    hard_s, hard_r = _pair("home_runs", 0.30, 0.20, 0.20, n=500)
+    easy_s, easy_r = _pair("hits", 0.60, 0.60, 0.60, n=500)
+    r = sc.across(hard_s + easy_s[:150], hard_r[:150] + easy_r)
+    by = {x["name"]: x for x in r["schemes"] if x["diff"] is not None}
+    assert abs(by["raw (no adjustment)"]["diff"]) > 0.03, by["raw (no adjustment)"]
+    assert abs(by["market"]["diff"]) < 0.03, by["market"]
+
+
+def test_coverage_falls_as_the_scheme_gets_finer():
+    """The cost of control, and the reason the finest scheme is not
+    automatically the best one to quote."""
+    sel, rej = _pair("hits", 0.58, 0.46, 0.58, n=200)
+    s2, r2 = _pair("total_bases", 0.62, 0.50, 0.62, n=200)
+    s3, r3 = _pair("strikeouts", 0.30, 0.22, 0.30, n=200)
+    r = sc.across(sel + s2 + s3, rej + r2 + r3)
+    cov = {x["name"]: x["covered"] for x in r["schemes"]}
+    assert cov["raw (no adjustment)"] >= cov["market"] >= cov[sc.PRIMARY]
+
+
+def test_book_is_not_one_of_the_schemes():
+    """A mediator, not a confounder — adjusting for it subtracts the very
+    effect being measured. The balance table makes adding it look obvious,
+    so the guard is explicit."""
+    assert all("book" not in name for name, _ in sc.SCHEMES)
+    import inspect
+    assert "mediator" in inspect.getsource(sc.across)
+
+
+def test_stability_declines_to_speak_on_one_scheme():
+    assert sc.stability([{"name": "raw (no adjustment)", "diff": 0.1, "se": 0.02},
+                         {"name": "market", "diff": 0.1, "se": 0.02}])["stable"] is None
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

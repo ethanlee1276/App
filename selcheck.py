@@ -84,6 +84,22 @@ SELECTED, REJECTED = "main", "loose"
 #: A stratum needs this many bets on BOTH sides before it can contribute a
 #: within-stratum difference.
 MIN_STRATUM = 12
+#: The stratification schemes, coarse to fine. Reported side by side: one
+#: adjusted number is one analyst's choice of cells, and the finest scheme
+#: on the real journal threw away 37% of the sample. The SPREAD across
+#: schemes is what says whether the answer is a property of the data or of
+#: the grid someone drew over it.
+#:
+#: Book is not here and must not be — see across()'s docstring. It is a
+#: mediator, not a confounder, and adjusting for it subtracts the effect.
+SCHEMES = [
+    ("market", lambda r: (r["market"],)),
+    ("claim band", lambda r: (_band(r),)),
+    ("market x claim band", lambda r: (r["market"], _band(r))),
+]
+#: The scheme quoted as THE adjusted answer, kept for continuity with the
+#: earlier runs.
+PRIMARY = "market x claim band"
 
 
 def load(conn, sport=None, category="main") -> list[dict]:
@@ -236,32 +252,77 @@ def across(sel: list[dict], rej: list[dict]) -> dict:
     adjusted for.
     """
     a, b = _stats(sel), _stats(rej)
-    raw_d = a["gap"] - b["gap"]
-    raw_se = math.sqrt(a["se"] ** 2 + b["se"] ** 2)
+    raw = {"name": "raw (no adjustment)",
+           "diff": a["gap"] - b["gap"],
+           "se": math.sqrt(a["se"] ** 2 + b["se"] ** 2),
+           "covered": len(sel) + len(rej), "strata": []}
+    schemes = [raw] + [stratified(sel, rej, name, key) for name, key in SCHEMES]
+    adj = next((s for s in schemes if s["name"] == PRIMARY and s["diff"] is not None),
+               None)
+    return {"sel": a, "rej": b, "raw": raw, "schemes": schemes,
+            "adjusted": adj,
+            "strata": adj["strata"] if adj else [],
+            "covered": adj["covered"] if adj else 0}
 
+
+def stratified(sel: list[dict], rej: list[dict], name: str, key) -> dict:
+    """The selected-minus-rejected difference within strata, pooled.
+
+    Inverse-variance weights over strata that clear MIN_STRATUM on BOTH
+    sides. Everything else is dropped, which is where the coverage number
+    comes from and why a finer scheme buys less precision than its extra
+    control suggests.
+    """
     groups: dict = {}
     for r in sel:
-        groups.setdefault((r["market"], _band(r)), ([], []))[0].append(r)
+        groups.setdefault(key(r), ([], []))[0].append(r)
     for r in rej:
-        groups.setdefault((r["market"], _band(r)), ([], []))[1].append(r)
+        groups.setdefault(key(r), ([], []))[1].append(r)
 
     strata, num, den = [], 0.0, 0.0
-    for (mkt, band), (s, j) in sorted(groups.items()):
+    for k, (s, j) in sorted(groups.items(), key=lambda kv: str(kv[0])):
         if len(s) < MIN_STRATUM or len(j) < MIN_STRATUM:
             continue
         sa, sb = _stats(s), _stats(j)
-        d = sa["gap"] - sb["gap"]
         v = sa["se"] ** 2 + sb["se"] ** 2
         if v <= 0:
             continue
-        strata.append({"market": mkt, "band": band, "n_sel": len(s),
-                       "n_rej": len(j), "diff": d, "se": math.sqrt(v)})
-        num += d / v
+        strata.append({"key": k, "n_sel": len(s), "n_rej": len(j),
+                       "diff": sa["gap"] - sb["gap"], "se": math.sqrt(v)})
+        num += (sa["gap"] - sb["gap"]) / v
         den += 1.0 / v
-    adj = {"diff": num / den, "se": math.sqrt(1.0 / den)} if den else None
-    return {"sel": a, "rej": b, "raw": {"diff": raw_d, "se": raw_se},
-            "adjusted": adj, "strata": strata,
+    return {"name": name,
+            "diff": num / den if den else None,
+            "se": math.sqrt(1.0 / den) if den else None,
+            "strata": strata,
             "covered": sum(s["n_sel"] + s["n_rej"] for s in strata)}
+
+
+def stability(schemes: list[dict]) -> dict:
+    """Does the answer survive the choice of cells?
+
+    One adjusted number is one analyst's choice of strata. The finest
+    scheme on the real journal discarded 37% of the sample, which is a lot
+    of power spent on a scheme nobody validated — so the estimate is
+    computed under every scheme and the SPREAD is the finding. An effect
+    that holds from coarse to fine is not an artifact of the cells; one
+    that only appears in a single scheme is.
+
+    `spread` is the range of the adjusted point estimates, quoted against
+    the median error bar so it can be read as "inside the noise" or not.
+    """
+    got = [s for s in schemes if s["name"] != "raw (no adjustment)"
+           and s["diff"] is not None]
+    if len(got) < 2:
+        return {"stable": None, "n": len(got)}
+    ds = [s["diff"] for s in got]
+    ses = sorted(s["se"] for s in got)
+    med = ses[len(ses) // 2]
+    spread = max(ds) - min(ds)
+    signs = {d > 0 for d in ds}
+    return {"stable": len(signs) == 1 and spread <= 2 * med,
+            "spread": spread, "median_se": med, "n": len(got),
+            "lo": min(ds), "hi": max(ds), "one_sign": len(signs) == 1}
 
 
 def balance(sel: list[dict], rej: list[dict], key) -> list[dict]:
@@ -320,19 +381,43 @@ def report_across(sel: list[dict], rej: list[dict]) -> int:
         print(f"  {label:20} {s['n']:5} bets   claimed {s['claimed']:6.1%}   "
               f"landed {s['landed']:6.1%}   gap {s['gap']:+6.1%} ±{2 * s['se']:.1%}")
     z = r["raw"]["diff"] / r["raw"]["se"] if r["raw"]["se"] else 0.0
+    total = len(sel) + len(rej)
     print()
-    print(f"  raw difference       {r['raw']['diff']:+.1%}  "
-          f"±{2 * r['raw']['se']:.1%} (2σ)   z {z:+.2f}")
-    if r["adjusted"]:
-        za = r["adjusted"]["diff"] / r["adjusted"]["se"]
-        print(f"  within-strata        {r['adjusted']['diff']:+.1%}  "
-              f"±{2 * r['adjusted']['se']:.1%} (2σ)   z {za:+.2f}")
-        print(f"    pooled over {len(r['strata'])} (market × claim band) strata "
-              f"covering {r['covered']:,} of {len(sel) + len(rej):,} bets")
-    else:
-        za = None
+    print("  adjusted for          difference        ±(2σ)       z   covered")
+    print("  " + "-" * 62)
+    for s in r["schemes"]:
+        if s["diff"] is None:
+            print(f"  {s['name']:20}  no stratum has enough on both sides")
+            continue
+        zs = s["diff"] / s["se"] if s["se"] else 0.0
+        star = " *" if s["name"] == PRIMARY else ""
+        print(f"  {s['name']:20} {s['diff']:+9.1%}    {2 * s['se']:6.1%}  "
+              f"{zs:+6.2f}   {s['covered'] / total:4.0%}{star}")
+    print()
+    print("  Coarse to fine, top to bottom. Each row controls for more and")
+    print("  pays for it in coverage — a stratum too thin on either side is")
+    print("  dropped entirely. The SPREAD down this column is the finding:")
+    print("  an effect that survives every scheme is a property of the data,")
+    print("  one that appears in a single row is a property of the cells.")
+    print()
+
+    st = stability(r["schemes"])
+    if st.get("stable") is not None:
+        verdict_word = ("HOLDS across schemes" if st["stable"]
+                        else "MOVES with the scheme")
+        print(f"  → the estimate {verdict_word}: "
+              f"{st['lo']:+.1%} to {st['hi']:+.1%}, a spread of "
+              f"{st['spread']:.1%} against a typical bar of ±{2 * st['median_se']:.1%}")
+        if not st["one_sign"]:
+            print("    and it CHANGES SIGN, which means the cells are driving")
+            print("    it rather than the gate. Treat the whole comparison as")
+            print("    unsettled, not as a small effect.")
+        print()
+
+    za = r["adjusted"]["diff"] / r["adjusted"]["se"] if r["adjusted"] else None
+    if r["adjusted"] is None:
         print("  within-strata        no stratum has enough on both sides")
-    print()
+        print()
     # Coverage first: stratifying throws away every bet in a stratum too
     # thin on one side, and that loss is why an adjusted estimate can keep
     # most of its size and still lose its significance.
