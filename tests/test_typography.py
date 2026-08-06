@@ -250,7 +250,26 @@ def test_the_theme_toggle_is_not_positioned_over_the_menu_bar():
     # Not "the first max-width:760 block" — there are several, and this rule
     # lives in a later one. The same assumption broke test_about_page.py
     # once already.
-    assert "#theme-toggle { position: static; }" in CSS
+    #
+    # What matters is that the toggle stays IN FLOW, not that it says one
+    # exact word. This used to assert the literal `position: static`, which
+    # then had to become `relative` — the toggle's 44px reach pseudo-element
+    # is absolutely positioned, so an unpositioned toggle sends it to the
+    # nearest positioned ancestor (the sticky .topbar) and parks an invisible
+    # 44x44 tap-blocker in the centre of the header. `static` and `relative`
+    # lay out identically here; `absolute` and `fixed` are the bug. Assert
+    # that, so the fix for one defect cannot read as a regression of another.
+    # test_masthead_brief.py owns the containing-block half of this.
+    css = _strip_comments(CSS)
+    for body in re.findall(r"#theme-toggle\s*\{([^}]*)\}", css):
+        pos = re.search(r"position\s*:\s*([a-z-]+)", body)
+        if pos:
+            assert pos.group(1) in ("static", "relative"), \
+                f"the toggle is `position: {pos.group(1)}` again — it floats " \
+                "over the menu bar's bordered pill instead of sharing the row"
+    assert re.search(r"#theme-toggle\s*\{[^}]*position\s*:", css), \
+        "nothing pins the toggle's position any more; it will inherit " \
+        "whatever the desktop rule says at phone widths"
     assert "top: 8px; right: 14px" not in CSS
     assert "top: 10px; right: 16px" not in _strip_comments(CSS), \
         "the tablet breakpoint still floats it over the bar"
