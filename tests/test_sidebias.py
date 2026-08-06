@@ -249,6 +249,48 @@ def test_no_simpson_warning_when_the_book_sits_inside_its_markets():
     assert "sits OUTSIDE the range" not in out
 
 
+def test_markets_sharing_a_mechanism_are_grouped_and_labelled():
+    """The cut that made 40 scattered thin bets add up to something.
+
+    strikeouts and outs are both pitcher props, and a pitcher prop lives on
+    how long the manager leaves him in — a decision, not a talent
+    measurement. Individually neither market has the bets to say anything;
+    together they are a hypothesis with a mechanism.
+    """
+    rows = (side_book("OVER", 60, 0.58, 0.50, "hits")
+            + side_book("UNDER", 40, 0.58, 0.52, "total_bases")
+            + side_book("OVER", 20, 0.58, 0.30, "strikeouts")
+            + side_book("UNDER", 10, 0.58, 0.60, "outs"))
+    out = _run(rows)
+    assert "BY FAMILY" in out
+    assert "(pitcher)" in out and "(hitter)" in out
+    # The label must not be truncated back into meaninglessness.
+    assert "(pitch)" not in out and "(hitte)" not in out
+
+
+def test_the_family_cut_admits_it_was_chosen_after_the_fact():
+    """It uses engine/parlays.FAMILY, which predates this file — but the
+    decision to look was made after reading the per-market table, so it
+    generates a hypothesis rather than confirming one. Saying so is the
+    difference between a lead and a licence."""
+    rows = (side_book("OVER", 60, 0.58, 0.50, "hits")
+            + side_book("UNDER", 40, 0.58, 0.52, "total_bases")
+            + side_book("OVER", 20, 0.58, 0.30, "strikeouts")
+            + side_book("UNDER", 10, 0.58, 0.60, "outs"))
+    out = _run(rows)
+    assert "chosen after reading the table" in out
+    assert "needs confirming on bets not yet made" in out
+
+
+def test_the_family_section_is_skipped_when_there_is_only_one():
+    """A single family is the headline again, and a table of one row that
+    restates the total teaches nobody anything."""
+    rows = (side_book("OVER", 60, 0.58, 0.50, "hits")
+            + side_book("UNDER", 40, 0.58, 0.52, "total_bases"))
+    out = _run(rows)
+    assert "BY FAMILY" not in out
+
+
 def test_an_empty_journal_does_not_divide_by_zero():
     assert sb.report([]) == 0
     s = sb.calibration_gap([])

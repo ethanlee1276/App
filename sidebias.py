@@ -240,6 +240,48 @@ def report(rows: list[dict], min_n: int = MIN_N) -> int:
               f"{gtu['n']:>9}{gtu['gap']:>+9.1%}{atm['diff']:>+9.1%}"
               f"{atm['z']:>+7.2f}")
 
+    # By FAMILY. This is the cut that makes the thin markets add up to
+    # something: strikeouts and outs are both pitcher props, and a pitcher
+    # prop lives or dies on how long the manager leaves him in, which is a
+    # decision rather than a talent measurement. A model can have the
+    # strikeout RATE right and the innings wrong and lose every over.
+    #
+    # The taxonomy is engine/parlays.FAMILY, which predates this file — the
+    # grouping is not invented to fit the data. But it was CHOSEN after
+    # seeing the data, so what follows generates a hypothesis; it does not
+    # confirm one. That distinction is the whole discipline here.
+    try:
+        from engine.parlays import FAMILY, HITTER_FAMILIES, PITCHER_FAMILIES
+    except Exception:
+        FAMILY, PITCHER_FAMILIES, HITTER_FAMILIES = {}, set(), set()
+    if FAMILY:
+        groups: dict = defaultdict(list)
+        for b in rows:
+            groups[FAMILY.get(b["market"], "other")].append(b)
+        shown = [(f, rs) for f, rs in groups.items() if len(rs) >= min_n]
+        if len(shown) > 1:
+            print()
+            print("=" * 74)
+            print("BY FAMILY — markets that share a mechanism")
+            print("=" * 74)
+            print(f"  {'family':<20}{'over n':>8}{'gap':>9}{'under n':>9}"
+                  f"{'gap':>9}{'diff':>9}{'z':>7}")
+            print("  " + "-" * 70)
+            for f, rs in sorted(shown, key=lambda x: -len(x[1])):
+                o, u = _split(rs)
+                go, gu = calibration_gap(o), calibration_gap(u)
+                af = asymmetry(go, gu)
+                label = f + (" (pitcher)" if f in PITCHER_FAMILIES
+                             else " (hitter)" if f in HITTER_FAMILIES else "")
+                print(f"  {label[:19]:<20}{go['n']:>8}{go['gap']:>+9.1%}"
+                      f"{gu['n']:>9}{gu['gap']:>+9.1%}{af['diff']:>+9.1%}"
+                      f"{af['z']:>+7.2f}")
+            print()
+            print("  Grouped by the taxonomy the parlay engine already uses,")
+            print("  not one drawn to fit these numbers. Still a hypothesis:")
+            print("  the cut was chosen after reading the table above, so it")
+            print("  needs confirming on bets not yet made.")
+
     # Simpson's check. If the whole book leans harder than any market in
     # it, the lean is not a property of those markets — it is composition,
     # or it is concentrated somewhere the per-market rows are too thin to
