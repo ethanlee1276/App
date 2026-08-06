@@ -219,6 +219,52 @@ def test_the_level_is_quoted_inside_the_data_not_extrapolated_to_zero():
     # The extrapolated value is still available, just not the headline.
     assert "intercept_at_zero" in f
 
+
+def test_categories_are_never_pooled():
+    """`bets.edge` is two different quantities and pooling them is a
+    Simpson's-paradox machine.
+
+    engine/ledger.py writes `r.get("edge", r.get("ev_per_unit"))` on a
+    longshot row, so a home-run bet's "edge" is a per-unit expected value
+    that runs from about -0.6 to +0.6 on a +900 price, while a main-board
+    row's is an edge in probability points. The first `--category all` run
+    bucketed the two together and reported CONSISTENT WITH SELECTION at
+    z +2.13 across buckets whose claimed probabilities were 10.3%, 15.1%,
+    53.0%, 45.6% and 27.2% — the buckets differed in what they CONTAINED
+    before they differed in anything measured.
+    """
+    import inspect
+    src = inspect.getsource(sc.main)
+    assert 'groups.setdefault(r.get("category")' in src, (
+        "main() must split by category before reporting; one pooled slope "
+        "over two definitions of `edge` is not a measurement"
+    )
+    assert "report(rs)" in src
+
+
+def test_the_market_table_carries_a_relative_gap():
+    """+2.9 points on a 14.7% claim is a fifth of the claim; +3.3 on 58.9%
+    is a twentieth. Ranking home runs against main-board props on absolute
+    probability points compares nothing."""
+    import contextlib
+    import io
+    rows = ([{"sport": "mlb", "market": "home_runs", "side": "OVER",
+              "odds": 700, "hit_prob": 0.147, "edge": 0.05,
+              "status": "won" if i % 7 == 0 else "lost", "category": "longshot"}
+             for i in range(300)]
+            + [{"sport": "mlb", "market": "hits", "side": "OVER",
+                "odds": -110, "hit_prob": 0.589, "edge": 0.04,
+                "status": "won" if i % 2 else "lost", "category": "longshot"}
+               for i in range(300)])
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        sc._markets(rows)
+    out = buf.getvalue()
+    assert "rel" in out
+    # home runs must show the LARGER relative miss despite smaller points
+    hr = [l for l in out.splitlines() if "home_runs" in l][0]
+    assert hr.strip().endswith("%")
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -80,7 +80,7 @@ MIN_TOTAL_N = 150
 
 
 def load(conn, sport=None, category="main") -> list[dict]:
-    q = ("SELECT sport, market, side, odds, hit_prob, edge, status "
+    q = ("SELECT sport, market, side, odds, hit_prob, edge, status, category "
          "FROM bets WHERE status IN ('won','lost') "
          "AND hit_prob IS NOT NULL AND edge IS NOT NULL")
     args: list = []
@@ -282,11 +282,15 @@ def _markets(rows: list[dict]) -> None:
     print("=" * 74)
     print("THE SECOND PREDICTION — widest where the model is least sure")
     print("=" * 74)
-    print("  market                     n   claimed   landed      gap")
-    print("  " + "-" * 58)
+    print("  market                     n   claimed   landed      gap    rel")
+    print("  " + "-" * 65)
     for m in ms:
+        # Relative, because +2.9 points on a 14.7% claim is a fifth of the
+        # claim and +3.3 on a 58.9% claim is a twentieth. Ranking home runs
+        # against main-board props on absolute points compares nothing.
+        rel = m["gap"] / m["claimed"] if m["claimed"] else 0.0
         print(f"  {m['key']:22} {m['n']:6}   {m['claimed']:6.1%}   "
-              f"{m['landed']:6.1%}   {m['gap']:+6.1%}")
+              f"{m['landed']:6.1%}   {m['gap']:+6.1%}  {rel:+5.0%}")
     print()
     print("  ratecheck measured pitcher strikeout RATE swinging 46.8%")
     print("  between starts — the noisiest thing the model estimates.")
@@ -301,7 +305,31 @@ def main(argv: list) -> int:
                    help="journal category, or 'all'")
     a = p.parse_args(argv)
     conn = ledger.connect()
-    return report(load(conn, sport=a.sport, category=a.category))
+    rows = load(conn, sport=a.sport, category=a.category)
+
+    # NEVER pool categories. `bets.edge` is two different quantities: on a
+    # main-board row it is an edge in probability points, and on a longshot
+    # row engine/ledger.py falls back to `ev_per_unit` when no edge is
+    # present — a per-unit expected value, which on a +900 price runs from
+    # about -0.6 to +0.6. Bucketing the two together sorts on a mixture of
+    # incompatible numbers, and it pools populations whose base rates run
+    # from 10% (home runs) to 58% (main-board props), so the buckets differ
+    # in WHAT THEY CONTAIN before they differ in anything measured.
+    #
+    # The first `--category all` run did exactly that and reported
+    # "CONSISTENT WITH SELECTION" at z +2.13 across buckets whose claimed
+    # probabilities were 10.3%, 15.1%, 53.0%, 45.6% and 27.2%. That slope
+    # is category mix, not the winner's curse.
+    groups: dict = {}
+    for r in rows:
+        groups.setdefault(r.get("category") or "main", []).append(r)
+    for i, (cat, rs) in enumerate(sorted(groups.items())):
+        if i:
+            print("\n")
+        print(f"### CATEGORY: {cat}   ({len(rs):,} settled)")
+        print()
+        report(rs)
+    return 0
 
 
 if __name__ == "__main__":
