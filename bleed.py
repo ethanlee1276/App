@@ -188,15 +188,6 @@ def odds_bucket(b) -> str:
     return "odds ≥ +150 (plus money)"
 
 
-def prob_bucket(b) -> str:
-    p = b.get("hit_prob")
-    if p is None:
-        return "prob unknown"
-    p = float(p)
-    return ("prob < 50%" if p < 0.5 else "prob 50-60%" if p < 0.6
-            else "prob 60-70%" if p < 0.7 else "prob ≥ 70%")
-
-
 # The circumstance dimensions come from engine/losspatterns, banded by the
 # MINER'S OWN functions rather than by edges invented here.
 #
