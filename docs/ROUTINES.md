@@ -279,6 +279,45 @@ happened once, on 7-27/7-28/7-30.
 silence is the design: a nightly ping that says "all fine" every day gets
 swiped away, and then so does the one that mattered.
 
+## Amendment after run #1 — the push that did not happen
+
+The first firing (manual, 2026-08-07 01:12 UTC) worked: it found a genuinely
+dead function in `bleed.py` and a test that had gone blind to two files'
+worth of inline CSS, committed both with real reasoning, and stopped. Then
+it **did not push**, and said nothing about not pushing.
+
+That is the worst shape a failure can take here. The session did the
+thinking, produced the fix, and left it in a container that gets reclaimed.
+The work survived only because the patch was exported by hand.
+
+Push in these containers is authenticated by the agent proxy rather than by
+anything in `.git/config` — no credential helper, no token in the remote
+URL. So a fired session can clone (read) and still lack the grant to push
+(write), and nothing in the prompt made it check.
+
+**Both prompts need these two lines, and neither trigger has them yet.**
+Applying them needs `update_trigger`, which this session cannot call.
+
+Replacing the push line in step 5 (nightly) and the closing block (weekly):
+
+```
+   Push with: git push -u origin claude/sports-betting-app-vhgmho
+   ALWAYS report whether that push succeeded, in one line, whenever you
+   committed anything — even under the "report only if something was
+   wrong" rule below. A commit that never reached the remote is the one
+   outcome that looks like success from inside the session and is total
+   work loss from outside it.
+   If the push fails for any reason, run `git format-patch origin/
+   claude/sports-betting-app-vhgmho..HEAD --stdout` and put the entire
+   patch in your report. Do not summarise it and do not truncate it —
+   the patch IS the deliverable when the remote is unreachable.
+```
+
+The "report only if something was wrong" instruction stays. A failed push
+IS something wrong, so the two do not conflict — but it was not obvious
+enough to a session that had just succeeded at everything else, and
+spelling it out costs one paragraph.
+
 ## Turning the Routines off
 
     list_triggers                       # ids, schedules, next run
