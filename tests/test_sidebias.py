@@ -67,31 +67,77 @@ def test_the_restatement_guards_degenerate_claims():
 
 
 def test_a_directional_lean_survives_the_restatement():
-    """The whole point. Pooling raw hit_prob makes an over-leaning book look
-    calibrated; restating to P(over) leaves the lean visible."""
+    """The whole point. Pooling raw hit_prob makes a leaning book look
+    calibrated; restating to P(over) leaves the lean visible.
+
+    **The first fixture here did not demonstrate that, and passed for two
+    months on a floating-point accident.** It had 100 unders claiming 0.60
+    of which exactly 60 won — unders landing precisely at their claim. Work
+    it through and the two gaps are algebraically identical: with `w_u`
+    under-wins out of `n_u` at claim `p`, the naive and restated gaps differ
+    by exactly `2*(n_u*p - w_u)/N`, which is zero when the unders are
+    calibrated. Both sides came to -12/220, and `abs(a) < abs(b)` between
+    two equal numbers turned on the order the sums accumulated: it held by
+    2.7e-15 on x86 Linux and failed on an ARM Mac.
+
+    The repair is the fixture, not the tolerance. To show restatement
+    exposing something, the two sides have to CANCEL when pooled naively:
+    overs landing under their claim and unders landing over theirs. Then
+    the naive gap is 0.0 — a book that looks perfectly calibrated — and the
+    restated gap is -15 points, because every under now counts as evidence
+    about the over instead of quietly offsetting it.
+    """
     rows = []
-    # Overs claim 60% and land 45%. Unders claim 60% and land 60%.
-    for _ in range(60):
+    # Overs claim 60% and land 45%.
+    for _ in range(45):
         rows.append(("OVER", 0.60, True))
-    for _ in range(60):
+    for _ in range(55):
         rows.append(("OVER", 0.60, False))
-    # 120 overs at 50% realised against a 60% claim: leaning.
-    for _ in range(60):
+    # Unders claim 60% and land 75% — the mirror miss, which is what makes
+    # the naive pooling cancel to nothing.
+    for _ in range(75):
         rows.append(("UNDER", 0.60, True))
-    for _ in range(40):
+    for _ in range(25):
         rows.append(("UNDER", 0.60, False))
 
     naive = [(p, 1 if won else 0) for _, p, won in rows]
     restated = [as_over(p, s, "won" if won else "lost") for s, p, won in rows]
 
-    # Pooled on raw hit_prob the book looks near its claim…
+    # Pooled on raw hit_prob the book looks exactly calibrated…
     naive_gap = sum(o for _, o in naive) / len(naive) - 0.60
+    assert abs(naive_gap) < 1e-9, naive_gap
+
     # …restated to P(over) it does not, because the unders now count as
     # evidence ABOUT the over and stop cancelling.
     over_claim = sum(p for p, _ in restated) / len(restated)
     over_real = sum(o for _, o in restated) / len(restated)
-    assert abs(naive_gap) < abs(over_real - over_claim), \
+    restated_gap = over_real - over_claim
+    assert abs(restated_gap - (-0.15)) < 1e-9, restated_gap
+
+    # A margin, not a strict inequality between two quantities that could
+    # be equal. This is the assertion that had no business being tight.
+    assert abs(restated_gap) > abs(naive_gap) + 0.10, \
         "restating did not expose the lean"
+
+
+def test_the_restatement_adds_nothing_when_the_unders_are_calibrated():
+    """The case the old fixture accidentally built, kept deliberately so
+    the equality is documented rather than rediscovered as a flake.
+
+    When the unders land exactly at their claim there is nothing for the
+    restatement to expose, and the two gaps agree to the last bit that
+    floating point allows. A test asserting a strict difference here is
+    asserting noise.
+    """
+    rows = ([("OVER", 0.60, True)] * 60 + [("OVER", 0.60, False)] * 60
+            + [("UNDER", 0.60, True)] * 60 + [("UNDER", 0.60, False)] * 40)
+    naive = [(p, 1 if won else 0) for _, p, won in rows]
+    restated = [as_over(p, s, "won" if won else "lost") for s, p, won in rows]
+    naive_gap = sum(o for _, o in naive) / len(naive) - 0.60
+    over_claim = sum(p for p, _ in restated) / len(restated)
+    over_real = sum(o for _, o in restated) / len(restated)
+    assert abs(abs(naive_gap) - abs(over_real - over_claim)) < 1e-9
+    assert abs(naive_gap - (-12 / 220)) < 1e-9
 
 
 # --- the asymmetry test ------------------------------------------------------

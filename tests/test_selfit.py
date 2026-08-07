@@ -379,7 +379,11 @@ def test_walkforward_finds_a_real_over_claim():
     out = sf.walkforward(_journal(0.12))
     assert out["n"] > 0
     assert out["gap_before"] > 0.08, out
-    assert abs(out["gap_after"]) < abs(out["gap_before"])
+    # A margin, not a bare `<`. test_sidebias spent two months passing on a
+    # 2.7e-15 float accident because it compared two quantities that were
+    # algebraically equal; a real correction on a real +12 closes far more
+    # than two points, so requiring it costs nothing and cannot flake.
+    assert abs(out["gap_after"]) < abs(out["gap_before"]) - 0.02, out
 
 
 def test_walkforward_does_not_invent_one_on_an_honest_board():
