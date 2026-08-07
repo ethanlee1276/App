@@ -325,3 +325,74 @@ The remedy is the same shrink for all of them, so this does not block
 steps 2–3. It matters for step 4, because stale quotes are fixable at the
 source and fixing a source beats shrinking after the fact. The CLV
 machinery is the place to look.
+
+
+---
+
+## §11 — the third estimator, and the premise it refuted (2026-08-07)
+
+Written up because this is the one section a future reader most needs and
+is least likely to reconstruct: **the reason the hold-out failed is still
+not known, and the leading explanation has now been ruled out.**
+
+### What was believed
+
+§10 recorded that the correction could not be validated because the board
+drifted — claim level 64.9% to 51.2%, UNDER share 44% to 25%, over 13 days.
+The reasoning was that the pre-registered single split trains on the early
+half and tests on the late one, so under drift it compares two different
+populations; and `crossval` interleaves dates, so every test night has
+training nights on both sides of it in time, which leaks the future.
+
+`walkforward()` was built on that: fit on every date **before** d, judge
+date d, roll forward. Strictly causal, refit nightly — what a live board
+would actually have done.
+
+### What the simulation said
+
+60 synthetic journals per world, 14 dates, 20 bets a date, PASS counted
+against the same pre-registered bars:
+
+| world | split | interleaved | walk-forward |
+|---|---|---|---|
+| honest, drift 14 pts | 4 PASS / 20 FAIL | 10 / 0 | 9 / 3 |
+| honest, no drift | 4 / 23 | 7 / 0 | 7 / 11 |
+| over-claim +12, drift | 24 / 20 | 59 / 0 | 42 / 4 |
+| over-claim +6, drift | 12 / 17 | 36 / 0 | 24 / 3 |
+
+**Drift moves the false-alarm rate by a point or two, not by the margin
+needed to explain a FAIL** — 4→4, 7→10, 7→9. The drift explanation for the
+failed hold-out is not supported.
+
+That is a refutation of the reason §10 gave, and it is recorded rather than
+quietly dropped. The door is not fully closed: the simulation drifts claim
+level only, and the real board also moved its UNDER share, which is not
+modelled.
+
+### Three things the table settles
+
+**Walk-forward is not the better test.** Similar false alarms to the
+interleaved CV, less power (42 vs 59 on a real +12). It is kept for one
+property: **the interleaved CV returns FAIL in zero simulated worlds**,
+including worlds where the correction damages the held-out half. It cannot
+convict. Walk-forward can.
+
+**None of these is a significance test.** `PASS_GAP` and `FAIL_GAP` are
+absolute thresholds on a gap. Measured, each estimator hands a PASS to an
+honest journal 7-17% of the time. A lone PASS is roughly what luck
+produces; agreement across all three is the only actionable reading, and
+`selfit.py` now prints all three side by side and says so.
+
+**The single split is the harshest and the least powerful** — 24 PASS on a
+real +12, against 59 for the CV. Its FAIL was always weaker evidence than
+it read, in the other direction.
+
+### What is now the leading explanation
+
+Not drift. The candidate is **shape**: a single temperature-plus-intercept
+assumes the over-claim is uniform in claim level. `by_claim()` splits the
+held-out gap into claim bands and reports the spread. If the gap is
+concentrated at high claims, one temperature is being asked to average two
+different faults, and that would fail a hold-out with no drift at all.
+
+That is a measurement Ethan's journal can answer and this container cannot.

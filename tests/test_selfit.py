@@ -327,6 +327,135 @@ def test_compose_counts_how_many_rows_carry_a_correction():
     assert x["n"] == 10 and x["n_cal"] == 1
     assert abs(x["cal_temp"] - 1.4) < 1e-9
 
+# --- walk-forward, and what the simulation said about it ---------------------
+def _journal(over_claim=0.0, drift=0.0, dates=14, per_day=20, seed=3):
+    import random
+    rng = random.Random(seed)
+    rows = []
+    for i in range(dates):
+        d = f"2026-07-{i + 1:02d}"
+        centre = 0.65 - drift * (i / max(1, dates - 1))
+        for _ in range(per_day):
+            claimed = min(0.92, max(0.50, rng.gauss(centre, 0.04)))
+            true_p = min(0.98, max(0.02, claimed - over_claim))
+            rows.append({"sport": "mlb", "market": "hits", "side": "OVER",
+                         "hit_prob": claimed, "date": d, "ts": d,
+                         "status": "won" if rng.random() < true_p else "lost",
+                         "cal_temp": None, "cal_bias": None})
+    return rows
+
+
+def test_walkforward_never_lets_a_fit_see_its_own_night():
+    """The one property that distinguishes it from the interleaved CV. If
+    a training set ever contains the date being judged, the number it
+    reports is not out of sample and the whole point is gone."""
+    rows = _journal(0.12)
+    dates = sorted({r["date"] for r in rows})
+    seen = []
+    real_fit = sf.cal.fit
+
+    def spy(pairs, **kw):
+        seen.append(len(pairs))
+        return real_fit(pairs, **kw)
+
+    sf.cal.fit = spy
+    try:
+        out = sf.walkforward(rows)
+    finally:
+        sf.cal.fit = real_fit
+    assert out["n"] > 0 and out["steps"] > 0
+    # Training size must strictly grow, which it cannot do if any fold
+    # reached forward for extra rows.
+    for f, g in zip(out["fits"], out["fits"][1:]):
+        assert g[1] > f[1], f"training set did not grow: {f} -> {g}"
+    # And every judged date must be later than its fit's newest training row.
+    for d, n_train, _t, _i in out["fits"]:
+        train_max = max(r["date"] for r in rows if r["date"] < d)
+        assert train_max < d, f"{train_max} is not before {d}"
+    assert dates[0] not in {f[0] for f in out["fits"]}
+
+
+def test_walkforward_finds_a_real_over_claim():
+    out = sf.walkforward(_journal(0.12))
+    assert out["n"] > 0
+    assert out["gap_before"] > 0.08, out
+    assert abs(out["gap_after"]) < abs(out["gap_before"])
+
+
+def test_walkforward_does_not_invent_one_on_an_honest_board():
+    out = sf.walkforward(_journal(0.0, drift=0.14))
+    assert out["n"] > 0
+    assert abs(out["gap_after"]) < 0.05, out
+
+
+def test_the_measured_operating_characteristics_are_written_down():
+    """A third estimator added after two FAILs is test-shopping unless its
+    false-alarm rate is on the record. These are the numbers that say it is
+    NOT the better test — similar false alarms, less power — and the reason
+    it is kept anyway is that the CV cannot return FAIL at all."""
+    doc = " ".join((sf.walkforward.__doc__ or "").split())
+    assert "false-alarm" in doc
+    for n in ("60", "7%", "17%"):
+        assert n in doc, n
+    assert "not strictly better" in doc or "not" in doc and "better" in doc
+    # The refuted premise has to stay visible, not be quietly dropped.
+    assert "refuted" in doc.lower() or "did not hold" in doc.lower()
+
+
+def test_a_lone_pass_is_explicitly_not_actionable():
+    """With a 7-17% false-alarm rate on each, one PASS out of three is
+    roughly what an honest journal produces by luck."""
+    # Search the whole source, not a `split('\"\"\"')` slice: this file has
+    # a dozen docstrings and an index into that split silently points at a
+    # different chunk the moment one is added.
+    src = open(os.path.join(ROOT, "selfit.py"), encoding="utf-8").read()
+    assert "A lone PASS moves nothing." in src
+    assert "short of agreement" in src
+
+
+# --- the claim-level shape ---------------------------------------------------
+def test_by_claim_splits_the_gap_by_claim_level():
+    rows = _journal(0.12)
+    bands = sf.by_claim(rows)
+    assert len(bands) > 1
+    assert sum(b["n"] for b in bands) == len(rows)
+    for b in bands:
+        assert b["lo"] < b["hi"]
+
+
+def test_by_claim_can_see_a_gap_that_is_not_flat():
+    """The diagnosis this exists for: if the over-claim lives only at high
+    claims, one temperature is the wrong shape, and that explains a failed
+    hold-out better than drift does."""
+    rows = []
+    for i in range(14):
+        d = f"2026-07-{i + 1:02d}"
+        for k in range(10):
+            rows.append({"sport": "mlb", "market": "hits", "side": "OVER",
+                         "hit_prob": 0.52, "date": d, "ts": d,
+                         "status": "won" if k < 5 else "lost",
+                         "cal_temp": None, "cal_bias": None})
+        for k in range(10):
+            rows.append({"sport": "mlb", "market": "hits", "side": "OVER",
+                         "hit_prob": 0.70, "date": d, "ts": d,
+                         "status": "won" if k < 4 else "lost",
+                         "cal_temp": None, "cal_bias": None})
+    bands = sf.by_claim(rows)
+    lo = next(b for b in bands if b["lo"] == 0.0)
+    hi = next(b for b in bands if b["hi"] == 1.0)
+    assert lo["gap_before"] < 0.05
+    assert hi["gap_before"] > 0.25
+    assert hi["gap_before"] - lo["gap_before"] > 0.10
+
+
+def test_by_claim_reports_nothing_for_an_empty_band():
+    rows = [{"sport": "mlb", "market": "hits", "side": "OVER",
+             "hit_prob": 0.57, "date": "2026-07-01", "ts": "x",
+             "status": "won", "cal_temp": None, "cal_bias": None}]
+    bands = sf.by_claim(rows)
+    assert len(bands) == 1 and bands[0]["n"] == 1
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -270,6 +270,138 @@ def crossval(rows: list[dict], folds: int = 4) -> dict:
             "se": math.sqrt(var) / n if var > 0 else 0.0}
 
 
+def walkforward(rows: list[dict], min_train: int = MIN_SIDE) -> dict:
+    """Rolling origin: fit on every date BEFORE d, judge date d, roll on.
+
+    Every prediction is made by a fit that saw only earlier dates, so this
+    is what a live board would actually have done — refit nightly, bet the
+    next slate — rather than what a retrospective split can arrange.
+
+    **IT WAS BUILT ON A PREMISE THE SIMULATION THEN REFUTED, and that
+    belongs here rather than in a commit message nobody re-reads.** The
+    reasoning was: the board drifted (claim level 64.9% to 51.2%), so the
+    single split is comparing two different populations and ``crossval``
+    interleaves dates and therefore leaks the future. Measured over 60
+    synthetic journals per world, 14 dates, 20 bets a date:
+
+        honest board, drift 14 pts        PASS   FAIL
+          single split                      4     20
+          interleaved CV                   10      0
+          walk-forward                      9      3
+
+        honest board, no drift            PASS   FAIL
+          single split                      4     23
+          interleaved CV                    7      0
+          walk-forward                      7     11
+
+    Drift barely moves any of them: 4 to 4, 7 to 10, 7 to 9. **The drift
+    is not what made the real hold-out fail**, and any explanation resting
+    on it — including the one this function was written to fix — is not
+    supported. (The simulation drifts claim level only. The real board also
+    moved its UNDER share 44% to 25%, which this does not model, so the
+    door is not fully closed.)
+
+    What the same sweep says about power, with a real +12 to find:
+
+        over-claim +12, drift            PASS   FAIL
+          single split                     24     20
+          interleaved CV                   59      0
+          walk-forward                     42      4
+
+    So walk-forward is **not** strictly better than what it was meant to
+    replace. It has a similar false-alarm rate to the interleaved CV and
+    less power. It is kept for one property the table shows plainly:
+    interleaved CV returns FAIL **zero times in any world**, including
+    worlds where the correction actively damages the held-out half. It
+    cannot convict. Walk-forward can, and it is causal, so it is reported
+    as a third opinion — not as the better test.
+
+    **THE READING THAT MATTERS MOST.** All three carry a false-alarm rate
+    between 7% and 17%. ``PASS_GAP`` and ``FAIL_GAP`` are absolute
+    thresholds on a gap, never calibrated as a significance level, so a
+    lone PASS is far weaker evidence than the word suggests — roughly one
+    honest journal in seven produces one. Agreement across all three is the
+    only reading worth acting on, and a single PASS should move nothing.
+
+    Cost, stated plainly: the early dates are spent as training and never
+    judged, and each fit sees less data than the full journal. So NOTHING
+    TO CORRECT here means "not enough yet", never "nothing there".
+
+    **Added after the single split returned FAIL, like ``crossval`` before
+    it, and it carries the same standing.** It does not replace the
+    pre-registered verdict and does not overturn it. Its bars are the same
+    PASS_GAP / FAIL_GAP / HALVED, so it is a different estimator of the
+    same pre-registered quantity rather than a new question asked until one
+    of them says yes. If it disagrees with the single split, the reading is
+    "unresolved, get more bets".
+    """
+    dates = sorted({r["date"] for r in rows if r.get("date")})
+    if len(dates) < 3:
+        return {"n": 0, "steps": 0}
+
+    held: list[dict] = []
+    fits = []
+    for i, d in enumerate(dates):
+        if i == 0:
+            continue
+        train = [r for r in rows if r["date"] < d]
+        out = [r for r in rows if r["date"] == d]
+        pairs = _pairs(train)
+        if len(pairs) < min_train or not out:
+            continue
+        c = cal.fit(pairs, sport="mlb", market="selection",
+                    min_samples=min_train)
+        fits.append((d, len(train), c.temperature, c.intercept))
+        for r in out:
+            held.append({**r, "_p": corrected(r, c.temperature, c.intercept)})
+    if not held:
+        return {"n": 0, "steps": 0, "dates": len(dates)}
+
+    n = len(held)
+    landed = sum(1 for r in held if r["status"] == "won") / n
+    adj = sum(r["_p"] for r in held) / n
+    raw = sum(float(r["hit_prob"]) for r in held) / n
+    var = sum(r["_p"] * (1 - r["_p"]) for r in held)
+    return {"n": n, "steps": len(fits), "fits": fits, "dates": len(dates),
+            "gap_before": raw - landed, "gap_after": adj - landed,
+            "se": math.sqrt(var) / n if var > 0 else 0.0}
+
+
+#: Claim-level bands for :func:`by_claim`. A global temperature assumes the
+#: over-claim is the same shape everywhere; these are how that gets checked
+#: rather than assumed.
+CLAIM_BANDS = ((0.0, 0.55), (0.55, 0.60), (0.60, 0.65), (0.65, 1.0))
+
+
+def by_claim(rows: list[dict], temp: float = 1.0,
+             icept: float = 0.0) -> list[dict]:
+    """The gap inside each claim band, before and after the correction.
+
+    The reason this is worth its lines: the board's drift was measured as a
+    fall in CLAIM LEVEL, 64.9% to 51.2%. If the over-claim is uniform in
+    claim level, that drift is harmless to a global correction and the
+    single split's FAIL was about something else. If instead the gap is
+    concentrated at high claims, a correction fitted on an early
+    high-claiming board is being tested on a late low-claiming one, and one
+    temperature was never the right shape.
+
+    Those are different diagnoses with different repairs, and no amount of
+    staring at a pooled number separates them.
+    """
+    out = []
+    for lo, hi in CLAIM_BANDS:
+        band = [r for r in rows if lo <= float(r["hit_prob"]) < hi]
+        if not band:
+            continue
+        raw = measure(band)
+        adj = measure(band, temp, icept)
+        out.append({"lo": lo, "hi": hi, "n": raw["n"],
+                    "claimed": raw["claimed"], "landed": raw["landed"],
+                    "gap_before": raw["gap"], "gap_after": adj["gap"],
+                    "se": raw["se"]})
+    return out
+
+
 def verdict(before: float, after: float) -> tuple[str, str]:
     """The pre-registered decision. No arguments beyond the two numbers, so
     it cannot quietly consult anything else.
@@ -496,6 +628,84 @@ def report(conn, sport: str = "mlb") -> int:
         if cv_v != v:
             print()
             print(f"  → they DISAGREE ({v} vs {cv_v}). Unresolved. Do not apply.")
+        print()
+
+    bands = by_claim(late, c.temperature, c.intercept)
+    if len(bands) > 1:
+        print("=" * 74)
+        print("IS ONE TEMPERATURE THE RIGHT SHAPE?  (held-out half, by claim)")
+        print("=" * 74)
+        print("   claim band      n   claimed    landed    gap    after")
+        print("  " + "-" * 56)
+        for bd in bands:
+            print(f"   {bd['lo']:.0%}-{bd['hi']:.0%}    {bd['n']:7d}   "
+                  f"{bd['claimed']:7.1%}   {bd['landed']:7.1%}  "
+                  f"{bd['gap_before']:+6.1%}  {bd['gap_after']:+6.1%}")
+        print()
+        wide = [b for b in bands if b["n"] >= 25]
+        if len(wide) > 1:
+            spread = max(b["gap_before"] for b in wide) - \
+                min(b["gap_before"] for b in wide)
+            print(f"  Spread across bands with 25+ bets: {spread:.1%}")
+            print()
+            if spread > 0.10:
+                print("  The over-claim is NOT flat in claim level, so a single")
+                print("  temperature is the wrong shape and the fit is being")
+                print("  asked to average two different faults. That is a")
+                print("  better explanation of a failed hold-out than drift.")
+            else:
+                print("  Flat enough that one temperature is a fair shape, so")
+                print("  a failed hold-out is not explained by this either.")
+        else:
+            print("  Too few bands carry 25+ bets to compare. No reading.")
+        print()
+
+    wf = walkforward(rows)
+    wf_v = None
+    if wf.get("n"):
+        wf_v, wf_why = verdict(wf["gap_before"], wf["gap_after"])
+        print("=" * 74)
+        print("THIRD OPINION — walk-forward, the one a live board would have run")
+        print("=" * 74)
+        print(f"  {wf['steps']} nightly refits across {wf['dates']} dates; "
+              f"{wf['n']} bets each priced by a fit that saw only")
+        print("  earlier nights — no future data anywhere in it")
+        print(f"  gap {wf['gap_before']:+.1%} -> {wf['gap_after']:+.1%}   "
+              f"(2σ ±{2 * wf['se']:.1%})     would read: {wf_v}")
+        ts = sorted(f[2] for f in wf["fits"])
+        print(f"  temperatures across refits: {ts[0]:.2f} to {ts[-1]:.2f}")
+        print()
+        print("  Built on the theory that the board's DRIFT was what broke")
+        print("  the hold-out. Simulated against 60 synthetic journals, that")
+        print("  theory did not hold: drift moves every estimator's false-")
+        print("  alarm rate by a point or two, not by the margin needed to")
+        print("  explain a FAIL. It is kept because the interleaved CV above")
+        print("  returns FAIL in ZERO simulated worlds — it cannot convict,")
+        print("  even of a correction that damages the held-out half — and")
+        print("  because this is the causal question. It is NOT the better")
+        print("  test: it has less power than the CV and a similar false-")
+        print("  alarm rate.")
+        print()
+
+    votes = [x for x in (v, cv_v, wf_v) if x]
+    if len(votes) > 1:
+        print("=" * 74)
+        print("READING ALL THREE")
+        print("=" * 74)
+        print(f"  pre-registered split: {v}")
+        print(f"  interleaved CV:       {cv_v or '—'}")
+        print(f"  walk-forward:         {wf_v or '—'}")
+        print()
+        if len(set(votes)) == 1:
+            print(f"  All three agree: {votes[0]}.")
+        else:
+            print("  They do not agree, and that is the finding. Every one of")
+            print("  these carries a 7-17% false-alarm rate — the bars are")
+            print("  absolute gaps, never calibrated as a significance level")
+            print("  — so roughly one honest journal in seven hands you a")
+            print("  PASS from one of them. A lone PASS moves nothing.")
+        print()
+        print("  Do not apply a correction on anything short of agreement.")
         print()
     return 0
 
