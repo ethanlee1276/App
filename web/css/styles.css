@@ -486,7 +486,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   border: 1px solid var(--border-soft); border-radius: 0; box-shadow: none;
   transition: transform .14s ease, border-color .2s ease;
 }
-.game-card { transform-style: preserve-3d; transition: box-shadow .25s ease, border-color .2s ease; }
+.game-card { transform-style: preserve-3d; transition: border-color .2s ease; }
 .game-card:hover { border-color: var(--brand); box-shadow: none; }
 .stadium-wrap { line-height: 0; background: #070b16; }
 .stadium-wrap .stadium { width: 100%; height: auto; display: block; }
@@ -530,7 +530,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   border: 1px solid var(--border-soft); border-radius: 0;
   padding: 18px; box-shadow: none;
   display: flex; flex-direction: column; gap: 14px;
-  transition: box-shadow .28s ease, border-color .2s ease;
+  transition: border-color .2s ease;
 }
 .card:hover { border-color: var(--border); box-shadow: none; }
 .card.faded { opacity: .6; }
@@ -796,7 +796,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .search-wrap input {
   width: 100%; padding: 14px 16px 14px 44px; font-size: var(--fs-lg); font-family: inherit;
   background: var(--panel); border: 1px solid var(--border); border-radius: 0; color: var(--text);
-  outline: none; transition: border-color .2s ease, box-shadow .2s ease;
+  outline: none; transition: border-color .2s ease;
 }
 .search-wrap input:focus { border-color: var(--brand); box-shadow: none; }
 .search-wrap .ico { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-mute); font-size: var(--fs-xl); }
@@ -1116,8 +1116,14 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .reveal, .reveal.in { opacity: 1; transform: none; transition: none; }
 
 /* pointer tilt on stadium cards */
-.tilt { transition: transform .3s cubic-bezier(.2, .7, .3, 1), box-shadow .25s ease; will-change: transform; }
-.tilt.tilting { transition: box-shadow .25s ease; }
+.tilt { transition: transform .3s cubic-bezier(.2, .7, .3, 1); will-change: transform; }
+/* `none`, said plainly. This rule exists to STOP the transform easing
+   while the pointer is driving the tilt — without it every mouse move
+   queues a 300ms animation and the card lags the cursor. It used to say
+   that by transitioning box-shadow instead, which reads as "animate the
+   shadow" and animates nothing, since no rule in this sheet sets a
+   shadow value at all. */
+.tilt.tilting { transition: none; }
 
 /* projection bar draws in on each render */
 /* §3.4: entrance animations are forbidden and .7s is over the ceiling. A

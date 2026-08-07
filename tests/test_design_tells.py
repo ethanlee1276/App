@@ -720,6 +720,37 @@ def test_a_transition_that_cannot_fire_is_not_left_in_place():
     rule = rule[:rule.index("}")]
     assert "transition" not in rule
 
+
+def test_nothing_transitions_a_shadow_that_never_exists():
+    """The manual says elevation on dark comes from surface luminance, not
+    shadows, and this sheet already complied completely — 42 mentions of
+    box-shadow and not one actual value. What was left behind was residue:
+    five transitions animating a property that is always `none`, which can
+    no more fire than the .4s ease on .lf-bar > span could.
+
+    The `box-shadow: none` resets are NOT dead and are left alone. Some of
+    them defend against a UA default — .search-wrap input:focus is a real
+    browser focus glow — and the rest document that this design has no
+    shadows, which is worth saying once per surface."""
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    assert not re.findall(r"transition:[^;]*box-shadow", css)
+    values = [v for v in re.findall(r"box-shadow:\s*([^;]+);", css)
+              if v.strip() != "none"]
+    assert not values, f"a shadow value appeared: {values}"
+
+
+def test_the_tilt_stop_rule_says_none_rather_than_implying_a_shadow():
+    """.tilt.tilting exists to stop the transform easing while the pointer
+    drives the tilt — without it every mouse move queues a 300ms animation
+    and the card lags the cursor. Saying that with `transition: box-shadow`
+    reads as "animate the shadow" and animates nothing."""
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    rule = css[css.index(".tilt.tilting {"):]
+    rule = rule[:rule.index("}")]
+    assert "transition: none" in rule
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
