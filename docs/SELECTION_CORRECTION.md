@@ -190,8 +190,65 @@ before it happens, rather than discovering it on a Tuesday.
 ## 10. Order
 
 1. `selcheck.py` — the edge-bucket test. Diagnostic only, ships nothing.
+   **Run. Flat in claimed edge (z −0.66), which §9 lists as a reason to
+   abandon — but at 47% power, and the between-group contrast in
+   `--across` spans a far longer lever arm than the 2–6% band inside the
+   selected set. Not resolved; see §11.**
 2. If it passes: fit pooled `(S, c)` per sport, store separately, journal
    the applied values, **do not apply yet**.
 3. Out-of-sample check per §7.
 4. Only then compose it into pricing, capped, behind the existing
    evidence gate.
+
+Steps 2 and 3 are `selfit.py`. It writes nothing, and its bars are module
+constants so that a diff shows them moving.
+
+## 11. What the run actually settled, and what it did not
+
+`selcheck --across` on 247 selected against 570 rejected:
+
+| adjusted for | difference | z | coverage |
+|---|---|---|---|
+| raw | +13.2% | +3.61 | 100% |
+| market | +11.2% | +2.86 | 93% |
+| claim band | +12.4% | +3.18 | 84% |
+| market × claim band | +9.1% | +2.01 | 63% |
+| **within book (a floor)** | **+13.6%** | **+2.84** | **85%** |
+
+**Settled: it is not one book.** The within-book difference survives at
+z 2.84, and splitting the selected side by whether its book appears on the
+rejected side at all gives +12.1% (154 bets) against +12.3% (93 bets), a
+difference of +0.2%. ESPN BET's 76 unpaired bets are not carrying the
+finding. §9's book clause is cleared.
+
+**A prediction of mine that failed.** The within-book number was supposed
+to be attenuated — book is a mediator, so conditioning on it should
+subtract part of the effect. It came back the LARGEST of the five, not the
+smallest. The honest reading is that book-shopping is a smaller part of
+the selection mechanism than the mediator argument assumed: the gate is
+winning by picking props, not by picking books. Caveat, because it matters:
+the schemes cover different samples (85% against 63%), so they are not a
+clean comparison.
+
+**Do not read +9.1% as "the real answer".** Four of the five estimates sit
+between +11.2% and +13.6%. The outlier is the finest scheme, which is also
+the one with the widest bar (±9.1%) and the worst coverage (63%). Finest
+is not most trustworthy — it controls the most and knows the least.
+
+**Not settled: which selection-like mechanism this is.** §3 named three
+alternatives that a flat edge-slope is consistent with. Two of them survive
+the between-group test, because they are also selection on a noisy
+quantity:
+
+- **stale quotes** — a line that has already moved is exactly what makes a
+  prop clear the bar, so it predicts a selected-vs-rejected difference too;
+- **a market-shrink weight that is too weak** — bets clear when our number
+  sits furthest from the book's, i.e. where the shrink failed hardest.
+
+A bad de-vig does not survive: it applies to selected and rejected alike
+and cannot produce a between-group difference.
+
+The remedy is the same shrink for all of them, so this does not block
+steps 2–3. It matters for step 4, because stale quotes are fixable at the
+source and fixing a source beats shrinking after the fact. The CLV
+machinery is the place to look.
