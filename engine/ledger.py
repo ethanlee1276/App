@@ -164,7 +164,23 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
                 # to, which moves the benchmark with the outlier; this
                 # is what it would have been measured against instead.
                 # Evidence only — nothing prices from it. bookcheck.py.
-                "fair_consensus", "consensus_books"):
+                "fair_consensus", "consensus_books",
+                # What line movement DID to this pick, which nothing
+                # recorded until 2026-08-07. engine/quality.apply_movement
+                # shifts the score by +/-4 (+/-7 on steam), can raise the
+                # letter, and REJECTS the pick outright when the drop puts
+                # it under 70 — while linemoves.py's docstring said for
+                # months that movement was "purely informational … because
+                # we haven't measured its predictive value on our own
+                # picks yet". It was never informational, and the reason
+                # given for believing it was is the reason this column has
+                # to exist: you cannot measure a signal you do not store.
+                #
+                # move_delta is the signed quality points actually applied,
+                # NULL when no movement was observed for the prop. Rejected
+                # picks land in the `loose` bucket carrying a negative one,
+                # which is what makes the veto's own record readable.
+                "move_delta", "move_steam"):
         try:
             conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
         except sqlite3.OperationalError:
@@ -285,9 +301,9 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
             "stake_dollars, status, leg, proj_minutes, lead_min, park_hr, "
             "wind_out, roofed, lineup_slot, lineup_conf, rest_days, "
             "body_clock, pen_own, pen_opp, raw_prob, cal_temp, cal_bias, "
-            "fair_consensus, consensus_books) "
+            "fair_consensus, consensus_books, move_delta, move_steam) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', "
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
              r["line"], r.get("book", ""), r.get("odds", -110), r.get("projection"),
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
@@ -326,7 +342,14 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # refit of an already-corrected market could honestly learn on.
              r.get("raw_prob"), temp, bias,
              # The field at pick time, beside the book we shopped to.
-             r.get("fair_consensus"), r.get("consensus_books")))
+             r.get("fair_consensus"), r.get("consensus_books"),
+             # What line movement did to this pick's quality score, stamped
+             # by quality.apply_movement itself. NULL means no movement was
+             # observed for the prop, which is not the same as a movement
+             # of zero — the veto's record has to be able to tell "the
+             # market did not move" from "the market moved and we ignored
+             # it". movecheck.py reads exactly this pair.
+             r.get("move_delta"), r.get("move_steam")))
         n += cur.rowcount
     # Recommended game bets journal too (sharp-anchor picks live or die by
     # forward results). Moneylines store player = the team picked, line 0.5,
@@ -574,12 +597,18 @@ def log_near_misses(conn, result: dict, flat_stake: float = 0.1) -> int:
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
-            "stake_units, stake_dollars, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'loose')",
+            "stake_units, stake_dollars, move_delta, move_steam, status, category) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'loose')",
             (now, sport, date, r["player"], r["market"],
              (r.get("side") or "OVER").upper(), float(r.get("line") or 0),
              r.get("book", ""), odds, None, r.get("hit_prob"), r.get("edge"),
-             None, r.get("grade", "Near miss"), flat_stake, 0.0))
+             None, r.get("grade", "Near miss"), flat_stake, 0.0,
+             # THE point of this bucket for the movement question. A pick
+             # the movement veto killed lands here with quality just under
+             # 70 and, without these two, is indistinguishable from a prop
+             # that simply graded low. That is the whole population whose
+             # outcomes say whether the veto earns its keep.
+             r.get("move_delta"), r.get("move_steam")))
         n += cur.rowcount
     conn.commit()
     return n

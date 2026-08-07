@@ -581,6 +581,14 @@ def near_misses(recommendations: list[dict], limit: int = 10) -> list[dict]:
             "edge": round(edge, 4), "quality": quality, "tier": tier,
             "hit_prob": r.get("hit_prob"), "grade": r.get("grade"),
             "missed_by": " · ".join(misses),
+            # Carried so the journal can tell a prop the movement veto
+            # killed from one that merely graded low. Both arrive here
+            # reading "quality 66/70" — the quality this reads is the
+            # POST-movement number, which is exactly how a rejected pick
+            # ends up in this bucket at all.
+            "move_delta": r.get("move_delta"),
+            "move_steam": r.get("move_steam"),
+            "move_rejected": bool(r.get("move_rejected")),
         })
     # Closest to the bar first — the best case looser gates could make.
     out.sort(key=lambda x: -(x["edge"] * (x["quality"] / 100.0)))

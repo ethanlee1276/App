@@ -169,6 +169,13 @@ def apply_movement(rec: dict, with_us: bool, steam: bool) -> None:
     if rec.get("quality") is None:
         return
     delta = (7.0 if steam else 4.0) * (1.0 if with_us else -1.0)
+    # Stamped HERE rather than recomputed by the journal, for the same
+    # reason ledger.py reads the calibration correction in the process that
+    # priced the pick: what gets recorded has to be what was applied. A
+    # second copy of this arithmetic somewhere else would drift, and the
+    # column exists precisely so the veto can be checked against outcomes.
+    rec["move_delta"] = delta
+    rec["move_steam"] = 1.0 if steam else 0.0
     q = int(round(clamp(rec["quality"] + delta, 0.0, 100.0)))
     rec["quality"] = q
     rec["confidence"] = round(q / 10.0, 1)
@@ -178,6 +185,10 @@ def apply_movement(rec: dict, with_us: bool, steam: bool) -> None:
         rec["grade"] = "Pass"
         rec["recommended"] = False
         rec["stake_units"] = 0.0
+        # The rejection itself, so a `loose` row can be told apart from a
+        # prop that merely graded low. Without it the bucket says "quality
+        # 66/70" and the cause is gone.
+        rec["move_rejected"] = True
         rec.setdefault("warnings", []).append(
             "Sharp movement against the pick dropped its quality below 70 — "
             "rejected: model edge that fights fresh sharp money is usually "
