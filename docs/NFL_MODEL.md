@@ -592,3 +592,77 @@ from the already-ingested nflverse pbp → richer volume projections; the
 role-reset rule; injury redistribution; alt-line ladders if the odds plan
 allows; historical similarity comps; referee/alignment/coordinator feeds if a
 free source appears.
+
+
+---
+
+# Appendix — the stopping rule, written 2026-08-07
+
+Before Week 1, and deliberately so. A stopping rule chosen after seeing a
+season is not a stopping rule.
+
+## Why NFL is exposed to exactly what happened to MLB
+
+`MARKET_TIER` in `engine/quality.py` is entirely NFL markets — receptions
+tier 1, pass/rush/rec yards tier 2 — and `TIER_MIN_EDGE` and `TIER_SHRINK`
+are shared with every other sport. So NFL prices through the same gate,
+with the same window:
+
+| market | tier | window |
+|---|---|---|
+| receptions | 1 | 2.5% – 5.0% |
+| pass_yds, rush_yds, rec_yds | 2 | 3.0% – 4.5% |
+
+`barcheck.py` showed what a 12-point over-claim does to a window that
+narrow: the honest floor lands around three times the ceiling, and no edge
+can satisfy both ends. **If NFL over-claims the way MLB does, there is no
+honest NFL board either.**
+
+MLB took **247 settled bets** to make that visible, and it stayed
+invisible the whole way because the deep fitter — 282,862 samples — kept
+reporting the model as fine. It is blind to selection by construction, and
+so was everything downstream.
+
+## The rule
+
+`nflguard.py`. Sequential, because NFL will not produce 247 bets until
+December and finding out in December is the same as not finding out.
+
+* Look after each date, never before **25** settled bets.
+* Statistic: the cumulative calibration z, `(Σp − wins) / √Σp(1−p)`.
+* Fire at **z 2.5**. First crossing wins.
+
+**z 2.5 is not a single-look significance level.** Looking weekly and
+firing at 2.0 false-alarms on roughly one honest season in ten. The
+boundary was picked by simulating honest seasons:
+
+| boundary | 8/week | 15/week | 25/week |
+|---|---|---|---|
+| z 2.00 | 8.9% | 9.5% | 11.8% |
+| **z 2.50** | **3.2%** | **3.0%** | **4.3%** |
+| z 3.00 | 0.7% | 1.1% | 1.5% |
+
+## What it catches, and what it does not
+
+Simulated over 1,200 seasons per cell:
+
+| true gap | volume | caught | median at |
+|---|---|---|---|
+| 12 points | 15/week | 96% | 105 bets (week 7) |
+| 8 points | 15/week | 64% | 135 bets (week 9) |
+| 5 points | 15/week | 30% | 150 bets (week 10) |
+
+Read the bottom row before trusting a quiet season. **A 5-point over-claim
+usually runs all year undetected — and 5 points already inverts the edge
+window** (it needs a 7.5% floor against a 5.0% ceiling). Silence means not
+catastrophically dishonest. It does not mean honest.
+
+## What firing does
+
+It reports. It does not disable the board, and it must not — that is a
+pricing change and belongs to a person. What it buys is finding out in
+week 7 instead of after the season, which is the entire difference between
+this and what happened to MLB.
+
+`watch.py` runs it nightly for both NFL and CFB, so the crossing arrives
+as a notification rather than as something remembered.

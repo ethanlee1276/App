@@ -235,6 +235,34 @@ def watch_bar(conn, state: dict) -> dict:
             "state": {"bar_reachable": h["reachable"]}}
 
 
+def watch_nflguard(conn, state: dict) -> dict:
+    """Has a football board crossed its pre-registered over-claim boundary?
+
+    NFL and CFB price through the same gate MLB does, so they inherit the
+    same failure mode, and MLB's took 247 settled bets to become visible.
+    nflguard's sequential rule catches it around 100 — but only if somebody
+    runs it, which is what this is for.
+
+    Both football sports, because CFB shares the gate and the calendar.
+    """
+    import nflguard as ng
+    out = []
+    for sport in ("nfl", "cfb"):
+        looks = ng.path(ng.load(conn, sport))
+        state_s, lk = ng.verdict(looks)
+        if state_s == "FIRED":
+            out.append(f"{sport}: crossed z {ng.BOUNDARY} on {lk['date']} at "
+                       f"{lk['n']} bets, gap {lk['gap']:+.1%}")
+    was = state.get("nflguard_fired") or []
+    new = [x for x in out if x.split(":")[0] not in
+           {w.split(":")[0] for w in was}]
+    return {"name": "football over-claim", "value": out, "fired": bool(new),
+            "reading": ("; ".join(out) + "  ** run nflguard.py — the board is "
+                        "claiming more than it delivers **" if new
+                        else "no football board has crossed its boundary"),
+            "state": {"nflguard_fired": out}}
+
+
 def watch_closures(conn, state: dict) -> dict:
     """A slice closing is a PRICING change — it starts refusing bets on the
     next build. House rule is that a person sees it first, so a newly
@@ -260,7 +288,7 @@ def watch_closures(conn, state: dict) -> dict:
 
 
 WATCHES = [watch_journal, watch_selection, watch_calibration, watch_closures,
-           watch_movement, watch_bar]
+           watch_movement, watch_bar, watch_nflguard]
 
 
 def run(conn, show_all: bool = False, reset: bool = False) -> int:
