@@ -139,6 +139,33 @@
      --text-faint (the card's 4px grade stripe, two separator glyphs, the
      empty-state icon). Misfiling something that way leaves it too legible
      rather than invisible, which is the failure worth having. */
+  /* MOTION. Three durations, two curves, and every transition on the page
+     goes through them.
+
+     The default `ease` was doing 21 of the 25 transitions here, and it is
+     the wrong curve for a control responding to a tap: it is symmetric,
+     so it accelerates slowly at BOTH ends and nothing visibly moves for
+     the first few frames. Measured against the replacement, by fraction
+     of the duration elapsed:
+
+         elapsed    ease     ease-out
+            5%       3.3%      20.2%     6.1x further
+           10%       9.5%      39.7%     4.2x
+           20%      29.5%      68.2%     2.3x
+
+     An element should leave immediately on the input and settle gently,
+     which is what a decelerating curve does. Only one thing overshoots —
+     the nav indicator — and it keeps its own spring.
+
+     The durations are the eight that were in use (.12 .14 .15 .18 .2 .24
+     .28 .3) collapsed onto the three tiers they were clustering around,
+     not three numbers picked fresh. */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 280ms;
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-spring: cubic-bezier(.5, 1.4, .5, 1);
+
   --text: #E8E4D9;
   --text-dim: #BAB3A6;
   --text-mute: #9E988B;
@@ -339,7 +366,7 @@ svg text.num, svg .svg-num { font-family: var(--font-mono);
   display: flex; align-items: center; gap: 12px;
   color: inherit; text-decoration: none; cursor: pointer;
   border-radius: 0; padding: 2px; margin: -2px;
-  transition: opacity .15s ease;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 .brand-home:hover { opacity: .82; }
 .brand-home:active { opacity: .65; }
@@ -386,7 +413,7 @@ svg text.num, svg .svg-num { font-family: var(--font-mono);
   color: var(--text-mute); font-weight: 700; font-size: var(--fs-sm);
   font-family: var(--font-sans); letter-spacing: .16em; text-transform: uppercase;
   padding: 9px 0; display: flex; align-items: center; gap: 7px;
-  transition: color .2s ease;
+  transition: color var(--dur-base) var(--ease-out);
 }
 .nav-btn:hover { color: var(--text); }
 .nav-btn.active { color: var(--text); }
@@ -407,7 +434,7 @@ svg text.num, svg .svg-num { font-family: var(--font-mono);
   position: absolute; top: auto; bottom: -1px; height: 2px; z-index: 0;
   left: 0; width: 1px; transform-origin: left center;
   background: var(--brand); box-shadow: none;
-  transition: transform .28s cubic-bezier(.5, 1.4, .5, 1);
+  transition: transform var(--dur-slow) var(--ease-spring);
 }
 .slate-meta { display: flex; align-items: center; gap: 12px; color: var(--text-dim); font-size: var(--fs-md); }
 
@@ -417,7 +444,7 @@ svg text.num, svg .svg-num { font-family: var(--font-mono);
   background: none; color: var(--text); border: 1px solid var(--text); cursor: pointer;
   padding: 7px 14px; font-weight: 700; font-size: var(--fs-xs);
   font-family: var(--font-sans); letter-spacing: .13em; text-transform: uppercase;
-  transition: background .12s ease, color .12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
   box-shadow: none;
 }
 .btn:hover { background: var(--text); color: var(--bg); box-shadow: none; }
@@ -502,7 +529,7 @@ input[type=range] {
 input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
   background: var(--brand); cursor: pointer; box-shadow: none;
-  transition: transform .12s ease;
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 
@@ -519,9 +546,9 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   flex: 0 0 272px; scroll-snap-align: start; overflow: hidden;
   background: var(--panel-2);
   border: 1px solid var(--border-soft); border-radius: 0; box-shadow: none;
-  transition: transform .14s ease, border-color .2s ease;
+  transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-base) var(--ease-out);
 }
-.game-card { transform-style: preserve-3d; transition: border-color .2s ease; }
+.game-card { transform-style: preserve-3d; transition: border-color var(--dur-base) var(--ease-out); }
 .game-card:hover { border-color: var(--brand); box-shadow: none; }
 .stadium-wrap { line-height: 0; background: #070b16; }
 .stadium-wrap .stadium { width: 100%; height: auto; display: block; }
@@ -565,7 +592,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   border: 1px solid var(--border-soft); border-radius: 0;
   padding: 18px; box-shadow: none;
   display: flex; flex-direction: column; gap: 14px;
-  transition: border-color .2s ease;
+  transition: border-color var(--dur-base) var(--ease-out);
 }
 .card:hover { border-color: var(--border); box-shadow: none; }
 .card.faded { opacity: .6; }
@@ -740,7 +767,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    distort — the usual objection to scaling a box does not apply here. */
 .conf-fill { height: 100%; border-radius: 0; width: 100%;
   transform: scaleX(0); transform-origin: left center;
-  transition: transform .24s cubic-bezier(.2, .8, .2, 1); }
+  transition: transform var(--dur-slow) var(--ease-out); }
 .conf-num { font-weight: 800; font-size: var(--fs-lg); min-width: 54px; text-align: right; }
 
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -815,7 +842,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    broke it. It is a column LABEL, not a headline, so it takes the sans. */
 .trend-col h3 { font-family: var(--font-sans); font-weight: 700; font-size: var(--fs-lg); display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .trend-col .colsub { color: var(--text-mute); font-size: var(--fs-sm); margin-bottom: 12px; }
-.trow { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 0; cursor: pointer; transition: background .15s ease; }
+.trow { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 0; cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
 .trow:hover { background: var(--fill-hover); }
 .trow + .trow { border-top: 1px solid var(--border-soft); }
 .trank { width: 22px; text-align: center; font-weight: 800; color: var(--text-mute); font-size: var(--fs-md); }
@@ -831,7 +858,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .search-wrap input {
   width: 100%; padding: 14px 16px 14px 44px; font-size: var(--fs-lg); font-family: inherit;
   background: var(--panel); border: 1px solid var(--border); border-radius: 0; color: var(--text);
-  outline: none; transition: border-color .2s ease;
+  outline: none; transition: border-color var(--dur-base) var(--ease-out);
 }
 .search-wrap input:focus { border-color: var(--brand); box-shadow: none; }
 .search-wrap .ico { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-mute); font-size: var(--fs-xl); }
@@ -994,7 +1021,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   border-right: 1.6px solid var(--text-mute);
   border-bottom: 1.6px solid var(--text-mute);
   transform: rotate(45deg) translate(-2px, -2px);
-  transition: transform .18s ease;
+  transition: transform var(--dur-base) var(--ease-out);
 }
 .pz-runner[open] > summary::after { transform: rotate(-135deg) translate(-3px, -3px); }
 .pz-runner > summary:hover { color: var(--text); }
@@ -1126,7 +1153,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   width: 40px; height: 40px; border-radius: 0; cursor: pointer;
   background: var(--panel); border: 1px solid var(--border); color: var(--text-dim);
   display: grid; place-items: center; font-size: var(--fs-xl); font-family: inherit;
-  transition: color .2s ease, border-color .2s ease, transform .15s ease;
+  transition: color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 .theme-toggle:hover { color: var(--text); border-color: var(--brand); transform: translateY(-1px); }
 
@@ -1158,7 +1185,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .reveal, .reveal.in { opacity: 1; transform: none; transition: none; }
 
 /* pointer tilt on stadium cards */
-.tilt { transition: transform .3s cubic-bezier(.2, .7, .3, 1); will-change: transform; }
+.tilt { transition: transform var(--dur-slow) var(--ease-out); will-change: transform; }
 /* `none`, said plainly. This rule exists to STOP the transform easing
    while the pointer is driving the tilt — without it every mouse move
    queues a 300ms animation and the card lags the cursor. It used to say
@@ -1266,7 +1293,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   letter-spacing: .16em; text-transform: uppercase;
   padding: 7px 0; margin-right: 18px;
   border-bottom: 2px solid transparent;
-  transition: color .2s ease, border-color .2s ease;
+  transition: color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
 }
 .sport-btn:hover { color: var(--text); }
 .sport-btn.active { color: var(--text); border-bottom-color: var(--brand); }
@@ -2009,10 +2036,10 @@ select.calc-in { width: auto; font-weight: 600; }
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 9px 14px; border-top: 1px solid var(--border-soft);
   color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600;
-  transition: color .2s ease, background .2s ease;
+  transition: color var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
 }
 .game-card:hover .game-cta { color: var(--brand); background: var(--fill-subtle); }
-.gc-arrow { transition: transform .2s ease; }
+.gc-arrow { transition: transform var(--dur-base) var(--ease-out); }
 .game-card:hover .gc-arrow { transform: translateX(3px); }
 
 .gp-back { margin-bottom: 14px; }
@@ -2381,7 +2408,7 @@ select.calc-in { width: auto; font-weight: 600; }
     background: currentColor; border-radius: 0; }
   .mt-bars::before, .mt-bars::after {
     content: ""; position: absolute; left: 0; width: 16px; height: 2px;
-    background: currentColor; border-radius: 0; transition: transform .18s ease;
+    background: currentColor; border-radius: 0; transition: transform var(--dur-base) var(--ease-out);
   }
   .mt-bars::before { top: -5px; } .mt-bars::after { top: 5px; }
   .menu-open .mt-bars { background: transparent; }
@@ -3685,3 +3712,21 @@ select.calc-in { width: auto; font-weight: 600; }
    than the whole table — a 900px-wide probability rule is a chart, and
    this is a mark. */
 .kx-overhead { max-width: 280px; margin-bottom: 10px; }
+
+/* Motion, switched off for anyone who has asked the OS to stop it.
+
+   There were two narrow blocks doing this — one for a disclosure chevron,
+   one for the confidence bars — which left every other transition and
+   animation on the page running. A per-element opt-out cannot keep up with
+   a stylesheet; the rule has to be the default for everyone who asked.
+
+   Not `none`: a zeroed duration still FIRES transitionend, so anything
+   waiting on that event keeps working instead of hanging. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
