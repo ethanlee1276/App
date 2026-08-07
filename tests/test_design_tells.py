@@ -644,6 +644,82 @@ def test_the_resolver_takes_the_first_root_block_not_the_last():
     css = ":root { --bg: #0A0907; }\n:root[data-theme=light] { --bg: #F2EFE6; }"
     assert make_icon.token("bg", css) == (0x0A, 0x09, 0x07)
 
+
+# --- motion: compositor only, and short ---------------------------------------
+def _transitions(css):
+    return re.findall(r"transition:\s*([^;]+);", css)
+
+
+def test_no_transition_animates_a_layout_property():
+    """width, height, left and friends make the browser re-run layout on
+    every frame of the animation. Three were doing it: the tab underline
+    animated left AND width on every navigation, and two meters animated
+    width — one of them on every card of a twenty-pick board, which is
+    twenty simultaneous layout animations. transform runs on the
+    compositor and touches neither layout nor paint."""
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    layout = re.compile(r"\b(width|height|left|right|top|bottom|margin|padding"
+                        r"|inset|flex-basis)\b")
+    bad = [t for t in _transitions(css) if layout.search(t)]
+    assert not bad, f"layout properties still animated: {bad}"
+
+
+def test_no_ui_transition_outlasts_the_reading_of_it():
+    """The confidence meter ran .8s — nearly three times the 300ms the
+    manual puts on UI motion, and long enough that the number beside the
+    bar had settled while the bar was still travelling. That reads as lag,
+    not as polish."""
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    slow = []
+    for t in _transitions(css):
+        for d in re.findall(r"([\d.]+)s\b", t):
+            if float(d) > 0.3:
+                slow.append((t.strip()[:48], d))
+    assert not slow, f"over 300ms: {slow}"
+
+
+def test_the_indicator_scales_from_a_one_pixel_base():
+    """scaleX(96) on a 1px bar is a 96px bar, which is what lets
+    moveIndicator keep passing the measured offsetWidth straight through
+    instead of computing a ratio against something that can change."""
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    rule = css[css.index(".nav-indicator {"):]
+    rule = rule[:rule.index("}")]
+    assert "width: 1px" in rule
+    assert "transform-origin: left" in rule
+    assert "transition: transform" in rule
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    fn = app[app.index("function moveIndicator("):]
+    fn = fn[:fn.index("\n}")]
+    assert "translateX(${active.offsetLeft}px) scaleX(${active.offsetWidth})" in fn
+    assert "style.left" not in fn and "style.width" not in fn
+
+
+def test_the_meter_converts_its_percentage_to_a_fraction():
+    """data-w is a CSS percentage and scaleX wants the fraction. Passing
+    "73%" straight into scaleX would be a no-op at best."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    fn = app[app.index("function fillMeters("):]
+    fn = fn[:fn.index("\n}")]
+    assert "parseFloat(el.dataset.w) || 0) / 100" in fn
+    assert "style.width" not in fn, "the meter must not set width any more"
+
+
+def test_a_transition_that_cannot_fire_is_not_left_in_place():
+    """.lf-bar > span is written by innerHTML with its width already
+    inline, so it is a fresh element whose width never changes and the
+    .4s ease on it never once ran. Same reasoning that kept the
+    slashed-zero rule out: a declaration that cannot do anything is
+    decoration wearing the costume of craft."""
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    rule = css[css.index(".lf-bar > span {"):]
+    rule = rule[:rule.index("}")]
+    assert "transition" not in rule
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

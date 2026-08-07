@@ -273,7 +273,13 @@ def test_no_dead_slashed_zero_declaration():
     and IBM Plex Mono — which is what numbers are actually set in — already
     draws a marked zero by default (3 contours against O's 2). A
     declaration that cannot fire is decoration that looks like craft."""
-    assert "slashed-zero" not in CSS
+    # Declarations only. The first cut asserted against the raw stylesheet
+    # and went red the moment a COMMENT explained why the rule was refused
+    # — the test was matching its own reasoning. Strip comments first, the
+    # same repair test_overhead.py's _decls_only() needed for the same
+    # reason.
+    decls = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    assert "slashed-zero" not in decls
 
 # --- grid blowout -----------------------------------------------------------
 PHONE_PX = 320

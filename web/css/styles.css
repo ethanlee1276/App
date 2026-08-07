@@ -355,10 +355,24 @@ svg text.num, svg .svg-num { font-family: var(--font-mono);
 }
 .nav-btn:hover { color: var(--text); }
 .nav-btn.active { color: var(--text); }
+/* Driven by transform, not by left/width. Both of those are LAYOUT
+   properties: the browser re-runs layout for the subtree on every frame of
+   the animation, and the tab strip is the one thing on the page that moves
+   on every navigation. transform runs on the compositor and touches
+   neither layout nor paint.
+
+   The 1px base width is what makes scaleX read as pixels — scaleX(96) on a
+   1px bar is a 96px bar — so moveIndicator can keep passing the measured
+   offsetWidth straight through.
+
+   Curve kept as it was: y=1.4 overshoots, which is deliberate. Previously
+   left and width overshot independently; one transform overshoots both
+   together, which is the same gesture with one less thing to desynchronise. */
 .nav-indicator {
   position: absolute; top: auto; bottom: -1px; height: 2px; z-index: 0;
+  left: 0; width: 1px; transform-origin: left center;
   background: var(--brand); box-shadow: none;
-  transition: left .28s cubic-bezier(.5, 1.4, .5, 1), width .28s cubic-bezier(.5, 1.4, .5, 1);
+  transition: transform .28s cubic-bezier(.5, 1.4, .5, 1);
 }
 .slate-meta { display: flex; align-items: center; gap: 12px; color: var(--text-dim); font-size: var(--fs-md); }
 
@@ -678,7 +692,20 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 
 .conf-wrap { display: flex; align-items: center; gap: 10px; }
 .conf-meter { flex: 1; height: 8px; background: var(--panel-3); border-radius: 0; overflow: hidden; }
-.conf-fill { height: 100%; border-radius: 0; width: 0; transition: width .8s cubic-bezier(.2, .8, .2, 1); }
+/* scaleX from a full-width base rather than animating width from 0: width
+   is a layout property and this meter renders once per card, so a board of
+   twenty picks was running twenty simultaneous layout animations.
+
+   .8s was also nearly three times the 300ms the manual puts on UI motion —
+   long enough that the number beside the bar has settled while the bar is
+   still travelling, which reads as lag rather than as polish. 240ms keeps
+   the fill legible as a movement without outlasting the reading of it.
+
+   The bar carries no radius and no content, so scaleX has nothing to
+   distort — the usual objection to scaling a box does not apply here. */
+.conf-fill { height: 100%; border-radius: 0; width: 100%;
+  transform: scaleX(0); transform-origin: left center;
+  transition: transform .24s cubic-bezier(.2, .8, .2, 1); }
 .conf-num { font-weight: 800; font-size: var(--fs-lg); min-width: 54px; text-align: right; }
 
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -3140,8 +3167,14 @@ select.calc-in { width: auto; font-weight: 600; }
 .lf-region-name { font-size: var(--fs-xs); color: var(--text-dim); font-weight: 600; }
 .lf-bar { height: 7px; border-radius: 0; background: var(--panel-3);
   overflow: hidden; }
-.lf-bar > span { display: block; height: 100%; border-radius: 0;
-  transition: width .4s ease; }
+/* No transition here on purpose. The span is written by innerHTML with its
+   width already inline, so it is a freshly-inserted element whose width
+   never changes — a transition on it cannot fire, and the .4s ease that
+   used to sit here never once ran. A declaration that cannot do anything
+   is decoration wearing the costume of craft, the same reason the
+   slashed-zero rule was refused. If this bar is ever wanted as a movement,
+   it wants transform like .conf-fill, not width. */
+.lf-bar > span { display: block; height: 100%; border-radius: 0; }
 .lf-region-n { text-align: right; font-size: var(--fs-sm); font-weight: 700;
   font-variant-numeric: tabular-nums; }
 .lf-chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 9px; }

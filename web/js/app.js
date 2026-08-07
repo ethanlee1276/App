@@ -2038,8 +2038,10 @@ function propInGame(r, g) {
 
 function fillMeters(host) {
   host.querySelectorAll(".conf-fill[data-w]").forEach((el) => {
-    if (state.quiet) { el.style.transition = "none"; el.style.width = el.dataset.w; }
-    else requestAnimationFrame(() => (el.style.width = el.dataset.w));
+    // data-w is a CSS percentage ("73%"); scaleX wants the fraction.
+    const to = `scaleX(${(parseFloat(el.dataset.w) || 0) / 100})`;
+    if (state.quiet) { el.style.transition = "none"; el.style.transform = to; }
+    else requestAnimationFrame(() => (el.style.transform = to));
   });
 }
 
@@ -7781,8 +7783,11 @@ function moveIndicator() {
   const active = document.querySelector(".nav-btn.active");
   const ind = document.getElementById("nav-indicator");
   if (!active || !ind) return;
-  ind.style.left = active.offsetLeft + "px";
-  ind.style.width = active.offsetWidth + "px";
+  // scaleX against a 1px base, so the measured width passes through
+  // unchanged while the animation stays on the compositor. See the
+  // .nav-indicator rule for why left/width were the wrong properties.
+  ind.style.transform =
+    `translateX(${active.offsetLeft}px) scaleX(${active.offsetWidth})`;
 }
 
 /* ============================================================
