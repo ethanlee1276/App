@@ -94,6 +94,11 @@ FAIL_GAP = 0.080
 #: Without it, a journal that started at +5.5 points could "pass" by not
 #: moving at all.
 HALVED = 0.50
+#: A mid-journal calibration change only threatens the comparison if
+#: enough rows carry it. Eleven rows in 126 cannot move a half's mean claim
+#: by more than about 1.8 points however hard they are shrunk, so below
+#: this share the change is reported and explicitly not blamed.
+BASIS_SHARE = 0.20
 #: Fewer than this on either side of the date split and the comparison is
 #: not worth running. Well below journalfit's 200: this is a diagnostic
 #: that ships nothing, and the alternative to a wide-barred answer here is
@@ -402,19 +407,35 @@ def report(conn, sport: str = "mlb") -> int:
     # what a mid-journal calibration release looks like.
     et = ce["cal_temp"] if ce["cal_temp"] is not None else 1.0
     lt = cl["cal_temp"] if cl["cal_temp"] is not None else 1.0
+    share = max(ce["n_cal"] / max(ce["n"], 1), cl["n_cal"] / max(cl["n"], 1))
     if abs(et - lt) > 0.05:
-        print("  ** AND THE DEEP CORRECTION MOVED BETWEEN THEM.")
-        print(f"     Mean cal_temp {et:.2f} early, {lt:.2f} held out "
-              f"({ce['n_cal']}/{ce['n']} and {cl['n_cal']}/{cl['n']} rows")
-        print("     carry one). `hit_prob` is the SHIPPED")
-        print("     claim — already through calibrate.py — so it only means")
-        print("     one thing while that temperature holds still. Across a")
-        print("     change the two halves are denominated differently, and")
-        print("     a selection layer fitted on one and tested on the other")
-        print("     is chasing a moving target. This is the same hazard")
-        print("     journalfit solves with undo_temperature, and selfit does")
-        print("     not yet solve it. Treat the verdict as UNSAFE, not just")
-        print("     under-powered.")
+        # How much of the halves' claim-level difference this change could
+        # POSSIBLY account for. On the real journal the answer was 11 rows
+        # in 126, which cannot move a mean by more than about 1.8 points
+        # however hard it shrinks them — against an observed 13.7. A
+        # warning that fires on a real but tiny basis change, and reads as
+        # though it explains the whole table, is the same overstatement
+        # this file keeps finding elsewhere. So it is quoted with its own
+        # ceiling attached, and only escalates when it can actually matter.
+        print("  ** The deep correction is not the same on both halves.")
+        print(f"     Mean cal_temp {et:.2f} early against {lt:.2f} held out, "
+              f"on {ce['n_cal']}/{ce['n']} and {cl['n_cal']}/{cl['n']} rows.")
+        if share < BASIS_SHARE:
+            print(f"     Too few rows carry it to matter: at most "
+                  f"{share:.0%} of a half,")
+            print("     so it can shift that half's mean claim by around")
+            print(f"     {share * 20:.1f} points at the very outside. Noted, "
+                  f"not the explanation")
+            print("     for anything larger. The verdict is not unsafe on this.")
+        else:
+            print("     `hit_prob` is the SHIPPED claim, already through")
+            print("     calibrate.py, so it only means one thing while that")
+            print("     temperature holds still. Across a change the halves")
+            print("     are denominated differently and a layer fitted on one")
+            print("     and tested on the other chases a moving target — the")
+            print("     hazard journalfit solves with undo_temperature and")
+            print("     selfit does not. Treat the verdict as UNSAFE rather")
+            print("     than merely under-powered.")
         print()
     elif ce["n_cal"] == 0 and cl["n_cal"] == 0:
         print("  (No row carries a logged cal_temp, so no deep correction was")

@@ -286,8 +286,22 @@ def test_the_moving_target_is_called_unsafe_not_underpowered():
     measurement of the right thing; it is a measurement of the wrong
     thing, and the two call for different responses."""
     src = open(os.path.join(ROOT, "selfit.py"), encoding="utf-8").read()
-    assert "UNSAFE, not just" in src
+    assert "UNSAFE rather" in src
     assert "under-powered" in src
+
+
+def test_a_basis_change_on_a_handful_of_rows_does_not_cry_wolf():
+    """The real journal had 11 of 126 held-out rows carrying a deep
+    correction. That is a genuine basis change and it cannot move a mean
+    claim by more than ~1.8 points however hard it shrinks — against an
+    observed 13.7. A warning that fires on it and reads as though it
+    explains the table is the same overstatement this file keeps catching
+    elsewhere, so it is quoted with its own ceiling."""
+    assert 11 / 126 < sf.BASIS_SHARE
+    src = open(os.path.join(ROOT, "selfit.py"), encoding="utf-8").read()
+    assert "share < BASIS_SHARE" in src
+    assert "not the explanation" in src
+    assert "The verdict is not unsafe on this." in src
 
 
 def test_the_claim_level_warning_does_not_blame_the_side_mix():
