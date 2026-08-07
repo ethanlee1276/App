@@ -181,6 +181,33 @@
      take. Non-retina never enters the query and keeps a true 1px. */
   --hairline: 1px;
 
+  /* ROW MEASURE — how long a line runs, and how far apart the lines sit.
+     The two halves of whether a row of text is comfortable, and both had
+     drifted rather than been chosen.
+
+     LEADING was 13 distinct values, 19 of them spread across SIX numbers
+     between 1.5 and 1.65 — a range no eye resolves, so the variation was
+     cost without effect. Three rungs now, far enough apart to mean
+     something:
+
+     LENGTH was six measures from 62ch to 92ch. The comfortable band for
+     running text tops out around 75 characters; 78ch and 92ch were past
+     it, the 92 on a section subtitle set at --fs-sm where the line is
+     longest in characters exactly because the type is smallest.
+
+     Three literals stay off the ladder on purpose:
+       line-height: 0    kills inline-block descender space under images;
+                         it is a layout trick, not leading.
+       line-height: 1    a single line that must not gain height.
+       line-height: .96  optical tightening on the masthead Didone, which
+                         is nowrap and one line by construction. */
+  --lh-tight: 1.25;
+  --lh-snug: 1.45;
+  --lh-body: 1.6;
+  --measure-tight: 62ch;
+  --measure: 68ch;
+  --measure-wide: 74ch;
+
   --text: #E8E4D9;
   --text-dim: #BAB3A6;
   --text-mute: #9E988B;
@@ -318,7 +345,7 @@ body {
   font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
-  line-height: 1.45;
+  line-height: var(--lh-snug);
   -webkit-font-smoothing: antialiased;
   /* Every figure on this site sits in a column next to another figure.
      Proportional digits make those columns wobble as the numbers change,
@@ -668,7 +695,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .empty-slate .es-title { font-size: var(--fs-lg); font-weight: 700;
   margin-top: 0; letter-spacing: .01em; }
 .empty-slate .es-sub { color: var(--text-dim); font-size: var(--fs-sm);
-  margin-top: 7px; max-width: 68ch; margin-inline: 0; line-height: 1.65; }
+  margin-top: 7px; max-width: var(--measure); margin-inline: 0; line-height: var(--lh-body); }
 .empty-slate code { background: var(--fill-subtle); padding: 2px 6px;
   border-radius: 0; }
 /* A drawn mark on a text baseline. */
@@ -922,13 +949,13 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    board on the site — the VERDICT is the hero, because on most nights the
    verdict is the whole page, and a "no" that whispers reads as an error. */
 .pz-doctrine {
-  font-size: var(--fs-md); color: var(--text-dim); line-height: 1.6;
-  max-width: 62ch; padding: 0 0 14px; margin: 2px 0 0;
+  font-size: var(--fs-md); color: var(--text-dim); line-height: var(--lh-body);
+  max-width: var(--measure-tight); padding: 0 0 14px; margin: 2px 0 0;
   border-bottom: var(--hairline) solid var(--border-soft);
 }
 .pz-verdict {
   display: flex; align-items: baseline; gap: 10px;
-  font-size: var(--fs-2xl); font-weight: 700; line-height: 1.35;
+  font-size: var(--fs-2xl); font-weight: 700; line-height: var(--lh-tight);
   padding: 18px 0 16px; margin: 0 0 4px;
   border-bottom: 3px solid var(--text);
 }
@@ -937,8 +964,8 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .pz-verdict .pz-mark { flex: 0 0 auto; transform: translateY(1px); }
 .pz-probation, .pz-note {
   display: flex; gap: 9px; align-items: flex-start;
-  font-size: var(--fs-sm); color: var(--text-dim); line-height: 1.6;
-  max-width: 72ch; padding: 12px 0; border-bottom: var(--hairline) solid var(--border-soft);
+  font-size: var(--fs-sm); color: var(--text-dim); line-height: var(--lh-body);
+  max-width: var(--measure-wide); padding: 12px 0; border-bottom: var(--hairline) solid var(--border-soft);
 }
 .pz-probation .pz-mark, .pz-risk .pz-mark { flex: 0 0 auto; margin-top: 2px; }
 /* The structural note answers the verdict directly above it, so it reads
@@ -988,8 +1015,8 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .pz-pair-rho { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pz-pair-rho i { color: var(--text-faint); font-style: normal; font-weight: 400; }
 .pz-pair-why, .pz-kill-why {
-  font-size: var(--fs-xs); color: var(--text-dim); line-height: 1.6;
-  max-width: 78ch; margin-top: 3px;
+  font-size: var(--fs-xs); color: var(--text-dim); line-height: var(--lh-body);
+  max-width: var(--measure-wide); margin-top: 3px;
 }
 .pz-kill-who { font-size: var(--fs-sm); font-weight: 700; }
 
@@ -1000,8 +1027,8 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   border-bottom: var(--hairline) solid var(--border-soft);
 }
 .pz-fine {
-  font-size: var(--fs-xs); color: var(--text-dim); line-height: 1.6;
-  max-width: 74ch; margin: 8px 0 2px;
+  font-size: var(--fs-xs); color: var(--text-dim); line-height: var(--lh-body);
+  max-width: var(--measure-wide); margin: 8px 0 2px;
 }
 .pz-clash { font-size: var(--fs-sm); color: var(--text-dim); padding: 2px 0 4px; }
 .pz-clash .ic { color: var(--good); vertical-align: -1px; margin-right: 5px; }
@@ -1064,15 +1091,15 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 }
 .pz-run-why {
   color: var(--text-mute); font-size: var(--fs-xs);
-  line-height: 1.55; max-width: 74ch; padding: 8px 0 0;
+  line-height: var(--lh-body); max-width: var(--measure-wide); padding: 8px 0 0;
 }
 @media (max-width: 640px) { .pz-runner > summary { gap: 3px 14px; } }
-.pz-edge { font-size: var(--fs-sm); line-height: 1.65; max-width: 74ch;
+.pz-edge { font-size: var(--fs-sm); line-height: var(--lh-body); max-width: var(--measure-wide);
   margin: 10px 0 0; color: var(--text-dim); }
 .pz-edge.pos b { color: var(--text); }
 .pz-edge.neg b { color: var(--bad); }
 .pz-dominance, .pz-verdict-line, .pz-risk, .pz-stake {
-  font-size: var(--fs-sm); line-height: 1.65; max-width: 74ch; margin: 8px 0 0;
+  font-size: var(--fs-sm); line-height: var(--lh-body); max-width: var(--measure-wide); margin: 8px 0 0;
 }
 .pz-verdict-line {
   font-size: var(--fs-md); font-weight: 600; color: var(--text);
@@ -1717,7 +1744,7 @@ select.calc-in { width: auto; font-weight: 600; }
 .section-title.subhead { margin: 14px 0 0; }
 .section-title .sub {
   font-size: var(--fs-sm); color: var(--text-mute); font-weight: 400;
-  line-height: 1.5; max-width: 92ch;
+  line-height: var(--lh-body); max-width: var(--measure-wide);
 }
 /* The hero keeps its own rhythm — it is the first thing on the page. */
 .hero-title { font-size: var(--fs-lg); color: var(--text); margin-top: 4px; }
@@ -1739,7 +1766,7 @@ select.calc-in { width: auto; font-weight: 600; }
   color: var(--brand); border-radius: 0;
   font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: .1em; text-transform: lowercase; cursor: pointer;
-  line-height: 1.4; opacity: 1;
+  line-height: var(--lh-snug); opacity: 1;
 }
 .why-toggle::after { content: "\2020"; font-size: .85em; vertical-align: super;
   margin-left: 1px; }
@@ -1754,7 +1781,7 @@ select.calc-in { width: auto; font-weight: 600; }
 .section-title .sub:not(.sub-collapsed) {
   border-left: 2px solid var(--brand); padding: 6px 0 6px 13px;
   margin-top: 8px; text-transform: none; letter-spacing: 0;
-  font-weight: 400; color: var(--text-body); max-width: 74ch;
+  font-weight: 400; color: var(--text-body); max-width: var(--measure-wide);
 }
 
 
@@ -1839,8 +1866,8 @@ select.calc-in { width: auto; font-weight: 600; }
 .rec-disclose > summary:hover { color: var(--text-dim); border-color: var(--border); }
 .rec-disclose[open] > summary::before { content: "×"; }
 .rec-disclose > div {
-  color: var(--text-dim); font-size: var(--fs-md); line-height: 1.55;
-  max-width: 78ch; margin-top: 8px; padding-left: 12px;
+  color: var(--text-dim); font-size: var(--fs-md); line-height: var(--lh-body);
+  max-width: var(--measure-wide); margin-top: 8px; padding-left: 12px;
   border-left: 2px solid var(--border-soft);
 }
 
@@ -1971,7 +1998,7 @@ select.calc-in { width: auto; font-weight: 600; }
   display: flex; gap: 10px; align-items: flex-start;
   padding: 12px 14px; margin-bottom: 14px;
   border-left: 3px solid var(--warn); background: var(--panel);
-  font-size: var(--fs-sm); color: var(--text-dim); line-height: 1.55;
+  font-size: var(--fs-sm); color: var(--text-dim); line-height: var(--lh-body);
 }
 .fx-prior b { color: var(--warn); }
 
@@ -2014,7 +2041,7 @@ select.calc-in { width: auto; font-weight: 600; }
 .fx-edge { font-weight: 700; }
 .fx-edge.pos { color: var(--good); } .fx-edge.neg { color: var(--bad); }
 .fx-note { color: var(--text-mute); font-size: var(--fs-sm);
-  margin: 10px 0 0; line-height: 1.55; max-width: 68ch; }
+  margin: 10px 0 0; line-height: var(--lh-body); max-width: var(--measure); }
 
 .fx-market { margin-top: 14px; border-top: var(--hairline) solid var(--border-soft); }
 .fx-market-head {
@@ -2126,7 +2153,7 @@ select.calc-in { width: auto; font-weight: 600; }
 .ufc-corner { min-width: 0; }
 .ufc-corner .fc-name { font-weight: 700; font-size: var(--fs-md); }
 .ufc-corner .fc-meta { color: var(--text-mute); font-size: var(--fs-xs); margin-top: 2px; }
-.ufc-corner .fc-stats { color: var(--text-body); font-size: var(--fs-xs); margin-top: 3px; line-height: 1.4; }
+.ufc-corner .fc-stats { color: var(--text-body); font-size: var(--fs-xs); margin-top: 3px; line-height: var(--lh-snug); }
 .ufc-corner .fc-cover { color: var(--text-mute); font-size: var(--fs-xs); margin-top: 2px; }
 @media (max-width: 520px) {
   .ufc-vs { grid-template-columns: 1fr; }
@@ -2328,8 +2355,8 @@ select.calc-in { width: auto; font-weight: 600; }
 .pk-fv { font-size: var(--fs-xs); text-align: right; font-variant-numeric: tabular-nums; color: var(--text-dim); }
 .pk-fv.up { color: var(--good); } .pk-fv.down { color: var(--bad); }
 
-.pk-plays { color: var(--text-body); font-size: var(--fs-sm); line-height: 1.5; margin: 10px 0 0; }
-.pk-note { color: var(--text-mute); font-size: var(--fs-xs); line-height: 1.5; margin: 8px 0 0; }
+.pk-plays { color: var(--text-body); font-size: var(--fs-sm); line-height: var(--lh-body); margin: 10px 0 0; }
+.pk-note { color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-body); margin: 8px 0 0; }
 @media (max-width: 860px) {
   .gp-hero { grid-template-columns: 1fr; }
 }
@@ -2505,7 +2532,7 @@ select.calc-in { width: auto; font-weight: 600; }
      rather than beside it. */
   .menu-open .nav-btn {
     display: block; text-align: left; white-space: normal;
-    padding: 8px 10px; line-height: 1.25;
+    padding: 8px 10px; line-height: var(--lh-tight);
   }
   .menu-open .nav-btn::after {
     content: attr(data-hint); display: block;
@@ -2585,7 +2612,7 @@ select.calc-in { width: auto; font-weight: 600; }
   /* Thumb-sized tap targets. The pill toggles were 21px tall — under
      every mobile guideline and a real miss-rate on a moving bus. This
      block sits AFTER the base .why-toggle rule, so it actually wins. */
-  .why-toggle { padding: 8px 14px; line-height: 1.5; position: relative; }
+  .why-toggle { padding: 8px 14px; line-height: var(--lh-body); position: relative; }
   /* …and the pill is still only ~34px of ink. Rather than inflate a 10px
      label into a 44px lozenge, the REACH grows without the pill growing:
      an invisible child stretches the hit area to Apple's 44px minimum.
@@ -2729,7 +2756,7 @@ select.calc-in { width: auto; font-weight: 600; }
    21px "why?" pill and the 29px sport buttons — the fingers did not get
    any smaller. Width decides which LAYOUT; pointer decides which HAND. */
 @media (pointer: coarse) and (min-width: 761px) {
-  .why-toggle { padding: 8px 14px; line-height: 1.5; position: relative; }
+  .why-toggle { padding: 8px 14px; line-height: var(--lh-body); position: relative; }
   .why-toggle::after {
     content: ""; position: absolute; left: 0; right: 0;
     top: 50%; transform: translateY(-50%);
@@ -2885,16 +2912,16 @@ select.calc-in { width: auto; font-weight: 600; }
 /* About — a reading page, not a dashboard. Longer measure, looser leading
    and real paragraph rhythm, because this is the one page on the site
    somebody actually reads top to bottom. */
-.about-lede { max-width: 68ch; margin: 0 0 4px; }
-.about-lede p { color: var(--text-body); font-size: var(--fs-lg); line-height: 1.62; margin: 0 0 12px; }
+.about-lede { max-width: var(--measure); margin: 0 0 4px; }
+.about-lede p { color: var(--text-body); font-size: var(--fs-lg); line-height: var(--lh-body); margin: 0 0 12px; }
 .about-lede strong { color: var(--text); }
-.about-card .about-body { margin-top: 6px; max-width: 62ch; }
-.about-card .about-body p { color: var(--text-body); font-size: var(--fs-md); line-height: 1.6; margin: 0 0 10px; }
+.about-card .about-body { margin-top: 6px; max-width: var(--measure-tight); }
+.about-card .about-body p { color: var(--text-body); font-size: var(--fs-md); line-height: var(--lh-body); margin: 0 0 10px; }
 .about-card .about-body p:last-child { margin-bottom: 0; }
 .about-card .about-body strong { color: var(--text); }
 .about-card .about-body em { color: var(--text-dim); font-style: normal; }
 .about-list { margin: 4px 0 0; padding-left: 18px; }
-.about-list li { color: var(--text-body); font-size: var(--fs-md); line-height: 1.58; margin-bottom: 7px; }
+.about-list li { color: var(--text-body); font-size: var(--fs-md); line-height: var(--lh-body); margin-bottom: 7px; }
 .about-list a { color: var(--brand); }
 /* One column: these cards are prose, and prose in two narrow columns on a
    wide screen is harder to read, not denser. */
@@ -3282,7 +3309,7 @@ select.calc-in { width: auto; font-weight: 600; }
      on a narrow screen it WRAPS rather than truncating. "Alexander
      Volkan…" identifies nobody, and there is vertical room here. */
   .lf-name { white-space: normal; overflow: visible; font-size: var(--fs-sm);
-             line-height: 1.25; min-height: 2.5em; }
+             line-height: var(--lh-tight); min-height: 2.5em; }
 
   /* A fixed column count stops working somewhere, and for these it is the
      small phone. Measured at 320px: the four-up long shot row leaves 33px
