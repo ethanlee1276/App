@@ -180,6 +180,79 @@ def measure(rows: list[dict], temp: float = 1.0, icept: float = 0.0) -> dict:
             "se": math.sqrt(var) / n if var > 0 else 0.0}
 
 
+def compose(rows: list[dict], temp: float = 1.0, icept: float = 0.0) -> dict:
+    """What a half is MADE OF, and how hard the correction bites it.
+
+    The first real run needed this and did not have it. The fitted pair
+    moved the in-sample gap 11.7 points and the held-out gap 3.3, and a
+    single correction cannot bite that differently unless the two halves
+    differ in composition. They did: a negative intercept is a lean toward
+    the UNDER, so it cuts an OVER claim by 6.5-19.7 points and leaves an
+    UNDER claim almost alone. Without this table the run looks like a
+    correction that failed to generalise, when what it really shows is a
+    correction that learned a direction rather than a shrink.
+    """
+    n = len(rows)
+    if not n:
+        return {"n": 0}
+    unders = sum(1 for r in rows
+                 if (r.get("side") or "").strip().lower().startswith("u"))
+    raw = sum(float(r["hit_prob"]) for r in rows) / n
+    adj = sum(corrected(r, temp, icept) for r in rows) / n
+    return {"n": n, "unders": unders, "p_under": unders / n,
+            "claim_raw": raw, "claim_adj": adj, "moved": adj - raw,
+            "dates": len({r["date"] for r in rows if r.get("date")})}
+
+
+def crossval(rows: list[dict], folds: int = 4) -> dict:
+    """Every bet held out exactly once, folds cut on whole dates.
+
+    **This was added AFTER the single split returned FAIL, and that has to
+    stay attached to it.** Changing the statistic once you have seen the
+    answer is the move this file exists to prevent, so the single split
+    stays the pre-registered verdict and this is reported beside it as a
+    second opinion, never in place of it. If the two disagree the reading
+    is "unresolved, get more bets" — not "it passed on the better test".
+
+    What it genuinely buys, and the reason it is worth having at all: the
+    single split judged 126 held-out bets and threw the other 121 away.
+    This judges all 247 out of sample, and averages over the luck of where
+    the boundary happened to land — which mattered here, because balancing
+    the split by bet count put three days on one side and ten on the other.
+    """
+    dates = sorted({r["date"] for r in rows if r.get("date")})
+    if len(dates) < folds * 2:
+        return {"n": 0, "folds": 0}
+    blocks: list[list[str]] = [[] for _ in range(folds)]
+    for i, d in enumerate(dates):
+        blocks[i % folds].append(d)
+
+    held: list[dict] = []
+    fits = []
+    for blk in blocks:
+        out = [r for r in rows if r["date"] in set(blk)]
+        train = [r for r in rows if r["date"] not in set(blk)]
+        pairs = _pairs(train)
+        if len(pairs) < MIN_SIDE or not out:
+            continue
+        c = cal.fit(pairs, sport="mlb", market="selection",
+                    min_samples=MIN_SIDE)
+        fits.append((c.temperature, c.intercept, c.at_boundary))
+        for r in out:
+            held.append({**r, "_p": corrected(r, c.temperature, c.intercept)})
+    if not held:
+        return {"n": 0, "folds": 0}
+
+    n = len(held)
+    landed = sum(1 for r in held if r["status"] == "won") / n
+    adj = sum(r["_p"] for r in held) / n
+    raw = sum(float(r["hit_prob"]) for r in held) / n
+    var = sum(r["_p"] * (1 - r["_p"]) for r in held)
+    return {"n": n, "folds": len(fits), "fits": fits,
+            "gap_before": raw - landed, "gap_after": adj - landed,
+            "se": math.sqrt(var) / n if var > 0 else 0.0}
+
+
 def verdict(before: float, after: float) -> tuple[str, str]:
     """The pre-registered decision. No arguments beyond the two numbers, so
     it cannot quietly consult anything else.
@@ -276,6 +349,38 @@ def report(conn, sport: str = "mlb") -> int:
     print("  expected to improve. Only the second line is evidence.")
     print()
 
+    # Composition. One correction cannot move two halves by different
+    # amounts unless the halves differ — and if it does, the interesting
+    # question stops being "did it generalise" and becomes "what did it
+    # actually learn".
+    print("=" * 74)
+    print("WHAT EACH HALF IS MADE OF")
+    print("=" * 74)
+    print("                       n   days   UNDERs   mean claim   after   moved")
+    print("  " + "-" * 68)
+    ce = compose(early, c.temperature, c.intercept)
+    cl = compose(late, c.temperature, c.intercept)
+    for label, x in (("early (fitted on)", ce), ("held out", cl)):
+        print(f"  {label:18} {x['n']:4}   {x['dates']:4}   {x['p_under']:6.0%}   "
+              f"{x['claim_raw']:10.1%}   {x['claim_adj']:5.1%}   "
+              f"{x['moved']:+5.1f}pt".replace(f"{x['moved']:+5.1f}",
+                                              f"{100 * x['moved']:+5.1f}"))
+    print()
+    if abs(ce["moved"] - cl["moved"]) > 0.03:
+        print("  ** The correction bites the two halves by different amounts.")
+        print("     A negative intercept is a LEAN toward the UNDER, not a")
+        print("     shrink: it cuts an OVER claim hard and leaves an UNDER")
+        print("     claim nearly alone. A held-out half with a different side")
+        print("     mix therefore gets a different correction, and the")
+        print("     verdict below is partly measuring that, not generalisation.")
+        print()
+    if ce["dates"] < 5:
+        print(f"  ** The fit saw only {ce['dates']} dates. Balancing the split by")
+        print("     BET COUNT can put a handful of heavy slates on one side —")
+        print("     nights are correlated, so this is far less training data")
+        print("     than the bet count suggests. Read the verdict accordingly.")
+        print()
+
     b_late = measure(late)
     a_late = measure(late, c.temperature, c.intercept)
     v, why = verdict(b_late["gap"], a_late["gap"])
@@ -299,6 +404,32 @@ def report(conn, sport: str = "mlb") -> int:
         print("  cannot yet tell a working correction from a lucky one, and")
         print("  the answer is more settled bets rather than a decision.")
     print()
+
+    cv = crossval(rows)
+    if cv.get("n"):
+        cv_v, cv_why = verdict(cv["gap_before"], cv["gap_after"])
+        print("=" * 74)
+        print("SECOND OPINION — every bet held out once (added after the above)")
+        print("=" * 74)
+        print(f"  {cv['folds']} folds cut on whole dates, {cv['n']} bets each "
+              f"scored by a fit that never saw its night")
+        print(f"  gap {cv['gap_before']:+.1%} -> {cv['gap_after']:+.1%}   "
+              f"(2σ ±{2 * cv['se']:.1%})     would read: {cv_v}")
+        ts = sorted(f[0] for f in cv["fits"])
+        print(f"  temperatures across folds: {ts[0]:.2f} to {ts[-1]:.2f}"
+              + ("   ** one or more hit the grid ceiling **"
+                 if any(f[2] for f in cv["fits"]) else ""))
+        print()
+        print("  This judges all the bets instead of half, and averages over")
+        print("  where the split boundary happened to land. It is NOT the")
+        print("  pre-registered verdict and cannot overturn it — it was built")
+        print("  after seeing that one, which is exactly the move this file")
+        print("  exists to prevent. If the two disagree, the reading is")
+        print("  UNRESOLVED and the answer is more bets.")
+        if cv_v != v:
+            print()
+            print(f"  → they DISAGREE ({v} vs {cv_v}). Unresolved. Do not apply.")
+        print()
     return 0
 
 

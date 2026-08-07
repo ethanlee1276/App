@@ -176,6 +176,82 @@ def test_the_measured_power_is_recorded_in_the_module():
     assert "only about half the time" in sf.__doc__
 
 
+
+# --- composition: why one correction can bite two halves differently --------
+def test_a_negative_intercept_is_a_lean_not_a_shrink():
+    """The real run's puzzle. T=4.0, c=-0.20 moved the in-sample gap 11.7
+    points and the held-out gap 3.3. A single pair cannot do that unless
+    the halves differ — and the reason it can is that the intercept leans
+    toward the UNDER, cutting an OVER claim hard and leaving an UNDER
+    claim alone."""
+    over = {"hit_prob": 0.58, "side": "OVER"}
+    under = {"hit_prob": 0.58, "side": "UNDER"}
+    T, c = 4.0, -0.20
+    assert sf.corrected(over, T, c) < 0.48        # cut ~11 points
+    assert sf.corrected(under, T, c) > 0.56       # barely touched
+    # …and a pure temperature with no intercept treats them symmetrically.
+    assert abs((0.58 - sf.corrected(over, T, 0.0))
+               - (0.58 - sf.corrected(under, T, 0.0))) < 1e-9
+
+
+def test_compose_reports_the_side_mix_and_the_bite():
+    rows = ([{"hit_prob": 0.58, "side": "OVER", "date": "2026-07-25",
+              "status": "lost"}] * 8
+            + [{"hit_prob": 0.58, "side": "UNDER", "date": "2026-07-26",
+                "status": "won"}] * 2)
+    x = sf.compose(rows, 4.0, -0.20)
+    assert x["n"] == 10 and x["unders"] == 2 and x["dates"] == 2
+    assert x["moved"] < 0                          # claims came down overall
+    assert abs(x["claim_raw"] - 0.58) < 1e-9
+
+
+def test_the_report_warns_when_the_fit_saw_only_a_few_nights():
+    """Balancing the split by BET COUNT put three heavy slates against ten
+    lighter ones on the real journal. Nights are correlated, so that is far
+    less training data than 121 suggests."""
+    src = open(os.path.join(ROOT, "selfit.py"), encoding="utf-8").read()
+    assert 'ce["dates"] < 5' in src
+    assert "nights are correlated" in src.lower()
+
+
+# --- the second opinion cannot quietly become the verdict -------------------
+def test_crossval_holds_every_bet_out_exactly_once():
+    dates = [f"2026-07-{d:02d}" for d in range(10, 26)]
+    rows = _rows(320, 0.12, dates)
+    cv = sf.crossval(rows, folds=4)
+    assert cv["n"] == len(rows), (cv["n"], len(rows))
+    assert cv["folds"] == 4
+
+
+def test_crossval_folds_are_whole_dates():
+    """Same leak as the single split: a fold that cuts a night in half
+    trains on the game it is about to be scored on."""
+    import inspect
+    src = inspect.getsource(sf.crossval)
+    assert 'r["date"] in set(blk)' in src and 'r["date"] not in set(blk)' in src
+
+
+def test_crossval_is_labelled_post_hoc_and_cannot_overturn():
+    """It was built after the pre-registered split returned FAIL. That has
+    to travel with it, or it becomes a second roll of the dice dressed as
+    a better test."""
+    import inspect
+    src = inspect.getsource(sf.crossval)
+    assert "AFTER the single split returned FAIL" in src
+    report_src = inspect.getsource(sf.report)
+    assert "cannot overturn it" in report_src
+    assert "they DISAGREE" in report_src
+
+
+def test_a_disagreement_is_reported_as_unresolved():
+    src = open(os.path.join(ROOT, "selfit.py"), encoding="utf-8").read()
+    assert "Unresolved. Do not apply." in src
+
+
+def test_crossval_declines_on_too_few_dates():
+    rows = _rows(200, 0.12, ["2026-07-10", "2026-07-11", "2026-07-12"])
+    assert sf.crossval(rows, folds=4)["n"] == 0
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
