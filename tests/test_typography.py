@@ -257,6 +257,45 @@ def test_the_observer_cannot_chase_its_own_writes():
     assert "addedNodes" in fn[:900], "process added nodes, not the whole tree"
 
 
+def test_visible_copy_uses_a_typographic_apostrophe():
+    """The manual's type-crimes checklist: straight quotes are the tell.
+    Scoped to COPY — comments keep the straight form so the source stays
+    greppable, and nothing in the repo is worth curling a comment for."""
+    import re as _re
+    src = APP
+    # blank comments, then look for letter-apostrophe-letter in what's left
+    nocom = _re.sub(r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"),
+                    src, flags=_re.S)
+    nocom = _re.sub(r"(?<!:)//[^\n]*", "", nocom)
+    straight = _re.findall(r"\w'\w", nocom)
+    assert not straight, f"{len(straight)} straight apostrophes left in copy"
+    assert len(_re.findall(r"\w\u2019\w", src)) > 100
+
+
+def test_the_html_copy_is_curled_in_text_and_display_attributes():
+    """A title= or data-hint= is read by a person the same as a text node."""
+    import re as _re
+    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    # HTML comments are source, not copy \u2014 same rule as the JS side. The
+    # five left in this file are layout notes nobody reads in a browser,
+    # and curling them would only make them harder to grep for.
+    visible = _re.sub(r"<!--.*?-->", "", html, flags=_re.S)
+    assert not _re.findall(r"\w'\w", visible)
+    assert _re.findall(r"\w\u2019\w", visible)
+
+
+def test_a_copy_guard_compares_words_not_glyphs():
+    """test_preservation's honesty pins fired when the copy was curled —
+    the sentences were intact and only the glyph moved. A guard that
+    hardcodes one form breaks on the next pass through the copy in
+    whichever direction it goes."""
+    src = open(os.path.join(ROOT, "tests", "test_preservation.py"),
+               encoding="utf-8").read()
+    fn = src[src.index("def test_the_honesty_copy_is_present_verbatim("):]
+    fn = fn[:fn.index("\n\n\n")]
+    assert "replace(" in fn and "u2019" in fn.replace("\\u2019", "u2019")
+
+
 # --- widows and orphans ------------------------------------------------------
 def test_headings_balance_and_body_gets_pretty():
     """A widow in display type is the loudest amateur tell on a page that

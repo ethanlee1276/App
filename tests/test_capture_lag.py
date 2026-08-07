@@ -26,6 +26,15 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 # --- the band ----------------------------------------------------------------
+
+def _flat(s):
+    """Normalise the apostrophe so a copy guard checks words, not glyphs.
+
+    The site's prose uses U+2019; a test that hardcodes either form breaks
+    on the next pass through the copy in whichever direction it went."""
+    return s.replace("\u2019", "'")
+
+
 def test_the_lead_bands_cover_the_cascade():
     assert lp.lead_band(-5) == "after start"
     assert lp.lead_band(0) == "after start"
@@ -204,7 +213,11 @@ def test_the_export_and_the_page_carry_the_restated_view():
                encoding="utf-8").read()
     i = app.index("function recRestatedSection(")
     fn = app[i:app.find("\nfunction ", i + 1)]
-    for needle in ("At today's sizing", "receipts as bet", "Restated ROI",
+    # Apostrophe-agnostic: the guard is about the COPY, not about which
+    # quote glyph it is set with. Hardcoding the curly form would break the
+    # moment anyone straightened it and vice versa.
+    fn = _flat(fn)
+    for needle in (_flat("At today's sizing"), "receipts as bet", "Restated ROI",
                    "excluded"):
         assert needle in fn, needle
     assert "recRestatedSection(d.restated, scoped ? scope : null)" in app

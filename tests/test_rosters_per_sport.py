@@ -276,7 +276,9 @@ def test_the_player_search_falls_back_to_the_roster_directory():
     body = app[app.index("async function renderPlayers"):]
     body = body[:body.index("\nfunction profileHTML")]
     assert "rosterMatches(q)" in body
-    assert "No prop on tonight's board" in " ".join(body.split())
+    # Apostrophe-agnostic — see the note in test_capture_lag.
+    flat = " ".join(body.split()).replace("\u2019", "'")
+    assert "No prop on tonight's board" in flat
     assert "async function rosterMatches" in app
     assert "function openRoster" in app
 

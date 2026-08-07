@@ -82,8 +82,16 @@ VERBATIM = [
 
 def test_the_honesty_copy_is_present_verbatim():
     """These are the lines a betting site is tempted to shrink. A redesign
-    is the most likely moment for it to happen by accident."""
-    missing = [s for s in VERBATIM if s not in FLAT]
+    is the most likely moment for it to happen by accident.
+
+    Compared with the apostrophe normalised, because the guard is about
+    the WORDS. It fired correctly when the copy was set with a typographic
+    apostrophe — the sentence was intact and only the glyph had changed —
+    and pinning either form would make the next pass through the copy
+    break it in whichever direction it went. Everything else here stays a
+    literal match."""
+    flat = FLAT.replace("\u2019", "'")
+    missing = [s for s in VERBATIM if s.replace("\u2019", "'") not in flat]
     assert not missing, f"honesty copy lost: {missing}"
 
 

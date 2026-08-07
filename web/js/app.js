@@ -47,28 +47,28 @@ function updateUnitNote() {
 
 const SPORT_META = {
   nfl: { logo: "🏈", tagline: "AI-powered NFL player-prop model",
-         gamesTitle: "This week's stadiums",
+         gamesTitle: "This week’s stadiums",
          gamesSub: "real stadium shapes, roof state, live wind and the passing "
                    + "conditions each one is playing to right now",
          api: "/api/recommendations", fallback: "data/recommendations.json" },
   mlb: { logo: "⚾", tagline: "AI-powered MLB player-prop model",
-         gamesTitle: "Tonight's ballparks",
+         gamesTitle: "Tonight’s ballparks",
          gamesSub: "real park shapes, roof state, live wind and the home-run "
                    + "factor each one is playing to right now",
          api: "/api/mlb/recommendations", fallback: "data/mlb_recommendations.json" },
   wnba: { logo: "🏀", tagline: "Scalpy — WNBA probability engine (on probation)",
-          gamesTitle: "Tonight's slate",
+          gamesTitle: "Tonight’s slate",
           gamesSub: "same minutes-first model as the NBA board, tuned to a "
                     + "40-minute game — and journaled on probation until it "
                     + "has graded enough WNBA results to earn a stake",
           api: "/api/wnba/recommendations", fallback: "data/wnba.json" },
   nba: { logo: "🏀", tagline: "Scalpy — NBA probability engine",
-         gamesTitle: "Tonight's slate",
+         gamesTitle: "Tonight’s slate",
          gamesSub: "minutes first, distributions not point estimates, every "
                    + "number clamped toward the de-vigged market",
          api: "/api/nba/recommendations", fallback: "data/nba.json" },
   cfb: { logo: "🏈", tagline: "College football — attention is the axis",
-         gamesTitle: "Saturday's board",
+         gamesTitle: "Saturday’s board",
          gamesSub: "134 teams, 60+ games, and no book prices a Wednesday MAC "
                    + "game the way it prices Ohio State – Michigan — so the "
                    + "haircut on our own edge is a dial, not a constant",
@@ -623,7 +623,7 @@ function updateAgo() {
   el.classList.toggle("idle", !state.livePolling && !stale);
   el.classList.toggle("stale", stale);
   el.title = stale
-    ? "The server hasn't rebuilt the board in a while — check that the "
+    ? "The server hasn’t rebuilt the board in a while — check that the "
       + "laptop is awake and python3 launch.py is still running."
     : "How long ago the server last rebuilt this board.";
 }
@@ -667,11 +667,11 @@ function renderProbation() {
   host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
     <div class="player">${iconMark("warn")}${escapeHtml((SPORT_META[state.sport] || {}).name || state.sport.toUpperCase())} is on probation — graded, not bet</div>
     <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
-      ${escapeHtml(t.note || "This league's tuning has not been fitted to its own results yet.")}
+      ${escapeHtml(t.note || "This league’s tuning has not been fitted to its own results yet.")}
       Everything below is priced and journaled exactly as a live board would be,
-      so the record it builds is real — it just doesn't stake anything until that
+      so the record it builds is real — it just doesn’t stake anything until that
       record clears the promotion bar${t.inherited_from
-        ? ` (the numbers are the ${escapeHtml(t.inherited_from.toUpperCase())} model's for now)` : ""}.
+        ? ` (the numbers are the ${escapeHtml(t.inherited_from.toUpperCase())} model’s for now)` : ""}.
     </div></div>`;
 }
 
@@ -716,7 +716,7 @@ function renderTalent() {
         : `The talent-to-points slope is still a documented prior rather than a
            fit — ${escapeHtml(fit.note || "")}`}
       It carries ~25% of a Week-1 projection and decays toward 5% by November,
-      because by then a team's own results have answered the question.
+      because by then a team’s own results have answered the question.
       ${(t.missing_layers || []).length
         ? `<b> Not loaded: ${escapeHtml((t.missing_layers || []).join(", "))}.</b>` : ""}
     </div></div>`;
@@ -828,12 +828,12 @@ function futuresDoctrine(d) {
     ? `<div class="fx-prior">${icon("warn")} <b>${(prior * 100).toFixed(0)}% of this is last season.</b>
        ${escapeHtml(d.note || "")}. Read it as a prior, not a projection —
        these numbers are real arithmetic on stale inputs, and they will be
-       replaced by this year's evidence within a few weeks of kickoff.</div>`
+       replaced by this year’s evidence within a few weeks of kickoff.</div>`
     : "";
   return `${warn}${recDisclosure("How these numbers are made", `${escapeHtml(d.doctrine || "")}
     Each remaining game is one draw from the two teams' ratings plus home
     advantage; wins accumulate, division winners are the most wins, the
-    playoff field fills per the league's own shape, and the bracket is played
+    playoff field fills per the league’s own shape, and the bracket is played
     out game by game. Assumed, and worth knowing: ratings hold for the rest
     of the season — no injuries, no trades, no regression — every game is
     independent, and home advantage is one constant per sport.`)}`;
@@ -870,7 +870,7 @@ function futuresTeamTable(d) {
         ${priced ? `<span class="fx-odds">Book</span><span class="fx-edge">Edge</span>` : ""}
       </div>${rows}</div>
     ${priced ? `<p class="fx-note">Edge is our simulated probability minus the
-      book's implied one, in points. A book posts futures early and revisits
+      book’s implied one, in points. A book posts futures early and revisits
       them rarely, so a positive number here is usually a stale quote rather
       than a disagreement about the team.</p>`
       : `<p class="fx-note">No book price attached. The probability stands on its
@@ -888,7 +888,7 @@ function futuresTotals(d) {
   if (!blocks.length) return "";
   return `
     <div class="section-title">Season totals
-      <span class="sub">— each player's rate so far, times the games his team has
+      <span class="sub">— each player’s rate so far, times the games his team has
       left, with the games he actually plays taken into account.</span></div>
     ${blocks.map((m) => `
       <div class="fx-market">
@@ -899,7 +899,7 @@ function futuresTotals(d) {
           <span class="fx-pnow">${p.banked}</span>
           <span class="fx-pproj"><b>${p.mean}</b>
             <span class="fx-band">±${p.sd}</span></span>
-          <span class="fx-pav" title="Share of his team's games he has actually played">${(p.availability * 100).toFixed(0)}%</span>
+          <span class="fx-pav" title="Share of his team’s games he has actually played">${(p.availability * 100).toFixed(0)}%</span>
           ${p.line == null ? `<span class="fx-pp"></span>`
             : `<span class="fx-pp ${p.p_over >= 0.5 ? "pos" : ""}">${fxPct(p.p_over)} o${p.line}</span>`}
         </div>`).join("")}
@@ -949,9 +949,9 @@ function renderEmptySlate() {
       <div class="es-title">Games tonight, but no player history to project from</div>
       <div class="es-sub">Every prop on this board is built from stored game
       logs, and this database has
-      <b>${gap.players_found || 0}</b> player(s) with any history for tonight's
+      <b>${gap.players_found || 0}</b> player(s) with any history for tonight’s
       teams — a prop needs three games. Nothing is broken and no odds are
-      wasted; the league just hasn't been ingested yet.<br><br>
+      wasted; the league just hasn’t been ingested yet.<br><br>
       Run once, then the board fills on the next refresh:<br>
       <code>${escapeHtml(gap.fix || "")}</code></div>`;
     return;
@@ -965,7 +965,7 @@ function renderEmptySlate() {
   const live = String(state.data.generated_from || "").startsWith("live");
   el.style.display = "";
   el.innerHTML = state.data.status === "not built"
-    ? `<div class="es-icon">${icon("clock", 30)}</div><div class="es-title">This slate hasn't been built yet</div>
+    ? `<div class="es-icon">${icon("clock", 30)}</div><div class="es-title">This slate hasn’t been built yet</div>
        <div class="es-sub">If <code>launch.py</code> is running, it builds every sport on its next
        refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.</div>`
     : live
@@ -1104,10 +1104,10 @@ async function renderBestBets() {
       <p style="margin:0;font-weight:800;font-size:var(--fs-lg)">${prePrice
         || "No qualifying plays at current numbers."}</p>
       <p style="margin:6px 0 0;color:var(--text-mute);font-size:var(--fs-md)">${prePrice
-        ? `The gate counts below ran against the last pull, not today's prices — read them
-           as stale, not as a verdict on today's slate.`
+        ? `The gate counts below ran against the last pull, not today’s prices — read them
+           as stale, not as a verdict on today’s slate.`
         : `That sentence is the system working, not failing — every market tonight either
-           missed the tier's edge bar, failed a gate, or graded below 70. Loosening the
+           missed the tier’s edge bar, failed a gate, or graded below 70. Loosening the
            sliders shows what was held and why.`}</p>
       ${censusFunnelHTML()}
     </div>`;
@@ -1152,7 +1152,7 @@ async function renderBestBets() {
       <summary>Tracked signals tonight (${signals.length}) — measurements, not picks</summary>
       <div style="padding:0">
         <p style="margin:6px 0 8px;font-size:var(--fs-sm);color:var(--text-mute)">These are NOT
-        recommendations. They're the signal families the site paper-tracks in quarantined
+        recommendations. They’re the signal families the site paper-tracks in quarantined
         Record buckets — each has a fixed promotion bar, and none is money tonight.</p>
         ${signals.map((s) => `
           <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 4px;
@@ -1170,9 +1170,9 @@ async function renderBestBets() {
     <div class="card" style="padding:0;border-left:3px solid var(--warn);margin-top:10px">
       <p style="padding:10px 14px 6px;margin:0;font-size:var(--fs-sm);color:var(--text-mute)">
         <b style="color:var(--text)">Riding from earlier pulls (${ridden.length}).</b>
-        These WERE tonight's picks — journaled when they cleared the bar. The line has
+        These WERE tonight’s picks — journaled when they cleared the bar. The line has
         moved since, and at the current number they no longer qualify, so: the bet rides
-        as placed, but don't add more at today's price. Tracked live on the Live tab.</p>
+        as placed, but don’t add more at today’s price. Tracked live on the Live tab.</p>
       ${ridden.map(({ b, cur }) => `
         <div style="display:flex;gap:12px;align-items:flex-start;padding:11px 14px;
                     border-bottom:1px solid rgba(255,255,255,.05);opacity:.85">
@@ -1184,7 +1184,7 @@ async function renderBestBets() {
             <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
               placed ${american(b.odds)}${cur && cur.odds != null
                 ? ` · current best ${american(cur.odds)}${cur.line != null && Number(cur.line) !== Number(b.line)
-                    ? ` (line now ${cur.line})` : ""} — doesn't clear the bar at this number`
+                    ? ` (line now ${cur.line})` : ""} — doesn’t clear the bar at this number`
                 : ` · no live quote for this market right now`}</span>
           </span>
           <span style="text-align:right;white-space:nowrap;font-size:var(--fs-sm);color:var(--text-mute)">
@@ -1194,9 +1194,9 @@ async function renderBestBets() {
 
   if (!picks.length && !signals.length && !ridden.length) { host.innerHTML = ""; return; }
   host.innerHTML = `
-    <div class="section-title">Tonight's picks
-      <span class="sub">— the one designated space for what we'd actually bet. If it isn't
-      in this box, it isn't a pick.</span></div>
+    <div class="section-title">Tonight’s picks
+      <span class="sub">— the one designated space for what we’d actually bet. If it isn’t
+      in this box, it isn’t a pick.</span></div>
     ${picksBlock}
     ${riddenBlock}
     ${signalsBlock}`;
@@ -1231,7 +1231,7 @@ function prePriceHeadline() {
   if (!opens || Date.now() >= opens) return "";
   const t = new Date(opens).toLocaleTimeString([],
     { hour: "numeric", minute: "2-digit" });
-  return `Today's book prices haven't been pulled yet — the window opens ${t}.`;
+  return `Today’s book prices haven’t been pulled yet — the window opens ${t}.`;
 }
 
 function oddsClockHTML() {
@@ -1256,7 +1256,7 @@ function oddsClockHTML() {
   if (os.priced_at) bits.push(`last pulled <b>${clock(os.priced_at)}</b>`);
   if (opens) {
     bits.push(waiting
-      ? `today's pricing starts <b>${clock(os.window_opens_at)}</b>`
+      ? `today’s pricing starts <b>${clock(os.window_opens_at)}</b>`
       : `pre-game window is open`);
   }
   /* The question this box exists to answer, an hour before first pitch, is
@@ -1309,9 +1309,9 @@ function censusFunnelHTML() {
   const names = { no_real_price: "no real book price yet",
     longshot_board: "home runs — live on the Long Shots board by design",
     credibility: "model-vs-market gap too big to trust (>10% raw = bad data)",
-    calibration: "market's calibration unreliable — closed until refit",
-    tier_edge_bar: "edge under the tier's minimum",
-    price_net: "price doesn't clear break-even",
+    calibration: "market’s calibration unreliable — closed until refit",
+    tier_edge_bar: "edge under the tier’s minimum",
+    price_net: "price doesn’t clear break-even",
     quality_under_70: "quality grade under 70",
     held_by_rules: "held by rules (lineups pending, IL, live game, juice)",
     // Hoops: the two the build drops before the model ever sees them.
@@ -1360,7 +1360,7 @@ function censusFunnelHTML() {
        A price we <em>paid</em> for and failed to match is a different thing:
        the build prints those as a name-match warning.</div>${oddsClockHTML()}` : "";
   return rows ? `<div style="margin-top:10px">
-    <div style="font-size:var(--fs-sm);font-weight:700;margin-bottom:2px">Where tonight's props died</div>
+    <div style="font-size:var(--fs-sm);font-weight:700;margin-bottom:2px">Where tonight’s props died</div>
     ${rows}${noPrice}${closed}</div>` : "";
 }
 
@@ -1381,9 +1381,9 @@ function renderLivePicks() {
     // A full tab now — an empty day says so instead of rendering nothing.
     host.innerHTML = `
       <div class="section-title">${iconMark("target")} Open bets
-        <span class="sub">— every journaled bet on today's card, tracked while its game runs</span></div>
-      <div class="card"><p class="loading">No open bets on today's card. A pick journals the
-        moment it's recommended and lives here until it settles — live progress bars, at-bat
+        <span class="sub">— every journaled bet on today’s card, tracked while its game runs</span></div>
+      <div class="card"><p class="loading">No open bets on today’s card. A pick journals the
+        moment it’s recommended and lives here until it settles — live progress bars, at-bat
         situation, and provisional grades as the games run.</p></div>`;
     return;
   }
@@ -1417,7 +1417,7 @@ function renderLivePicks() {
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${r.current} so far — over ${r.line} is locked</span>`;
     if (r.status === "busted")
       return `<span style="color:var(--bad);font-weight:800">${icon('cross')} BUSTED</span>
-        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${r.current} already — under ${r.line} can't cash</span>`;
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${r.current} already — under ${r.line} can’t cash</span>`;
     if (r.status === "won_pending")
       return `<span style="color:var(--good);font-weight:800">${icon('check')} WON</span>
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${ml(r) ? "final" : `finished at ${r.current}`} — settles officially overnight</span>`;
@@ -1435,7 +1435,7 @@ function renderLivePicks() {
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${escapeHtml(whenLabel(r.game.date, r.game.kickoff) || "today")}</span>`;
     if (r.status === "unmapped")
       return `<span style="color:var(--warn);font-weight:700">OPEN</span>
-        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">couldn't map to a game this cycle — still settles overnight</span>`;
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">couldn’t map to a game this cycle — still settles overnight</span>`;
     if (r.current != null) {
       const needs = r.side === "OVER"
         ? `needs ${Math.max(1, Math.ceil(r.line - r.current))} more`
@@ -1510,7 +1510,7 @@ function renderLivePicks() {
     <div class="section-title">${nLive
         ? `<span style="color:var(--bad)">${icon('dot')}</span>`
         : `<span style="color:var(--brand)">${icon('dot')}</span>`} Open bets
-      <span class="sub">— every journaled bet on today's card: live with real-time progress,
+      <span class="sub">— every journaled bet on today’s card: live with real-time progress,
       finished awaiting the official settle, or waiting on first pitch. Never new in-play
       bets — everything here was placed pre-game.</span></div>
     <div class="card" style="padding:0;border-left:3px solid ${nLive ? "var(--bad)" : "var(--brand)"}">
@@ -1527,17 +1527,17 @@ function renderLivePicks() {
             ${situationLine(r)}
             ${offBoard(r) ? `<span style="display:block;font-size:var(--fs-xs);color:var(--warn);margin-top:2px">
               ${icon('warn')} the price has moved off the bar since this was journaled — riding at
-              ${american(r.odds)} as placed (also listed under Tonight's Picks).</span>` : ""}
+              ${american(r.odds)} as placed (also listed under Tonight’s Picks).</span>` : ""}
             ${progressBar(r)}
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
         </div>`).join("")}
       <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">
-        ${rows.length} open bet(s) on today's card${elsewhere
+        ${rows.length} open bet(s) on today’s card${elsewhere
           ? ` · ${elsewhere} older open bet(s) awaiting results — graded on the Record page`
-          : ""}. A bet journals the moment it's recommended and stays here until it
-        settles — even if the pick later drops off Tonight's Picks because prices moved.
-        Stat lines update with the board's refresh cycle; every bet settles
+          : ""}. A bet journals the moment it’s recommended and stays here until it
+        settles — even if the pick later drops off Tonight’s Picks because prices moved.
+        Stat lines update with the board’s refresh cycle; every bet settles
         officially against ingested final results overnight.</p>
     </div>`;
 }
@@ -1562,7 +1562,7 @@ async function renderTeamForm() {
   const sampler = gradedN
     ? `sampler: backing hot teams at real prices is ${fm.wins}-${fm.losses} `
       + `(${signedPct(fm.roi || 0)} ROI) — graded on the Record page`
-    : `sampler journals the hot side's moneyline in every hot-vs-cold matchup `
+    : `sampler journals the hot side’s moneyline in every hot-vs-cold matchup `
       + `at the real price — grades on the Record page`;
   const row = (r, tone) => `
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -1571,7 +1571,7 @@ async function renderTeamForm() {
         ${teamMark(r.team, 18)} <strong>${escapeHtml(teamName(r.team))}</strong></span>
       <span style="white-space:nowrap">${r.w}-${r.l}</span>
       <span class="val ${tone}" style="white-space:nowrap;min-width:88px;text-align:right"
-            title="Run differential per game over the window minus the team's own season number — hot relative to itself, not the league">
+            title="Run differential per game over the window minus the team’s own season number — hot relative to itself, not the league">
         ${r.delta_diff >= 0 ? "+" : ""}${r.delta_diff.toFixed(1)} r/g</span>
       <span style="min-width:34px;text-align:right;color:${r.streak > 0 ? "var(--good)" : "var(--bad)"}">
         ${r.streak > 0 ? `W${r.streak}` : r.streak < 0 ? `L${-r.streak}` : "—"}</span>
@@ -1585,7 +1585,7 @@ async function renderTeamForm() {
   host.innerHTML = `
     <div class="section-title">Team form — last ${tf.window_days || 7} days
       <span class="sub">— from our own ingested results, refreshed nightly. Tracked and
-      measured before it's ever allowed to move a bet.</span></div>
+      measured before it’s ever allowed to move a bet.</span></div>
     <div class="trend-grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))">
       ${col("Running hot", iconMark("hot"), tf.hot || [], "pos")}
       ${col("Running cold", iconMark("cold"), tf.cold || [], "neg")}
@@ -1685,7 +1685,7 @@ function renderRestWatch() {
       ${escapeHtml(pic.note || "")}</p>`;
   host.innerHTML = `
     <div class="section-title">Rest watch
-      <span class="sub">— the playoff picture's usage risks. A clinched team
+      <span class="sub">— the playoff picture’s usage risks. A clinched team
       may rest starters, an eliminated one may shut veterans down, and an
       announced rest flips its props to Pass on this board — a season-usage
       prop on a benched rotation is a stale price, not an edge.</span></div>
@@ -2012,7 +2012,7 @@ function gameCard(g) {
         ${isLive && !mlb ? liveDetail : ""}
       </div>
       ${footer}
-      <div class="game-cta">${n ? `${n} pick${n === 1 ? "" : "s"} for this game` : "See this game's board"}
+      <div class="game-cta">${n ? `${n} pick${n === 1 ? "" : "s"} for this game` : "See this game’s board"}
         <span class="gc-arrow">→</span></div>
     </article>`;
 }
@@ -2075,7 +2075,7 @@ function renderRecommended() {
         game that has already started — pre-game picks are never made against
         in-play lines. The other ${recs.length - real.length} prop(s) are
         waiting on real book prices, which books post close to first pitch.
-        The board fills as tonight's prices arrive; no slider changes that.`;
+        The board fills as tonight’s prices arrive; no slider changes that.`;
     } else if (!recs.length && censusTotal() > 0) {
       /* Nothing reached the board AT ALL, which the old copy answered with
          "loosen the sliders" — advice that cannot work, because a slider
@@ -2261,7 +2261,7 @@ function renderLongShots() {
     host.innerHTML = watchlistHTML(watch, mlb);
     note.innerHTML = watch.length
       ? `<div class="ls-note">No price clears the strict <b>value</b> bar tonight, so
-         these are the model's most likely ${mlb ? "home runs" : "scorers"} instead, with
+         these are the model’s most likely ${mlb ? "home runs" : "scorers"} instead, with
          the price shown honestly. They are <b>not</b> value picks and are not journaled
          as bets — read them as insight, not as a card.</div>`
       : `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
@@ -2272,7 +2272,7 @@ function renderLongShots() {
   note.innerHTML = `<div class="ls-note">Top ${picks.length} pick(s), ranked by
     <b>edge</b>, never by payout — the same ${picks.length === 1 ? "one" : picks.length}
     featured on the Recommended page.${watch.length ? ` Topped up to three with the
-    model's most likely ${mlb ? "home run" : "scorer"}${watch.length > 1 ? "s" : ""},
+    model’s most likely ${mlb ? "home run" : "scorer"}${watch.length > 1 ? "s" : ""},
     shown for context and not journaled as bets.` : ""}</div>`;
   host.innerHTML = picks.map(longShotCard).join("") + watchlistHTML(watch, mlb);
   fillMeters(host);
@@ -2341,8 +2341,8 @@ function renderParlays() {
     </div>
     ${tickets.length ? `<div class="pz-sub pz-rank-title">
       ${qualified.length
-        ? "Tonight's board, ranked — the first is the play"
-        : "Tonight's board, ranked — best constructions available"}
+        ? "Tonight’s board, ranked — the first is the play"
+        : "Tonight’s board, ranked — best constructions available"}
       </div>` : ""}
     ${tickets.slice(0, 1).map((t) => parlayTicket(t, t.qualified)).join("")}
     ${parlayRunnersUp(tickets.slice(1))}
@@ -2352,7 +2352,7 @@ function renderParlays() {
     <div class="pz-census">
       Screened ${z.considered} candidate ${z.considered === 1 ? "ticket" : "tickets"}
       built from ${z.eligible_legs} eligible ${z.eligible_legs === 1 ? "leg" : "legs"}
-      on tonight's board.
+      on tonight’s board.
       ${z.killed && z.killed.length
         ? `${z.killed.length} ${z.killed.length === 1 ? "was" : "were"} killed
            for the reasons above.` : ""}
@@ -2408,7 +2408,7 @@ function parlayTicket(t, live) {
          than taken from the model doc, so it is priced at face value: the
          humility clamp exists because a prior is a guess, and a counted
          number has nothing to be humble about. `
-      : ""}The published ρ is the doc's prior; the priced ρ is that prior after
+      : ""}The published ρ is the doc’s prior; the priced ρ is that prior after
       the clamp this engine applies to every raw edge. Those magnitudes are
       professional estimates, not measured constants, and pricing an estimate
       at face value would invent edge out of a guess.</div>
@@ -2447,7 +2447,7 @@ function parlayTicket(t, live) {
         ? `of edge — still short of the ${t.threshold_points}-point bar.`
         : `<b>behind</b> the price. Even at the most generous number a book
            would plausibly offer, this loses money.`}
-      That figure is what tonight's board is ranked on.</div>
+      That figure is what tonight’s board is ranked on.</div>
     <div class="pz-fine">Nobody publishes what they charge to combine legs, so
       the two numbers above are a <b>band</b>, not a quote: this ticket is
       measured against a book taking
@@ -2455,7 +2455,7 @@ function parlayTicket(t, live) {
       taking ${(t.correlation_tax_worst_case * 100).toFixed(0)}%, versus the
       4.3–4.8% a straight side costs. ${t.grade === "marginal"
         ? `It clears the first and not the second — which makes this a question
-           about your book's actual number rather than about the model.`
+           about your book’s actual number rather than about the model.`
         : t.grade === "play"
         ? `It clears both, so the price is not what stands between you and this
            ticket.` : ""}</div>
@@ -2564,7 +2564,7 @@ function longshotEmptyReason(mlb) {
   const dg = state.data.longshot_diag;
   if (mlb && dg) {
     if (!dg.hr_props)
-      return "No hitter props are built yet. Lineups aren't posted AND no recent " +
+      return "No hitter props are built yet. Lineups aren’t posted AND no recent " +
              "batting order could be projected — if games are on today, the next " +
              "refresh usually fixes this (the projector needs the free MLB Stats " +
              "API to be reachable).";
@@ -2575,14 +2575,14 @@ function longshotEmptyReason(mlb) {
     if (!dg.plus_money)
       return `${dg.real_priced} home-run price(s) are attached but none are ` +
              "plus-money in a believable range right now. This usually means " +
-             "games are in progress (in-play prices) — tomorrow's board resets " +
+             "games are in progress (in-play prices) — tomorrow’s board resets " +
              "with fresh pre-game quotes.";
     return `${dg.plus_money} real plus-money price(s) exist but every one failed ` +
            "a sanity guard (edge cap or odds window). If this persists on a " +
            "pre-game board, something is wrong — worth reporting.";
   }
   return "The model only surfaces " + (mlb ? "home-run" : "touchdown") +
-         " picks that beat the book's price inside a sane odds range" +
+         " picks that beat the book’s price inside a sane odds range" +
          (mlb ? " (+250 to +650)." : " (-150 to +200).");
 }
 
@@ -2610,7 +2610,7 @@ function watchlistHTML(watch, mlb) {
   }).join("");
   return `<div style="grid-column:1/-1;min-width:0">
     <div class="section-title">Most likely ${mlb ? "to homer" : "to score"} tonight
-      <span class="sub">— model % vs the book's implied %. Positive EV = price worth taking;
+      <span class="sub">— model % vs the book’s implied %. Positive EV = price worth taking;
       negative = likely but overpriced. Never a guarantee.</span></div>
     <div class="card" style="padding:0">${rows}</div></div>`;
 }
@@ -2764,7 +2764,7 @@ function stadiumPanel(g) {
       <span class="chip">${s.surface === "turf" ? "Turf" : "Grass"}</span>
     </div>
     ${s.plays ? `<p class="pk-plays">${escapeHtml(s.plays)}</p>` : ""}
-    <p class="pk-note">Football fields are the same size everywhere, so a venue's
+    <p class="pk-note">Football fields are the same size everywhere, so a venue’s
       effect is almost entirely its environment — indoors vs outdoors first,
       then altitude. The live weather above is the number that moves a total.</p>
   </div>`;
@@ -2778,9 +2778,9 @@ function renderGamePage() {
   const g = findGame(state.gameId);
   if (!g) {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("stadium", 30)}</div>
-      <div class="es-title">That game isn't on the current slate</div>
+      <div class="es-title">That game isn’t on the current slate</div>
       <div class="es-sub">Slates roll over each day. Head back to the board for
-      today's games.</div></div>
+      today’s games.</div></div>
       <button class="btn ghost gp-back" id="gp-back" style="margin-top:14px">← Back to the board</button>`;
     const b = document.getElementById("gp-back");
     if (b) b.addEventListener("click", () => switchView("recommended"));
@@ -2876,7 +2876,7 @@ function renderGamePage() {
         <div class="cards gp-cards">${byMarket.get(k).map(cardHTML).join("")}</div>`).join("")
       : `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
           <div class="es-title">No player props clear the filters in this game</div>
-          <div class="es-sub">Either the model passes on everything here, or books haven't
+          <div class="es-sub">Either the model passes on everything here, or books haven’t
           posted prices for it yet.</div>
           ${props.length ? `<button class="btn ghost" id="gp-showall" style="margin-top:12px">
             Show all ${props.length} analyzed prop(s) anyway</button>` : ""}</div>`}
@@ -2922,7 +2922,7 @@ function renderTrending() {
       // contradict the Recommended page.
       tag: (r) => passesFilters(r)
         ? `<span style="color:var(--good)">${icon('check')} recommended</span>`
-        : `<span style="opacity:.55">pass — didn't clear the gates</span>` },
+        : `<span style="opacity:.55">pass — didn’t clear the gates</span>` },
   ];
   const host = document.getElementById("trending");
   host.innerHTML = cols.map((c) => `
@@ -2965,7 +2965,7 @@ async function renderPlayers() {
     const misses = q ? await rosterMatches(q) : [];
     if (misses.length) {
       host.innerHTML = `
-        <div class="empty" style="margin-bottom:12px">No prop on tonight's board for
+        <div class="empty" style="margin-bottom:12px">No prop on tonight’s board for
           “${escapeHtml(state.search)}” — profiles here are prop cards.
           On the roster${misses.length > 1 ? "s" : ""}:</div>
         ${misses.map((m) => `
@@ -3198,7 +3198,7 @@ function recCurveChart(curve) {
               stroke-linejoin="round" stroke-linecap="round"/>
         ${dots}
       </svg>
-      <div class="rc-foot">Hover a dot for that day's bets. Flat units — every pick
+      <div class="rc-foot">Hover a dot for that day’s bets. Flat units — every pick
         weighted by its stake, no bankroll compounding.</div>
     </div>`;
 }
@@ -3340,7 +3340,7 @@ function recParlaySection(pz) {
         pz.z == null ? "" : ` (now ${pz.z.toFixed(2)})`}`)}
     </div>
     <div class="card" style="padding:0;margin-top:12px">${verdict}${rows ||
-      `<p class="loading" style="padding:12px">No ticket has settled yet — accrues from tonight's board.</p>`}${codes}</div>`;
+      `<p class="loading" style="padding:12px">No ticket has settled yet — accrues from tonight’s board.</p>`}${codes}</div>`;
 }
 
 function recLongshotSection(ls) {
@@ -3386,13 +3386,13 @@ function recLongshotSection(ls) {
     <div class="section-title">Long Shots — tracked separately
       <span class="sub">— home runs &amp; anytime TDs, with their own ROI. Never mixed
       into the record above.</span></div>
-    ${recDisclosure("Why these are quarantined", `Only the board's actual
+    ${recDisclosure("Why these are quarantined", `Only the board’s actual
       PICKS — three per night at most — count toward this record, graded at a flat 0.1u
       nominal stake with zero bankroll impact. The watchlist (every real-priced home run
       on the slate, sometimes 100+ names) is tracked separately as a calibration sample
       and never enters this W-L: recommend a couple hundred homers a night and a handful
       always land, which proves nothing. These markets are long shots by nature, so even
-      picks that clear the main board's bar are quarantined here — a night of +650 darts
+      picks that clear the main board’s bar are quarantined here — a night of +650 darts
       would otherwise make the headline record describe the dart board instead of the
       picks the model stands behind. Judge the ROI and calibration over weeks, not the
       hit column.`)}
@@ -3415,7 +3415,7 @@ function recLongshotSection(ls) {
         `<span class="chip">${escapeHtml(s.toUpperCase())} ${d.w}/${d.n}
            (${d.net_u >= 0 ? "+" : ""}${d.net_u.toFixed(2)}u)</span>`).join(" ")}</div>` : ""}
     <div class="card" style="padding:0;margin-top:12px">${calib}${rows ||
-      `<p class="loading" style="padding:12px">Nothing settled yet — accrues from tonight's board.</p>`}${watch}</div>`;
+      `<p class="loading" style="padding:12px">Nothing settled yet — accrues from tonight’s board.</p>`}${watch}</div>`;
 }
 
 /* Calibration: when the model said X%, how often did it actually happen.
@@ -3551,7 +3551,7 @@ function calScoreBlock(cal) {
   return `<div style="padding:12px 14px;border-top:1px solid rgba(255,255,255,.06)">
     <div style="display:flex;gap:18px;flex-wrap:wrap">${cards}${ece}</div>
     <p style="margin:10px 0 0;font-size:.85em;opacity:.62">Lower is better for both.
-      Scored against the de-vigged closing price on the same bets — if we can't
+      Scored against the de-vigged closing price on the same bets — if we can’t
       out-forecast the close on our own selections, the edge story is fiction.
       Shown either way, because a site that hides this number is a tout with a
       website.</p>${disagree}</div>`;
@@ -3590,8 +3590,8 @@ function recCalibrationSplits(s) {
   if (!mk && !hz) return "";
   const held = s.markets_held_back
     ? `<p style="margin:6px 0 0;font-size:.82em;opacity:.55">
-        ${s.markets_held_back} more market(s) haven't reached ${s.min_n} graded
-        picks. They're in the headline number above — they just can't carry a
+        ${s.markets_held_back} more market(s) haven’t reached ${s.min_n} graded
+        picks. They’re in the headline number above — they just can’t carry a
         row of their own yet, because the band would be wider than any miss it
         could show.</p>` : "";
   // Degenerate means fewer than two buckets clear the bar — so the rows are
@@ -3665,7 +3665,7 @@ function recRestatedSection(rs, sport) {
   const roi = (r.roi ?? 0) * 100;
   const tone = (v) => v >= 0 ? "var(--good)" : "var(--bad)";
   return `
-    <div class="section-title">At today's sizing
+    <div class="section-title">At today’s sizing
       <span class="sub">— the same graded picks, re-staked by the current
       model: 1u = 1% of bankroll, conviction plays near a unit, +200-or-longer
       capped at a dime. The official record above is the receipts as bet;
@@ -3685,7 +3685,7 @@ function recRestatedSection(rs, sport) {
     </div>
     ${r.excluded ? `<p class="loading" style="margin-top:8px">${r.excluded.toLocaleString()}
       old pick(s) are excluded — at their journaled probability and price,
-      today's Kelly would not have made those bets at all.</p>` : ""}`;
+      today’s Kelly would not have made those bets at all.</p>` : ""}`;
 }
 
 function recProseSection(pz, sport) {
@@ -3721,7 +3721,7 @@ function recProseSection(pz, sport) {
     <div class="section-title">The night desk
       <span class="sub">— the one other job an AI that writes prose gets here:
       narrating. A nightly postmortem of what actually graded and a weekly
-      note on what the learning ladder did — written from the arithmetic's
+      note on what the learning ladder did — written from the arithmetic’s
       own numbers, never setting one. Capped spend, every call on the
       ledger.</span></div>
     <div class="card" style="padding:0">
@@ -3753,7 +3753,7 @@ function recSelfTuningSection(st, sport) {
       <span class="sub">— settled bets fit the dials; nobody turns one by hand.</span></div>
     <div class="card"><p style="margin:0;padding:12px 14px;font-size:.87em;color:var(--text-mute)">
       Nothing tuned for ${escapeHtml(sport.toUpperCase())} yet. The fitters run
-      on every settle pass, on this sport's own settled bets only, and adopt
+      on every settle pass, on this sport’s own settled bets only, and adopt
       a correction only when it beats the spec in a walk-forward test — so this
       fills in as its journal deepens.</p></div>`;
   }
@@ -3789,7 +3789,7 @@ function recSelfTuningSection(st, sport) {
     if (!w.at_boundary || !w.grid_n) return "";
     const flat = w.plateau >= Math.max(2, w.grid_n * 0.5);
     const txt = w.adopted
-      ? `at the family's edge — the anchor curve is the thing to revisit, not the grid`
+      ? `at the family’s edge — the anchor curve is the thing to revisit, not the grid`
       : flat
         ? `${w.plateau}/${w.grid_n} dial settings tied — flat surface, the edge is where the search landed`
         : `${w.plateau}/${w.grid_n} tied — a real slope, but under the adoption bar`;
@@ -3834,7 +3834,7 @@ function recSelfTuningSection(st, sport) {
     const verdict = gain > 0 ? "memory scored better"
       : gain < 0 ? "memory scored worse" : "no difference";
     return `<span style="opacity:.6;font-variant-numeric:tabular-nums"
-      title="Walk-forward ${escapeHtml(label)}, memory off → on: ${escapeHtml(verdict)} by ${Math.abs(gain).toFixed(5)}. Lower is better. Each bet's correction knew only that player's EARLIER games, so this is out-of-sample at every row. The memory switches on only when it wins by at least 0.0005.">${before.toFixed(4)} → ${after.toFixed(4)}</span>`;
+      title="Walk-forward ${escapeHtml(label)}, memory off → on: ${escapeHtml(verdict)} by ${Math.abs(gain).toFixed(5)}. Lower is better. Each bet’s correction knew only that player’s EARLIER games, so this is out-of-sample at every row. The memory switches on only when it wins by at least 0.0005.">${before.toFixed(4)} → ${after.toFixed(4)}</span>`;
   };
   const playerRows = players.map((p) => `
     <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
@@ -3869,7 +3869,7 @@ function recSelfTuningSection(st, sport) {
   return `
     <div class="section-title">The model tunes itself
       <span class="sub">— a market is fitted once it clears 200 settled bets, and
-      REFITTED from every settled bet after that. This is the site's AI lane:
+      REFITTED from every settled bet after that. This is the site’s AI lane:
       arithmetic on outcomes, reproducible and auditable, which is exactly why a
       chatbot never sets a probability here.</span></div>
     <div class="stats">
@@ -3877,7 +3877,7 @@ function recSelfTuningSection(st, sport) {
            real defect for as long as the defect existed.
 
            It first said "runs itself after every settle", which was untrue.
-           It was corrected to say the stamp only moves on a market's FIRST
+           It was corrected to say the stamp only moves on a market’s FIRST
            fit — accurate, because the fitter skipped any market it had
            already corrected: those bets were priced UNDER the correction and
            refitting on them naively replaces a working number with ~1.0.
@@ -3889,7 +3889,7 @@ function recSelfTuningSection(st, sport) {
            up. -->
       <div class="tile"><div class="k">Last fit</div><div class="v" style="font-size:var(--fs-lg)">${escapeHtml(lastRefit)}</div>
         <div class="tile-sub">every market refits from the whole journal —
-          each bet's claim is un-corrected by whatever was live when it was
+          each bet’s claim is un-corrected by whatever was live when it was
           placed, so a correction can deepen instead of freezing</div></div>
       <div class="tile"><div class="k">Markets tuned</div><div class="v">${markets.length}</div></div>
       <div class="tile"><div class="k">Self-closed</div><div class="v">${closed.length}</div>
@@ -3944,21 +3944,21 @@ function recLossPatternsSection(lp, sport) {
   const empty = (sport && (lp.findings || []).length) ? `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
       No pattern involves ${escapeHtml(sport.toUpperCase())} — its graded bets
-      are in every night's sweep, and a clean sheet here is the sweep's
+      are in every night’s sweep, and a clean sheet here is the sweep’s
       verdict, not its absence.</p>` : (lp.tested ?? 0) > 0 ? `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
       Scanned ${lp.tested} slice${lp.tested === 1 ? "" : "s"} of
       ${(lp.n_records ?? 0).toLocaleString()} graded bets — nothing survives
       false-discovery control yet. Patterns that look real on small samples
-      usually aren't, and a bar that bends to make the page interesting
+      usually aren’t, and a bar that bends to make the page interesting
       stops meaning anything. The bar stays.</p>` : `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
       Not enough graded bets in any one slice yet — a slice is only tested
-      at ${lp.min_n ?? 40}+ settled picks. Every night's grades feed this.</p>`;
+      at ${lp.min_n ?? 40}+ settled picks. Every night’s grades feed this.</p>`;
   return `
     <div class="section-title">Learning from losses
       <span class="sub">— the miner slices every graded bet by side, price band,
-      stated probability, horizon and book, hunting pockets where the model's
+      stated probability, horizon and book, hunting pockets where the model’s
       claims systematically missed. A pocket that runs hot enough closes itself
       and blocks new picks — the same self-closure markets already live under,
       one level finer.</span></div>
@@ -3977,14 +3977,14 @@ function recLossPatternsSection(lp, sport) {
       <p style="margin:0;font-size:.87em">Every "trends" tab in this industry
       is a pattern-hallucination machine: slice one record forty ways and luck
       alone hands you two impressive streaks. Two disciplines here. First, a
-      slice is judged on whether the model's own stated probabilities missed
+      slice is judged on whether the model’s own stated probabilities missed
       reality (said 64%, hit 51%) — not on win rate, which would flag every
       honest longshot bucket. Second, every slice tested enters a
       Benjamini–Hochberg false-discovery correction, and only survivors are
       findings — the flagged set is expected to be at most
       ${Math.round(((lp.alpha ?? 0.05) * 100))}% luck. A pattern that clears
       both bars closes its slice automatically; the pick engines refuse
-      anything that lands in it, and the veto's reason names this page.</p>`)}`;
+      anything that lands in it, and the veto’s reason names this page.</p>`)}`;
 }
 
 function recHypothesisLab(hl, sport) {
@@ -4021,19 +4021,19 @@ function recHypothesisLab(hl, sport) {
   const empty = (sport && (hl.hypotheses || []).length) ? `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
       No hypothesis touches ${escapeHtml(sport.toUpperCase())} yet. The next
-      <code>python3 hypotheses.py</code> run reads every sport's record —
+      <code>python3 hypotheses.py</code> run reads every sport’s record —
       including this one — and proposes wherever the evidence points.</p>` : `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
       The lab is idle. Add <code>ANTHROPIC_API_KEY</code> to secrets.local and
-      run <code>python3 hypotheses.py</code> — the model reads the record's own
-      summary and proposes slice intersections the miner doesn't test. Every
+      run <code>python3 hypotheses.py</code> — the model reads the record’s own
+      summary and proposes slice intersections the miner doesn’t test. Every
       proposal faces the same statistics as everything else on this page;
       nothing an AI writes here can ever set a probability.</p>`;
   return `
     <div class="section-title">The hypothesis lab
       <span class="sub">— the one safe job for an AI that writes prose: propose.
-      A language model reads the record's summary and suggests loss patterns
-      built strictly from the miner's own tested dimensions — the intersections
+      A language model reads the record’s summary and suggests loss patterns
+      built strictly from the miner’s own tested dimensions — the intersections
       no single-dimension sweep covers. The arithmetic disposes: same
       calibration test, same false-discovery bar, re-earned against the growing
       journal on every settle pass.</span></div>
@@ -4054,7 +4054,7 @@ function recHypothesisLab(hl, sport) {
       audited. Its one structural advantage is hypothesis generation — the
       miner tests every single dimension of the record but never their
       intersections, and a model that has read the summary can name the few
-      worth testing. So proposals are constrained to the miner's own menu of
+      worth testing. So proposals are constrained to the miner’s own menu of
       dimensions, convicted or acquitted by the same statistics that govern
       every number on this page, and re-tried nightly as new bets settle —
       a confirmation that was luck decays on its own. The model saw the record
@@ -4088,7 +4088,7 @@ function recCalibrationSection(cal, era) {
       (era || {}).since ? ` (${escapeHtml(era.since)})` : ""} — the misses above were mostly
       earned by gates that no longer exist. The current model gets its own chart here once
       ~50 of its picks settle (${eraN} so far). The nightly calibration refit already feeds
-      these misses back into the model's tempering.</p>`;
+      these misses back into the model’s tempering.</p>`;
   const eraBlock = eraN >= 50 ? `
     <div class="section-title">Current model only
       <span class="sub">— the same test, restricted to picks graded since the
@@ -4097,7 +4097,7 @@ function recCalibrationSection(cal, era) {
       <div style="padding:14px 14px 4px;border-top:1px solid rgba(255,255,255,.06)">
         ${reliabilityDiagram(era.buckets)}</div>${calScoreBlock(era)}</div>` : "";
   return `<div class="section-title">Calibration — did "60%" mean 60%?
-      <span class="sub">— every settled pick, bucketed by the model's claimed probability.</span></div>
+      <span class="sub">— every settled pick, bucketed by the model’s claimed probability.</span></div>
     <div class="card" style="padding:0">${rows}${diagramBlock}${brier}${eraNote}</div>
     ${eraBlock}`;
 }
@@ -4132,14 +4132,14 @@ function recHealthSection(h) {
   const blind = !(h.blind_spots || []).length ? "" : `
     <details style="margin-top:10px">
       <summary style="cursor:pointer;font-size:.85em;color:var(--text-mute)">
-        What this score can't see — and why</summary>
+        What this score can’t see — and why</summary>
       <ul style="margin:8px 0 0;padding-left:18px;font-size:.85em;color:var(--text-body)">
         ${h.blind_spots.map((s) => `<li><strong>${escapeHtml(s.signal)}</strong>
           — ${escapeHtml(s.why)}</li>`).join("")}
       </ul>
       <p style="font-size:.83em;opacity:.6;margin:8px 0 0">Books watch all of
         these. We score the four we can measure honestly and name the rest
-        rather than implying a completeness this doesn't have.</p>
+        rather than implying a completeness this doesn’t have.</p>
     </details>`;
   return `<div class="section-title">Account health
       <span class="sub">— books quietly limit winners; this estimates how limit-prone your action looks, per book.</span></div>
@@ -4170,8 +4170,8 @@ function recUfcSection(u) {
     <div class="section-title">UFC — tracked separately
       <span class="sub">— every journaled fight pick, graded from post-card results.
       Never mixed into the record above.</span></div>
-    ${recDisclosure("Why these are quarantined", `Scalpy MMA's picks journal at
-      their real prices (one-fifth Kelly stakes) and settle automatically from ESPN's
+    ${recDisclosure("Why these are quarantined", `Scalpy MMA’s picks journal at
+      their real prices (one-fifth Kelly stakes) and settle automatically from ESPN’s
       fight results after each card. UFC is the newest graded module, so it earns its
       way like every other signal: its own bucket, its own ROI, and no place in the
       headline record until a real sample says it belongs there.`)}
@@ -4184,7 +4184,7 @@ function recUfcSection(u) {
                 "cards are small samples — judge after 50+")}
     </div>
     <div class="card" style="padding:0;margin-top:12px">${rows ||
-      `<p class="loading" style="padding:12px">Grades after each card's fights are official.</p>`}</div>`;
+      `<p class="loading" style="padding:12px">Grades after each card’s fights are official.</p>`}</div>`;
 }
 
 /* Polymarket flag record — the Intel page's graded flags, quarantined in
@@ -4228,7 +4228,7 @@ function recLooseSection(lo) {
                 graded >= 100 ? "sample reached — read the ROI" : "graded picks needed")}
     </div>
     <div class="card" style="padding:0;margin-top:12px">${rows ||
-      `<p class="loading" style="padding:12px">Nothing settled yet — accrues from tonight's near-misses.</p>`}</div>`;
+      `<p class="loading" style="padding:12px">Nothing settled yet — accrues from tonight’s near-misses.</p>`}</div>`;
 }
 
 function recPolymarketSection(v) {
@@ -4417,7 +4417,7 @@ function labSkillTile(m) {
     `vs always saying ${(sk.base_rate * 100).toFixed(0)}% (the base rate)`,
     { lead: true, tone: beats ? "pos" : "neg",
       help: "Brier scored against the base-rate baseline. Positive = the "
-          + "model's probabilities carry information; negative = you would "
+          + "model’s probabilities carry information; negative = you would "
           + "do better ignoring it." });
 }
 
@@ -4580,7 +4580,7 @@ async function renderLab() {
     <table class="agate"><thead><tr><th>Sport</th><th>Player props</th>
       <th>Game lines</th></tr></thead><tbody>${gaps}</tbody></table>` : "";
   host.innerHTML = `
-    ${recDisclosure("What this page is, and what it isn't", `The Book grades the picks
+    ${recDisclosure("What this page is, and what it isn’t", `The Book grades the picks
       we actually made, going forward. This page grades the <em>model</em>, by
       replaying it over history it never saw at the time — projections for each
       game are built only from games before it, then settled against what
@@ -4611,7 +4611,7 @@ async function renderRecord() {
       <div class="es-title">No graded picks yet</div>
       <div class="es-sub">Every recommended pick is journaled automatically at its real
       price and grades itself once results are ingested (nightly, automatic).
-      Check back after tonight's games settle — this page becomes the honest
+      Check back after tonight’s games settle — this page becomes the honest
       scoreboard for everything the model recommends.</div></div>`;
     return;
   }
@@ -4726,7 +4726,7 @@ async function renderRecord() {
     </div>
     ${recDisclosure("What counts as a tracked bet", `Journals every
       <strong>Recommended</strong> bet — the same count the "Recommended bets"
-      tile shows on each sport's board: player props plus game bets (moneyline,
+      tile shows on each sport’s board: player props plus game bets (moneyline,
       spread &amp; totals, sharp-anchor and model alike) — at the real book price
       shown when it was recommended. One entry per player &amp; market per day.
       Long Shots and stale-line flags are tracked in their own buckets at a flat
@@ -4837,15 +4837,15 @@ function recFormSection(fm) {
   }).join("");
   return `
     <div class="section-title">Team-form sampler — measurement in progress
-      <span class="sub">— every hot-vs-cold matchup, hot side's moneyline at the real book
+      <span class="sub">— every hot-vs-cold matchup, hot side’s moneyline at the real book
       price. Flat 0.1u, zero bankroll impact, never in the record above.</span></div>
     ${recDisclosure("What this is testing", `Streaks are the most public stat in
       sports, so the default assumption is the market already prices them — hot teams
-      cost more to back. This bucket journals the hot team's moneyline in every
+      cost more to back. This bucket journals the hot team’s moneyline in every
       hot-vs-cold matchup at the price someone could actually bet, and settles it
       against the real result. The promotion bar is the same as every sampler:
       100+ graded, z ≥ 2, positive ROI. Clear it and form becomes a model input;
-      miss it and we've learned the market has streaks covered — cheaply.`)}
+      miss it and we’ve learned the market has streaks covered — cheaply.`)}
     <div class="stats rec-kpis">
       ${recTile("Flat-stake ROI", (fm.roi >= 0 ? "+" : "") + (fm.roi * 100).toFixed(1) + "%",
                 `${fm.net_units >= 0 ? "+" : ""}${(fm.net_units || 0).toFixed(2)}u on ${(fm.units_staked || 0).toFixed(1)}u staked`,
@@ -4869,9 +4869,9 @@ function recStaleSection(st) {
   const calib = st.avg_taken_implied != null
     ? `<div style="opacity:.7;font-size:.9em;padding:8px 14px">
          The flagged prices implied <strong>${(st.avg_taken_implied * 100).toFixed(1)}%</strong>
-         · the field's consensus said <strong>${(st.avg_consensus_implied * 100).toFixed(1)}%</strong>
+         · the field’s consensus said <strong>${(st.avg_consensus_implied * 100).toFixed(1)}%</strong>
          · they actually hit <strong>${(st.actual_hit_rate * 100).toFixed(1)}%</strong>.
-         Hitting above the taken price's implied = the cheap price was real value.</div>` : "";
+         Hitting above the taken price’s implied = the cheap price was real value.</div>` : "";
   const rows = (st.recent || []).map((b) => {
     const won = b.status === "won";
     const push = b.status === "push";
@@ -4891,12 +4891,12 @@ function recStaleSection(st) {
       <span class="sub">— every pre-game stale-line flag, taken at the flagged price. Flat 0.1u,
       zero bankroll impact, never in the record above.</span></div>
     ${recDisclosure("What this is testing", `The scanner flags a book pricing
-      a side at least a point cheaper than every other book's consensus. On 30,448
+      a side at least a point cheaper than every other book’s consensus. On 30,448
       harvested quotes, taking that price beat the eventual close 64.8% of the time —
       but closing-line value is a statistic, not money. This bucket journals every
       pre-game flag automatically and settles it against the real result. If the hit
-      rate clears the taken price's break-even over a real sample, the signal graduates
-      from "interesting" to "bettable" — and if it doesn't, this table is how we find
+      rate clears the taken price’s break-even over a real sample, the signal graduates
+      from "interesting" to "bettable" — and if it doesn’t, this table is how we find
       out cheaply.`)}
     <div class="stats rec-kpis">
       ${recTile("Flat-stake ROI", (st.roi >= 0 ? "+" : "") + (st.roi * 100).toFixed(1) + "%",
@@ -5004,8 +5004,8 @@ function renderEdgeBoard() {
       <h3>No positively-priced bets right now</h3>
       <p>${noMarketExplainer()}</p>
       <p style="opacity:.7">The Edge Board lists every bet whose real price
-      beats the model's probability — including small edges and long odds that
-      don't clear the Recommended bar. Expected value is honest math, not a
+      beats the model’s probability — including small edges and long odds that
+      don’t clear the Recommended bar. Expected value is honest math, not a
       guarantee: a +5% EV bet still loses often; the edge shows up over
       hundreds of bets.</p></div>`;
     return;
@@ -5135,7 +5135,7 @@ function renderScanner() {
           <span style="color:var(--bad);font-weight:700">${(t.measured_roi * 100).toFixed(1)}% historically</span>
           <span style="display:block;opacity:.6;font-size:.85em">${escapeHtml(t.band)} band</span></span>
       </div>`,
-      "No plus-money quotes on today's board — main props or long shots. That's the cheap place to be.")
+      "No plus-money quotes on today’s board — main props or long shots. That’s the cheap place to be.")
     + scanSection("Arbitrage", "opposite sides priced so a margin is locked whichever way it lands — IF both legs fill at the shown prices before they move. Rare across US books and gone in minutes",
       arbs, (a) => {
         const so = stake * a.stake_over_pct, su = stake * (1 - a.stake_over_pct);
@@ -5147,7 +5147,7 @@ function renderScanner() {
            <span style="display:block;opacity:.7;font-size:.85em">$${so.toFixed(0)} Over / $${su.toFixed(0)} Under</span>${suspect}`);
       },
       "No arbitrage pairs right now. Real arbs across legal US books appear a few times a week and last minutes — this scanner checks every refresh.")
-    + scanSection("Middles", "Over at a low line + Under at a higher one: land between them and BOTH win; miss and you only pay the vig. Ranked by EV from the sport's real outcome distribution — never by window width",
+    + scanSection("Middles", "Over at a low line + Under at a higher one: land between them and BOTH win; miss and you only pay the vig. Ranked by EV from the sport’s real outcome distribution — never by window width",
       middles, (m) => {
         const evLine = m.ev_per_unit != null
           ? `<span style="font-weight:700;color:${m.ev_per_unit >= 0 ? "var(--good,#3ddc84)" : "var(--text-mute,#889)"}">${m.ev_per_unit >= 0 ? "+" : ""}${(m.ev_per_unit * 100).toFixed(1)}% EV</span>
@@ -5167,7 +5167,7 @@ function renderScanner() {
       <div class="card" style="padding:0">
         ${anchors.map((b) => `<div class="drow" style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
             <span style="flex:1"><strong>${escapeHtml(b.pick_label || "")}</strong>
-              <span style="display:block;opacity:.6;font-size:.85em">${escapeHtml(b.matchup || "")} · priced off the sharp book's fair value</span></span>
+              <span style="display:block;opacity:.6;font-size:.85em">${escapeHtml(b.matchup || "")} · priced off the sharp book’s fair value</span></span>
             <span style="min-width:64px;text-align:right">${american(b.odds)}</span>
             <span style="min-width:80px;text-align:right;color:var(--good,#3ddc84)">+${((b.ev_per_unit || 0) * 100).toFixed(1)}% EV</span>
           </div>`).join("")}
@@ -5188,13 +5188,13 @@ function renderScanner() {
           </div>`;
         }).join("")}
         ${!anchors.length && !steam.length ? `<p class="loading" style="padding:12px">
-          Nothing sharp-flagged right now. Sharp-anchor picks appear when a soft book's
-          price beats the sharp book's fair value; steam appears when several books
+          Nothing sharp-flagged right now. Sharp-anchor picks appear when a soft book’s
+          price beats the sharp book’s fair value; steam appears when several books
           re-price together inside an hour.</p>` : ""}
       </div>
       <p style="opacity:.55;font-size:.85em;margin-top:12px">Positive-EV bets live on the
-      <b>Recommended</b> and <b>Edge Board</b> pages — that's the model's job. This page
-      needs no model: it's the books disagreeing with each other. Arbitrage and middle
+      <b>Recommended</b> and <b>Edge Board</b> pages — that’s the model’s job. This page
+      needs no model: it’s the books disagreeing with each other. Arbitrage and middle
       prices move fast; verify at the book before betting. Books limit accounts that
       only arb — mix it into normal betting.</p>`;
 
@@ -5286,7 +5286,7 @@ const STANDALONE_BRAND = {
   intel: { tagline: "Polymarket informed-flow intelligence" },
   fantasy: { tagline: "Fantasy football — usage, scripts, draft kit" },
   ufc: { tagline: "Scalpy MMA — dossier-gated fight model" },
-  why: { tagline: "See the math. Know if it's working." },
+  why: { tagline: "See the math. Know if it’s working." },
   record: { tagline: "The Book — every pick journaled, graded, learned from" },
   lab: { tagline: "The Lab — the model replayed against stored history" },
 };
@@ -5375,8 +5375,8 @@ function kalshiSectionHTML(k) {
       <span class="kx-sport chip">${escapeHtml((r.sport || "").toUpperCase())}</span>
       <span class="kx-title" title="${escapeHtml(r.title)}">${escapeHtml(r.title)}
         ${r.matchup ? `<span class="kx-match">· ${escapeHtml(r.matchup)}</span>` : ""}${basis}</span>
-      <span class="kx-num kx-k" title="Kalshi mid — the exchange's own probability">${(r.prob * 100).toFixed(0)}%</span>
-      <span class="kx-num kx-m" title="Our model's probability for the same claim">${r.model_p == null ? "—" : (r.model_p * 100).toFixed(0) + "%"}</span>
+      <span class="kx-num kx-k" title="Kalshi mid — the exchange’s own probability">${(r.prob * 100).toFixed(0)}%</span>
+      <span class="kx-num kx-m" title="Our model’s probability for the same claim">${r.model_p == null ? "—" : (r.model_p * 100).toFixed(0) + "%"}</span>
       <span class="kx-num kx-e">${edge}</span>
       <span class="kx-vol" title="24h volume">$${Number(r.volume_24h || 0).toLocaleString()}</span>
     </div>`;
@@ -5387,7 +5387,7 @@ function kalshiSectionHTML(k) {
   return `
     <div class="section-title">Kalshi board
       <span class="sub">— CFTC-regulated event contracts, all fifty states. The mid of a
-      two-sided book is the market's probability with no vig to strip; "edge" is our model
+      two-sided book is the market’s probability with no vig to strip; "edge" is our model
       minus that, in points, and only appears where both numbers exist.</span></div>
     ${/* The Overhead for a market that has no building: the space a price
           is set in IS the probability line. One drawing for the whole
@@ -5403,7 +5403,7 @@ function kalshiSectionHTML(k) {
       <div class="tile"><div class="k">Matched to tonight</div><div class="v">${k.n_matched || 0}</div></div>
       <div class="tile"><div class="k">With a model number</div><div class="v">${k.n_modeled || 0}</div></div>
       <div class="tile"><div class="k">Tape stored</div><div class="v">${((k.tape || {}).stored_total || 0).toLocaleString()}</div>
-        <div class="tile-sub">snapshots — order books can't be backfilled</div></div>
+        <div class="tile-sub">snapshots — order books can’t be backfilled</div></div>
     </div>
     <div class="card kx-table" style="padding:0">${rows}${empty}</div>`;
 }
@@ -5423,7 +5423,7 @@ async function renderIntel() {
   if (!d || (!(d.flow || []).length && !(d.markets || []).length)) {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
       <div class="es-title">No prediction-market data yet</div>
-      <div class="es-sub">The launcher pulls Kalshi's order books and Polymarket's public
+      <div class="es-sub">The launcher pulls Kalshi’s order books and Polymarket’s public
       market list and trade tape on every refresh (free, no key needed). If this persists,
       the machine may not be able to reach the venues.</div></div>`
       + kalshiSectionHTML(kx);
@@ -5459,7 +5459,7 @@ async function renderIntel() {
         </div>
         <span class="pm-status" style="color:${color}">${f.status.toUpperCase()}</span>
       </div>
-      <!-- .pm-title so the stylesheet can find this link: it is the card's
+      <!-- .pm-title so the stylesheet can find this link: it is the card’s
            headline and its main tap target, and needs a thumb-sized hit
            box on a phone. -->
       <div class="pm-title" style="margin:8px 0 10px;font-weight:600;line-height:1.35">
@@ -5663,7 +5663,7 @@ async function renderFantasy() {
       </div>
       ${[s.home, s.away].filter((t) => coachChanged[t]).map((t) =>
         `<div class="warning" style="margin-top:8px">${iconMark("clock")}${escapeHtml(t)} has a new head coach
-           (${escapeHtml(coachChanged[t])}) — last season's tendencies (PROE included) may not carry</div>`).join("")}
+           (${escapeHtml(coachChanged[t])}) — last season’s tendencies (PROE included) may not carry</div>`).join("")}
       <div class="metrics">
         <div class="metric"><div class="k">${escapeHtml(s.home)} implied</div><div class="v">${s.home_implied}</div></div>
         <div class="metric"><div class="k">${escapeHtml(s.away)} implied</div><div class="v">${s.away_implied}</div></div>
@@ -5708,7 +5708,7 @@ async function renderFantasy() {
       <span class="sub">— season vs 4-week vs last week, biggest role changes first</span></div>
     <div class="card ff-table">
       <div class="ff-row ff-head">
-        <span class="ff-who">Player</span><span class="ff-bar-h">Last week's share</span>
+        <span class="ff-who">Player</span><span class="ff-bar-h">Last week’s share</span>
         <span class="ff-n">Season</span><span class="ff-n">4-week</span><span class="ff-n">Last</span>
         <span class="ff-n trend">Trend</span><span class="ff-n rz">RZ/g</span><span class="ff-n">PPR</span>
       </div>
@@ -5727,9 +5727,9 @@ async function renderFantasy() {
       scales with the spread</span></div>
     <div class="cards wide">${scriptCards ||
       `<p class="loading" style="grid-column:1/-1">No upcoming NFL games with posted spreads and
-       totals in the DB yet — fills when next season's lines are ingested.</p>`}</div>
+       totals in the DB yet — fills when next season’s lines are ingested.</p>`}</div>
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Expected points are
-      fit from this season's own data (league value per target and per carry by position) —
+      fit from this season’s own data (league value per target and per carry by position) —
       volume-based, so a player can legitimately sustain a positive gap; only gaps beyond
       ~${bs.band || 1.5} PPG are flagged. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
   const more = document.getElementById("usage-more");
@@ -5776,7 +5776,7 @@ function campHTML(camp) {
         shakes them out</span></div>
       <div class="card"><p class="loading">Tracking started ${escapeHtml(camp.tracking_since || "today")} —
         the first movers show after a few days of snapshots. The depth chart is the coaching
-        staff's own verdict; the change over camp is the honest preseason signal, not
+        staff’s own verdict; the change over camp is the honest preseason signal, not
         August box scores.</p></div>`;
   }
   const accruing = `No chart movement in the window yet.`;
@@ -5790,7 +5790,7 @@ function campHTML(camp) {
             (camp.new_starters || []).map((r) => row(r, "var(--good)")).join(""), accruing)}
       ${box("Risers", "climbing the chart — roles headed their way",
             (camp.risers || []).map((r) => row(r, "var(--good)")).join(""), accruing)}
-      ${box("Fallers", "sliding — last season's usage overstates their Week-1 role",
+      ${box("Fallers", "sliding — last season’s usage overstates their Week-1 role",
             (camp.fallers || []).map((r) => row(r, "var(--warn)")).join(""), accruing)}
     </div>`;
 }
@@ -5868,18 +5868,18 @@ function offseasonHTML(off) {
     <div class="warning" style="margin-bottom:12px">${icon('warn')} Rosters last synced
       ${escapeHtml(off.rosters_synced_at)} — over ${Math.floor(syncAge / 24)} days ago
       (the live pull has been failing and a cached copy is serving). Trades since then
-      won't show until the feed comes back.</div>`
+      won’t show until the feed comes back.</div>`
     : off.rosters_synced_at ? `
     <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-bottom:12px">
       Rosters synced ${escapeHtml(off.rosters_synced_at)} — trades checked on every
       launch, refreshed daily.</div>` : "";
   return `
     <div class="section-title">The ${off.upcoming_season || "upcoming"} offseason
-      <span class="sub">— what the league changed under last season's numbers. Derived from
+      <span class="sub">— what the league changed under last season’s numbers. Derived from
       the schedule and roster feeds on every build, not from a news list that goes stale.</span></div>
     ${rosterNote}
     <div class="cards wide">
-      ${box("Coaching changes", "new head coach — last season's tendencies may not carry",
+      ${box("Coaching changes", "new head coach — last season’s tendencies may not carry",
             (off.coach_changes || []).map(pair).join(""), "No changes detected.")}
       ${box("New starting QBs", "depth-chart QB1 now vs who actually started late last season",
             (off.qb_changes || []).map(pair).join(""), off.rosters_live
@@ -5944,18 +5944,18 @@ const ROSTER_PLACEHOLDER = {
 };
 
 const ROSTER_COPY = {
-  nfl: "— every team as it stands today, ordered by the coaching staff's own "
+  nfl: "— every team as it stands today, ordered by the coaching staff’s own "
      + "depth chart. Players who are unavailable (IR, PUP, suspended) are listed "
      + "with their status rather than quietly removed.",
-  mlb: "— the league's own active rosters, refreshed through the day, pitchers "
+  mlb: "— the league’s own active rosters, refreshed through the day, pitchers "
      + "first. The games column is measured from our own logs: playing time is "
      + "still the depth chart, the league feed just decides who exists.",
   nba: "— built from who has actually appeared for each club this season, most "
      + "minutes-logged games first. Measured playing time is the depth chart here, "
-     + "rather than somebody's published guess at one.",
+     + "rather than somebody’s published guess at one.",
   wnba: "— built from who has actually appeared for each club this season, most "
       + "games first. Measured playing time is the depth chart here, rather than "
-      + "somebody's published guess at one.",
+      + "somebody’s published guess at one.",
 };
 
 /* One player line. The depth slot is the staff's opinion and is shown as
@@ -6125,7 +6125,7 @@ function seedsHTML(seeds) {
   return `<div class="section-title">If the season ended today
       <span class="sub">— a PROJECTION from the table above, not a bracket.
       Nothing below has been played, and seeding here uses our own order
-      rather than the league's official tiebreakers.</span></div>
+      rather than the league’s official tiebreakers.</span></div>
     <div class="ros-teams">${seeds.map((c) => `<div class="card std-card">
       <div class="std-group">${escapeHtml(c.conference)}</div>
       ${c.seeds.map((t) => `<div class="std-row">
@@ -6196,7 +6196,7 @@ async function renderRosters() {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("list", 30)}</div>
       <h3>No roster data for ${escapeHtml(sport.toUpperCase())}</h3>
       <p>${escapeHtml(d.note
-        || "Run `python3 rosters_build.py` once to build this sport's rosters.")}</p></div>`;
+        || "Run `python3 rosters_build.py` once to build this sport’s rosters.")}</p></div>`;
     return;
   }
   const q = (state.rosterQuery || "").trim().toLowerCase();
@@ -6224,7 +6224,7 @@ async function renderRosters() {
   // that cannot detect one would read as "no trades happened".
   const moves = d.transactions ? `
     <div class="section-title">Recent team changes
-      <span class="sub">— from diffing this site's own daily roster snapshots,
+      <span class="sub">— from diffing this site’s own daily roster snapshots,
       not a news feed. Anything that changed teams shows up here on its own.</span></div>
     ${transactionsHTML(d.transactions)}` : "";
   host.innerHTML = stale + moves + `
@@ -6304,7 +6304,7 @@ function draftKitHTML(kit) {
 
   return `
     <div class="section-title">Draft kit
-      <span class="sub">— last season's volume turned into value over replacement.
+      <span class="sub">— last season’s volume turned into value over replacement.
       Draft by tier, not rank; rookies are not on this board and it says so.</span></div>
     <div class="card dk-draftday">
       <div class="card-head"><div><div class="player">Draft day — live Sleeper sync</div>
@@ -6437,7 +6437,7 @@ function intelVerdict(v) {
        (hit ${pctv(v.hit_rate)} vs ${pctv(v.avg_implied)} implied, ${v.roi >= 0 ? "+" : ""}${pctv(v.roi)} ROI,
        z ${v.z}). Following a fresh LIVE flag below — same side, at or better than the flagged
        entry price — is now a recommended play, sized small (flat 0.1u).</p>`
-    : `<div style="font-weight:800;font-size:var(--fs-xl)">${iconMark("target", 16)}What we recommend right now: <span style="color:var(--warn)">nothing — watch, don't bet</span></div>
+    : `<div style="font-weight:800;font-size:var(--fs-xl)">${iconMark("target", 16)}What we recommend right now: <span style="color:var(--warn)">nothing — watch, don’t bet</span></div>
        <p style="margin:8px 0 0">This page detects large anomalous trades ("informed flow") and
        <b>paper-tracks every flag</b> to find out whether following that money actually wins.
        ${v && v.graded
@@ -6510,8 +6510,8 @@ async function sleeperGet(path) {
 function sleeperConnectHTML(msg) {
   return `<div class="card" style="margin-bottom:16px">
     <div class="card-head"><div><div class="player">My league — Sleeper sync</div>
-      <div class="subtitle">Free and read-only: see YOUR roster's usage trends, trade flags,
-        and who's unrostered in YOUR league. No password — just your Sleeper username.</div></div></div>
+      <div class="subtitle">Free and read-only: see YOUR roster’s usage trends, trade flags,
+        and who’s unrostered in YOUR league. No password — just your Sleeper username.</div></div></div>
     <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
       <input id="sleeper-username" type="text" placeholder="Sleeper username"
         style="flex:1;min-width:180px;background:var(--panel-2);color:inherit;
@@ -6628,7 +6628,7 @@ function renderSleeperPanel(d, ctx) {
     <div class="section-title">My roster
       <span class="sub">— usage trend (season → 4wk → last) and trade flags for YOUR players</span></div>
     <div style="margin:0 -18px">${myRows.map(rowHTML).join("") ||
-      `<p class="loading" style="padding:12px 16px">Couldn't match a roster you own in this league.</p>`}</div>
+      `<p class="loading" style="padding:12px 16px">Couldn’t match a roster you own in this league.</p>`}</div>
     <div class="section-title">Waiver watch
       <span class="sub">— usage RISERS nobody in this league rosters</span></div>
     <div style="margin:0 -18px">${waivers.map((u) => rowHTML({
@@ -6874,7 +6874,7 @@ async function renderUFC() {
                   ["a_dec", "var(--brand)"], ["b_dec", "var(--cyan)"],
                   ["b_sub", "var(--warn)"], ["b_ko", "var(--good)"]];
     return `<div style="display:flex;height:10px;border-radius:var(--radius);overflow:hidden;margin-top:8px"
-        title="method distribution — left: pick's KO/SUB/DEC, right: opponent's DEC/SUB/KO">
+        title="method distribution — left: pick’s KO/SUB/DEC, right: opponent’s DEC/SUB/KO">
       ${segs.map(([k, c]) => `<span style="width:${(m[k] || 0) * 100}%;background:${c}"></span>`).join("")}
     </div>
     <div style="display:flex;justify-content:space-between;color:var(--text-mute);font-size:var(--fs-xs);margin-top:3px">
@@ -7042,7 +7042,7 @@ async function renderUFC() {
                     ...(d.pass_list || []).filter((m) => m.p_final != null)];
       if (!rows.length) return "";
       return `<div class="section-title">Fight-by-fight edge board
-          <span class="sub">— every priced bout: the model's number vs the market's, and
+          <span class="sub">— every priced bout: the model’s number vs the market’s, and
           the verdict. Bet rows are journaled in the UFC record.</span></div>
         <div class="card" style="padding:0;overflow-x:auto;overflow-y:hidden">
           ${rows.map((r) => `
@@ -7110,7 +7110,7 @@ async function renderUFC() {
     ${d.no_qualifying ? `<div class="card"><div class="player">No qualifying plays on this card.</div>
         <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:6px">Most fights on any card
         have no exploitable edge — the pass list below says why, fight by fight. Re-check after
-        Friday weigh-ins: missed weight and visible cut damage aren't fully priced for hours, and
+        Friday weigh-ins: missed weight and visible cut damage aren’t fully priced for hours, and
         the weigh-in results land here automatically.</div></div>`
       : `<div class="section-title">Picks
           <span class="sub">— cleared the clamp AND the gate · one-fifth Kelly stakes · journaled
@@ -7258,7 +7258,7 @@ function whyCalcKelly() {
   if (full <= 0) {
     out.innerHTML = `<p style="margin-top:8px"><strong style="color:var(--bad)">No bet.</strong>
       At ${american(odds)} you need ${(amToProb(odds) * 100).toFixed(1)}% to break even and you estimate ${(p * 100).toFixed(1)}% —
-      EV ${signedPct(edge)}. Kelly's answer for a negative edge is a stake of zero, and it's the only honest one.</p>`;
+      EV ${signedPct(edge)}. Kelly’s answer for a negative edge is a stake of zero, and it’s the only honest one.</p>`;
     return;
   }
   const stakePct = full * frac;
@@ -7295,7 +7295,7 @@ function whyCalcParlay() {
                    ? pv / 100 : amToProb(o) / TYPICAL_OVERROUND });
   }
   if (legs.length < 2) {
-    out.innerHTML = `<p class="loading" style="padding:8px 0">Enter odds for at least two legs (win % optional — blank assumes the book's implied).</p>`;
+    out.innerHTML = `<p class="loading" style="padding:8px 0">Enter odds for at least two legs (win % optional — blank assumes the book’s implied).</p>`;
     return;
   }
   const dec = legs.reduce((a, l) => a * amToDec(l.odds), 1);
@@ -7305,7 +7305,7 @@ function whyCalcParlay() {
   const assumed = legs.some((l) => l.assumed);
   const verdict = evParlay > evSingles + 1e-9
     ? "the parlay compounds it — only because every leg you entered is +EV"
-    : "the singles are the better bet — the parlay multiplies the book's margin into every leg";
+    : "the singles are the better bet — the parlay multiplies the book’s margin into every leg";
   out.innerHTML = `
     <p style="margin-top:8px">${legs.length}-leg parlay pays <strong>${american(probToAm(1 / dec))}</strong>
       (decimal ${dec.toFixed(2)}) · combined win probability <strong>${(prob * 100).toFixed(1)}%</strong></p>
@@ -7354,14 +7354,14 @@ function renderAbout() {
       <p><strong>Qellys Book is an analytics tool, not a sportsbook and not a
       tipster.</strong> You cannot place a bet here and no money changes hands
       on this site. What it does is take the same public information the
-      sportsbooks use — every game, every player's recent form, injuries,
+      sportsbooks use — every game, every player’s recent form, injuries,
       weather, venues, and the live prices at ten different books — pull it
       into one place, and estimate its own probability for each outcome.</p>
 
       <p>Then it does the only thing that actually matters: it compares that
-      probability to the price. When our number and the book's number
+      probability to the price. When our number and the book’s number
       disagree by enough to survive our own margin for error, the board
-      shows it. When they don't, the board says <em>"no qualifying plays"</em>
+      shows it. When they don’t, the board says <em>"no qualifying plays"</em>
       and shows you nothing. That happens often, and it is the system
       working rather than failing.</p>
     </div>
@@ -7380,13 +7380,13 @@ function renderAbout() {
         quoting the same game differently is a real, ordinary occurrence, and
         on a two-way market a twenty-cent difference in price can be the whole
         margin. You cannot beat a book on information it also has; you can
-        beat it on information it hasn't bothered to price carefully, and on
+        beat it on information it hasn’t bothered to price carefully, and on
         being at the right window.</p>`)}
 
       ${card("What the model is actually doing", `
         <p>For each market it builds a full <strong>distribution</strong>, not a
         pick. Not "this player goes over" but "here is the range of outcomes
-        and how likely each one is." It removes the book's built-in margin
+        and how likely each one is." It removes the book’s built-in margin
         (the "vig") to find what the market really believes, compares that to
         our number, and then <strong>deliberately shrinks our own edge</strong>
         — because a model that trusts itself completely is a model that has
@@ -7418,7 +7418,7 @@ function renderAbout() {
         <p><strong>No model can predict a single event, and this one does not
         claim to.</strong> It claims something much smaller: that across
         hundreds of bets, taking prices that are better than they should be
-        works out better than taking prices that aren't. Even if every number
+        works out better than taking prices that aren’t. Even if every number
         on this site were perfect, you would still have long losing runs. That
         is not a bug in the method — it is what randomness looks like from the
         inside.</p>
@@ -7556,7 +7556,7 @@ async function renderWhy() {
     <td style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.05)">${us}</td></tr>`;
 
   host.innerHTML = `
-    <p style="font-size:1.06em;max-width:none;line-height:1.6;margin:0 0 4px"><strong>See the math. Know if it's working. Stay in the game.</strong>
+    <p style="font-size:1.06em;max-width:none;line-height:1.6;margin:0 0 4px"><strong>See the math. Know if it’s working. Stay in the game.</strong>
       Most betting sites sell certainty. This one sells measurement — every probability is computed
       from data you can name, every pick is graded in public, and the math is on this page for you to check by hand.</p>
 
@@ -7588,10 +7588,10 @@ async function renderWhy() {
       </table>
     </div>
 
-    <div class="section-title">What we deliberately don't do</div>
+    <div class="section-title">What we deliberately don’t do</div>
     <div class="card" style="padding:14px 18px">
       <ul style="margin:0;padding-left:18px;line-height:1.9;color:var(--text-body)">
-        <li>No guarantees, locks, or "can't-miss" anything — that language is how touts talk, and it's always false.</li>
+        <li>No guarantees, locks, or "can’t-miss" anything — that language is how touts talk, and it’s always false.</li>
         <li>No parlay pushing — the calculator below shows exactly what parlays cost, which is why books advertise them.</li>
         <li>No hiding losses — the Record page keeps every settled pick, and the lucky wins are labeled as lucky.</li>
         <li>No placing bets and no handling money — this recommends, journals, and grades. The decisions stay yours.</li>
@@ -7604,8 +7604,8 @@ async function renderWhy() {
 
     <div class="card" style="padding:16px;margin-bottom:14px">
       <h3 style="margin:0 0 4px">Remove the vig — three ways</h3>
-      <p style="color:var(--text-mute);font-size:.85em;margin:0 0 10px">A −110/−110 line isn't 50/50 — it's 52.4% + 52.4% = 104.8%.
-        The extra 4.8% is the book's hold. Enter both sides of any market:</p>
+      <p style="color:var(--text-mute);font-size:.85em;margin:0 0 10px">A −110/−110 line isn’t 50/50 — it’s 52.4% + 52.4% = 104.8%.
+        The extra 4.8% is the book’s hold. Enter both sides of any market:</p>
       <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
         <label>Side A <input id="dv-a" type="number" value="-115" step="5" class="calc-in"></label>
         <label>Side B <input id="dv-b" type="number" value="-105" step="5" class="calc-in"></label>
@@ -7632,7 +7632,7 @@ async function renderWhy() {
     <div class="card" style="padding:16px;margin-bottom:14px">
       <h3 style="margin:0 0 4px">Parlay vs singles</h3>
       <p style="color:var(--text-mute);font-size:.85em;margin:0 0 10px">Enter 2–3 legs. Win % is optional —
-        left blank, each leg is assumed to hit exactly as often as the book's price implies.</p>
+        left blank, each leg is assumed to hit exactly as often as the book’s price implies.</p>
       <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
         ${[1, 2, 3].map((i) => `<span style="display:inline-flex;gap:6px;align-items:center">
           <label>Leg ${i} <input id="pl-o${i}" type="number" ${i < 3 ? `value="-110"` : ""} step="5" class="calc-in"></label>
@@ -7644,9 +7644,9 @@ async function renderWhy() {
 
     <div class="card" style="padding:14px 18px;margin-top:20px;border-left:3px solid var(--warn)">
       <h3 style="margin:0 0 6px">Play the long game</h3>
-      <p style="color:var(--text-body);font-size:.92em;margin:0">Even a real edge loses often — that's variance, not failure,
-        and it's why stakes here are fractions of bankroll, never "bet big to catch up." 21+ only. Never bet money you
-        can't afford to lose. If it stops feeling like a decision, call or text <strong>1-800-GAMBLER</strong> or the National
+      <p style="color:var(--text-body);font-size:.92em;margin:0">Even a real edge loses often — that’s variance, not failure,
+        and it’s why stakes here are fractions of bankroll, never "bet big to catch up." 21+ only. Never bet money you
+        can’t afford to lose. If it stops feeling like a decision, call or text <strong>1-800-GAMBLER</strong> or the National
         Problem Gambling Helpline at <strong>1-800-522-4700</strong> — free, confidential, 24/7.</p>
     </div>`;
 
