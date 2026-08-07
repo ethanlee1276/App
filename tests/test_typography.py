@@ -210,7 +210,12 @@ def test_the_sign_regex_cannot_eat_a_date_or_a_score():
 
     import subprocess
     probe = subprocess.run(
-        ["node", "-e", """
+        # Raw: the JS below contains \w, \d and \u2212, and Python was
+        # trying to interpret them as ITS escapes. \u2212 happened to mean
+        # the same thing in both languages, \w and \d are not Python
+        # escapes at all, and 3.12 started warning that a future release
+        # will make them an error. node parses every one of them itself.
+        ["node", "-e", r"""
 const s = process.argv[1];
 const MINUS = "\u2212";
 const RE_SIGN = /(^|[^\w])-(?=[\d.])/g;
