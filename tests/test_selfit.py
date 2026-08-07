@@ -456,6 +456,101 @@ def test_by_claim_reports_nothing_for_an_empty_band():
     assert len(bands) == 1 and bands[0]["n"] == 1
 
 
+# --- the second functional form ----------------------------------------------
+def test_a_temperature_cannot_move_a_claim_sitting_at_even_money():
+    """The arithmetic the whole second form rests on. logit(p)/T has 50% as
+    a fixed point, so on a board claiming near even money the temperature
+    is inert — and BELOW 50% it pushes the wrong way."""
+    from engine.calibrate import apply_temperature as at
+    assert abs(at(0.50, 6.0, 0.0) - 0.50) < 1e-9
+    # 47.9% is the real held-out band's mean claim. A big temperature moves
+    # it UP, toward 50%, against any downward correction.
+    assert at(0.479, 3.6, 0.0) > 0.479
+    assert at(0.641, 3.6, 0.0) < 0.641
+
+
+def test_fit_shift_pins_the_temperature_and_moves_the_intercept():
+    rows = _journal(0.15, dates=13, per_day=20)
+    t, b = sf.fit_shift(sf._pairs(rows))
+    assert t == 1.0
+    assert b < -0.1, b
+
+
+def test_fit_shift_stands_down_below_the_sample_floor():
+    assert sf.fit_shift([(0.6, 1)] * 5) == (1.0, 0.0)
+
+
+def test_fit_shift_leaves_an_honest_board_alone():
+    rows = _journal(0.0, dates=13, per_day=20)
+    _t, b = sf.fit_shift(sf._pairs(rows))
+    assert abs(b) < 0.15, b
+
+
+def test_the_shift_form_beats_the_joint_fit_on_a_near_even_money_board():
+    """The case that broke the real run: claims hugging 50%, where the
+    joint fit spends itself on a temperature that cannot pay."""
+    import random
+    rng = random.Random(11)
+    rows = []
+    for i in range(13):
+        d = f"2026-07-{i + 1:02d}"
+        for _ in range(20):
+            claimed = min(0.70, max(0.42, rng.gauss(0.51, 0.05)))
+            rows.append({"sport": "mlb", "market": "hits", "side": "OVER",
+                         "hit_prob": claimed, "date": d, "ts": d,
+                         "status": "won" if rng.random() < claimed - 0.15
+                                   else "lost",
+                         "cal_temp": None, "cal_bias": None})
+    early, late = sf.split(rows)
+    c = sf.cal.fit(sf._pairs(early), sport="mlb", market="selection",
+                   min_samples=sf.MIN_SIDE)
+    st, sb = sf.fit_shift(sf._pairs(early))
+    joint = abs(sf.measure(late, c.temperature, c.intercept)["gap"])
+    shift = abs(sf.measure(late, st, sb)["gap"])
+    assert shift <= joint + 0.005, (shift, joint)
+
+
+def test_both_forms_go_through_the_same_estimators():
+    """Giving the shift form its own copy of the held-out machinery is how
+    two numbers quietly stop being comparable."""
+    rows = _journal(0.12, dates=13, per_day=20)
+    for fn in (sf.crossval, sf.walkforward):
+        a = fn(rows, fitter="temp")
+        b = fn(rows, fitter="shift")
+        assert a["n"] == b["n"], (fn.__name__, a["n"], b["n"])
+        assert a["n"] > 0
+    assert all(f[0] == 1.0 for f in sf.crossval(rows, fitter="shift")["fits"])
+
+
+def test_the_six_looks_are_counted_out_loud():
+    """Two forms by three estimators, each with a 7-17% false-alarm rate.
+    A report that widens the table without saying the bar moved is how
+    somebody reads the one green cell."""
+    src = open(os.path.join(ROOT, "selfit.py"), encoding="utf-8").read()
+    assert "TWO functional forms by THREE estimators" in src
+    assert "went UP when this table got wider" in src
+
+
+def test_the_reason_for_the_second_form_is_the_measurement_not_a_hunch():
+    doc = " ".join((sf.fit_shift.__doc__ or "").split())
+    for n in ("47.9%", "32.6%", "49.4%", "-0.64"):
+        assert n in doc, n
+    assert "fixed point" in doc
+
+
+def test_the_dominant_band_is_read_even_when_bands_cannot_be_compared():
+    """The first cut printed "no reading" whenever fewer than two bands
+    carried 25+ bets, and on the real journal that swallowed the most
+    useful line in the report: 92 of 123 held-out bets in one band, moved
+    +15.2% to +15.3%. A comparison needs two bands; reading the band the
+    board actually lives in needs one."""
+    src = open(os.path.join(ROOT, "selfit.py"), encoding="utf-8").read()
+    assert "The board lives in" in src
+    assert "cannot move a claim sitting at even" in src
+    # and the old swallow-everything branch is gone
+    assert "No reading." not in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

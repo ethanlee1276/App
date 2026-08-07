@@ -221,7 +221,20 @@ def compose(rows: list[dict], temp: float = 1.0, icept: float = 0.0) -> dict:
             "cal_temp": (sum(temps) / len(temps)) if temps else None}
 
 
-def crossval(rows: list[dict], folds: int = 4) -> dict:
+def _fit_pair(pairs, fitter, min_samples):
+    """One place that turns training rows into (temperature, intercept).
+
+    Both estimators take a `fitter` so the SAME held-out machinery judges
+    both functional forms. Giving the shift form its own copy of the
+    estimators would be how the two quietly stop being comparable.
+    """
+    if fitter == "shift":
+        return fit_shift(pairs, min_samples)
+    c = cal.fit(pairs, sport="mlb", market="selection", min_samples=min_samples)
+    return c.temperature, c.intercept
+
+
+def crossval(rows: list[dict], folds: int = 4, fitter: str = "temp") -> dict:
     """Every bet held out exactly once, folds cut on whole dates.
 
     **This was added AFTER the single split returned FAIL, and that has to
@@ -252,11 +265,10 @@ def crossval(rows: list[dict], folds: int = 4) -> dict:
         pairs = _pairs(train)
         if len(pairs) < MIN_SIDE or not out:
             continue
-        c = cal.fit(pairs, sport="mlb", market="selection",
-                    min_samples=MIN_SIDE)
-        fits.append((c.temperature, c.intercept, c.at_boundary))
+        t, b = _fit_pair(pairs, fitter, MIN_SIDE)
+        fits.append((t, b, t >= 6.0))
         for r in out:
-            held.append({**r, "_p": corrected(r, c.temperature, c.intercept)})
+            held.append({**r, "_p": corrected(r, t, b)})
     if not held:
         return {"n": 0, "folds": 0}
 
@@ -270,7 +282,8 @@ def crossval(rows: list[dict], folds: int = 4) -> dict:
             "se": math.sqrt(var) / n if var > 0 else 0.0}
 
 
-def walkforward(rows: list[dict], min_train: int = MIN_SIDE) -> dict:
+def walkforward(rows: list[dict], min_train: int = MIN_SIDE,
+                fitter: str = "temp") -> dict:
     """Rolling origin: fit on every date BEFORE d, judge date d, roll on.
 
     Every prediction is made by a fit that saw only earlier dates, so this
@@ -349,11 +362,10 @@ def walkforward(rows: list[dict], min_train: int = MIN_SIDE) -> dict:
         pairs = _pairs(train)
         if len(pairs) < min_train or not out:
             continue
-        c = cal.fit(pairs, sport="mlb", market="selection",
-                    min_samples=min_train)
-        fits.append((d, len(train), c.temperature, c.intercept))
+        t, b = _fit_pair(pairs, fitter, min_train)
+        fits.append((d, len(train), t, b))
         for r in out:
-            held.append({**r, "_p": corrected(r, c.temperature, c.intercept)})
+            held.append({**r, "_p": corrected(r, t, b)})
     if not held:
         return {"n": 0, "steps": 0, "dates": len(dates)}
 
@@ -365,6 +377,60 @@ def walkforward(rows: list[dict], min_train: int = MIN_SIDE) -> dict:
     return {"n": n, "steps": len(fits), "fits": fits, "dates": len(dates),
             "gap_before": raw - landed, "gap_after": adj - landed,
             "se": math.sqrt(var) / n if var > 0 else 0.0}
+
+
+def fit_shift(pairs: list[tuple[float, int]],
+              min_samples: int = MIN_SIDE) -> tuple[float, float]:
+    """Fit the INTERCEPT alone, temperature pinned at 1.0.
+
+    **Why a second functional form exists at all**, measured on the real
+    journal 2026-08-07 and not guessed:
+
+    ``apply_temperature`` is ``logit(p)/T + c``, and the ``/T`` term has 50%
+    as a fixed point — it moves a claim in proportion to how far that claim
+    already sits from even money. This board does not sit far from even
+    money. 92 of 123 held-out bets claim under 55%, averaging 47.9%, and
+    they landed 32.6%.
+
+    On that band the fitted (T 3.6, c -0.14) did this:
+
+        raw                     47.9%
+        temperature alone       49.4%     <- UP, toward 50%
+        intercept alone         44.4%
+        both, as fitted         45.9%
+        what actually landed    32.6%
+
+    The temperature does not merely fail to help below 50%, it pushes the
+    other way and cancels part of the intercept. The band came out +15.2%
+    before and +15.3% after: the correction made the largest part of the
+    held-out half fractionally worse.
+
+    Meanwhile the early half it trained on claims 64.1%, where the same
+    temperature moves 10 points on its own. So Brier minimisation bought
+    spread — the parameter that pays on the training half — and starved the
+    only parameter that can move a claim sitting at even money. An
+    intercept of about -0.64 would have matched what the big band landed;
+    the joint fit chose -0.14.
+
+    ``calibrate.apply_temperature`` has warned about exactly this since it
+    was written: "a model whose predictions cluster near 50% while outcomes
+    run at 42% cannot be corrected by temperature at any value". The run
+    printed the other half of that signature too — the fold temperatures
+    reached the grid ceiling at 6.00.
+
+    So this is not a new test of the same model, it is the model the
+    diagnosis points at, judged by the same pre-registered bars.
+    """
+    if len(pairs) < min_samples:
+        return 1.0, 0.0
+    best_b, best = 0.0, cal.brier(pairs, 1.0, 0.0)
+    b = -1.5
+    while b <= 1.5001:
+        s = cal.brier(pairs, 1.0, b)
+        if s < best:
+            best, best_b = s, b
+        b += 0.01
+    return 1.0, best_b
 
 
 #: Claim-level bands for :func:`by_claim`. A global temperature assumes the
@@ -657,7 +723,34 @@ def report(conn, sport: str = "mlb") -> int:
                 print("  Flat enough that one temperature is a fair shape, so")
                 print("  a failed hold-out is not explained by this either.")
         else:
-            print("  Too few bands carry 25+ bets to compare. No reading.")
+            print("  Only one band carries 25+ bets, so the bands cannot be")
+            print("  compared with each other.")
+        # A COMPARISON needs two bands. A reading of the band the board
+        # actually lives in needs one — and the first cut of this printed
+        # "no reading" and swallowed the single most useful line in the
+        # report: on the real journal the biggest band held 92 of 123
+        # held-out bets and the correction moved it +15.2% to +15.3%.
+        # Silence about the dominant band is not caution, it is a
+        # missing answer.
+        big = max(bands, key=lambda b: b["n"])
+        share = big["n"] / sum(b["n"] for b in bands)
+        if share >= 0.40:
+            moved = abs(big["gap_before"]) - abs(big["gap_after"])
+            print()
+            print(f"  The board lives in {big['lo']:.0%}-{big['hi']:.0%}: "
+                  f"{big['n']} of {sum(b['n'] for b in bands)} held-out bets "
+                  f"({share:.0%}),")
+            print(f"  claiming {big['claimed']:.1%} and landing "
+                  f"{big['landed']:.1%}. The correction moved that band's")
+            print(f"  gap by {moved:+.1%}.")
+            if abs(moved) < 0.02:
+                print()
+                print("  That is the finding. A temperature has 50% as a fixed")
+                print("  point, so it cannot move a claim sitting at even")
+                print("  money — and below 50% it pushes UP, against the")
+                print("  intercept. Three quarters of this board sits there,")
+                print("  so the instrument is inert exactly where the bets")
+                print("  are. See the second functional form below.")
         print()
 
     wf = walkforward(rows)
@@ -687,17 +780,57 @@ def report(conn, sport: str = "mlb") -> int:
         print("  alarm rate.")
         print()
 
+    # --- the second functional form ------------------------------------
+    st, sb = fit_shift(_pairs(early))
+    s_late = measure(late, st, sb)
+    s_v, _s_why = verdict(b_late["gap"], s_late["gap"])
+    s_cv = crossval(rows, fitter="shift")
+    s_wf = walkforward(rows, fitter="shift")
+    s_cv_v = (verdict(s_cv["gap_before"], s_cv["gap_after"])[0]
+              if s_cv.get("n") else None)
+    s_wf_v = (verdict(s_wf["gap_before"], s_wf["gap_after"])[0]
+              if s_wf.get("n") else None)
+
+    print("=" * 74)
+    print("SECOND FUNCTIONAL FORM — intercept only, temperature pinned at 1")
+    print("=" * 74)
+    print(f"  intercept {sb:+.3f}   — the joint fit above chose "
+          f"{c.intercept:+.3f} alongside temperature {c.temperature:.2f}")
+    print()
+    print("  logit(p)/T has 50% as a FIXED POINT, so the temperature moves a")
+    print("  claim in proportion to how far it already sits from even money.")
+    print("  This board does not sit far from even money, and below 50% the")
+    print("  temperature pushes UP — against the intercept — so it spends the")
+    print("  fit's capacity where it cannot pay and cancels part of what can.")
+    print()
+    print(f"  held out            gap {b_late['gap']:+.1%} -> "
+          f"{s_late['gap']:+.1%}     would read: {s_v}")
+    if s_cv_v:
+        print(f"  interleaved CV      gap {s_cv['gap_before']:+.1%} -> "
+              f"{s_cv['gap_after']:+.1%}     would read: {s_cv_v}")
+    if s_wf_v:
+        print(f"  walk-forward        gap {s_wf['gap_before']:+.1%} -> "
+              f"{s_wf['gap_after']:+.1%}     would read: {s_wf_v}")
+    print()
+
     votes = [x for x in (v, cv_v, wf_v) if x]
     if len(votes) > 1:
         print("=" * 74)
-        print("READING ALL THREE")
+        print("READING ALL OF IT")
         print("=" * 74)
-        print(f"  pre-registered split: {v}")
-        print(f"  interleaved CV:       {cv_v or '—'}")
-        print(f"  walk-forward:         {wf_v or '—'}")
+        print(f"  temperature + intercept    split {v} | CV {cv_v or '—'} "
+              f"| walk-forward {wf_v or '—'}")
+        print(f"  intercept only             split {s_v} | CV {s_cv_v or '—'} "
+              f"| walk-forward {s_wf_v or '—'}")
+        print()
+        print(f"  That is TWO functional forms by THREE estimators — six")
+        print(f"  looks at one {len(rows)}-bet journal. Each estimator hands a")
+        print("  PASS to an honest journal 7-17% of the time, so across six")
+        print("  looks a stray PASS is likelier than not. The bar for any")
+        print("  single cell went UP when this table got wider, not down.")
         print()
         if len(set(votes)) == 1:
-            print(f"  All three agree: {votes[0]}.")
+            print(f"  The pre-registered form's three agree: {votes[0]}.")
         else:
             print("  They do not agree, and that is the finding. Every one of")
             print("  these carries a 7-17% false-alarm rate — the bars are")
