@@ -323,6 +323,7 @@ def records_from_ledger(conn) -> list[dict]:
     """
     rows = conn.execute(
         "SELECT sport, market, side, odds, hit_prob, book, date, ts, status, "
+        "category, "
         "lead_min, park_hr, wind_out, roofed, lineup_slot, lineup_conf, "
         "rest_days, body_clock, pen_own, pen_opp "
         "FROM bets WHERE status IN ('won','lost')").fetchall()
@@ -339,6 +340,11 @@ def records_from_ledger(conn) -> list[dict]:
         out.append({
             "sport": r["sport"], "market": r["market"], "prob": float(p),
             "won": 1 if r["status"] == "won" else 0,
+            # Not a slicing dimension — a provenance field. The veto's
+            # consequences land almost entirely on picks that would have
+            # been `main`, and this journal is 227 main against 3,134
+            # pooled, so a finding needs to say which book convicted it.
+            "category": r["category"] or "?",
             "feats": features_of(side=r["side"], odds=r["odds"], prob=p,
                                  book=r["book"], horizon_days=horizon,
                                  lead_min=r["lead_min"], park_hr=r["park_hr"],
@@ -398,6 +404,62 @@ def _bh(findings: list[dict], alpha: float) -> list[dict]:
     return findings
 
 
+#: A finding whose rows are at least this heavily one category is reported
+#: as a measurement of that book rather than of the board. Not a veto and
+#: not a filter — a label, because the pooled journal is 227 `main` bets
+#: against 3,134 of everything, so "the model misses here" can be a
+#: statement about the paper buckets while the block it produces lands on
+#: real recommendations.
+CATEGORY_DOMINANT = 0.80
+
+
+def _category_mix(rows: list[dict]) -> dict:
+    """Share of a slice by journal category, biggest first."""
+    counts: dict = {}
+    for r in rows:
+        counts[r.get("category") or "?"] = counts.get(r.get("category") or "?", 0) + 1
+    n = len(rows) or 1
+    return {k: round(v / n, 3)
+            for k, v in sorted(counts.items(), key=lambda kv: -kv[1])}
+
+
+def _dedupe(findings: list[dict]) -> tuple[list, list]:
+    """Split findings into distinct ones and restatements of those.
+
+    The same fault bleed.py's `_dedupe` was written for, in the module next
+    door. Ten "patterns" came out of one real journal and they are not ten
+    facts: home_runs is 1,863 of the 2,434 rows in the "all markets OVER"
+    slice, so the two are very nearly the same bets seen through two
+    labels. Every market-level slice is also contained in its sport-level
+    twin by construction. Printing them all as separate findings, each
+    "surviving false-discovery control", makes one fact look like a pile of
+    independent evidence.
+
+    Kept: the smallest slice of each nested chain, which is the tightest
+    true statement. Anything that contains a kept slice is a restatement
+    and is labelled as one.
+
+    This does NOT touch the BH correction. Overlapping slices are
+    positively dependent, which is a case BH is valid for, so every one of
+    these was correctly tested. The fault was only ever in the counting.
+    """
+    kept: list[dict] = []
+    echoes: list[dict] = []
+    for f in sorted(findings, key=lambda f: len(f.get("_rows") or ())):
+        rows = f.get("_rows")
+        cover = None
+        if rows is not None:
+            cover = next((k for k in kept
+                          if (k.get("_rows") or set()) <= rows), None)
+        if cover is None:
+            kept.append(f)
+        else:
+            f["restates"] = (f"{cover['sport']}:{cover.get('market') or '*'}:"
+                             f"{cover['dim']}={cover['value']}")
+            echoes.append(f)
+    return kept, echoes
+
+
 def mine(records: list[dict], min_n: int | None = None,
          alpha: float | None = None) -> dict:
     """Slice the record two ways — within a market, and across a sport —
@@ -407,10 +469,16 @@ def mine(records: list[dict], min_n: int | None = None,
     alpha = ALPHA if alpha is None else alpha
 
     slices: dict[tuple, list[dict]] = {}
-    for r in records:
+    #: Which rows landed in each slice, by position. Needed to tell a
+    #: genuinely separate finding from the same bets wearing a second
+    #: label — see _dedupe.
+    members: dict[tuple, set] = {}
+    for i, r in enumerate(records):
         for dim, val in r["feats"].items():
-            slices.setdefault((r["sport"], r["market"], dim, val), []).append(r)
-            slices.setdefault((r["sport"], None, dim, val), []).append(r)
+            for key in ((r["sport"], r["market"], dim, val),
+                        (r["sport"], None, dim, val)):
+                slices.setdefault(key, []).append(r)
+                members.setdefault(key, set()).add(i)
 
     tested = []
     for (sport, market, dim, val), rows in sorted(slices.items(),
@@ -420,7 +488,9 @@ def mine(records: list[dict], min_n: int | None = None,
         t = _slice_test(rows)
         if t is None:
             continue
-        t.update({"sport": sport, "market": market, "dim": dim, "value": val})
+        t.update({"sport": sport, "market": market, "dim": dim, "value": val,
+                  "_rows": members[(sport, market, dim, val)],
+                  "categories": _category_mix(rows)})
         tested.append(t)
 
     _bh(tested, alpha)
@@ -464,14 +534,51 @@ def mine(records: list[dict], min_n: int | None = None,
                if t["gap_pts"] > 0
                else "ran cold — money left on the table, not a danger"))
         findings.append(t)
+
+    # One fault seen through several labels is one fault. Restatements are
+    # kept and reported as such rather than dropped — a reader who does not
+    # know a slice is contained in another cannot judge either.
+    findings, echoes = _dedupe(findings)
     findings.sort(key=lambda f: (f["action"] != "close", f["q"]))
+    echoes.sort(key=lambda f: f["q"])
+
+    # A finding that is nearly all one journal category is a statement
+    # about that book. The block it produces is not: it lands on whatever
+    # the gate prices next, and this journal is 227 `main` against 3,134
+    # pooled. Labelled, never filtered — see the module docstring.
+    for f in findings + echoes:
+        mix = f.get("categories") or {}
+        top = next(iter(mix), None)
+        if top and mix[top] >= CATEGORY_DOMINANT:
+            f["measured_on"] = top
+            if f["action"] == "close" and top != "main":
+                f["reading"] += (f" — but {mix[top]:.0%} of these are "
+                                 f"`{top}` bets, and the block lands on "
+                                 f"recommendations")
+    for f in findings + echoes:
+        f.pop("_rows", None)
 
     return {
         "generated": _dt.datetime.now().isoformat(timespec="seconds"),
         "n_records": len(records), "tested": len(tested),
         "min_n": min_n, "alpha": alpha,
         "findings": findings,
-        "closed": [f for f in findings if f["action"] == "close"],
+        "restatements": echoes,
+        # ENFORCEMENT IS DELIBERATELY UNCHANGED BY THE DEDUPE, and the
+        # first cut of this got it wrong by taking `closed` from the
+        # deduped list alone.
+        #
+        # Two slices can cover the identical rows and still enforce
+        # differently: closing `prob_band=10-20%` refuses future props in
+        # that band, closing `side=over` refuses every over. Identical
+        # evidence, different forward scope. Dropping one because it
+        # restates the other silently narrows the veto — a pricing change,
+        # made as a side effect of a counting fix, which is exactly the
+        # kind of thing that is supposed to need a human.
+        #
+        # So the dedupe is for READING. Every convicted slice still
+        # enforces.
+        "closed": [f for f in findings + echoes if f["action"] == "close"],
     }
 
 
@@ -603,6 +710,16 @@ def _format(result: dict) -> str:
             f"  {f['action']:5}  {f['sport']:5} {mk:16.16}  {sl:26.26} "
             f"{f['n']:5}  {f['said']:5.1%}  {f['hit']:5.1%}  "
             f"{f['gap_pts']:+5.1f}  {f.get('gap_rel', 0):+5.0%}")
+
+    echoes = result.get("restatements") or []
+    if echoes:
+        out += ["", f"  {len(echoes)} further slice(s) survived and are "
+                    f"RESTATEMENTS of the above —", "  the same bets under a "
+                    "wider label, not separate evidence:"]
+        for f in echoes:
+            mk = f.get("market") or "(all markets)"
+            out.append(f"    {f['sport']} {mk} {f['dim']}={f['value']} "
+                       f"({f['n']}) restates {f['restates']}")
 
     closed = [f for f in fs if f["action"] == "close"]
     out += ["", "=" * 78,

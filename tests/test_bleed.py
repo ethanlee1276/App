@@ -341,9 +341,22 @@ def test_category_all_pools_every_bucket_the_way_the_miner_does():
     lab can therefore confirm a pattern bleed never sees, and the two
     disagreeing is confusing rather than informative unless you can look at
     the same book it does."""
-    import inspect
     from engine import losspatterns as lp
-    assert "category" not in inspect.getsource(lp.records_from_ledger)
+    # Behavioural, not a source pin. This used to assert the word
+    # "category" never appeared in records_from_ledger, which stopped
+    # meaning what it said the moment the miner started RECORDING the
+    # category as provenance without filtering on it. What has to hold is
+    # that both buckets still come back.
+    probe = ledger.connect(":memory:")
+    for i, cat in enumerate(("main", "longshot")):
+        probe.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+            "odds,hit_prob,status,category) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("2026-08-01T10:00:00", "mlb", "2026-08-01", f"Q{i}", "hits",
+             "OVER", 1.5, "dk", -110, 0.6, "won", cat))
+    probe.commit()
+    assert {r["category"] for r in lp.records_from_ledger(probe)} == \
+        {"main", "longshot"}, "the miner must still read every bucket"
 
     conn = ledger.connect(":memory:")
     for i in range(60):

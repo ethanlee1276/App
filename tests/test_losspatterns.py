@@ -66,8 +66,13 @@ def test_a_pooled_sport_slice_may_watch_but_never_close():
     would veto clean UNDER picks in markets that did nothing wrong —
     pooled slices point, specific slices convict."""
     out = lp.mine(CLEAN + HOT)
-    pooled = [f for f in out["findings"] if f["market"] is None]
-    assert pooled, "the pooled slice should still surface as a finding"
+    # It surfaces in one of the two lists. A pooled slice that contains a
+    # convicted market slice is a RESTATEMENT of it — same bets, wider
+    # label — so it now lands there rather than being counted as a second
+    # finding. What must not change is that it never closes.
+    pooled = [f for f in out["findings"] + out["restatements"]
+              if f["market"] is None]
+    assert pooled, "the pooled slice should still surface somewhere"
     assert all(f["action"] == "watch" for f in pooled)
     assert "pooled" in pooled[0]["reading"]
 
@@ -305,10 +310,127 @@ def test_the_pooled_slice_stays_watch_in_the_preview():
     """The guard that predates the relative bar, seen through the output
     a human actually reads."""
     r = lp.mine(recs("mlb", "home_runs", {"side": "over"}, 0.15, 228, 1900))
-    pooled = [f for f in r["findings"] if f["market"] is None]
+    pooled = [f for f in r["findings"] + r["restatements"]
+              if f["market"] is None]
     assert pooled and all(f["action"] == "watch" for f in pooled)
     assert "(all markets)" in lp._format(r)
 
+
+
+# --- one fault seen twice is one fault --------------------------------------
+def test_nested_slices_collapse_to_the_tightest_true_statement():
+    """Ten "patterns" came out of the real journal and they were not ten
+    facts: home_runs is 1,863 of the 2,434 rows in "all markets OVER". The
+    same bets under a wider label are a restatement, not evidence."""
+    rows = recs("mlb", "home_runs", {"side": "OVER", "prob_band": "10-20%"},
+                0.15, 228, 1900)
+    out = lp.mine(rows)
+    assert len(out["findings"]) == 1, out["findings"]
+    assert len(out["restatements"]) == 3
+    for e in out["restatements"]:
+        assert e["restates"] == "mlb:home_runs:prob_band=10-20%" \
+            or e["restates"].startswith("mlb:home_runs:")
+
+
+def test_a_restatement_says_what_it_restates():
+    out = lp.mine(recs("mlb", "home_runs", {"side": "OVER",
+                                            "prob_band": "10-20%"},
+                       0.15, 228, 1900))
+    assert all("restates" in e for e in out["restatements"])
+    assert "RESTATEMENTS of the above" in lp._format(out)
+
+
+def test_two_genuinely_separate_faults_both_survive():
+    """The dedupe must not swallow a distinct finding. Different markets
+    share no rows, so neither can restate the other."""
+    a = recs("mlb", "home_runs", {"side": "OVER"}, 0.15, 228, 900)
+    b = recs("mlb", "hits", {"side": "UNDER"}, 0.60, 240, 500)
+    out = lp.mine(a + b)
+    markets = {f["market"] for f in out["findings"]}
+    assert {"home_runs", "hits"} <= markets, out["findings"]
+
+
+def test_the_dedupe_never_narrows_the_veto():
+    """The fault the first cut of this shipped. Two slices can cover the
+    IDENTICAL rows and still enforce differently — closing prob_band=10-20%
+    refuses props in that band, closing side=over refuses every over. Same
+    evidence, different forward scope. Dropping one as a restatement would
+    silently change pricing as a side effect of a counting fix."""
+    out = lp.mine(recs("mlb", "home_runs", {"side": "OVER",
+                                            "prob_band": "10-20%"},
+                       0.15, 228, 1900))
+    closed_dims = {(f["dim"], f["value"]) for f in out["closed"]}
+    assert ("side", "OVER") in closed_dims
+    assert ("prob_band", "10-20%") in closed_dims
+    # …and the restated ones are still enforceable, not just reported
+    assert len(out["closed"]) > len(out["findings"])
+
+
+def test_the_bh_correction_is_untouched_by_the_dedupe():
+    """Overlapping slices are positively dependent, a case BH is valid
+    for, so every one of these was correctly TESTED. The fault was only in
+    the counting, and a future reader must not 'fix' the statistics too."""
+    import inspect
+    src = inspect.getsource(lp._dedupe)
+    assert "does NOT touch the BH correction" in src
+    out = lp.mine(recs("mlb", "home_runs", {"side": "OVER",
+                                            "prob_band": "10-20%"},
+                       0.15, 228, 1900))
+    assert out["tested"] == 4        # every slice still entered the correction
+
+
+# --- which book convicted it ------------------------------------------------
+def test_a_finding_records_the_categories_that_convicted_it():
+    """The journal is 227 `main` bets against 3,134 pooled, and selcheck
+    measured those populations 13 points apart in calibration. A finding
+    has to say which book it came from."""
+    rows = [dict(r, category="longshot") for r in
+            recs("mlb", "home_runs", {"side": "OVER"}, 0.15, 228, 1900)]
+    out = lp.mine(rows)
+    f = out["findings"][0]
+    assert f["categories"] == {"longshot": 1.0}
+    assert f.get("measured_on") == "longshot"
+
+
+def test_a_closure_convicted_on_paper_bets_says_the_block_lands_elsewhere():
+    """The veto runs at pricing time on every candidate prop, but its
+    consequence is felt on the ones that would have become recommendations.
+    A slice that is all `longshot` rows convicting the board is worth
+    saying out loud."""
+    rows = [dict(r, category="longshot") for r in
+            recs("mlb", "home_runs", {"side": "OVER"}, 0.15, 228, 1900)]
+    out = lp.mine(rows)
+    assert "the block lands on recommendations" in out["closed"][0]["reading"]
+
+
+def test_a_main_slice_gets_no_such_caveat():
+    rows = [dict(r, category="main") for r in
+            recs("mlb", "total_bases", {"side": "OVER"}, 0.60, 500, 1000)]
+    out = lp.mine(rows)
+    hot = [f for f in out["findings"] + out["restatements"]
+           if f["action"] == "close"]
+    assert hot, "fixture must produce a closure"
+    assert all("lands on recommendations" not in f["reading"] for f in hot)
+
+
+def test_a_mixed_slice_is_not_labelled_as_one_book():
+    """80% is the bar. A slice drawing on several books is a statement
+    about the board and needs no caveat."""
+    rows = [dict(r, category="main" if i % 2 else "loose") for i, r in
+            enumerate(recs("mlb", "home_runs", {"side": "OVER"},
+                           0.15, 228, 1900))]
+    out = lp.mine(rows)
+    assert out["findings"][0].get("measured_on") is None
+
+
+def test_the_record_stays_json_serialisable():
+    """The row-membership sets exist only to compute the dedupe. Leaving
+    one in the result would make save() raise on a set."""
+    import json
+    out = lp.mine(recs("mlb", "home_runs", {"side": "OVER"}, 0.15, 228, 900))
+    json.dumps(out)
+    for f in out["findings"] + out["restatements"]:
+        assert "_rows" not in f
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
