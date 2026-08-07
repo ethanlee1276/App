@@ -59,6 +59,83 @@ def test_no_stock_tailwind_ramp_step_is_used_verbatim():
     assert not hits, f"stock Tailwind swatches used verbatim: {hits}"
 
 
+def _blank_comments(text):
+    """Comments removed, line numbering intact — each one becomes its own
+    newlines. `_strip_comments` deletes them, which is right for a
+    substring search and wrong the moment you report a line."""
+    def blank(m):
+        return "\n" * m.group(0).count("\n")
+    for pattern in (r"/\*.*?\*/", r"<!--.*?-->"):
+        text = re.sub(pattern, blank, text, flags=re.S)
+    # `[ \t]`, not `\s`: `\s*` after `^` eats the preceding blank lines too,
+    # and every line comment in app.js then costs a line number.
+    return re.sub(r"^[ \t]*//.*$", "", text, flags=re.M)
+
+
+def _token_defs_and_refs():
+    """Every custom property DEFINED anywhere the site can define one, and
+    every one it READS, across the stylesheet, both renderers, and the
+    pages that carry their own <style>.
+
+    A definition is any `--name:` — which deliberately counts the ones JS
+    writes inline (`style="--grade-color:..."`), because that is a real
+    definition at the only place the token is read.
+
+    Comments come out first, and that is not a nicety: the stylesheet
+    NAMES `var(--violet, #a78bfa)` in the note explaining why it was
+    removed, and a check that read comments would fail on its own
+    postmortem. They come out as their own newlines rather than as
+    nothing, so the line a failure names is a line you can open — deleting
+    a forty-line comment outright slides every number after it."""
+    defs, refs = set(), {}
+    for base, _dirs, files in os.walk(os.path.join(ROOT, "web")):
+        for name in sorted(files):
+            if not name.endswith((".css", ".js", ".html")):
+                continue
+            path = os.path.join(base, name)
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+            rel = os.path.relpath(path, ROOT)
+            body = _blank_comments(text)
+            defs |= set(re.findall(r"(--[a-zA-Z0-9_-]+)\s*:", body))
+            for m in re.finditer(r"var\(\s*(--[a-zA-Z0-9_-]+)", body):
+                refs.setdefault(m.group(1), []).append(
+                    f"{rel}:{body[:m.start()].count(chr(10)) + 1}")
+    return defs, refs
+
+
+def test_every_colour_token_read_is_a_token_that_exists():
+    """`var(--green, #3ddc84)` — one span on the Edge Board, and the only
+    place in the app that named a token nobody defines. It rendered the
+    fallback: a mint that is not in the palette, that does not darken for
+    the light theme the way `--good` does, and that sat in the EV column
+    beside numbers painted the real green. It looked FINE, which is the
+    whole problem — a fallback hex is a colour that ships when the token
+    is misspelled, so the typo has no symptom to notice.
+
+    This is the third time: `--violet` fell through to Tailwind's
+    violet-400 the same way, and the tell above only catches it because
+    that particular hex is famous enough to sit in a list. Nothing about
+    #3ddc84 is famous. Resolve the reference instead of recognising the
+    fallback."""
+    defs, refs = _token_defs_and_refs()
+    orphans = {tok: where for tok, where in refs.items() if tok not in defs}
+    assert not orphans, (
+        "var() reads a token nothing defines; the fallback hex is what "
+        f"actually paints: {orphans}")
+
+
+def test_the_resolver_would_notice_a_token_that_went_missing():
+    """The check above passes trivially if the walk stops finding files or
+    the regex stops matching — both silent. Pin the ends: it sees the
+    stylesheet's own tokens, and it sees the ones only JS writes inline."""
+    defs, refs = _token_defs_and_refs()
+    assert "--good" in defs and "--good" in refs
+    assert "--grade-color" in defs, \
+        "the inline definitions JS writes are no longer being counted"
+    assert len(refs) > 40, f"only {len(refs)} var() reads found — walk broke?"
+
+
 # --- 2. One face, one weight, one ramp --------------------------------------
 def test_svg_labels_use_the_pages_own_face():
     """SVG <text> does not inherit the page face the way HTML does. 294

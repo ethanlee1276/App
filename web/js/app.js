@@ -4956,7 +4956,7 @@ function edgeRowHTML(r, i) {
     <span style="min-width:64px;text-align:right">${r.odds > 0 ? "+" : ""}${r.odds}</span>
     <span style="min-width:120px;text-align:right;opacity:.8">
       ${(r.model * 100).toFixed(0)}% vs ${(r.implied * 100).toFixed(0)}%</span>
-    <span style="min-width:70px;text-align:right;color:var(--green,#3ddc84)">
+    <span style="min-width:70px;text-align:right;color:var(--good,#3ddc84)">
       +${evPct}% EV</span>
     <span style="min-width:86px;text-align:right;opacity:.75">${r.rec ? `${icon('check')} ` : ""}${escapeHtml(r.grade || "")}</span>
   </div>`;
