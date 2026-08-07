@@ -250,7 +250,14 @@ def apply_to_slate(slate, conn, season: int,
         if not hit:
             continue
         week, kind, detail = hit
-        kept = [g for g in prop.logs if (g.week or 0) >= week]
+        # `g.week` is a week NUMBER, and a carried game's number belongs to
+        # the previous season — so a carried week 17 would sail past a
+        # current-season week 5 reset and survive as "post-reset" evidence
+        # about a job that ended a year before the reset happened. A
+        # carried game is never post-reset. Without the carry every log has
+        # prior=False and this reads exactly as it did.
+        kept = [g for g in prop.logs
+                if not getattr(g, "prior", False) and (g.week or 0) >= week]
         entry = {"week": week, "kind": kind, "detail": detail,
                  "kept": len(kept), "dropped": len(prop.logs) - len(kept)}
         if len(kept) >= MIN_POST_RESET:

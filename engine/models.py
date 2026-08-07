@@ -42,6 +42,12 @@ class GameLog:
     opponent: str
     value: float          # the stat value for the market in question
     home: bool = True
+    # True when this game was CARRIED IN from the previous season, because
+    # the current one has not produced enough games yet. Its ``week`` is
+    # that season's week, so it must never be compared with a current-season
+    # week — see engine/carry.py, and reset.apply_to_slate which excludes
+    # carried games from the post-reset window for exactly that reason.
+    prior: bool = False
 
 
 @dataclass

@@ -666,3 +666,121 @@ this and what happened to MLB.
 
 `watch.py` runs it nightly for both NFL and CFB, so the crossing arrives
 as a notification rather than as something remembered.
+
+---
+
+# Appendix — the prior-season carry, written 2026-08-07
+
+## The hole
+
+`player_game_logs` keeps only `0 < wk < upto_week` — one season, no
+cross-season carry anywhere in the file — and `build_slate` skips any
+player with fewer than three logs. Week 1 has zero prior weeks, week 2 has
+one, week 3 has two. Measured against the cached 2025 season:
+
+| week | props | players |
+|---|---|---|
+| 1 | 0 | 0 |
+| 2 | 0 | 0 |
+| 3 | 0 | 0 |
+| 4 | 235 | 235 |
+| 5 | 231 | 231 |
+
+**The NFL prop board switched itself off for the first three weeks of every
+season.** For 2026 that is Sep 9 to Oct 1. The game-level board was never
+affected — `build_games` needs only the schedule, and the cached nflverse
+schedule already carries real spreads and totals for all 16 week-1 games.
+
+The feed that makes the repair possible is the season roster
+(`roster_{season}.csv`), which — unlike weekly stats — exists before a snap
+is played. 2,930 rows for 2026, 915 of them at QB/RB/WR/TE. The carry
+supplies the numbers; the roster supplies the team those numbers now belong
+to, which is the only place a player who changed clubs is on the new one.
+
+## What was fitted, and what it corrected
+
+2024 → 2025 weeks 1-3, REG only, players with ≥8 prior games. Sweeping `k`
+in `w = n/(n+k)`, scoring MAE against what the player actually did:
+
+| market | best k | MAE k=0 | MAE k=2 | MAE k=∞ |
+|---|---|---|---|---|
+| pass_yds | 2 | 50.53 | 50.18 | 54.46 |
+| rush_yds | 0 | 16.64 | 16.64 | 26.82 |
+| rec_yds | 2 | 14.96 | 14.88 | 20.76 |
+| receptions | 2 | 1.10 | 1.09 | 1.64 |
+
+**This corrected the design.** The plan assumed a stale season needed heavy
+regression toward the positional mean. Measured, that is wrong in the
+expensive direction: shrinking all the way costs 39% on receiving yards.
+A carried season is good evidence and should be used near face value. The
+fitted `k = 2` pulls a 17-game log 11% toward the anchor, and the gain over
+no shrink at all is under 1% — its real work is at low `n`, where
+`n/(n+2)` bites harder on its own.
+
+The anchor is the mean of qualified players' **season means**, not the mean
+of every player-game row. Those differ: on 2025 the row-mean drags the QB
+anchor to 184.1 against 196.7 for the players who actually held a job,
+because 38 of the 81 quarterbacks in the feed never cleared the floor. The
+constant was fitted against the second construction, so shipping the first
+would have left it calibrated for an anchor the code no longer computed.
+
+## Why the offseason reset warns instead of discarding
+
+§5's reset rule is right that a trade resets the sample, and
+`engine/reset.py` applies it mid-season, where discarding still leaves you
+the games since. **The offseason case is a different shape**: there is
+nothing since, so "discard" means the player leaves the board — the exact
+failure the carry exists to fix. That cost needs evidence, and the evidence
+does not support paying it:
+
+* Raw MAE said movers beat stayers for receivers (12.00 vs 14.96). That is
+  the level confound — movers averaged 30.1 yards against 36.8, and MAE is
+  not scale-free.
+* Level-matched on relative error inside baseline-median halves, the
+  comparison contradicts itself: rec_yds −46% / −0%, receptions −6% / +20%,
+  rush_yds −12% / +11%, pass_yds +88% / −43%. Every cell suggesting movers
+  are worse (n=6, n=6, n=18) is contradicted by one of similar or greater
+  size going the other way.
+* Fitting the shrink separately for movers returns the **same k = 2**. If a
+  changed team really made last season stale, movers would want more shrink
+  than stayers. They do not.
+
+So a detected reset is reported on the card and the sample is kept.
+`DISCARD_ON_RESET` exists so that decision can be revisited rather than
+rediscovered; flipping it is justified at roughly 60+ movers in a single
+market, which is three or four seasons of accumulation.
+
+Detectable across an offseason: **team change** (roster against the prior
+season's last team, clean and complete) and **head-coach change** (the
+schedule carries a coach on every row of both seasons — the same
+under-detecting proxy for "coordinator change" that `reset.py` documents).
+**Role change is not detectable**: it needs snap share, and a season with
+no games has no snaps. Under-detection, never false detection.
+
+## The two traps this opened, both closed
+
+**A carried week number belongs to last season.** `reset.apply_to_slate`
+keeps `g.week >= reset_week`, so without a guard a carried week 17 would
+sail past a week-14 reset and become "post-reset" evidence about a job that
+ended a year before the reset happened. Carried games are now excluded from
+that window outright.
+
+**`compute_form` reads the log list positionally** — `last1`, `last3`,
+`last5` are slices, not week lookups. Current-season games are therefore
+concatenated *ahead* of carried ones rather than sorted in with them;
+sorting by week would put last September's finale in front of this week's
+opener.
+
+## Running it
+
+    python3 nfl_build.py 2026 1 --carry --injuries --depth
+
+`launch.py` passes `--carry` on every NFL refresh. It stands itself down as
+soon as the season has three real games, so there is nothing to switch off
+in October. Every carried recommendation says so on its card, and a
+detected offseason reset says that too.
+
+On the 2026 week-1 slate it builds **293 props across all 32 teams**, 105
+of them flagged as offseason movers. Note that without `--odds` every edge
+reads +0.0%: the proxy line is derived from our own baseline, so the model
+is pricing against itself. Real edges need real book lines.

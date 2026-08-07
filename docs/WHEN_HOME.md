@@ -79,17 +79,35 @@ the cached `games.csv` already carries real spread and total for all 16 Week 1
 games. So the game-level board — moneyline, total, spread off team ratings —
 and futures are unaffected. It is specifically the player props that vanish.
 
-**The decision I need from you:** carry the prior season's tail, or accept a
-dark prop board until October. Carrying is what the books themselves do — a
-player with 17 games in 2025 and 0 in 2026 has a perfectly usable Week 1
-baseline. It is not free: #72's reset rule exists precisely because
-prior-season samples go stale on a coordinator, role or trade change, so
-carried logs would need tagging as prior-season, passing through that gate,
-and probably shrinking toward the positional mean. That interaction is the
-actual work; the splice itself is small.
+**DONE — you chose "build it with the reset gate", and it is built.** On the
+2026 week-1 slate it now builds **293 props across all 32 teams**, up from
+zero. `launch.py` passes `--carry` on every NFL refresh and it stands itself
+down as soon as the season has three real games, so there is nothing to turn
+off in October.
 
-I can build it while you're out if you say go. I did not start it unasked
-because the shrink factor and the reset interaction are model decisions.
+Two things the measurement changed, both written up in `docs/NFL_MODEL.md`:
+
+* **The shrink is mild, not heavy.** Fitted on 2024 → 2025 weeks 1-3, the
+  best `k` is 2 across every market — an 11% pull toward the positional mean
+  on a 17-game log. My plan assumed a stale season needed heavy regression;
+  measured, that is wrong in the expensive direction, costing 39% on
+  receiving yards if taken all the way.
+* **The offseason reset warns instead of discarding.** Discarding a mover
+  leaves nothing to project from, so he drops off the board — the exact
+  problem being fixed. Level-matched, movers are not consistently worse, and
+  fitting them separately returns the same `k = 2`. So 105 flagged movers
+  keep their baseline and say so on the card. `DISCARD_ON_RESET` is there to
+  revisit it when there is enough data.
+
+Nothing here needs you. Run it if you want to see it:
+
+```
+python3 nfl_build.py 2026 1 --carry --injuries --depth
+```
+
+Without `--odds` every edge reads +0.0% — the proxy line is derived from our
+own baseline, so the model is pricing against itself. That is pre-existing
+and expected; real edges need real book lines.
 
 ### 3b. The dress rehearsal can happen tonight, not Aug 24 (#41 corrected)
 

@@ -264,8 +264,13 @@ def refresh_nfl(quiet: bool = False) -> bool:
     # so this cannot cost a build. --depth rides along on the same terms:
     # it refines the injury knock-on roles and powers the QB-dependency
     # watch, and a missing chart feed costs a warning, never the build.
+    # --carry so weeks 1-3 have a board at all. Without it player_game_logs
+    # is single-season and build_slate wants three of them, so the prop
+    # board builds literally nothing until week 4 — measured on 2025: 0, 0,
+    # 0, then 235. It stands itself down as soon as the season has three
+    # real games, so there is nothing to switch off later.
     args = ["nfl_build.py", str(season), str(week), "--out", out,
-            "--injuries", "--depth"]
+            "--injuries", "--depth", "--carry"]
     spend = _slate_games(out) > 0 and _odds_affordable(out, quiet, sport="nfl")
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:

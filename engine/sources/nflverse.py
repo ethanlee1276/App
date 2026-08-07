@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .fetch import fetch_csv, load_local_csv, CACHE_DIR, DataUnavailable
+from .. import carry as _carry
 from ..models import (
     Team, DefenseProfile, Weather, Game, Prop, GameLog, SportsbookLine,
     PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS,
@@ -166,6 +167,59 @@ def load_weekly_stats(season: int) -> list[dict]:
         f"    nfl.import_weekly_data([{season}]).to_csv('{local}', index=False)\n"
         f"(last error: {last_err})"
     )
+
+
+def _roster_urls(season: int) -> list[str]:
+    base = "https://github.com/nflverse/nflverse-data/releases/download"
+    return [f"{base}/rosters/roster_{season}.csv",
+            f"{base}/rosters/roster_{season}.csv.gz"]
+
+
+def load_rosters(season: int) -> list[dict]:
+    """Who is on which team THIS season, before a snap has been played.
+
+    The one feed that exists for a season that has not started — unlike
+    weekly stats, which cannot exist until there are games. That is what
+    makes the prior-season carry possible at all: the carry supplies the
+    numbers, the roster supplies the team those numbers now belong to.
+
+    Note this is NOT ``ROSTERS_URL`` (nfldata/rosters.csv), which stops at
+    2019 and would silently return nothing for a current season.
+    """
+    local = CACHE_DIR / f"roster_{season}.csv"
+    if local.exists():
+        return load_local_csv(local)
+    last_err = None
+    for url in _roster_urls(season):
+        try:
+            return fetch_csv(url, f"roster_{season}.csv")
+        except DataUnavailable as exc:
+            last_err = exc
+    raise DataUnavailable(
+        f"Rosters for {season} are unavailable here. Export them once and "
+        f"save to {local} — e.g. in Python:\n"
+        f"    import nfl_data_py as nfl\n"
+        f"    nfl.import_seasonal_rosters([{season}]).to_csv('{local}', "
+        f"index=False)\n(last error: {last_err})"
+    )
+
+
+def roster_index(season: int) -> dict[str, dict]:
+    """``{player: {team, position, status}}`` for the active roster.
+
+    Only ACT survives: a player on reserve or already cut should not have
+    a prop built for him off last season's numbers.
+    """
+    out: dict[str, dict] = {}
+    for r in load_rosters(season):
+        name = _s(r, "full_name", "player_name", "football_name")
+        status = _s(r, "status").upper()
+        if not name or (status and status != "ACT"):
+            continue
+        out[name] = {"team": _s(r, "team"),
+                     "position": _s(r, "position", "depth_chart_position"),
+                     "status": status}
+    return out
 
 
 def _regular_season(rows: list[dict]) -> list[dict]:
@@ -328,8 +382,67 @@ def top_players_for_week(rows: list[dict], teams: set[str], upto_week: int,
     return specs
 
 
+#: Fewest same-season games that can carry a projection on their own. Below
+#: it the prior season is topped up in, when the carry is enabled.
+MIN_LOGS = 3
+
+
+def _carry_specs(prior_rows: list[dict], roster: dict[str, dict],
+                 teams: set[str], per_team: int = 3) -> list[PlayerSpec]:
+    """Who to build props for when the current season has no volume yet.
+
+    Same ranking as ``top_players_for_week`` — highest opportunity volume
+    per team and position — but read off the PRIOR season and filed under
+    the player's CURRENT team, which is the whole difference. Ranking a
+    traded receiver against his old team-mates would put him on the wrong
+    board and leave his new team a man short.
+
+    No ``upto_week`` here, unlike ``top_players_for_week``: the prior season
+    is over, so there is no cut-off to respect and every week of it counts.
+    """
+    agg: dict[tuple, dict] = {}
+    for r in _regular_season(prior_rows):
+        name = _s(r, "player_display_name", "player_name", "full_name")
+        entry = roster.get(name)
+        if not name or not entry:
+            continue
+        team = entry.get("team") or ""
+        if team not in teams:
+            continue
+        pos = (entry.get("position") or "").upper()
+        if pos not in POSITION_MARKETS:
+            continue
+        a = agg.setdefault((team, pos, name), {"vol": 0.0})
+        a["vol"] += _f(r, "attempts") + _f(r, "carries") + _f(r, "targets")
+
+    specs: list[PlayerSpec] = []
+    for team in teams:
+        for pos, markets in POSITION_MARKETS.items():
+            cands = [(k, v) for k, v in agg.items()
+                     if k[0] == team and k[1] == pos]
+            cands.sort(key=lambda kv: kv[1]["vol"], reverse=True)
+            take = 1 if pos in ("QB",) else per_team
+            for (_t, _p, name), _v in cands[:take]:
+                for market, role in markets:
+                    specs.append(PlayerSpec(name, market, role))
+    return specs
+
+
+def _merge_specs(primary: list[PlayerSpec],
+                 extra: list[PlayerSpec]) -> list[PlayerSpec]:
+    """``primary`` wins on any (player, market) it already covers.
+
+    The current season is always the better evidence when it exists, so a
+    mid-season call keeps its own ranking and the carry only fills gaps.
+    """
+    seen = {(s.player, s.market) for s in primary}
+    return list(primary) + [s for s in extra
+                            if (s.player, s.market) not in seen]
+
+
 def build_slate(season: int, week: int, upto_week: int | None = None,
-                specs: list[PlayerSpec] | None = None) -> Slate:
+                specs: list[PlayerSpec] | None = None,
+                carry: bool = False, report: dict | None = None) -> Slate:
     """Assemble a real Slate for a season/week.
 
     Requires weekly stats (for game logs and defense profiles). Since nflverse
@@ -337,13 +450,27 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     recent-form baseline, so the pipeline surfaces how far the matchup/weather/
     injury model moves the projection off that baseline. Swap in an odds feed to
     price against real books.
+
+    ``carry`` tops a thin log up from the PREVIOUS season, which is the only
+    way weeks 1-3 produce anything at all: they hold 0, 1 and 2 prior games
+    against a floor of ``MIN_LOGS``, so without it the prop board is empty
+    until week 4. See engine/carry.py for what was measured before it was
+    built. ``report`` is filled in with what was carried, for the cards.
     """
     upto_week = upto_week or week
     games = build_games(season, week)
     if not games:
         raise DataUnavailable(f"No scheduled games found for {season} week {week}.")
 
-    stats = load_weekly_stats(season)
+    # A season that has not started has no weekly stats and cannot — the
+    # file 404s because the games have not been played. That is the exact
+    # case the carry exists for, so it is survivable rather than fatal.
+    try:
+        stats = load_weekly_stats(season)
+    except DataUnavailable:
+        if not carry:
+            raise
+        stats = []
     defenses = build_defense_profiles(stats, upto_week)
 
     participating = {g.home for g in games} | {g.away for g in games}
@@ -352,32 +479,68 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         opponent_of[g.home] = g.away
         opponent_of[g.away] = g.home
 
+    prior_stats: list[dict] = []
+    roster: dict[str, dict] = {}
+    index: dict = {}
+    pos_means: dict[str, dict[str, float]] = {}
+    if carry:
+        try:
+            prior_stats = load_weekly_stats(season - 1)
+            roster = roster_index(season)
+        except DataUnavailable:
+            prior_stats, roster = [], {}
+        if prior_stats and roster:
+            index = _carry.build_index(prior_stats, roster,
+                                       load_schedules(), season)
+            for market in MARKET_COLUMNS:
+                pos_means[market] = _carry.positional_means(prior_stats, market)
+
     if specs is None:
         specs = top_players_for_week(stats, participating, upto_week)
+        if carry and index:
+            specs = _merge_specs(specs, _carry_specs(
+                prior_stats, roster, participating))
 
     def team_of(player: str) -> str:
         for r in stats:
             if _s(r, "player_display_name", "player_name", "full_name") == player:
                 return _s(r, "recent_team", "team")
-        return ""
+        # The roster is the authority for a season with no games yet, and
+        # the ONLY place a player who changed teams is on the new one.
+        return (roster.get(player) or {}).get("team", "")
 
-    # Official headshot URLs, when the stats feed carries them.
+    # Official headshot URLs, when the stats feed carries them. The prior
+    # season is a fallback: a face does not go stale over one offseason.
     headshots: dict[str, str] = {}
-    for r in stats:
+    for r in list(stats) + list(prior_stats):
         url = _s(r, "headshot_url", "headshot")
         if url:
             headshots.setdefault(
                 _s(r, "player_display_name", "player_name", "full_name"), url)
 
+    carried_report: dict = {}
     props: list[Prop] = []
     for spec in specs:
         team = team_of(spec.player)
         if team not in opponent_of:
             continue
         logs = player_game_logs(stats, spec.player, spec.market, upto_week)
-        if len(logs) < 3:
+        carried = None
+        if carry and index and len(logs) < MIN_LOGS:
+            carried = _carry.carry_for(index, prior_stats, spec.player,
+                                       spec.market,
+                                       pos_means.get(spec.market, {}))
+        if carried is None and len(logs) < MIN_LOGS:
             continue  # not enough history to project
-        baseline = _recent_mean(logs)
+        if carried is not None:
+            # Order matters and is not the sort order: a carried week 17
+            # is OLDER than a current week 1, and compute_form reads the
+            # list positionally. Current games first, always.
+            logs = logs + carried["logs"]
+            baseline = _carry.shrunk_mean(carried)
+            carried_report[spec.player] = carried
+        else:
+            baseline = _recent_mean(logs)
         if baseline <= 0:
             continue
         line = _round_half(baseline) - 0.5  # a touch under baseline, like a book
@@ -389,7 +552,12 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             position=pos,
             market=spec.market,
             logs=logs,
-            career_avg=career_average(stats, spec.player, spec.market),
+            # A carried player has no current-season rows, so his career
+            # anchor has to come from the season the logs came from —
+            # otherwise compute_form shrinks toward a career average of 0.
+            career_avg=career_average(
+                prior_stats if carried is not None else stats,
+                spec.player, spec.market),
             vs_opponent_avg=None,
             lines=[SportsbookLine(book="proxy", line=line, over_odds=-110, under_odds=-110)],
             usage_role=spec.usage_role,
@@ -404,5 +572,9 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             name=abbr,
             defense=defenses.get(abbr, DefenseProfile(team=abbr)),
         )
+
+    if report is not None:
+        report["carried"] = carried_report
+        report["carried_n"] = len(carried_report)
 
     return Slate(date=f"{season}-W{week:02d}", teams=teams, games=games, props=props)

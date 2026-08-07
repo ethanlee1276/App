@@ -64,19 +64,34 @@ def main() -> None:
     ap.add_argument("--min-confidence", type=float, default=6.0)
     ap.add_argument("--min-edge", type=float, default=0.02)
     ap.add_argument("--out", default=None, help="Write recommendations JSON here.")
+    ap.add_argument("--carry", action="store_true",
+                    help="top thin logs up from last season, so weeks 1-3 "
+                         "have a board at all (see engine/carry.py)")
     args = ap.parse_args()
 
     show_games(args.season, args.week)
     if args.games_only:
         return
 
+    carry_report: dict = {}
     try:
-        slate = build_slate(args.season, args.week)
+        slate = build_slate(args.season, args.week, carry=args.carry,
+                            report=carry_report)
     except DataUnavailable as exc:
         print("\n⚠️  Full projections need weekly player stats.\n")
         print(exc)
         print("\nTip: run with --games-only to use just the live schedule/weather layer.")
         sys.exit(2)
+
+    if carry_report.get("carried_n"):
+        n = carry_report["carried_n"]
+        moved = sum(1 for e in carry_report["carried"].values() if e.get("reset"))
+        print(f"\nCarried {n} projection(s) from {args.season - 1} — the "
+              f"current season has too few games yet.")
+        if moved:
+            print(f"  {moved} of them changed team or head coach in the "
+                  f"offseason; flagged on the card, not discarded "
+                  f"(see engine/carry.py for why).")
 
     if args.injuries:
         try:
@@ -235,6 +250,17 @@ def main() -> None:
         _reset.decorate(result["recommendations"], reset_report)
         result["sample_resets"] = {
             k: v for k, v in reset_report.items() if k != "index"}
+
+    # …and say when the number came from last season at all. A carried
+    # projection that reads like a played one is this feature's whole risk.
+    if carry_report.get("carried"):
+        from engine import carry as _carry
+        _carry.decorate(result["recommendations"], carry_report)
+        result["carried"] = {
+            p: {"season": e["season"], "games": e["games"],
+                "weight": round(e["weight"], 3), "position": e["position"],
+                "reset": list(e["reset"]) if e.get("reset") else None}
+            for p, e in carry_report["carried"].items()}
 
     # §10 drawdown circuit-breaker: after a 10u peak-to-trough drawdown on
     # the settled journal, every stake is halved until the peak is recovered.
