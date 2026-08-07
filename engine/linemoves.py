@@ -409,8 +409,12 @@ def annotate_recommendations(recs: list[dict], reports: list[MoveReport]) -> int
     Agreement becomes a reason ("the market is moving our way" — the same
     direction sharp money shows up as); disagreement becomes a warning, which
     is the honest thing to show when books are actively re-pricing away from
-    our number. Purely informational — it never changes a grade, because we
-    haven't measured its predictive value on our own picks yet.
+    our number. NOT informational: this calls quality.apply_movement, which
+    moves the quality score (±4, or ±7 on steam), can raise the letter, and
+    REJECTS the pick outright if the drop puts it under 70. It never raises
+    the stake. Said plainly because the reverse was written here for a while,
+    and a reader who believes movement is inert will not go looking for it
+    when a pick he expected disappears off the board.
 
     Returns how many recommendations got a movement stamp.
     """

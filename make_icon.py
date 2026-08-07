@@ -27,9 +27,11 @@ U = 48.0
 CX, CY = 24.0, 24.0              # bowl centre
 RX, RY = 17.0, 11.5              # bowl radii — the venue mark's proportions
 HALF = 1.7                       # half of the 3.4-unit stroke
-                                 # turns the mark into a magnifying glass.
-# The ring is centred at y=22 to leave room for a tail that no longer needs
-# it, so the whole mark drops 2 units. Matches the <g transform> in the SVG.
+# The bowl sits dead centre (24, 24) and needs no offset: the tail that the
+# old ring-plus-handle mark had to leave room for is gone, and so is the
+# 2-unit drop that compensated for it. web/favicon.svg carries no <g
+# transform> either — the two are aligned by both being centred, not by a
+# shared nudge.
 NUDGE = (0.0, 0.0)
 CORNER = 0.0                     # square: radius 0 everywhere, spec §3.3
 

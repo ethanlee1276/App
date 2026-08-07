@@ -218,8 +218,10 @@ exactly the chore that should not depend on remembering.
 The design rests on one asymmetry: **lineups are free, rebuilds are not.**
 Cards come from `statsapi.mlb.com`, which is unmetered; only the rebuild
 spends Odds API credits. So it polls as often as is useful (`--every`,
-floored at the boxscore cache's own 5-minute TTL — below that it re-reads
-one file and learns nothing) and builds as rarely as is useful:
+default 10m; the boxscore cache's 5-minute TTL is the point below which a
+poll re-reads one file and learns nothing, and the flag's help says so —
+but it is advice, not a clamp. The only hard floor is 60s) and builds as
+rarely as is useful:
 
 * `--min-gap` (25m) — cards trickle out over an hour or more. Rebuilding
   on each one spends a day's credits to reach the board one build at the

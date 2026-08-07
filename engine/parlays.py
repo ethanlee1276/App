@@ -241,8 +241,10 @@ RULES: dict[str, SportRules] = {
     # §4. Anchor must be a Tier 1 volume market; Tier 3 (anytime TD, longest)
     # never anchors and three of them together are banned outright.
     "nfl": SportRules("nfl", "NFL", anchor_tier1=True, blowout_spread=10.0),
-    # §6. Highest bar in the system: 8 points for three legs, and one ticket
-    # per Saturday against a 60-game slate.
+    # §6. Highest bar in the system: 2.5 points for two legs and 4 for three
+    # (against the 2.0/3.0 every other sport carries), and one ticket per
+    # Saturday against a 60-game slate. The doc's own figure was 8 for three
+    # legs; see SportRules for why every threshold was tuned down from it.
     "cfb": SportRules("cfb", "College Football", two_leg_points=2.5,
                       three_leg_points=4.0, blowout_spread=17.0),
     # §5. The lineup rule dominates; enforced per-leg in _leg_eligible.
@@ -777,9 +779,13 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
         if (sport == "mlb" and fa in PITCHER_FAMILIES and fb in PITCHER_FAMILIES
                 and ua == ub):
             # No band is published for strikeouts-over against outs-over. Using
-            # the low end of the nearest published pitcher band (§5.1's outs
+            # the MIDPOINT of the nearest published pitcher band (§5.1's outs
             # over vs his team's ML, +0.20 to +0.35) rather than inventing a
-            # larger number for the construction the doc likes most.
+            # number outside it for the construction the doc likes most.
+            # This sat at the band's bottom until the §1.3 retune: reading
+            # every band low was conservatism stacked on top of the 0.45
+            # humility clamp, which is the number actually anchored to a
+            # calibration point and which stays.
             return Relation(0.275, "one arm, one mechanism, two markets moving "
                                   "together — §5.2's pitcher stack, which books "
                                   "often price as if the pair were independent",
@@ -880,7 +886,9 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
     # near-restatement to be penalised. Two players are not a restatement of
     # each other.
 
-    # The permitted positive constructions, at the bottom of each band.
+    # The permitted positive constructions, at the MIDPOINT of each band
+    # (§1.3 retune — they sat at the bottom until the humility clamp was
+    # judged to be carrying that conservatism already).
     if same_team and {fa, fb} == {"pass", "catch"} and ua and ub:
         r, meas = rho_for("qb_passing_game", 0.425)
         return Relation(r, "one passing game wearing two jerseys — §4.1's "
