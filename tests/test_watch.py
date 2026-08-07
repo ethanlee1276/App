@@ -43,20 +43,28 @@ class _Count:
 
 
 def _journal(n_main=260, n_loose=580, claim=0.58, land=0.46):
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    conn.execute("CREATE TABLE bets (sport TEXT, market TEXT, side TEXT, "
-                 "odds REAL, book TEXT, hit_prob REAL, edge REAL, status TEXT,"
-                 " category TEXT, date TEXT, ts TEXT)")
+    """Built on the REAL schema, via ledger.connect.
+
+    This used to hand-roll a `bets` table with the eleven columns the
+    watches happened to read. That is the fixture equivalent of a hardcoded
+    fallback: it kept passing while the watches grew to read columns the
+    fixture had never heard of, and the first sign was every new watch
+    crashing at once on a table that exists nowhere but this file.
+    """
+    from engine import ledger as L
+    conn = L.connect(":memory:")
     rows = []
     for cat, n, p, l in (("main", n_main, claim, land),
                          ("loose", n_loose, 0.59, 0.60)):
         for i in range(n):
-            rows.append(("mlb", "total_bases", "OVER", -110, "DraftKings", p,
-                         0.04, "won" if i < round(n * l) else "lost", cat,
-                         f"2026-07-{10 + i % 20:02d}",
-                         f"2026-07-{10 + i % 20:02d}T12:00:00"))
-    conn.executemany("INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows)
+            d = f"2026-07-{10 + i % 20:02d}"
+            rows.append((d + "T12:00:00", "mlb", d, f"{cat}{i}", "total_bases",
+                         "OVER", 1.5, "DraftKings", -110, p, 0.04,
+                         "won" if i < round(n * l) else "lost", cat, 0.5, 0.0))
+    conn.executemany(
+        "INSERT INTO bets (ts, sport, date, player, market, side, line, book, "
+        "odds, hit_prob, edge, status, category, stake_units, pnl_units) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
     conn.commit()
     return conn
 
@@ -203,6 +211,90 @@ def test_a_crashing_watch_reports_instead_of_going_quiet():
         assert "the watch itself failed" in out and "kaboom" in out
     finally:
         w.WATCHES = was
+
+
+# --- the two watches that close tonight's open loops -------------------------
+def _stamped(conn, cat, n, delta, claim, wins, tag):
+    for i in range(n):
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,book,odds,"
+            "hit_prob,edge,status,category,move_delta,move_steam,stake_units,"
+            "pnl_units) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("2026-08-01", "mlb", "2026-08-01", f"{tag}{i}", "total_bases",
+             "OVER", 1.5, "dk", -110, claim, 0.04,
+             "won" if i < wins else "lost", cat, delta, 0.0, 0.5, 0.0))
+    conn.commit()
+
+
+def _bets(gap=0.12, killed=0, spared=0):
+    from engine import ledger as L
+    conn = L.connect(":memory:")
+    _stamped(conn, "main", 250, None, 0.58, round(250 * (0.58 - gap)), "m")
+    if killed:
+        _stamped(conn, "loose", killed, -4.0, 0.58, killed // 2, "lk")
+    if spared:
+        _stamped(conn, "loose", spared, None, 0.58, spared // 2, "ls")
+    return conn
+
+
+def test_the_movement_watch_fires_when_movecheck_becomes_runnable():
+    """A diagnostic nobody re-runs is a diagnostic that was never built.
+    movecheck cannot say anything until enough stamped rows settle on both
+    sides, and that moment should arrive as a notification rather than as
+    something remembered."""
+    import movecheck as mv
+    thin = w.watch_movement(_bets(killed=5, spared=5), {})
+    assert thin["fired"] is False and f"needs {mv.MIN_SIDE}" in thin["reading"]
+
+    ready = w.watch_movement(_bets(killed=40, spared=40), {})
+    assert ready["fired"] is True
+    assert "movecheck.py can now run" in ready["reading"]
+
+
+def test_the_movement_watch_does_not_re_fire():
+    ready = w.watch_movement(_bets(killed=40, spared=40),
+                             {"movecheck_ready": True})
+    assert ready["fired"] is False
+
+
+def test_the_bar_watch_fires_only_when_a_floor_becomes_reachable():
+    """barcheck's finding is arithmetic, not a standing fact — it flips the
+    moment the over-claim shrinks enough, and that is the first point at
+    which an honest board could exist again."""
+    wide = w.watch_bar(_bets(gap=0.12), {"bar_reachable": False})
+    assert wide["fired"] is False and wide["value"] is False
+    assert "short by" in wide["reading"]
+
+    tight = w.watch_bar(_bets(gap=0.02), {"bar_reachable": False})
+    assert tight["fired"] is True and tight["value"] is True
+    assert "arithmetically possible again" in tight["reading"]
+
+
+def test_the_bar_watch_needs_a_prior_reading_to_call_it_a_crossing():
+    """First run has nothing to cross FROM. Announcing one would greet a
+    fresh install with a false all-clear on the most important number in
+    the report."""
+    first = w.watch_bar(_bets(gap=0.02), {})
+    assert first["value"] is True and first["fired"] is False
+
+
+def test_the_bar_watch_declines_on_a_thin_journal():
+    conn = _bets(gap=0.12)
+    conn.execute("DELETE FROM bets WHERE rowid > 30")
+    conn.commit()
+    r = w.watch_bar(conn, {"bar_reachable": False})
+    assert r["fired"] is False and r["value"] is None
+    assert "only 30 settled" in r["reading"]
+
+
+def test_the_floor_needs_the_gap_under_two_and_a_half_points():
+    """Worth pinning as a number rather than a feeling: tier 1's floor is
+    2.5% and its credibility ceiling 5.0%, so an honest floor only fits
+    while the over-claim is under 2.5 points. That is how far the model has
+    to come, and the watch's threshold is that arithmetic, not a guess."""
+    import barcheck as bc
+    assert bc.honest_bar(1, 0.025)["reachable"] is True
+    assert bc.honest_bar(1, 0.026)["reachable"] is False
 
 
 # --- the nightly runner ------------------------------------------------------

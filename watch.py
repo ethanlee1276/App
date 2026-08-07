@@ -178,6 +178,63 @@ def watch_calibration(conn, state: dict) -> dict:
             "state": {"calibration_gap": round(s["gap"], 4)}}
 
 
+def watch_movement(conn, state: dict) -> dict:
+    """Is the movement veto finally measurable?
+
+    `engine.quality.apply_movement` rejects picks outright when line
+    movement against them drops their quality below 70, on a signal whose
+    predictive value has never been measured. Nothing recorded what it did
+    until 2026-08-07, so movecheck.py cannot say anything until enough
+    stamped rows have settled on both sides.
+
+    This exists so that moment arrives as a notification rather than as
+    something remembered. A diagnostic nobody re-runs is a diagnostic that
+    was never built.
+    """
+    import movecheck as mv
+    rows = mv.load(conn, "mlb")
+    loose = [r for r in rows if r.get("category") == "loose"]
+    killed = [r for r in loose if (r.get("move_delta") or 0) < 0]
+    spared = [r for r in loose if r.get("move_delta") is None]
+    ready = len(killed) >= mv.MIN_SIDE and len(spared) >= mv.MIN_SIDE
+    was = bool(state.get("movecheck_ready"))
+    return {"name": "movement veto", "value": ready, "fired": ready and not was,
+            "reading": (f"{len(killed)} killed / {len(spared)} spared"
+                        + ("  ** movecheck.py can now run — the veto's own "
+                           "record is finally readable **" if ready and not was
+                           else f" (needs {mv.MIN_SIDE} each)")),
+            "state": {"movecheck_ready": ready}}
+
+
+def watch_bar(conn, state: dict) -> dict:
+    """Would an honest edge floor fit inside the credibility window yet?
+
+    barcheck's finding is arithmetic, not a fit: the floor a bet needs is
+    the tier minimum plus the measured over-claim, and today that lands
+    around three times the largest edge the gate will believe. It is
+    therefore not a standing fact — it flips the moment the gap shrinks
+    enough, and that is exactly the moment worth being told about, because
+    it is the first point at which a board could honestly exist again.
+    """
+    import barcheck as bc
+    rows = bc.load(conn, "mlb")
+    if len(rows) < 60:
+        return {"name": "honest edge floor", "value": None, "fired": False,
+                "reading": f"only {len(rows)} settled recommendations",
+                "state": {}}
+    gap = bc.measured_gap(rows)["gap"]
+    h = bc.honest_bar(1, gap)
+    was = state.get("bar_reachable")
+    return {"name": "honest edge floor", "value": h["reachable"],
+            "fired": h["reachable"] and was is False,
+            "reading": (f"gap {gap:+.1%} needs a {h['need']:.1%} floor against "
+                        f"a {h['ceiling']:.1%} ceiling — "
+                        + ("REACHABLE  ** an honest board is arithmetically "
+                           "possible again **" if h["reachable"]
+                           else f"short by {100 * h['short']:.1f} points")),
+            "state": {"bar_reachable": h["reachable"]}}
+
+
 def watch_closures(conn, state: dict) -> dict:
     """A slice closing is a PRICING change — it starts refusing bets on the
     next build. House rule is that a person sees it first, so a newly
@@ -202,7 +259,8 @@ def watch_closures(conn, state: dict) -> dict:
             "state": {"closures": keys}}
 
 
-WATCHES = [watch_journal, watch_selection, watch_calibration, watch_closures]
+WATCHES = [watch_journal, watch_selection, watch_calibration, watch_closures,
+           watch_movement, watch_bar]
 
 
 def run(conn, show_all: bool = False, reset: bool = False) -> int:
