@@ -203,6 +203,52 @@ before it happens, rather than discovering it on a Tuesday.
 Steps 2 and 3 are `selfit.py`. It writes nothing, and its bars are module
 constants so that a diff shows them moving.
 
+## 10a. The instrument that is not available: a higher bar
+
+§8 said correcting the over-claim honestly "may not trim the board but
+empty it", and treated that as a cost to accept. It is worse than a cost,
+and `barcheck.py` shows why in two constants that were already in the code.
+
+The gate accepts a post-haircut edge inside a window. The floor is
+`TIER_MIN_EDGE`; the ceiling is `MAX_CREDIBLE_EDGE` (0.10) times the
+tier's shrink, beyond which a disagreement is treated as bad data rather
+than alpha:
+
+| tier | floor | ceiling | window |
+|---|---|---|---|
+| 1 | 2.5% | 5.0% | 2.5 points |
+| 2 | 3.0% | 4.5% | 1.5 points |
+
+An honest floor has to cover the over-claim — `floor + gap`:
+
+| tier | needs | ceiling | |
+|---|---|---|---|
+| 1 | **14.5%** | 5.0% | short by 9.5 points |
+| 2 | **15.0%** | 4.5% | short by 10.5 points |
+
+**The required floor is about three times the largest edge the model is
+permitted to claim.** The window is not narrowed by this; it is inverted.
+No edge is simultaneously big enough to survive an honest floor and small
+enough to be believed, so every candidate fails one end or the other.
+
+The journal agrees without being asked: sweeping bars over the settled
+board, no bet survives past roughly 7.5%, because the credibility ceiling
+caps edges below where an honest floor would have to sit.
+
+So "raise the edge bar" is not a conservative version of the current
+system. It is arithmetically switching the board off, and it is not a
+third branch beside the two real ones:
+
+  1. the CLAIMS come down — the correction in §4, which §7's hold-out
+     cannot yet validate on 13 days of a drifting board, or
+  2. there is nothing on this board worth betting.
+
+`barcheck.py` recomputes this from the live constants and the journal's own
+measured gap, so it stays true if either moves. It deliberately does not
+name a recommended bar: sweeping bars over 247 settled bets and taking the
+best ROI is a maximum-of-draws against a ±6.3-point noise floor, and would
+produce a "finding" on data with no signal in it.
+
 ## 11. What the run actually settled, and what it did not
 
 `selcheck --across` on 247 selected against 570 rejected:
