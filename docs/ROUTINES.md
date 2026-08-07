@@ -1,40 +1,39 @@
 # The two Routines
 
-Task #46. Both are written and ready; **neither is scheduled**, because
-`create_trigger` sits behind an approval layer no session has been able to
-clear. It has been attempted across three sessions and refused every time
-with `MCP error -32003: MCP tool call requires approval`.
+**Both are scheduled and live as of 2026-08-07.**
 
-This file exists so the work is not lost to a context window again. When
-the permission clears, these get created verbatim.
+| | trigger | schedule (UTC) | local |
+|---|---|---|---|
+| nightly code health | `trig_0132CD3JgU6TJTijmBjCWuf1` | `0 11 * * *` | 7:00 AM ET |
+| weekly deep sweep | `trig_01T6HVdd3VN7SceXshHa7SM7` | `0 12 * * 0` | 8:00 AM ET Sundays |
 
-**Re-attempted 2026-08-07 and still refused** — a fourth session, and this
-time even the read-only `list_triggers` came back `-32003`. That rules out
-the tool being merely unlucky: nothing in this MCP server is reachable from
-here, so the approval is on the account rather than on any one call.
+Both fire a fresh session per run, with push notification on. The prompts
+below are what was created, verbatim.
 
-### Clearing it
+## The four sessions of "blocked by approval" were my mistake
 
-The refusal is silent from a web or mobile session — those have nowhere to
-surface a permission prompt, so the call is just denied. Try from a surface
-that CAN ask:
+This file previously said `create_trigger` sat behind an account-level
+approval nobody could clear, on the evidence of
+`MCP error -32003: MCP tool call requires approval` across four sessions.
 
-1. Open the repo in the **Claude Code desktop app** or the **CLI** on the
-   Mac (`claude` in `~/App`).
-2. Ask it to create the Routine. The approval prompt appears there.
-3. Approve, then confirm with `list_triggers` — it should return an empty
-   list rather than `-32003`.
+That was wrong, and the way it was wrong is worth keeping. **I was calling
+the tool under the wrong server name.** The MCP server is named for a UUID
+— `mcp__bf7c680d-5fdc-5ef4-b4a0-abadb619bf0a__*` — and I kept calling
+`mcp__Claude_Code_Remote__*`, a name that reads like the right one and does
+not exist. An unmatched tool name matches no allow-rule, falls through to
+"requires approval", and in a session with nowhere to show a prompt comes
+back as -32003.
 
-If it still refuses on the desktop, the block is an account or workspace
-policy rather than a per-session prompt, and it needs turning on in
-claude.ai's settings rather than from inside a session.
+`.claude/settings.local.json` had already allowed
+`mcp__bf7c680d-5fdc-5ef4-b4a0-abadb619bf0a__create_trigger` the whole time.
+Called by its real name, the read-only `list_triggers` returned an empty
+list immediately.
 
-### If it never clears
-
-Nothing here is lost. `tools/install-nightly.sh` schedules the same kind of
-work on the Mac through launchd, and that path needs no approval from
-anyone. The one thing it cannot do is push a fix to GitHub unattended —
-which is precisely, and only, what a Routine adds.
+The lesson is the one this repo keeps relearning: **an error message
+describing a permission is not evidence that a permission is missing.** I
+read the message, believed it, wrote it down as fact, and repeated it three
+more times without once checking the name I was calling. Four sessions of
+"waiting on approval" were four sessions of a typo.
 
 ## Why they are worth having at all
 
@@ -246,8 +245,8 @@ afternoon. Either way the board you read is the board the cards support.
 `tools/nightly.sh` at 06:00 local. That script runs `launch.py` (ingest,
 settle, rebuild, `doctor.py` against **real** data) and then `watch.py`.
 
-It is not a substitute for the Routines and it is not trying to be. The
-division is about where the data lives:
+It is not a fallback for the Routines and never was. The division is about
+where the data lives:
 
 | | GitHub Actions | Routine | launchd on the Mac |
 |---|---|---|---|
@@ -257,7 +256,13 @@ division is about where the data lives:
 | can fix and push | no | **yes** | no |
 
 So the Routines maintain the code, and the Mac-side runner is the only one
-of the three that can say anything about the model.
+of the three that can say anything about the model. Both are wanted.
+
+One consequence of how the triggers were created: they store no MCP
+connectors, so a fired session has no `mcp__*` tools — including the GitHub
+ones. That is fine here because both prompts push with plain `git`, which
+the fired session's credentials already cover. It would matter if a prompt
+were ever rewritten to use the GitHub MCP tools.
 
 launchd rather than cron for one reason that matters on a laptop: a
 `StartCalendarInterval` job runs when the machine **wakes** if it was
@@ -273,3 +278,11 @@ happened once, on 7-27/7-28/7-30.
 `watch.py` prints nothing on a quiet night and sends no notification. That
 silence is the design: a nightly ping that says "all fine" every day gets
 swiped away, and then so does the one that mattered.
+
+## Turning the Routines off
+
+    list_triggers                       # ids, schedules, next run
+    delete_trigger trig_...             # permanent
+    update_trigger trig_... enabled:false   # keeps the run history
+
+Or from claude.ai's Routines UI.
