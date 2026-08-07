@@ -108,7 +108,8 @@ def load(conn, sport: str, category: str = "main") -> list[dict]:
     hypothesis — so `loose` is not training data. It reappears later as a
     control, never as a fit input.
     """
-    q = ("SELECT sport, market, side, hit_prob, status, date, ts "
+    q = ("SELECT sport, market, side, hit_prob, status, date, ts, "
+         "cal_temp, cal_bias "
          "FROM bets WHERE status IN ('won','lost') AND hit_prob IS NOT NULL "
          "AND category=?")
     args: list = [category]
@@ -199,9 +200,20 @@ def compose(rows: list[dict], temp: float = 1.0, icept: float = 0.0) -> dict:
                  if (r.get("side") or "").strip().lower().startswith("u"))
     raw = sum(float(r["hit_prob"]) for r in rows) / n
     adj = sum(corrected(r, temp, icept) for r in rows) / n
+    # Which DEEP correction was live when each row was logged. hit_prob is
+    # the shipped claim, i.e. already through calibrate.py's temperature —
+    # so it is only a consistent quantity while that temperature holds
+    # still. When it moves mid-journal the two halves are denominated in
+    # different things, and a selection layer fitted across the change is
+    # fitted on a moving target. journalfit has un-corrected per row since
+    # the refit-capture work for exactly this reason; this reports whether
+    # the same hazard is present here.
+    temps = [float(r["cal_temp"]) for r in rows if r.get("cal_temp") is not None]
     return {"n": n, "unders": unders, "p_under": unders / n,
             "claim_raw": raw, "claim_adj": adj, "moved": adj - raw,
-            "dates": len({r["date"] for r in rows if r.get("date")})}
+            "dates": len({r["date"] for r in rows if r.get("date")}),
+            "n_cal": len(temps),
+            "cal_temp": (sum(temps) / len(temps)) if temps else None}
 
 
 def crossval(rows: list[dict], folds: int = 4) -> dict:
@@ -356,23 +368,57 @@ def report(conn, sport: str = "mlb") -> int:
     print("=" * 74)
     print("WHAT EACH HALF IS MADE OF")
     print("=" * 74)
-    print("                       n   days   UNDERs   mean claim   after   moved")
-    print("  " + "-" * 68)
+    print("                       n   days   UNDERs   mean claim   after   moved"
+          "   deep T")
+    print("  " + "-" * 76)
     ce = compose(early, c.temperature, c.intercept)
     cl = compose(late, c.temperature, c.intercept)
     for label, x in (("early (fitted on)", ce), ("held out", cl)):
+        dt = (f"{x['cal_temp']:.2f} ({x['n_cal']}/{x['n']})"
+              if x["cal_temp"] is not None else "  — (0 logged)")
         print(f"  {label:18} {x['n']:4}   {x['dates']:4}   {x['p_under']:6.0%}   "
               f"{x['claim_raw']:10.1%}   {x['claim_adj']:5.1%}   "
-              f"{x['moved']:+5.1f}pt".replace(f"{x['moved']:+5.1f}",
-                                              f"{100 * x['moved']:+5.1f}"))
+              f"{100 * x['moved']:+5.1f}pt   {dt}")
     print()
-    if abs(ce["moved"] - cl["moved"]) > 0.03:
-        print("  ** The correction bites the two halves by different amounts.")
-        print("     A negative intercept is a LEAN toward the UNDER, not a")
-        print("     shrink: it cuts an OVER claim hard and leaves an UNDER")
-        print("     claim nearly alone. A held-out half with a different side")
-        print("     mix therefore gets a different correction, and the")
-        print("     verdict below is partly measuring that, not generalisation.")
+    # The claim LEVEL is the dominant driver of how hard the correction
+    # bites, and it is worth saying so plainly because the first cut of
+    # this warning blamed the side mix and was wrong on the real journal:
+    # the held-out half had FEWER unders (25% against 44%), which would
+    # bite harder, and it moved less anyway. What actually separated the
+    # halves was a 13.7-point difference in mean claim.
+    if abs(ce["claim_raw"] - cl["claim_raw"]) > 0.05:
+        print(f"  ** The two halves claim very different things on average:")
+        print(f"     {ce['claim_raw']:.1%} early against {cl['claim_raw']:.1%} "
+              f"held out. A temperature bites in")
+        print("     proportion to how far a claim sits from 50%, so the same")
+        print("     (S, c) is a far larger correction on one half than the")
+        print("     other. The verdict below is partly measuring that rather")
+        print("     than generalisation.")
+        print()
+    # A row with no logged cal_temp had NO deep correction live, which is
+    # 1.0 — the identity. Comparing only when both sides carry a number
+    # would miss the loudest version of this: nothing live early, a
+    # correction live later. That is a change from 1.0, and it is exactly
+    # what a mid-journal calibration release looks like.
+    et = ce["cal_temp"] if ce["cal_temp"] is not None else 1.0
+    lt = cl["cal_temp"] if cl["cal_temp"] is not None else 1.0
+    if abs(et - lt) > 0.05:
+        print("  ** AND THE DEEP CORRECTION MOVED BETWEEN THEM.")
+        print(f"     Mean cal_temp {et:.2f} early, {lt:.2f} held out "
+              f"({ce['n_cal']}/{ce['n']} and {cl['n_cal']}/{cl['n']} rows")
+        print("     carry one). `hit_prob` is the SHIPPED")
+        print("     claim — already through calibrate.py — so it only means")
+        print("     one thing while that temperature holds still. Across a")
+        print("     change the two halves are denominated differently, and")
+        print("     a selection layer fitted on one and tested on the other")
+        print("     is chasing a moving target. This is the same hazard")
+        print("     journalfit solves with undo_temperature, and selfit does")
+        print("     not yet solve it. Treat the verdict as UNSAFE, not just")
+        print("     under-powered.")
+        print()
+    elif ce["n_cal"] == 0 and cl["n_cal"] == 0:
+        print("  (No row carries a logged cal_temp, so no deep correction was")
+        print("   live during this window and the claims are on one basis.)")
         print()
     if ce["dates"] < 5:
         print(f"  ** The fit saw only {ce['dates']} dates. Balancing the split by")

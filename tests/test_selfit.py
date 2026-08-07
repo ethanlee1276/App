@@ -252,6 +252,67 @@ def test_crossval_declines_on_too_few_dates():
     rows = _rows(200, 0.12, ["2026-07-10", "2026-07-11", "2026-07-12"])
     assert sf.crossval(rows, folds=4)["n"] == 0
 
+
+# --- the claims have to mean one thing across the journal -------------------
+def test_the_deep_correction_is_read_off_the_journal():
+    """`hit_prob` is the SHIPPED claim, already through calibrate.py. It is
+    a consistent quantity only while that temperature holds still, and the
+    ledger records per row which one was live (engine/ledger.py:161).
+    Fitting across a change chases a moving target — the hazard journalfit
+    solves with undo_temperature."""
+    import inspect
+    src = inspect.getsource(sf.load)
+    assert "cal_temp" in src and "cal_bias" in src
+
+
+def test_a_correction_shipping_mid_journal_is_detected():
+    """The loudest version: nothing live early, a correction live later.
+    Comparing only when BOTH halves carry a number would miss it, because
+    a missing cal_temp is not missing data — it is the identity, 1.0."""
+    early = [{"hit_prob": 0.62, "side": "OVER", "status": "lost",
+              "date": "2026-07-25", "cal_temp": None, "cal_bias": None}] * 40
+    late = [{"hit_prob": 0.52, "side": "OVER", "status": "lost",
+             "date": "2026-08-01", "cal_temp": 1.45, "cal_bias": 0.0}] * 40
+    ce, cl = sf.compose(early), sf.compose(late)
+    assert ce["cal_temp"] is None and ce["n_cal"] == 0
+    assert abs(cl["cal_temp"] - 1.45) < 1e-9 and cl["n_cal"] == 40
+    src = open(os.path.join(ROOT, "selfit.py"), encoding="utf-8").read()
+    assert 'ce["cal_temp"] if ce["cal_temp"] is not None else 1.0' in src
+    assert "it is the identity" in src or "the identity" in src
+
+
+def test_the_moving_target_is_called_unsafe_not_underpowered():
+    """A verdict computed across a calibration change is not a weak
+    measurement of the right thing; it is a measurement of the wrong
+    thing, and the two call for different responses."""
+    src = open(os.path.join(ROOT, "selfit.py"), encoding="utf-8").read()
+    assert "UNSAFE, not just" in src
+    assert "under-powered" in src
+
+
+def test_the_claim_level_warning_does_not_blame_the_side_mix():
+    """The first cut of this warning blamed the UNDER mix and was wrong on
+    the real journal: the held-out half had FEWER unders (25% against 44%),
+    which bites HARDER, and it moved less anyway. What separated the halves
+    was a 13.7-point difference in mean claim."""
+    src = open(os.path.join(ROOT, "selfit.py"), encoding="utf-8").read()
+    warn = src[src.index("if abs(ce[\"claim_raw\"]"):]
+    warn = warn[:warn.index("print()")]
+    assert "claim very different things" in warn
+    assert "UNDER" not in warn.upper().replace("UNDERSTAND", "")
+
+
+def test_compose_counts_how_many_rows_carry_a_correction():
+    """A mean temperature over three of 121 rows is not the half's basis.
+    The count has to travel with the number."""
+    rows = ([{"hit_prob": 0.6, "side": "OVER", "status": "won",
+              "date": "2026-07-25", "cal_temp": 1.4, "cal_bias": 0.0}]
+            + [{"hit_prob": 0.6, "side": "OVER", "status": "won",
+                "date": "2026-07-25", "cal_temp": None, "cal_bias": None}] * 9)
+    x = sf.compose(rows)
+    assert x["n"] == 10 and x["n_cal"] == 1
+    assert abs(x["cal_temp"] - 1.4) < 1e-9
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
