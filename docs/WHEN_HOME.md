@@ -1,0 +1,292 @@
+# When you get home — the laptop checklist
+
+Written 2026-08-07. Everything here needs the Mac, because the container has
+no ledger, no route to the sports APIs, and no browser you can look at.
+
+Ordered so that each step is worth doing whether or not you get to the next
+one. If you only do one thing, do §1.
+
+**Push state: nothing outstanding.** Working tree clean, `origin` and local
+both at `d1f0cc5`, no untracked files. Everything discussed is on
+`claude/sports-betting-app-vhgmho`.
+
+---
+
+## 1. The units fix — 10 minutes, do it first
+
+Every settled bet was journalled on a different staking scale than the one in
+use now, so the Record page's ROI is not measuring one thing. `rescale.py`
+puts them all on today's ruler.
+
+```
+python3 rescale.py            # dry run — writes nothing, read the table
+python3 rescale.py --apply    # backs the ledger up first
+python3 launch.py             # rebuild the record files
+```
+
+Do this before the NFL section. NFL bets will start landing in the same
+ledger, and rescaling a mixed-sport ledger is cheaper now than in October.
+
+## 2. Read the loss miner before it prices anything
+
+```
+python3 -m engine.losspatterns
+```
+
+Writes nothing. It prints which slices it has convicted and what the veto
+would block. The `home_runs` slice now closes, and its reading says 100% of
+those are `longshot` bets with the block landing on recommendations. Decide
+whether you want that veto live before anything runs `--apply`.
+
+---
+
+## 3. NFL — the part that changed today
+
+I measured three things in the container this afternoon. Two of them move the
+NFL plan.
+
+### 3a. The prop board is empty for Weeks 1–3 (#83) — the real finding
+
+Measured against the cached 2025 season, not predicted:
+
+```
+2025 week 1:    0 props,   0 players
+2025 week 2:    0 props,   0 players
+2025 week 3:    0 props,   0 players
+2025 week 4:  235 props, 235 players
+2025 week 5:  231 props, 231 players
+```
+
+Two lines cause it. `player_game_logs()` at `engine/sources/nflverse.py:184`
+keeps only `0 < wk < upto_week` — one season, no cross-season carry anywhere
+in the file. And `build_slate()` at `nflverse.py:379` skips any player with
+`len(logs) < 3`. Week 1 has zero prior weeks, week 2 has one, week 3 has two.
+Week 4 is the first with three.
+
+For 2026, from the cached schedule:
+
+| week | dates | props |
+|---|---|---|
+| 1 | Sep 9 – Sep 14 | none |
+| 2 | Sep 17 – Sep 21 | none |
+| 3 | Sep 24 – Sep 28 | none |
+| 4 | Oct 1 – Oct 5 | appear |
+
+**The NFL prop board would be dark for the first 23 days of the season.**
+
+What still works in those weeks: `build_games()` needs only the schedule, and
+the cached `games.csv` already carries real spread and total for all 16 Week 1
+games. So the game-level board — moneyline, total, spread off team ratings —
+and futures are unaffected. It is specifically the player props that vanish.
+
+**The decision I need from you:** carry the prior season's tail, or accept a
+dark prop board until October. Carrying is what the books themselves do — a
+player with 17 games in 2025 and 0 in 2026 has a perfectly usable Week 1
+baseline. It is not free: #72's reset rule exists precisely because
+prior-season samples go stale on a coordinator, role or trade change, so
+carried logs would need tagging as prior-season, passing through that gate,
+and probably shrinking toward the positional mean. That interaction is the
+actual work; the splice itself is small.
+
+I can build it while you're out if you say go. I did not start it unasked
+because the shrink factor and the reset interaction are model decisions.
+
+### 3b. The dress rehearsal can happen tonight, not Aug 24 (#41 corrected)
+
+Task #41 says to rehearse against "a real preseason slate." That is not
+reachable. The cached nflverse `games.csv` holds 7,548 games and its
+`game_type` values are `REG/WC/DIV/CON/SB` only — **zero preseason rows**.
+Preseason is not in this data source at all.
+
+But 2026 Week 1 is already in there with real market lines on all 16 games,
+so the rehearsal can run now:
+
+```
+python3 nfl_build.py 2026 1 --games-only
+```
+
+That one is verified — I ran it here this afternoon and it printed all 16
+games with spreads, totals and roofs. The full build is the one to try on
+your machine:
+
+```
+python3 nfl_build.py 2026 1 --injuries --depth --out /tmp/nfl2026wk1.json
+```
+
+Expect it to stop at the props with a `player_stats_2026.csv` 404 — that file
+cannot exist until games are played, and that is §3a again rather than a
+separate fault. What you are checking is that the games, injuries and depth
+layers all come through, and that the game-level bets price.
+
+Note the message it prints blames "GitHub release access is blocked by this
+environment's egress policy" when the actual error is a plain 404. Cosmetic,
+but it will send you chasing a network problem that isn't there.
+
+### 3c. `launch.py` will not touch NFL until Sep 2
+
+`_current_nfl_week()` at `launch.py:224` only calls a week current if the
+nearest game is within 7 days. Week 1 opens Wed Sep 9, so the NFL board stays
+on its existing data until **Sep 2**, then starts refreshing nightly. That is
+correct behaviour, not a bug — but it means between now and Sep 2 the only way
+to exercise NFL is `nfl_build.py` by hand, as in §3b.
+
+### 3d. Two things to confirm during the rehearsal
+
+- The NFL journal writes `move_delta` and `move_steam`. The movement capture
+  from `c8657de` went in on the shared ledger path so it should, but it has
+  never run on an NFL slate.
+- `python3 nflguard.py` should read **TOO EARLY** until Week 1 settles. That
+  is the correct output, not a failure.
+
+### 3e. The stopping rule is already armed
+
+No action — recording it so the NFL section is complete. `MARKET_TIER` in
+`engine/quality.py` is entirely NFL markets and `TIER_MIN_EDGE`/`TIER_SHRINK`
+are shared, so NFL prices through the identical gate that MLB's +12-point
+over-claim inverted. `nflguard.py` watches cumulative calibration z at
+boundary 2.5, looks after each date once 25 bets settle, first crossing wins.
+Against a real 12-point gap at 15 bets/week it catches 96% of seasons, median
+105 bets, week 7. Against an 8-point gap, 64%. Against 5 points, 30% — and 5
+points already inverts the window. **Silence means not catastrophically
+dishonest. It does not mean honest.**
+
+`watch.py` runs it nightly for NFL and CFB, so a crossing reaches you as a
+notification rather than something you have to remember to check.
+
+---
+
+## 4. Website visuals
+
+The design queue is empty — all four items shipped, each with a before/after
+number in its commit. What's left is one decision and one look.
+
+### 4a. The one decision: split `--text-mute` (#82)
+
+`--text-mute` measures APCA **Lc 15** on every dark ground — the point of
+invisibility — and it is used **108 times**, on things people need to read:
+`.section-title`, `.tile .k` (the label on every metric tile), `.matchup
+.away`, `.pick .book`, `.game-sub.starters`.
+
+Be exact about the standard: this is *not* the "WCAG flatters dark pairs"
+case from the manual. It measures 2.57:1 in WCAG terms, which fails AA for
+large text (3.0) as well as normal (4.5). Both algorithms agree it is too
+faint.
+
+It cannot simply be made lighter. The tiers by OKLCH lightness:
+
+```
+--text       L 0.919    Lc 90
+--text-dim   L 0.708    Lc 51   (already under its own 60 target)
+--text-mute  L 0.441    Lc 15
+```
+
+Reaching Lc 60 needs `--text-mute` at L 0.761, which is **brighter than
+`--text-dim`**. The hierarchy inverts. What each target costs:
+
+```
+Lc 30 (decorative)   L 0.566   #7B766D
+Lc 45 (large/bold)   L 0.670   #9A958C
+Lc 60 (secondary)    L 0.761   #B6B1A8   <- passes --text-dim
+```
+
+The real fault is one token doing two jobs — decorative furniture, and
+readable secondary content. The repair is to split it and decide which of the
+108 sites go in which tier. **A suggested shape, not a decision:**
+`--text-mute` stays quiet at ~L 0.57 (Lc 30), a new `--text-quiet` at ~L 0.67
+(Lc 45) takes the readable labels, and `--text-dim` probably wants to come up
+too.
+
+Also under target: `--bad` at Lc 36, below the 45 large/bold bar. Negative-EV
+and error text is set in it.
+
+```
+python3 contrast.py --wcag     # the whole table, writes nothing
+```
+
+`tests/test_contrast.py` is a ratchet, not a standard: it pins today's numbers
+and fails if any pair gets fainter. So the decision stays open instead of
+quietly getting worse while nobody looks.
+
+### 4b. The one look: seven changes you have not seen on a real screen
+
+All shipped, all test-pinned, none eyeballed by you. Run `python3 launch.py`
+and look at a board page and the Record page at both phone and desktop width:
+
+- `afa618b` — real minus signs (U+2212) on every number, chosen by measured
+  font metrics. Check dates still read `2026-08-07` with hyphens; that
+  regression happened once and the guard is a preceding-character rule.
+- `8795028` — the dark neutrals moved onto hue 84, the same hue as the rest of
+  the palette. Backgrounds should read very slightly warm rather than blue.
+- `4c20069` — nav indicator and confidence bars now animate on `transform`
+  instead of `width`/`left`. Should feel identical but smoother; watch the
+  nav underline as you switch tabs.
+- `9205827` — five box-shadow transitions removed (the shadows themselves were
+  already gone, so these were animating nothing).
+- `5dc3c82` — apostrophes curled in copy, and only in copy.
+- `55640ae` — one span on the Edge Board was painting a green the palette does
+  not own.
+- `d1f0cc5` — the contrast measurement itself; nothing visual changed.
+
+If any of it looks wrong, the number that justified it is in the commit
+message, so we can argue with the measurement rather than with taste.
+
+---
+
+## 5. Infrastructure — two things that only need a terminal
+
+### 5a. Install the nightly job
+
+```
+bash tools/install-nightly.sh --now      # run once, read the log
+tail -40 logs/nightly-$(date +%F).log
+bash tools/install-nightly.sh            # then schedule for 06:00
+```
+
+Runs `launch.py` then `watch.py`. **`watch.py` prints nothing on a quiet
+night — that silence is the design**, not a broken install. The log is how you
+tell the difference.
+
+### 5b. Approve `update_trigger` (#79)
+
+The two Routines have a silent-push-failure hole: a run can do its work and
+fail to push without saying so. The prompt fix is written up in
+`docs/ROUTINES.md` under "Amendment after run #1".
+
+It needs approving from the **Claude Code desktop app or CLI on the Mac** —
+web and mobile have nowhere to show the permission prompt. Or paste both
+prompts into the claude.ai Routines UI by hand, which needs no approval.
+
+---
+
+## 6. Diagnostics sweep — five minutes, all read-only
+
+```
+python3 barcheck.py     # why a higher edge bar cannot fix the over-claim
+python3 movecheck.py    # expect NOTHING TO MEASURE YET — correct
+python3 nflguard.py     # expect TOO EARLY — correct
+python3 watch.py --all
+python3 gapcheck.py     # expect "cannot be answered yet"
+```
+
+None of these write anything. Three of them are supposed to decline to answer
+right now, and knowing which three is the point of running them.
+
+---
+
+## 7. Low priority — the Odds API key (#76)
+
+Not a blocker, and I previously wrote it up as though it were. It is a quota
+credential, not a payment method: the worst case is someone spending credits,
+and if the leaked one is your exhausted key the worst case is nothing.
+
+Verified: `git grep` and `git log --all -S` both return zero — the key never
+reached the repo or its history. `secrets.local` and its variants are
+gitignored at `.gitignore:29-31`.
+
+Open `secrets.local` and check whether `5dc51e48…` is the dead key or the live
+one. Dead → do nothing, just don't top that one up. Live → regenerate at your
+leisure. Your two-key setup is already the design: `oddsapi.py:284-305` reads
+a ring (`ODDS_API_KEY`, `ODDS_API_KEY_2..n`, or `ODDS_API_KEYS` comma-
+separated), `get_api_key()` returns the first with credits left, and line 427
+swaps to the next key and retries the same call when one comes back exhausted.
+Keep both in there, dead one included — the ring skips it.
