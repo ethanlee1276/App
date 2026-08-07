@@ -94,29 +94,89 @@ def test_the_header_comment_still_describes_what_ships():
 
 
 # --- the comment that ate a rule --------------------------------------------
+def _delimiter_faults(css):
+    """Walk one block of CSS and report where its comments stop matching.
+
+    Returns (stray '*/' line numbers, is-a-comment-left-open), both counted
+    from the first line of the block."""
+    depth = i = 0
+    line = 1
+    stray = []
+    while i < len(css):
+        if css.startswith("/*", i) and not depth:
+            depth, i = 1, i + 2
+            continue
+        if css.startswith("*/", i):
+            if not depth:
+                stray.append(line)
+            depth, i = 0, i + 2
+            continue
+        if css[i] == "\n":
+            line += 1
+        i += 1
+    return stray, bool(depth)
+
+
+def _css_everywhere():
+    """Every block a CSS comment can be opened in, not just the stylesheet.
+
+    This is the same widening `_font_refs_everywhere` needed, for the same
+    reason and against the same page: the balance check below read
+    styles.css alone, which was true until pages started carrying their own
+    <style> blocks. preview-nightform.html now holds twenty comments in
+    nineteen kilobytes of CSS that nothing was counting. A comment that
+    reopens there eats the rule under it exactly as it would in the
+    stylesheet, and an inline block gets less proofreading, not more.
+
+    Line numbers are offset back to the containing file so a failure names
+    a line you can actually open."""
+    blocks = [("web/css/styles.css", CSS, 0)]
+    for base, _dirs, files in os.walk(os.path.join(ROOT, "web")):
+        for name in sorted(files):
+            if not name.endswith(".html"):
+                continue
+            path = os.path.join(base, name)
+            with open(path, encoding="utf-8") as fh:
+                txt = fh.read()
+            rel = os.path.relpath(path, ROOT)
+            for m in re.finditer(r"<style[^>]*>(.*?)</style>", txt, re.S):
+                blocks.append((rel, m.group(1), txt[:m.start(1)].count("\n")))
+    return blocks
+
+
 def test_comments_are_balanced():
     """Twice in one sitting I appended a paragraph to an existing comment
     and left the original `*/` in the middle of it. The tail then parses as
     a SELECTOR, swallowing the rule underneath — and the page still looked
     right on a phone, because the fallback happened to be one column. A
     stylesheet cannot tell you it lost a rule, so count the delimiters."""
-    depth = i = 0
-    line = 1
-    stray = []
-    while i < len(CSS):
-        if CSS.startswith("/*", i) and not depth:
-            depth, i = 1, i + 2
-            continue
-        if CSS.startswith("*/", i):
-            if not depth:
-                stray.append(line)
-            depth, i = 0, i + 2
-            continue
-        if CSS[i] == "\n":
-            line += 1
-        i += 1
-    assert not stray, f"stray '*/' (comment reopened?) at lines {stray}"
-    assert not depth, "a comment is never closed; everything after it is dead"
+    for label, css, line0 in _css_everywhere():
+        stray, unclosed = _delimiter_faults(css)
+        assert not stray, (
+            f"{label}: stray '*/' (comment reopened?) at lines "
+            f"{[n + line0 for n in stray]}")
+        assert not unclosed, \
+            f"{label}: a comment is never closed; everything after it is dead"
+
+
+def test_the_balance_check_reads_the_inline_style_blocks_too():
+    """The check above is only as good as the list of places it looks, and
+    that list is a walk that silently returns whatever it finds. If a page
+    stops matching the <style> pattern — or the walk quietly returns just
+    the stylesheet again — the balance test still passes, green and blind.
+    Pin the pages that carry their own CSS."""
+    found = {label for label, _css, _line0 in _css_everywhere()}
+    for page in ("web/og-card.html", "web/preview-nightform.html"):
+        assert page in found, f"{page} carries a <style> block nothing checks"
+
+
+def test_a_reopened_comment_is_actually_caught():
+    """The scanner is the thing being trusted, so make it fail on demand —
+    otherwise a refactor that quietly stops counting reads as all-clear."""
+    stray, unclosed = _delimiter_faults("a{color:red}\n/* note */ and more */\n")
+    assert stray == [2] and not unclosed
+    assert _delimiter_faults("/* never closed\n.rule{x:y}\n")[1]
+    assert _delimiter_faults("/* fine */\n.rule{x:y}\n") == ([], False)
 
 
 # --- grid blowout -----------------------------------------------------------
