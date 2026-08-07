@@ -16,6 +16,7 @@ screen and the header stop looking like the same brand.
 
 from __future__ import annotations
 
+import re
 import math
 import struct
 import sys
@@ -35,11 +36,63 @@ HALF = 1.7                       # half of the 3.4-unit stroke
 NUDGE = (0.0, 0.0)
 CORNER = 0.0                     # square: radius 0 everywhere, spec §3.3
 
+def _oklch_to_rgb(L: float, C: float, H: float) -> tuple:
+    """OKLCH to 8-bit sRGB. Needed because the neutral ramp is written in
+    oklch() — see the block comment on --bg in styles.css — and an icon
+    generator that only understands hex would silently keep whatever the
+    palette used to be."""
+    h = math.radians(H)
+    a, b = C * math.cos(h), C * math.sin(h)
+    l_, m_, s_ = (L + 0.3963377774 * a + 0.2158037573 * b,
+                  L - 0.1055613458 * a - 0.0638541728 * b,
+                  L - 0.0894841775 * a - 1.2914855480 * b)
+    l, m, s = l_ ** 3, m_ ** 3, s_ ** 3
+    lin = (4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+           -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+           -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s)
+    out = []
+    for c in lin:
+        c = max(0.0, min(1.0, c))
+        c = 12.92 * c if c <= 0.0031308 else 1.055 * c ** (1 / 2.4) - 0.055
+        out.append(max(0, min(255, round(c * 255))))
+    return tuple(out)
+
+
+def token(name: str, css: str | None = None) -> tuple:
+    """Resolve a custom property from the stylesheet's FIRST :root block.
+
+    First, because that is the dark theme — the light one is a later
+    override and matching it here would paint the icon for the wrong
+    ground. Reads hex or oklch(), so the ramp can be written in whichever
+    notation suits it.
+
+    This is derived rather than copied on purpose. The favicon carried a
+    hardcoded #101115 through a palette change and went off-brand without
+    anything noticing until the test that compares them ran.
+    """
+    if css is None:
+        css = (Path(__file__).resolve().parent / "web" / "css"
+               / "styles.css").read_text(encoding="utf-8")
+    root = css[css.index(":root"):]
+    root = root[:root.index("}")]
+    m = re.search(rf"--{re.escape(name)}:\s*([^;]+);", root)
+    if not m:
+        raise KeyError(name)
+    val = m.group(1).strip()
+    if val.startswith("#"):
+        return tuple(int(val[i:i + 2], 16) for i in (1, 3, 5))
+    ok = re.match(r"oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)", val)
+    if ok:
+        return _oklch_to_rgb(*(float(x) for x in ok.groups()))
+    raise ValueError(f"--{name}: cannot read {val!r}")
+
+
 # Flat, not a gradient: these are the site's own --panel-2 and --brand, so
-# the home-screen tile looks like the chrome it opens into.
-TOP = (0x10, 0x11, 0x15)
-BOT = (0x10, 0x11, 0x15)
-INK = (0xFF, 0xB0, 0x00)
+# the home-screen tile looks like the chrome it opens into. Read from the
+# stylesheet rather than transcribed, so the tile cannot drift off the
+# palette the way it already did once.
+TOP = BOT = token("panel-2")
+INK = token("brand")
 
 SS = 4                           # supersampling factor per axis
 

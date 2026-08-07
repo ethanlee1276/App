@@ -140,8 +140,11 @@ def test_the_theme_colour_matches_the_page():
     """It said #0f1420 — the pre-Night-Form panel — so the phone painted
     its chrome a different near-black to the page beneath it."""
     head = _head(_read("web", "index.html"))
-    css = _read("web", "css", "styles.css")
-    bg = re.search(r"--bg:\s*(#[0-9A-Fa-f]{6})", css).group(1)
+    # Same trap as test_brand: a bare hex regex over the whole stylesheet
+    # matches whichever theme happens to be written in hex, which stopped
+    # being the dark one when the ramp moved to oklch().
+    import make_icon
+    bg = "#%02X%02X%02X" % make_icon.token("bg")
     assert (_meta(head, "name", "theme-color") or "").lower() == bg.lower(), (
         f"theme-color should be {bg}, the page's own background"
     )

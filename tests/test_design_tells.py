@@ -559,6 +559,91 @@ def test_the_picks_come_before_the_scenery():
     assert view.index('id="stats"') < parks
 
 
+
+# --- the neutral ramp sits on one hue ----------------------------------------
+def _oklch_of(rgb):
+    """8-bit sRGB -> (L, C, H) in OKLCH."""
+    import math
+    r, g, b = (c / 255 for c in rgb)
+    f = lambda c: c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = f(r), f(g), f(b)
+    l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
+    m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
+    s_ = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b
+    l_, m_, s3 = l ** (1/3), m ** (1/3), s_ ** (1/3)
+    L = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s3
+    a = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s3
+    bb = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s3
+    return L, math.hypot(a, bb), math.degrees(math.atan2(bb, a)) % 360
+
+
+def test_the_dark_neutrals_do_not_flip_hue_halfway_up():
+    """Measured before the ramp was touched, and it was genuinely broken:
+
+        bg / bg-2 / panel-2 / panel-3   hue 263-276   cool blue
+        border-soft -> border -> text   hue  80- 90   warm amber
+
+    Four dark surfaces were cool while every border and text token above
+    them was warm, so the ground and the ink disagreed about temperature.
+    It was an oversight rather than a decision — the LIGHT theme is warm
+    end to end across all nine steps, which is why only the dark surfaces
+    ever went cool."""
+    import make_icon
+    hues = []
+    for name in ("bg", "bg-2", "panel-2", "panel-3", "border-soft",
+                 "border", "text-mute", "text"):
+        L, C, H = _oklch_of(make_icon.token(name))
+        hues.append((name, H))
+    warm = [h for _, h in hues]
+    assert max(warm) - min(warm) < 40, (
+        f"the neutral ramp spans {max(warm) - min(warm):.0f} degrees of hue: "
+        f"{[(n, round(h)) for n, h in hues]}")
+    for name, h in hues:
+        assert 60 <= h <= 110, f"--{name} sits at hue {h:.0f}, outside the warm trace"
+
+
+def test_the_light_ramp_is_warm_too():
+    """The control that showed the dark split was a mistake rather than a
+    choice. If this ever fails, the two themes have diverged and the fix
+    belongs wherever they disagree."""
+    import re as _re
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    # the light block is the LAST :root-scoped override in the sheet
+    tail = css[css.rindex("--bg:"):]
+    m = _re.search(r"--bg:\s*(#[0-9A-Fa-f]{6})", tail)
+    assert m, "the light theme's --bg should still be a hex"
+    rgb = tuple(int(m.group(1)[i:i+2], 16) for i in (1, 3, 5))
+    _, _, H = _oklch_of(rgb)
+    assert 60 <= H <= 110, f"the light ground drifted to hue {H:.0f}"
+
+
+def test_the_icon_reads_the_palette_instead_of_copying_it():
+    """web/favicon.svg carried a hardcoded #101115 straight through a
+    palette change and went off-brand, and nothing noticed until the test
+    that compares them ran. The generator now resolves the token."""
+    import inspect
+    import make_icon
+    src = inspect.getsource(make_icon)
+    assert "TOP = BOT = token(" in src and "INK = token(" in src
+    svg = open(os.path.join(ROOT, "web", "favicon.svg"), encoding="utf-8").read()
+    assert ("#%02X%02X%02X" % make_icon.token("panel-2")).lower() in svg.lower()
+
+
+def test_the_token_resolver_reads_both_notations():
+    import make_icon
+    css = ":root { --a: #13110D; --b: oklch(0.178 0.008 84); }"
+    assert make_icon.token("a", css) == (0x13, 0x11, 0x0D)
+    assert make_icon.token("b", css) == (0x13, 0x11, 0x0D)
+
+
+def test_the_resolver_takes_the_first_root_block_not_the_last():
+    """The first is the dark theme; the light one is a later override.
+    Reading the wrong one paints the icon for the wrong ground."""
+    import make_icon
+    css = ":root { --bg: #0A0907; }\n:root[data-theme=light] { --bg: #F2EFE6; }"
+    assert make_icon.token("bg", css) == (0x0A, 0x09, 0x07)
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

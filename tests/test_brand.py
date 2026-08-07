@@ -159,9 +159,14 @@ def test_the_mark_matches_the_design_system():
     # else. A gradient-filled tile reads as a sticker on a flat interface.
     svg = _read("web", "favicon.svg")
     assert "linearGradient" not in svg
-    css = _read("web", "css", "styles.css")
-    panel_2 = re.search(r"--panel-2:\s*(#[0-9a-fA-F]{6})", css).group(1)
-    brand = re.search(r"--brand:\s*(#[0-9a-fA-F]{6})", css).group(1)
+    # Resolve the TOKEN rather than regexing a hex out of the sheet. The
+    # old lookup matched the first `--panel-2: #......` anywhere in the
+    # file, so the moment the dark ramp moved to oklch() it silently
+    # started reading the LIGHT theme's value and comparing the icon
+    # against the wrong ground. make_icon.token reads the first :root
+    # block and understands both notations.
+    panel_2 = "#%02X%02X%02X" % make_icon.token("panel-2")
+    brand = "#%02X%02X%02X" % make_icon.token("brand")
     assert panel_2.lower() in svg.lower(), "tile drifted off --panel-2"
     assert brand.lower() in svg.lower(), "stroke drifted off --brand"
     assert make_icon.INK == tuple(int(brand[i:i + 2], 16) for i in (1, 3, 5))
