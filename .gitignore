@@ -41,6 +41,19 @@ data/history.db
 *.db
 data/ledger.db
 data/backups/
+# …and the backups a migration leaves BESIDE the database. `*.db` does not
+# cover them: rescale.py writes `ledger.db.pre-rescale-<date>`, which ends
+# in a date, so it showed up as a perfectly ordinary untracked file. One
+# `git add -A` and the whole bet journal is public. Found on the real
+# machine 2026-08-07 with such a file sitting untracked in data/.
+data/*.pre-rescale-*
+data/*.bak
+data/*.backup
+# Runtime state written next to the databases — a spend counter and a
+# failure log, both machine-local and both meaningless in anyone else's
+# clone. Same reasoning as the UFC dossiers below.
+data/llm_spend.json
+data/sim_gate_failures.json
 # Both forms on purpose. A trailing slash matches DIRECTORIES ONLY, and a
 # symlink is not a directory to git — so `node_modules/` alone let a symlink
 # named node_modules be committed, pointing at a scratchpad path that exists
