@@ -8,6 +8,34 @@ with `MCP error -32003: MCP tool call requires approval`.
 This file exists so the work is not lost to a context window again. When
 the permission clears, these get created verbatim.
 
+**Re-attempted 2026-08-07 and still refused** — a fourth session, and this
+time even the read-only `list_triggers` came back `-32003`. That rules out
+the tool being merely unlucky: nothing in this MCP server is reachable from
+here, so the approval is on the account rather than on any one call.
+
+### Clearing it
+
+The refusal is silent from a web or mobile session — those have nowhere to
+surface a permission prompt, so the call is just denied. Try from a surface
+that CAN ask:
+
+1. Open the repo in the **Claude Code desktop app** or the **CLI** on the
+   Mac (`claude` in `~/App`).
+2. Ask it to create the Routine. The approval prompt appears there.
+3. Approve, then confirm with `list_triggers` — it should return an empty
+   list rather than `-32003`.
+
+If it still refuses on the desktop, the block is an account or workspace
+policy rather than a per-session prompt, and it needs turning on in
+claude.ai's settings rather than from inside a session.
+
+### If it never clears
+
+Nothing here is lost. `tools/install-nightly.sh` schedules the same kind of
+work on the Mac through launchd, and that path needs no approval from
+anyone. The one thing it cannot do is push a fix to GitHub unattended —
+which is precisely, and only, what a Routine adds.
+
 ## Why they are worth having at all
 
 A Routine can do one thing GitHub Actions cannot: **fix what it finds and
@@ -208,3 +236,40 @@ is a thin wrapper on purpose.
 
 Run it once when you sit down, or leave `--watch` going through the
 afternoon. Either way the board you read is the board the cards support.
+
+
+---
+
+## The Mac-side runner, which is not a Routine
+
+`tools/install-nightly.sh` installs a launchd agent that runs
+`tools/nightly.sh` at 06:00 local. That script runs `launch.py` (ingest,
+settle, rebuild, `doctor.py` against **real** data) and then `watch.py`.
+
+It is not a substitute for the Routines and it is not trying to be. The
+division is about where the data lives:
+
+| | GitHub Actions | Routine | launchd on the Mac |
+|---|---|---|---|
+| sees the code | yes | yes | yes |
+| sees `ledger.db` | no | no | **yes** |
+| can reach the sports APIs | no | no | **yes** |
+| can fix and push | no | **yes** | no |
+
+So the Routines maintain the code, and the Mac-side runner is the only one
+of the three that can say anything about the model.
+
+launchd rather than cron for one reason that matters on a laptop: a
+`StartCalendarInterval` job runs when the machine **wakes** if it was
+asleep at the scheduled hour. A cron job shut out at 6am is simply skipped,
+and skipped ingest is the failure this is meant to prevent — it has already
+happened once, on 7-27/7-28/7-30.
+
+    bash tools/install-nightly.sh              # 06:00 local
+    bash tools/install-nightly.sh --at 04:30   # some other hour
+    bash tools/install-nightly.sh --now        # run it once, now
+    bash tools/install-nightly.sh --remove
+
+`watch.py` prints nothing on a quiet night and sends no notification. That
+silence is the design: a nightly ping that says "all fine" every day gets
+swiped away, and then so does the one that mattered.

@@ -61,3 +61,7 @@ package-lock.json
 data/ufc_cards.json
 data/ufc_dossiers.json
 data/ufc_gyms.json
+
+# Nightly runner: local logs and its overlap lock.
+logs/
+.nightly.lock
