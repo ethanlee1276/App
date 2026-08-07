@@ -186,3 +186,69 @@ Two cases that shaped it:
 Where the data genuinely is not there the column is **omitted**, not filled
 with em dashes — a blank column looks like the data is missing rather than
 not applicable.
+
+## 6. `--text-mute` was one token doing two jobs. Now there are four.
+
+Closed 2026-08-07. This sat open as an explicit "a person has to decide
+this" for good reason — it could not be fixed by changing a colour.
+
+**The fault.** `--text-mute` measured **Lc 15** on every dark ground, which
+APCA calls the point of invisibility, across **223 uses** — 108 in the
+stylesheet, 114 in the inline styles `app.js` writes, one in the social
+card. Not decoration either: `.section-title`, `.tile .k` (the label on
+every metric tile), `.matchup .away`, `.pick .book`, `.game-sub.starters`.
+`--text-dim` was also under its own target, at Lc 51 against 60.
+
+Being exact about the standard, because it is easy to borrow the wrong
+argument here: this was **not** a case of WCAG flattering a dark pair. It
+measured 2.57:1, which fails AA for large text (3.0) as well as normal
+(4.5). Both algorithms agreed.
+
+**Why it could not be repaired in place.** Lc 60 needs L 0.761 and
+`--text-dim` was L 0.708. Lightening the quiet tier to its target would
+have made it brighter than the tier above it and inverted the hierarchy.
+
+**The repair is a fourth step, not a brighter third one.**
+
+| token | Lc | role | was |
+|---|---|---|---|
+| `--text` | 90 | body text, preferred | unchanged |
+| `--text-dim` | 60 | larger or secondary text | 51 |
+| `--text-mute` | 45 | large or bold UI | 15 |
+| `--text-faint` | 30 | disabled or decorative | new |
+
+APCA's own reference targets, one tier apart, each solved against
+`--panel-3` — the lightest panel, where contrast is lowest and therefore
+binds — plus ~0.8 Lc of headroom. The headroom is not fussiness: solved to
+exactly 45.0, the mute tier measured 44.7 on `--panel-3` and the audit
+filed it under "decorative".
+
+**The split defaults to readable, and that direction was chosen.** All 223
+sites stayed on `--text-mute` and rose to Lc 45. Only five genuinely
+non-text marks were demoted to `--text-faint`: the card's 4px grade
+stripe, the parlay-miss stripe, two separator glyphs, and the empty-state
+icon. Sorting 223 sites by hand in the other direction — quiet by default,
+promote individually — would have left anything missed invisible. This way
+anything missed is merely too legible.
+
+**The disclosure chevron stayed on `--text-mute` deliberately.** It is a
+control affordance, not decoration, and Lc 45 ("large or bold UI") is
+exactly its target. The thing that tells you a section opens should not be
+fainter than the section.
+
+**Paper did not get the same ladder.** Measured, the light theme's
+`--text-mute` is already Lc 52-64 and its `--text-dim` Lc 76-87, both above
+target. Copying the dark side's numbers across would have made the light
+theme worse, so only the fourth tier is new there.
+
+**Still open, and deliberately not folded in:** `--bad` measures Lc 36,
+under the 45 large/bold bar. Negative-EV and error text is set in it. That
+is a colour with a job rather than a rung on a hierarchy, so moving it is a
+palette decision and belongs in its own pass. `--text` also sits at Lc 89.9
+on `--panel-2`, a rounding hair under APCA's *preferred* body bar — the
+minimum is 75 — and was left alone because changing the colour every line
+of prose is set in is a bigger change than a hierarchy repair.
+
+`tests/test_contrast.py` pins the ladder as an **order**, not as four
+floors. Four independent floor checks would stay green through an
+inversion, which is the exact failure this started as.

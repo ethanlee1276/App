@@ -24,9 +24,9 @@ The reference targets, from APCA's own guidance:
     |Lc| 30   disabled or decorative
     |Lc| 15   the point of invisibility
 
-WHAT IT FOUND, AND WHAT IT DID NOT
-----------------------------------
-Run against the dark theme:
+WHAT IT FOUND, AND WHAT WAS DONE ABOUT IT
+------------------------------------------
+Measured 2026-08-07, the dark theme read:
 
     --text        Lc  90 on every ground     exactly the body target
     --brand       Lc  69                     comfortable for secondary
@@ -35,30 +35,51 @@ Run against the dark theme:
     --bad         Lc  36                     under the 45 large/bold target
     --text-mute   Lc  15                     the point of invisibility
 
-`--text-mute` is used 108 times, and not on decoration: .section-title,
-.tile .k (the label on every metric), .matchup .away, .pick .book,
-.game-sub.starters. Those are things a reader needs to resolve.
+`--text-mute` carried **223 uses** — 108 in the stylesheet, 114 in the
+inline styles app.js writes, one in the social card — and not on
+decoration: .section-title, .tile .k (the label on every metric),
+.matchup .away, .pick .book, .game-sub.starters. Things a reader needs to
+resolve.
 
 NOT the WCAG-versus-APCA subtlety, though, and it is worth being exact:
---text-mute measures 2.57:1 in WCAG terms, which fails AA for both normal
-(4.5) and large (3.0) text. Both algorithms agree it is too faint. The
-manual's point about WCAG flattering dark pairs is real, but this token is
-not an example of it.
+--text-mute measured 2.57:1 in WCAG terms, which fails AA for both normal
+(4.5) and large (3.0) text. Both algorithms agreed it was too faint. The
+manual's point about WCAG flattering dark pairs is real, but this token
+was not an example of it.
 
-WHY THIS TOOL DOES NOT ALSO FIX IT
------------------------------------
-Reaching Lc 60 would need `--text-mute` at L 0.761. `--text-dim` sits at
-L 0.708. The quiet tier would end up BRIGHTER than the tier above it and
-the hierarchy would invert.
+It could not be repaired by lightening one token, and that is the whole
+reason it stayed open as long as it did: Lc 60 needs L 0.761, and
+`--text-dim` was L 0.708, so the quiet tier would have ended up BRIGHTER
+than the tier above it. The fault was one token doing two jobs —
+decorative furniture, and readable secondary content — so the repair is a
+fourth step rather than a brighter third one:
 
-So the fault is not the colour, it is that one token is doing two jobs:
-genuinely decorative furniture, and readable secondary content. Splitting
-those is a design decision about hierarchy, with 108 call sites behind it,
-and it belongs to a person rather than to a script that can only see
-numbers.
+    --text        Lc 90    body text, preferred
+    --text-dim    Lc 60    larger or secondary text     (was 51)
+    --text-mute   Lc 45    large or bold UI             (was 15)
+    --text-faint  Lc 30    disabled or decorative       (new)
 
-What this ships instead is the measurement, so the numbers are visible and
-a test can keep them from drifting further down.
+APCA's own reference targets, one tier apart, each solved against
+`--panel-3` because the lightest panel is where contrast is lowest and
+therefore binds.
+
+**The split defaults to readable.** Everything stayed on `--text-mute`
+and rose to Lc 45; only five genuinely non-text marks moved down to
+`--text-faint` — the card's 4px grade stripe, the parlay miss stripe, two
+separator glyphs, and the empty-state icon. Misfiling something that way
+leaves it too legible rather than invisible.
+
+The disclosure chevron deliberately stayed on `--text-mute`: it is a
+control affordance, and Lc 45 (large or bold UI) is exactly its target.
+
+The light theme was NOT given the same ladder. Measured, its `--text-mute`
+is already Lc 52-64 and its `--text-dim` Lc 76-87, both above target, so
+copying the dark side's numbers across would have made paper worse. Only
+the fourth tier is new there.
+
+Still under target and left alone: `--bad` at Lc 36, below the 45
+large/bold bar. That one is a colour with a job — negative EV and errors
+read red — and moving it is a palette decision, not a hierarchy one.
 """
 
 from __future__ import annotations
@@ -85,7 +106,8 @@ TARGETS = ((90, "body text, preferred"), (75, "body text, minimum"),
 #: Which inks are checked against which grounds. Every real pairing on the
 #: dark theme; anything not listed is not text on a surface.
 GROUNDS = ("bg", "panel", "panel-2", "panel-3")
-INKS = ("text", "text-dim", "text-mute", "brand", "good", "bad", "warn")
+INKS = ("text", "text-dim", "text-mute", "text-faint",
+        "brand", "good", "bad", "warn")
 
 
 def luminance(rgb) -> float:
@@ -163,17 +185,27 @@ def report(show_wcag: bool = False) -> int:
         print(line + f"   {level(r['lc'])}")
     print()
 
-    weak = [r for r in rows if abs(r["lc"]) < 45]
+    # --text-faint is SUPPOSED to sit under the large/bold bar; that is its
+    # whole job. Listing it as a problem every run is how a report teaches
+    # someone to stop reading it.
+    weak = [r for r in rows if abs(r["lc"]) < 45 and r["ink"] != "text-faint"]
     if weak:
         inks = sorted({r["ink"] for r in weak})
         print(f"  Below the large/bold UI bar: {', '.join(inks)}")
         print()
-        print("  See this module's docstring before changing any of them —")
-        print("  --text-mute cannot reach the secondary-text target without")
-        print("  becoming brighter than --text-dim, so the repair is a")
-        print("  hierarchy decision rather than a colour one.")
+        print("  --bad is the one left, and it is a colour with a job:")
+        print("  negative EV and errors read red. Moving it is a palette")
+        print("  decision rather than a hierarchy one, so it is not")
+        print("  something this tool should quietly pick for you.")
     else:
-        print("  Every pair clears the large/bold UI bar.")
+        print("  Every text pair clears the large/bold UI bar.")
+    print()
+    faint = [r for r in rows if r["ink"] == "text-faint"]
+    if faint:
+        lo = min(abs(r["lc"]) for r in faint)
+        print(f"  --text-faint sits at Lc {lo:.0f} deliberately — decorative")
+        print("  marks only (the grade stripes, two separator glyphs, the")
+        print("  empty-state icon). Text on it would be a misfiling.")
     print()
     return 0
 

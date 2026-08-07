@@ -750,6 +750,20 @@ So a detected reset is reported on the card and the sample is kept.
 rediscovered; flipping it is justified at roughly 60+ movers in a single
 market, which is three or four seasons of accumulation.
 
+**But a mover is not staked.** `STAKE_ON_RESET` is False, so he stays on
+the board and cannot become a recommended bet while last season is the
+only sample there is. That is not a claim the fit refutes — it is the
+recognition that "keep him on the board" and "put money on him" are
+different questions with different burdens. At n = 9 to 42 per market a
+20% degradation would be invisible, so the measurement licenses the first
+(no evidence he is bad) and not the second (no evidence he is fine).
+
+The asymmetry decides it: a bet not taken costs nothing; a bet taken on a
+baseline describing a job the player no longer holds costs money. Weeks
+1-3 are also the stretch where the model is least checkable — `nflguard`
+needs 25 settled bets before it reports anything — so caution is at its
+cheapest exactly there. The card says the pick was held back and why.
+
 Detectable across an offseason: **team change** (roster against the prior
 season's last team, clean and complete) and **head-coach change** (the
 schedule carries a coach on every row of both seasons — the same

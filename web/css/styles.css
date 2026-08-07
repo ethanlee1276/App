@@ -105,9 +105,44 @@
   --border: #3A352C;
   --border-soft: #23201A;
 
+  /* The quiet ladder, measured rather than picked. APCA on the darkest
+     ground, solved against --panel-3 because the lightest panel is where
+     contrast is lowest and therefore binds:
+
+       --text        Lc 90    body text, preferred
+       --text-dim    Lc 60    larger or secondary text
+       --text-mute   Lc 45    large or bold UI
+       --text-faint  Lc 30    disabled or decorative
+
+     Those are APCA's own reference targets, one tier apart, with nothing
+     between them chosen by eye.
+
+     WHAT THIS REPLACED. --text-mute was #57524A — Lc 15, which APCA calls
+     the point of invisibility — across 223 uses, and not on decoration:
+     .section-title, .tile .k (the label on every metric tile), .matchup
+     .away, .pick .book, .game-sub.starters. --text-dim sat at Lc 51, under
+     its own 60 target.
+
+     It could not be repaired by lightening one token. Lc 60 needs
+     L 0.761 and --text-dim was L 0.708, so the quiet tier would have
+     ended up brighter than the tier above it. One token was doing two
+     jobs — decorative furniture, and readable secondary content — and the
+     repair is the fourth step, not a brighter third one.
+
+     Each value is solved to its target plus ~0.8 Lc of headroom, so that
+     rounding never prints a tier as sitting below its own bar: at exactly
+     45.0 the mute tier measured 44.7 on --panel-3 and the audit filed it
+     under 'decorative'.
+
+     The split defaults to READABLE. Everything stayed on --text-mute and
+     rose to Lc 45; only genuinely non-text marks were moved down to
+     --text-faint (the card's 4px grade stripe, two separator glyphs, the
+     empty-state icon). Misfiling something that way leaves it too legible
+     rather than invisible, which is the failure worth having. */
   --text: #E8E4D9;
-  --text-dim: #A8A090;
-  --text-mute: #57524A;
+  --text-dim: #BAB3A6;
+  --text-mute: #9E988B;
+  --text-faint: #7F786C;
 
   /* The accent is PARCHMENT, not periwinkle. Every colour left in this
      palette after green/amber/red are spoken for is either violet — the
@@ -534,7 +569,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 }
 .card:hover { border-color: var(--border); box-shadow: none; }
 .card.faded { opacity: .6; }
-.card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--grade-color, var(--text-mute)); }
+.card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--grade-color, var(--text-faint)); }
 
 /* space-between distributes LEFTOVER space; it does not make anything
    shrink. Flex items default to min-width:auto, so a long market question
@@ -585,7 +620,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .empty-slate { text-align: left; padding: 26px 0 30px; margin: 6px 0 4px;
   border-top: 1px solid var(--border); background: none; border-radius: 0;
   grid-column: 1 / -1; }
-.empty-slate .es-icon { color: var(--text-mute); line-height: 1;
+.empty-slate .es-icon { color: var(--text-faint); line-height: 1;
   display: block; margin-bottom: 12px; }
 .empty-slate .es-icon .ic { width: 22px; height: 22px; }
 .empty-slate .es-title { font-size: var(--fs-lg); font-weight: 700;
@@ -874,7 +909,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 }
 
 .pz-ticket { padding: 18px; margin: 16px 0; --grade-color: var(--text-dim); }
-.pz-ticket.pz-miss { --grade-color: var(--text-mute); opacity: .92; }
+.pz-ticket.pz-miss { --grade-color: var(--text-faint); opacity: .92; }
 .pz-ticket .card-head { margin-bottom: 12px; }
 
 /* The legs read as an agate block: a fixed grid so the numbers line up in
@@ -892,7 +927,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   text-align: right; font-variant-numeric: tabular-nums; color: var(--text-dim);
   white-space: nowrap;
 }
-.pz-legs .pz-leg-nums i { color: var(--text-mute); font-style: normal; padding: 0 2px; }
+.pz-legs .pz-leg-nums i { color: var(--text-faint); font-style: normal; padding: 0 2px; }
 
 /* Correlation reads as a two-line block per pair, not a table. The
    mechanism sentence is the point of the section and a table column
@@ -909,7 +944,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 }
 .pz-pair-who { font-weight: 700; }
 .pz-pair-rho { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.pz-pair-rho i { color: var(--text-mute); font-style: normal; font-weight: 400; }
+.pz-pair-rho i { color: var(--text-faint); font-style: normal; font-weight: 400; }
 .pz-pair-why, .pz-kill-why {
   font-size: var(--fs-xs); color: var(--text-dim); line-height: 1.6;
   max-width: 78ch; margin-top: 3px;
@@ -1050,9 +1085,16 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   --panel-3: #E1DCCC;
   --border: #B9B1A0;
   --border-soft: #D2CBB9;
+  /* Paper never had the dark theme's fault: measured, --text-mute here is
+     already Lc 52-64 and --text-dim Lc 76-87, both above their targets.
+     So the ladder is NOT copied across — lowering --text-dim to the 60
+     the dark side needed would make this side worse. Only the fourth
+     tier is new, and it is solved the same way, against the darkest
+     ground because on paper that is where contrast is lowest. */
   --text: #14120E;
   --text-dim: #3E3A31;
   --text-mute: #7A7263;
+  --text-faint: #A7A194;
   /* On paper the inversion runs the other way: ink on the accent. */
   --brand: #B87400;
   --brand-ink: #F2EFE6;

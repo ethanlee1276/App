@@ -306,6 +306,62 @@ def test_the_card_also_says_he_changed_teams():
     assert recs[0]["carried"]["reset"]["kind"] == carry.TRADE
 
 
+def _mover_rec(recommended=True):
+    recs = [{"player": "Mover", "recommended": recommended}]
+    report = {"carried": {"Mover": {
+        "season": 2025, "games": 12, "weight": 0.857, "position": "WR",
+        "reset": (carry.TRADE, "joined DEN from MIA")}}}
+    carry.decorate(recs, report)
+    return recs[0]
+
+
+def test_a_mover_is_shown_but_not_staked():
+    """The two questions have different answers. Keeping him on the board
+    needs only 'no evidence he is bad'; staking him needs 'evidence he is
+    fine', and n=9-42 per market supplies neither."""
+    assert carry.STAKE_ON_RESET is False
+    r = _mover_rec()
+    assert r["recommended"] is False
+    assert r["carried"]["held_back"] is True
+    assert any("Not staked" in w for w in r["warnings"])
+
+
+def test_holding_a_bet_back_says_so_on_the_card():
+    """A pick that silently stops being a pick is worse than one that was
+    never there — the reader cannot tell it from a modelling result."""
+    r = _mover_rec()
+    warn = " ".join(r["warnings"])
+    assert "job he holds now" in warn
+
+
+def test_a_carried_player_who_did_not_move_can_still_be_staked():
+    """The hold is about the reset, not about the carry. If every carried
+    pick were blocked, weeks 1-3 would have a board and no bets, which is
+    the same outcome as having no board."""
+    recs = [{"player": "Stayer", "recommended": True}]
+    carry.decorate(recs, {"carried": {"Stayer": {
+        "season": 2025, "games": 16, "weight": 0.889, "position": "WR",
+        "reset": None}}})
+    assert recs[0]["recommended"] is True
+
+
+def test_the_stake_switch_actually_lets_them_through_when_flipped():
+    was = carry.STAKE_ON_RESET
+    try:
+        carry.STAKE_ON_RESET = True
+        assert _mover_rec()["recommended"] is True
+    finally:
+        carry.STAKE_ON_RESET = was
+
+
+def test_a_mover_that_was_never_recommended_is_not_relabelled():
+    """Only a bet that WOULD have been staked gets held back. Marking an
+    already-failing pick as held would overstate what the rule did."""
+    r = _mover_rec(recommended=False)
+    assert r["recommended"] is False
+    assert "held_back" not in r["carried"]
+
+
 def test_a_player_who_was_not_carried_gets_no_note():
     recs = [{"player": "Played"}]
     assert carry.decorate(recs, {"carried": {}}) == 0

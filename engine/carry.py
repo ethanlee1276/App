@@ -113,6 +113,24 @@ MIN_PRIOR_GAMES = 6
 #: the evidence that would justify flipping this.
 DISCARD_ON_RESET = False
 
+#: …but they are not STAKED either. A mover keeps his baseline and stays on
+#: the board; he just cannot become a recommended bet while that baseline is
+#: the only thing we have.
+#:
+#: This is deliberately NOT a claim that movers are worse — the fit says the
+#: opposite, or rather says it cannot tell, which is the point. n is 9 to 42
+#: per market, and a 20% degradation would be invisible at that size. So the
+#: measurement licenses keeping them on the board (there is no evidence they
+#: are bad) and does not license staking them (there is no evidence they are
+#: fine). Those are different questions and the honest answer differs.
+#:
+#: The asymmetry decides it: a bet not taken costs nothing, a bet taken on a
+#: baseline describing a job the player no longer holds costs money. Weeks
+#: 1-3 are also where the model is least checkable — nflguard needs 25
+#: settled bets before it can say anything at all — so this is the stretch
+#: where caution is cheapest.
+STAKE_ON_RESET = False
+
 #: Kinds of offseason reset, reusing reset.py's vocabulary so a reader sees
 #: one set of labels across both rules.
 TRADE = "team change"
@@ -356,5 +374,14 @@ def decorate(recommendations: list[dict], report: dict) -> int:
                 f"in the average — there is nothing else yet — so treat this "
                 f"as describing the job he had, not the one he has")
             r["carried"]["reset"] = {"kind": kind, "detail": detail}
+            if not STAKE_ON_RESET and r.get("recommended"):
+                # Shown, not staked. See STAKE_ON_RESET for why those are
+                # different answers to different questions.
+                r["recommended"] = False
+                r["carried"]["held_back"] = True
+                r["warnings"].append(
+                    "Not staked while that is the only sample there is. It "
+                    "stays on the board so the number is visible, but a bet "
+                    "wants evidence about the job he holds now")
         n += 1
     return n
