@@ -231,6 +231,19 @@ body {
 
 h1, h2, h3 { margin: 0; font-family: var(--font-display); font-weight: 400; }
 
+/* A heading that breaks "Calibration by market and" / "horizon" has a widow,
+   and a widow in display type is the loudest amateur tell on a page that is
+   otherwise set carefully. `balance` asks the browser to even the lines
+   instead, and it is capped around six lines by spec so it cannot become a
+   layout cost on something long.
+
+   `pretty` is the body-copy version: it only guards the LAST line against a
+   single stranded word, which is why it is safe to apply broadly where
+   `balance` would not be. Both degrade to normal wrapping where unsupported,
+   which is the whole reason they are worth shipping now rather than later. */
+h1, h2, h3, .tile .k, .standfirst, .dek { text-wrap: balance; }
+p, .note, .tile-sub, .caveat, .reading { text-wrap: pretty; }
+
 /* SVG text does not inherit the page's face the way HTML does, so every
    label inside the ballpark, field and court diagrams — 294 of them across
    the site — was rendering in system-ui while the rest of the page used

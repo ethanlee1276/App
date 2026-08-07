@@ -206,9 +206,38 @@ const gradeClass = (g) => ({ "A+": "strong", "A": "play", "B+": "lean",
 const gradeColor = (g) => ({ "A+": "var(--good)", "A": "var(--cyan)", "B+": "var(--warn)",
   "Strong Play": "var(--good)", "Play": "var(--cyan)", "Lean": "var(--warn)",
   "Conditional": "var(--warn)", "Pass": "var(--text-mute)" }[g] || "var(--text-mute)");
+/* U+2212 MINUS SIGN, not U+002D HYPHEN-MINUS. Measured in this site's own
+   subset files, because the difference is not a matter of taste:
+
+     Archivo Narrow   + advance 479   - advance 273   − advance 479
+     IBM Plex Mono    + ink 476       - ink 290       − ink 476
+
+   In Archivo Narrow the hyphen is 43% narrower than the plus, so a column
+   of +3.5 over -3.5 does not line up — the digits sit two hundred units
+   apart. Plex Mono is monospaced so the advances match, but its hyphen bar
+   is 290 units against the plus's 476: next to each other one reads as a
+   stub. The true minus matches the plus exactly in both faces.
+
+   This is a board made almost entirely of ±odds and ±percentages, so it is
+   the highest-frequency glyph pair on the site. */
+const MINUS = "−";
+/* Only a hyphen that is actually a SIGN: one before a digit or a decimal
+   point AND not preceded by a word character.
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   That second half was missing in the first cut and it mangled dates —
+   `2026-08-07` in a numeric cell came out `2026−08−07`, because every
+   hyphen in it is followed by a digit. A sign has nothing but whitespace,
+   a delimiter, or the start of the string in front of it.
+
+   Written with a capture rather than a lookbehind so it does not depend on
+   a 2023-era Safari. Ranges between numbers (`3-5`) are deliberately left
+   alone: they want an en dash, which is a different repair. */
+const RE_SIGN = /(^|[^\w])-(?=[\d.])/g;
+const trueMinus = (s) => String(s).replace(RE_SIGN, `$1${MINUS}`);
+
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
-const signedPct = (x) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
-const american = (o) => (o > 0 ? `+${o}` : `${o}`);
+const signedPct = (x) => trueMinus(`${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`);
+const american = (o) => (o > 0 ? `+${o}` : trueMinus(`${o}`));
 const activeTeams = () => window.ACTIVE_TEAMS || (typeof TEAMS !== "undefined" ? TEAMS : {});
 const teamName = (a) => (activeTeams()[a] && activeTeams()[a].nick) || a;
 const teamPrimary = (a) => (activeTeams()[a] && activeTeams()[a].primary) || "var(--brand)";
@@ -8094,3 +8123,59 @@ if (document.fonts && document.fonts.ready) {
 renderStandingRecord();
 initMasthead();
 load();
+
+/* --- the true minus, applied where numbers stack --------------------------
+   Every signed figure the site prints comes out of a template literal, and
+   there are 229 toFixed calls across 88 innerHTML sinks. Converting each by
+   hand would be a large diff that rots the first time somebody adds a
+   column, so the substitution happens once, here, at the render boundary.
+
+   Scoped deliberately. The manual's rule is that tabular figures matter
+   where numbers STACK — in a column the eye reads down, a stubby hyphen
+   breaks the left edge of the number. In running prose the same figures
+   look mechanical, and a hyphen there is correct. So this walks only the
+   elements the code already marks as numeric, and never touches body copy.
+
+   Convergent by construction: U+2212 does not match RE_SIGN, so a pass over
+   already-converted text is a no-op and the observer cannot chase its own
+   writes. */
+const NUM_SEL = "td.num, .tile .v, .metric-value, .fx-edge, .agate .num";
+
+function applyTrueMinus(root) {
+  if (!root || !root.querySelectorAll) return 0;
+  let n = 0;
+  const cells = [];
+  if (root.matches && root.matches(NUM_SEL)) cells.push(root);
+  root.querySelectorAll(NUM_SEL).forEach((el) => cells.push(el));
+  for (const el of cells) {
+    // Text nodes only: an attribute or a nested element's markup is none of
+    // this function's business.
+    for (const node of el.childNodes) {
+      if (node.nodeType !== 3) continue;
+      const was = node.nodeValue;
+      if (was.indexOf("-") < 0) continue;      // cheap reject, the common case
+      const now = trueMinus(was);
+      if (now !== was) { node.nodeValue = now; n += 1; }
+    }
+  }
+  return n;
+}
+
+/* One observer rather than a call in each of the thirty-odd render
+   functions: a hand-maintained list is a list somebody forgets to add to,
+   and the failure mode is one column silently keeping its hyphens. */
+function watchNumbers() {
+  const main = document.querySelector("main") || document.body;
+  if (!main || typeof MutationObserver === "undefined") return null;
+  applyTrueMinus(main);
+  const obs = new MutationObserver((records) => {
+    for (const r of records) {
+      for (const node of r.addedNodes) {
+        if (node.nodeType === 1) applyTrueMinus(node);
+      }
+    }
+  });
+  obs.observe(main, { childList: true, subtree: true });
+  return obs;
+}
+watchNumbers();

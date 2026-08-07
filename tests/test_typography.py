@@ -179,6 +179,102 @@ def test_a_reopened_comment_is_actually_caught():
     assert _delimiter_faults("/* fine */\n.rule{x:y}\n") == ([], False)
 
 
+# --- the true minus ----------------------------------------------------------
+APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+
+
+def test_signed_numbers_use_a_real_minus_not_a_hyphen():
+    """Measured in this site's own subset files, so this is not taste:
+
+        Archivo Narrow   + advance 479   - advance 273   − advance 479
+        IBM Plex Mono    + ink 476       - ink 290       − ink 476
+
+    The hyphen is 43% narrower than the plus in Archivo, so a column of
+    +3.5 over -3.5 does not line up. This board is almost entirely ±odds
+    and ±percentages, which makes it the highest-frequency glyph pair on
+    the site."""
+    assert 'const MINUS = "\u2212"' in APP or "const MINUS = \"−\"" in APP
+    assert "const signedPct = (x) => trueMinus(" in APP
+    assert "const american = (o) => (o > 0 ? `+${o}` : trueMinus(" in APP
+
+
+def test_the_sign_regex_cannot_eat_a_date_or_a_score():
+    """The bug the first cut shipped: every hyphen in `2026-08-07` is
+    followed by a digit, so a rule that only looked ahead turned a date in
+    a numeric cell into `2026−08−07`. A sign has nothing but whitespace, a
+    delimiter, or the start of the string in front of it."""
+    m = re.search(r"const RE_SIGN = /(.*?)/g;", APP)
+    assert m, "RE_SIGN must stay a named constant"
+    pattern = m.group(1)
+    assert "^|[^" in pattern, "the rule has to constrain what PRECEDES the sign"
+
+    import subprocess
+    probe = subprocess.run(
+        ["node", "-e", """
+const s = process.argv[1];
+const MINUS = "\u2212";
+const RE_SIGN = /(^|[^\w])-(?=[\d.])/g;
+const f = (x) => String(x).replace(RE_SIGN, `$1${MINUS}`);
+const cases = {"-110":"\u2212110", "2026-08-07":"2026-08-07",
+               "W 12-7":"W 12-7", "3-5 units":"3-5 units",
+               "(-0.5)":"(\u22120.5)", "Smith-Jones":"Smith-Jones",
+               "+3.5 / -3.5":"+3.5 / \u22123.5"};
+for (const [k, want] of Object.entries(cases)) {
+  if (f(k) !== want) { console.log("FAIL " + k + " -> " + f(k)); process.exit(1); }
+}
+console.log("ok");
+"""], capture_output=True, text=True)
+    assert probe.returncode == 0, probe.stdout + probe.stderr
+    assert "ok" in probe.stdout
+
+
+def test_the_substitution_is_scoped_to_columns_not_prose():
+    """The manual's rule is that tabular figures matter where numbers
+    STACK. In running prose the same figures read as mechanical and a
+    hyphen is correct, so this must never touch body copy."""
+    assert "const NUM_SEL =" in APP
+    sel = re.search(r"const NUM_SEL = \"(.*?)\";", APP).group(1)
+    for want in ("td.num", ".tile .v"):
+        assert want in sel, want
+    assert " p," not in sel and not sel.strip().startswith("p")
+
+
+def test_it_walks_text_nodes_only():
+    """An attribute or a nested element's markup is none of its business —
+    rewriting those would corrupt a title or a style value."""
+    fn = APP[APP.index("function applyTrueMinus("):]
+    fn = fn[:fn.index("\n}")]
+    assert "nodeType !== 3" in fn
+    assert "childNodes" in fn
+
+
+def test_the_observer_cannot_chase_its_own_writes():
+    """U+2212 does not match RE_SIGN, so a pass over converted text is a
+    no-op and the observer converges. Said in the source because the
+    alternative — an observer that retriggers forever — is a hang."""
+    assert "onvergent by construction" in APP or "cannot chase its own" in APP
+    fn = APP[APP.index("function watchNumbers("):]
+    assert "addedNodes" in fn[:900], "process added nodes, not the whole tree"
+
+
+# --- widows and orphans ------------------------------------------------------
+def test_headings_balance_and_body_gets_pretty():
+    """A widow in display type is the loudest amateur tell on a page that
+    is otherwise set carefully."""
+    assert "text-wrap: balance" in CSS
+    assert "text-wrap: pretty" in CSS
+    bal = CSS[CSS.index("text-wrap: balance") - 200:CSS.index("text-wrap: balance")]
+    assert "h1, h2, h3" in bal
+
+
+def test_no_dead_slashed_zero_declaration():
+    """The manual calls slashed-zero non-negotiable for data, and for THESE
+    subset files it would do nothing: no font here ships a `zero` feature,
+    and IBM Plex Mono — which is what numbers are actually set in — already
+    draws a marked zero by default (3 contours against O's 2). A
+    declaration that cannot fire is decoration that looks like craft."""
+    assert "slashed-zero" not in CSS
+
 # --- grid blowout -----------------------------------------------------------
 PHONE_PX = 320
 
