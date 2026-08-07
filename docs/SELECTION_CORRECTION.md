@@ -249,6 +249,33 @@ name a recommended bar: sweeping bars over 247 settled bets and taking the
 best ROI is a maximum-of-draws against a ±6.3-point noise floor, and would
 produce a "finding" on data with no signal in it.
 
+## 10b. The question that decides where the repair goes
+
+Everything above measures baseball. guardfit, bleed, selcheck, selfit and
+barcheck all take `--sport` and all default to `mlb`, so the +12 has been
+measured six ways against one sport.
+
+`gapcheck.py` asks whether the other sports miss by the same share:
+
+  * **Same share** → the fault is in what every sport SHARES — the market
+    shrink, the de-vig, the credibility guard, the edge gate. NFL inherits
+    it at kickoff and the correction belongs at engine level.
+  * **Different** → it is baseball's projection layer. NFL may launch
+    clean, and one engine-wide correction would damage the sports that are
+    already honest.
+
+The test is Cochran's Q on the RELATIVE gap, not the absolute one — a sport
+claiming 15% and one claiming 58% cannot be ranked on points. Sports under
+60 settled bets are shown but excluded, because their bars would reconcile
+anything with anything.
+
+On the current journal this probably returns **cannot be answered yet**,
+with only baseball clearing the floor. That is the honest state and it has
+a consequence: until a second sport gets there, the +12 cannot be told
+apart from an engine-wide fault, so NFL must be treated as exposed to it.
+`nflguard.py` is the standing bet on that being wrong, and §10a is what
+happens if it is not.
+
 ## 11. What the run actually settled, and what it did not
 
 `selcheck --across` on 247 selected against 570 rejected:
