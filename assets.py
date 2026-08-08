@@ -446,6 +446,130 @@ def probe_conferences() -> int:
     return 0
 
 
+def probe_conference_table(date: str) -> int:
+    """Is ``CONFERENCE_IDS`` still right? Derive the answer, don't recall it.
+
+    THE QUESTION THIS EXISTS FOR. After the groups feed turned out to carry
+    no conference names, that twelve-row table checked into cfbdata.py is
+    the ONLY source for a game's conference — and conference feeds
+    ``attention_tier``, which scales how much of an edge the CFB model
+    believes. It still lists Pac-12, which after realignment is two schools
+    rather than a conference.
+
+    THE JOIN, because neither source can answer alone. CFBD knows which
+    conference each school is in and does not know ESPN's numeric ids; the
+    ESPN scoreboard stamps every team with a ``conferenceId`` and does not
+    say what it is called. One school appearing in both gives one row of
+    ``{conferenceId: name}``, and a Saturday's slate gives most of the
+    table. Nothing here is recalled from memory.
+
+    PROBE ONLY. It prints a comparison and changes nothing. Both CFBD's
+    response shape and the join's hit rate are unverified — this container
+    reaches neither host — so the shape of anything that fails is dumped
+    rather than guessed at, which is the lesson from four rounds on ESPN's
+    groups feed.
+    """
+    from engine.sources import cfbd, cfbdata
+
+    print("=" * 78)
+    print(f"CFB CONFERENCE TABLE — derived from {date}, not recalled")
+    print("=" * 78)
+
+    # 1. CFBD: school -> conference. Candidate paths, because which one this
+    #    plan's key can reach is exactly what is unverified.
+    school_conf: dict = {}
+    year = date[:4]
+    for label, path, params in (
+            ("/conferences", "/conferences", {}),
+            ("/teams/fbs", "/teams/fbs", {"year": year}),
+            ("/teams", "/teams", {"year": year})):
+        try:
+            rows = cfbd._get(path, params, f"cfbd_probe_{label.strip('/')}"
+                             .replace("/", "_") + ".json", ttl=0)
+        except Exception as exc:                              # noqa: BLE001
+            print(f"  NO   {label:<14} {type(exc).__name__}: {str(exc)[:70]}")
+            continue
+        if not isinstance(rows, list) or not rows:
+            print(f"  NO   {label:<14} answered, but not a list of rows")
+            continue
+        print(f"  OK   {label:<14} {len(rows)} rows, "
+              f"keys={sorted(rows[0])[:10]}")
+        got = {str(r.get("school") or r.get("name") or "").strip():
+               str(r.get("conference") or "").strip()
+               for r in rows if isinstance(r, dict)}
+        got = {k: v for k, v in got.items() if k and v}
+        if got:
+            school_conf = got
+            print(f"       -> {len(got)} schools carry a conference here")
+            break
+        print(f"       -> no school/conference pair in these rows; shape:")
+        for line in _sketch(rows[0]):
+            print(line)
+
+    if not school_conf:
+        print("\n  CFBD gave no school->conference map. Nothing to join to;")
+        print("  the table below stays unverified. Send the shapes above.")
+        return 1
+
+    # 2. ESPN scoreboard: team -> conferenceId, straight off the feed the
+    #    build already reads every day.
+    try:
+        payload = cfbdata.fetch_scoreboard(date, ttl=0)
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"\n  ESPN scoreboard for {date} unreachable: {exc}")
+        return 1
+    seen: dict = {}
+    for ev in payload.get("events", []) or []:
+        for c in ((ev.get("competitions") or [{}])[0]
+                  .get("competitors", []) or []):
+            t = c.get("team") or {}
+            cid = str(t.get("conferenceId") or "").strip()
+            name = (t.get("location") or t.get("displayName") or "").strip()
+            if cid and name:
+                seen[name] = cid
+    print(f"\n  {len(seen)} teams on the {date} slate carry a conferenceId")
+    if not seen:
+        print("  No conferenceId on this slate — pick a date with games.")
+        return 1
+
+    # 3. The join. A school has to be spelled compatibly in both, so match
+    #    on the loose key this module already uses for odds-feed names.
+    by_key = {cfbdata.name_key(s): c for s, c in school_conf.items()}
+    derived: dict = {}
+    misses = 0
+    for name, cid in seen.items():
+        conf = by_key.get(cfbdata.name_key(name))
+        if not conf:
+            misses += 1
+            continue
+        derived.setdefault(cid, {})
+        derived[cid][conf] = derived[cid].get(conf, 0) + 1
+    print(f"  {len(seen) - misses} joined to a CFBD conference, {misses} not")
+
+    # 4. The comparison. Majority name per id — one mis-joined school should
+    #    not rename a conference.
+    built = cfbdata.CONFERENCE_IDS
+    print("\n  id   built-in              derived (from this slate)")
+    resolved = {cid: max(names.items(), key=lambda kv: kv[1])[0]
+                for cid, names in derived.items()}
+    for cid in sorted(set(built) | set(resolved),
+                      key=lambda c: int(c) if c.isdigit() else 0):
+        old, new = built.get(cid, ""), resolved.get(cid, "")
+        if not new:
+            state = "not on this slate"
+        elif not old:
+            state = f"NEW -> {new}"
+        elif cfbdata.conference_name(new) == old:
+            state = "matches"
+        else:
+            state = f"RENAMED -> {new}"
+        print(f"  {cid:>4}  {old:<20}  {state}")
+    print("\n  Send this. RENAMED and NEW rows are the table rotting; a row")
+    print("  that is merely 'not on this slate' proves nothing either way —")
+    print("  run a busy Saturday to cover more of it.")
+    return 0
+
+
 def audit(only: str | None) -> int:
     """Fetch the logo for EVERY team the site can render, and name the misses.
 
@@ -504,12 +628,17 @@ def main(argv: list) -> int:
     p.add_argument("--conferences", action="store_true",
                    help="which CFB groups-feed shape answers, and whether "
                         "the built-in conference table has gone stale")
+    p.add_argument("--conf-table", metavar="DATE", default="",
+                   help="derive {conferenceId: name} by joining CFBD to an "
+                        "ESPN slate, and compare it with the built-in table")
     p.add_argument("--sport", default="",
                    help="limit to one sport (nfl, mlb, nba, wnba, cfb)")
     a = p.parse_args(argv)
-    if not (a.probe or a.audit or a.conferences):
+    if not (a.probe or a.audit or a.conferences or a.conf_table):
         p.print_help()
         return 1
+    if a.conf_table:
+        return probe_conference_table(a.conf_table)
     if a.conferences:
         return probe_conferences()
     only = a.sport.lower() or None

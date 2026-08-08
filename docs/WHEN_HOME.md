@@ -258,12 +258,28 @@ after realignment is two schools rather than a conference — and conference
 feeds `attention_tier`, which decides how much of an edge to believe based on
 how hard the market was looking.
 
-The `GONE / RENAMED` check I built for this can never fire now, because
-nothing resolves live to compare against. The obvious alternative is CFBD,
-already a dependency for the talent prior — but it is key-gated, so before I
-build anything against it: **is `CFBD_API_KEY` in your `secrets.local`?** If
-yes I will check what it offers for conferences. If no, the honest fix is to
-correct the twelve rows by hand and note when they were last checked.
+Neither feed can answer this alone. CFBD knows which conference each school
+is in and knows nothing about ESPN's numeric ids; the ESPN scoreboard stamps
+every team with a `conferenceId` and never says what it is called. One school
+in both gives one row of `{conferenceId: name}`, and a busy Saturday gives
+most of the table.
+
+```
+python3 assets.py --conf-table 2025-11-01
+```
+
+Read-only, cache bypassed, changes nothing. Pick a **past Saturday in
+season** — the more games, the more of the twelve rows get covered. It joins
+the two feeds and prints each id as `matches`, `RENAMED -> x`, `NEW -> x`, or
+`not on this slate`.
+
+Send it. `RENAMED` and `NEW` rows are the table rotting and I will correct
+them; `not on this slate` proves nothing either way, so a second run on a
+different date fills in what the first missed.
+
+If CFBD's rows turn out not to carry a conference, the probe dumps their
+shape rather than guessing — that is the one habit worth keeping from the
+four rounds this cost on the groups feed.
 
 CFB opens in about three weeks, so this is the one dated item on the list.
 
