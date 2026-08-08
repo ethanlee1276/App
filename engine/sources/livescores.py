@@ -69,8 +69,49 @@ def fetch_live() -> dict[frozenset, LiveStatus]:
     return parse_espn_scoreboard(json.loads(text))
 
 
+def _near_in_time(a: str, b: str, days: int = 1) -> bool:
+    """Are these two dates within ``days`` of each other?
+
+    NOT equality, and the reason is a real fixture: DAL @ NYG kicks at
+    20:20 Eastern on 2026-09-13, which is 00:20 UTC on the 14th. ESPN
+    stamps its dates UTC and nflverse stores the local gameday, so every
+    Sunday-night and Monday-night game disagrees by one. Requiring an exact
+    match would silently switch the live board off for exactly the games
+    people watch it during.
+
+    Unparseable either side returns True — the caller falls back to the
+    team match rather than dropping a live score over a bad string.
+    """
+    import datetime as _dt
+    try:
+        d1 = _dt.date.fromisoformat((a or "")[:10])
+        d2 = _dt.date.fromisoformat((b or "")[:10])
+    except ValueError:
+        return True
+    return abs((d1 - d2).days) <= days
+
+
 def attach_live(slate) -> int:
-    """Overlay live state onto a slate's games. Returns games matched."""
+    """Overlay live state onto a slate's games. Returns games matched.
+
+    MATCHED ON TEAMS *AND* DATE, because teams alone is not a game.
+
+    ESPN's scoreboard takes no season-type filter here — it returns whatever
+    the NFL is playing today — so during August that is PRESEASON. The key
+    is `frozenset({home, away})`, which ignores both the date and which side
+    is home, so a preseason meeting between two teams that also face each
+    other in Week 1 would paint its score straight onto the Week 1 card:
+    a finished 17-13 sitting on a fixture a month away, on a board whose
+    whole claim is that its numbers are real.
+
+    It has never had a way to be caught, either. Nothing downstream settles
+    from this overlay — the journal grades off `history.db` — so the failure
+    is confined to the board, where it looks exactly like a working live
+    score. Adding the preseason to the site is what made the collision
+    reachable, so the guard goes in with it.
+
+    A day of tolerance rather than equality; see `_near_in_time`.
+    """
     try:
         board = fetch_live()
     except DataUnavailable:
@@ -78,7 +119,8 @@ def attach_live(slate) -> int:
     n = 0
     for g in slate.games:
         live = board.get(frozenset((g.home, g.away)))
-        if live:
+        if live and _near_in_time(getattr(live, "start_time", ""),
+                                  getattr(g, "date", "")):
             g.live = live
             n += 1
     return n

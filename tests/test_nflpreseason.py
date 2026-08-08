@@ -273,6 +273,81 @@ def test_the_display_labels_from_state_not_from_a_number():
     assert 'g["state"] == "in"' in block
 
 
+
+
+# --- the live board must not borrow a preseason score -------------------------
+def test_the_live_overlay_matches_on_date_as_well_as_teams():
+    """Adding the preseason to the site made an old hole reachable.
+
+    `fetch_live()` hits ESPN's scoreboard with no season-type filter — it
+    returns whatever the NFL is playing today, which in August is
+    preseason. `attach_live` keyed purely on `frozenset({home, away})`, so
+    a preseason meeting between two teams who also face each other in Week
+    1 would paint its score onto the Week 1 card: a finished 17-13 on a
+    fixture a month away.
+
+    Nothing settles from this overlay (the journal grades off history.db),
+    so it was invisible — a wrong live score looks exactly like a right
+    one.
+    """
+    import inspect
+    from engine.sources import livescores
+    src = inspect.getsource(livescores.attach_live)
+    assert "_near_in_time" in src, "the overlay is back to teams-only"
+
+
+def test_the_date_window_is_a_day_because_of_night_games():
+    """NOT equality. DAL @ NYG kicks 20:20 Eastern on 2026-09-13, which is
+    00:20 UTC on the 14th; ESPN stamps UTC and nflverse stores the local
+    gameday. An exact match would switch the live board off for exactly the
+    games people watch it during."""
+    from engine.sources.livescores import _near_in_time
+    assert _near_in_time("2026-09-14T00:20Z", "2026-09-13") is True
+    assert _near_in_time("2026-09-13T17:00Z", "2026-09-13") is True
+    assert _near_in_time("2026-08-13T23:00Z", "2026-09-13") is False
+    assert _near_in_time("2026-09-15T17:00Z", "2026-09-13") is False
+
+
+def test_an_unreadable_date_still_attaches():
+    """A bad string must not silently kill the live board — fall back to
+    the team match rather than dropping the score."""
+    from engine.sources.livescores import _near_in_time
+    assert _near_in_time("", "2026-09-13") is True
+    assert _near_in_time("not-a-date", "2026-09-13") is True
+
+
+def test_a_preseason_score_does_not_reach_a_regular_season_card():
+    """The whole failure, end to end."""
+    from engine.sources import livescores as ls
+    from engine.models import LiveStatus
+
+    class _G:
+        def __init__(self, h, a, d):
+            self.home, self.away, self.date, self.live = h, a, d, None
+
+    class _S:
+        def __init__(self, games): self.games = games
+
+    board = {frozenset(("CIN", "CLE")): LiveStatus(
+        state="final", home_score=17, away_score=13, period="", clock="",
+        detail="", start_time="2026-08-13T23:00Z")}
+    real = ls.fetch_live
+    try:
+        ls.fetch_live = lambda: board
+        slate = _S([_G("CIN", "CLE", "2026-09-13")])
+        assert ls.attach_live(slate) == 0
+        assert slate.games[0].live is None
+        # …and the same fixture on its own night still attaches.
+        board2 = {frozenset(("CIN", "CLE")): LiveStatus(
+            state="live", home_score=7, away_score=3, period="Q2",
+            clock="8:12", detail="", start_time="2026-09-13T17:00Z")}
+        ls.fetch_live = lambda: board2
+        slate2 = _S([_G("CIN", "CLE", "2026-09-13")])
+        assert ls.attach_live(slate2) == 1
+        assert slate2.games[0].live.state == "live"
+    finally:
+        ls.fetch_live = real
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
