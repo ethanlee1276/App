@@ -63,6 +63,24 @@ def print_summary(conn) -> None:
                       f"moneyline backtest are running on nothing. Restore "
                       f"them with: python3 ingest.py mlb --from {lo} "
                       f"--to {hi} --scores-only")
+    # Player photos, which are captured DURING ingest and are therefore the
+    # one thing here that a pull cannot deliver. An empty table looks
+    # identical to a working board — every card falls back to the initials
+    # chip, which is what it drew before faces existed — so it has to be
+    # counted rather than noticed.
+    try:
+        faces = conn.execute(
+            "SELECT sport, COUNT(*), SUM(headshot != '') FROM player_assets "
+            "GROUP BY sport ORDER BY sport").fetchall()
+    except Exception:                                         # noqa: BLE001
+        faces = []                       # database predates the table
+    if faces:
+        parts = [f"{r[0].upper()} {r[2] or 0:,}/{r[1]:,}" for r in faces]
+        print(f"  Player photos: {' · '.join(parts)}")
+    elif s["games"].get("nba") or s["games"].get("wnba"):
+        print("  Player photos: none stored — NBA/WNBA prop cards will draw "
+              "initials. Re-ingest those seasons to capture them.")
+
     n_ump = conn.execute(
         "SELECT COUNT(*) FROM game_umpires WHERE sport='mlb'").fetchone()[0]
     n_sp = conn.execute(

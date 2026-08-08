@@ -230,6 +230,71 @@ def test_the_avatar_still_falls_back_when_a_photo_is_missing():
     assert "if (opts.headshot) {" in js[i:i + 200]
 
 
+# --- is it actually there? ---------------------------------------------------
+def test_the_census_counts_the_photos_it_captured():
+    """THE GAP ETHAN'S RUN EXPOSED. He re-ingested NBA and WNBA, and the
+    census reported games and player-log rows and said nothing about faces —
+    so a run that captured zero photos and a run that captured thousands
+    print identically, and the board looks the same either way because a
+    missing photo correctly falls back to the initials chip."""
+    import io
+    from contextlib import redirect_stdout
+    import ingest
+    conn = db.connect(":memory:")
+    _seed_game(conn, "nba")
+    db.upsert_player_assets(conn, [
+        {"sport": "nba", "player": "A", "espn_id": "1",
+         "headshot": HREF, "seen": "2026-01-02"},
+        {"sport": "nba", "player": "B", "espn_id": "2",
+         "headshot": "", "seen": "2026-01-02"}])
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        ingest.print_summary(conn)
+    line = next(l for l in buf.getvalue().splitlines() if "photos" in l)
+    assert "NBA 1/2" in line, line
+
+
+def test_an_empty_photo_table_is_stated_not_omitted():
+    """An absent line reads as "that is not a thing here", which is a
+    different fact from "this is empty and here is how to fill it"."""
+    import io
+    from contextlib import redirect_stdout
+    import ingest
+    conn = db.connect(":memory:")
+    _seed_game(conn, "wnba")
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        ingest.print_summary(conn)
+    out = buf.getvalue()
+    assert "none stored" in out, out
+    assert "Re-ingest" in out, "no instruction for how to fill it"
+
+
+def test_a_database_without_the_table_still_prints_a_census():
+    """`print_summary` runs at the end of every ingest. A pre-migration
+    database must not turn a report into a stack trace."""
+    import io
+    import sqlite3
+    from contextlib import redirect_stdout
+    import ingest
+    conn = db.connect(":memory:")
+    _seed_game(conn, "nba")
+    conn.execute("DROP TABLE player_assets")
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        ingest.print_summary(conn)
+    assert "NBA:" in buf.getvalue()
+
+
+def _seed_game(conn, sport):
+    db.upsert_games(conn, [{
+        "sport": sport, "season": 2025, "period": "2026-01-02",
+        "game_id": "1", "home": "BOS", "away": "LAL",
+        "home_score": 1.0, "away_score": 2.0, "spread": 0.0, "total": None,
+        "roof": "indoor", "surface": "hardwood", "temp": None, "wind": None,
+        "extra": None}])
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
