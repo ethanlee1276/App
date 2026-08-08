@@ -142,20 +142,43 @@ def preseason_games(season: int, weeks: tuple[int, ...] | None = None) -> list[d
     error — the Hall of Fame game is week 1 some years and absent others.
     """
     seen: dict[str, dict] = {}
+    failed: list[str] = []
+    empty: list[int] = []
     for wk in (weeks if weeks is not None else (1, 2, 3, 4)):
         try:
             data = fetch_scoreboard(season, PRESEASON, wk)
-        except DataUnavailable:
+        except DataUnavailable as exc:
+            failed.append(f"week {wk}: {exc}")
             continue
-        for g in parse_games(data, season):
+        got = parse_games(data, season)
+        if not got:
+            empty.append(wk)
+        for g in got:
             if g["game_id"]:
                 seen[g["game_id"]] = g
-    if not seen:
+    if seen:
+        return sorted(seen.values(), key=lambda g: (g["kickoff"], g["home"]))
+
+    # Nothing came back — and WHY matters, because the two causes need
+    # opposite responses. The first cut of this reported one message for
+    # both, which is the same misdirection as a "run the ingest" prompt
+    # for a season that has not been played: it sends the reader to wait
+    # for a schedule when the calls never landed, or to debug a network
+    # that is working fine.
+    if failed and not empty:
         raise DataUnavailable(
-            f"ESPN listed no preseason games for {season}. Either the "
-            f"schedule is not published yet, or every weekly call failed — "
-            f"the cached payloads under {CACHE_DIR} say which.")
-    return sorted(seen.values(), key=lambda g: (g["kickoff"], g["home"]))
+            f"Every ESPN call for {season} preseason FAILED — no payload was "
+            f"received, so nothing can be said about whether a schedule "
+            f"exists. This is a fetch problem, not a calendar one.\n  "
+            + "\n  ".join(failed))
+    raise DataUnavailable(
+        f"ESPN answered for preseason week(s) {empty or '?'} of {season} and "
+        f"listed no games. The calls worked; the schedule is not in this "
+        f"response. Either it is not published yet, or the query shape is "
+        f"wrong — the cached payloads under {CACHE_DIR} hold the actual "
+        f"answers, and `python3 nflpre.py --raw` says where."
+        + (f"\n  {len(failed)} week(s) also failed outright:\n  "
+           + "\n  ".join(failed) if failed else ""))
 
 
 def window(games: list[dict]) -> tuple[str, str] | None:

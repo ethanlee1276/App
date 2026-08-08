@@ -81,12 +81,82 @@ def report(season: int, show_raw: bool = False) -> int:
     return 0
 
 
+def probe(season: int) -> int:
+    """Try several query shapes, and a control year, and say which answered.
+
+    This exists because the parser was written against an API that the
+    cloud container is refused by policy, so "no games came back" has two
+    very different causes and no way to tell them apart from here.
+
+    The control is what separates them. If LAST season's preseason returns
+    games and this one does not, the query shape is right and the schedule
+    simply is not published. If neither returns anything, the shape is
+    wrong and waiting will not fix it.
+    """
+    import json
+    import urllib.request
+    from engine.sources.livescores import ESPN_NFL
+
+    shapes = [
+        (f"{ESPN_NFL}?dates={season}&seasontype=1&week=1",
+         "year + seasontype + week   (what nflpre uses)"),
+        (f"{ESPN_NFL}?dates={season}&seasontype=1",
+         "year + seasontype, no week"),
+        (f"{ESPN_NFL}?seasontype=1&week=1",
+         "seasontype + week, no year"),
+        (f"{ESPN_NFL}?dates={season}0801-{season}0901",
+         "explicit August date range"),
+        (f"{ESPN_NFL}?dates={season - 1}&seasontype=1&week=1",
+         f"CONTROL — {season - 1} preseason, a season that happened"),
+        (f"{ESPN_NFL}?dates={season}&seasontype=2&week=1",
+         f"CONTROL — {season} REGULAR season week 1"),
+    ]
+    print("=" * 74)
+    print(f"PROBE — which ESPN query actually returns {season} preseason?")
+    print("=" * 74)
+    print()
+    for url, label in shapes:
+        try:
+            with urllib.request.urlopen(url, timeout=30) as r:
+                body = r.read().decode("utf-8", "replace")
+            data = json.loads(body)
+            events = data.get("events")
+            if events is None:
+                print(f"  {'NO EVENTS KEY':>14}  {label}")
+                print(f"  {'':>14}  keys: {sorted(data)[:8]}")
+            else:
+                n = len(events)
+                first = ""
+                if n:
+                    e = events[0]
+                    first = f"  first: {e.get('date', '')[:10]} {e.get('shortName', '')}"
+                print(f"  {n:>10} games  {label}{first}")
+        except Exception as exc:                              # noqa: BLE001
+            print(f"  {'FAILED':>14}  {label}")
+            print(f"  {'':>14}  {type(exc).__name__}: {str(exc)[:80]}")
+        print(f"  {'':>14}  {url}")
+        print()
+    print("  READ IT LIKE THIS:")
+    print(f"    control {season - 1} has games, {season} does not")
+    print("        -> the query is right; the schedule is not out yet.")
+    print("    no control returns anything")
+    print("        -> the query shape is wrong, and waiting will not help.")
+    print("    a different shape above returns games")
+    print("        -> that is the one nflpre should be using. Send me the line.")
+    return 0
+
+
 def main(argv: list) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--season", type=int, default=_dt.date.today().year)
     p.add_argument("--raw", action="store_true",
                    help="say where the cached ESPN payloads landed")
+    p.add_argument("--probe", action="store_true",
+                   help="try several query shapes and a control year, to "
+                        "tell a wrong query from an unpublished schedule")
     a = p.parse_args(argv)
+    if a.probe:
+        return probe(a.season)
     return report(a.season, a.raw)
 
 
