@@ -309,6 +309,43 @@ def _js_abbr_map() -> dict:
         return {}
 
 
+def _sketch(node, depth: int = 0, budget: list | None = None) -> list:
+    """A payload's SHAPE, a few lines of it — never its contents.
+
+    Added because the first diagnostic reported "parsed nothing" and stopped
+    there, which named the symptom and hid the cause. All three shapes had
+    reached the host and returned real JSON; what nobody could see was where
+    in that JSON the conferences were sitting. Dumping the whole payload
+    would be unreadable and would put a feed's contents in a chat log, so
+    this prints keys, types and lengths only.
+    """
+    if budget is None:
+        budget = [50]                       # total lines, shared across depth
+    out: list = []
+    pad = "      " + "  " * depth
+    # Deep enough to see through this API's sports[0].leagues[0] envelope
+    # and one level past it — which is exactly where the conferences would
+    # be hiding if the envelope is the answer.
+    if budget[0] <= 0 or depth > 6:
+        return out
+    if isinstance(node, dict):
+        keys = list(node)[:12]
+        budget[0] -= 1
+        out.append(f"{pad}dict({len(node)})  {keys}")
+        for k in keys:
+            v = node.get(k)
+            if isinstance(v, (dict, list)) and v:
+                budget[0] -= 1
+                out.append(f"{pad}  .{k}")
+                out += _sketch(v, depth + 1, budget)
+    elif isinstance(node, list):
+        budget[0] -= 1
+        out.append(f"{pad}list({len(node)})")
+        if node:
+            out += _sketch(node[0], depth + 1, budget)
+    return out
+
+
 def probe_conferences() -> int:
     """Which groups-feed shape actually returns conferences — and whether the
     built-in table has rotted underneath us.
@@ -337,6 +374,23 @@ def probe_conferences() -> int:
         # column hid the actual error behind the URL that produced it, which
         # is the one thing this run is for.
         print(f"        {note}")
+        if count > 1 or note.startswith("unreachable"):
+            continue
+        # It answered and we read nothing out of it. That is a parser
+        # problem, not a network one, and the shape is the evidence.
+        url = next((u for lbl, u, _ in cfbdata.GROUP_CANDIDATES
+                    if lbl == label), "")
+        cache = next((c for lbl, _, c in cfbdata.GROUP_CANDIDATES
+                      if lbl == label), "")
+        try:
+            raw = cfbdata.fetch_json(url, cache, ttl=0,
+                                     user_agent=cfbdata.DEFAULT_AGENT)
+        except Exception as exc:                              # noqa: BLE001
+            print(f"        (could not re-read for the shape: {exc})")
+            continue
+        print("        shape of what it returned:")
+        for line in _sketch(raw):
+            print(line)
 
     if not live:
         print("\n  Nothing usable. The board is running on the built-in table")

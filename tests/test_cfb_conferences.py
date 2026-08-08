@@ -55,6 +55,39 @@ def test_conferences_nested_under_the_parent_group_are_found():
     assert got.get("151") == "FCS", got
 
 
+def test_the_api_envelope_is_unwrapped():
+    """THE ACTUAL CAUSE, measured 2026-08-08. All three URL shapes REACHED
+    the host and returned valid JSON, and all three parsed to nothing — so
+    the feed was never down. This API wraps its collections in
+    sports[0].leagues[0].<thing>; `parse_teams` has unwrapped exactly that
+    since it was written and this function never did, so it was reading the
+    top level of an envelope that has nothing at the top level."""
+    env = {"sports": [{"leagues": [{"groups": [
+        {"groupId": "8", "shortName": "SEC"},
+        {"groupId": "5", "name": "Big Ten Conference"},
+    ]}]}]}
+    got = C.parse_conferences(env)
+    assert got.get("8") == "SEC", got
+    assert got.get("5") == "Big Ten", got
+
+
+def test_the_envelope_and_the_nesting_compose():
+    """Both candidate causes at once, which is the shape nobody has ruled
+    out: conferences under the FBS group, inside the envelope."""
+    env = {"sports": [{"leagues": [{"groups": [
+        {"id": "80", "name": "FBS",
+         "children": [{"groupId": "8", "shortName": "SEC"}]}]}]}]}
+    assert C.parse_conferences(env).get("8") == "SEC"
+
+
+def test_a_broken_envelope_does_not_raise():
+    """A feed half-way through a shape change must not take the build down."""
+    for junk in ({"sports": []}, {"sports": [{"leagues": []}]},
+                 {"sports": "nope"}, {"sports": [{"leagues": ["x"]}]},
+                 {"sports": [{}]}):
+        assert C.parse_conferences(junk) == {}, junk
+
+
 def test_the_flat_shapes_still_parse():
     """Both shapes this module already handled. A fix for one payload that
     breaks the others is not a fix."""
@@ -213,6 +246,38 @@ def test_the_diagnostic_checks_the_built_in_table_for_rot():
     src = inspect.getsource(assets.probe_conferences)
     assert "CONFERENCE_IDS" in src
     assert "GONE" in src and "RENAMED" in src
+
+
+def test_the_diagnostic_shows_the_shape_when_a_feed_answers_with_nothing():
+    """The first diagnostic said "parsed nothing" and stopped. That named the
+    symptom and hid the cause — the payload was right there and nobody could
+    see where in it the conferences were. It prints keys and lengths, never
+    contents: a feed's contents do not belong in a chat log."""
+    import assets
+    p = {"sports": [{"id": "20", "name": "Football", "leagues": [
+        {"id": "23", "groups": [{"groupId": "8", "shortName": "SEC"}]}]}]}
+    lines = "\n".join(assets._sketch(p))
+    assert "sports" in lines and "leagues" in lines and "groups" in lines, lines
+    assert "SEC" not in lines, "the sketch is leaking contents, not shape"
+
+
+def test_the_shape_dump_cannot_run_away_on_a_large_payload():
+    """756 schools came back from the teams feed. An unbounded dump of
+    something that size is not a diagnostic, it is a wall."""
+    import assets
+    big = {"items": [{"a": {"b": {"c": [{"d": i} for i in range(500)]}}}
+                     for _ in range(500)]}
+    assert len(assets._sketch(big)) < 60
+
+
+def test_the_shape_is_only_dumped_when_it_is_the_useful_answer():
+    """A refused host has no payload to describe, and a shape that worked
+    needs no explaining. Printing either would bury the one that matters."""
+    import inspect
+    import assets
+    src = inspect.getsource(assets.probe_conferences)
+    assert 'note.startswith("unreachable")' in src
+    assert "count > 1 or" in src
 
 
 def test_the_diagnostic_is_reachable_from_the_command_line():

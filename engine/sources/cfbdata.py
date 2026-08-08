@@ -168,6 +168,21 @@ def parse_conferences(payload: dict) -> dict[str, str]:
     """
     out: dict[str, str] = {}
 
+    # THE ENVELOPE. This API wraps its collections in
+    # sports[0].leagues[0].<thing> — `parse_teams` has unwrapped exactly that
+    # since it was written, and this function never did. Measured on Ethan's
+    # machine 2026-08-08: all three URL shapes REACHED the host and returned
+    # valid JSON, and all three parsed to nothing. A feed that answers and
+    # yields zero conferences is not a feed that is down; it is a reader
+    # looking at the wrong level.
+    try:
+        league = payload["sports"][0]["leagues"][0]
+        if isinstance(league, dict):
+            payload = {**league, **{k: v for k, v in payload.items()
+                                    if k != "sports"}}
+    except (KeyError, IndexError, TypeError):
+        pass                       # already unwrapped, or a different shape
+
     def walk(node, depth=0):
         if depth > 4 or not isinstance(node, dict):
             return                              # cycles are not a thing here,

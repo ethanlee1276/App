@@ -202,23 +202,33 @@ table**, and `cfbdata`'s own header says that table exists to be overridden
 because "conferences in this sport move around constantly." Post-realignment,
 its `Pac-12` entry is close to fiction.
 
-Two failures looked identical from outside and needed separating: the host
-refusing, and the feed answering fine while the parser read one level too
-shallow — conferences are nested under the FBS group's `children`, so read
-flat the whole payload yields `{"80": "FBS"}` and reports success. The parse
-now walks the tree and the fetch tries three URL shapes.
+**The feed was never down.** Your run showed all three URL shapes reaching
+the host and returning valid JSON, and all three parsing to nothing — which
+is not a network failure, it is a reader looking at the wrong level. This API
+wraps its collections in `sports[0].leagues[0].<thing>`; `parse_teams` has
+unwrapped exactly that since it was written and `parse_conferences` never
+did, so it was reading the top of an envelope that has nothing at the top.
+
+Fixed: the parse unwraps the envelope and walks the nesting underneath it
+(conferences may also hang off the FBS group's `children`, which read flat
+yields the single useless entry `{"80": "FBS"}`).
 
 ```
 python3 assets.py --conferences
 ```
 
-Read-only, cache bypassed. It prints each shape with OK or NO, then checks
-every built-in id against the live answer and marks any that are `GONE` or
-`RENAMED`. Send me the output:
+Read-only, cache bypassed. Each shape reports OK or NO, and any that answers
+without yielding conferences now prints the **shape** of what came back —
+keys and lengths, never contents — so a wrong guess about the envelope is
+visible instead of silent. Then it checks every built-in id against the live
+answer and marks any that are `GONE` or `RENAMED`.
 
-- a shape marked **OK** is the one to keep, and I trim the ladder to it
-- **all NO** means the endpoint is genuinely gone and we need a different
-  source before the season opens
+Send me the output:
+
+- a shape marked **OK** means the envelope was the answer; I trim the ladder
+  to the one that worked
+- still **NO** with a shape dump underneath means the conferences live
+  somewhere else in that payload, and the dump says where
 - **GONE / RENAMED** rows are the built-in table rotting, which is the thing
   actually affecting pricing
 
