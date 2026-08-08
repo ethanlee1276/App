@@ -3130,8 +3130,9 @@ async function renderPlayers() {
   // So an unsearched visit shows a browsable handful and says how many
   // there are. Searching still reaches every one of them: the filter runs
   // over the whole list above and only the DISPLAY is capped.
-  const capped = !q && players.length > PLAYER_BROWSE;
-  const shown = capped ? players.slice(0, PLAYER_BROWSE) : players;
+  const cap = playerBrowseCap();
+  const capped = !q && players.length > cap;
+  const shown = capped ? players.slice(0, cap) : players;
   host.innerHTML = (capped ? `<p class="browse-note">Showing ${shown.length}
       of ${players.length} players with a prop on tonight’s board —
       type a name to find anyone else.</p>` : "")
@@ -3140,11 +3141,22 @@ async function renderPlayers() {
   revealChildren(host);
 }
 
-//: How many profiles an unsearched Players page draws. A profile is a tall
-//: card — chart, form table, meters — so this is a screen or two of
-//: browsing, not a directory. The number exists to be tuned; the reason it
-//: exists is that no number at all meant 293.
-const PLAYER_BROWSE = 12;
+//: How many profiles an unsearched Players page draws.
+//:
+//: TWO NUMBERS, BECAUSE THE GRID IS NOT ONE LAYOUT. A profile is a tall
+//: card — chart, form table, meters — and `.player-grid` is
+//: `auto-fill, minmax(420px, 1fr)`: three columns on a laptop, ONE on a
+//: phone. Measured at 390x844 after the first cap shipped, twelve cards
+//: stacked single-file came to 10,919px — 12.9 screens, which is the
+//: original complaint again on the device least able to afford it.
+//:
+//: Read at render rather than at load: a rotated phone or a resized window
+//: is the same visitor, and a constant captured once would leave them with
+//: whichever layout they happened to start in.
+function playerBrowseCap() {
+  return (typeof window !== "undefined" && window.matchMedia
+    && window.matchMedia("(max-width: 760px)").matches) ? 4 : 12;
+}
 
 async function rosterMatches(q) {
   const d = await loadRosters(state.sport);

@@ -148,10 +148,10 @@ def test_an_unsearched_player_page_does_not_draw_every_profile():
     screens, on the page whose own tab hint is "search a player". The search
     box was filtering a DOM that had already been built in full."""
     js = _js()
-    assert "const PLAYER_BROWSE" in js
-    i = js.index("const capped = !q && players.length > PLAYER_BROWSE")
+    assert "function playerBrowseCap(" in js
+    i = js.index("const capped = !q && players.length > cap")
     body = js[i:i + 600]
-    assert "players.slice(0, PLAYER_BROWSE)" in body
+    assert "players.slice(0, cap)" in body
 
 
 def test_searching_still_reaches_every_player():
@@ -162,6 +162,41 @@ def test_searching_still_reaches_every_player():
     i = js.index("async function renderPlayers(")
     body = js[i:i + 900]
     assert body.index("recs = recs.filter") < body.index("const seen")
+
+
+def test_the_browse_cap_is_smaller_where_the_grid_is_one_column():
+    """MEASURED AT 390x844 after the first cap shipped: `.player-grid` is
+    `auto-fill, minmax(420px, 1fr)` — three columns on a laptop, ONE on a
+    phone — so twelve cards stacked single-file came to 10,919px. Twelve
+    point nine screens, which is the original complaint again on the device
+    least able to afford it."""
+    js = _js()
+    i = js.index("function playerBrowseCap(")
+    body = js[i:i + 400]
+    assert "max-width: 760px" in body, body
+    ns = re.findall(r"\b(\d+)\b", body.split("return")[1])
+    assert "4" in ns and "12" in ns, ns
+
+
+def test_the_cap_is_read_at_render_not_captured_once():
+    """A rotated phone or a resized window is the same visitor. A constant
+    read at load leaves them with whichever layout they started in."""
+    js = _js()
+    assert "const cap = playerBrowseCap();" in js, \
+        "the cap is no longer evaluated per render"
+
+
+def test_a_browser_without_matchmedia_gets_the_desktop_cap():
+    """Failing open to FOUR would quietly halve a laptop's browse list."""
+    js = _js()
+    i = js.index("function playerBrowseCap(")
+    body = js[i:i + 400]
+    assert "window.matchMedia" in body and "typeof window" in body
+    # The ELSE branch is the desktop number. Verified in node across all
+    # three shapes: no matchMedia -> 12, desktop -> 12, phone -> 4. The
+    # first version of this asserted the slice ended in a brace, which is
+    # true of nothing in particular and proved no property at all.
+    assert re.search(r"\?\s*4\s*:\s*12", body), body
 
 
 # --- hierarchy ---------------------------------------------------------------
