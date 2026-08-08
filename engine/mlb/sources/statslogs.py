@@ -26,6 +26,7 @@ from ..models import (
 )
 from .mlbstats import (
     STATS_BASE, _get_json, TEAM_ID_ABBR, VENUE_PARK, PARK_COORDS, park_weather,
+    headshot_url,
 )
 
 # Which stat group + per-game stat field feeds each market.
@@ -403,4 +404,8 @@ def _add_prop(props, person_id, name, team, opp, position, market, season,
                               over_odds=-110, under_odds=-110)],
         bats=bats, throws=throws, lineup_spot=lineup_spot,
         person_id=int(person_id), game_number=game_number,
+        # The field has been on this record since MLB shipped and nothing
+        # ever filled it, so every MLB prop drew initials while the id that
+        # addresses the photo sat one line above.
+        headshot=headshot_url(person_id),
     ))

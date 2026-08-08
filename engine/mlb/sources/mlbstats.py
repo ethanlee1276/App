@@ -29,6 +29,36 @@ from ..models import MLBGame, MLBWeather, Pitcher
 STATS_BASE = "https://statsapi.mlb.com/api/v1"
 METEO_BASE = "https://api.open-meteo.com/v1/forecast"
 
+#: MLB's own photo CDN, keyed by the person id we already carry on every
+#: prop. This is why MLB faces did NOT need the ESPN athlete-id join that
+#: looked unavoidable: the Stats API hands us `person.id` for every hitter
+#: and pitcher we price, and MLB serves that id's headshot itself.
+#:
+#: BE CLEAR ABOUT WHAT THIS IS. Unlike the NBA and WNBA faces, which take a
+#: href straight out of ESPN's box score, this path is CONSTRUCTED. The
+#: Stats API does not publish a photo URL, so there is nothing to take. That
+#: makes it the same kind of guess as `limit=400` and the User-Agent 403,
+#: and it is written to cost nothing when wrong: `assets.py --probe` checks
+#: it, and on the page a bad URL falls to the untransformed version and then
+#: to the team-coloured chip — which is exactly what MLB props draw today.
+#:
+#: The `w_180,q_auto` segment is not decoration. `facePreview` resizes a
+#: Cloudinary URL by replacing the FIRST path segment after /image/upload/,
+#: so a URL with no transform segment there would have `v1` eaten instead
+#: and 404 every face. It is also a working URL in its own right, which is
+#: what the <img>'s first-error fallback swaps to.
+HEADSHOT = ("https://img.mlbstatic.com/mlb-photos/image/upload/"
+            "w_180,q_auto/v1/people/{pid}/headshot/67/current")
+
+
+def headshot_url(person_id) -> str:
+    """MLB's headshot for a Stats API person id, or "" if there isn't one."""
+    try:
+        pid = int(person_id)
+    except (TypeError, ValueError):
+        return ""
+    return HEADSHOT.format(pid=pid) if pid > 0 else ""
+
 # MLB Stats API team id -> our abbreviation.
 TEAM_ID_ABBR = {
     108: "LAA", 109: "ARI", 110: "BAL", 111: "BOS", 112: "CHC", 113: "CIN",

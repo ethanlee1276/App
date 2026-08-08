@@ -5970,7 +5970,7 @@ function offseasonHTML(off) {
   if (!off || (!off.upcoming_season && !(off.coach_changes || []).length
                && !off.rosters_live)) return "";
   const pair = (c) => `
-    <div class="os-row"><span class="os-team">${teamMark(c.team, 20, nflMap())} ${escapeHtml(nflName(c.team))}</span>
+    <div class="os-row"><span class="os-team">${teamMark(c.team, 20, nflMap(), "nfl")} ${escapeHtml(nflName(c.team))}</span>
       <span class="os-before">${escapeHtml(c.before)}</span>
       <span class="os-arrow">→</span>
       <span class="os-now">${escapeHtml(c.now)}</span></div>`;

@@ -248,11 +248,26 @@ function logoUrl(abbr, sport, size = 48) {
     encodeURIComponent(a)}.png&w=${size * 2}&h=${size * 2}`;
 }
 
-function teamMark(abbr, size = 20, src = null) {
-  const t = team(abbr, src);
+/* `src` is the TEAM DICTIONARY — the same third argument `team()` takes —
+   and `sport` is separate. They were briefly the same parameter, and the one
+   call site that passes a real dictionary (offseasonHTML, which is always
+   NFL whatever tab you came from) reached `(sport || "").toLowerCase()` with
+   an object and threw, taking the whole coach-change section down with it. A
+   string in `src` is still read as the sport, so neither reading breaks.
+
+   The ESPN id wins over the abbreviation when the team record carries one.
+   That is what makes college work: ESPN keys 134 schools numerically, the
+   ids come off ESPN's own teams feed at build time and ride in the slate
+   payload, and the alternative was a hand-written 134-row map that would rot
+   the first time a school rebranded. Our other four sports have no id in
+   their colour dicts, so they keep using the abbreviation. */
+function teamMark(abbr, size = 20, src = null, sport = null) {
+  const map = typeof src === "string" ? null : src;
+  const t = team(abbr, map);
   const uid = "tm" + Math.random().toString(36).slice(2, 7);
-  const sport = src || (typeof state !== "undefined" ? state.sport : "") || "nfl";
-  const url = logoUrl(abbr, sport, size);
+  const league = sport || (typeof src === "string" ? src : "")
+    || (typeof state !== "undefined" ? state.sport : "") || "nfl";
+  const url = logoUrl(t.id || abbr, league, size);
   // The monogram stays underneath. `onerror` removes only the image, so a
   // bad abbreviation or a dead CDN lands on the chip this used to be.
   const img = url

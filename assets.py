@@ -170,9 +170,22 @@ def probe_other_headshots(only: str | None) -> None:
     print("PLAYER HEADSHOTS — the sports that need an ID we do not store")
     print("=" * 78)
     cands = [
-        ("mlb", "MLB Stats API, Aaron Judge (592450)",
+        # THE TWO THE BOARD NOW SHIPS. Both are constructed from the person
+        # id, because the Stats API publishes no photo URL — so unlike every
+        # other entry here, these two are the ones a failure actually costs
+        # something. The first is what `facePreview` builds; the second is
+        # what the <img> falls back to on the first error. If both say FAIL,
+        # MLB props are drawing initials and the path needs correcting.
+        ("mlb", "SHIPPED · resized, what the page requests first",
+         "https://img.mlbstatic.com/mlb-photos/image/upload/"
+         "f_auto,q_auto,w_112,h_112,c_fill,g_face/v1/people/592450/"
+         "headshot/67/current"),
+        ("mlb", "SHIPPED · untransformed, the first-error fallback",
+         "https://img.mlbstatic.com/mlb-photos/image/upload/"
+         "w_180,q_auto/v1/people/592450/headshot/67/current"),
+        ("mlb", "MLB Stats API spots, an alternative if the above fail",
          "https://midfield.mlbstatic.com/v1/people/592450/spots/120"),
-        ("mlb", "ESPN, by ESPN athlete id",
+        ("mlb", "ESPN, by ESPN athlete id — needs a join we do not have",
          "https://a.espncdn.com/i/headshots/mlb/players/full/33192.png"),
         ("nba", "ESPN, by ESPN athlete id",
          "https://a.espncdn.com/i/headshots/nba/players/full/1966.png"),
@@ -217,6 +230,25 @@ def _teams_for(sport: str) -> list[str]:
     return sorted(set(re.findall(r'^\s{2}"([A-Za-z0-9]{2,5})":\s*\{', src, re.M)))
 
 
+def _cfb_ids() -> list[tuple[str, str]]:
+    """``[(abbr, espn_id)]`` for college, from ESPN's own teams feed.
+
+    College has no teams_*.js and never will: 134 schools is precisely the
+    list that rots. ESPN keys them numerically, the build already pulls
+    those ids off this feed and ships them in the slate payload, and the
+    board now draws with them — so the audit has to check the same ids the
+    page will use, not a file that does not exist.
+    """
+    try:
+        from engine.sources import cfbdata
+        teams = cfbdata.parse_teams(cfbdata.fetch_teams())
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  CFB: teams feed unreachable ({type(exc).__name__}), skipped")
+        return []
+    return sorted((ab, t.get("id", "")) for ab, t in teams.items()
+                  if t.get("id"))
+
+
 #: Mirrors ESPN_ABBR in web/js/visuals.js. Two copies is a real hazard, and
 #: `--audit` is exactly what catches them drifting: it reads the map out of
 #: the JS rather than trusting this comment.
@@ -254,13 +286,20 @@ def audit(only: str | None) -> int:
     for sport, (key, _) in SPORTS.items():
         if only and sport != only:
             continue
-        teams = _teams_for(sport)
+        # College is keyed by ESPN's numeric id, not by our abbreviation, so
+        # its identities come off the same feed the build reads.
+        if sport == "cfb":
+            pairs = _cfb_ids()
+        else:
+            pairs = [(ab, amap.get(sport, {}).get(ab.upper(), ab.lower()))
+                     for ab in _teams_for(sport)]
+        teams = [ab for ab, _ in pairs]
         if not teams:
-            print(f"\n  {sport.upper()}: no teams file, skipped")
+            if sport != "cfb":
+                print(f"\n  {sport.upper()}: no teams file, skipped")
             continue
         misses = []
-        for ab in teams:
-            espn = amap.get(sport, {}).get(ab.upper(), ab.lower())
+        for ab, espn in pairs:
             url = (f"https://a.espncdn.com/combiner/i?img=/i/teamlogos/{key}"
                    f"/500/{espn}.png&w=96&h=96")
             verdict, detail = _get(url)
