@@ -169,6 +169,26 @@ def test_a_missing_key_says_so_and_stops():
     assert "stays unverified" in buf.getvalue()
 
 
+def test_the_team_endpoints_are_asked_before_the_conference_one():
+    """MEASURED ON ETHAN'S KEY: /conferences answers 106 rows, and they are
+    conferences — id, name, abbreviation, classification — not schools. It
+    was first in the list, so the probe opened by dumping a payload that was
+    never going to carry a school/conference pair."""
+    import inspect
+    src = inspect.getsource(assets.probe_conference_table)
+    i, j = src.index('"/teams/fbs"'), src.index('"/conferences"')
+    assert i < j, "the conference endpoint is asked before the team ones"
+
+
+def test_conference_rows_are_named_as_such_rather_than_dumped():
+    """A different question answered correctly is not a broken response, and
+    a shape dump for one reads as a fault."""
+    rows = [{"id": 8, "name": "SEC", "short_name": "SEC",
+             "classification": "fbs"}]
+    _, out = _run(rows)
+    assert "CONFERENCE rows, not schools" in out, out
+
+
 def test_a_shape_that_carries_no_conference_is_dumped_not_guessed_at():
     """THE LESSON FROM THE GROUPS FEED, applied before it costs anything.
     Four rounds went by there because the diagnostic reported "parsed

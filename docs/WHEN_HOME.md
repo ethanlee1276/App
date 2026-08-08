@@ -300,9 +300,9 @@ have never been on your board.
 
 ## 3g. Check the keys — one command, safe to paste
 
-You believe `secrets.local` holds the Anthropic key, two Odds API keys and
-the CFBD key. I cannot verify that: the file is gitignored, so it exists only
-on your Mac, which is the point of it. This answers it from your side.
+**Run 2026-08-08: all four present and correctly named.** Anthropic 108
+chars, CFBD 64 chars and answering, and two Odds keys — one with ~11k
+credits, one spent. Details in §7. Re-run this whenever a layer goes quiet.
 
 ```
 python3 keycheck.py
@@ -463,7 +463,32 @@ real information.
 
 ---
 
-## 7. Low priority — the Odds API key (#76)
+## 7. The Odds API keys (#76) — now answerable in ten seconds
+
+**Measured 2026-08-08 by `keycheck.py`:**
+
+```
+ODDS_API_KEY     10,965 credits left,  9,035 used
+ODDS_API_KEY_2            0 left,     20,000 used   — SPENT
+```
+
+Both keys are live and correctly named; the second one's plan is simply
+exhausted, and the ring skips a spent key automatically, so nothing is
+broken. Between them you are running on ~11k credits until the second
+plan resets.
+
+That also settles the leak question below without any guesswork. Open
+`secrets.local` and see which line the key starting `5dc51e48` is on:
+
+- it is **`ODDS_API_KEY_2`** → do nothing at all. That key has zero credits;
+  someone holding it can spend nothing.
+- it is **`ODDS_API_KEY`** → that is the one with 10,965 credits on it.
+  Regenerate at your leisure, keep the old line in the file, and add the new
+  one — the ring skips dead keys.
+
+Original write-up follows, still accurate on everything else.
+
+
 
 Not a blocker, and I previously wrote it up as though it were. It is a quota
 credential, not a payment method: the worst case is someone spending credits,

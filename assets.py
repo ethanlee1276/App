@@ -475,14 +475,21 @@ def probe_conference_table(date: str) -> int:
     print(f"CFB CONFERENCE TABLE — derived from {date}, not recalled")
     print("=" * 78)
 
-    # 1. CFBD: school -> conference. Candidate paths, because which one this
-    #    plan's key can reach is exactly what is unverified.
+    # 1. CFBD: school -> conference.
+    #
+    #    ORDER MATTERS AND I HAD IT BACKWARDS. `/conferences` was tried
+    #    first; measured on Ethan's key it answers 106 rows, but they are
+    #    CONFERENCES — id, name, abbreviation, classification — not schools,
+    #    so there is no school/conference pair in them and the loop fell
+    #    through with a confusing dump. The team endpoints are the ones that
+    #    carry the pair, so they go first and `/conferences` stays last as
+    #    the thing to inspect if neither does.
     school_conf: dict = {}
     year = date[:4]
     for label, path, params in (
-            ("/conferences", "/conferences", {}),
             ("/teams/fbs", "/teams/fbs", {"year": year}),
-            ("/teams", "/teams", {"year": year})):
+            ("/teams", "/teams", {"year": year}),
+            ("/conferences", "/conferences", {})):
         try:
             rows = cfbd._get(path, params, f"cfbd_probe_{label.strip('/')}"
                              .replace("/", "_") + ".json", ttl=0)
@@ -502,9 +509,15 @@ def probe_conference_table(date: str) -> int:
             school_conf = got
             print(f"       -> {len(got)} schools carry a conference here")
             break
-        print(f"       -> no school/conference pair in these rows; shape:")
-        for line in _sketch(rows[0]):
-            print(line)
+        # A row keyed by conference rather than by school is this endpoint
+        # answering a different question, not a broken response — say which.
+        if any(k in rows[0] for k in ("classification", "short_name")):
+            print(f"       -> these are CONFERENCE rows, not schools; no "
+                  f"school->conference pair to take from them")
+        else:
+            print(f"       -> no school/conference pair in these rows; shape:")
+            for line in _sketch(rows[0]):
+                print(line)
 
     if not school_conf:
         print("\n  CFBD gave no school->conference map. Nothing to join to;")
