@@ -1,0 +1,176 @@
+"""The preseason schedule, which nflverse does not have.
+
+    from engine.sources.nflpreseason import preseason_games
+    games = preseason_games(2026)
+
+WHY A SECOND SCHEDULE SOURCE
+----------------------------
+The whole NFL board reads `nfldata/games.csv`, and that file contains no
+preseason at all. Measured on the cached copy: 7,548 games whose
+`game_type` values are REG, WC, DIV, CON and SB, and nothing else. So
+`build_games(2026, 1)` cannot show an August fixture however it is asked.
+
+ESPN's public scoreboard does carry it, under `seasontype=1`, and this repo
+already parses that payload shape for live scores. This module reuses the
+same reading and the same abbreviation map, so a team is spelled one way
+across the site.
+
+WRITTEN AGAINST AN API THIS CONTAINER CANNOT REACH
+---------------------------------------------------
+site.api.espn.com is refused by the environment's network policy (the
+gateway answers 403 to CONNECT), so the parser below was written from the
+payload shape `livescores.parse_espn_scoreboard` already handles rather
+than from a response anyone here has seen.
+
+Two consequences are designed in rather than hoped away:
+
+* **The raw payload is cached before it is parsed.** If the parse is
+  wrong, the data is already on disk and the fix costs no second fetch.
+* **A shape it does not recognise raises rather than returning nothing.**
+  An empty list would read as "no preseason scheduled", which is a
+  perfectly ordinary thing for August to mean, and would hide a broken
+  parser until someone wondered where the games went.
+
+WHAT THIS DELIBERATELY DOES NOT DO
+-----------------------------------
+It does not price anything. Preseason is the one part of the calendar
+where this engine's central premise fails: projections are volume times
+efficiency measured over prior games, and in August starters play a series
+and a half behind a line that will not start together again. A prop priced
+off last season's usage is not a slightly worse number, it is a number
+about a different event.
+
+Schedules, scores and results are useful; props are not, and the two are
+separated here so that showing the first never quietly enables the second.
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+import json
+
+from .fetch import CACHE_DIR, DataUnavailable, fetch_text
+from .livescores import ESPN_NFL, _abbr
+
+#: ESPN's season types. 1 is preseason, 2 regular, 3 postseason.
+PRESEASON, REGULAR, POSTSEASON = 1, 2, 3
+
+#: How long a cached scoreboard stays fresh. Schedules barely move, and a
+#: preseason fixture list is settled weeks ahead; scores are what change,
+#: and `livescores` owns those on its own 30-second clock.
+SCHEDULE_TTL = 6 * 3600
+
+
+def _url(season: int, seasontype: int, week: int | None) -> str:
+    q = f"?dates={season}&seasontype={seasontype}&limit=400"
+    if week is not None:
+        q += f"&week={week}"
+    return ESPN_NFL + q
+
+
+def fetch_scoreboard(season: int, seasontype: int = PRESEASON,
+                     week: int | None = None) -> dict:
+    """The raw ESPN payload, cached to disk before anything reads it."""
+    name = f"espn_nfl_{season}_t{seasontype}" + (f"_w{week}" if week else "") + ".json"
+    text = fetch_text(_url(season, seasontype, week), name, ttl=SCHEDULE_TTL)
+    try:
+        return json.loads(text)
+    except ValueError as exc:
+        raise DataUnavailable(
+            f"ESPN returned something that is not JSON for {season} "
+            f"seasontype {seasontype}; the raw body is cached at "
+            f"{CACHE_DIR / name}") from exc
+
+
+def parse_games(data: dict, season: int) -> list[dict]:
+    """Scoreboard payload → one dict per game.
+
+    Raises rather than returning [] on a payload it cannot read: an empty
+    list is a legitimate answer for a date with no fixtures, so using it
+    for "I did not understand this" would make a broken parser look like a
+    quiet August.
+    """
+    if "events" not in data:
+        raise DataUnavailable(
+            "ESPN payload has no `events` key — the scoreboard shape has "
+            "changed, or this is an error body. Nothing was parsed.")
+
+    out: list[dict] = []
+    for ev in data.get("events") or []:
+        comp = (ev.get("competitions") or [{}])[0]
+        home = away = None
+        hs = as_ = None
+        for c in comp.get("competitors", []):
+            ab = _abbr((c.get("team") or {}).get("abbreviation", ""))
+            score = c.get("score")
+            score = int(score) if str(score).lstrip("-").isdigit() else None
+            if c.get("homeAway") == "home":
+                home, hs = ab, score
+            else:
+                away, as_ = ab, score
+        if not home or not away:
+            continue
+        status = (comp.get("status") or ev.get("status") or {})
+        stype = status.get("type") or {}
+        venue = comp.get("venue") or {}
+        out.append({
+            "season": season,
+            "season_type": "PRE",
+            "week": ((ev.get("week") or {}).get("number")),
+            "game_id": str(ev.get("id") or ""),
+            "kickoff": ev.get("date", ""),
+            "date": (ev.get("date", "") or "")[:10],
+            "home": home,
+            "away": away,
+            "home_score": hs,
+            "away_score": as_,
+            "completed": bool(stype.get("completed")),
+            "state": stype.get("state", "pre"),
+            "venue": venue.get("fullName", ""),
+            "indoor": bool(venue.get("indoor")),
+        })
+    return out
+
+
+def preseason_games(season: int, weeks: tuple[int, ...] | None = None) -> list[dict]:
+    """Every preseason game ESPN lists for a season, earliest first.
+
+    One call per week rather than one for the season: ESPN's scoreboard
+    paginates by week for some season types, and a single call that
+    silently returns only week 1 would look exactly like a short
+    preseason. Weeks with no fixtures contribute nothing and are not an
+    error — the Hall of Fame game is week 1 some years and absent others.
+    """
+    seen: dict[str, dict] = {}
+    for wk in (weeks if weeks is not None else (1, 2, 3, 4)):
+        try:
+            data = fetch_scoreboard(season, PRESEASON, wk)
+        except DataUnavailable:
+            continue
+        for g in parse_games(data, season):
+            if g["game_id"]:
+                seen[g["game_id"]] = g
+    if not seen:
+        raise DataUnavailable(
+            f"ESPN listed no preseason games for {season}. Either the "
+            f"schedule is not published yet, or every weekly call failed — "
+            f"the cached payloads under {CACHE_DIR} say which.")
+    return sorted(seen.values(), key=lambda g: (g["kickoff"], g["home"]))
+
+
+def window(games: list[dict]) -> tuple[str, str] | None:
+    """(first date, last date) across a fixture list, or None if empty."""
+    days = sorted(g["date"] for g in games if g.get("date"))
+    return (days[0], days[-1]) if days else None
+
+
+def days_until(games: list[dict], today: _dt.date | None = None) -> int | None:
+    """Days to the first fixture; negative once it has started."""
+    w = window(games)
+    if not w:
+        return None
+    try:
+        first = _dt.date.fromisoformat(w[0])
+    except ValueError:
+        return None
+    return (first - (today or _dt.date.today())).days
