@@ -297,11 +297,23 @@ def test_the_build_can_say_why_every_bout_passed():
     src = open(os.path.join(ROOT, "ufc_build.py"), encoding="utf-8").read()
     assert '"--why"' in src
     i = src.index("if args.why:")
-    body = src[i:i + 1600]
-    assert "reason_code" in body, "the breakdown does not group by reason"
-    assert "near_miss" in body, "no near misses — the gated case says nothing"
+    body = src[i:i + 1800]
     for code in ("no_data", "no_price", "gated"):
         assert code in body, f"{code} is not explained in the reading"
+
+    # THE KEY IT READS MUST BE THE KEY THE MODEL WRITES. The first version
+    # read `out["passes"]` — which is a COUNT inside `counts`, not a list —
+    # so on a real 12-bout card it printed a header with no rows under it.
+    # Asserting the string "reason_code" appears proved only that I had
+    # typed it. Ask the model what it actually returns.
+    import inspect
+    from engine.ufc import model as M
+    ret = inspect.getsource(M.run_card)
+    ret = ret[ret.rindex("return {"):]
+    assert '"pass_list": passes' in ret, ret[:200]
+    assert 'out.get("pass_list"' in body, "the breakdown reads the wrong key"
+    # and the records it groups on carry the field it groups by
+    assert '"reason_code"' in inspect.getsource(M), "no reason_code is set"
 
 
 # --- the empty-cache trap that produced two blank cards ----------------------

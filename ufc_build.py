@@ -203,12 +203,20 @@ def main() -> None:
         # which are opposite problems with opposite fixes.
         if args.why:
             from collections import Counter
+            # `pass_list`, not `passes` — the latter is a COUNT inside
+            # `counts`. The first version of this read the count's key,
+            # found nothing iterable, and printed a header with no rows
+            # under it, which is a diagnostic that diagnoses nothing.
             codes = Counter((p.get("reason_code") or "other")
-                            for p in out.get("passes", []))
+                            for p in out.get("pass_list", []))
             print("\n  why each bout passed:")
+            if not codes:
+                print("    (no pass records in the payload — the model "
+                      "returned none, which is itself the finding)")
             for code, n in codes.most_common():
                 print(f"    {n:>3}  {code}")
-            near = [p for p in out.get("passes", []) if p.get("near_miss")]
+            near = out.get("near_misses") or [
+                p for p in out.get("pass_list", []) if p.get("near_miss")]
             if near:
                 print(f"\n  {len(near)} near miss(es) — priced, gated, "
                       f"and close:")
