@@ -196,6 +196,40 @@ def test_the_college_audit_drops_the_schools_that_cannot_reach_a_board():
     assert "conf in confs" in body
 
 
+def test_an_unreachable_groups_feed_is_not_read_as_no_conferences():
+    """THE BUG THE SECOND AUDIT RUN EXPOSED. `fetch_conferences` answers {}
+    when the groups endpoint won't respond — and on Ethan's machine,
+    2026-08-08, it did not respond, while the teams feed was fine. The audit
+    used that {} alone, decided no school was in any conference, and fell
+    straight back to checking all 756 rows.
+
+    `parse_scoreboard` never had this problem: it layered the built-in table
+    underneath. The merge is now one function so the two cannot disagree."""
+    from engine.sources import cfbdata
+    # .get, not [], so a missing floor reports the claim rather than a
+    # KeyError that says nothing about what went wrong.
+    assert cfbdata.conference_ids({}).get("8") == "SEC", (
+        "an empty live feed erases the built-in ids")
+    assert cfbdata.conference_ids(None), "no floor at all"
+    assert cfbdata.conference_ids({"8": "live name"})["8"] == "live name", (
+        "the live feed must still win where it answers")
+    src = _read("assets.py")
+    i = src.index("def _cfb_ids(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert "conference_ids(" in body, (
+        "the audit is back to trusting the live feed on its own")
+
+
+def test_the_scoreboard_and_the_audit_resolve_conferences_the_same_way():
+    """Two merges that drift is exactly how one caller ends up correct and
+    the other silently wrong, which is what happened here."""
+    import inspect
+    from engine.sources import cfbdata
+    src = inspect.getsource(cfbdata.parse_scoreboard)
+    assert "conference_ids(" in src
+    assert "{**CONFERENCE_IDS" not in src, "the merge was copied back inline"
+
+
 def test_an_unmarked_feed_audits_everything_and_says_so():
     """The filter is only as good as the marker. If ESPN stops sending it,
     the audit must go back to checking all of them and announce that —

@@ -169,6 +169,22 @@ def parse_conferences(payload: dict) -> dict[str, str]:
     return out
 
 
+def conference_ids(live: dict[str, str] | None = None) -> dict[str, str]:
+    """Every conference group id we can name, live feed layered on top.
+
+    The built-in table is the floor and the live feed is the improvement,
+    never the other way round — ``fetch_conferences`` answers ``{}`` when
+    the groups endpoint is unreachable, and a caller that used that answer
+    alone would decide this sport has no conferences at all.
+
+    It exists as a function because it had two callers with two behaviours:
+    ``parse_scoreboard`` merged correctly and `assets.py --audit` did not,
+    so the audit read every school as unaffiliated and fell back to checking
+    ESPN's whole 756-row college database.
+    """
+    return {**CONFERENCE_IDS, **(live or {})}
+
+
 def parse_teams(payload: dict) -> dict[str, dict]:
     """``{abbr: {name, nick, primary, alt, id}}`` from ESPN's teams feed.
 
@@ -248,7 +264,7 @@ def parse_scoreboard(payload: dict,
     deliberately NOT — those come from a source that actually knows, and
     until then they stay false so the play is held rather than guessed.
     """
-    confs = {**CONFERENCE_IDS, **(conferences or {})}
+    confs = conference_ids(conferences)
     games: list[dict] = []
     for ev in payload.get("events", []) or []:
         comp = (ev.get("competitions") or [{}])[0]
@@ -351,7 +367,13 @@ def fetch_teams(ttl: int = 7 * 24 * 3600) -> dict:
 
 
 def fetch_conferences(ttl: int = 7 * 24 * 3600) -> dict[str, str]:
-    """Live conference names, falling back to the built-in ids."""
+    """Live conference names, or ``{}`` when the groups feed won't answer.
+
+    It does NOT fall back to the built-in ids, whatever this docstring used
+    to claim. ``conference_ids()`` layers those underneath, and a caller
+    that skips it reads an unreachable feed as "this sport has no
+    conferences" — which is what sent `--audit cfb` through all 756 schools.
+    """
     try:
         payload = fetch_json(f"{GROUPS}?groups={FBS_GROUP}",
                              "espn_cfb_groups.json", ttl=ttl,

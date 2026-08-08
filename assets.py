@@ -260,18 +260,25 @@ def _cfb_ids() -> list[tuple[str, str]]:
     every = sorted((ab, t.get("id", ""), t.get("conf", ""))
                    for ab, t in teams.items() if t.get("id"))
     try:
-        confs = cfbdata.fetch_conferences()
+        live = cfbdata.fetch_conferences()
     except Exception:                                         # noqa: BLE001
-        confs = {}
+        live = {}
+    # The built-in table underneath, which is the whole point of
+    # `conference_ids` — the groups feed did not answer on Ethan's machine
+    # (2026-08-08) and reading that as "no conferences exist" is what put
+    # all 756 schools back in the audit.
+    confs = cfbdata.conference_ids(live)
+    if not live:
+        print("  CFB: groups feed did not answer; using the built-in "
+              "conference ids, which is what the board does too")
     keep = [(ab, tid) for ab, tid, conf in every if conf and conf in confs]
     if keep:
-        print(f"  CFB: {len(keep)} of {len(every)} schools are in an FBS "
-              f"conference; the rest never reach a D-I board")
+        print(f"  CFB: {len(keep)} of {len(every)} schools are in a "
+              f"conference we can name; the rest never reach a D-I board")
         return keep
-    why = ("the conferences feed did not answer" if not confs else
-           "the teams feed carries no conference marker")
-    print(f"  CFB: {why} — auditing all {len(every)} schools, so expect "
-          f"misses you cannot act on")
+    print(f"  CFB: the teams feed carries no conference marker — "
+          f"auditing all {len(every)} schools, so expect misses "
+          f"you cannot act on")
     return [(ab, tid) for ab, tid, _ in every]
 
 
