@@ -33,6 +33,50 @@ class TeamRating:
     games: int
 
 
+#: Average played games per team below which the current season cannot
+#: carry a rating on its own and the previous one is pooled in. Four is
+#: about a month of an NFL season; under it, `n/(n+shrink)` is regressing
+#: so hard that every team looks league-average anyway.
+MIN_GAMES_PER_TEAM = 4.0
+
+
+def ratings_for_season(conn, sport: str, season: int, shrink: float = 6.0):
+    """``(ratings, seasons_used)`` — the current season, widened when it is
+    too thin to say anything.
+
+    **The bug this exists for.** Every build script asked for
+    ``seasons=[current]``, and ``compute_team_ratings`` requires a final
+    score. On 2026-08-08 the NFL table held 1,696 games of which 1,424 were
+    scored — and all 272 unscored ones were the 2026 season, because it had
+    not been played. So the query returned nothing, the board printed "none
+    in the DB yet — run `python3 ingest.py nfl`", and running the ingest
+    could not possibly help. A message that sends someone to do the one
+    thing that cannot work is worse than no message.
+
+    It is the same fault as the prop board's: scoping to a season that by
+    definition has no results at the start of a season. The repair is the
+    same too — carry the previous one until this one can stand up.
+
+    Pooled rather than swapped, so the changeover is gradual: while the
+    current season is thin the prior dominates by weight of games, and each
+    new week dilutes it. Above the floor the current season stands alone,
+    which is a small discontinuity accepted on purpose — a rating that
+    still carried last year's roster in December would be worse.
+    """
+    got = compute_team_ratings(conn, sport, seasons=[season], shrink=shrink)
+    if got:
+        per_team = sum(r.games for r in got.values()) / len(got)
+        if per_team >= MIN_GAMES_PER_TEAM:
+            return got, [season]
+    pooled = compute_team_ratings(conn, sport, seasons=[season - 1, season],
+                                  shrink=shrink)
+    if pooled:
+        return pooled, [season - 1, season]
+    # Nothing in either — say so by returning what the caller asked for
+    # rather than inventing a wider window that also has nothing.
+    return got, [season]
+
+
 def compute_team_ratings(conn, sport: str, seasons: list[int] | None = None,
                          shrink: float = 6.0) -> dict[str, TeamRating]:
     """Return ``{team_abbr: TeamRating}`` from the ``games`` table.

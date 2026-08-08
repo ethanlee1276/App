@@ -208,18 +208,24 @@ def main() -> None:
     # Team ratings for the moneyline model, from ingested historical scores.
     try:
         from engine.db import connect
-        from engine.teamrates import compute_team_ratings, attach_ratings
+        from engine.teamrates import ratings_for_season, attach_ratings
         conn = connect()
-        ratings = compute_team_ratings(conn, "nfl", seasons=[args.season])
+        ratings, seasons_used = ratings_for_season(conn, "nfl", args.season)
         conn.close()
         nr = attach_ratings(slate.games, ratings)
         priceable = sum(1 for g in slate.games
                         if g.home_ml and g.away_ml and (g.home_rating or g.away_rating))
         if nr:
-            print(f"\nTeam ratings: attached to {nr} game(s); {priceable} moneyline(s) priceable.")
+            span = ("%d" % seasons_used[0] if len(seasons_used) == 1
+                    else "%d-%d" % (seasons_used[0], seasons_used[-1]))
+            carried = " (last season pooled in — this one is too thin yet)" \
+                if len(seasons_used) > 1 else ""
+            print(f"\nTeam ratings: attached to {nr} game(s) from {span}"
+                  f"{carried}; {priceable} moneyline(s) priceable.")
         else:
-            print("\nTeam ratings: none in the DB yet — run `python3 ingest.py nfl` so the "
-                  "moneyline model has team strength to find an edge.")
+            print("\nTeam ratings: no SCORED games for this season or the one "
+                  "before it. `python3 ingest.py nfl` fills them once games "
+                  "have been played — before that there is nothing to fill.")
     except Exception as exc:
         print(f"\n⚠️  Team ratings unavailable — moneyline shows no edge.\n   {exc}")
 

@@ -181,10 +181,12 @@ def main() -> None:
     # Team ratings for the moneyline model, from ingested historical scores.
     try:
         from engine.db import connect
-        from engine.teamrates import compute_team_ratings, attach_ratings
+        from engine.teamrates import ratings_for_season, attach_ratings
         season = int(args.date[:4])
         conn = connect()
-        ratings = compute_team_ratings(conn, "mlb", seasons=[season])
+        # Same season-scoping fault nfl_build had: on opening day this
+        # season has no scored games at all. See teamrates.
+        ratings, _seasons = ratings_for_season(conn, "mlb", season)
         conn.close()
         nr = attach_ratings(slate.games, ratings)
         priceable = sum(1 for g in slate.games
