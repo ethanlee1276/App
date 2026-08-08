@@ -226,6 +226,22 @@
 
       <div class="stats" id="stats"></div>
 
+      <!-- VENUES FIRST, by Ethan's call (2026-08-08). This block sat below
+           the picks and the reason is still true and worth knowing rather
+           than deleting: measured on an iPhone 13, venues-first put
+           "Tonight's picks" at 1030px — 1.6 screens below the fold, on the
+           page opened first every day. What changed is the judgement, not
+           the arithmetic. The scroller is one row that scrolls sideways
+           rather than 753px of stacked diagrams, so the cost is far
+           smaller than it was when that number was taken; the current
+           figure is in tests/test_board_order.py and is re-measured there
+           rather than remembered. -->
+      <div class="section-title hero-title" id="games-title">Tonight’s ballparks
+        <span class="sub">— real park shapes, roof state, live wind and the home-run
+        factor each one is playing to right now</span>
+      </div>
+      <div class="games-scroller hero-games" id="games"></div>
+
       <div id="best-bets"></div>
 
       <!-- NFL only, and only while it is on: the preseason fixture list
@@ -241,12 +257,6 @@
            retires the block on its own once the last fixture has passed,
            so it is not a section anyone has to remember to remove. -->
       <div id="preseason-board"></div>
-
-      <div class="section-title hero-title" id="games-title">Tonight’s ballparks
-        <span class="sub">— real park shapes, roof state, live wind and the home-run
-        factor each one is playing to right now</span>
-      </div>
-      <div class="games-scroller hero-games" id="games"></div>
 
       <div id="team-form"></div>
 

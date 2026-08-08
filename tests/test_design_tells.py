@@ -535,27 +535,35 @@ def test_the_selected_nav_is_announced_and_not_only_drawn():
         assert call in app
 
 
-def test_the_picks_come_before_the_scenery():
-    """Measured on an iPhone 13: "Tonight's picks" sat at 1030px — 1.6 full
-    screens below the fold — on the page that gets opened first every day.
-    Above it was the masthead, then 753px of stadium diagrams.
+def test_the_counts_tile_still_leads_the_recommended_page():
+    """WAS `test_the_picks_come_before_the_scenery`, and the rename is the
+    honest record of a decision being reversed by the person whose site it
+    is rather than a guard quietly weakening.
 
-    That is what "the site feels cramped" actually was. Not density: the
-    thing you came for was buried under context. Reordered, the picks land
-    at 471px, on the first screen. The ballparks are still there and still
-    worth having — they are what a pick is priced INTO, so they read
-    better as the answer to "why that number" than as the front page.
+    What it used to assert, and why: measured on an iPhone 13, venues-first
+    put "Tonight's picks" at 1030px — 1.6 screens below the fold, on the
+    page opened first every day. That is what "the site feels cramped"
+    actually was. Reordered, the picks landed at 471px.
+
+    Ethan moved the venues back on top on 2026-08-08 ("show the stadiums
+    and ballparks and arenas and shit first"). The arithmetic is much
+    kinder than it was: the 1030px came from 753px of STACKED diagrams, and
+    the block is now a single sideways scroller, so the picks sit at 848px
+    on a phone and 906px at 1280 — just under the fold rather than 1.6
+    screens down. tests/test_board_order.py owns that ordering and carries
+    the numbers; duplicating the assertion here would mean two files
+    disagreeing the next time it changes.
+
+    What survives is the part nobody has overruled: the four-number strip
+    leads, because a board's first answer is how many picks there are —
+    including when the answer is none.
     """
     html = open(os.path.join(ROOT, "web", "index.html"),
                 encoding="utf-8").read()
     view = html[html.index('id="view-recommended"'):]
     view = view[:view.index('id="view-', 10)] if 'id="view-' in view[10:] else view
-    picks = view.index('id="best-bets"')
-    parks = view.index('id="games-title"')
-    assert picks < parks, "the scenery is back in front of the product"
-    # The counts tile leads, because a board's first answer is how many
-    # picks there are — including when the answer is none.
-    assert view.index('id="stats"') < parks
+    assert view.index('id="stats"') < view.index('id="games-title"')
+    assert view.index('id="stats"') < view.index('id="best-bets"')
 
 
 

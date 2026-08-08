@@ -144,14 +144,19 @@ def test_the_board_has_a_host_and_it_is_rendered():
     assert "async function renderPreseason(" in js
 
 
-def test_it_sits_under_the_picks_not_above_them():
-    """The board's documented order puts the picks first; measured once at
-    1030px on an iPhone, burying them cost the thing you came for. The
-    preseason goes directly below, above the ballparks, because in August
-    it is the only football being played."""
+def test_it_sits_under_the_picks():
+    """Directly below the picks, because in August it is the only football
+    being played — but still below them, so the preseason never outranks a
+    priced board.
+
+    It used to also sit ABOVE the venue scroller. That stopped being true
+    when Ethan moved the venues to the top of the page on 2026-08-08; the
+    order there is his call and lives in test_board_order.py. What this
+    still guards is the part that is about the preseason: it does not climb
+    over the picks.
+    """
     html = _read("web", "index.html")
     assert html.index('id="best-bets"') < html.index('id="preseason-board"')
-    assert html.index('id="preseason-board"') < html.index('id="games-title"')
 
 
 def test_it_retires_itself_on_the_last_fixture():

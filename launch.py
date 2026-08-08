@@ -221,6 +221,16 @@ def refresh_mlb(quiet: bool = False) -> bool:
     return ok
 
 
+#: How far ahead of kickoff a week counts as "the current slate".
+#:
+#: 45 days covers the gap from the preseason opener to Week 1 — 32 days on
+#: 2026-08-08 — without reaching so far that the board is built for a month
+#: of fixtures nobody is pricing yet. Only used when there is no game
+#: within a week; in season the nearest-game rule wins and this never
+#: applies.
+SEASON_RUNUP_DAYS = 45
+
+
 def _current_nfl_week():
     """Best-effort (season, week) for the games nearest today, or None in the
     offseason / when the schedule can't be reached."""
@@ -244,6 +254,37 @@ def _current_nfl_week():
     # Only treat it as "current" if the nearest game is within a week.
     if best and best[0] <= 7:
         return best[1], best[2]
+
+    # THE RUN-UP TO A SEASON IS NOT THE OFFSEASON, and treating them the
+    # same is why the NFL page sat on the sample slate through August.
+    # Week 1 2026 is 32 days out on 2026-08-08, so the rule above returned
+    # None every launch, `refresh_nfl` printed "no current slate — kept
+    # existing data", and the board kept serving the illustrative sample
+    # with its Jan 4 fixtures. It was doing what it was told; nobody had
+    # told it that a buildable week existed.
+    #
+    # It is buildable now: the prior-season carry (engine/carry.py) exists
+    # precisely so weeks 1-3 have projections before this season has
+    # played a snap, and books post Week 1 lines all summer.
+    #
+    # FORWARD ONLY. Widening the window in both directions would, in
+    # March, find last February's Super Bowl nearer than September's opener
+    # and rebuild a board for a game five weeks gone. This looks at
+    # UPCOMING fixtures alone.
+    upcoming = None
+    for r in rows:
+        gd = _s(r, "gameday")
+        try:
+            d = _dt.date.fromisoformat(gd[:10])
+            season, week = int(_s(r, "season")), int(_s(r, "week"))
+        except Exception:                                     # noqa: BLE001
+            continue
+        days = (d - today).days
+        if 0 <= days <= SEASON_RUNUP_DAYS:
+            if upcoming is None or days < upcoming[0]:
+                upcoming = (days, season, week)
+    if upcoming:
+        return upcoming[1], upcoming[2]
     return None
 
 
