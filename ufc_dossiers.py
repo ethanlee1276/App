@@ -196,6 +196,31 @@ def _fighters(book: dict):
             if isinstance(v, dict) and not k.startswith("_")]
 
 
+def forget_unfound() -> list[str]:
+    """Empty the skip list. Returns the names that were on it.
+
+    `needs_draft` remembers a name ESPN could not find and skips it for a
+    day, which is load-bearing — see the comment there. But the reason a
+    name lands on that list is sometimes OURS, not ESPN's, and when we fix
+    the reason the skip is no longer protecting anything. It is actively
+    in the way: the fix cannot prove itself until tomorrow, and the card
+    is tonight.
+
+    Concretely, and why this exists: the loose name matcher only worked
+    when ESPN carried the LONGER name, so "Carlos Diego Ferreira" never
+    resolved to ESPN's "Diego Ferreira" and went on the skip list. With
+    the matcher fixed he would still sit there unqueried for 24 hours.
+    """
+    if not DOSSIERS.exists():
+        return []
+    book = json.loads(DOSSIERS.read_text())
+    names = sorted(_unfound(book))
+    if names:
+        book[UNFOUND_KEY] = {}
+        DOSSIERS.write_text(json.dumps(book, indent=2))
+    return names
+
+
 def _review(args) -> None:
     """The two-minute job the drafting tool leaves behind.
 
@@ -261,12 +286,23 @@ def main() -> None:
     ap.add_argument("--clear", metavar="FIGHTER",
                     help="clear the red flags on one fighter — say you have "
                          "checked them and accept the risk")
+    ap.add_argument("--retry-unfound", action="store_true",
+                    help="forget the 24-hour skip list and search ESPN again "
+                         "for every name it could not find")
     args = ap.parse_args()
     load_local_secrets()
 
     if args.review or args.clear:
         _review(args)
         return
+
+    if args.retry_unfound:
+        forgotten = forget_unfound()
+        if forgotten:
+            print(f"Forgot {len(forgotten)} skipped name(s); searching "
+                  f"again: {', '.join(forgotten)}\n")
+        else:
+            print("Nothing on the skip list.\n")
 
     if args.names:
         label, names = "requested", list(args.names)

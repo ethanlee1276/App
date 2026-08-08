@@ -436,6 +436,103 @@ def test_offline_still_answers_with_an_empty_card():
         oddsapi.CACHE_DIR, oddsapi._request = real_dir, real_req
 
 
+def test_the_clamp_kills_are_named_too():
+    """MEASURED ON THE 2026-08-08 CARD: 3 gate, 2 clamp_kill, 1 no_data, 1
+    no_dossier. The gated bouts were named by the near-miss section and
+    the data gaps by the section above; the two clamp kills were the only
+    passes on the card with nothing but a tally.
+
+    They are the ones most worth naming. A clamp kill is the model
+    claiming a bigger edge than the humility clamp will let it act on,
+    which is either the best read on the card or a dossier that is wrong
+    about somebody — opposite problems, invisible from the number 2."""
+    src = open(os.path.join(ROOT, "ufc_build.py"), encoding="utf-8").read()
+    i = src.index("if args.why:")
+    body = src[i:src.index('if __name__ ==', i)]
+    assert '"clamp_kill"' in body, "clamp kills are still only counted"
+    j = body.index('== "clamp_kill"')
+    assert "p.get('fight'" in body[j:j + 400], "named by count, not by name"
+    assert "p.get('why'" in body[j:j + 400], "the clamp's reason is dropped"
+
+
+def test_the_clamp_kill_reason_code_is_the_one_the_model_writes():
+    """The `--why` block has now twice read a key next to the one that
+    exists. Ask the model rather than the memory."""
+    import inspect
+    from engine.ufc import model as M
+    ev = inspect.getsource(M.evaluate_fight)
+    assert '"reason_code": "clamp_kill"' in ev, ev[:200]
+
+
+def test_a_clamp_kill_carries_a_reason_a_person_can_read():
+    """Naming a bout and then printing an empty line under it is the same
+    "?" bug in a different costume."""
+    import inspect
+    from engine.ufc import model as M
+    ev = inspect.getsource(M.evaluate_fight)
+    i = ev.index('"reason_code": "clamp_kill"')
+    assert '"why": clamp_note' in ev[i:i + 200], ev[i:i + 200]
+
+
+# --- the skip list, and why it has to be resettable --------------------------
+def test_a_name_espn_could_not_find_can_be_retried_on_demand():
+    """The 24-hour skip is load-bearing — an unfindable name at the front
+    of a card used to eat the launcher's whole per-tick budget every
+    cycle. But the reason a name lands there is sometimes OURS.
+
+    Carlos Diego Ferreira went on that list because our loose matcher only
+    worked when ESPN carried the longer name. With the matcher fixed he
+    would still have sat there unqueried until tomorrow, and the card was
+    tonight."""
+    import ufc_dossiers
+    assert hasattr(ufc_dossiers, "forget_unfound")
+    src = open(os.path.join(ROOT, "ufc_dossiers.py"), encoding="utf-8").read()
+    assert '"--retry-unfound"' in src
+    i = src.index("if args.retry_unfound:")
+    assert "forget_unfound()" in src[i:i + 400]
+
+
+def test_forgetting_the_skip_list_keeps_every_dossier():
+    """It clears the skip list, not the book. Wiping drafted fighters
+    would turn a one-line convenience into half an hour of refetching —
+    and, on a card night, into no dossiers at all."""
+    import json, tempfile, pathlib
+    import ufc_dossiers
+    book = {"_readme": "x",
+            "_unfound": {"Carlos Diego Ferreira": {"attempts": 3}},
+            "Diego Lopes": {"name": "Diego Lopes", "ufc_fights": 8}}
+    with tempfile.TemporaryDirectory() as d:
+        p = pathlib.Path(d) / "ufc_dossiers.json"
+        p.write_text(json.dumps(book))
+        orig = ufc_dossiers.DOSSIERS
+        ufc_dossiers.DOSSIERS = p
+        try:
+            forgotten = ufc_dossiers.forget_unfound()
+            after = json.loads(p.read_text())
+        finally:
+            ufc_dossiers.DOSSIERS = orig
+    assert forgotten == ["Carlos Diego Ferreira"]
+    assert after["_unfound"] == {}
+    assert after["Diego Lopes"]["ufc_fights"] == 8, "it ate a real dossier"
+    assert after["_readme"] == "x"
+
+
+def test_forgetting_an_empty_skip_list_is_not_an_error():
+    """Run on a clean book it must say nothing happened, not crash — this
+    is a thing typed at 6pm on a card night."""
+    import json, tempfile, pathlib
+    import ufc_dossiers
+    with tempfile.TemporaryDirectory() as d:
+        p = pathlib.Path(d) / "ufc_dossiers.json"
+        p.write_text(json.dumps({"_readme": "x"}))
+        orig = ufc_dossiers.DOSSIERS
+        ufc_dossiers.DOSSIERS = p
+        try:
+            assert ufc_dossiers.forget_unfound() == []
+        finally:
+            ufc_dossiers.DOSSIERS = orig
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

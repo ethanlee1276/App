@@ -106,6 +106,29 @@ def _search_players(query: str) -> list[tuple[str, str]]:
 
 
 def _match_player(players: list[tuple[str, str]], name: str) -> str | None:
+    """The best athlete id for a name, or None if it is not clearly one.
+
+    FOUR TIERS, tried in order, each requiring a UNIQUE winner. Ambiguity
+    returns None on purpose: drafting the wrong man's fight history is far
+    worse than drafting nobody, because nothing downstream can tell.
+
+    TIER 4 IS WHY THIS COMMENT EXISTS. The loose match used to run one
+    way — every token of the odds-feed name had to appear in ESPN's — so
+    it absorbed ESPN carrying the LONGER name ("Jose Aldo" finding "Jose
+    Aldo Junior") and nothing at all when the odds feed did.
+
+    Found on the 2026-08-08 card: The Odds API lists "Carlos Diego
+    Ferreira" and ESPN lists him as "Diego Ferreira". Three tokens against
+    two, subset test false, no id, no dossier, and the bout reported as a
+    data gap — for a lightweight with more than a decade on the roster,
+    whose stats ESPN has had the whole time. The last-name retry could not
+    save it either: "Ferreira" returns a crowd, and none of them contained
+    all three tokens either.
+
+    The reverse direction is the same idea with the feeds swapped, and it
+    stays safe for the same reason the forward one does: it must be the
+    only candidate that fits.
+    """
     target = _norm(name)
     for disp, pid in players:
         if _norm(disp) == target:
@@ -113,8 +136,14 @@ def _match_player(players: list[tuple[str, str]], name: str) -> str | None:
     if len(players) == 1:
         return players[0][1]
     parts = set(target.split())
-    loose = [pid for disp, pid in players if parts <= set(_norm(disp).split())]
-    return loose[0] if len(loose) == 1 else None
+    cands = [(set(_norm(disp).split()), pid) for disp, pid in players]
+    # Forward first, unchanged, so nothing that matched before can now be
+    # made ambiguous by a candidate the new direction dragged in.
+    fwd = [pid for toks, pid in cands if toks and parts <= toks]
+    if len(fwd) == 1:
+        return fwd[0]
+    rev = [pid for toks, pid in cands if toks and toks <= parts]
+    return rev[0] if len(rev) == 1 else None
 
 
 def find_athlete_id(name: str) -> str | None:

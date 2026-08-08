@@ -252,6 +252,59 @@ def test_select_card_groups_nearest_event():
     assert select_card([], now=now) == ("", [])
 
 
+# --- the loose name match, and the bout it cost ------------------------------
+def test_a_longer_odds_feed_name_still_finds_the_fighter():
+    """THE BUG, found on the real 2026-08-08 card.
+
+    The Odds API lists "Carlos Diego Ferreira"; ESPN lists him as "Diego
+    Ferreira". The loose match ran ONE WAY — every token of the odds name
+    had to appear in ESPN's — so three tokens against two failed, no id
+    came back, no dossier was drafted, and `--why` reported the bout as a
+    data gap. For a lightweight with a decade on the roster whose stats
+    ESPN has had the whole time.
+
+    "no dossier" and "we cannot look him up" print identically and mean
+    opposite things: one is a fighter nobody tracks, the other is our
+    matcher. This is the second.
+    """
+    players = [("Diego Ferreira", "1"), ("Diego Lopes", "2")]
+    assert espnmma._match_player(players, "Carlos Diego Ferreira") == "1"
+
+
+def test_the_direction_that_already_worked_still_works():
+    """ESPN carrying the LONGER name is the case the old rule was written
+    for. The fix is additive or it is a regression wearing a fix's
+    clothes."""
+    players = [("Jose Aldo Junior", "9"), ("Diego Lopes", "2")]
+    assert espnmma._match_player(players, "Jose Aldo") == "9"
+
+
+def test_the_forward_match_is_tried_before_the_new_one():
+    """Ordering, not decoration. Searching a surname returns a crowd, and
+    a candidate that only fits the NEW direction must never be able to
+    make an old exact-ish match ambiguous."""
+    players = [("Jose Aldo Junior", "9"), ("Jose", "5")]
+    assert espnmma._match_player(players, "Jose Aldo") == "9"
+
+
+def test_two_plausible_fighters_are_refused_rather_than_guessed():
+    """Drafting the wrong man's fight history is worse than drafting
+    nobody, because every number downstream looks completely normal."""
+    players = [("Diego Ferreira", "1"), ("Carlos Ferreira", "3")]
+    assert espnmma._match_player(players, "Carlos Diego Ferreira") is None
+
+
+def test_a_name_that_matches_nothing_is_still_none():
+    players = [("Diego Lopes", "2"), ("Movsar Evloev", "4")]
+    assert espnmma._match_player(players, "Carlos Diego Ferreira") is None
+
+
+def test_a_single_search_hit_is_taken_on_trust():
+    """Local spellings trip exact search; one hit for a full name is the
+    man. Unchanged, asserted so the tier order cannot quietly drop it."""
+    assert espnmma._match_player([("Ludovit Klein", "7")], "L'udovit Klein") == "7"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -227,6 +227,24 @@ def main() -> None:
                     # one part of the line you cannot act on without.
                     print(f"    {p.get('fight', '?')}")
                     print(f"      {p.get('why', '')[:96]}")
+            # THE MODEL'S STRONGEST OPINIONS, WHICH WERE THE ONLY PASSES
+            # WITH NO NAMES ON THEM. A clamp kill is not a quiet refusal —
+            # it is the model claiming a bigger edge than the humility
+            # clamp will let it act on, which is either the best read on
+            # the card or a dossier that is wrong about somebody. Those
+            # are opposite problems and neither is visible from the tally.
+            #
+            # On the 2026-08-08 card two of seven bouts ended here and the
+            # output named neither, so the only actionable thing about
+            # them was a number 2.
+            killed = [p for p in out.get("pass_list", [])
+                      if p.get("reason_code") == "clamp_kill"]
+            if killed:
+                print(f"\n  {len(killed)} bout(s) the model wanted and the "
+                      f"clamp refused:")
+                for p in killed:
+                    print(f"    {p.get('fight', '?')}")
+                    print(f"      {p.get('why', '')[:96]}")
             # WHICH BOUTS AND WHICH FIGHTERS. A count of data gaps is not
             # a to-do list; the names are. These are the ones a dossier or
             # a fight history would turn into a priced bout.
