@@ -8,17 +8,22 @@ HE WAS RIGHT, AND IT IS PROVABLE FROM ONE ROW. A +106 winner returning
 +0.05u was staked 0.05/1.06 = 0.047u. `staking.MIN_STAKE_UNITS` is 0.1
 and `to_units` floors every positive stake at it, so nothing in the
 sizing path can emit 0.047. Something downstream of the floor shrinks
-stakes, and it is `correlation.apply_exposure_caps`, which multiplies
-stakes by a scaling factor and re-rounds without re-flooring.
+stakes, and it is `correlation.apply_exposure_caps`, which multiplied
+stakes by a scaling factor and re-rounded without re-flooring. FIXED the
+same day, to Ethan's call: over the cap now drops the weakest bets until
+the rest fit at full size. The audit stays, because the settled history
+was made under the old rule and is not restated.
 
 THE SECOND HALF, from the history rather than the arithmetic:
 GAME_CAP_U and SLATE_CAP_U were set on 2026-07-29 (commit 9a846b6),
 when a unit was 1/20th of the bankroll. The unit scale was multiplied
 by five on 2026-08-04 (commit 3f86208, "One scale for every stake"),
 and the caps were not re-derived. Every stake got five times bigger
-against a ceiling that did not move, so the cap now binds on ordinary
-slates instead of extreme ones — and when it binds it shrinks
-everything rather than betting fewer things properly.
+against a ceiling that did not move, so a cap built for the extreme
+slate started catching the ordinary one. The caps themselves were left
+alone — at the current scale 15u is 15% of bankroll on one night, which
+is a defensible ceiling; it was the 75% it implied under the old scale
+that was absurd. What changed is what happens when the ceiling is hit.
 
 WHAT THIS FILE DOES NOT CLAIM. It does not assert that this explains
 the -16.6% ROI. That is measurable and has not been measured: the
@@ -83,17 +88,17 @@ def test_the_sizing_path_cannot_produce_the_stake_that_shipped():
     assert 0.047 < MIN_STAKE_UNITS
 
 
-def test_the_exposure_caps_scale_without_reflooring():
+def test_the_exposure_caps_no_longer_scale_stakes():
     """Named so the next person finds it from the symptom. This is the
-    only code between `to_units` and the journal that changes a stake."""
+    only code between `to_units` and the journal that changes a stake,
+    and it must not shrink one below the floor again."""
     src = open(os.path.join(ROOT, "engine", "correlation.py"),
                encoding="utf-8").read()
     i = src.index("def apply_exposure_caps(")
     body = src[i:]
-    assert 'r["stake_units"] * factor' in body, \
-        "the scaling moved — re-check what now shrinks a stake"
-    assert "MIN_STAKE_UNITS" not in body, \
-        "the floor is applied here now; update this test and the docstring"
+    assert 'r["stake_units"] * factor' not in body, \
+        "proportional scaling is back — that is what produced the 0.047u"
+    assert "_trim(" in body, "the cap no longer trims"
 
 
 def test_the_caps_predate_the_scale_change():

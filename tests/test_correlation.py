@@ -67,13 +67,68 @@ def test_different_games_never_flag():
     assert "correlations" not in a and "correlations" not in b
 
 
-def test_game_cap_scales_correlated_stakes_together():
+def test_a_game_over_its_cap_drops_bets_instead_of_shrinking_them():
+    """CHANGED 2026-08-08, and this test changed with it.
+
+    It used to assert the surviving stakes summed to EXACTLY the cap,
+    which is what proportional scaling guarantees and is precisely the
+    behaviour that had to go. Ethan found the cost of it on the board: a
+    +106 winner returned 0.05u because it had been staked 0.047u — below
+    `staking.MIN_STAKE_UNITS`, a number the sizing path cannot emit. The
+    caps were re-rounding stakes after the floor had been applied.
+
+    The invariant now is an inequality, not an equality: the kept bets fit
+    inside the cap AT THE SIZE KELLY ASKED FOR. Hitting the cap exactly is
+    not a property worth having if the way you hit it is by making every
+    bet the wrong size."""
     rows = [_rec(f"P{i}", "KC", "LV", "receptions", "OVER", stake=2.0)
             for i in range(4)]                    # 8u in one game
     notes = apply_exposure_caps(rows, [])
-    total = sum(r["stake_units"] for r in rows)
-    assert abs(total - GAME_CAP_U) < 0.05
+    kept = [r for r in rows if r["recommended"]]
+    assert sum(r["stake_units"] for r in kept) <= GAME_CAP_U
+    assert kept, "the cap emptied the game"
+    assert all(r["stake_units"] == 2.0 for r in kept), \
+        "a surviving bet was resized"
     assert any("Game cap" in n for n in notes)
+
+
+def test_a_dropped_bet_leaves_the_board_rather_than_lingering_at_zero():
+    """A bet still marked recommended with a zero stake is journaled,
+    graded into the win-loss record, and contributes nothing to P&L — it
+    moves the record without moving the money. Same treatment as the
+    incoherent-pair rejection, which is the other place a bet is taken
+    off."""
+    rows = [_rec(f"P{i}", "KC", "LV", "receptions", "OVER", stake=2.0)
+            for i in range(4)]
+    apply_exposure_caps(rows, [])
+    for r in rows:
+        if not r["recommended"]:
+            assert r["stake_units"] == 0.0
+            assert r["grade"] == "Pass"
+            assert r.get("warnings"), "dropped with no reason given"
+
+
+def test_the_weakest_bets_are_the_ones_dropped():
+    """The entire argument for trimming over scaling. If the cap dropped
+    arbitrary bets it would be worse than scaling, not better."""
+    rows = []
+    for i, q in enumerate((9.0, 3.0, 8.0, 4.0)):
+        r = _rec(f"P{i}", "KC", "LV", "receptions", "OVER", stake=2.0)
+        r["quality"] = q
+        rows.append(r)
+    apply_exposure_caps(rows, [])
+    kept = {r["player"] for r in rows if r["recommended"]}
+    assert kept == {"P0", "P2"}, kept
+
+
+def test_a_slate_inside_its_caps_is_left_completely_alone():
+    """The caps are circuit breakers. A quiet night must come out the far
+    side byte-identical, or every stake on the board is a cap artefact."""
+    rows = [_rec("P1", "KC", "LV", "receptions", "OVER", stake=1.0),
+            _rec("P2", "BUF", "MIA", "receptions", "OVER", stake=0.5)]
+    before = [dict(r) for r in rows]
+    assert apply_exposure_caps(rows, []) == []
+    assert rows == before
 
 
 def test_slate_cap_counts_game_bets_too():
@@ -83,10 +138,21 @@ def test_slate_cap_counts_game_bets_too():
     bets = [{"home": "GB", "away": "CHI", "date": "2026-09-13",
              "recommended": True, "stake_units": 4.0}]
     notes = apply_exposure_caps(recs, bets)
-    total = (sum(r["stake_units"] for r in recs)
-             + sum(b["stake_units"] for b in bets))
-    assert abs(total - SLATE_CAP_U) < 0.1
+    live = ([r for r in recs if r["recommended"]]
+            + [b for b in bets if b["recommended"]])
+    assert sum(r["stake_units"] for r in live) <= SLATE_CAP_U
+    assert all(r["stake_units"] == 4.0 for r in live), "a survivor was resized"
     assert any("Slate cap" in n for n in notes)
+
+
+def test_the_strongest_bet_is_never_dropped_by_a_cap():
+    """A cap that can empty the board is a bug wearing a risk control's
+    clothes. If one bet alone busts the cap it is clamped to it, not
+    deleted."""
+    lone = _rec("Solo", "KC", "LV", "receptions", "OVER", stake=40.0)
+    apply_exposure_caps([lone], [])
+    assert lone["recommended"] is True
+    assert lone["stake_units"] == GAME_CAP_U
 
 
 def test_non_recommended_rows_are_ignored_by_caps():
