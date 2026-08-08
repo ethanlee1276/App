@@ -187,6 +187,74 @@ def test_the_measurement_sits_next_to_the_decision_it_made():
     assert "11,537" in why or "11537" in why
 
 
+
+# --- player faces ------------------------------------------------------------
+def test_the_face_is_requested_at_the_size_it_is_drawn():
+    """THE MEASUREMENT THAT FORCED THIS. nflverse ships full resolution, and
+    full resolution is 3,797,822 / 3,145,446 / 4,307,894 bytes — measured on
+    Ethan's machine for the first three roster players. Twelve props drawn
+    at 40px would pull ~45MB. That is not a polish feature, it is a stall."""
+    js = _js()
+    assert "function facePreview(" in js
+    i = js.index("function facePreview(")
+    body = js[i:i + 700]
+    assert "/image/upload/" in body, "no Cloudinary transform is applied"
+    assert "px * 2" in body, "no retina multiple — a 40px avatar wants 80px"
+
+
+def test_a_wrong_transform_falls_back_to_the_original_not_to_nothing():
+    """The transform is a GUESS — which Cloudinary transforms this account
+    permits is what `assets.py --probe` asks. So it is built to fail open:
+    the first error swaps to the untransformed URL that is known to work,
+    and only a second error reveals the initials underneath.
+
+    Wrong transform costs one 404 and a heavy image, which is exactly the
+    behaviour that shipped before. There is no path where this is worse."""
+    js = _js()
+    i = js.index("function playerAvatar(")
+    body = js[i:i + 1600]
+    assert "data-full" in body, "the original URL is not carried as a fallback"
+    assert "this.src=this.dataset.full" in body, "no swap to the original"
+    assert "this.remove()" in body, "no final give-up to the initials avatar"
+
+
+def test_a_non_cloudinary_url_is_left_alone():
+    """Other sports will not be nfl.com. A transform spliced into an ESPN
+    path would 404 every face on those boards."""
+    js = _js()
+    i = js.index("function facePreview(")
+    body = js[i:i + 700]
+    assert "indexOf(marker) < 0" in body and "return url" in body
+
+
+def test_the_roster_carries_a_face_for_the_current_season():
+    """Weekly stats do not exist until games are played, so on a Week 1
+    board they are empty. The roster is the only current-season source.
+
+    HONEST SCOPE: this changed nothing on today's board — measured, Week 1
+    2026 was already 293/293, because the carry only builds props for
+    players who HAVE prior-season stats, so every one of them is in last
+    season's file by construction. It is insurance for rookies and
+    practice-squad promotions, who have a photo and no stat line."""
+    from engine.sources import nflverse as nv
+    idx = nv.roster_index(2026)
+    if not idx:
+        return                       # no cached roster in this checkout
+    have = sum(1 for v in idx.values() if v.get("headshot"))
+    assert have > len(idx) * 0.8, f"only {have}/{len(idx)} roster faces"
+
+
+def test_the_stats_source_still_wins_over_the_roster():
+    """Order matters: this season's stats, then the roster, then last
+    season. A face from a played game is the most current thing available."""
+    import inspect
+    from engine.sources import nflverse as nv
+    src = inspect.getsource(nv.build_slate)
+    i = src.index("headshots: dict[str, str] = {}")
+    block = src[i:i + 900]
+    assert block.index("for r in list(stats)") < block.index("for name, row in roster.items()")
+    assert block.index("for name, row in roster.items()") < block.index("prior_stats")
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

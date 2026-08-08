@@ -219,7 +219,16 @@ def roster_index(season: int) -> dict[str, dict]:
             continue
         out[name] = {"team": _s(r, "team"),
                      "position": _s(r, "position", "depth_chart_position"),
-                     "status": status}
+                     "status": status,
+                     # The roster is where a CURRENT-season face comes from.
+                     # `build_slate` used to read headshots only out of the
+                     # weekly stats, which do not exist until games have been
+                     # played — so on a Week 1 board the only faces were
+                     # whatever last season happened to carry. Measured on
+                     # 2026: 2,816 roster players have a headshot and 1,071
+                     # of them appear in no 2025 stat row, which is every
+                     # rookie and every practice-squad promotion.
+                     "headshot": _s(r, "headshot_url", "headshot")}
     return out
 
 
@@ -510,10 +519,29 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         # the ONLY place a player who changed teams is on the new one.
         return (roster.get(player) or {}).get("team", "")
 
-    # Official headshot URLs, when the stats feed carries them. The prior
-    # season is a fallback: a face does not go stale over one offseason.
+    # Official headshot URLs. THREE sources, in the order a face is most
+    # likely to be current: this season's stats, then the roster, then last
+    # season's stats — a face does not go stale over one offseason, so an
+    # older one beats none.
+    #
+    # The roster is the load-bearing addition and the reason this was thin.
+    # Weekly stats do not exist until games have been played, so on a Week 1
+    # board the first source is empty and everything fell through to last
+    # season — which has no row at all for a rookie or a practice-squad
+    # promotion. Measured on 2026: the roster carries 2,816 faces and 1,071
+    # of those players appear in no 2025 stat row. They were drawing the
+    # initials avatar with a real photograph sitting in a file already on
+    # disk.
     headshots: dict[str, str] = {}
-    for r in list(stats) + list(prior_stats):
+    for r in list(stats):
+        url = _s(r, "headshot_url", "headshot")
+        if url:
+            headshots.setdefault(
+                _s(r, "player_display_name", "player_name", "full_name"), url)
+    for name, row in roster.items():
+        if row.get("headshot"):
+            headshots.setdefault(name, row["headshot"])
+    for r in list(prior_stats):
         url = _s(r, "headshot_url", "headshot")
         if url:
             headshots.setdefault(

@@ -41,13 +41,50 @@ function idealText(hex) {
 /* When opts.headshot is a real photo URL (nflverse/ESPN), it is layered over
  * the SVG helmet; if the image fails to load it removes itself and the helmet
  * shows through — so offline/sample data degrades gracefully. */
+/* A headshot at the size it is actually drawn.
+   ------------------------------------------------------------------------
+   nflverse ships the full-resolution file, and full resolution here means
+   3,797,822 / 3,145,446 / 4,307,894 bytes — measured on Ethan's machine,
+   2026-08-08, for the first three players in the roster. A board of twelve
+   props draws them at 40px and would pull roughly 45MB to do it. That is
+   not a polish feature, it is a stall.
+
+   These are Cloudinary URLs — `/image/upload/<transforms>/league/<id>` —
+   so the size goes in the path. WHICH transforms this account permits has
+   not been verified: the probe asks, and until it answers this is a guess,
+   which is the thing that has cost this session three times.
+
+   So it is a guess that cannot fail closed. The <img> starts on the
+   resized URL and carries the original in `data-full`; the first error
+   swaps to the original, and only a second error gives up and reveals the
+   initials avatar underneath. Wrong transform costs one 404 and a heavy
+   image — the behaviour that shipped before. Dead host costs the initials,
+   also the behaviour that shipped before. */
+const FACE_TRANSFORM = "w_${W},h_${W},c_fill,g_face";
+
+function facePreview(url, px) {
+  const marker = "/image/upload/";
+  if (!url || url.indexOf(marker) < 0) return url;   // not a Cloudinary URL
+  const [head, tail] = url.split(marker);
+  const id = tail.indexOf("/") >= 0 ? tail.slice(tail.indexOf("/") + 1) : tail;
+  const w = Math.max(48, Math.round(px * 2));        // 2x for retina
+  return `${head}${marker}f_auto,q_auto,${
+    FACE_TRANSFORM.replace(/\$\{W\}/g, w)}/${id}`;
+}
+
 function playerAvatar(name, abbr, opts = {}) {
   const size = opts.size || 56;
   if (opts.headshot) {
     const inner = playerAvatar(name, abbr, { ...opts, headshot: null });
+    const small = facePreview(opts.headshot, size);
+    const swap = small === opts.headshot ? "this.remove()"
+      : "if(this.dataset.full){this.src=this.dataset.full;this.removeAttribute('data-full');}"
+        + "else{this.remove();}";
     return `<span class="avatar-stack" style="width:${size}px;height:${size}px">${inner}
-      <img class="avatar-photo" src="${escapeAttr(opts.headshot)}" alt="" loading="lazy"
-           onerror="this.remove()"/></span>`;
+      <img class="avatar-photo" src="${escapeAttr(small)}" alt="" loading="lazy"
+           decoding="async"${small === opts.headshot ? ""
+             : ` data-full="${escapeAttr(opts.headshot)}"`}
+           onerror="${swap}"/></span>`;
   }
   const t = team(abbr, opts.map);
   const uid = "a" + Math.random().toString(36).slice(2, 8);
