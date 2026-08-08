@@ -406,6 +406,17 @@ svg text.num, svg .svg-num { font-family: var(--font-mono);
 .topbar {
   position: sticky; top: 0; z-index: 40;
   display: flex; align-items: center; justify-content: space-between;
+  /* Wrapping belongs to the BASE rule, not to a max-width block. It lived
+     in `@media (max-width: 1799px)`, which meant that at 1800px and up the
+     bar did not wrap at all — while the two-row layout further down still
+     asked for `.brand { flex: 1 0 100% }`. A 100%-wide item on a nowrap
+     row cannot take a line of its own; it just refuses to shrink and
+     squeezes its siblings. Measured at 1800: the switcher wrapped to FOUR
+     rows inside a crushed brand, the header went to 263px, and the page
+     nav overflowed its box by 274px. Every width below 1800 was fine,
+     which is exactly why it survived — the bug only shows on a monitor
+     bigger than the one it was designed on. */
+  flex-wrap: wrap;
   gap: 18px; padding: 14px 26px;
   background: var(--topbar-bg);
   border-bottom: var(--hairline) solid var(--border-soft);
@@ -2978,6 +2989,30 @@ select.calc-in { width: auto; font-weight: 600; }
      cascade collision here twice, and test_header_density slices the
      stylesheet from the first match of this exact query — a third block
      silently moved what that slice was reading. */
+  /* A GROUP IS A BOX HERE, not `display: contents`.
+     ------------------------------------------------------------------
+     With contents, all eleven buttons are direct children of the
+     switcher, so the wrap algorithm may break the row between any two of
+     them — including inside a group. Measured on HEAD: the markets pair
+     split across two rows at 960px, and the record pair at 1100, 820 and
+     768. The separator hairline below then sits on whichever button
+     happens to start row two, so the one mark that says "the axis
+     changed here" lands somewhere it does not mean, and the row reads as
+     something that has come apart. That is the "bugged out" report.
+
+     As real boxes the groups are the flex items, so a break can only
+     fall BETWEEN groups — which is the reading the hairline already
+     claims. `gap: inherit` copies the switcher's own gap, so the row
+     still looks like one row and the two stay in step when the gap
+     changes at a breakpoint (it does, at 1100).
+
+     This also brings `.sport-group { gap: 3px }` at 761-1023px to life.
+     It has been in the sheet all along and did nothing: `gap` on a
+     `display: contents` element has no box to apply to. It was written
+     by someone who believed these were boxes, which is the same model
+     this rule makes true. */
+  .sport-group { display: flex; align-items: center; gap: inherit; }
+
   .sport-group[data-group="markets"] .sport-btn:first-child,
   .sport-group[data-group="record"] .sport-btn:first-child {
     margin-left: 12px; padding-left: 16px;
@@ -3023,6 +3058,51 @@ select.calc-in { width: auto; font-weight: 600; }
   .nav { flex: 0 1 auto; min-width: 0; order: 2; }
   .slate-meta { margin-left: auto; flex: 0 1 auto; min-width: 0; order: 3;
     justify-content: flex-end; }
+}
+
+/* Which EDGE of the More button the menu hangs from, decided by whether
+   the button ends its row.
+   ------------------------------------------------------------------
+   The rule above anchors left, on the reasoning that "More" is the
+   switcher's last item so there is always at least the menu's width to
+   its right. Measured, that was not true even before this file changed:
+   at 1280px the left-anchored menu ran from 1199 to 1399 — 119px past the
+   viewport, and enough to give the whole PAGE a horizontal scrollbar. The
+   widths in that comment's checklist (800/1024/1280/1440/1800) include the
+   one it fails at.
+
+   Making the switcher full-width below 1248px moved "More" to the far
+   right of the bar, which added the same overflow at 960 (7px) and 900
+   (67px). So the anchor has to follow the button.
+
+   847px is where the switcher stops fitting on one line, and the number is
+   a measurement rather than a round figure: the eleven buttons need 795px
+   and the content box is the viewport less 52px of bar padding, so 847 is
+   the narrowest width that still holds them (795 fits in exactly 795) and
+   846 is the first that wraps. Both 848 and 861 were tried first and both
+   clipped, by 120px and 107px, because they left-anchored widths where
+   "More" still ended the row. At or above 847 "More" always ends it, so
+   the menu's RIGHT edge belongs on the button's and it can never reach the
+   viewport edge. Below it "More" can be the FIRST item of a wrapped second
+   row — measured at 820 it sits at x 26 — and there the original reasoning
+   holds exactly: anchor left, with the whole bar's width to the right.
+
+   THE BREAKPOINT HAS TO TRACK THE WRAP POINT, and it is wrong in both
+   directions. Set too high, the widths between the wrap point and it
+   left-anchor while "More" still ends the row — 861 was the first attempt
+   and clipped 107px at 860. Set too low, they right-anchor while "More"
+   leads a wrapped row, and the menu hangs off the LEFT instead (at 820
+   that would be -120). Adding a sport moves the wrap point and this number
+   with it; test_headerwrap pins the pair together.
+
+   The old note against right-anchoring ("it opened under WNBA and UFC and
+   looked like it belonged to them — at 1440, button 630-685, menu
+   485-685") was measured when the switcher was narrower and "More" sat
+   mid-row. It now ends the row at 1199-1240, so the menu lands under
+   Record and The Lab, beside the button rather than adrift under a
+   league. */
+@media (min-width: 847px) {
+  .sport-more .sport-group[data-group="tools"] { left: auto; right: 0; }
 }
 
 /* On a phone the wrapper must not exist: the slide-down menu already
@@ -3562,12 +3642,45 @@ select.calc-in { width: auto; font-weight: 600; }
 .brand { flex: 1 1 100%; align-items: flex-start; gap: 18px;
   padding-bottom: 13px; border-bottom: var(--hairline) solid var(--border-soft); }
 /* Spacing comes from the container's gap, not from a margin on each button.
-   `.sport-group` is display:contents, so its buttons flow into this row —
-   which means `.sport-btn:last-child` matches the last LEAGUE, not the last
-   button, and zeroing its margin ran "UFC" straight into "MORE". A gap has
-   no such edge case. */
+   `.sport-btn:last-child` matches the last button of its GROUP rather than
+   the last button of the row, so zeroing its margin ran "UFC" straight into
+   "MORE". A gap has no such edge case.
+   (The groups were `display: contents` when that was written, which made
+   every button a direct child of this row; they are boxes on desktop now —
+   see the `min-width: 761px` block — and the hazard is the same either
+   way.) */
 .sport-switch { flex: 0 1 auto; margin-left: 22px; margin-top: 6px;
   gap: 26px; flex-wrap: wrap; }
+
+/* Below 1248px the switcher takes the whole width instead of squeezing in
+   beside the wordmark, because there it measurably does not fit beside it:
+   the brand block is 318px and the eleven buttons want 860-900px, so at
+   1100px they are 86px short of what is left over and at 960px they are
+   346px short. That is not a near miss tighter spacing recovers — the
+   switcher wrapped to two rows at 960 and three at 900, and each of those
+   is ~44px of header. Given its own line it has 886px at 960 and fits on
+   one row.
+
+   THIS BLOCK HAS TO SIT AFTER THE RULES ABOVE, and the first attempt put
+   it at line ~3150 with the other 761-1247 rules, where every declaration
+   in it was silently overridden by `.sport-switch { flex: 0 1 auto;
+   margin-left: 22px }` further down this file. Same specificity, later
+   wins, and a media query adds none. The layout appeared to change anyway
+   — `.brand { flex-wrap: wrap }` was doing all the work from the earlier
+   block — so the measurement looked like a success while four of the five
+   declarations did nothing.
+
+   Above 1248px nothing here applies: the two genuinely fit side by side
+   (1178px of content in 1228px) and the `min-width: 761px` block's
+   `flex-wrap: nowrap` holds that layout. */
+@media (min-width: 761px) and (max-width: 1247px) {
+  /* row-gap, because the wordmark and the switcher are STACKED here and
+     the 18px that separated them across a row is too much between lines.
+     Left at the row values the stack cost 24px of air and the header grew
+     even though the switcher had stopped wrapping. */
+  .brand { flex-wrap: wrap; row-gap: 2px; }
+  .sport-switch { flex: 1 1 100%; margin-left: 0; margin-top: 0; }
+}
 .sport-btn { font-size: var(--fs-md); letter-spacing: .14em;
   padding: 5px 0 9px; margin-right: 0; }
 

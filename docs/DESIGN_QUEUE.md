@@ -224,3 +224,52 @@ the bottom rather than acting on it.
 ## Done
 
 <!-- Move completed items here with the before → after number. -->
+
+- **The header came apart at both ends of the width range.** Not a queue
+  item — reported directly ("this area on the screen is all bugged out and
+  also is taking up WAY too much space") and fixed on the spot, recorded
+  here because the measurements are worth keeping.
+
+  Three faults, independent of each other:
+
+  1. **`flex-wrap: wrap` lived in `@media (max-width: 1799px)`** while the
+     two-row layout asks for `.brand { flex: 1 0 100% }`. A 100%-wide item
+     on a nowrap row cannot take a line of its own, so at 1800px and up the
+     switcher wrapped to **four** rows inside a crushed brand and the page
+     nav overflowed its box by 274px, printing on top of the running-ROI
+     line and the status chips. Every width *below* 1800 was fine, which is
+     why it survived: it only shows on a monitor bigger than the one it was
+     designed on.
+  2. **`.sport-group` was `display: contents`**, so all eleven buttons were
+     direct children of the switcher and the row could break inside a
+     group — the markets pair split at 960px, the record pair at 1100, 820
+     and 768. The separator hairline then sat on whichever button started
+     row two.
+  3. **The More menu was left-anchored at every width** on the reasoning
+     that "More" always has the menu's width to its right. It did not: at
+     1280 the menu ran 119px past the viewport and gave the whole page a
+     horizontal scrollbar. Pre-existing, and the widths listed as checked
+     in that comment include the one it fails at.
+
+  Header height, before → after, on a **return visit** (the state the site
+  is used in — `.brand-home` is hidden by the compact masthead):
+
+  | width | before | after | | width | before | after |
+  |------:|-------:|------:|-|------:|-------:|------:|
+  | 1800  | 263 | **196** | | 960 | 279 | **222** |
+  | 1440  | 196 | 196     | | 900 | 254 | **197** |
+  | 1280  | 232 | 232     | | 820 | 254 | **248** |
+  | 1024  | 229 | **223** | | 768 | 254 | **248** |
+
+  No group splits at any width, and no menu clipping or page horizontal
+  scroll from 762 to 1800. First visit improves too (306 → 299 at 960,
+  317 → 259 at 900) but stays tall on purpose — that state is the pitch.
+
+  Pinned by `tests/test_headerwrap.py`, including a source-order assertion:
+  the first cut of the fix put the switcher override ~470 lines *above* the
+  rule it overrides, where four of its five declarations were silently
+  dead. The layout improved anyway, because one surviving declaration was
+  doing all the work — so the measurement looked like a success while most
+  of the change did nothing. **A before/after number cannot tell you that a
+  rule applied.** When a CSS change lands in a file this long, check where
+  it sits relative to what it is overriding.
