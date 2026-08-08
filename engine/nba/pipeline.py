@@ -304,12 +304,19 @@ def _avg(vals, n=None):
 def shared_recommendations(props: list[dict],
                            lines_map: dict | None = None,
                            dates_map: dict | None = None,
-                           tune: LeagueTuning = NBA) -> list[dict]:
+                           tune: LeagueTuning = NBA,
+                           assets: dict | None = None) -> list[dict]:
     """Every evaluable prop as a shared-schema recommendation dict.
 
     ``lines_map``: {(player, market): [line dicts]} — the multi-book quotes
     the Scanner needs (Scalpy itself only keeps the best two-way price).
     ``dates_map``: {player: [ISO dates, newest first]} for real log labels.
+
+    ``assets``: {player: {espn_id, headshot}} from `db.player_assets`, so a
+    prop can carry the player's photo. ESPN's box score ships the URL
+    beside the athlete and the hoops ingest now stores it; this is only the
+    lookup. Absent, every face falls back to the initials avatar — which is
+    what the board did before, so an old database is not a broken one.
 
     ``tune`` is NOT optional in practice. This layer is what the seven
     shared pages actually render, and it used to call ``evaluate_prop``
@@ -345,7 +352,11 @@ def shared_recommendations(props: list[dict],
             "opponent": r.get("opponent", ""),
             "market": r["market"], "market_label": r["market_label"],
             "position": "", "usage_role": f"minutes {r['minutes_grade']}",
-            "headshot": "",
+            # Was hardcoded "". The field has been on this record all along
+            # and nothing ever filled it, so every NBA and WNBA prop drew
+            # the initials avatar while ESPN was handing us the photo URL
+            # in the same payload the stat line came from.
+            "headshot": (assets or {}).get(r["player"], {}).get("headshot", ""),
             "side": r["side"], "book": r.get("book", ""),
             "line": r["line"], "odds": r["odds"],
             "projection": r["projection"],

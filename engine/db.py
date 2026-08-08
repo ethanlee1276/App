@@ -41,6 +41,23 @@ CREATE TABLE IF NOT EXISTS ingest_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sport TEXT, kind TEXT, detail TEXT, rows INTEGER, ts TEXT
 );
+-- Who a player IS, as opposed to what he did in one game.
+--
+-- A SEPARATE TABLE, not a column on player_game_logs, for two reasons. An
+-- id is a property of a person and would repeat identically across every
+-- row that person ever generates — 306,355 NBA log rows for a few hundred
+-- players. And the feed that knows the id is the box score, which we walk
+-- once per game; writing it per stat row would multiply it by the number
+-- of markets.
+--
+-- `headshot` is stored rather than built. ESPN's box score usually carries
+-- the photo URL beside the athlete, and a URL a feed handed us cannot be
+-- wrong the way a pattern reconstructed from an id can — the failure mode
+-- this session has paid for three times.
+CREATE TABLE IF NOT EXISTS player_assets (
+    sport TEXT, player TEXT, espn_id TEXT, headshot TEXT, seen TEXT,
+    PRIMARY KEY (sport, player)
+);
 -- Point-in-time sportsbook prices. This is what lets a backtest measure the
 -- model against the number a bettor could actually have taken, rather than a
 -- naive baseline. Historical API calls cost extra credits and a past price
@@ -228,6 +245,52 @@ def upsert_player_logs(conn, rows: list[dict]) -> int:
 
 def upsert_odds_history(conn, rows: list[dict]) -> int:
     return _upsert(conn, "odds_history", ODDS_HIST_COLS, rows)
+
+
+ASSET_COLS = ["sport", "player", "espn_id", "headshot", "seen"]
+
+
+def upsert_player_assets(conn, rows: list[dict]) -> int:
+    """Player identity rows, where a BLANK never erases a known value.
+
+    A traded player keeps his id and his photo; what changes is the team,
+    and that lives on the game log. So the only thing a re-ingest can do
+    here is re-state the same two facts — with one exception that a plain
+    INSERT OR REPLACE would get wrong.
+
+    Not every box score carries `athlete.headshot`. A player whose photo we
+    already have can appear in a later-written game without one, and last
+    write wins would blank the face we had. Backfills do not run in date
+    order either, so this is not a rare shape. Same fix `upsert_games`
+    uses: keep the old value when the new one is empty. NULLIF, not
+    COALESCE alone, because our blank is the empty string, not NULL.
+    """
+    if not rows:
+        return 0
+    placeholders = ", ".join(f":{c}" for c in ASSET_COLS)
+    updates = ", ".join(
+        f"{c}=COALESCE(NULLIF(excluded.{c}, ''), player_assets.{c})"
+        for c in ASSET_COLS if c not in ("sport", "player"))
+    conn.executemany(
+        f"INSERT INTO player_assets ({', '.join(ASSET_COLS)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(sport, player) DO UPDATE SET {updates}",
+        [{c: r.get(c) for c in ASSET_COLS} for r in rows])
+    conn.commit()
+    return len(rows)
+
+
+def player_assets(conn, sport: str) -> dict[str, dict]:
+    """``{player: {espn_id, headshot}}`` for one sport."""
+    out: dict[str, dict] = {}
+    try:
+        for r in conn.execute(
+                "SELECT player, espn_id, headshot FROM player_assets "
+                "WHERE sport=?", (sport,)):
+            out[r[0]] = {"espn_id": r[1] or "", "headshot": r[2] or ""}
+    except Exception:                                         # noqa: BLE001
+        pass          # pre-migration database: no faces, not a broken board
+    return out
 
 
 STARTER_COLS = ["sport", "season", "period", "game_id", "team", "pitcher",

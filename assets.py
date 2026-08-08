@@ -159,6 +159,12 @@ def probe_other_headshots(only: str | None) -> None:
     change: NFL hands us the URL, and every other sport needs an id we do
     not currently store anywhere — `player_game_logs` has `player` and no
     identifier. Each of these would mean capturing the id during ingest.
+
+    NBA and WNBA are now DONE and are here only as a regression check: the
+    box-score summary carries `athlete.headshot.href`, ingest writes it to
+    `player_assets`, and the board reads it. MLB is still open, because we
+    ingest statsapi — which gives MLB's ids, not ESPN's — so it needs a
+    name→id join before an ESPN path means anything.
     """
     print("\n" + "=" * 78)
     print("PLAYER HEADSHOTS — the sports that need an ID we do not store")
@@ -180,6 +186,22 @@ def probe_other_headshots(only: str | None) -> None:
         print(f"  {verdict:<10} {sport:<5} {label}")
         print(f"  {'':<10} {detail}")
         print(f"  {'':<10} {url}")
+
+    # Is the raw ESPN headshot worth resizing? The board ships the href the
+    # feed handed us, untouched, because that URL cannot be wrong about its
+    # own shape. Whether to route it through the combiner — as the LOGOS
+    # already do, where it measured 40,228 bytes against 11,537 — is a
+    # question with a number behind it, and this is the number. Both sizes
+    # print; nobody has to remember which is which.
+    if not only or only in ("nba", "wnba"):
+        print("\n  Raw vs combiner, same ESPN headshot (decides whether the")
+        print("  board should resize faces the way it resizes logos):")
+        raw = "https://a.espncdn.com/i/headshots/nba/players/full/1966.png"
+        sized = ("https://a.espncdn.com/combiner/i?img=/i/headshots/nba/"
+                 "players/full/1966.png&w=112&h=112")
+        for label, url in (("raw full", raw), ("combiner 112", sized)):
+            verdict, detail = _get(url)
+            print(f"    {verdict:<10} {label:<14} {detail}")
 
 
 def _teams_for(sport: str) -> list[str]:

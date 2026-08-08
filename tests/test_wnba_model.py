@@ -280,7 +280,12 @@ def test_the_page_layer_grades_the_wnba_as_the_wnba():
     with open(os.path.join(root, "nba_build.py"), encoding="utf-8") as fh:
         build = fh.read()
     assert "shared_recommendations(props, lines_map, dates_map," in build
-    assert "tune=tune)" in build, "the build never passes the league through"
+    # Anchored on the ARGUMENT, not on "tune=tune)" — the closing paren was
+    # part of the match until a second keyword argument was added after it,
+    # and the test then failed while the thing it protects was untouched.
+    i = build.index("shared_recommendations(props, lines_map, dates_map,")
+    assert "tune=tune" in build[i:i + 400], \
+        "the build never passes the league through"
 
 
 def test_a_tier_three_prop_is_harder_to_recommend_on_the_page_too():

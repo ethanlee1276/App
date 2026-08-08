@@ -565,8 +565,13 @@ def main() -> None:
                          "over_odds": ln.over_odds, "under_odds": ln.under_odds}
                         for ln in pr.lines]
             dates_map = {name: h.get("dates", []) for name, h in hist.items()}
+            # Photos come out of the same box scores that produced the stat
+            # history — one table read, no second feed. A player we have
+            # never ingested is simply absent and keeps the initials chip.
+            from engine.db import player_assets
             recs = shared_recommendations(props, lines_map, dates_map,
-                                          tune=tune)
+                                          tune=tune,
+                                          assets=player_assets(conn, args.league))
             out["recommendations"] = recs
             out["counts"] = {**picks_result["counts"],
                              "props_analyzed": len(recs),

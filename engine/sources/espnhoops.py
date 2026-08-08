@@ -148,10 +148,25 @@ def parse_summary(payload: dict) -> list[dict]:
                             vals[STAT_MAP[col]] = v
                 if not vals:
                     continue
+                # Identity, which this parser used to read and throw away.
+                # `info` already holds the athlete id and, on most
+                # payloads, the photo URL — so a face for the NBA and WNBA
+                # boards costs one dict lookup rather than a second feed.
+                #
+                # The URL is TAKEN, not reconstructed from the id. Building
+                # `.../headshots/{league}/players/full/{id}.png` by hand is
+                # the same class of guess that produced `limit=400` and the
+                # User-Agent 403; a href the feed handed us cannot be wrong
+                # about its own shape. The id is kept anyway, because it is
+                # the only stable handle if a payload ever omits the href.
+                shot = (info.get("headshot") or {})
                 rows.append({
                     "player": player, "team": team,
                     "position": "S" if ath.get("starter") else "B",
                     "stats": vals,
+                    "espn_id": str(info.get("id") or ""),
+                    "headshot": (shot.get("href") if isinstance(shot, dict)
+                                 else str(shot or "")) or "",
                 })
     return rows
 
@@ -188,7 +203,8 @@ def ingest_day(conn, date: str, league: str = "wnba",
     """
     from .. import db
 
-    result: dict = {"games": 0, "player_logs": 0, "skipped": []}
+    result: dict = {"games": 0, "player_logs": 0, "assets": 0, "skipped": []}
+    arows: list[dict] = []
     try:
         games = load_day(date, league=league)
     except DataUnavailable as exc:
@@ -213,6 +229,14 @@ def ingest_day(conn, date: str, league: str = "wnba",
             continue
         opp = {g["home"]: g["away"], g["away"]: g["home"]}
         for row in parse_summary(summary):
+            # Identity once per player per game, not once per market — the
+            # same person appears in this loop for points, rebounds and
+            # assists, and an id does not vary between them.
+            if row.get("espn_id") or row.get("headshot"):
+                arows.append({"sport": league, "player": row["player"],
+                              "espn_id": row.get("espn_id", ""),
+                              "headshot": row.get("headshot", ""),
+                              "seen": date})
             for market, value in row["stats"].items():
                 prows.append({
                     "sport": league, "season": _season_of(date, league),
@@ -225,6 +249,7 @@ def ingest_day(conn, date: str, league: str = "wnba",
                 })
     result["games"] = db.upsert_games(conn, grows)
     result["player_logs"] = db.upsert_player_logs(conn, prows)
+    result["assets"] = db.upsert_player_assets(conn, arows)
     return result
 
 
