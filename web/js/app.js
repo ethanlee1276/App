@@ -2092,16 +2092,13 @@ function gameCard(g) {
   } else if (isFinal) {
     badge = `<div class="status-badge final">FINAL${live.period && live.period !== "Final" ? " · " + escapeHtml(live.period) : ""}</div>`;
   }
-  // MLB live: a mini base-state diamond replaces the outs/runners text.
+  // MLB live: the count and the outs. The runners are on the park art
+  // above, lit on the bases they are standing on, so this line no longer
+  // repeats them.
   // NFL live: the down & distance line.
   let liveDetail = "";
   if (isLive && mlb) {
-    const outs = live.outs == null ? 0 : live.outs;
-    liveDetail = `
-      <div class="live-detail base">
-        ${baseDiamond(live.bases, live.outs)}
-        <span class="base-label">${outs} out${outs === 1 ? "" : "s"}</span>
-      </div>`;
+    liveDetail = `<div class="live-detail count">${countStrip(live)}</div>`;
   } else if (isLive && live.detail) {
     liveDetail = `<div class="live-detail"><span class="live-dot sm"></span>${escapeHtml(live.detail)}</div>`;
   }

@@ -397,6 +397,56 @@ function stadium(game, opts = {}) {
     `<g><line x1="${x}" y1="${y}" x2="${x + (x<120?10:-10)}" y2="${y+(y<80?8:-8)}" stroke="#5b6b95" stroke-width="2"/>
       <circle cx="${x}" cy="${y}" r="3.4" fill="#fff4c2"/><circle cx="${x}" cy="${y}" r="6" fill="#fff4c2" opacity="0.25"/></g>`
   ).join("");
+  // THE BALL, WHERE THE BALL IS.
+  //
+  // Ethan, 2026-08-08: "we can coninue that idea onto football by
+  // displaying what yard line the players are on along with what down
+  // they are on that the quarter and time left."
+  //
+  // The quarter and the clock are already in the LIVE badge over this
+  // art, and the down and distance is already the footer line, so what
+  // was actually missing is field position — the one thing prose is worst
+  // at and a drawing is best at.
+  //
+  // Geometry, which is the whole trick: the field rect runs x=52..188
+  // with an 18-wide end zone at each end, so goal line to goal line is
+  // exactly x=70..170. `yard_line` is defined as 0-100 from the HOME
+  // goal line and the home end zone is the left one, so the spot is
+  // simply x = 70 + yard. No scaling, no offset, nothing to get backwards.
+  //
+  // FAILS OPEN, and it will be closed most of the time: `yard_line` is
+  // null for every scheduled game, every final, every college game (that
+  // feed is a different parser and does not carry a spot yet), and any
+  // live game whose spot string does not resolve to a side. All of those
+  // draw the field exactly as it was before this existed.
+  const lv = game.live || {};
+  const yard = lv.state === "live" && lv.yard_line != null ? Number(lv.yard_line) : null;
+  let drive = "";
+  if (yard != null && Number.isFinite(yard)) {
+    const x = 70 + Math.max(0, Math.min(100, yard));
+    // Home drives toward the away end zone, which is the right one.
+    // Unknown possession draws the spot and no arrow rather than a
+    // guessed direction — half the fact is better than a wrong one.
+    const dir = lv.possession === game.away ? -1 : lv.possession === game.home ? 1 : 0;
+    // The arrow sits 7px downfield of the spot and is dropped rather than
+    // clamped when that lands past the goal line: an arrow pinned to the
+    // end zone would read as a spot of its own.
+    const ax = x + dir * 7;
+    const arrow = dir && ax > 71 && ax < 169
+      ? `<path d="M${ax} 55 l${dir * 5} 3 l${-dir * 5} 3 z" fill="#ffd24a" opacity="0.95"/>`
+      : "";
+    // The dark backing line is not decoration. The field is nine white
+    // yard stripes on green; one more thin bright line among them is just
+    // a tenth stripe. The dark edge is what makes this one read as a
+    // marker laid ON the field rather than painted into it.
+    drive = `
+      <g>
+        <line x1="${x}" y1="50" x2="${x}" y2="110" stroke="#0c1020" stroke-width="3.6" opacity="0.45"/>
+        <line x1="${x}" y1="50" x2="${x}" y2="110" stroke="#ffd24a" stroke-width="1.8"/>
+        <ellipse cx="${x}" cy="58" rx="4.2" ry="2.8" fill="#8a4b22" stroke="#ffffff" stroke-width="1"/>
+        ${arrow}
+      </g>`;
+  }
   const roofOverlay = covered ? `
     <ellipse cx="120" cy="80" rx="108" ry="66" fill="url(#${uid}roof)" opacity="0.8"/>
     <ellipse cx="120" cy="80" rx="108" ry="66" fill="none" stroke="${shade(home.primary,20)}" stroke-width="2"/>
@@ -457,6 +507,10 @@ function stadium(game, opts = {}) {
     <text x="120" y="84" text-anchor="middle" font-size="10" font-weight="800"
           fill="#ffffff" font-family="system-ui">${escapeAttr(game.home)}</text>
     ${roofOverlay}
+    <!-- Last, and deliberately after the roof: a dome lays a 0.8-opacity
+         ellipse over the whole field, which would leave the ball spot
+         dimmer indoors than out. -->
+    ${drive}
   </svg>`;
 }
 
@@ -505,6 +559,19 @@ function court(game, opts = {}) {
 }
 
 
+// The base state, said in words. The lit bases are a colour difference on a
+// 240px drawing, which is nothing at all to a screen reader — and the mini
+// diamond that used to carry an aria-label is gone.
+const BASE_NAMES = { 1: "first", 2: "second", 3: "third" };
+function runnerLabel(runners) {
+  const on = [1, 2, 3].filter((n) => runners && runners.has(n));
+  if (!on.length) return "Ballpark";
+  if (on.length === 3) return "Ballpark — bases loaded";
+  return `Ballpark — runner${on.length > 1 ? "s" : ""} on `
+    + on.map((n) => BASE_NAMES[n]).join(" and ");
+}
+
+
 function ballpark(game, opts = {}) {
   const w = opts.w || 240, h = opts.h || 150;
   const home = team(game.home), away = team(game.away);
@@ -515,6 +582,10 @@ function ballpark(game, opts = {}) {
   const grassDark = turf ? "#186038" : "#1f7d41";
   const dirt = "#b3814f";
   const uid = "bp" + Math.random().toString(36).slice(2, 7);
+  // Occupied bases, live only. `live.bases` is [1], [2, 3], … — the same
+  // shape the mini diamond has always read.
+  const lv = game.live || {};
+  const runners = new Set(lv.state === "live" ? (lv.bases || []) : []);
   const fx = (game.factors || {});
   const hrPct = fx.hr ? Math.round((fx.hr - 1) * 100) : 0;
   const hrBadge = hrPct ? `
@@ -545,8 +616,16 @@ function ballpark(game, opts = {}) {
         fill="#9aa6c9" font-family="system-ui">RETRACTABLE · OPEN</text>` : "");
 
   return `
-  <svg class="stadium" width="${w}" height="${h}" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+  <svg class="stadium" width="${w}" height="${h}" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet"
+       role="img" aria-label="${escapeAttr(runnerLabel(runners))}">
     <defs>
+      <!-- The glow that makes an occupied base read as occupied at 240px.
+           Gold, the colour the mini diamond used for the same fact, so the
+           idea survived the diagram that used to carry it. -->
+      <filter id="${uid}runner" x="-80%" y="-80%" width="260%" height="260%">
+        <feDropShadow dx="0" dy="0" stdDeviation="2.2"
+                      flood-color="#ffd24a" flood-opacity="0.95"/>
+      </filter>
       <radialGradient id="${uid}sky" cx="50%" cy="30%" r="80%">
         <stop offset="0%" stop-color="${covered ? "#0f1730" : "#16233f"}"/>
         <stop offset="100%" stop-color="#0a0f22"/>
@@ -591,11 +670,53 @@ function ballpark(game, opts = {}) {
       <line x1="120" y1="128" x2="40" y2="62"/>
       <line x1="120" y1="128" x2="200" y2="62"/>
     </g>
-    <!-- bases + mound + plate -->
-    <g fill="#ffffff">
-      <rect x="93" y="97" width="6" height="6" transform="rotate(45 96 100)"/>
-      <rect x="117" y="73" width="6" height="6" transform="rotate(45 120 76)"/>
-      <rect x="141" y="97" width="6" height="6" transform="rotate(45 144 100)"/>
+    <!-- BASES, LIT WHEN OCCUPIED.
+         Ethan, 2026-08-08: "when games are live, can we highlight what
+         batters are on base on the actual stadium."
+
+         The art already drew these three squares at these three
+         coordinates; the live feed already carried which of them are
+         occupied. Nothing new is fetched — the two halves simply had
+         never been introduced.
+
+         An occupied base is filled with the same gold the mini diamond
+         used and given a soft ring, so it reads at 240px without a
+         legend. Off a live game every base is white, exactly as before,
+         because the runner set is empty and the fill falls through.
+         (No backticks in this comment: it lives inside a template
+         literal, and one would end the string.) -->
+    <g>
+      ${[[96, 100, 3], [120, 76, 2], [144, 100, 1]].map(([bx, by, n]) => {
+        if (!runners.has(n)) {
+          return `<rect x="${bx - 3}" y="${by - 3}" width="6" height="6"
+            transform="rotate(45 ${bx} ${by})" fill="#ffffff"/>`;
+        }
+        // MEASURED IN CHROMIUM, and it took two passes.
+        //
+        // First: the gold fill did not read. The bases sit ON the infield
+        // dirt (#b3814f) and #ffd24a is the same warmth at nearly the same
+        // value — at six pixels the occupied base and the empty one were
+        // the same grain of rice, and a gold glow on tan only softened the
+        // edge further. The dark disc is what does the work: it separates
+        // the marker from the dirt so the gold has something to be bright
+        // against. Bigger, too — a runner is a bigger deal than a bag.
+        //
+        // Second, and the one worth remembering: the gold was not merely
+        // low-contrast, it was NOT THERE. `.stadium g rect` in the Night
+        // Form stylesheet sets `fill: none` on every rect inside the art —
+        // deliberately, to hollow out the plaques — and a presentation
+        // attribute loses to any CSS rule. `getComputedStyle(rect).fill`
+        // came back "none" while `fill="#ffd24a"` sat right there in the
+        // markup. Hence the class: the styling of an occupied base lives
+        // in the stylesheet, where it can out-specify the rule that would
+        // otherwise erase it.
+        return `<g>
+          <circle cx="${bx}" cy="${by}" r="6.5" fill="#0c1020" opacity="0.55"/>
+          <rect class="on-base" x="${bx - 4}" y="${by - 4}" width="8" height="8"
+            transform="rotate(45 ${bx} ${by})" fill="#ffd24a"
+            stroke="#ffffff" stroke-width="1" filter="url(#${uid}runner)"/>
+        </g>`;
+      }).join("")}
     </g>
     <circle cx="120" cy="100" r="5.5" fill="${dirt}" stroke="#caa06a" stroke-width="1"/>
     <circle cx="120" cy="100" r="1.8" fill="#ffffff"/>
@@ -750,33 +871,34 @@ function marketRule(rows, opts = {}) {
   </svg>`;
 }
 
-/* ---------------- Mini base-state diamond (MLB live) --------------------- */
-function baseDiamond(bases, outs, opts = {}) {
-  const size = opts.size || 46;
-  const occ = new Set(bases || []);
-  const on = "#ffd24a", off = "#2c3557", edge = "#0c1020";
-  // rotated-square base at (cx,cy); occupied bases glow gold.
-  const base = (cx, cy, n) => {
-    const lit = occ.has(n);
-    return `<rect x="${cx - 5}" y="${cy - 5}" width="10" height="10" rx="1.5"
-      transform="rotate(45 ${cx} ${cy})" fill="${lit ? on : off}"
-      stroke="${lit ? shade(on, -30) : edge}" stroke-width="1.2"
-      ${lit ? 'filter="url(#baseglow)"' : ""}/>`;
-  };
+/* ---------------- Count strip (MLB live) ---------------------------------
+   This replaced a 46px base diamond that sat in the same spot.
+
+   The diamond was the only place the base state was shown, so it earned
+   its room. Now the park art above it lights the occupied bases where the
+   runners actually are, and a second, smaller diagram forty pixels below
+   was saying the same sentence twice — while the half of the situation it
+   never said, the count, went unsaid on every card.
+
+   FAILS OPEN. `balls`/`strikes` are new to the live parse; any payload
+   built before it, or any game the feed is thin on, has them null. The
+   count is dropped and the outs still render — which is exactly what the
+   footer said before, minus the picture.                                 */
+function countStrip(live) {
+  const l = live || {};
+  const outs = l.outs == null ? 0 : l.outs;
+  const b = l.balls, s = l.strikes;
   const outDot = (cx, filled) =>
-    `<circle cx="${cx}" cy="43" r="2.6" fill="${filled ? "#fb2c46" : off}"/>`;
-  const nOuts = outs == null ? 0 : outs;
-  return `
-  <svg class="basediamond" width="${size}" height="${size}" viewBox="0 0 48 50" aria-label="base state">
-    <defs><filter id="baseglow" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="0" dy="0" stdDeviation="1.6" flood-color="${on}" flood-opacity="0.9"/>
-    </filter></defs>
-    ${base(24, 12, 2)}   <!-- 2B top -->
-    ${base(36, 24, 1)}   <!-- 1B right -->
-    ${base(12, 24, 3)}   <!-- 3B left -->
-    ${outDot(18, nOuts >= 1)}
-    ${outDot(30, nOuts >= 2)}
-  </svg>`;
+    `<circle cx="${cx}" cy="5.5" r="4" fill="${filled ? "#fb2c46" : "#2c3557"}"/>`;
+  const count = (b == null || s == null) ? "" :
+    `<span class="cnt" title="Balls and strikes">${b}<i>–</i>${s}</span>`;
+  return `${count}
+    <span class="cnt-outs">
+      <svg class="outdots" width="23" height="11" viewBox="0 0 23 11" aria-hidden="true">
+        ${outDot(5.5, outs >= 1)}${outDot(17.5, outs >= 2)}
+      </svg>
+      <span class="count-label">${outs} out${outs === 1 ? "" : "s"}</span>
+    </span>`;
 }
 
 /* ---------------- Sparkline (game-log trend) ----------------------------- */

@@ -155,6 +155,26 @@ class LiveStatus:
     start_time: str = ""         # ISO or human, for scheduled games
     outs: Optional[int] = None            # MLB: 0-2
     bases: Optional[list] = None          # MLB: occupied bases, e.g. [2] or [1, 3]
+    # The count. Parsed by `livestats.game_state` since it was written and
+    # never carried this far, so the board could say "2 outs" and not
+    # "3-2, two down" — which is the half of the situation that changes
+    # what the next pitch is.
+    balls: Optional[int] = None           # MLB: 0-3
+    strikes: Optional[int] = None         # MLB: 0-2
+    # Football field position, so the card art can put the ball where the
+    # ball is. `detail` already carried "2nd & 7 at DEN 45" as prose; a
+    # drawing needs a number.
+    #
+    # THE CONVENTION, stated once here because every consumer depends on
+    # it: `yard_line` is 0-100 measured from the HOME team's own goal
+    # line, so 0 is home's end zone, 50 is midfield, 100 is the away end
+    # zone. That is NOT how anyone says it out loud ("the DEN 45" is
+    # ambiguous until you know whose 45), and it is not how the feed
+    # states it either — the parse resolves the side and converts. It is
+    # what the art needs: the field is drawn left-to-right with the home
+    # end zone on the left, so x is a straight function of this number.
+    yard_line: Optional[float] = None     # NFL/CFB: 0-100 from home's goal
+    possession: str = ""                  # NFL/CFB: team abbr with the ball
 
 
 def live_to_dict(live) -> Optional[dict]:
@@ -171,6 +191,10 @@ def live_to_dict(live) -> Optional[dict]:
         "start_time": live.start_time,
         "outs": live.outs,
         "bases": live.bases,
+        "balls": live.balls,
+        "strikes": live.strikes,
+        "yard_line": live.yard_line,
+        "possession": live.possession,
     }
 
 

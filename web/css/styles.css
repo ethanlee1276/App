@@ -1525,11 +1525,20 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 
 @media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
 
-/* base-state diamond sits inline in the live footer, breathing room around it */
+/* The live count sits inline in the footer, breathing room around it.
+   The bases moved onto the park art; what is left here is the count and
+   the outs, so this is a text row now rather than a 46px drawing. */
 .wind-wrap.live-footer { justify-content: flex-start; gap: 12px; flex-wrap: wrap; }
-.live-detail.base { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
-.basediamond { display: block; flex-shrink: 0; }
-.base-label { font-size: var(--fs-xs); color: var(--text-dim); font-weight: 600; white-space: nowrap; }
+.live-detail.count { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; }
+.cnt {
+  font-size: var(--fs-sm); font-weight: 800; color: var(--text);
+  font-variant-numeric: tabular-nums; letter-spacing: .5px; white-space: nowrap;
+}
+/* The dash is punctuation between two figures, not a third figure. */
+.cnt i { font-style: normal; color: var(--text-mute); margin: 0 1px; }
+.cnt-outs { display: inline-flex; align-items: center; gap: 6px; }
+.outdots { display: block; flex-shrink: 0; }
+.count-label { font-size: var(--fs-xs); color: var(--text-dim); font-weight: 600; white-space: nowrap; }
 
 /* Live auto-refresh indicator in the header.
    The healthy state used to be RED — a red pill, red border, red text
@@ -3637,6 +3646,18 @@ select.calc-in { width: auto; font-weight: 600; }
    property, the only way to unset an rx="7.5" written on the element
    without editing the drawing code. */
 .stadium g rect { fill: none; stroke: var(--border); stroke-width: 1; opacity: 1; }
+/* ...WITH ONE EXCEPTION, and it is the exception that proves the rule was
+   about plaques rather than about rects. An occupied base is not chrome,
+   it is the live state of the game — the single most time-sensitive fact
+   on the card. Hollowing it makes an empty base and a runner on second
+   the same drawing.
+
+   THIS RULE IS LOAD-BEARING IN THE LITERAL SENSE: the fill is written on
+   the element as well, and a presentation attribute loses to any CSS
+   selector, so the rule above erased it outright. Measured, not guessed —
+   `getComputedStyle(rect).fill` returned "none" with `fill="#ffd24a"`
+   sitting in the markup. Two classes to one, so this wins. */
+.stadium g rect.on-base { fill: #ffd24a; stroke: #ffffff; stroke-width: 1; }
 /* Zero radius is a house rule everywhere else in Night Form; the art was
    the one place still drawing rounded corners (rx="6" on the NFL field
    and end zones, rx="7.5" on the plaques). */
