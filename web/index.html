@@ -228,6 +228,20 @@
 
       <div id="best-bets"></div>
 
+      <!-- NFL only, and only while it is on: the preseason fixture list
+           with live scores. It sits directly under the picks because in
+           August it is the only football actually being played — the Week
+           1 board above it is a month away — and above the ballparks
+           because those are context for a pick rather than an event.
+
+           NOTHING IN IT IS PRICED. Preseason is where this engine's
+           premise fails: a projection is volume times efficiency over
+           prior games, and a starter plays a series and a half behind a
+           line that will not start together again. renderPreseason()
+           retires the block on its own once the last fixture has passed,
+           so it is not a section anyone has to remember to remove. -->
+      <div id="preseason-board"></div>
+
       <div class="section-title hero-title" id="games-title">Tonight’s ballparks
         <span class="sub">— real park shapes, roof state, live wind and the home-run
         factor each one is playing to right now</span>

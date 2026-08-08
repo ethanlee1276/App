@@ -247,6 +247,44 @@ def _current_nfl_week():
     return None
 
 
+def refresh_preseason(quiet: bool = False) -> bool:
+    """The NFL preseason fixture list, for the board's August block.
+
+    Runs on every launch rather than by hand, because a schedule that only
+    updates when someone remembers is a schedule that is wrong on the night
+    it matters. It is cheap: ESPN's scoreboard is free and the fetcher
+    caches it for six hours, so out of season this is four cached reads and
+    no network at all.
+
+    OUT OF SEASON IT IS NOT AN ERROR. `preseason_games` raises when the
+    schedule is not published — which is the correct answer for most of the
+    year — and the launcher must not print a warning every day from
+    September to July for a feed doing exactly what it should.
+    """
+    from engine.sources.fetch import DataUnavailable
+    import datetime as _dt
+    import json
+    season = _dt.date.today().year
+    try:
+        from engine.sources import nflpreseason as _pre
+        games = _pre.preseason_games(season)
+        payload = _pre.board_payload(games, season)
+    except DataUnavailable:
+        return False                      # not published / not reachable
+    except Exception as exc:                                  # noqa: BLE001
+        if not quiet:
+            print(f"  preseason: {type(exc).__name__}: {str(exc)[:70]}")
+        return False
+    path = ROOT / "web" / "data" / "nfl_preseason.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=1), encoding="utf-8")
+    if not quiet:
+        print(f"  preseason: {payload['total']} game(s) "
+              f"{payload['first']} → {payload['last']}, "
+              f"{payload['complete']} final")
+    return True
+
+
 def refresh_nfl(quiet: bool = False) -> bool:
     """Build the current NFL week into web/data/recommendations.json."""
     wk = _current_nfl_week()
@@ -511,6 +549,7 @@ def refresh_all(quiet: bool = False) -> None:
     refresh_cfb(quiet=quiet)
     refresh_ufc(quiet=quiet)
     refresh_sport_rosters(quiet=quiet)
+    refresh_preseason(quiet=quiet)
     refresh_standings(quiet=quiet)
     _arbitrate_parlays(quiet=quiet)
     _journal_parlays(quiet=quiet)

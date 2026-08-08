@@ -3903,3 +3903,85 @@ select.calc-in { width: auto; font-weight: 600; }
 @media (min-resolution: 2dppx) {
   :root { --hairline: 0.5px; }
 }
+
+/* ============================================================
+   NFL preseason — the August block
+   ============================================================
+   A fixture list and its scores, on the board for about five weeks a
+   year. It is a block rather than a nav tab because a permanent
+   destination that says nothing for eleven months costs more than it
+   gives, and it retires itself off the last fixture's date so nobody has
+   to remember to remove it.
+
+   Deliberately quieter than a pick. Nothing here is priced — that is the
+   whole boundary the module and the renderer both hold — so it must not
+   wear the visual weight the picks do, or the page implies a claim it is
+   not making. Agate rows, muted text, no grade badges and no accent
+   except the live dot. */
+.pre-card { padding: 14px 16px; }
+.pre-note { margin: 0 0 12px; font-size: var(--fs-sm); color: var(--text-mute);
+  line-height: var(--lh-body); max-width: var(--measure); }
+.pre-note b { color: var(--text-dim); font-weight: 700; }
+
+.pre-week { margin-top: 12px; }
+.pre-week:first-of-type { margin-top: 0; }
+/* A <details>, so three of the four weeks fold away. The marker is the
+   site's own chevron rather than the UA triangle, which does not inherit
+   colour and sat black-on-black in the dark theme. */
+.pre-week > summary { cursor: pointer; list-style: none; }
+.pre-week > summary::-webkit-details-marker { display: none; }
+.pre-week > summary::after {
+  content: "+"; margin-left: auto; color: var(--text-mute);
+  font-weight: 700; font-size: var(--fs-sm);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.pre-week[open] > summary::after { content: "−"; }
+.pre-week > summary:hover { color: var(--text-dim); }
+.pre-week > summary:focus-visible { outline: 2px solid var(--brand);
+  outline-offset: 3px; }
+.pre-week-head {
+  display: flex; align-items: baseline; gap: 10px;
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-mute);
+  padding-bottom: 6px; border-bottom: var(--hairline) solid var(--border-soft);
+}
+.pre-week-n { color: var(--text-mute); letter-spacing: .06em; font-weight: 600; }
+
+/* One row per fixture. A grid, not a flex row: the date, the two marks
+   and the score have to line up down the column or 16 games a week read
+   as a heap. */
+.pre-game {
+  display: grid; align-items: center; gap: 0 10px;
+  grid-template-columns: 46px 46px 14px 46px minmax(0, 1fr) auto;
+  padding: 7px 0; border-bottom: var(--hairline) solid var(--border-soft);
+  font-size: var(--fs-sm);
+}
+.pre-game:last-child { border-bottom: 0; }
+.pre-date { color: var(--text-mute); font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xs); }
+.pre-team {
+  display: grid; place-items: center; padding: 3px 0;
+  border: var(--hairline) solid; border-radius: 0;
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em;
+  color: var(--text-dim);
+}
+.pre-at { color: var(--text-mute); font-size: var(--fs-2xs); text-align: center; }
+.pre-score { font-variant-numeric: tabular-nums; color: var(--text-dim);
+  letter-spacing: .04em; }
+/* The winner reads louder than the loser; neither is good/bad coloured,
+   because we did not bet it. */
+.pre-score b { font-weight: 500; color: var(--text-mute); }
+.pre-score b.won { font-weight: 700; color: var(--text); }
+.pre-state { color: var(--text-mute); font-size: var(--fs-xs);
+  text-align: right; letter-spacing: .08em; text-transform: uppercase; }
+.pre-state.live { color: var(--warn); font-weight: 700; }
+.pre-roof { color: var(--text-mute); font-size: var(--fs-2xs); }
+
+@media (max-width: 560px) {
+  /* The date leads its own line and the fixture sits under it; six
+     columns in 320px is four characters a cell. */
+  .pre-game { grid-template-columns: 44px 14px 44px minmax(0, 1fr) auto;
+    row-gap: 2px; }
+  .pre-date { grid-column: 1 / -1; }
+  .pre-roof { display: none; }
+}

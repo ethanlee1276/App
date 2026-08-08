@@ -750,6 +750,7 @@ function renderAll() {
   renderGameBets();
   renderIncentives();
   renderRestWatch();
+  renderPreseason();
   renderRecommended();
   renderEdgeBoard();
   renderScanner();
@@ -1648,6 +1649,140 @@ function renderIncentives() {
       who is close, and the books are slow to price that. Picks touching a
       live chase say so on their card.</span></div>
     <div class="card" style="padding:0">${body}</div>`;
+}
+
+/* ============================================================
+   NFL preseason — the fixture list, and nothing priced
+   ============================================================
+   Live for about five weeks a year, which is why it is a block on the
+   board rather than a tab in the nav: a permanent destination that says
+   nothing for eleven months is worse than no destination. It retires
+   itself by comparing today against the last fixture's date, so nobody
+   has to remember to take it down in September.
+
+   IT CARRIES NO PROJECTION, NO PRICE AND NO PICK, on purpose. Preseason
+   is the one part of the calendar where this engine's premise fails — a
+   projection is volume times efficiency measured over prior games, and in
+   August a starter plays a series and a half behind a line that will not
+   start together again. A prop priced off last season's usage is not a
+   slightly worse number, it is a number about a different event.
+   ============================================================ */
+let _preseasonCache;
+
+async function loadPreseason() {
+  if (_preseasonCache !== undefined) return _preseasonCache;
+  try {
+    const res = await fetch("data/nfl_preseason.json?t=" + (Date.now() / 60000 | 0));
+    _preseasonCache = res.ok ? await res.json() : null;
+  } catch (e) { _preseasonCache = null; }
+  return _preseasonCache;
+}
+
+function preseasonScoreHTML(g) {
+  // Label from `state`, never from the presence of a number: ESPN sends
+  // score "0" for a game nobody has played, so "has a score" and "has been
+  // played" are different questions. Asking the wrong one tagged 48
+  // scheduled fixtures as in progress on the first real run.
+  if (g.state === "post") {
+    const aw = g.away_score, hm = g.home_score;
+    const awWon = aw > hm, hmWon = hm > aw;
+    return `<span class="pre-score">
+      <b class="${awWon ? "won" : ""}">${aw}</b>–<b class="${hmWon ? "won" : ""}">${hm}</b>
+    </span><span class="pre-state">Final</span>`;
+  }
+  if (g.state === "in") {
+    return `<span class="pre-score">${g.away_score}–${g.home_score}</span>` +
+           `<span class="pre-state live">Live</span>`;
+  }
+  // Local time, not the feed's UTC. ESPN sends Z-stamped kickoffs, and
+  // printing them raw put "23:00 UTC" beside every fixture — a number no
+  // one reading this is in, for a schedule whose entire job is telling you
+  // when to watch.
+  let t = "";
+  if (g.kickoff) {
+    const d = new Date(g.kickoff);
+    if (!isNaN(d)) t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  return `<span class="pre-state">${escapeHtml(t || "—")}</span>`;
+}
+
+function preseasonGameHTML(g) {
+  const teams = (typeof teamsForSport === "function")
+    ? teamsForSport("nfl") : {};
+  const mark = (ab) => {
+    const m = teams[ab] || {};
+    return `<span class="pre-team" style="border-color:${
+      escapeHtml(m.primary || "#39405166")}">${escapeHtml(ab)}</span>`;
+  };
+  return `<div class="pre-game${g.state === "in" ? " is-live" : ""}">
+    <span class="pre-date">${escapeHtml((g.date || "").slice(5))}</span>
+    ${mark(g.away)}<span class="pre-at">@</span>${mark(g.home)}
+    ${preseasonScoreHTML(g)}
+    ${g.indoor ? '<span class="pre-roof">indoor</span>' : ""}
+  </div>`;
+}
+
+async function renderPreseason() {
+  const host = document.getElementById("preseason-board");
+  if (!host) return;
+  host.innerHTML = "";
+  if ((state.sport || "nfl") !== "nfl") return;
+  const data = await loadPreseason();
+  if (!data || !data.total || !data.weeks) return;
+
+  // Self-retiring. `show_until` is the last fixture's date; once it is
+  // past, this block stops existing without anyone editing anything.
+  const today = new Date().toISOString().slice(0, 10);
+  if (data.show_until && today > data.show_until) return;
+
+  // Only ONE week is expanded: the first that still has a game to play.
+  // All four open is 49 rows and 2,168px of board — more than a screen,
+  // below the picks, for a list whose useful part is "what is on next".
+  // The rest are one click away and say enough collapsed to know whether
+  // to bother (16 games · all final).
+  const openWeek = data.weeks.find(w => w.games.some(g => (g.date || "") >= today))
+                   || data.weeks[data.weeks.length - 1];
+
+  const left = data.days_until;
+  const when = left === null || left === undefined ? ""
+    : left > 0 ? `starts in ${left} day${left === 1 ? "" : "s"}`
+    : left === 0 ? "starts today"
+    : `${data.complete} of ${data.total} played`;
+
+  host.innerHTML = `
+    <div class="section-title">Preseason
+      <span class="sub">— ${escapeHtml(String(data.season))} exhibition schedule and scores${
+        when ? ", " + escapeHtml(when) : ""}</span>
+    </div>
+    <div class="card pre-card">
+      <p class="pre-note">Schedule and results only — <b>nothing here is
+        priced</b>. Preseason usage is not the season’s: starters play a
+        series behind a line that will not start together again, so a
+        projection built on last year’s snaps is a number about a different
+        event.</p>
+      ${data.weeks.map(w => preseasonWeekHTML(w, w === openWeek)).join("")}
+    </div>`;
+}
+
+function preseasonWeekHTML(w, isOpen) {
+  const played = w.games.filter(g => g.state === "post").length;
+  const live = w.games.some(g => g.state === "in");
+  const dates = w.games.map(g => g.date).filter(Boolean).sort();
+  const span = dates.length
+    ? (dates[0] === dates[dates.length - 1] ? dates[0].slice(5)
+       : `${dates[0].slice(5)}–${dates[dates.length - 1].slice(5)}`)
+    : "";
+  const note = live ? "live now"
+    : played === w.games.length ? "all final"
+    : played ? `${played} of ${w.games.length} played`
+    : span;
+  return `<details class="pre-week"${isOpen ? " open" : ""}>
+    <summary class="pre-week-head">Week ${w.week === null ? "?" : w.week}
+      <span class="pre-week-n">${w.games.length} game${
+        w.games.length === 1 ? "" : "s"}${note ? " · " + escapeHtml(note) : ""}</span>
+    </summary>
+    ${w.games.map(preseasonGameHTML).join("")}
+  </details>`;
 }
 
 function renderRestWatch() {

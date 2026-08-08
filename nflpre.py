@@ -149,6 +149,30 @@ def probe(season: int) -> int:
     return 0
 
 
+def write_board(season: int, out: str) -> int:
+    """Write the fixture list where the website reads it.
+
+    Separate from `report` so the terminal view and the page cannot drift:
+    both call `preseason_games`, and this one hands the same list to
+    `board_payload` without touching it.
+    """
+    import json
+    import pathlib
+    try:
+        games = pre.preseason_games(season)
+    except DataUnavailable as exc:
+        print(f"  preseason      : no {season} schedule — {str(exc).splitlines()[0]}")
+        return 2
+    path = pathlib.Path(out)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = pre.board_payload(games, season)
+    path.write_text(json.dumps(payload, indent=1), encoding="utf-8")
+    span = f"{payload['first']} → {payload['last']}"
+    print(f"  preseason      : {payload['total']} game(s), {span}, "
+          f"{payload['complete']} final → {path}")
+    return 0
+
+
 def main(argv: list) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--season", type=int, default=_dt.date.today().year)
@@ -157,9 +181,14 @@ def main(argv: list) -> int:
     p.add_argument("--probe", action="store_true",
                    help="try several query shapes and a control year, to "
                         "tell a wrong query from an unpublished schedule")
+    p.add_argument("--out", default="",
+                   help="write the fixture list as JSON for the website "
+                        "(e.g. web/data/nfl_preseason.json)")
     a = p.parse_args(argv)
     if a.probe:
         return probe(a.season)
+    if a.out:
+        return write_board(a.season, a.out)
     return report(a.season, a.raw)
 
 

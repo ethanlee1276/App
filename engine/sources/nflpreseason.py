@@ -256,6 +256,51 @@ def preseason_games(season: int, weeks: tuple[int, ...] | None = None) -> list[d
            + "\n  ".join(failed) if failed else ""))
 
 
+def board_payload(games: list[dict], season: int,
+                  today: _dt.date | None = None) -> dict:
+    """The fixture list as the website reads it. Facts only — no price.
+
+    Grouped by week because that is how a preseason is talked about, and
+    because the weeks are not equal: week 1 is the Hall of Fame game alone
+    and the rest are sixteen apiece, so a flat list of 49 reads as noise.
+
+    `show_until` is the last fixture's date, and it is the whole retirement
+    mechanism. This board is live for about five weeks a year; a permanent
+    home for it would mean a nav tab that says nothing for eleven months,
+    or a block someone has to remember to take down. The page compares
+    today against this date and stops drawing itself.
+
+    NOTHING HERE IS A PRICE, and that is structural rather than an
+    oversight. Preseason is where this engine's premise fails — a
+    projection is volume times efficiency over prior games, and in August a
+    starter plays a series and a half behind a line that will not start
+    together again. Scores and schedules are worth showing; a number
+    claiming what a player will do is not, and keeping the two apart is
+    what stops the first quietly becoming the second.
+    """
+    today = today or _dt.date.today()
+    span = window(games)
+    by_week: dict = {}
+    for g in games:
+        by_week.setdefault(g.get("week"), []).append(g)
+    weeks = []
+    for wk in sorted(by_week, key=lambda w: (w is None, w)):
+        rows = sorted(by_week[wk], key=lambda g: (g["kickoff"], g["home"]))
+        weeks.append({"week": wk, "games": rows})
+    done = sum(1 for g in games if g.get("completed"))
+    return {
+        "season": season,
+        "generated": _dt.datetime.now().isoformat(timespec="seconds"),
+        "first": span[0] if span else None,
+        "last": span[1] if span else None,
+        "show_until": span[1] if span else None,
+        "days_until": days_until(games, today),
+        "total": len(games),
+        "complete": done,
+        "weeks": weeks,
+    }
+
+
 def window(games: list[dict]) -> tuple[str, str] | None:
     """(first date, last date) across a fixture list, or None if empty."""
     days = sorted(g["date"] for g in games if g.get("date"))
