@@ -221,8 +221,23 @@ def main() -> None:
                 print(f"\n  {len(near)} near miss(es) — priced, gated, "
                       f"and close:")
                 for p in near[:6]:
-                    print(f"    {p.get('fighter') or p.get('bout') or '?'}: "
-                          f"{p.get('why', '')[:88]}")
+                    # `fight`, which is what `base` actually carries. The
+                    # first version guessed `fighter`/`bout`, neither of
+                    # which exists, and printed "?" for every row — the
+                    # one part of the line you cannot act on without.
+                    print(f"    {p.get('fight', '?')}")
+                    print(f"      {p.get('why', '')[:96]}")
+            # WHICH BOUTS AND WHICH FIGHTERS. A count of data gaps is not
+            # a to-do list; the names are. These are the ones a dossier or
+            # a fight history would turn into a priced bout.
+            gaps = [p for p in out.get("pass_list", [])
+                    if p.get("reason_code") in ("no_dossier", "no_data")]
+            if gaps:
+                print(f"\n  {len(gaps)} bout(s) the model could not price "
+                      f"for want of data:")
+                for p in gaps:
+                    print(f"    {p.get('fight', '?')}")
+                    print(f"      {p.get('why', '')[:96]}")
             print("\n  READ IT LIKE THIS")
             print("    mostly no_data   -> dossiers are missing, not the "
                   "model's doing. Check `python3 launch.py` drafted them.")

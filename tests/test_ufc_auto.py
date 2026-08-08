@@ -296,8 +296,11 @@ def test_the_build_can_say_why_every_bout_passed():
     refusing — opposite problems with opposite fixes."""
     src = open(os.path.join(ROOT, "ufc_build.py"), encoding="utf-8").read()
     assert '"--why"' in src
+    # To the END of the block, not a fixed window — the window version
+    # broke the first time the block grew, which is a test failing on
+    # formatting rather than on meaning.
     i = src.index("if args.why:")
-    body = src[i:i + 1800]
+    body = src[i:src.index('if __name__ ==', i)]
     for code in ("no_data", "no_price", "gated"):
         assert code in body, f"{code} is not explained in the reading"
 
@@ -314,6 +317,34 @@ def test_the_build_can_say_why_every_bout_passed():
     assert 'out.get("pass_list"' in body, "the breakdown reads the wrong key"
     # and the records it groups on carry the field it groups by
     assert '"reason_code"' in inspect.getsource(M), "no reason_code is set"
+
+
+def test_the_breakdown_names_the_bouts_it_is_talking_about():
+    """A count of data gaps is not a to-do list; the names are. The first
+    version guessed `fighter`/`bout` — neither of which the model writes —
+    and printed "?" for every row, which is the one part of the line you
+    cannot act on without."""
+    import inspect
+    from engine.ufc import model as M
+    src = open(os.path.join(ROOT, "ufc_build.py"), encoding="utf-8").read()
+    i = src.index("if args.why:")
+    body = src[i:src.index('if __name__ ==', i)]
+    # The field the model actually sets on every pass record.
+    ev = inspect.getsource(M.evaluate_fight)
+    assert '"fight": f"{name_a} vs {name_b}"' in ev, ev[:200]
+    assert body.count("p.get('fight'") >= 2, "the rows are still unnamed"
+    assert "'fighter'" not in body and "'bout'" not in body, \
+        "guessed field names are back"
+
+
+def test_the_data_gaps_are_listed_not_just_counted():
+    """no_dossier and no_data are the two the model cannot price through,
+    and they are the only ones a person can actually go and fix."""
+    src = open(os.path.join(ROOT, "ufc_build.py"), encoding="utf-8").read()
+    i = src.index("if args.why:")
+    body = src[i:src.index('if __name__ ==', i)]
+    assert '"no_dossier", "no_data"' in body, \
+        "the fixable passes are not singled out"
 
 
 # --- the empty-cache trap that produced two blank cards ----------------------
