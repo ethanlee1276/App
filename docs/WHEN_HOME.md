@@ -250,37 +250,34 @@ edit.
 **Nothing here needs you any more.** It is closed, with one real thing left
 over that this feed can no longer answer:
 
-### The conference table, checked — and it is fine where it matters
+### The conference table — checked, corrected, closed
 
-Run 2026-08-08 against the 2025-11-01 slate. 50 teams, 50 joined to CFBD, no
-misses. **All four power conferences verified: ACC 1, Big 12 4, Big Ten 5,
-SEC 8 — plus Mountain West 17 and FBS Independents 18.**
+Derived twice, from 2025-11-01 and 2025-11-29. Both slates: 50 teams, 50
+joined to CFBD, no misses. Between them, **nine of the twelve ids confirmed**
+— ACC 1, Big 12 4, Big Ten 5, SEC 8, Conference USA 12, MAC 15, Mountain West
+17, FBS Independents 18, Sun Belt 37.
 
-That is the whole exposure, because `POWER_CONFERENCES` in
-`engine/cfb/model.py` is exactly `{SEC, Big Ten, Big 12, ACC}` and nothing
-else in `attention_tier` distinguishes one non-power conference from another.
-A Sun Belt game and an FCS game price identically. So the two mismatches the
-run turned up cannot move a number:
+**One real error found and fixed: id 151 was labelled `FCS` and is the
+American Athletic Conference.** Both Saturdays resolved it unanimously, four
+schools on the second, while every other id on those slates came back
+matching — so the method was not simply disagreeing with everything.
 
-* **15 MAC → "Mid-American"** was my alias table, not realignment. CFBD drops
-  the trailing "Conference", so the same league arrived under two names.
-  Fixed — that and the other short forms are aliased now.
-* **151 FCS → "American Athletic"** is more interesting and is NOT yet acted
-  on. If ESPN really stamps AAC teams with 151, our table mislabels them on
-  the board. But the probe did not say how many schools voted for that, and
-  renaming a conference off one possibly-misjoined row is a coin flip with a
-  confident label on it. The probe now prints the vote count.
+It moved no price. Nothing in the engine keys on the string `FCS`, and
+`POWER_CONFERENCES` is exactly `{SEC, Big Ten, Big 12, ACC}` — all four
+verified. It was a label on the board naming the wrong conference.
 
-```
-python3 assets.py --conf-table
-```
+The `MAC → Mid-American` mismatch from the first run was my alias table and
+is fixed; CFBD drops the trailing "Conference".
 
-One more run, on a different Saturday. What I need from it: the tally beside
-151, and coverage of 9 / 12 / 20 / 37, which had no games on the slate I saw.
-If 151 shows a healthy majority for American Athletic I will correct it; if it
-is one school, it stays as it is.
+Still uncovered: **9 (Pac-12), 20 (American)**. Neither had a game on either
+slate, which for a two-team Pac-12 is not surprising. Nothing needs doing —
+if you ever want them checked, `python3 assets.py --conf-table 2025-09-06` or
+any earlier-season Saturday will reach different conferences. Low value: both
+are non-power, so neither can move a tier.
 
-Not urgent. The rows that feed pricing are confirmed correct.
+Which id real FCS teams carry is now unknown, and deliberately not guessed.
+Unresolved conferences come out empty, and `attention_tier` reads empty as
+STANDARD — never as "nobody is watching this".
 
 ---
 

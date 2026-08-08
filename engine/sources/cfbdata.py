@@ -58,7 +58,18 @@ CONFERENCE_IDS = {
     "1": "ACC", "4": "Big 12", "5": "Big Ten", "8": "SEC", "9": "Pac-12",
     "12": "Conference USA", "15": "MAC", "17": "Mountain West",
     "18": "FBS Independents", "20": "American", "37": "Sun Belt",
-    "151": "FCS",
+    # 151 WAS "FCS" AND IT IS THE AMERICAN. Derived, not recalled, by
+    # `assets.py --conf-table`: two independent Saturdays — 2025-11-01 and
+    # 2025-11-29 — both resolve 151 to the American Athletic Conference,
+    # unanimously, off a join that matched 50 of 50 teams on each slate.
+    # Every other id checked on those runs came back matching, so the method
+    # is not simply disagreeing with everything.
+    #
+    # Which id real FCS teams carry is still unknown, and deliberately not
+    # guessed. Unknown is handled correctly already: an unresolved conference
+    # comes out empty, and `attention_tier` reads empty as STANDARD, never as
+    # "nobody is watching" — see the header note above.
+    "151": "American",
 }
 
 # The power conferences, spelled the way engine.cfb.model expects them.

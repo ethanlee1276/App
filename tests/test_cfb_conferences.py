@@ -350,6 +350,42 @@ def test_the_walk_cannot_run_away_on_a_self_referencing_payload():
 
 
 # --- the merge, which is what the board actually reads -----------------------
+def test_the_conference_names_match_the_spellings_the_model_grades_on():
+    """`POWER_CONFERENCES` is a set of exact strings. A conference that
+    arrives spelled any other way is not in it, and the game silently drops
+    a tier — so the table and the model have to agree letter for letter."""
+    from engine.cfb.model import POWER_CONFERENCES
+    named = set(C.CONFERENCE_IDS.values())
+    assert POWER_CONFERENCES <= named, POWER_CONFERENCES - named
+
+
+def test_the_short_spellings_the_feeds_use_resolve_to_those_names():
+    """CFBD drops the trailing "Conference". Measured 2026-08-08: that alone
+    made the same league arrive as both "MAC" and "Mid-American"."""
+    for raw, want in (("Mid-American", "MAC"),
+                      ("Mid-American Conference", "MAC"),
+                      ("American Athletic", "American"),
+                      ("American Athletic Conference", "American"),
+                      ("Big Ten", "Big Ten"),
+                      ("Big Ten Conference", "Big Ten")):
+        assert C.conference_name(raw) == want, f"{raw} -> {C.conference_name(raw)}"
+
+
+def test_group_151_is_the_american_not_the_fcs():
+    """CORRECTED FROM A MEASUREMENT, 2026-08-08. Two independent Saturdays —
+    2025-11-01 and 2025-11-29 — both resolved 151 to the American Athletic
+    Conference, unanimously, off a join that matched 50 of 50 teams each
+    time, while every other id on those slates came back matching.
+
+    Nothing keys on the string "FCS", so this moved no price; it was a label
+    on the board that named the wrong conference. Which id real FCS teams
+    carry is still unknown and is NOT guessed here — unresolved comes out
+    empty, and attention_tier reads empty as STANDARD rather than soft."""
+    assert C.CONFERENCE_IDS["151"] == "American"
+    assert "FCS" not in C.CONFERENCE_IDS.values(), (
+        "an FCS id was added back without a measurement behind it")
+
+
 def test_the_built_in_table_is_the_floor_and_the_live_feed_the_improvement():
     assert C.conference_ids({}).get("8") == "SEC"
     assert C.conference_ids({"8": "live"}).get("8") == "live"
