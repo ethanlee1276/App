@@ -2617,6 +2617,63 @@ def _settleable_days(open_days) -> list[str]:
                   if d.get("date") and "-W" not in d["date"])
 
 
+def show_unplayed(apply: bool = False) -> None:
+    """Bets whose game was never played. Shows first, writes only on --apply.
+
+    A postponed, cancelled or suspended fixture is no-action at every book,
+    but nothing here could say so: the stuck report told these bets to
+    "Ingest the finals", which cannot work, because the results ingest only
+    ever writes completed and scored games — so the scoreless row it is
+    waiting on will never be filled. Seventeen MLB bets sat on that
+    instruction for twelve days.
+
+    A DRY RUN BY DEFAULT, and that is not politeness. This writes a
+    settlement into the journal that the Record page and every learning
+    rung read as fact; the person holding it should see the list before it
+    happens.
+    """
+    from engine import db, ledger
+    lconn = ledger.connect()
+    hconn = db.connect()
+    try:
+        rows = ledger.unplayed_bets(lconn, hconn)
+        if not rows:
+            print("No open bets are waiting on a game that was never played.")
+            return
+        by_day: dict = {}
+        for r in rows:
+            by_day.setdefault((r["date"], r["sport"]), []).append(r)
+        print(f"{len(rows)} open pick(s) whose game was never played "
+              f"(postponed, cancelled or suspended):\n")
+        for (day, sport), group in sorted(by_day.items()):
+            teams = sorted({r["team"] for r in group if r["team"]})
+            g = group[0]
+            print(f"  {day}  {sport:<5} {len(group):>3} pick(s)   "
+                  f"{', '.join(teams)}   "
+                  f"({g['finals']} of {g['games']} game(s) that day scored)")
+            for r in group[:4]:
+                print(f"        {(r['player'] or '')[:28]:<28} {r['market']}")
+            if len(group) > 4:
+                print(f"        … and {len(group) - 4} more")
+        print()
+        if not apply:
+            print("  Nothing was written. These grade as VOID — no action, "
+                  "zero P&L — which\n"
+                  "  is what a book does with a game that was not played. "
+                  "To write it:\n"
+                  "      python3 launch.py --void-unplayed --apply")
+            return
+        n = ledger.void_unplayed(lconn, rows)
+        print(f"  Voided {n} pick(s) — no action, 0.00u each.")
+        # Same export every other write path uses, on the same connection
+        # before it closes: the Record page must not keep showing these as
+        # open after they have been settled.
+        ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+        print("  Record page updated.")
+    finally:
+        lconn.close(); hconn.close()
+
+
 def show_stuck() -> None:
     """Which open bets can never settle, and why.
 
@@ -3273,6 +3330,9 @@ def main() -> None:
         return
     if "--stuck" in argv:
         show_stuck()
+        return
+    if "--void-unplayed" in argv:
+        show_unplayed(apply="--apply" in argv)
         return
     if "--settle" in argv:
         i = argv.index("--settle")

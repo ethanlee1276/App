@@ -1215,7 +1215,75 @@ def _logged_within(hist_conn, b, want: str, days: int = 1) -> str | None:
     return None
 
 
-def _date_shift_repair_note(hist_conn, b, found_on: str) -> str:
+def never_resolving_game(hist_conn, b, log_row, today=None) -> bool:
+    """True when the team's scoreless game on the bet's date can NEVER get
+    a score — so no amount of re-ingesting will release the settle guard.
+
+    `parse_results` returns completed, SCORED games and nothing else
+    (mlbstats.py: it skips anything whose `abstractGameState` is not Final,
+    anything whose `codedGameState` is C/D/T — cancelled, postponed,
+    suspended — and anything missing a score). It therefore cannot write a
+    scoreless row at all. A scoreless row on a PAST date was written by the
+    schedule/odds side for a fixture that was then never played.
+
+    `db.coverage_gaps` already draws exactly this conclusion and flags such
+    days `repairable=False`; the stuck report simply never asked it. That
+    is how seventeen bets came to carry the instruction "Ingest the finals:
+    python3 ingest.py mlb --dates 2026-07-27 --refresh" for twelve days —
+    a command that provably does nothing, printed four lines above the same
+    tool's own "nothing a re-ingest would fill".
+
+    Measured on Ethan's DB, 2026-08-08: 2026-07-27 held 12 MLB game rows,
+    11 with finals; the twelfth was CLE @ CIN, and every one of those
+    seventeen bets is on a CIN or CLE player.
+
+    THREE conditions, and the third is the one that keeps this honest.
+
+    STRICTLY the past. A game in progress right now is scoreless for an
+    entirely ordinary reason, and calling that unresolvable would void live
+    bets. ``today`` is a parameter rather than a call to the wall clock so
+    the answer does not change depending on when it is asked — the first
+    cut read `date.today()` and disagreed with the `today` its own caller
+    had been handed.
+
+    THE DAY MUST SHOW IT WAS INGESTED — at least one OTHER game that date
+    carrying a final. Without this the rule is too strong, and wrongly so:
+    a scoreless row on a past date also describes a day nobody has fetched
+    yet, where "ingest the finals" is exactly the right advice and voiding
+    would throw away a bet that is about to grade. Ethan's 2026-07-27 had
+    11 of 12 games scored, which is what makes the twelfth a fixture rather
+    than a gap.
+    """
+    import datetime as _dt
+    day = str(b["date"] or "")
+    try:
+        d = _dt.date.fromisoformat(day)
+    except ValueError:
+        return False                     # a week label has no day to judge
+    ref = today or _dt.date.today().isoformat()
+    try:
+        if d >= _dt.date.fromisoformat(str(ref)):
+            return False
+    except ValueError:
+        return False
+    team = log_row["team"] if "team" in log_row.keys() else None
+    if not team:
+        return False
+    r = hist_conn.execute(
+        "SELECT COUNT(*), COALESCE(SUM(home_score IS NOT NULL), 0) "
+        "FROM games WHERE sport=? AND period=? AND (home=? OR away=?)",
+        (b["sport"], day, team, team)).fetchone()
+    tot, fin = int(r[0] or 0), int(r[1] or 0)
+    if not tot or fin >= tot:
+        return False
+    day_fin = hist_conn.execute(
+        "SELECT COALESCE(SUM(home_score IS NOT NULL), 0) FROM games "
+        "WHERE sport=? AND period=?", (b["sport"], day)).fetchone()[0]
+    return int(day_fin or 0) > 0
+
+
+def _date_shift_repair_note(hist_conn, b, found_on: str,
+                            today=None) -> str:
     """Why the neighbour-day repair has not graded this bet, in one line.
 
     "Logged under the next day" used to end with "tell me and I will fix
@@ -1241,6 +1309,19 @@ def _date_shift_repair_note(hist_conn, b, found_on: str) -> str:
                 f"it: python3 ingest.py {b['sport']} --dates {found_on} "
                 f"--refresh")
     if _team_day_unfinished(hist_conn, where, wargs, rows[0]):
+        # Two very different situations wearing one message. The guard is
+        # right either way — it refuses to grade a bet whose own game might
+        # still be out there — but the REMEDY is opposite, and for twelve
+        # days this printed the one that cannot work.
+        if never_resolving_game(hist_conn, b, rows[0], today):
+            return (f"{rows[0]['team']}'s game on {b['date']} has no final "
+                    f"score and never will — a scoreless row on a past date "
+                    f"is a postponed, cancelled or suspended fixture, and "
+                    f"the results ingest only ever writes completed, scored "
+                    f"games. Re-ingesting cannot fill it, so this bet cannot "
+                    f"grade and is not waiting on anything. A prop on a game "
+                    f"that was not played is a VOID: python3 launch.py "
+                    f"--void-unplayed (dry run; add --apply to write it)")
         return (f"{rows[0]['team']} has a game on {b['date']} with no final "
                 f"score stored, so the repair cannot rule out that the bet "
                 f"is about THAT game. Ingest the finals: python3 ingest.py "
@@ -1384,7 +1465,7 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
                 if found_on:
                     extra["logged_on"] = found_on
                     extra["repair"] = _date_shift_repair_note(
-                        hist_conn, b, found_on)
+                        hist_conn, b, found_on, today)
                     reason = "logged under the next day"
                 elif len(names) < THIN_DAY_PLAYERS:
                     reason = "day barely ingested"
@@ -1399,6 +1480,90 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
                     "player": b["player"], "market": b["market"],
                     "age_days": age, "reason": reason, **extra})
     return out
+
+
+def unplayed_bets(conn, hist_conn, today=None) -> list[dict]:
+    """Open bets whose own game was never played, and so can never grade.
+
+    A prop on a postponed, cancelled or suspended fixture is no-action at
+    every book, and leaving it open forever is phantom exposure that also
+    keeps the day in `--settle all`'s sweep list for good. This finds them;
+    it does not write.
+
+    DELIBERATELY NARROW. It only claims a bet when the bet's own team has a
+    scoreless game row on the bet's own PAST date — the same test
+    `db.coverage_gaps` uses to call a day unrepairable. It does not reach
+    for bets that are merely ungraded, and it says nothing about a day still
+    in play.
+    """
+    out: list[dict] = []
+    for b in conn.execute(
+            "SELECT * FROM bets WHERE status='open' ORDER BY date, sport"
+    ).fetchall():
+        if not b["date"] or "-W" in str(b["date"]):
+            continue
+        team = _bet_team(hist_conn, b)
+        if not team:
+            continue
+        if not never_resolving_game(hist_conn, b, {"team": team}, today):
+            continue
+        r = hist_conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(home_score IS NOT NULL), 0) "
+            "FROM games WHERE sport=? AND period=? AND (home=? OR away=?)",
+            (b["sport"], b["date"], team, team)).fetchone()
+        tot, fin = int(r[0] or 0), int(r[1] or 0)
+        out.append({"id": b["id"], "sport": b["sport"], "date": b["date"],
+                    "player": b["player"], "market": b["market"],
+                    "team": team, "games": tot, "finals": fin,
+                    "stake_units": b["stake_units"] if "stake_units" in b.keys()
+                    else None})
+    return out
+
+
+def _bet_team(hist_conn, b) -> str | None:
+    """Which team the bet's player was on, from the results themselves.
+
+    Read from the neighbouring day's log when the bet's own day has none —
+    which is the whole situation here: the player has no row on the bet's
+    date precisely because his game was never played.
+    """
+    from .sources.oddsapi import normalize_name
+    want = normalize_name(b["player"] or "")
+    if not want:
+        return None
+    import datetime as _dt
+    try:
+        d0 = _dt.date.fromisoformat(str(b["date"] or ""))
+    except ValueError:
+        return None
+    for off in (0, -1, 1):
+        d = (d0 + _dt.timedelta(days=off)).isoformat()
+        for r in hist_conn.execute(
+                "SELECT player, team FROM player_game_logs "
+                "WHERE sport=? AND period=?", (b["sport"], d)):
+            if normalize_name(r[0]) == want and r[1]:
+                return r[1]
+    return None
+
+
+def void_unplayed(conn, rows: list[dict]) -> int:
+    """Mark the given bets void — no action, zero P&L. Returns the count.
+
+    Separate from `unplayed_bets` so the caller can show the list first.
+    A settlement that surprises the person holding the journal is worse
+    than one that waits for a keystroke.
+    """
+    n = 0
+    for r in rows:
+        # rowcount off THIS statement's cursor. `conn.total_changes` is
+        # cumulative for the connection, so testing it per row counts every
+        # write the connection has ever made and returns 1 forever.
+        cur = conn.execute(
+            "UPDATE bets SET status='void', pnl_units=0, pnl_dollars=0 "
+            "WHERE id=? AND status='open'", (r["id"],))
+        n += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+    conn.commit()
+    return n
 
 
 def _neighbour_day_rows_raw(hist_conn, b, where: str, wargs: list):
