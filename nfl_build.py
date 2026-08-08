@@ -220,8 +220,22 @@ def main() -> None:
                     else "%d-%d" % (seasons_used[0], seasons_used[-1]))
             carried = " (last season pooled in — this one is too thin yet)" \
                 if len(seasons_used) > 1 else ""
+            # Report the WHOLE game board, not just the moneylines. The
+            # first version printed "0 moneyline(s) priceable" and nothing
+            # else, on a run that had in fact priced 64 game bets and
+            # recommended 13 — because moneylines are the one game market
+            # that needs a book price, while totals and spreads price off
+            # team ratings against the schedule's own lines. A reader who
+            # sees only the zero concludes the board is dead.
             print(f"\nTeam ratings: attached to {nr} game(s) from {span}"
-                  f"{carried}; {priceable} moneyline(s) priceable.")
+                  f"{carried}.")
+            if not priceable:
+                print("  Moneylines need book prices and the schedule "
+                      "carries none — pass --odds for those.")
+            else:
+                print(f"  {priceable} moneyline(s) priceable.")
+            print("  Totals and spreads do NOT need odds; they price off "
+                  "the ratings against the schedule's own lines.")
         else:
             print("\nTeam ratings: no SCORED games for this season or the one "
                   "before it. `python3 ingest.py nfl` fills them once games "
@@ -302,6 +316,31 @@ def main() -> None:
         print("(lines are recent-form proxies — pass --odds for real book edges)\n")
     else:
         print("(edges priced against real sportsbook lines)\n")
+
+    # The game board is a separate product from the props and was invisible
+    # in this output: a run that priced 64 game bets and recommended 13
+    # printed nothing about any of them, so it read as a dead board.
+    gb = result.get("game_bets", [])
+    if gb:
+        from collections import Counter as _C
+        mix = _C(b.get("bet_type") or b.get("market") for b in gb)
+        rec = sum(1 for b in gb if b.get("recommended"))
+        kinds = ", ".join(f"{n} {k}" for k, n in sorted(mix.items()))
+        print(f"Game board: {len(gb)} bet(s) → {rec} recommended  ({kinds})")
+        for b in sorted(gb, key=lambda x: (x.get("recommended", False),
+                                           x.get("confidence", 0)),
+                        reverse=True)[:8]:
+            flag = "✅" if b.get("recommended") else "  "
+            # A spread carries its pick in `team` and leaves `side` empty,
+            # while a total does the reverse. Printing only `side` left
+            # every spread reading as a market with no selection.
+            what = " ".join(x for x in (b.get("team", ""),
+                                        b.get("market", ""),
+                                        b.get("side", "")) if x)
+            print(f"  {flag} conf {b.get('confidence', 0):4.1f}  "
+                  f"edge {b.get('edge', 0):+6.1%}  "
+                  f"{what} {b.get('line', '')}")
+        print()
     for r in result["recommendations"][:25]:
         flag = "✅" if r["recommended"] else "  "
         # A good grade with no tick is confusing unless we say what blocked it.
