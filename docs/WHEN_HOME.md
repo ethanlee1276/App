@@ -298,6 +298,46 @@ have never been on your board.
 
 ---
 
+## 3g. Check the keys — one command, safe to paste
+
+You believe `secrets.local` holds the Anthropic key, two Odds API keys and
+the CFBD key. I cannot verify that: the file is gitignored, so it exists only
+on your Mac, which is the point of it. This answers it from your side.
+
+```
+python3 keycheck.py
+```
+
+It reports each variable NAME, whether something is set, how long it is, and
+what the provider says when asked. **It never prints a key** — not the value,
+not a prefix, not the last four characters, and anything a provider echoes
+back in an error is scrubbed before printing. Paste the whole output.
+
+It costs nothing. The Odds API is asked for `/sports`, which does not count
+against quota and returns your remaining balance in a header — so the check
+that proves a key works also tells you what is left on it, per key. CFBD gets
+one small request. **Anthropic is checked for presence only**, because every
+call to that API costs money and a validation that bills you is not a
+diagnostic.
+
+The names are exact and case-sensitive, and this is the failure worth ruling
+out — a key set under a name the code does not read is invisible to it:
+
+```
+ANTHROPIC_API_KEY=...
+ODDS_API_KEY=...
+ODDS_API_KEY_2=...        # the second plan; _3, _4 … also read
+CFBD_API_KEY=...
+```
+
+One `NAME=value` per line, no `export`, no quotes. Every consumer degrades
+politely when its key is missing — the college board just runs without a
+preseason prior, the odds layer just falls back to proxy lines — which is
+correct behaviour and exactly why a missing key can sit unnoticed for a
+month.
+
+---
+
 ## 4. Website visuals
 
 The design queue is empty — all four items shipped, each with a before/after
