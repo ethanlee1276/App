@@ -73,6 +73,18 @@ CONFERENCE_ALIASES = {
     "mountain west conference": "Mountain West",
     "sun belt conference": "Sun Belt",
     "conference usa": "Conference USA",
+    # CFBD's spellings, measured 2026-08-08 against a real slate. It drops
+    # the trailing "Conference", so the aliases above miss it and the same
+    # league arrives under two names depending on which feed answered. That
+    # showed up as `15 MAC -> RENAMED -> Mid-American`, which is not
+    # realignment, it is two spellings of the same thing.
+    "mid-american": "MAC",
+    "american athletic": "American",
+    "mountain west": "Mountain West",
+    "sun belt": "Sun Belt",
+    "big ten": "Big Ten",
+    "big 12": "Big 12",
+    "cusa": "Conference USA",
 }
 
 

@@ -230,6 +230,24 @@ def _teams_for(sport: str) -> list[str]:
     return sorted(set(re.findall(r'^\s{2}"([A-Za-z0-9]{2,5})":\s*\{', src, re.M)))
 
 
+def _season_year(today=None) -> int:
+    """The college season CFBD should be asked about.
+
+    In August the current calendar year's season has not started, and asking
+    for a season with no teams in it yet returns nothing — so before the
+    August start, ask about the one that finished.
+
+    ``today`` is a parameter because a function that reads the wall clock
+    cannot be tested at the boundary it exists for, and the boundary is the
+    only interesting thing about it.
+    """
+    import datetime as dt
+    from engine.seasons import SEASON_WINDOWS
+    today = today or dt.date.today()
+    m0, d0 = SEASON_WINDOWS["cfb"][0], SEASON_WINDOWS["cfb"][1]
+    return today.year if (today.month, today.day) >= (m0, d0) else today.year - 1
+
+
 def _cfb_ids() -> list[tuple[str, str]]:
     """``[(abbr, espn_id)]`` for college, from ESPN's own teams feed.
 
@@ -259,29 +277,43 @@ def _cfb_ids() -> list[tuple[str, str]]:
         return []
     every = sorted((ab, t.get("id", "")) for ab, t in teams.items()
                    if t.get("id"))
-    # The groups feed says which NCAA division a school is in, which is the
-    # filter this wants — D-I plays on the board, D-II and NAIA do not.
-    # But it PAGINATES at 25 per division, and a filter built from a page is
-    # worse than no filter: it would drop real FBS schools as confidently as
-    # it drops Avila. So the map is used only if it is plainly not one page.
+    # WHICH SCHOOLS CAN ACTUALLY REACH A BOARD. CFBD's FBS team list is a
+    # real enumeration — measured, 136 rows, each with a school name and a
+    # conference. ESPN's teams feed answers with its entire college
+    # database, 756 rows, most of them NAIA and D-II that no D-I scoreboard
+    # will ever show; auditing those produced 92 misses nobody could act on,
+    # which is how a real one gets missed.
+    #
+    # Two earlier attempts at this filter failed for the same reason: they
+    # inferred membership instead of reading it. A `conferenceId` guessed
+    # onto ESPN's teams payload turned out not to be there, and the groups
+    # feed paginates at 25 per division so its list is a page. This one is
+    # a list, and the join is the same loose name key the odds feed uses —
+    # measured at 50 of 50 on a real slate.
+    #
+    # It fails OPEN: no CFBD key, no join, nothing matched, and the audit
+    # covers everything with a stated reason. Auditing too much is noise;
+    # auditing too little is a logo silently broken forever.
     try:
-        division = cfbdata.fetch_group_divisions()
-    except Exception:                                         # noqa: BLE001
-        division = {}
-    complete = len(division) > cfbdata.GROUP_PAGE * 8
-    if complete:
-        # Measured labels are FBS, FCS, NCAA Division II, NCAA Division III.
-        # Excluding by the two lower names rather than allow-listing the two
-        # upper ones, because a new D-I label would then still be audited.
-        d1 = {tid for tid, div in division.items()
-              if "Division II" not in div and "Division III" not in div}
-        keep = [(ab, tid) for ab, tid in every if tid in d1]
-        if keep:
-            print(f"  CFB: {len(keep)} of {len(every)} schools are Division I; "
-                  f"the rest never reach a board")
-            return keep
-    print(f"  CFB: no complete division list ({len(division)} schools, and a "
-          f"page is {cfbdata.GROUP_PAGE} per division) — auditing all "
+        from engine.sources import cfbd
+        rows = cfbd._get("/teams/fbs", {"year": _season_year()},
+                         "cfbd_fbs_audit.json")
+        schools = [str(r.get("school") or r.get("name") or "").strip()
+                   for r in rows if isinstance(r, dict)]
+    except Exception as exc:                                  # noqa: BLE001
+        schools = []
+        why = f"{type(exc).__name__}"
+    else:
+        why = f"{len(schools)} FBS schools listed"
+    lookup = cfbdata.team_lookup(teams)
+    fbs_abbr = {a for a in (lookup.get(cfbdata.name_key(s)) for s in schools)
+                if a}
+    keep = [(ab, tid) for ab, tid in every if ab in fbs_abbr]
+    if keep:
+        print(f"  CFB: {len(keep)} of {len(every)} schools are FBS ({why}); "
+              f"the rest never reach a board")
+        return keep
+    print(f"  CFB: no FBS list to filter on ({why}) — auditing all "
           f"{len(every)}, so expect misses you cannot act on")
     return every
 
@@ -600,6 +632,11 @@ def probe_conference_table(date: str) -> int:
     print("\n  id   built-in              derived (from this slate)")
     resolved = {cid: max(names.items(), key=lambda kv: kv[1])[0]
                 for cid, names in derived.items()}
+    # HOW MANY SCHOOLS VOTED. Without it a one-school answer and a
+    # twelve-school answer print identically, and "RENAMED" off a single
+    # possibly-misjoined row is not a finding — it is a coin flip with a
+    # confident label on it.
+    votes = {cid: sum(names.values()) for cid, names in derived.items()}
     for cid in sorted(set(built) | set(resolved),
                       key=lambda c: int(c) if c.isdigit() else 0):
         old, new = built.get(cid, ""), resolved.get(cid, "")
@@ -611,7 +648,11 @@ def probe_conference_table(date: str) -> int:
             state = "matches"
         else:
             state = f"RENAMED -> {new}"
-        print(f"  {cid:>4}  {old:<20}  {state}")
+        n = votes.get(cid, 0)
+        tally = f"  [{n} school{'s' if n != 1 else ''}]" if n else ""
+        if n and len(derived[cid]) > 1:
+            tally += f"  split: {dict(sorted(derived[cid].items(), key=lambda kv: -kv[1]))}"
+        print(f"  {cid:>4}  {old:<20}  {state}{tally}")
     print("\n  Send this. RENAMED and NEW rows are the table rotting; a row")
     print("  that is merely 'not on this slate' proves nothing either way —")
     print("  run a busy Saturday to cover more of it.")

@@ -112,40 +112,83 @@ def test_the_group_nodes_have_no_id_which_is_why_the_old_map_was_empty():
 
 def test_a_page_is_not_a_roster():
     """Measured: four divisions, exactly 25 schools each, 100 total. That is
-    a page size. A filter built from it would drop real FBS schools as
-    confidently as it drops Avila, which is worse than no filter at all."""
+    a page size, which is why the audit filters on CFBD's FBS list instead —
+    136 rows, a real enumeration. This holds the parse itself honest."""
     assert C.GROUP_PAGE == 25
     paged = {"groups": [{"name": "D1", "children": [
         {"name": "FBS", "teams": [{"id": str(i)} for i in range(25)]}]}]}
     assert len(C.parse_group_divisions(paged)) == C.GROUP_PAGE
-    # Behaviour, not a grep. The first version of this checked that the
-    # string "GROUP_PAGE" appeared in the function — which it still does, in
-    # a print, so replacing the completeness test with `bool(division)` left
-    # the assertion passing while the guard was gone.
+
+
+def test_the_audit_filters_to_the_schools_that_can_reach_a_board():
+    """Third attempt at this filter and the first that reads membership
+    rather than inferring it: a `conferenceId` guessed onto ESPN's teams
+    payload was not there, and the groups feed paginates at 25 so its list
+    is a page. CFBD's FBS list is 136 rows, measured.
+
+    Behaviour, not a grep — an earlier version of this checked that a
+    constant's NAME appeared in the function, which it still did in a print
+    statement, so the guard could be deleted with the assertion passing."""
     import assets
-    teams = {f"T{i}": {"id": str(i)} for i in range(400)}
-    page = {str(i): "FBS" for i in range(C.GROUP_PAGE)}
-    got = _with_audit_feeds(teams, page, assets._cfb_ids)
-    assert len(got) == 400, (
-        f"a {C.GROUP_PAGE}-row page filtered the audit down to {len(got)}")
-    whole = {str(i): ("FBS" if i < 300 else "NCAA Division III")
+    teams = {f"T{i}": {"id": str(i), "name": f"School {i}"}
              for i in range(400)}
-    got = _with_audit_feeds(teams, whole, assets._cfb_ids)
-    assert len(got) == 300, f"a complete list did not filter: {len(got)}"
+    got = _with_audit_feeds(teams, [f"School {i}" for i in range(136)],
+                            assets._cfb_ids)
+    assert len(got) == 136, f"the FBS list did not filter: {len(got)}"
 
 
-def _with_audit_feeds(teams, division, run):
-    """Run the audit's team lookup against stubbed feeds."""
+def test_no_fbs_list_audits_everything_rather_than_nothing():
+    """It fails OPEN. Auditing too much is noise; auditing too little is a
+    logo silently broken forever — and a filter that quietly matches nothing
+    looks exactly like a clean sheet."""
+    import assets
+    teams = {f"T{i}": {"id": str(i), "name": f"School {i}"}
+             for i in range(400)}
+    got = _with_audit_feeds(teams, None, assets._cfb_ids)
+    assert len(got) == 400, f"a failed CFBD call filtered to {len(got)}"
+    got = _with_audit_feeds(teams, ["Nobody We Know"], assets._cfb_ids)
+    assert len(got) == 400, f"a list that joins to nothing filtered to {len(got)}"
+
+
+def test_the_season_asked_of_cfbd_is_one_that_has_teams_in_it():
+    """In August the current year's season has not started. Asking CFBD for
+    it returns nothing, the join matches nothing, and the audit silently
+    goes back to all 756 — a filter that looks present and does nothing.
+
+    `today` is a parameter for exactly this: a function that reads the wall
+    clock cannot be tested at the boundary it exists for."""
+    import datetime as dt
+    import assets
+    assert assets._season_year(dt.date(2026, 8, 8)) == 2025
+    assert assets._season_year(dt.date(2026, 8, 14)) == 2025
+    assert assets._season_year(dt.date(2026, 8, 15)) == 2026
+    assert assets._season_year(dt.date(2026, 11, 4)) == 2026
+    assert assets._season_year(dt.date(2027, 1, 10)) == 2026
+
+
+def _with_audit_feeds(teams, fbs, run):
+    """Run the audit's team lookup against stubbed feeds.
+
+    ``teams`` is ESPN's {abbr: {id, name}}; ``fbs`` is the list of school
+    names CFBD calls FBS, or None to make that call fail.
+    """
+    from engine.sources import cfbd
     real_fetch, real_parse = C.fetch_teams, C.parse_teams
-    real_div = C.fetch_group_divisions
+    real_get = cfbd._get
     C.fetch_teams = lambda *a, **k: {}
     C.parse_teams = lambda payload: teams
-    C.fetch_group_divisions = lambda *a, **k: division
+
+    def fake_get(path, params, cache, api_key=None, ttl=None):
+        if fbs is None:
+            raise cfbd.CFBDUnavailable("no key")
+        return [{"school": s, "conference": "SEC"} for s in fbs]
+
+    cfbd._get = fake_get
     try:
         return run()
     finally:
         C.fetch_teams, C.parse_teams = real_fetch, real_parse
-        C.fetch_group_divisions = real_div
+        cfbd._get = real_get
 
 
 def test_a_deeper_nesting_keeps_the_division_not_the_leaf():

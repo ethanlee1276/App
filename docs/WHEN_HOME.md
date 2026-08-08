@@ -250,93 +250,37 @@ edit.
 **Nothing here needs you any more.** It is closed, with one real thing left
 over that this feed can no longer answer:
 
-### Is the built-in conference table still right? (open)
+### The conference table, checked — and it is fine where it matters
 
-`CONFERENCE_IDS` in `engine/sources/cfbdata.py` is twelve rows and it is now
-the *only* source for a game's conference. It still lists `Pac-12`, which
-after realignment is two schools rather than a conference — and conference
-feeds `attention_tier`, which decides how much of an edge to believe based on
-how hard the market was looking.
+Run 2026-08-08 against the 2025-11-01 slate. 50 teams, 50 joined to CFBD, no
+misses. **All four power conferences verified: ACC 1, Big 12 4, Big Ten 5,
+SEC 8 — plus Mountain West 17 and FBS Independents 18.**
 
-Neither feed can answer this alone. CFBD knows which conference each school
-is in and knows nothing about ESPN's numeric ids; the ESPN scoreboard stamps
-every team with a `conferenceId` and never says what it is called. One school
-in both gives one row of `{conferenceId: name}`, and a busy Saturday gives
-most of the table.
+That is the whole exposure, because `POWER_CONFERENCES` in
+`engine/cfb/model.py` is exactly `{SEC, Big Ten, Big 12, ACC}` and nothing
+else in `attention_tier` distinguishes one non-power conference from another.
+A Sun Belt game and an FCS game price identically. So the two mismatches the
+run turned up cannot move a number:
+
+* **15 MAC → "Mid-American"** was my alias table, not realignment. CFBD drops
+  the trailing "Conference", so the same league arrived under two names.
+  Fixed — that and the other short forms are aliased now.
+* **151 FCS → "American Athletic"** is more interesting and is NOT yet acted
+  on. If ESPN really stamps AAC teams with 151, our table mislabels them on
+  the board. But the probe did not say how many schools voted for that, and
+  renaming a conference off one possibly-misjoined row is a coin flip with a
+  confident label on it. The probe now prints the vote count.
 
 ```
 python3 assets.py --conf-table
 ```
 
-Read-only, cache bypassed, changes nothing. The date is optional — bare, it
-uses the last Saturday there were college games on, which in August means
-reaching back to the finished season rather than to an empty weekend. Pass
-one (`--conf-table 2025-11-01`) to cover different weeks; the more games, the
-more of the twelve rows get checked. It joins the two feeds and prints each
-id as `matches`, `RENAMED -> x`, `NEW -> x`, or `not on this slate`.
+One more run, on a different Saturday. What I need from it: the tally beside
+151, and coverage of 9 / 12 / 20 / 37, which had no games on the slate I saw.
+If 151 shows a healthy majority for American Athletic I will correct it; if it
+is one school, it stays as it is.
 
-Send it. `RENAMED` and `NEW` rows are the table rotting and I will correct
-them; `not on this slate` proves nothing either way, so a second run on a
-different date fills in what the first missed.
-
-If CFBD's rows turn out not to carry a conference, the probe dumps their
-shape rather than guessing — that is the one habit worth keeping from the
-four rounds this cost on the groups feed.
-
-CFB opens in about three weeks, so this is the one dated item on the list.
-
-Also worth a run while you are there, now that the audit filters to schools
-that can actually reach a D-I board:
-
-```
-python3 assets.py --audit --sport cfb
-```
-
-The first line says which filter applied. If it reads *"the teams feed
-carries no conference marker"* then ESPN does not ship that field and I need
-a different way to tell a Big Ten school from a JUCO — the 92 misses in the
-last run were all NAIA and D-II schools that render the monogram chip and
-have never been on your board.
-
----
-
-## 3g. Check the keys — one command, safe to paste
-
-**Run 2026-08-08: all four present and correctly named.** Anthropic 108
-chars, CFBD 64 chars and answering, and two Odds keys — one with ~11k
-credits, one spent. Details in §7. Re-run this whenever a layer goes quiet.
-
-```
-python3 keycheck.py
-```
-
-It reports each variable NAME, whether something is set, how long it is, and
-what the provider says when asked. **It never prints a key** — not the value,
-not a prefix, not the last four characters, and anything a provider echoes
-back in an error is scrubbed before printing. Paste the whole output.
-
-It costs nothing. The Odds API is asked for `/sports`, which does not count
-against quota and returns your remaining balance in a header — so the check
-that proves a key works also tells you what is left on it, per key. CFBD gets
-one small request. **Anthropic is checked for presence only**, because every
-call to that API costs money and a validation that bills you is not a
-diagnostic.
-
-The names are exact and case-sensitive, and this is the failure worth ruling
-out — a key set under a name the code does not read is invisible to it:
-
-```
-ANTHROPIC_API_KEY=...
-ODDS_API_KEY=...
-ODDS_API_KEY_2=...        # the second plan; _3, _4 … also read
-CFBD_API_KEY=...
-```
-
-One `NAME=value` per line, no `export`, no quotes. Every consumer degrades
-politely when its key is missing — the college board just runs without a
-preseason prior, the odds layer just falls back to proxy lines — which is
-correct behaviour and exactly why a missing key can sit unnoticed for a
-month.
+Not urgent. The rows that feed pricing are confirmed correct.
 
 ---
 
