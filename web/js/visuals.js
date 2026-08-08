@@ -171,12 +171,62 @@ function playerAvatar(name, abbr, opts = {}) {
 }
 
 /* ---------------- Team logo mark (procedural monogram) ------------------- */
+/* ---------------- Real team logos ---------------------------------------
+   ESPN's CDN serves every league we cover. Verified 2026-08-08 from
+   Ethan's machine, all five keys, HTTP 200 image/png.
+
+   THE COMBINER PATH, NOT THE RAW ONE. `/combiner/i?img=…&w=&h=` resizes
+   server-side, and the difference is not small: the raw 500px NFL mark is
+   40,228 bytes against 11,537 for the combiner, MLB 20,024 against 7,739.
+   A board draws twenty of these, so it is the difference between ~800KB
+   and ~230KB of logo on one page load.
+
+   ESPN SPELLS SOME TEAMS DIFFERENTLY FROM US, and the map below is
+   recalled rather than measured for everything except the five the probe
+   actually tested. That is why `teamMark` layers the image OVER the
+   existing monogram instead of replacing it: a wrong abbreviation, a dead
+   host or no network at all removes the <img> and leaves exactly the chip
+   that shipped before this change. There is no state in which this is
+   worse than what it replaced.
+
+   `assets.py --audit` walks every abbreviation in every teams file and
+   reports which ones 404, so the misses get fixed from a measurement
+   rather than from memory. Run it before trusting this map. */
+const ESPN_LEAGUE = { nfl: "nfl", cfb: "ncaa", mlb: "mlb", nba: "nba", wnba: "wnba" };
+
+const ESPN_ABBR = {
+  nfl:  { WAS: "wsh", LA: "lar", ARZ: "ari", SD: "lac", STL: "lar", OAK: "lv" },
+  mlb:  { CWS: "chw", TBR: "tb" },
+  nba:  { NOP: "no", NYK: "ny", GSW: "gs", SAS: "sa", UTA: "utah", PHX: "phx" },
+  wnba: { CON: "conn", GSV: "gs", LAS: "la", LVA: "lv", NYL: "ny", WAS: "wsh" },
+  cfb:  {},
+};
+
+function logoUrl(abbr, sport, size = 48) {
+  const key = ESPN_LEAGUE[(sport || "").toLowerCase()];
+  if (!key || !abbr) return "";
+  const a = (ESPN_ABBR[sport.toLowerCase()] || {})[String(abbr).toUpperCase()]
+            || String(abbr).toLowerCase();
+  return `https://a.espncdn.com/combiner/i?img=/i/teamlogos/${key}/500/${
+    encodeURIComponent(a)}.png&w=${size * 2}&h=${size * 2}`;
+}
+
 function teamMark(abbr, size = 20, src = null) {
   const t = team(abbr, src);
   const uid = "tm" + Math.random().toString(36).slice(2, 7);
-  return `
-  <svg class="team-mark" width="${size}" height="${size}" viewBox="0 0 24 24" role="img"
-       aria-label="${escapeAttr(abbr)}">
+  const sport = src || (typeof state !== "undefined" ? state.sport : "") || "nfl";
+  const url = logoUrl(abbr, sport, size);
+  // The monogram stays underneath. `onerror` removes only the image, so a
+  // bad abbreviation or a dead CDN lands on the chip this used to be.
+  const img = url
+    ? `<img class="team-logo" src="${escapeAttr(url)}" width="${size}"
+            height="${size}" alt="" loading="lazy" decoding="async"
+            onerror="this.remove()">`
+    : "";
+  return `<span class="team-mark-wrap" style="width:${size}px;height:${size}px"
+                role="img" aria-label="${escapeAttr(abbr)}">
+  <svg class="team-mark" width="${size}" height="${size}" viewBox="0 0 24 24"
+       aria-hidden="true" focusable="false">
     <defs>
       <linearGradient id="${uid}" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0%" stop-color="${shade(t.primary, 20)}"/>
@@ -189,7 +239,7 @@ function teamMark(abbr, size = 20, src = null) {
     <text x="12" y="15.8" text-anchor="middle" font-family="system-ui, sans-serif"
           font-size="8" font-weight="800"
           fill="${idealText(t.primary)}">${escapeAttr(String(abbr).slice(0, 3))}</text>
-  </svg>`;
+  </svg>${img}</span>`;
 }
 
 /* ---------------- Animated wind gauge ------------------------------------ */

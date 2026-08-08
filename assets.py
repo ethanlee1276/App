@@ -112,11 +112,44 @@ def probe_nfl_headshots() -> None:
         rows = [r for r in csv.DictReader(fh)
                 if (r.get("headshot_url") or "").strip()]
     print(f"  {len(rows)} roster rows carry a headshot_url")
-    for r in rows[:3]:
+    print("\n  RAW, as nflverse ships it:")
+    for r in rows[:2]:
         verdict, detail = _get(r["headshot_url"])
         name = r.get("full_name") or r.get("player_name") or "?"
         print(f"    {verdict:<10} {name[:24]:<24} {detail}")
-        print(f"    {'':<10} {r['headshot_url'][:70]}")
+
+    # THE SIZE IS THE PROBLEM, not the availability. Measured from Ethan's
+    # machine 2026-08-08: 3,797,822 / 3,145,446 / 4,307,894 bytes. A board
+    # showing twelve props would pull ~45MB of headshots to draw them at
+    # 40px. That is not a face feature, it is a stall.
+    #
+    # These are Cloudinary URLs (`/image/upload/<transforms>/league/<id>`),
+    # so transforms go in the path. Which ones this account allows is the
+    # open question, and guessing it is how the last three feed bugs
+    # happened — so it is asked here rather than written into the site.
+    print("\n  RESIZED — which transform does this Cloudinary allow?")
+    variants = [
+        ("w_96,h_96,c_fill,g_face", "square crop centred on the face"),
+        ("w_96,c_fill",             "width only, default gravity"),
+        ("w_96",                    "width only, no crop"),
+        ("t_headshot_desktop",      "a named preset, if one exists"),
+    ]
+    base = rows[0]["headshot_url"]
+    name = rows[0].get("full_name") or "?"
+    marker = "/image/upload/"
+    if marker not in base:
+        print(f"    the URL shape changed — no '{marker}' in {base[:70]}")
+        return
+    head, tail = base.split(marker, 1)
+    # nflverse already ships `f_auto,q_auto` as the transform segment; the
+    # new one replaces it rather than stacking a second copy.
+    tail_id = tail.split("/", 1)[1] if "/" in tail else tail
+    for tf, label in variants:
+        url = f"{head}{marker}f_auto,q_auto,{tf}/{tail_id}"
+        verdict, detail = _get(url)
+        print(f"    {verdict:<10} {label:<34} {detail}")
+        print(f"    {'':<10} {url[:96]}")
+    print(f"\n    (all four are the same player: {name})")
 
 
 def probe_other_headshots(only: str | None) -> None:
@@ -149,17 +182,99 @@ def probe_other_headshots(only: str | None) -> None:
         print(f"  {'':<10} {url}")
 
 
+def _teams_for(sport: str) -> list[str]:
+    """Every abbreviation the site actually uses for a sport, from the same
+    teams_*.js the page reads — so the audit covers what will be rendered,
+    not a list kept in step by hand."""
+    import re
+    fname = {"nfl": "teams.js"}.get(sport, f"teams_{sport}.js")
+    path = os.path.join(ROOT, "web", "js", fname)
+    if not os.path.exists(path):
+        return []
+    src = open(path, encoding="utf-8").read()
+    return sorted(set(re.findall(r'^\s{2}"([A-Za-z0-9]{2,5})":\s*\{', src, re.M)))
+
+
+#: Mirrors ESPN_ABBR in web/js/visuals.js. Two copies is a real hazard, and
+#: `--audit` is exactly what catches them drifting: it reads the map out of
+#: the JS rather than trusting this comment.
+def _js_abbr_map() -> dict:
+    import json
+    import re
+    src = open(os.path.join(ROOT, "web", "js", "visuals.js"),
+               encoding="utf-8").read()
+    m = re.search(r"const ESPN_ABBR = (\{.*?\n\};)", src, re.S)
+    if not m:
+        return {}
+    body = m.group(1).rstrip(";")
+    body = re.sub(r"(\w+):", r'"\1":', body)          # bare keys -> quoted
+    body = re.sub(r",(\s*[}\]])", r"\1", body)        # trailing commas
+    try:
+        return json.loads(body)
+    except ValueError:
+        return {}
+
+
+def audit(only: str | None) -> int:
+    """Fetch the logo for EVERY team the site can render, and name the misses.
+
+    The map in visuals.js is recalled for everything the probe did not
+    test, which is most of it. A miss is not a crash — the <img> removes
+    itself and the monogram chip shows — but it is a team quietly wearing
+    the old mark forever, which nobody would notice on a board they do not
+    open. This is the measurement that replaces the memory.
+    """
+    amap = _js_abbr_map()
+    if not amap:
+        print("  could not read ESPN_ABBR out of visuals.js — audit aborted")
+        return 2
+    bad = 0
+    for sport, (key, _) in SPORTS.items():
+        if only and sport != only:
+            continue
+        teams = _teams_for(sport)
+        if not teams:
+            print(f"\n  {sport.upper()}: no teams file, skipped")
+            continue
+        misses = []
+        for ab in teams:
+            espn = amap.get(sport, {}).get(ab.upper(), ab.lower())
+            url = (f"https://a.espncdn.com/combiner/i?img=/i/teamlogos/{key}"
+                   f"/500/{espn}.png&w=96&h=96")
+            verdict, detail = _get(url)
+            if verdict != "OK ":
+                misses.append((ab, espn, detail))
+        print(f"\n  {sport.upper()}: {len(teams) - len(misses)}/{len(teams)} "
+              f"logos resolve")
+        for ab, espn, detail in misses:
+            print(f"    MISS  {ab:<5} -> tried '{espn}'   {detail}")
+        bad += len(misses)
+    print(f"\n  {bad} miss(es) total.")
+    if bad:
+        print("  Send this and I will correct the map. Every miss renders the")
+        print("  monogram chip in the meantime, which is the old behaviour.")
+    return 0
+
+
 def main(argv: list) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--probe", action="store_true",
                    help="try every candidate URL and report what answered")
+    p.add_argument("--audit", action="store_true",
+                   help="fetch the logo for EVERY team the site renders and "
+                        "name the abbreviations that miss")
     p.add_argument("--sport", default="",
                    help="limit to one sport (nfl, mlb, nba, wnba, cfb)")
     a = p.parse_args(argv)
-    if not a.probe:
+    if not (a.probe or a.audit):
         p.print_help()
         return 1
     only = a.sport.lower() or None
+    if a.audit:
+        print("=" * 78)
+        print("LOGO AUDIT — every abbreviation the site can render")
+        print("=" * 78)
+        return audit(only)
     probe_logos(only)
     if not only or only == "nfl":
         probe_nfl_headshots()

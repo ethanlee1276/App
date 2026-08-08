@@ -3999,3 +3999,27 @@ select.calc-in { width: auto; font-weight: 600; }
   .pre-date { grid-column: 1 / -1; }
   .pre-roof { display: none; }
 }
+
+/* ============================================================
+   Real team logos
+   ============================================================
+   The logo is layered OVER the monogram chip rather than replacing it, so
+   `onerror="this.remove()"` on the <img> falls back to the chip that
+   shipped before — a wrong ESPN abbreviation, a dead CDN or no network at
+   all lands on exactly the previous behaviour. Nothing here can be worse
+   than what it replaced.
+
+   Sized by the wrapper, not the image, so the fallback and the logo take
+   identical space and no row reflows when one becomes the other. */
+.team-mark-wrap {
+  position: relative; display: inline-block; flex: 0 0 auto;
+  vertical-align: middle; line-height: 0;
+}
+.team-mark-wrap > .team-mark,
+.team-mark-wrap > .team-logo {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+}
+/* `contain`, because these marks are not one aspect ratio — a Boston B is
+   near-square and a Texans bull is wide. Cropping to fill would cut the
+   part of a logo people recognise. */
+.team-mark-wrap > .team-logo { object-fit: contain; }
