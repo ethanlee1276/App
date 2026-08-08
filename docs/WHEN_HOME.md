@@ -240,16 +240,30 @@ I also removed a `conf` field I had added to the team payload on the guess
 that ESPN ships `conferenceId` there. It doesn't, nothing read it, and it was
 riding along on 756 rows to the browser.
 
-```
-python3 assets.py --conferences
-```
+`limit=900` was the last idea and it did not lift the pagination — still 25
+per division. So the endpoint is a dead end and the build has stopped asking
+it: `fetch_conferences` made four requests per cache miss to be told again
+what three runs already established. `assets.py --conferences` still probes
+on demand, so re-checking after any ESPN change is one command, not a code
+edit.
 
-Read-only, cache bypassed. One thing left to learn from it: the ladder now
-also tries `limit=900`, the same parameter `fetch_teams` sends to this API to
-get 756 rows. If that comes back with several hundred schools instead of 100,
-the division map becomes a complete D-I filter and the audit starts using it
-automatically. If it still returns 100, the endpoint is a dead end for us and
-I will stop asking.
+**Nothing here needs you any more.** It is closed, with one real thing left
+over that this feed can no longer answer:
+
+### Is the built-in conference table still right? (open)
+
+`CONFERENCE_IDS` in `engine/sources/cfbdata.py` is twelve rows and it is now
+the *only* source for a game's conference. It still lists `Pac-12`, which
+after realignment is two schools rather than a conference — and conference
+feeds `attention_tier`, which decides how much of an edge to believe based on
+how hard the market was looking.
+
+The `GONE / RENAMED` check I built for this can never fire now, because
+nothing resolves live to compare against. The obvious alternative is CFBD,
+already a dependency for the talent prior — but it is key-gated, so before I
+build anything against it: **is `CFBD_API_KEY` in your `secrets.local`?** If
+yes I will check what it offers for conferences. If no, the honest fix is to
+correct the twelve rows by hand and note when they were last checked.
 
 CFB opens in about three weeks, so this is the one dated item on the list.
 

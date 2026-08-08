@@ -388,7 +388,7 @@ def probe_conferences() -> int:
     print("\n  GROUP ID → NAME (asked for, and this feed does not carry it:")
     print("  its group nodes have no id. Kept so a fix would be noticed.)")
     report: list = []
-    live = cfbdata.fetch_conferences(ttl=0, report=report)
+    live = cfbdata.fetch_conferences(ttl=0, report=report, probe=True)
     for label, count, note in report:
         mark = "OK " if count > 1 else "NO "
         print(f"  {mark:<5} {label:<12} {count:>3} parsed")

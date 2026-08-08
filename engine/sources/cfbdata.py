@@ -497,24 +497,41 @@ GROUP_CANDIDATES = [
 ]
 
 
+#: The groups endpoint does not carry conference names, and asking it four
+#: times per cache miss to be told so again is waste on every CFB build.
+#:
+#: MEASURED, three runs, 2026-08-08. All four URL shapes answer 200 with the
+#: same payload: NCAA divisions, no id on any group node, team lists cut at
+#: GROUP_PAGE. ``limit=900`` — the parameter that gets 756 rows out of this
+#: same API's teams endpoint — does not lift the pagination either.
+#:
+#: So the build path stops asking. ``probe=True`` still goes to the wire, so
+#: `assets.py --conferences` can re-check in one command if ESPN ever
+#: changes it. This is a measurement, not a permanent verdict; it is just
+#: not one worth re-taking on a schedule.
+GROUPS_CARRY_CONFERENCES = False
+
+
 def fetch_conferences(ttl: int = 7 * 24 * 3600,
-                      report: list | None = None) -> dict[str, str]:
-    """Live conference names, or ``{}`` when nothing usable comes back.
+                      report: list | None = None,
+                      probe: bool = False) -> dict[str, str]:
+    """Live conference names, or ``{}`` — which, measured, is always.
 
     It does NOT fall back to the built-in ids. ``conference_ids()`` layers
-    those underneath, and a caller that skips it reads an unreachable feed
-    as "this sport has no conferences" — which is what sent `--audit cfb`
+    those underneath, and a caller that skips it reads an empty answer as
+    "this sport has no conferences" — which is what sent `--audit cfb`
     through all 756 schools.
 
-    WHY A LADDER RATHER THAN ONE URL. The single shape this used to send
-    stopped producing conferences, and from the outside "the host refused"
-    and "the payload parsed to nothing" looked the same. Both are now tried
-    against alternatives and the first that yields a real map wins, so a
-    changed parameter costs one extra request instead of a whole silent
-    model input. ``report`` collects ``(label, count, note)`` per candidate
-    for the diagnostic, which is how we find out WHICH one answered rather
-    than only that something did.
+    Without ``probe`` this makes no request at all. See
+    ``GROUPS_CARRY_CONFERENCES``: the endpoint has been measured three times
+    and does not carry what this asks for, so the four-request ladder was
+    buying nothing on every build.
     """
+    if not (probe or GROUPS_CARRY_CONFERENCES):
+        if report is not None:
+            report.append(("not asked", 0, "measured: this feed has no "
+                           "conference names — --conferences to re-check"))
+        return {}
     for label, url, cache in GROUP_CANDIDATES:
         try:
             payload = fetch_json(url, cache, ttl=ttl, user_agent=DEFAULT_AGENT)
@@ -540,7 +557,10 @@ def fetch_group_divisions(ttl: int = 7 * 24 * 3600,
 
     Diagnostic and audit use only — nothing in pricing reads this. See
     ``parse_group_divisions`` for why: the feed carries divisions, not
-    conferences, and paginates its team lists at ``GROUP_PAGE``.
+    conferences, and paginates its team lists at ``GROUP_PAGE``. Unlike
+    ``fetch_conferences`` this still goes to the wire, because divisions ARE
+    what it carries and a complete page would be usable; it is only ever
+    called from the audit and the diagnostic, not from a build.
     """
     for label, url, cache in GROUP_CANDIDATES:
         try:

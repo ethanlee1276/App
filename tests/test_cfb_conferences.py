@@ -188,10 +188,47 @@ def test_the_truncation_is_reported_rather_than_passed_off_as_an_answer():
 
 
 def test_a_limit_shape_is_tried_since_the_lists_are_paginated():
-    """fetch_teams sends limit=900 against this same API and gets 756 rows,
-    which is reason to think the parameter is honoured here even though
-    `groups` demonstrably is not."""
+    """Measured: it does not lift the pagination — 25 per division either
+    way. Kept in the ladder so the diagnostic still reports on it, since it
+    is the one parameter that demonstrably works elsewhere on this API."""
     assert any("limit" in lbl for lbl, _, _ in C.GROUP_CANDIDATES)
+
+
+def test_a_build_does_not_ask_a_feed_that_has_been_measured_empty():
+    """Four requests per cache miss, on every CFB build, to be told again
+    what three runs already established. The diagnostic still probes."""
+    calls: list = []
+
+    def fake(url, cache, ttl=0, user_agent=None):
+        calls.append(url)
+        return {}
+
+    got = _with_fetch(fake, lambda: C.fetch_conferences(ttl=0))
+    assert calls == [], f"the build path still hits the wire: {calls}"
+    assert got == {}
+
+
+def test_the_diagnostic_can_still_reach_it_in_one_command():
+    """A measurement is not a permanent verdict. If ESPN changes the feed,
+    re-checking must not require editing the source."""
+    calls: list = []
+
+    def fake(url, cache, ttl=0, user_agent=None):
+        calls.append(url)
+        return {}
+
+    _with_fetch(fake, lambda: C.fetch_conferences(ttl=0, probe=True))
+    assert len(calls) == len(C.GROUP_CANDIDATES), calls
+    src = _read_root("assets.py")
+    assert "probe=True" in src, "--conferences no longer goes to the wire"
+
+
+def test_the_skipped_fetch_still_says_why_in_the_report():
+    """Silence in the diagnostic would read as "nothing tried", which is
+    how a deliberate decision gets mistaken for a bug six months later."""
+    report: list = []
+    C.fetch_conferences(report=report)
+    assert report and "measured" in report[0][2], report
 
 
 def _read_root(name):
@@ -318,7 +355,7 @@ def test_a_lone_parent_group_is_not_accepted_as_the_answer():
         return ({"groups": [{"id": "80", "name": "FBS"}]} if len(calls) == 1
                 else NESTED)
 
-    got = _with_fetch(fake, lambda: C.fetch_conferences(ttl=0))
+    got = _with_fetch(fake, lambda: C.fetch_conferences(ttl=0, probe=True))
     assert len(calls) == 2, f"stopped early on the parent-only payload: {calls}"
     assert got.get("8") == "SEC", got
 
@@ -330,7 +367,7 @@ def test_the_first_usable_answer_wins_and_nothing_further_is_requested():
         calls.append(url)
         return NESTED
 
-    got = _with_fetch(fake, lambda: C.fetch_conferences(ttl=0))
+    got = _with_fetch(fake, lambda: C.fetch_conferences(ttl=0, probe=True))
     assert len(calls) == 1, calls
     assert len(got) > 1
 
@@ -346,7 +383,7 @@ def test_an_unreachable_shape_does_not_end_the_ladder():
             raise C.DataUnavailable("404", status=404)
         return NESTED
 
-    got = _with_fetch(fake, lambda: C.fetch_conferences(ttl=0))
+    got = _with_fetch(fake, lambda: C.fetch_conferences(ttl=0, probe=True))
     assert len(calls) == len(C.GROUP_CANDIDATES)
     assert got.get("8") == "SEC"
 
@@ -357,7 +394,7 @@ def test_everything_failing_is_an_empty_map_not_a_raise():
     def fake(url, cache, ttl=0, user_agent=None):
         raise C.DataUnavailable("nope", status=503)
 
-    assert _with_fetch(fake, lambda: C.fetch_conferences(ttl=0)) == {}
+    assert _with_fetch(fake, lambda: C.fetch_conferences(ttl=0, probe=True)) == {}
 
 
 def test_the_report_names_which_shape_did_what():
@@ -367,7 +404,7 @@ def test_the_report_names_which_shape_did_what():
         raise C.DataUnavailable("boom", status=404)
 
     report: list = []
-    _with_fetch(fake, lambda: C.fetch_conferences(ttl=0, report=report))
+    _with_fetch(fake, lambda: C.fetch_conferences(ttl=0, report=report, probe=True))
     assert len(report) == len(C.GROUP_CANDIDATES)
     for label, count, note in report:
         assert count == 0
@@ -380,7 +417,7 @@ def test_the_report_distinguishes_refused_from_parsed_empty():
         return {"groups": []}
 
     report: list = []
-    _with_fetch(fake, lambda: C.fetch_conferences(ttl=0, report=report))
+    _with_fetch(fake, lambda: C.fetch_conferences(ttl=0, report=report, probe=True))
     assert all(not n.startswith("unreachable") for _, _, n in report), report
 
 
