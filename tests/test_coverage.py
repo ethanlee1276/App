@@ -141,21 +141,73 @@ def test_no_layer_checks_a_cache_name_nothing_writes():
 def test_an_out_of_season_board_is_not_reported_as_a_failure():
     """NFL in July has journaled nothing because there was nothing to bet.
     Flagging that ❌ next to a real gap trains you to skim the rows that
-    matter."""
-    saved = C.ROOT
+    matter.
+
+    BOTH INPUTS ARE STUBBED, and the second one is the fix. The branch under
+    test fires on `not (o or s) and dormant` — an empty journal AND a
+    dormant board. This stubbed only `C.ROOT`, which controls the board
+    status; `o` and `s` come from `_journal()`, which opens the REAL ledger
+    through `ledger.DEFAULT_DB` and ignores `C.ROOT` entirely.
+
+    So the test passed for as long as the live journal happened to hold no
+    NFL bets, and failed on Ethan's machine the first evening it did — the
+    run-up change (SEASON_RUNUP_DAYS) let the launcher build Week 1 in
+    August, which journaled six game bets, which made `o` non-zero, which
+    skipped the branch. Nothing about the behaviour under test had changed.
+
+    `ledger.connect()` resolves DEFAULT_DB at call time precisely so a test
+    can repoint it, which is what this now does.
+    """
     import tempfile, json as _json
     from pathlib import Path as _P
+    from engine import ledger as _led
+    saved_root, saved_db = C.ROOT, _led.DEFAULT_DB
     try:
         tmp = _P(tempfile.mkdtemp())
         (tmp / "web" / "data").mkdir(parents=True)
         (tmp / "web" / "data" / "recommendations.json").write_text(
             _json.dumps({"status": "offseason"}))
         C.ROOT = tmp
+        _led.DEFAULT_DB = tmp / "ledger.db"      # empty: no bets, any sport
+        assert C._journal("nfl") == (0, 0), \
+            "the ledger stub did not take — this test is reading a real one"
         layer = C._journal_layer("nfl")
         assert layer.state == C.PARTIAL
         assert "out of season" in layer.detail
     finally:
-        C.ROOT = saved
+        C.ROOT, _led.DEFAULT_DB = saved_root, saved_db
+
+
+def test_a_dormant_board_with_journaled_bets_is_not_called_out_of_season():
+    """The other half of that branch, which nothing covered.
+
+    "Out of season" is a claim about having bet NOTHING. A board that is
+    dormant today but holds settled bets from last season has a real record
+    to report, and saying "nothing journaled yet" over the top of it would
+    be false — the exact case the run-up change created in August."""
+    import tempfile, json as _json
+    from pathlib import Path as _P
+    from engine import ledger as _led
+    saved_root, saved_db = C.ROOT, _led.DEFAULT_DB
+    try:
+        tmp = _P(tempfile.mkdtemp())
+        (tmp / "web" / "data").mkdir(parents=True)
+        (tmp / "web" / "data" / "recommendations.json").write_text(
+            _json.dumps({"status": "offseason"}))
+        C.ROOT = tmp
+        _led.DEFAULT_DB = tmp / "ledger.db"
+        conn = _led.connect(_led.DEFAULT_DB)
+        conn.execute(
+            "INSERT INTO bets (ts, sport, date, player, market, side, line,"
+            " odds, stake_units, status, category) "
+            "VALUES ('t','nfl','2026-09-13','X','rush_yds','OVER',1,-110,"
+            "1,'won','main')")
+        conn.commit(); conn.close()
+        assert C._journal("nfl") == (0, 1)
+        layer = C._journal_layer("nfl")
+        assert "out of season" not in layer.detail, layer.detail
+    finally:
+        C.ROOT, _led.DEFAULT_DB = saved_root, saved_db
 
 
 def test_every_command_the_scan_prints_actually_exists():
