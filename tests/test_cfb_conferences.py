@@ -44,6 +44,148 @@ NESTED = {"groups": [{"id": "80", "name": "FBS", "children": [
 ]}]}
 
 
+#: WHAT THE ENDPOINT ACTUALLY RETURNS. Measured 2026-08-08 from Ethan's
+#: machine, after two wrong guesses about it. The decisive detail is that
+#: the GROUP NODES CARRY NO ID — only teams do — so {group_id: name}, the
+#: map this module has asked this endpoint for since it was written, was
+#: never buildable from it.
+REAL = {"status": "ok", "groups": [
+    {"name": "NCAA Division I-A", "abbreviation": "FBS", "children": [
+        {"name": "Southeastern Conference", "abbreviation": "SEC", "teams": [
+            {"id": "333", "abbreviation": "ALA"},
+            {"id": "2", "abbreviation": "AUB"}]},
+        {"name": "Big Ten Conference", "abbreviation": "B1G", "teams": [
+            {"id": "194", "abbreviation": "OSU"}]}]},
+    {"name": "NCAA Division I-AA", "abbreviation": "FCS", "children": [
+        {"name": "Big Sky Conference", "teams": [
+            {"id": "204", "abbreviation": "MONT"}]}]}]}
+
+
+# --- the map the feed can actually produce ----------------------------------
+def test_the_feed_is_read_as_team_to_conference():
+    got = C.parse_group_teams(REAL)
+    assert got == {"333": "SEC", "2": "SEC", "194": "Big Ten",
+                   "204": "Big Sky Conference"}, got
+
+
+def test_the_group_nodes_have_no_id_which_is_the_whole_finding():
+    """Kept as an assertion rather than a comment, because the moment ESPN
+    adds ids here the old `{group_id: name}` route becomes viable again and
+    somebody should be told rather than left maintaining two answers."""
+    for grp in REAL["groups"]:
+        assert "id" not in grp and "groupId" not in grp
+        for child in grp["children"]:
+            assert "id" not in child and "groupId" not in child
+    assert C.parse_conferences(REAL) == {}, (
+        "the id→name map is suddenly buildable; revisit fetch_conferences")
+
+
+def test_a_division_does_not_become_the_conference():
+    """Some conferences split into divisions that also carry teams. Naming a
+    school's conference "East Division" would be worse than useless to
+    attention_tier, which reads it to judge how hard the market is looking."""
+    div = {"groups": [{"name": "FBS", "children": [
+        {"name": "Conference USA", "children": [
+            {"name": "East Division", "teams": [{"id": "9"}]},
+            {"name": "West Division", "teams": [{"id": "10"}]}]}]}]}
+    assert C.parse_group_teams(div) == {"9": "Conference USA",
+                                        "10": "Conference USA"}
+
+
+def test_a_school_hanging_off_the_top_level_keeps_that_name():
+    """Independents have no conference node between them and the division."""
+    indep = {"groups": [{"name": "FBS Independents",
+                         "teams": [{"id": "87"}]}]}
+    assert C.parse_group_teams(indep) == {"87": "FBS Independents"}
+
+
+def test_the_division_of_college_football_is_not_a_conference():
+    """"NCAA Division I-A" is not what anyone means by a school's
+    conference, and it must not leak out as one."""
+    assert "NCAA Division I-A" not in C.parse_group_teams(REAL).values()
+
+
+def test_the_team_map_survives_the_envelope_too():
+    env = {"sports": [{"leagues": [REAL]}]}
+    assert C.parse_group_teams(env).get("333") == "SEC"
+
+
+def test_a_malformed_groups_payload_is_empty_not_an_exception():
+    for junk in ({}, {"groups": None}, {"groups": ["s", None, 7]},
+                 {"groups": [{"teams": [{"id": "1"}]}]},   # no name anywhere
+                 {"groups": [{"name": "X", "teams": ["not a dict"]}]}):
+        assert C.parse_group_teams(junk) == {}, junk
+
+
+# --- what reads it -----------------------------------------------------------
+def test_the_live_map_wins_over_the_checked_in_table():
+    """The conferenceId route resolves through twelve rows checked into the
+    source file. Schools change conference every year; the file does not."""
+    sb = {"events": [{"competitions": [{"competitors": [
+        {"homeAway": "home", "team": {"id": "333", "abbreviation": "ALA",
+                                      "conferenceId": 8}},
+        {"homeAway": "away", "team": {"id": "194", "abbreviation": "OSU",
+                                      "conferenceId": 8}},
+    ]}]}]}
+    games = C.parse_scoreboard(sb, None, {"194": "Big Ten"})
+    assert games[0]["away_conference"] == "Big Ten", games[0]
+    # The one with no live entry still resolves the old way.
+    assert games[0]["home_conference"] == "SEC", games[0]
+
+
+def test_without_the_live_map_nothing_changes():
+    """It is an improvement layered on, not a replacement. A CFB build that
+    cannot reach the groups feed must behave exactly as it did before."""
+    sb = {"events": [{"competitions": [{"competitors": [
+        {"homeAway": "home", "team": {"id": "333", "abbreviation": "ALA",
+                                      "conferenceId": 8}},
+        {"homeAway": "away", "team": {"id": "194", "abbreviation": "OSU",
+                                      "conferenceId": 5}},
+    ]}]}]}
+    # Comparing the two calls alone proves nothing — a change that broke
+    # both identically would still pass. The values are the assertion.
+    for got in (C.parse_scoreboard(sb), C.parse_scoreboard(sb, None, {})):
+        assert got[0]["home_conference"] == "SEC", got
+        assert got[0]["away_conference"] == "Big Ten", got
+
+
+def test_the_range_loader_fetches_the_map_once_not_once_a_day():
+    """A season backfill is ~180 days. The map is cached for a week, so a
+    per-day lookup asks the cache 180 times for an answer that cannot have
+    changed."""
+    import inspect
+    src = inspect.getsource(C.load_range)
+    i = src.index("while day <= d1:")
+    assert "fetch_group_teams" not in src[i:], "the fetch moved into the loop"
+    assert "fetch_group_teams" in src[:i]
+
+
+def test_the_build_passes_the_live_map_through():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "cfb_build.py"), encoding="utf-8") as fh:
+        src = fh.read()
+    i = src.index("cfbdata.parse_scoreboard(")
+    assert "team_conf" in src[i - 300:i + 200], (
+        "the build resolves conferences from the checked-in table only")
+
+
+def test_the_audit_filters_on_the_list_not_on_an_inferred_field():
+    """The previous filter looked for a `conferenceId` on the teams payload.
+    Measured runs showed it is not there. This one uses the enumeration the
+    groups feed gives directly, which is a list rather than an inference."""
+    src = _read_root("assets.py")
+    i = src.index("def _cfb_ids(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert "fetch_group_teams()" in body
+    assert "in_a_conference" in body
+
+
+def _read_root(name):
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, name), encoding="utf-8") as fh:
+        return fh.read()
+
+
 # --- the parse ---------------------------------------------------------------
 def test_conferences_nested_under_the_parent_group_are_found():
     """THE SILENT FAILURE. One level deep this payload yields {"80": "FBS"}

@@ -153,6 +153,73 @@ def conference_name(raw: str) -> str:
 
 
 # --- parsers (pure) ---------------------------------------------------------
+def parse_group_teams(payload: dict) -> dict[str, str]:
+    """``{espn team id: conference name}`` from ESPN's groups feed.
+
+    THIS IS WHAT THE ENDPOINT ACTUALLY RETURNS, measured 2026-08-08 from
+    Ethan's machine after two wrong guesses about it. The shape is::
+
+        {status, groups: [ {name, abbreviation, children: [
+            {name, abbreviation, teams: [ {id, name, abbreviation, ...} ]}
+        ]} ]}
+
+    The load-bearing detail is that **the group nodes carry no id**. Only
+    teams do. So ``{group_id: name}`` — the map this module has asked this
+    endpoint for since it was written — was never buildable from it, and no
+    amount of unwrapping or deeper walking was going to produce one. That is
+    why the feed "answered with nothing" twice while being perfectly healthy.
+
+    Keyed by team instead, the same payload is strictly more useful: it says
+    which conference each school is in AND, by omission, which schools are
+    not in one. ESPN's teams endpoint returns its entire college database —
+    756 rows, most of them NAIA and D-II — and this is the list of the ones
+    that play in a conference we can name.
+
+    The label is taken from the FIRST named level below the top and never
+    overwritten deeper. The top level is the division of college football —
+    "NCAA Division I-A" — which is not a conference; the level under it is.
+    Some conferences then split into divisions that also carry teams, and
+    naming a school's conference "East Division" would be worse than useless
+    to ``attention_tier``, which reads this to decide how hard the market is
+    looking at a game.
+    """
+    out: dict[str, str] = {}
+
+    def walk(node, label: str = "", depth: int = 0):
+        if depth > 6 or not isinstance(node, dict):
+            return
+        name = conference_name((node.get("shortName") or node.get("name")
+                                or node.get("abbreviation") or "").strip())
+        if depth == 0:
+            # FBS/FCS itself, unless it holds teams directly — independents
+            # can hang off the top with no conference node in between.
+            here = name if node.get("teams") else ""
+        else:
+            here = label or name
+        for t in (node.get("teams") or []):
+            if not isinstance(t, dict):
+                continue
+            tid = str(t.get("id") or "").strip()
+            if tid and here:
+                out[tid] = here
+        for key in ("children", "groups", "conferences"):
+            for kid in (node.get(key) or []):
+                walk(kid, here, depth + 1)
+
+    body = payload
+    try:                            # the sports[0].leagues[0] envelope
+        league = payload["sports"][0]["leagues"][0]
+        if isinstance(league, dict):
+            body = {**league, **{k: v for k, v in payload.items()
+                                 if k != "sports"}}
+    except (KeyError, IndexError, TypeError):
+        pass
+    for key in ("groups", "children", "conferences"):
+        for row in (body.get(key) or []):
+            walk(row)
+    return out
+
+
 def parse_conferences(payload: dict) -> dict[str, str]:
     """``{group_id: conference name}`` from ESPN's groups feed.
 
@@ -236,22 +303,19 @@ def parse_teams(payload: dict) -> dict[str, dict]:
             continue
         color = (t.get("color") or "").strip().lstrip("#")
         alt = (t.get("alternateColor") or "").strip().lstrip("#")
-        # Which conference ESPN files the school under, when it says. The
-        # feed ignores our ``groups=80`` and answers with its whole college
-        # database — measured, 756 schools, most of them NAIA and D-II that
-        # no D-I scoreboard will ever show. Anything that needs to separate
-        # the schools we can render from the ones we cannot has to have
-        # something to separate them BY, and this is the only marker the
-        # payload offers. Empty when absent, which callers must treat as
-        # "unknown", never as "not D-I".
-        groups = t.get("groups") or {}
+        # No conference marker is read here. One was added on the guess that
+        # this payload carries `conferenceId`, so that `--audit cfb` could
+        # tell a Big Ten school from a JUCO; measured, it does not, and the
+        # groups feed enumerates conference membership by team id anyway.
+        # See `parse_group_teams`. A field nothing reads, on a guess the
+        # measurement contradicted, in a map that ships 756 rows to the
+        # browser, is not worth keeping for the day it might be true.
         out[abbr] = {
             "id": str(t.get("id") or ""),
             "name": t.get("displayName") or t.get("location") or abbr,
             "nick": t.get("shortDisplayName") or t.get("location") or abbr,
             "primary": f"#{color}" if color else "",
             "alt": f"#{alt}" if alt else "",
-            "conf": str(t.get("conferenceId") or groups.get("id") or ""),
         }
     return out
 
@@ -288,15 +352,24 @@ def _score(raw) -> float | None:
 
 
 def parse_scoreboard(payload: dict,
-                     conferences: dict[str, str] | None = None) -> list[dict]:
+                     conferences: dict[str, str] | None = None,
+                     team_conf: dict[str, str] | None = None) -> list[dict]:
     """An ESPN scoreboard payload → the game dicts the CFB model reads.
 
     Everything ``attention_tier`` needs is set here; everything the two
     refusals need (§2.3 quarterback, §2.4 December participation) is
     deliberately NOT — those come from a source that actually knows, and
     until then they stay false so the play is held rather than guessed.
+
+    ``team_conf`` is ``{team id: conference}`` from ``fetch_group_teams`` and
+    it wins where it has an answer. It is the only one of the two sources
+    that is live: the ``conferenceId`` route resolves through a twelve-row
+    table checked into this file, which the header above says goes stale
+    every time a school moves — and schools move constantly. Absent, nothing
+    changes and the built-in table answers as before.
     """
     confs = conference_ids(conferences)
+    by_team = team_conf or {}
     games: list[dict] = []
     for ev in payload.get("events", []) or []:
         comp = (ev.get("competitions") or [{}])[0]
@@ -307,7 +380,8 @@ def parse_scoreboard(payload: dict,
                 "abbr": (team.get("abbreviation") or "").strip(),
                 "name": team.get("displayName") or "",
                 "conference": conference_name(
-                    confs.get(str(team.get("conferenceId") or ""), "")),
+                    by_team.get(str(team.get("id") or ""))
+                    or confs.get(str(team.get("conferenceId") or ""), "")),
                 "rank": _rank(c),
                 "score": _score(c.get("score")),
             }
@@ -449,20 +523,57 @@ def fetch_conferences(ttl: int = 7 * 24 * 3600,
     return {}
 
 
+def fetch_group_teams(ttl: int = 7 * 24 * 3600,
+                      report: list | None = None) -> dict[str, str]:
+    """``{espn team id: conference}`` off the same groups feed.
+
+    The map this endpoint can actually produce. ``fetch_conferences`` asks it
+    for ``{group_id: name}``, which — measured — it does not carry, because
+    its group nodes have no id. Rather than delete that function and its
+    callers, this sits beside it: same candidate ladder, different question,
+    and the one that comes back with an answer.
+    """
+    for label, url, cache in GROUP_CANDIDATES:
+        try:
+            payload = fetch_json(url, cache, ttl=ttl, user_agent=DEFAULT_AGENT)
+        except DataUnavailable as exc:
+            if report is not None:
+                report.append((label, 0, f"unreachable: {exc}"))
+            continue
+        teams = parse_group_teams(payload)
+        if report is not None:
+            report.append((label, len(teams),
+                           "ok" if teams else "answered, no teams in it"))
+        if teams:
+            return teams
+    return {}
+
+
 def load_games(date: str, ttl: int = 300) -> list[dict]:
     """A day's FBS slate, conference names resolved as far as they can be."""
-    confs = fetch_conferences()
-    return parse_scoreboard(fetch_scoreboard(date, ttl=ttl), confs)
+    return parse_scoreboard(fetch_scoreboard(date, ttl=ttl),
+                            fetch_conferences(), fetch_group_teams())
 
 
 def load_range(start: str, end: str, ttl: int = 24 * 3600,
-               conferences: dict[str, str] | None = None) -> list[dict]:
+               conferences: dict[str, str] | None = None,
+               team_conf: dict[str, str] | None = None) -> list[dict]:
     """Every game across a date range, one keyless request per day.
 
     Days that can't be fetched are skipped rather than aborting the range —
     a rating built from 90% of the season beats no rating at all, and the
     fitted-vs-prior label downstream says which one is in force.
+
+    The conference maps are fetched ONCE here, not per day. Both are cached
+    for a week, but a season backfill is ~180 days and doing the lookup
+    inside the loop would ask the cache 180 times for an answer that cannot
+    have changed.
     """
+    if team_conf is None:
+        try:
+            team_conf = fetch_group_teams(ttl=ttl)
+        except DataUnavailable:
+            team_conf = {}
     try:
         d0 = _dt.date.fromisoformat(start)
         d1 = _dt.date.fromisoformat(end)
@@ -473,7 +584,7 @@ def load_range(start: str, end: str, ttl: int = 24 * 3600,
     while day <= d1:
         try:
             out += parse_scoreboard(fetch_scoreboard(day.isoformat(), ttl=ttl),
-                                    conferences)
+                                    conferences, team_conf)
         except (DataUnavailable, ValueError):
             pass
         day += _dt.timedelta(days=1)

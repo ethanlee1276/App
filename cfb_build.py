@@ -419,8 +419,12 @@ def main() -> None:
 
     try:
         confs = cfbdata.fetch_conferences()
+        # {team id: conference}, the only live half of this. The
+        # conferenceId route resolves through a twelve-row table checked
+        # into cfbdata.py, and schools change conference every year.
+        team_conf = cfbdata.fetch_group_teams()
         games = cfbdata.parse_scoreboard(cfbdata.fetch_scoreboard(args.date),
-                                         confs)
+                                         confs, team_conf)
     except DataUnavailable as exc:
         out.update(status="unreachable", note=str(exc))
         _write(out, args.out)

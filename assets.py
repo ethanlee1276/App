@@ -257,36 +257,27 @@ def _cfb_ids() -> list[tuple[str, str]]:
     except Exception as exc:                                  # noqa: BLE001
         print(f"  CFB: teams feed unreachable ({type(exc).__name__}), skipped")
         return []
-    every = sorted((ab, t.get("id", ""), t.get("conf", ""))
-                   for ab, t in teams.items() if t.get("id"))
-    report: list = []
+    every = sorted((ab, t.get("id", "")) for ab, t in teams.items()
+                   if t.get("id"))
+    # The groups feed enumerates every school that plays in a conference,
+    # by id. That is the filter, and it is a list rather than an inference:
+    # a school absent from it is not in a D-I conference and cannot appear
+    # on a board built from the D-I scoreboard. This replaced a guess at a
+    # `conferenceId` field on the teams payload, which measured runs showed
+    # was never there.
     try:
-        live = cfbdata.fetch_conferences(report=report)
+        in_a_conference = cfbdata.fetch_group_teams()
     except Exception:                                         # noqa: BLE001
-        live = {}
-    # The built-in table underneath, which is the whole point of
-    # `conference_ids` — the groups feed did not answer on Ethan's machine
-    # (2026-08-08) and reading that as "no conferences exist" is what put
-    # all 756 schools back in the audit.
-    confs = cfbdata.conference_ids(live)
-    if not live:
-        # "Did not answer" covered two different failures and named neither.
-        # A refused host and a payload that parsed to nothing need different
-        # fixes, and the report says which one happened.
-        reached = [r for r in report if not r[2].startswith("unreachable")]
-        why = ("every groups shape parsed to nothing" if reached
-               else "the groups host refused every shape")
-        print(f"  CFB: {why}; using the built-in conference ids, which is "
-              f"what the board does too — `--conferences` for the detail")
-    keep = [(ab, tid) for ab, tid, conf in every if conf and conf in confs]
+        in_a_conference = {}
+    keep = [(ab, tid) for ab, tid in every if tid in in_a_conference]
     if keep:
-        print(f"  CFB: {len(keep)} of {len(every)} schools are in a "
-              f"conference we can name; the rest never reach a D-I board")
+        print(f"  CFB: {len(keep)} of {len(every)} schools play in a "
+              f"conference; the rest never reach a D-I board")
         return keep
-    print(f"  CFB: the teams feed carries no conference marker — "
-          f"auditing all {len(every)} schools, so expect misses "
-          f"you cannot act on")
-    return [(ab, tid) for ab, tid, _ in every]
+    print(f"  CFB: the groups feed named no schools — auditing all "
+          f"{len(every)}, so expect misses you cannot act on. "
+          f"`--conferences` says why.")
+    return every
 
 
 #: Mirrors ESPN_ABBR in web/js/visuals.js. Two copies is a real hazard, and
@@ -365,6 +356,27 @@ def probe_conferences() -> int:
     print("=" * 78)
     print("CFB CONFERENCES — which groups shape answers")
     print("=" * 78)
+    # The map this endpoint can actually produce, asked for first because it
+    # is the one that answers. `fetch_conferences` wants {group_id: name},
+    # and the group nodes carry no id — so it will keep reporting nothing,
+    # correctly, and that is now a documented fact rather than a mystery.
+    treport: list = []
+    by_team = cfbdata.fetch_group_teams(ttl=0, report=treport)
+    print("  TEAM → CONFERENCE (what the feed does carry)")
+    for label, count, note in treport:
+        print(f"  {'OK ' if count else 'NO ':<5} {label:<12} {count:>4} "
+              f"schools   {note[:70]}")
+    if by_team:
+        names: dict = {}
+        for conf in by_team.values():
+            names[conf] = names.get(conf, 0) + 1
+        print(f"\n  {len(by_team)} schools across {len(names)} conferences:")
+        for conf, n in sorted(names.items(), key=lambda kv: (-kv[1], kv[0])):
+            print(f"    {n:>4}  {conf}")
+    else:
+        print("\n  No schools resolved — the shape dump below is the evidence.")
+
+    print("\n  GROUP ID → NAME (what this module used to ask for)")
     report: list = []
     live = cfbdata.fetch_conferences(ttl=0, report=report)
     for label, count, note in report:

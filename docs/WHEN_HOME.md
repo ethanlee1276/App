@@ -202,35 +202,47 @@ table**, and `cfbdata`'s own header says that table exists to be overridden
 because "conferences in this sport move around constantly." Post-realignment,
 its `Pac-12` entry is close to fiction.
 
-**The feed was never down.** Your run showed all three URL shapes reaching
-the host and returning valid JSON, and all three parsing to nothing — which
-is not a network failure, it is a reader looking at the wrong level. This API
-wraps its collections in `sports[0].leagues[0].<thing>`; `parse_teams` has
-unwrapped exactly that since it was written and `parse_conferences` never
-did, so it was reading the top of an envelope that has nothing at the top.
+**The feed was never down, and it never carried what we were asking for.**
+Your two runs settled it. All three URL shapes reached the host and returned
+valid JSON; the shape dump then showed why nothing came out:
 
-Fixed: the parse unwraps the envelope and walks the nesting underneath it
-(conferences may also hang off the FBS group's `children`, which read flat
-yields the single useless entry `{"80": "FBS"}`).
+```
+{status, groups: [ {name, abbreviation, children: [
+    {name, abbreviation, teams: [ {id, name, abbreviation, logos, ...} ]}
+]} ]}
+```
+
+**The group nodes have no id.** Only teams do. So `{group_id: name}` — the
+map this module has asked this endpoint for since it was written — was never
+buildable from it, and no amount of unwrapping or deeper walking was going to
+produce one. Two of my guesses at the cause (the envelope, the nesting) were
+wrong; both are handled now, but neither was the problem.
+
+Keyed by team instead, the same payload is strictly more useful. It says
+which conference each school is in, and by omission which schools are not in
+one — which is also the D-I filter `--audit cfb` needed, as a list rather
+than an inference. `parse_group_teams` reads it, `parse_scoreboard` prefers
+it over the twelve-row checked-in table, and the audit filters on it.
+
+I also removed a `conf` field I had added to the team payload on the guess
+that ESPN ships `conferenceId` there. It doesn't, nothing read it, and it was
+riding along on 756 rows to the browser.
 
 ```
 python3 assets.py --conferences
 ```
 
-Read-only, cache bypassed. Each shape reports OK or NO, and any that answers
-without yielding conferences now prints the **shape** of what came back —
-keys and lengths, never contents — so a wrong guess about the envelope is
-visible instead of silent. Then it checks every built-in id against the live
-answer and marks any that are `GONE` or `RENAMED`.
+Read-only, cache bypassed. It now reports **team → conference** first — the
+map that works — with a count per conference, then the old group-id question
+underneath for the record. What to look for:
 
-Send me the output:
-
-- a shape marked **OK** means the envelope was the answer; I trim the ladder
-  to the one that worked
-- still **NO** with a shape dump underneath means the conferences live
-  somewhere else in that payload, and the dump says where
-- **GONE / RENAMED** rows are the built-in table rotting, which is the thing
-  actually affecting pricing
+- a conference list that looks like college football, with sane counts, means
+  this is done and CFB resolves conferences live for the first time
+- a short list, or conferences you don't recognise, means the walk is picking
+  up the wrong level and I need the counts to fix it
+- **GONE / RENAMED** rows in the built-in table section are the twelve-row
+  fallback rotting — worth knowing even now that it is no longer the only
+  source
 
 CFB opens in about three weeks, so this is the one dated item on the list.
 
