@@ -1,31 +1,49 @@
 # When you get home — the laptop checklist
 
-Written 2026-08-07. Everything here needs the Mac, because the container has
-no ledger, no route to the sports APIs, and no browser you can look at.
+Written 2026-08-07, revised 2026-08-08. Everything here needs the Mac,
+because the container has no ledger, no route to the sports APIs, and no
+browser you can look at.
 
 Ordered so that each step is worth doing whether or not you get to the next
 one. If you only do one thing, do §1.
 
-**Push state: nothing outstanding.** Working tree clean, `origin` and local
-both at `d1f0cc5`, no untracked files. Everything discussed is on
+**Push state: nothing outstanding.** Everything discussed is on
 `claude/sports-betting-app-vhgmho`.
+
+**Done since the first version:** the units rescale (§1 as written on the
+7th) is complete — don't run it again. The loss-miner read below still
+stands.
 
 ---
 
-## 1. The units fix — 10 minutes, do it first
+## 1. Pull, then two ingests — 15 minutes, do it first
 
-Every settled bet was journalled on a different staking scale than the one in
-use now, so the Record page's ROI is not measuring one thing. `rescale.py`
-puts them all on today's ruler.
+Two days of work — real team logos on every sport, player faces on NFL, NBA,
+WNBA and MLB, the preseason board, and a crash on the NFL offseason section
+— is inert on your machine until you pull. The faces need more than a pull:
+the photo URL is captured **during ingest**, so the table is empty until the
+hoops seasons are re-read.
 
 ```
-python3 rescale.py            # dry run — writes nothing, read the table
-python3 rescale.py --apply    # backs the ledger up first
-python3 launch.py             # rebuild the record files
+git pull
+python3 ingest.py wnba --seasons 2025-2026
+python3 ingest.py nba  --seasons 2025-2026
+python3 ingest.py nfl
+python3 launch.py
 ```
 
-Do this before the NFL section. NFL bets will start landing in the same
-ledger, and rescaling a mixed-sport ledger is cheaper now than in October.
+`ingest.py nfl` is the one that matters most and has never been run. Without
+it there are no NFL team ratings, so `game_bets` is empty and the
+moneyline/total/spread board cannot price at all — which is most of what the
+NFL board is for during the three weeks its props are dark (§3a).
+
+What you should see afterwards: photos instead of initials on NBA, WNBA and
+MLB prop cards, real logos beside team names everywhere, and the offseason
+coach-change rows rendering at all — they were throwing a TypeError and
+taking that whole section down.
+
+Anything that can't load a photo falls back to the team-coloured chip it drew
+before, so a missing face is cosmetic, never a hole.
 
 ## 2. Read the loss miner before it prices anything
 
@@ -173,6 +191,54 @@ notification rather than something you have to remember to check.
 
 ---
 
+## 3f. College — the conference feed went quiet (#93)
+
+Found by `--audit cfb` on the 8th, and it is not an audit problem. ESPN's
+groups endpoint stopped returning conferences while the teams endpoint on the
+same host answered fine. Conference feeds `attention_tier`, which is how the
+CFB model decides whether the market is looking hard at a game — so with the
+live feed gone, the whole sport resolves through a **twelve-row built-in
+table**, and `cfbdata`'s own header says that table exists to be overridden
+because "conferences in this sport move around constantly." Post-realignment,
+its `Pac-12` entry is close to fiction.
+
+Two failures looked identical from outside and needed separating: the host
+refusing, and the feed answering fine while the parser read one level too
+shallow — conferences are nested under the FBS group's `children`, so read
+flat the whole payload yields `{"80": "FBS"}` and reports success. The parse
+now walks the tree and the fetch tries three URL shapes.
+
+```
+python3 assets.py --conferences
+```
+
+Read-only, cache bypassed. It prints each shape with OK or NO, then checks
+every built-in id against the live answer and marks any that are `GONE` or
+`RENAMED`. Send me the output:
+
+- a shape marked **OK** is the one to keep, and I trim the ladder to it
+- **all NO** means the endpoint is genuinely gone and we need a different
+  source before the season opens
+- **GONE / RENAMED** rows are the built-in table rotting, which is the thing
+  actually affecting pricing
+
+CFB opens in about three weeks, so this is the one dated item on the list.
+
+Also worth a run while you are there, now that the audit filters to schools
+that can actually reach a D-I board:
+
+```
+python3 assets.py --audit --sport cfb
+```
+
+The first line says which filter applied. If it reads *"the teams feed
+carries no conference marker"* then ESPN does not ship that field and I need
+a different way to tell a Big Ten school from a JUCO — the 92 misses in the
+last run were all NAIA and D-II schools that render the monogram chip and
+have never been on your board.
+
+---
+
 ## 4. Website visuals
 
 The design queue is empty — all four items shipped, each with a before/after
@@ -284,10 +350,17 @@ python3 movecheck.py    # expect NOTHING TO MEASURE YET — correct
 python3 nflguard.py     # expect TOO EARLY — correct
 python3 watch.py --all
 python3 gapcheck.py     # expect "cannot be answered yet"
+python3 assets.py --conferences        # §3f — the one I need output from
+python3 assets.py --probe --sport nba  # confirms the face resize
 ```
 
 None of these write anything. Three of them are supposed to decline to answer
 right now, and knowing which three is the point of running them.
+
+The two `assets.py` runs are new. `--probe --sport nba` should show the
+combiner at ~15KB against ~274KB raw — that measurement is already in hand
+and the run is just a regression check. `--conferences` is the one carrying
+real information.
 
 ---
 

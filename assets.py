@@ -259,8 +259,9 @@ def _cfb_ids() -> list[tuple[str, str]]:
         return []
     every = sorted((ab, t.get("id", ""), t.get("conf", ""))
                    for ab, t in teams.items() if t.get("id"))
+    report: list = []
     try:
-        live = cfbdata.fetch_conferences()
+        live = cfbdata.fetch_conferences(report=report)
     except Exception:                                         # noqa: BLE001
         live = {}
     # The built-in table underneath, which is the whole point of
@@ -269,8 +270,14 @@ def _cfb_ids() -> list[tuple[str, str]]:
     # all 756 schools back in the audit.
     confs = cfbdata.conference_ids(live)
     if not live:
-        print("  CFB: groups feed did not answer; using the built-in "
-              "conference ids, which is what the board does too")
+        # "Did not answer" covered two different failures and named neither.
+        # A refused host and a payload that parsed to nothing need different
+        # fixes, and the report says which one happened.
+        reached = [r for r in report if not r[2].startswith("unreachable")]
+        why = ("every groups shape parsed to nothing" if reached
+               else "the groups host refused every shape")
+        print(f"  CFB: {why}; using the built-in conference ids, which is "
+              f"what the board does too — `--conferences` for the detail")
     keep = [(ab, tid) for ab, tid, conf in every if conf and conf in confs]
     if keep:
         print(f"  CFB: {len(keep)} of {len(every)} schools are in a "
@@ -300,6 +307,67 @@ def _js_abbr_map() -> dict:
         return json.loads(body)
     except ValueError:
         return {}
+
+
+def probe_conferences() -> int:
+    """Which groups-feed shape actually returns conferences — and whether the
+    built-in table has rotted underneath us.
+
+    WHY THIS EXISTS. `--audit cfb` reported the conferences feed silent while
+    the teams feed on the same host answered fine, and from the outside two
+    very different failures look identical: the host refusing, and a payload
+    that parses to nothing because the conferences were nested a level deeper
+    than the parser looked. This separates them, and names the shape that
+    works so the ladder can be trimmed to it.
+
+    Cache is bypassed (ttl=0). A stale `espn_cfb_groups.json` is one of the
+    candidate explanations, so reading it would answer the wrong question.
+    """
+    from engine.sources import cfbdata
+
+    print("=" * 78)
+    print("CFB CONFERENCES — which groups shape answers")
+    print("=" * 78)
+    report: list = []
+    live = cfbdata.fetch_conferences(ttl=0, report=report)
+    for label, count, note in report:
+        mark = "OK " if count > 1 else "NO "
+        print(f"  {mark:<5} {label:<12} {count:>3} parsed")
+        # The reason goes on its own line untruncated. Clipping it to fit a
+        # column hid the actual error behind the URL that produced it, which
+        # is the one thing this run is for.
+        print(f"        {note}")
+
+    if not live:
+        print("\n  Nothing usable. The board is running on the built-in table")
+        print("  below, which this module's own header says goes stale every")
+        print("  time a school changes conference.")
+    else:
+        print(f"\n  {len(live)} conferences resolved live.")
+
+    built = cfbdata.CONFERENCE_IDS
+    print(f"\n  Built-in table ({len(built)} ids) against the live answer:")
+    for gid, name in sorted(built.items(), key=lambda kv: int(kv[0])):
+        got = live.get(gid)
+        if not live:
+            state = "unchecked"
+        elif got is None:
+            state = "GONE from the live feed"
+        elif got != name:
+            state = f"RENAMED -> {got}"
+        else:
+            state = "matches"
+        print(f"    {gid:>4}  {name:<20} {state}")
+    extra = sorted(set(live) - set(built), key=lambda g: int(g) if g.isdigit() else 0)
+    if extra:
+        print(f"\n  {len(extra)} conference(s) the live feed knows and the "
+              f"built-in table does not:")
+        for gid in extra:
+            print(f"    {gid:>4}  {live[gid]}")
+    print("\n  Send this. A shape marked OK is the one to keep; GONE or")
+    print("  RENAMED rows are the built-in table rotting, which is exactly")
+    print("  what the live feed is supposed to prevent.")
+    return 0
 
 
 def audit(only: str | None) -> int:
@@ -357,12 +425,17 @@ def main(argv: list) -> int:
     p.add_argument("--audit", action="store_true",
                    help="fetch the logo for EVERY team the site renders and "
                         "name the abbreviations that miss")
+    p.add_argument("--conferences", action="store_true",
+                   help="which CFB groups-feed shape answers, and whether "
+                        "the built-in conference table has gone stale")
     p.add_argument("--sport", default="",
                    help="limit to one sport (nfl, mlb, nba, wnba, cfb)")
     a = p.parse_args(argv)
-    if not (a.probe or a.audit):
+    if not (a.probe or a.audit or a.conferences):
         p.print_help()
         return 1
+    if a.conferences:
+        return probe_conferences()
     only = a.sport.lower() or None
     if a.audit:
         print("=" * 78)

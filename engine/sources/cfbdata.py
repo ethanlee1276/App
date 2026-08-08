@@ -156,16 +156,33 @@ def conference_name(raw: str) -> str:
 def parse_conferences(payload: dict) -> dict[str, str]:
     """``{group_id: conference name}`` from ESPN's groups feed.
 
-    Two shapes are in the wild for this endpoint, so both are read rather
-    than betting the whole conference layer on one of them.
+    Several shapes are in the wild for this endpoint, so the whole tree is
+    walked rather than betting the conference layer on one of them.
+
+    THE NESTING IS THE POINT. Asking for ``groups=80`` can answer with the
+    FBS group itself and the conferences hanging off its ``children``. Read
+    one level deep, that payload yields exactly one entry — ``{"80": "FBS"}``
+    — and every real conference is missed while the fetch reports success.
+    That failure looks identical from the outside to the feed being down,
+    which is why this walks down instead of guessing which level to read.
     """
     out: dict[str, str] = {}
-    rows = payload.get("groups") or payload.get("children") or []
-    for g in rows:
-        gid = str(g.get("groupId") or g.get("id") or "").strip()
-        name = (g.get("shortName") or g.get("name") or g.get("abbreviation") or "").strip()
+
+    def walk(node, depth=0):
+        if depth > 4 or not isinstance(node, dict):
+            return                              # cycles are not a thing here,
+        gid = str(node.get("groupId") or node.get("id") or "").strip()
+        name = (node.get("shortName") or node.get("name")
+                or node.get("abbreviation") or "").strip()
         if gid and name:
             out[gid] = conference_name(name)
+        for key in ("children", "groups", "conferences"):
+            for kid in (node.get(key) or []):
+                walk(kid, depth + 1)
+
+    for key in ("groups", "children", "conferences"):
+        for row in (payload.get(key) or []):
+            walk(row)
     return out
 
 
@@ -366,21 +383,55 @@ def fetch_teams(ttl: int = 7 * 24 * 3600) -> dict:
                       user_agent=DEFAULT_AGENT)
 
 
-def fetch_conferences(ttl: int = 7 * 24 * 3600) -> dict[str, str]:
-    """Live conference names, or ``{}`` when the groups feed won't answer.
+#: The shapes worth asking for, in the order worth asking. The first entry
+#: is what this module has always sent; the rest exist because on Ethan's
+#: machine, 2026-08-08, that one produced nothing while the teams feed on
+#: the same host answered fine. Dropping the parameter is not a random
+#: second guess — ``fetch_teams`` sends the identical ``groups=80`` and the
+#: feed demonstrably ignores it there, which is a reason to doubt it means
+#: anything on this endpoint either.
+GROUP_CANDIDATES = [
+    ("groups=80", f"{GROUPS}?groups={FBS_GROUP}", "espn_cfb_groups.json"),
+    ("group=80", f"{GROUPS}?group={FBS_GROUP}", "espn_cfb_groups_g.json"),
+    ("no filter", GROUPS, "espn_cfb_groups_all.json"),
+]
 
-    It does NOT fall back to the built-in ids, whatever this docstring used
-    to claim. ``conference_ids()`` layers those underneath, and a caller
-    that skips it reads an unreachable feed as "this sport has no
-    conferences" — which is what sent `--audit cfb` through all 756 schools.
+
+def fetch_conferences(ttl: int = 7 * 24 * 3600,
+                      report: list | None = None) -> dict[str, str]:
+    """Live conference names, or ``{}`` when nothing usable comes back.
+
+    It does NOT fall back to the built-in ids. ``conference_ids()`` layers
+    those underneath, and a caller that skips it reads an unreachable feed
+    as "this sport has no conferences" — which is what sent `--audit cfb`
+    through all 756 schools.
+
+    WHY A LADDER RATHER THAN ONE URL. The single shape this used to send
+    stopped producing conferences, and from the outside "the host refused"
+    and "the payload parsed to nothing" looked the same. Both are now tried
+    against alternatives and the first that yields a real map wins, so a
+    changed parameter costs one extra request instead of a whole silent
+    model input. ``report`` collects ``(label, count, note)`` per candidate
+    for the diagnostic, which is how we find out WHICH one answered rather
+    than only that something did.
     """
-    try:
-        payload = fetch_json(f"{GROUPS}?groups={FBS_GROUP}",
-                             "espn_cfb_groups.json", ttl=ttl,
-                             user_agent=DEFAULT_AGENT)
-    except DataUnavailable:
-        return {}
-    return parse_conferences(payload)
+    for label, url, cache in GROUP_CANDIDATES:
+        try:
+            payload = fetch_json(url, cache, ttl=ttl, user_agent=DEFAULT_AGENT)
+        except DataUnavailable as exc:
+            if report is not None:
+                report.append((label, 0, f"unreachable: {exc}"))
+            continue
+        confs = parse_conferences(payload)
+        # One entry is the parent group answering for itself — the "80: FBS"
+        # case — not a conference list. Keep looking.
+        usable = len(confs) > 1
+        if report is not None:
+            report.append((label, len(confs),
+                           "ok" if usable else f"parsed {sorted(confs.items())}"))
+        if usable:
+            return confs
+    return {}
 
 
 def load_games(date: str, ttl: int = 300) -> list[dict]:
