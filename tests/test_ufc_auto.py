@@ -15,6 +15,8 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 from engine.ufc import weighin, weighin_feed
 
 
@@ -285,6 +287,111 @@ def test_the_health_check_does_not_fight_over_a_fixed_port():
     assert "port = 0" in block, "the sweep still binds a hard-coded port"
     assert "server.server_address[1]" in src, \
         "the OS-chosen port is never read back, so the browser gets the wrong one"
+
+
+def test_the_build_can_say_why_every_bout_passed():
+    """"12 passes" and "why 12 passes" are different questions and only the
+    second is actionable. Two cards in a row produced nothing, and the
+    counts alone could not distinguish missing data from a model correctly
+    refusing — opposite problems with opposite fixes."""
+    src = open(os.path.join(ROOT, "ufc_build.py"), encoding="utf-8").read()
+    assert '"--why"' in src
+    i = src.index("if args.why:")
+    body = src[i:i + 1600]
+    assert "reason_code" in body, "the breakdown does not group by reason"
+    assert "near_miss" in body, "no near misses — the gated case says nothing"
+    for code in ("no_data", "no_price", "gated"):
+        assert code in body, f"{code} is not explained in the reading"
+
+
+# --- the empty-cache trap that produced two blank cards ----------------------
+def test_an_empty_cached_event_list_is_a_miss_not_an_answer():
+    """THE BUG, measured 2026-08-08. `cache_only` serves a cached copy at ANY
+    age and only raises when the file is ABSENT — so an empty list comes back
+    happily forever. A thirty-day-old empty file was served without complaint.
+
+    For a sport with a continuous season that is harmless. For UFC it is
+    fatal: between cards this endpoint legitimately returns [], that [] is
+    cached, every later read is cache_only and never goes to the wire, so
+    `card_fighters` finds nobody, the auto-drafter returns early, no dossier
+    is ever written — and when a card finally is priced, every bout hits
+    "no dossier, no bet".
+
+    Same knot `refresh_ufc` untied for the BUILD, left tied on the event
+    list. The endpoint is FREE, so trying the wire costs nothing."""
+    import os
+    import pathlib
+    import tempfile
+    import time
+    from engine.sources import oddsapi
+
+    real_dir, real_req = oddsapi.CACHE_DIR, oddsapi._request
+    oddsapi.CACHE_DIR = pathlib.Path(tempfile.mkdtemp())
+    stale = oddsapi.CACHE_DIR / "odds_events_ufc.json"
+    stale.write_text("[]")
+    os.utime(stale, (time.time() - 86400 * 30,) * 2)
+    seen = []
+
+    def fake(url, name, ttl=300, timeout=30, cache_only=False):
+        seen.append("cache" if cache_only else "wire")
+        if cache_only:
+            return real_req(url, name, ttl=ttl, cache_only=True)
+        return [{"id": "1", "home_team": "A", "away_team": "B"}], oddsapi.Quota()
+
+    oddsapi._request = fake
+    try:
+        got = oddsapi.list_events("k", sport="ufc", cache_only=True)
+    finally:
+        oddsapi.CACHE_DIR, oddsapi._request = real_dir, real_req
+    assert got, "a stale empty event list is still being served as an answer"
+    assert seen == ["cache", "wire"], seen
+
+
+def test_a_cache_with_events_in_it_still_costs_no_request():
+    """The fallback must not turn every read into a wire call. A caller
+    asking for cache_only is asking not to spend, and a populated cache is
+    a real answer."""
+    import pathlib
+    import tempfile
+    from engine.sources import oddsapi
+
+    real_dir, real_req = oddsapi.CACHE_DIR, oddsapi._request
+    oddsapi.CACHE_DIR = pathlib.Path(tempfile.mkdtemp())
+    (oddsapi.CACHE_DIR / "odds_events_ufc.json").write_text(
+        '[{"id": "9", "home_team": "X", "away_team": "Y"}]')
+    seen = []
+
+    def fake(url, name, ttl=300, timeout=30, cache_only=False):
+        seen.append("cache" if cache_only else "wire")
+        return real_req(url, name, ttl=ttl, cache_only=cache_only)
+
+    oddsapi._request = fake
+    try:
+        got = oddsapi.list_events("k", sport="ufc", cache_only=True)
+    finally:
+        oddsapi.CACHE_DIR, oddsapi._request = real_dir, real_req
+    assert len(got) == 1
+    assert seen == ["cache"], f"went to the wire on a good cache: {seen}"
+
+
+def test_offline_still_answers_with_an_empty_card():
+    """The fallback must not become a new way for the build to raise."""
+    import pathlib
+    import tempfile
+    from engine.sources import oddsapi
+
+    real_dir, real_req = oddsapi.CACHE_DIR, oddsapi._request
+    oddsapi.CACHE_DIR = pathlib.Path(tempfile.mkdtemp())
+
+    def dead(url, name, ttl=300, timeout=30, cache_only=False):
+        raise oddsapi.OddsAPIError("offline")
+
+    oddsapi._request = dead
+    try:
+        assert oddsapi.list_events("k", sport="ufc", cache_only=True) == []
+    finally:
+        oddsapi.CACHE_DIR, oddsapi._request = real_dir, real_req
+
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

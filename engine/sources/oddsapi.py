@@ -460,11 +460,51 @@ def _request(url: str, cache_name: str, ttl: int = 300,
 # --- endpoints --------------------------------------------------------------
 def list_events(api_key: str | None = None, ttl: int = 300,
                 sport: str = "nfl", cache_only: bool = False) -> list[dict]:
+    """Upcoming events for a sport. FREE — event lists do not count against
+    the credit quota, which is what makes the fallback below affordable.
+
+    AN EMPTY CACHED LIST IS A MISS, NOT AN ANSWER, and that distinction is
+    the whole bug this fixes. `cache_only` serves a cached copy at ANY age
+    and only raises when the file is absent — so an empty list is returned
+    happily forever. For a sport with a continuous season that is harmless;
+    for UFC it is fatal:
+
+      * between cards — most of any week — this endpoint legitimately
+        returns [], and that [] gets cached;
+      * every later read is `cache_only`, gets the stale [], and never goes
+        to the wire, because [] is not an exception;
+      * `ufc_dossiers.card_fighters` therefore finds no fighters, the
+        auto-drafter returns early, and no dossier is ever written;
+      * when a card finally is priced, every bout hits "no dossier, no bet".
+
+    Measured: a thirty-day-old empty file was served without complaint.
+    Two cards in a row produced no bets and no data, which is exactly what
+    that chain does. It is the same knot `refresh_ufc` untied for the BUILD
+    — a thing that can only be read from a cache nothing seeds — left tied
+    on the event list.
+
+    So: entries in the cache are trusted; an empty one goes to the wire. A
+    caller asking for cache_only is asking not to SPEND, and this costs
+    nothing.
+    """
     key = get_api_key(api_key)
     sport_key = SPORT_CONFIG[sport]["sport_key"]
     url = f"{ODDS_BASE}/sports/{sport_key}/events?{urllib.parse.urlencode({'apiKey': key})}"
+    if cache_only:
+        try:
+            data, _ = _request(url, f"odds_events_{sport}.json", ttl=ttl,
+                               cache_only=True)
+            if data:
+                return data
+        except OddsAPIError:
+            pass                      # nothing cached — same as an empty one
+        try:
+            data, _ = _request(url, f"odds_events_{sport}.json", ttl=ttl)
+            return data
+        except OddsAPIError:
+            return []                 # offline: an empty card, as before
     data, _ = _request(url, f"odds_events_{sport}.json", ttl=ttl,
-                       cache_only=cache_only)
+                       cache_only=False)
     return data
 
 

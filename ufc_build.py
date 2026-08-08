@@ -81,6 +81,9 @@ def best_h2h(payload: dict, name_a: str, name_b: str) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--odds", action="store_true")
+    ap.add_argument("--why", action="store_true",
+                    help="group the passes by reason — missing data, no "
+                         "posted price, or the model refusing")
     ap.add_argument("--cached-odds", action="store_true")
     ap.add_argument("--out", default="web/data/ufc.json")
     args = ap.parse_args()
@@ -193,6 +196,33 @@ def main() -> None:
             print("0 dossiers loaded — copy data/ufc_dossiers.sample.json to "
                   "data/ufc_dossiers.json and fill in fighters. No dossier, "
                   "no bet.")
+        # WHY, grouped, because "12 passes" and "why 12 passes" are
+        # different questions and only the second one is actionable. Two
+        # cards in a row produced nothing and the counts alone could not
+        # say whether that was missing data or a model correctly refusing —
+        # which are opposite problems with opposite fixes.
+        if args.why:
+            from collections import Counter
+            codes = Counter((p.get("reason_code") or "other")
+                            for p in out.get("passes", []))
+            print("\n  why each bout passed:")
+            for code, n in codes.most_common():
+                print(f"    {n:>3}  {code}")
+            near = [p for p in out.get("passes", []) if p.get("near_miss")]
+            if near:
+                print(f"\n  {len(near)} near miss(es) — priced, gated, "
+                      f"and close:")
+                for p in near[:6]:
+                    print(f"    {p.get('fighter') or p.get('bout') or '?'}: "
+                          f"{p.get('why', '')[:88]}")
+            print("\n  READ IT LIKE THIS")
+            print("    mostly no_data   -> dossiers are missing, not the "
+                  "model's doing. Check `python3 launch.py` drafted them.")
+            print("    mostly no_price  -> books had not posted h2h yet; "
+                  "rebuild closer to the card.")
+            print("    mostly gated     -> the model priced every bout and "
+                  "refused. That is the system working, and the near")
+            print("                        misses above say by how much.")
     else:
         print(f"UFC: {out['status']}. Wrote {args.out}")
 
