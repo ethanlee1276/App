@@ -49,7 +49,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 
-from .fetch import CACHE_DIR, DataUnavailable, fetch_text
+from .fetch import CACHE_DIR, DEFAULT_AGENT, DataUnavailable, fetch_text
 from .livescores import ESPN_NFL, _abbr
 
 #: ESPN's season types. 1 is preseason, 2 regular, 3 postseason.
@@ -91,7 +91,8 @@ def fetch_scoreboard(season: int, seasontype: int = PRESEASON,
                      week: int | None = None) -> dict:
     """The raw ESPN payload, cached to disk before anything reads it."""
     name = f"espn_nfl_{season}_t{seasontype}" + (f"_w{week}" if week else "") + ".json"
-    text = fetch_text(_url(season, seasontype, week), name, ttl=SCHEDULE_TTL)
+    text = fetch_text(_url(season, seasontype, week), name,
+                      ttl=SCHEDULE_TTL, user_agent=DEFAULT_AGENT)
     try:
         return json.loads(text)
     except ValueError as exc:
@@ -169,7 +170,8 @@ def _range_url(season: int) -> str:
 
 def _by_date_range(season: int) -> list[dict]:
     name = f"espn_nfl_{season}_range.json"
-    text = fetch_text(_range_url(season), name, ttl=SCHEDULE_TTL)
+    text = fetch_text(_range_url(season), name, ttl=SCHEDULE_TTL,
+                      user_agent=DEFAULT_AGENT)
     try:
         data = json.loads(text)
     except ValueError as exc:

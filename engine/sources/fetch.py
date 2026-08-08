@@ -17,6 +17,18 @@ from pathlib import Path
 
 CACHE_DIR = Path(__file__).resolve().parents[2] / "data" / "cache"
 USER_AGENT = "qellys-book/0.1 (+nflverse loader)"
+
+#: Some hosts reject an unfamiliar User-Agent outright. Passing this as
+#: ``user_agent`` sends NO header, so urllib supplies its own default —
+#: which is what every ESPN endpoint here accepts.
+#:
+#: Measured 2026-08-08 from Ethan's machine, same URL, same second:
+#:     User-Agent: qellys-book/0.1   ->  HTTP 403 Forbidden
+#:     urllib's default              ->  200, 1 game
+#:
+#: This is not a disguise. It identifies the client honestly as a Python
+#: script; the custom string was simply unfamiliar enough to trip a rule.
+DEFAULT_AGENT = object()
 DEFAULT_TTL = 12 * 3600  # re-download at most twice a day
 
 
@@ -29,7 +41,7 @@ def _cache_path(name: str) -> Path:
 
 
 def fetch_text(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
-               timeout: int = 45) -> str:
+               timeout: int = 45, user_agent=USER_AGENT) -> str:
     """Return the text body of ``url``, caching it under ``cache_name``.
 
     If a fresh cache exists it is used. On a network failure a stale cache is
@@ -42,7 +54,9 @@ def fetch_text(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
         return path.read_text(encoding="utf-8", errors="replace")
 
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        headers = ({} if user_agent is DEFAULT_AGENT
+                   else {"User-Agent": user_agent})
+        req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read()
         if url.endswith(".gz") or raw[:2] == b"\x1f\x8b":
@@ -57,7 +71,7 @@ def fetch_text(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
 
 
 def fetch_json(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
-               timeout: int = 45):
+               timeout: int = 45, user_agent=USER_AGENT):
     """Fetch JSON, and refuse to cache anything that isn't.
 
     ``fetch_text`` writes whatever the server returned straight to disk. If
@@ -81,7 +95,9 @@ def fetch_json(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
             path.unlink(missing_ok=True)          # poisoned — go to the wire
 
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        headers = ({} if user_agent is DEFAULT_AGENT
+                   else {"User-Agent": user_agent})
+        req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read()
         if raw[:2] == b"\x1f\x8b":

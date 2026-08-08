@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 
-from .fetch import fetch_text, DataUnavailable
+from .fetch import fetch_text, DataUnavailable, DEFAULT_AGENT
 from ..models import LiveStatus
 
 ESPN_NFL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
@@ -63,7 +63,9 @@ def parse_espn_scoreboard(data: dict) -> dict[frozenset, LiveStatus]:
 
 
 def fetch_live() -> dict[frozenset, LiveStatus]:
-    text = fetch_text(ESPN_NFL, "espn_nfl_scoreboard.json", ttl=30)
+    # ESPN 403s an unfamiliar User-Agent; see fetch.DEFAULT_AGENT.
+    text = fetch_text(ESPN_NFL, "espn_nfl_scoreboard.json", ttl=30,
+                      user_agent=DEFAULT_AGENT)
     return parse_espn_scoreboard(json.loads(text))
 
 

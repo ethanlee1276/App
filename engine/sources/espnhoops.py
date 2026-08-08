@@ -27,7 +27,7 @@ confident nonsense. Mapping by name costs nothing and cannot drift.
 
 from __future__ import annotations
 
-from .fetch import fetch_json, DataUnavailable
+from .fetch import DEFAULT_AGENT, fetch_json, DataUnavailable
 
 ROOT = "https://site.api.espn.com/apis/site/v2/sports"
 
@@ -162,13 +162,15 @@ def fetch_scoreboard(date: str, ttl: int = 21600,
     # A finished day never changes, so history caches effectively forever
     # and a re-run of a six-season backfill costs nothing.
     return fetch_json(f"{_base(league)}/scoreboard?dates={day}&limit=60",
-                      f"espn_{league}_{day}.json", ttl=ttl)
+                      f"espn_{league}_{day}.json", ttl=ttl,
+                      user_agent=DEFAULT_AGENT)
 
 
 def fetch_summary(game_id: str, ttl: int = 30 * 24 * 3600,
                   league: str = "wnba") -> dict:
     return fetch_json(f"{_base(league)}/summary?event={game_id}",
-                      f"espn_{league}_box_{game_id}.json", ttl=ttl)
+                      f"espn_{league}_box_{game_id}.json", ttl=ttl,
+                      user_agent=DEFAULT_AGENT)
 
 
 def load_day(date: str, ttl: int = 21600, league: str = "wnba") -> list[dict]:
