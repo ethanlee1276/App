@@ -133,6 +133,18 @@ def parse_games(data: dict, season: int) -> list[dict]:
         status = (comp.get("status") or ev.get("status") or {})
         stype = status.get("type") or {}
         venue = comp.get("venue") or {}
+        # ESPN sends `score: "0"` for a game nobody has played, not an
+        # absent field. Taken at face value that reads as a real 0-0, and
+        # since `completed` is also false the only honest label left is
+        # "live" — which is how 48 scheduled preseason fixtures came out
+        # tagged as in progress on the first real run.
+        #
+        # `state` is the discriminator: pre / in / post. A genuine 0-0 in
+        # the first quarter has state "in", so gating on "pre" costs
+        # nothing and stops a placeholder becoming a scoreline.
+        state = stype.get("state", "pre")
+        if state == "pre":
+            hs = as_ = None
         out.append({
             "season": season,
             "season_type": "PRE",
@@ -145,7 +157,7 @@ def parse_games(data: dict, season: int) -> list[dict]:
             "home_score": hs,
             "away_score": as_,
             "completed": bool(stype.get("completed")),
-            "state": stype.get("state", "pre"),
+            "state": state,
             "venue": venue.get("fullName", ""),
             "indoor": bool(venue.get("indoor")),
         })

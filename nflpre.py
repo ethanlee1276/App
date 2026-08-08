@@ -59,11 +59,14 @@ def report(season: int, show_raw: bool = False) -> int:
         rows = by_week[wk]
         print(f"  Week {wk if wk is not None else '?'} — {len(rows)} game(s)")
         for g in rows:
+            # Label from `state`, not from the presence of a number: ESPN
+            # supplies 0-0 for anything unplayed, so "has a score" is not
+            # the same question as "has been played".
             score = ""
-            if g["home_score"] is not None and g["away_score"] is not None:
-                score = f"   {g['away_score']}-{g['home_score']}"
-                if not g["completed"]:
-                    score += " (live)"
+            if g["state"] == "post":
+                score = f"   {g['away_score']}-{g['home_score']}  final"
+            elif g["state"] == "in":
+                score = f"   {g['away_score']}-{g['home_score']}  LIVE"
             roof = " · indoor" if g["indoor"] else ""
             print(f"    {g['date']}  {g['away']:>3} @ {g['home']:<3}"
                   f"{score}{roof}")

@@ -219,6 +219,60 @@ def test_the_range_fallback_drops_anything_past_preseason():
     assert [g["week"] for g in kept] == [1]
 
 
+# --- what the first real run exposed -----------------------------------------
+def test_a_placeholder_zero_is_not_a_score():
+    """ESPN sends `score: "0"` for a game nobody has played, not an absent
+    field. Taken at face value that is a real 0-0, and since `completed` is
+    also false the only label left is "live" — which is how 48 scheduled
+    preseason fixtures came out tagged as in progress on the first run
+    against real data."""
+    board = {"events": [{
+        "id": "1", "date": "2026-08-13T23:00Z", "week": {"number": 2},
+        "competitions": [{"competitors": [
+            {"homeAway": "home", "team": {"abbreviation": "CIN"}, "score": "0"},
+            {"homeAway": "away", "team": {"abbreviation": "DET"}, "score": "0"}],
+            "status": {"type": {"state": "pre", "completed": False}}}]}]}
+    g = pre.parse_games(board, 2026)[0]
+    assert g["home_score"] is None and g["away_score"] is None
+    assert g["state"] == "pre"
+
+
+def test_a_real_nil_nil_in_progress_survives():
+    """The guard keys on `state`, not on the number, so a genuine scoreless
+    first quarter is still a live 0-0 rather than being blanked."""
+    board = {"events": [{
+        "id": "2", "date": "2026-08-13T23:00Z", "week": {"number": 2},
+        "competitions": [{"competitors": [
+            {"homeAway": "home", "team": {"abbreviation": "PIT"}, "score": "0"},
+            {"homeAway": "away", "team": {"abbreviation": "GB"}, "score": "0"}],
+            "status": {"type": {"state": "in", "completed": False}}}]}]}
+    g = pre.parse_games(board, 2026)[0]
+    assert g["home_score"] == 0 and g["away_score"] == 0
+    assert g["state"] == "in"
+
+
+def test_a_final_keeps_its_score():
+    board = {"events": [{
+        "id": "3", "date": "2026-08-07T23:00Z", "week": {"number": 1},
+        "competitions": [{"competitors": [
+            {"homeAway": "home", "team": {"abbreviation": "ARI"}, "score": "30"},
+            {"homeAway": "away", "team": {"abbreviation": "CAR"}, "score": "33"}],
+            "status": {"type": {"state": "post", "completed": True}}}]}]}
+    g = pre.parse_games(board, 2026)[0]
+    assert (g["away_score"], g["home_score"]) == (33, 30)
+    assert g["completed"] is True
+
+
+def test_the_display_labels_from_state_not_from_a_number():
+    """"Has a score" and "has been played" are different questions, and
+    the first cut of the report asked the wrong one."""
+    src = open(os.path.join(ROOT, "nflpre.py"), encoding="utf-8").read()
+    i = src.index('score = ""')
+    block = src[i:i + 400]
+    assert 'g["state"] == "post"' in block
+    assert 'g["state"] == "in"' in block
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
