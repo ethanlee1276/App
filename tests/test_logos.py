@@ -227,6 +227,61 @@ def test_a_non_cloudinary_url_is_left_alone():
     assert "indexOf(marker) < 0" in body and "return url" in body
 
 
+def test_an_espn_face_is_resized_the_way_an_espn_logo_is():
+    """MEASURED ON ETHAN'S MACHINE, 2026-08-08: one ESPN full headshot is
+    196,283 bytes. The NBA and WNBA boards take that href straight out of
+    the box score — correct, and a dozen props is ~2.4MB of face drawn at
+    56px. The combiner is the same server-side resize the logos already use
+    (40,228 against 11,537 there), so faces go through it too."""
+    js = _js()
+    assert "function espnFacePreview(" in js
+    i = js.index("function espnFacePreview(")
+    body = js[i:i + 700]
+    assert "combiner/i?img=" in body
+    assert "&w=" in body and "&h=" in body
+
+
+def test_the_face_combiner_request_matches_the_call_that_was_verified():
+    """`logoUrl` passes the path in raw, slashes and all — that is the form
+    that answered 200. Percent-encoding the whole path is the obvious tidy
+    version and would encode the slashes with it."""
+    js = _js()
+    body = js[js.index("function espnFacePreview("):][:700]
+    assert "encodeURIComponent(path)" not in body, (
+        "the path is being escaped; the verified call does not escape it")
+    assert "img=${path}" in body
+
+
+def test_an_already_sized_face_is_not_sized_twice():
+    """Nesting a combiner URL inside a combiner URL is a 404 that would
+    look exactly like 'ESPN has no photo for this player'."""
+    js = _js()
+    body = js[js.index("function espnFacePreview("):][:700]
+    assert '"/combiner/"' in body
+
+
+def test_the_untransformed_espn_href_is_still_the_fallback():
+    """The combiner serving /i/headshots the way it serves /i/teamlogos is
+    NOT verified — the probe only measured the logo path. So the resized URL
+    is a guess, and it fails onto the raw href, which the probe DID verify
+    at 196,283 bytes, and then onto the initials chip."""
+    js = _js()
+    i = js.index("function playerAvatar(")
+    body = js[i:i + 1600]
+    assert "data-full" in body and "this.src=this.dataset.full" in body
+
+
+def test_a_cloudinary_face_still_takes_the_cloudinary_path():
+    """NFL and MLB faces are Cloudinary; only ESPN's go to the combiner.
+    Routing everything one way would break the other two sports."""
+    js = _js()
+    i = js.index("function facePreview(")
+    body = js[i:i + 700]
+    assert body.index("a.espncdn.com") < body.index('"/image/upload/"'), \
+        "the ESPN branch must be checked before the Cloudinary marker"
+    assert "FACE_TRANSFORM" in body
+
+
 def test_the_roster_carries_a_face_for_the_current_season():
     """Weekly stats do not exist until games are played, so on a Week 1
     board they are empty. The roster is the only current-season source.

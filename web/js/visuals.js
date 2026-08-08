@@ -62,9 +62,35 @@ function idealText(hex) {
    also the behaviour that shipped before. */
 const FACE_TRANSFORM = "w_${W},h_${W},c_fill,g_face";
 
+/* ESPN's own faces, which the NBA and WNBA boards draw.
+   ------------------------------------------------------------------------
+   Those URLs are TAKEN from the box score, so they are right — and they are
+   the full-resolution file. Measured on Ethan's machine, 2026-08-08: one
+   ESPN full headshot is 196,283 bytes. A dozen props is ~2.4MB of face to
+   draw at 56px.
+
+   The combiner is the same server-side resize the logos already use, where
+   it measured 40,228 bytes against 11,537, and the request is built to
+   match that verified call exactly: the path goes in raw, slashes and all,
+   because that is the form that answered 200. Whether the combiner serves
+   /i/headshots the way it serves /i/teamlogos is NOT verified, so this is
+   still a guess — and it fails onto the untransformed href, which the probe
+   did verify, and then onto the initials chip. */
+function espnFacePreview(url, px) {
+  const host = "a.espncdn.com";
+  const i = url.indexOf(host);
+  if (i < 0 || url.indexOf("/combiner/") >= 0) return url;   // already sized
+  const path = url.slice(i + host.length).split("?")[0];
+  if (!path) return url;
+  const w = Math.max(48, Math.round(px * 2));
+  return `https://${host}/combiner/i?img=${path}&w=${w}&h=${w}`;
+}
+
 function facePreview(url, px) {
+  if (!url) return url;
+  if (url.indexOf("a.espncdn.com") >= 0) return espnFacePreview(url, px);
   const marker = "/image/upload/";
-  if (!url || url.indexOf(marker) < 0) return url;   // not a Cloudinary URL
+  if (url.indexOf(marker) < 0) return url;           // not a Cloudinary URL
   const [head, tail] = url.split(marker);
   const id = tail.indexOf("/") >= 0 ? tail.slice(tail.indexOf("/") + 1) : tail;
   const w = Math.max(48, Math.round(px * 2));        // 2x for retina

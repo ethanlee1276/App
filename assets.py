@@ -233,11 +233,23 @@ def _teams_for(sport: str) -> list[str]:
 def _cfb_ids() -> list[tuple[str, str]]:
     """``[(abbr, espn_id)]`` for college, from ESPN's own teams feed.
 
-    College has no teams_*.js and never will: 134 schools is precisely the
-    list that rots. ESPN keys them numerically, the build already pulls
-    those ids off this feed and ships them in the slate payload, and the
-    board now draws with them — so the audit has to check the same ids the
-    page will use, not a file that does not exist.
+    College has no teams_*.js and never will: the FBS alone is 134 schools,
+    precisely the list that rots. ESPN keys them numerically, the build
+    already pulls those ids off this feed and ships them in the slate
+    payload, and the board draws with them — so the audit checks the same
+    ids the page will use, not a file that does not exist.
+
+    NARROWED, BECAUSE THE FIRST RUN WAS MOSTLY NOISE. It reported 92 misses
+    out of 756: Avila, Culver-Stockton, Dakota Wesleyan, Haskell, Pikeville
+    — NAIA and D-II schools with no logo on ESPN's CDN and no route onto a
+    D-I scoreboard. ``fetch_teams`` already asks for ``groups=80`` and the
+    feed ignores it, answering with ESPN's whole college database. 92 misses
+    nobody can act on is how a real one gets missed, so the audit keeps only
+    schools filed under a conference the FBS groups feed knows.
+
+    The fallback matters as much as the filter: when the payload carries no
+    conference marker at all, this audits EVERYTHING and says so, rather
+    than quietly reporting a clean sheet it never earned.
     """
     try:
         from engine.sources import cfbdata
@@ -245,8 +257,22 @@ def _cfb_ids() -> list[tuple[str, str]]:
     except Exception as exc:                                  # noqa: BLE001
         print(f"  CFB: teams feed unreachable ({type(exc).__name__}), skipped")
         return []
-    return sorted((ab, t.get("id", "")) for ab, t in teams.items()
-                  if t.get("id"))
+    every = sorted((ab, t.get("id", ""), t.get("conf", ""))
+                   for ab, t in teams.items() if t.get("id"))
+    try:
+        confs = cfbdata.fetch_conferences()
+    except Exception:                                         # noqa: BLE001
+        confs = {}
+    keep = [(ab, tid) for ab, tid, conf in every if conf and conf in confs]
+    if keep:
+        print(f"  CFB: {len(keep)} of {len(every)} schools are in an FBS "
+              f"conference; the rest never reach a D-I board")
+        return keep
+    why = ("the conferences feed did not answer" if not confs else
+           "the teams feed carries no conference marker")
+    print(f"  CFB: {why} — auditing all {len(every)} schools, so expect "
+          f"misses you cannot act on")
+    return [(ab, tid) for ab, tid, _ in every]
 
 
 #: Mirrors ESPN_ABBR in web/js/visuals.js. Two copies is a real hazard, and

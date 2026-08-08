@@ -188,12 +188,22 @@ def parse_teams(payload: dict) -> dict[str, dict]:
             continue
         color = (t.get("color") or "").strip().lstrip("#")
         alt = (t.get("alternateColor") or "").strip().lstrip("#")
+        # Which conference ESPN files the school under, when it says. The
+        # feed ignores our ``groups=80`` and answers with its whole college
+        # database — measured, 756 schools, most of them NAIA and D-II that
+        # no D-I scoreboard will ever show. Anything that needs to separate
+        # the schools we can render from the ones we cannot has to have
+        # something to separate them BY, and this is the only marker the
+        # payload offers. Empty when absent, which callers must treat as
+        # "unknown", never as "not D-I".
+        groups = t.get("groups") or {}
         out[abbr] = {
             "id": str(t.get("id") or ""),
             "name": t.get("displayName") or t.get("location") or abbr,
             "nick": t.get("shortDisplayName") or t.get("location") or abbr,
             "primary": f"#{color}" if color else "",
             "alt": f"#{alt}" if alt else "",
+            "conf": str(t.get("conferenceId") or groups.get("id") or ""),
         }
     return out
 

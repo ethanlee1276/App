@@ -167,6 +167,50 @@ def test_the_college_team_map_reaches_the_page():
     assert "state.data && state.data.teams" in app[i:i + 400]
 
 
+def test_the_conference_marker_is_read_from_either_place_espn_puts_it():
+    """`--audit cfb` needs SOMETHING to tell a Big Ten school from a JUCO,
+    and this is the only marker the payload offers. ESPN files it as a flat
+    `conferenceId` on some rows and nested under `groups` on others."""
+    from engine.sources import cfbdata
+    p = {"sports": [{"leagues": [{"teams": [
+        {"team": {"id": 333, "abbreviation": "ALA", "conferenceId": 8}},
+        {"team": {"id": 2, "abbreviation": "AUB", "groups": {"id": "8"}}},
+        {"team": {"id": 2048, "abbreviation": "AVILA"}},
+    ]}]}]}
+    t = cfbdata.parse_teams(p)
+    assert t["ALA"]["conf"] == "8"
+    assert t["AUB"]["conf"] == "8"
+    assert t["AVILA"]["conf"] == "", "absent must read as unknown, not as 0"
+
+
+def test_the_college_audit_drops_the_schools_that_cannot_reach_a_board():
+    """MEASURED, 2026-08-08: the first run reported 92 misses out of 756 —
+    Avila, Culver-Stockton, Haskell, Pikeville. `fetch_teams` already asks
+    for groups=80 and the feed ignores it, returning ESPN's whole college
+    database. 92 misses nobody can act on is how a real one gets missed."""
+    import assets
+    src = _read("assets.py")
+    i = src.index("def _cfb_ids(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert "fetch_conferences" in body, "nothing separates FBS from NAIA"
+    assert "conf in confs" in body
+
+
+def test_an_unmarked_feed_audits_everything_and_says_so():
+    """The filter is only as good as the marker. If ESPN stops sending it,
+    the audit must go back to checking all of them and announce that —
+    silently reporting a clean sheet it never earned is worse than noise."""
+    src = _read("assets.py")
+    i = src.index("def _cfb_ids(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert "auditing all" in body
+    # Anchored on the statement, not on where the slice ends — slicing to
+    # the next `def` swept in the comment block that precedes it, so an
+    # `endswith` here failed on a function that was perfectly correct.
+    assert "return [(ab, tid) for ab, tid, _ in every]" in body, (
+        "the no-marker path no longer falls back to the full list")
+
+
 def test_the_audit_covers_college_from_the_feed_not_from_a_file():
     """There is no teams_cfb.js and there should not be one. Before this the
     audit printed "no teams file, skipped" — a whole sport reported as fine
