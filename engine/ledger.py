@@ -388,12 +388,20 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
-            "stake_dollars, status, leg) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?)",
+            "stake_dollars, status, leg, rest_days, body_clock) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?)",
             (now, sport, date, player, market, side, line,
              r.get("book", "best"), r.get("odds", -110), None,
              r.get("win_prob"), r.get("edge"), r.get("confidence"),
              r.get("grade"), stake_units, round(stake_units * unit_dollars, 2),
-             r.get("game_number") if r.get("doubleheader") else None))
+             r.get("game_number") if r.get("doubleheader") else None,
+             # Fatigue, for the side this bet is about. A short week or a
+             # 10am body clock is a spread's business at least as much as a
+             # prop's — this row carried no dimension at all, so half the
+             # NFL journal was invisible to the miner even once the props
+             # started reporting. Empty for a GAME total, which is about
+             # both teams and belongs to neither; see pipeline._finish_bet.
+             r.get("rest_days"), r.get("body_clock")))
         n += cur.rowcount
     conn.commit()
     return n

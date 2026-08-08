@@ -256,6 +256,28 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     d["live"] = bool(g.live and g.live.state == "live")
     d["date"] = g.date
     d["kickoff"] = g.kickoff
+    # Schedule fatigue, for the side the bet is actually about. A short week
+    # or a body clock three hours out is a spread's business at least as
+    # much as a prop's, so a game bet that journals NULL leaves the miner
+    # half-blind on the market where rest is most often the story.
+    #
+    # ONLY WHEN THERE IS ONE SUBJECT. `team` is the side the bet is on for
+    # moneylines, spreads and team totals, and is empty string for a GAME
+    # total — which is about both teams and belongs to neither. Filling
+    # that in with the home side's rest would put two different meanings in
+    # one column, and a dimension that means different things in different
+    # rows is worse than one that is absent: the miner would convict on a
+    # pocket that does not exist.
+    d["rest_days"] = d["body_clock"] = None
+    subject = (d.get("team") or "").strip()
+    if subject:
+        try:
+            from .fatigue import state_for as _fatigue_state
+            _st = _fatigue_state(g, subject) or {}
+            d["rest_days"] = _st.get("rest_days")
+            d["body_clock"] = _st.get("body_clock")
+        except Exception:                                     # noqa: BLE001
+            pass
     return d
 
 
@@ -348,6 +370,35 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         w = game.weather
         d["roofed"] = bool(w.dome)
         d["wind_out"] = None if w.dome else round(float(w.wind_mph or 0), 1)
+        # The schedule-fatigue dimension: days of rest, and how far the
+        # visitor's body clock is from kickoff.
+        #
+        # THESE WERE COMPUTED AND THROWN AWAY. `betting.py` already derives
+        # both to feed the loss-pattern veto (it has done since the fatigue
+        # work shipped) but never put them on the record, so
+        # `ledger.log_recommendations`' `r.get("rest_days")` wrote NULL on
+        # every pick ever journaled. The doctor reports it plainly —
+        # "always-NULL: rest_days, body_clock" — which is two of nine
+        # mineable dimensions permanently empty.
+        #
+        # That made the fatigue rung a closed loop with no input: the miner
+        # could REFUSE a pick on a short-week pattern, but could never
+        # CONVICT one, because no settled bet carried the dimension to
+        # learn from. It was applying rules it had no way to discover.
+        #
+        # Derived here rather than passed down from `betting.py` so the
+        # value lands on the record whatever the veto does with it — a
+        # dimension that only gets journaled when a gate happens to fire is
+        # a biased sample of exactly the thing being measured.
+        try:
+            from .fatigue import state_for as _fatigue_state
+            _st = _fatigue_state(game, prop.team) or {}
+            d["rest_days"] = _st.get("rest_days")
+            d["body_clock"] = _st.get("body_clock")
+        except Exception:                                     # noqa: BLE001
+            # A fatigue hiccup must never cost the pick itself; the
+            # dimension going missing is recoverable, a lost board is not.
+            d["rest_days"] = d["body_clock"] = None
         results.append(d)
 
     # Rank: recommended bets first, then by confidence, then by edge.
