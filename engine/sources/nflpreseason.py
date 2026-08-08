@@ -62,7 +62,26 @@ SCHEDULE_TTL = 6 * 3600
 
 
 def _url(season: int, seasontype: int, week: int | None) -> str:
-    q = f"?dates={season}&seasontype={seasontype}&limit=400"
+    """No `limit` parameter, and that is the whole bug the first run hit.
+
+    Probed from Ethan's machine 2026-08-08, the difference between a query
+    that answers and one that does not was exactly that:
+
+        ?dates=2026&seasontype=1&week=1              1 game
+        ?dates=2026&seasontype=1&week=1&limit=400    nothing
+
+    ESPN's scoreboard does not take `limit`, and rather than ignoring it,
+    supplying it empties the answer. It was added here on the assumption
+    that a season's worth of fixtures would paginate — a guess about an API
+    nobody had called, doing damage in the one way a guess like that can.
+
+    THE WEEK IS NOT OPTIONAL EITHER. Dropping it does not widen the query,
+    it breaks the season-type filter: `?dates=2026&seasontype=1` returned
+    100 games starting 2026-01-03, which is a REGULAR season fixture from
+    the 2025 season. Anything that looks like a chance to do one call
+    instead of four is that.
+    """
+    q = f"?dates={season}&seasontype={seasontype}"
     if week is not None:
         q += f"&week={week}"
     return ESPN_NFL + q
@@ -132,14 +151,44 @@ def parse_games(data: dict, season: int) -> list[dict]:
     return out
 
 
+def _range_url(season: int) -> str:
+    """August, as an explicit date range.
+
+    A FALLBACK, not the primary, and the distinction is the point. This is
+    a calendar guess: it asks for every NFL game in a window and trusts
+    that only preseason falls there. True for 2026 — the regular season
+    opens Sep 9 — and false for any year the window is drawn wrongly. The
+    week loop asks for preseason BY NAME, which is a filter rather than a
+    coincidence, so it stays first.
+
+    Probed 2026-08-08: this returns 49 games, the same total the week loop
+    reaches, which is what makes it a usable cross-check.
+    """
+    return f"{ESPN_NFL}?dates={season}0701-{season}0908"
+
+
+def _by_date_range(season: int) -> list[dict]:
+    name = f"espn_nfl_{season}_range.json"
+    text = fetch_text(_range_url(season), name, ttl=SCHEDULE_TTL)
+    try:
+        data = json.loads(text)
+    except ValueError as exc:
+        raise DataUnavailable(f"range query returned non-JSON; see "
+                              f"{CACHE_DIR / name}") from exc
+    # The range carries whatever is in the window, so anything already
+    # played as a REGULAR fixture has to be dropped rather than relabelled.
+    return [g for g in parse_games(data, season)
+            if (g.get("week") or 0) <= 4]
+
+
 def preseason_games(season: int, weeks: tuple[int, ...] | None = None) -> list[dict]:
     """Every preseason game ESPN lists for a season, earliest first.
 
-    One call per week rather than one for the season: ESPN's scoreboard
-    paginates by week for some season types, and a single call that
-    silently returns only week 1 would look exactly like a short
-    preseason. Weeks with no fixtures contribute nothing and are not an
-    error — the Hall of Fame game is week 1 some years and absent others.
+    One call per week, because the season-type filter does not work
+    without one — see `_url`. Measured on 2026: week 1 is the Hall of Fame
+    game alone, weeks 2-4 are sixteen apiece, and the total of 49 matches
+    what an explicit August date range returns. Weeks with no fixtures
+    contribute nothing and are not an error.
     """
     seen: dict[str, dict] = {}
     failed: list[str] = []
@@ -158,6 +207,18 @@ def preseason_games(season: int, weeks: tuple[int, ...] | None = None) -> list[d
                 seen[g["game_id"]] = g
     if seen:
         return sorted(seen.values(), key=lambda g: (g["kickoff"], g["home"]))
+
+    # The week loop found nothing. Before blaming the calendar, try the
+    # other shape that is known to work — if ESPN changes what `week`
+    # means for preseason, this is what keeps the board alive.
+    try:
+        got = _by_date_range(season)
+    except DataUnavailable as exc:
+        failed.append(f"date range: {exc}")
+    else:
+        if got:
+            return sorted(got, key=lambda g: (g["kickoff"], g["home"]))
+        empty.append(0)
 
     # Nothing came back — and WHY matters, because the two causes need
     # opposite responses. The first cut of this reported one message for

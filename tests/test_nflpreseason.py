@@ -169,6 +169,56 @@ def test_the_unverified_api_shape_is_disclosed():
     assert "cached before it is parsed" in doc
 
 
+# --- what the probe measured -------------------------------------------------
+def test_the_query_carries_no_limit_parameter():
+    """The whole first-run bug. Probed from Ethan's machine 2026-08-08:
+
+        ?dates=2026&seasontype=1&week=1              1 game
+        ?dates=2026&seasontype=1&week=1&limit=400    nothing
+
+    ESPN does not take `limit`, and supplying it empties the answer rather
+    than being ignored. It was added on a guess about pagination for an API
+    nobody had called."""
+    assert "limit" not in pre._url(2026, pre.PRESEASON, 1)
+
+
+def test_the_week_is_always_sent():
+    """Dropping it does not widen the query, it breaks the season-type
+    filter: `?dates=2026&seasontype=1` returned 100 games starting
+    2026-01-03 — a REGULAR fixture from the 2025 season."""
+    assert "week=1" in pre._url(2026, pre.PRESEASON, 1)
+    assert "seasontype=1" in pre._url(2026, pre.PRESEASON, 1)
+
+
+def test_a_single_game_week_is_not_a_failure():
+    """Preseason week 1 is the Hall of Fame game alone. A loop that treated
+    a one-game week as a bad response would throw away the opener."""
+    got = pre.parse_games(
+        _board(_event(1, "2026-08-07T20:00Z", "CAR", "ARI", week=1)), 2026)
+    assert len(got) == 1
+    assert got[0]["week"] == 1
+
+
+def test_the_range_fallback_is_a_fallback_not_the_primary():
+    """It asks for every game in a window and trusts that only preseason
+    falls there — true for 2026, a guess in general. The week loop asks by
+    name, so it stays first."""
+    import inspect
+    src = inspect.getsource(pre.preseason_games)
+    assert src.index("fetch_scoreboard") < src.index("_by_date_range")
+    doc = " ".join((pre._range_url.__doc__ or "").split())
+    assert "FALLBACK" in doc and "calendar guess" in doc
+
+
+def test_the_range_fallback_drops_anything_past_preseason():
+    """The window carries whatever is in it. A regular-season fixture that
+    creeps into the range must not be relabelled PRE."""
+    board = _board(_event(1, "2026-08-07T20:00Z", "CAR", "ARI", week=1),
+                   _event(2, "2026-09-10T20:00Z", "SEA", "NE", week=18))
+    kept = [g for g in pre.parse_games(board, 2026) if (g.get("week") or 0) <= 4]
+    assert [g["week"] for g in kept] == [1]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
