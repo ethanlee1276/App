@@ -208,6 +208,12 @@
   --measure: 68ch;
   --measure-wide: 74ch;
 
+  /* Named for a hue this palette no longer has. It measures C 0.024 at
+     hue 84.6 — a warm near-neutral, not cyan — left from the indigo/violet
+     direction the brand comment describes removing. Four rules still use
+     it (.gb-line, .card.gamebet, .chip.books, .val.cyan), so it stays
+     until those are re-pointed; the name is the bug, not the colour. */
+  --cyan: #A8A090;
   --text: #E8E4D9;
   --text-dim: #BAB3A6;
   --text-mute: #9E988B;
@@ -223,10 +229,14 @@
   --brand: #FFB000;
   --brand-2: #4A3B14;
   --brand-ink: #0A0907;            /* text ON the accent — the warm base */
-  --cyan: #A8A090;
-  --good: #33C77A;
-  --warn: #FFB000;
-  --bad: #E5484D;
+  --good: #29C878;
+  /* Amber is ONE colour with one meaning — §1 of the redesign
+     decisions: a condition is live or material. --brand is the
+     active nav item, which is such a condition, so these were
+     always the same hex. Written as an alias so editing one
+     cannot silently split them. */
+  --warn: var(--brand);
+  --bad: #DC5455;
   /* The two status marks the STYLESHEET draws. Same geometry as the check
      and cross in ICON_PATHS (web/js/app.js) — if one moves, move both. Used
      as a mask, so the paint inside the URI is irrelevant; the element's
@@ -1160,6 +1170,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
      the dark side needed would make this side worse. Only the fourth
      tier is new, and it is solved the same way, against the darkest
      ground because on paper that is where contrast is lowest. */
+  --cyan: #5C564A;
   --text: #14120E;
   --text-dim: #3E3A31;
   --text-mute: #7A7263;
@@ -1168,9 +1179,8 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   --brand: #B87400;
   --brand-ink: #F2EFE6;
   --brand-2: #E0C58A;
-  --cyan: #5C564A;
   --good: #12734B;
-  --warn: #B87400;
+  --warn: var(--brand);
   --bad: #C8102E;
   --plum: #7A7263;                 /* darker: it sits on paper, not ink */
   --grad-brand: #B87400;

@@ -396,3 +396,82 @@ concentrated at high claims, one temperature is being asked to average two
 different faults, and that would fail a hold-out with no drift at all.
 
 That is a measurement Ethan's journal can answer and this container cannot.
+
+
+---
+
+## §12 — resolved, and not in the direction this document assumed (2026-08-07)
+
+**The correction does not work on this board, the journal is now big
+enough to say so, and both explanations offered for the earlier failures
+were wrong.** Recording all three together because the wrong turns are the
+part a future reader will otherwise repeat.
+
+### The run
+
+255 settled bets, two functional forms, three estimators:
+
+| | split | interleaved CV | walk-forward |
+|---|---|---|---|
+| temperature + intercept | FAIL | INCONCLUSIVE | FAIL |
+| intercept only | FAIL | FAIL | FAIL |
+
+Six cells, zero passes.
+
+### Why that is a conclusion rather than a shrug
+
+From this file's own simulation, at 250 bets against a real **correctable**
+12-point over-claim, the pre-registered split returns:
+
+    PASS 70%   INCONCLUSIVE 20%   FAIL 9%
+
+It returned FAIL. That is the 9% branch once, or it is the likelier
+reading: there is no correctable distortion here to find. Five of six
+looks agreeing pushes it further the same way.
+
+The earlier position — "the journal cannot yet tell a working correction
+from a lucky one" — was right at 124 bets and is no longer right at 255.
+
+### Both diagnoses were wrong
+
+**Drift (§10, §11).** Claim level fell 64.9% to 51.2%, and the failure was
+attributed to the halves being different populations. Simulated over 60
+synthetic journals, drift moves each estimator's false-alarm rate by a
+point or two. Refuted.
+
+**Shape (§11).** The temperature has 50% as a fixed point, and 92 of 123
+held-out bets claim under 55%, so the instrument was inert exactly where
+the board lives — the biggest band moved 15.2% to 15.3%. That diagnosis
+was *correct about the mechanism* and still did not fix anything: the
+intercept-only form, which can move a claim at even money, closed 2.6
+points against the joint fit's 1.9. Refuted as the explanation, though the
+mechanism it identified is real and stays documented.
+
+### What it actually is
+
+`watch.py` had the answer before any of this: of the +12.1 point
+calibration gap, **+10.5 points is the selection effect** — the difference
+between the bets the gate took (255) and the ones it rejected (638), at
+z 2.44. The rejected population runs at roughly +1.6.
+
+A probability map that is near-calibrated on the bets you did not take and
+12 points off on the ones you did is not a miscalibrated map. It is a
+**selection** problem, and no rescaling of probabilities can fix it,
+because the same numbers are already right on the unselected population.
+`E[ε | selected] > 0` is a property of the choosing, not of the estimate.
+
+That is why every functional form fails and why a wider search would keep
+failing. The instrument is aimed at the wrong object.
+
+### What this closes and what it opens
+
+**Closed:** steps 2-4 of §10. Do not fit, do not apply, and do not add a
+seventh look. Two forms by three estimators is already six, each with a
+7-17% false-alarm rate, and the honest reading of a table that wide is
+that one stray PASS would have meant nothing.
+
+**Open:** the selection rule itself — the edge gate, the shrink, the
+grade thresholds. That is where the +10.5 lives. §8's two branches are
+unchanged and now sharper: either selection stops picking the spots where
+its own error points favourably, or there is nothing on this board worth
+betting. Neither is a calibration change.

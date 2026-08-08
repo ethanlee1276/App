@@ -58,13 +58,25 @@ def _oklch_to_rgb(L: float, C: float, H: float) -> tuple:
     return tuple(out)
 
 
-def token(name: str, css: str | None = None) -> tuple:
+#: How many `var(--x)` hops to follow. One alias is a design
+#: decision — `--warn` IS `--brand`, written as a reference so
+#: editing one cannot silently split them. A longer chain is not a
+#: palette, it is a puzzle, and capping it also makes a cycle
+#: terminate instead of hanging.
+_MAX_ALIAS_HOPS = 4
+
+
+def token(name: str, css: str | None = None, _hops: int = 0) -> tuple:
     """Resolve a custom property from the stylesheet's FIRST :root block.
 
     First, because that is the dark theme — the light one is a later
     override and matching it here would paint the icon for the wrong
-    ground. Reads hex or oklch(), so the ramp can be written in whichever
-    notation suits it.
+    ground. Reads hex, oklch(), or `var(--other)` — the last so an
+    alias stays readable to the tools. Without it, aliasing --warn
+    to --brand dropped warn out of contrast.audit() silently,
+    because audit swallows ValueError to skip tokens a theme does
+    not define. A measurement quietly measuring one thing fewer is
+    the worst way for this to fail.
 
     This is derived rather than copied on purpose. The favicon carried a
     hardcoded #101115 through a palette change and went off-brand without
@@ -84,6 +96,11 @@ def token(name: str, css: str | None = None) -> tuple:
     ok = re.match(r"oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)", val)
     if ok:
         return _oklch_to_rgb(*(float(x) for x in ok.groups()))
+    alias = re.match(r"var\(\s*--([A-Za-z0-9_-]+)\s*\)$", val)
+    if alias:
+        if _hops >= _MAX_ALIAS_HOPS:
+            raise ValueError(f"--{name}: alias chain too deep at {val!r}")
+        return token(alias.group(1), css, _hops + 1)
     raise ValueError(f"--{name}: cannot read {val!r}")
 
 

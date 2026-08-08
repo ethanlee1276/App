@@ -478,14 +478,13 @@ def test_the_two_projbar_series_resolve_to_different_hexes():
     """Consistent tokens are not enough: --brand and --warn are literally
     the same amber, so two DIFFERENT token names can still paint one
     colour. The dots have to be distinguishable on the screen."""
-    def hex_for(token, block):
-        m = re.search(rf"{token}:\s*(#[0-9A-Fa-f]{{3,8}})", block)
-        return m.group(1).lower() if m else None
-
-    body = _strip_comments(CSS)
-    # The dark theme block is the :root default in this sheet.
-    root = body[body.index(":root"):body.index("}", body.index(":root"))]
-    proj, line = hex_for("--text", root), hex_for("--warn", root)
+    # Resolve rather than pattern-match the declaration. `--warn` is now
+    # written as `var(--brand)` — the sameness this test is about is
+    # explicit in the stylesheet instead of being a coincidence — and a
+    # regex looking for a hex found nothing and failed on a palette that
+    # was fine. What the screen shows is the resolved colour, so resolve.
+    import make_icon as mi
+    proj, line = mi.token("text"), mi.token("warn")
     assert proj and line, (proj, line)
     assert proj != line, (proj, line)
 

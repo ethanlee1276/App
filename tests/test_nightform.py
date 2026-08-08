@@ -21,8 +21,10 @@ reads only the spec cannot "fix" them back:
 
 import os
 import re
+import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 
 
 def _read(*parts):
@@ -155,11 +157,28 @@ def test_green_and_red_still_carry_results():
 
 def test_amber_is_reserved_for_live_and_material_conditions():
     """The other half of the split. If --warn and --brand diverge, amber has
-    stopped being one idea."""
+    stopped being one idea.
+
+    Checked as an ALIAS rather than as two literals that happen to match.
+    Two equal hexes are one edit away from disagreeing and nothing would
+    catch it until someone noticed the LIVE badge had gone a different
+    amber from the nav; `--warn: var(--brand)` cannot drift by
+    construction. This test used to compare the declaration strings, which
+    broke the moment the relationship it is about became explicit.
+    """
     for theme in ("dark", "light"):
         t = _tokens(theme)
-        assert t["--warn"].strip().lower() == t["--brand"].strip().lower(), \
-            f"{theme}: the accent and the condition colour drifted apart"
+        warn = t["--warn"].strip().lower()
+        assert warn == "var(--brand)", \
+            f"{theme}: --warn is {warn!r}, not an alias of --brand"
+
+
+def test_the_amber_alias_still_resolves_to_a_real_colour():
+    """An alias to a token that stopped existing is worse than a stale
+    hex: every rule using it renders with no colour at all."""
+    import make_icon as mi
+    assert mi.token("warn") == mi.token("brand")
+    assert mi.token("warn") != (0, 0, 0)
 
 
 def test_the_venue_art_is_engraved_from_the_stylesheet():
