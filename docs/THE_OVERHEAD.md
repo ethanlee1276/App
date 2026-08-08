@@ -44,10 +44,43 @@ faceted silhouette) all froze a frame and varied only the inputs.
 
 So:
 
+> **§1 was amended on 2026-08-08.** Ethan opened the two rows struck
+> through below — *"i feel like we should have the color for the stadiums
+> and arenas and shit instead of these lines we are calling stadiums"* —
+> after seeing the current art, a full-colour revert and a middle option
+> rendered side by side on real cards. The colour is back on the
+> **surfaces**; everything else in this table still holds, and the two rows
+> that changed are struck rather than deleted so the reasoning survives the
+> decision. The rest of this document is unchanged and still governs.
+>
+> **What the colour is now:** the fills that were always in `visuals.js`
+> — grass, infield dirt, hardwood, the team's own colour on stands and end
+> zones. The engraving was only ever a stylesheet re-skin, so removing the
+> strip rules restored the drawing exactly.
+>
+> **What did NOT come back, and this is the whole difference between the
+> amendment and a revert:** the art still sits on the page's ground rather
+> than its own. The sky wash is still flattened to `--bg-2`, every label is
+> still mono at one weight, every radius is still zero, and the plaques are
+> still hairline boxes. Rendered as a straight revert, the venues read as
+> three cards pasted in from a different website — a radial navy gradient
+> behind each one on a near-black page, with system-ui labels among mono.
+>
+> **One rule was added.** Labels now carry a `--bg-2` halo via
+> `paint-order: stroke fill`. `--text-dim` was picked when the ground under
+> every label was flat and identical; on Vikings purple, "MIN" vanished
+> outright. The halo solves it for every surface at once and inverts with
+> the theme, where the alternative — the old per-team ideal-contrast fill —
+> would put a third type system back on the card.
+>
+> Enforced by `tests/test_overhead.py`, which was rewritten alongside this
+> rather than deleted: the coverage guard that policed the strip rules is
+> now a guard on the ground rule and the label halo.
+
 | Locked | Value |
 |---|---|
-| **Line language** | Outline only. No fill, no gradient, no wash. `stroke-width: 1.1` for structure, `1` for surfaces and hatching. |
-| **Ink** | `--text-mute` for structure, `--border` for surfaces and hatching, `--text-dim` for labels, `--text` for figures (`text.num`). Nothing else. |
+| ~~**Line language**~~ | ~~Outline only. No fill, no gradient, no wash.~~ **Amended 2026-08-08:** surfaces carry colour again. Structure that is still drawn as line keeps `stroke-width: 1.1` / `1`. |
+| ~~**Ink**~~ | ~~`--text-mute` for structure, `--border` for surfaces and hatching. Nothing else.~~ **Amended:** surfaces use the drawing's own colour and the team's. **Type is unchanged and still locked:** `--text-dim`/`--text` on labels and figures, plus a `--bg-2` halo so they survive a coloured surface. |
 | **Radius** | Zero. `rx: 0; ry: 0` on every rect in the art. |
 | **Type** | `--font-mono` on every label, one weight (400), one opacity (1). |
 | **Colour exception** | Exactly one, per REDESIGN_DECISIONS §6.13: team colour survives as a flat block behind the monogram, at `opacity: .5`, so you can still tell whose building it is. |

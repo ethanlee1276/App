@@ -181,15 +181,27 @@ def test_the_amber_alias_still_resolves_to_a_real_colour():
     assert mi.token("warn") != (0, 0, 0)
 
 
-def test_the_venue_art_is_engraved_from_the_stylesheet():
-    """The art is re-skinned through the cascade rather than by rewriting
-    three drawing functions — SVG presentation attributes lose to CSS, so
-    every <text>, score and label in visuals.js survives untouched. That is
-    the property worth pinning: if these rules go, the art silently returns
-    to team-tinted gradients."""
+def test_the_venue_art_is_re_skinned_from_the_stylesheet():
+    """The property worth pinning is the MECHANISM, not the skin.
+
+    The art is re-skinned through the cascade rather than by rewriting
+    three drawing functions — SVG presentation attributes lose to CSS — so
+    every <text>, score and label in visuals.js survives whatever the skin
+    does. That is what makes a treatment reversible in a stylesheet and why
+    turning the colour back on (2026-08-08) touched no drawing code.
+
+    This used to assert `.stadium > ellipse`, i.e. that the bowl was
+    OUTLINED. That was the skin, not the mechanism, and the skin is Ethan's
+    to change — which he did. What survives is the part that must hold
+    under any skin: the art stands on the page's own ground, its labels
+    belong to the page's type system, and the wind gauge is still styled
+    from here.
+    """
     body = _nc()
-    assert ".stadium > ellipse" in body, "the bowl lost its engraving rule"
-    assert ".stadium text, .field text" in body
+    assert ".stadium > rect:first-of-type" in body, \
+        "the sky wash is no longer flattened — the art brings its own ground"
+    assert ".stadium text, .field text" in body, \
+        "the art's labels left the page's type system"
     assert ".wind .stream" in body, "the wind gauge lost its engraving rule"
 
 

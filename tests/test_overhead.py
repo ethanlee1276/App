@@ -120,45 +120,70 @@ def _covers(selectors, cls, tag):
     return any(pat.match(s) for s in selectors)
 
 
-def test_every_shape_a_renderer_draws_is_re_skinned():
-    """The real guard. Not "does the path rule exist" — that is the last
-    bug, and it would pass again the next time a `<polygon>` appears.
+def test_the_ground_rule_covers_every_renderer():
+    """WHAT REPLACED THE COVERAGE GUARD, and why the replacement is
+    narrower on purpose.
 
-    For each renderer: every element type it emits must be named in a
-    selector under that renderer's class, in the engraving block. If
-    someone adds a shape and forgets the rule, the art quietly keeps its
-    presentation-attribute colour on that sport only, which is exactly how
-    the ballpark stayed green through an entire redesign.
+    This file used to assert that EVERY element type a renderer emits is
+    matched by a rule in the engraving block — because the block's job was
+    to strip every presentation-attribute fill, and it was only as complete
+    as its selector list. `ballpark()` draws thirteen `<path>`s, Night Form
+    shipped `.field path` and no `.stadium path`, and the MLB board rendered
+    the pre-redesign colour cartoon for the entire life of the redesign
+    while every test passed.
+
+    Ethan put the colour back on 2026-08-08, so stripping fills is no
+    longer the block's job and that invariant is false by design — the
+    greens and browns are now the point. Deleting the file would throw away
+    the lesson with the rule, so what survives is the part that is still
+    load-bearing: the art sits on the PAGE'S ground, not on its own navy
+    sky. Rendered without this, the venues read as three cards pasted in
+    from a different website.
+
+    Still keyed off what the renderers actually emit rather than a literal
+    selector, so it cannot be satisfied by a rule that matches nothing.
     """
     js = _read("web", "js", "visuals.js")
     sels = _selectors(_engraving_block(_read("web", "css", "styles.css")))
     missing = []
     for fn, cls in RENDERERS.items():
-        for tag in sorted(_emitted(js, fn)):
-            if not _covers(sels, cls, tag):
-                missing.append(f"{fn}() emits <{tag}> but no `.{cls} {tag}` rule")
-    assert not missing, (
-        "the engraving layer does not cover every shape these renderers "
-        "draw, so the un-covered ones keep the raw fills written on the "
-        "element:\n  " + "\n  ".join(missing)
-    )
+        if "rect" not in _emitted(js, fn):
+            continue                     # nothing to stand on
+        if not _covers(sels, cls, "rect"):
+            missing.append(f"{fn}() draws its ground as <rect> but no "
+                           f"`.{cls} rect` rule flattens it")
+    assert not missing, "\n  ".join(missing)
 
 
-def test_the_ballpark_paths_are_outlined():
-    """The specific regression. `ballpark()` is 13 paths; without this rule
-    the stands, outfield fan, wall, infield dirt, infield grass and plate
-    all keep the greens and browns out of visuals.js."""
+def test_the_sky_wash_is_still_flattened_to_the_page_ground():
+    """The one rule the whole treatment rests on. `visuals.js` paints a
+    radial navy gradient behind every venue; on a near-black page that is a
+    second background showing through."""
     block = _engraving_block(_read("web", "css", "styles.css"))
-    m = re.search(r"\.stadium path\s*\{([^}]*)\}", block)
-    assert m, (
-        "`.stadium path` is gone. `ballpark()` draws its whole body in "
-        "<path>, so without it the MLB board renders the pre-redesign "
-        "colour cartoon and nothing else fails."
-    )
-    assert "fill: none" in m.group(1), (
-        "`.stadium path` must clear the fill — that is the entire point; "
-        "the greens are written on the elements as presentation attributes"
-    )
+    m = re.search(r"\.stadium > rect:first-of-type,\s*"
+                  r"\.field > rect:first-of-type\s*\{([^}]*)\}", block)
+    assert m, "the sky wash is no longer flattened to the page's ground"
+    assert "var(--bg-2)" in m.group(1), m.group(1)
+
+
+def test_the_labels_survive_a_coloured_surface():
+    """`--text-dim` was chosen when the ground under every label was flat
+    and identical. With the colour back, the same label sits on Vikings
+    purple or Marlins teal — "MIN" across a purple dome vanished outright
+    in the first render.
+
+    A ground-coloured outline under the glyphs fixes it once for every
+    surface without asking what is underneath, and inverts with the theme
+    for free because both ends are tokens. The alternative — restoring the
+    old per-team ideal-contrast fill — brings back a third type system on
+    the card."""
+    block = _engraving_block(_read("web", "css", "styles.css"))
+    m = re.search(r"\.stadium text, \.field text\s*\{([^}]*)\}", block)
+    assert m, "the art's labels are no longer styled at all"
+    body = m.group(1)
+    assert "paint-order" in body, "no halo — labels will drop out on colour"
+    assert "var(--bg-2)" in body, "the halo must be the page's own ground"
+    assert "var(--font-mono)" in body, "the art's type system drifted"
 
 
 def test_the_art_has_no_rounded_corners():
@@ -173,19 +198,29 @@ def test_the_art_has_no_rounded_corners():
     )
 
 
-def test_the_mow_stripes_are_classed_and_dropped():
-    """Filled at 18% they read as faint stripes. Engraved, each wedge is an
-    arc plus two radii — five of those radiating from the plate is a cat's
-    cradle over the infield. They carry no data, so they go. The football
-    field's stripes survive because they are rectangles, which outline into
-    parallel lines."""
+def test_the_mow_stripes_keep_their_class_even_though_they_are_visible_again():
+    """They were hidden for a reason that no longer applies. Filled at 18%
+    they read as faint stripes; ENGRAVED, each wedge becomes an arc plus
+    two radii, and five of those radiating from the plate is a cat's cradle
+    over the infield. Outlining is what made them unreadable, not the
+    stripes themselves — so with the fills back on (2026-08-08) they return
+    to what they always were.
+
+    The CLASS still has to be there. It is the only handle anything has on
+    them, it costs nothing, and the day someone wants a line-art variant
+    again it is the difference between one CSS rule and re-reading a
+    drawing function.
+    """
     js = _read("web", "js", "visuals.js")
     assert 'class="mow"' in _fn_body(js, "ballpark"), (
-        "the ballpark's mow stripes need a class so the engraving layer can "
-        "drop them; without it they outline into a tangle"
+        "the ballpark's mow stripes lost their class — the one handle any "
+        "future re-skin has on them"
     )
     block = _engraving_block(_read("web", "css", "styles.css"))
-    assert re.search(r"\.stadium path\.mow\s*\{[^}]*display:\s*none", block)
+    assert not re.search(r"\.stadium path\.mow\s*\{[^}]*display:\s*none", block), (
+        "the mow stripes are hidden again while the art is in colour, "
+        "which drops texture for a reason that only applied to outlines"
+    )
 
 
 def test_every_renderer_shares_one_canvas():

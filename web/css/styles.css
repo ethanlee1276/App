@@ -3489,68 +3489,82 @@ select.calc-in { width: auto; font-weight: 600; }
    ------------------------------------------------------------------- */
 .stadium, .field { background: none; }
 
-/* The sky/bowl/wood washes: flat ink, no gradient. */
+/* COLOUR IS BACK ON THE SURFACES — Ethan, 2026-08-08.
+   ----------------------------------------------------------------------
+   "i feel like we should have the color for the stadiums and arenas and
+   shit instead of these lines we are calling stadiums."
+
+   This reverses the outline-only line language and the four-ink palette
+   that docs/THE_OVERHEAD.md §1 had marked LOCKED. That document is not
+   wrong and has not been deleted — it was written against real research
+   (Ehrenberg-Bass on repetition; Tropicana losing ~20% of unit sales in
+   seven weeks after replacing a distinctive asset), and it contains the
+   warning that fits this exact moment: "the temptation to redraw this
+   because you have looked at it a thousand times is the single biggest
+   risk to it ever working." The lock names Ethan as the one who can open
+   it, and he did, with three variants rendered side by side in front of
+   him. §1 is updated rather than ignored.
+
+   WHAT CAME BACK: the fills. Grass, infield dirt, hardwood, the team's
+   own colour on the stands and the end zones — all of it was still in
+   `visuals.js` the whole time, because the engraving was a stylesheet
+   re-skin and never touched the drawing code. Deleting the strip rules
+   restores it exactly.
+
+   WHAT STAYED, and this is the difference between this and simply
+   reverting: the art sits on the SITE'S ground, not its own. The rules
+   below still flatten the navy sky wash to `--bg-2`, still set every
+   label in mono at one weight, still zero every radius, and still draw
+   the plaques as hairline boxes. Rendered side by side, the full revert
+   read as three cards pasted in from a different website — a radial navy
+   gradient behind each venue on a near-black page, with system-ui labels
+   among mono ones. Keeping the ground and the type is what lets the
+   colour arrive without the discontinuity.
+   ---------------------------------------------------------------------- */
+
+/* The sky wash goes flat: the page's own ground, not a navy gradient.
+   THIS IS THE LOAD-BEARING ONE. Without it the venues float on their own
+   backdrop and stop belonging to the page. */
 .stadium > rect:first-of-type,
 .field > rect:first-of-type { fill: var(--bg-2); stroke: none; }
 
-/* Bowl, stands, court surface — outline only. */
-.stadium > ellipse,
-.field > rect { fill: none; stroke: var(--text-mute); stroke-width: 1.1; }
-
-/* The playing surface: an outlined rect, not a green field. Mow stripes
-   and plank lines become hatching at the same weight as everything else. */
-.stadium > rect:not(:first-of-type),
-.field line { fill: none; stroke: var(--border); stroke-width: 1; opacity: 1; }
-.stadium line { stroke: var(--border); stroke-opacity: 1; }
-.stadium g[stroke] line, .stadium g[stroke] path { stroke: var(--border); }
-
-/* Circles: centre badge, mound, tip-off. Outline, bone. */
-.stadium circle, .field circle { fill: none; stroke: var(--text-mute); stroke-width: 1.1; }
-/* …except the floodlights, which are points of light and read as dots. */
-.stadium g circle { fill: var(--text-mute); stroke: none; }
-
-.field path { fill: none; stroke: var(--text-mute); stroke-width: 1.1; opacity: 1; }
-
-/* …and the same for `.stadium`, which is the rule that was missing.
-   Measured: the NFL bowl is built from 31 <line>, 10 <circle>, 2 <ellipse>
-   and 10 <rect>, so every rule above caught it and it engraved perfectly.
-   The MLB ballpark draws its stands, outfield fan, mow stripes, wall,
-   infield dirt, infield grass and plate as THIRTEEN <path> elements — and
-   nothing here matched a path under `.stadium`. Computed fills came back
-   rgb(31,125,65) and rgb(42,157,84): the raw greens out of visuals.js.
-   So the entire re-skin slid off the one sport on the board that opens
-   first, and the Overhead's own grammar was being followed by two
-   renderers out of three.
-   `.stadium g[stroke] path` above is more specific, so the goalposts,
-   base paths and altitude glyph keep their existing treatment. */
-.stadium path { fill: none; stroke: var(--text-mute); stroke-width: 1.1; opacity: 1; }
-/* Decoration, and the one thing here that carries no data — see the note
-   in ballpark(). The outfield arc and the foul lines already give the fan
-   its radial structure. */
-.stadium path.mow { display: none; }
-
-/* Plaques (HR factor, altitude) and the bases sit inside <g>, so the
-   direct-child rect rule never reached them either — they kept a filled
-   navy pill. Hairline box, square corners: `rx` is a CSS geometry
-   property, which is the only way to unset an rx="7.5" written on the
-   element without editing the drawing code. */
+/* Plaques (HR factor, altitude) and the bases sit inside <g>. Hairline
+   box, square corners — a filled navy pill next to coloured grass reads
+   as a leftover, and these carry NUMBERS, which belong to the page's
+   type system rather than to the illustration. `rx` is a CSS geometry
+   property, the only way to unset an rx="7.5" written on the element
+   without editing the drawing code. */
 .stadium g rect { fill: none; stroke: var(--border); stroke-width: 1; opacity: 1; }
 /* Zero radius is a house rule everywhere else in Night Form; the art was
    the one place still drawing rounded corners (rx="6" on the NFL field
    and end zones, rx="7.5" on the plaques). */
 .stadium rect, .field rect { rx: 0; ry: 0; }
 
-/* Every label on the art is bone at one weight. The old art set them in
-   white, in the team's ideal-contrast colour, and at four opacities. */
+/* Every label on the art is bone mono at one weight. The pre-redesign art
+   set them in white, in the team's ideal-contrast colour, and at four
+   opacities — three type systems on one card.
+   ----------------------------------------------------------------------
+   THE HALO IS NOT DECORATION. `--text-dim` was chosen when the ground
+   under these labels was flat `--bg-2` and identical on every card. With
+   the colour back, the same label now sits on Vikings purple, Chiefs red
+   or Marlins teal — and "MIN" across a purple dome disappeared outright in
+   the first render. Restoring the old per-team ideal-contrast fill would
+   solve it and bring back the third type system with it.
+   A ground-coloured outline under the glyphs solves it once, for every
+   surface, without asking what colour is underneath: `paint-order` draws
+   the stroke first so the fill stays crisp on top. It inverts with the
+   theme for free — bone text with a near-black halo on dark, ink text with
+   a near-white halo on light — because both ends are tokens. */
 .stadium text, .field text {
-  fill: var(--text-dim); font-family: var(--font-mono); font-weight: 400;
+  fill: var(--text); font-family: var(--font-mono); font-weight: 400;
   opacity: 1;
+  paint-order: stroke fill;
+  stroke: var(--bg-2); stroke-width: 2.4px; stroke-linejoin: round;
 }
+/* The plaques sit on the flat ground inside a hairline box, so they need
+   no halo — and a stroked figure inside a 1px rule reads as bold. */
+.stadium g text { stroke-width: 0; }
 .stadium text.num, .field text.num { fill: var(--text); }
-
-/* §6.13 — team colour is the one permitted exception, kept as a flat block
-   behind the monogram so the building is still identifiable. */
-.stadium rect[fill^="#"]:not(:first-of-type) { opacity: .5; }
 
 
 /* The wind gauge, engraved. §5.5 is explicit that it survives the redesign
