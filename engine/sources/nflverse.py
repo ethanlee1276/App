@@ -18,7 +18,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .fetch import fetch_csv, load_local_csv, CACHE_DIR, DataUnavailable
+from .fetch import (fetch_csv, load_local_csv, CACHE_DIR, DataUnavailable,
+                    release_unavailable)
 from .. import carry as _carry
 from ..models import (
     Team, DefenseProfile, Weather, Game, Prop, GameLog, SportsbookLine,
@@ -159,14 +160,14 @@ def load_weekly_stats(season: int) -> list[dict]:
             return fetch_csv(url, f"player_stats_{season}.csv")
         except DataUnavailable as exc:
             last_err = exc
-    raise DataUnavailable(
-        f"Weekly player stats for {season} are unavailable here (GitHub release "
-        f"access is blocked by this environment's egress policy). Export them "
-        f"once and save to {local} — e.g. in Python:\n"
-        f"    import nfl_data_py as nfl\n"
-        f"    nfl.import_weekly_data([{season}]).to_csv('{local}', index=False)\n"
-        f"(last error: {last_err})"
-    )
+
+    # 404 and "could not reach it" need opposite responses — see
+    # `release_unavailable`. This used to assert the egress cause for both,
+    # and told Ethan to export a file that does not exist yet.
+    raise release_unavailable(
+        "weekly player stats", season, local,
+        f"nfl.import_weekly_data([{season}]).to_csv('{local}', index=False)",
+        _weekly_stats_urls(season), last_err)
 
 
 def _roster_urls(season: int) -> list[str]:

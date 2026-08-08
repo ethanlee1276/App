@@ -33,7 +33,73 @@ DEFAULT_TTL = 12 * 3600  # re-download at most twice a day
 
 
 class DataUnavailable(RuntimeError):
-    """Raised when a required feed cannot be fetched and has no local cache."""
+    """Raised when a required feed cannot be fetched and has no local cache.
+
+    Carries ``status`` — the HTTP status when the failure was an HTTP error,
+    and None when it was a timeout, a DNS failure, a refused CONNECT or
+    anything else that never got a response.
+
+    WHY A CALLER NEEDS THIS. "The server said no such file" and "I could not
+    reach the server" need opposite responses, and a message that guesses
+    between them sends the reader the wrong way. `load_weekly_stats` told
+    Ethan that GitHub release access was "blocked by this environment's
+    egress policy" and to export the file locally — on a machine with a
+    working connection, whose own last-error line in the same message read
+    `HTTP Error 404: Not Found`. The file was not blocked, it does not exist:
+    nflverse publishes a season's player stats once games have been played,
+    and the 2026 season had not started. The suggested export reads the same
+    release and would have failed identically.
+    """
+
+    def __init__(self, *args, status: int | None = None):
+        super().__init__(*args)
+        self.status = status
+
+
+def _status_of(exc: BaseException) -> int | None:
+    """The HTTP status behind a fetch failure, if there was a response."""
+    code = getattr(exc, "code", None)
+    return code if isinstance(code, int) else None
+
+
+def release_unavailable(what: str, season: int, local: Path | str,
+                        exporter: str, urls, last_err) -> DataUnavailable:
+    """The right error for a missing nflverse release, chosen by what the
+    server actually said.
+
+    Three loaders — weekly stats, depth charts, injuries — each carried the
+    same hardcoded sentence: "unavailable here (GitHub release access is
+    blocked by this environment's egress policy), export it with
+    nfl_data_py". That is one of the two possible causes stated as though it
+    were known, and when it is the wrong one the advice is worse than
+    nothing: the export reads the very same release, so it fails the same
+    way. It reached Ethan's Mac, on a working connection, directly above its
+    own `HTTP Error 404: Not Found`.
+
+    404 means the file is not there. For a season whose games have not been
+    played that is the expected answer and nothing to act on. Anything else
+    — a refused CONNECT, a timeout, a 403 from a proxy — means we never got
+    an answer, and exporting elsewhere is exactly the right move.
+    """
+    status = getattr(last_err, "status", None)
+    tried = ", ".join(urls)
+    if status == 404:
+        return DataUnavailable(
+            f"nflverse has not published {what} for {season} (HTTP 404). "
+            f"These appear once games have been played, so before a season's "
+            f"Week 1 this is the expected answer rather than something to "
+            f"fix. If {season} is already under way, check whether nflverse "
+            f"renamed the release.\n(tried: {tried})",
+            status=404)
+    return DataUnavailable(
+        f"{what.capitalize()} for {season} could not be fetched — the request "
+        f"never got an answer, so this is a reachability problem and not a "
+        f"missing file. If that is this container's egress policy, export "
+        f"them once where GitHub is reachable and save to {local}:\n"
+        f"    import nfl_data_py as nfl\n"
+        f"    {exporter}\n"
+        f"(last error: {last_err})",
+        status=status)
 
 
 def _cache_path(name: str) -> Path:
@@ -67,7 +133,8 @@ def fetch_text(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
     except Exception as exc:  # network blocked / offline
         if path.exists():
             return path.read_text(encoding="utf-8", errors="replace")
-        raise DataUnavailable(f"Could not fetch {url}: {exc}") from exc
+        raise DataUnavailable(f"Could not fetch {url}: {exc}",
+                              status=_status_of(exc)) from exc
 
 
 def fetch_json(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
@@ -109,7 +176,8 @@ def fetch_json(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
                 return _json.loads(path.read_text(encoding="utf-8"))
             except ValueError:
                 path.unlink(missing_ok=True)
-        raise DataUnavailable(f"Could not fetch {url}: {exc}") from exc
+        raise DataUnavailable(f"Could not fetch {url}: {exc}",
+                              status=_status_of(exc)) from exc
 
     try:
         data = _json.loads(text)

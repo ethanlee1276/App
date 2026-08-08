@@ -21,7 +21,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .fetch import fetch_csv, load_local_csv, CACHE_DIR, DataUnavailable
+from .fetch import (fetch_csv, load_local_csv, CACHE_DIR, DataUnavailable,
+                    release_unavailable)
 from .nflverse import _s  # shared "first non-empty key" helper
 from ..models import Injury
 
@@ -65,14 +66,10 @@ def load_injuries(season: int) -> list[dict]:
             return fetch_csv(url, f"injuries_{season}.csv")
         except DataUnavailable as exc:
             last_err = exc
-    raise DataUnavailable(
-        f"Injury reports for {season} are unavailable here (GitHub release access "
-        f"is blocked by this environment's egress policy). Export them once and "
-        f"save to {local} — e.g. in Python:\n"
-        f"    import nfl_data_py as nfl\n"
-        f"    nfl.import_injuries([{season}]).to_csv('{local}', index=False)\n"
-        f"(last error: {last_err})"
-    )
+    raise release_unavailable(
+        "injury reports", season, local,
+        f"nfl.import_injuries([{season}]).to_csv('{local}', index=False)",
+        _injuries_urls(season), last_err)
 
 
 def _map_status(raw: str) -> str:
