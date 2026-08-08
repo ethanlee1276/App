@@ -193,11 +193,43 @@ def test_the_columns_are_named_not_selected_by_position():
         assert f'class="{cls[1:]}"' in APP, cls
 
 
+def _phone_blocks(css):
+    """Every `@media (max-width: 760px)` block, braces-matched.
+
+    "Up to the next @media" is the obvious slice and it is wrong here: this
+    stylesheet keeps each media query beside the rules it modifies rather
+    than grouping them at the end, so that slice swallows every top-level
+    rule in between and a block appears to contain selectors nowhere near
+    it.
+    """
+    out = []
+    i = css.find("@media (max-width: 760px)")
+    while i >= 0:
+        start = css.index("{", i)
+        depth = 0
+        for k in range(start, len(css)):
+            if css[k] == "{":
+                depth += 1
+            elif css[k] == "}":
+                depth -= 1
+                if depth == 0:
+                    out.append(css[start:k + 1])
+                    break
+        i = css.find("@media (max-width: 760px)", i + 30)
+    return out
+
+
 def test_the_phone_hides_exactly_as_many_cells_as_tracks_it_drops():
     """The invariant behind that bug, stated as arithmetic. Nine cells in a
     priced row, four hidden on a phone, four tracks declared."""
-    i = CSS.index("@media (max-width: 760px)")
-    block = CSS[i:CSS.index("@media", i + 10)]
+    # The block that contains the futures rules, not "the first 760px block
+    # in the file". This stylesheet keeps each media query next to the rules
+    # it modifies, so a new component added anywhere ABOVE the futures table
+    # silently became the first match and this read a block with no .fx- in
+    # it. Anchor on the thing meant, never on ordinal position.
+    block = next((b for b in _phone_blocks(CSS)
+                  if ".fx-table.priced .fx-row {" in b), "")
+    assert block, "no 760px block declares the priced futures row"
     j = block.index(".fx-table.priced .fx-row {")
     tracks = block[j:j + 200].split("grid-template-columns:")[1].split(";")[0]
     assert _tracks(tracks) == 4, tracks

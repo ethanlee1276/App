@@ -306,13 +306,51 @@ def test_no_new_type_token_was_invented_for_it():
     assert "--fs-5xl" not in body
 
 
+def _media_body(css, i):
+    """The braces-matched body of the block starting at `i`.
+
+    "Everything up to the next @media" is what these tests used to do, and
+    it is only correct when media queries are contiguous. They are not —
+    this stylesheet keeps each one beside the rules it modifies — so that
+    slice swallowed every top-level rule in between and a block appeared to
+    contain selectors that were nowhere near it.
+    """
+    start = css.index("{", i)
+    depth = 0
+    for k in range(start, len(css)):
+        if css[k] == "{":
+            depth += 1
+        elif css[k] == "}":
+            depth -= 1
+            if depth == 0:
+                return css[start:k + 1]
+    return css[start:]
+
+
+def _phone_block(css, containing):
+    """The `@media (max-width: 760px)` block that declares `containing`.
+
+    NOT "the first one in the file". This stylesheet keeps each media query
+    beside the rules it modifies, so a component added anywhere ABOVE the
+    one meant silently becomes the first match. Three assertions in this
+    file made that assumption and all three broke the day sub-tabs were
+    added above them — anchor on the rule meant, never on position.
+    """
+    i = css.find("@media (max-width: 760px)")
+    while i >= 0:
+        chunk = _media_body(css, i)
+        if containing in chunk:
+            return chunk
+        i = css.find("@media (max-width: 760px)", i + 30)
+    return ""
+
+
 def test_the_phone_lead_takes_its_own_row():
     """Two equal columns would put the answer beside a supporting number at
     the same width, which is the shape this layout exists to stop."""
     body = _strip_comments(CSS)
-    i = body.index("@media (max-width: 760px)")
-    nxt = body.index("@media", i + 10)
-    block = body[i:nxt]
+    block = _phone_block(body, "#stats { grid-template-columns:")
+    assert block, "no 760px block sets the #stats grid"
     assert "#stats { grid-template-columns: repeat(3, 1fr)" in block
     assert "grid-column: 1 / -1" in block
     # The shared class keeps its own two-column phone grid.
@@ -411,10 +449,8 @@ def test_the_phone_row_gives_the_flexible_track_to_the_name_not_the_price():
     price is three characters and never flexes, while a handle is the only
     thing here whose length is unbounded."""
     body = _strip_comments(CSS)
-    i = body.index("@media (max-width: 760px)")
-    block = body[i:body.index("@media", i + 30)]
-    assert ".rl-row, .pm-rows .rl-row {" in block, \
-        "the phone template loses to the Polymarket override"
+    block = _phone_block(body, ".rl-row, .pm-rows .rl-row {")
+    assert block, "the phone template loses to the Polymarket override"
     rule = block[block.index(".rl-row, .pm-rows .rl-row {"):]
     cols = rule[rule.index("grid-template-columns:"):rule.index(";")]
     # proc is the third area in ". date proc odds ." — third track flexes.
@@ -425,9 +461,14 @@ def test_a_long_handle_breaks_on_a_phone_instead_of_running_over_the_price():
     """`white-space: normal` alone will not break "monkeymashingkeyboard"
     or a wallet address — they are single unbreakable tokens, and they
     overflowed the track intact."""
+    # The block that declares `.rl-proc`, not "the first 760px block". This
+    # stylesheet keeps each media query beside the rules it modifies, so a
+    # component added anywhere ABOVE this one silently became the first
+    # match and this read a block with no .rl- in it. Anchor on the rule
+    # meant, never on ordinal position.
     body = _strip_comments(CSS)
-    i = body.index("@media (max-width: 760px)")
-    block = body[i:body.index("@media", i + 30)]
+    block = _phone_block(body, ".rl-proc {")
+    assert block, "no 760px block declares .rl-proc"
     j = block.index(".rl-proc {")
     rule = block[j:block.index("}", j)]
     assert "overflow-wrap: anywhere" in rule

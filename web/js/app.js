@@ -3121,10 +3121,30 @@ async function renderPlayers() {
     host.innerHTML = `<div class="empty">No players match “${escapeHtml(state.search)}”.</div>`;
     return;
   }
-  host.innerHTML = players.map(profileHTML).join("");
+  // MEASURED IN CHROMIUM, 2026-08-08: with no query this rendered 293 full
+  // profiles — 4,315 table rows and 139,451px of page. A hundred and
+  // fifty-five screens, on the page whose own tab hint is "search a
+  // player". The search box was filtering a DOM that had already been
+  // built in full.
+  //
+  // So an unsearched visit shows a browsable handful and says how many
+  // there are. Searching still reaches every one of them: the filter runs
+  // over the whole list above and only the DISPLAY is capped.
+  const capped = !q && players.length > PLAYER_BROWSE;
+  const shown = capped ? players.slice(0, PLAYER_BROWSE) : players;
+  host.innerHTML = (capped ? `<p class="browse-note">Showing ${shown.length}
+      of ${players.length} players with a prop on tonight’s board —
+      type a name to find anyone else.</p>` : "")
+    + shown.map(profileHTML).join("");
   fillMeters(host);
   revealChildren(host);
 }
+
+//: How many profiles an unsearched Players page draws. A profile is a tall
+//: card — chart, form table, meters — so this is a screen or two of
+//: browsing, not a directory. The number exists to be tuned; the reason it
+//: exists is that no number at all meant 293.
+const PLAYER_BROWSE = 12;
 
 async function rosterMatches(q) {
   const d = await loadRosters(state.sport);
@@ -4225,7 +4245,7 @@ function recCalibrationSection(cal, era) {
       ~50 of its picks settle (${eraN} so far). The nightly calibration refit already feeds
       these misses back into the model’s tempering.</p>`;
   const eraBlock = eraN >= 50 ? `
-    <div class="section-title">Current model only
+    <div class="section-title minor">Current model only
       <span class="sub">— the same test, restricted to picks graded since the
       ${escapeHtml((era || {}).since || "")} re-tune (n=${eraN}).</span></div>
     <div class="card" style="padding:0">${calBucketRows(era.buckets)}
@@ -4345,7 +4365,7 @@ function recLooseSection(lo) {
     </div>`;
   }).join("");
   return `
-    <div class="section-title">Looser-gates sampler — measurement in progress
+    <div class="section-title minor">Looser-gates sampler — measurement in progress
       <span class="sub">— the props that JUST missed the bar, paper-tracked nightly.
       This bucket IS the answer to "should we loosen the filters?"</span></div>
     ${recDisclosure("How this decides anything", `Every build journals the
@@ -4428,6 +4448,118 @@ function recordScopeHTML(d, scope) {
                    settled || open || 0));
   }
   return `<div class="rec-scopes">${parts.join("")}</div>`;
+}
+
+/* ============================================================
+   SUB-TABS — one page, several rooms
+   ============================================================
+   Ethan, 2026-08-08: "everything feels cluttered and kinda just thrown
+   around in place when I say to add something."
+
+   MEASURED, because "cluttered" is a feeling and a count is a fact: 81
+   section titles across 47 render functions, and the Record page alone
+   composes TWENTY-TWO of them into a single vertical scroll. Every one of
+   them renders at identical visual weight, so "Running P&L" and
+   "Team-form sampler — measurement in progress" look equally important.
+   Nothing was badly built; things were appended, one at a time, to
+   whichever page was nearest.
+
+   This is the grouping that was always latent. It is deliberately NOT a
+   set of new top-level tabs — the site already carries eleven of those
+   plus a sport switcher, and adding more is the thing that made it hard
+   to navigate in the first place.
+
+   THREE RULES THAT MAKE IT SAFE:
+
+   1. A TAB WITH NOTHING BEHIND IT IS NEVER DRAWN. The Record page hides
+      most of its panels when scoped to one sport, so a fixed tab bar
+      would offer five rooms and open two empty ones. Groups are built as
+      strings first and only the ones with content become tabs.
+   2. NOTHING IS UNREACHABLE. If every group but one is empty the bar
+      disappears and the content renders plain — the page behaves exactly
+      as it did before sub-tabs existed.
+   3. THE CHOICE IS REMEMBERED, per view, for the session. Landing back on
+      Receipts every time you glance at a sport is the kind of small tax
+      that makes people stop opening a page. */
+
+//: Where you were, per view. Not persisted — a new session should open on
+//: the first tab, which is the one that answers "how am I doing".
+const _subtab = {};
+
+/**
+ * Build a sub-tabbed view.
+ * `groups` is [[id, label, hint, html], ...] in display order.
+ * Returns the whole block: tab bar plus panels, ready to assign.
+ */
+function subtabbedHTML(view, groups) {
+  const live = groups.filter((g) => (g[3] || "").trim());
+  if (live.length < 2) return live.map((g) => g[3]).join("");
+  const want = _subtab[view];
+  const active = live.some((g) => g[0] === want) ? want : live[0][0];
+  const tabs = live.map((g) => `
+    <button class="subnav-btn${g[0] === active ? " active" : ""}" role="tab"
+            type="button" data-subtab="${escapeAttr(g[0])}"
+            aria-selected="${g[0] === active}"
+            tabindex="${g[0] === active ? "0" : "-1"}"
+            title="${escapeAttr(g[2] || "")}">${escapeHtml(g[1])}</button>`).join("");
+  const hint = (live.find((g) => g[0] === active) || [])[2] || "";
+  const panels = live.map((g) => `
+    <div class="subgroup" data-subgroup="${escapeAttr(g[0])}" role="tabpanel"
+         ${g[0] === active ? "" : "hidden"}>${g[3]}</div>`).join("");
+  return `<div class="subnav-wrap" data-subnav="${escapeAttr(view)}">
+    <div class="subnav" role="tablist" aria-label="Sections">${tabs}</div>
+    <p class="subnav-hint">${escapeHtml(hint)}</p>
+  </div>${panels}`;
+}
+
+/* Click and keyboard for whatever sub-tab bar is inside `host`.
+   Arrow keys move between tabs because this is a real tablist and a
+   keyboard user should not have to Tab through five buttons to reach the
+   sixth. */
+/* Say what the page you are on actually shows, in the words already
+   written for the phone menu. Called from the view switch AND at startup:
+   the first view is active in the markup and never goes through the
+   switch, so a hint set only there is blank on the page people land on. */
+function syncNavHint(view) {
+  const el = document.getElementById("nav-hint");
+  if (!el) return;
+  const btn = document.querySelector(`.nav-btn[data-view="${view}"]`)
+    || document.querySelector(".nav-btn.active");
+  el.textContent = (btn && btn.dataset.hint) || "";
+}
+
+function bindSubtabs(host) {
+  const wrap = host.querySelector(".subnav-wrap");
+  if (!wrap) return;
+  const view = wrap.dataset.subnav;
+  const btns = [...wrap.querySelectorAll(".subnav-btn")];
+  const show = (id) => {
+    _subtab[view] = id;
+    btns.forEach((b) => {
+      const on = b.dataset.subtab === id;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-selected", String(on));
+      b.tabIndex = on ? 0 : -1;
+      if (on) {
+        const h = wrap.querySelector(".subnav-hint");
+        if (h) h.textContent = b.title || "";
+      }
+    });
+    host.querySelectorAll(".subgroup").forEach((p) => {
+      p.hidden = p.dataset.subgroup !== id;
+    });
+  };
+  btns.forEach((b, i) => {
+    b.addEventListener("click", () => show(b.dataset.subtab));
+    b.addEventListener("keydown", (e) => {
+      const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (!step) return;
+      e.preventDefault();
+      const next = btns[(i + step + btns.length) % btns.length];
+      next.focus();
+      show(next.dataset.subtab);
+    });
+  });
 }
 
 function bindRecordScopes(host) {
@@ -4710,7 +4842,7 @@ async function renderLab() {
       <td>${escapeHtml((s.props || {}).unavailable || "—")}</td>
       <td>${escapeHtml((s.game_lines || {}).unavailable || "—")}</td></tr>`;
   }).join("");
-  const gapBlock = gaps ? `<div class="section-title">Not replayed yet
+  const gapBlock = gaps ? `<div class="section-title minor">Not replayed yet
       <span class="sub">— what each of these needs before it can appear above</span></div>
     <table class="agate"><thead><tr><th>Sport</th><th>Player props</th>
       <th>Game lines</th></tr></thead><tbody>${gaps}</tbody></table>` : "";
@@ -4809,7 +4941,10 @@ async function renderRecord() {
        the process by CLV before that.</p>` : "";
   const pr = o.process || {};
   const nProc = (pr.good || 0) + (pr.bad || 0) + (pr.flat || 0);
-  host.innerHTML = scopeBar + `
+  // The page's lead — what happened, in units. Built as a string so it can
+  // be handed to the first room rather than rendered above the tab bar,
+  // which would leave the tabs floating in the middle of the page.
+  const receipts = `
     <div class="stats rec-kpis">
       ${recTile("ROI", (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
                 `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`,
@@ -4912,39 +5047,73 @@ async function renderRecord() {
         </div>`;
       }).join("") || `<p class="loading" style="padding:12px">Nothing settled yet.</p>`}
     </div>
-    ${/* The samplers and account health are whole-journal by nature —
-          a per-book limit risk and a cross-sport promotion bar are not
-          per-sport questions — so they only appear on the combined view
-          rather than repeating an unscoped number under a sport's name. */
-      scoped ? "" : recEraSection(d.model_eras)}
-    ${recCalibrationSection(src.calibration, src.calibration_era)}
-    ${scoped ? "" : recCalibrationSplits(d.calibration_splits)}
-    ${/* The learning ladder renders on EVERY scope, filtered to the
-          sport being viewed — each league fits on its own bets, so each
-          league's page shows its own learning. Hiding these behind "All"
-          is how the whole ladder shipped invisible: the record page
-          always lands sport-scoped. */""}
-    ${recRestatedSection(d.restated, scoped ? scope : null)}
-    ${recProseSection(d.prose, scoped ? scope : null)}
-    ${recSelfTuningSection(d.self_tuning, scoped ? scope : null)}
-    ${recLossPatternsSection(d.loss_patterns, scoped ? scope : null)}
-    ${recHypothesisLab(d.hypothesis_lab, scoped ? scope : null)}
-    ${scoped ? "" : recForecastLog(d.forecast_log)}
-    ${scoped ? "" : recHealthSection(d.account_health)}
-    ${scoped ? "" : recLongshotSection(d.longshots)}
-    ${scoped ? "" : recParlaySection(d.parlays)}
-    ${scoped ? "" : recStaleSection(d.stale_flags)}
-    ${scoped ? "" : recFormSection(d.form_sampler)}
-    ${scoped ? "" : recLooseSection(d.loose_sampler)}
-    ${scoped && scope !== "ufc" ? "" : recUfcSection(d.ufc_record)}
-    ${/* Polymarket's flags are not wagers in this ledger — they are graded
-          by their own report card in predmarkets.json. Folding a flag rate
-          into a betting P&L would make both numbers mean nothing, so it
-          gets its own scope rather than a row in the table. */
-      scoped && scope !== "intel" ? "" : recPolymarketSection(pmv)}
-    <p class="rec-stamp">Updated ${escapeHtml(d.generated_at || "")}
+  `;
+  host.innerHTML = scopeBar
+    + _recordRooms(d, src, pmv, scope, scoped, receipts)
+    + `<p class="rec-stamp">Updated ${escapeHtml(d.generated_at || "")}
       · settles automatically as results are ingested each day.</p>`;
   bindRecordScopes(host);
+  bindSubtabs(host);
+}
+
+/* The five rooms of the Record page.
+   ------------------------------------------------------------------
+   Twenty-two sections used to stack here in one scroll. They were never
+   twenty-two subjects — they are five, and the grouping below is the one
+   already implied by what each panel answers:
+
+     Receipts       what happened, in units
+     By product     the buckets kept OUT of the main P&L on purpose
+     Calibration    did the probabilities mean what they said
+     What it learned the four-rung ladder, showing its work
+     Health         whether this account survives being right
+
+   Which panels exist depends on scope, and that is why the groups are
+   built as strings and handed to `subtabbedHTML` rather than declared as
+   a fixed bar: scoped to one sport, most of "By product" is empty, and a
+   tab that opens an empty room is worse than no tab at all. */
+function _recordRooms(d, src, pmv, scope, scoped, receipts) {
+  // Whole-journal panels are written as inline `scoped ? "" : X` rather
+  // than through a helper. A helper reads better and hides the guard from
+  // the tests that exist to prove it: six of them scan for `scoped` beside
+  // each call, because "a per-book limit risk shown under one sport's
+  // name" is a wrong number, not a layout slip. Legibility to the test is
+  // worth more here than tidiness.
+  // The learning ladder renders on EVERY scope, filtered to the sport in
+  // view — each league fits on its own bets. Hiding these behind "All" is
+  // how the whole ladder once shipped invisible: this page always lands
+  // sport-scoped. Spelled out at each call for the same reason the scope
+  // guards above are: a test proves this and can only read what is written.
+  return subtabbedHTML("record", [
+    ["receipts", "Receipts",
+     "what happened, in units — the curve, the splits, every settled pick",
+     receipts],
+    ["products", "By product",
+     "the buckets deliberately kept out of the main P&L",
+     (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recParlaySection(d.parlays))
+     + (scoped ? "" : recStaleSection(d.stale_flags)) + (scoped ? "" : recFormSection(d.form_sampler))
+     + (scoped ? "" : recLooseSection(d.loose_sampler))
+     + (scoped && scope !== "ufc" ? "" : recUfcSection(d.ufc_record))
+     // Polymarket's flags are not wagers in this ledger — they are graded
+     // by their own report card. Folding a flag rate into a betting P&L
+     // would make both numbers mean nothing.
+     + (scoped && scope !== "intel" ? "" : recPolymarketSection(pmv))],
+    ["calibration", "Calibration",
+     "did “60%” actually mean 60%?",
+     (scoped ? "" : recEraSection(d.model_eras))
+     + recCalibrationSection(src.calibration, src.calibration_era)
+     + (scoped ? "" : recCalibrationSplits(d.calibration_splits))
+     + (scoped ? "" : recForecastLog(d.forecast_log))],
+    ["learning", "What it learned",
+     "the four-rung ladder, showing its work",
+     recRestatedSection(d.restated, scoped ? scope : null) + recProseSection(d.prose, scoped ? scope : null)
+     + recSelfTuningSection(d.self_tuning, scoped ? scope : null)
+     + recLossPatternsSection(d.loss_patterns, scoped ? scope : null)
+     + recHypothesisLab(d.hypothesis_lab, scoped ? scope : null)],
+    ["health", "Health",
+     "whether this account survives being right",
+     (scoped ? "" : recHealthSection(d.account_health))],
+  ]);
 }
 
 /* The stale-line sampler: every pre-game scanner flag, journaled at a flat
@@ -4971,7 +5140,7 @@ function recFormSection(fm) {
     </div>`;
   }).join("");
   return `
-    <div class="section-title">Team-form sampler — measurement in progress
+    <div class="section-title minor">Team-form sampler — measurement in progress
       <span class="sub">— every hot-vs-cold matchup, hot side’s moneyline at the real book
       price. Flat 0.1u, zero bankroll impact, never in the record above.</span></div>
     ${recDisclosure("What this is testing", `Streaks are the most public stat in
@@ -5022,7 +5191,7 @@ function recStaleSection(st) {
     </div>`;
   }).join("");
   return `
-    <div class="section-title">Stale-line sampler — measurement in progress
+    <div class="section-title minor">Stale-line sampler — measurement in progress
       <span class="sub">— every pre-game stale-line flag, taken at the flagged price. Flat 0.1u,
       zero bankroll impact, never in the record above.</span></div>
     ${recDisclosure("What this is testing", `The scanner flags a book pricing
@@ -5820,7 +5989,11 @@ async function renderFantasy() {
     </article>`).join("");
 
   const bsCount = (bs.buy_low || []).length + (bs.sell_high || []).length;
-  host.innerHTML = `
+  // Four rooms, not one 11-screen scroll. Measured in Chromium: this page
+  // was 9,906px with ten section titles stacked in a single column, and
+  // the usage table — the thing the page is FOR — sat below camp reports,
+  // the waiver pulse, the offseason tracker and the draft kit.
+  const _ffLead = `
     <div class="stats">
       <div class="tile"><div class="k">Season</div><div class="v">${d.season}</div>
         <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${d.season < new Date().getFullYear()
@@ -5832,12 +6005,8 @@ async function renderFantasy() {
       <div class="tile"><div class="k">Game scripts</div><div class="v">${(d.scripts || []).length}</div>
         <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">games with posted lines</div></div>
     </div>
-    <div id="sleeper-zone"></div>
-    ${campHTML(d.camp)}
-    ${waiverPulseHTML(d.trending)}
-    ${offseasonHTML(off)}
-    ${draftKit}
-    <div class="ls-note">Shares are of TEAM volume: targets for WR/TE/QB, carries for RB.
+`;
+  const _ffUsage = `    <div class="ls-note">Shares are of TEAM volume: targets for WR/TE/QB, carries for RB.
       The delta column is the money — a riser at 42% beats a flat 60%.</div>
     <div class="section-title">Usage movers
       <span class="sub">— season vs 4-week vs last week, biggest role changes first</span></div>
@@ -5849,7 +6018,8 @@ async function renderFantasy() {
       </div>
       ${usageRows || `<p class="loading" style="padding:12px">No usage rows for this season yet.</p>`}
     </div>
-    <div class="section-title">Buy low
+`;
+  const _ffTrade = `    <div class="section-title">Buy low
       <span class="sub">— volume-expected points say the production is coming</span></div>
     <div class="cards wide">${(bs.buy_low || []).map((r) => tradeCard(r, "buy")).join("") ||
       `<p class="loading" style="grid-column:1/-1">Nobody outside the sustainable band right now.</p>`}</div>
@@ -5857,16 +6027,32 @@ async function renderFantasy() {
       <span class="sub">— outrunning their opportunity; regression risk</span></div>
     <div class="cards wide">${(bs.sell_high || []).map((r) => tradeCard(r, "sell")).join("") ||
       `<p class="loading" style="grid-column:1/-1">Nobody outside the sustainable band right now.</p>`}</div>
-    <div class="section-title">Game scripts
+`;
+  const _ffScripts = `    <div class="section-title">Game scripts
       <span class="sub">— Vegas is the input: implied totals, archetypes, and confidence that
       scales with the spread</span></div>
     <div class="cards wide">${scriptCards ||
       `<p class="loading" style="grid-column:1/-1">No upcoming NFL games with posted spreads and
        totals in the DB yet — fills when next season’s lines are ingested.</p>`}</div>
-    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Expected points are
+`;
+  const _ffFoot = `    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Expected points are
       fit from this season’s own data (league value per target and per carry by position) —
       volume-based, so a player can legitimately sustain a positive gap; only gaps beyond
       ~${bs.band || 1.5} PPG are flagged. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
+  host.innerHTML = _ffLead + subtabbedHTML("fantasy", [
+    ["usage", "Usage", "who is getting the ball, and whose share is moving",
+     _ffUsage],
+    ["trade", "Trade targets",
+     "buy low and sell high — where production and opportunity disagree",
+     _ffTrade],
+    ["scripts", "Game scripts",
+     "what the market expects each game to look like", _ffScripts],
+    ["league", "Around the league",
+     "camp, the waiver wire, the offseason and the draft kit",
+     `<div id="sleeper-zone"></div>` + campHTML(d.camp)
+     + waiverPulseHTML(d.trending) + offseasonHTML(off) + draftKit],
+  ]) + _ffFoot;
+  bindSubtabs(host);
   const more = document.getElementById("usage-more");
   if (more) more.addEventListener("click", () => {
     const rest = document.getElementById("usage-rest");
@@ -7861,6 +8047,7 @@ function switchView(name, push = false) {
   // from, so Recommended stays lit while you're inside a game.
   const lit = name === "game" ? "recommended" : name;
   document.querySelectorAll(".nav-btn").forEach((b) => setSelected(b, b.dataset.view === lit));
+  syncNavHint(lit);
   if (name === "game") {
     renderGamePage();
     if (state.gameId) history.replaceState(null, "", `#game/${encodeURIComponent(state.gameId)}`);
@@ -8009,6 +8196,7 @@ function initMobileMenu() {
     if (e.key === "Escape") closeMobileMenu();
   });
   syncMenuLabel();
+  syncNavHint();
 }
 
 /* The phone header is four stacked rows — menu bar, brand, freshness, date

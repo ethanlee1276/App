@@ -478,6 +478,24 @@ svg text.num, svg .svg-num { font-family: var(--font-mono);
   padding: 9px 0; display: flex; align-items: center; gap: 7px;
   transition: color var(--dur-base) var(--ease-out);
 }
+/* The active tab's own description, under the row. Same treatment as
+   `.subnav-hint` because it answers the same question one level up. */
+.nav-hint {
+  /* The header is a flex ROW with hand-assigned `order` on every child —
+     brand 1, nav 5, standing 9, slate-meta 10. A new element defaults to
+     order 0, which sorted this line ABOVE the masthead, where it read as a
+     stray caption on the logo. It belongs immediately after the tab row it
+     describes, on a line of its own. */
+  order: 6; flex: 1 1 100%;
+  margin: 6px 0 0; min-height: 1em;
+  color: var(--text-mute); font-size: var(--fs-sm); font-style: italic;
+}
+@media (max-width: 760px) {
+  /* The phone menu already prints every hint beside its tab, so repeating
+     the active one here is a line of chrome on the screen with the least
+     of it to spare. */
+  .nav-hint { display: none; }
+}
 .nav-btn:hover { color: var(--text); }
 .nav-btn.active { color: var(--text); }
 /* Driven by transform, not by left/width. Both of those are LAYOUT
@@ -529,7 +547,84 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
 .view.active { display: block; }
 
 .section-title { font-size: var(--fs-lg); font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+
+/* ---------------- Sub-tabs: one page, several rooms ----------------
+   The Record page composed twenty-two sections into one scroll. These
+   group them into five rooms WITHOUT adding a twelfth top-level tab —
+   the site already has eleven of those plus a sport switcher, and more
+   of them is what made it hard to navigate.
+
+   So this bar must read as SUBORDINATE to `.nav`, never as a peer.
+   Three things separate them and none is colour: the main tabs are
+   uppercase with .16em tracking and a 2px indicator; these are sentence
+   case, unspaced, with a 1px underline on the active one only. Same
+   family, obviously lower rank — which is what a reader needs in order
+   to know where they are without reading anything. */
+.subnav {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  border-bottom: var(--hairline) solid var(--border);
+  margin: 0 0 4px;
+}
+.subnav-btn {
+  border: 0; background: transparent; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: 600;
+  /* No radius. This redesign is hairlines and square corners throughout —
+     a rounded tab is a different design language, and `test_nightform`
+     exists to catch exactly that drift. */
+  color: var(--text-mute); padding: 7px 11px;
+  /* The active underline sits ON the bar's hairline rather than beside
+     it — a 1px rule 1px away from another 1px rule reads as a smudge. */
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color var(--dur-base) var(--ease-out),
+              border-color var(--dur-base) var(--ease-out);
+}
+.subnav-btn:hover { color: var(--text); }
+.subnav-btn.active { color: var(--text); border-bottom-color: var(--brand); }
+.subnav-btn:focus-visible { outline-offset: 2px; }
+
+/* The hint is the answer to "which tab has what", which is a thing Ethan
+   named directly. Tab labels are necessarily short; this line says what
+   the room actually holds, and it changes with the tab rather than
+   sitting there as static furniture. */
+.subnav-hint {
+  margin: 0 0 18px; color: var(--text-mute);
+  font-size: var(--fs-sm); font-style: italic;
+}
+.subnav-wrap { margin-bottom: 4px; }
+
+/* A section title directly under a sub-tab bar is redundant with the tab
+   you just pressed, so the first one in a room loses its top margin and
+   the room breathes instead. */
+.subgroup > .section-title:first-child { margin-top: 0; }
+
+@media (max-width: 760px) {
+  /* Rooms scroll sideways rather than wrapping to three rows and pushing
+     the content off the screen — the same trade `.nav` already makes. */
+  .subnav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .subnav::-webkit-scrollbar { display: none; }
+  .subnav-btn { white-space: nowrap; }
+}
 .section-title .sub { color: var(--text-mute); font-weight: 500; font-size: var(--fs-sm); }
+
+/* THREE RANKS, NOT ONE. Ethan, 2026-08-08: "no visual hierarchy —
+   everything looks equally important, so nothing stands out."
+
+   Measured: 81 section titles across the site, every one of them rendered
+   at the identical size and weight. "Running P&L" and "Team-form sampler
+   — measurement in progress" were typographically the same announcement,
+   so a reader had to actually read both to learn which mattered.
+
+   `.lead` is the one thing a page is FOR. `.minor` is the quarantined
+   samplers and the not-yet-measured — real, kept visible on purpose, and
+   not competing with the number you came to see. Size and weight carry
+   it; colour is left alone, because the mute tokens are already at the
+   bottom of what stays legible (see the contrast ratchet).  */
+.section-title.lead { font-size: calc(var(--fs-lg) * 1.2); letter-spacing: -0.01em; }
+.section-title.minor {
+  font-size: var(--fs-sm); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-dim); font-weight: 700; margin-bottom: 8px;
+}
+.section-title.minor .sub { text-transform: none; letter-spacing: 0; }
 
 /* ---------------- Stat tiles ---------------- */
 /* `.stats` is SHARED — the Record page's eight KPI rows, the game-panel
@@ -925,6 +1020,13 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 }
 .search-wrap input:focus { border-color: var(--brand); box-shadow: none; }
 .search-wrap .ico { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-mute); font-size: var(--fs-xl); }
+
+/* The cap note on an unsearched Players page. Spans the grid rather than
+   sitting in a column — it is about the whole list, not the first card. */
+.browse-note {
+  grid-column: 1 / -1; margin: 0 0 4px;
+  color: var(--text-mute); font-size: var(--fs-sm);
+}
 
 .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: 18px; }
 .profile {
