@@ -259,24 +259,30 @@ def _cfb_ids() -> list[tuple[str, str]]:
         return []
     every = sorted((ab, t.get("id", "")) for ab, t in teams.items()
                    if t.get("id"))
-    # The groups feed enumerates every school that plays in a conference,
-    # by id. That is the filter, and it is a list rather than an inference:
-    # a school absent from it is not in a D-I conference and cannot appear
-    # on a board built from the D-I scoreboard. This replaced a guess at a
-    # `conferenceId` field on the teams payload, which measured runs showed
-    # was never there.
+    # The groups feed says which NCAA division a school is in, which is the
+    # filter this wants — D-I plays on the board, D-II and NAIA do not.
+    # But it PAGINATES at 25 per division, and a filter built from a page is
+    # worse than no filter: it would drop real FBS schools as confidently as
+    # it drops Avila. So the map is used only if it is plainly not one page.
     try:
-        in_a_conference = cfbdata.fetch_group_teams()
+        division = cfbdata.fetch_group_divisions()
     except Exception:                                         # noqa: BLE001
-        in_a_conference = {}
-    keep = [(ab, tid) for ab, tid in every if tid in in_a_conference]
-    if keep:
-        print(f"  CFB: {len(keep)} of {len(every)} schools play in a "
-              f"conference; the rest never reach a D-I board")
-        return keep
-    print(f"  CFB: the groups feed named no schools — auditing all "
-          f"{len(every)}, so expect misses you cannot act on. "
-          f"`--conferences` says why.")
+        division = {}
+    complete = len(division) > cfbdata.GROUP_PAGE * 8
+    if complete:
+        # Measured labels are FBS, FCS, NCAA Division II, NCAA Division III.
+        # Excluding by the two lower names rather than allow-listing the two
+        # upper ones, because a new D-I label would then still be audited.
+        d1 = {tid for tid, div in division.items()
+              if "Division II" not in div and "Division III" not in div}
+        keep = [(ab, tid) for ab, tid in every if tid in d1]
+        if keep:
+            print(f"  CFB: {len(keep)} of {len(every)} schools are Division I; "
+                  f"the rest never reach a board")
+            return keep
+    print(f"  CFB: no complete division list ({len(division)} schools, and a "
+          f"page is {cfbdata.GROUP_PAGE} per division) — auditing all "
+          f"{len(every)}, so expect misses you cannot act on")
     return every
 
 
@@ -356,27 +362,31 @@ def probe_conferences() -> int:
     print("=" * 78)
     print("CFB CONFERENCES — which groups shape answers")
     print("=" * 78)
-    # The map this endpoint can actually produce, asked for first because it
-    # is the one that answers. `fetch_conferences` wants {group_id: name},
-    # and the group nodes carry no id — so it will keep reporting nothing,
-    # correctly, and that is now a documented fact rather than a mystery.
+    # What the feed does carry: NCAA DIVISION, not conference. Measured, the
+    # four labels are FBS / FCS / NCAA Division II / NCAA Division III, and
+    # the team lists paginate at GROUP_PAGE. Nothing in pricing reads this.
     treport: list = []
-    by_team = cfbdata.fetch_group_teams(ttl=0, report=treport)
-    print("  TEAM → CONFERENCE (what the feed does carry)")
+    by_team = cfbdata.fetch_group_divisions(ttl=0, report=treport)
+    print("  TEAM → NCAA DIVISION (what the feed does carry — not conference)")
     for label, count, note in treport:
         print(f"  {'OK ' if count else 'NO ':<5} {label:<12} {count:>4} "
               f"schools   {note[:70]}")
     if by_team:
         names: dict = {}
-        for conf in by_team.values():
-            names[conf] = names.get(conf, 0) + 1
-        print(f"\n  {len(by_team)} schools across {len(names)} conferences:")
-        for conf, n in sorted(names.items(), key=lambda kv: (-kv[1], kv[0])):
-            print(f"    {n:>4}  {conf}")
+        for div in by_team.values():
+            names[div] = names.get(div, 0) + 1
+        print(f"\n  {len(by_team)} schools across {len(names)} divisions:")
+        for div, n in sorted(names.items(), key=lambda kv: (-kv[1], kv[0])):
+            flag = "  <- exactly one page" if n == cfbdata.GROUP_PAGE else ""
+            print(f"    {n:>4}  {div}{flag}")
+        if all(n == cfbdata.GROUP_PAGE for n in names.values()):
+            print("\n  Every division is exactly one page, so this is a page")
+            print("  and not a roster. It cannot be used to filter anything.")
     else:
         print("\n  No schools resolved — the shape dump below is the evidence.")
 
-    print("\n  GROUP ID → NAME (what this module used to ask for)")
+    print("\n  GROUP ID → NAME (asked for, and this feed does not carry it:")
+    print("  its group nodes have no id. Kept so a fix would be noticed.)")
     report: list = []
     live = cfbdata.fetch_conferences(ttl=0, report=report)
     for label, count, note in report:

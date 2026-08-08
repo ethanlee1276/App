@@ -202,9 +202,9 @@ table**, and `cfbdata`'s own header says that table exists to be overridden
 because "conferences in this sport move around constantly." Post-realignment,
 its `Pac-12` entry is close to fiction.
 
-**The feed was never down, and it never carried what we were asking for.**
-Your two runs settled it. All three URL shapes reached the host and returned
-valid JSON; the shape dump then showed why nothing came out:
+**Resolved, and the answer is that this feed cannot give us conferences at
+all.** Your three runs settled it. The host was never down; every shape
+returned valid JSON. The shape dump showed why nothing came out:
 
 ```
 {status, groups: [ {name, abbreviation, children: [
@@ -212,17 +212,29 @@ valid JSON; the shape dump then showed why nothing came out:
 ]} ]}
 ```
 
-**The group nodes have no id.** Only teams do. So `{group_id: name}` — the
-map this module has asked this endpoint for since it was written — was never
-buildable from it, and no amount of unwrapping or deeper walking was going to
-produce one. Two of my guesses at the cause (the envelope, the nesting) were
-wrong; both are handled now, but neither was the problem.
+Two facts, neither guessable:
 
-Keyed by team instead, the same payload is strictly more useful. It says
-which conference each school is in, and by omission which schools are not in
-one — which is also the D-I filter `--audit cfb` needed, as a list rather
-than an inference. `parse_group_teams` reads it, `parse_scoreboard` prefers
-it over the twelve-row checked-in table, and the audit filters on it.
+- **The group nodes carry no id.** Only teams do. So `{group_id: name}` —
+  what this module has asked this endpoint for since it was written — was
+  never buildable from it.
+- **The four children are NCAA divisions**, not conferences: FBS, FCS,
+  Division II, Division III. There is no conference node anywhere in the
+  tree. And the team lists paginate at 25, so the 100 rows it returns are a
+  page, not a roster.
+
+**I shipped a bug on the way here and your output caught it.** For one
+commit I read those division labels as conferences and wired them into
+`parse_scoreboard`. That would have told `attention_tier` that Alabama's
+conference is "FBS" — dropping every power-five school out of the power set
+and pricing the SEC as though nobody was watching it. Reverted; conference
+resolution is back on `conferenceId` and the built-in table, exactly as
+before any of this. A test now fails if that map is wired into naming again.
+
+So the honest state: **CFB conference resolution is unchanged and still runs
+on the twelve-row checked-in table.** What was gained is knowing the live
+feed cannot replace it, instead of assuming it was temporarily broken. The
+audit still needs a D-I filter and still does not have one — a paginated
+list is worse than none, so it audits all 756 and says so.
 
 I also removed a `conf` field I had added to the team payload on the guess
 that ESPN ships `conferenceId` there. It doesn't, nothing read it, and it was
@@ -232,17 +244,12 @@ riding along on 756 rows to the browser.
 python3 assets.py --conferences
 ```
 
-Read-only, cache bypassed. It now reports **team → conference** first — the
-map that works — with a count per conference, then the old group-id question
-underneath for the record. What to look for:
-
-- a conference list that looks like college football, with sane counts, means
-  this is done and CFB resolves conferences live for the first time
-- a short list, or conferences you don't recognise, means the walk is picking
-  up the wrong level and I need the counts to fix it
-- **GONE / RENAMED** rows in the built-in table section are the twelve-row
-  fallback rotting — worth knowing even now that it is no longer the only
-  source
+Read-only, cache bypassed. One thing left to learn from it: the ladder now
+also tries `limit=900`, the same parameter `fetch_teams` sends to this API to
+get 756 rows. If that comes back with several hundred schools instead of 100,
+the division map becomes a complete D-I filter and the audit starts using it
+automatically. If it still returns 100, the endpoint is a dead end for us and
+I will stop asking.
 
 CFB opens in about three weeks, so this is the one dated item on the list.
 
