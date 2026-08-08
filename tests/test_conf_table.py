@@ -206,6 +206,52 @@ def test_it_reads_the_cache_past_rather_than_a_stale_answer():
     assert "ttl=0" in src
 
 
+def test_the_date_is_optional():
+    """It was required, and Ethan hit that on the first run. Making someone
+    look up a date before they can run a diagnostic is how the diagnostic
+    goes unrun."""
+    import inspect
+    src = inspect.getsource(assets.main)
+    assert 'nargs="?"' in src, "--conf-table still demands a DATE"
+    assert "busiest_recent_saturday()" in src
+
+
+def test_the_default_always_lands_on_a_saturday():
+    """Every full college slate is a Saturday. A Wednesday has MACtion and
+    four games on it, which would report most of the table unverified."""
+    import datetime as dt
+    for iso in ("2026-08-08", "2026-11-04", "2026-09-01", "2027-01-10",
+                "2026-03-15", "2026-12-25", "2026-01-01"):
+        got = assets.busiest_recent_saturday(dt.date.fromisoformat(iso))
+        assert dt.date.fromisoformat(got).weekday() == 5, f"{iso} -> {got}"
+
+
+def test_the_default_is_never_in_the_future():
+    """A date with no games played yet joins nothing and reads as a fault."""
+    import datetime as dt
+    for iso in ("2026-08-08", "2026-11-04", "2026-09-01", "2026-03-15"):
+        day = dt.date.fromisoformat(iso)
+        assert dt.date.fromisoformat(
+            assets.busiest_recent_saturday(day)) <= day, iso
+
+
+def test_out_of_season_it_reaches_back_to_a_saturday_with_games_on_it():
+    """THE CASE THAT MATTERS TODAY. In August the most recent Saturday has
+    no college football on it at all, so the naive answer joins nothing and
+    the probe looks broken. It jumps to the finished season instead."""
+    import datetime as dt
+    got = assets.busiest_recent_saturday(dt.date(2026, 8, 8))
+    d = dt.date.fromisoformat(got)
+    assert d.month == 11, f"August should reach back to November, got {got}"
+    assert d.year == 2025, f"should be the FINISHED season, got {got}"
+
+
+def test_in_season_it_uses_the_saturday_just_gone():
+    import datetime as dt
+    got = assets.busiest_recent_saturday(dt.date(2026, 11, 4))   # a Wednesday
+    assert got == "2026-10-31", got
+
+
 def test_the_probe_is_reachable_from_the_command_line():
     import inspect
     src = inspect.getsource(assets.main)

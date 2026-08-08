@@ -446,6 +446,41 @@ def probe_conferences() -> int:
     return 0
 
 
+def busiest_recent_saturday(today=None) -> str:
+    """A date with a full college slate on it, without being asked for one.
+
+    This started out as a required argument, which is friction invented for
+    no reason: the answer is almost always "the last Saturday there were
+    games on", and making someone look up a date before they can run a
+    diagnostic is how the diagnostic goes unrun.
+
+    In season, that is simply the most recent Saturday. Out of season — and
+    this tool exists in August, three weeks before kickoff — walking back to
+    "the last Saturday" lands on an empty slate and the probe reports that
+    nothing joined, which looks like a fault and is not one. So out of
+    season it jumps to the last Saturday of November in the most recently
+    completed season: deep enough to have conference play on it, and before
+    the December weeks when only championships are played.
+    """
+    import datetime as dt
+    from engine.seasons import SEASON_WINDOWS
+
+    today = today or dt.date.today()
+    m0, d0, m1, d1, _ = SEASON_WINDOWS["cfb"]
+    after_start = (today.month, today.day) >= (m0, d0)
+    before_end = (today.month, today.day) <= (m1, d1)
+    in_season = after_start or before_end          # the window wraps a year
+    if in_season:
+        return (today - dt.timedelta(days=(today.weekday() - 5) % 7)).isoformat()
+    # Out of season: the last November that had games on it. Reaching here
+    # means the date sits between the January end and the August start, all
+    # inside one calendar year — so the last November is ALWAYS the previous
+    # one. Comparing months to pick the year gave November of the current
+    # year for any August date, which is three months in the future.
+    nov30 = dt.date(today.year - 1, 11, 30)
+    return (nov30 - dt.timedelta(days=(nov30.weekday() - 5) % 7)).isoformat()
+
+
 def probe_conference_table(date: str) -> int:
     """Is ``CONFERENCE_IDS`` still right? Derive the answer, don't recall it.
 
@@ -641,9 +676,12 @@ def main(argv: list) -> int:
     p.add_argument("--conferences", action="store_true",
                    help="which CFB groups-feed shape answers, and whether "
                         "the built-in conference table has gone stale")
-    p.add_argument("--conf-table", metavar="DATE", default="",
+    p.add_argument("--conf-table", metavar="DATE", nargs="?", const="auto",
+                   default="",
                    help="derive {conferenceId: name} by joining CFBD to an "
-                        "ESPN slate, and compare it with the built-in table")
+                        "ESPN slate, and compare it with the built-in table. "
+                        "DATE is optional — without it, the last Saturday "
+                        "there were college games on")
     p.add_argument("--sport", default="",
                    help="limit to one sport (nfl, mlb, nba, wnba, cfb)")
     a = p.parse_args(argv)
@@ -651,7 +689,9 @@ def main(argv: list) -> int:
         p.print_help()
         return 1
     if a.conf_table:
-        return probe_conference_table(a.conf_table)
+        date = (busiest_recent_saturday() if a.conf_table == "auto"
+                else a.conf_table)
+        return probe_conference_table(date)
     if a.conferences:
         return probe_conferences()
     only = a.sport.lower() or None

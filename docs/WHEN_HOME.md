@@ -265,13 +265,15 @@ in both gives one row of `{conferenceId: name}`, and a busy Saturday gives
 most of the table.
 
 ```
-python3 assets.py --conf-table 2025-11-01
+python3 assets.py --conf-table
 ```
 
-Read-only, cache bypassed, changes nothing. Pick a **past Saturday in
-season** — the more games, the more of the twelve rows get covered. It joins
-the two feeds and prints each id as `matches`, `RENAMED -> x`, `NEW -> x`, or
-`not on this slate`.
+Read-only, cache bypassed, changes nothing. The date is optional — bare, it
+uses the last Saturday there were college games on, which in August means
+reaching back to the finished season rather than to an empty weekend. Pass
+one (`--conf-table 2025-11-01`) to cover different weeks; the more games, the
+more of the twelve rows get checked. It joins the two feeds and prints each
+id as `matches`, `RENAMED -> x`, `NEW -> x`, or `not on this slate`.
 
 Send it. `RENAMED` and `NEW` rows are the table rotting and I will correct
 them; `not on this slate` proves nothing either way, so a second run on a
