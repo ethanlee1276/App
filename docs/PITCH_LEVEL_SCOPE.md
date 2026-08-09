@@ -65,9 +65,13 @@ A backfill for calibration is optional and separable: it only needs the
 starts belonging to pitchers we have actually bet, which the journal
 names.
 
-> **Not measured.** Savant and statsapi are both blocked from the sandbox
-> this was scoped in (403 at the proxy), so every size here is an
-> estimate. Measure before building:
+> **Measured 2026-08-09: 656,647 bytes for one game** — about 640 KB,
+> smaller than the 1–3 MB this section first estimated. A full season is
+> therefore ~1.5 GB raw and the nightly window ~32 MB before caching.
+>
+> Savant and statsapi are both blocked from the sandbox this was scoped
+> in (403 at the proxy), so the remaining figures are still estimates.
+> Re-measure with:
 >
 >     curl -s "https://statsapi.mlb.com/api/v1/game/775296/playByPlay" | wc -c
 >     curl -s "https://statsapi.mlb.com/api/v1/game/775296/playByPlay" \
@@ -94,9 +98,16 @@ as "the best next build".
 
 ## 5. What is worth building, in order
 
-1. **A playByPlay adapter** (`engine/mlb/sources/pbp.py`), cached exactly
-   like `fetch_boxscore`, with a parser that is pure and unit-tested. One
-   endpoint, one cache key, no new host.
+1. ~~**A playByPlay adapter**~~ — **built 2026-08-09**.
+   `engine/mlb/sources/pbp.py`: cached fetch plus pure parsers for
+   pitches, per-pitcher counts, velocity by pitch type, and times through
+   the order. 9 tests.
+
+   **Its fixture is a READ of the payload, not a capture of one** — the
+   sandbox cannot reach statsapi — so the parsers are proven
+   self-consistent and unproven against reality. `python3 launch.py --pbp
+   <gamePk>` closes that gap on a machine with network, and says so
+   loudly if zero pitches parse.
 2. **Velocity trend** — average `startSpeed` per start, by pitch type,
    for the last five starts. §5 calls a 1+ mph drop a red flag; that is
    directly checkable and needs nothing else.

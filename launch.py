@@ -2697,6 +2697,58 @@ def _settleable_days(open_days) -> list[str]:
                   if d.get("date") and "-W" not in d["date"])
 
 
+def show_pbp(game_pk=None) -> None:
+    """Parse one real game's pitches and print what came out.
+
+    THE FIXTURE IN tests/test_pbp.py IS MY READ OF THE PAYLOAD, not a
+    capture of one — statsapi is blocked from the sandbox this was
+    written in. So the parsers are proven self-consistent and unproven
+    against reality, and those are different things.
+
+    This closes that gap in one command on a machine with network. If the
+    counts look like a baseball game, the shape is right; if it prints
+    zero pitches, the keys moved and the fixture is fiction.
+
+        python3 launch.py --pbp 775296
+    """
+    from engine.mlb.sources import pbp as _pbp
+    if not game_pk:
+        print("\n  usage: python3 launch.py --pbp <gamePk>")
+        print("  find one: any recent MLB game id, e.g. from the schedule\n")
+        return
+    try:
+        payload = _pbp.fetch_playbyplay(game_pk)
+    except Exception as exc:                                # noqa: BLE001
+        print(f"\n  could not fetch game {game_pk}: {exc}\n")
+        return
+    rows = _pbp.pitches(payload)
+    print(f"\n{'='*70}\n  PITCH-BY-PITCH — game {game_pk}\n{'='*70}")
+    print(f"  {len(payload.get('allPlays') or [])} plays · {len(rows)} pitches")
+    if not rows:
+        print("\n  ** NO PITCHES PARSED. The payload shape is not what the")
+        print("  ** fixture assumes — the keys have moved. Do not build on")
+        print("  ** this until the parser matches a real game.\n")
+        return
+    counts = _pbp.pitch_counts(rows)
+    print(f"  {len(counts)} pitcher(s)\n")
+    # The starter is whoever threw the most; good enough for a probe.
+    for pid, n in sorted(counts.items(), key=lambda kv: -kv[1])[:4]:
+        who = next((r["pitcher"] for r in rows if r["pitcher_id"] == pid), pid)
+        vel = _pbp.velocity_by_type(rows, pitcher_id=pid)
+        tto = _pbp.times_through_order(rows, pid)
+        deepest = max(tto.values()) if tto else 0
+        arsenal = ", ".join(
+            f"{t} {mph} ({k})" for t, (mph, k) in
+            sorted(vel.items(), key=lambda kv: -kv[1][1]))
+        print(f"    {str(who)[:24]:<24} {n:>3} pitches · "
+              f"{deepest}x through the order")
+        print(f"      {arsenal or '(no speeds recorded)'}")
+    miss = sum(1 for r in rows if r["speed"] is None)
+    print(f"\n  {miss} pitch(es) carried no speed — statsapi omits it on "
+          f"some events;\n  a large number here means the tracking feed "
+          f"was down for that game.\n")
+
+
 def show_unbuilt() -> None:
     """Everything the model specs NAME but do not fully implement.
 
@@ -3479,6 +3531,11 @@ def main() -> None:
         return
     if "--odds-doctor" in argv:
         odds_doctor()
+        return
+    if "--pbp" in argv:
+        i = argv.index("--pbp")
+        pk = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else None
+        show_pbp(pk)
         return
     if "--unbuilt" in argv:
         show_unbuilt()
