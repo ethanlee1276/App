@@ -79,8 +79,7 @@ def _rows(db: str, sport: str | None, since: str | None,
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     q = ("SELECT date, sport, player, market, side, odds, hit_prob, grade, "
-         "edge, stake_units, pnl_units, status, category, "
-         "projection, line, actual FROM bets "
+         "edge, stake_units, pnl_units, status, category FROM bets "
          "WHERE status IN ('won','lost')")
     if not measurement:
         q += " AND category='main' AND stake_units > 0"
@@ -501,7 +500,8 @@ def fit_report(rows: list[dict]) -> None:
     value and NOT a promise about the future — 95 held-out bets is a
     small test and the eras differ in more than sizing.
     """
-    from engine.calibrate import apply_temperature, brier, fit_correction
+    from engine.calibrate import (apply_temperature, brier, fit_correction,
+                                  _INTERCEPTS)
 
     train = [r for r in rows if (r["date"] or "") < RESCALE_DAY
              and r.get("hit_prob") is not None]
@@ -518,6 +518,17 @@ def fit_report(rows: list[dict]) -> None:
     # purpose and said out loud: this is a diagnostic, not a fit anyone
     # should ship off 197 rows.
     t, b = fit_correction(pairs, min_samples=50)
+    # INTERCEPT ONLY, fitted the same way with the spread left alone.
+    #
+    # The reliability curve says the gap is negative in EVERY confidence
+    # band — no sign change, the least-confident bets underperform too.
+    # That is a flat handicap, which an intercept describes and a
+    # temperature does not. So the temperature may be fitting noise, and
+    # it is not a free parameter: it is what shrinks a 70% claim to 58%
+    # instead of 64%, and what took 89 of 95 bets off the board.
+    #
+    # Two parameters must EARN the second one on data they have not seen.
+    b_only = min(_INTERCEPTS, key=lambda c: brier(pairs, 1.0, c))
 
     print(f"\n{'='*70}\n  FITTING THE OVERCONFIDENCE, OUT OF SAMPLE\n{'='*70}")
     print(f"    fit on   {train[0]['date']} → {train[-1]['date']}   "
@@ -542,47 +553,33 @@ def fit_report(rows: list[dict]) -> None:
 
     tp = [(float(r["hit_prob"]), 1 if r["status"] == "won" else 0)
           for r in test]
-    before, after = brier(tp, 1.0, 0.0), brier(tp, t, b)
     claimed = sum(p for p, _ in tp) / len(tp)
-    corrected = sum(apply_temperature(p, t, b) for p, _ in tp) / len(tp)
     actual = sum(o for _, o in tp) / len(tp)
-    print(f"\n  ON THE HELD-OUT ERA")
-    print(f"    mean claimed   {claimed:>7.1%}  →  {corrected:>7.1%} corrected")
-    print(f"    actually won   {actual:>7.1%}")
-    print(f"    gap            {actual - claimed:>+7.1%}  →  "
-          f"{actual - corrected:>+7.1%}")
-    print(f"    Brier          {before:>7.4f}  →  {after:>7.4f}"
-          f"   ({'better' if after < before else 'WORSE'})")
+    print(f"\n  ON THE HELD-OUT ERA   ({len(test)} bets, "
+          f"claimed {claimed:.1%}, actually won {actual:.1%})")
+    print(f"    {'correction':<24}{'Brier':>9}{'mean claim':>12}"
+          f"{'gap':>9}{'bets left':>11}{'ROI':>10}")
+    for label, tt, bb in (("none", 1.0, 0.0),
+                          ("shift only", 1.0, b_only),
+                          ("shift + temperature", t, b)):
+        corrected = sum(apply_temperature(p, tt, bb) for p, _ in tp) / len(tp)
+        keep = [r for r in test
+                if apply_temperature(float(r["hit_prob"]), tt, bb)
+                > 1.0 / american_to_decimal(int(r["odds"]))]
+        ks = sum(r["stake_units"] or 0.0 for r in keep)
+        kn = sum(r["pnl_units"] or 0.0 for r in keep)
+        roi = f"{_roi(kn, ks):+.1%}" if keep else "—"
+        print(f"    {label:<24}{brier(tp, tt, bb):>9.4f}{corrected:>12.1%}"
+              f"{actual - corrected:>+9.1%}{len(keep):>11}{roi:>10}")
+    print("\n    The second parameter has to EARN itself here, on bets the fit")
+    print("    never saw. If 'shift only' matches 'shift + temperature' on")
+    print("    Brier, prefer it — it is one parameter instead of two and it")
+    print("    leaves far more bets on the board.")
 
-    # --- and what it would have stopped us betting ----------------------
-    kept, dropped = [], 0
-    for r in test:
-        p = apply_temperature(float(r["hit_prob"]), t, b)
-        breakeven = 1.0 / american_to_decimal(int(r["odds"]))
-        if p > breakeven:
-            kept.append(r)
-        else:
-            dropped += 1
-    print(f"\n  WHAT IT WOULD HAVE STOPPED")
-    print(f"    {dropped} of {len(test)} bets no longer clear BREAK-EVEN at "
-          f"the price taken —")
-    print(f"    not the model's gates, just the arithmetic of the odds.")
-    if kept:
-        s = sum(r["stake_units"] or 0.0 for r in kept)
-        n = sum(r["pnl_units"] or 0.0 for r in kept)
-        w = sum(1 for r in kept if r["status"] == "won")
-        print(f"    the {len(kept)} that survive: {w}-{len(kept) - w}, "
-              f"{n:+.2f}u on {s:.2f}u staked, ROI {_roi(n, s):+.2%}")
-        ts = sum(r["stake_units"] or 0.0 for r in test)
-        tn = sum(r["pnl_units"] or 0.0 for r in test)
-        print(f"    against all {len(test)}:      "
-              f"{sum(1 for r in test if r['status'] == 'won')}-"
-              f"{len(test) - sum(1 for r in test if r['status'] == 'won')}, "
-              f"{tn:+.2f}u on {ts:.2f}u staked, ROI {_roi(tn, ts):+.2%}")
-    print("\n    A fair replay — the survivors are chosen by a correction "
-          "fitted on\n    an earlier era and a price known before kickoff. "
-          "No outcome is read.\n    It is still 95 bets. Treat it as a "
-          "direction, not a number.")
+    print("\n    A fair replay throughout — survivors are chosen by a "
+          "correction fitted\n    on an earlier era and a price known before "
+          "kickoff. No outcome is read.\n    It is still "
+          f"{len(test)} bets. Treat it as a direction, not a number.")
 
 
 def spread_report(rows: list[dict]) -> None:
@@ -684,9 +681,9 @@ def main() -> None:
     ap.add_argument("--sport")
     ap.add_argument("--since", help="ISO date; only bets on or after it")
     ap.add_argument("--spread", action="store_true",
-                    help="check whether the projections' distributions are "
-                         "too narrow — the defect a large fitted temperature "
-                         "points at. Reports only")
+                    help="bucket the bets by the probability the model "
+                         "claimed and compare each bucket to how often it "
+                         "happened. Reports only")
     ap.add_argument("--fit", action="store_true",
                     help="fit the model's overconfidence on the pre-rescale "
                          "era and test it on the current one. Reports only; "

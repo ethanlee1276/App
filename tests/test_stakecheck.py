@@ -691,14 +691,13 @@ def test_the_fit_recovers_a_bias_it_was_not_told_about():
     gap does not close, the fitter is decoration."""
     path = _bias_db(bias=-0.10)
     try:
-        out = _fit_out(path)
+        t = _fit_table(path)
     finally:
         os.unlink(path)
-    import re as _re
-    line = [l for l in out.splitlines() if l.strip().startswith("gap")][0]
-    before, after = [float(x) for x in _re.findall(r"([-+]\d+\.\d)%", line)]
-    assert before < -8.0, line
-    assert abs(after) < abs(before) / 2, f"the gap barely moved: {line}"
+    before = t["none"][1]
+    after = min(t["shift only"][1], t["shift + temperature"][1], key=abs)
+    assert before < -8.0, t
+    assert abs(after) < abs(before) / 2, f"the gap barely moved: {t}"
 
 
 def test_the_fit_is_trained_and_tested_on_different_bets():
@@ -722,13 +721,11 @@ def test_the_fit_leaves_clean_data_alone():
     artefact of its own search grid."""
     path = _bias_db(bias=0.0, seed=5)
     try:
-        out = _fit_out(path)
+        t = _fit_table(path)
     finally:
         os.unlink(path)
-    import re as _re
-    line = [l for l in out.splitlines() if l.strip().startswith("gap")][0]
-    before, after = [float(x) for x in _re.findall(r"([-+]\d+\.\d)%", line)]
-    assert abs(before) < 8.0, f"the planted data is not actually clean: {line}"
+    assert abs(t["none"][1]) < 8.0, \
+        f"the planted data is not actually clean: {t}"
 
 
 def test_the_fit_describes_the_correction_it_found():
@@ -956,6 +953,70 @@ def test_the_sigma_inversion_is_gone_and_documented():
     doc = stakecheck.spread_report.__doc__
     assert "COUNTS" in doc and "discrete" in doc, \
         "the reason it was abandoned is no longer written down"
+
+
+def _fit_table(path, out=None):
+    """{correction label: (brier, gap, bets_left)} off the --fit table."""
+    import re as _re
+    res = {}
+    for line in (out or _fit_out(path)).splitlines():
+        m = _re.match(r"\s+(none|shift only|shift \+ temperature)\s+"
+                      r"([\d.]+)\s+[\d.]+%\s+([-+][\d.]+)%\s+(\d+)", line)
+        if m:
+            res[m.group(1)] = (float(m.group(2)), float(m.group(3)),
+                               int(m.group(4)))
+    return res
+
+
+def test_a_pure_shift_is_best_corrected_by_a_pure_shift():
+    """THE POINT OF THE THREE-WAY COMPARISON. Ethan's reliability curve
+    came back negative in every confidence band with no sign change —
+    a flat handicap, which is what an intercept describes. A temperature
+    on top of that is fitting noise, and it is not free: it is what
+    shrinks a 70% claim to 58% instead of 64%, and what took 89 of 95
+    bets off the board.
+
+    So on data whose bias IS a flat shift, the one-parameter correction
+    must win on held-out Brier."""
+    path = _bias_db(bias=-0.10)
+    try:
+        t = _fit_table(path)
+    finally:
+        os.unlink(path)
+    assert t["shift only"][0] < t["none"][0], t
+    assert t["shift only"][0] <= t["shift + temperature"][0] + 0.002, t
+
+
+def test_the_cheaper_correction_leaves_more_bets_on_the_board():
+    """Why the choice matters in money rather than in Brier. Every
+    parameter that shrinks a probability also removes bets that clear
+    break-even, and a correction is only worth its cost if it is real."""
+    path = _bias_db(bias=-0.10)
+    try:
+        t = _fit_table(path)
+    finally:
+        os.unlink(path)
+    assert t["none"][2] > t["shift only"][2], t
+    assert all(v[2] > 0 for v in t.values()), t
+
+
+def test_all_three_corrections_are_scored_on_the_same_held_out_bets():
+    """A comparison across different test sets is not a comparison."""
+    body = _code_only("fit_report")
+    assert body.count("for label, tt, bb in") == 1, \
+        "the three corrections are no longer scored in one pass"
+    assert '("none", 1.0, 0.0)' in body
+
+
+def test_the_tool_does_not_select_columns_it_never_reads():
+    """`projection`, `line` and `actual` were selected for the sigma
+    inversion that has since been deleted. A ledger without them then
+    crashed the whole tool on a query for data nothing wanted."""
+    src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
+    i = src.index("q = (\"SELECT")
+    q = src[i:src.index("WHERE status", i)]
+    for col in ("projection", "line", "actual"):
+        assert col not in q, f"{col} is selected but never read"
 
 
 if __name__ == "__main__":
