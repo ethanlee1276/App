@@ -108,9 +108,13 @@ as "the best next build".
    self-consistent and unproven against reality. `python3 launch.py --pbp
    <gamePk>` closes that gap on a machine with network, and says so
    loudly if zero pitches parse.
-2. **Velocity trend** — average `startSpeed` per start, by pitch type,
-   for the last five starts. §5 calls a 1+ mph drop a red flag; that is
-   directly checkable and needs nothing else.
+2. ~~**Velocity trend**~~ — **built 2026-08-09**. `engine/mlb/velocity.py`,
+   10 tests. Last five STARTS (relievers excluded by `gamesStarted`),
+   compared within a pitch type, against his own baseline, with a
+   10-pitch floor per start and a signed 1.0 mph threshold.
+   `python3 launch.py --velo <personId>` prints the starts, not just the
+   verdict — a steady 97.1/97.3/97.2 then 95.9 is a different story from
+   97.4/96.2/97.1/96.0 at the same delta.
 3. **TTO** — batter-sequence position within the game, which the same
    payload gives for free.
 4. **Pitch-count projection** — from boxscore `pitchesThrown`, which is

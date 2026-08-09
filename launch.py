@@ -2697,6 +2697,58 @@ def _settleable_days(open_days) -> list[str]:
                   if d.get("date") and "-W" not in d["date"])
 
 
+def show_velocity(person_id=None, season: int | None = None) -> None:
+    """A pitcher's last five starts, by pitch type, against his baseline.
+
+        python3 launch.py --velo 543037        # Gerrit Cole
+
+    MLB_MODEL §5: "Velocity, start over start. A drop of 1+ mph is a red
+    flag — check injury and mechanics reporting before trusting any
+    projection of him."
+
+    Prints the starts rather than only the verdict, because the verdict is
+    one number off five and the shape of the five is what tells you
+    whether to believe it. A steady 97.1/97.3/97.2 followed by 95.9 is a
+    different story from 97.4/96.2/97.1/96.0 with the same delta.
+    """
+    import datetime as _d
+    from engine.mlb import velocity as _v
+    if not person_id:
+        print("\n  usage: python3 launch.py --velo <mlbPersonId>")
+        print("  ids come from the roster feed; 543037 is Gerrit Cole\n")
+        return
+    season = season or _d.date.today().year
+    try:
+        hist = _v.velocity_history(int(person_id), season)
+    except Exception as exc:                                # noqa: BLE001
+        print(f"\n  could not read that pitcher: {exc}\n")
+        return
+    print(f"\n{'='*70}\n  VELOCITY, START OVER START — {person_id}, {season}"
+          f"\n{'='*70}")
+    if not hist:
+        print("  No starts with enough of any one pitch type to average.")
+        print("  Early season, a reliever, or an id that is not a pitcher.\n")
+        return
+    for h in hist:
+        arsenal = "  ".join(f"{t} {mph}" for t, mph in
+                            sorted(h["by_type"].items(),
+                                   key=lambda kv: -kv[1]))
+        print(f"    {h['date']}   {arsenal}")
+    t = _v.trend(hist)
+    if not t:
+        print("\n  No comparable baseline — his latest pitch type does not")
+        print("  appear in the earlier starts. That is a real answer, and")
+        print("  common in April.\n")
+        return
+    mark = "  ← RED FLAG" if t["flag"] else ""
+    print(f"\n  {t['pitch_type']}: {t['latest']} vs {t['baseline']} baseline "
+          f"over {t['baseline_starts']} start(s)   "
+          f"{t['delta']:+.2f} mph{mark}")
+    print(f"  {t['reading']}")
+    print("\n  Evidence only — nothing prices from this. It is a pointer at")
+    print("  injury reporting, which is what §5 asks it to be.\n")
+
+
 def show_pbp(game_pk=None) -> None:
     """Parse one real game's pitches and print what came out.
 
@@ -3531,6 +3583,11 @@ def main() -> None:
         return
     if "--odds-doctor" in argv:
         odds_doctor()
+        return
+    if "--velo" in argv:
+        i = argv.index("--velo")
+        who = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else None
+        show_velocity(who)
         return
     if "--pbp" in argv:
         i = argv.index("--pbp")
