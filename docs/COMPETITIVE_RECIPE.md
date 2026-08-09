@@ -147,7 +147,7 @@ than bankroll management.
 | NFL officiating crew tendencies | MISSING | the study's largest named data gap |
 | NBA referee tendencies (FT-driven props) | MISSING | same |
 | UFC referee & judge assignments | MISSING | `PARKED` in `engine/coverage.py`: "no structured assignment feed" |
-| Travel / rest / altitude | MISSING | |
+| Travel / rest / altitude | PARTIAL | rest/travel built and rendered (`engine/fatigue.py`, wired into `pipeline.py`, `betting.py`, `losspatterns.py`); altitude is a static venue field (`engine/stadiums.py`), not a fatigue-specific adjustment |
 | Injury-report latency | PARTIAL | `engine/injuries.py` has the reports, not the latency |
 | Published effect sizes for venue adjustments | MISSING | the study's specific ask: don't just show wind, show what wind is worth |
 
