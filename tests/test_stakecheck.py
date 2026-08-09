@@ -1019,6 +1019,38 @@ def test_the_tool_does_not_select_columns_it_never_reads():
         assert col not in q, f"{col} is selected but never read"
 
 
+def test_the_shift_only_correction_is_fitted_on_its_own():
+    """A MUTATION GOT PAST THIS. Setting `b_only = b` — reusing the
+    two-parameter intercept instead of fitting one with the spread held
+    at 1.0 — passed all 57 tests, because on a pure-shift fixture the
+    joint fit lands near temperature 1.0 anyway and the two coincide.
+
+    They do NOT coincide on Ethan's data: the joint fit is temperature
+    1.64, intercept -0.26, and the intercept that is best on its own is
+    a different number. Reusing the joint one would score a
+    handicapped one-parameter model against the two-parameter one and
+    quietly rig the comparison the whole section exists to make.
+
+    So this recomputes the optimum directly rather than trusting the
+    shape of a fixture."""
+    from engine.calibrate import brier, _INTERCEPTS
+    path = _bias_db(bias=-0.10)
+    try:
+        rows = stakecheck._rows(path, None, None)
+        table = _fit_table(path)
+    finally:
+        os.unlink(path)
+    train = [r for r in rows if (r["date"] or "") < stakecheck.RESCALE_DAY]
+    test = [r for r in rows if (r["date"] or "") >= stakecheck.RESCALE_DAY]
+    pairs = [(float(r["hit_prob"]), 1 if r["status"] == "won" else 0)
+             for r in train]
+    best_b = min(_INTERCEPTS, key=lambda c: brier(pairs, 1.0, c))
+    tp = [(float(r["hit_prob"]), 1 if r["status"] == "won" else 0)
+          for r in test]
+    assert abs(table["shift only"][0] - brier(tp, 1.0, best_b)) < 5e-5, \
+        f"shift-only is not the best intercept at temperature 1: {table}"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
