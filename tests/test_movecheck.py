@@ -190,6 +190,81 @@ def test_it_writes_nothing():
         assert forbidden not in src, forbidden
 
 
+def test_the_report_says_whether_movement_can_be_SEEN_not_just_counted():
+    """Ethan's first real run: "3,366 settled mlb bets, 14 carrying a
+    movement stamp". The natural reading is "wait for more bets", and it
+    is usually wrong.
+
+    A stamp needs `analyze` to have SEEN the prop move, which needs two
+    snapshots of the same (player, market, book) with different numbers.
+    A prop pulled once a day is invisible to this instrument forever,
+    however much it moved in between — so the binding constraint is the
+    PULL CADENCE, and more settled bets cannot fix it."""
+    import contextlib
+    import io
+    import json
+    import tempfile
+    from pathlib import Path
+    from engine import linemoves
+    ts = 1_700_000_000
+    rows = [
+        # one series seen twice — observable
+        {"player": "A", "market": "hits", "book": "FanDuel", "ts": ts,
+         "line": 1.5, "over_odds": -110},
+        {"player": "A", "market": "hits", "book": "FanDuel", "ts": ts + 600,
+         "line": 1.5, "over_odds": -140},
+        # three series seen once — invisible, whatever they did
+        {"player": "B", "market": "hits", "book": "FanDuel", "ts": ts,
+         "line": 1.5, "over_odds": -110},
+        {"player": "C", "market": "hits", "book": "FanDuel", "ts": ts,
+         "line": 1.5, "over_odds": -110},
+        {"player": "D", "market": "hits", "book": "FanDuel", "ts": ts,
+         "line": 1.5, "over_odds": -110},
+    ]
+    fd, path = tempfile.mkstemp(suffix=".jsonl")
+    with os.fdopen(fd, "w") as fh:
+        for r in rows:
+            fh.write(json.dumps(r) + "\n")
+    orig = linemoves.HISTORY_PATH
+    linemoves.HISTORY_PATH = Path(path)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            mc._snapshot_depth()
+    finally:
+        linemoves.HISTORY_PATH = orig
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "1 of 4" in out, out
+    assert "3 were pulled once" in out or "other 3" in out, out
+    # More invisible than visible: it must name cadence as the blocker
+    # rather than let "wait for more bets" stand.
+    assert "CADENCE IS THE BINDING CONSTRAINT" in out
+    assert "pre-kickoff" in out
+
+
+def test_snapshot_depth_is_silent_with_no_history_rather_than_crashing():
+    """It runs at the top of every report, so it must never be the reason
+    the report does not print."""
+    import contextlib
+    import io
+    import tempfile
+    from pathlib import Path
+    from engine import linemoves
+    fd, path = tempfile.mkstemp(suffix=".jsonl")
+    os.close(fd)
+    orig = linemoves.HISTORY_PATH
+    linemoves.HISTORY_PATH = Path(path)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            mc._snapshot_depth()
+    finally:
+        linemoves.HISTORY_PATH = orig
+        os.unlink(path)
+    assert buf.getvalue() == ""
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

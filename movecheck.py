@@ -130,6 +130,51 @@ def _line(label: str, r: dict) -> str:
             f"landed {r['landed']:5.1%} ±{2 * r['se']:.1%}")
 
 
+def _snapshot_depth() -> None:
+    """WHY SO FEW STAMPS — the question the headline count provokes and
+    could not answer.
+
+    A pick can only carry a movement stamp if `linemoves.analyze` saw the
+    prop move, and that needs at least TWO snapshots of the same
+    (player, market, book) with different numbers. One snapshot is not a
+    low reading, it is no reading: a prop pulled once a day is invisible
+    to this instrument forever, however much it moved in between.
+
+    So the binding constraint on measuring the veto is usually the PULL
+    CADENCE, not the sample of bets. Saying "14 of 3,366" without saying
+    which one is short sends you off to wait for more bets when more bets
+    will not help.
+    """
+    try:
+        from engine.linemoves import load_history
+        rows = load_history()
+    except Exception:                                       # noqa: BLE001
+        return
+    if not rows:
+        return
+    series: dict = {}
+    for r in rows:
+        k = (r.get("player"), r.get("market"), r.get("book"))
+        series.setdefault(k, set()).add(
+            (r.get("line"), r.get("over_odds"), r.get("under_odds")))
+    once = sum(1 for v in series.values() if len(v) < 2)
+    many = len(series) - once
+    if not series:
+        return
+    print("  SNAPSHOT DEPTH — can movement be SEEN at all?")
+    print(f"    {many:,} of {len(series):,} (player, market, book) series have "
+          f"two or more\n    distinct readings. The other {once:,} were "
+          f"pulled once and can never\n    show movement, whatever they did.")
+    if once > many:
+        print("    ** CADENCE IS THE BINDING CONSTRAINT, not the bet count. "
+              "More settled")
+        print("    ** bets will not fix this; more pulls per day will. A "
+              "second daily")
+        print("    ** pull roughly doubles what is observable "
+              "(`install-nightly.sh --pre-kickoff`).")
+    print()
+
+
 def report(conn, sport: str = "mlb") -> int:
     rows = load(conn, sport)
     stamped = [r for r in rows if r.get("move_delta") is not None]
@@ -140,6 +185,7 @@ def report(conn, sport: str = "mlb") -> int:
     print(f"  {len(rows):,} settled {sport} bets, {len(stamped):,} carrying a "
           f"movement stamp")
     print()
+    _snapshot_depth()
 
     if not stamped:
         print("  NOTHING TO MEASURE YET — and this is a real answer, not a bug.")
