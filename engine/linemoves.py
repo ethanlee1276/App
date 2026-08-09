@@ -376,6 +376,64 @@ class MoveReport:
     first_mover_sharp: bool = False
 
 
+def lineup_release_move(rows: list[dict], player: str, market: str,
+                        line: float | None, side: str,
+                        posted_ts: float) -> dict | None:
+    """The move across the lineup-card boundary, from OUR side's view.
+
+    §4 calls this baseball's unique tell: "If a number moved against your
+    position right after lineups confirmed, the market just priced
+    information — a star's rest day, a platoon swap, a lefty-heavy
+    lineup — that your inputs may have missed."
+
+    Returns None when the boundary cannot be straddled — no reading
+    before, or none after. That is the common case early on and it is a
+    real answer: a prop we only ever saw once tells us nothing about what
+    the card did to it, and inventing a zero would bury the signal under
+    props that were never observed.
+
+    SIGN CONVENTION, which is the whole thing. `delta` is in implied
+    probability of OUR side, so negative always means the market moved
+    AGAINST us — our number got longer after the card posted. An OVER and
+    an UNDER on the same prop must produce opposite signs from the same
+    two prices, and getting that backwards would flag exactly the wrong
+    half of the board.
+    """
+    want_under = (side or "OVER").upper() == "UNDER"
+    key_line = round(float(line), 1) if line is not None else None
+    before: list[tuple] = []
+    after: list[tuple] = []
+    for r in rows:
+        if r.get("player") != player or r.get("market") != market:
+            continue
+        if key_line is not None and r.get("line") is not None \
+                and round(float(r["line"]), 1) != key_line:
+            continue
+        px = r.get("under_odds") if want_under else r.get("over_odds")
+        p = _implied(px)
+        if p is None or r.get("ts") is None:
+            continue
+        (after if float(r["ts"]) >= posted_ts else before).append(
+            (float(r["ts"]), p, r.get("book")))
+    if not before or not after:
+        return None
+    # Last reading before the card, first after it — the tightest pair
+    # that straddles the boundary. Using the whole day's median either
+    # side would fold in movement that has nothing to do with the card.
+    before.sort()
+    after.sort()
+    p0 = _median([p for ts, p, _b in before if ts == before[-1][0]])
+    p1 = _median([p for ts, p, _b in after if ts == after[0][0]])
+    return {
+        "before": round(p0, 4), "after": round(p1, 4),
+        "delta": round(p1 - p0, 4),
+        "against_us": (p1 - p0) < 0,
+        "gap_s": round(after[0][0] - before[-1][0], 1),
+        "books_before": len({b for _t, _p, b in before if _t == before[-1][0]}),
+        "books_after": len({b for _t, _p, b in after if _t == after[0][0]}),
+    }
+
+
 def _is_sharp(book: str) -> bool:
     """Is this one of the books §4 says shapes the truth?
 

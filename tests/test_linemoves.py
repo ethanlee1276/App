@@ -297,6 +297,124 @@ def test_first_mover_attribution_does_not_touch_the_grade():
         assert name not in src, f"{name} reached the grader unmeasured"
 
 
+# --- §4 the lineup-release move, baseball's unique tell ---------------------
+def _card_rows(t0, before_over, after_over, before_under=-110,
+               after_under=-110, book="FanDuel"):
+    return [
+        {"player": "A B", "market": "hits", "ts": t0, "line": 1.5,
+         "over_odds": before_over, "under_odds": before_under, "book": book},
+        {"player": "A B", "market": "hits", "ts": t0 + 900, "line": 1.5,
+         "over_odds": after_over, "under_odds": after_under, "book": book},
+    ]
+
+
+def test_an_over_and_an_under_get_opposite_signs_from_one_price_move():
+    """THE THING MOST WORTH GETTING RIGHT. `delta` is in implied
+    probability of OUR side, so negative always means the market moved
+    against us. Reading one sign for both sides would flag exactly the
+    wrong half of the board — and it would look like a working detector
+    the whole time."""
+    t0 = 1_700_000_000
+    rows = _card_rows(t0, -110, +130, -110, -160)
+    over = lm.lineup_release_move(rows, "A B", "hits", 1.5, "OVER", t0 + 600)
+    under = lm.lineup_release_move(rows, "A B", "hits", 1.5, "UNDER", t0 + 600)
+    assert over["delta"] < 0 and over["against_us"] is True
+    assert under["delta"] > 0 and under["against_us"] is False
+
+
+def test_a_prop_that_does_not_straddle_the_card_returns_none():
+    """A real answer, not a gap. A prop seen only before the card says
+    nothing about what the card did to it, and returning a zero would
+    bury the signal under props that were never observed after."""
+    t0 = 1_700_000_000
+    rows = _card_rows(t0, -110, +130)
+    assert lm.lineup_release_move(
+        rows, "A B", "hits", 1.5, "OVER", t0 + 9999) is None
+    assert lm.lineup_release_move(
+        rows, "A B", "hits", 1.5, "OVER", t0 - 9999) is None
+
+
+def test_the_pair_straddling_the_card_is_the_tightest_one():
+    """Using the day's median either side would fold in movement that has
+    nothing to do with the card — which is most of the day."""
+    t0 = 1_700_000_000
+    rows = [
+        {"player": "A B", "market": "hits", "ts": t0, "line": 1.5,
+         "over_odds": +200, "book": "FanDuel"},          # morning, far off
+        {"player": "A B", "market": "hits", "ts": t0 + 500, "line": 1.5,
+         "over_odds": -110, "book": "FanDuel"},          # just before
+        {"player": "A B", "market": "hits", "ts": t0 + 700, "line": 1.5,
+         "over_odds": -120, "book": "FanDuel"},          # just after
+        {"player": "A B", "market": "hits", "ts": t0 + 5000, "line": 1.5,
+         "over_odds": -300, "book": "FanDuel"},          # late, far off
+    ]
+    r = lm.lineup_release_move(rows, "A B", "hits", 1.5, "OVER", t0 + 600)
+    from engine.linemoves import _implied
+    # The function rounds to 4dp, so compare at 4dp. A 1e-6 tolerance
+    # here failed on correct output — the tightest pair WAS selected.
+    assert r["before"] == round(_implied(-110), 4)
+    assert r["after"] == round(_implied(-120), 4)
+    assert r["gap_s"] == 200.0, "a wider pair than the straddling one"
+
+
+def test_a_close_at_a_different_line_is_not_the_same_prop():
+    """Same fault the CLV rebuild had: over 1.5 and over 2.5 are
+    different bets, and reading one as the other inverts exactly the
+    cases where the line moved."""
+    t0 = 1_700_000_000
+    rows = [
+        {"player": "A B", "market": "hits", "ts": t0, "line": 1.5,
+         "over_odds": -110, "book": "FanDuel"},
+        {"player": "A B", "market": "hits", "ts": t0 + 900, "line": 2.5,
+         "over_odds": +250, "book": "FanDuel"},
+    ]
+    assert lm.lineup_release_move(
+        rows, "A B", "hits", 1.5, "OVER", t0 + 600) is None
+
+
+def test_lineup_times_records_the_first_sighting_and_never_moves_it():
+    """The boundary is the FIRST time we saw the card up. A later look
+    must not overwrite it, or every extra poll drags the boundary later
+    and shrinks the 'after' window toward nothing."""
+    import tempfile
+    from pathlib import Path
+    from engine.mlb import lineuptimes
+    fd, path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    p = Path(path)
+    try:
+        lineuptimes.note_look("2026-08-09", 777, False, ts=1000.0, path=p)
+        lineuptimes.note_look("2026-08-09", 777, True, ts=1600.0, path=p)
+        lineuptimes.note_look("2026-08-09", 777, True, ts=9000.0, path=p)
+        assert lineuptimes.posted_at("2026-08-09", 777, path=p) == 1600.0
+        assert lineuptimes.is_usable("2026-08-09", 777, path=p) is True
+    finally:
+        os.unlink(path)
+
+
+def test_a_first_sighting_with_no_previous_look_is_not_usable():
+    """It is a real timestamp and a useless boundary — the true release
+    could be any time before it. Treating it as precise would find
+    'movement after lineups' everywhere, because most of the day's
+    movement would land on the after side."""
+    import tempfile
+    from pathlib import Path
+    from engine.mlb import lineuptimes
+    fd, path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    p = Path(path)
+    try:
+        lineuptimes.note_look("2026-08-09", 42, True, ts=1600.0, path=p)
+        assert lineuptimes.posted_at("2026-08-09", 42, path=p) == 1600.0
+        assert lineuptimes.is_usable("2026-08-09", 42, path=p) is False
+        # And a gap wider than the useful window is equally unusable.
+        lineuptimes.note_look("2026-08-09", 43, False, ts=0.0, path=p)
+        lineuptimes.note_look("2026-08-09", 43, True, ts=20_000.0, path=p)
+        assert lineuptimes.is_usable("2026-08-09", 43, path=p) is False
+    finally:
+        os.unlink(path)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

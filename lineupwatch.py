@@ -91,6 +91,7 @@ def posted_live(date: str) -> tuple[int, int]:
     what the next build will conclude. A game whose boxscore will not load
     counts as not posted: failing closed matches §5.
     """
+    from engine.mlb import lineuptimes
     from engine.mlb.sources.mlbstats import STATS_BASE, _get_json
     from engine.mlb.sources.statslogs import fetch_boxscore
 
@@ -108,8 +109,21 @@ def posted_live(date: str) -> tuple[int, int]:
                 box = fetch_boxscore(pk)
             except Exception:
                 continue
-            if (box.get("teams", {}).get("home", {}).get("battingOrder")
-                    and box.get("teams", {}).get("away", {}).get("battingOrder")):
+            up = bool(box.get("teams", {}).get("home", {}).get("battingOrder")
+                      and box.get("teams", {}).get("away", {}).get("battingOrder"))
+            # RECORD THE BOUNDARY WHILE WE ARE HERE. This loop already
+            # knows which game and what its state is; it threw both away
+            # and returned a count. §4's lineup-release move needs the
+            # moment, and there was nowhere to get one.
+            #
+            # Noted on every look, not only the posted ones: a first
+            # sighting with no previous observation has an unbounded
+            # window, which is indistinguishable from a stale guess.
+            try:
+                lineuptimes.note_look(date, pk, up)
+            except Exception:                               # noqa: BLE001
+                pass        # bookkeeping must never break the poller
+            if up:
                 posted += 1
     return (posted, total)
 
