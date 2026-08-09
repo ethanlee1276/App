@@ -1493,6 +1493,58 @@ def test_a_fixed_line_market_keeps_every_close():
         f"a fixed-line market lost its closes or flipped sign: {mean}"
 
 
+def test_the_worst_decile_is_reported_beside_the_rest():
+    """THE ONE STRUCTURAL LEAD in Ethan's numbers: 69% of bets beat the
+    close and the mean was still negative, so a minority of large misses
+    outweighed a majority of small wins. If those misses are findable
+    before kickoff, dropping them moves the mean without the model
+    getting smarter. The report has to show the skew for that to be
+    visible at all."""
+    path, snaps = _clv_db(edge_pts=0.005)
+    import contextlib
+    import io
+    buf = io.StringIO()
+    try:
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history(snaps, _go)
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "THE WORST DECILE" in out
+    assert "median CLV overall" in out
+    # The decile must actually be the worst tenth, not a tenth.
+    import re as _re
+    m = _re.search(r"(\d+) bets averaging ([-+][\d.]+)%", out)
+    r = _re.search(r"the other (\d+) average ([-+][\d.]+)%", out)
+    assert m and r, out
+    assert int(m.group(1)) + int(r.group(1)) == 400
+    assert float(m.group(2)) < float(r.group(2)), \
+        "the 'worst' decile is not worse than the rest"
+
+
+def test_the_clv_slices_carry_their_own_noise():
+    """Same discipline as the calibration slices. A mean with no standard
+    error beside it is an invitation to rank four numbers that are one
+    number."""
+    path, snaps = _clv_db(edge_pts=0.005)
+    import contextlib
+    import io
+    buf = io.StringIO()
+    try:
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history(snaps, _go)
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "CLV BY PRICE BAND" in out
+    seg = out[out.index("CLV BY PRICE BAND"):]
+    assert "SE from 0" in seg and "±" in seg
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -801,7 +801,8 @@ def clv_report(rows: list[dict]) -> None:
         px = sides.get("under" if (r.get("side") or "OVER").upper() == "UNDER"
                        else "over")
         if px is not None:
-            have.append(dict(r, closing_odds=int(px)))
+            have.append(dict(r, closing_odds=int(px),
+                             _band=_band(int(r["odds"]))))
     print(f"\n{'='*70}\n  DID THE MARKET COME TO US BY KICKOFF?\n{'='*70}")
     print(f"  {len(have)} of {len(rows)} settled bets have a closing price "
           f"rebuilt from\n  the raw snapshots, side-aware. "
@@ -867,6 +868,52 @@ def clv_report(rows: list[dict]) -> None:
     print("      correction, cap or stake rule turns that into money.")
     print("    negative -> we are consistently on the wrong side of the")
     print("      market's own revision, which is worse than no edge.")
+
+    # --- where do the bad ones live? ------------------------------------
+    #
+    # THE ONE STRUCTURAL LEAD IN THE DATA. 69% of bets beat the close and
+    # the MEAN is still negative, so a minority of large misses outweighs
+    # a majority of small wins. If those misses are identifiable BEFORE
+    # kickoff — a market, a price band — then dropping them moves the mean
+    # without needing the model to get smarter.
+    #
+    # Exploratory, and the same multiple-look discipline applies: slice
+    # enough ways and the worst-looking slice is worst by chance.
+    import statistics as _st
+    pairs = list(zip(have, vals))
+    worst = sorted(pairs, key=lambda pv: pv[1])[:max(1, len(pairs) // 10)]
+    rest_mean = (sum(v for _, v in pairs[len(worst):]) /
+                 max(len(pairs) - len(worst), 1))
+    print(f"\n  THE WORST DECILE")
+    print(f"    {len(worst)} bets averaging {sum(v for _, v in worst) / len(worst):+.2%}")
+    print(f"    the other {len(pairs) - len(worst)} average "
+          f"{(sum(v for _, v in pairs) - sum(v for _, v in worst)) / max(len(pairs) - len(worst), 1):+.2%}")
+    print(f"    median CLV overall {_st.median(vals):+.2%} against a mean of "
+          f"{mean:+.2%}")
+    print("    A median well above the mean is the skew: many small wins, a "
+          "few\n    large misses. Whether those are findable before kickoff "
+          "is the\n    question worth chasing.")
+
+    def _clv_slice(title, key):
+        groups: dict = {}
+        for r, v in pairs:
+            groups.setdefault(r.get(key) or "?", []).append(v)
+        groups = {k: v for k, v in groups.items() if len(v) >= 12}
+        if len(groups) < 2:
+            return
+        print(f"\n  CLV BY {title.upper()}")
+        print(f"    {title:<18}{'bets':>6}{'mean':>10}{'median':>10}"
+              f"{'1 SE':>9}{'SE from 0':>11}")
+        for k in sorted(groups, key=lambda g: -len(groups[g])):
+            vv = groups[k]
+            m = sum(vv) / len(vv)
+            sd = math.sqrt(sum((x - m) ** 2 for x in vv) / max(len(vv) - 1, 1))
+            e = sd / math.sqrt(len(vv))
+            print(f"    {str(k):<18}{len(vv):>6}{m:>10.2%}{_st.median(vv):>10.2%}"
+                  f"{'±' + format(e, '.2%'):>9}{abs(m) / e if e else 0:>11.1f}")
+
+    _clv_slice("market", "market")
+    _clv_slice("price band", "_band")
 
     # And whether CLV predicts the result, which is the internal check
     # that the closing prices being read are the right ones.
