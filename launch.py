@@ -2766,6 +2766,65 @@ def _settleable_days(open_days) -> list[str]:
                   if d.get("date") and "-W" not in d["date"])
 
 
+def show_alignment(team=None, season: int | None = None) -> None:
+    """How a defence covers and how an offence lines up (NFL_MODEL §6).
+
+        python3 launch.py --alignment NE
+        python3 launch.py --alignment NE 2024
+
+    §6 parked alignment matchups and coordinator profiles behind "no data
+    exists". nflverse publishes it: `pbp_participation_{season}.csv`, every
+    season 2016-2025, with man/zone, coverage shell, box count, rushers,
+    formation and personnel. ~49 MB a season, cached after the first pull.
+
+    Evidence only — nothing prices from this. See the last paragraph of
+    `engine/sources/nflpart.py` for why.
+    """
+    import datetime as _d
+    from engine.sources import nflpart
+    season = int(season or (_d.date.today().year - 1))
+    if not team:
+        print("\n  usage: python3 launch.py --alignment <TEAM> [season]")
+        print("  e.g.   python3 launch.py --alignment NE 2024\n")
+        return
+    team = str(team).upper()
+    try:
+        rows = nflpart.load_participation(season)
+    except Exception as exc:                                # noqa: BLE001
+        print(f"\n  participation {season} unavailable: {exc}\n")
+        return
+    have = nflpart.teams_in(rows)
+    if team not in have:
+        print(f"\n  {team} is not in the {season} file. It holds: "
+              f"{', '.join(have)}\n")
+        return
+    d = nflpart.coverage_rates(rows, team)
+    o = nflpart.formation_rates(rows, team)
+    p = nflpart.personnel_rates(rows, team)
+    print(f"\n{'='*70}\n  {team} — ALIGNMENT AND COVERAGE, {season}\n{'='*70}")
+    print(f"\n  DEFENCE   ({d['n_labelled']} coverage-labelled snaps, "
+          f"{d['n_dropbacks']} dropbacks faced)")
+    if d["man_rate"] is None:
+        print("    no coverage labels on this team's games")
+    else:
+        print(f"    man {d['man_rate']:.1%}   zone {d['zone_rate']:.1%}"
+              f"   blitz {d['blitz_rate']:.1%}"
+              f"   box {d['box_avg']}   rushers {d['rushers_avg']}")
+    print(f"\n  OFFENCE   ({o['n']} snaps with a formation)")
+    for k, v in list(o["rates"].items())[:5]:
+        print(f"    {k:<14} {v:.1%}")
+    if p["rates"]:
+        print("\n  personnel")
+        for k, v in list(p["rates"].items())[:4]:
+            print(f"    {k:<22} {v:.1%}")
+    print("\n  Rates are over LABELLED plays — coverage is classified on")
+    print("  dropbacks only, so dividing by every snap would describe")
+    print("  run-pass balance rather than coverage.")
+    print("\n  Evidence only. Nothing prices from this until "
+          "`stakecheck --info`")
+    print("  says a new input can earn its place.\n")
+
+
 def show_velocity(person_id=None, season: int | None = None) -> None:
     """A pitcher's last five starts, by pitch type, against his baseline.
 
@@ -3761,6 +3820,12 @@ def main() -> None:
         from engine import losspatterns as _lp
         print(_lp.format_both_ways(
             _lp.both_ways(_lp.records_from_ledger(_l.connect()))))
+        return
+    if "--alignment" in argv:
+        i = argv.index("--alignment")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_alignment(rest[0] if rest else None,
+                       rest[1] if len(rest) > 1 else None)
         return
     if "--unbuilt" in argv:
         show_unbuilt()
