@@ -800,7 +800,10 @@ def clv_report(rows: list[dict]) -> None:
                            if r.get("line") is not None else None)) or {}
         px = sides.get("under" if (r.get("side") or "OVER").upper() == "UNDER"
                        else "over")
-        if px is not None:
+        # Guarded here too, and deliberately not only at the source: this
+        # report also reads whatever a future close-builder hands it, and
+        # a single -5 moved the headline by nearly a point.
+        if px is not None and abs(float(px)) >= 100 and abs(int(r["odds"])) >= 100:
             have.append(dict(r, closing_odds=int(px),
                              _band=_band(int(r["odds"]))))
     print(f"\n{'='*70}\n  DID THE MARKET COME TO US BY KICKOFF?\n{'='*70}")

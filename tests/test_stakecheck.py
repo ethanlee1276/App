@@ -1597,6 +1597,59 @@ def test_the_report_refuses_to_call_the_remainder_edge():
     assert "without looking at" in out.lower()
 
 
+def test_an_impossible_price_is_not_a_close():
+    """FOUND BY NAMING THE ROWS, 2026-08-09. Two of the eleven worst CLV
+    bets closed at "-5":
+
+        Nathan Church   OVER hits 0.5        took -105 -> closed -5
+        Taylor Trammell OVER total_bases 0.5 took +105 -> closed -5
+
+    There is no such price. American odds never fall strictly between
+    -100 and +100 — that range does not exist — so -5 is a number that
+    got into a price column. `american_to_decimal(-5)` returns 21.0, a
+    4.8% longshot, and each row produced about -45 points of CLV on its
+    own. Together they were a fifth of the reported mean.
+
+    This is the kind of exclusion that is legitimate: the rule is a
+    property of American odds and was established without looking at
+    what excluding them does to the answer."""
+    import datetime
+    import time as _t
+    ts = _t.time() - 7200
+    date = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    snaps = [{"player": "Nathan Church", "market": "hits", "ts": ts,
+              "line": 0.5, "over_odds": -5, "under_odds": None,
+              "book": "FanDuel"}]
+    bets = [_row(date=date, player="Nathan Church", market="hits",
+                 side="OVER", odds=-105, line=0.5, status="lost")]
+    path = _db(bets)
+    import contextlib
+    import io
+    buf = io.StringIO()
+    try:
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history(snaps, _go)
+    finally:
+        os.unlink(path)
+    assert "0 of 1" in buf.getvalue(), buf.getvalue()
+
+
+def test_a_legal_price_at_the_boundary_survives():
+    """+100 and -100 ARE legal and are the most common prices near a
+    coin flip. A guard written as `> 100` would silently delete them."""
+    from engine.linemoves import closing_odds_by_date
+    import time as _t
+    ts = _t.time() - 7200
+    got = closing_odds_by_date([
+        {"player": "A B", "market": "hits", "ts": ts, "line": 1.5,
+         "over_odds": 100, "under_odds": -100, "book": "FanDuel"}])
+    key = [k for k in got][0]
+    assert got[key]["over"] == 100
+    assert got[key]["under"] == -100
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

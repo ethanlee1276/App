@@ -239,9 +239,22 @@ def closing_odds_by_date(rows: list[dict]) -> dict:
                 if v in (None, ""):
                     continue
                 try:
-                    vals.append(float(v))
+                    v = float(v)
                 except (TypeError, ValueError):
                     continue
+                # A LEGAL AMERICAN PRICE HAS |odds| >= 100. There is no
+                # such quote as -5: the range between -100 and +100 does
+                # not exist, and a number landing there is a number that
+                # got into a price column, not a price.
+                #
+                # Found 2026-08-09 in the CLV worst decile — two closes
+                # recorded as -5, which `american_to_decimal` reads as
+                # decimal 21.0, a 4.8% longshot. Each produced a CLV
+                # around -45 points on its own and together they were a
+                # fifth of the reported mean.
+                if abs(v) < 100:
+                    continue
+                vals.append(v)
             return _median(vals) if vals else None
 
         out[key] = {"over": _side("over_odds"), "under": _side("under_odds")}
