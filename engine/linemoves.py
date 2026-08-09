@@ -334,6 +334,11 @@ class BookMove:
     current: float
     delta: float
     last_move_ts: float
+    #: When this book FIRST left its opening number. `last_move_ts` says
+    #: when it stopped moving, which is the wrong end for attribution:
+    #: §4 asks who moved first, because "the first mover took the smart
+    #: money; the rest are copying".
+    first_move_ts: float = 0.0
     open_odds: int | None = None       # over-side price at open
     current_odds: int | None = None
     prob_delta: float = 0.0            # implied-prob shift of the over side
@@ -352,6 +357,40 @@ class MoveReport:
     prob_delta: float = 0.0            # consensus implied-prob shift (over)
     open_odds: int | None = None       # consensus over price at open
     current_odds: int | None = None
+    #: FIRST-MOVER ATTRIBUTION (§4). The book that left its opening
+    #: number first among those that moved with the eventual direction,
+    #: and how far ahead of the next one it was.
+    #:
+    #: EVIDENCE ONLY. Nothing prices from this, and that is deliberate
+    #: rather than unfinished: `engine/quality.apply_movement` already
+    #: gives movement veto power over the board — it can set grade="Pass"
+    #: and stake 0 — on a signal whose predictive value has never been
+    #: measured. `movecheck.py` exists to settle that, and until it says
+    #: something, adding a second unmeasured movement signal to the grade
+    #: would repeat the mistake with more confidence.
+    first_mover: str | None = None
+    first_mover_lead_s: float = 0.0
+    #: True when the first mover is one of the sharp books. That is the
+    #: case §4 actually cares about; a recreational book moving first is
+    #: usually a stale line being corrected, not information arriving.
+    first_mover_sharp: bool = False
+
+
+def _is_sharp(book: str) -> bool:
+    """Is this one of the books §4 says shapes the truth?
+
+    Matched loosely on purpose: the snapshots carry display names
+    ("Pinnacle"), `oddsapi.SHARP_BOOKS` carries API keys ("pinnacle"),
+    and a strict comparison between the two silently answers False
+    forever — the most expensive kind of wrong, because it looks like a
+    finding about the market.
+    """
+    try:
+        from .sources.oddsapi import SHARP_BOOKS
+    except Exception:                                       # noqa: BLE001
+        SHARP_BOOKS = {"pinnacle"}
+    b = (book or "").strip().lower().replace(" ", "")
+    return any(s.lower().replace(" ", "") in b for s in SHARP_BOOKS if s)
 
 
 def _implied(odds) -> float | None:
@@ -404,10 +443,18 @@ def analyze(rows: list[dict], min_move: float = 0.5, steam_books: int = 2,
                 dedup.append((ts, line, odds))
         open_line, current = dedup[0][1], dedup[-1][1]
         p0, p1 = _implied(dedup[0][2]), _implied(dedup[-1][2])
+        # The FIRST departure from the opening number. dedup has already
+        # collapsed unchanged re-records, so index 1 is by construction
+        # the first real change — no threshold here, because a book that
+        # nudges a half-cent and then leaps is still the book that moved
+        # first, and thresholding would hand the credit to whoever moved
+        # loudest instead.
+        first_ts = dedup[1][0] if len(dedup) > 1 else 0.0
         per_prop.setdefault((player, market), []).append(BookMove(
             book=book, open=open_line, current=current,
             delta=current - open_line,
             last_move_ts=dedup[-1][0] if len(dedup) > 1 else 0.0,
+            first_move_ts=first_ts,
             open_odds=dedup[0][2], current_odds=dedup[-1][2],
             prob_delta=(p1 - p0) if p0 is not None and p1 is not None else 0.0,
         ))
@@ -429,6 +476,20 @@ def analyze(rows: list[dict], min_move: float = 0.5, steam_books: int = 2,
             if (sign * b.delta >= min_move or sign * b.prob_delta >= min_prob_move)
             and (now - b.last_move_ts) <= window_s
         ]
+        # WHO WENT FIRST, among the books that moved WITH the eventual
+        # direction. A book that moved the other way and got dragged back
+        # is not the first mover of this move; it is noise that happens to
+        # be early, and crediting it would invert the whole signal.
+        with_dir = [b for b in books
+                    if b.first_move_ts > 0
+                    and (sign * b.delta > 0 or sign * b.prob_delta > 0)]
+        with_dir.sort(key=lambda b: b.first_move_ts)
+        first_mover = with_dir[0].book if with_dir else None
+        # The lead is only meaningful against a SECOND mover. One book
+        # moving alone has no lead over anybody, and reporting a huge one
+        # would read as a strong signal when it is an absent comparison.
+        lead = (with_dir[1].first_move_ts - with_dir[0].first_move_ts
+                if len(with_dir) > 1 else 0.0)
         odds_open = [b.open_odds for b in books if b.open_odds is not None]
         odds_cur = [b.current_odds for b in books if b.current_odds is not None]
         reports.append(MoveReport(
@@ -442,6 +503,10 @@ def analyze(rows: list[dict], min_move: float = 0.5, steam_books: int = 2,
             prob_delta=round(prob_delta, 4),
             open_odds=int(_median([float(o) for o in odds_open])) if odds_open else None,
             current_odds=int(_median([float(o) for o in odds_cur])) if odds_cur else None,
+            first_mover=first_mover,
+            first_mover_lead_s=round(lead, 1),
+            first_mover_sharp=bool(
+                first_mover and _is_sharp(first_mover)),
         ))
     reports.sort(key=lambda r: (r.steam, abs(r.delta), abs(r.prob_delta)),
                  reverse=True)

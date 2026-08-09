@@ -5,6 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from engine import linemoves as lm
 from engine.linemoves import analyze, record_snapshots, load_history
 from engine.models import Prop, GameLog, SportsbookLine, RUSH_YDS
 
@@ -201,6 +202,99 @@ def test_annotate_price_move_reads_as_odds():
     assert annotate_recommendations([rec], analyze(rows, now=NOW)) == 1
     assert rec["line_move"]["verdict"] == "with"
     assert any("Over price +150 → +115" in r for r in rec["reasons"])
+
+
+# --- §4 first-mover attribution ---------------------------------------------
+def _ladder(book_moves, t0=1_700_000_000):
+    """book -> [(offset_s, over_odds)] into snapshot rows on one 1.5 line."""
+    rows = []
+    for book, moves in book_moves.items():
+        for dt, odds in moves:
+            rows.append({"player": "A B", "market": "hits", "ts": t0 + dt,
+                         "line": 1.5, "over_odds": odds, "book": book})
+    return rows, t0
+
+
+def test_the_first_mover_is_the_book_that_left_its_open_first():
+    """§4: "Which book moved first matters — the first mover took the
+    smart money; the rest are copying." `last_move_ts` already existed
+    and is the wrong end of the move for this question."""
+    rows, t0 = _ladder({
+        "Pinnacle":   [(0, -110), (60, -135), (600, -140)],
+        "FanDuel":    [(0, -110), (300, -130), (700, -138)],
+        "DraftKings": [(0, -112), (700, -112)],
+    })
+    r = lm.analyze(rows, now=t0 + 800)[0]
+    assert r.first_mover == "Pinnacle"
+    assert r.first_mover_lead_s == 240.0
+    assert r.first_mover_sharp is True
+
+
+def test_a_book_that_moved_the_other_way_is_not_the_first_mover():
+    """It moved earliest and it moved AGAINST the eventual direction — a
+    stale number being dragged back, not information arriving. Crediting
+    it would invert the signal on exactly the props where a book was
+    wrong early."""
+    rows, t0 = _ladder({
+        "DraftKings": [(0, -110), (30, +100)],       # drifts, earliest
+        "Pinnacle":   [(0, -110), (120, -140)],      # shortens, with the move
+        "FanDuel":    [(0, -110), (400, -135)],
+    })
+    r = lm.analyze(rows, now=t0 + 500)[0]
+    assert r.direction == "up"
+    assert r.first_mover == "Pinnacle", r.first_mover
+
+
+def test_a_lone_mover_reports_no_lead():
+    """A lead is a comparison. One book moving alone has no lead over
+    anybody, and printing a large one would read as a strong signal when
+    it is an absent second data point."""
+    # TWO books, not three. With three, one mover leaves the consensus
+    # median unmoved and `analyze` correctly reports nothing at all —
+    # which is the existing filter working, and was my fixture being
+    # wrong rather than the code.
+    rows, t0 = _ladder({
+        "Pinnacle": [(0, -110), (60, -160)],
+        "FanDuel":  [(0, -110), (600, -110)],
+    })
+    r = lm.analyze(rows, now=t0 + 700)[0]
+    assert r.first_mover == "Pinnacle"
+    assert r.first_mover_lead_s == 0.0
+
+
+def test_a_recreational_first_mover_is_not_flagged_sharp():
+    rows, t0 = _ladder({
+        "FanDuel":  [(0, -110), (60, -140)],
+        "Pinnacle": [(0, -110), (300, -138)],
+    })
+    r = lm.analyze(rows, now=t0 + 400)[0]
+    assert r.first_mover == "FanDuel"
+    assert r.first_mover_sharp is False
+
+
+def test_sharp_matching_survives_the_display_name_vs_api_key_gap():
+    """The snapshots carry "Pinnacle"; oddsapi.SHARP_BOOKS carries
+    "pinnacle". A strict comparison answers False forever, which looks
+    like a finding about the market rather than a string bug."""
+    assert lm._is_sharp("Pinnacle") is True
+    assert lm._is_sharp("pinnacle") is True
+    assert lm._is_sharp("Pinnacle Sports") is True
+    assert lm._is_sharp("FanDuel") is False
+    assert lm._is_sharp("") is False
+    assert lm._is_sharp(None) is False
+
+
+def test_first_mover_attribution_does_not_touch_the_grade():
+    """DELIBERATE. `engine.quality.apply_movement` already gives movement
+    veto power over the board — it can set grade="Pass" and stake 0 — on
+    a signal whose predictive value has never been measured; movecheck.py
+    exists to settle exactly that. Wiring a SECOND unmeasured movement
+    signal into pricing would repeat the mistake with more confidence."""
+    import inspect
+    from engine import quality
+    src = inspect.getsource(quality)
+    for name in ("first_mover", "first_mover_sharp", "first_mover_lead_s"):
+        assert name not in src, f"{name} reached the grader unmeasured"
 
 
 if __name__ == "__main__":
