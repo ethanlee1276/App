@@ -1766,6 +1766,90 @@ def test_the_paper_book_is_labelled_as_paper_not_scolded_as_noise():
     assert "None of it is money" in out
 
 
+def test_the_banked_column_is_audited_against_the_rebuild():
+    """After --repair-closes the banked closes are correct, and the note
+    saying they came from the side-buggy code became false. A note that
+    describes a fixed problem is worse than none: it teaches you to
+    distrust a column that is now right.
+
+    Both numbers exist for the same rows and are derived the same way, so
+    they get checked against each other instead. Agreement is the
+    evidence the repair took; disagreement means the settle path and this
+    report have diverged again, which is the failure that hid for twelve
+    days."""
+    import contextlib
+    import io
+    path, snaps = _clv_db(edge_pts=0.005)
+    try:
+        # Bank the SAME values the rebuild will produce.
+        with sqlite3.connect(path) as c:
+            for r in snaps:
+                c.execute("UPDATE bets SET closing_odds=? WHERE player=?",
+                          (int(r["over_odds"] if r["over_odds"] is not None
+                               else r["under_odds"]), r["player"]))
+        buf = io.StringIO()
+
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history(snaps, _go)
+        out = buf.getvalue()
+    finally:
+        os.unlink(path)
+    assert "every one agrees" in out, out
+    assert "side bug" not in out, "the stale note survived"
+
+
+def test_a_drifted_banked_close_is_reported_not_silently_ignored():
+    import contextlib
+    import io
+    path, snaps = _clv_db(edge_pts=0.005)
+    try:
+        with sqlite3.connect(path) as c:
+            c.execute("UPDATE bets SET closing_odds=-9999")
+        buf = io.StringIO()
+
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history(snaps, _go)
+        out = buf.getvalue()
+    finally:
+        os.unlink(path)
+    assert "DISAGREE" in out, out
+    assert "--repair-closes" in out
+
+
+def test_the_coverage_gap_names_the_unders():
+    """"113 of 307" says nothing about whether the missing 194 are a bug,
+    a gap, or a known limit. Most are unders that CANNOT be rebuilt from
+    pre-2026-08-09 snapshots, and that has a recovery date."""
+    import contextlib
+    import io
+    import time as _t
+    ts = _t.time() - 7200
+    date = __import__("datetime").datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    snaps = [{"player": f"P{i}", "market": "hits", "ts": ts, "line": 1.5,
+              "over_odds": -115, "under_odds": None, "book": "FanDuel"}
+             for i in range(30)]
+    bets = [_row(date=date, player=f"P{i}", market="hits",
+                 side="OVER" if i < 20 else "UNDER", odds=-110, line=1.5,
+                 status="lost") for i in range(30)]
+    path = _db(bets)
+    try:
+        buf = io.StringIO()
+
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history(snaps, _go)
+        out = buf.getvalue()
+    finally:
+        os.unlink(path)
+    assert "10 of those are UNDERS" in out, out
+    assert "2026-08-09" in out
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

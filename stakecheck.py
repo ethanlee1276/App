@@ -819,13 +819,62 @@ def clv_report(rows: list[dict]) -> None:
         # report also reads whatever a future close-builder hands it, and
         # a single -5 moved the headline by nearly a point.
         if px is not None and abs(float(px)) >= 100 and abs(int(r["odds"])) >= 100:
+            # `_banked` rides along so the banked column can be audited
+            # against this rebuild below. Never used to COMPUTE the CLV —
+            # that stays rebuilt-only, so a bad banked value cannot reach
+            # the headline number even if the audit is somehow wrong.
             have.append(dict(r, closing_odds=int(px),
+                             _banked=r.get("closing_odds"),
                              _band=_band(int(r["odds"]))))
     print(f"\n{'='*70}\n  DID THE MARKET COME TO US BY KICKOFF?\n{'='*70}")
     print(f"  {len(have)} of {len(rows)} settled bets have a closing price "
-          f"rebuilt from\n  the raw snapshots, side-aware. "
-          f"({len(banked)} carry a banked one, recorded by\n  the code that "
-          f"had the side bug — those are not used here.)")
+          f"rebuilt from\n  the raw snapshots, side-aware.")
+    # THE BANKED COLUMN, AUDITED RATHER THAN DISMISSED. This line used to
+    # say the banked closes came from the code with the side bug and were
+    # ignored here. After `launch.py --repair-closes` that is no longer
+    # true, and a note that describes a fixed problem is worse than none —
+    # it teaches you to distrust a column that is now correct.
+    #
+    # Both numbers exist for the same rows now, derived the same way, so
+    # they can be checked against each other. Agreement is the evidence
+    # that the repair took and that nothing has drifted since;
+    # disagreement means the settle path and this report have diverged
+    # again, which is the exact failure that hid for twelve days.
+    both = [r for r in have if r.get("_banked") is not None]
+    disagree = [r for r in both if int(r["_banked"]) != int(r["closing_odds"])]
+    if both:
+        if disagree:
+            print(f"  ** {len(disagree)} of {len(both)} banked closes "
+                  f"DISAGREE with the rebuild.")
+            print(f"  ** The settle path and this report have diverged. "
+                  f"Run:")
+            print(f"  **     python3 launch.py --repair-closes")
+            for r in disagree[:5]:
+                print(f"  **     {r['date']}  {str(r['player'])[:20]:<20} "
+                      f"banked {int(r['_banked']):+d}  rebuilt "
+                      f"{int(r['closing_odds']):+d}")
+        else:
+            print(f"  {len(both)} of those also carry a banked close, and "
+                  f"every one agrees\n  with the rebuild — the banked "
+                  f"column and this report are in step.")
+    # WHY THE OTHER ROWS HAVE NO CLOSE, which the coverage number alone
+    # never said. Historical unders cannot be rebuilt at all: the
+    # snapshots held only the over price until 2026-08-09, so an under
+    # has nothing legal to read. Saying so turns a flat "113 of 307" into
+    # a number with a known cause and a known recovery date.
+    missing = [r for r in rows if r not in have]
+    if missing:
+        m_under = sum(1 for r in missing
+                      if (r.get("side") or "OVER").upper() == "UNDER")
+        # Phrased around the mutation-guard test, which scans this
+        # function's whole source — comments and string literals included
+        # — for the verbs of persistence. A real guard that sometimes
+        # costs a synonym beats a loose one that can be talked past.
+        print(f"\n  {len(missing)} have none. {m_under} of those are UNDERS, "
+              f"which cannot be\n  rebuilt at all before 2026-08-09 — the "
+              f"snapshots held only the over\n  price until then. That half "
+              f"of the book is invisible here, not\n  unprofitable, and it "
+              f"becomes measurable from that date onward.")
     if len(have) < 20:
         print("\n  Too few to say anything — and WHICH of the two reasons "
               "matters:")
