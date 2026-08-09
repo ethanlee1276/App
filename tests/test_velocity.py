@@ -15,8 +15,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from engine.mlb import velocity as V                             # noqa: E402
 
 
-def _h(date, **by_type):
-    return {"date": date, "game_pk": hash(date) % 100000, "by_type": by_type}
+def _h(date, counts=None, **by_type):
+    return {"date": date, "game_pk": hash(date) % 100000,
+            "by_type": by_type, "counts": counts or {}}
 
 
 def test_a_full_mph_drop_is_flagged():
@@ -92,6 +93,27 @@ def test_the_primary_pitch_is_the_one_present_across_starts():
     assert V.primary_pitch(hist) == "SI"
 
 
+def test_the_primary_pitch_is_decided_by_VOLUME_not_the_alphabet():
+    """CAUGHT ON THE FIRST REAL PITCHER. Gerrit Cole's four-seam and
+    slider both appear in all five starts, so presence tied — and the
+    tiebreak fell through to sorting, where "SL" beats "FF". The tool
+    reported his slider and called a fastball pitcher's arm on it.
+
+    Volume decides. These are his real counts."""
+    hist = [_h("2026-08-08", counts={"FF": 42, "SL": 13}, FF=96.65, SL=89.35),
+            _h("2026-08-02", counts={"FF": 40, "SL": 15}, FF=96.79, SL=90.59),
+            _h("2026-07-28", counts={"FF": 45, "SL": 12}, FF=97.22, SL=90.38)]
+    assert V.primary_pitch(hist) == "FF"
+
+
+def test_presence_still_decides_when_no_counts_were_recorded():
+    """A history built before counts existed must not silently pick by
+    alphabet again — presence ranks it, and the sort is the last resort
+    rather than the rule."""
+    hist = [_h("a", FF=97.0, SL=89.0), _h("b", FF=97.1), _h("c", FF=97.2)]
+    assert V.primary_pitch(hist) == "FF"
+
+
 def test_the_baseline_is_his_own_not_the_leagues():
     """92 is alarming for Cole and ordinary for a soft-tosser. Both of
     these are steady arms and neither may flag."""
@@ -117,6 +139,43 @@ def test_the_arithmetic_touches_no_network():
         src = inspect.getsource(fn)
         for verb in ("urlopen", "fetch_playbyplay", "fetch_game_log"):
             assert verb not in src, f"{fn.__name__} calls {verb}"
+
+
+def test_every_pitch_type_is_reported_not_just_the_primary():
+    """THE CASE THAT MOTIVATED IT, from Cole's real five starts: his
+    four-seam was flat while his changeup went 87.64, 86.48, 86.26, 85.09
+    and then vanished. A single primary-pitch verdict said "SL within 0.8
+    mph" and hid a 2.5 mph slide on another pitch — the exact shape §5
+    asks us to notice."""
+    hist = [_h("2026-08-08", counts={"FF": 42}, FF=96.65, SL=89.35),
+            _h("2026-08-02", counts={"FF": 40}, FF=96.79, SL=90.59, CH=85.09),
+            _h("2026-07-28", counts={"FF": 45}, FF=97.22, SL=90.38, CH=86.26),
+            _h("2026-07-22", counts={"FF": 44}, FF=96.86, SL=89.49, CH=86.48),
+            _h("2026-07-17", counts={"FF": 46}, FF=97.28, SL=90.21, CH=87.64)]
+    got = {r["pitch_type"]: r for r in V.trend_all(hist)}
+    assert set(got) == {"FF", "SL", "CH"}
+    assert got["CH"]["dropped"] is True
+    assert got["FF"]["delta"] is not None and abs(got["FF"]["delta"]) < 0.5
+
+
+def test_a_pitch_he_stopped_throwing_is_reported_not_silently_missing():
+    """Shelving a pitch is itself a signal — it is what a pitcher does
+    when one is not working or hurts. Returning nothing would make the
+    most informative case the silent one."""
+    hist = [_h("new", counts={"FF": 40}, FF=97.0),
+            _h("b", FF=97.1, CH=86.0), _h("c", FF=97.2, CH=86.4)]
+    ch = [r for r in V.trend_all(hist) if r["pitch_type"] == "CH"]
+    assert ch and ch[0]["dropped"] is True
+    assert ch[0]["latest"] is None, "a dropped pitch must not invent a reading"
+    assert ch[0]["flag"] is False, "absence is not a velocity drop"
+
+
+def test_trend_all_sorts_the_worst_drop_first():
+    hist = [_h("new", counts={"FF": 40}, FF=94.0, SL=89.9),
+            _h("b", FF=97.0, SL=90.0), _h("c", FF=97.0, SL=90.0)]
+    got = V.trend_all(hist)
+    assert got[0]["pitch_type"] == "FF" and got[0]["flag"] is True
+    assert got[1]["pitch_type"] == "SL" and got[1]["flag"] is False
 
 
 if __name__ == "__main__":

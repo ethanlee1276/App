@@ -112,9 +112,17 @@ as "the best next build".
    10 tests. Last five STARTS (relievers excluded by `gamesStarted`),
    compared within a pitch type, against his own baseline, with a
    10-pitch floor per start and a signed 1.0 mph threshold.
-   `python3 launch.py --velo <personId>` prints the starts, not just the
-   verdict — a steady 97.1/97.3/97.2 then 95.9 is a different story from
-   97.4/96.2/97.1/96.0 at the same delta.
+   `python3 launch.py --velo <personId>` prints the starts and EVERY
+   pitch type, not just the verdict.
+
+   Both of those came from running it on a real pitcher. Cole's four-seam
+   and slider each appeared in all five starts, so the primary-pitch
+   tiebreak fell through to sorting — "SL" beats "FF" — and it judged a
+   fastball pitcher on his slider. Ranked by volume now. And a single
+   verdict reported "SL within 0.8 mph" while his changeup went 87.64,
+   86.48, 86.26, 85.09 and then vanished from the latest start: a 2.5 mph
+   slide and a shelved pitch, both invisible. `trend_all` reports every
+   type and names a pitch that disappeared.
 3. **TTO** — batter-sequence position within the game, which the same
    payload gives for free.
 4. **Pitch-count projection** — from boxscore `pitchesThrown`, which is

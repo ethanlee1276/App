@@ -2734,17 +2734,38 @@ def show_velocity(person_id=None, season: int | None = None) -> None:
                             sorted(h["by_type"].items(),
                                    key=lambda kv: -kv[1]))
         print(f"    {h['date']}   {arsenal}")
-    t = _v.trend(hist)
-    if not t:
-        print("\n  No comparable baseline — his latest pitch type does not")
+    rows = _v.trend_all(hist)
+    if not rows:
+        print("\n  No comparable baseline — his latest pitch types do not")
         print("  appear in the earlier starts. That is a real answer, and")
         print("  common in April.\n")
         return
-    mark = "  ← RED FLAG" if t["flag"] else ""
-    print(f"\n  {t['pitch_type']}: {t['latest']} vs {t['baseline']} baseline "
-          f"over {t['baseline_starts']} start(s)   "
-          f"{t['delta']:+.2f} mph{mark}")
-    print(f"  {t['reading']}")
+    primary = _v.primary_pitch(hist)
+    print()
+    for t in rows:
+        star = " *" if t["pitch_type"] == primary else "  "
+        if t.get("dropped"):
+            print(f"   {star} {t['pitch_type']:<3}  not thrown  "
+                  f"(was {t['baseline']} over {t['baseline_starts']})"
+                  f"   ← SHELVED")
+            continue
+        mark = "   ← RED FLAG" if t["flag"] else ""
+        print(f"   {star} {t['pitch_type']:<3} {t['latest']:>6} vs "
+              f"{t['baseline']:>6} over {t['baseline_starts']}"
+              f"   {t['delta']:+.2f} mph{mark}")
+    print(f"\n  * his primary pitch, by volume")
+    flagged = [t for t in rows if t["flag"] or t.get("dropped")]
+    if flagged:
+        for t in flagged:
+            print(f"  {t['reading']}")
+    else:
+        print(f"  Nothing over the {abs(_v.DROP_FLAG_MPH):.0f} mph line "
+              f"across {len(rows)} pitch type(s).")
+    # Said every time, not only when something fires: four pitches watched
+    # at a 1 mph threshold is four rolls of the dice, not one.
+    print(f"\n  {len(rows)} pitch type(s) examined — more types watched "
+          f"means more\n  chances for one to cross the line on noise "
+          f"alone. Read the shape,\n  not the flag.")
     print("\n  Evidence only — nothing prices from this. It is a pointer at")
     print("  injury reporting, which is what §5 asks it to be.\n")
 

@@ -61,6 +61,22 @@ def start_velocity(rows: list[dict], pitcher_id, min_pitches: int = MIN_PITCHES
             if n >= min_pitches}
 
 
+def start_counts(rows: list[dict], pitcher_id,
+                 min_pitches: int = MIN_PITCHES) -> dict:
+    """`{pitch_type: how many he threw}` for one pitcher in one game.
+
+    Kept alongside the means because "which pitch is his" is a question
+    about VOLUME, and `start_velocity` throws the count away. Without it
+    the primary pitch had to be guessed from presence alone, and that is
+    how Gerrit Cole — 42 four-seams in the game this was probed on — got
+    judged on his slider.
+    """
+    from .sources.pbp import velocity_by_type
+    return {t: n for t, (_mph, n) in
+            velocity_by_type(rows, pitcher_id=pitcher_id).items()
+            if n >= min_pitches}
+
+
 def primary_pitch(history: list[dict]) -> str | None:
     """The pitch type to judge him on: the one present in the most starts.
 
@@ -70,16 +86,26 @@ def primary_pitch(history: list[dict]) -> str | None:
     would outrank the sinker he actually lives on. Presence across starts
     is what makes a comparison possible at all.
     """
-    counts: dict = {}
+    starts: dict = {}
+    thrown: dict = {}
     for h in history:
         for t in (h.get("by_type") or {}):
-            counts[t] = counts.get(t, 0) + 1
-    if not counts:
+            starts[t] = starts.get(t, 0) + 1
+        for t, n in (h.get("counts") or {}).items():
+            thrown[t] = thrown.get(t, 0) + n
+    if not starts:
         return None
-    # Ties break toward the pitch thrown most in the most recent start,
-    # so a genuine 50/50 arsenal still resolves deterministically.
-    latest = (history[0].get("by_type") or {}) if history else {}
-    return max(counts, key=lambda t: (counts[t], t in latest, t))
+    # VOLUME FIRST, presence second. The first version ranked on presence
+    # alone and broke ties alphabetically — so a pitcher whose four-seam
+    # and slider both appear in all five starts got judged on the slider,
+    # because "SL" sorts above "FF". That is not a tiebreak, it is a coin
+    # flip wearing a rule, and it picked wrong on the first real pitcher
+    # it saw.
+    #
+    # `counts` may be absent on a history built before this existed, in
+    # which case thrown is empty and presence still decides — with the
+    # alphabetical fallback made explicit rather than accidental.
+    return max(starts, key=lambda t: (thrown.get(t, 0), starts[t], t))
 
 
 def trend(history: list[dict], pitch_type: str | None = None,
@@ -128,6 +154,56 @@ def trend(history: list[dict], pitch_type: str | None = None,
     }
 
 
+def trend_all(history: list[dict], baseline_starts: int = BASELINE_STARTS
+              ) -> list[dict]:
+    """Every pitch type that has a baseline, worst drop first.
+
+    WHY NOT JUST THE PRIMARY. Probed on Gerrit Cole, whose four-seam was
+    flat across five starts while his changeup went 87.64, 86.48, 86.26,
+    85.09 — and then vanished from the latest outing entirely. A single
+    primary-pitch verdict reported "SL within 0.8 mph" and hid a 2.5 mph
+    slide on another pitch, which is the exact shape §5 is asking us to
+    notice.
+
+    A pitch DISAPPEARING is reported too, as `dropped`. Shelving a pitch
+    is itself a signal — it is what a pitcher does when one is not
+    working or hurts — and returning nothing for it would let the most
+    informative case be the silent one.
+
+    MORE TYPES MEANS MORE CHANCES TO CROSS THE LINE BY NOISE: four
+    pitches watched at a 1 mph threshold is four rolls, not one. So this
+    returns a list to read rather than a single verdict to act on, and
+    the caller is told how many were examined.
+    """
+    types: set = set()
+    for h in history:
+        types.update((h.get("by_type") or {}).keys())
+    out = []
+    for t in sorted(types):
+        r = trend(history, pitch_type=t, baseline_starts=baseline_starts)
+        if r:
+            out.append(r)
+            continue
+        # No reading in the latest start, but a baseline exists: he had
+        # this pitch and stopped throwing it (or threw it under the floor).
+        prior = [h["by_type"][t] for h in history[1:1 + baseline_starts]
+                 if t in (h.get("by_type") or {})]
+        if prior and t not in (history[0].get("by_type") or {}):
+            out.append({
+                "pitch_type": t, "latest": None,
+                "baseline": round(sum(prior) / len(prior), 2),
+                "delta": None, "baseline_starts": len(prior),
+                "flag": False, "dropped": True,
+                "date": history[0].get("date"),
+                "reading": (f"{t} not thrown in the latest start (or under "
+                            f"the {MIN_PITCHES}-pitch floor) after "
+                            f"{len(prior)} start(s) averaging "
+                            f"{sum(prior) / len(prior):.1f}"),
+            })
+    out.sort(key=lambda r: (r["delta"] if r["delta"] is not None else 99))
+    return out
+
+
 # --- the network half, kept apart from the arithmetic above -----------------
 def recent_start_pks(person_id: int, season: int, limit: int = 5) -> list[dict]:
     """`[{"date", "game_pk"}]` most-recent-first for a pitcher's STARTS.
@@ -172,5 +248,6 @@ def velocity_history(person_id: int, season: int, limit: int = 5,
         by_type = start_velocity(rows, person_id, min_pitches)
         if by_type:
             out.append({"date": s["date"], "game_pk": s["game_pk"],
-                        "by_type": by_type})
+                        "by_type": by_type,
+                        "counts": start_counts(rows, person_id, min_pitches)})
     return out
