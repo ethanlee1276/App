@@ -1880,6 +1880,139 @@ def test_the_covered_and_uncovered_counts_add_up():
         f"{covered} covered + {uncovered} uncovered != {total} total")
 
 
+# --- the information test ---------------------------------------------------
+def test_auc_against_answers_known_by_hand():
+    """Before any of it is believed on real data."""
+    assert stakecheck._auc([1, 2, 3, 4], [0, 0, 1, 1]) == 1.0
+    assert stakecheck._auc([1, 2, 3, 4], [1, 1, 0, 0]) == 0.0
+    assert stakecheck._auc([1, 2, 3, 4], [0, 1, 0, 1]) == 0.75
+    assert stakecheck._auc([5, 5], [0, 1]) == 0.5      # a tie is half a win
+    assert stakecheck._auc([1, 2], [1, 1]) is None     # undefined, not 0.5
+
+
+def test_ties_do_not_let_row_order_decide_the_answer():
+    """Prices cluster on round numbers, so dozens of bets share an implied
+    probability exactly. Resolving those by list order would make the
+    result depend on what SQLite happened to return first."""
+    scores = [0.5] * 6
+    a = stakecheck._auc(scores, [1, 1, 1, 0, 0, 0])
+    b = stakecheck._auc(scores, [0, 0, 0, 1, 1, 1])
+    assert a == b == 0.5
+
+
+def test_auc_ignores_the_vig_because_it_is_rank_based():
+    """The reason this works on the prices we actually paid. Vig shifts
+    every implied probability by roughly a constant, and a monotone shift
+    cannot reorder anything — so no de-vigging is needed, and none of the
+    ways de-vigging goes wrong can happen here."""
+    raw = [0.35, 0.45, 0.55, 0.65]
+    y = [0, 1, 0, 1]
+    vigged = [p * 1.045 for p in raw]        # a 4.5% hold, applied flat
+    assert stakecheck._auc(raw, y) == stakecheck._auc(vigged, y)
+
+
+def _info_db(rows):
+    """Through the DB and back, so the report sees the dict shape it sees
+    in production rather than a hand-built one that could drift."""
+    path = _db(rows)
+    try:
+        return stakecheck._rows(path, None, None)
+    finally:
+        os.unlink(path)
+
+
+def _exact_null_rows(pairs=150):
+    """A sample whose claimed edge has AUC EXACTLY 0.5, by construction.
+
+    The first version of this drew outcomes at random with the edge made
+    irrelevant, and asserted the report called it noise. That is not a
+    test, it is a coin flip with extra steps: n=400 puts the AUC's own
+    SD near 0.03, seed 7 landed 2 SD low, and the report — correctly —
+    announced an inverted signal. The fixture was wrong, not the code.
+
+    So: at every distinct edge value put exactly one winner and one
+    loser. Every winner/loser pair across two edges is then matched by a
+    mirrored pair going the other way, and the AUC is 0.5 on the nose for
+    every seed, forever."""
+    out = []
+    for i in range(pairs):
+        for won in (True, False):
+            out.append(_row(date="2026-08-05",
+                            player=f"P{i}{'w' if won else 'l'}",
+                            market="hits", side="OVER", odds=100, line=1.5,
+                            hit_prob=0.50 + i * 0.001,
+                            status="won" if won else "lost",
+                            stake_units=0.4,
+                            pnl_units=0.4 if won else -0.4))
+    return _info_db(out)
+
+
+def _strong_signal_rows(n=400):
+    """Bets whose claimed edge really does predict the outcome, by a
+    margin far larger than the interval at this sample size."""
+    import random
+    rng = random.Random(7)
+    out = []
+    for i in range(n):
+        claimed = rng.uniform(-0.05, 0.25)
+        won = rng.random() < 0.5 + claimed * 1.5
+        out.append(_row(date="2026-08-05", player=f"P{i}", market="hits",
+                        side="OVER", odds=100, line=1.5,
+                        hit_prob=0.5 + claimed,
+                        status="won" if won else "lost",
+                        stake_units=0.4, pnl_units=0.4 if won else -0.4))
+    return _info_db(out)
+
+
+def test_a_real_edge_signal_is_detected():
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        stakecheck.info_report(_strong_signal_rows())
+    out = buf.getvalue()
+    assert "DOES sort winners from losers" in out, out
+
+
+def test_a_noise_edge_signal_is_called_noise():
+    """The result that matters: if bets we called better do not win more
+    often, every gate and stake rule in the repo is tuned on noise."""
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        stakecheck.info_report(_exact_null_rows())
+    out = buf.getvalue()
+    assert "cannot be told apart from noise" in out, out
+    assert "tuning a threshold on noise" in out
+
+
+def test_the_information_test_refuses_a_sample_too_small_to_rank():
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        stakecheck.info_report(_exact_null_rows(pairs=8))
+    assert "Too few" in buf.getvalue()
+
+
+def test_the_information_test_writes_nothing():
+    body = _code_only("info_report")
+    for verb in ("save", "write", "store", "set_", "UPDATE", "INSERT"):
+        assert verb not in body, f"info_report calls {verb}"
+
+
+def test_the_exact_null_fixture_really_is_exactly_a_coin_flip():
+    """The fixture the noise test depends on, verified rather than
+    assumed — a fixture that quietly drifts off 0.5 would turn its test
+    into the seed lottery this one was written to replace."""
+    rows = _exact_null_rows()
+    y = [1 if r["status"] == "won" else 0 for r in rows]
+    edge = [float(r["hit_prob"]) - __import__('engine.odds', fromlist=['x']).american_to_prob(int(r["odds"]))
+            for r in rows]
+    assert stakecheck._auc(edge, y) == 0.5
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

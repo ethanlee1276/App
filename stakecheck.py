@@ -147,6 +147,190 @@ def _band(odds: int) -> str:
     return "shorter than +100"
 
 
+def _auc(scores: list[float], labels: list[int]) -> float | None:
+    """Probability that a random winner outranks a random loser.
+
+    Mann-Whitney U, computed on MIDRANKS so ties count as half a win
+    rather than as a coin flip resolved by list order. That matters here:
+    prices cluster hard on round numbers, so dozens of bets share an
+    implied probability exactly, and sorting them arbitrarily would let
+    the answer depend on the order rows came out of SQLite.
+
+    0.5 is no discrimination at all. Below 0.5 means the score sorts
+    winners BELOW losers, which is information pointing backwards.
+    """
+    pairs = sorted(zip(scores, labels))
+    n = len(pairs)
+    ranks = [0.0] * n
+    i = 0
+    while i < n:                      # average the ranks within each tie
+        j = i
+        while j + 1 < n and pairs[j + 1][0] == pairs[i][0]:
+            j += 1
+        mid = (i + j) / 2.0 + 1.0
+        for k in range(i, j + 1):
+            ranks[k] = mid
+        i = j + 1
+    pos = sum(1 for _, y in pairs if y)
+    neg = n - pos
+    if not pos or not neg:
+        return None                   # all winners or all losers: undefined
+    rank_sum = sum(r for r, (_, y) in zip(ranks, pairs) if y)
+    return (rank_sum - pos * (pos + 1) / 2.0) / (pos * neg)
+
+
+def _boot_auc(scores, labels, reps: int = 2000, seed: int = 20260809):
+    """Percentile bootstrap CI for one AUC."""
+    import random
+    rng = random.Random(seed)
+    n = len(scores)
+    out = []
+    for _ in range(reps):
+        idx = [rng.randrange(n) for _ in range(n)]
+        a = _auc([scores[i] for i in idx], [labels[i] for i in idx])
+        if a is not None:
+            out.append(a)
+    if len(out) < reps // 2:
+        return None, None
+    out.sort()
+    return out[int(0.025 * len(out))], out[int(0.975 * len(out))]
+
+
+def _boot_auc_diff(a_scores, b_scores, labels, reps: int = 2000,
+                   seed: int = 20260809):
+    """PAIRED bootstrap of AUC(a) − AUC(b).
+
+    Paired because both scores describe the SAME bets: resampling them
+    independently would throw away the correlation between the model's
+    number and the market's, and that correlation is most of what makes
+    the difference measurable at this sample size.
+    """
+    import random
+    rng = random.Random(seed)
+    n = len(labels)
+    out = []
+    for _ in range(reps):
+        idx = [rng.randrange(n) for _ in range(n)]
+        ys = [labels[i] for i in idx]
+        aa = _auc([a_scores[i] for i in idx], ys)
+        bb = _auc([b_scores[i] for i in idx], ys)
+        if aa is not None and bb is not None:
+            out.append(aa - bb)
+    if len(out) < reps // 2:
+        return None, None
+    out.sort()
+    return out[int(0.025 * len(out))], out[int(0.975 * len(out))]
+
+
+def info_report(rows: list[dict]) -> None:
+    """DOES OUR NUMBER KNOW ANYTHING THE PRICE DOESN'T?
+
+    CLV answers a different question — "did the market move toward us?" —
+    and a null there is what a merely-decent model would produce anyway,
+    because this book is far too small to move a line. So a flat CLV
+    cannot distinguish "the model is worthless" from "the model is fine
+    and we are simply not sharp enough to be front-run".
+
+    This can. Rank every settled bet three ways and ask which ranking
+    sorts winners above losers:
+
+        the model's hit_prob
+        the market's implied probability, from the price we took
+        THE CLAIMED EDGE ITSELF (hit_prob − implied)
+
+    The third is the one that decides things. Every gate, threshold and
+    stake rule in this repo is a function of `edge`. If bets with more
+    claimed edge do not win more often than bets with less, then `edge`
+    is noise, and no amount of tuning a threshold on a noise variable
+    produces money. That is a much sharper statement than "no CLV", and
+    it is answerable from data already sitting in the journal.
+
+    AUC is rank-based, which is what makes it usable on the prices we
+    actually paid: the vig shifts every implied probability up by roughly
+    the same amount, and a monotone shift cannot change a ranking. No
+    de-vigging, no fair-value reconstruction, nothing to get wrong.
+
+    WHAT IT CANNOT SAY. These are the bets we chose to make, so every
+    number here is conditional on that selection. The model's AUC is not
+    "how good the model is at baseball", it is "how well it sorted the
+    spots it liked". That is the right question for deciding whether to
+    keep betting this way, and the wrong one for deciding whether the
+    projections have any merit in general.
+    """
+    from engine.odds import american_to_prob
+    use = [r for r in rows
+           if r["status"] in ("won", "lost")
+           and r.get("hit_prob") is not None and r.get("odds") is not None]
+    print(f"\n{'='*70}\n  DOES OUR NUMBER KNOW ANYTHING THE PRICE DOESN'T?"
+          f"\n{'='*70}")
+    if len(use) < 40:
+        print(f"  {len(use)} settled bets carry both a hit_prob and a price. "
+              f"Too few\n  to rank anything — this needs a couple of hundred "
+              f"before the\n  intervals are narrower than the effect.")
+        return
+    y = [1 if r["status"] == "won" else 0 for r in use]
+    model = [float(r["hit_prob"]) for r in use]
+    market = [american_to_prob(int(r["odds"])) for r in use]
+    edge = [m - k for m, k in zip(model, market)]
+    wins = sum(y)
+    print(f"  {len(use)} settled bets, {wins} winners and {len(use)-wins} "
+          f"losers.")
+    print(f"  AUC = the chance a random winner is ranked above a random "
+          f"loser.\n  0.50 is a coin flip. Below 0.50 is information "
+          f"pointing backwards.\n")
+    rows_out = []
+    for label, sc in (("the model's hit_prob", model),
+                      ("the market's price", market),
+                      ("OUR CLAIMED EDGE", edge)):
+        a = _auc(sc, y)
+        lo, hi = _boot_auc(sc, y)
+        rows_out.append((label, a, lo, hi))
+        star = "  <-- the one that decides things" if "EDGE" in label else ""
+        print(f"    {label:<22} AUC {a:.3f}   95% CI "
+              f"[{lo:.3f}, {hi:.3f}]{star}")
+    d, dlo, dhi = (_auc(model, y) - _auc(market, y),
+                   *_boot_auc_diff(model, market, y))
+    print(f"\n  model minus market   {d:+.3f}   95% CI [{dlo:+.3f}, "
+          f"{dhi:+.3f}]")
+    print(f"    Paired — both scores describe the same bets, and throwing "
+          f"away\n    that pairing would widen this interval for no reason.")
+
+    # --- what it means, stated before the numbers can be admired --------
+    _, e_auc, e_lo, e_hi = rows_out[2]
+    print(f"\n  READ IT LIKE THIS")
+    if e_lo <= 0.5 <= e_hi:
+        print(f"    The claimed edge cannot be told apart from noise: its "
+              f"interval\n    [{e_lo:.3f}, {e_hi:.3f}] contains 0.5. Bets we "
+              f"said were better did\n    not win more often than bets we "
+              f"said were worse. Every gate\n    and stake rule in the repo "
+              f"is a function of that number, so\n    tuning any of them is "
+              f"tuning a threshold on noise.")
+    elif e_lo > 0.5:
+        print(f"    The claimed edge DOES sort winners from losers — its "
+              f"whole\n    interval sits above 0.5. The number means "
+              f"something, and the\n    losses are coming from somewhere "
+              f"else: price, timing, sizing,\n    or which markets we take "
+              f"it into.")
+    else:
+        print(f"    The claimed edge sorts winners BELOW losers, with the "
+              f"whole\n    interval under 0.5. That is worse than useless: "
+              f"it is signal\n    with its sign inverted, and the gates are "
+              f"selecting against us.")
+    if dlo <= 0 <= dhi:
+        print(f"\n    Model against market is a wash. On the spots we chose, "
+              f"our\n    number ranks outcomes about as well as the price "
+              f"does — which,\n    after the vig, is a losing proposition no "
+              f"matter how it is sized.")
+    elif dlo > 0:
+        print(f"\n    The model out-ranks the market on these bets. That is "
+              f"the one\n    result that argues for keeping money on it.")
+    else:
+        print(f"\n    The market out-ranks the model on our own chosen "
+              f"spots. The\n    price knows more about these bets than we "
+              f"do.")
+    print(f"\n  read-only; nothing was written.\n")
+
+
 def report(rows: list[dict]) -> None:
     if not rows:
         print("No settled bets match. Nothing to measure.")
@@ -1064,6 +1248,9 @@ def main() -> None:
                     help="fit the model's overconfidence on the pre-rescale "
                          "era and test it on the current one. Reports only; "
                          "writes nothing and changes no model")
+    ap.add_argument("--info", action="store_true",
+                    help="does our number know anything the price does not? "
+                         "Ranks bets by model, by market, and by claimed edge")
     ap.add_argument("--paper", action="store_true",
                     help="measure the PAPER book instead of the real one — "
                          "same picks, same settling, zero dollars")
@@ -1083,6 +1270,11 @@ def main() -> None:
     rows = _rows(args.db, args.sport, args.since,
                  category="paper" if args.paper else None,
                  measurement=args.include_measurement)
+    if args.info:
+        # Its own trailer is printed inside, since it ends on the reading
+        # rather than on a table.
+        info_report(rows)
+        return
     if args.clv:
         clv_report(rows)
         print("\n  read-only; nothing was written.\n")
