@@ -652,6 +652,47 @@ def spread_report(rows: list[dict]) -> None:
               f"{actual:>9.1%}{actual - claimed:>+9.1%}"
               f"{'±' + format(se, '.1%'):>9}")
 
+    # --- where is the gap? ---------------------------------------------
+    #
+    # The pooled number is an average and averages hide subsets. The
+    # +100 to +119 price band already came back near honest while the
+    # book as a whole did not, which is worth chasing: if one market or
+    # one sport is calibrated, that is where a bet lives.
+    #
+    # AND THIS IS WHERE A MEASUREMENT TURNS INTO A STORY IF NOBODY IS
+    # COUNTING. Slice 292 bets eight ways and the best-looking slice will
+    # sit about two standard errors from the truth by chance alone. The
+    # bar is printed with the table rather than left to the reader.
+    import math as _m
+
+    def _slice(title, key):
+        groups: dict = {}
+        for r in cal:
+            groups.setdefault(r.get(key) or "?", []).append(r)
+        groups = {k: v for k, v in groups.items() if len(v) >= 15}
+        if len(groups) < 2:
+            return 0
+        print(f"\n  BY {title.upper()}")
+        print(f"    {title:<16}{'bets':>6}{'claimed':>10}{'actual':>9}"
+              f"{'gap':>9}{'1 SE':>9}{'SE from 0':>11}")
+        for k in sorted(groups, key=lambda g: -len(groups[g])):
+            chunk = groups[k]
+            c = sum(float(x["hit_prob"]) for x in chunk) / len(chunk)
+            a = sum(1 for x in chunk if x["status"] == "won") / len(chunk)
+            se = _m.sqrt(max(a * (1 - a), 1e-9) / len(chunk))
+            print(f"    {str(k):<16}{len(chunk):>6}{c:>10.1%}{a:>9.1%}"
+                  f"{a - c:>+9.1%}{'±' + format(se, '.1%'):>9}"
+                  f"{abs(a - c) / se if se else 0:>11.1f}")
+        return len(groups)
+
+    n_sl = _slice("sport", "sport") + _slice("market", "market")
+    if n_sl >= 2:
+        bar = _m.sqrt(2 * _m.log(n_sl))
+        print(f"\n    {n_sl} slices shown. With that many, the most extreme "
+              f"one sits about\n    {bar:.1f} SE from the truth by chance "
+              f"alone — so treat anything under\n    that as the sample "
+              f"breathing, not a place to bet.")
+
     print("\n  READ IT LIKE THIS")
     print("    negative at the top and POSITIVE at the bottom -> every")
     print("      probability sits too far from 50%. The spread is too narrow")

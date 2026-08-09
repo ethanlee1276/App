@@ -1051,6 +1051,121 @@ def test_the_shift_only_correction_is_fitted_on_its_own():
         f"shift-only is not the best intercept at temperature 1: {table}"
 
 
+# --- where is the gap? -------------------------------------------------------
+def _slice_db(spec, seed=5):
+    """spec: [(market, bias, n)]. Big n on purpose — see the test."""
+    import random
+    rng = random.Random(seed)
+    rows = []
+    for market, bias, n in spec:
+        for i in range(n):
+            cl = rng.uniform(0.40, 0.65)
+            won = rng.random() < cl + bias
+            rows.append(_row(player=f"{market}{i}", market=market, odds=-110,
+                             hit_prob=cl, status="won" if won else "lost",
+                             pnl_units=0.27 if won else -0.3))
+    return _db(rows)
+
+
+def _slice_rows(path, header="BY MARKET"):
+    """{name: (bets, gap, se_from_zero)} out of a slice table."""
+    import contextlib
+    import io
+    import re as _re
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        stakecheck.spread_report(stakecheck._rows(path, None, None))
+    text = buf.getvalue()
+    if header not in text:
+        return {}
+    seg = text[text.index(header):]
+    seg = seg[:seg.index("\n\n")] if "\n\n" in seg else seg
+    out = {}
+    for line in seg.splitlines():
+        m = _re.match(r"\s+(\S+)\s+(\d+)\s+[\d.]+%\s+[\d.]+%\s+"
+                      r"([-+][\d.]+)%\s+±[\d.]+%\s+([\d.]+)", line)
+        if m:
+            out[m.group(1)] = (int(m.group(2)), float(m.group(3)),
+                               float(m.group(4)))
+    return out
+
+
+def test_a_biased_market_is_separated_from_an_honest_one():
+    """WHY THE SAMPLE IS LARGE HERE. At 90 bets per market the first
+    version of this fixture drew an 'honest' market at 36.7% against a
+    claimed 52.0% — a 2.9 SE fluke that looked exactly like the planted
+    bias next to it. That is the hazard the whole slice section is
+    warning about, and it is a terrible property for a test, so n is
+    raised until the planted structure is the signal rather than the
+    seed."""
+    path = _slice_db([("hits", 0.0, 400), ("total_bases", -0.18, 400)])
+    try:
+        t = _slice_rows(path)
+    finally:
+        os.unlink(path)
+    assert t["total_bases"][1] < -12.0, t
+    assert abs(t["hits"][1]) < 6.0, t
+    assert t["total_bases"][2] > t["hits"][2], t
+
+
+def test_the_multiple_comparison_bar_is_printed_with_the_table():
+    """A number of standard errors means nothing without knowing how many
+    chances it had. Slice 292 bets eight ways and the best-looking slice
+    sits about two SE from the truth for free."""
+    import contextlib
+    import io
+    path = _slice_db([("hits", 0.0, 200), ("total_bases", -0.15, 200),
+                      ("outs", -0.05, 200)])
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.spread_report(stakecheck._rows(path, None, None))
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "SE from 0" in out
+    assert "by chance" in out and "slices shown" in out
+
+
+def test_a_slice_too_small_to_read_is_not_shown():
+    """A market with six bets has an SE wider than any gap it could
+    show. Printing it invites a reader to rank it."""
+    # Three markets so that two survive the floor — a slice table with a
+    # single row is not a comparison, and the report correctly declines
+    # to print one at all.
+    path = _slice_db([("hits", 0.0, 200), ("total_bases", -0.15, 200),
+                      ("rare", -0.30, 6)])
+    try:
+        t = _slice_rows(path)
+    finally:
+        os.unlink(path)
+    assert "rare" not in t, t
+    assert "hits" in t and "total_bases" in t
+
+
+def test_the_bar_grows_with_the_number_of_slices():
+    """The correction has to depend on how many looks were taken, or it
+    is decoration."""
+    import contextlib
+    import io
+    import re as _re
+
+    def bar(spec):
+        path = _slice_db(spec)
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                stakecheck.spread_report(stakecheck._rows(path, None, None))
+        finally:
+            os.unlink(path)
+        m = _re.search(r"([\d.]+) SE from the truth by chance", buf.getvalue())
+        return float(m.group(1)) if m else None
+
+    few = bar([("a", 0.0, 100), ("b", 0.0, 100)])
+    many = bar([(c, 0.0, 100) for c in "abcdefgh"])
+    assert few and many and many > few, (few, many)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
