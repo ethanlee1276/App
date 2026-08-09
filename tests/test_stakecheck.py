@@ -1702,6 +1702,45 @@ def test_every_clv_slice_prints_a_median_beside_its_mean():
         assert "median" in seg, header
 
 
+def test_a_slice_that_cannot_be_shown_says_why_with_its_counts():
+    """IT BIT IN THE LIVE TOOL, immediately after I fixed the same thing
+    in a fixture. `--clv` printed no by-side section and there was no way
+    to tell whether the build had not landed or whether one side simply
+    had too few closes to compare.
+
+    The counts are usually the interesting part. "OVER 98, UNDER 4" is a
+    finding about the SNAPSHOT PIPELINE — under prices not being stored —
+    dressed up as an absence of one about betting."""
+    import contextlib
+    import datetime
+    import io
+    import time as _t
+    ts = _t.time() - 7200
+    date = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    snaps, bets = [], []
+    for i in range(40):
+        side = "OVER" if i < 37 else "UNDER"      # 3 UNDERs: under the floor
+        snaps.append({"player": f"P{i}", "market": "hits", "ts": ts,
+                      "line": 1.5,
+                      "over_odds": -115 if side == "OVER" else None,
+                      "under_odds": -105 if side == "UNDER" else None,
+                      "book": "FanDuel"})
+        bets.append(_row(date=date, player=f"P{i}", market="hits", side=side,
+                         odds=-110, line=1.5, status="lost"))
+    path = _db(bets)
+    buf = io.StringIO()
+    try:
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history(snaps, _go)
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "CLV BY SIDE: not shown" in out, out
+    assert "OVER 37" in out and "UNDER 3" in out, out
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

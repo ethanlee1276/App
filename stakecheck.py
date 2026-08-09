@@ -924,8 +924,20 @@ def clv_report(rows: list[dict]) -> None:
         groups: dict = {}
         for r, v in pairs:
             groups.setdefault(r.get(key) or "?", []).append(v)
+        raw = {k: len(v) for k, v in groups.items()}
         groups = {k: v for k, v in groups.items() if len(v) >= 12}
         if len(groups) < 2:
+            # SAY SO. A slice that silently prints nothing is
+            # indistinguishable from a slice that does not exist, and the
+            # counts are usually the interesting part: "only OVER has
+            # enough closes" is a finding about the SNAPSHOT PIPELINE, not
+            # an absence of one about betting.
+            print(f"\n  CLV BY {title.upper()}: not shown — "
+                  + (", ".join(f"{k} {n}" for k, n in sorted(raw.items(),
+                                                             key=lambda kv: -kv[1]))
+                     or "no rows")
+                  + f"\n    (needs two groups of 12+; a group that thin is "
+                    f"a gap in the closes,\n    not a gap in the betting)")
             return
         print(f"\n  CLV BY {title.upper()}")
         print(f"    {title:<18}{'bets':>6}{'mean':>10}{'median':>10}"
