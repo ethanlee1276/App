@@ -403,7 +403,16 @@ def records_from_ledger(conn) -> list[dict]:
             # consequences land almost entirely on picks that would have
             # been `main`, and this journal is 227 main against 3,134
             # pooled, so a finding needs to say which book convicted it.
-            "category": r["category"] or "?",
+            #
+            # A MISSING CATEGORY IS `main`, and it has to be spelled that
+            # way HERE. This read `or "?"` while `main_only_check` and
+            # `both_ways` both read `or "main"`, so one NULL row counted
+            # as main in the guard and as unknown in the mix beside it —
+            # two rules for one fact, disagreeing. `bets.category` is
+            # TEXT DEFAULT 'main' and `_migrate_category` backfilled
+            # every pre-column row to 'main', so absence means the
+            # headline book and never "unknown, treat as paper".
+            "category": r["category"] or "main",
             "feats": features_of(side=r["side"], odds=r["odds"], prob=p,
                                  book=r["book"], horizon_days=horizon,
                                  lead_min=r["lead_min"], park_hr=r["park_hr"],
@@ -726,6 +735,188 @@ def mine(records: list[dict], min_n: int | None = None,
     }
 
 
+# --- the both-ways comparison (task #78) -------------------------------------
+#: `main` rows needed before mining main-only is worth doing at all. It is
+#: not a power calculation on the miner — it is MIN_N times a slice count,
+#: the point at which the ordinary slices stop being empty. Below it every
+#: comparison returns "cannot say", which is a true answer and a useless
+#: one.
+BOTH_WAYS_MIN_MAIN = 500
+
+
+def _key(f: dict) -> tuple:
+    return (f["sport"], f["market"], f["dim"], f["value"])
+
+
+def _convictions(result: dict) -> dict:
+    """What the miner CONVICTED, before the main-only guard demoted any of it.
+
+    Reading `result["closed"]` here would compare the wrong thing. `mine`
+    already demotes a closure the `main` book does not support, so on the
+    pooled side `closed` is emptied by the very effect this comparison is
+    trying to size — the first cut of this function found zero
+    disagreements for exactly that reason, which looked like agreement and
+    was the guard working.
+
+    A demoted finding is a conviction that was then withheld. Counting
+    both is what makes `pooled_only` mean "the pooled evidence would have
+    blocked this", which is the quantity the open question is about — and
+    it doubles as a count of how often the existing guard fires.
+    """
+    out = {}
+    for f in result.get("findings", []) + result.get("restatements", []):
+        if f.get("action") == "close" or f.get("demoted"):
+            out[_key(f)] = f
+    return out
+
+
+def both_ways(records: list[dict], min_n: int | None = None,
+              alpha: float | None = None) -> dict:
+    """Mine the pool and mine `main` alone, then compare the closures.
+
+    TASK #78'S OPEN QUESTION, MADE INTO A MEASUREMENT. `records_from_ledger`
+    reads every graded single across every journal category — on the real
+    journal roughly 300 `main` against 3,100 in the measurement buckets —
+    while `veto()` blocks RECOMMENDATIONS, which are `main` and only
+    `main`. Evidence and enforcement are drawn from different populations.
+
+    Two arguments point opposite ways and neither can win on reasoning.
+    Pooling is defensible because the veto runs at pricing time on every
+    candidate prop, so the population it sees really is all of them.
+    Filtering is defensible because blocking a prop that would have been
+    `loose` changes nothing — it was never bet — so every real-world
+    consequence of the veto lands on the main-eligible population, and
+    `docs/SELECTION_CORRECTION.md` §2 says that population is the one
+    where the miscalibration lives at all: E[epsilon | selected] > 0.
+
+    The task's own instruction was "do not resolve this by argument.
+    Resolve it when there are enough `main` rows to mine both ways and
+    compare." This is that comparison, written now so the answer costs a
+    command later instead of a design session.
+
+    THE THREE BUCKETS ARE THE WHOLE OUTPUT:
+
+      both        the closure survives either way. Pooling did no harm.
+      pooled_only it closes on the pool and not on `main`. Either the pool
+                  diluted a real `main` effect into visibility from the
+                  other direction, or — the case that matters — the
+                  closure is a property of books we never bet, enforced
+                  against the one we do.
+      main_only   it closes on `main` and NOT on the pool. This is the
+                  blind spot made visible: a selection effect present in
+                  the selected book and averaged away by ten times as
+                  much unselected material.
+
+    A `main_only` bucket that is non-empty is the argument for filtering,
+    made out of data. An empty one after the sample is big enough is the
+    argument for pooling. Until then `ready` is False and the honest
+    reading is printed instead of a verdict.
+    """
+    min_n = MIN_N if min_n is None else min_n
+    alpha = ALPHA if alpha is None else alpha
+
+    # Same rule as `main_only_check`: a missing category IS main. The
+    # column is `TEXT DEFAULT 'main'` and the migration backfilled it, so
+    # absence means the headline book rather than "unknown".
+    mains = [r for r in records if (r.get("category") or "main") == "main"]
+
+    pooled = mine(records, min_n=min_n, alpha=alpha)
+    # Mining `main` alone is run even when it is far too thin, because the
+    # count of what it CAN test is the readiness number, and guessing it
+    # from the row total would be guessing.
+    solo = mine(mains, min_n=min_n, alpha=alpha)
+
+    p_closed = _convictions(pooled)
+    m_closed = _convictions(solo)
+
+    # How many `main` rows each pooled closure actually has, which is what
+    # decides whether the comparison could have gone either way. A pooled
+    # closure sitting on 3 main rows is not evidence that main disagrees —
+    # it is a slice main has never seen.
+    comparable, incomparable = [], []
+    for k, f in sorted(p_closed.items(), key=lambda kv: str(kv[0])):
+        n_main = (f.get("main_only") or {}).get("n", 0)
+        (comparable if n_main >= min_n else incomparable).append(
+            {"key": k, "n_main": n_main,
+             "reading": f.get("reading", ""),
+             "gap_pts": f.get("gap_pts"), "z": f.get("z")})
+
+    return {
+        "generated": _dt.datetime.now().isoformat(timespec="seconds"),
+        "n_records": len(records), "n_main": len(mains),
+        "min_n": min_n, "alpha": alpha,
+        "milestone": BOTH_WAYS_MIN_MAIN,
+        # READY IS ABOUT THE SAMPLE, NOT ABOUT THE RESULT. Reporting
+        # "0 disagreements" off 227 main rows would read as agreement when
+        # it is silence, which is the exact mistake this file exists to
+        # stop making elsewhere.
+        "ready": len(mains) >= BOTH_WAYS_MIN_MAIN,
+        # CONVICTIONS, not enforced closures — see `_convictions`.
+        "pooled_closed": sorted(str(k) for k in p_closed),
+        "main_closed": sorted(str(k) for k in m_closed),
+        "both": sorted(str(k) for k in (p_closed.keys() & m_closed.keys())),
+        "pooled_only": sorted(str(k) for k in (p_closed.keys() - m_closed.keys())),
+        "main_only": sorted(str(k) for k in (m_closed.keys() - p_closed.keys())),
+        "comparable": comparable,
+        "incomparable": incomparable,
+    }
+
+
+def format_both_ways(res: dict) -> str:
+    lines = ["", "=" * 70,
+             "  THE MINER, BOTH WAYS  (task #78)", "=" * 70,
+             f"  pooled: {res['n_records']} graded singles"
+             f"   ·   main only: {res['n_main']}",
+             ""]
+    if not res["ready"]:
+        short = res["milestone"] - res["n_main"]
+        lines += [
+            f"  NOT READY — {res['n_main']} `main` rows, and the comparison "
+            f"needs {res['milestone']}.",
+            f"  {short} to go. Below that the main-only mine has almost no "
+            "slice",
+            f"  reaching min_n={res['min_n']}, so 'no disagreement' would "
+            "mean silence",
+            "  rather than agreement, and reading it as agreement is the "
+            "mistake",
+            "  this whole comparison exists to avoid.",
+            ""]
+    lines += [
+        f"  convicts both ways    {len(res['both'])}",
+        f"  pooled only          {len(res['pooled_only'])}"
+        "   ← would block on evidence `main` lacks",
+        f"  main only            {len(res['main_only'])}"
+        "   ← the blind spot: diluted away by the pool",
+        "",
+        f"  of {len(res['pooled_closed'])} pooled conviction"
+        f"{'' if len(res['pooled_closed']) == 1 else 's'}, "
+        f"{len(res['comparable'])} ha"
+        f"{'s' if len(res['comparable']) == 1 else 've'} {res['min_n']}+ "
+        "`main` rows and could",
+        f"  have disagreed; {len(res['incomparable'])} sit on slices `main` "
+        "has barely seen.",
+        ""]
+    for name, keys in (("pooled only", res["pooled_only"]),
+                       ("main only", res["main_only"])):
+        if keys:
+            lines.append(f"  {name}:")
+            lines += [f"    {k}" for k in keys]
+            lines.append("")
+    if res["ready"]:
+        lines += [
+            "  THE READING. A non-empty `main only` bucket is the argument "
+            "for",
+            "  filtering the miner to `main`, made out of data rather than "
+            "out of",
+            "  reasoning. An empty one, at this sample size, is the argument "
+            "for",
+            "  leaving it pooled. Either way the answer is a pricing change "
+            "and",
+            "  wants a human — see docs/SELECTION_CORRECTION.md §2.",
+            ""]
+    return "\n".join(lines)
+
+
 # --- persistence and the pick-time veto --------------------------------------
 def save(result: dict, path=None) -> Path:
     p = Path(path if path is not None else DEFAULT_PATH)
@@ -901,9 +1092,19 @@ def main(argv=None) -> int:
                    help=f"false-discovery rate (default {ALPHA})")
     p.add_argument("--apply", action="store_true",
                    help="write the result to the store the veto reads")
+    p.add_argument("--both-ways", action="store_true",
+                   help="mine the pool and `main` alone, and compare "
+                        "(task #78)")
     a = p.parse_args(argv if argv is not None else _sys.argv[1:])
 
     from . import ledger
+    if a.both_ways:
+        # No --apply path, deliberately. Choosing a population is a
+        # pricing change; this command reports and stops.
+        print(format_both_ways(both_ways(
+            records_from_ledger(ledger.connect()),
+            min_n=a.min_n, alpha=a.alpha)))
+        return 0
     result = mine(records_from_ledger(ledger.connect()),
                   min_n=a.min_n, alpha=a.alpha)
     shown = dict(result)

@@ -561,6 +561,137 @@ def test_a_demoted_finding_is_absent_from_the_enforced_list():
         assert (f.get("dim"), f.get("value")) not in closed_keys
 
 
+# --- both ways: the comparison task #78 asked for ----------------------------
+def _cat_recs(sport, market, feats, said, wins, n, cat):
+    """`recs` with a journal category attached, which is the only thing
+    `both_ways` splits on."""
+    out = recs(sport, market, feats, said, wins, n)
+    for r in out:
+        r["category"] = cat
+    return out
+
+
+def test_both_ways_sees_the_effect_the_pool_averages_away():
+    """THE BLIND SPOT, MADE VISIBLE — the whole point of task #78.
+
+    `main` claims 65% and hits 40% over 300 bets: a 25-point miss, the
+    largest thing in the journal. Ten times as much `loose` material in
+    the same slice is calibrated, so pooled it reads 0.65 against 0.646
+    and the miner closes nothing at all.
+
+    That is `docs/SELECTION_CORRECTION.md` §2 running in the miner:
+    E[epsilon | selected] > 0 means the miscalibration exists only
+    conditional on being selected, so a fit over the whole population
+    cannot see it. The `main only` bucket is what seeing it looks like."""
+    rows = (_cat_recs("mlb", "hits", {"side": "UNDER"}, 0.65, 120, 300, "main")
+            + _cat_recs("mlb", "hits", {"side": "UNDER"}, 0.65, 1980, 3000,
+                        "loose")
+            + _cat_recs("mlb", "hits", {"side": "OVER"}, 0.60, 180, 300,
+                        "main")
+            + _cat_recs("mlb", "hits", {"side": "OVER"}, 0.60, 1800, 3000,
+                        "loose"))
+    res = lp.both_ways(rows, min_n=40)
+    assert res["pooled_closed"] == [], (
+        "the pool was supposed to be blind here: " + str(res["pooled_closed"]))
+    assert res["main_only"], "the main-only mine missed a 25-point miss"
+    assert "UNDER" in res["main_only"][0]
+
+
+def test_both_ways_flags_a_closure_main_does_not_carry():
+    """The other direction, and the one that costs real picks. The slice
+    is hot in books we never bet and calibrated in the one we do, so a
+    pooled closure would block recommendations on the strength of
+    somebody else's book."""
+    rows = (_cat_recs("mlb", "hits", {"side": "UNDER"}, 0.65, 195, 300, "main")
+            + _cat_recs("mlb", "hits", {"side": "UNDER"}, 0.65, 1200, 3000,
+                        "loose")
+            + _cat_recs("mlb", "hits", {"side": "OVER"}, 0.60, 180, 300,
+                        "main")
+            + _cat_recs("mlb", "hits", {"side": "OVER"}, 0.60, 1800, 3000,
+                        "loose"))
+    res = lp.both_ways(rows, min_n=40)
+    assert res["pooled_only"], "a pooled-only closure should have been named"
+    assert not res["main_only"]
+
+
+def test_both_ways_reports_silence_as_silence_below_the_milestone():
+    """An underpowered comparison that reads as agreement is the exact
+    mistake this file exists to stop making elsewhere, so `ready` is
+    about the SAMPLE and never about the result. Below the milestone the
+    report says how far short it is instead of printing a verdict."""
+    rows = (_cat_recs("mlb", "hits", {"side": "UNDER"}, 0.65, 26, 60, "main")
+            + _cat_recs("mlb", "hits", {"side": "UNDER"}, 0.65, 260, 600,
+                        "loose"))
+    res = lp.both_ways(rows, min_n=40)
+    assert res["n_main"] == 60
+    assert res["ready"] is False
+    text = lp.format_both_ways(res)
+    assert "NOT READY" in text
+    assert f"{lp.BOTH_WAYS_MIN_MAIN - 60} to go" in text
+    # And the verdict block — the paragraph that says what an empty
+    # `main only` bucket would MEAN — must not print at all. That reading
+    # is only valid once the sample can carry it.
+    assert "THE READING" not in text
+
+
+def test_both_ways_separates_disagreement_from_never_having_seen_it():
+    """A pooled closure sitting on three `main` rows is not evidence that
+    `main` disagrees — it is a slice `main` has never seen. Counting it
+    as a disagreement would manufacture the finding."""
+    rows = (_cat_recs("mlb", "hits", {"side": "UNDER"}, 0.65, 1, 5, "main")
+            + _cat_recs("mlb", "hits", {"side": "UNDER"}, 0.65, 300, 1000,
+                        "loose")
+            + _cat_recs("mlb", "hits", {"side": "OVER"}, 0.60, 600, 1000,
+                        "loose"))
+    res = lp.both_ways(rows, min_n=40)
+    assert res["pooled_only"], "expected a pooled closure to compare against"
+    assert res["comparable"] == [], "5 main rows cannot disagree with anything"
+    assert res["incomparable"], "the thin slice should be named as thin"
+    assert res["incomparable"][0]["n_main"] < 40
+
+
+def test_both_ways_treats_a_missing_category_as_main():
+    """Same rule as `main_only_check`, and it has to be the same rule.
+    `bets.category` is TEXT DEFAULT 'main' and the migration backfilled
+    every old row, so absence means the headline book — reading it as
+    paper would empty the main side the moment a caller passed rows that
+    predate the column."""
+    rows = recs("mlb", "hits", {"side": "UNDER"}, 0.65, 40, 100)   # no category
+    res = lp.both_ways(rows, min_n=40)
+    assert res["n_main"] == 100
+
+
+def test_both_ways_never_writes_the_store_the_veto_reads():
+    """Choosing a population is a pricing change. The command reports and
+    stops — there is no --apply on this path, and adding one would let a
+    reading command silently change what gets blocked."""
+    src = open(os.path.join(ROOT, "engine", "losspatterns.py"),
+               encoding="utf-8").read()
+    body = src[src.index("if a.both_ways:"):src.index("result = mine(")]
+    assert "save(" not in body, "the both-ways path must not write the store"
+
+
+def test_one_rule_decides_what_counts_as_main():
+    """`records_from_ledger` mapped a NULL category to "?" while the
+    guard beside it mapped a missing one to "main", so a single row was
+    main to the check and unknown to the mix it was printed next to.
+
+    `bets.category` is TEXT DEFAULT 'main' and `_migrate_category`
+    backfills every pre-column row to 'main', so absence means the
+    headline book. One rule, asserted where a NULL can actually reach."""
+    conn = ledger.connect(":memory:")
+    conn.execute(
+        "INSERT INTO bets (ts, sport, date, player, market, side, line, "
+        "book, odds, hit_prob, status, category) VALUES "
+        "('2026-08-01T12:00:00','mlb','2026-08-01','P','hits','OVER',1.5,"
+        "'dk',-150,0.6,'won',NULL)")
+    conn.commit()
+    rows = lp.records_from_ledger(conn)
+    assert len(rows) == 1
+    assert rows[0]["category"] == "main"
+    assert lp.both_ways(rows, min_n=40)["n_main"] == 1
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

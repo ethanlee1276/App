@@ -3375,6 +3375,17 @@ def settle_now(day: str | None = None) -> None:
         else:
             print(f"  loss patterns: nothing over the bar "
                   f"({lp.get('tested', 0)} slice(s) tested)")
+        # TASK #78 HAS A DATE NOW. Its instruction was "do not resolve
+        # this by argument — resolve it when there are enough `main` rows
+        # to mine both ways and compare", and a condition nobody is
+        # watching for is a condition nobody notices being met. Announced
+        # once it is crossable, and silent before then: a countdown every
+        # night is a line you stop reading.
+        _mains = sum(1 for r in losspatterns.records_from_ledger(lconn)
+                     if r["category"] == "main")
+        if _mains >= losspatterns.BOTH_WAYS_MIN_MAIN:
+            print(f"  loss patterns: {_mains} `main` rows — the pooled-vs-"
+                  f"main comparison is now runnable (launch.py --both-ways)")
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠️  loss-pattern mining skipped: {exc}")
     try:
@@ -3618,6 +3629,15 @@ def main() -> None:
         i = argv.index("--pbp")
         pk = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else None
         show_pbp(pk)
+        return
+    if "--both-ways" in argv:
+        # Task #78: mine the pooled journal and `main` alone, then compare
+        # the convictions. Reports and stops — choosing a population is a
+        # pricing change, so there is deliberately no --apply here.
+        from engine import ledger as _l
+        from engine import losspatterns as _lp
+        print(_lp.format_both_ways(
+            _lp.both_ways(_lp.records_from_ledger(_l.connect()))))
         return
     if "--unbuilt" in argv:
         show_unbuilt()

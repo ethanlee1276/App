@@ -475,3 +475,71 @@ grade thresholds. That is where the +10.5 lives. §8's two branches are
 unchanged and now sharper: either selection stops picking the spots where
 its own error points favourably, or there is nothing on this board worth
 betting. Neither is a calibration change.
+
+---
+
+## The same blind spot in the loss miner, and the measurement that settles it
+
+§2's argument is general: a fit over the whole population cannot see a
+miscalibration that exists **conditional on being selected**. That is why
+`calibrate.py`'s 282,862-sample fit says the model is fine while the
+journal runs +12 hot.
+
+`engine/losspatterns.py` has the same shape of exposure, in both
+directions at once. `records_from_ledger` pools every graded single across
+every journal category — on the real journal roughly 300 `main` against
+3,100 measurement rows — while `veto()` blocks **recommendations**, which
+are `main` and only `main`. So:
+
+- a real selection effect inside `main` gets averaged against ten times as
+  much unselected material and diluted toward nothing, and
+- a slice that happens to be `main`-heavy inherits the curse and reads as
+  a property of the *slice*.
+
+**What is already enforced.** A closure the `main` book does not support
+is demoted to a watch (`main_only_check`, commit e322749). It keeps
+appearing and keeps accruing evidence, and it stops blocking picks on the
+strength of a different book. That fixes the second direction: nothing is
+refused on evidence `main` does not carry.
+
+**What that cannot fix** is the first direction. A finding diluted below
+the bar never surfaces, so it is never demoted — there is nothing to
+demote. Only mining `main` on its own can see it.
+
+### The open question, and why it is not settled by argument
+
+Should a veto that lands on recommendations be *convicted* on rows that
+would have been recommendations?
+
+*Pooling* is defensible: the veto runs at pricing time on every candidate
+prop (`engine/mlb/betting.py`, inside `gate_ok`), so the population it
+sees really is all of them.
+
+*Filtering* is defensible: blocking a prop that would have been `loose`
+changes nothing — it was never bet — so every real-world consequence of
+the veto lands on the main-eligible population, and §2 says that is the
+population where the miscalibration exists at all.
+
+Both are reasonable and neither wins on reasoning. `losspatterns.both_ways`
+mines the pool and mines `main` alone and compares the convictions:
+
+    python3 launch.py --both-ways
+
+- **`main only` non-empty** → the pool is hiding real findings. That is the
+  argument for filtering, made out of data.
+- **`main only` empty, at a sample big enough to have found something** →
+  the argument for leaving it pooled.
+
+It compares **convictions**, not enforced closures, because `mine` already
+demotes what `main` will not support — reading `closed` on the pooled side
+would compare against a list the demotion has emptied, and report the
+guard working as agreement.
+
+`ready` is about the SAMPLE and never about the result: below
+`BOTH_WAYS_MIN_MAIN` (500 `main` rows) the report says how far short it is
+and prints no verdict, because an underpowered comparison that reads as
+agreement is the mistake this whole document exists to avoid. The nightly
+settle announces the milestone once it is crossed.
+
+Either answer is a **pricing change** and wants a human. The command
+reports and stops; there is deliberately no `--apply` on that path.
