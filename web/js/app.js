@@ -2318,6 +2318,49 @@ function moveChip(r) {
   return `<span class="chip ${withUs ? "up" : "down"}" title="${withUs ? "Books have re-priced toward our side since our first snapshot" : "Books have re-priced away from our side since our first snapshot"}">${mark} Market ${withUs ? "with" : "against"} pick · ${what}</span>`;
 }
 
+/* §5's velocity tell, on the card. MLB_MODEL: "A drop of 1+ mph is a red
+   flag — check injury and mechanics reporting before trusting any
+   projection of him."
+
+   PITCHER MARKETS ONLY, which is why most cards show nothing: the number
+   is his own change against his own recent baseline, and a hitter prop
+   has no such thing. An absent chip means unmeasured, never steady.
+
+   NOTHING PRICES FROM THIS. The chip is deliberately worded as an
+   instruction to go and read something, because a number on a card reads
+   as a recommendation unless it says otherwise — and the claimed edge on
+   this book is still indistinguishable from a coin flip
+   (docs/THE_INFORMATION_TEST.md). */
+function veloChip(r) {
+  const d = r.velo_delta;
+  if (d == null) return "";
+  const drop = d <= -1.0;
+  const mph = `${d >= 0 ? "+" : ""}${d.toFixed(1)} mph`;
+  const tip = drop
+    ? "Down a full mph or more on his main pitch against his own last "
+      + "starts. §5 treats this as a red flag: check injury and mechanics "
+      + "reporting before trusting the projection. It does not change the "
+      + "price."
+    : "Change on his main pitch against his own last starts. Evidence "
+      + "only — nothing prices from it.";
+  return `<span class="chip ${drop ? "down" : ""}" title="${tip}">`
+       + `${drop ? iconMark("warn") : ""}Velo ${mph}`
+       + `${drop ? " · check reports" : ""}</span>`;
+}
+
+/* §4: "Which book moved first matters — the first mover took the smart
+   money; the rest are copying." Shown only when a SHARP book led, because
+   that is the case §4 is about — a recreational book moving first is
+   usually a stale number being corrected, which is noise on a card. */
+function firstMoverChip(r) {
+  const m = r.line_move;
+  if (!m || !m.first_mover || !m.first_mover_sharp) return "";
+  return `<span class="chip" title="A sharp book left its opening number `
+       + `first and the rest followed. §4 reads that as the informed side `
+       + `moving. Recorded and journaled; it does not change the price.">`
+       + `${iconMark("signal", 11)}${escapeHtml(m.first_mover)} moved first</span>`;
+}
+
 // §8/§10 chips: the market tier and volatility rating every play carries.
 function tierChip(r) {
   if (r.tier == null) return "";
@@ -2368,7 +2411,7 @@ function cardHTML(r) {
         ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
              ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
         : ""}
-      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${booksChip(r)}${stakeChip}</div>
+      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${booksChip(r)}${stakeChip}</div>
       ${corr}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
 }
