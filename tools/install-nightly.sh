@@ -30,6 +30,9 @@ MINUTE=0
 PRE=""
 PRE_HOUR=7
 PRE_MINUTE=0
+# Which of the three runners this agent drives — nightly, the
+# pre-kickoff odds pull, or the lineup watch. Set by the mode flags.
+SCRIPT="nightly"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -49,11 +52,23 @@ while [ $# -gt 0 ]; do
       ;;
     --pre-kickoff)
       PRE=1
+      SCRIPT="prekick"
       LABEL="com.qellysbook.prekick"
       PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
       # An explicit --at after --pre-kickoff still wins; these are the
-      # defaults for thepre-kickoff pass only.
+      # defaults for the pre-kickoff pass only.
       HOUR=$PRE_HOUR; MINUTE=$PRE_MINUTE
+      shift
+      ;;
+    --lineups)
+      # Must start BEFORE the cards post. A boundary's width is the gap
+      # since the previous look at that game, so a watch that starts late
+      # finds them already up with nothing to measure against — the first
+      # real run caught 11 and could use 1.
+      SCRIPT="lineups"
+      LABEL="com.qellysbook.lineups"
+      PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+      HOUR=11; MINUTE=0
       shift
       ;;
     *) echo "unknown argument: $1"; exit 2 ;;
@@ -66,7 +81,7 @@ if [ "$(uname)" != "Darwin" ]; then
   exit 1
 fi
 
-chmod +x "$REPO/tools/nightly.sh"
+chmod +x "$REPO/tools/${SCRIPT}.sh"
 mkdir -p "$HOME/Library/LaunchAgents"
 
 cat > "$PLIST" <<PLISTEOF
@@ -79,7 +94,7 @@ cat > "$PLIST" <<PLISTEOF
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>$REPO/tools/${PRE:+prekick}${PRE:-nightly}.sh</string>
+    <string>$REPO/tools/${SCRIPT}.sh</string>
   </array>
   <key>WorkingDirectory</key><string>$REPO</string>
   <key>StartCalendarInterval</key>

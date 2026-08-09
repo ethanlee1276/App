@@ -263,8 +263,22 @@ A second agent handles the pre-kickoff pull:
     bash tools/install-nightly.sh --pre-kickoff --at 07:30
     bash tools/install-nightly.sh --pre-kickoff --remove
 
-It runs `launch.py --nightly --odds-only`: refresh the odds, rebuild the
-boards, settle nothing. The 6am pass prices a 9:30am kickoff on lines
+And a third for the lineup cards:
+
+    bash tools/install-nightly.sh --lineups                # 11:00 local
+    bash tools/install-nightly.sh --lineups --at 10:30
+
+**It has to start before the cards post**, and that is the whole reason it
+is scheduled rather than run by hand. `engine/mlb/lineuptimes` records the
+first moment each card is seen up, and the width of the window the real
+release sits in is the gap since the PREVIOUS look at that game. A watch
+started at 3pm finds ten cards already up with no previous look, so their
+boundaries are unbounded and unusable. Measured on the first real run:
+**15 games, 11 caught, 1 usable.** It polls every 5 minutes — the interval
+IS the precision of every boundary — and exits when the slate is set.
+
+The pre-kickoff agent runs `launch.py --nightly --odds-only`: refresh the
+odds, rebuild the boards, settle nothing. The 6am pass prices a 9:30am kickoff on lines
 three and a half hours old, which is the window a Saturday-night number
 becomes a Sunday-morning one. Separate label, separate lock, separate log
 — a 6am run that overruns must not block the pull with a deadline.

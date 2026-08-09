@@ -464,6 +464,44 @@ def test_a_posted_card_is_not_re_fetched_on_later_polls():
         os.unlink(path)
 
 
+def test_the_installer_drives_three_distinct_agents():
+    """Three runners now share one installer, and the failure mode is
+    silent: a label pointing at the wrong script installs an agent that
+    runs the nightly at 11am, or a lineup watch at 6am, and neither
+    announces itself."""
+    import pathlib
+    sh = (pathlib.Path(__file__).resolve().parent.parent / "tools"
+          / "install-nightly.sh").read_text()
+    for label, script in (("com.qellysbook.nightly", "nightly"),
+                          ("com.qellysbook.prekick", "prekick"),
+                          ("com.qellysbook.lineups", "lineups")):
+        assert label in sh, label
+        assert (pathlib.Path(__file__).resolve().parent.parent / "tools"
+                / f"{script}.sh").is_file(), f"tools/{script}.sh missing"
+    # The plist and the chmod must BOTH follow the selected script. A
+    # chmod hardcoded to nightly.sh leaves the other two non-executable,
+    # which launchd reports as a permissions error nobody connects back
+    # to the installer.
+    assert 'tools/${SCRIPT}.sh</string>' in sh
+    assert 'chmod +x "$REPO/tools/${SCRIPT}.sh"' in sh
+    assert '${PRE:+prekick}' not in sh, "the two-way expansion is back"
+
+
+def test_the_lineup_watch_polls_tighter_than_the_default():
+    """The polling interval IS the precision of every boundary recorded.
+    Skipping games whose cards are already up made a tight interval cheap,
+    so the agent spends that saving on precision rather than pocketing
+    it."""
+    import pathlib
+    sh = (pathlib.Path(__file__).resolve().parent.parent / "tools"
+          / "lineups.sh").read_text()
+    assert "--every 5" in sh
+    assert "--watch" in sh
+    # And it must report the harvest, or a day that recorded nothing
+    # usable is invisible until someone runs a report by hand.
+    assert "coverage()" in sh
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
