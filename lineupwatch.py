@@ -98,33 +98,55 @@ def posted_live(date: str) -> tuple[int, int]:
     sched = _get_json(
         f"{STATS_BASE}/schedule?sportId=1&startDate={date}&endDate={date}",
         f"mlb_schedule_{date}.json", ttl=600)
+    # A CARD DOES NOT UN-POST. Games already recorded up today need no
+    # boxscore at all, so a poll late in the afternoon fetches only the
+    # handful still waiting instead of the whole slate every ten minutes.
+    # The boundary bookkeeping pays for itself here.
+    try:
+        known = lineuptimes.already_posted(date)
+    except Exception:                                       # noqa: BLE001
+        known = set()
     posted = total = 0
+    looks = []
+    # SAY WHAT IT IS DOING. Each un-posted game is a boxscore fetch over
+    # the network, so a full slate is a dozen-plus serial round trips
+    # with, until now, nothing on screen — indistinguishable from a hang,
+    # which is exactly what it got reported as.
+    pending = sum(len(d.get("games") or []) for d in sched.get("dates") or [])
+    if pending:
+        print(f"  checking {pending} game(s) — {len(known)} already have "
+              f"cards up", flush=True)
     for day in sched.get("dates", []) or []:
         for g in day.get("games", []) or []:
             total += 1
             pk = g.get("gamePk")
             if not pk:
                 continue
+            if pk in known:
+                posted += 1
+                continue                # already seen up; nothing to fetch
             try:
                 box = fetch_boxscore(pk)
             except Exception:
                 continue
+            print(".", end="", flush=True)
             up = bool(box.get("teams", {}).get("home", {}).get("battingOrder")
                       and box.get("teams", {}).get("away", {}).get("battingOrder"))
-            # RECORD THE BOUNDARY WHILE WE ARE HERE. This loop already
-            # knows which game and what its state is; it threw both away
-            # and returned a count. §4's lineup-release move needs the
-            # moment, and there was nowhere to get one.
-            #
-            # Noted on every look, not only the posted ones: a first
-            # sighting with no previous observation has an unbounded
-            # window, which is indistinguishable from a stale guess.
-            try:
-                lineuptimes.note_look(date, pk, up)
-            except Exception:                               # noqa: BLE001
-                pass        # bookkeeping must never break the poller
+            # The boundary §4's lineup-release move needs. This loop
+            # already knew which game and what its state was, and returned
+            # a count. Collected rather than written per game — writing
+            # each one reloaded and rewrote the whole store, which is what
+            # made this crawl.
+            looks.append((pk, up))
             if up:
                 posted += 1
+    if looks:
+        print(flush=True)          # close the dot line
+    try:
+        if looks:
+            lineuptimes.note_looks(date, looks)
+    except Exception:                                       # noqa: BLE001
+        pass                # bookkeeping must never break the poller
     return (posted, total)
 
 

@@ -90,6 +90,49 @@ def note_look(date: str, game_pk, posted: bool, ts: float | None = None,
     return row
 
 
+def note_looks(date: str, looks, ts: float | None = None,
+               path: Path | None = None) -> dict:
+    """Record a whole poll's worth of observations in ONE read and write.
+
+    `note_look` loads and rewrites the entire store per call, which is
+    fine for one game and quadratic for a slate: fifteen games meant
+    fifteen reads and fifteen full rewrites of a file that grows by a row
+    per game per day all season. That was my regression and it is what
+    made `lineupwatch` crawl.
+
+    `looks` is an iterable of (game_pk, posted).
+    """
+    ts = time.time() if ts is None else ts
+    data = _load(path)
+    for game_pk, posted in looks:
+        key = f"{date}:{game_pk}"
+        row = data.get(key) or {"date": date, "game_pk": game_pk,
+                                "posted_ts": None, "last_look_ts": None,
+                                "seen_within_s": None}
+        if posted and row.get("posted_ts") is None:
+            prev = row.get("last_look_ts")
+            row["posted_ts"] = ts
+            row["seen_within_s"] = round(ts - prev, 1) if prev else None
+        row["last_look_ts"] = ts
+        data[key] = row
+    _save(data, path)
+    return data
+
+
+def already_posted(date: str, path: Path | None = None) -> set:
+    """Game pks whose card we have already seen up today.
+
+    A posted lineup does not un-post, so these need no boxscore fetch on
+    any later poll — which turns the new bookkeeping from a cost into the
+    thing that makes the poll cheap as the slate fills in.
+    """
+    out = set()
+    for row in _load(path).values():
+        if row.get("date") == date and row.get("posted_ts"):
+            out.add(row.get("game_pk"))
+    return out
+
+
 def posted_at(date: str, game_pk, path: Path | None = None) -> float | None:
     """The boundary for this game, or None if we never caught it."""
     row = _load(path).get(f"{date}:{game_pk}")

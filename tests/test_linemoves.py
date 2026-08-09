@@ -415,6 +415,55 @@ def test_a_first_sighting_with_no_previous_look_is_not_usable():
         os.unlink(path)
 
 
+def test_a_whole_poll_is_one_read_and_one_write():
+    """MY REGRESSION, reported as "lineupwatch is taking forever to
+    load". `note_look` loads and rewrites the entire store per call —
+    fine for one game, quadratic for a slate: fifteen games meant fifteen
+    reads and fifteen full rewrites of a file that grows by a row per
+    game per day all season."""
+    import tempfile
+    from pathlib import Path
+    from engine.mlb import lineuptimes
+    fd, path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    p = Path(path)
+    writes = {"n": 0}
+    real_save = lineuptimes._save
+    lineuptimes._save = lambda d, pp=None: (writes.__setitem__("n", writes["n"] + 1),
+                                            real_save(d, pp))[1]
+    try:
+        lineuptimes.note_looks("2026-08-09",
+                               [(i, i % 2 == 0) for i in range(15)],
+                               ts=1000.0, path=p)
+        assert writes["n"] == 1, f"{writes['n']} writes for one poll"
+        assert lineuptimes.posted_at("2026-08-09", 0, path=p) == 1000.0
+        assert lineuptimes.posted_at("2026-08-09", 1, path=p) is None
+    finally:
+        lineuptimes._save = real_save
+        os.unlink(path)
+
+
+def test_a_posted_card_is_not_re_fetched_on_later_polls():
+    """A card does not un-post, so the games already seen up need no
+    boxscore at all — which turns the boundary bookkeeping from a cost
+    into the thing that makes the poll cheap as the slate fills in."""
+    import tempfile
+    from pathlib import Path
+    from engine.mlb import lineuptimes
+    fd, path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    p = Path(path)
+    try:
+        lineuptimes.note_looks("2026-08-09", [(1, True), (2, False)],
+                               ts=1000.0, path=p)
+        known = lineuptimes.already_posted("2026-08-09", path=p)
+        assert known == {1}, known
+        # A different day must not inherit today's answers.
+        assert lineuptimes.already_posted("2026-08-10", path=p) == set()
+    finally:
+        os.unlink(path)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
