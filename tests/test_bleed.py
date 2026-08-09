@@ -225,7 +225,13 @@ def test_a_significant_rate_with_a_quiet_units_test_is_not_read_as_fine():
                         stake=rnd.choice([0.05, 0.05, 0.05, 0.1, 0.1, 0.8])))
     s = bleed.measure(rows)
     assert s["z_rate"] < -2, s["z_rate"]
-    assert abs(s["z"]) < abs(s["z_rate"]), "stake variance did not damp units"
+    # MARGIN, not a bare comparison. `abs(a) < abs(b)` passes on a
+    # last-decimal difference, which is the shape of a real effect and
+    # of float noise alike — see tests/test_sidebias.py, where that
+    # class of assertion flaked. Measured here: 0.22 against 3.29, so
+    # 10% is far inside the real gap and far outside the noise.
+    assert abs(s["z"]) < abs(s["z_rate"]) * 0.9, \
+        "stake variance did not damp units"
     # Flattened: the copy wraps across print() calls, and a test that
     # breaks on rewrapping is a test of the line breaks.
     out = " ".join(_run(rows).split())

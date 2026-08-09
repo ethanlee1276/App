@@ -122,7 +122,11 @@ def test_the_hoops_gate_consults_all_three_verdicts():
                   open(cal.DEFAULT_PATH, "w"))
         cal.reset_cache()
         tempered = hoops_eval(dict(HOOPS_PROP), WNBA)
-        assert abs(tempered["p_model"] - 0.5) < abs(base["p_model"] - 0.5)
+        # Margin rather than a bare comparison (see test_sidebias.py).
+        # Measured: 0.019 against 0.038 — tempering halves the distance
+        # from the coin flip, so 10% is nowhere near the real effect.
+        assert (abs(tempered["p_model"] - 0.5)
+                < abs(base["p_model"] - 0.5) * 0.9)
         # ...and a boundary fit closes the market outright.
         json.dump({"wnba:pts": {"temperature": cal.GRID_MAX, "intercept": 0.0}},
                   open(cal.DEFAULT_PATH, "w"))

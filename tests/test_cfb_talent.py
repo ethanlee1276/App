@@ -156,7 +156,9 @@ def test_the_blue_chip_ratio_is_not_a_second_helping_of_the_same_fact():
     flipped = {t: {"ratio": r["ratio"]} for t, r in
                zip(agreeing, reversed(list(agreeing.values())))}
     disagree = T.talent_prior(TALENT, blue_chip=flipped)
-    assert abs(disagree["BAMA"]) < abs(plain["BAMA"])
+    # Margin rather than a bare comparison (see test_sidebias.py).
+    # Measured: 3.02 against 6.03 — a clean halving.
+    assert abs(disagree["BAMA"]) < abs(plain["BAMA"]) * 0.9
     assert abs(disagree["BAMA"]) == abs(plain["BAMA"]) / 2
 
 

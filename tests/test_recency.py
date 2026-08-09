@@ -154,7 +154,10 @@ def test_temper_edge_shrinks_and_flags_bad_data():
     # The real Caminero case: model 0.75 vs a broken market price of 0.27.
     hit, edge, credible = temper_edge(0.75, 0.27, "Hard Rock")
     assert not credible                         # a 48% raw gap is bad data, not alpha
-    assert abs(edge) < abs(0.75 - 0.27)         # probability shrunk toward the market
+    # Margin rather than a bare comparison (see test_sidebias.py). The
+    # point is that a 48-point raw gap is SHRUNK hard, so demanding a
+    # tenth of it is a floor the real behaviour clears easily.
+    assert abs(edge) < abs(0.75 - 0.27) * 0.9   # shrunk toward the market
     # A modest, believable edge on a real line survives (and is damped).
     hit, edge, credible = temper_edge(0.56, 0.50, "DraftKings")
     assert credible and 0 < edge < 0.06
@@ -205,7 +208,10 @@ def test_empirical_model_corrects_discrete_props():
     blended = empirical_prob_over(hist, 0.5, parametric)
 
     assert parametric > 0.78                       # the old, overstated number
-    assert abs(blended - true_rate) < abs(parametric - true_rate)
+    # Margin rather than a bare comparison (see test_sidebias.py).
+    # Measured: 0.028 against 0.213 — the blend is nearly eight times
+    # closer to truth.
+    assert abs(blended - true_rate) < abs(parametric - true_rate) * 0.9
     assert blended < parametric
 
     # Too short a log can't outvote the model — it falls straight through.

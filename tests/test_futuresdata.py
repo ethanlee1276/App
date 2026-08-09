@@ -76,7 +76,10 @@ def test_last_seasons_rating_is_decayed_before_it_is_trusted():
     raw = compute_team_ratings(c, "mlb", seasons=[2025])
     assert prior == 1.0
     team = max(raw, key=lambda t: abs(raw[t].net))
-    assert abs(blended[team]) < abs(raw[team].net)
+    # Margin rather than a bare comparison (see test_sidebias.py).
+    # Measured: 0.91 against 1.22 — the tightest of these, and still
+    # a third clear.
+    assert abs(blended[team]) < abs(raw[team].net) * 0.9
 
 
 def test_a_game_means_a_different_amount_in_each_league():

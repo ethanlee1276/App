@@ -47,7 +47,9 @@ def test_shrinkage_pulls_small_samples_toward_zero():
     raw = compute_team_ratings(conn, "nfl", seasons=[2026], shrink=0.0)
     shrunk = compute_team_ratings(conn, "nfl", seasons=[2026], shrink=6.0)
     # AAA has only 2 games, so shrinkage should noticeably temper its rating.
-    assert abs(shrunk["AAA"].net) < abs(raw["AAA"].net)
+    # Margin rather than a bare comparison (see test_sidebias.py).
+    # Measured: 4.25 against 17.0 — shrinkage to a quarter.
+    assert abs(shrunk["AAA"].net) < abs(raw["AAA"].net) * 0.9
     assert shrunk["AAA"].net > 0        # still positive, just regressed
 
 

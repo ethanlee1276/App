@@ -301,25 +301,114 @@ def test_no_test_file_strands_tests_below_its_runner():
     test_parlays.py sat there — every test of the ranking and the slate cap —
     plus eight more across four other files, all green, none running.
 
-    Grep-level rule, checked for the whole suite at once, because the failure
-    mode is invisible from inside the file it happens in.
+    Checked for the whole suite at once, because the failure mode is
+    invisible from inside the file it happens in.
+
+    FOUND BY THE PARSE TREE, after the grep version accused this very
+    file. It located the runner with the FIRST occurrence of the marker
+    string, and the marker appeared here as a string literal inside this
+    test — so every test written below this one read as stranded, and the
+    fix on offer was to keep reordering tests around a false positive.
+    `ast` finds the real `if` statement at module level and nothing that
+    merely quotes it.
     """
-    import re
+    import ast
     here = os.path.dirname(os.path.abspath(__file__))
+
+    def runner_line(tree):
+        """Line of the module-level `if __name__ == "__main__":`, if any."""
+        for node in tree.body:
+            if not isinstance(node, ast.If):
+                continue
+            t = node.test
+            if (isinstance(t, ast.Compare)
+                    and isinstance(t.left, ast.Name)
+                    and t.left.id == "__name__"
+                    and any(isinstance(c, ast.Constant) and c.value == "__main__"
+                            for c in t.comparators)):
+                return node.lineno
+        return None
+
     stranded = {}
     for name in sorted(os.listdir(here)):
         if not (name.startswith("test_") and name.endswith(".py")):
             continue
         src = open(os.path.join(here, name), encoding="utf-8").read()
-        marker = 'if __name__ == "__main__"'
-        if marker not in src:
+        tree = ast.parse(src, filename=name)
+        line = runner_line(tree)
+        if line is None:
             continue
-        after = re.findall(r"^def (test_\w+)", src[src.index(marker):], re.M)
+        after = [n.name for n in tree.body
+                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                 and n.name.startswith("test_") and n.lineno > line]
         if after:
             stranded[name] = after
     assert not stranded, (
         "tests defined below the __main__ runner never execute: "
         + "; ".join(f"{k}: {', '.join(v)}" for k, v in stranded.items()))
+
+
+def test_no_bare_abs_against_abs_assertion_survives():
+    """`assert abs(a) < abs(b)` passes on a last-decimal difference.
+
+    Task #84, the sidebias flake class. That shape says "this effect is
+    smaller than that one" and accepts 0.4999 against 0.5000 as proof —
+    which is the signature of a real effect and of float noise alike, so
+    the test goes green either way and goes red on a rounding change
+    nobody made deliberately.
+
+    Every one of the eight in this repo was MEASURED before a margin was
+    set, and the margins came from the measurements rather than from
+    taste: the tightest genuine gap was 0.913 against 1.217, the widest
+    0.218 against 3.287. A 10% floor therefore sits well inside every
+    real effect here and well outside the last-decimal band.
+
+    READ WITH `ast`, NOT `grep`, and the difference is the whole test. A
+    line-regex flagged `abs(a - 1) < 1e-6 and abs(b - 1) < 1e-9` in
+    test_rescale.py and test_team_context.py — two absolute-tolerance
+    checks sharing a line, where the right-hand side of each comparison
+    is a constant. Both are correct as written. What makes the flake is
+    an abs() *as the thing being compared against*, and only the parse
+    tree can tell that from an abs() that merely appears later on the
+    line. A guard with false positives gets switched off.
+
+    It lives with the other cross-file shape checks because no individual
+    test can assert that its neighbours are not flaky.
+    """
+    import ast
+    here = os.path.dirname(os.path.abspath(__file__))
+
+    def is_bare_abs(node):
+        """A direct `abs(...)` call, with nothing done to it.
+
+        `abs(x) * 0.9`, `abs(x) + 0.05` and `abs(x) / 2` are BinOps, so
+        they fall through here — which is exactly the licence: a margin
+        makes the comparison say something a last decimal cannot satisfy.
+        """
+        return (isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "abs")
+
+    bare = []
+    for name in sorted(os.listdir(here)):
+        if not (name.startswith("test_") and name.endswith(".py")):
+            continue
+        src = open(os.path.join(here, name), encoding="utf-8").read()
+        for node in ast.walk(ast.parse(src, filename=name)):
+            if not isinstance(node, ast.Assert):
+                continue
+            for cmp_ in [n for n in ast.walk(node.test)
+                         if isinstance(n, ast.Compare)]:
+                ops = cmp_.ops
+                if len(ops) != 1 or not isinstance(
+                        ops[0], (ast.Lt, ast.Gt, ast.LtE, ast.GtE)):
+                    continue
+                if is_bare_abs(cmp_.left) and is_bare_abs(cmp_.comparators[0]):
+                    bare.append(f"{name}:{cmp_.lineno}")
+    assert not bare, (
+        "bare abs-vs-abs assertions pass on a last-decimal difference; "
+        "measure both values and give the comparison a margin (task "
+        "#84): " + ", ".join(bare))
 
 
 if __name__ == "__main__":

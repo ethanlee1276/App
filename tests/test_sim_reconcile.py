@@ -316,7 +316,10 @@ def test_a_short_order_is_padded_so_it_cycles_at_nine():
         return G.simulate_lineup(rates, [], trials=20000).pa_mean["bat1"]
     short, full = pa(eight), pa(padded)
     assert short > full > G.expected_pa(1) - 0.5
-    assert abs(full - G.expected_pa(1)) < abs(short - G.expected_pa(1))
+    # Margin rather than a bare comparison (see test_sidebias.py).
+    # Measured: 0.106 against 0.631.
+    assert (abs(full - G.expected_pa(1))
+            < abs(short - G.expected_pa(1)) * 0.9)
     # A full nine is returned untouched.
     assert len(G.pad_to_nine(padded)) == 9
 
