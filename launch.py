@@ -2714,18 +2714,31 @@ def repair_closes(apply: bool = False) -> None:
     r = ledger.repair_closing_odds(conn, apply=apply)
     print(f"\n{'='*70}\n  BANKED CLOSING PRICES, REBUILT FROM THE "
           f"SNAPSHOTS\n{'='*70}")
-    print(f"  {r['settled']} settled bets examined")
-    print(f"  {r['agreed']:>5} already correct")
-    print(f"  {r['rewritten']:>5} rewritten to the right side/line")
-    print(f"  {r['cleared']:>5} cleared — no legal close exists for that "
-          f"side and line")
-    if r["sample"]:
-        print("\n  a sample of what changes:")
-        for date, player, side, market, line, had, want in r["sample"]:
-            print(f"    {date}  {str(player)[:20]:<20} {str(side or '')[:5]:<5} "
-                  f"{str(market)[:12]:<12} {line}   "
+    def _rows(label, sample):
+        if not sample:
+            return
+        print(f"\n  {label}")
+        for date, player, side, market, line, had, want in sample:
+            print(f"    {date}  {str(player)[:20]:<20} "
+                  f"{str(side or '')[:5]:<5} {str(market)[:12]:<12} {line}   "
                   f"{'(none)' if had is None else f'{int(had):+d}'} -> "
                   f"{'(cleared)' if want is None else f'{int(want):+d}'}")
+
+    print(f"  {r['settled']} settled bets examined")
+    print(f"  {r['agreed']:>5} already correct — left alone")
+    print(f"  {r['filled']:>5} FILLED     had no close, gains one "
+          f"(coverage, nothing overwritten)")
+    print(f"  {r['overwritten']:>5} OVERWRITTEN had a close, gets a "
+          f"different one")
+    print(f"  {r['cleared']:>5} CLEARED    had a close, no legal one exists "
+          f"for that side/line")
+    # The overwrites first and in full, because they are the only rows
+    # where a value that already existed is being replaced.
+    _rows("OVERWRITTEN — check these before applying:",
+          r["overwritten_sample"])
+    _rows("CLEARED — these lose a value and gain nothing:",
+          r["cleared_sample"])
+    _rows("filled (a sample; these are pure coverage):", r["sample"])
     if r["applied"]:
         print("\n  written. Re-run `python3 launch.py --settle` to refresh "
               "the site,")

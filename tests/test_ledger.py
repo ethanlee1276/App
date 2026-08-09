@@ -2191,7 +2191,7 @@ def test_repair_rewrites_an_under_banked_with_the_overs_price():
     conn, snaps, _ = _close_repair_db()
     r = _with_history(snaps, lambda: ledger.repair_closing_odds(conn,
                                                                 apply=True))
-    assert r["rewritten"] == 1, r
+    assert r["overwritten"] == 1, r
     got = conn.execute("SELECT closing_odds FROM bets").fetchone()[0]
     assert got == 105, f"the under's own close should be banked, got {got}"
 
@@ -2199,7 +2199,7 @@ def test_repair_rewrites_an_under_banked_with_the_overs_price():
 def test_repair_is_a_dry_run_unless_asked():
     conn, snaps, _ = _close_repair_db()
     r = _with_history(snaps, lambda: ledger.repair_closing_odds(conn))
-    assert r["rewritten"] == 1 and r["applied"] is False
+    assert r["overwritten"] == 1 and r["applied"] is False
     assert conn.execute("SELECT closing_odds FROM bets").fetchone()[0] == -140
 
 
@@ -2289,6 +2289,40 @@ def test_reading_the_paper_switch_does_not_flip_it():
     finally:
         ledger.DEFAULT_DB = orig
         os.unlink(path)
+
+
+def test_the_dry_run_separates_a_fill_from_an_overwrite():
+    """The first real dry run reported 2065 "rewritten" and sampled
+    twelve — and all twelve were (none) -> price, rows that simply had no
+    close and now gain one. That is pure coverage and it is safe.
+
+    The rows that HAD a value and get a different one are the only place
+    anything is destroyed, and they were invisible, because the sample
+    was taken from the front of the scan. A dry run that cannot show you
+    the risky subset is not doing the job a dry run exists to do."""
+    import time as _t
+    ts = _t.time() - 7200
+    date = __import__("datetime").datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    conn = ledger.connect(":memory:")
+    for player, banked in (("Had Nothing", None), ("Had A Value", -140)):
+        conn.execute(
+            "INSERT INTO bets (ts, sport, date, player, market, side, line, "
+            "odds, status, stake_units, closing_odds, category) VALUES "
+            "(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (date, "mlb", date, player, "hits", "UNDER", 1.5, -110,
+             "lost", 0.4, banked, "main"))
+    conn.commit()
+    snaps = [{"player": p, "market": "hits", "ts": ts, "line": 1.5,
+              "over_odds": -140, "under_odds": 105, "book": "FanDuel"}
+             for p in ("Had Nothing", "Had A Value")]
+    r = _with_history(snaps, lambda: ledger.repair_closing_odds(conn))
+    assert r["filled"] == 1, r
+    assert r["overwritten"] == 1, r
+    assert [x[1] for x in r["overwritten_sample"]] == ["Had A Value"]
+    assert [x[1] for x in r["sample"]] == ["Had Nothing"]
+    # And the overwrite must show what is being destroyed.
+    assert r["overwritten_sample"][0][5] == -140
+    assert r["overwritten_sample"][0][6] == 105
 
 
 if __name__ == "__main__":

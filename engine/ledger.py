@@ -2148,7 +2148,10 @@ def repair_closing_odds(conn, apply: bool = False) -> dict:
     rows = conn.execute(
         "SELECT id, player, market, date, side, line, odds, closing_odds "
         "FROM bets WHERE status IN ('won','lost','push')").fetchall()
-    fixed, cleared, agreed, changes = 0, 0, 0, []
+    fixed = cleared = agreed = filled = 0
+    changes: list = []      # filled: had nothing, gains a close
+    over_sample: list = []  # OVERWRITTEN: had a value, gets another
+    clear_sample: list = [] # cleared: had a value, loses it
     for b in rows:
         sides = snaps.get(
             (normalize_name(b["player"]), b["market"], b["date"],
@@ -2164,20 +2167,40 @@ def repair_closing_odds(conn, apply: bool = False) -> dict:
         if had is not None and want is not None and int(had) == int(want):
             agreed += 1
             continue
+        # THREE OUTCOMES, COUNTED APART. The first dry run reported 2065
+        # "rewritten" and sampled twelve, and all twelve were (none) ->
+        # price — rows that simply had no close and now gain one. That is
+        # pure coverage and it is safe. The rows that had a value and get
+        # a DIFFERENT one are the only ones where something is being
+        # overwritten, and they were invisible in a sample taken from the
+        # front of the scan. A dry run that cannot show you the risky
+        # subset is not doing the job a dry run exists to do.
         if want is None:
             cleared += 1
+            kind = "cleared"
+        elif had is None:
+            filled += 1
+            kind = "filled"
         else:
             fixed += 1
-        if len(changes) < 12:
-            changes.append((b["date"], b["player"], b["side"], b["market"],
-                            b["line"], had, want))
+            kind = "overwritten"
+        row = (b["date"], b["player"], b["side"], b["market"], b["line"],
+               had, want)
+        if kind == "overwritten" and len(over_sample) < 12:
+            over_sample.append(row)
+        elif kind == "cleared" and len(clear_sample) < 6:
+            clear_sample.append(row)
+        elif kind == "filled" and len(changes) < 6:
+            changes.append(row)
         if apply:
             conn.execute("UPDATE bets SET closing_odds=? WHERE id=?",
                          (int(want) if want is not None else None, b["id"]))
     if apply:
         conn.commit()
-    return {"settled": len(rows), "agreed": agreed, "rewritten": fixed,
-            "cleared": cleared, "sample": changes, "applied": apply}
+    return {"settled": len(rows), "agreed": agreed, "overwritten": fixed,
+            "filled": filled, "cleared": cleared,
+            "sample": changes, "overwritten_sample": over_sample,
+            "cleared_sample": clear_sample, "applied": apply}
 
 
 def _bet_price_clv(b) -> float | None:
