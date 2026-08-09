@@ -2697,6 +2697,52 @@ def _settleable_days(open_days) -> list[str]:
                   if d.get("date") and "-W" not in d["date"])
 
 
+def set_paper_mode(want: str | None = None) -> None:
+    """Turn real-money staking on or off. `python3 launch.py --paper on`.
+
+    What paper mode is, since the name suggests less than it does: the
+    entire machine keeps running. Picks are made, journaled, settled
+    against real box scores, and measured for CLV exactly as before. The
+    stake each pick would have taken is still computed and stored. The
+    only differences are that the row is filed under 'paper' instead of
+    'main', so it never enters the headline record, and its dollar stake
+    is zero.
+
+    It exists because on 2026-08-09 the CLV measurement — once the side
+    bug, the line bug, the impossible prices and the missing under side
+    were all out of it — came back indistinguishable from zero. No
+    demonstrated edge, and an edge large enough to cover the vig excluded
+    at better than three standard errors. The cheapest way to find out
+    whether that changes is to keep measuring without paying for it.
+
+    Called with no argument it reports the current state and writes
+    nothing, because a toggle that flips when you ask it what it is set
+    to is a trap.
+    """
+    conn = ledger.connect()
+    cur = str(ledger.get_cfg(conn, "paper_mode") or "0") == "1"
+    if want is None:
+        print(f"\n  paper mode is {'ON' if cur else 'OFF'} — "
+              f"picks are being staked "
+              f"{'on paper only, zero dollars' if cur else 'WITH REAL MONEY'}")
+        print("    python3 launch.py --paper on     journal to the paper "
+              "book, no money")
+        print("    python3 launch.py --paper off    resume real staking\n")
+        return
+    on = want.strip().lower() in ("on", "1", "true", "yes")
+    ledger.set_paper_mode(conn, on)
+    print(f"\n  paper mode {'ON' if on else 'OFF'}.")
+    if on:
+        print("    Picks from here journal under 'paper' with zero dollars.")
+        print("    The record page keeps its own separate Paper bucket, and")
+        print("    the headline record stops moving. Everything else — "
+              "settling,")
+        print("    CLV, calibration, the miners — runs unchanged.\n")
+    else:
+        print("    Picks from here journal under 'main' and are staked "
+              "for real money.\n")
+
+
 def show_unplayed(apply: bool = False) -> None:
     """Bets whose game was never played. Shows first, writes only on --apply.
 
@@ -3413,6 +3459,11 @@ def main() -> None:
         return
     if "--void-unplayed" in argv:
         show_unplayed(apply="--apply" in argv)
+        return
+    if "--paper" in argv:
+        i = argv.index("--paper")
+        want = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else None
+        set_paper_mode(want)
         return
     if "--settle" in argv:
         i = argv.index("--settle")

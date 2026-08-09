@@ -2036,6 +2036,96 @@ def test_a_recorded_snapshot_round_trips_the_under_price():
     assert sides["under"] == -105, f"the under price did not survive: {sides}"
 
 
+def _paper_result():
+    return {"sport": "mlb", "date": "2026-08-10", "recommendations": [
+        {"player": "Paper Hitter", "market": "hits", "side": "OVER",
+         "line": 1.5, "odds": -110, "book": "FanDuel", "hit_prob": 0.55,
+         "edge": 0.04, "confidence": 70, "grade": "B", "stake_units": 0.4,
+         "projection": 1.8, "recommended": True}]}
+
+
+def test_paper_mode_journals_the_pick_with_zero_dollars():
+    """Ethan, 2026-08-09, after the cleaned CLV read came back at zero:
+    keep the machine running and stop paying for it.
+
+    The stake in UNITS is kept as sized — that is the whole point, since
+    a paper book has to answer "what would this have returned" and a zero
+    stake cannot. What makes it costless is the category, not the size."""
+    conn = ledger.connect(":memory:")
+    ledger.set_paper_mode(conn, True)
+    assert ledger.log_recommendations(conn, _paper_result()) == 1
+    row = conn.execute("SELECT category, stake_units, stake_dollars "
+                       "FROM bets").fetchone()
+    assert row[0] == "paper"
+    assert row[1] == 0.4, "the sized stake must survive — it is the measurement"
+    assert row[2] == 0.0, "paper mode must move no dollars"
+
+
+def test_paper_bets_never_enter_the_headline_record():
+    """The one guarantee the whole feature rests on."""
+    conn = ledger.connect(":memory:")
+    ledger.set_paper_mode(conn, True)
+    ledger.log_recommendations(conn, _paper_result())
+    conn.execute("UPDATE bets SET status='won', pnl_units=0.36, "
+                 "pnl_dollars=0.0")
+    conn.commit()
+    perf = ledger.performance(conn, "mlb")
+    assert perf["settled"] == 0, f"a paper bet reached the record: {perf}"
+
+
+def test_paper_mode_is_off_unless_it_was_turned_on():
+    """A default that silently stopped betting real money would be a
+    worse surprise than one that silently kept going."""
+    conn = ledger.connect(":memory:")
+    assert ledger.paper_mode(conn) is False
+    ledger.log_recommendations(conn, _paper_result())
+    row = conn.execute("SELECT category, stake_dollars FROM bets").fetchone()
+    assert row[0] == "main"
+    assert row[1] > 0, "real mode must still size dollars"
+
+
+def test_the_toggle_survives_a_reconnect():
+    """It is stored config rather than a nightly flag precisely so it
+    outlives the process that set it."""
+    import tempfile
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    try:
+        c1 = ledger.connect(path)
+        ledger.set_paper_mode(c1, True)
+        c1.close()
+        c2 = ledger.connect(path)
+        assert ledger.paper_mode(c2) is True
+        c2.close()
+    finally:
+        os.unlink(path)
+
+
+def test_the_site_payload_carries_the_paper_book_and_the_switch():
+    """The page has to be able to say "these are paper" — a paper record
+    rendered without that label is just a second, quieter lie about how
+    the model is doing."""
+    import json
+    import tempfile
+    conn = ledger.connect(":memory:")
+    ledger.set_paper_mode(conn, True)
+    ledger.log_recommendations(conn, _paper_result())
+    conn.execute("UPDATE bets SET status='won', pnl_units=0.36, "
+                 "pnl_dollars=0.0")
+    conn.commit()
+    fd, path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    try:
+        ledger.export_json(conn, path)
+        out = json.load(open(path))
+    finally:
+        os.unlink(path)
+    assert out["paper_mode"] is True
+    assert out["paper"]["settled"] == 1
+    assert out["overall"]["settled"] == 0, "the paper win reached the record"
+    assert out["paper"]["net_units"] == 0.36
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

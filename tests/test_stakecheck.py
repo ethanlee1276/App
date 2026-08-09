@@ -1741,6 +1741,31 @@ def test_a_slice_that_cannot_be_shown_says_why_with_its_counts():
     assert "OVER 37" in out and "UNDER 3" in out, out
 
 
+def test_the_paper_book_is_labelled_as_paper_not_scolded_as_noise():
+    """`--paper` used to trip the longshot warning, which told Ethan to
+    drop a flag he had not passed. A tool that scolds you for doing the
+    thing you just decided to do teaches you to stop reading it."""
+    import contextlib
+    import io
+    rows = [_row(date="2026-08-10", player="X Y", market="hits",
+                 side="OVER", odds=-110, line=1.5, status="won",
+                 stake_units=0.4, pnl_units=0.36)]
+    path = _db(rows)
+    try:
+        with sqlite3.connect(path) as c:
+            c.execute("UPDATE bets SET category='paper'")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            stakecheck.report(stakecheck._rows(path, None, None,
+                                               category="paper"))
+        out = buf.getvalue()
+    finally:
+        os.unlink(path)
+    assert "THE PAPER BOOK" in out, out
+    assert "--include-measurement" not in out, out
+    assert "None of it is money" in out
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

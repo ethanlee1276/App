@@ -83,7 +83,12 @@ SCHEMA = _BETS_TABLE + _FORECAST_LOG + """
 CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
 """
 
-DEFAULTS = {"starting_bankroll": "1000", "unit_pct": "1.0", "bankroll": "1000"}
+DEFAULTS = {"starting_bankroll": "1000", "unit_pct": "1.0",
+            "bankroll": "1000",
+            # OFF unless deliberately turned on. A default that
+            # silently stopped betting real money would be a worse
+            # surprise than one that silently kept going.
+            "paper_mode": "0"}
 
 
 def _migrate(conn) -> None:
@@ -208,6 +213,21 @@ def set_cfg(conn, key: str, value) -> None:
     conn.commit()
 
 
+def set_paper_mode(conn, on: bool) -> None:
+    """Stop (or resume) putting money on the picks.
+
+    Deliberately a stored config value rather than a command-line flag on
+    the nightly build: the whole point is that it survives until it is
+    deliberately turned off, and a flag has to be remembered every night
+    by the person who least wants to think about it.
+    """
+    set_cfg(conn, "paper_mode", "1" if on else "0")
+
+
+def paper_mode(conn) -> bool:
+    return str(get_cfg(conn, "paper_mode") or "0") == "1"
+
+
 def configure_bankroll(conn, starting: float | None = None, unit_pct: float | None = None) -> None:
     if starting is not None:
         set_cfg(conn, "starting_bankroll", starting)
@@ -281,6 +301,21 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
     sport = result.get("sport", "nfl")
     date = result.get("date", "")
     unit_dollars = float(get_cfg(conn, "unit_pct")) / 100.0 * bankroll(conn)
+    # PAPER MODE. Ethan, 2026-08-09, after the CLV read came back
+    # indistinguishable from zero on a cleaned instrument: keep the whole
+    # machine running and stop putting money on it.
+    #
+    # Everything downstream is unchanged — picks are made, journaled,
+    # settled against real results, and measured for CLV exactly as
+    # before. Only two things differ. The row is filed under 'paper'
+    # rather than 'main', so it never touches the headline record; and
+    # its dollar stake is zero, because no dollars moved.
+    #
+    # stake_units is KEPT AS SIZED. That is the whole point: the paper
+    # book has to answer "what would this have returned", and a stake of
+    # zero cannot. `category` is what makes it costless, not the size.
+    paper = str(get_cfg(conn, "paper_mode") or "0") == "1"
+    category = "paper" if paper else "main"
     now = datetime.datetime.utcnow().isoformat(timespec="seconds")
     kick = _kickoff_map(result)
     n = 0
@@ -298,16 +333,21 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
-            "stake_dollars, status, leg, proj_minutes, lead_min, park_hr, "
-            "wind_out, roofed, lineup_slot, lineup_conf, rest_days, "
+            "stake_dollars, status, category, leg, proj_minutes, lead_min, "
+            "park_hr, wind_out, roofed, lineup_slot, lineup_conf, rest_days, "
             "body_clock, pen_own, pen_opp, raw_prob, cal_temp, cal_bias, "
             "fair_consensus, consensus_books, move_delta, move_steam) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, "
             "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
              r["line"], r.get("book", ""), r.get("odds", -110), r.get("projection"),
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
-             stake_units, round(stake_units * unit_dollars, 2),
+             stake_units,
+             # Zero dollars in paper mode, and it must be zero rather than
+             # small: `performance` sums this column for the dollar P&L,
+             # and a paper book that moves the dollar line is not paper.
+             0.0 if paper else round(stake_units * unit_dollars, 2),
+             category,
              # Which doubleheader leg this bet belongs to — the settler
              # grades against that game's stat line, not a coin flip.
              r.get("game_number") if r.get("doubleheader") else None,
@@ -3428,6 +3468,12 @@ def export_json(conn, path) -> None:
         "form_sampler": form_report(conn),
         "loose_sampler": loose_report(conn),
         "ufc_record": ufc_report(conn),
+        # THE PAPER BOOK, reported beside the real one and never inside
+        # it. Same shape as `overall`, so the page can render one against
+        # the other: this is what the model would have returned over the
+        # stretch where we deliberately were not paying it.
+        "paper": performance(conn, category="paper"),
+        "paper_mode": paper_mode(conn),
         # Per-sport, so each model can be tuned on its own evidence rather
         # than on the average of six.
         "by_sport": {sp: sport_report(conn, sp) for sp in TRACKED_SPORTS},

@@ -55,7 +55,7 @@ RESCALE_DAY = "2026-08-04"
 
 
 def _rows(db: str, sport: str | None, since: str | None,
-          measurement: bool = False):
+          measurement: bool = False, category: str | None = None):
     """Settled bets. BY DEFAULT, ONLY THE ONES THAT WERE REAL.
 
     THE MISTAKE THIS EXISTS TO PREVENT, made 2026-08-08 and caught by
@@ -75,6 +75,7 @@ def _rows(db: str, sport: str | None, since: str | None,
     `ledger.py` scores the record as `category='main' AND stake_units >
     0`, and that is now the default here. Nothing else is a bet.
     """
+    args: list = []
     uri = f"file:{db}?mode=ro"
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
@@ -82,16 +83,22 @@ def _rows(db: str, sport: str | None, since: str | None,
          "edge, stake_units, pnl_units, status, category, closing_odds, "
          "line FROM bets "
          "WHERE status IN ('won','lost')")
-    if not measurement:
+    if category:
+        q += " AND category=? AND stake_units > 0"
+        args_pre = [category]
+    elif not measurement:
         q += " AND category='main' AND stake_units > 0"
-    args: list = []
+        args_pre = []
+    else:
+        args_pre = []
     if sport:
         q += " AND sport = ?"
         args.append(sport)
     if since:
         q += " AND date >= ?"
         args.append(since)
-    out = [dict(r) for r in conn.execute(q + " ORDER BY date", args)]
+    out = [dict(r) for r in conn.execute(q + " ORDER BY date",
+                                        args_pre + args)]
     conn.close()
     return out
 
@@ -160,7 +167,15 @@ def report(rows: list[dict]) -> None:
     for r in rows:
         cats[r.get("category") or "?"] = cats.get(r.get("category") or "?", 0) + 1
     print("  bucket(s): " + ", ".join(f"{k} {v}" for k, v in sorted(cats.items())))
-    if set(cats) - {"main"}:
+    if set(cats) == {"paper"}:
+        # NOT the longshot warning. A paper book is deliberate and its
+        # numbers are the point; telling Ethan to "drop
+        # --include-measurement" when he passed --paper would be the tool
+        # scolding him for doing exactly what he decided to do.
+        print("  ** THE PAPER BOOK — same picks, same settling, zero")
+        print("  ** dollars. Every figure below is what the model WOULD")
+        print("  ** have returned. None of it is money won or lost.")
+    elif set(cats) - {"main"}:
         print("  ** measurement buckets included — `longshot` carries zero")
         print("  ** dollar exposure and `longshot_watch` is a calibration")
         print("  ** sample. Neither is money. Drop --include-measurement.")
@@ -991,6 +1006,9 @@ def main() -> None:
                     help="fit the model's overconfidence on the pre-rescale "
                          "era and test it on the current one. Reports only; "
                          "writes nothing and changes no model")
+    ap.add_argument("--paper", action="store_true",
+                    help="measure the PAPER book instead of the real one — "
+                         "same picks, same settling, zero dollars")
     ap.add_argument("--include-measurement", action="store_true",
                     help="also count the longshot and longshot_watch "
                          "buckets. They are NOT money — zero dollar "
@@ -1005,6 +1023,7 @@ def main() -> None:
         print(f"No ledger at {args.db}.")
         return
     rows = _rows(args.db, args.sport, args.since,
+                 category="paper" if args.paper else None,
                  measurement=args.include_measurement)
     if args.clv:
         clv_report(rows)
