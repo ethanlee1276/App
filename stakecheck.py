@@ -59,7 +59,7 @@ def _rows(db: str, sport: str | None, since: str | None):
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     q = ("SELECT date, sport, player, market, side, odds, hit_prob, grade, "
-         "stake_units, pnl_units, status, category FROM bets "
+         "edge, stake_units, pnl_units, status, category FROM bets "
          "WHERE status IN ('won','lost')")
     args: list = []
     if sport:
@@ -182,6 +182,22 @@ def report(rows: list[dict]) -> None:
               f"{sum(r['pnl_units'] or 0 for r, _ in have):+8.2f}u   "
               f"ROI {_roi(sum(r['pnl_units'] or 0 for r, _ in have), got_t):+7.2%}")
 
+    # --- the rule that shipped, replayed --------------------------------
+    from engine.correlation import SLATE_CAP_U
+    sim = simulate_trim(rows, SLATE_CAP_U)
+    if sim["kept"]:
+        print(f"\n  IF THE CAP HAD TRIMMED INSTEAD OF SHRUNK  "
+              f"(slate cap only; see simulate_trim)")
+        print(f"    {sim['kept']} bets kept, {sim['dropped']} dropped "
+              f"across {sim['slates']} slate(s)")
+        print(f"    {sim['staked']:8.2f}u staked   {sim['net']:+8.2f}u   "
+              f"ROI {sim['roi']:+7.2%}")
+        print(f"    against as-staked  {staked:8.2f}u   {net:+8.2f}u   "
+              f"ROI {_roi(net, staked):+7.2%}")
+        print("\n    A fair replay: dropping a bet does not change whether "
+              "another won,\n    and the ranking is the model's own pre-game "
+              "grade, not the result.")
+
     # --- does stake size predict the result? ----------------------------
     print("\n  DOES STAKE SIZE PREDICT THE RESULT?")
     print("    If we bet more on the ones we lose, ROI is worse than the "
@@ -219,6 +235,71 @@ def report(rows: list[dict]) -> None:
         cap_s = "—" if cap == float("inf") else f"{cap:.1f}u"
         print(f"    {label:<20}{len(chunk):>6}{s / len(chunk):>10.3f}u"
               f"{cap_s:>8}{w / len(chunk):>9.1%}{_roi(n, s):>10.1%}")
+
+
+_GRADE_RANK = {"A+": 3, "A": 2, "B+": 1}
+
+
+def simulate_trim(rows: list[dict], cap: float) -> dict:
+    """Replay the slate cap as TRIMMING instead of scaling.
+
+    Ethan chose the rule on 2026-08-08 and it shipped the same day. This
+    replays it against the bets already settled, so the choice can be
+    checked before more money goes through it.
+
+    IT IS A FAIR REPLAY, not a fitted one. Dropping a bet does not change
+    whether any other bet won, so the surviving subset's P&L is exactly
+    what it would have been. Nothing is refitted and no outcome is used
+    to decide what to keep — the ranking is the model's own pre-game
+    grade and edge.
+
+    TWO HONEST LIMITS.
+
+    Only the SLATE cap is simulated. The 5u per-game cap needs to know
+    which bets shared a game, and the journal stores the player and the
+    date but not the fixture. The slate cap is the larger lever here by
+    far — the model asked for roughly six times it — but the game cap
+    would drop more bets still, so this is a floor on how much gets cut,
+    not a forecast of it.
+
+    And the live rule ranks on `quality` first, which is not journaled.
+    This ranks on grade then edge, the two that are. If the simulation
+    and the shipped rule ever disagree it will be here.
+    """
+    from collections import defaultdict
+    slates = defaultdict(list)
+    for r in rows:
+        w = intended_stake(r)
+        if w:
+            slates[(r["sport"], r["date"])].append((r, w))
+
+    kept_n = dropped_n = 0
+    net = staked = 0.0
+    for bets in slates.values():
+        order = sorted(bets, key=lambda rw: (
+            _GRADE_RANK.get(rw[0].get("grade") or "", 0),
+            float(rw[0].get("edge") or 0.0)), reverse=True)   # strongest first
+        running = 0.0
+        full = False
+        for r, w in order:
+            # STOP, do not skip. The shipped rule drops from the weakest
+            # end until the total fits, which keeps the strongest PREFIX.
+            # Skipping an over-large bet and taking smaller weaker ones
+            # behind it would pack the budget fuller and model a rule that
+            # does not exist — a simulation of the wrong thing is worse
+            # than no simulation.
+            if full or running + w > cap:
+                full = True
+                dropped_n += 1
+                continue
+            running += w
+            staked += w
+            kept_n += 1
+            net += (american_to_decimal(int(r["odds"])) - 1.0) * w \
+                if r["status"] == "won" else -w
+    return {"kept": kept_n, "dropped": dropped_n, "net": net,
+            "staked": staked, "roi": _roi(net, staked),
+            "slates": len(slates)}
 
 
 def main() -> None:

@@ -49,7 +49,7 @@ from engine.staking import MIN_STAKE_UNITS, to_units, kelly_units
 
 
 COLS = ("date", "sport", "player", "market", "side", "odds", "hit_prob",
-        "grade", "stake_units", "pnl_units", "status", "category")
+        "grade", "edge", "stake_units", "pnl_units", "status", "category")
 
 
 def _db(rows):
@@ -58,7 +58,7 @@ def _db(rows):
     os.close(fd)
     c = sqlite3.connect(path)
     c.execute("CREATE TABLE bets (id INTEGER PRIMARY KEY, "
-              + ", ".join(f"{k} {'REAL' if k in ('hit_prob','stake_units','pnl_units') else 'INTEGER' if k == 'odds' else 'TEXT'}"
+              + ", ".join(f"{k} {'REAL' if k in ('hit_prob','stake_units','pnl_units','edge') else 'INTEGER' if k == 'odds' else 'TEXT'}"
                           for k in COLS) + ")")
     c.executemany(f"INSERT INTO bets ({','.join(COLS)}) VALUES "
                   f"({','.join('?' * len(COLS))})", rows)
@@ -69,7 +69,7 @@ def _db(rows):
 
 def _row(**kw):
     base = dict(date="2026-08-08", sport="mlb", player="X", market="hits",
-                side="OVER", odds=106, hit_prob=0.52, grade="A",
+                side="OVER", odds=106, hit_prob=0.52, grade="A", edge=0.05,
                 stake_units=0.25, pnl_units=-0.25, status="lost",
                 category="main")
     base.update(kw)
@@ -229,6 +229,96 @@ def test_open_bets_are_not_measured():
     finally:
         os.unlink(path)
     assert len(got) == 1 and got[0]["player"] == "done"
+
+
+# --- replaying the rule that shipped ----------------------------------------
+def _sim_row(grade, edge, p, odds, status):
+    return {"sport": "mlb", "date": "2026-08-08", "grade": grade,
+            "edge": edge, "hit_prob": p, "odds": odds, "status": status}
+
+
+def test_the_replay_keeps_the_strongest_bets_first():
+    """The entire claim of trimming is that the model's own ranking picks
+    a better subset than crowding does. If the replay kept them in ledger
+    order it would be measuring nothing."""
+    # Verified stakes: A+ at .58/-110 caps at 2.0u, B+ at .60/-110 at 0.5u.
+    rows = [_sim_row("B+", 0.02, 0.60, -110, "lost"),
+            _sim_row("A+", 0.09, 0.58, -110, "won")]
+    out = stakecheck.simulate_trim(rows, cap=2.0)
+    assert out["kept"] == 1 and out["dropped"] == 1, out
+    assert out["net"] > 0, "it kept the B+ loser over the A+ winner"
+
+
+def test_the_replay_never_exceeds_the_cap():
+    rows = [_sim_row("A", 0.08, 0.62, -110, "won") for _ in range(40)]
+    out = stakecheck.simulate_trim(rows, cap=15.0)
+    assert out["staked"] <= 15.0 + 1e-9, out["staked"]
+    assert out["dropped"] > 0, "a 40-bet slate did not exceed 15u"
+
+
+def test_the_replay_does_not_select_on_the_outcome():
+    """THE PROPERTY THAT MAKES IT A BACKTEST RATHER THAN A STORY. Flip
+    every result and the same bets must be kept — the ranking is the
+    pre-game grade and edge, and neither knows what happened."""
+    base = [_sim_row("A+", 0.09, 0.58, -110, "won"),
+            _sim_row("A", 0.06, 0.58, -110, "lost"),
+            _sim_row("B+", 0.03, 0.60, -110, "won")]
+    flipped = [dict(r, status=("lost" if r["status"] == "won" else "won"))
+               for r in base]
+    a = stakecheck.simulate_trim(base, cap=3.0)
+    b = stakecheck.simulate_trim(flipped, cap=3.0)
+    assert a["kept"] == b["kept"] and a["staked"] == b["staked"]
+    assert a["net"] != b["net"], "the outcomes did not reach the P&L at all"
+
+
+def test_each_slate_gets_its_own_budget():
+    """The cap is per slate. Pooling two nights into one budget would
+    drop a whole night's bets to fund the other."""
+    two = ([dict(_sim_row("A", 0.08, 0.62, -110, "won"), date="2026-08-07")
+            for _ in range(30)]
+           + [dict(_sim_row("A", 0.08, 0.62, -110, "won"), date="2026-08-08")
+              for _ in range(30)])
+    out = stakecheck.simulate_trim(two, cap=15.0)
+    assert out["slates"] == 2
+    assert out["staked"] <= 30.0 + 1e-9 and out["staked"] > 15.0
+
+
+def test_sports_are_separate_slates():
+    """`apply_exposure_caps` runs once per pipeline, so an MLB night and
+    a WNBA night each get their own 15u, exactly as they do live."""
+    mixed = ([_sim_row("A", 0.08, 0.62, -110, "won") for _ in range(30)]
+             + [dict(_sim_row("A", 0.08, 0.62, -110, "won"), sport="wnba")
+                for _ in range(30)])
+    assert stakecheck.simulate_trim(mixed, cap=15.0)["slates"] == 2
+
+
+def test_a_bet_the_rules_would_not_size_is_not_replayed():
+    """No hit_prob means no intended stake. Treating it as zero-stake and
+    keeping it would inflate the kept count with bets carrying no money."""
+    rows = [_sim_row("A", 0.08, None, -110, "won"),
+            _sim_row("A", 0.08, 0.62, -110, "won")]
+    assert stakecheck.simulate_trim(rows, cap=15.0)["kept"] == 1
+
+
+def test_the_replay_is_honest_about_the_cap_it_cannot_simulate():
+    """The 5u per-game cap needs to know which bets shared a fixture and
+    the journal does not store one. Claiming to model it would overstate
+    how many bets survive."""
+    doc = stakecheck.simulate_trim.__doc__
+    assert "game" in doc and "not a forecast" in doc
+
+
+def test_the_replay_stops_at_the_budget_rather_than_packing_it():
+    """It must model the rule that shipped, which drops from the weakest
+    end until the total fits — so the survivors are the strongest PREFIX.
+    Skipping a bet that does not fit and taking smaller, weaker ones
+    behind it would fill the budget more efficiently and simulate a rule
+    that is not in the code."""
+    rows = [_sim_row("A+", 0.09, 0.58, -110, "won"),     # 2.0u
+            _sim_row("B+", 0.03, 0.60, -110, "won")]     # 0.5u
+    out = stakecheck.simulate_trim(rows, cap=1.0)
+    assert out["kept"] == 0, "it packed the budget with the weaker bet"
+    assert out["dropped"] == 2
 
 
 if __name__ == "__main__":
