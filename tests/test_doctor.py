@@ -460,6 +460,43 @@ def test_a_never_run_agent_is_not_reported_as_merely_old():
     assert body.index("no log has ever been written") < body.index("with no run")
 
 
+def test_the_nightly_runs_every_sports_results_not_just_baseball():
+    """ETHAN, 2026-08-09: "is nightly tied into nfl and cfb and nba or just
+    mlb — we need it tied in with everything."
+
+    BUILDING always was every sport: `refresh_all` covers mlb, nfl, nba,
+    wnba, cfb and ufc, so picks journal for all of them. SETTLING was not.
+    `settle_now` ingests through `ingest_for_open_bets`, which pulls MLB,
+    NBA and WNBA and nothing else — NFL grades off the nflverse WEEKLY
+    stats file and CFB off its own feed, and both live in
+    `engine.maintenance.run_if_due`.
+
+    That function had exactly two callers and both needed the SERVER up:
+    `_startup_chores` and `_background_refresher`. So an unattended machine
+    would journal NFL picks every day of the season and grade none of them
+    — bets piling up open while the Record page showed nothing, starting
+    the week of Sep 9."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("def nightly_run(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert "_run_maintenance()" in body, (
+        "without the daily chores the unattended nightly settles baseball "
+        "and hoops only — NFL and CFB results are never ingested")
+    # And BEFORE the settle, or it grades against results that are not
+    # there yet and the bets stay open for another day.
+    assert body.index("_run_maintenance()") < body.index("settle_now(None)")
+
+
+def test_the_daily_chores_are_not_reachable_only_through_the_server():
+    """The shape of the bug, pinned so it cannot come back: a chore that
+    only runs while someone is watching is not automation."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    callers = src.count("_run_maintenance()")
+    # def + background refresher + startup chores + nightly
+    assert callers >= 4, (
+        f"only {callers} references — the nightly path must call it too")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -2982,13 +2982,40 @@ def nightly_run(odds_only: bool = False, sports=None) -> None:
     except Exception:                                       # noqa: BLE001
         pass
     if not odds_only:
-        print("\n[1/3] settling last night …")
+        # DAILY CHORES FIRST, AND WITHOUT THEM THE NIGHTLY IS BASEBALL-ONLY.
+        #
+        # Ethan, 2026-08-09: "is nightly tied into nfl and cfb and nba or
+        # just mlb — we need it tied in with everything."
+        #
+        # Building was already every sport: `refresh_all` covers mlb, nfl,
+        # nba, wnba, cfb and ufc, so picks journal for all of them. SETTLING
+        # was not. `settle_now` ingests through `ingest_for_open_bets`,
+        # which pulls MLB, NBA and WNBA and nothing else — NFL grades off
+        # the nflverse WEEKLY stats file and CFB off its own feed, and both
+        # of those live in `engine.maintenance.run_if_due`.
+        #
+        # That function was called from exactly two places, and both of them
+        # need the SERVER up: `_startup_chores` and `_background_refresher`.
+        # So an unattended machine would journal NFL picks every day of the
+        # season and never grade one — the bets would pile up open while the
+        # record page showed nothing, starting the week of Sep 9.
+        #
+        # It is throttled to once a day internally, so calling it here costs
+        # nothing on a day the server already ran it, and `settle_now` below
+        # then grades against results that actually exist.
+        print("\n[1/4] daily chores (every sport's results) …")
+        try:
+            _run_maintenance()
+        except Exception as exc:                            # noqa: BLE001
+            print(f"  ⚠️  daily chores failed: {exc}")
+            rc = 1
+        print("\n[2/4] settling last night …")
         try:
             settle_now(None)
         except Exception as exc:                            # noqa: BLE001
             print(f"  ⚠️  settle failed: {exc}")
             rc = 1
-    print(f"\n[{'1/1' if odds_only else '2/3'}] rebuilding the boards …")
+    print(f"\n[{'1/1' if odds_only else '3/4'}] rebuilding the boards …")
     try:
         if odds_only and sports:
             # ONE SPORT'S CREDITS, NOT SIX. The pre-kickoff pass exists
@@ -3013,7 +3040,7 @@ def nightly_run(odds_only: bool = False, sports=None) -> None:
         print(f"  ⚠️  refresh failed: {exc}")
         rc = 1
     if not odds_only:
-        print("\n[3/3] doctor, against real data …")
+        print("\n[4/4] doctor, against real data …")
         try:
             import doctor
             rc = doctor.main([]) or rc
