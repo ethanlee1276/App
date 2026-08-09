@@ -392,15 +392,31 @@ def test_a_finding_records_the_categories_that_convicted_it():
     assert f.get("measured_on") == "longshot"
 
 
-def test_a_closure_convicted_on_paper_bets_says_the_block_lands_elsewhere():
-    """The veto runs at pricing time on every candidate prop, but its
-    consequence is felt on the ones that would have become recommendations.
-    A slice that is all `longshot` rows convicting the board is worth
-    saying out loud."""
+def test_a_closure_convicted_on_paper_bets_no_longer_blocks_the_board():
+    """WAS: "says the block lands elsewhere". The contract changed on
+    2026-08-09 and this test changed with it, deliberately.
+
+    It used to assert that a closure built entirely from `longshot` rows
+    stayed in `closed` — enforced — with a warning stapled to its prose.
+    That was the module's stated policy: "Labelled, never filtered". A
+    label does not stop a block, and the block lands on `main`.
+
+    The veto runs at pricing time against candidates that become
+    RECOMMENDATIONS, so evidence drawn from a book we do not bet cannot
+    be grounds for refusing one we would. It is demoted to a watch: still
+    reported, still accruing evidence, no longer enforcing.
+
+    What the test protects is unchanged — that a closure convicted on
+    paper bets is visibly not a statement about the board."""
     rows = [dict(r, category="longshot") for r in
             recs("mlb", "home_runs", {"side": "OVER"}, 0.15, 228, 1900)]
     out = lp.mine(rows)
-    assert "the block lands on recommendations" in out["closed"][0]["reading"]
+    assert not out["closed"], "a paper-only conviction still blocks the board"
+    flagged = [f for f in out["findings"] + out["restatements"]
+               if f.get("demoted")]
+    assert flagged, "the finding disappeared instead of being demoted"
+    assert "NOT ENFORCED" in flagged[0]["reading"]
+    assert flagged[0]["action"] == "watch"
 
 
 def test_a_main_slice_gets_no_such_caveat():
@@ -431,6 +447,85 @@ def test_the_record_stays_json_serialisable():
     json.dumps(out)
     for f in out["findings"] + out["restatements"]:
         assert "_rows" not in f
+
+def _mixed_slice(main_n, main_hot, pooled_n, pooled_hot, claim=0.60):
+    """A slice built from two books with DIFFERENT truths.
+
+    `main_hot`/`pooled_hot` are the real hit rates. Setting them apart is
+    the whole point: the pooled average can be hot while the book the
+    block lands on is fine, and vice versa."""
+    rows = []
+    i = 0
+    for cat, n, hot in (("main", main_n, main_hot),
+                        ("loose", pooled_n, pooled_hot)):
+        wins = int(round(n * hot))
+        for k in range(n):
+            i += 1
+            rows.append(("2026-08-01T10:00:00", "mlb", "2026-08-01",
+                         f"P{i}", "hits", "OVER", 1.5, "dk", -150, claim,
+                         "won" if k < wins else "lost", cat))
+    return rows
+
+
+def test_a_closure_is_not_enforced_when_main_does_not_support_it():
+    """THE DEFECT, task #78. `records_from_ledger` pools every journal
+    category — roughly 300 `main` against 3,100 measurement rows — while
+    `veto()` blocks RECOMMENDATIONS, which are `main` and only `main`. So
+    evidence and enforcement come from different populations, and the
+    module's own comment admits it: "Labelled, never filtered".
+
+    Here the pooled book runs hot enough to close the slice while `main`
+    itself is calibrated. Before this fix that closure blocked real picks
+    on the strength of bets we never made."""
+    conn = ledger.connect(":memory:")
+    _seed(conn, _mixed_slice(main_n=60, main_hot=0.60,     # exactly the claim
+                             pooled_n=400, pooled_hot=0.30))  # awful
+    res = lp.mine(lp.records_from_ledger(conn), min_n=40)
+    closed = [f for f in res["findings"] if f["action"] == "close"]
+    hits = [f for f in res["findings"] + res.get("echoes", [])
+            if f.get("demoted")]
+    assert not closed, f"still closing on pooled evidence: {closed}"
+    assert hits, "the finding vanished entirely instead of being demoted"
+    assert "NOT ENFORCED" in hits[0]["reading"]
+
+
+def test_a_closure_survives_when_main_agrees():
+    """The fix must not simply disable the miner. When the book being
+    gated shows the same fault, the closure stands."""
+    conn = ledger.connect(":memory:")
+    _seed(conn, _mixed_slice(main_n=120, main_hot=0.30,
+                             pooled_n=400, pooled_hot=0.30))
+    res = lp.mine(lp.records_from_ledger(conn), min_n=40)
+    closed = [f for f in res["findings"] if f["action"] == "close"]
+    assert closed, "a fault present in main itself must still close"
+    assert closed[0]["main_only"]["verdict"] == "agrees"
+
+
+def test_every_finding_carries_its_main_only_reading():
+    """Answerable without re-running anything, on every row."""
+    conn = ledger.connect(":memory:")
+    _seed(conn, _mixed_slice(main_n=60, main_hot=0.60,
+                             pooled_n=400, pooled_hot=0.30))
+    res = lp.mine(lp.records_from_ledger(conn), min_n=40)
+    all_f = res["findings"] + res.get("echoes", [])
+    assert all_f
+    for f in all_f:
+        assert "main_only" in f, f
+        assert "n" in (f["main_only"] or {})
+
+
+def test_a_thin_main_slice_is_demoted_not_trusted():
+    """"main has not seen this enough to say" is a different statement
+    from "main disagrees", and neither is a licence to block."""
+    conn = ledger.connect(":memory:")
+    _seed(conn, _mixed_slice(main_n=8, main_hot=0.30,   # under MAIN_MIN_N
+                             pooled_n=400, pooled_hot=0.30))
+    res = lp.mine(lp.records_from_ledger(conn), min_n=40)
+    assert not [f for f in res["findings"] if f["action"] == "close"]
+    dem = [f for f in res["findings"] + res.get("echoes", [])
+           if f.get("demoted")]
+    assert dem and "too little evidence" in dem[0]["reading"]
+
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

@@ -412,6 +412,57 @@ def _bh(findings: list[dict], alpha: float) -> list[dict]:
 #: real recommendations.
 CATEGORY_DOMINANT = 0.80
 
+#: A main-only re-test needs its own floor. Below this the honest
+#: answer is "the book we gate has not seen this slice enough to
+#: say", which is a different statement from "it disagrees".
+MAIN_MIN_N = 25
+
+
+def main_only_check(rows: list[dict]) -> dict | None:
+    """The same calibration test, restricted to the bets we stood behind.
+
+    THE DEFECT THIS EXISTS TO MEASURE. `records_from_ledger` pools every
+    graded single across every journal category — roughly 300 `main`
+    against 3,100 in the measurement buckets. A closure is then enforced
+    by `veto()` against RECOMMENDATIONS, which are `main` and only `main`.
+    So the evidence and the enforcement are drawn from different
+    populations, and the module's own comment says so: "Labelled, never
+    filtered".
+
+    That is calibrate.py's blind spot with the sign flipped.
+    `docs/SELECTION_CORRECTION.md` §2 shows the claim runs hot on selected
+    bets while staying honest on the population — E[epsilon | selected] >
+    0, the winner's curse — and concludes that a fit on unselected history
+    can never see it. The miner has the opposite exposure: it pools the
+    selected book in with ten times as much unselected material, so a real
+    selection effect in `main` gets diluted toward nothing, while a slice
+    that happens to be `main`-heavy inherits the curse and reads as a
+    property of the slice.
+
+    The doc also predicted the magnitude: "if the edge signal is mostly
+    noise, the shrink needed is large." On 2026-08-09 the edge signal was
+    measured at AUC 0.479 — noise. So the effect this cannot see is the
+    large one.
+
+    Returns the main-only test, or None when `main` is too thin to say
+    anything, which is itself the finding for most slices.
+    """
+    # A record with no category IS a main record. `bets.category` is
+    # declared `TEXT DEFAULT 'main'` and the pre-category migration
+    # backfilled every old row to 'main', so absence means the headline
+    # book — never "unknown, treat as paper". Reading it the other way
+    # would demote every closure the moment a caller passed rows that
+    # predate the column.
+    m = [r for r in rows if (r.get("category") or "main") == "main"]
+    if len(m) < MAIN_MIN_N:
+        return {"n": len(m), "verdict": "too thin to check"}
+    t = _slice_test(m)
+    if t is None:
+        return {"n": len(m), "verdict": "too thin to check"}
+    t["verdict"] = ("agrees" if t["gap_pts"] > 0 and t["z"] < -1.0
+                    else "not supported")
+    return t
+
 
 def _category_mix(rows: list[dict]) -> dict:
     """Share of a slice by journal category, biggest first."""
@@ -490,7 +541,12 @@ def mine(records: list[dict], min_n: int | None = None,
             continue
         t.update({"sport": sport, "market": market, "dim": dim, "value": val,
                   "_rows": members[(sport, market, dim, val)],
-                  "categories": _category_mix(rows)})
+                  "categories": _category_mix(rows),
+                  # What the slice looks like in the book the block will
+                  # actually land on. Carried on every finding, so the
+                  # question "does this transfer?" is answerable without
+                  # re-running anything.
+                  "main_only": main_only_check(rows)})
         tested.append(t)
 
     _bh(tested, alpha)
@@ -555,6 +611,33 @@ def mine(records: list[dict], min_n: int | None = None,
                 f["reading"] += (f" — but {mix[top]:.0%} of these are "
                                  f"`{top}` bets, and the block lands on "
                                  f"recommendations")
+    # THE CLOSURE IS DOWNGRADED WHEN THE BOOK IT GATES DOES NOT SUPPORT IT.
+    #
+    # The 80% label above catches only the extreme case. A slice that is
+    # 55% `loose` and 45% `main` gets no label at all, and its gap is a
+    # weighted average of two populations with different selection — which
+    # is not a property of the slice in either of them.
+    #
+    # `veto()` blocks RECOMMENDATIONS. So the question that decides whether
+    # a closure should fire is not "is this slice hot in the pool", it is
+    # "is this slice hot in `main`". Where main cannot answer, the closure
+    # is demoted to a watch: it keeps appearing, keeps accruing evidence,
+    # and stops blocking picks on the strength of a different book.
+    for f in findings + echoes:
+        mo = f.get("main_only") or {}
+        if f.get("action") != "close":
+            continue
+        if mo.get("verdict") == "agrees":
+            continue
+        f["action"] = "watch"
+        f["demoted"] = mo.get("verdict") or "no main evidence"
+        f["reading"] += (
+            f" — NOT ENFORCED: on the {mo.get('n', 0)} `main` bets in this "
+            f"slice the pattern "
+            + ("has too little evidence to confirm"
+               if mo.get("verdict") == "too thin to check"
+               else "does not hold")
+            + ", and a block would land on `main` alone")
     for f in findings + echoes:
         f.pop("_rows", None)
 
