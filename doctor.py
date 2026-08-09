@@ -553,6 +553,30 @@ def check_learning(rep):
         live = [d for d, n in filled.items() if n]
         dead = [d for d, n in filled.items() if not n]
 
+        # A DIMENSION ONLY ITS SPORTS CARRY IS NOT A BROKEN PIPELINE.
+        # `betting.py` computes rest_days/body_clock under
+        # `if sport in ("nfl", "cfb")` — schedule fatigue is a football
+        # idea, and MLB's own spec parks it for want of a feed. On a
+        # journal that is almost entirely baseball those columns are NULL
+        # because the sports that fill them have barely bet yet, which is
+        # a different statement from "the pipeline is not journaling it".
+        #
+        # Reported as a fact rather than a fault: a warning that implies a
+        # bug where there is none is how you learn to skip warnings.
+        SPORT_BOUND = {"rest_days": ("nfl", "cfb"),
+                       "body_clock": ("nfl", "cfb")}
+        seasonal = {}
+        for d in list(dead):
+            sports = SPORT_BOUND.get(d)
+            if not sports:
+                continue
+            n = conn.execute(
+                "SELECT COUNT(*) FROM bets WHERE sport IN (%s)"
+                % ",".join("?" * len(sports)), sports).fetchone()[0]
+            if n == 0:
+                seasonal[d] = sports
+                dead.remove(d)
+
         # OUTPUT: anything any rung has actually fitted or found.
         #
         # A store that cannot be READ is reported, never swallowed. The
@@ -620,6 +644,12 @@ def check_learning(rep):
                     "always-NULL: " + ", ".join(dead)
                     + " — those pipelines are not journaling their dimension, "
                       "so the miner can never convict on it")
+        elif seasonal:
+            rep.add("learning ladder", OK, detail + " · " + "; ".join(
+                f"{d} waits on {'/'.join(sp).upper()}" for d, sp in
+                sorted(seasonal.items()))
+                + " — no picks from those sports yet, so the column is "
+                  "empty by season, not by fault")
         else:
             rep.add("learning ladder", OK, detail)
 

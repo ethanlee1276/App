@@ -83,11 +83,56 @@ def test_a_dimension_that_is_always_null_is_reported_not_averaged_away():
     row = _run(path, orig)
     assert row["status"] == doctor.WARN, row
     assert "always-NULL" in row["fix"]
-    for dead in ("park_hr", "wind_out", "lineup_slot", "body_clock"):
+    # `body_clock` is NOT in this list any more, and the omission is the
+    # point — see the seasonal test below. The journal here is one `mlb`
+    # bet, and body_clock is only ever computed for nfl/cfb.
+    for dead in ("park_hr", "wind_out", "lineup_slot"):
         assert dead in row["fix"], dead
     # And the ones that ARE carrying data are not named as dead.
     for live in ("pen_own", "rest_days", "loss_cause"):
         assert live not in row["fix"], live
+
+
+def test_a_football_only_dimension_is_not_a_fault_on_a_baseball_journal():
+    """`betting.py` computes rest_days/body_clock under
+    `if sport in ("nfl", "cfb")` — schedule fatigue is a football idea,
+    and MLB's own spec parks it for want of a feed.
+
+    On Ethan's journal, which is almost entirely baseball, the doctor
+    reported "those pipelines are not journaling their dimension, so the
+    miner can never convict on it". That reads as a broken pipeline and a
+    task marked complete that was not. Neither was true: the sports that
+    fill the column have barely bet yet.
+
+    A warning implying a bug where there is none is how you learn to skip
+    warnings."""
+    path, orig = _journal(pen_own=12.0, pen_opp=9.0, park_hr=1.1,
+                          wind_out=4.0, lineup_slot=3, lead_min=95.0,
+                          loss_cause="blowout")
+    row = _run(path, orig)
+    assert row["status"] == doctor.OK, row
+    assert "waits on NFL/CFB" in (row.get("detail") or "")
+    assert "by season, not by fault" in (row.get("detail") or "")
+
+
+def test_a_football_dimension_IS_a_fault_once_football_has_bet():
+    """The exemption must be narrow. Once an nfl or cfb pick exists and
+    the column is still empty, the pipeline really has stopped journaling
+    it — which is the fault the original check was written to catch."""
+    path, orig = _journal(pen_own=12.0, pen_opp=9.0, park_hr=1.1,
+                          wind_out=4.0, lineup_slot=3, lead_min=95.0,
+                          loss_cause="blowout")
+    conn = orig(path)
+    conn.execute(
+        "INSERT INTO bets (ts, sport, date, player, market, side, line, odds,"
+        " hit_prob, stake_units, status, category) VALUES "
+        "('t','nfl','2026-09-10','Y','rush_yds','OVER',40.5,-110,"
+        "0.55,1.0,'lost','main')")
+    conn.commit()
+    conn.close()
+    row = _run(path, orig)
+    assert row["status"] == doctor.WARN, row
+    assert "rest_days" in row["fix"] and "body_clock" in row["fix"]
 
 
 def test_a_fully_journaled_pick_is_green():
