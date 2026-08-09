@@ -33,6 +33,12 @@ PRE_MINUTE=0
 # Which of the three runners this agent drives — nightly, the
 # pre-kickoff odds pull, or the lineup watch. Set by the mode flags.
 SCRIPT="nightly"
+# Echoed back into the printed commands so they act on the agent
+# just installed. `--remove` alone removes the NIGHTLY one —
+# the label comes from the flags preceding it — so someone who
+# followed the printed line would delete the wrong agent and
+# leave the one they meant to remove running.
+MODE=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -43,7 +49,10 @@ while [ $# -gt 0 ]; do
       exit 0
       ;;
     --now)
-      exec bash "$REPO/tools/nightly.sh"
+      # $SCRIPT, not nightly.sh. Printed straight after installing an
+      # agent, so hardcoding it meant "run it once now" ran the WRONG
+      # runner — the nightly, at midday, instead of the lineup watch.
+      exec bash "$REPO/tools/${SCRIPT}.sh"
       ;;
     --at)
       HOUR="${2%%:*}"; MINUTE="${2##*:}"
@@ -52,7 +61,7 @@ while [ $# -gt 0 ]; do
       ;;
     --pre-kickoff)
       PRE=1
-      SCRIPT="prekick"
+      SCRIPT="prekick"; MODE="--pre-kickoff "
       LABEL="com.qellysbook.prekick"
       PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
       # An explicit --at after --pre-kickoff still wins; these are the
@@ -65,7 +74,7 @@ while [ $# -gt 0 ]; do
       # since the previous look at that game, so a watch that starts late
       # finds them already up with nothing to measure against — the first
       # real run caught 11 and could use 1.
-      SCRIPT="lineups"
+      SCRIPT="lineups"; MODE="--lineups "
       LABEL="com.qellysbook.lineups"
       PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
       HOUR=11; MINUTE=0
@@ -118,9 +127,9 @@ launchctl load -w "$PLIST" || { echo "launchctl load failed"; exit 1; }
 printf 'Installed %s — runs %02d:%02d local time.\n' "$LABEL" "$HOUR" "$MINUTE"
 echo
 echo "  check it is registered:  launchctl list | grep qellysbook"
-echo "  run it once now:         bash tools/install-nightly.sh --now"
-echo "  read last night:         tail -40 logs/nightly-\$(date +%F).log"
-echo "  remove it:               bash tools/install-nightly.sh --remove"
+echo "  run it once now:         bash tools/install-nightly.sh $MODE--now"
+echo "  read its log:            tail -40 logs/${SCRIPT}-\$(date +%F).log"
+echo "  remove it:               bash tools/install-nightly.sh $MODE--remove"
 echo
 echo "Local time, not UTC — unlike the GitHub workflows, which are UTC."
 echo "If the Mac is asleep at that hour, launchd runs the job on wake."

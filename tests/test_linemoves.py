@@ -502,6 +502,30 @@ def test_the_lineup_watch_polls_tighter_than_the_default():
     assert "coverage()" in sh
 
 
+def test_the_installer_prints_commands_that_act_on_what_it_installed():
+    """After installing the lineup agent it printed:
+
+        run it once now:  bash tools/install-nightly.sh --now
+        read last night:  tail -40 logs/nightly-$(date +%F).log
+        remove it:        bash tools/install-nightly.sh --remove
+
+    All three were wrong for the agent just installed. `--now` execed
+    nightly.sh whatever mode you asked for; the log named belongs to a
+    different runner; and `--remove` alone removes the NIGHTLY agent,
+    because the label comes from the flags preceding it — so following
+    that line deletes the wrong one and leaves the intended one running.
+
+    Guidance that names the wrong target is worse than none: it is
+    confidently wrong at the moment you are least able to tell."""
+    import pathlib
+    sh = (pathlib.Path(__file__).resolve().parent.parent / "tools"
+          / "install-nightly.sh").read_text()
+    assert 'exec bash "$REPO/tools/${SCRIPT}.sh"' in sh, "--now still hardcoded"
+    assert 'logs/${SCRIPT}-' in sh, "the log path is still one runner's"
+    assert '$MODE--remove' in sh and '$MODE--now' in sh, "commands lose the mode"
+    assert 'logs/nightly-\$(date' not in sh
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
