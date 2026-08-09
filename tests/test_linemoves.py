@@ -557,6 +557,20 @@ def test_the_installer_does_not_offer_the_watch_as_a_quick_check():
     assert "runs until every card is out" in sh
 
 
+def test_each_agent_gets_its_own_launchd_error_file():
+    """Three agents shared one `logs/launchd.err`, so they interleaved
+    and clobbered each other. That file is where a job which cannot even
+    start says why — precisely the case where the script's own log does
+    not exist to be read, which is how a nightly showing exit 126 had
+    nothing to show for it."""
+    import pathlib
+    sh = (pathlib.Path(__file__).resolve().parent.parent / "tools"
+          / "install-nightly.sh").read_text()
+    assert "logs/launchd-${SCRIPT}.err" in sh
+    assert "logs/launchd-${SCRIPT}.out" in sh
+    assert "logs/launchd.err<" not in sh, "the shared path is back"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

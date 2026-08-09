@@ -114,8 +114,13 @@ cat > "$PLIST" <<PLISTEOF
   <!-- false on purpose: installing this should not kick off a full ingest
        and rebuild the moment you run the installer. Use --now for that. -->
   <key>RunAtLoad</key><false/>
-  <key>StandardOutPath</key><string>$REPO/logs/launchd.out</string>
-  <key>StandardErrorPath</key><string>$REPO/logs/launchd.err</string>
+  <!-- PER AGENT. All three wrote to one launchd.err, so three schedules
+       interleaved into one file and the error you needed was the one
+       most likely overwritten. launchd's own stderr is where a job that
+       cannot even start says why — exactly the case where the script's
+       own log does not exist to be read. -->
+  <key>StandardOutPath</key><string>$REPO/logs/launchd-${SCRIPT}.out</string>
+  <key>StandardErrorPath</key><string>$REPO/logs/launchd-${SCRIPT}.err</string>
 </dict>
 </plist>
 PLISTEOF
