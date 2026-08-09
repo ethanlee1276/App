@@ -527,6 +527,40 @@ def test_a_thin_main_slice_is_demoted_not_trusted():
     assert dem and "too little evidence" in dem[0]["reading"]
 
 
+def test_the_settle_line_reports_demotions_rather_than_going_quiet():
+    """It printed only `if lp["closed"]`, so the night the main-only check
+    demoted all four standing closures the line vanished — and a mining
+    step that found nothing reads exactly like one that crashed.
+
+    The demotions are the news, not the absence of closures: they are
+    picks that will now be priced which yesterday were refused."""
+    import contextlib
+    import importlib
+    import io
+    import pathlib
+    launch = importlib.import_module("launch")
+    src = pathlib.Path(launch.__file__).read_text()
+    i = src.index("loss patterns:")
+    seg = src[max(0, i - 1400):i + 400]
+    assert "demoted to watch" in seg, "demotions still unreported"
+    assert "nothing over the bar" in seg, "a quiet run is still silent"
+
+
+def test_a_demoted_finding_is_absent_from_the_enforced_list():
+    """The contract the settle line describes: demoted means not in
+    `closed`, so `veto()` cannot reach it."""
+    conn = ledger.connect(":memory:")
+    _seed(conn, _mixed_slice(main_n=60, main_hot=0.60,
+                             pooled_n=400, pooled_hot=0.30))
+    res = lp.mine(lp.records_from_ledger(conn), min_n=40)
+    dem = [f for f in res["findings"] + res["restatements"]
+           if f.get("demoted")]
+    assert dem
+    closed_keys = {(f.get("dim"), f.get("value")) for f in res["closed"]}
+    for f in dem:
+        assert (f.get("dim"), f.get("value")) not in closed_keys
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

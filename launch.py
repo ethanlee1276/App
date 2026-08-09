@@ -3063,9 +3063,28 @@ def settle_now(day: str | None = None) -> None:
     try:
         from engine import losspatterns
         lp = losspatterns.refresh(lconn)
-        if lp["closed"]:
-            print(f"  loss patterns: {len(lp['closed'])} slice(s) "
-                  "self-closed — see the Record page")
+        # ALWAYS REPORTED, including zero. This printed only when
+        # something closed, so the night the main-only check demoted all
+        # four standing closures the line simply vanished — and a mining
+        # step that found nothing looks exactly like one that crashed.
+        # The demotions ARE the news: they are picks that will now be
+        # priced which yesterday were refused.
+        _dem = [f for f in (lp.get("findings") or [])
+                + (lp.get("restatements") or []) if f.get("demoted")]
+        if lp["closed"] or _dem:
+            bits = []
+            if lp["closed"]:
+                bits.append(f"{len(lp['closed'])} enforced")
+            if _dem:
+                thin = sum(1 for f in _dem
+                           if f.get("demoted") == "too thin to check")
+                bits.append(f"{len(_dem)} demoted to watch"
+                            + (f" ({thin} for want of `main` evidence)"
+                               if thin else ""))
+            print(f"  loss patterns: {', '.join(bits)} — see the Record page")
+        else:
+            print(f"  loss patterns: nothing over the bar "
+                  f"({lp.get('tested', 0)} slice(s) tested)")
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠️  loss-pattern mining skipped: {exc}")
     try:
