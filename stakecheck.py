@@ -717,6 +717,40 @@ def spread_report(rows: list[dict]) -> None:
                   "projections rather than the journal.")
 
 
+def rederived_closes() -> dict:
+    """Correct closing prices, rebuilt from the raw snapshot history.
+
+    ETHAN, 2026-08-09: "we cant test what we have been doing against our
+    past wins and losses to see if we would have improved."
+
+    Half right, and the half that is wrong is the useful half. The CLV
+    bug was in the LOOKUP, not the storage: every snapshot ever taken
+    still sits in `cache/line_history.jsonl` with BOTH `over_odds` and
+    `under_odds` on it. What was lost is the number the settle pass
+    computed from them, and that number can simply be computed again —
+    side-aware this time, and without the guard that threw away any row
+    whose over price was missing.
+
+    So CLV on the whole book is recoverable, not gone.
+
+    WHAT IS GENUINELY GONE, and it is a different and more important
+    limit: there is no record of the bets the model DECLINED. The journal
+    holds what it chose. That means a change which FILTERS the existing
+    picks can be replayed exactly — the sizing replays, the corrections,
+    the cap policies all are — but a change that would make the model bet
+    something new cannot be scored against history at all. It has to be
+    tested forward.
+    """
+    try:
+        from engine.linemoves import load_history, closing_odds_by_date
+    except Exception:
+        return {}
+    try:
+        return closing_odds_by_date(load_history())
+    except Exception:
+        return {}
+
+
 def clv_report(rows: list[dict]) -> None:
     """Did the market move toward us by kickoff?
 
@@ -748,15 +782,44 @@ def clv_report(rows: list[dict]) -> None:
     price we took was better than the price at close.
     """
     import math
-    have = [r for r in rows if r.get("closing_odds") not in (None, "")
-            and r.get("odds") is not None]
+    from engine.sources.oddsapi import normalize_name
+
+    banked = [r for r in rows if r.get("closing_odds") not in (None, "")
+              and r.get("odds") is not None]
+    # REBUILT FROM THE SNAPSHOTS, side-aware, because the banked numbers
+    # were recorded by the code that had the side bug and half of them
+    # are the wrong side of the market. See `rederived_closes`.
+    fresh = rederived_closes()
+    have = []
+    for r in rows:
+        if r.get("odds") is None:
+            continue
+        sides = fresh.get((normalize_name(r["player"] or ""), r["market"],
+                           r["date"])) or {}
+        px = sides.get("under" if (r.get("side") or "OVER").upper() == "UNDER"
+                       else "over")
+        if px is not None:
+            have.append(dict(r, closing_odds=int(px)))
     print(f"\n{'='*70}\n  DID THE MARKET COME TO US BY KICKOFF?\n{'='*70}")
-    print(f"  {len(have)} of {len(rows)} settled bets carry a closing price.")
+    print(f"  {len(have)} of {len(rows)} settled bets have a closing price "
+          f"rebuilt from\n  the raw snapshots, side-aware. "
+          f"({len(banked)} carry a banked one, recorded by\n  the code that "
+          f"had the side bug — those are not used here.)")
     if len(have) < 20:
-        print("  Too few to say anything. Closing prices are captured by the "
-              "settle\n  pass; if this stays near zero the capture is the "
-              "thing to fix first,\n  because it is the sharpest read "
-              "available on whether an edge exists.")
+        print("\n  Too few to say anything — and WHICH of the two reasons "
+              "matters:")
+        if banked:
+            print(f"    {len(banked)} bets banked a close but the snapshot "
+                  f"history cannot rebuild\n    them. The raw file "
+                  f"(cache/line_history.jsonl) is missing, thin, or does\n"
+                  f"    not cover these dates. That file is the only place "
+                  f"a correct close\n    can come from now, so it is the "
+                  f"thing to protect.")
+        else:
+            print("    Nothing is being captured at all. Closing prices come "
+                  "from the\n    snapshot pull; until it runs, the sharpest "
+                  "read on whether an edge\n    exists is simply not "
+                  "available.")
         return
 
     def _clv(r):
@@ -785,8 +848,12 @@ def clv_report(rows: list[dict]) -> None:
     var = sum((v - mean) ** 2 for v in vals) / max(len(vals) - 1, 1)
     se = math.sqrt(var / len(vals))
     beat = sum(1 for v in vals if v > 0)
+    # A t needs a spread to divide by. Identical rows give se ~ 0 and a
+    # t in the quadrillions, which is not a strong result — it is a
+    # degenerate one, and printing it as a number invites reading it.
+    tstat = (f"{mean / se:+.1f}" if se > 1e-6 else "— (no spread to test)")
     print(f"\n  mean CLV      {mean:+.2%} of a probability point   "
-          f"± {se:.2%} (1 SE)   t = {mean / se if se else 0:+.1f}")
+          f"± {se:.2%} (1 SE)   t = {tstat}")
     print(f"  beat the close on {beat} of {len(have)} "
           f"({beat / len(have):.0%})")
     print("\n  READ IT LIKE THIS")

@@ -1183,6 +1183,25 @@ def test_the_bar_grows_with_the_number_of_slices():
     assert few and many and many > few, (few, many)
 
 
+def _with_history(rows, fn):
+    """Run `fn` with linemoves pointed at a temporary snapshot file."""
+    import json
+    import tempfile
+    from pathlib import Path
+    from engine import linemoves
+    fd, path = tempfile.mkstemp(suffix=".jsonl")
+    with os.fdopen(fd, "w") as fh:
+        for r in rows:
+            fh.write(json.dumps(r) + "\n")
+    orig = linemoves.HISTORY_PATH
+    linemoves.HISTORY_PATH = Path(path)
+    try:
+        return fn()
+    finally:
+        linemoves.HISTORY_PATH = orig
+        os.unlink(path)
+
+
 # --- closing line value ------------------------------------------------------
 def _to_american(p):
     d = 1.0 / p
@@ -1191,45 +1210,68 @@ def _to_american(p):
 
 def _clv_db(edge_pts, n=400, seed=6):
     """A book whose closing prices move by a KNOWN amount, built in
-    PROBABILITY space.
+    PROBABILITY space. Returns (ledger path, snapshot rows).
+
+    THE SNAPSHOTS ARE PART OF THE FIXTURE NOW, because the report rebuilds
+    the close from them rather than trusting the banked column — the
+    banked ones were written by the code that had the side bug.
 
     THE FIRST NULL WAS BUILT WRONG and it matters. Adding symmetric noise
     to AMERICAN odds is not symmetric in probability — the mapping is
     non-linear and jumps across +/-100 — so a book with no true movement
     read +0.42% at t = +1.9. That looks like a finding and is arithmetic.
     A null has to be null in the units the tool measures in."""
+    import datetime
     import random
+    import time as _t
     rng = random.Random(seed)
-    rows = []
+    ts = _t.time() - 7200
+    date = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    rows, snaps = [], []
     for i in range(n):
         p_taken = rng.uniform(0.42, 0.58)
         p_close = min(0.95, max(0.05, p_taken + edge_pts + rng.gauss(0, 0.02)))
         won = rng.random() < 0.48
-        rows.append(_row(player=f"P{i}", odds=_to_american(p_taken),
-                         closing_odds=_to_american(p_close),
+        rows.append(_row(date=date, player=f"P{i}", market="hits",
+                         side="OVER", odds=_to_american(p_taken),
+                         closing_odds=None,
                          status="won" if won else "lost",
                          pnl_units=0.27 if won else -0.3))
-    return _db(rows)
+        snaps.append({"player": f"P{i}", "market": "hits", "ts": ts,
+                      "line": 1.5, "over_odds": _to_american(p_close),
+                      "under_odds": None, "book": "FanDuel"})
+    return _db(rows), snaps
 
 
-def _clv_stats(path):
+def _clv_stats(path, snaps=None):
     import contextlib
     import io
     import re as _re
     buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        stakecheck.clv_report(stakecheck._rows(path, None, None))
-    m = _re.search(r"mean CLV\s+([-+][\d.]+)%.*?t = ([-+][\d.]+)",
-                   buf.getvalue(), _re.S)
-    return (float(m.group(1)), float(m.group(2))) if m else (None, None)
+
+    def _go():
+        with contextlib.redirect_stdout(buf):
+            stakecheck.clv_report(stakecheck._rows(path, None, None))
+    if snaps is None:
+        _go()
+    else:
+        _with_history(snaps, _go)
+    # The mean is read INDEPENDENTLY of the t. A degenerate spread prints
+    # "t = — (no spread to test)" on purpose, and a combined pattern made
+    # that case look like no output at all.
+    out = buf.getvalue()
+    m = _re.search(r"mean CLV\s+([-+][\d.]+)%", out)
+    t = _re.search(r"t = ([-+][\d.]+)", out)
+    return (float(m.group(1)) if m else None,
+            float(t.group(1)) if t else None)
 
 
 def test_a_book_with_no_line_movement_reads_zero():
     """The property that makes CLV worth trusting. A tool that finds edge
     in a null finds edge in anything."""
-    path = _clv_db(edge_pts=0.0)
+    path, snaps = _clv_db(edge_pts=0.0)
     try:
-        mean, t = _clv_stats(path)
+        mean, t = _clv_stats(path, snaps)
     finally:
         os.unlink(path)
     assert abs(mean) < 0.5, mean
@@ -1237,9 +1279,9 @@ def test_a_book_with_no_line_movement_reads_zero():
 
 
 def test_a_real_two_point_edge_is_recovered():
-    path = _clv_db(edge_pts=0.02)
+    path, snaps = _clv_db(edge_pts=0.02)
     try:
-        mean, t = _clv_stats(path)
+        mean, t = _clv_stats(path, snaps)
     finally:
         os.unlink(path)
     assert 1.5 < mean < 2.5, mean
@@ -1260,10 +1302,20 @@ def test_the_direction_is_not_backwards():
     """A sign error here would report a losing book as a winning one, and
     nothing else in the tool would contradict it. Taking +120 on
     something that closes -110 is value TO US."""
-    path = _db([_row(player="good", odds=120, closing_odds=-110),
-                _row(player="good2", odds=115, closing_odds=-105)] * 15)
+    import datetime
+    import time as _t
+    ts = _t.time() - 7200
+    date = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    bets, snaps = [], []
+    for i in range(30):
+        bets.append(_row(date=date, player=f"G{i}", market="hits",
+                         side="OVER", odds=120))
+        snaps.append({"player": f"G{i}", "market": "hits", "ts": ts,
+                      "line": 1.5, "over_odds": -110, "under_odds": None,
+                      "book": "FanDuel"})
+    path = _db(bets)
     try:
-        mean, _ = _clv_stats(path)
+        mean, _ = _clv_stats(path, snaps)
     finally:
         os.unlink(path)
     assert mean > 0, f"beating the close reported as negative: {mean}"
@@ -1291,6 +1343,85 @@ def test_the_clv_check_writes_nothing():
     body = _code_only("clv_report")
     for verb in ("save", "write", "store", "set_"):
         assert verb not in body, f"clv_report calls {verb}"
+
+
+def test_the_close_is_rebuilt_from_snapshots_not_from_the_banked_column():
+    """ETHAN: "we cant test what we have been doing against our past wins
+    and losses." Half right. The CLV bug was in the LOOKUP; every
+    snapshot ever taken still carries both sides in
+    cache/line_history.jsonl, so the correct close can be computed again
+    for the whole book.
+
+    Proved by making the two disagree: 60 UNDERs taken at +100 with the
+    under closing +115 (we took the worse number, so CLV is NEGATIVE)
+    while the OVER closes -140 (which, read side-blind, looks strongly
+    positive). The banked column holds -140. If the report reads it, the
+    sign flips."""
+    import datetime
+    import time as _t
+    ts = _t.time() - 7200
+    date = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    snaps = [{"player": f"P{i}", "market": "hits", "ts": ts, "line": 1.5,
+              "over_odds": -140, "under_odds": 115, "book": "FanDuel"}
+             for i in range(60)]
+    bets = [_row(date=date, player=f"P{i}", market="hits", side="UNDER",
+                 odds=100, closing_odds=-140, status="lost")
+            for i in range(60)]
+    path = _db(bets)
+    try:
+        mean, _ = _with_history(snaps, lambda: _clv_stats(path))
+    finally:
+        os.unlink(path)
+    assert mean is not None and mean < 0, \
+        f"read the banked over-side close instead of rebuilding: {mean}"
+
+
+def test_a_degenerate_spread_does_not_print_a_t_statistic():
+    """Identical rows give a standard error of zero and a t in the
+    quadrillions. That is not a strong result, it is an undefined one,
+    and printing it as a number invites reading it as evidence."""
+    import contextlib
+    import datetime
+    import io
+    import time as _t
+    ts = _t.time() - 7200
+    date = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    snaps = [{"player": f"P{i}", "market": "hits", "ts": ts, "line": 1.5,
+              "over_odds": -140, "under_odds": 115, "book": "FanDuel"}
+             for i in range(30)]
+    bets = [_row(date=date, player=f"P{i}", market="hits", side="UNDER",
+                 odds=100, status="lost") for i in range(30)]
+    path = _db(bets)
+    buf = io.StringIO()
+    try:
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history(snaps, _go)
+    finally:
+        os.unlink(path)
+    assert "no spread to test" in buf.getvalue(), buf.getvalue()
+
+
+def test_a_missing_snapshot_file_says_which_problem_it_is():
+    """Zero rebuilt with banked closes present is a different failure from
+    zero of both: the first means the raw file cannot cover these dates,
+    the second means nothing is being captured. They need different
+    fixes."""
+    import contextlib
+    import io
+    path = _db([_row(player=f"P{i}", closing_odds=-110) for i in range(40)])
+    buf = io.StringIO()
+    try:
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history([], _go)
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "0 of 40" in out
+    assert "cannot rebuild" in out and "line_history.jsonl" in out
 
 
 if __name__ == "__main__":
