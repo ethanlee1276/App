@@ -123,10 +123,23 @@ as "the best next build".
    86.48, 86.26, 85.09 and then vanished from the latest start: a 2.5 mph
    slide and a shelved pitch, both invisible. `trend_all` reports every
    type and names a pitch that disappeared.
-3. **TTO** — batter-sequence position within the game, which the same
-   payload gives for free.
-4. **Pitch-count projection** — from boxscore `pitchesThrown`, which is
-   already being fetched today and thrown away.
+3. ~~**TTO**~~ — **built 2026-08-09**. Journaled as `tto_proj`, banded
+   around §5's third-time-through penalty, in `DIMS` so the lab can
+   propose on it and in `bleed` so the report that tests can slice it.
+
+   **It is a PROJECTION, and that is the whole design.** Times through
+   the order is a within-game quantity and the bet is placed before any
+   of it exists, so what lands on the row is how deep he has BEEN going.
+   Journaling tonight's actual depth would be journaling the future — the
+   miner would convict on information the pick never had, and any gate
+   built on it would be reading tomorrow's newspaper.
+4. **Pitch-count projection** — **parked, deliberately.** The raw counts
+   are parsed and reach the probe. Going further means feeding the outs
+   projection, which is a PRICING change, and §6 below is why that waits.
+   As a mining dimension it would restate `tto` almost exactly — how deep
+   he goes and how many pitches he throws are close to one fact, and the
+   miner would spend its multiple-testing budget convicting the same
+   pocket twice.
 
 Steps 2–4 are days, not weeks, and none of them touches a new data
 provider or costs a credit.

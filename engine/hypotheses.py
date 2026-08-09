@@ -89,7 +89,7 @@ DIMS = ("side", "odds", "prob", "horizon", "book", "lead", "park", "wind",
         # §5's velocity tell. Listed here is what puts it in the LLM's
         # menu — a dimension absent from DIMS is one the lab can never
         # propose about, however faithfully it is journaled.
-        "velo")
+        "velo", "tto")
 
 
 class HypothesisUnavailable(RuntimeError):

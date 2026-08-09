@@ -116,6 +116,21 @@ def _velo_for(prop):
     return delta_for(prop.person_id, _dt.date.today().year)
 
 
+def _tto_for(prop):
+    """How deep he has been going, as a projection. None if unmeasured.
+
+    A PROJECTION, never tonight's depth. Times through the order is a
+    within-game quantity and the bet is placed before any of it exists —
+    journaling the actual figure would be journaling the future, and the
+    miner would convict on information the pick never had.
+    """
+    if prop.market not in PITCHER_MARKETS or not getattr(prop, "person_id", 0):
+        return None
+    import datetime as _dt
+    from .velocity import projected_tto
+    return projected_tto(prop.person_id, _dt.date.today().year)
+
+
 def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
                       allow_synthetic_line: bool = False,
                       game=None) -> Recommendation:
@@ -203,14 +218,14 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     # calls this with no game at all, which is an unmeasured pen rather
     # than a fresh one.
     _pen = (game.bullpen_fatigue or {}) if game is not None else {}
-    _velo = _velo_for(prop)          # §5's velocity tell — see the function
+    _velo, _tto = _velo_for(prop), _tto_for(prop)      # §5; see functions
     pattern_block = lp_veto("mlb", prop.market, side=side, odds=best.odds,
                             prob=hit, book=best.book, horizon_days=0,
                             lead_min=minutes_until(
                                 getattr(game, "kickoff", None)),
                             pen_own=_pen.get(prop.team),
                             pen_opp=_pen.get(prop.opponent),
-                            velo_delta=_velo,
+                            velo_delta=_velo, tto_proj=_tto,
                             **_env)
     tier = mlb_tier(prop.market)
     min_edge = mlb_tier_min_edge(prop.market)

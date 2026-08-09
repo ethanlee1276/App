@@ -61,18 +61,33 @@ SIGNALS = (
             "the loss miner can convict on and the lab can propose about."},
     {"name": "times through order",
      "module": "engine/mlb/sources/pbp.py",
-     "symbols": ("times_through_order", "tto_band"),
-     "want": ("probe", "journal"),
+     "symbols": ("times_through_order", "tto_band", "tto_proj",
+                 "projected_tto"),
+     "want": ("probe", "journal", "gate"),
      "why": "§5. Third time through is a real, measurable penalty."},
     {"name": "pitch counts",
      "module": "engine/mlb/sources/pbp.py",
      "symbols": ("pitch_counts",),
-     # `probe` today, honestly. The pitch-count PROJECTION that would feed
-     # the outs market is not built — writing `pipeline` here would be
-     # recording an intention as if it were a fact.
+     # `probe`, and DELIBERATELY not more. §5 wants a pitch-count
+     # projection feeding the outs market, and two things argue against
+     # building it next.
+     #
+     # It would be a PRICING change, not a dimension. Feeding the outs
+     # projection moves numbers, and the information test says the
+     # claimed edge carries none — a new input into a noise variable is
+     # the exact move that finding rules out until something moves the
+     # AUC off 0.5.
+     #
+     # And as a mining dimension it would nearly duplicate `tto`: how
+     # deep he goes and how many pitches he throws are close to the same
+     # fact, and the miner would spend its multiple-testing budget
+     # convicting the same pocket twice. `losspatterns._dedupe` exists
+     # because that has already happened once.
      "want": ("probe",),
-     "why": "§5's pitch-count projection feeds the outs market — not yet "
-            "built; this is the raw count it will need."},
+     "why": "§5's pitch-count projection feeds the OUTS market, which "
+            "makes it a pricing change rather than a dimension — parked "
+            "until the edge test says a new input can earn its place. As "
+            "a slice it would restate `tto` almost exactly."},
     {"name": "first-mover attribution",
      "module": "engine/linemoves.py",
      "symbols": ("first_mover", "first_mover_sharp", "move_first_sharp"),

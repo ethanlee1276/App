@@ -756,6 +756,8 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
             from .velocity import delta_for as _vd
             import datetime as _dt
             d["velo_delta"] = _vd(prop.person_id, _dt.date.today().year)
+            from .velocity import projected_tto as _tp
+            d["tto_proj"] = _tp(prop.person_id, _dt.date.today().year)
         if getattr(game, "doubleheader", False):
             # Say WHICH game of the doubleheader this prop is for — on the
             # card, in the headline, everywhere.

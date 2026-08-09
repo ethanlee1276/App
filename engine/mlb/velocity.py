@@ -284,3 +284,63 @@ def delta_for(person_id, season: int) -> float | None:
         out = None          # never let a pitcher lookup break a board
     _MEMO[key] = out
     return out
+
+
+# --- times through the order ------------------------------------------------
+#: How deep his recent starts actually went, as a projection of how deep
+#: tonight's will. §5 treats the third time through as a real penalty, and
+#: the question at PICK time is how much of the game happens there.
+TTO_STARTS = 5
+
+
+def deepest_tto(rows: list[dict], pitcher_id) -> int:
+    """How many times he faced the deepest batter, in one game."""
+    from .sources.pbp import times_through_order
+    seen = times_through_order(rows, pitcher_id)
+    return max(seen.values()) if seen else 0
+
+
+def tto_history(person_id: int, season: int, limit: int = TTO_STARTS
+                ) -> list[int]:
+    """The depth of each of his last `limit` starts, most recent first."""
+    from .sources.pbp import fetch_playbyplay, pitches
+    out = []
+    for s in recent_start_pks(person_id, season, limit):
+        try:
+            d = deepest_tto(pitches(fetch_playbyplay(s["game_pk"])), person_id)
+        except Exception:                                       # noqa: BLE001
+            continue
+        if d:
+            out.append(d)
+    return out
+
+
+_TTO_MEMO: dict = {}
+
+
+def projected_tto(person_id, season: int) -> float | None:
+    """Mean depth of his recent starts, or None.
+
+    WHAT THIS IS AND IS NOT. It is a PROJECTION made before the game, not
+    a measurement of it. TTO is a within-game quantity — a pitch thrown
+    the third time through is a fact about that pitch — and a bet is
+    placed before any of them exist. Journaling tonight's actual depth
+    would be journaling the future, and the miner would convict on
+    information the pick never had.
+
+    So what lands on the row is how deep he has been GOING. That is
+    knowable at pick time, which is the only kind of thing a gate is
+    allowed to use.
+    """
+    key = (person_id, season)
+    if key in _TTO_MEMO:
+        return _TTO_MEMO[key]
+    out = None
+    try:
+        h = tto_history(int(person_id), int(season))
+        if h:
+            out = round(sum(h) / len(h), 2)
+    except Exception:                                           # noqa: BLE001
+        out = None
+    _TTO_MEMO[key] = out
+    return out

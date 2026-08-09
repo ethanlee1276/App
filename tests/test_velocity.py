@@ -277,6 +277,72 @@ def test_a_pitcher_lookup_that_fails_never_breaks_a_board():
         V._MEMO.clear()
 
 
+# --- times through the order, as a PROJECTION ------------------------------
+def test_tto_bands_split_around_the_third_time_through():
+    """§5 treats the third pass as a real penalty, so the bands split
+    there — a starter who reliably reaches it is in a different spot from
+    one pulled after two."""
+    from engine import losspatterns as lp
+    assert lp.tto_band(1.8) == "under 2x"
+    assert lp.tto_band(2.4) == "about 2x"
+    assert lp.tto_band(3.0) == "reaches 3x"
+    assert lp.tto_band(3.4) == "past 3x"
+    assert lp.tto_band(None) is None
+
+
+def test_what_is_journaled_is_a_PROJECTION_not_tonights_depth():
+    """THE ERROR THAT WOULD POISON THIS DIMENSION. Times through the
+    order is a within-game quantity, and the bet is placed before any of
+    it exists. Journaling tonight's actual depth would be journaling the
+    future — the miner would convict on information the pick never had,
+    and every gate built on it would be reading tomorrow's newspaper.
+
+    What lands on the row is how deep he has BEEN going."""
+    import inspect
+    from engine.mlb import velocity as V
+    src = inspect.getsource(V.projected_tto)
+    assert "recent_start_pks" in inspect.getsource(V.tto_history)
+    assert "projection" in src.lower()
+    from engine.mlb import betting as B
+    hook = inspect.getsource(B._tto_for)
+    assert "projected_tto" in hook
+    # It must read PAST starts, never the game being priced.
+    assert "game_pk" not in hook and "tonight" not in hook.replace(
+        "never tonight's depth", "")
+
+
+def test_deepest_tto_reads_the_deepest_batter_not_the_count_of_batters():
+    from engine.mlb import velocity as V
+    rows = [{"pitcher_id": 1, "batter_id": b, "at_bat": i}
+            for i, b in enumerate([10, 11, 12, 10, 11, 10])]
+    assert V.deepest_tto(rows, 1) == 3      # batter 10 faced three times
+    assert V.deepest_tto(rows, 999) == 0
+
+
+def test_tto_reaches_the_lab_menu_and_the_veto():
+    import inspect
+    from engine import hypotheses, losspatterns as lp
+    assert "tto" in hypotheses.DIMS
+    assert "tto_proj" in inspect.signature(lp.veto).parameters
+    assert lp.features_of(side="OVER", tto_proj=3.3)["tto"] == "past 3x"
+
+
+def test_tto_is_memoised_per_pitcher():
+    from engine.mlb import velocity as V
+    calls = {"n": 0}
+    real = V.tto_history
+    V.tto_history = lambda *a, **k: (calls.__setitem__("n", calls["n"] + 1),
+                                     [3])[1]
+    V._TTO_MEMO.clear()
+    try:
+        V.projected_tto(1, 2026)
+        V.projected_tto(1, 2026)
+    finally:
+        V.tto_history = real
+        V._TTO_MEMO.clear()
+    assert calls["n"] == 1
+
+
 if __name__ == "__main__":
     for name, fn in sorted(list(globals().items())):
         if name.startswith("test_") and callable(fn):
