@@ -34,11 +34,26 @@ import keycheck
 
 #: Distinctive enough that any leak is unambiguous, and shaped like the real
 #: things so a prefix-printing bug would still be caught.
+# THE FAKES MUST NOT COLLIDE WITH ORDINARY OUTPUT, and the first version
+# did. "oddsAAAA…" starts with `odds`, and this checker prints
+# "Free key at the-odds-api.com" — while The Odds API's own 401 body says
+# "Get an API key at https://the-odds-api.com". Both contain `odds`, so
+# the fragment assertion fired on the vendor's domain name rather than on
+# a leak.
+#
+# It passed in CI and on any machine where that host is unreachable,
+# because then no error body is ever printed — so the failure only
+# appeared on the one machine with working keys and a live network, which
+# is the worst possible place to first meet a test bug.
+#
+# The guarantee is unchanged and still strict. These prefixes and suffixes
+# are chosen to be strings that cannot occur in prose, a URL, or a
+# provider's error text.
 FAKE = {
-    "ODDS_API_KEY": "oddsAAAAAAAAAAAAAAAAAAAAAAAAAAAA1111",
-    "ODDS_API_KEY_2": "oddsBBBBBBBBBBBBBBBBBBBBBBBBBBBB2222",
-    "CFBD_API_KEY": "cfbdCCCCCCCCCCCCCCCCCCCCCCCCCCCC3333",
-    "ANTHROPIC_API_KEY": "sk-ant-DDDDDDDDDDDDDDDDDDDDDDDD4444",
+    "ODDS_API_KEY": "Zq7vAAAAAAAAAAAAAAAAAAAAAAAAAAAAxK41",
+    "ODDS_API_KEY_2": "Zq7wBBBBBBBBBBBBBBBBBBBBBBBBBBBBxK42",
+    "CFBD_API_KEY": "Jr9xCCCCCCCCCCCCCCCCCCCCCCCCCCCCxK43",
+    "ANTHROPIC_API_KEY": "sk-ant-Vt5yDDDDDDDDDDDDDDDDDDDDxK44",
 }
 
 
@@ -179,6 +194,25 @@ def test_the_closing_note_states_that_nothing_was_printed():
     """The output is meant to be pasted. Saying so is what makes someone
     comfortable pasting it, and it is a claim the tests above enforce."""
     assert "No key value is printed above" in _run()
+
+
+def test_the_fakes_cannot_collide_with_the_checkers_own_prose():
+    """The fixture bug that hid a working test: a fake key beginning
+    `odds` made the fragment assertion fire on "the-odds-api.com" in
+    ordinary output and in the provider's 401 body.
+
+    Any future fake must be checkable against the same standard — if its
+    first four characters appear in the checker's source, the leak test
+    is measuring vocabulary rather than leakage."""
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parent.parent
+           / "keycheck.py").read_text().lower()
+    for name, value in FAKE.items():
+        for n in (4, 6):
+            assert value[:n].lower() not in src, (
+                f"{name}: the fake's first {n} chars occur in keycheck.py")
+            assert value[-n:].lower() not in src, (
+                f"{name}: the fake's last {n} chars occur in keycheck.py")
 
 
 if __name__ == "__main__":
