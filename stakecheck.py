@@ -940,6 +940,11 @@ def clv_report(rows: list[dict]) -> None:
 
     _clv_slice("market", "market")
     _clv_slice("price band", "_band")
+    # SIDE, and this one was not fished for. Every bet in the worst
+    # decile is an OVER, and every one of them closed longer — the
+    # market moving away from the side we took. Two groups, specified
+    # from the pattern in the outliers rather than from a sweep.
+    _clv_slice("side", "side")
 
     # And whether CLV predicts the result, which is the internal check
     # that the closing prices being read are the right ones.

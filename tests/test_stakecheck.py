@@ -1242,14 +1242,25 @@ def _clv_db(edge_pts, n=400, seed=6):
         p_taken = rng.uniform(0.42, 0.58)
         p_close = min(0.95, max(0.05, p_taken + edge_pts + rng.gauss(0, 0.02)))
         won = rng.random() < 0.48
-        rows.append(_row(date=date, player=f"P{i}", market="hits",
-                         side="OVER", odds=_to_american(p_taken),
+        # MIXED SIDES, so the by-side slice has two groups to compare and
+        # the side-aware lookup is exercised on both. The closing price
+        # goes on the side the bet took, so CLV is `edge_pts` either way.
+        side = "OVER" if i % 2 == 0 else "UNDER"
+        # Two markets as well, so the by-market slice has something to
+        # compare. A fixture with one of everything cannot exercise a
+        # comparison, and the slice correctly declines to print — which
+        # reads as a missing feature rather than a well-behaved one.
+        mkt = "hits" if i % 3 else "total_bases"
+        rows.append(_row(date=date, player=f"P{i}", market=mkt,
+                         side=side, odds=_to_american(p_taken),
                          closing_odds=None, line=1.5,
                          status="won" if won else "lost",
                          pnl_units=0.27 if won else -0.3))
-        snaps.append({"player": f"P{i}", "market": "hits", "ts": ts,
-                      "line": 1.5, "over_odds": _to_american(p_close),
-                      "under_odds": None, "book": "FanDuel"})
+        snaps.append({"player": f"P{i}", "market": mkt, "ts": ts,
+                      "line": 1.5,
+                      "over_odds": _to_american(p_close) if side == "OVER" else None,
+                      "under_odds": _to_american(p_close) if side == "UNDER" else None,
+                      "book": "FanDuel"})
     return _db(rows), snaps
 
 
@@ -1648,6 +1659,47 @@ def test_a_legal_price_at_the_boundary_survives():
     key = [k for k in got][0]
     assert got[key]["over"] == 100
     assert got[key]["under"] == -100
+
+
+def test_clv_is_sliced_by_side():
+    """NOT FISHED FOR. Every bet in Ethan's worst CLV decile was an OVER,
+    and every one closed longer — the market moving away from the side
+    taken. Eleven for eleven is a pattern worth its own two-group slice,
+    specified from the outliers rather than from a sweep."""
+    path, snaps = _clv_db(edge_pts=0.005)
+    import contextlib
+    import io
+    buf = io.StringIO()
+    try:
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history(snaps, _go)
+    finally:
+        os.unlink(path)
+    assert "CLV BY SIDE" in buf.getvalue()
+
+
+def test_every_clv_slice_prints_a_median_beside_its_mean():
+    """The whole book has a median of +0.61% against a mean of -0.30%.
+    A slice showing only one of those hides exactly the skew that made
+    the outliers findable."""
+    path, snaps = _clv_db(edge_pts=0.005)
+    import contextlib
+    import io
+    buf = io.StringIO()
+    try:
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history(snaps, _go)
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    for header in ("CLV BY MARKET", "CLV BY PRICE BAND", "CLV BY SIDE"):
+        seg = out[out.index(header):]
+        seg = seg[:seg.index("\n\n")] if "\n\n" in seg else seg
+        assert "median" in seg, header
 
 
 if __name__ == "__main__":
