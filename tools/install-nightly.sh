@@ -127,7 +127,18 @@ launchctl load -w "$PLIST" || { echo "launchctl load failed"; exit 1; }
 printf 'Installed %s — runs %02d:%02d local time.\n' "$LABEL" "$HOUR" "$MINUTE"
 echo
 echo "  check it is registered:  launchctl list | grep qellysbook"
-echo "  run it once now:         bash tools/install-nightly.sh $MODE--now"
+if [ "$SCRIPT" = "lineups" ]; then
+  # NOT a quick check. --now here starts the real watch, which polls
+  # until every card is out — hours, in the foreground. Offering it the
+  # same way as the other two invites exactly the "did it freeze" this
+  # printed line caused.
+  echo "  see the state now:       python3 lineupwatch.py --check"
+  echo "  start the watch by hand: bash tools/install-nightly.sh $MODE--now"
+  echo "                           (runs until every card is out — hours;"
+  echo "                            Ctrl+C is safe, the 11:00 agent stays)"
+else
+  echo "  run it once now:         bash tools/install-nightly.sh $MODE--now"
+fi
 echo "  read its log:            tail -40 logs/${SCRIPT}-\$(date +%F).log"
 echo "  remove it:               bash tools/install-nightly.sh $MODE--remove"
 echo

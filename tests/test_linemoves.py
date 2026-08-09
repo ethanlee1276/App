@@ -526,6 +526,37 @@ def test_the_installer_prints_commands_that_act_on_what_it_installed():
     assert 'logs/nightly-\$(date' not in sh
 
 
+def test_the_watch_announces_its_next_check_rather_than_sleeping_silently():
+    """"did it freeze" — within a minute of first use.
+
+    It had not. `--watch` polls every five minutes and slept silently in
+    between, so a watch working correctly is indistinguishable from a
+    hung one. A long-running foreground process owes the person watching
+    it evidence that time is passing on purpose."""
+    import pathlib
+    import re
+    src = (pathlib.Path(__file__).resolve().parent.parent
+           / "lineupwatch.py").read_text()
+    loop = src[src.index("while True:"):]
+    assert "next check" in loop, "the sleep is still silent"
+    # And the announcement must come BEFORE the sleep, or it prints only
+    # after the wait it was meant to explain.
+    assert loop.index("next check") < loop.index("time.sleep("), loop[:400]
+    assert "Ctrl+C is safe" in src or "Ctrl+C to stop" in src
+
+
+def test_the_installer_does_not_offer_the_watch_as_a_quick_check():
+    """`--now` on the other two agents takes minutes. On this one it
+    starts the real watch and runs for hours, so printing it the same way
+    is what produced the freeze report."""
+    import pathlib
+    sh = (pathlib.Path(__file__).resolve().parent.parent / "tools"
+          / "install-nightly.sh").read_text()
+    assert 'if [ "$SCRIPT" = "lineups" ]' in sh
+    assert "lineupwatch.py --check" in sh, "no quick alternative offered"
+    assert "runs until every card is out" in sh
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

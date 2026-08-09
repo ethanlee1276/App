@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import datetime as _dt
 import json
 import subprocess
 import sys
@@ -255,8 +256,18 @@ def main(argv: list) -> int:
             print(f"          hit the {args.max_builds}-rebuild ceiling; "
                   f"stopping. Re-run to keep watching.")
             return 0
+        nap = max(60, args.every * 60)
+        # SAY WHEN IT WILL WAKE. The loop slept silently, so a watch that
+        # is working correctly looks exactly like one that has hung —
+        # reported as "did it freeze" within a minute of first use. A
+        # long-running foreground process owes the person watching it
+        # some evidence that time is passing on purpose.
+        nxt = _dt.datetime.now() + _dt.timedelta(seconds=nap)
+        print(f"          next check {nxt.strftime('%H:%M')} "
+              f"(every {args.every} min · Ctrl+C to stop, the schedule "
+              f"keeps running)", flush=True)
         try:
-            time.sleep(max(60, args.every * 60))
+            time.sleep(nap)
         except KeyboardInterrupt:
             print("\nstopped.")
             return 0
