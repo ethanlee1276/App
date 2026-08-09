@@ -2231,6 +2231,66 @@ def test_price_clv_still_declines_when_there_is_no_banked_close():
                                   "closing_odds": None}) is None
 
 
+def test_every_launch_cli_path_added_tonight_actually_runs():
+    """I shipped two CLI entry points that raised NameError on the first
+    line — `ledger` is imported locally inside each launch.py function,
+    never at module level, and I wrote both assuming otherwise.
+
+    The unit tests all passed, because they called
+    `ledger.repair_closing_odds` and `ledger.set_paper_mode` directly.
+    Nothing called the thing Ethan types. A wrapper thin enough to look
+    untestable is exactly the wrapper that breaks, because nobody runs
+    it before pushing.
+
+    So this calls them the way the command line does."""
+    import importlib
+    import pathlib
+    import tempfile
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    orig = ledger.DEFAULT_DB
+    try:
+        ledger.DEFAULT_DB = pathlib.Path(path)
+        launch = importlib.import_module("launch")
+        buf = __import__("io").StringIO()
+        with __import__("contextlib").redirect_stdout(buf):
+            launch.set_paper_mode(None)        # report, writes nothing
+            launch.set_paper_mode("on")
+            launch.repair_closes(apply=False)  # dry run
+            launch.set_paper_mode("off")
+        out = buf.getvalue()
+        assert "paper mode is OFF" in out
+        assert "paper mode ON" in out
+        assert "DRY RUN" in out
+    finally:
+        ledger.DEFAULT_DB = orig
+        os.unlink(path)
+
+
+def test_reading_the_paper_switch_does_not_flip_it():
+    """A toggle that changes state when you ask what it is set to is a
+    trap, and this is the call Ethan makes when he is unsure."""
+    import importlib
+    import pathlib
+    import tempfile
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    orig = ledger.DEFAULT_DB
+    try:
+        ledger.DEFAULT_DB = pathlib.Path(path)
+        launch = importlib.import_module("launch")
+        conn = ledger.connect()
+        ledger.set_paper_mode(conn, True)
+        conn.close()
+        with __import__("contextlib").redirect_stdout(__import__("io").StringIO()):
+            launch.set_paper_mode(None)
+            launch.set_paper_mode(None)
+        assert ledger.paper_mode(ledger.connect()) is True
+    finally:
+        ledger.DEFAULT_DB = orig
+        os.unlink(path)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

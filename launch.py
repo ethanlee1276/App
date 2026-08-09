@@ -2709,6 +2709,7 @@ def repair_closes(apply: bool = False) -> None:
     every run and ignores the column, which is why its number is right
     and the site's is not.
     """
+    from engine import ledger
     conn = ledger.connect()
     r = ledger.repair_closing_odds(conn, apply=apply)
     print(f"\n{'='*70}\n  BANKED CLOSING PRICES, REBUILT FROM THE "
@@ -2755,6 +2756,7 @@ def set_paper_mode(want: str | None = None) -> None:
     nothing, because a toggle that flips when you ask it what it is set
     to is a trap.
     """
+    from engine import ledger
     conn = ledger.connect()
     cur = str(ledger.get_cfg(conn, "paper_mode") or "0") == "1"
     if want is None:
