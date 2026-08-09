@@ -79,7 +79,8 @@ def _rows(db: str, sport: str | None, since: str | None,
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     q = ("SELECT date, sport, player, market, side, odds, hit_prob, grade, "
-         "edge, stake_units, pnl_units, status, category FROM bets "
+         "edge, stake_units, pnl_units, status, category, "
+         "projection, line, actual FROM bets "
          "WHERE status IN ('won','lost')")
     if not measurement:
         q += " AND category='main' AND stake_units > 0"
@@ -584,11 +585,120 @@ def fit_report(rows: list[dict]) -> None:
           "direction, not a number.")
 
 
+def spread_report(rows: list[dict]) -> None:
+    """Is the model's projection distribution too narrow?
+
+    THE HYPOTHESIS, and why it is worth testing before applying the
+    shrinkage. `--fit` recovered a temperature of 1.64, meaning every
+    probability has to be pulled hard toward 50%. Probabilities that are
+    too extreme in BOTH directions is the signature of one specific
+    defect: a projection whose spread is understated.
+
+    If the model believes a hitter's total bases are 1.4 ± 0.5 when they
+    are really 1.4 ± 0.75, its mean is perfect and its probabilities are
+    still wrong — P(over 1.5) comes out further from 50% than it should.
+    Correcting that with a temperature works. Fixing the spread works
+    better, because it keeps the bets whose edge is real instead of
+    shrinking those too.
+
+    HOW IT IS CHECKED, using only columns the journal already stores. A
+    probability at a line implies a spread:
+
+        OVER :  (line - projection) / sigma = invcdf(1 - hit_prob)
+        UNDER:  (line - projection) / sigma = invcdf(hit_prob)
+
+    so sigma falls out. Against it stands the spread that actually
+    happened — the standard deviation of (actual - projection) over the
+    same bets. A ratio above 1 means reality is wider than the model
+    thought, and the ratio itself is roughly the temperature that would
+    be needed to paper over it.
+
+    THREE LIMITS, stated because this is an approximation and reads like
+    a measurement:
+
+      * it assumes a normal shape to invert. Several of these markets are
+        counts and are priced from discrete distributions, so sigma here
+        is "the normal spread that would produce this probability", not
+        a number the model holds.
+      * a bet near its own line carries almost no information about
+        spread — dividing by a z-score near zero explodes. Those rows are
+        dropped, which biases the sample toward confident calls.
+      * the journal is a selected sample. Selection is on the model's
+        mean against the market, not on the outcome, so the realized
+        spread is still a fair estimate — but the bets are not a random
+        draw and the two columns are not measured on identical footing.
+    """
+    from statistics import NormalDist, StatisticsError, stdev
+    nd = NormalDist()
+
+    by_market: dict = {}
+    for r in rows:
+        proj, line, p = r.get("projection"), r.get("line"), r.get("hit_prob")
+        act = r.get("actual")
+        if proj is None or line is None or p is None or act is None:
+            continue
+        if not 0.02 < float(p) < 0.98:
+            continue
+        side = (r.get("side") or "OVER").upper()
+        z = nd.inv_cdf(1 - float(p)) if side == "OVER" else nd.inv_cdf(float(p))
+        if abs(z) < 0.15:            # the bet sits on its own line
+            continue
+        sigma = (float(line) - float(proj)) / z
+        if sigma <= 0:
+            continue
+        by_market.setdefault(r.get("market") or "?", []).append(
+            (sigma, float(act) - float(proj)))
+
+    if not by_market:
+        print("\n  No row carries projection, line, hit_prob and actual "
+              "together — nothing to check.")
+        return
+
+    print(f"\n{'='*70}\n  IS THE PROJECTION'S SPREAD TOO NARROW?\n{'='*70}")
+    print("  The model's own probability at its own line implies a spread.")
+    print("  Beside it: the spread that actually happened.\n")
+    print(f"    {'market':<16}{'bets':>6}{'model sigma':>13}"
+          f"{'real sigma':>12}{'ratio':>8}")
+    tot_i = tot_r = 0.0
+    tot_n = 0
+    for m in sorted(by_market, key=lambda k: -len(by_market[k])):
+        pairs = by_market[m]
+        if len(pairs) < 8:
+            continue
+        imp = sum(s for s, _ in pairs) / len(pairs)
+        try:
+            real = stdev([d for _, d in pairs])
+        except StatisticsError:
+            continue
+        tot_i += imp * len(pairs)
+        tot_r += real * len(pairs)
+        tot_n += len(pairs)
+        print(f"    {m:<16}{len(pairs):>6}{imp:>13.3f}{real:>12.3f}"
+              f"{real / imp if imp else 0:>8.2f}")
+    if tot_n:
+        ratio = (tot_r / tot_n) / (tot_i / tot_n)
+        print(f"    {'ALL':<16}{tot_n:>6}{tot_i / tot_n:>13.3f}"
+              f"{tot_r / tot_n:>12.3f}{ratio:>8.2f}")
+        print(f"\n  A ratio near 1.00 means the spread is honest and the "
+              f"overconfidence\n  comes from the MEAN being wrong, or from "
+              f"selection. Above about 1.2\n  means the distribution is too "
+              f"narrow, and the ratio is roughly the\n  temperature needed to "
+              f"cover for it — compare it to the {1.64:.2f} that\n  --fit "
+              f"recovered. If they match, that is the root cause named.")
+    print("\n  Approximate: normal shape assumed to invert, bets sitting on "
+          "their own\n  line dropped, and the sample is selected. See "
+          "spread_report's docstring.")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--db", default="data/ledger.db")
     ap.add_argument("--sport")
     ap.add_argument("--since", help="ISO date; only bets on or after it")
+    ap.add_argument("--spread", action="store_true",
+                    help="check whether the projections' distributions are "
+                         "too narrow — the defect a large fitted temperature "
+                         "points at. Reports only")
     ap.add_argument("--fit", action="store_true",
                     help="fit the model's overconfidence on the pre-rescale "
                          "era and test it on the current one. Reports only; "
@@ -608,6 +718,10 @@ def main() -> None:
         return
     rows = _rows(args.db, args.sport, args.since,
                  measurement=args.include_measurement)
+    if args.spread:
+        spread_report(rows)
+        print("\n  read-only; nothing was written.\n")
+        return
     if args.fit:
         fit_report(rows)
         print("\n  read-only; nothing was written.\n")

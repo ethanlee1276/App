@@ -55,7 +55,8 @@ from engine.staking import MIN_STAKE_UNITS, to_units, kelly_units
 
 
 COLS = ("date", "sport", "player", "market", "side", "odds", "hit_prob",
-        "grade", "edge", "stake_units", "pnl_units", "status", "category")
+        "grade", "edge", "stake_units", "pnl_units", "status", "category",
+        "projection", "line", "actual")
 
 
 def _db(rows):
@@ -64,7 +65,7 @@ def _db(rows):
     os.close(fd)
     c = sqlite3.connect(path)
     c.execute("CREATE TABLE bets (id INTEGER PRIMARY KEY, "
-              + ", ".join(f"{k} {'REAL' if k in ('hit_prob','stake_units','pnl_units','edge') else 'INTEGER' if k == 'odds' else 'TEXT'}"
+              + ", ".join(f"{k} {'REAL' if k in ('hit_prob','stake_units','pnl_units','edge','projection','line','actual') else 'INTEGER' if k == 'odds' else 'TEXT'}"
                           for k in COLS) + ")")
     c.executemany(f"INSERT INTO bets ({','.join(COLS)}) VALUES "
                   f"({','.join('?' * len(COLS))})", rows)
@@ -77,7 +78,7 @@ def _row(**kw):
     base = dict(date="2026-08-08", sport="mlb", player="X", market="hits",
                 side="OVER", odds=106, hit_prob=0.52, grade="A", edge=0.05,
                 stake_units=0.25, pnl_units=-0.25, status="lost",
-                category="main")
+                category="main", projection=None, line=None, actual=None)
     base.update(kw)
     return tuple(base[k] for k in COLS)
 
@@ -759,11 +760,131 @@ def test_the_fit_writes_nothing():
     """It is pointed at the money file and at the calibration store, and
     must touch neither. Applying a correction is a separate, deliberate
     act."""
-    src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
-    i = src.index("def fit_report(")
-    body = src[i:src.index("\ndef ", i + 10)]
+    body = _code_only("fit_report")
     for verb in ("save", "write", "store", "set_"):
         assert verb not in body, f"fit_report calls {verb}"
+
+
+def _code_only(func_name):
+    """A function's CODE, with its docstring removed.
+
+    Third time this trap has fired in this session. `spread_report`'s
+    docstring says "using only columns the journal already stores", and a
+    scan for the word "store" matched the explanation rather than a call.
+    Scan the thing meant, never the prose about it."""
+    import re as _re
+    src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
+    i = src.index(f"def {func_name}(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    return _re.sub(r'""".*?"""', "", body, flags=_re.S)
+
+
+# --- is the spread too narrow? -----------------------------------------------
+def _spread_db(model_sd, true_sd, n=300, seed=4):
+    """A ledger where the model's spread and reality's are both KNOWN.
+    The check has to tell them apart or it is not a check."""
+    import random
+    from statistics import NormalDist
+    nd = NormalDist()
+    rng = random.Random(seed)
+    rows = []
+    for i in range(n):
+        mu = rng.uniform(1.0, 2.0)
+        line = mu + rng.choice([-0.4, -0.25, 0.25, 0.4])
+        p = 1 - nd.cdf((line - mu) / model_sd)
+        act = rng.gauss(mu, true_sd)
+        won = act > line
+        rows.append(_row(player=f"P{i}", market="total_bases", side="OVER",
+                         odds=-110, hit_prob=p, projection=mu, line=line,
+                         actual=act, status="won" if won else "lost",
+                         pnl_units=0.27 if won else -0.3))
+    return _db(rows)
+
+
+def _spread_ratio(path):
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        stakecheck.spread_report(stakecheck._rows(path, None, None))
+    line = [l for l in buf.getvalue().splitlines() if l.strip().startswith("ALL")]
+    assert line, buf.getvalue()
+    return float(line[0].split()[-1])
+
+
+def test_an_honest_spread_reads_near_one():
+    """A model whose distribution is right must not be accused of being
+    too narrow. A check that always finds a defect finds nothing."""
+    path = _spread_db(model_sd=0.9, true_sd=0.9)
+    try:
+        assert 0.85 <= _spread_ratio(path) <= 1.15
+    finally:
+        os.unlink(path)
+
+
+def test_a_narrow_spread_is_caught_and_roughly_quantified():
+    """Model believes 0.6, reality is 0.9 — a ratio of 1.5. The check
+    should land near it, and the ratio is the temperature that would be
+    needed to cover for the defect rather than fix it."""
+    path = _spread_db(model_sd=0.6, true_sd=0.9)
+    try:
+        r = _spread_ratio(path)
+    finally:
+        os.unlink(path)
+    assert 1.25 <= r <= 1.75, r
+
+
+def test_a_too_wide_spread_is_caught_the_other_way():
+    """The failure has two directions and only one of them is the one we
+    suspect. A check that can only detect the expected answer is a
+    thermometer that reads the same in every room."""
+    path = _spread_db(model_sd=1.3, true_sd=0.9)
+    try:
+        r = _spread_ratio(path)
+    finally:
+        os.unlink(path)
+    assert r < 0.9, r
+
+
+def test_a_bet_sitting_on_its_own_line_is_dropped():
+    """Backing a spread out of a probability divides by a z-score. At the
+    line that z is ~0 and the implied sigma explodes, so one coin-flip
+    bet could dominate a market's average."""
+    src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
+    i = src.index("def spread_report(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert "abs(z) <" in body, "no guard on a near-zero z-score"
+
+
+def test_the_side_decides_which_tail_is_inverted():
+    """hit_prob is the probability the BET hits, not the probability of
+    going over. Inverting an UNDER with the OVER's formula flips the sign
+    of the implied sigma and the row is silently discarded — losing every
+    UNDER in the book from the measurement."""
+    src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
+    i = src.index("def spread_report(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert 'side == "OVER"' in body
+    assert "inv_cdf(1 - float(p))" in body and "inv_cdf(float(p))" in body
+
+
+def test_a_ledger_without_projections_says_so_rather_than_dividing_by_zero():
+    path = _db([_row(player="x")])          # projection/line/actual all None
+    import contextlib
+    import io
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.spread_report(stakecheck._rows(path, None, None))
+    finally:
+        os.unlink(path)
+    assert "nothing to check" in buf.getvalue()
+
+
+def test_the_spread_check_writes_nothing():
+    body = _code_only("spread_report")
+    for verb in ("save", "write", "store", "set_"):
+        assert verb not in body, f"spread_report calls {verb}"
 
 
 if __name__ == "__main__":
