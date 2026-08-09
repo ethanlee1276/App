@@ -2697,6 +2697,42 @@ def _settleable_days(open_days) -> list[str]:
                   if d.get("date") and "-W" not in d["date"])
 
 
+def repair_closes(apply: bool = False) -> None:
+    """Rewrite every settled bet's banked closing price from the raw
+    snapshots, side- and line-aware. Dry run unless --apply.
+
+    The banked column was written at settle time by code that read the
+    OVER price whatever side the bet took and ignored the line. Both are
+    fixed, but a settled bet never settles again, so the wrong values sit
+    there — and `performance` reads them for the site's CLV figure and
+    the nightly prose. `stakecheck --clv` rebuilds from the snapshots
+    every run and ignores the column, which is why its number is right
+    and the site's is not.
+    """
+    conn = ledger.connect()
+    r = ledger.repair_closing_odds(conn, apply=apply)
+    print(f"\n{'='*70}\n  BANKED CLOSING PRICES, REBUILT FROM THE "
+          f"SNAPSHOTS\n{'='*70}")
+    print(f"  {r['settled']} settled bets examined")
+    print(f"  {r['agreed']:>5} already correct")
+    print(f"  {r['rewritten']:>5} rewritten to the right side/line")
+    print(f"  {r['cleared']:>5} cleared — no legal close exists for that "
+          f"side and line")
+    if r["sample"]:
+        print("\n  a sample of what changes:")
+        for date, player, side, market, line, had, want in r["sample"]:
+            print(f"    {date}  {str(player)[:20]:<20} {str(side or '')[:5]:<5} "
+                  f"{str(market)[:12]:<12} {line}   "
+                  f"{'(none)' if had is None else f'{int(had):+d}'} -> "
+                  f"{'(cleared)' if want is None else f'{int(want):+d}'}")
+    if r["applied"]:
+        print("\n  written. Re-run `python3 launch.py --settle` to refresh "
+              "the site,")
+        print("  or just let tonight's run do it.\n")
+    else:
+        print("\n  DRY RUN — nothing written. Add --apply to commit it.\n")
+
+
 def set_paper_mode(want: str | None = None) -> None:
     """Turn real-money staking on or off. `python3 launch.py --paper on`.
 
@@ -3459,6 +3495,9 @@ def main() -> None:
         return
     if "--void-unplayed" in argv:
         show_unplayed(apply="--apply" in argv)
+        return
+    if "--repair-closes" in argv:
+        repair_closes(apply="--apply" in argv)
         return
     if "--paper" in argv:
         i = argv.index("--paper")

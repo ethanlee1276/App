@@ -1820,14 +1820,31 @@ def test_price_clv_measures_what_the_line_cannot():
     assert abs(ledger._bet_price_clv(took_better) - 0.0222) < 0.001
 
 
-def test_price_clv_declines_to_guess_on_an_under():
-    """The snapshots record the OVER price. Measuring an under against
-    1 − P(over at close) compares two different quantities: the vig means
-    an over and an under at one book do not sum to 1, and that hold is
-    4–5 points — enough to swamp a CLV signal measured in single points.
-    None is the honest answer until the taken over price is journaled."""
-    assert ledger._bet_price_clv(
-        {"side": "UNDER", "odds": -140, "closing_odds": 400}) is None
+def test_price_clv_never_substitutes_one_minus_the_over():
+    """THE RULE THIS TEST HAS ALWAYS BEEN ABOUT, kept while the behaviour
+    around it changed.
+
+    It used to assert that an under returned None, because the snapshots
+    recorded only the OVER price and the sole way to score an under would
+    have been against 1 − P(over at close). That is not the same
+    quantity: the vig means an over and an under at one book do not sum
+    to 1, and the 4–5 point hold would swamp a signal measured in single
+    points.
+
+    Unders are scored now, against the under's OWN close, because
+    `record_snapshots` writes both sides. So the assertion moves from
+    "declines to answer" to "answers without ever doing the substitution"
+    — which is what the docstring was really protecting.
+
+    A banked close of +400 against a taken −140 is a market that moved
+    hard AWAY from us; under 1−p it would read as a large positive."""
+    got = ledger._bet_price_clv(
+        {"side": "UNDER", "odds": -140, "closing_odds": 400})
+    assert got is not None
+    assert got < 0, "an under whose price blew out cannot have positive CLV"
+    from engine.odds import american_to_prob
+    naive = (1 - american_to_prob(400)) - american_to_prob(-140)
+    assert abs(got - naive) > 0.01, "this is the 1-p substitution, not CLV"
 
 
 def test_price_clv_survives_a_row_that_predates_the_column():
@@ -2124,6 +2141,94 @@ def test_the_site_payload_carries_the_paper_book_and_the_switch():
     assert out["paper"]["settled"] == 1
     assert out["overall"]["settled"] == 0, "the paper win reached the record"
     assert out["paper"]["net_units"] == 0.36
+
+
+def _with_history(rows, fn):
+    """Run `fn` with linemoves pointed at a temporary snapshot file.
+
+    Same helper as test_stakecheck's; duplicated rather than imported so
+    neither file can break the other by editing it."""
+    import json
+    import tempfile
+    from pathlib import Path
+    from engine import linemoves
+    fd, path = tempfile.mkstemp(suffix=".jsonl")
+    with os.fdopen(fd, "w") as fh:
+        for r in rows:
+            fh.write(json.dumps(r) + "\n")
+    orig = linemoves.HISTORY_PATH
+    linemoves.HISTORY_PATH = Path(path)
+    try:
+        return fn()
+    finally:
+        linemoves.HISTORY_PATH = orig
+        os.unlink(path)
+
+
+def _close_repair_db():
+    """A settled UNDER whose banked close is the OVER's price — exactly
+    what the side-buggy settle path wrote 55 times."""
+    import time as _t
+    ts = _t.time() - 7200
+    date = __import__("datetime").datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    conn = ledger.connect(":memory:")
+    conn.execute(
+        "INSERT INTO bets (ts, sport, date, player, market, side, line, "
+        "odds, status, stake_units, closing_odds, category) VALUES "
+        "(?,?,?,?,?,?,?,?,?,?,?,?)",
+        (date, "mlb", date, "Under Guy", "hits", "UNDER", 1.5, -110,
+         "lost", 0.4, -140, "main"))
+    conn.commit()
+    snaps = [{"player": "Under Guy", "market": "hits", "ts": ts, "line": 1.5,
+              "over_odds": -140, "under_odds": +105, "book": "FanDuel"}]
+    return conn, snaps, date
+
+
+def test_repair_rewrites_an_under_banked_with_the_overs_price():
+    """The 55 rows. A settled bet never settles again, so the wrong value
+    sits in the column forever while `performance` reads it for the
+    site's CLV figure."""
+    conn, snaps, _ = _close_repair_db()
+    r = _with_history(snaps, lambda: ledger.repair_closing_odds(conn,
+                                                                apply=True))
+    assert r["rewritten"] == 1, r
+    got = conn.execute("SELECT closing_odds FROM bets").fetchone()[0]
+    assert got == 105, f"the under's own close should be banked, got {got}"
+
+
+def test_repair_is_a_dry_run_unless_asked():
+    conn, snaps, _ = _close_repair_db()
+    r = _with_history(snaps, lambda: ledger.repair_closing_odds(conn))
+    assert r["rewritten"] == 1 and r["applied"] is False
+    assert conn.execute("SELECT closing_odds FROM bets").fetchone()[0] == -140
+
+
+def test_repair_clears_rather_than_invents_when_no_close_exists():
+    """A value known to have come from the broken path is worse than no
+    value, because nothing downstream can tell that it is wrong."""
+    conn, _, _ = _close_repair_db()
+    r = _with_history([], lambda: ledger.repair_closing_odds(conn,
+                                                             apply=True))
+    assert r["cleared"] == 1, r
+    assert conn.execute("SELECT closing_odds FROM bets").fetchone()[0] is None
+
+
+def test_price_clv_now_scores_an_under_against_the_unders_close():
+    """The gate said OVER-only because the snapshots held only the over
+    price. They hold both now, so the reason is gone — and no 1-p
+    substitution happens anywhere, which was the thing that would have
+    baked the hold into the number."""
+    from engine.odds import american_to_prob
+    row = {"side": "UNDER", "odds": -110, "closing_odds": 105}
+    got = ledger._bet_price_clv(row)
+    assert got is not None, "an under still returns None"
+    want = american_to_prob(105) - american_to_prob(-110)
+    assert abs(got - want) < 1e-9
+
+
+def test_price_clv_still_declines_when_there_is_no_banked_close():
+    assert ledger._bet_price_clv({"side": "UNDER", "odds": -110,
+                                  "closing_odds": None}) is None
 
 
 if __name__ == "__main__":

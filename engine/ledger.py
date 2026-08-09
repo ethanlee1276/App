@@ -2121,6 +2121,65 @@ def _bet_clv(b) -> float | None:
     return move if (b["side"] or "OVER").upper() == "OVER" else -move
 
 
+def repair_closing_odds(conn, apply: bool = False) -> dict:
+    """Re-derive every settled bet's banked closing price, side- and
+    line-aware, from the raw snapshots.
+
+    WHY IT IS NEEDED. `closing_odds` is written at settle time, and until
+    2026-08-09 the code that wrote it had two faults: it read the OVER
+    price whatever side the bet took, and it ignored the line, so a close
+    quoted at a different number was banked as if it were the same bet.
+    Both are fixed, but a settled bet never settles again — the wrong
+    values sit in the column forever, and `performance` reads them for
+    the site's CLV figure and the nightly prose.
+
+    `stakecheck --clv` sidesteps this by rebuilding from the snapshots
+    every run and ignoring the banked column entirely. That was the right
+    call for a report. It is not a fix for the stored data.
+
+    Rows whose correct close cannot be found are set to NULL rather than
+    left alone: a value known to have been written by the broken path is
+    worse than no value, because nothing downstream can tell it is wrong.
+
+    Returns a summary; writes only when `apply` is true.
+    """
+    from .sources.oddsapi import normalize_name
+    snaps = _snapshot_close_odds()
+    rows = conn.execute(
+        "SELECT id, player, market, date, side, line, odds, closing_odds "
+        "FROM bets WHERE status IN ('won','lost','push')").fetchall()
+    fixed, cleared, agreed, changes = 0, 0, 0, []
+    for b in rows:
+        sides = snaps.get(
+            (normalize_name(b["player"]), b["market"], b["date"],
+             round(float(b["line"]), 1) if b["line"] is not None else None)
+        ) or {}
+        want = sides.get(
+            "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")
+        if want is not None and abs(float(want)) < 100:
+            want = None            # not a legal American price; see linemoves
+        had = b["closing_odds"]
+        if want is None and had is None:
+            continue
+        if had is not None and want is not None and int(had) == int(want):
+            agreed += 1
+            continue
+        if want is None:
+            cleared += 1
+        else:
+            fixed += 1
+        if len(changes) < 12:
+            changes.append((b["date"], b["player"], b["side"], b["market"],
+                            b["line"], had, want))
+        if apply:
+            conn.execute("UPDATE bets SET closing_odds=? WHERE id=?",
+                         (int(want) if want is not None else None, b["id"]))
+    if apply:
+        conn.commit()
+    return {"settled": len(rows), "agreed": agreed, "rewritten": fixed,
+            "cleared": cleared, "sample": changes, "applied": apply}
+
+
 def _bet_price_clv(b) -> float | None:
     """CLV in PROBABILITY POINTS, from the price rather than the line.
 
@@ -2137,18 +2196,23 @@ def _bet_price_clv(b) -> float | None:
     across prices — 2 points at +400 and 2 points at −150 are the same
     amount of having been right, where "50 cents of odds" is not.
 
-    OVER bets only, and that limit is real rather than laziness. The
-    snapshots record the OVER price, so for an under we would have to
-    compare the under price we took against ``1 − P(over at close)`` — and
-    those are not the same quantity, because the vig means an over and an
-    under at one book do not sum to 1. The difference is the hold, roughly
-    4–5 points, which would swamp a CLV signal measured in single points.
-    Returning None is the honest answer until the taken over price is
-    journaled alongside; overs are 85% of this book and all of the
-    home-run board, which is the part the line-based measure was blind to.
+    BOTH SIDES since 2026-08-09. This was OVER-only, and the reason given
+    was sound at the time: the snapshots recorded the OVER price alone, so
+    an under would have had to be scored against ``1 − P(over at close)``,
+    which is not the same quantity — the vig means an over and an under at
+    one book do not sum to 1, and that 4–5 point hold would swamp a signal
+    measured in single points.
+
+    That reason is gone. `linemoves.record_snapshots` never wrote
+    `under_odds` at all, which is what made the over the only price
+    available; it writes both now, and the settle path banks the price for
+    the side the bet actually took. So an under is scored against the
+    under's own close, and no 1−p substitution happens anywhere.
+
+    It does not reach backwards. Snapshots taken before that fix hold no
+    under price, so historical unders return None here exactly as they
+    always did — `repair_closing_odds` will clear rather than invent them.
     """
-    if (b["side"] or "OVER").upper() != "OVER":
-        return None
     try:
         close = b["closing_odds"]
     except (KeyError, IndexError):
