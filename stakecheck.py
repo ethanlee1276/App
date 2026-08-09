@@ -182,21 +182,28 @@ def report(rows: list[dict]) -> None:
               f"{sum(r['pnl_units'] or 0 for r, _ in have):+8.2f}u   "
               f"ROI {_roi(sum(r['pnl_units'] or 0 for r, _ in have), got_t):+7.2%}")
 
-    # --- the rule that shipped, replayed --------------------------------
+    # --- the cap policies, replayed side by side ------------------------
     from engine.correlation import SLATE_CAP_U
-    sim = simulate_trim(rows, SLATE_CAP_U)
-    if sim["kept"]:
-        print(f"\n  IF THE CAP HAD TRIMMED INSTEAD OF SHRUNK  "
-              f"(slate cap only; see simulate_trim)")
-        print(f"    {sim['kept']} bets kept, {sim['dropped']} dropped "
-              f"across {sim['slates']} slate(s)")
-        print(f"    {sim['staked']:8.2f}u staked   {sim['net']:+8.2f}u   "
-              f"ROI {sim['roi']:+7.2%}")
-        print(f"    against as-staked  {staked:8.2f}u   {net:+8.2f}u   "
-              f"ROI {_roi(net, staked):+7.2%}")
-        print("\n    A fair replay: dropping a bet does not change whether "
-              "another won,\n    and the ranking is the model's own pre-game "
-              "grade, not the result.")
+    uni = simulate_uniform(rows, SLATE_CAP_U)
+    trim = simulate_trim(rows, SLATE_CAP_U)
+    if uni["kept"] or trim["kept"]:
+        print("\n  CAP POLICIES, REPLAYED  (slate cap only — the journal "
+              "stores the player\n  and the date but not the fixture, so the "
+              "5u game cap cannot be modelled)")
+        print(f"    {'policy':<28}{'kept':>6}{'dropped':>9}"
+              f"{'staked':>10}{'net':>10}{'ROI':>9}")
+        for label, s in (("uniform scale + floor drop", uni),
+                         ("trim the weakest", trim)):
+            if s["kept"]:
+                print(f"    {label:<28}{s['kept']:>6}{s['dropped']:>9}"
+                      f"{s['staked']:>9.2f}u{s['net']:>+9.2f}u"
+                      f"{s['roi']:>9.2%}")
+        print(f"    {'as actually staked':<28}{len(rows):>6}{0:>9}"
+              f"{staked:>9.2f}u{net:>+9.2f}u{_roi(net, staked):>9.2%}")
+        print("\n    Fair replays: dropping a bet does not change whether "
+              "another won, and\n    no outcome decides which survive. The "
+              "uniform line differs from the\n    asked-for ROI above by ONE "
+              "thing — the low-Kelly tail the floor removes.")
 
     # --- is the ranking predictive at all? ------------------------------
     #
@@ -335,6 +342,51 @@ def simulate_trim(rows: list[dict], cap: float) -> dict:
             kept_n += 1
             net += (american_to_decimal(int(r["odds"])) - 1.0) * w \
                 if r["status"] == "won" else -w
+    return {"kept": kept_n, "dropped": dropped_n, "net": net,
+            "staked": staked, "roi": _roi(net, staked),
+            "slates": len(slates)}
+
+
+def simulate_uniform(rows: list[dict], cap: float) -> dict:
+    """Replay the slate cap as ONE uniform scale plus a floor drop.
+
+    The policy that shipped 2026-08-08 after the trim replay came back
+    against trimming. Same replay discipline: nothing refitted, no
+    outcome touches which bets survive.
+
+    The interesting property is that this is ALMOST ROI-neutral by
+    construction. A uniform factor cannot move the ratio at all; the only
+    thing that can is the floor drop, which removes the smallest
+    intended stakes. So the gap between this line and the asked-for line
+    is a clean measurement of one thing: what dropping the low-Kelly tail
+    costs or earns. Nothing else differs.
+
+    Same limits as `simulate_trim`: slate cap only, because the journal
+    stores the player and the date but not the fixture.
+    """
+    from collections import defaultdict
+    from engine.staking import MIN_STAKE_UNITS
+
+    slates = defaultdict(list)
+    for r in rows:
+        w = intended_stake(r)
+        if w:
+            slates[(r["sport"], r["date"])].append((r, w))
+
+    kept_n = dropped_n = 0
+    net = staked = 0.0
+    for bets in slates.values():
+        total = sum(w for _, w in bets)
+        factor = min(1.0, cap / total) if total else 1.0
+        for r, w in bets:
+            s = w * factor
+            if s < MIN_STAKE_UNITS:
+                dropped_n += 1
+                continue
+            kept_n += 1
+            staked += s
+            net += (american_to_decimal(int(r["odds"])) - 1.0) * s \
+                if r["status"] == "won" else -s
     return {"kept": kept_n, "dropped": dropped_n, "net": net,
             "staked": staked, "roi": _roi(net, staked),
             "slates": len(slates)}

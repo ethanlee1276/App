@@ -9,9 +9,11 @@ Two jobs, both about bets relating to each other:
    rejected, not footnoted.
 2. COUNT correlated bets as combined exposure against the §10 bankroll
    caps: max 5u per game and 15u per slate (1u = 1% bankroll). Over the
-   cap means FEWER BETS, not smaller ones: the weakest are dropped until
-   the rest fit at the size Kelly asked for. See `_trim` for what this
-   replaced and why it had to go.
+   cap, ONE factor scales the whole board — which cannot change ROI,
+   because net and staked move together — and any stake that falls under
+   `staking.MIN_STAKE_UNITS` comes off rather than being rounded through
+   it. See `_uniform_factor` for the two policies this replaced and the
+   888 settled bets that decided against both.
 """
 
 from __future__ import annotations
@@ -155,69 +157,61 @@ def flag_mlb_correlations(recs: list[dict]) -> dict:
     return {"pairs_flagged": flagged, "pairs_rejected": rejected}
 
 
-_GRADE_RANK = {"A+": 3, "A": 2, "B+": 1}
+def _uniform_factor(by_game: dict, live: list[dict]) -> tuple[float, str]:
+    """The single scale factor that satisfies EVERY cap, and why.
 
+    THE POINT OF DOING IT IN ONE FACTOR. Multiplying every stake on the
+    slate by the same number cannot change ROI — net and staked move
+    together and the ratio is untouched. Any cap policy that shrinks
+    some bets more than others is choosing a different portfolio, and
+    that choice needs a ranking it can defend.
 
-def _strength(r: dict) -> tuple:
-    """Sort key, weakest first. Highest is the last thing to be dropped."""
-    return (float(r.get("quality") or 0.0),
-            _GRADE_RANK.get(r.get("grade") or "", 0),
-            float(r.get("edge") or 0.0))
+    Measured 2026-08-08 on 888 settled bets, which is how we got here:
 
+      * the old rule scaled PER GAME and then per slate, so three legs
+        in one fixture were cut to a fraction while a lone bet in a
+        quiet game kept full size. It also re-rounded below
+        `staking.MIN_STAKE_UNITS` — Ethan spotted a +106 winner that
+        returned 0.05u on a 0.047u stake, which the sizing path cannot
+        emit. As staked -5.67%; at the stakes the rules asked for,
+        +4.91%. Ten points, entirely from the reweighting.
+      * so the caps were changed to drop the weakest bets and keep the
+        rest at full size. Replayed against the same 888 bets that was
+        WORSE: the 128 bets it keeps returned -11.33% and the 443 it
+        drops returned +9.14%. Small (about 1.3 SE from zero) and not a
+        verdict, but it is not support either — and the rule only works
+        if the grade it sorts on is predictive, which is now an open
+        question rather than an assumption.
 
-def _trim(rows: list[dict], cap: float) -> tuple[float, list[dict]]:
-    """Drop the weakest bets until the rest fit at FULL size.
+    Hence uniform. It is the one policy that needs no ranking to be
+    right, so it is correct whether the grade turns out to be predictive
+    or inverted.
 
-    Returns (exposure asked for, bets dropped).
-
-    THIS REPLACED PROPORTIONAL SCALING, and the difference is the whole
-    point. Scaling multiplied every stake by cap/total and re-rounded,
-    which had three problems:
-
-      * it walked straight through `staking.MIN_STAKE_UNITS`. Ethan found
-        it on the board: a +106 winner that returned 0.05u had been
-        staked 0.047u, a number the sizing path cannot produce.
-      * it punished bets for their neighbours. A game with four legs got
-        each leg cut to a quarter; the same bet alone in a quiet game
-        kept full size. Nothing about the bet changed.
-      * it is the wrong answer to being over budget. Fifteen bets at a
-        third of their proper size is not a smaller version of the right
-        portfolio, it is a worse one — the edge per bet is unchanged and
-        the variance per unit staked is higher.
-
-    Ethan chose this, 2026-08-08: bet the best spots properly and skip
-    the rest, rather than betting every spot badly.
-
-    The strongest bet is never dropped. If it alone busts the cap it is
-    clamped to the cap instead — unreachable with today's constants (a
-    single stake maxes at the A+ cap of 2u against a 5u game cap) and
-    written anyway, because the constants are the kind of thing that
-    moves.
+    The game caps and the slate cap are satisfied by taking the most
+    binding of them. One crowded fixture therefore shrinks the whole
+    board, which is conservative — and in practice invisible, because
+    with the model asking roughly six times the slate cap it is the
+    slate that binds every time.
     """
-    from .staking import MIN_STAKE_UNITS
-
-    live = [r for r in rows
-            if r.get("recommended") and (r.get("stake_units") or 0) > 0]
-    asked = sum(r["stake_units"] for r in live)
-    if asked <= cap or not live:
-        return asked, []
-
-    dropped: list[dict] = []
-    order = sorted(live, key=_strength)          # weakest first
-    running = asked
-    for r in order[:-1]:                          # never the strongest
-        if running <= cap:
-            break
-        running -= r["stake_units"]
-        dropped.append(r)
-    keeper = order[-1]
-    if running > cap:
-        # Only the strongest is left and it still does not fit.
-        if cap < MIN_STAKE_UNITS:
-            dropped.append(keeper)
-        else:
-            keeper["stake_units"] = round(cap, 2)
-    return asked, dropped
+    factor, why = 1.0, ""
+    for key, rows in by_game.items():
+        total = sum(r.get("stake_units", 0) for r in rows
+                    if r.get("recommended"))
+        if total > GAME_CAP_U:
+            f = GAME_CAP_U / total
+            if f < factor:
+                names = "/".join(sorted({k for k in key[:2] if k})) or "one game"
+                factor = f
+                why = (f"{names} asked {total:.1f}u against the "
+                       f"{GAME_CAP_U:.0f}u game cap")
+    slate_total = sum(r.get("stake_units", 0) for r in live)
+    if slate_total > SLATE_CAP_U:
+        f = SLATE_CAP_U / slate_total
+        if f < factor:
+            factor = f
+            why = (f"the slate asked {slate_total:.1f}u against the "
+                   f"{SLATE_CAP_U:.0f}u cap")
+    return factor, why
 
 
 def _reject(r: dict, why: str) -> None:
@@ -236,9 +230,13 @@ def apply_exposure_caps(recs: list[dict], game_bets: list[dict]) -> list[str]:
     counted together (they are — everything in one game counts as that
     game's exposure).
 
-    Over budget means FEWER BETS, not smaller ones. See `_trim`. Mutates
-    in place; returns human-readable notes.
+    ONE FACTOR, APPLIED TO EVERYTHING, then the floor enforced by
+    dropping rather than rounding. See `_uniform_factor` for the two
+    policies this replaced and the 888 settled bets that decided against
+    both. Mutates in place; returns human-readable notes.
     """
+    from .staking import MIN_STAKE_UNITS
+
     notes: list[str] = []
 
     by_game: dict = {}
@@ -250,35 +248,41 @@ def apply_exposure_caps(recs: list[dict], game_bets: list[dict]) -> list[str]:
             key = tuple(sorted((b.get("home", ""), b.get("away", "")))) + (b.get("date", ""),)
             by_game.setdefault(key, []).append(b)
 
-    for key, rows in by_game.items():
-        names = "/".join(sorted({k for k in key[:2] if k})) or "this game"
-        asked, dropped = _trim(rows, GAME_CAP_U)
-        for r in dropped:
-            _reject(r, f"Game cap — {names} wanted {asked:.1f}u across its "
-                       f"bets against a {GAME_CAP_U:.0f}u limit, and this was "
-                       f"the weakest of them. The ones that stayed are at "
-                       f"full size rather than all of them at a fraction.")
-        if dropped:
-            kept = sum(r.get("stake_units", 0) for r in rows
-                       if r.get("recommended"))
-            notes.append(f"Game cap: {names} asked {asked:.1f}u against "
-                         f"{GAME_CAP_U:.0f}u — {len(dropped)} bet(s) dropped, "
-                         f"{kept:.1f}u kept at full size")
+    live = [r for r in (list(recs) + list(game_bets or []))
+            if r.get("recommended") and (r.get("stake_units") or 0) > 0]
+    if not live:
+        return notes
 
-    # The slate cap runs on what SURVIVED the game caps, so a bet cannot
-    # be charged twice for the same crowding.
-    everything = ([r for r in recs if r.get("recommended")]
-                  + [b for b in (game_bets or []) if b.get("recommended")])
-    asked, dropped = _trim(everything, SLATE_CAP_U)
+    factor, why = _uniform_factor(by_game, live)
+    before = sum(r["stake_units"] for r in live)
+    if factor < 1.0:
+        for r in live:
+            r["stake_units"] = r["stake_units"] * factor
+
+    # THE FLOOR, ENFORCED BY DROPPING. `staking.MIN_STAKE_UNITS` exists
+    # because a stake below it is not a bet, it is a rounding artefact
+    # with a ticket. The old rule re-rounded straight past it and put
+    # 0.047u into the journal. Scaling cannot honour a floor and a cap at
+    # once, so the bets that fall through it come off the board.
+    #
+    # This is a selection, and an honest one: it selects on the stake
+    # Kelly asked for, not on the model's letter grade. That distinction
+    # is the whole reason for this policy — the grade's predictiveness is
+    # currently an open question and nothing here depends on the answer.
+    dropped = [r for r in live if r["stake_units"] < MIN_STAKE_UNITS]
     for r in dropped:
-        _reject(r, f"Slate cap — the night's recommended bets totalled "
-                   f"{asked:.1f}u against a {SLATE_CAP_U:.0f}u limit, and "
-                   f"this was the weakest of them. Bankroll rules cut the "
-                   f"number of bets, not the size of the good ones.")
-    if dropped:
-        kept = sum(r.get("stake_units", 0) for r in everything
-                   if r.get("recommended"))
-        notes.append(f"Slate cap: asked {asked:.1f}u against "
-                     f"{SLATE_CAP_U:.0f}u — {len(dropped)} bet(s) dropped, "
-                     f"{kept:.1f}u kept at full size")
+        _reject(r, f"Exposure cap — {why}, so every stake was scaled by "
+                   f"{factor:.2f} and this one fell under the "
+                   f"{MIN_STAKE_UNITS}u minimum. A stake that small is a "
+                   f"rounding artefact with a ticket, not a bet.")
+    for r in live:
+        if r.get("recommended"):
+            r["stake_units"] = round(r["stake_units"], 2)
+
+    if factor < 1.0:
+        kept = sum(r["stake_units"] for r in live if r.get("recommended"))
+        notes.append(f"Exposure cap: {why} — every stake scaled by "
+                     f"{factor:.2f} ({before:.1f}u → {kept:.1f}u), "
+                     f"{len(dropped)} bet(s) dropped under the "
+                     f"{MIN_STAKE_UNITS}u minimum")
     return notes

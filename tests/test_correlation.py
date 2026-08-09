@@ -7,9 +7,12 @@ receiver's Over), and must count correlated stakes together against the
 """
 
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 from engine.correlation import (flag_correlations, apply_exposure_caps,
                                 GAME_CAP_U, SLATE_CAP_U)
@@ -67,29 +70,57 @@ def test_different_games_never_flag():
     assert "correlations" not in a and "correlations" not in b
 
 
-def test_a_game_over_its_cap_drops_bets_instead_of_shrinking_them():
-    """CHANGED 2026-08-08, and this test changed with it.
+def test_the_whole_board_is_scaled_by_ONE_factor():
+    """THE PROPERTY THE POLICY EXISTS FOR, and the only one that makes it
+    safe without a trustworthy ranking: scaling every stake by the same
+    number cannot change ROI, because net and staked move together.
 
-    It used to assert the surviving stakes summed to EXACTLY the cap,
-    which is what proportional scaling guarantees and is precisely the
-    behaviour that had to go. Ethan found the cost of it on the board: a
-    +106 winner returned 0.05u because it had been staked 0.047u — below
-    `staking.MIN_STAKE_UNITS`, a number the sizing path cannot emit. The
-    caps were re-rounding stakes after the floor had been applied.
+    THIS TEST HAS NOW BEEN REWRITTEN TWICE, which is the honest record of
+    how the decision went. It first asserted the survivors summed to
+    exactly the cap (proportional per-game scaling). Then it asserted the
+    survivors kept full size (trim the weakest). Measured against 888
+    settled bets, per-game scaling cost ten points of ROI by reweighting
+    the book, and trimming backtested worse still — the 128 bets it keeps
+    returned -11.33% while the 443 it drops returned +9.14%.
 
-    The invariant now is an inequality, not an equality: the kept bets fit
-    inside the cap AT THE SIZE KELLY ASKED FOR. Hitting the cap exactly is
-    not a property worth having if the way you hit it is by making every
-    bet the wrong size."""
-    rows = [_rec(f"P{i}", "KC", "LV", "receptions", "OVER", stake=2.0)
-            for i in range(4)]                    # 8u in one game
-    notes = apply_exposure_caps(rows, [])
-    kept = [r for r in rows if r["recommended"]]
-    assert sum(r["stake_units"] for r in kept) <= GAME_CAP_U
-    assert kept, "the cap emptied the game"
-    assert all(r["stake_units"] == 2.0 for r in kept), \
-        "a surviving bet was resized"
-    assert any("Game cap" in n for n in notes)
+    So the invariant is neither of those. It is that the RATIOS between
+    surviving stakes are exactly the ratios Kelly asked for."""
+    rows = [_rec("Big", "KC", "LV", "receptions", "OVER", stake=2.0),
+            _rec("Mid", "KC", "LV", "receptions", "OVER", stake=1.0),
+            _rec("Small", "BUF", "MIA", "receptions", "OVER", stake=1.0)]
+    for i in range(10):                       # push the slate over 15u
+        rows.append(_rec(f"F{i}", f"X{i}", f"Y{i}", "receptions", "OVER",
+                         stake=2.0))
+    before = {r["player"]: r["stake_units"] for r in rows}
+    apply_exposure_caps(rows, [])
+    kept = {r["player"]: r["stake_units"] for r in rows if r["recommended"]}
+    # Recover the factor from any survivor and hold EVERY other survivor
+    # to it. Asserting the ratios directly looks equivalent and is weaker:
+    # stakes are rounded to 0.01u for display (a bet slip has no fourth
+    # decimal), so Big/Mid came back 2.016 rather than 2.0 and the exact
+    # comparison failed on the rounding rather than on the property.
+    factor = kept["Big"] / before["Big"]
+    for name, stake in kept.items():
+        assert abs(stake - round(before[name] * factor, 2)) <= 0.005, \
+            f"{name} was not scaled by the same factor as the rest"
+    assert kept["Mid"] == kept["Small"], "equal stakes came out unequal"
+
+
+def test_a_stake_scaled_under_the_floor_comes_off_the_board():
+    """The 0.047u bet Ethan found. A scale factor and a floor cannot both
+    be honoured by arithmetic, so the bets that fall through it are
+    dropped — never rounded back up, which would break the cap, and never
+    placed, which is what shipped."""
+    from engine.staking import MIN_STAKE_UNITS
+    rows = [_rec(f"F{i}", f"X{i}", f"Y{i}", "receptions", "OVER", stake=2.0)
+            for i in range(10)]
+    rows.append(_rec("Tiny", "KC", "LV", "receptions", "OVER", stake=0.1))
+    apply_exposure_caps(rows, [])
+    tiny = [r for r in rows if r["player"] == "Tiny"][0]
+    assert tiny["recommended"] is False, "a sub-floor stake was placed"
+    for r in rows:
+        if r["recommended"]:
+            assert r["stake_units"] >= MIN_STAKE_UNITS, r
 
 
 def test_a_dropped_bet_leaves_the_board_rather_than_lingering_at_zero():
@@ -98,8 +129,9 @@ def test_a_dropped_bet_leaves_the_board_rather_than_lingering_at_zero():
     moves the record without moving the money. Same treatment as the
     incoherent-pair rejection, which is the other place a bet is taken
     off."""
-    rows = [_rec(f"P{i}", "KC", "LV", "receptions", "OVER", stake=2.0)
-            for i in range(4)]
+    rows = [_rec(f"F{i}", f"X{i}", f"Y{i}", "receptions", "OVER", stake=2.0)
+            for i in range(10)]
+    rows.append(_rec("Tiny", "KC", "LV", "receptions", "OVER", stake=0.1))
     apply_exposure_caps(rows, [])
     for r in rows:
         if not r["recommended"]:
@@ -108,17 +140,30 @@ def test_a_dropped_bet_leaves_the_board_rather_than_lingering_at_zero():
             assert r.get("warnings"), "dropped with no reason given"
 
 
-def test_the_weakest_bets_are_the_ones_dropped():
-    """The entire argument for trimming over scaling. If the cap dropped
-    arbitrary bets it would be worse than scaling, not better."""
-    rows = []
-    for i, q in enumerate((9.0, 3.0, 8.0, 4.0)):
-        r = _rec(f"P{i}", "KC", "LV", "receptions", "OVER", stake=2.0)
-        r["quality"] = q
-        rows.append(r)
-    apply_exposure_caps(rows, [])
-    kept = {r["player"] for r in rows if r["recommended"]}
-    assert kept == {"P0", "P2"}, kept
+def test_the_cap_does_not_sort_on_the_model_grade():
+    """DELIBERATE, and the reason this policy was chosen. Whether A+
+    outperforms B+ is an open question as of 2026-08-08 — the trim replay
+    suggested it may be inverted. A cap rule that reads the grade bets on
+    the answer; this one does not have to."""
+    src = open(os.path.join(ROOT, "engine", "correlation.py"),
+               encoding="utf-8").read()
+    i = src.index("def _uniform_factor(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    # THE DOCSTRING COMES OUT FIRST. That docstring explains at length
+    # why the factor must not read the grade — so scanning the raw text
+    # for "grade" matched the explanation and failed on the correct file.
+    # Same wrong-occurrence trap that has bitten every string-scanning
+    # test in this repo; the fix is always to scan the thing meant.
+    body = re.sub(r'""".*?"""', "", body, flags=re.S)
+    # Not just the helper names — the FIELDS. A mutation that read
+    # `r.get("grade")` directly slipped past a check for `_GRADE_RANK`,
+    # which guards the spelling of a bug rather than the bug.
+    # `sorted(` is deliberately NOT here: the factor sorts two team
+    # abbreviations to name a game in a note. Forbidding it would be
+    # banning a word rather than a behaviour, and the guard below is
+    # about which FIELDS of a bet the factor is allowed to see.
+    for token in ("_GRADE_RANK", "quality", "grade", "edge", "_strength"):
+        assert token not in body, f"the cap is reading {token} again"
 
 
 def test_a_slate_inside_its_caps_is_left_completely_alone():
@@ -131,6 +176,16 @@ def test_a_slate_inside_its_caps_is_left_completely_alone():
     assert rows == before
 
 
+def test_the_most_binding_cap_is_the_one_that_applies():
+    """Game and slate caps are both hard limits; satisfying one is not
+    satisfying the other. The factor is the smaller of the two."""
+    rows = [_rec(f"P{i}", "KC", "LV", "receptions", "OVER", stake=2.5)
+            for i in range(4)]                      # 10u in ONE game
+    apply_exposure_caps(rows, [])
+    total = sum(r["stake_units"] for r in rows if r["recommended"])
+    assert total <= GAME_CAP_U + 0.01, total
+
+
 def test_slate_cap_counts_game_bets_too():
     recs = [_rec(f"P{i}", t, o, "receptions", "OVER", stake=4.0)
             for i, (t, o) in enumerate([("KC", "LV"), ("BUF", "MIA"),
@@ -140,19 +195,9 @@ def test_slate_cap_counts_game_bets_too():
     notes = apply_exposure_caps(recs, bets)
     live = ([r for r in recs if r["recommended"]]
             + [b for b in bets if b["recommended"]])
-    assert sum(r["stake_units"] for r in live) <= SLATE_CAP_U
-    assert all(r["stake_units"] == 4.0 for r in live), "a survivor was resized"
-    assert any("Slate cap" in n for n in notes)
-
-
-def test_the_strongest_bet_is_never_dropped_by_a_cap():
-    """A cap that can empty the board is a bug wearing a risk control's
-    clothes. If one bet alone busts the cap it is clamped to it, not
-    deleted."""
-    lone = _rec("Solo", "KC", "LV", "receptions", "OVER", stake=40.0)
-    apply_exposure_caps([lone], [])
-    assert lone["recommended"] is True
-    assert lone["stake_units"] == GAME_CAP_U
+    assert sum(r["stake_units"] for r in live) <= SLATE_CAP_U + 0.01
+    assert len(live) == 5, "the slate cap dropped a bet it only had to scale"
+    assert notes and "Exposure cap" in notes[0]
 
 
 def test_non_recommended_rows_are_ignored_by_caps():

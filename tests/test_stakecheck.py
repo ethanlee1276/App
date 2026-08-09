@@ -88,17 +88,19 @@ def test_the_sizing_path_cannot_produce_the_stake_that_shipped():
     assert 0.047 < MIN_STAKE_UNITS
 
 
-def test_the_exposure_caps_no_longer_scale_stakes():
+def test_the_exposure_caps_enforce_the_floor_they_scale_through():
     """Named so the next person finds it from the symptom. This is the
-    only code between `to_units` and the journal that changes a stake,
-    and it must not shrink one below the floor again."""
+    only code between `to_units` and the journal that changes a stake.
+    It may scale one — uniformly, which is ROI-neutral — but a stake that
+    lands under the floor has to come OFF, not be rounded through it."""
     src = open(os.path.join(ROOT, "engine", "correlation.py"),
                encoding="utf-8").read()
     i = src.index("def apply_exposure_caps(")
     body = src[i:]
-    assert 'r["stake_units"] * factor' not in body, \
-        "proportional scaling is back — that is what produced the 0.047u"
-    assert "_trim(" in body, "the cap no longer trims"
+    assert "_uniform_factor(" in body, "the cap policy changed shape"
+    assert "MIN_STAKE_UNITS" in body, (
+        "the floor is not enforced here; a scaled stake can drop under it "
+        "again, which is exactly what produced the 0.047u")
 
 
 def test_the_caps_predate_the_scale_change():
@@ -362,6 +364,79 @@ def test_a_grade_the_rules_would_not_size_shows_a_dash_not_a_zero():
         os.unlink(path)
     line = [l for l in buf.getvalue().splitlines() if l.strip().startswith("A ")]
     assert line and line[0].rstrip().endswith("—"), line
+
+
+# --- the policy that replaced the trim --------------------------------------
+def test_the_uniform_replay_preserves_every_ratio_it_keeps():
+    """The property the live policy is chosen for, asserted on the replay
+    so the two cannot drift apart. One factor across the slate cannot
+    change the relationship between any two stakes."""
+    rows = [_sim_row("A+", 0.09, 0.58, -110, "won"),      # 2.0u
+            _sim_row("A", 0.09, 0.58, -110, "won")]       # 1.0u (grade cap)
+    out = stakecheck.simulate_uniform(rows, cap=1.5)
+    # 3.0u asked against 1.5u: factor 0.5, so 1.0u and 0.5u, both above
+    # the floor, and the 2:1 relationship survives.
+    assert out["kept"] == 2, out
+    assert abs(out["staked"] - 1.5) < 1e-9, out["staked"]
+
+
+def test_the_uniform_replay_drops_what_falls_under_the_floor():
+    """The only thing that can move ROI in this policy, so it must be the
+    only thing the replay does beyond scaling."""
+    # Verified stakes: A+ at .58/-110 caps at 2.0u; a B+ at .525 is a
+    # hairline edge that already floors at 0.1u before any scaling, so it
+    # is the first thing a factor pushes through the floor. 60 A+ bets
+    # put the slate 8x over, which is the shape the real board has.
+    rows = ([_sim_row("A+", 0.09, 0.58, -110, "won")] * 60
+            + [_sim_row("B+", 0.02, 0.525, -110, "lost")])
+    out = stakecheck.simulate_uniform(rows, cap=15.0)
+    assert out["dropped"] == 1, out
+    assert out["kept"] == 60, out
+    assert out["staked"] <= 15.0 + 1e-9
+
+
+def test_the_uniform_replay_leaves_a_slate_inside_its_cap_untouched():
+    rows = [_sim_row("A+", 0.09, 0.58, -110, "won")]      # 2.0u
+    out = stakecheck.simulate_uniform(rows, cap=15.0)
+    assert out["kept"] == 1 and out["dropped"] == 0
+    assert abs(out["staked"] - 2.0) < 1e-9
+
+
+def test_the_uniform_replay_does_not_select_on_the_outcome():
+    """Same guard as the trim replay: flip every result, get the same
+    survivors. A uniform scale has no way to see an outcome, and the
+    floor drop reads only the stake — this proves neither started to."""
+    base = [_sim_row("A+", 0.09, 0.58, -110, "won"),
+            _sim_row("A", 0.06, 0.58, -110, "lost"),
+            _sim_row("B+", 0.03, 0.60, -110, "won")]
+    flipped = [dict(r, status=("lost" if r["status"] == "won" else "won"))
+               for r in base]
+    a = stakecheck.simulate_uniform(base, cap=2.0)
+    b = stakecheck.simulate_uniform(flipped, cap=2.0)
+    assert a["kept"] == b["kept"]
+    assert abs(a["staked"] - b["staked"]) < 1e-9
+    assert a["net"] != b["net"], "the outcomes did not reach the P&L at all"
+
+
+def test_both_policies_are_reported_so_neither_is_taken_on_faith():
+    """The trim was chosen, shipped, replayed, and replaced inside one
+    evening. Printing both is how the next choice gets made on numbers
+    rather than on whichever one is currently live."""
+    import contextlib
+    import io
+    rows = [_row(grade="A+", odds=-110, hit_prob=0.70, status="won",
+                 pnl_units=0.23, stake_units=0.25) for _ in range(30)]
+    path = _db(rows)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.report(stakecheck._rows(path, None, None))
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "uniform scale + floor drop" in out
+    assert "trim the weakest" in out
+    assert "as actually staked" in out
 
 
 if __name__ == "__main__":
