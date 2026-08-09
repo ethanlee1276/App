@@ -302,6 +302,22 @@ ones. That is fine here because both prompts push with plain `git`, which
 the fired session's credentials already cover. It would matter if a prompt
 were ever rewritten to use the GitHub MCP tools.
 
+### The repo cannot live in ~/Desktop, ~/Documents or ~/Downloads
+
+macOS protects those three under TCC. Terminal reads them because you
+approved a prompt once; **a launchd agent inherits no such grant.** Found
+2026-08-09 with all three agents installed and none able to run:
+
+    /bin/bash: /Users/…/Desktop/App/tools/nightly.sh: Operation not permitted
+
+`launchctl list` showed exit 126, and `logs/nightly-<date>.log` did not
+exist — bash never got far enough to open it. Everything worked by hand
+the whole time, which is exactly why it went unnoticed.
+
+The fix is to move the repo; the home directory root is unprotected.
+Reinstall every agent afterwards, since each plist embeds the absolute
+path. The installer now warns when it detects this.
+
 launchd rather than cron for one reason that matters on a laptop: a
 `StartCalendarInterval` job runs when the machine **wakes** if it was
 asleep at the scheduled hour. A cron job shut out at 6am is simply skipped,

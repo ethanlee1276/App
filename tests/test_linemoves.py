@@ -571,6 +571,34 @@ def test_each_agent_gets_its_own_launchd_error_file():
     assert "logs/launchd.err<" not in sh, "the shared path is back"
 
 
+def test_the_installer_warns_when_the_repo_is_in_a_protected_folder():
+    """THE ACTUAL CAUSE of com.qellysbook.nightly exiting 126.
+
+        /bin/bash: /Users/…/Desktop/App/tools/nightly.sh: Operation not
+        permitted
+
+    macOS protects ~/Desktop, ~/Documents and ~/Downloads under TCC.
+    Terminal can read them because the user approved a prompt once; a
+    launchd agent inherits no such grant. So every one of the three
+    agents was installed, registered, and incapable of running — while
+    everything kept working by hand, which is what makes this cost days
+    rather than minutes.
+
+    It fails before bash can open the script, so the script's own log
+    never exists to explain it. The installer is the only place that can
+    say this at a moment anyone is looking."""
+    import pathlib
+    sh = (pathlib.Path(__file__).resolve().parent.parent / "tools"
+          / "install-nightly.sh").read_text()
+    assert '"$HOME"/Desktop/*' in sh
+    assert '"$HOME"/Documents/*' in sh
+    assert '"$HOME"/Downloads/*' in sh
+    assert "Operation not permitted" in sh, "the symptom is not named"
+    # It must still install — refusing would strand someone who cannot
+    # move the repo right now, and the agent is harmless until it fires.
+    assert "Installing anyway" in sh
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

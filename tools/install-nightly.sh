@@ -126,6 +126,41 @@ cat > "$PLIST" <<PLISTEOF
 PLISTEOF
 
 mkdir -p "$REPO/logs"
+
+# TCC WILL SILENTLY BREAK THIS. macOS protects ~/Desktop, ~/Documents and
+# ~/Downloads: Terminal gets access once you approve the prompt, but a
+# launchd agent inherits no such grant and cannot read a single file
+# there. The job then fails with
+#
+#   /bin/bash: .../tools/nightly.sh: Operation not permitted
+#
+# and — because bash never got far enough to open the script — the
+# script's own log does not exist to explain it. Everything keeps working
+# when run by hand, which is what makes it cost a week rather than a
+# minute. Measured here: three agents installed, none able to run.
+case "$REPO/" in
+  "$HOME"/Desktop/*|"$HOME"/Documents/*|"$HOME"/Downloads/*)
+    echo
+    echo "  ⚠️  THIS AGENT WILL NOT BE ABLE TO RUN."
+    echo
+    echo "  The repo is in a macOS privacy-protected folder:"
+    echo "      $REPO"
+    echo
+    echo "  Terminal can read it because you approved that once. launchd"
+    echo "  agents get no such grant, so this job will fail with"
+    echo "  'Operation not permitted' before it can open its own log."
+    echo
+    echo "  Move the repo somewhere unprotected and reinstall:"
+    echo "      mv \"$REPO\" \"$HOME/$(basename "$REPO")\""
+    echo "      cd \"$HOME/$(basename "$REPO")\""
+    echo "      bash tools/install-nightly.sh $MODE"
+    echo
+    echo "  (The home directory root is fine — only Desktop, Documents"
+    echo "   and Downloads are protected. Installing anyway.)"
+    echo
+    ;;
+esac
+
 launchctl unload "$PLIST" 2>/dev/null
 launchctl load -w "$PLIST" || { echo "launchctl load failed"; exit 1; }
 
