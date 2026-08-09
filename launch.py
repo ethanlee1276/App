@@ -2125,6 +2125,45 @@ def preflight() -> None:
         print(f"{warn} Auto-settle: no record yet — it starts the next time "
               f"you run `python3 launch.py`")
 
+    # SCHEDULED AGENTS: did they actually RUN, not merely load.
+    #
+    # `launchctl list` on 2026-08-09 showed all three agents loaded with a
+    # last exit status of 0 — and `logs/nightly-2026-08-09.log` did not
+    # exist, so the nightly had not run that day at all. A job that is
+    # installed, healthy-looking and silent is indistinguishable from one
+    # doing its work, which is how "I have to settle by hand every day"
+    # goes unexplained for a week.
+    #
+    # The LOG is the evidence, because it is written by the script rather
+    # than by launchd: a plist can be loaded and still never fire (the
+    # machine asleep at the hour, an agent installed after today's slot,
+    # TCC refusing the working directory — all three have happened here).
+    print("\n  Scheduled agents (did they run, not just load):")
+    import datetime as _dt2
+    for label, stem, every_h, what in (
+            ("nightly", "nightly", 24, "settles yesterday and prices today"),
+            ("pre-kickoff", "prekick", 24, "07:00 odds refresh, NFL only"),
+            ("lineups", "lineups", 24, "records when lineup cards go up")):
+        logs = sorted((ROOT / "logs").glob(f"{stem}-*.log"))
+        if not logs:
+            print(f"{warn} {label}: no log has ever been written — it is "
+                  f"installed but has not run. `bash tools/install-nightly.sh"
+                  + ("" if stem == "nightly" else
+                     f" --{'pre-kickoff' if stem == 'prekick' else stem}")
+                  + " --now` runs it once so you can read the output.")
+            continue
+        age_h = (_dt2.datetime.now().timestamp()
+                 - logs[-1].stat().st_mtime) / 3600.0
+        mark = ok if age_h <= every_h * 1.5 else warn
+        when = (f"{age_h:.0f}h ago" if age_h >= 1
+                else f"{age_h * 60:.0f} min ago")
+        print(f"{mark} {label}: last wrote {logs[-1].name} {when} — {what}")
+        if mark is warn:
+            print(f"      more than {every_h}h with no run. A laptop asleep "
+                  f"at the hour catches up on wake; one that was powered off "
+                  f"runs at next boot. If neither happened, read "
+                  f"logs/launchd-{stem}.err.")
+
     # UFC dossiers + backups.
     doss = ROOT / "data" / "ufc_dossiers.json"
     print(f"{ok if doss.is_file() else warn} UFC dossiers: "

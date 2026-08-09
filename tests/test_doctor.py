@@ -425,6 +425,41 @@ def test_a_broken_forecast_chain_fails_the_doctor():
 
 
 
+# --- did the scheduled agents RUN, not just load -----------------------------
+def test_the_agent_check_reads_logs_not_launchctl():
+    """ETHAN, 2026-08-09. `launchctl list` showed all three agents loaded
+    with a last exit status of 0, and `logs/nightly-2026-08-09.log` did
+    not exist — the nightly had not run that day at all. Installed,
+    healthy-looking and silent is indistinguishable from working, which
+    is how "I have to settle by hand every day" went unexplained.
+
+    The LOG is the evidence because the script writes it, while launchd
+    writes the status. A plist can be loaded and never fire: the machine
+    asleep at the hour, an agent installed after today's slot, or TCC
+    refusing the working directory — all three have happened on this
+    machine."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("Scheduled agents (did they run")
+    body = src[i:i + 2200]
+    assert 'glob(f"{stem}-*.log")' in body, "it must read the scripts' own logs"
+    assert "launchctl" not in body, (
+        "a loaded plist is not a run — that is the exact confusion this "
+        "check exists to remove")
+    assert "st_mtime" in body, "age comes from the log's own timestamp"
+
+
+def test_a_never_run_agent_is_not_reported_as_merely_old():
+    """No log at all and a stale log are different problems with different
+    fixes — one needs a first run, the other needs to know why a schedule
+    stopped firing. The two branches say different things."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("Scheduled agents (did they run")
+    body = src[i:i + 2200]
+    assert "no log has ever been written" in body
+    assert "with no run" in body
+    assert body.index("no log has ever been written") < body.index("with no run")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
