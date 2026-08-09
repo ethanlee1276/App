@@ -38,6 +38,22 @@ Both are guarded below. The empirical conclusions drawn before the fix
 are void until re-measured; the arithmetic ones (a uniform factor is
 ROI-neutral; 0.047 is below 0.1) never depended on the sample.
 
+A NOTE FOR ANYONE MUTATION-TESTING THIS FILE, which cost an hour on
+2026-08-09 and would have cost it again. Flip a line in `stakecheck.py`,
+run the suite, restore the line — and Python may run the STALE bytecode
+for both. CPython invalidates a `.pyc` on (mtime, size), and a mutation
+that swaps two lines of equal total length, applied and reverted inside
+the same second, matches on both. The suite then reports the mutated
+behaviour against the restored source, or the reverse.
+
+It showed as a CLV of -2.04% on a fixture built to be +2.04%, with the
+file on disk provably correct and `inspect.getsource` agreeing — because
+getsource reads the file while the interpreter runs the cached code.
+
+`find . -name __pycache__ -type d -exec rm -rf {} +` between mutations.
+Every mutation result in this file's history that preserved file size is
+suspect without it.
+
 Run directly: `python3 tests/test_stakecheck.py`
 """
 
