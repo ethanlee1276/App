@@ -641,50 +641,73 @@ def spread_report(rows: list[dict]) -> None:
             continue
         side = (r.get("side") or "OVER").upper()
         z = nd.inv_cdf(1 - float(p)) if side == "OVER" else nd.inv_cdf(float(p))
-        if abs(z) < 0.15:            # the bet sits on its own line
-            continue
-        sigma = (float(line) - float(proj)) / z
-        if sigma <= 0:
-            continue
         by_market.setdefault(r.get("market") or "?", []).append(
-            (sigma, float(act) - float(proj)))
+            (float(line) - float(proj), z, float(act) - float(proj)))
 
     if not by_market:
         print("\n  No row carries projection, line, hit_prob and actual "
               "together — nothing to check.")
         return
 
+    def _sigma(triples):
+        """Least squares through the origin: (line - mu) = sigma * z.
+
+        NOT the mean of (line - mu) / z, which is what the first version
+        computed and which is worthless on this data. z is the model's
+        own z-score at the line, and the journal is full of near
+        coin-flips, so z sits near zero on most rows. Dividing by it
+        inflates that row's sigma without bound, and a mean over such
+        rows reports whichever bet was closest to 50-50.
+
+        It showed as total_bases with an implied sigma of 2.818 — for a
+        stat that runs 0 to 4. An impossible number, produced by an
+        estimator that looked reasonable.
+
+        Least squares has the same fixed point (if line - mu = sigma*z
+        exactly, this returns sigma) and lets a small-z row contribute
+        little to numerator and denominator alike, which is what a bet
+        near its own line actually tells you about spread: nearly
+        nothing.
+        """
+        num = sum(d * z for d, z, _ in triples)
+        den = sum(z * z for _, z, _ in triples)
+        return (num / den) if den > 1e-9 else None
+
     print(f"\n{'='*70}\n  IS THE PROJECTION'S SPREAD TOO NARROW?\n{'='*70}")
     print("  The model's own probability at its own line implies a spread.")
     print("  Beside it: the spread that actually happened.\n")
     print(f"    {'market':<16}{'bets':>6}{'model sigma':>13}"
-          f"{'real sigma':>12}{'ratio':>8}")
-    tot_i = tot_r = 0.0
-    tot_n = 0
+          f"{'real sigma':>12}{'ratio':>8}{'|z| med':>9}")
+    all_t: list = []
     for m in sorted(by_market, key=lambda k: -len(by_market[k])):
-        pairs = by_market[m]
-        if len(pairs) < 8:
+        trip = by_market[m]
+        if len(trip) < 8:
             continue
-        imp = sum(s for s, _ in pairs) / len(pairs)
+        imp = _sigma(trip)
         try:
-            real = stdev([d for _, d in pairs])
+            real = stdev([d for _, _, d in trip])
         except StatisticsError:
             continue
-        tot_i += imp * len(pairs)
-        tot_r += real * len(pairs)
-        tot_n += len(pairs)
-        print(f"    {m:<16}{len(pairs):>6}{imp:>13.3f}{real:>12.3f}"
-              f"{real / imp if imp else 0:>8.2f}")
-    if tot_n:
-        ratio = (tot_r / tot_n) / (tot_i / tot_n)
-        print(f"    {'ALL':<16}{tot_n:>6}{tot_i / tot_n:>13.3f}"
-              f"{tot_r / tot_n:>12.3f}{ratio:>8.2f}")
+        if not imp or imp <= 0:
+            continue
+        all_t.extend(trip)
+        zs = sorted(abs(z) for _, z, _ in trip)
+        print(f"    {m:<16}{len(trip):>6}{imp:>13.3f}{real:>12.3f}"
+              f"{real / imp:>8.2f}{zs[len(zs) // 2]:>9.2f}")
+    if all_t:
+        imp = _sigma(all_t)
+        real = stdev([d for _, _, d in all_t])
+        print(f"    {'ALL':<16}{len(all_t):>6}{imp:>13.3f}{real:>12.3f}"
+              f"{real / imp:>8.2f}")
         print(f"\n  A ratio near 1.00 means the spread is honest and the "
               f"overconfidence\n  comes from the MEAN being wrong, or from "
               f"selection. Above about 1.2\n  means the distribution is too "
               f"narrow, and the ratio is roughly the\n  temperature needed to "
-              f"cover for it — compare it to the {1.64:.2f} that\n  --fit "
-              f"recovered. If they match, that is the root cause named.")
+              f"cover for it — compare it to what --fit\n  recovered. If they "
+              f"match, that is the root cause named.")
+        print(f"\n  The |z| median column is how well conditioned this is. "
+              f"Near zero means\n  the book is all coin-flips and says "
+              f"little about spread either way.")
     print("\n  Approximate: normal shape assumed to invert, bets sitting on "
           "their own\n  line dropped, and the sample is selected. See "
           "spread_report's docstring.")

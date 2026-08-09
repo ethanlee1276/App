@@ -780,7 +780,7 @@ def _code_only(func_name):
 
 
 # --- is the spread too narrow? -----------------------------------------------
-def _spread_db(model_sd, true_sd, n=300, seed=4):
+def _spread_db(model_sd, true_sd, n=300, seed=4, offset=(-0.4, -0.25, 0.25, 0.4)):
     """A ledger where the model's spread and reality's are both KNOWN.
     The check has to tell them apart or it is not a check."""
     import random
@@ -790,7 +790,8 @@ def _spread_db(model_sd, true_sd, n=300, seed=4):
     rows = []
     for i in range(n):
         mu = rng.uniform(1.0, 2.0)
-        line = mu + rng.choice([-0.4, -0.25, 0.25, 0.4])
+        line = (mu + rng.choice(offset) if isinstance(offset, (list, tuple))
+                else mu + rng.uniform(-offset, offset))
         p = 1 - nd.cdf((line - mu) / model_sd)
         act = rng.gauss(mu, true_sd)
         won = act > line
@@ -846,14 +847,49 @@ def test_a_too_wide_spread_is_caught_the_other_way():
     assert r < 0.9, r
 
 
-def test_a_bet_sitting_on_its_own_line_is_dropped():
-    """Backing a spread out of a probability divides by a z-score. At the
-    line that z is ~0 and the implied sigma explodes, so one coin-flip
-    bet could dominate a market's average."""
-    src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
-    i = src.index("def spread_report(")
-    body = src[i:src.index("\ndef ", i + 10)]
-    assert "abs(z) <" in body, "no guard on a near-zero z-score"
+def test_a_bet_on_its_own_line_barely_moves_the_estimate():
+    """The invariant CHANGED with the estimator, and this test changed
+    with it. The first version dropped every row with |z| < 0.15 and this
+    asserted the guard existed. Dropping them biased the sample toward
+    confident calls — and on a book of coin-flips it dropped nearly
+    everything, which is how an implied sigma of 2.818 got printed.
+
+    Least squares needs no guard: a bet at its own line carries almost no
+    information about spread, and weighting by z-squared says exactly
+    that. Asserted behaviourally — pad a clean book with on-the-line bets
+    and the answer must hold."""
+    import random
+    from statistics import NormalDist
+    nd = NormalDist()
+    rng = random.Random(2)
+    base = []
+    for i in range(200):
+        mu = rng.uniform(1.0, 2.0)
+        line = mu + rng.choice([-0.4, 0.4])
+        p = 1 - nd.cdf((line - mu) / 0.9)
+        act = rng.gauss(mu, 0.9)
+        base.append(_row(player=f"b{i}", market="total_bases", odds=-110,
+                         hit_prob=p, projection=mu, line=line, actual=act,
+                         status="won" if act > line else "lost",
+                         pnl_units=0.27 if act > line else -0.3))
+    padding = []
+    for i in range(200):
+        mu = rng.uniform(1.0, 2.0)
+        line = mu + rng.uniform(-0.01, 0.01)     # right on the line
+        p = 1 - nd.cdf((line - mu) / 0.9)
+        act = rng.gauss(mu, 0.9)
+        padding.append(_row(player=f"p{i}", market="total_bases", odds=-110,
+                            hit_prob=p, projection=mu, line=line, actual=act,
+                            status="won" if act > line else "lost",
+                            pnl_units=0.27 if act > line else -0.3))
+    a, b = _db(base), _db(base + padding)
+    try:
+        clean, padded = _spread_ratio(a), _spread_ratio(b)
+    finally:
+        os.unlink(a)
+        os.unlink(b)
+    assert abs(clean - padded) < 0.15, \
+        f"200 on-the-line bets moved the answer {clean:.2f} -> {padded:.2f}"
 
 
 def test_the_side_decides_which_tail_is_inverted():
@@ -885,6 +921,57 @@ def test_the_spread_check_writes_nothing():
     body = _code_only("spread_report")
     for verb in ("save", "write", "store", "set_"):
         assert verb not in body, f"spread_report calls {verb}"
+
+
+def test_the_estimate_survives_a_book_of_coin_flips():
+    """THE CASE THAT BROKE THE FIRST VERSION, and the one I should have
+    written before trusting it.
+
+    The original estimator averaged (line - projection) / z per bet. Every
+    synthetic I validated it against put the line a quarter of a run from
+    the projection, so z was comfortably away from zero and the estimator
+    looked fine. THE REAL JOURNAL IS NOT SHAPED LIKE THAT — the model bets
+    near coin-flips, z sits near zero on most rows, and dividing by it
+    inflates that row without bound.
+
+    On Ethan's ledger it reported an implied sigma of 2.818 for total
+    bases: a stat that runs 0 to 4. An impossible number from an
+    estimator that looked reasonable, validated on data that avoided its
+    only failure mode.
+
+    Least squares through the origin has the same fixed point and lets a
+    near-the-line bet contribute almost nothing, which is exactly what it
+    tells you about spread."""
+    path = _spread_db(model_sd=0.6, true_sd=0.9, offset=0.08, seed=9)
+    try:
+        r = _spread_ratio(path)
+    finally:
+        os.unlink(path)
+    assert 1.2 <= r <= 1.9, f"coin-flip book gives {r}, true ratio is 1.5"
+
+
+def test_the_estimator_is_least_squares_not_a_mean_of_ratios():
+    """Anchored on the arithmetic, because the two agree on well-spread
+    data and only diverge on the shape that matters."""
+    body = _code_only("spread_report")
+    assert "num / den" in body or "/ den" in body, body[:200]
+    assert "d / z" not in body, "back to dividing by a near-zero z"
+
+
+def test_the_conditioning_is_reported_next_to_the_answer():
+    """A ratio computed from bets that all sit on their own line is not
+    wrong, it is uninformative — and the two look identical unless the
+    z-spread is on screen beside it."""
+    path = _spread_db(model_sd=0.9, true_sd=0.9)
+    import contextlib
+    import io
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.spread_report(stakecheck._rows(path, None, None))
+    finally:
+        os.unlink(path)
+    assert "|z| med" in buf.getvalue()
 
 
 if __name__ == "__main__":
