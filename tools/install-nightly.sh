@@ -19,6 +19,17 @@ LABEL="com.qellysbook.nightly"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 HOUR=6
 MINUTE=0
+# The pre-kickoff pass runs as its OWN agent, with its own label, so the
+# two can be installed, moved and removed independently. It refreshes
+# odds and rebuilds the boards; it does not settle, because there is
+# nothing to settle at 7am that the 6am pass did not already grade.
+#
+# Ethan, 2026-08-09: "make sure we make the odds pull around 7am est for
+# nfl since there will be some games starting at 9am est." A 6am build
+# prices a 9:30am London kickoff on lines three and a half hours old.
+PRE=""
+PRE_HOUR=7
+PRE_MINUTE=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -35,6 +46,15 @@ while [ $# -gt 0 ]; do
       HOUR="${2%%:*}"; MINUTE="${2##*:}"
       HOUR=$((10#$HOUR)); MINUTE=$((10#$MINUTE))
       shift 2
+      ;;
+    --pre-kickoff)
+      PRE=1
+      LABEL="com.qellysbook.prekick"
+      PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+      # An explicit --at after --pre-kickoff still wins; these are the
+      # defaults for thepre-kickoff pass only.
+      HOUR=$PRE_HOUR; MINUTE=$PRE_MINUTE
+      shift
       ;;
     *) echo "unknown argument: $1"; exit 2 ;;
   esac
@@ -59,7 +79,7 @@ cat > "$PLIST" <<PLISTEOF
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>$REPO/tools/nightly.sh</string>
+    <string>$REPO/tools/${PRE:+prekick}${PRE:-nightly}.sh</string>
   </array>
   <key>WorkingDirectory</key><string>$REPO</string>
   <key>StartCalendarInterval</key>

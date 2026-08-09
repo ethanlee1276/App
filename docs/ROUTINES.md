@@ -244,8 +244,30 @@ afternoon. Either way the board you read is the board the cards support.
 ## The Mac-side runner, which is not a Routine
 
 `tools/install-nightly.sh` installs a launchd agent that runs
-`tools/nightly.sh` at 06:00 local. That script runs `launch.py` (ingest,
-settle, rebuild, `doctor.py` against **real** data) and then `watch.py`.
+`tools/nightly.sh` at 06:00 local. That script runs `launch.py --nightly`
+(settle, rebuild, `doctor.py` against **real** data, then exit) and then
+`watch.py`.
+
+> **It ran bare `launch.py` until 2026-08-09, and that was two bugs.**
+> Bare `launch.py` ends in `server.serve_forever()`, so the job never
+> returned: `watch.py` never ran, the EXIT trap never fired, and
+> `.nightly.lock` survived to make every following night print "another
+> nightly run is still going; skipping". One hang silenced the automation
+> permanently — the shape of the 7-27/7-28/7-30 gap. It also never
+> settled: `refresh_all()` rebuilds boards and does not grade anything,
+> so settling had only ever happened when a human typed `--settle`.
+
+A second agent handles the pre-kickoff pull:
+
+    bash tools/install-nightly.sh --pre-kickoff            # 07:00 local
+    bash tools/install-nightly.sh --pre-kickoff --at 07:30
+    bash tools/install-nightly.sh --pre-kickoff --remove
+
+It runs `launch.py --nightly --odds-only`: refresh the odds, rebuild the
+boards, settle nothing. The 6am pass prices a 9:30am kickoff on lines
+three and a half hours old, which is the window a Saturday-night number
+becomes a Sunday-morning one. Separate label, separate lock, separate log
+— a 6am run that overruns must not block the pull with a deadline.
 
 It is not a fallback for the Routines and never was. The division is about
 where the data lives:

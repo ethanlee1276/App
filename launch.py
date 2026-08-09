@@ -2697,6 +2697,63 @@ def _settleable_days(open_days) -> list[str]:
                   if d.get("date") and "-W" not in d["date"])
 
 
+def nightly_run(odds_only: bool = False) -> None:
+    """The unattended pass: do the work, print, EXIT.
+
+    THE BUG THIS FIXES, found 2026-08-09 while adding a pre-kickoff odds
+    pull. `tools/nightly.sh` ran bare `launch.py`, whose last act is
+    `server.serve_forever()`. So the launchd job never returned:
+
+      * `watch.py` — the tripwire, step 2 of the same script — never ran,
+      * the `.nightly.lock` directory was never removed, because the EXIT
+        trap cannot fire on a process that does not exit,
+      * and every following night hit "another nightly run is still
+        going; skipping".
+
+    One hang silences the automation permanently. That is the exact shape
+    of the 7-27/7-28/7-30 ingest gap (task #43) — three consecutive
+    nights missed, not three separate failures.
+
+    AND IT NEVER SETTLED. nightly.sh's header says launch.py will "ingest
+    last night's finals, settle open bets, rebuild the site, and run
+    doctor.py". Bare `launch.py` calls `refresh_all()`, which does none of
+    those four things: it rebuilds the boards from live data and serves
+    them. Grading has only ever happened when a human typed `--settle`.
+
+    Order is deliberate and is the order that comment always described.
+    Settle first: last night's finals decide the calibration, the miner's
+    slices and the edge test, and tonight's board should be priced by a
+    model that has already learned from them.
+    """
+    import subprocess as _sp
+    rc = 0
+    if not odds_only:
+        print("\n[1/3] settling last night …")
+        try:
+            settle_now(None)
+        except Exception as exc:                            # noqa: BLE001
+            print(f"  ⚠️  settle failed: {exc}")
+            rc = 1
+    print(f"\n[{'1/1' if odds_only else '2/3'}] rebuilding the boards …")
+    try:
+        refresh_all()
+    except Exception as exc:                                # noqa: BLE001
+        print(f"  ⚠️  refresh failed: {exc}")
+        rc = 1
+    if not odds_only:
+        print("\n[3/3] doctor, against real data …")
+        try:
+            import doctor
+            rc = doctor.main([]) or rc
+        except SystemExit as exc:
+            rc = int(getattr(exc, "code", 0) or 0) or rc
+        except Exception as exc:                            # noqa: BLE001
+            print(f"  ⚠️  doctor failed: {exc}")
+            rc = 1
+    print("\nnightly complete — not serving. `python3 launch.py` for the site.")
+    sys.exit(rc)
+
+
 def repair_closes(apply: bool = False) -> None:
     """Rewrite every settled bet's banked closing price from the raw
     snapshots, side- and line-aware. Dry run unless --apply.
@@ -3285,6 +3342,9 @@ def main() -> None:
         return
     if "--check" in argv:
         preflight()
+        return
+    if "--nightly" in argv:
+        nightly_run(odds_only="--odds-only" in argv)
         return
     if "--doctor" in argv:
         import doctor

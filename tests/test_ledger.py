@@ -2422,6 +2422,67 @@ def test_the_hypothesis_pack_sees_the_edge_finding():
     assert prompt.index("measured state of the model") < 200, prompt[:200]
 
 
+def test_the_nightly_runner_does_not_end_in_a_blocking_server():
+    """THE AUTOMATION FAILURE, found 2026-08-09.
+
+    `tools/nightly.sh` ran bare `launch.py`, whose last act is
+    `server.serve_forever()`. The launchd job never returned, so
+    `watch.py` never ran, the EXIT trap never fired, `.nightly.lock`
+    survived, and every following night hit "another nightly run is still
+    going; skipping".
+
+    One hang silences the automation permanently — the exact shape of the
+    7-27/7-28/7-30 ingest gap (#43): three consecutive nights missed, not
+    three separate failures."""
+    import pathlib
+    sh = (pathlib.Path(__file__).resolve().parent.parent / "tools"
+          / "nightly.sh").read_text()
+    assert "launch.py --nightly" in sh, "still invoking the blocking path"
+    import re
+    bare = re.search(r'^\s*"\$PY"\s+launch\.py\s*>>', sh, re.M)
+    assert not bare, "a bare launch.py invocation is back"
+
+
+def test_the_nightly_mode_settles_which_the_old_path_never_did():
+    """nightly.sh's header promised launch.py would "ingest last night's
+    finals, settle open bets, rebuild the site, and run doctor.py". Bare
+    launch.py calls refresh_all(), which does none of the four. Grading
+    only ever happened when a human typed --settle."""
+    import inspect
+    import pathlib
+    import re
+    src = (pathlib.Path(__file__).resolve().parent.parent
+           / "launch.py").read_text()
+    body = re.search(r"def nightly_run\(.*?\n(?=def )", src, re.S).group(0)
+    assert "settle_now" in body
+    assert "refresh_all" in body
+    assert "doctor" in body
+    assert "sys.exit" in body, "the whole point is that it returns"
+
+
+def test_odds_only_skips_the_settle():
+    """The 7am pass must not re-grade. Nothing finishes between 6am and
+    7am that the 6am pass did not already settle, and re-running it costs
+    calls and risks grading a game still being corrected."""
+    import pathlib
+    import re
+    src = (pathlib.Path(__file__).resolve().parent.parent
+           / "launch.py").read_text()
+    body = re.search(r"def nightly_run\(.*?\n(?=def )", src, re.S).group(0)
+    i_guard = body.index("if not odds_only")
+    i_settle = body.index("settle_now")
+    assert i_guard < i_settle, "settle is not behind the odds_only guard"
+
+
+def test_the_two_agents_do_not_share_a_lock():
+    """A 6am run that overran would otherwise block the 7am pull — the
+    one pull with an actual deadline."""
+    import pathlib
+    t = pathlib.Path(__file__).resolve().parent.parent / "tools"
+    assert ".nightly.lock" in (t / "nightly.sh").read_text()
+    assert ".prekick.lock" in (t / "prekick.sh").read_text()
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

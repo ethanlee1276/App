@@ -7,8 +7,11 @@
 # that matter about the MODEL can only run here.
 #
 # Two steps, and the order is deliberate:
-#   1. launch.py   — ingest last night's finals, settle open bets, rebuild
-#                    the site, and run doctor.py against real data.
+#   1. launch.py --nightly — ingest last night's finals, settle open bets,
+#                    rebuild the site, run doctor.py against real data, exit.
+#                    (Bare `launch.py` serves forever and settles nothing;
+#                    this comment described it accurately for months while
+#                    the script invoked something else.)
 #   2. watch.py    — read the numbers that decide things and stay silent
 #                    unless one crossed a bar fixed in advance.
 #
@@ -51,7 +54,13 @@ trap 'rmdir "$LOCK" 2>/dev/null' EXIT
   echo "================================================================"
 } >> "$LOG"
 
-"$PY" launch.py >> "$LOG" 2>&1
+# --nightly, NOT bare launch.py. Bare launch.py ends in
+# server.serve_forever(): the job never returned, watch.py below never
+# ran, and the EXIT trap never fired — so `.nightly.lock` survived and
+# every following night hit "another nightly run is still going". One
+# hang silenced the automation permanently, which is the shape of the
+# 7-27/7-28/7-30 gap. --nightly settles, rebuilds, doctors, and exits.
+"$PY" launch.py --nightly >> "$LOG" 2>&1
 LAUNCH_RC=$?
 echo "$(date -Iseconds)  launch.py exit $LAUNCH_RC" >> "$LOG"
 
