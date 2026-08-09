@@ -198,6 +198,44 @@ def report(rows: list[dict]) -> None:
               "another won,\n    and the ranking is the model's own pre-game "
               "grade, not the result.")
 
+    # --- is the ranking predictive at all? ------------------------------
+    #
+    # THE ASSUMPTION UNDER EVERY CAP RULE. Trimming a slate to fit means
+    # choosing which bets to keep, and the only defensible basis is the
+    # model's own pre-game confidence. If A+ does not beat B+ then no cap
+    # policy can help, because there is nothing to sort on — and a rule
+    # that keeps the top grades is then actively harmful.
+    #
+    # The last column is the one that matters: ROI at the stake the rules
+    # asked for is exactly what a trim harvests from that grade.
+    print("\n  IS THE GRADE PREDICTIVE?  (the ranking every cap rule sorts on)")
+    print(f"    {'grade':<8}{'bets':>6}{'hit rate':>10}{'ROI as staked':>15}"
+          f"{'ROI at asked':>14}")
+    by_grade: dict = {}
+    for r in rows:
+        by_grade.setdefault(r.get("grade") or "?", []).append(r)
+    for g in ("A+", "A", "B+", "Pass", "?"):
+        chunk = by_grade.get(g)
+        if not chunk:
+            continue
+        s = sum(c["stake_units"] or 0.0 for c in chunk)
+        n = sum(c["pnl_units"] or 0.0 for c in chunk)
+        w = sum(1 for c in chunk if c["status"] == "won")
+        wn = ws = 0.0
+        for c in chunk:
+            iw = intended_stake(c)
+            if not iw:
+                continue
+            ws += iw
+            wn += (american_to_decimal(int(c["odds"])) - 1.0) * iw \
+                if c["status"] == "won" else -iw
+        asked_roi = f"{_roi(wn, ws):+.1%}" if ws else "—"
+        print(f"    {g:<8}{len(chunk):>6}{w / len(chunk):>9.1%}"
+              f"{_roi(n, s):>14.1%}{asked_roi:>14}")
+    print("\n    A+ below B+ in that last column means the confidence signal "
+          "is\n    inverted, and no cap policy can fix a ranking that points "
+          "the wrong way.")
+
     # --- does stake size predict the result? ----------------------------
     print("\n  DOES STAKE SIZE PREDICT THE RESULT?")
     print("    If we bet more on the ones we lose, ROI is worse than the "

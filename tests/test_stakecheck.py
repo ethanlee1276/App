@@ -321,6 +321,49 @@ def test_the_replay_stops_at_the_budget_rather_than_packing_it():
     assert out["dropped"] == 2
 
 
+def test_the_grade_breakdown_prices_at_the_asked_for_stake_too():
+    """THE COLUMN THE CAP DECISION TURNS ON. A trim harvests each grade at
+    the stake the rules asked for, not the stake the old caps left behind,
+    so ROI-as-staked cannot answer whether trimming that grade is a good
+    idea. Both are printed; only the second is the trim's yield."""
+    import contextlib
+    import io
+    rows = [_row(grade="A+", odds=-110, hit_prob=0.70, status="won",
+                 pnl_units=0.23, stake_units=0.25),
+            _row(grade="B+", odds=-110, hit_prob=0.56, status="lost",
+                 pnl_units=-0.25, stake_units=0.25)]
+    path = _db(rows)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.report(stakecheck._rows(path, None, None))
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "IS THE GRADE PREDICTIVE?" in out
+    assert "ROI at asked" in out and "ROI as staked" in out
+    # Both grades present, each on its own line.
+    assert any(l.strip().startswith("A+") for l in out.splitlines())
+    assert any(l.strip().startswith("B+") for l in out.splitlines())
+
+
+def test_a_grade_the_rules_would_not_size_shows_a_dash_not_a_zero():
+    """A grade whose every bet lacks a hit_prob has no asked-for ROI. A
+    printed 0.0% there reads as "this grade breaks even", which is a
+    claim, and the honest output is that there is nothing to say."""
+    import contextlib
+    import io
+    path = _db([_row(grade="A", hit_prob=None, status="won", pnl_units=0.05)])
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.report(stakecheck._rows(path, None, None))
+    finally:
+        os.unlink(path)
+    line = [l for l in buf.getvalue().splitlines() if l.strip().startswith("A ")]
+    assert line and line[0].rstrip().endswith("—"), line
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
