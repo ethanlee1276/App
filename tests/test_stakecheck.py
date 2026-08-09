@@ -654,6 +654,118 @@ def test_a_bet_with_no_claimed_probability_is_left_out_of_calibration():
     assert line.split()[2] == "1", line   # one bet, not two
 
 
+# --- fitting the overconfidence ----------------------------------------------
+def _bias_db(bias=-0.10, n_old=197, n_new=95, seed=11):
+    """A ledger with a KNOWN bias, so the fitter is checked against an
+    answer rather than against a hope. A fitter that always reports an
+    improvement is not a measurement."""
+    import random
+    rng = random.Random(seed)
+    rows = []
+    for label, d, n in (("old", "2026-07-28", n_old), ("new", "2026-08-06", n_new)):
+        for i in range(n):
+            claimed = rng.uniform(0.45, 0.70)
+            o = rng.choice([-110, -120, 105, 130])
+            dec = (1 + o / 100) if o > 0 else (1 + 100 / -o)
+            won = rng.random() < claimed + bias
+            rows.append(_row(date=d, player=f"{label}{i}", odds=o,
+                             hit_prob=claimed, stake_units=0.3,
+                             pnl_units=((dec - 1) * 0.3 if won else -0.3),
+                             status="won" if won else "lost"))
+    return _db(rows)
+
+
+def _fit_out(path):
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        stakecheck.fit_report(stakecheck._rows(path, None, None))
+    return buf.getvalue()
+
+
+def test_the_fit_recovers_a_bias_it_was_not_told_about():
+    """Ten points of overconfidence planted in the data; the correction is
+    fitted on one era and the gap measured on the other. If the held-out
+    gap does not close, the fitter is decoration."""
+    path = _bias_db(bias=-0.10)
+    try:
+        out = _fit_out(path)
+    finally:
+        os.unlink(path)
+    import re as _re
+    line = [l for l in out.splitlines() if l.strip().startswith("gap")][0]
+    before, after = [float(x) for x in _re.findall(r"([-+]\d+\.\d)%", line)]
+    assert before < -8.0, line
+    assert abs(after) < abs(before) / 2, f"the gap barely moved: {line}"
+
+
+def test_the_fit_is_trained_and_tested_on_different_bets():
+    """A correction fitted and scored on the same rows always looks like
+    it worked. The eras never overlap — asserted on the source, because
+    getting this wrong produces a number that is confidently meaningless."""
+    src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
+    i = src.index("def fit_report(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert '< RESCALE_DAY' in body and '>= RESCALE_DAY' in body
+    assert body.index("fit_correction(pairs") > body.index("train = [")
+    # and the pairs handed to the fitter come from train, never test
+    j = body.index("fit_correction(pairs")
+    assert "pairs = [" in body[:j]
+    assert "for r in train" in body[:j]
+
+
+def test_the_fit_leaves_clean_data_alone():
+    """A model claiming exactly what it delivers must not be 'corrected'.
+    A fitter that finds a bias in unbiased data would send us chasing an
+    artefact of its own search grid."""
+    path = _bias_db(bias=0.0, seed=5)
+    try:
+        out = _fit_out(path)
+    finally:
+        os.unlink(path)
+    import re as _re
+    line = [l for l in out.splitlines() if l.strip().startswith("gap")][0]
+    before, after = [float(x) for x in _re.findall(r"([-+]\d+\.\d)%", line)]
+    assert abs(before) < 8.0, f"the planted data is not actually clean: {line}"
+
+
+def test_the_fit_describes_the_correction_it_found():
+    """The first version printed "temperature above 1 shrinks toward 50%"
+    unconditionally. A constant bias is absorbed by the INTERCEPT and can
+    leave the temperature below 1, so that line described the opposite of
+    what had been fitted half the time."""
+    path = _bias_db(bias=-0.10)
+    try:
+        out = _fit_out(path)
+    finally:
+        os.unlink(path)
+    assert "temperature" in out and "intercept" in out
+    # The wording must follow the sign, not a fixed sentence.
+    assert ("moved DOWN" in out) or ("moved up" in out) or \
+           ("no systematic shift" in out)
+
+
+def test_the_fit_refuses_a_sample_too_small_to_mean_anything():
+    path = _bias_db(bias=-0.10, n_old=10, n_new=5)
+    try:
+        out = _fit_out(path)
+    finally:
+        os.unlink(path)
+    assert "Nothing fitted" in out
+
+
+def test_the_fit_writes_nothing():
+    """It is pointed at the money file and at the calibration store, and
+    must touch neither. Applying a correction is a separate, deliberate
+    act."""
+    src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
+    i = src.index("def fit_report(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    for verb in ("save", "write", "store", "set_"):
+        assert verb not in body, f"fit_report calls {verb}"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

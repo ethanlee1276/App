@@ -471,11 +471,128 @@ def simulate_uniform(rows: list[dict], cap: float) -> dict:
             "slates": len(slates)}
 
 
+def fit_report(rows: list[dict]) -> None:
+    """Fit the overconfidence on one era, test it on the next.
+
+    THE FINDING THIS ANSWERS, measured 2026-08-09 on 292 real bets:
+
+        old era   claimed 59.7%   actual 49.7%   gap -9.9%  (2.8 SE)
+        new era   claimed 51.3%   actual 40.0%   gap -11.3% (2.3 SE)
+        pooled    claimed 57.0%   actual 46.5%   gap -10.4% (3.6 SE)
+
+    Two independent samples, the same answer, and pooled it is past three
+    standard errors. The model claims about ten points more than it
+    delivers, and Kelly stakes in proportion to the claim.
+
+    WHY THIS FITS FROM THE JOURNAL AND NOT FROM history.db, which is
+    where `calibrate.py` fits today. history.db holds projections against
+    outcomes for every player-game. The journal holds only the bets we
+    MADE — which is a selected sample, selected by the model's own error.
+    A bet exists precisely when the model's estimate sat far enough above
+    the market's, so the bets placed are the ones where an overestimate
+    was most likely. Fitting on all projections cannot see that; fitting
+    on the journal is the only place it shows up.
+
+    OUT OF SAMPLE, because a correction fitted and tested on the same
+    rows will always look like it worked. The unit-scale change on
+    2026-08-04 gives a natural split, and the fit never sees the test
+    era. The numbers below are therefore honest about the correction's
+    value and NOT a promise about the future — 95 held-out bets is a
+    small test and the eras differ in more than sizing.
+    """
+    from engine.calibrate import apply_temperature, brier, fit_correction
+
+    train = [r for r in rows if (r["date"] or "") < RESCALE_DAY
+             and r.get("hit_prob") is not None]
+    test = [r for r in rows if (r["date"] or "") >= RESCALE_DAY
+            and r.get("hit_prob") is not None]
+    if len(train) < 50 or len(test) < 20:
+        print(f"\nNot enough on one side of {RESCALE_DAY} to fit and test "
+              f"({len(train)} / {len(test)}). Nothing fitted.")
+        return
+
+    pairs = [(float(r["hit_prob"]), 1 if r["status"] == "won" else 0)
+             for r in train]
+    # The library floor is 200 and the training era is 197. Lowered on
+    # purpose and said out loud: this is a diagnostic, not a fit anyone
+    # should ship off 197 rows.
+    t, b = fit_correction(pairs, min_samples=50)
+
+    print(f"\n{'='*70}\n  FITTING THE OVERCONFIDENCE, OUT OF SAMPLE\n{'='*70}")
+    print(f"    fit on   {train[0]['date']} → {train[-1]['date']}   "
+          f"{len(train)} bets")
+    print(f"    test on  {test[0]['date']} → {test[-1]['date']}   "
+          f"{len(test)} bets")
+    print(f"\n    fitted correction: temperature {t:.2f}, intercept {b:+.2f}")
+    # Describe what was FITTED, not what I expected to be fitted. A
+    # constant bias is absorbed almost entirely by the intercept and can
+    # leave the temperature below 1, so a line that always says "shrinks
+    # toward 50%" would be describing the wrong correction half the time.
+    print("      temperature " + (
+        f"{t:.2f} — every probability pulled toward 50%" if t > 1.02 else
+        f"{t:.2f} — spread left alone" if t > 0.98 else
+        f"{t:.2f} — spread widened, so the bias is in the shift below"))
+    print("      intercept   " + (
+        f"{b:+.2f} — the whole book moved DOWN, which is the model "
+        f"claiming\n                  more than it delivers on every bet"
+        if b < -0.02 else
+        f"{b:+.2f} — the whole book moved up" if b > 0.02 else
+        f"{b:+.2f} — no systematic shift"))
+
+    tp = [(float(r["hit_prob"]), 1 if r["status"] == "won" else 0)
+          for r in test]
+    before, after = brier(tp, 1.0, 0.0), brier(tp, t, b)
+    claimed = sum(p for p, _ in tp) / len(tp)
+    corrected = sum(apply_temperature(p, t, b) for p, _ in tp) / len(tp)
+    actual = sum(o for _, o in tp) / len(tp)
+    print(f"\n  ON THE HELD-OUT ERA")
+    print(f"    mean claimed   {claimed:>7.1%}  →  {corrected:>7.1%} corrected")
+    print(f"    actually won   {actual:>7.1%}")
+    print(f"    gap            {actual - claimed:>+7.1%}  →  "
+          f"{actual - corrected:>+7.1%}")
+    print(f"    Brier          {before:>7.4f}  →  {after:>7.4f}"
+          f"   ({'better' if after < before else 'WORSE'})")
+
+    # --- and what it would have stopped us betting ----------------------
+    kept, dropped = [], 0
+    for r in test:
+        p = apply_temperature(float(r["hit_prob"]), t, b)
+        breakeven = 1.0 / american_to_decimal(int(r["odds"]))
+        if p > breakeven:
+            kept.append(r)
+        else:
+            dropped += 1
+    print(f"\n  WHAT IT WOULD HAVE STOPPED")
+    print(f"    {dropped} of {len(test)} bets no longer clear BREAK-EVEN at "
+          f"the price taken —")
+    print(f"    not the model's gates, just the arithmetic of the odds.")
+    if kept:
+        s = sum(r["stake_units"] or 0.0 for r in kept)
+        n = sum(r["pnl_units"] or 0.0 for r in kept)
+        w = sum(1 for r in kept if r["status"] == "won")
+        print(f"    the {len(kept)} that survive: {w}-{len(kept) - w}, "
+              f"{n:+.2f}u on {s:.2f}u staked, ROI {_roi(n, s):+.2%}")
+        ts = sum(r["stake_units"] or 0.0 for r in test)
+        tn = sum(r["pnl_units"] or 0.0 for r in test)
+        print(f"    against all {len(test)}:      "
+              f"{sum(1 for r in test if r['status'] == 'won')}-"
+              f"{len(test) - sum(1 for r in test if r['status'] == 'won')}, "
+              f"{tn:+.2f}u on {ts:.2f}u staked, ROI {_roi(tn, ts):+.2%}")
+    print("\n    A fair replay — the survivors are chosen by a correction "
+          "fitted on\n    an earlier era and a price known before kickoff. "
+          "No outcome is read.\n    It is still 95 bets. Treat it as a "
+          "direction, not a number.")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--db", default="data/ledger.db")
     ap.add_argument("--sport")
     ap.add_argument("--since", help="ISO date; only bets on or after it")
+    ap.add_argument("--fit", action="store_true",
+                    help="fit the model's overconfidence on the pre-rescale "
+                         "era and test it on the current one. Reports only; "
+                         "writes nothing and changes no model")
     ap.add_argument("--include-measurement", action="store_true",
                     help="also count the longshot and longshot_watch "
                          "buckets. They are NOT money — zero dollar "
@@ -491,6 +608,10 @@ def main() -> None:
         return
     rows = _rows(args.db, args.sport, args.since,
                  measurement=args.include_measurement)
+    if args.fit:
+        fit_report(rows)
+        print("\n  read-only; nothing was written.\n")
+        return
     if args.all_eras or args.since:
         report(rows)
     else:
