@@ -1864,9 +1864,59 @@ def test_the_closing_price_comes_from_the_free_snapshots():
     import inspect
     from engine import linemoves
     src = inspect.getsource(linemoves.closing_odds_by_date)
-    assert "over_odds" in src
+    assert "over_odds" in src and "under_odds" in src
     assert "_pregame_only" in src, "an in-play re-price could become the close"
     assert "_median" in src, "one outlier book could define the close"
+
+
+def _snap(player, market, ts, over=None, under=None):
+    return {"player": player, "market": market, "ts": ts, "line": 1.5,
+            "over_odds": over, "under_odds": under, "book": "FanDuel"}
+
+
+def test_the_close_carries_both_sides():
+    """THE BUG, found 2026-08-09 by CLV's own internal check running
+    backwards: win rate when we 'beat the close' was 41.2%, when we did
+    not 61.9%. Beating the close is supposed to PREDICT winning.
+
+    This returned the OVER price alone and `_settle_all` looked it up
+    with a key carrying no side, so every UNDER bet in the journal banked
+    the OVER's closing price as its own and was measured against the
+    opposite of what it bought. The snapshot table has carried
+    `under_odds` since it was created; nothing read it."""
+    from engine.linemoves import closing_odds_by_date
+    import time as _t
+    ts = _t.time() - 7200
+    got = closing_odds_by_date([_snap("Aaron Judge", "hits", ts,
+                                      over=-120, under=100)])
+    key = [k for k in got][0]
+    assert got[key]["over"] == -120
+    assert got[key]["under"] == 100
+
+
+def test_a_row_quoted_only_on_the_under_is_not_thrown_away():
+    """The old guard skipped any row without an over price, which is how
+    an under-only quote became no close at all."""
+    from engine.linemoves import closing_odds_by_date
+    import time as _t
+    got = closing_odds_by_date([_snap("X Y", "hits", _t.time() - 7200,
+                                      over=None, under=-105)])
+    assert got, "an under-only quote produced no close"
+    key = [k for k in got][0]
+    assert got[key]["under"] == -105
+    assert got[key]["over"] is None, "a missing side must be None, not faked"
+
+
+def test_the_settle_picks_the_side_the_bet_actually_took():
+    """The other half of the fix. A correct lookup is no use if the
+    caller still asks for the over."""
+    import inspect
+    from engine import ledger
+    src = inspect.getsource(ledger)
+    i = src.index('_sides = closes_cache["_snapshot_odds"]')
+    body = src[i:i + 400]
+    assert '"under" if' in body and 'UNDER' in body
+    assert '"over"' in body
 
 
 def test_the_field_is_journaled_beside_the_book_we_shopped_to():

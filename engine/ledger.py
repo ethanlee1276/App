@@ -1153,12 +1153,17 @@ def _snapshot_closes() -> dict:
 
 
 def _snapshot_close_odds() -> dict:
-    """``{(normalized player, market, date): closing OVER price}``.
+    """``{(player, market, date): {"over": px, "under": px}}``.
 
     The price companion to :func:`_snapshot_closes`. Same free source, and
     the one that makes CLV mean anything on a fixed-line market: a
     home-run prop's LINE closes at 0.5 every night, so line CLV there is a
     zero that says nothing, while the price moves all evening.
+
+    BOTH SIDES since 2026-08-09. It returned the over alone, and the
+    caller keyed on (player, market, date) with no side, so every UNDER
+    bet banked the OVER's close as its own — see
+    `linemoves.closing_odds_by_date` for how that surfaced.
     """
     try:
         from .linemoves import load_history, closing_odds_by_date
@@ -1851,8 +1856,14 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         # nothing and accrues on every pull that was already paid for.
         if "_snapshot_odds" not in closes_cache:
             closes_cache["_snapshot_odds"] = _snapshot_close_odds()
-        close_odds = closes_cache["_snapshot_odds"].get(
-            (normalize_name(b["player"]), b["market"], b["date"]))
+        # THE SIDE MATTERS. An UNDER bet scored against the OVER's closing
+        # price is measured against the opposite of what it bought — which
+        # is what made CLV's own internal check run backwards (winners beat
+        # the close 41% of the time, losers 62%).
+        _sides = closes_cache["_snapshot_odds"].get(
+            (normalize_name(b["player"]), b["market"], b["date"])) or {}
+        close_odds = _sides.get(
+            "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")
         # Capture the minutes actually played alongside the result, so the
         # journal can answer "did we lose because the rotation read was
         # wrong, or because she shot 3-for-12?" — the one question that

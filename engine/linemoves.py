@@ -165,21 +165,27 @@ def closing_lines_by_date(rows: list[dict]) -> dict:
 
 
 def closing_odds_by_date(rows: list[dict]) -> dict:
-    """``{(normalized player, market, YYYY-MM-DD): closing OVER price}``.
+    """``{(normalized player, market, YYYY-MM-DD): {"over": px, "under": px}}``
 
-    The companion to :func:`closing_lines_by_date`, and the reason it had
-    to exist: on a fixed-line market the line never moves, so line-based
-    CLV reads 0 forever — and home-run props are quoted OVER 0.5 and close
-    at 0.5, every single time. On a journal that is two-thirds home runs
-    that is not "no edge given up", it is an instrument that cannot see.
+    BOTH SIDES, and that is the fix rather than a nicety. This returned
+    the OVER price alone, and `ledger._settle_all` looked it up with a key
+    carrying no side — so every UNDER bet in the journal recorded the
+    OVER's closing price as its own.
 
-    Those markets move on PRICE. A home-run over taken at +400 and closing
-    at +350 was a good bet by exactly the evidence CLV exists to provide,
-    and the snapshots have carried `over_odds` all along without anything
-    reading it.
+    HOW IT SHOWED, 2026-08-09, on 55 bets with a close: mean CLV +3.58%
+    at t = +2.0, which reads as edge — while the internal check ran
+    backwards. Win rate when we "beat the close" was 41.2%; when we did
+    not, 61.9%. Beating the close is supposed to PREDICT winning. Half the
+    book was being scored against the opposite side of its own market, so
+    for those bets the measurement was inverted by construction.
 
-    Same close-picking discipline as the line version: pre-game snapshots
-    only, last instant of the day, median across the books quoted at it.
+    The snapshots have carried `under_odds` since the table was created
+    (db.py). Nothing read it.
+
+    Same close-picking discipline as before: pre-game snapshots only, last
+    instant of the day, median across the books quoted at it. A side with
+    no usable price comes back None rather than absent, so a caller can
+    tell "no quote" from "no snapshot".
     """
     import datetime as _dt
     from .sources.oddsapi import normalize_name
@@ -188,9 +194,11 @@ def closing_odds_by_date(rows: list[dict]) -> dict:
     for r in rows:
         try:
             ts = float(r["ts"])
-            if r.get("over_odds") in (None, ""):
+            # A row is usable if EITHER side is quoted. Requiring the over
+            # was what made the under invisible.
+            if r.get("over_odds") in (None, "") and \
+                    r.get("under_odds") in (None, ""):
                 continue
-            int(r["over_odds"])                    # reject unusable rows early
             date = _dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
             grouped.setdefault(
                 (normalize_name(r["player"]), r["market"], date), []).append(r)
@@ -202,8 +210,21 @@ def closing_odds_by_date(rows: list[dict]) -> dict:
         if not items:
             continue
         last = max(float(r["ts"]) for r in items)
-        out[key] = _median([float(r["over_odds"]) for r in items
-                            if float(r["ts"]) == last])
+        at_close = [r for r in items if float(r["ts"]) == last]
+
+        def _side(col):
+            vals = []
+            for r in at_close:
+                v = r.get(col)
+                if v in (None, ""):
+                    continue
+                try:
+                    vals.append(float(v))
+                except (TypeError, ValueError):
+                    continue
+            return _median(vals) if vals else None
+
+        out[key] = {"over": _side("over_odds"), "under": _side("under_odds")}
     return out
 
 
