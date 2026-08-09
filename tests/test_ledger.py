@@ -2483,6 +2483,97 @@ def test_the_two_agents_do_not_share_a_lock():
     assert ".prekick.lock" in (t / "prekick.sh").read_text()
 
 
+# --- keys, credits, and the unbuilt backlog ---------------------------------
+def test_the_credit_banner_never_raises_and_is_empty_when_unconfigured():
+    """It prints before the build, so it must be incapable of being the
+    reason the site fails to come up."""
+    from engine import credits
+    import os as _os
+    saved = {k: _os.environ.pop(k, None)
+             for k in ("ODDS_API_KEY", "CFBD_API_KEY", "ANTHROPIC_API_KEY")}
+    try:
+        assert credits.lines() == []
+        assert credits.banner() == ""
+    finally:
+        for k, v in saved.items():
+            if v is not None:
+                _os.environ[k] = v
+
+
+def test_a_spent_odds_key_is_named_not_averaged_away():
+    """The ring skips a spent key silently and everything keeps working —
+    which is exactly how you fail to notice. The total across the ring is
+    what decides whether tonight's board can be priced; three keys at 40
+    each is not "fine"."""
+    from engine import credits
+    real = credits.odds_keys
+    credits.odds_keys = lambda: [
+        {"shape": "…a1b2", "remaining": "412", "used": "88", "error": None},
+        {"shape": "…c3d4", "remaining": None, "used": None,
+         "error": "SPENT or rejected"}]
+    try:
+        out = "\n".join(credits.lines(low_water=500))
+    finally:
+        credits.odds_keys = real
+    assert "SPENT" in out
+    assert "412 credits across the ring" in out
+    assert "LOW" in out, "a ring under the low-water mark must say so"
+    assert "1 key(s) spent" in out
+
+
+def test_the_banner_reports_anthropic_spend_not_an_invented_balance():
+    """The API publishes no credits endpoint. Reporting a guess would be
+    worse than reporting nothing, so this shows the local spend ledger
+    and says which it is."""
+    from engine import credits
+    real_o, real_c, real_a = (credits.odds_keys, credits.cfbd,
+                              credits.anthropic)
+    credits.odds_keys = lambda: []
+    credits.cfbd = lambda: {"set": False}
+    credits.anthropic = lambda: {"set": True, "month_usd": 1.27,
+                                 "total_usd": 8.44, "runs": 31}
+    try:
+        out = "\n".join(credits.lines())
+    finally:
+        credits.odds_keys, credits.cfbd, credits.anthropic = (
+            real_o, real_c, real_a)
+    assert "$1.27 this month" in out
+    assert "spend, not balance" in out
+
+
+def test_the_unbuilt_report_separates_a_missing_feed_from_a_missing_task():
+    """"No external source exists" and "we have not stored it yet" read
+    almost identically and mean opposite things — the second is a task,
+    because the store is ours. That distinction is the only thing making
+    this list actionable rather than depressing."""
+    import contextlib
+    import importlib
+    import io
+    launch = importlib.import_module("launch")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        launch.show_unbuilt()
+    out = buf.getvalue()
+    assert "WAITING ON WORK" in out and "WAITING ON A DATA SOURCE" in out
+    # Referee assignments have no feed anywhere; UFC movement history is
+    # simply not stored yet, and storing it is ours to do.
+    work = out[out.index("WAITING ON WORK"):out.index("WAITING ON A DATA")]
+    data = out[out.index("WAITING ON A DATA"):]
+    assert "Referee" in data or "referee" in data
+    assert "Movement engine (open" in work or "Movement engine" in work
+
+
+def test_the_unbuilt_report_reads_the_docs_rather_than_a_hardcoded_list():
+    """A pasted list rots the first time a map row changes. This parses
+    docs/*_MODEL.md, so the backlog updates when the doc does."""
+    import inspect
+    import importlib
+    launch = importlib.import_module("launch")
+    src = inspect.getsource(launch.show_unbuilt)
+    assert "_MODEL.md" in src
+    assert "📋" in src and "🟡" in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

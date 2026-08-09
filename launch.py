@@ -2697,6 +2697,78 @@ def _settleable_days(open_days) -> list[str]:
                   if d.get("date") and "-W" not in d["date"])
 
 
+def show_unbuilt() -> None:
+    """Everything the model specs NAME but do not fully implement.
+
+    Each `docs/*_MODEL.md` ends in an implementation map — one row per
+    spec section, marked implemented / partial / parked. Those maps are
+    the honest part of this repo and they are also spread across six
+    files, so nobody has ever seen the whole list at once. Forty-eight
+    rows, as of 2026-08-09.
+
+    `--coverage` answers a different question and answers it better: it
+    checks the real database and cache for whether a layer's DATA is
+    present today. This reads what the specs SAY is unfinished, which is
+    the backlog rather than the runtime state. Both are worth having and
+    neither substitutes for the other.
+
+    Split by blocker, because that is the only split that decides what
+    happens next. A row waiting on a feed nobody sells is not a task; a
+    row waiting on work is.
+    """
+    import re
+    from pathlib import Path as _P
+    rows = []
+    for f in sorted((ROOT / "docs").glob("*_MODEL.md")):
+        sport = _P(f).stem.replace("_MODEL", "")
+        for line in f.read_text().splitlines():
+            if not line.startswith("|"):
+                continue
+            if "📋" not in line and "🟡" not in line:
+                continue
+            c = [x.strip() for x in line.strip().strip("|").split("|")]
+            if len(c) < 3 or c[0].lower().startswith("section"):
+                continue
+            rows.append({"sport": sport,
+                         "state": "parked" if "📋" in c[1] else "partial",
+                         "section": c[0], "why": c[2]})
+    if not rows:
+        print("\n  No implementation maps found — docs/*_MODEL.md missing?")
+        return
+    # A row is data-blocked when its own note says so. Deliberately
+    # keyed on the prose rather than a curated list: the note is what
+    # gets updated when a source appears, so the classification updates
+    # with it instead of drifting behind it.
+    # "No external source exists" and "we have not stored it yet" read
+    # almost identically in prose and mean opposite things. The second is
+    # a task — the store is ours. So `stored`/`storing` wins outright,
+    # and is checked FIRST.
+    ours = re.compile(r"\bstor(ed|ing|es)\b|\bnot stored\b", re.I)
+    blocked = re.compile(
+        r"\bno\s+(?:[\w/+-]+\s+){0,3}(?:source|feed|data|wire|api)\b|"
+        r"\bneeds?\s+(?:[\w/+-]+\s+){0,3}(?:data|feed|source)\b|"
+        r"\bno structured source\b|\bqualitative\b|"
+        r"\bnot (?:available|published)\b|\bunmodellable\b", re.I)
+    dat = [r for r in rows
+           if blocked.search(r["why"]) and not ours.search(r["why"])]
+    work = [r for r in rows if r not in dat]
+    print(f"\n{'='*70}\n  NAMED IN THE SPECS, NOT FULLY BUILT\n{'='*70}")
+    print(f"  {len(rows)} rows across {len({r['sport'] for r in rows})} "
+          f"model docs — {len(dat)} waiting on a data source, "
+          f"{len(work)} waiting on work.\n")
+    for title, group in (("WAITING ON WORK — these are tasks", work),
+                         ("WAITING ON A DATA SOURCE — these are not tasks "
+                          "until a feed exists", dat)):
+        print(f"  {title}  ({len(group)})")
+        for r in sorted(group, key=lambda r: (r["sport"], r["section"])):
+            mark = "📋" if r["state"] == "parked" else "🟡"
+            print(f"    {mark} {r['sport']:<5} {r['section'][:40]:<40} "
+                  f"{r['why'][:70]}")
+        print()
+    print("  `--coverage` is the companion: what the specs say is unfinished")
+    print("  here, what the live database is actually missing there.\n")
+
+
 def nightly_run(odds_only: bool = False) -> None:
     """The unattended pass: do the work, print, EXIT.
 
@@ -2725,8 +2797,17 @@ def nightly_run(odds_only: bool = False) -> None:
     slices and the edge test, and tonight's board should be priced by a
     model that has already learned from them.
     """
-    import subprocess as _sp
     rc = 0
+    # Printed in the nightly too, because the log is where a slow drain
+    # is actually visible: one line a day, and the day it reads zero is
+    # findable afterwards.
+    try:
+        from engine.credits import banner
+        b = banner()
+        if b:
+            print(b)
+    except Exception:                                       # noqa: BLE001
+        pass
     if not odds_only:
         print("\n[1/3] settling last night …")
         try:
@@ -3366,6 +3447,9 @@ def main() -> None:
     if "--odds-doctor" in argv:
         odds_doctor()
         return
+    if "--unbuilt" in argv:
+        show_unbuilt()
+        return
     if "--coverage" in argv:
         from engine.coverage import report
         i = argv.index("--coverage")
@@ -3623,6 +3707,16 @@ def main() -> None:
     port = int(ports[0]) if ports else 8000
 
     print("Qellys Book — grabbing the newest live data for both leagues…")
+    # BEFORE the build, not after: if the ring is spent, the board about
+    # to be built is priced on cached or proxy lines, and that is worth
+    # knowing while it is happening rather than in a post-mortem.
+    try:
+        from engine.credits import banner
+        b = banner()
+        if b:
+            print(b)
+    except Exception:                                       # noqa: BLE001
+        pass                    # a banner must never be why the site fails
     if not _with_odds():
         print("  (no ODDS_API_KEY set — using model/proxy lines; live scores still update)")
     refresh_all()
