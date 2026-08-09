@@ -2769,7 +2769,16 @@ def show_unbuilt() -> None:
     print("  here, what the live database is actually missing there.\n")
 
 
-def nightly_run(odds_only: bool = False) -> None:
+#: Which refresh each sport name drives. Used only by --odds-only, so a
+#: pre-kickoff pass can pay for the sport with a kickoff coming rather
+#: than for all six.
+_SPORT_REFRESH = {
+    "mlb": "refresh_mlb", "nfl": "refresh_nfl", "nba": "refresh_nba",
+    "wnba": "refresh_wnba", "cfb": "refresh_cfb", "ufc": "refresh_ufc",
+}
+
+
+def nightly_run(odds_only: bool = False, sports=None) -> None:
     """The unattended pass: do the work, print, EXIT.
 
     THE BUG THIS FIXES, found 2026-08-09 while adding a pre-kickoff odds
@@ -2817,7 +2826,25 @@ def nightly_run(odds_only: bool = False) -> None:
             rc = 1
     print(f"\n[{'1/1' if odds_only else '2/3'}] rebuilding the boards …")
     try:
-        refresh_all()
+        if odds_only and sports:
+            # ONE SPORT'S CREDITS, NOT SIX. The pre-kickoff pass exists
+            # because a 6am build prices a 9:30am kickoff on stale lines.
+            # That argument is about the sport with a game coming — at
+            # 7am the baseball board is twelve hours out and was already
+            # priced an hour ago, so re-pulling it buys nothing and the
+            # odds API bills per event per market either way.
+            #
+            # Ethan is rationing ~10k credits to a month-end reset; a
+            # second full six-sport pull every morning is the kind of
+            # cost that only shows up as an empty quota in week three.
+            for sp in sports:
+                fn = globals().get(_SPORT_REFRESH.get(sp, ""))
+                if fn is None:
+                    print(f"  ⚠️  unknown sport {sp!r} — skipped")
+                    continue
+                fn()
+        else:
+            refresh_all()
     except Exception as exc:                                # noqa: BLE001
         print(f"  ⚠️  refresh failed: {exc}")
         rc = 1
@@ -3425,7 +3452,13 @@ def main() -> None:
         preflight()
         return
     if "--nightly" in argv:
-        nightly_run(odds_only="--odds-only" in argv)
+        _sp = None
+        if "--sport" in argv:
+            i = argv.index("--sport")
+            if len(argv) > i + 1 and not argv[i + 1].startswith("-"):
+                _sp = [x.strip().lower() for x in argv[i + 1].split(",")
+                       if x.strip()]
+        nightly_run(odds_only="--odds-only" in argv, sports=_sp)
         return
     if "--doctor" in argv:
         import doctor

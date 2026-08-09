@@ -2608,6 +2608,56 @@ def test_the_unbuilt_report_reads_the_docs_rather_than_a_hardcoded_list():
     assert "📋" in src and "🟡" in src
 
 
+def test_the_prekick_pass_pays_for_one_sport_not_six():
+    """Ethan is rationing ~10k odds credits to a month-end reset, and I
+    had the 7am pass running a full six-sport `refresh_all()` — for a
+    request that was explicitly about NFL kickoffs.
+
+    The Odds API bills per event per market group, so at 7am that buys a
+    baseball board twelve hours from first pitch which the 6am nightly
+    already priced. Roughly six times the cost for one sport's worth of
+    value, and the kind of overspend that only surfaces as an empty quota
+    in week three."""
+    import inspect
+    import pathlib
+    import launch
+    src = inspect.getsource(launch.nightly_run)
+    assert "if odds_only and sports:" in src
+    assert "refresh_all()" in src, "the full pass must still exist"
+    sh = (pathlib.Path(__file__).resolve().parent.parent / "tools"
+          / "prekick.sh").read_text()
+    assert "--sport nfl" in sh
+    assert "--nightly --odds-only" in sh
+
+
+def test_an_unknown_sport_is_skipped_loudly_not_silently():
+    """A typo in the agent's flag would otherwise refresh nothing and
+    exit 0 — a pre-kickoff pass that quietly does nothing is worse than
+    one that fails, because the board still looks built."""
+    import contextlib
+    import io
+    import launch
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            launch.nightly_run(odds_only=True, sports=["nlf"])
+    except SystemExit:
+        pass
+    out = buf.getvalue()
+    assert "unknown sport" in out and "nlf" in out
+
+
+def test_the_full_nightly_still_refreshes_everything():
+    """The sport filter applies to --odds-only alone. The 6am pass must
+    keep building every board, or five sports quietly stop updating."""
+    import inspect
+    import launch
+    src = inspect.getsource(launch.nightly_run)
+    i_guard = src.index("if odds_only and sports:")
+    i_else = src.index("refresh_all()", i_guard)
+    assert "else:" in src[i_guard:i_else], "refresh_all is no longer the default"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

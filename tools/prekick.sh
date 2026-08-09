@@ -55,7 +55,15 @@ trap 'rmdir "$LOCK" 2>/dev/null' EXIT
   echo "$(date -Iseconds)  pre-kickoff start   python: $PY"
 } >> "$LOG"
 
-"$PY" launch.py --nightly --odds-only >> "$LOG" 2>&1
+# --sport nfl, not every board. The reason this pass exists is a 9:30am
+# kickoff priced on 6am lines; at 7am the MLB board is twelve hours out
+# and was refreshed an hour ago. The odds API bills per event per market,
+# so pulling all six sports here costs roughly six times what the one
+# sport with a game coming is worth.
+#
+# Add sports as their seasons start: --sport nfl,cfb once college is
+# playing Saturday mornings.
+"$PY" launch.py --nightly --odds-only --sport nfl >> "$LOG" 2>&1
 RC=$?
 echo "$(date -Iseconds)  prekick exit $RC" >> "$LOG"
 
