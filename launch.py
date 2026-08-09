@@ -3221,7 +3221,10 @@ def show_stuck() -> None:
             "for that sport does not carry this market.",
         "game not found":
             "a game-level bet whose game is not in the results: usually a "
-            "postponement, which should be voided rather than graded.",
+            "postponement, which should be voided rather than graded — "
+            "`python3 launch.py --void-unplayed` lists them, add --apply to "
+            "write it. Settling cannot help: the game was never played, so "
+            "no re-ingest will produce the score the settler waits for.",
     }
     print("What each means:")
     for reason in sorted(by_reason, key=lambda k: -len(by_reason[k])):

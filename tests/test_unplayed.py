@@ -266,6 +266,64 @@ def test_the_cli_defaults_to_a_dry_run():
     assert "--apply" in block
 
 
+# --- game-level bets, which had no team at all -------------------------------
+def test_a_moneyline_on_an_unplayed_game_is_found():
+    """THE DOCTOR'S "game not found" BUCKET, and why it never cleared.
+
+    `_bet_team` resolves a team by looking the bet's `player` up in
+    `player_game_logs`, which is right for a prop and cannot work for a
+    game bet: `player` there is not a person. Moneyline, spread and
+    team_total store the TEAM in that column. So the lookup returned None,
+    `unplayed_bets` skipped the row, and a moneyline on a postponed
+    fixture could not be voided by the tool built to void bets on
+    postponed fixtures.
+
+    Six were open on 2026-08-09 carrying `--settle all` as the advice.
+    Settling can never help: the game was not played, so no re-ingest will
+    produce the score the settler waits for."""
+    hconn, lconn = _world()
+    _bet(lconn, PAST, "CIN", market="moneyline", cat="main")
+    got = ledger.unplayed_bets(lconn, hconn)
+    assert len(got) == 1, got
+    assert got[0]["team"] == "CIN"
+    assert got[0]["market"] == "moneyline"
+
+
+def test_a_total_is_found_through_its_matchup_key():
+    """`total` stores the matchup key `AWAY@HOME`, not a team. Either half
+    is enough — `never_resolving_game` asks whether that team has a
+    scoreless row on that date, and both halves of a postponed game do."""
+    hconn, lconn = _world()
+    _bet(lconn, PAST, "CLE@CIN", market="total", cat="main")
+    got = ledger.unplayed_bets(lconn, hconn)
+    assert len(got) == 1, got
+    assert got[0]["team"] == "CIN"
+
+
+def test_a_doubleheader_suffix_is_not_read_as_part_of_the_team_name():
+    """`CLE@CIN-G2` is one game, not a team called `CIN-G2`."""
+    hconn, lconn = _world()
+    _bet(lconn, PAST, "CLE@CIN-G2", market="total", cat="main")
+    assert len(ledger.unplayed_bets(lconn, hconn)) == 1
+
+
+def test_a_game_bet_whose_game_was_played_is_left_alone():
+    """The narrowness is the safety. A team with a FINAL on its date is
+    not an unplayed fixture, and voiding it would erase a real result."""
+    hconn, lconn = _world()
+    _bet(lconn, PAST, "CWS", market="moneyline", cat="main")
+    assert ledger.unplayed_bets(lconn, hconn) == []
+
+
+def test_a_game_bet_is_voided_with_zero_pnl_like_any_other():
+    hconn, lconn = _world()
+    _bet(lconn, PAST, "CIN", market="spread", cat="main")
+    rows = ledger.unplayed_bets(lconn, hconn)
+    assert ledger.void_unplayed(lconn, rows) == 1
+    r = lconn.execute("SELECT status, pnl_units FROM bets").fetchone()
+    assert r[0] == "void" and (r[1] or 0) == 0
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

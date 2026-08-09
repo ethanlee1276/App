@@ -1573,7 +1573,8 @@ def unplayed_bets(conn, hist_conn, today=None) -> list[dict]:
     ).fetchall():
         if not b["date"] or "-W" in str(b["date"]):
             continue
-        team = _bet_team(hist_conn, b)
+        team = _game_bet_team(b) if b["market"] in GAME_MARKETS \
+            else _bet_team(hist_conn, b)
         if not team:
             continue
         if not never_resolving_game(hist_conn, b, {"team": team}, today):
@@ -1589,6 +1590,38 @@ def unplayed_bets(conn, hist_conn, today=None) -> list[dict]:
                     "stake_units": b["stake_units"] if "stake_units" in b.keys()
                     else None})
     return out
+
+
+def _game_bet_team(b) -> str | None:
+    """The team a GAME-level bet is on, read off the bet itself.
+
+    THE HOLE THIS CLOSES. `_bet_team` finds a team by looking the bet's
+    `player` up in `player_game_logs`, which is right for a prop and can
+    never work for a game bet: `player` there is not a person. Moneyline,
+    spread and team_total store the TEAM in that column, and total stores
+    the matchup key `AWAY@HOME`. Neither ever matches a player name, so
+    `unplayed_bets` returned None and skipped every game bet — which meant
+    a moneyline on a postponed fixture could not be voided by the tool
+    built to void bets on postponed fixtures.
+
+    That is the doctor's "game not found" bucket. Six of them were sitting
+    open on 2026-08-09 with `--settle all` as the advice, and settling
+    cannot help: the game was never played, so no re-ingest will ever
+    produce the score the settler is waiting for.
+
+    Either half of a matchup key is enough — `never_resolving_game` asks
+    whether that team has a scoreless row on that date, and both halves of
+    a postponed game do.
+    """
+    p = str(b["player"] or "").strip()
+    if not p:
+        return None
+    if "@" in p:
+        # AWAY@HOME, with a possible doubleheader suffix (`-G2`) that is
+        # part of neither team's name.
+        home = p.split("@", 1)[1]
+        return home.split("-G")[0].strip() or None
+    return p
 
 
 def _bet_team(hist_conn, b) -> str | None:
