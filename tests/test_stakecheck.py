@@ -582,6 +582,78 @@ def test_the_grade_table_accounts_for_every_bet():
     assert sum(counts) == 10, (counts, seen)
 
 
+# --- claimed against realized ------------------------------------------------
+def test_the_calibration_line_compares_the_claim_to_the_outcome():
+    """THE MEASUREMENT EVERYTHING ELSE WAS CIRCLING. Every other section
+    asks how the money was distributed; this asks whether there was an
+    edge to distribute.
+
+    It became the point on 2026-08-09, when the real 292-bet record came
+    back ordered flat > as-staked > asked-for. Sizing MORE per the rules
+    lost more. That ordering is the signature of overconfidence: Kelly
+    stakes in proportion to claimed edge, so an inflated claim gets a
+    bigger stake on a bigger error."""
+    import contextlib
+    import io
+    rows = ([_row(player=f"w{i}", hit_prob=0.60, status="won",
+                  pnl_units=0.25) for i in range(4)]
+            + [_row(player=f"l{i}", hit_prob=0.60, status="lost",
+                    pnl_units=-0.25) for i in range(6)])
+    path = _db(rows)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.report(stakecheck._rows(path, None, None))
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "CLAIMED vs REALIZED" in out
+    line = [l for l in out.splitlines() if "every bet" in l][0]
+    assert "60.0%" in line, line          # claimed
+    assert "40.0%" in line, line          # realized 4/10
+    assert "-20.0%" in line, line         # the gap, signed
+
+
+def test_the_calibration_line_carries_its_own_noise_figure():
+    """A gap without a standard error invites reading ten bets as a
+    finding. On this record the current era is 95 bets, where one SE on a
+    hit rate is about five points — most gaps that look damning are not."""
+    import contextlib
+    import io
+    rows = [_row(player=f"w{i}", hit_prob=0.5,
+                 status=("won" if i % 2 else "lost"),
+                 pnl_units=0.1) for i in range(4)]
+    path = _db(rows)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.report(stakecheck._rows(path, None, None))
+    finally:
+        os.unlink(path)
+    line = [l for l in buf.getvalue().splitlines() if "every bet" in l][0]
+    assert "±" in line, line
+    # 4 bets at 50%: sqrt(.25/4) = 25.0%
+    assert "25.0%" in line, line
+
+
+def test_a_bet_with_no_claimed_probability_is_left_out_of_calibration():
+    """Averaging a missing claim as zero would manufacture a gap the
+    model never had."""
+    import contextlib
+    import io
+    rows = [_row(player="has", hit_prob=0.6, status="won", pnl_units=0.25),
+            _row(player="none", hit_prob=None, status="lost")]
+    path = _db(rows)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.report(stakecheck._rows(path, None, None))
+    finally:
+        os.unlink(path)
+    line = [l for l in buf.getvalue().splitlines() if "every bet" in l][0]
+    assert line.split()[2] == "1", line   # one bet, not two
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

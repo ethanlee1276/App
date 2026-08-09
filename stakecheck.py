@@ -239,6 +239,45 @@ def report(rows: list[dict]) -> None:
               "uniform line differs from the\n    asked-for ROI above by ONE "
               "thing — the low-Kelly tail the floor removes.")
 
+    # --- does the model's probability mean anything? --------------------
+    #
+    # THE MEASUREMENT THE REST OF THIS TOOL WAS CIRCLING. Every line above
+    # asks how the money was distributed. This one asks whether there was
+    # an edge to distribute.
+    #
+    # Kelly stakes in proportion to claimed edge. If the claim is inflated
+    # — and inflated most where it is most wrong — then staking more on a
+    # bigger claim is staking more on a bigger error, and the ordering
+    # flat > as-staked > asked-for is exactly what that looks like. Which
+    # is the ordering the current era shows.
+    #
+    # A model that says 55% and hits 40% has no cap policy problem.
+    cal = [r for r in rows if r.get("hit_prob") is not None]
+    if cal:
+        import math
+        print("\n  CLAIMED vs REALIZED  (the model's own probability, "
+              "against what happened)")
+        print(f"    {'band':<20}{'bets':>6}{'claimed':>10}{'actual':>9}"
+              f"{'gap':>9}{'noise (1 SE)':>14}")
+
+        def _line(label, chunk):
+            n = len(chunk)
+            if not n:
+                return
+            claimed = sum(float(c["hit_prob"]) for c in chunk) / n
+            actual = sum(1 for c in chunk if c["status"] == "won") / n
+            se = math.sqrt(max(actual * (1 - actual), 1e-9) / n)
+            print(f"    {label:<20}{n:>6}{claimed:>9.1%}{actual:>9.1%}"
+                  f"{actual - claimed:>+9.1%}{'±' + format(se, '.1%'):>14}")
+
+        _line("every bet", cal)
+        for label in ("shorter than +100", "+100 to +119", "+120 to +199",
+                      "+200 and longer"):
+            _line(label, [c for c in cal if _band(int(c["odds"])) == label])
+        print("\n    A negative gap wider than about two of those noise "
+              "figures is the\n    model claiming an edge it does not have — "
+              "and Kelly multiplies\n    that error rather than hedging it.")
+
     # --- is the ranking predictive at all? ------------------------------
     #
     # THE ASSUMPTION UNDER EVERY CAP RULE. Trimming a slate to fit means
