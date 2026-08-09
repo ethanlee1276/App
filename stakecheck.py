@@ -806,8 +806,16 @@ def clv_report(rows: list[dict]) -> None:
     # are the wrong side of the market. See `rederived_closes`.
     fresh = rederived_closes()
     have = []
+    # COLLECTED IN THE LOOP, not derived afterwards. The first version
+    # computed this as `[r for r in rows if r not in have]`, and `have`
+    # holds freshly-built dicts rather than the originals — so nothing
+    # ever matched and it reported all 307 settled bets as having no
+    # close, on the same screen that said 113 did. Two numbers from one
+    # loop must come out of that loop.
+    missing = []
     for r in rows:
         if r.get("odds") is None:
+            missing.append(r)
             continue
         sides = fresh.get((normalize_name(r["player"] or ""), r["market"],
                            r["date"],
@@ -826,6 +834,8 @@ def clv_report(rows: list[dict]) -> None:
             have.append(dict(r, closing_odds=int(px),
                              _banked=r.get("closing_odds"),
                              _band=_band(int(r["odds"]))))
+        else:
+            missing.append(r)
     print(f"\n{'='*70}\n  DID THE MARKET COME TO US BY KICKOFF?\n{'='*70}")
     print(f"  {len(have)} of {len(rows)} settled bets have a closing price "
           f"rebuilt from\n  the raw snapshots, side-aware.")
@@ -862,7 +872,6 @@ def clv_report(rows: list[dict]) -> None:
     # snapshots held only the over price until 2026-08-09, so an under
     # has nothing legal to read. Saying so turns a flat "113 of 307" into
     # a number with a known cause and a known recovery date.
-    missing = [r for r in rows if r not in have]
     if missing:
         m_under = sum(1 for r in missing
                       if (r.get("side") or "OVER").upper() == "UNDER")

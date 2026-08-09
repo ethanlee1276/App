@@ -1850,6 +1850,36 @@ def test_the_coverage_gap_names_the_unders():
     assert "2026-08-09" in out
 
 
+def test_the_covered_and_uncovered_counts_add_up():
+    """It printed "113 of 307 have a close" and "307 have none" on the
+    same screen. The gap was computed as `[r for r in rows if r not in
+    have]`, and `have` holds freshly-built dicts rather than the original
+    rows, so the membership test never matched anything.
+
+    Two numbers that partition one set have to come out of one pass over
+    it. This asserts the partition rather than either number."""
+    import contextlib
+    import io
+    import re as _re
+    path, snaps = _clv_db(edge_pts=0.005)
+    buf = io.StringIO()
+    try:
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history(snaps, _go)
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    m = _re.search(r"(\d+) of (\d+) settled bets have a closing price", out)
+    assert m, out
+    covered, total = int(m.group(1)), int(m.group(2))
+    gap = _re.search(r"(\d+) have none", out)
+    uncovered = int(gap.group(1)) if gap else 0
+    assert covered + uncovered == total, (
+        f"{covered} covered + {uncovered} uncovered != {total} total")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
