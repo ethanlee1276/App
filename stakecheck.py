@@ -79,8 +79,8 @@ def _rows(db: str, sport: str | None, since: str | None,
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     q = ("SELECT date, sport, player, market, side, odds, hit_prob, grade, "
-         "edge, stake_units, pnl_units, status, category, closing_odds "
-         "FROM bets "
+         "edge, stake_units, pnl_units, status, category, closing_odds, "
+         "line FROM bets "
          "WHERE status IN ('won','lost')")
     if not measurement:
         q += " AND category='main' AND stake_units > 0"
@@ -795,7 +795,9 @@ def clv_report(rows: list[dict]) -> None:
         if r.get("odds") is None:
             continue
         sides = fresh.get((normalize_name(r["player"] or ""), r["market"],
-                           r["date"])) or {}
+                           r["date"],
+                           round(float(r["line"]), 1)
+                           if r.get("line") is not None else None)) or {}
         px = sides.get("under" if (r.get("side") or "OVER").upper() == "UNDER"
                        else "over")
         if px is not None:

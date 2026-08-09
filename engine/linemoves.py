@@ -165,7 +165,7 @@ def closing_lines_by_date(rows: list[dict]) -> dict:
 
 
 def closing_odds_by_date(rows: list[dict]) -> dict:
-    """``{(normalized player, market, YYYY-MM-DD): {"over": px, "under": px}}``
+    """``{(player, market, YYYY-MM-DD, line): {"over": px, "under": px}}``
 
     BOTH SIDES, and that is the fix rather than a nicety. This returned
     the OVER price alone, and `ledger._settle_all` looked it up with a key
@@ -182,7 +182,25 @@ def closing_odds_by_date(rows: list[dict]) -> dict:
     The snapshots have carried `under_odds` since the table was created
     (db.py). Nothing read it.
 
-    Same close-picking discipline as before: pre-game snapshots only, last
+    THE LINE IS PART OF THE KEY, and that is the second half of the same
+    bug. A price is only comparable to a price AT THE SAME LINE. Without
+    it, a bet taken on Over 1.5 was scored against whatever line the book
+    happened to be quoting at close — and when a line drops to 0.5 the
+    over price shortens hard, which recorded as large POSITIVE value
+    exactly when the market had moved AGAINST the over.
+
+    That inverted the bets where the line moved most, which is precisely
+    where the information is. Measured 2026-08-09 on 116 rebuilt closes:
+    win rate 30.8% when we "beat the close" against 49.0% when we did
+    not — an 18-point inversion at 2.0 SE, after the side fix had already
+    landed.
+
+    Fixed-line markets (home runs, quoted 0.5 every night) are unaffected
+    and keep every row. A moved line now produces no close for that bet
+    rather than a fabricated one, which costs coverage and buys a number
+    that means what it says.
+
+    Same close-picking discipline otherwise: pre-game snapshots only, last
     instant of the day, median across the books quoted at it. A side with
     no usable price comes back None rather than absent, so a caller can
     tell "no quote" from "no snapshot".
@@ -200,8 +218,10 @@ def closing_odds_by_date(rows: list[dict]) -> dict:
                     r.get("under_odds") in (None, ""):
                 continue
             date = _dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+            ln = round(float(r["line"]), 1)
             grouped.setdefault(
-                (normalize_name(r["player"]), r["market"], date), []).append(r)
+                (normalize_name(r["player"]), r["market"], date, ln),
+                []).append(r)
         except (KeyError, TypeError, ValueError):
             continue
     out: dict = {}

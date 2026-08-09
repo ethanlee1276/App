@@ -1028,12 +1028,22 @@ def test_all_three_corrections_are_scored_on_the_same_held_out_bets():
 def test_the_tool_does_not_select_columns_it_never_reads():
     """`projection`, `line` and `actual` were selected for the sigma
     inversion that has since been deleted. A ledger without them then
-    crashed the whole tool on a query for data nothing wanted."""
+    crashed the whole tool on a query for data nothing wanted.
+
+    `line` CAME BACK, legitimately: the CLV close is keyed on it, because
+    a closing price at a different line is a different bet. So the rule
+    is not "these columns are banned" but "every column selected is
+    read" — checked against the body rather than against a list I
+    remember."""
     src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
     i = src.index("q = (\"SELECT")
     q = src[i:src.index("WHERE status", i)]
-    for col in ("projection", "line", "actual"):
+    body = src[src.index("def intended_stake("):]
+    for col in ("projection", "actual"):
         assert col not in q, f"{col} is selected but never read"
+    if "line" in q:
+        assert 'r.get("line")' in body or 'r["line"]' in body, \
+            "line is selected but nothing reads it"
 
 
 def test_the_shift_only_correction_is_fitted_on_its_own():
@@ -1234,7 +1244,7 @@ def _clv_db(edge_pts, n=400, seed=6):
         won = rng.random() < 0.48
         rows.append(_row(date=date, player=f"P{i}", market="hits",
                          side="OVER", odds=_to_american(p_taken),
-                         closing_odds=None,
+                         closing_odds=None, line=1.5,
                          status="won" if won else "lost",
                          pnl_units=0.27 if won else -0.3))
         snaps.append({"player": f"P{i}", "market": "hits", "ts": ts,
@@ -1309,7 +1319,7 @@ def test_the_direction_is_not_backwards():
     bets, snaps = [], []
     for i in range(30):
         bets.append(_row(date=date, player=f"G{i}", market="hits",
-                         side="OVER", odds=120))
+                         side="OVER", odds=120, line=1.5))
         snaps.append({"player": f"G{i}", "market": "hits", "ts": ts,
                       "line": 1.5, "over_odds": -110, "under_odds": None,
                       "book": "FanDuel"})
@@ -1365,7 +1375,7 @@ def test_the_close_is_rebuilt_from_snapshots_not_from_the_banked_column():
               "over_odds": -140, "under_odds": 115, "book": "FanDuel"}
              for i in range(60)]
     bets = [_row(date=date, player=f"P{i}", market="hits", side="UNDER",
-                 odds=100, closing_odds=-140, status="lost")
+                 odds=100, closing_odds=-140, status="lost", line=1.5)
             for i in range(60)]
     path = _db(bets)
     try:
@@ -1390,7 +1400,7 @@ def test_a_degenerate_spread_does_not_print_a_t_statistic():
               "over_odds": -140, "under_odds": 115, "book": "FanDuel"}
              for i in range(30)]
     bets = [_row(date=date, player=f"P{i}", market="hits", side="UNDER",
-                 odds=100, status="lost") for i in range(30)]
+                 odds=100, status="lost", line=1.5) for i in range(30)]
     path = _db(bets)
     buf = io.StringIO()
     try:
@@ -1422,6 +1432,65 @@ def test_a_missing_snapshot_file_says_which_problem_it_is():
     out = buf.getvalue()
     assert "0 of 40" in out
     assert "cannot rebuild" in out and "line_history.jsonl" in out
+
+
+def test_a_close_at_a_different_line_is_not_a_close():
+    """THE SECOND HALF OF THE CLV BUG, and it survived the side fix.
+
+    The lookup keyed on (player, market, date) with no LINE, so a bet
+    taken on Over 1.5 was scored against whatever line the book happened
+    to be quoting at close. When a line drops to 0.5 the over price
+    shortens hard — recorded as large POSITIVE value at exactly the
+    moment the market moved AGAINST the over.
+
+    Measured on 116 rebuilt closes: win rate 30.8% when we "beat the
+    close" against 49.0% when we did not, an 18-point inversion at 2.0
+    SE, AFTER the side fix had landed. It inverts the bets where the line
+    moved most, which is where the information is.
+
+    A moved line must now produce no close rather than a fabricated one."""
+    import datetime
+    import time as _t
+    ts = _t.time() - 7200
+    date = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    # Book closes quoting 0.5, we bet 1.5. Not the same market.
+    snaps = [{"player": f"P{i}", "market": "hits", "ts": ts, "line": 0.5,
+              "over_odds": -300, "under_odds": 240, "book": "FanDuel"}
+             for i in range(40)]
+    bets = [_row(date=date, player=f"P{i}", market="hits", side="OVER",
+                 odds=120, line=1.5, status="lost") for i in range(40)]
+    path = _db(bets)
+    try:
+        mean, _ = _clv_stats(path, snaps)
+    finally:
+        os.unlink(path)
+    assert mean is None, \
+        f"scored against a close at another line and called it {mean}"
+
+
+def test_a_fixed_line_market_keeps_every_close():
+    """Home runs are quoted 0.5 every night and never move. The line key
+    must cost nothing there — if it did, the fix would have thrown away
+    the market CLV was built for."""
+    import datetime
+    import time as _t
+    ts = _t.time() - 7200
+    date = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    snaps = [{"player": f"H{i}", "market": "home_runs", "ts": ts, "line": 0.5,
+              "over_odds": 380, "under_odds": -500, "book": "FanDuel"}
+             for i in range(40)]
+    bets = [_row(date=date, player=f"H{i}", market="home_runs", side="OVER",
+                 odds=400, line=0.5, status="lost") for i in range(40)]
+    path = _db(bets)
+    try:
+        mean, _ = _clv_stats(path, snaps)
+    finally:
+        os.unlink(path)
+    # +400 taken against a +380 close is value TO US: we bought the
+    # longer number. (The first version of this assertion said the
+    # opposite and the code was right.)
+    assert mean is not None and mean > 0, \
+        f"a fixed-line market lost its closes or flipped sign: {mean}"
 
 
 if __name__ == "__main__":

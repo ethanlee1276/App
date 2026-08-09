@@ -1860,8 +1860,13 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         # price is measured against the opposite of what it bought — which
         # is what made CLV's own internal check run backwards (winners beat
         # the close 41% of the time, losers 62%).
+        # Keyed on the LINE as well: a closing price at a different line is
+        # a different bet, and reading one as CLV inverts exactly the
+        # cases where the line moved.
         _sides = closes_cache["_snapshot_odds"].get(
-            (normalize_name(b["player"]), b["market"], b["date"])) or {}
+            (normalize_name(b["player"]), b["market"], b["date"],
+             round(float(b["line"]), 1) if b["line"] is not None else None)
+        ) or {}
         close_odds = _sides.get(
             "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")
         # Capture the minutes actually played alongside the result, so the
