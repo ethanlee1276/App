@@ -2013,6 +2013,28 @@ def test_the_exact_null_fixture_really_is_exactly_a_coin_flip():
     assert stakecheck._auc(edge, y) == 0.5
 
 
+def test_the_information_finding_doc_still_matches_the_tool():
+    """docs/THE_INFORMATION_TEST.md records a conclusion that parks a lot
+    of pending work. If the tool it cites gets renamed or its verdict
+    wording changes, the document silently becomes a claim about
+    something that no longer exists — which is how a dated finding turns
+    into folklore."""
+    import pathlib
+    doc = pathlib.Path(__file__).resolve().parent.parent / "docs" / \
+        "THE_INFORMATION_TEST.md"
+    text = doc.read_text()
+    assert "stakecheck.py --info" in text
+    # The commands it tells you to re-run must exist.
+    sc = (pathlib.Path(__file__).resolve().parent.parent /
+          "stakecheck.py").read_text()
+    for flag in ("--info", "--clv", "--paper"):
+        assert f'"{flag}"' in sc, f"the doc cites {flag}; stakecheck lost it"
+    # And the verdict strings the doc quotes must still be producible.
+    assert "cannot be told apart from noise" in sc
+    assert "test_auc_ignores_the_vig_because_it_is_rank_based" in \
+        pathlib.Path(__file__).read_text()
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
