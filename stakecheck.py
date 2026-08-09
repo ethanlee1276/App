@@ -586,131 +586,96 @@ def fit_report(rows: list[dict]) -> None:
 
 
 def spread_report(rows: list[dict]) -> None:
-    """Is the model's projection distribution too narrow?
+    """Does the model's confidence mean what it says?
 
-    THE HYPOTHESIS, and why it is worth testing before applying the
-    shrinkage. `--fit` recovered a temperature of 1.64, meaning every
-    probability has to be pulled hard toward 50%. Probabilities that are
-    too extreme in BOTH directions is the signature of one specific
-    defect: a projection whose spread is understated.
+    WHAT THIS REPLACED, and why. The first two versions tried to back a
+    standard deviation out of each bet — the model's probability at its
+    own line implies one — and compare it to the spread that actually
+    happened. The estimator was fixed once (mean-of-ratios exploded on a
+    book of coin-flips) and the answer was still nonsense: implied
+    sigmas of 2.5 for total bases, 1.46 for hits, and 0.048 for pitcher
+    outs, a ratio of 60.
 
-    If the model believes a hitter's total bases are 1.4 ± 0.5 when they
-    are really 1.4 ± 0.75, its mean is perfect and its probabilities are
-    still wrong — P(over 1.5) comes out further from 50% than it should.
-    Correcting that with a temperature works. Fixing the spread works
-    better, because it keeps the bets whose edge is real instead of
-    shrinking those too.
+    The reason is not the estimator. It is the premise. These markets are
+    COUNTS, priced from discrete distributions, and the lines sit on half
+    integers. Inverting a normal out of "P(hits >= 1) = 0.60" at a line
+    of 0.5 returns 1.58 for a quantity whose real spread is near 0.86 —
+    inflated by roughly the factor the whole table showed. The number was
+    an artefact of assuming a shape the model never used.
 
-    HOW IT IS CHECKED, using only columns the journal already stores. A
-    probability at a line implies a spread:
+    SO ASK THE QUESTION WITHOUT ASSUMING A SHAPE. Bucket the bets by the
+    probability the model claimed, and in each bucket compare that claim
+    to how often it actually happened. No distribution is inverted and
+    nothing is assumed about the market.
 
-        OVER :  (line - projection) / sigma = invcdf(1 - hit_prob)
-        UNDER:  (line - projection) / sigma = invcdf(hit_prob)
+    It also separates the two hypotheses, which the sigma table never
+    could:
 
-    so sigma falls out. Against it stands the spread that actually
-    happened — the standard deviation of (actual - projection) over the
-    same bets. A ratio above 1 means reality is wider than the model
-    thought, and the ratio itself is roughly the temperature that would
-    be needed to paper over it.
+      * gap negative in the confident buckets AND POSITIVE in the timid
+        ones means every probability sits too far from 50%. The spread is
+        too narrow and a temperature is the fix.
+      * gap negative in EVERY bucket by about the same amount means a
+        systematic overclaim — or the winner's curse of only ever betting
+        your own outliers. A shift is the fix.
+      * both patterns at once means both, which is what `--fit` found.
 
-    THREE LIMITS, stated because this is an approximation and reads like
-    a measurement:
-
-      * it assumes a normal shape to invert. Several of these markets are
-        counts and are priced from discrete distributions, so sigma here
-        is "the normal spread that would produce this probability", not
-        a number the model holds.
-      * a bet near its own line carries almost no information about
-        spread — dividing by a z-score near zero explodes. Those rows are
-        dropped, which biases the sample toward confident calls.
-      * the journal is a selected sample. Selection is on the model's
-        mean against the market, not on the outcome, so the realized
-        spread is still a fair estimate — but the bets are not a random
-        draw and the two columns are not measured on identical footing.
+    Buckets are equal-count rather than fixed-width. This book crowds
+    into 40-60%, and fixed bands would put almost every bet in one row
+    and call the rest a finding.
     """
-    from statistics import NormalDist, StatisticsError, stdev
-    nd = NormalDist()
-
-    by_market: dict = {}
-    for r in rows:
-        proj, line, p = r.get("projection"), r.get("line"), r.get("hit_prob")
-        act = r.get("actual")
-        if proj is None or line is None or p is None or act is None:
-            continue
-        if not 0.02 < float(p) < 0.98:
-            continue
-        side = (r.get("side") or "OVER").upper()
-        z = nd.inv_cdf(1 - float(p)) if side == "OVER" else nd.inv_cdf(float(p))
-        by_market.setdefault(r.get("market") or "?", []).append(
-            (float(line) - float(proj), z, float(act) - float(proj)))
-
-    if not by_market:
-        print("\n  No row carries projection, line, hit_prob and actual "
-              "together — nothing to check.")
+    cal = [r for r in rows if r.get("hit_prob") is not None]
+    if len(cal) < 25:
+        print(f"\n  Only {len(cal)} bet(s) carry a model probability. "
+              f"Nothing to say yet.")
         return
 
-    def _sigma(triples):
-        """Least squares through the origin: (line - mu) = sigma * z.
+    import math
+    cal.sort(key=lambda r: float(r["hit_prob"]))
+    k = 5 if len(cal) >= 100 else 3
+    size = len(cal) // k
 
-        NOT the mean of (line - mu) / z, which is what the first version
-        computed and which is worthless on this data. z is the model's
-        own z-score at the line, and the journal is full of near
-        coin-flips, so z sits near zero on most rows. Dividing by it
-        inflates that row's sigma without bound, and a mean over such
-        rows reports whichever bet was closest to 50-50.
-
-        It showed as total_bases with an implied sigma of 2.818 — for a
-        stat that runs 0 to 4. An impossible number, produced by an
-        estimator that looked reasonable.
-
-        Least squares has the same fixed point (if line - mu = sigma*z
-        exactly, this returns sigma) and lets a small-z row contribute
-        little to numerator and denominator alike, which is what a bet
-        near its own line actually tells you about spread: nearly
-        nothing.
-        """
-        num = sum(d * z for d, z, _ in triples)
-        den = sum(z * z for _, z, _ in triples)
-        return (num / den) if den > 1e-9 else None
-
-    print(f"\n{'='*70}\n  IS THE PROJECTION'S SPREAD TOO NARROW?\n{'='*70}")
-    print("  The model's own probability at its own line implies a spread.")
-    print("  Beside it: the spread that actually happened.\n")
-    print(f"    {'market':<16}{'bets':>6}{'model sigma':>13}"
-          f"{'real sigma':>12}{'ratio':>8}{'|z| med':>9}")
-    all_t: list = []
-    for m in sorted(by_market, key=lambda k: -len(by_market[k])):
-        trip = by_market[m]
-        if len(trip) < 8:
+    print(f"\n{'='*70}\n  DOES THE MODEL'S CONFIDENCE MEAN WHAT IT SAYS?"
+          f"\n{'='*70}")
+    print("  Bets grouped by the probability the model claimed, against how")
+    print("  often it happened. Nothing is assumed about the distribution.\n")
+    print(f"    {'claimed range':<18}{'bets':>6}{'claimed':>10}{'actual':>9}"
+          f"{'gap':>9}{'1 SE':>9}")
+    rows_out = []
+    for i in range(k):
+        chunk = cal[i * size:] if i == k - 1 else cal[i * size:(i + 1) * size]
+        if not chunk:
             continue
-        imp = _sigma(trip)
-        try:
-            real = stdev([d for _, _, d in trip])
-        except StatisticsError:
-            continue
-        if not imp or imp <= 0:
-            continue
-        all_t.extend(trip)
-        zs = sorted(abs(z) for _, z, _ in trip)
-        print(f"    {m:<16}{len(trip):>6}{imp:>13.3f}{real:>12.3f}"
-              f"{real / imp:>8.2f}{zs[len(zs) // 2]:>9.2f}")
-    if all_t:
-        imp = _sigma(all_t)
-        real = stdev([d for _, _, d in all_t])
-        print(f"    {'ALL':<16}{len(all_t):>6}{imp:>13.3f}{real:>12.3f}"
-              f"{real / imp:>8.2f}")
-        print(f"\n  A ratio near 1.00 means the spread is honest and the "
-              f"overconfidence\n  comes from the MEAN being wrong, or from "
-              f"selection. Above about 1.2\n  means the distribution is too "
-              f"narrow, and the ratio is roughly the\n  temperature needed to "
-              f"cover for it — compare it to what --fit\n  recovered. If they "
-              f"match, that is the root cause named.")
-        print(f"\n  The |z| median column is how well conditioned this is. "
-              f"Near zero means\n  the book is all coin-flips and says "
-              f"little about spread either way.")
-    print("\n  Approximate: normal shape assumed to invert, bets sitting on "
-          "their own\n  line dropped, and the sample is selected. See "
-          "spread_report's docstring.")
+        lo = float(chunk[0]["hit_prob"])
+        hi = float(chunk[-1]["hit_prob"])
+        claimed = sum(float(c["hit_prob"]) for c in chunk) / len(chunk)
+        actual = sum(1 for c in chunk if c["status"] == "won") / len(chunk)
+        se = math.sqrt(max(actual * (1 - actual), 1e-9) / len(chunk))
+        rows_out.append((claimed, actual, se, len(chunk)))
+        print(f"    {f'{lo:.0%} - {hi:.0%}':<18}{len(chunk):>6}{claimed:>10.1%}"
+              f"{actual:>9.1%}{actual - claimed:>+9.1%}"
+              f"{'±' + format(se, '.1%'):>9}")
+
+    print("\n  READ IT LIKE THIS")
+    print("    negative at the top and POSITIVE at the bottom -> every")
+    print("      probability sits too far from 50%. The spread is too narrow")
+    print("      and a temperature is the fix.")
+    print("    negative in EVERY row by about the same amount -> a systematic")
+    print("      overclaim, or the winner's curse of only betting your own")
+    print("      outliers. A shift is the fix.")
+    print("    both patterns -> both corrections, which is what --fit found.")
+    if len(rows_out) >= 2:
+        top, bot = rows_out[-1], rows_out[0]
+        tgap, bgap = top[1] - top[0], bot[1] - bot[0]
+        noise = math.sqrt(top[2] ** 2 + bot[2] ** 2)
+        print(f"\n  Most confident row {tgap:+.1%}, least confident row "
+              f"{bgap:+.1%};")
+        print(f"  the difference is {tgap - bgap:+.1%} against {noise:.1%} of "
+              f"noise on it.")
+        if abs(tgap - bgap) < 2 * noise:
+            print("  That difference is inside the noise, so this book cannot "
+                  "yet tell a\n  too-narrow spread from a flat overclaim. "
+                  "More settled bets, or the\n  answer comes from the "
+                  "projections rather than the journal.")
 
 
 def main() -> None:

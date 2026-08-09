@@ -779,133 +779,121 @@ def _code_only(func_name):
     return _re.sub(r'""".*?"""', "", body, flags=_re.S)
 
 
-# --- is the spread too narrow? -----------------------------------------------
-def _spread_db(model_sd, true_sd, n=300, seed=4, offset=(-0.4, -0.25, 0.25, 0.4)):
-    """A ledger where the model's spread and reality's are both KNOWN.
-    The check has to tell them apart or it is not a check."""
+# --- does the confidence mean what it says? ---------------------------------
+def _shape_db(kind, n=300, seed=7):
+    """A ledger with a KNOWN cause. `narrow` puts every probability too
+    far from 50% in both directions; `flat` claims ten points too much on
+    every bet. The table has to tell them apart or it decides nothing."""
     import random
-    from statistics import NormalDist
-    nd = NormalDist()
     rng = random.Random(seed)
     rows = []
     for i in range(n):
-        mu = rng.uniform(1.0, 2.0)
-        line = (mu + rng.choice(offset) if isinstance(offset, (list, tuple))
-                else mu + rng.uniform(-offset, offset))
-        p = 1 - nd.cdf((line - mu) / model_sd)
-        act = rng.gauss(mu, true_sd)
-        won = act > line
-        rows.append(_row(player=f"P{i}", market="total_bases", side="OVER",
-                         odds=-110, hit_prob=p, projection=mu, line=line,
-                         actual=act, status="won" if won else "lost",
+        claimed = rng.uniform(0.30, 0.72)
+        true_p = (0.5 + (claimed - 0.5) / 1.6) if kind == "narrow" \
+            else claimed - 0.10
+        won = rng.random() < true_p
+        # VARIED DATES ON PURPOSE. Every row carried the same date, and
+        # Python's sort is stable, so a mutation that re-sorted the book
+        # by date instead of by claimed probability was a no-op and the
+        # whole suite passed it. A fixture that cannot distinguish the
+        # bug from the fix is not a fixture.
+        rows.append(_row(date=f"2026-08-{1 + i % 28:02d}", player=f"P{i}",
+                         odds=-110, hit_prob=claimed,
+                         status="won" if won else "lost",
                          pnl_units=0.27 if won else -0.3))
     return _db(rows)
 
 
-def _spread_ratio(path):
+def _bands(path):
+    """[(claimed, actual, gap)] per bucket, read back off the report."""
     import contextlib
     import io
+    import re as _re
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         stakecheck.spread_report(stakecheck._rows(path, None, None))
-    line = [l for l in buf.getvalue().splitlines() if l.strip().startswith("ALL")]
-    assert line, buf.getvalue()
-    return float(line[0].split()[-1])
+    out = []
+    for line in buf.getvalue().splitlines():
+        m = _re.match(r"\s+\d+% - \d+%\s+\d+\s+([\d.]+)%\s+([\d.]+)%\s+"
+                      r"([-+][\d.]+)%", line)
+        if m:
+            out.append(tuple(float(g) for g in m.groups()))
+    return out
 
 
-def test_an_honest_spread_reads_near_one():
-    """A model whose distribution is right must not be accused of being
-    too narrow. A check that always finds a defect finds nothing."""
-    path = _spread_db(model_sd=0.9, true_sd=0.9)
+def test_a_too_narrow_spread_tilts_across_fifty():
+    """THE SIGNATURE. If every probability sits too far from 50%, the
+    timid bets come in BETTER than claimed and the confident ones worse.
+    The gap crosses zero — that sign change is the whole diagnosis, and
+    the sigma table it replaced could not see it at all."""
+    path = _shape_db("narrow")
     try:
-        assert 0.85 <= _spread_ratio(path) <= 1.15
+        b = _bands(path)
     finally:
         os.unlink(path)
+    assert len(b) == 5, b
+    assert b[0][2] > 3.0, f"least confident band should overperform: {b[0]}"
+    assert b[-1][2] < -3.0, f"most confident band should underperform: {b[-1]}"
 
 
-def test_a_narrow_spread_is_caught_and_roughly_quantified():
-    """Model believes 0.6, reality is 0.9 — a ratio of 1.5. The check
-    should land near it, and the ratio is the temperature that would be
-    needed to cover for the defect rather than fix it."""
-    path = _spread_db(model_sd=0.6, true_sd=0.9)
+def test_a_flat_overclaim_is_negative_everywhere():
+    """The other cause, and the one a shift fixes rather than a
+    temperature. The bottom band's SIGN is what separates them."""
+    path = _shape_db("flat")
     try:
-        r = _spread_ratio(path)
+        b = _bands(path)
     finally:
         os.unlink(path)
-    assert 1.25 <= r <= 1.75, r
+    assert b[0][2] < 0, f"least confident band should also underperform: {b[0]}"
+    assert all(x[2] < 2.0 for x in b), b
 
 
-def test_a_too_wide_spread_is_caught_the_other_way():
-    """The failure has two directions and only one of them is the one we
-    suspect. A check that can only detect the expected answer is a
-    thermometer that reads the same in every room."""
-    path = _spread_db(model_sd=1.3, true_sd=0.9)
+def test_the_buckets_are_equal_count_not_equal_width():
+    """This book crowds into 40-60%. Fixed-width bands would put almost
+    every bet in one row and report the two nearly empty ones as
+    findings."""
+    path = _shape_db("flat")
     try:
-        r = _spread_ratio(path)
+        b = _bands(path)
     finally:
         os.unlink(path)
-    assert r < 0.9, r
+    import contextlib
+    import io
+    buf = io.StringIO()
+    path2 = _shape_db("flat")
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.spread_report(stakecheck._rows(path2, None, None))
+    finally:
+        os.unlink(path2)
+    counts = [int(l.split()[3]) for l in buf.getvalue().splitlines()
+              if "% - " in l and "claimed" not in l]
+    assert max(counts) - min(counts) <= 1, counts
 
 
-def test_a_bet_on_its_own_line_barely_moves_the_estimate():
-    """The invariant CHANGED with the estimator, and this test changed
-    with it. The first version dropped every row with |z| < 0.15 and this
-    asserted the guard existed. Dropping them biased the sample toward
-    confident calls — and on a book of coin-flips it dropped nearly
-    everything, which is how an implied sigma of 2.818 got printed.
-
-    Least squares needs no guard: a bet at its own line carries almost no
-    information about spread, and weighting by z-squared says exactly
-    that. Asserted behaviourally — pad a clean book with on-the-line bets
-    and the answer must hold."""
+def test_it_says_when_the_book_cannot_tell_the_two_apart():
+    """The honest outcome on a small or flat book. Printing a tilt that
+    is inside its own noise is how a reader talks themselves into a
+    root cause."""
+    import contextlib
+    import io
     import random
-    from statistics import NormalDist
-    nd = NormalDist()
-    rng = random.Random(2)
-    base = []
-    for i in range(200):
-        mu = rng.uniform(1.0, 2.0)
-        line = mu + rng.choice([-0.4, 0.4])
-        p = 1 - nd.cdf((line - mu) / 0.9)
-        act = rng.gauss(mu, 0.9)
-        base.append(_row(player=f"b{i}", market="total_bases", odds=-110,
-                         hit_prob=p, projection=mu, line=line, actual=act,
-                         status="won" if act > line else "lost",
-                         pnl_units=0.27 if act > line else -0.3))
-    padding = []
-    for i in range(200):
-        mu = rng.uniform(1.0, 2.0)
-        line = mu + rng.uniform(-0.01, 0.01)     # right on the line
-        p = 1 - nd.cdf((line - mu) / 0.9)
-        act = rng.gauss(mu, 0.9)
-        padding.append(_row(player=f"p{i}", market="total_bases", odds=-110,
-                            hit_prob=p, projection=mu, line=line, actual=act,
-                            status="won" if act > line else "lost",
-                            pnl_units=0.27 if act > line else -0.3))
-    a, b = _db(base), _db(base + padding)
+    rng = random.Random(3)
+    rows = [_row(player=f"P{i}", odds=-110, hit_prob=rng.uniform(0.45, 0.55),
+                 status="won" if rng.random() < 0.5 else "lost",
+                 pnl_units=0.1) for i in range(120)]
+    path = _db(rows)
+    buf = io.StringIO()
     try:
-        clean, padded = _spread_ratio(a), _spread_ratio(b)
+        with contextlib.redirect_stdout(buf):
+            stakecheck.spread_report(stakecheck._rows(path, None, None))
     finally:
-        os.unlink(a)
-        os.unlink(b)
-    assert abs(clean - padded) < 0.15, \
-        f"200 on-the-line bets moved the answer {clean:.2f} -> {padded:.2f}"
+        os.unlink(path)
+    assert "inside the noise" in buf.getvalue()
 
 
-def test_the_side_decides_which_tail_is_inverted():
-    """hit_prob is the probability the BET hits, not the probability of
-    going over. Inverting an UNDER with the OVER's formula flips the sign
-    of the implied sigma and the row is silently discarded — losing every
-    UNDER in the book from the measurement."""
-    src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
-    i = src.index("def spread_report(")
-    body = src[i:src.index("\ndef ", i + 10)]
-    assert 'side == "OVER"' in body
-    assert "inv_cdf(1 - float(p))" in body and "inv_cdf(float(p))" in body
-
-
-def test_a_ledger_without_projections_says_so_rather_than_dividing_by_zero():
-    path = _db([_row(player="x")])          # projection/line/actual all None
+def test_too_few_bets_is_said_not_shown():
+    path = _db([_row(player=f"P{i}") for i in range(10)])
     import contextlib
     import io
     buf = io.StringIO()
@@ -914,7 +902,26 @@ def test_a_ledger_without_projections_says_so_rather_than_dividing_by_zero():
             stakecheck.spread_report(stakecheck._rows(path, None, None))
     finally:
         os.unlink(path)
-    assert "nothing to check" in buf.getvalue()
+    assert "Nothing to say yet" in buf.getvalue()
+
+
+def test_it_assumes_no_distribution_at_all():
+    """The premise that broke the last two versions. Inverting a normal
+    out of a discretely-priced count returned an implied sigma of 1.58
+    for a quantity whose real spread is 0.86. Nothing here inverts
+    anything."""
+    body = _code_only("spread_report")
+    # Anchored on how the code would ACCESS these, not on the words. The
+    # first version forbade the bare string "projection" and matched the
+    # sentence "the answer comes from the projections rather than the
+    # journal" in a print — fourth time this session a scan has found its
+    # own prose. Symbols are checked as symbols; a column is checked as a
+    # lookup.
+    for symbol in ("NormalDist", "inv_cdf(", "stdev("):
+        assert symbol not in body, f"still reaching for {symbol}"
+    for col in ("projection", "line", "actual"):
+        assert f'r.get("{col}")' not in body and f'["{col}"]' not in body, \
+            f"still reading the {col} column"
 
 
 def test_the_spread_check_writes_nothing():
@@ -923,55 +930,32 @@ def test_the_spread_check_writes_nothing():
         assert verb not in body, f"spread_report calls {verb}"
 
 
-def test_the_estimate_survives_a_book_of_coin_flips():
-    """THE CASE THAT BROKE THE FIRST VERSION, and the one I should have
-    written before trusting it.
+def test_the_sigma_inversion_is_gone_and_documented():
+    """THREE VERSIONS DIED HERE and the record belongs somewhere.
 
-    The original estimator averaged (line - projection) / z per bet. Every
-    synthetic I validated it against put the line a quarter of a run from
-    the projection, so z was comfortably away from zero and the estimator
-    looked fine. THE REAL JOURNAL IS NOT SHAPED LIKE THAT — the model bets
-    near coin-flips, z sits near zero on most rows, and dividing by it
-    inflates that row without bound.
+    v1 backed a standard deviation out of each bet as
+    (line - projection) / z and averaged. On a book of coin-flips z sits
+    near zero, so each row's sigma exploded and the mean reported
+    whichever bet was closest to 50-50. It printed an implied sigma of
+    2.818 for total bases.
 
-    On Ethan's ledger it reported an implied sigma of 2.818 for total
-    bases: a stat that runs 0 to 4. An impossible number from an
-    estimator that looked reasonable, validated on data that avoided its
-    only failure mode.
+    v2 fixed the estimator — least squares through the origin, which is
+    correct — and the answer was still nonsense: 1.46 for hits, 0.048 for
+    pitcher outs, a ratio of 60.
 
-    Least squares through the origin has the same fixed point and lets a
-    near-the-line bet contribute almost nothing, which is exactly what it
-    tells you about spread."""
-    path = _spread_db(model_sd=0.6, true_sd=0.9, offset=0.08, seed=9)
-    try:
-        r = _spread_ratio(path)
-    finally:
-        os.unlink(path)
-    assert 1.2 <= r <= 1.9, f"coin-flip book gives {r}, true ratio is 1.5"
+    Because the premise was wrong, not the arithmetic. These markets are
+    counts priced from DISCRETE distributions with lines on half
+    integers. Inverting a normal out of "P(hits >= 1) = 0.60" at a line
+    of 0.5 returns 1.58 for a quantity whose real spread is near 0.86.
 
-
-def test_the_estimator_is_least_squares_not_a_mean_of_ratios():
-    """Anchored on the arithmetic, because the two agree on well-spread
-    data and only diverge on the shape that matters."""
+    v3 asks the same question without assuming any shape. This test
+    exists so nobody re-derives v1 from first principles."""
     body = _code_only("spread_report")
-    assert "num / den" in body or "/ den" in body, body[:200]
-    assert "d / z" not in body, "back to dividing by a near-zero z"
-
-
-def test_the_conditioning_is_reported_next_to_the_answer():
-    """A ratio computed from bets that all sit on their own line is not
-    wrong, it is uninformative — and the two look identical unless the
-    z-spread is on screen beside it."""
-    path = _spread_db(model_sd=0.9, true_sd=0.9)
-    import contextlib
-    import io
-    buf = io.StringIO()
-    try:
-        with contextlib.redirect_stdout(buf):
-            stakecheck.spread_report(stakecheck._rows(path, None, None))
-    finally:
-        os.unlink(path)
-    assert "|z| med" in buf.getvalue()
+    assert "z * z" not in body and "d * z" not in body, \
+        "the sigma inversion is back"
+    doc = stakecheck.spread_report.__doc__
+    assert "COUNTS" in doc and "discrete" in doc, \
+        "the reason it was abandoned is no longer written down"
 
 
 if __name__ == "__main__":
