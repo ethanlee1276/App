@@ -54,13 +54,35 @@ from engine.quality import STAKE_CAP_U
 RESCALE_DAY = "2026-08-04"
 
 
-def _rows(db: str, sport: str | None, since: str | None):
+def _rows(db: str, sport: str | None, since: str | None,
+          measurement: bool = False):
+    """Settled bets. BY DEFAULT, ONLY THE ONES THAT WERE REAL.
+
+    THE MISTAKE THIS EXISTS TO PREVENT, made 2026-08-08 and caught by
+    Ethan's own output rather than by me: the first version selected
+    every settled row and reported 2,582 + 888 bets. The site's headline
+    record is 292. The other three thousand are measurement buckets —
+    `longshot` is journaled at a flat stake with ZERO dollar exposure,
+    and `longshot_watch` was, in ledger.py's own words, "most of the
+    journal by volume and all of the noise in it", a couple of hundred
+    home-run rows a night.
+
+    So every ROI in this tool's first three days of output described a
+    population that was mostly paper. The tell was visible and I did not
+    read it: 1,787 of 2,582 bets priced at +200 and longer, which is a
+    home-run board, not a betting record.
+
+    `ledger.py` scores the record as `category='main' AND stake_units >
+    0`, and that is now the default here. Nothing else is a bet.
+    """
     uri = f"file:{db}?mode=ro"
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     q = ("SELECT date, sport, player, market, side, odds, hit_prob, grade, "
          "edge, stake_units, pnl_units, status, category FROM bets "
          "WHERE status IN ('won','lost')")
+    if not measurement:
+        q += " AND category='main' AND stake_units > 0"
     args: list = []
     if sport:
         q += " AND sport = ?"
@@ -129,6 +151,18 @@ def report(rows: list[dict]) -> None:
 
     print(f"\n{'='*70}\n  {len(rows)} settled bets  ·  "
           f"{rows[0]['date']} → {rows[-1]['date']}\n{'='*70}")
+    # WHAT IS IN THE SAMPLE, always, before any conclusion is drawn from
+    # it. This line is here because its absence cost three days: the tool
+    # reported 3,470 bets against a real record of 292 and nothing on
+    # screen said the difference was paper.
+    cats: dict = {}
+    for r in rows:
+        cats[r.get("category") or "?"] = cats.get(r.get("category") or "?", 0) + 1
+    print("  bucket(s): " + ", ".join(f"{k} {v}" for k, v in sorted(cats.items())))
+    if set(cats) - {"main"}:
+        print("  ** measurement buckets included — `longshot` carries zero")
+        print("  ** dollar exposure and `longshot_watch` is a calibration")
+        print("  ** sample. Neither is money. Drop --include-measurement.")
     print(f"\n  AS STAKED       {won}-{len(rows)-won}   "
           f"{staked:8.2f}u staked   {net:+8.2f}u   ROI {_roi(net, staked):+7.2%}")
     print(f"  AT FLAT 1u      {won}-{len(rows)-won}   "
@@ -221,7 +255,13 @@ def report(rows: list[dict]) -> None:
     by_grade: dict = {}
     for r in rows:
         by_grade.setdefault(r.get("grade") or "?", []).append(r)
-    for g in ("A+", "A", "B+", "Pass", "?"):
+    # EVERY grade present, not a list of the ones I expected. The first
+    # version iterated a hardcoded ("A+", "A", "B+", "Pass", "?") and
+    # silently dropped 442 of 888 rows — the table added up to half the
+    # sample and said so nowhere. A report that omits what it did not
+    # anticipate is worse than one that crashes.
+    _order = {"A+": 0, "A": 1, "B+": 2, "Pass": 8, "?": 9}
+    for g in sorted(by_grade, key=lambda k: (_order.get(k, 5), k)):
         chunk = by_grade.get(g)
         if not chunk:
             continue
@@ -397,6 +437,11 @@ def main() -> None:
     ap.add_argument("--db", default="data/ledger.db")
     ap.add_argument("--sport")
     ap.add_argument("--since", help="ISO date; only bets on or after it")
+    ap.add_argument("--include-measurement", action="store_true",
+                    help="also count the longshot and longshot_watch "
+                         "buckets. They are NOT money — zero dollar "
+                         "exposure and a calibration sample — so this is "
+                         "for inspecting them, never for judging a record")
     ap.add_argument("--all-eras", action="store_true",
                     help="one combined report instead of splitting at the "
                          "day the unit scale changed")
@@ -405,7 +450,8 @@ def main() -> None:
     if not os.path.exists(args.db):
         print(f"No ledger at {args.db}.")
         return
-    rows = _rows(args.db, args.sport, args.since)
+    rows = _rows(args.db, args.sport, args.since,
+                 measurement=args.include_measurement)
     if args.all_eras or args.since:
         report(rows)
     else:

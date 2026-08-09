@@ -1,4 +1,5 @@
-"""The staking audit, and the defect that made it necessary.
+"""The staking audit, the defect that made it necessary, and the mistake
+the audit itself made.
 
 Ethan, 2026-08-08, reading the settled list on his phone: "We got .05
 units back for a +100 bet. Our units per bet is too low or something
@@ -7,30 +8,35 @@ because that seems wrong."
 HE WAS RIGHT, AND IT IS PROVABLE FROM ONE ROW. A +106 winner returning
 +0.05u was staked 0.05/1.06 = 0.047u. `staking.MIN_STAKE_UNITS` is 0.1
 and `to_units` floors every positive stake at it, so nothing in the
-sizing path can emit 0.047. Something downstream of the floor shrinks
-stakes, and it is `correlation.apply_exposure_caps`, which multiplied
-stakes by a scaling factor and re-rounded without re-flooring. FIXED the
-same day, to Ethan's call: over the cap now drops the weakest bets until
-the rest fit at full size. The audit stays, because the settled history
-was made under the old rule and is not restated.
+sizing path can emit 0.047. `correlation.apply_exposure_caps` was
+multiplying stakes by a cap factor and re-rounding straight through the
+floor. That bug is real, was found on a real main-category prop, and is
+fixed.
 
-THE SECOND HALF, from the history rather than the arithmetic:
-GAME_CAP_U and SLATE_CAP_U were set on 2026-07-29 (commit 9a846b6),
-when a unit was 1/20th of the bankroll. The unit scale was multiplied
-by five on 2026-08-04 (commit 3f86208, "One scale for every stake"),
-and the caps were not re-derived. Every stake got five times bigger
-against a ceiling that did not move, so a cap built for the extreme
-slate started catching the ordinary one. The caps themselves were left
-alone — at the current scale 15u is 15% of bankroll on one night, which
-is a defensible ceiling; it was the 75% it implied under the old scale
-that was absurd. What changed is what happens when the ceiling is hit.
+THE CAP POLICY WENT THROUGH THREE VERSIONS IN ONE EVENING — per-game
+proportional scaling, then trim-the-weakest, then one uniform factor with
+the floor enforced by dropping. The last of those is the only one that
+needs no ranking to be correct, which is why it is the one that stayed:
+a uniform scale cannot move ROI, because net and staked move together.
 
-WHAT THIS FILE DOES NOT CLAIM. It does not assert that this explains
-the -16.6% ROI. That is measurable and has not been measured: the
-container this was written in carries a five-row stub ledger, not the
-292-bet real one. `stakecheck.py` exists precisely so the question is
-answered with Ethan's data instead of my inference, and the assertions
-below are about the tool being arithmetically sound.
+AND THEN THE AUDIT'S OWN ERROR, which is the more useful lesson here.
+`_rows` selected EVERY settled bet. It reported 2,582 and 888 across two
+eras; the site's headline record is 292. The rest are measurement
+buckets: `longshot` journals at a flat stake with zero dollar exposure,
+`longshot_watch` is a calibration sample ledger.py calls "most of the
+journal by volume and all of the noise in it". So three days of ROI
+figures, a recommendation, and a shipped code change all described a
+population that was mostly paper.
+
+The tell was on screen the whole time: 1,787 of 2,582 bets priced at
++200 or longer is a home-run board, not a betting record. A second tell
+was there too — the grade table summed to 446 of 888 rows, because it
+iterated a hardcoded list of the grades I expected and silently dropped
+the rest.
+
+Both are guarded below. The empirical conclusions drawn before the fix
+are void until re-measured; the arithmetic ones (a uniform factor is
+ROI-neutral; 0.047 is below 0.1) never depended on the sample.
 
 Run directly: `python3 tests/test_stakecheck.py`
 """
@@ -437,6 +443,143 @@ def test_both_policies_are_reported_so_neither_is_taken_on_faith():
     assert "uniform scale + floor drop" in out
     assert "trim the weakest" in out
     assert "as actually staked" in out
+
+
+# --- the population, which is the thing I got wrong --------------------------
+def test_only_real_money_counts_by_default():
+    """THE ERROR THIS FILE EXISTS TO PREVENT REPEATING, made 2026-08-08
+    and caught by Ethan's output rather than by me.
+
+    The first version selected every settled row. It reported 2,582 and
+    888 bets across two eras; the site's headline record is 292. The rest
+    are measurement buckets — `longshot` journals at a flat stake with
+    ZERO dollar exposure, and `longshot_watch` is a calibration sample
+    that ledger.py itself calls "most of the journal by volume and all of
+    the noise in it".
+
+    So three days of ROI figures, a policy recommendation and a shipped
+    code change all rested on a population that was mostly paper. The
+    tell was on screen the whole time and I read past it: 1,787 of 2,582
+    bets priced at +200 or longer is a home-run board, not a betting
+    record."""
+    rows = [_row(player="real", category="main", stake_units=0.25),
+            _row(player="paper", category="longshot", stake_units=0.1),
+            _row(player="noise", category="longshot_watch", stake_units=0.1)]
+    path = _db(rows)
+    try:
+        got = stakecheck._rows(path, None, None)
+        every = stakecheck._rows(path, None, None, measurement=True)
+    finally:
+        os.unlink(path)
+    assert [r["player"] for r in got] == ["real"], got
+    assert len(every) == 3
+
+
+def test_the_default_matches_how_the_ledger_itself_scores_the_record():
+    """Not a filter I invented. If ledger.py ever changes what counts,
+    this test fails and the two are reconciled deliberately rather than
+    drifting into two different truths about the same money."""
+    led = open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
+    assert "category='main' AND stake_units > 0" in led
+    src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
+    assert "category='main' AND stake_units > 0" in src
+
+
+def test_a_zero_stake_row_is_not_a_bet():
+    """`stake_units > 0` is half the ledger's own definition. A row at
+    zero stake moves the win-loss record and no money, so counting it
+    drags every ROI toward nothing."""
+    path = _db([_row(player="ghost", category="main", stake_units=0.0,
+                     pnl_units=0.0, status="won"),
+                _row(player="real", category="main", stake_units=0.25)])
+    try:
+        got = stakecheck._rows(path, None, None)
+    finally:
+        os.unlink(path)
+    assert [r["player"] for r in got] == ["real"]
+
+
+def test_the_sample_says_what_is_in_it_before_any_conclusion():
+    """A census line at the top, unconditionally. The absence of one is
+    exactly why the contamination survived three days of output — nothing
+    on screen distinguished 3,470 rows from 292."""
+    import contextlib
+    import io
+    path = _db([_row(player="real", category="main", stake_units=0.25)])
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.report(stakecheck._rows(path, None, None))
+    finally:
+        os.unlink(path)
+    assert "bucket(s): main 1" in buf.getvalue()
+
+
+def test_including_measurement_buckets_says_so_loudly():
+    """The flag exists for inspecting those buckets, which is legitimate.
+    Reporting an ROI from them without a warning is not."""
+    import contextlib
+    import io
+    path = _db([_row(player="real", category="main", stake_units=0.25),
+                _row(player="paper", category="longshot", stake_units=0.1)])
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.report(stakecheck._rows(path, None, None,
+                                               measurement=True))
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "longshot 1" in out and "main 1" in out
+    assert "Neither is money" in out
+
+
+def test_the_grade_table_shows_every_grade_it_finds():
+    """THE SECOND HALF OF THE SAME MISTAKE. The grade breakdown iterated
+    a hardcoded list of the grades I expected, so 442 of 888 rows were
+    silently absent and the column totals did not add up to the header —
+    on screen, with nothing saying so.
+
+    A report that omits what it did not anticipate is worse than one that
+    crashes, because it looks complete."""
+    import contextlib
+    import io
+    rows = [_row(player="a", grade="A+"), _row(player="b", grade="Watch"),
+            _row(player="c", grade="C-"), _row(player="d", grade=None)]
+    path = _db(rows)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.report(stakecheck._rows(path, None, None))
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    seen = out[out.index("IS THE GRADE PREDICTIVE?"):]
+    for g in ("A+", "Watch", "C-", "?"):
+        assert any(l.strip().startswith(g) for l in seen.splitlines()), \
+            f"{g} is missing from the grade table"
+
+
+def test_the_grade_table_accounts_for_every_bet():
+    """The arithmetic that would have caught it without anyone noticing
+    the missing names: the rows of the table must sum to the header."""
+    import contextlib
+    import io
+    import re as _re
+    rows = ([_row(player=f"a{i}", grade="A+") for i in range(3)]
+            + [_row(player=f"z{i}", grade="Watch") for i in range(7)])
+    path = _db(rows)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.report(stakecheck._rows(path, None, None))
+    finally:
+        os.unlink(path)
+    seen = buf.getvalue()
+    seen = seen[seen.index("IS THE GRADE PREDICTIVE?"):]
+    counts = [int(m.group(1)) for m in
+              _re.finditer(r"^\s+\S+\s+(\d+)\s+\d+\.\d%", seen, _re.M)]
+    assert sum(counts) == 10, (counts, seen)
 
 
 if __name__ == "__main__":
