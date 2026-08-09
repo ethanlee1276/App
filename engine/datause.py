@@ -124,6 +124,32 @@ SIGNALS = (
      "why": "The 2026-08-09 finding. Banked nightly, rendered on the "
             "Record page (web/js/app.js, outside this scan), and led with "
             "in the lab's prompt."},
+    {"name": "book sharpness",
+     "module": "engine/booksharp.py",
+     # NOT `measure`. That name appears in 120 files — the first cut
+     # matched every one of them and reported this signal as living in
+     # gate, journal and pipeline before a single caller existed. A
+     # registry symbol has to be distinctive enough to be evidence.
+     "symbols": ("compare_to_the_list", "show_booksharp", "MIN_SERIES"),
+     "want": ("probe",),
+     "why": "§4. The sharp-book hierarchy is a hand-written list today; "
+            "this measures it from our own snapshots. Probe only — "
+            "weighting the consensus by it is a pricing change."},
+    {"name": "injury redistribution",
+     "module": "engine/redistribute.py",
+     # `redistribution` alone also hits engine/coverage.py's prose about
+     # NBA minutes, which is a different word doing a different job.
+     "symbols": ("show_redistribution", "MIN_OUT_GAMES"),
+     "want": ("probe",),
+     "why": "§7. injuries.py prices with invented multipliers (1.09 for a "
+            "CB1); this measures where usage actually goes. Probe only "
+            "until the edge test says a new input can earn its place."},
+    {"name": "alignment and coverage",
+     "module": "engine/sources/nflpart.py",
+     "symbols": ("coverage_rates", "formation_rates", "show_alignment"),
+     "want": ("probe",),
+     "why": "§6. The coverage data the spec said did not exist. Probe "
+            "first; a matchup adjustment built on it would be pricing."},
 )
 
 #: Where a consumer has to live to count as each kind. Checked by path,

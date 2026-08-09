@@ -2766,6 +2766,46 @@ def _settleable_days(open_days) -> list[str]:
                   if d.get("date") and "-W" not in d["date"])
 
 
+def show_booksharp() -> None:
+    """Which books are actually sharp, from our own snapshots (§4).
+
+        python3 launch.py --booksharp
+
+    Today the hierarchy is a hand-written LIST (`oddsapi.SHARP_BOOKS`).
+    This measures it: per book, how far its early price sat from the
+    closing consensus, and how often it moved first. Reports only.
+    """
+    from engine import booksharp, linemoves
+    print(booksharp.report(linemoves.load_history()))
+
+
+def show_redistribution(team=None, player=None, kind="targets",
+                        season: int | None = None) -> None:
+    """Where a player's usage goes when he is out (§7).
+
+        python3 launch.py --ripple NE "Rhamondre Stevenson" carries
+
+    engine/injuries.py prices injuries with invented multipliers today —
+    1.09 for an opposing CB1, 1.06 for a DT. This measures the real thing
+    from the weekly stats already on disk. Reports only.
+    """
+    import datetime as _d
+    from engine import redistribute
+    from engine.sources import nflverse
+    if not team or not player:
+        print("\n  usage: python3 launch.py --ripple <TEAM> <\"Player Name\">"
+              " [targets|carries] [season]\n")
+        return
+    season = int(season or (_d.date.today().year - 1))
+    try:
+        rows = nflverse.load_weekly_stats(season)
+    except Exception as exc:                                # noqa: BLE001
+        print(f"\n  weekly stats {season} unavailable: {exc}\n")
+        return
+    res = redistribute.redistribution(rows, str(team).upper(), player, kind)
+    print(redistribute.report(res))
+
+
 def show_alignment(team=None, season: int | None = None) -> None:
     """How a defence covers and how an offence lines up (NFL_MODEL §6).
 
@@ -3820,6 +3860,14 @@ def main() -> None:
         from engine import losspatterns as _lp
         print(_lp.format_both_ways(
             _lp.both_ways(_lp.records_from_ledger(_l.connect()))))
+        return
+    if "--booksharp" in argv:
+        show_booksharp()
+        return
+    if "--ripple" in argv:
+        i = argv.index("--ripple")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_redistribution(*(rest[:4] or [None]))
         return
     if "--alignment" in argv:
         i = argv.index("--alignment")
