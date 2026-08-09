@@ -23,6 +23,69 @@ from engine.ufc.model import run_card
 DOSSIERS = Path("data/ufc_dossiers.json")
 
 
+def _lookup(dossiers: dict, name: str):
+    """(dossier, closest-name-we-hold) for a fighter on the card.
+
+    THE TWO CAUSES OF `no_dossier` LOOK IDENTICAL TODAY.
+    `dossiers.get(normalize_name(a))` is an exact hit or nothing, so "we
+    have never written a dossier for this fighter" and "we have one,
+    spelled differently from the odds feed" both come out as the same pass
+    line — and only the second is fixed by editing one line of JSON. Two
+    of the twelve bouts on 2026-08-08 passed for want of a dossier with no
+    way to tell which kind they were without opening the file.
+
+    So a miss also reports the CLOSEST name we hold. It does NOT match on
+    it. A fighter is not a name similarity, and pricing a bout against the
+    wrong man's record is worse than not pricing it at all — the whole
+    point of `no dossier, no bet`. The pass line gains "closest we hold is
+    X", and a person decides in one glance whether that is a spelling fix
+    or a genuinely absent fighter.
+    """
+    # Imported here, like `load_dossiers` does: this module is also run
+    # as a script and the engine import is not free at import time.
+    from engine.sources.oddsapi import normalize_name
+    key = normalize_name(name)
+    d = dossiers.get(key)
+    if d is not None:
+        return d, None
+    return None, _closest(key, dossiers)
+
+
+def _closest(key: str, dossiers: dict) -> str | None:
+    """The nearest dossier key, when one is near enough to be worth naming.
+
+    TWO TESTS, because string distance alone misses the commonest case.
+    `jose aldo junior` against `jose aldo` scores 0.72 — under any cutoff
+    loose enough to be safe — and yet it is obviously the same man with a
+    suffix the folder does not know (`Jr.` is in `normalize_name`'s suffix
+    list, the spelled-out `Junior` is not). An extra middle name does the
+    same thing.
+
+    So: every token of one name contained in the other, with at least two
+    tokens to match on, OR a high string similarity. The token test
+    catches added words, the distance test catches altered letters, and
+    neither is allowed to pick a fighter — see `_lookup`.
+
+    Cutoffs are deliberately tight. Anything looser starts proposing a
+    different fighter in the same division, which is exactly the
+    suggestion someone would act on by mistake.
+    """
+    import difflib
+    if not key or not dossiers:
+        return None
+    want = set(key.split())
+    if len(want) >= 2:
+        # Longest containment wins: between `jon jones` and `jon`, the
+        # fuller name is the better guess at who was meant.
+        subs = [k for k in dossiers
+                if len(k.split()) >= 2
+                and (set(k.split()) <= want or want <= set(k.split()))]
+        if subs:
+            return max(subs, key=lambda k: len(k.split()))
+    hit = difflib.get_close_matches(key, list(dossiers), n=1, cutoff=0.82)
+    return hit[0] if hit else None
+
+
 def load_dossiers() -> dict:
     from engine.sources.oddsapi import normalize_name
     if not DOSSIERS.exists():
@@ -94,6 +157,7 @@ def main() -> None:
     dossiers = load_dossiers()
 
     fights, event_label = [], ""
+    near: list = []      # (name on the card, closest dossier we hold)
     if args.odds or args.cached_odds:
         from engine.sources import oddsapi
         from engine.sources.oddsapi import normalize_name
@@ -112,8 +176,11 @@ def main() -> None:
                         prices = best_h2h(payload, a, b)
                     except oddsapi.OddsAPIError:
                         prices = {"fighter_a": a, "fighter_b": b}
-                    da = dossiers.get(normalize_name(a))
-                    db = dossiers.get(normalize_name(b))
+                    da, na = _lookup(dossiers, a)
+                    db, nb = _lookup(dossiers, b)
+                    for who, close in ((a, na), (b, nb)):
+                        if close:
+                            near.append((who, close))
                     fights.append({"a": da, "b": db, "prices": prices,
                                    "division": (da or db or {}).get("division", "")})
             # §8 — where the card is. One fact per event, recorded by hand
@@ -256,6 +323,16 @@ def main() -> None:
                 for p in gaps:
                     print(f"    {p.get('fight', '?')}")
                     print(f"      {p.get('why', '')[:96]}")
+                    # Which KIND of gap, in one line. A near name is a
+                    # one-line JSON fix; no near name is a fighter we have
+                    # never written up.
+                    for who, close in near:
+                        if who in (p.get("fight") or ""):
+                            print(f"      ↳ no dossier under \"{who}\" — the "
+                                  f"closest we hold is \"{close}\". If that is "
+                                  f"the same man, fix the spelling in "
+                                  f"data/ufc_dossiers.json; the lookup is "
+                                  f"exact and never guesses.")
             print("\n  READ IT LIKE THIS")
             print("    mostly no_data   -> dossiers are missing, not the "
                   "model's doing. Check `python3 launch.py` drafted them.")

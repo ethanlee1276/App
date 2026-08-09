@@ -231,6 +231,79 @@ def test_journal_and_settle_from_fight_results():
 
 # The runner stays at the TRUE END of the file — a test defined after it
 # never runs (this exact bug has now bitten three test files).
+# --- telling a misspelling from a missing fighter (#96) ----------------------
+def test_a_dossier_that_matches_is_returned_and_nothing_is_flagged():
+    import ufc_build
+    d = {"khamzat chimaev": {"name": "Khamzat Chimaev"}}
+    got, close = ufc_build._lookup(d, "Khamzat Chimaev")
+    assert got is d["khamzat chimaev"] and close is None
+
+
+def test_a_near_miss_names_the_closest_dossier_we_hold():
+    """THE TWO CAUSES OF `no_dossier` LOOKED IDENTICAL. An exact dict hit
+    means "never written up" and "written up, spelled differently" produce
+    the same pass line — and only the second is a one-line JSON fix. Two
+    of twelve bouts on 2026-08-08 passed this way with no way to tell
+    which kind they were without opening the file."""
+    import ufc_build
+    d = {"jose aldo": {"name": "Jose Aldo"}}
+    # `Jr.` IS folded by normalize_name's suffix rule; the spelled-out
+    # `Junior` is not in that list, so an odds feed writing it out in full
+    # misses a dossier we hold. Measured, not assumed — this test was
+    # first written asserting the opposite.
+    assert ufc_build._lookup(d, "Jos\u00e9 Aldo Jr.")[0] is not None
+    got, close = ufc_build._lookup(d, "Jos\u00e9 Aldo Junior")
+    assert got is None, "the spelled-out suffix is not folded"
+    assert close == "jose aldo", close
+    got, close = ufc_build._lookup(d, "Jose Aldos")
+    assert got is None and close == "jose aldo"
+
+
+def test_it_never_matches_on_the_near_name():
+    """A fighter is not a name similarity. Pricing a bout against the
+    wrong man's record is worse than not pricing it, which is what `no
+    dossier, no bet` is for — so the near name is REPORTED, never
+    substituted."""
+    import ufc_build
+    d = {"jose aldo": {"name": "Jose Aldo"}}
+    got, close = ufc_build._lookup(d, "Jose Aldos")
+    assert got is None, "a near name must never stand in for a dossier"
+    assert close
+
+
+def test_a_genuinely_absent_fighter_gets_no_suggestion():
+    """No near name is itself the answer: nobody has written him up."""
+    import ufc_build
+    d = {"jose aldo": {"name": "Jose Aldo"}, "sean omalley": {"name": "x"}}
+    got, close = ufc_build._lookup(d, "Ilia Topuria")
+    assert got is None and close is None
+
+
+def test_an_empty_dossier_file_suggests_nothing_rather_than_crashing():
+    import ufc_build
+    assert ufc_build._lookup({}, "Anybody") == (None, None)
+    assert ufc_build._lookup({"a b": {}}, "") == (None, None)
+
+
+def test_an_extra_middle_name_is_recognised_as_the_same_man():
+    """String distance alone cannot do this. `jose aldo junior` against
+    `jose aldo` scores 0.72 — under any cutoff loose enough to be safe —
+    and it is obviously the same fighter. Token containment catches added
+    words; the distance test catches altered letters."""
+    import ufc_build
+    d = {"jose aldo": {"name": "Jose Aldo"}}
+    assert ufc_build._closest("jose aldo junior", d) == "jose aldo"
+    assert ufc_build._closest("jose roberto aldo", d) == "jose aldo"
+
+
+def test_a_single_token_is_never_enough_to_suggest_anyone():
+    """One shared word is a coincidence, not a fighter. Half the roster
+    shares a first name."""
+    import ufc_build
+    d = {"jose aldo": {}, "jose maria": {}}
+    assert ufc_build._closest("jose", d) is None
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

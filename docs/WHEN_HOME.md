@@ -1,20 +1,68 @@
 # When you get home — the laptop checklist
 
-Written 2026-08-07, revised 2026-08-08. Everything here needs the Mac,
+Written 2026-08-07, revised 2026-08-09. Everything here needs the Mac,
 because the container has no ledger, no route to the sports APIs, and no
 browser you can look at.
-
-Ordered so that each step is worth doing whether or not you get to the next
-one. If you only do one thing, do §1.
 
 **Push state: nothing outstanding.** Everything discussed is on
 `claude/sports-betting-app-vhgmho`.
 
-**Done since the first version:** the units rescale (§1 as written on the
-7th) is complete — don't run it again. The loss-miner read below still
-stands.
+---
+
+## WHAT IS ACTUALLY LEFT
+
+Two things. Everything below the line is closed and kept for the record —
+this list was 450 lines of finished work with the two live items buried in
+it, which is a checklist nobody reads.
+
+### A. Which key is `5dc51e48` (#76) — ten seconds
+
+Open `secrets.local` and see which line it is on. Measured 2026-08-08 by
+`keycheck.py`: `ODDS_API_KEY` has 10,965 credits, `ODDS_API_KEY_2` has 0
+and is spent.
+
+- on **`ODDS_API_KEY_2`** → do nothing. A key with zero credits can spend
+  nothing.
+- on **`ODDS_API_KEY`** → that is the live 10,965. Regenerate at your
+  leisure, keep the old line and add the new one; the ring skips dead keys.
+
+Not urgent either way. It is a quota credential, not a payment method, and
+`git grep` plus `git log --all -S` both return zero, so it never reached the
+repo.
+
+### B. Look at the site (§4b below) — five minutes
+
+Seven visual changes are shipped and test-pinned and you have not seen any
+of them on a real screen. `python3 launch.py`, then a board page and the
+Record page at phone and desktop width. The list and what to check on each
+is in §4b. Every one has the number that justified it in its commit message,
+so you can argue with the measurement rather than with taste.
+
+### Verified done 2026-08-09, no action
+
+- **§1 ingests** — your `--check` shows NFL 269,181 player-game rows, NBA
+  306,355, and NFL team ratings on 1,696 games. All three ran.
+- **§2 the loss miner** — it no longer prices anything without evidence
+  from the book being gated. Tonight it demoted all five closures for want
+  of `main` rows, which is the demotion working, not a failure.
+- **§5a the nightly job** — installed and running; the launchd/TCC problem
+  that kept it from ever firing was the repo living under `~/Desktop`, and
+  moving to `~/App` fixed it.
+- **§5b the Routines fix** (#79) — done.
+- **§4a the `--text-mute` split** (#82) — decided and shipped.
+- **§3f the CFB conference feed** (#93, #94) — closed; the live feed cannot
+  supply conferences at all, and the built-in table has been corrected.
+- **§6 diagnostics** — `movecheck` and `nflguard` still decline to answer,
+  which is the correct output at this point in the season.
 
 ---
+
+# CLOSED — kept for the record
+
+Everything below is finished. It is here because the measurements and the
+reasoning behind each decision are worth keeping, not because anything in
+it needs doing.
+
 
 ## 1. Pull, then two ingests — 15 minutes, do it first
 
