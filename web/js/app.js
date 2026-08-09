@@ -1539,7 +1539,8 @@ function renderLivePicks() {
         </div>`).join("")}
       <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">
         ${rows.length} open bet(s) on today’s card${elsewhere
-          ? ` · ${elsewhere} older open bet(s) awaiting results — graded on the Record page`
+          ? ` · ${elsewhere} open on other boards — a different sport, or a week that has not been played yet.`
+            + ` This tab tracks THIS league’s card; the Record page counts them all`
           : ""}. A bet journals the moment it’s recommended and stays here until it
         settles — even if the pick later drops off Tonight’s Picks because prices moved.
         Stat lines update with the board’s refresh cycle; every bet settles

@@ -12,6 +12,8 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 from engine.livepicks import assemble_live_picks
 from engine.mlb.livestats import parse_live_stats, parse_situation
 
@@ -185,6 +187,45 @@ def test_team_bets_track_from_the_live_score():
 
 
 # Runner at the TRUE END — a test defined after it never runs.
+# --- the count the page shows against the count the masthead shows -----------
+def test_open_elsewhere_counts_every_sport_not_just_this_one():
+    """ETHAN, 2026-08-09: "why does this say 7 bets are still open yet the
+    live page only shows two."
+
+    The masthead read `307 settled · 6 open` two inches above a Live tab
+    reading `2 open bet(s) on today's card`, with nothing to connect them.
+    Both numbers were right and they count different things: the Record's
+    `overall.open` is `main` across EVERY sport — those six were NFL Week
+    1, whose games are a month away — while the Live tab shows this
+    league's card. The bridge between them, `open_elsewhere`, was scoped
+    `sport='mlb'`, so the six were invisible to it and the page's own
+    comment promising it "always reconciles with the Record's" was false.
+
+    This pins the query's shape, since the bug was a WHERE clause and the
+    build that runs it needs a live slate."""
+    src = open(os.path.join(ROOT, "mlb_build.py"), encoding="utf-8").read()
+    i = src.index("_all_open = _lpc.execute(")
+    q = src[i:i + 320]
+    assert "sport='mlb'" not in q, (
+        "the cross-sport count must not be scoped to one sport — that is "
+        "the defect")
+    assert "category IN ('main','longshot')" in q
+    # Same population rule as `performance()`, which is what the masthead
+    # renders: a zero-staked row was never a bet.
+    assert "stake_units > 0" in q
+
+
+def test_the_page_does_not_call_a_future_bet_older():
+    """The six were NFL Week 1 — not played yet. The line said "older open
+    bet(s) awaiting results", which is wrong in the one direction that
+    makes someone go looking for a settle that never ran."""
+    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    i = js.index("open bet(s) on today\u2019s card")
+    line = js[i:i + 400]
+    assert "older open bet" not in line
+    assert "other boards" in line
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -475,15 +475,24 @@ def main() -> None:
         # the Record's. Counted as "all open minus what we are showing"
         # rather than "not today's date", because the window above now
         # shows some bets whose journal date is not today.
+        # NOT `sport='mlb'`, and that was the whole defect. This query used
+        # to be MLB-scoped while its own comment promised the page would
+        # reconcile with the Record — and the Record's `overall` counts
+        # `main` across EVERY sport. On 2026-08-09 the masthead read
+        # "6 open" (six NFL Week-1 bets) two inches above a Live tab
+        # saying "2 open bet(s) on today's card" and nothing else, because
+        # the six were invisible to a count that only looked at baseball.
+        # Two populations, one word, no explanation.
         _all_open = _lpc.execute(
-            "SELECT COUNT(*) FROM bets WHERE status='open' AND sport='mlb' "
-            "AND category IN ('main','longshot')").fetchone()[0]
+            "SELECT COUNT(*) FROM bets WHERE status='open' "
+            "AND category IN ('main','longshot') "
+            "AND stake_units > 0").fetchone()[0]
         result["open_elsewhere"] = max(0, _all_open - len(rows))
         if result["live_picks"]:
             n_live = sum(1 for r in result["live_picks"] if r["phase"] == "live")
             print(f"Open-bet tracker: {len(result['live_picks'])} on today's "
                   f"card ({n_live} live)"
-                  + (f", {result['open_elsewhere']} older still open"
+                  + (f", {result['open_elsewhere']} open on other boards"
                      if result["open_elsewhere"] else ""))
     except Exception as exc:
         # Into the JSON, not just stdout — the launcher swallows build
