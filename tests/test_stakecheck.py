@@ -1545,6 +1545,58 @@ def test_the_clv_slices_carry_their_own_noise():
     assert "SE from 0" in seg and "±" in seg
 
 
+def test_the_worst_decile_is_named_not_just_counted():
+    """At -22.69 points average the question stops being statistical. A
+    price implying 50% closing at 27% is scratch-level, not ordinary prop
+    movement, and eleven of those in 116 bets is a data question with a
+    factual answer. A tally cannot be checked against a box score; a date,
+    a player and two prices can.
+
+    It is also the guard on the trap sitting right beside it: delete the
+    worst tenth of ANY null sample and the remainder looks positive."""
+    path, snaps = _clv_db(edge_pts=0.005)
+    import contextlib
+    import io
+    import re as _re
+    buf = io.StringIO()
+    try:
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history(snaps, _go)
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "BY NAME" in out
+    rows = _re.findall(r"took ([-+]\d+) -> closed ([-+]\d+)", out)
+    assert len(rows) >= 5, out
+    # Every named row must actually be a bad one, and the prices must be
+    # the pair the CLV was computed from.
+    from engine.odds import american_to_decimal as a2d
+    for taken, close in rows:
+        v = 1 / a2d(int(close)) - 1 / a2d(int(taken))
+        assert v < 0, f"a NAMED worst-decile row has positive CLV: {taken}/{close}"
+
+
+def test_the_report_refuses_to_call_the_remainder_edge():
+    """The single most inviting misreading available in this output, and
+    the one that would send us back to betting on arithmetic."""
+    path, snaps = _clv_db(edge_pts=0.005)
+    import contextlib
+    import io
+    buf = io.StringIO()
+    try:
+        def _go():
+            with contextlib.redirect_stdout(buf):
+                stakecheck.clv_report(stakecheck._rows(path, None, None))
+        _with_history(snaps, _go)
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "DO NOT READ" in out
+    assert "without looking at" in out.lower()
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

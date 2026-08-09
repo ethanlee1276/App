@@ -884,15 +884,38 @@ def clv_report(rows: list[dict]) -> None:
     worst = sorted(pairs, key=lambda pv: pv[1])[:max(1, len(pairs) // 10)]
     rest_mean = (sum(v for _, v in pairs[len(worst):]) /
                  max(len(pairs) - len(worst), 1))
-    print(f"\n  THE WORST DECILE")
+    print(f"\n  THE WORST DECILE, BY NAME")
     print(f"    {len(worst)} bets averaging {sum(v for _, v in worst) / len(worst):+.2%}")
+    # NAMED, because at this magnitude the question stops being statistical.
+    # A CLV of -20 points means a price that implied 50% closed implying
+    # 27% — scratch-level, not ordinary prop movement. Eleven of those in
+    # 116 is a data question with a factual answer, and a tally cannot be
+    # checked against a box score.
+    #
+    # IT ALSO GUARDS THE TRAP. Delete the worst tenth of ANY null sample
+    # and the remainder looks positive; that is arithmetic, not evidence.
+    # These rows may only be excluded for a reason established WITHOUT
+    # looking at their CLV — a scratch, a wrong game, a stale snapshot.
+    # Printing them is what makes that check possible.
+    for r, v in worst[:12]:
+        print(f"      {v:+7.1%}  {r['date']}  {r['player'][:22]:<22} "
+              f"{(r['side'] or '')[:5]:<5} {r['market'][:12]:<12} "
+              f"{r['line']}  took {r['odds']:+d} -> closed "
+              f"{int(r['closing_odds']):+d}")
     print(f"    the other {len(pairs) - len(worst)} average "
           f"{(sum(v for _, v in pairs) - sum(v for _, v in worst)) / max(len(pairs) - len(worst), 1):+.2%}")
     print(f"    median CLV overall {_st.median(vals):+.2%} against a mean of "
           f"{mean:+.2%}")
     print("    A median well above the mean is the skew: many small wins, a "
-          "few\n    large misses. Whether those are findable before kickoff "
-          "is the\n    question worth chasing.")
+          "few\n    large misses.")
+    print("\n    DO NOT READ THE 'other' LINE AS EDGE. Removing the worst "
+          "tenth of any\n    null sample leaves a positive remainder — that "
+          "is arithmetic. It counts\n    only if those rows are excluded for "
+          "a reason found WITHOUT looking at\n    their CLV. Check the names "
+          "above against what actually happened: a\n    scratch, the wrong "
+          "game of a doubleheader, a snapshot taken hours\n    before "
+          "kickoff. If they are genuine moves, they stay and the mean "
+          "stands.")
 
     def _clv_slice(title, key):
         groups: dict = {}
