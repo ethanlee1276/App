@@ -3100,6 +3100,15 @@ def settle_now(day: str | None = None) -> None:
         prose.weekly_lab(lconn, print)
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠️  prose lanes skipped: {exc}")
+    # BANK THE INFORMATION TEST BEFORE EXPORTING, so tonight's settled
+    # bets are in tonight's run rather than tomorrow's. It is the whole
+    # reason the series exists: a number nobody has to remember to take.
+    _edge = ledger.record_edge_run(lconn)
+    if _edge:
+        print(f"  edge test: n={_edge['n']}  claimed-edge AUC "
+              f"{_edge['auc_edge']:.3f} "
+              f"[{_edge['auc_edge_lo']:.3f}, {_edge['auc_edge_hi']:.3f}]  "
+              f"-> {_edge['verdict']}")
     ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
     after = counts(lconn)
     print(f"  journal: settled {n} pick(s)")

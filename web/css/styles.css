@@ -4146,3 +4146,40 @@ select.calc-in { width: auto; font-weight: 600; }
    near-square and a Texans bull is wide. Cropping to fill would cut the
    part of a logo people recognise. */
 .team-mark-wrap > .team-logo { object-fit: contain; }
+
+/* --- Is there an edge at all? -------------------------------------------
+   The Record page's frame, above the ROI rather than beside it. A -28% ROI
+   next to "the edge signal carries no information" is one story with a
+   cause; the same ROI alone invites a hunt for the bad week that explains
+   it, and there is no bad week.
+
+   Deliberately quiet. The verdict is doing the work, and a panel that
+   shouts undermines a number whose whole authority is that it was measured
+   carefully. One hairline accent on the left edge carries the tone. */
+.rec-edge {
+  margin: 0 0 18px; padding: 14px 16px 12px;
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--border-soft);
+  border-left: 3px solid var(--text-faint);
+}
+.rec-edge.tone-neg { border-left-color: var(--bad); }
+.rec-edge.tone-pos { border-left-color: var(--good); }
+.rec-edge .section-title { margin-top: 0; }
+.rec-edge-verdict {
+  font-size: var(--fs-md); line-height: var(--lh-snug); color: var(--text);
+  margin: 6px 0 12px; max-width: var(--measure-tight);
+}
+.rec-edge-tbl { width: auto; min-width: min(100%, 34rem); margin-bottom: 10px; }
+.rec-edge-tbl td, .rec-edge-tbl th { padding: 4px 14px 4px 0; }
+/* The claimed edge is the row that decides things; the other three are
+   context for it. */
+.rec-edge-tbl tr.lead-row td { font-weight: 700; color: var(--text); }
+.rec-edge-tbl tr.lead-row td:first-child::after {
+  content: " \2190"; color: var(--text-faint); font-weight: 400;
+}
+.rec-edge .mini { max-width: var(--measure); }
+@media (max-width: 640px) {
+  .rec-edge { padding: 12px 12px 10px; }
+  .rec-edge-tbl { min-width: 0; width: 100%; font-size: var(--fs-xs); }
+  .rec-edge-tbl td, .rec-edge-tbl th { padding: 4px 8px 4px 0; }
+}

@@ -3534,6 +3534,51 @@ def _parlay_report(conn) -> dict:
         return {"graded": 0, "open": 0, "probation": True}
 
 
+def _edge_rows(conn, category: str = "main") -> list[dict]:
+    """Settled bets in the shape the information test wants."""
+    return [dict(r) for r in conn.execute(
+        "SELECT status, hit_prob, odds FROM bets WHERE status IN "
+        "('won','lost') AND category=? AND stake_units > 0", (category,))]
+
+
+def record_edge_run(conn, category: str = "main") -> dict | None:
+    """Measure and bank the information test. Called from the settle, so
+    the series grows on its own.
+
+    The measurement that made this worth automating took a terminal and a
+    person remembering to run it — which in practice means it gets run
+    when something feels wrong, exactly the moment least able to tell a
+    real change from the mood that prompted the check.
+    """
+    from . import edgehistory
+    rows = _edge_rows(conn, category)
+    clv = None
+    try:
+        clvs = [c for c in (_bet_price_clv(b) for b in conn.execute(
+            "SELECT side, odds, closing_odds FROM bets WHERE status IN "
+            "('won','lost') AND category=?", (category,))) if c is not None]
+        if clvs:
+            mean = sum(clvs) / len(clvs)
+            var = (sum((c - mean) ** 2 for c in clvs) / (len(clvs) - 1)
+                   if len(clvs) > 1 else 0.0)
+            clv = {"clv_mean": mean,
+                   "clv_se": (var / len(clvs)) ** 0.5,
+                   "clv_n": len(clvs)}
+    except Exception:                                       # noqa: BLE001
+        clv = None
+    return edgehistory.record(conn, rows, category=category, clv=clv)
+
+
+def _edge_snapshot(conn, category: str = "main") -> dict | None:
+    from . import edgehistory
+    return edgehistory.latest(conn, category)
+
+
+def _edge_series(conn, category: str = "main") -> list[dict]:
+    from . import edgehistory
+    return edgehistory.series(conn, category)
+
+
 def export_json(conn, path) -> None:
     """Write the journal's performance to a JSON file the website renders.
 
@@ -3555,6 +3600,11 @@ def export_json(conn, path) -> None:
         "form_sampler": form_report(conn),
         "loose_sampler": loose_report(conn),
         "ufc_record": ufc_report(conn),
+        # IS THERE AN EDGE AT ALL — the 2026-08-09 finding, kept live
+        # rather than re-derived by hand. `edge_now` is the latest run,
+        # `edge_trend` the series. See docs/THE_INFORMATION_TEST.md.
+        "edge_now": _edge_snapshot(conn),
+        "edge_trend": _edge_series(conn),
         # THE PAPER BOOK, reported beside the real one and never inside
         # it. Same shape as `overall`, so the page can render one against
         # the other: this is what the model would have returned over the

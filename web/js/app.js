@@ -4870,6 +4870,75 @@ async function renderLab() {
       ${escapeHtml((d.generated_at || "").replace("T", " "))}</p>`;
 }
 
+/* The edge test, rendered as a verdict rather than three AUCs.
+
+   Three numbers between 0.4 and 0.6 read as "fine" to anybody who is not
+   already thinking about rank statistics, which is everybody at 1am. The
+   verdict comes from `edgehistory.measure`, computed once server-side, so
+   this panel and the nightly prose and the LLM's evidence pack cannot each
+   invent their own reading of the same numbers. */
+const EDGE_VERDICTS = {
+  edge_is_noise: {
+    tone: "neg", label: "No measurable edge",
+    say: "Bets the model called better did not win more often than bets it "
+       + "called worse. Its ranking and the market’s are the same ranking.",
+    then: "Every gate, threshold and stake rule is a function of that "
+        + "number, so tuning them cannot help. The model needs information "
+        + "the market lacks, not better use of what it already has.",
+  },
+  edge_inverted: {
+    tone: "neg", label: "Edge points backwards",
+    say: "The claimed edge sorts winners BELOW losers.",
+    then: "Worse than no signal — the gates are selecting against us.",
+  },
+  edge_predicts: {
+    tone: "pos", label: "The edge signal is real",
+    say: "Bets the model called better did win more often.",
+    then: "The signal carries information, so losses are coming from price, "
+        + "timing or sizing rather than from the pick itself.",
+  },
+};
+
+function recEdgePanel(e, trend) {
+  const v = EDGE_VERDICTS[e.verdict] || EDGE_VERDICTS.edge_is_noise;
+  const ci = (lo, hi) => (lo == null || hi == null) ? ""
+    : `[${lo.toFixed(3)}, ${hi.toFixed(3)}]`;
+  const row = (name, val, lo, hi, lead) => `
+    <tr${lead ? ' class="lead-row"' : ""}><td>${escapeHtml(name)}</td>
+    <td class="num">${val == null ? "—" : val.toFixed(3)}</td>
+    <td class="num mini">${ci(lo, hi)}</td></tr>`;
+  /* The series, only once it can show a change. One point is not a trend
+     and drawing it as one invites reading noise as movement. */
+  const runs = (trend || []).filter((r) => r.auc_edge != null);
+  const spark = runs.length < 3 ? "" : `
+    <p class="mini" style="margin-top:8px">Claimed-edge AUC over the last
+    ${runs.length} runs: ${runs.map((r) => r.auc_edge.toFixed(3)).join(" \u2192 ")}
+    ${runs.length > 1 && Math.abs(runs[runs.length - 1].auc_edge - runs[0].auc_edge) < 0.02
+      ? " — flat." : ""}</p>`;
+  return `
+  <div class="rec-edge tone-${v.tone}">
+    <div class="section-title">Is there an edge at all?
+      <span class="sub">— ${e.n} settled bets</span></div>
+    <div class="rec-edge-verdict"><strong>${escapeHtml(v.label)}.</strong>
+      ${escapeHtml(v.say)}</div>
+    <table class="agate rec-edge-tbl"><thead><tr>
+      <th>ranked by</th><th class="num">AUC</th><th class="num">95% CI</th>
+    </tr></thead><tbody>
+      ${row("the model’s own number", e.auc_model, e.auc_model_lo, e.auc_model_hi)}
+      ${row("the market’s price", e.auc_market, e.auc_market_lo, e.auc_market_hi)}
+      ${row("our claimed edge", e.auc_edge, e.auc_edge_lo, e.auc_edge_hi, true)}
+      ${row("model minus market", e.diff, e.diff_lo, e.diff_hi)}
+    </tbody></table>
+    <p class="mini">0.500 is a coin flip — the chance a random winner is
+      ranked above a random loser. Rank-based, so the vig cannot distort it.
+      ${escapeHtml(v.then)}</p>
+    ${e.clv_n ? `<p class="mini">Closing-line value over ${e.clv_n} bets with a
+      close: ${(e.clv_mean * 100).toFixed(2)}% ± ${((e.clv_se || 0) * 100).toFixed(2)}
+      — a second, independent instrument.</p>` : ""}
+    ${spark}
+  </div>`;
+}
+
 async function renderRecord() {
   const host = document.getElementById("record-body");
   if (!host) return;
@@ -4950,10 +5019,24 @@ async function renderRecord() {
        the process by CLV before that.</p>` : "";
   const pr = o.process || {};
   const nProc = (pr.good || 0) + (pr.bad || 0) + (pr.flat || 0);
+  /* IS THERE AN EDGE AT ALL — rendered ABOVE the ROI, because it is the
+     frame the ROI should be read through rather than a footnote to it.
+
+     On 2026-08-09 the model's ranking of its own bets was measured
+     against the market's ranking of the same bets: +0.004 AUC apart, and
+     the claimed edge indistinguishable from a coin flip. A -28% ROI next
+     to "the edge signal carries no information" is one story with a
+     cause. The same ROI on its own invites a search for the bad week
+     that explains it, and there isn't one.
+
+     Scoped panels get nothing: the measurement is computed over the whole
+     main book, and slicing it per sport would print a number that was
+     never calculated. See docs/THE_INFORMATION_TEST.md. */
+  const edgePanel = (scoped || !d.edge_now) ? "" : recEdgePanel(d.edge_now, d.edge_trend);
   // The page's lead — what happened, in units. Built as a string so it can
   // be handed to the first room rather than rendered above the tab bar,
   // which would leave the tabs floating in the middle of the page.
-  const receipts = `
+  const receipts = edgePanel + `
     <div class="stats rec-kpis">
       ${recTile("ROI", (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
                 `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`,

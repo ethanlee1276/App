@@ -2325,6 +2325,103 @@ def test_the_dry_run_separates_a_fill_from_an_overwrite():
     assert r["overwritten_sample"][0][6] == 105
 
 
+def _edge_journal(conn, n=120, seed=5, signal=False):
+    import random
+    rng = random.Random(seed)
+    for i in range(n):
+        claimed = rng.uniform(-0.05, 0.15)
+        won = rng.random() < (0.5 + (claimed * 1.5 if signal else 0.0))
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,odds,"
+            "hit_prob,status,stake_units,pnl_units,category) VALUES "
+            "(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("t", "mlb", "2026-08-05", f"P{i}", "hits", "OVER", 1.5, 100,
+             0.5 + claimed, "won" if won else "lost", 0.4,
+             0.4 if won else -0.4, "main"))
+    conn.commit()
+
+
+def test_the_edge_test_runs_itself_and_is_kept():
+    """THE POINT OF AUTOMATING IT. The measurement that produced the
+    2026-08-09 finding needed a terminal and a person remembering to run
+    it — which in practice means it gets run when something feels wrong,
+    the moment least able to tell a real change from the mood that
+    prompted the check."""
+    from engine import edgehistory
+    conn = ledger.connect(":memory:")
+    _edge_journal(conn)
+    m = ledger.record_edge_run(conn)
+    assert m and m["n"] == 120
+    assert m["verdict"] in ("edge_is_noise", "edge_predicts", "edge_inverted")
+    assert len(edgehistory.series(conn)) == 1
+    assert edgehistory.latest(conn)["verdict"] == m["verdict"]
+
+
+def test_the_verdict_is_derived_once_not_per_consumer():
+    """The site, the nightly prose and the LLM's evidence pack all read
+    this. Three readings of the same three numbers is three chances to
+    disagree about what the model is."""
+    from engine import edgehistory
+    noise = edgehistory.measure([
+        {"status": "won" if w else "lost", "hit_prob": 0.5 + i * 0.001,
+         "odds": 100}
+        for i in range(80) for w in (True, False)])
+    assert noise["verdict"] == "edge_is_noise"
+    assert noise["auc_edge"] == 0.5
+
+
+def test_a_real_signal_is_not_called_noise():
+    from engine import edgehistory
+    conn = ledger.connect(":memory:")
+    _edge_journal(conn, n=600, signal=True)
+    m = ledger.record_edge_run(conn)
+    assert m["verdict"] == "edge_predicts", m
+
+
+def test_the_site_payload_carries_the_edge_finding_and_its_series():
+    import json
+    import tempfile
+    conn = ledger.connect(":memory:")
+    _edge_journal(conn)
+    ledger.record_edge_run(conn)
+    fd, path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    try:
+        ledger.export_json(conn, path)
+        out = json.load(open(path))
+    finally:
+        os.unlink(path)
+    assert out["edge_now"]["verdict"]
+    assert out["edge_now"]["auc_edge"] is not None
+    assert len(out["edge_trend"]) == 1
+
+
+def test_losing_the_edge_run_cannot_take_down_the_settle():
+    """It is bookkeeping attached to the one pass that grades real money.
+    A history row is never worth a settle."""
+    conn = ledger.connect(":memory:")
+    _edge_journal(conn, n=10)          # too thin to measure
+    assert ledger.record_edge_run(conn) is None   # returns, does not raise
+
+
+def test_the_hypothesis_pack_sees_the_edge_finding():
+    """The LLM was proposing slices of a variable already measured as
+    noise, and nothing in its evidence said so. Every proposal looked
+    reasonable, and would have forever."""
+    from engine import hypotheses
+    conn = ledger.connect(":memory:")
+    _edge_journal(conn)
+    ledger.record_edge_run(conn)
+    pack = hypotheses.evidence_pack(conn)
+    assert "edge_test" in pack, "the pack is still blind to it"
+    assert pack["edge_test"]["verdict"]
+    assert pack["edge_test"]["means"], "a verdict with no instruction attached"
+    prompt = hypotheses.build_prompt(pack)
+    # Led with, not buried: a model skimming a large object for slice
+    # candidates will not weight one field on its own.
+    assert prompt.index("measured state of the model") < 200, prompt[:200]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

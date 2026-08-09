@@ -93,6 +93,10 @@ class HypothesisUnavailable(RuntimeError):
 
 
 # --- the evidence pack -------------------------------------------------------
+def _r(x, n=3):
+    return round(x, n) if isinstance(x, (int, float)) else x
+
+
 def evidence_pack(lconn, lp_store: dict | None = None) -> dict:
     """What the model is shown: per-market calibration summaries, the
     miner's findings AND near-misses, and the exact menu of testable
@@ -132,6 +136,57 @@ def evidence_pack(lconn, lp_store: dict | None = None) -> dict:
         "menu": {d: sorted(values[d]) for d in DIMS},
         "sports": sorted({s for (s, _m) in by_mkt}),
     }
+    # THE HEADLINE FACT ABOUT THE MODEL, which this pack did not contain.
+    #
+    # Everything above is a per-slice calibration gap: which pockets claim
+    # more than they deliver. That framing silently assumes the claim is
+    # worth something SOMEWHERE and the job is finding where. On
+    # 2026-08-09 that assumption was measured and failed — the claimed
+    # edge's AUC is 0.479, indistinguishable from a coin flip, and the
+    # model's ranking beats the market's by +0.004 (see
+    # docs/THE_INFORMATION_TEST.md).
+    #
+    # Without this in the pack the model proposes slice after slice of a
+    # noise variable forever, and every one of them looks reasonable.
+    # With it, "the edge signal itself carries no information" is a fact
+    # it can reason from rather than a conclusion it has to rediscover
+    # from summary statistics that cannot show it.
+    try:
+        from . import edgehistory
+        latest = edgehistory.latest(lconn)
+        if latest:
+            pack["edge_test"] = {
+                "verdict": latest["verdict"],
+                "n": latest["n"],
+                "auc_claimed_edge": _r(latest["auc_edge"]),
+                "auc_claimed_edge_ci": [_r(latest["auc_edge_lo"]),
+                                        _r(latest["auc_edge_hi"])],
+                "auc_model": _r(latest["auc_model"]),
+                "auc_market": _r(latest["auc_market"]),
+                "model_minus_market": _r(latest["diff"]),
+                "model_minus_market_ci": [_r(latest["diff_lo"]),
+                                          _r(latest["diff_hi"])],
+                "clv_mean": _r(latest["clv_mean"]),
+                "clv_n": latest["clv_n"],
+                "means": {
+                    "edge_is_noise":
+                        "Bets we called better did not win more often than "
+                        "bets we called worse. Slices defined by our own "
+                        "edge or confidence are slices of a coin flip. "
+                        "Prefer hypotheses about OBSERVABLE conditions "
+                        "(park, rest, lineup slot, weather) over anything "
+                        "keyed to what the model claimed.",
+                    "edge_inverted":
+                        "Our claimed edge sorts winners BELOW losers. The "
+                        "gates are selecting against us.",
+                    "edge_predicts":
+                        "The claimed edge does sort winners from losers, so "
+                        "the losses come from price, timing or sizing "
+                        "rather than from the signal.",
+                }.get(latest["verdict"], ""),
+            }
+    except Exception:                                       # noqa: BLE001
+        pass
     # Trim the widest sections first if the pack runs long; the menu and
     # sports lists are load-bearing and never trimmed.
     while len(json.dumps(pack)) > MAX_PACK_CHARS and pack["markets"]:
@@ -200,7 +255,21 @@ SCHEMA = {
 
 
 def build_prompt(pack: dict) -> str:
-    return ("Here is the record's current state as JSON. Propose slice "
+    # `edge_test` is called out in prose rather than left to be noticed in
+    # the JSON. It is the one field that should change what gets proposed
+    # rather than merely inform it, and a model skimming a large object
+    # for slice candidates will not weight it on its own.
+    lead = ""
+    et = pack.get("edge_test")
+    if et and et.get("means"):
+        lead = (f"FIRST, the measured state of the model itself: "
+                f"{et['means']}\n"
+                f"(claimed-edge AUC {et['auc_claimed_edge']}, 95% CI "
+                f"{et['auc_claimed_edge_ci']}, n={et['n']}; model minus "
+                f"market {et['model_minus_market']}, CI "
+                f"{et['model_minus_market_ci']}.)\n\n")
+    return (lead
+            + "Here is the record's current state as JSON. Propose slice "
             "intersections worth testing, using ONLY values from `menu` "
             "(and sports/markets that appear in `markets`).\n\n"
             + json.dumps(pack, indent=1))
