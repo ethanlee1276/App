@@ -286,11 +286,40 @@ def pen_band(score) -> str | None:
     return "pen gassed"
 
 
+def velo_band(delta) -> str | None:
+    """A pitcher's velocity change against his own recent baseline, banded.
+
+    MLB_MODEL §5: "A drop of 1+ mph is a red flag — check injury and
+    mechanics reporting before trusting any projection of him." That
+    threshold gets its own band so the miner can convict on exactly the
+    thing the spec names, rather than on a bucket that blurs it.
+
+    None when unmeasured, which is most rows: it is computed for pitcher
+    markets only, and only when he has a comparable baseline. An
+    unmeasured pitcher is not a steady one, and banding him "steady"
+    would bury the signal under every hitter prop ever journaled.
+    """
+    if delta is None:
+        return None
+    try:
+        d = float(delta)
+    except (TypeError, ValueError):
+        return None
+    if d <= -1.0:
+        return "down 1+"
+    if d <= -0.4:
+        return "down"
+    if d < 0.4:
+        return "steady"
+    return "up"
+
+
 def features_of(side=None, odds=None, prob=None, book=None,
                 horizon_days=None, lead_min=None, park_hr=None,
                 wind_out=None, roofed=False, lineup_slot=None,
                 lineup_conf=False, sport=None, rest_days=None,
-                body_clock=None, pen_own=None, pen_opp=None) -> dict:
+                body_clock=None, pen_own=None, pen_opp=None,
+                velo_delta=None) -> dict:
     """The feature dict for one bet — mining and veto both come through
     here, so a pick is judged by exactly the dimensions it was mined on."""
     feats = {
@@ -310,6 +339,8 @@ def features_of(side=None, odds=None, prob=None, book=None,
         # starter's. Pooling them would average two opposite effects.
         "pen_opp": pen_band(pen_opp),
         "pen_own": pen_band(pen_own),
+        # §5's injury tell, as a dimension the miner can convict on.
+        "velo": velo_band(velo_delta),
     }
     return {k: v for k, v in feats.items() if v is not None}
 
@@ -325,7 +356,7 @@ def records_from_ledger(conn) -> list[dict]:
         "SELECT sport, market, side, odds, hit_prob, book, date, ts, status, "
         "category, "
         "lead_min, park_hr, wind_out, roofed, lineup_slot, lineup_conf, "
-        "rest_days, body_clock, pen_own, pen_opp "
+        "rest_days, body_clock, pen_own, pen_opp, velo_delta "
         "FROM bets WHERE status IN ('won','lost')").fetchall()
     out = []
     for r in rows:
@@ -352,6 +383,7 @@ def records_from_ledger(conn) -> list[dict]:
                                  roofed=bool(r["roofed"]),
                                  lineup_slot=r["lineup_slot"],
                                  lineup_conf=bool(r["lineup_conf"]),
+                                 velo_delta=r["velo_delta"],
                                  rest_days=r["rest_days"],
                                  body_clock=r["body_clock"],
                                  pen_own=r["pen_own"], pen_opp=r["pen_opp"],
@@ -709,6 +741,7 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
          book=None, horizon_days=None, lead_min=None, park_hr=None,
          wind_out=None, roofed=False, lineup_slot=None, lineup_conf=False,
          rest_days=None, body_clock=None, pen_own=None, pen_opp=None,
+         velo_delta=None,
          path=None) -> str | None:
     """The reason this pick is blocked, or None.
 
@@ -724,6 +757,7 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
                         park_hr=park_hr, wind_out=wind_out, roofed=roofed,
                         lineup_slot=lineup_slot, lineup_conf=lineup_conf,
                         rest_days=rest_days, body_clock=body_clock,
+                        velo_delta=velo_delta,
                         pen_own=pen_own, pen_opp=pen_opp,
                         sport=sport)
     for f in store.get("closed") or []:

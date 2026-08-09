@@ -85,7 +85,11 @@ from .losspatterns import (ALPHA, CLOSE_GAP_PTS, MIN_N,  # noqa: E402
 # from the lab's own watchlist, journaled by the miner, and listed here so
 # the lab can propose on them — its best ideas, made testable.
 DIMS = ("side", "odds", "prob", "horizon", "book", "lead", "park", "wind",
-        "slot", "rest", "clock", "pen_opp", "pen_own")
+        "slot", "rest", "clock", "pen_opp", "pen_own",
+        # §5's velocity tell. Listed here is what puts it in the LLM's
+        # menu — a dimension absent from DIMS is one the lab can never
+        # propose about, however faithfully it is journaled.
+        "velo")
 
 
 class HypothesisUnavailable(RuntimeError):

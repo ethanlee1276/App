@@ -178,6 +178,105 @@ def test_trend_all_sorts_the_worst_drop_first():
     assert got[1]["pitch_type"] == "SL" and got[1]["flag"] is False
 
 
+# --- the dimension: journaled, banded, mineable, visible to the lab -------
+def test_the_flag_threshold_gets_its_own_band():
+    """§5 names 1+ mph specifically. A band that blurs it means the miner
+    can never convict on the thing the spec actually says."""
+    from engine import losspatterns as lp
+    assert lp.velo_band(-1.4) == "down 1+"
+    assert lp.velo_band(-1.0) == "down 1+"
+    assert lp.velo_band(-0.9) == "down"
+    assert lp.velo_band(0.0) == "steady"
+    assert lp.velo_band(1.2) == "up"
+
+
+def test_unmeasured_is_NOT_steady():
+    """THE TRAP THAT WOULD MAKE THIS WORTHLESS. It is computed for
+    pitcher markets only, so most rows are NULL — every hitter prop ever
+    journaled. Banding those "steady" would bury the real signal under
+    thousands of rows that were never measured, and the miner would
+    convict on a bucket that means "we did not look"."""
+    from engine import losspatterns as lp
+    assert lp.velo_band(None) is None
+    assert lp.velo_band("") is None
+    assert "velo" not in lp.features_of(side="OVER", velo_delta=None)
+
+
+def test_the_dimension_reaches_the_lab_menu():
+    """`losspatterns.features_of` builds the menu the LLM proposes from,
+    and `hypotheses.DIMS` is what lets a proposal name it. A dimension
+    missing from either is one the lab can never reason about, however
+    faithfully it is journaled."""
+    from engine import hypotheses, losspatterns as lp
+    assert "velo" in hypotheses.DIMS
+    assert lp.features_of(side="OVER", velo_delta=-1.6)["velo"] == "down 1+"
+
+
+def test_the_veto_bands_a_candidate_as_the_record_was_banded():
+    """A pick is judged by exactly the dimensions it was mined on. If the
+    veto path could not take `velo_delta`, a convicted velocity pocket
+    could never refuse the next matching pick."""
+    import inspect
+    from engine import losspatterns as lp
+    assert "velo_delta" in inspect.signature(lp.veto).parameters
+    assert "velo_delta" in inspect.signature(lp.features_of).parameters
+
+
+def test_the_journal_round_trips_the_dimension():
+    from engine import ledger, losspatterns as lp
+    conn = ledger.connect(":memory:")
+    ledger.log_recommendations(conn, {"sport": "mlb", "date": "2026-08-10",
+        "recommendations": [{"player": "SP", "market": "strikeouts",
+            "side": "OVER", "line": 5.5, "odds": -110, "book": "FanDuel",
+            "hit_prob": 0.55, "edge": 0.04, "confidence": 70, "grade": "B",
+            "stake_units": 0.4, "projection": 6.1, "recommended": True,
+            "velo_delta": -1.6}]})
+    conn.execute("UPDATE bets SET status='lost'")
+    conn.commit()
+    got = conn.execute("SELECT velo_delta FROM bets").fetchone()[0]
+    assert got == -1.6
+    # And the miner must read it back as a feature, or the column is
+    # storage rather than evidence.
+    rec = lp.records_from_ledger(conn)
+    assert rec and rec[0]["feats"].get("velo") == "down 1+", rec
+
+
+def test_the_memo_stops_one_slate_refetching_a_starter():
+    """A starter carries several markets, and each miss is five cached
+    playByPlay fetches. Without the memo a fifteen-game board multiplies
+    that by every pitcher prop it prices."""
+    from engine.mlb import velocity as V
+    calls = {"n": 0}
+    real = V.velocity_history
+    V.velocity_history = lambda *a, **k: (calls.__setitem__("n", calls["n"] + 1),
+                                          [])[1]
+    V._MEMO.clear()
+    try:
+        V.delta_for(660271, 2026)
+        V.delta_for(660271, 2026)
+        V.delta_for(660271, 2026)
+    finally:
+        V.velocity_history = real
+        V._MEMO.clear()
+    assert calls["n"] == 1, f"{calls['n']} lookups for one pitcher"
+
+
+def test_a_pitcher_lookup_that_fails_never_breaks_a_board():
+    from engine.mlb import velocity as V
+    real = V.velocity_history
+
+    def _boom(*a, **k):
+        raise RuntimeError("statsapi down")
+
+    V.velocity_history = _boom
+    V._MEMO.clear()
+    try:
+        assert V.delta_for(1, 2026) is None
+    finally:
+        V.velocity_history = real
+        V._MEMO.clear()
+
+
 if __name__ == "__main__":
     for name, fn in sorted(list(globals().items())):
         if name.startswith("test_") and callable(fn):

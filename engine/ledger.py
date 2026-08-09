@@ -175,6 +175,11 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
                 # can test §4's claim that the first mover carries the
                 # information. Evidence only — nothing prices from it.
                 "move_first_sharp",
+                # §5's velocity tell: mph against his own recent baseline,
+                # NULL on every row it was not measured for (hitter props,
+                # and pitchers without a comparable baseline). NULL is not
+                # "steady" — see losspatterns.velo_band.
+                "velo_delta",
                 "fair_consensus", "consensus_books",
                 # What line movement DID to this pick, which nothing
                 # recorded until 2026-08-07. engine/quality.apply_movement
@@ -343,9 +348,9 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
             "park_hr, wind_out, roofed, lineup_slot, lineup_conf, rest_days, "
             "body_clock, pen_own, pen_opp, raw_prob, cal_temp, cal_bias, "
             "fair_consensus, consensus_books, move_delta, move_steam, "
-            "move_first_sharp) "
+            "move_first_sharp, velo_delta) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, "
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
              r["line"], r.get("book", ""), r.get("odds", -110), r.get("projection"),
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
@@ -397,7 +402,7 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # market did not move" from "the market moved and we ignored
              # it". movecheck.py reads exactly this pair.
              r.get("move_delta"), r.get("move_steam"),
-             r.get("move_first_sharp")))
+             r.get("move_first_sharp"), r.get("velo_delta")))
         n += cur.rowcount
     # Recommended game bets journal too (sharp-anchor picks live or die by
     # forward results). Moneylines store player = the team picked, line 0.5,

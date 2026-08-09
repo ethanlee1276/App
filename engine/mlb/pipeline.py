@@ -19,7 +19,7 @@ from ..gamebets import (
     price_spread_sharp,
 )
 from .data_loader import load_mlb_slate, MLBSlate
-from .models import MARKET_LABELS
+from .models import MARKET_LABELS, PITCHER_MARKETS
 from .parks import get_park
 from .projection import build_mlb_projection
 from .betting import evaluate_mlb_prop
@@ -739,11 +739,23 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         # lineup_status: the batting slot and its certainty at pick time —
         # the PA half of a batter prop. A pitcher prop has no slot, and
         # NULL says so honestly.
-        from .models import PITCHER_MARKETS
+        # (imported at module scope — a local re-import here made
+        # PITCHER_MARKETS local to this whole function, so the use of it
+        # a few lines above raised UnboundLocalError.)
         if prop.market not in PITCHER_MARKETS:
             d["lineup_slot"] = int(prop.lineup_spot or 0)
             d["lineup_confirmed"] = bool(
                 getattr(game, "lineups_confirmed", True))
+        # §5's velocity tell, carried onto the recommendation so
+        # `log_recommendations` can journal it. Computed in `betting.py`
+        # behind the same per-pitcher memo, so this is a dict read rather
+        # than five more fetches. Pitcher markets only — a hitter prop
+        # given the opposing starter's number would be a different
+        # quantity under the same column name.
+        if prop.market in PITCHER_MARKETS and getattr(prop, "person_id", 0):
+            from .velocity import delta_for as _vd
+            import datetime as _dt
+            d["velo_delta"] = _vd(prop.person_id, _dt.date.today().year)
         if getattr(game, "doubleheader", False):
             # Say WHICH game of the doubleheader this prop is for — on the
             # card, in the headline, everywhere.

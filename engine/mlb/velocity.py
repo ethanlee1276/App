@@ -251,3 +251,36 @@ def velocity_history(person_id: int, season: int, limit: int = 5,
                         "by_type": by_type,
                         "counts": start_counts(rows, person_id, min_pitches)})
     return out
+
+
+#: One slate asks about the same starter once per market — strikeouts and
+#: outs at least, sometimes more. Each miss is five cached playByPlay
+#: fetches, so without a memo a fifteen-game board multiplies that by
+#: however many pitcher props it prices. Keyed on (person_id, season);
+#: process-lifetime, because a build is one process and a start does not
+#: change mid-run.
+_MEMO: dict = {}
+
+
+def delta_for(person_id, season: int) -> float | None:
+    """The mph change on his primary pitch, or None if unmeasurable.
+
+    The one function the pricing path calls. Returns a NUMBER and never
+    raises: a pitcher whose game logs will not load, who has no baseline,
+    or who is a reliever comes back None — and None must stay None
+    through to the journal, because `losspatterns.velo_band` treats it as
+    unmeasured rather than as steady.
+    """
+    key = (person_id, season)
+    if key in _MEMO:
+        return _MEMO[key]
+    out = None
+    try:
+        hist = velocity_history(int(person_id), int(season))
+        t = trend(hist)
+        if t:
+            out = t["delta"]
+    except Exception:                                       # noqa: BLE001
+        out = None          # never let a pitcher lookup break a board
+    _MEMO[key] = out
+    return out

@@ -202,7 +202,7 @@ def odds_bucket(b) -> str:
 # One vocabulary, so a number seen here can be tested there.
 from engine.losspatterns import (clock_band, horizon_band,  # noqa: E402
                                  lead_band, lineup_band, park_band,
-                                 pen_band, prob_band, rest_band, wind_band)
+                                 pen_band, prob_band, rest_band, wind_band, velo_band)
 
 
 def _roofed(b) -> bool:
@@ -242,6 +242,11 @@ DIMENSIONS = {
     "clock":       lambda b: clock_band(b.get("body_clock")),
     "pen own":     lambda b: pen_band(b.get("pen_own")),
     "pen opp":     lambda b: pen_band(b.get("pen_opp")),
+    # §5's velocity tell. Journaled on pitcher markets only, so most
+    # rows band to None and drop out — which is right: unmeasured is
+    # not steady, and pooling them would hide the signal under every
+    # hitter prop ever taken.
+    "velo":        lambda b: velo_band(b.get("velo_delta")),
 }
 
 

@@ -50,13 +50,18 @@ ROOT = Path(__file__).resolve().parent.parent
 SIGNALS = (
     {"name": "velocity trend",
      "module": "engine/mlb/velocity.py",
-     "symbols": ("velocity_history", "trend_all", "primary_pitch"),
-     "want": ("probe", "journal"),
+     # `delta_for` and `velo_delta` are the names the pricing and journal
+     # paths actually use; the first three are the probe's. Watching only
+     # the probe's names reported this SHORT after the journal wiring
+     # landed — the registry has to name every door the signal leaves by.
+     "symbols": ("velocity_history", "trend_all", "primary_pitch",
+                 "delta_for", "velo_delta", "velo_band"),
+     "want": ("probe", "journal", "gate"),
      "why": "§5's injury tell. Journaled it becomes a mineable dimension "
             "the loss miner can convict on and the lab can propose about."},
     {"name": "times through order",
      "module": "engine/mlb/sources/pbp.py",
-     "symbols": ("times_through_order",),
+     "symbols": ("times_through_order", "tto_band"),
      "want": ("probe", "journal"),
      "why": "§5. Third time through is a real, measurable penalty."},
     {"name": "pitch counts",

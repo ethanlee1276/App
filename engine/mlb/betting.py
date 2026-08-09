@@ -95,6 +95,27 @@ def _lineup_certainty(prop: MLBProp, game=None) -> float:
     return 0.35                        # not in any posted/projected lineup
 
 
+def _velo_for(prop):
+    """§5's velocity change on his primary pitch, or None if unmeasured.
+
+    PITCHER MARKETS ONLY. For strikeouts and outs the prop's own player
+    IS the pitcher, so `person_id` is his. A hitter prop could be handed
+    the opposing starter's number — and that would be a different
+    quantity under one column name, which `losspatterns.velo_band` would
+    band together and the miner could never tell apart.
+
+    Memoised per pitcher per season inside `velocity.delta_for`, so a
+    slate prices all of one starter's markets off a single lookup. Never
+    raises: a pitcher whose logs will not load comes back None, banding
+    as UNMEASURED rather than as steady.
+    """
+    if prop.market not in PITCHER_MARKETS or not getattr(prop, "person_id", 0):
+        return None
+    import datetime as _dt
+    from .velocity import delta_for
+    return delta_for(prop.person_id, _dt.date.today().year)
+
+
 def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
                       allow_synthetic_line: bool = False,
                       game=None) -> Recommendation:
@@ -182,12 +203,14 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     # calls this with no game at all, which is an unmeasured pen rather
     # than a fresh one.
     _pen = (game.bullpen_fatigue or {}) if game is not None else {}
+    _velo = _velo_for(prop)          # §5's velocity tell — see the function
     pattern_block = lp_veto("mlb", prop.market, side=side, odds=best.odds,
                             prob=hit, book=best.book, horizon_days=0,
                             lead_min=minutes_until(
                                 getattr(game, "kickoff", None)),
                             pen_own=_pen.get(prop.team),
                             pen_opp=_pen.get(prop.opponent),
+                            velo_delta=_velo,
                             **_env)
     tier = mlb_tier(prop.market)
     min_edge = mlb_tier_min_edge(prop.market)

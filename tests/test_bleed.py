@@ -418,11 +418,16 @@ def test_every_journaled_dimension_the_lab_can_test_is_sliceable_here():
     tool that TESTS them disagree about what exists."""
     from engine.hypotheses import DIMS
     covered = {"side", "odds", "prob", "horizon", "book", "lead", "park",
-               "wind", "slot", "rest", "clock", "pen_opp", "pen_own"}
+               "wind", "slot", "rest", "clock", "pen_opp", "pen_own",
+               # §5's velocity tell, added 2026-08-09. This assertion is
+               # what caught it: the lab gained a dimension and this
+               # report could not slice it, which is the two tools
+               # disagreeing about what exists.
+               "velo"}
     assert set(DIMS) == covered, "DIMS moved; recheck bleed's coverage"
     here = set(bleed.DIMENSIONS)
     for want in ("side", "book", "price", "claimed p", "horizon", "capture lag",
-                 "park", "wind", "lineup", "rest", "clock", "pen own",
+                 "park", "wind", "lineup", "rest", "clock", "pen own", "velo",
                  "pen opp"):
         assert want in here, want
 
