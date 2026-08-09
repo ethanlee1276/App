@@ -543,6 +543,11 @@ def main() -> None:
         odds_status["at"] = _dt2.datetime.now().strftime("%H:%M")
         result["odds_status"] = odds_status
         result["built_at"] = _dt.datetime.now().isoformat(timespec="seconds")
+        # NFL_MODEL §2.3: label the knowledge tier of every reason, so a
+        # post-mortem can tell a stale feed from a bad inference. Reads
+        # the finished strings and prices nothing.
+        from engine.knowledge import stamp as _tier_stamp
+        _tier_stamp(result)
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         with open(args.out, "w") as fh:
             json.dump(result, fh, indent=2)

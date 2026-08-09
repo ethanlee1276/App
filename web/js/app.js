@@ -254,8 +254,31 @@ const NEG_REASON = new RegExp(
    // its favour, whatever else the card says.
    "unconfirmed", "unverified", "^CONDITIONAL", "EXTREME"].join("|"), "i");
 
-function reasonLI(x) {
-  return `<li class="${NEG_REASON.test(x) ? "neg" : ""}">${escapeHtml(x)}</li>`;
+/* NFL_MODEL §2.3: "Label your knowledge tiers in every output ... because
+   the fix for a bad bet depends on which tier failed."
+
+   A one-word tag rather than a coloured pill, and set in the quietest
+   type on the page, because there are up to five of these per card and a
+   badge on each would shout louder than the reason it describes. The tag
+   is the ANSWER to "why did this lose": a stale feed, a historical
+   pattern that did not repeat, or the model's own reasoning — and only
+   the third means the model is wrong.
+
+   Classified in Python (`engine/knowledge.py`) and stamped into the slate
+   as `reason_tiers`, never re-derived here: a mirrored registry in
+   JavaScript would be right the day it was written and silently wrong the
+   first time a module adds a reason. An unlabelled reason renders exactly
+   as it always did. */
+const TIER_LABEL = {
+  measured: "measured",
+  historical: "historical",
+  inference: "inferred",
+};
+
+function reasonLI(x, tier) {
+  const t = TIER_LABEL[tier]
+    ? `<span class="r-tier r-${tier}">${TIER_LABEL[tier]}</span>` : "";
+  return `<li class="${NEG_REASON.test(x) ? "neg" : ""}">${escapeHtml(x)}${t}</li>`;
 }
 
 /* ---------------------------------------------------------------------
@@ -1877,7 +1900,8 @@ function gameBetCard(r) {
   const tierChip = r.attention_tier
     ? `<span class="chip tier-${escapeHtml(r.attention_tier)}">${escapeHtml(r.attention_tier)} attention</span>`
     : "";
-  const reasons = (r.reasons || []).map(reasonLI).join("");
+  const reasons = (r.reasons || []).map(
+    (x, i) => reasonLI(x, (r.reason_tiers || [])[i])).join("");
 
   // Header (badge + title + sub) varies by bet type; the metrics are shared.
   let mark, title, sub;
@@ -2382,7 +2406,8 @@ function qualityChip(r) {
 }
 
 function cardHTML(r) {
-  const reasons = (r.reasons || []).map(reasonLI).join("");
+  const reasons = (r.reasons || []).map(
+    (x, i) => reasonLI(x, (r.reason_tiers || [])[i])).join("");
   const corr = (r.correlations || []).map((c) =>
     `<div class="warning" style="border-color:var(--cyan)">${iconMark("tag")}${escapeHtml(c)}</div>`).join("");
   const warnings = (r.warnings || []).map((w) => `<div class="warning">${icon('warn')} ${escapeHtml(w)}</div>`).join("");

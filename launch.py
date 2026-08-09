@@ -1971,6 +1971,36 @@ def preflight() -> None:
                         extra += "  ← rebuild: pre-dedupe board"
             print(f"{ok} {name}: valid{extra}")
 
+    # Are the knowledge tiers still labelling everything? (NFL_MODEL §2.3)
+    # The registry is a list of reason PREFIXES, so a new module writing a
+    # new opening quietly stops being labelled — the cards keep rendering,
+    # just with one fewer answer to "which tier failed". Measured against
+    # the built boards rather than assumed: 100% of 1,636 reasons on
+    # 2026-08-09.
+    try:
+        from engine.knowledge import tier_of as _tier, unregistered as _unreg
+        _rs = []
+        for _rel in ("web/data/recommendations.json",
+                     "web/data/mlb_recommendations.json"):
+            _p = ROOT / _rel
+            if not _p.is_file():
+                continue
+            for _c in (_json.loads(_p.read_text()).get("recommendations") or []):
+                _rs += (_c.get("reasons") or [])
+        if _rs:
+            _miss = _unreg(_rs)
+            _cov = 100.0 * sum(1 for r in _rs if _tier(r)) / len(_rs)
+            if _miss:
+                print(f"{warn} Knowledge tiers: {_cov:.1f}% of {len(_rs)} "
+                      f"reasons labelled — unregistered: "
+                      + ", ".join(_miss[:4])
+                      + " (add to engine/knowledge.py PREFIXES)")
+            else:
+                print(f"{ok} Knowledge tiers: all {len(_rs)} reasons labelled "
+                      f"measured / historical / inference")
+    except Exception as exc:  # noqa: BLE001
+        print(f"{warn} Knowledge tiers: not checked ({exc})")
+
     _browser_sweep(ok, warn, bad)
 
     # Database inventory — the raw truth every model reads.
@@ -2893,6 +2923,22 @@ def show_unbuilt() -> None:
             c = [x.strip() for x in line.strip().strip("|").split("|")]
             if len(c) < 3 or c[0].lower().startswith("section"):
                 continue
+            # THE STATUS CELL DECIDES, not the row. The filter above looks
+            # at the whole line, so a row marked ✅ whose NOTE mentions a
+            # parked sub-item came through as unfinished — NFL §3 Line
+            # shopping is done ("shops every book both sides") and was
+            # listed because its note ends "alt-line ladder 📋". A backlog
+            # that includes finished work is a backlog people stop reading.
+            if "📋" not in c[1] and "🟡" not in c[1]:
+                continue
+            # "📋 by design" is not a gap. NFL §13 says live betting is
+            # refused on purpose, per the spec's own discipline clause —
+            # printing it beside real tasks invites someone to build the
+            # one thing the model deliberately does not do.
+            if "by design" in c[1].lower():
+                rows.append({"sport": sport, "state": "by design",
+                             "section": c[0], "why": c[2]})
+                continue
             rows.append({"sport": sport,
                          "state": "parked" if "📋" in c[1] else "partial",
                          "section": c[0], "why": c[2]})
@@ -2913,19 +2959,27 @@ def show_unbuilt() -> None:
         r"\bneeds?\s+(?:[\w/+-]+\s+){0,3}(?:data|feed|source)\b|"
         r"\bno structured source\b|\bqualitative\b|"
         r"\bnot (?:available|published)\b|\bunmodellable\b", re.I)
-    dat = [r for r in rows
+    design = [r for r in rows if r["state"] == "by design"]
+    rest = [r for r in rows if r["state"] != "by design"]
+    dat = [r for r in rest
            if blocked.search(r["why"]) and not ours.search(r["why"])]
-    work = [r for r in rows if r not in dat]
+    work = [r for r in rest if r not in dat]
     print(f"\n{'='*70}\n  NAMED IN THE SPECS, NOT FULLY BUILT\n{'='*70}")
-    print(f"  {len(rows)} rows across {len({r['sport'] for r in rows})} "
+    print(f"  {len(rest)} rows across {len({r['sport'] for r in rows})} "
           f"model docs — {len(dat)} waiting on a data source, "
-          f"{len(work)} waiting on work.\n")
+          f"{len(work)} waiting on work"
+          + (f", plus {len(design)} refused on purpose.\n" if design
+             else ".\n"))
     for title, group in (("WAITING ON WORK — these are tasks", work),
                          ("WAITING ON A DATA SOURCE — these are not tasks "
-                          "until a feed exists", dat)):
+                          "until a feed exists", dat),
+                         ("REFUSED ON PURPOSE — do not build these", design)):
+        if not group:
+            continue
         print(f"  {title}  ({len(group)})")
         for r in sorted(group, key=lambda r: (r["sport"], r["section"])):
-            mark = "📋" if r["state"] == "parked" else "🟡"
+            mark = {"parked": "📋", "by design": "⛔"}.get(
+                r["state"], "🟡")
             print(f"    {mark} {r['sport']:<5} {r['section'][:40]:<40} "
                   f"{r['why'][:70]}")
         print()

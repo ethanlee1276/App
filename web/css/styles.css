@@ -4183,3 +4183,23 @@ select.calc-in { width: auto; font-weight: 600; }
   .rec-edge-tbl { min-width: 0; width: 100%; font-size: var(--fs-xs); }
   .rec-edge-tbl td, .rec-edge-tbl th { padding: 4px 8px 4px 0; }
 }
+
+/* Knowledge tiers on a reason (NFL_MODEL §2.3). Deliberately the quietest
+   thing on the card: up to five reasons each carry one, so anything with
+   a background or a colour of its own would out-shout the sentence it is
+   labelling. It reads as an aside, which is what it is — until a bet
+   loses, when it is the first thing you want. */
+.r-tier {
+  margin-left: .5ch;
+  font-size: var(--fs-xs);
+  letter-spacing: .04em;
+  text-transform: lowercase;
+  color: var(--text-mute);
+  white-space: nowrap;
+}
+.r-tier::before { content: "· "; }
+/* Only INFERENCE gets a colour, and only a faint one. It is the tier that
+   means the model itself was wrong, so it is the one worth finding on a
+   card you are re-reading after a loss. The other two are facts about the
+   world and need no emphasis. */
+.r-inference { color: var(--text-dim); font-style: italic; }
