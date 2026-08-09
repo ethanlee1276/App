@@ -79,7 +79,8 @@ def _rows(db: str, sport: str | None, since: str | None,
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     q = ("SELECT date, sport, player, market, side, odds, hit_prob, grade, "
-         "edge, stake_units, pnl_units, status, category FROM bets "
+         "edge, stake_units, pnl_units, status, category, closing_odds "
+         "FROM bets "
          "WHERE status IN ('won','lost')")
     if not measurement:
         q += " AND category='main' AND stake_units > 0"
@@ -716,11 +717,113 @@ def spread_report(rows: list[dict]) -> None:
                   "projections rather than the journal.")
 
 
+def clv_report(rows: list[dict]) -> None:
+    """Did the market move toward us by kickoff?
+
+    THE SHARPEST TEST AVAILABLE AT THIS SAMPLE SIZE, and the reason it is
+    worth building after everything else. 292 win/loss outcomes give a
+    hit rate to about three points either way, which is too blunt to
+    separate a small real edge from none. Closing line value is not a
+    coin flip — it is a continuous measurement on every bet, so the same
+    292 rows say far more.
+
+    IT IS ALSO THE ONE MEASUREMENT THE WINNER'S CURSE CANNOT FAKE. The
+    calibration gap came back as a uniform handicap: -9.6, -8.6, -10.5,
+    -5.5 across four markets, every price band, every confidence level.
+    Nothing market-specific looks like that. The one thing identical
+    everywhere is the SELECTION — a bet exists when our estimate beat the
+    market, by the same rule in every market — so the gap is consistent
+    with the projections being fine and the act of picking adding the
+    optimism.
+
+    That story and "there is no edge" predict the same calibration table
+    and OPPOSITE closing lines. A bettor who is actually finding stale
+    prices beats the close on average even across a losing stretch,
+    because the market comes to them. A bettor whose apparent edge is
+    their own estimation noise does not, because there was nothing there
+    to come to.
+
+    Measured on PRICE, not on the line. Prop lines are sticky at half
+    integers and mostly do not move; the juice does. Positive means the
+    price we took was better than the price at close.
+    """
+    import math
+    have = [r for r in rows if r.get("closing_odds") not in (None, "")
+            and r.get("odds") is not None]
+    print(f"\n{'='*70}\n  DID THE MARKET COME TO US BY KICKOFF?\n{'='*70}")
+    print(f"  {len(have)} of {len(rows)} settled bets carry a closing price.")
+    if len(have) < 20:
+        print("  Too few to say anything. Closing prices are captured by the "
+              "settle\n  pass; if this stays near zero the capture is the "
+              "thing to fix first,\n  because it is the sharpest read "
+              "available on whether an edge exists.")
+        return
+
+    def _clv(r):
+        """Value taken, in PROBABILITY POINTS.
+
+        The implied probability of the close minus the implied
+        probability we paid. Positive means the market ended up needing
+        a bigger number than we did — we bought it cheap.
+
+        NOT the ratio of decimal prices, which was the first version.
+        That is convex, and American odds jump across the +/-100 line, so
+        averaging it puts a positive bias on a book with NO edge: a
+        synthetic with zero true movement came back +0.42% at t = +1.9,
+        which reads as a finding and is arithmetic.
+
+        Probability points are also the same unit as the calibration gap
+        above, so the two numbers can be set beside each other: the model
+        claims about ten points it does not have — does the market agree
+        by even one?
+        """
+        return (1.0 / american_to_decimal(int(r["closing_odds"]))
+                - 1.0 / american_to_decimal(int(r["odds"])))
+
+    vals = [_clv(r) for r in have]
+    mean = sum(vals) / len(vals)
+    var = sum((v - mean) ** 2 for v in vals) / max(len(vals) - 1, 1)
+    se = math.sqrt(var / len(vals))
+    beat = sum(1 for v in vals if v > 0)
+    print(f"\n  mean CLV      {mean:+.2%} of a probability point   "
+          f"± {se:.2%} (1 SE)   t = {mean / se if se else 0:+.1f}")
+    print(f"  beat the close on {beat} of {len(have)} "
+          f"({beat / len(have):.0%})")
+    print("\n  READ IT LIKE THIS")
+    print("    positive and past about 2 SE -> real edge. The market moved to")
+    print("      us, which a losing stretch does not undo. Keep betting and")
+    print("      fix the sizing.")
+    print("    indistinguishable from zero -> no demonstrated edge. The")
+    print("      calibration gap is our own selection noise, and no")
+    print("      correction, cap or stake rule turns that into money.")
+    print("    negative -> we are consistently on the wrong side of the")
+    print("      market's own revision, which is worse than no edge.")
+
+    # And whether CLV predicts the result, which is the internal check
+    # that the closing prices being read are the right ones.
+    pos = [r for r, v in zip(have, vals) if v > 0]
+    neg = [r for r, v in zip(have, vals) if v <= 0]
+    if pos and neg:
+        def _wr(g):
+            return sum(1 for r in g if r["status"] == "won") / len(g)
+        print(f"\n  win rate when we beat the close   {_wr(pos):.1%}  "
+              f"({len(pos)} bets)")
+        print(f"  win rate when we did not          {_wr(neg):.1%}  "
+              f"({len(neg)} bets)")
+        print("    A large gap the WRONG way is a data problem, not a "
+              "betting one —\n    it would mean the closing prices being "
+              "read are not the ones we\n    were graded against.")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--db", default="data/ledger.db")
     ap.add_argument("--sport")
     ap.add_argument("--since", help="ISO date; only bets on or after it")
+    ap.add_argument("--clv", action="store_true",
+                    help="closing line value: did the market move toward "
+                         "us by kickoff? The sharpest edge test available "
+                         "on a few hundred bets. Reports only")
     ap.add_argument("--spread", action="store_true",
                     help="bucket the bets by the probability the model "
                          "claimed and compare each bucket to how often it "
@@ -744,6 +847,10 @@ def main() -> None:
         return
     rows = _rows(args.db, args.sport, args.since,
                  measurement=args.include_measurement)
+    if args.clv:
+        clv_report(rows)
+        print("\n  read-only; nothing was written.\n")
+        return
     if args.spread:
         spread_report(rows)
         print("\n  read-only; nothing was written.\n")

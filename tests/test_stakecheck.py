@@ -56,7 +56,7 @@ from engine.staking import MIN_STAKE_UNITS, to_units, kelly_units
 
 COLS = ("date", "sport", "player", "market", "side", "odds", "hit_prob",
         "grade", "edge", "stake_units", "pnl_units", "status", "category",
-        "projection", "line", "actual")
+        "projection", "line", "actual", "closing_odds")
 
 
 def _db(rows):
@@ -65,7 +65,7 @@ def _db(rows):
     os.close(fd)
     c = sqlite3.connect(path)
     c.execute("CREATE TABLE bets (id INTEGER PRIMARY KEY, "
-              + ", ".join(f"{k} {'REAL' if k in ('hit_prob','stake_units','pnl_units','edge','projection','line','actual') else 'INTEGER' if k == 'odds' else 'TEXT'}"
+              + ", ".join(f"{k} {'REAL' if k in ('hit_prob','stake_units','pnl_units','edge','projection','line','actual') else 'INTEGER' if k in ('odds','closing_odds') else 'TEXT'}"
                           for k in COLS) + ")")
     c.executemany(f"INSERT INTO bets ({','.join(COLS)}) VALUES "
                   f"({','.join('?' * len(COLS))})", rows)
@@ -78,7 +78,8 @@ def _row(**kw):
     base = dict(date="2026-08-08", sport="mlb", player="X", market="hits",
                 side="OVER", odds=106, hit_prob=0.52, grade="A", edge=0.05,
                 stake_units=0.25, pnl_units=-0.25, status="lost",
-                category="main", projection=None, line=None, actual=None)
+                category="main", projection=None, line=None, actual=None,
+                closing_odds=None)
     base.update(kw)
     return tuple(base[k] for k in COLS)
 
@@ -1164,6 +1165,116 @@ def test_the_bar_grows_with_the_number_of_slices():
     few = bar([("a", 0.0, 100), ("b", 0.0, 100)])
     many = bar([(c, 0.0, 100) for c in "abcdefgh"])
     assert few and many and many > few, (few, many)
+
+
+# --- closing line value ------------------------------------------------------
+def _to_american(p):
+    d = 1.0 / p
+    return int(round((d - 1) * 100)) if d >= 2 else int(round(-100 / (d - 1)))
+
+
+def _clv_db(edge_pts, n=400, seed=6):
+    """A book whose closing prices move by a KNOWN amount, built in
+    PROBABILITY space.
+
+    THE FIRST NULL WAS BUILT WRONG and it matters. Adding symmetric noise
+    to AMERICAN odds is not symmetric in probability — the mapping is
+    non-linear and jumps across +/-100 — so a book with no true movement
+    read +0.42% at t = +1.9. That looks like a finding and is arithmetic.
+    A null has to be null in the units the tool measures in."""
+    import random
+    rng = random.Random(seed)
+    rows = []
+    for i in range(n):
+        p_taken = rng.uniform(0.42, 0.58)
+        p_close = min(0.95, max(0.05, p_taken + edge_pts + rng.gauss(0, 0.02)))
+        won = rng.random() < 0.48
+        rows.append(_row(player=f"P{i}", odds=_to_american(p_taken),
+                         closing_odds=_to_american(p_close),
+                         status="won" if won else "lost",
+                         pnl_units=0.27 if won else -0.3))
+    return _db(rows)
+
+
+def _clv_stats(path):
+    import contextlib
+    import io
+    import re as _re
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        stakecheck.clv_report(stakecheck._rows(path, None, None))
+    m = _re.search(r"mean CLV\s+([-+][\d.]+)%.*?t = ([-+][\d.]+)",
+                   buf.getvalue(), _re.S)
+    return (float(m.group(1)), float(m.group(2))) if m else (None, None)
+
+
+def test_a_book_with_no_line_movement_reads_zero():
+    """The property that makes CLV worth trusting. A tool that finds edge
+    in a null finds edge in anything."""
+    path = _clv_db(edge_pts=0.0)
+    try:
+        mean, t = _clv_stats(path)
+    finally:
+        os.unlink(path)
+    assert abs(mean) < 0.5, mean
+    assert abs(t) < 2.0, t
+
+
+def test_a_real_two_point_edge_is_recovered():
+    path = _clv_db(edge_pts=0.02)
+    try:
+        mean, t = _clv_stats(path)
+    finally:
+        os.unlink(path)
+    assert 1.5 < mean < 2.5, mean
+    assert t > 5.0, t
+
+
+def test_clv_is_measured_in_probability_points_not_price_ratios():
+    """Averaging decimal-price ratios is convex, and American odds jump
+    across +/-100, so it carries a positive bias on a book with no edge.
+    Probability points are also the same unit as the calibration gap, so
+    the two can be read against each other."""
+    body = _code_only("clv_report")
+    assert "1.0 / american_to_decimal" in body
+    assert "/ american_to_decimal(int(r[\"closing_odds\"])) - 1.0)" not in body
+
+
+def test_the_direction_is_not_backwards():
+    """A sign error here would report a losing book as a winning one, and
+    nothing else in the tool would contradict it. Taking +120 on
+    something that closes -110 is value TO US."""
+    path = _db([_row(player="good", odds=120, closing_odds=-110),
+                _row(player="good2", odds=115, closing_odds=-105)] * 15)
+    try:
+        mean, _ = _clv_stats(path)
+    finally:
+        os.unlink(path)
+    assert mean > 0, f"beating the close reported as negative: {mean}"
+
+
+def test_a_thin_close_capture_says_so_instead_of_reporting():
+    """Closing prices come from the settle pass. If they are missing the
+    honest output is that the sharpest measurement available is not
+    running — not a confident number off twelve rows."""
+    import contextlib
+    import io
+    path = _db([_row(player=f"P{i}") for i in range(50)])   # no closes
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.clv_report(stakecheck._rows(path, None, None))
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "0 of 50" in out
+    assert "Too few to say anything" in out
+
+
+def test_the_clv_check_writes_nothing():
+    body = _code_only("clv_report")
+    for verb in ("save", "write", "store", "set_"):
+        assert verb not in body, f"clv_report calls {verb}"
 
 
 if __name__ == "__main__":
