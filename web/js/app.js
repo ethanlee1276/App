@@ -752,6 +752,10 @@ function renderAll() {
   renderRestWatch();
   renderPreseason();
   renderRecommended();
+  // AFTER the renderers, always. Which rooms exist is decided by what
+  // they just wrote — grouping first would judge every block empty and
+  // draw a single tab.
+  groupRecommended();
   renderEdgeBoard();
   renderScanner();
   renderLongShots();
@@ -4564,6 +4568,100 @@ function subtabbedHTML(view, groups) {
   </div>${panels}`;
 }
 
+/* ------------------------------------------------------------------
+   THE SAME ROOMS, FOR A PAGE BUILT OUT OF STANDING CONTAINERS
+
+   `subtabbedHTML` takes strings, which works for Record, Players and
+   Fantasy because those pages compose their whole body in JavaScript.
+   Recommended does not. Its fifteen blocks are declared in index.html and
+   filled in place by fifteen separate render functions that each find
+   their element by id — `renderGameBets` writes to `#gamebets`,
+   `renderRestWatch` to `#rest-watch`, and so on.
+
+   So this variant MOVES the existing nodes into panels instead of
+   rebuilding them. Every id survives, every renderer keeps working, and
+   nothing about what gets drawn changes — only where it sits. Rebuilding
+   Recommended as strings to reuse the other function would have meant
+   rewriting fifteen renderers to hit one page, which is a large change
+   with nothing to show for it.
+
+   WHY EMPTINESS IS RE-JUDGED ON EVERY CALL. The Record page knows what
+   it has before it renders; this page does not. `#gamebets` is empty
+   until the slate arrives, `#preseason-board` fills only in August, and
+   switching leagues empties half the page and fills the other half. A
+   room decided once at startup would offer a Game bets tab on a night
+   with no game bets, which is rule 1 of the sub-tab contract broken by
+   the only page that changes underneath it.
+
+   AND WHY IT IS JUDGED BY CONTENT, NOT BY HEIGHT. Everything inside an
+   inactive panel measures zero — `hidden` is display:none — so an
+   offsetHeight test would call every room but the open one empty and
+   collapse the bar to a single tab. Content is the only property that
+   survives being off screen. */
+function subtabbedDOM(view, host, groups) {
+  let wrap = host.querySelector(":scope > .subnav-wrap");
+  if (!wrap) {
+    // First pass: build the bar and the panels, then move each block in.
+    // Insertion point is where the first grouped element already sits, so
+    // anything above it (a masthead note, say) stays above.
+    const first = document.getElementById(groups[0][3][0]);
+    wrap = document.createElement("div");
+    wrap.className = "subnav-wrap";
+    wrap.dataset.subnav = view;
+    wrap.innerHTML = `<div class="subnav" role="tablist"
+        aria-label="Sections"></div><p class="subnav-hint"></p>`;
+    host.insertBefore(wrap, first);
+    groups.forEach((g) => {
+      const panel = document.createElement("div");
+      panel.className = "subgroup";
+      panel.dataset.subgroup = g[0];
+      panel.setAttribute("role", "tabpanel");
+      host.insertBefore(panel, null);
+      g[3].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) panel.appendChild(el);
+      });
+    });
+  }
+
+  const filled = (el) => {
+    if (!el) return false;
+    // An element hidden by its own renderer is not content. `#empty-slate`
+    // and `#gamebets-title` both sit in the markup permanently and are
+    // switched on by display, so reading textContent alone would count
+    // the "Game bets" heading on a night with no game bets.
+    if (el.style && el.style.display === "none") return false;
+    return el.children.length > 0 || (el.textContent || "").trim() !== "";
+  };
+  const live = groups.filter((g) => g[3].some((id) =>
+    filled(document.getElementById(id))));
+
+  const bar = wrap.querySelector(".subnav");
+  // Rule 2: one room means no bar. The page then behaves exactly as it
+  // did before sub-tabs existed, which is what makes this safe on a slate
+  // that turns out to have only picks and nothing else.
+  wrap.hidden = live.length < 2;
+  const want = _subtab[view];
+  const active = live.some((g) => g[0] === want) ? want : (live[0] || [])[0];
+  bar.innerHTML = live.map((g) => `
+    <button class="subnav-btn${g[0] === active ? " active" : ""}" role="tab"
+            type="button" data-subtab="${escapeAttr(g[0])}"
+            aria-selected="${g[0] === active}"
+            tabindex="${g[0] === active ? "0" : "-1"}"
+            title="${escapeAttr(g[2] || "")}">${escapeHtml(g[1])}</button>`)
+    .join("");
+  const hintEl = wrap.querySelector(".subnav-hint");
+  hintEl.textContent = (live.find((g) => g[0] === active) || [])[2] || "";
+  host.querySelectorAll(":scope > .subgroup").forEach((p) => {
+    const on = live.some((g) => g[0] === p.dataset.subgroup);
+    // An empty room's panel is hidden, never removed: its elements are
+    // where the renderers write, and a renderer whose target has been
+    // deleted fails silently for the rest of the session.
+    p.hidden = !on || (live.length > 1 && p.dataset.subgroup !== active);
+  });
+  bindSubtabs(host);
+}
+
 /* Click and keyboard for whatever sub-tab bar is inside `host`.
    Arrow keys move between tabs because this is a real tablist and a
    keyboard user should not have to Tab through five buttons to reach the
@@ -4612,6 +4710,37 @@ function bindSubtabs(host) {
       show(next.dataset.subtab);
     });
   });
+}
+
+/* Recommended's rooms. MEASURED IN CHROMIUM, not eyeballed, because that
+   is the standard the rest of this work was held to: the NFL board runs
+   8.1 screens on a 1440x900 desktop, and two blocks are 4.8 of them —
+   `#gamebets` at 3.23 screens and `#rest-watch` at 1.50. Everything a
+   person opens this page to see was below both of them.
+
+   THE VENUE BLOCK STAYS IN THE DEFAULT ROOM. Ethan put the ballparks
+   first on purpose — park, roof and wind are what the picks are read
+   against — so grouping is not licence to reorder. `games-title` and
+   `games` open room one, exactly where they were.
+
+   The sliders travel with the cards they filter. Leaving `#rec-controls`
+   behind would put a Min-edge dial in a room containing no prop. */
+const REC_ROOMS = [
+  ["board", "Tonight’s board",
+   "the venues, the designated picks, and every prop that cleared the bar",
+   ["probation-note", "talent-note", "stats", "games-title", "games",
+    "best-bets", "empty-slate", "rec-controls", "cards"]],
+  ["gamebets", "Game bets",
+   "moneyline, spread and total edges from the team model",
+   ["gamebets-title", "gamebets"]],
+  ["watch", "Watchlists",
+   "context that shades a pick without being one: rest, incentives, form",
+   ["preseason-board", "team-form", "incentive-watch", "rest-watch"]],
+];
+
+function groupRecommended() {
+  const host = document.getElementById("view-recommended");
+  if (host) subtabbedDOM("recommended", host, REC_ROOMS);
 }
 
 function bindRecordScopes(host) {
@@ -8512,7 +8641,8 @@ function bind() {
     load();
   });
   document.getElementById("show-all").addEventListener("change", (e) => {
-    state.showAll = e.target.checked; renderGameBets(); renderRecommended();
+    state.showAll = e.target.checked;
+    renderGameBets(); renderRecommended(); groupRecommended();
   });
   document.getElementById("player-search").addEventListener("input", (e) => {
     state.search = e.target.value; renderPlayers();
@@ -8544,6 +8674,9 @@ function bind() {
     renderBestBets();
     renderGameBets();
     renderRecommended();
+    // Showing non-recommended props, or entering a bankroll, can empty a
+    // room or fill one — the rooms have to be re-judged with the content.
+    groupRecommended();
     renderPlayers();
   };
   bankrollEl.addEventListener("input", onBankrollChange);

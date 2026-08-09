@@ -268,6 +268,123 @@ def test_the_hint_sits_under_the_tabs_rather_than_wherever_flex_put_it():
     assert "flex: 1 1 100%" in block, "no line of its own"
 
 
+def _first_room():
+    """The element ids in REC_ROOMS' first room, read out of the source.
+
+    Parsed rather than string-searched: `"games-title" in board` is true
+    of the whole literal as well as of room one, so a slice taken by
+    eyeballing the text would pass no matter which room the venues ended
+    up in."""
+    js = _js()
+    i = js.index("const REC_ROOMS = [")
+    lit = js[i:js.index("\n];", i)]
+    # The first room's id list is the first bracketed run of quoted names
+    # that contains more than one entry.
+    for m in re.finditer(r"\[\s*(\"[^\]]+?)\]", lit, re.S):
+        names = re.findall(r'"([a-z0-9-]+)"', m.group(1))
+        if len(names) > 3:
+            return names
+    raise AssertionError("could not find REC_ROOMS' first room")
+
+
+# --- Recommended's rooms -----------------------------------------------------
+def test_the_recommended_board_is_three_rooms():
+    """MEASURED IN CHROMIUM, against the checked-in sample slate: the NFL
+    board ran 8.1 screens at 1440x900, and two blocks were 4.8 of them —
+    `#gamebets` at 3.23 screens and `#rest-watch` at 1.50. Grouped, the
+    tallest room is 3.3 and the one you land on is 2.7."""
+    js = _js()
+    i = js.index("const REC_ROOMS = [")
+    body = js[i:i + 1200]
+    for room in ("board", "gamebets", "watch"):
+        assert f'["{room}"' in body or f'"{room}",' in body, room
+    assert "gamebets-title" in body and "rest-watch" in body
+
+
+def test_the_venue_block_stays_in_the_room_you_land_on():
+    """Ethan put the ballparks first on purpose — park, roof and wind are
+    what the picks are read against. Grouping is not licence to reorder,
+    so `games-title` and `games` open room one."""
+    board = _first_room()
+    assert "games-title" in board and "games" in board
+    # In the FIRST room, not merely somewhere in the list — the whole
+    # constraint is which room you land on.
+    assert "gamebets" not in board and "rest-watch" not in board
+
+
+def test_the_sliders_travel_with_the_cards_they_filter():
+    """A Min-edge dial in a room containing no prop is a control that does
+    nothing to anything on screen."""
+    js = _js()
+    i = js.index("const REC_ROOMS = [")
+    board = js[i:js.index('["gamebets"', i)]
+    assert '"rec-controls"' in board and '"cards"' in board
+    assert 'id="rec-controls"' in _read("web", "index.html")
+
+
+def test_the_rooms_are_rejudged_on_every_render_not_decided_once():
+    """`#gamebets` is empty until the slate arrives, `#preseason-board`
+    fills only in August, and switching leagues empties half the page. A
+    room decided once at startup would offer a Game bets tab on a night
+    with no game bets."""
+    js = _js()
+    # Every path that re-renders the board must re-group after it.
+    for anchor in ("renderRecommended();\n  // AFTER the renderers",
+                   "renderGameBets(); renderRecommended(); groupRecommended();"):
+        assert anchor in js, anchor
+    i = js.index("function subtabbedDOM(")
+    body = js[i:i + 3600]
+    assert "const live = groups.filter" in body, "emptiness must be recomputed"
+
+
+def test_emptiness_is_judged_by_content_not_by_height():
+    """Everything inside an inactive panel measures zero — `hidden` is
+    display:none — so an offsetHeight test would call every room but the
+    open one empty and collapse the bar to a single tab."""
+    js = _js()
+    i = js.index("function subtabbedDOM(")
+    body = js[i:i + 3600]
+    filled = body[body.index("const filled ="):body.index("const live =")]
+    assert "offsetHeight" not in filled and "getBoundingClientRect" not in filled
+    assert "textContent" in filled and "children.length" in filled
+    # An element its own renderer switched off is not content.
+    assert 'display === "none"' in filled
+
+
+def test_an_empty_rooms_panel_is_hidden_and_never_removed():
+    """Its elements are where fifteen renderers write by id. A renderer
+    whose target has been deleted fails silently for the rest of the
+    session."""
+    js = _js()
+    i = js.index("function subtabbedDOM(")
+    body = js[i:i + 3600]
+    assert ".remove()" not in body and "removeChild" not in body
+
+
+def test_no_renderer_had_to_change_to_get_rooms():
+    """The whole point of the DOM variant. Recommended's blocks are
+    declared in index.html and filled in place by functions that find them
+    by id; rebuilding the page as strings to reuse `subtabbedHTML` would
+    have meant rewriting fifteen renderers to group one page."""
+    html = _read("web", "index.html")
+    for el in ("stats", "games", "best-bets", "gamebets", "rest-watch",
+               "incentive-watch", "team-form", "cards"):
+        assert f'id="{el}"' in html, el
+
+
+def test_the_inventory_walks_the_rooms_before_it_harvests():
+    """The preservation net records what is VISIBLE, and a closed room is
+    display:none. Without this, growing rooms reads to the net as deleting
+    every string inside them — the safety net reporting a reorganisation
+    as data loss, which is how a safety net gets ignored."""
+    inv = _read("tools", "inventory.mjs")
+    assert "roomHarvest" in inv
+    assert ".subnav-btn" in inv
+    # Counts stay at rest: summing cards across rooms reports a number
+    # nobody ever sees on one screen.
+    assert "counts: r.counts" in inv
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

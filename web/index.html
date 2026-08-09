@@ -285,7 +285,10 @@
            teams rest, eliminated teams shut down. renderRestWatch(). -->
       <div id="rest-watch"></div>
 
-      <div class="controls" style="margin-top:20px">
+      <!-- id so the sub-tab grouping can move it with the board it
+           belongs to; the sliders filter `#cards` and are useless
+           sitting in a room where no card is. -->
+      <div class="controls" id="rec-controls" style="margin-top:20px">
         <div class="control">
           <label for="min-conf">Min confidence <b id="conf-val">6.0</b></label>
           <input type="range" id="min-conf" min="0" max="10" step="0.5" value="6" />

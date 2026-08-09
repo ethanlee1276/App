@@ -144,7 +144,37 @@ async function harvest() {
         (want) => typeof state !== 'undefined' && state.sport === want,
         s, { timeout: 1200 }).catch(() => {});
       await p.waitForTimeout(240);
-      const r = await p.evaluate(() => {
+      /* WALK THE SUB-TABS BEFORE HARVESTING.
+       *
+       * The harvest records what is VISIBLE, and a sub-tab panel is
+       * display:none until its tab is clicked. So the moment Record,
+       * Players, Fantasy or Recommended grew rooms, every string in a
+       * closed room read as a deletion — the net reporting the
+       * reorganisation as data loss, which is the one failure that makes
+       * a safety net get ignored.
+       *
+       * Behind a tab is still present. The contract is that the string
+       * exists and is reachable, not that it is on screen at rest, so the
+       * harvest opens each room in turn and unions what it finds. Strings
+       * are a set already; the COUNTS deliberately stay as they are at
+       * rest, because "how many cards does this page show" is a question
+       * about the page you land on. */
+      const roomHarvest = async (fn) => {
+        const tabs = await p.$$('.view.active .subnav-btn');
+        const acc = [];
+        acc.push(await p.evaluate(fn));
+        for (let i = 1; i < tabs.length; i++) {
+          await tabs[i].click().catch(() => {});
+          await p.waitForTimeout(90);
+          acc.push(await p.evaluate(fn));
+        }
+        if (tabs.length > 1) {
+          await tabs[0].click().catch(() => {});   // leave it as we found it
+          await p.waitForTimeout(90);
+        }
+        return acc;
+      };
+      const collect = () => {
         const seen = new Set(), classes = new Set();
         const affordances = { buttons: [], expanders: [], inputs: [], links: [] };
         const root = document.querySelector('.view.active') || document.body;
@@ -181,15 +211,21 @@ async function harvest() {
         return { strings: [...seen], classes: [...classes], affordances, counts,
                  nav: [...document.querySelectorAll('.nav-btn')]
                         .filter(visible).map(b => b.dataset.view) };
-      });
+      };
+      const rooms = await roomHarvest(collect);
+      const r = rooms[0];                       // the page as you land on it
+      const all = (pick) => [...new Set(
+        rooms.flatMap(pick).map(norm))].sort();
       out.pages[`${w}|${s}|${v}`] = {
-        strings: [...new Set(r.strings.map(norm))].sort(),
-        classes: r.classes.sort(),
-        buttons: [...new Set(r.affordances.buttons.map(norm))].sort(),
-        expanders: [...new Set(r.affordances.expanders.map(norm))].sort(),
-        inputs: [...new Set(r.affordances.inputs.map(norm))].sort(),
-        links: [...new Set(r.affordances.links.map(norm))].sort(),
+        strings: all((x) => x.strings),
+        classes: [...new Set(rooms.flatMap((x) => x.classes))].sort(),
+        buttons: all((x) => x.affordances.buttons),
+        expanders: all((x) => x.affordances.expanders),
+        inputs: all((x) => x.affordances.inputs),
+        links: all((x) => x.affordances.links),
         nav: r.nav,
+        // AT REST, not unioned. Summing card counts across rooms would
+        // report a number no one ever sees on one screen.
         counts: r.counts,
       };
     }
