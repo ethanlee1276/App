@@ -1982,6 +1982,60 @@ def test_nothing_prices_from_the_field_yet():
             assert "_field" not in line and "consensus" not in line, decision
 
 
+def test_the_snapshot_writes_both_sides_of_the_price():
+    """FOUND BY --clv PRINTING ITS GROUP COUNTS: "CLV BY SIDE: not shown
+    — OVER 113". Not 98 and 15. Every single rebuilt close was an OVER,
+    on a book that plainly contains UNDERs.
+
+    The snapshot writer recorded `over_odds` and never `under_odds`, so
+    the entire line history is over-only and no UNDER bet can ever have a
+    close rebuilt from it. The line object has carried the field all
+    along and the odds_history table has a column for it; only this
+    writer dropped it.
+
+    It does not recover the past — those rows are on disk without an
+    under price. It starts the clock."""
+    import inspect
+    from engine import linemoves
+    src = inspect.getsource(linemoves)
+    i = src.index('"ts": ts, "player": prop.player')
+    row = src[i:i + 400]
+    assert '"over_odds"' in row and '"under_odds"' in row, row
+
+
+def test_a_recorded_snapshot_round_trips_the_under_price():
+    """Behavioural, not a source scan: write one and read it back through
+    the close builder, which is the only consumer that matters."""
+    import tempfile
+    import time as _t
+    from pathlib import Path
+    from engine import linemoves
+
+    class _Ln:
+        book = "FanDuel"
+        line = 1.5
+        over_odds = -115
+        under_odds = -105
+
+    class _Prop:
+        player = "Test Hitter"
+        market = "hits"
+        lines = [_Ln()]
+
+    fd, path = tempfile.mkstemp(suffix=".jsonl")
+    os.close(fd)
+    try:
+        linemoves.record_snapshots([_Prop()], path=Path(path),
+                                   ts=_t.time() - 7200)
+        got = linemoves.closing_odds_by_date(linemoves.load_history(path))
+    finally:
+        os.unlink(path)
+    assert got, "nothing was recorded"
+    sides = got[[k for k in got][0]]
+    assert sides["over"] == -115
+    assert sides["under"] == -105, f"the under price did not survive: {sides}"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

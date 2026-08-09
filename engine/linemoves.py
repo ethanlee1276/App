@@ -80,9 +80,24 @@ def record_snapshots(props, ts: float | None = None,
             for ln in prop.lines:
                 if ln.book == "proxy":
                     continue
+                # BOTH SIDES. The under price was never written, and the
+                # whole snapshot history is over-only as a result — so
+                # `--clv` rebuilt a close for 113 bets and every single one
+                # of them was an OVER, with the under half of the book
+                # invisible rather than unprofitable.
+                #
+                # The line object has carried `under_odds` all along
+                # (models.py) and the odds_history table has a column for
+                # it (db.py). Only this writer dropped it.
+                #
+                # This does not recover the past: those rows are on disk
+                # without an under price and cannot be rebuilt. It starts
+                # the clock for UNDER bets from here.
                 row = {
                     "ts": ts, "player": prop.player, "market": prop.market,
-                    "book": ln.book, "line": ln.line, "over_odds": ln.over_odds,
+                    "book": ln.book, "line": ln.line,
+                    "over_odds": ln.over_odds,
+                    "under_odds": getattr(ln, "under_odds", None),
                 }
                 if start is not None:
                     row["start_ts"] = start
