@@ -587,7 +587,21 @@ def summary_lines(reports: list[MoveReport], limit: int = 10) -> list[str]:
     for r in reports[:limit]:
         arrow = "▲" if r.direction == "up" else "▼"
         steam = "  🔥 STEAM" if r.steam else ""
-        out.append(f"  {arrow} {r.player} {r.market}: {_describe(r)}{steam}")
+        # WHO WENT FIRST. §4: "Which book moved first matters — the first
+        # mover took the smart money; the rest are copying." It was
+        # computed, tested, and then read by nothing at all — the
+        # data-use audit reported it INERT, which was fair. A sharp book
+        # leading is the case §4 cares about, so it is called out; a
+        # recreational book leading usually means a stale number being
+        # corrected and is shown plainly.
+        first = ""
+        if r.first_mover:
+            lead = (f", {r.first_mover_lead_s / 60:.0f}m clear"
+                    if r.first_mover_lead_s >= 60 else "")
+            first = (f"  [{'SHARP ' if r.first_mover_sharp else ''}"
+                     f"{r.first_mover} first{lead}]")
+        out.append(f"  {arrow} {r.player} {r.market}: {_describe(r)}"
+                   f"{steam}{first}")
     return out
 
 
@@ -635,7 +649,22 @@ def annotate_recommendations(recs: list[dict], reports: list[MoveReport]) -> int
             # Live / Chase / Stale instead of showing a move already missed.
             "moved_ago_min": round((time.time() - last_move) / 60.0)
                              if last_move else None,
+            # WHO LED, carried onto the pick so it can be JOURNALED and
+            # therefore mined. §4 says the first mover took the smart
+            # money and the rest are copying — if that is true, picks a
+            # sharp book led against should lose more often than picks a
+            # recreational book drifted on, and that is a question the
+            # loss miner can answer once the column has rows.
+            #
+            # Journaling is not pricing. Nothing here moves a grade: the
+            # movement engine ALREADY vetoes picks on an unmeasured
+            # signal (#80), and a second one would repeat that mistake.
+            # This only makes the evidence collectable.
+            "first_mover": rep.first_mover,
+            "first_mover_sharp": rep.first_mover_sharp,
         }
+        rec["move_first_sharp"] = (
+            1.0 if rep.first_mover_sharp else 0.0) if rep.first_mover else None
         what = _describe(rep)
         steam_txt = " (steam — several books moved together)" if rep.steam else ""
         if with_us:

@@ -3605,6 +3605,10 @@ def main() -> None:
     if "--odds-doctor" in argv:
         odds_doctor()
         return
+    if "--data-use" in argv:
+        from engine.datause import report as _use
+        print(_use())
+        return
     if "--velo" in argv:
         i = argv.index("--velo")
         who = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else None
