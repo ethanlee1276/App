@@ -545,7 +545,7 @@ def near_misses(recommendations: list[dict], limit: int = 10) -> list[dict]:
     would have picked. Real-priced, credible, calibration-open Tier 1/2
     only; each row says which gate stopped it and by how much."""
     from ..calibrate import is_reliable
-    from .quality import TIER_MIN_EDGE
+    from .quality import MLB_TIER_MIN_EDGE, MLB_QUALITY_FLOOR
     out = []
     for r in recommendations:
         if r.get("recommended") or r.get("has_market") is False:
@@ -562,17 +562,21 @@ def near_misses(recommendations: list[dict], limit: int = 10) -> list[dict]:
         if not is_reliable("mlb", r.get("market", "")):
             continue
         edge, quality = float(r.get("edge") or 0), float(r.get("quality") or 0)
-        bar = TIER_MIN_EDGE.get(tier, 0.030)
+        # The MLB bars, not the shared ones — after the 2026-08-10
+        # loosening this book must sample the band below the NEW bars,
+        # or it would keep re-litigating the band it already won into
+        # the main record.
+        bar = MLB_TIER_MIN_EDGE.get(tier, 0.030)
         if edge < NEAR_EDGE_FRACTION * bar or quality < NEAR_QUALITY_FLOOR:
             continue
-        if edge >= bar and quality >= 70:
+        if edge >= bar and quality >= MLB_QUALITY_FLOOR:
             continue                      # died at a structural gate — not
                                           # a candidate for "looser bars"
         misses = []
         if edge < bar:
             misses.append(f"edge {edge:.1%} vs {bar:.1%} bar")
-        if quality < 70:
-            misses.append(f"quality {quality:.0f}/70")
+        if quality < MLB_QUALITY_FLOOR:
+            misses.append(f"quality {quality:.0f}/{MLB_QUALITY_FLOOR:.0f}")
         out.append({
             "player": r.get("player"), "team": r.get("team"),
             "market": r.get("market"), "market_label": r.get("market_label"),
@@ -602,7 +606,7 @@ def gate_census(recommendations: list[dict]) -> dict:
     from ..betting import favourite_surcharge, MAX_CREDIBLE_EDGE
     from ..odds import american_to_prob
     from ..calibrate import is_reliable
-    from .quality import TIER_SHRINK, TIER_MIN_EDGE
+    from .quality import TIER_SHRINK, MLB_TIER_MIN_EDGE, MLB_QUALITY_FLOOR
     census = {"recommended": 0, "no_real_price": 0, "longshot_board": 0,
               "credibility": 0, "calibration": 0, "tier_edge_bar": 0,
               "price_net": 0, "quality_under_70": 0, "held_by_rules": 0}
@@ -638,14 +642,16 @@ def gate_census(recommendations: list[dict]) -> dict:
         if abs(raw) > MAX_CREDIBLE_EDGE:
             census["credibility"] += 1
             continue
-        if (r.get("edge") or 0) < TIER_MIN_EDGE.get(tier, 0.03):
+        if (r.get("edge") or 0) < MLB_TIER_MIN_EDGE.get(tier, 0.03):
             census["tier_edge_bar"] += 1
             continue
         net = (r.get("hit_prob") or 0) - american_to_prob(r.get("odds") or -110)
         if net <= favourite_surcharge(r.get("odds") or -110):
             census["price_net"] += 1
             continue
-        if (r.get("quality") or 0) < 70:
+        # Key name kept for the page's reader; the floor is 66 since the
+        # 2026-08-10 loosening (receipt on MLB_QUALITY_FLOOR).
+        if (r.get("quality") or 0) < MLB_QUALITY_FLOOR:
             census["quality_under_70"] += 1
             continue
         census["held_by_rules"] += 1     # lineups, IL, live game, juice, sliders

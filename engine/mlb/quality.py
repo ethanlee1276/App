@@ -44,8 +44,42 @@ def mlb_tier_shrink(market: str) -> float:
     return TIER_SHRINK[mlb_tier(market)]
 
 
+# THE FIRST EVIDENCE-DRIVEN LOOSENING (2026-08-10). The near-miss paper
+# book — every prop that fell just short of these exact bars, journaled
+# nightly at flat stakes and settled against real results — reached its
+# written decision threshold: 453-311 over 764 graded, +1.3% ROI, while
+# the main record these bars protect sat at 145-162, −14.9%. The band
+# the gates refused outperformed the band they approved by sixteen
+# points. Per the rule attached to that bucket the day it was built
+# ("profitable over 100+ graded → loosen the real gates"), the MLB bars
+# come down one notch — MLB ONLY, because the loose book is MLB-only
+# evidence; every other sport keeps the shared TIER_MIN_EDGE until it
+# has its own bucket to argue from.
+#
+# Honesty about the margin: +1.3% on 764 flat stakes carries a wide
+# confidence interval — the PROVEN fact is "the refused band is not
+# burning money", not "it prints". That is exactly why this is one
+# notch and not the door: the newly admitted band journals as MAIN and
+# so measures itself from tonight, and the near-miss book automatically
+# re-anchors below the NEW bars, testing the next band down. If the
+# admitted band burns, these numbers go back up with the same receipt.
+# Tier 3 (home runs) is untouched — the Long Shots board owns it.
+MLB_TIER_MIN_EDGE = {1: 0.021, 2: 0.026, 3: TIER_MIN_EDGE[3]}
+MLB_QUALITY_FLOOR = 66.0
+MLB_GRADE_BANDS = (("A+", 90.0), ("A", 80.0), ("B+", MLB_QUALITY_FLOOR))
+
+
+def mlb_letter(quality: float) -> str:
+    """MLB's grade bands — B+ starts at the loosened floor, so the grade
+    a pick wears and the gate that admits it stay one fact."""
+    for name, floor in MLB_GRADE_BANDS:
+        if quality >= floor:
+            return name
+    return "Pass"
+
+
 def mlb_tier_min_edge(market: str) -> float:
-    return TIER_MIN_EDGE[mlb_tier(market)]
+    return MLB_TIER_MIN_EDGE[mlb_tier(market)]
 
 
 def mlb_volatility(market: str) -> str:

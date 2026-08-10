@@ -124,6 +124,42 @@ def test_sample_slate_recommends_one_tier1_play():
         assert r["quality"] == round(r["confidence"] * 10)
 
 
+def test_the_2026_08_10_loosening_is_one_notch_mlb_only():
+    """The first evidence-driven loosening. The near-miss paper book —
+    built the day the gates went up, with its decision rule written down
+    in advance ("profitable over 100+ graded → loosen the real gates") —
+    fired: 453-311, +1.3% ROI over 764 flat-staked graded near-misses,
+    while the main record sat 145-162, −14.9%. The refused band beat the
+    approved band by sixteen points, so the MLB bars came down ONE notch.
+
+    Pinned here so nobody re-tightens (or further loosens) without a new
+    receipt:
+    - edge bars: Tier 1 2.1% (was 2.5%), Tier 2 2.6% (was 3.0%);
+    - quality floor 66 (was 70), and the B+ band moves WITH it — the
+      grade a pick wears and the gate that admits it stay one fact;
+    - Tier 3 (home runs) untouched — the Long Shots board owns it;
+    - MLB ONLY: the loose book is MLB evidence, so every other sport
+      keeps the shared bars until it earns its own verdict.
+    """
+    from engine.mlb.quality import (MLB_TIER_MIN_EDGE, MLB_QUALITY_FLOOR,
+                                    mlb_letter)
+    from engine.quality import TIER_MIN_EDGE, letter
+
+    assert mlb_tier_min_edge("strikeouts") == MLB_TIER_MIN_EDGE[1] == 0.021
+    assert mlb_tier_min_edge("total_bases") == MLB_TIER_MIN_EDGE[2] == 0.026
+    assert mlb_tier_min_edge("home_runs") == TIER_MIN_EDGE[3]   # untouched
+
+    # The admitted band: quality 67 / edge 2.7% Tier 2 was a Pass on
+    # 2026-08-09 and is a B+ on 2026-08-10. Just below stays refused.
+    assert MLB_QUALITY_FLOOR == 66.0
+    assert mlb_letter(67) == "B+"
+    assert mlb_letter(65) == "Pass"
+
+    # Other sports still price off the shared bars — 67 is NOT a B+ there.
+    assert TIER_MIN_EDGE[1] == 0.025 and TIER_MIN_EDGE[2] == 0.030
+    assert letter(67) == "Pass"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

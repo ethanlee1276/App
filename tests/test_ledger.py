@@ -1738,7 +1738,11 @@ def test_near_misses_pick_only_the_just_under_bar():
     nm = near_misses(rows)
     assert [r["player"] for r in nm] == ["Near Quality", "Near Edge"]
     assert "edge 2.5%" in nm[1]["missed_by"]
-    assert "quality 63/70" in nm[0]["missed_by"]
+    # 63/66, not 63/70: the sampler anchors below the LIVE bars, and the
+    # 2026-08-10 loosening (its own verdict — 453-311, +1.3% over 764)
+    # moved the MLB floor to 66. The book must keep testing the next band
+    # down, not the band it already proved.
+    assert "quality 63/66" in nm[0]["missed_by"]
 
 
 def test_the_breakeven_comes_from_the_prices_actually_taken():

@@ -139,7 +139,7 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     minimum, grade 0–100 with baseball's weights, size with fractional
     Kelly. ``game`` supplies lineup/probable/umpire context (None → neutral)."""
     from .quality import (mlb_tier, mlb_tier_shrink, mlb_tier_min_edge,
-                          mlb_volatility, mlb_quality_score, letter,
+                          mlb_volatility, mlb_quality_score, mlb_letter,
                           STAKE_CAP_U)
     history = [g.value for g in prop.logs] if prop.logs else []
     temp, bias = correction_for("mlb", prop.market)
@@ -194,7 +194,9 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     #                measured favourite surcharge). Not a second edge bar:
     #                the old +0.010 requirement sat above the tier minimums
     #                at standard juice and silently overrode them.
-    #  quality     — below 70 is no bet, not a lean (§10)
+    #  quality     — below MLB_QUALITY_FLOOR is no bet, not a lean (§10;
+    #                70 → 66 on 2026-08-10, the near-miss book's verdict —
+    #                the receipt lives on the constant in quality.py)
     calibration_ok = is_reliable("mlb", prop.market)
     # One level finer than the market gate above: the loss-pattern miner
     # closes SLICES (a side, a price band) whose stated probabilities
@@ -232,7 +234,7 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     gate_ok = (credible and calibration_ok and pattern_block is None
                and has_market and edge >= min_edge
                and net > favourite_surcharge(best.odds))
-    grade = letter(quality) if gate_ok else "Pass"
+    grade = mlb_letter(quality) if gate_ok else "Pass"
     fraction = 0.5 if (grade == "A+" and tier == 1) else 0.25
     stake = (_kelly_stake(hit, best.odds, fraction, STAKE_CAP_U[grade])
              if grade != "Pass" else 0.0)
