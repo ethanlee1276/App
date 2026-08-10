@@ -340,12 +340,45 @@ def tto_band(depth) -> str | None:
     return "past 3x"
 
 
+def coverage_band(zone_rate) -> str | None:
+    """How much ZONE the opposing defence plays — §6's coverage tell.
+
+    Bands rather than a number, like every other dimension here, so the
+    miner has slices with enough rows to test. The cuts are the league's
+    own shape rather than round numbers: measured across 2022, defences
+    ran 65-79% zone, so a "heavy man" defence is one well under the pack
+    and "heavy zone" one well above it, and the middle band is where most
+    of the league actually lives.
+
+    NULL WHEN UNMEASURED, and that is load-bearing. Most journalled bets
+    are not NFL props at all, and an NFL prop in Week 1 has no
+    season-to-date coverage behind it. Returning "balanced" for those
+    would pool three different states — a balanced defence, a sport with
+    no coverage data, and a week too early to have any — into one slice,
+    and the miner would convict the pool.
+    """
+    if zone_rate is None:
+        return None
+    try:
+        z = float(zone_rate)
+    except (TypeError, ValueError):
+        return None
+    if not 0.0 <= z <= 1.0:
+        return None
+    if z < 0.65:
+        return "heavy man (zone under 65%)"
+    if z < 0.75:
+        return "balanced (zone 65-75%)"
+    return "heavy zone (75%+)"
+
+
 def features_of(side=None, odds=None, prob=None, book=None,
                 horizon_days=None, lead_min=None, park_hr=None,
                 wind_out=None, roofed=False, lineup_slot=None,
                 lineup_conf=False, sport=None, rest_days=None,
                 body_clock=None, pen_own=None, pen_opp=None,
-                velo_delta=None, tto_proj=None) -> dict:
+                velo_delta=None, tto_proj=None,
+                opp_zone_rate=None) -> dict:
     """The feature dict for one bet — mining and veto both come through
     here, so a pick is judged by exactly the dimensions it was mined on."""
     feats = {
@@ -369,6 +402,9 @@ def features_of(side=None, odds=None, prob=None, book=None,
         "velo": velo_band(velo_delta),
         # How deep he has been going. §5's third-time-through penalty.
         "tto": tto_band(tto_proj),
+        # §6's coverage tell: how much zone the opposing defence plays.
+        # NFL props only; NULL is not "balanced" — see coverage_band.
+        "coverage": coverage_band(opp_zone_rate),
     }
     return {k: v for k, v in feats.items() if v is not None}
 
@@ -384,7 +420,8 @@ def records_from_ledger(conn) -> list[dict]:
         "SELECT sport, market, side, odds, hit_prob, book, date, ts, status, "
         "category, "
         "lead_min, park_hr, wind_out, roofed, lineup_slot, lineup_conf, "
-        "rest_days, body_clock, pen_own, pen_opp, velo_delta, tto_proj "
+        "rest_days, body_clock, pen_own, pen_opp, velo_delta, tto_proj, "
+        "opp_zone_rate "
         "FROM bets WHERE status IN ('won','lost')").fetchall()
     out = []
     for r in rows:
@@ -422,6 +459,7 @@ def records_from_ledger(conn) -> list[dict]:
                                  lineup_conf=bool(r["lineup_conf"]),
                                  velo_delta=r["velo_delta"],
                                  tto_proj=r["tto_proj"],
+                                 opp_zone_rate=r["opp_zone_rate"],
                                  rest_days=r["rest_days"],
                                  body_clock=r["body_clock"],
                                  pen_own=r["pen_own"], pen_opp=r["pen_opp"],
@@ -961,7 +999,7 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
          book=None, horizon_days=None, lead_min=None, park_hr=None,
          wind_out=None, roofed=False, lineup_slot=None, lineup_conf=False,
          rest_days=None, body_clock=None, pen_own=None, pen_opp=None,
-         velo_delta=None, tto_proj=None,
+         velo_delta=None, tto_proj=None, opp_zone_rate=None,
          path=None) -> str | None:
     """The reason this pick is blocked, or None.
 
@@ -978,6 +1016,7 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
                         lineup_slot=lineup_slot, lineup_conf=lineup_conf,
                         rest_days=rest_days, body_clock=body_clock,
                         velo_delta=velo_delta, tto_proj=tto_proj,
+                        opp_zone_rate=opp_zone_rate,
                         pen_own=pen_own, pen_opp=pen_opp,
                         sport=sport)
     for f in store.get("closed") or []:

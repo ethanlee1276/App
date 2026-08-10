@@ -278,7 +278,59 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
             d["body_clock"] = _st.get("body_clock")
         except Exception:                                     # noqa: BLE001
             pass
+    # §6's coverage tell: how much ZONE the defence this player faces
+    # plays, from participation data for games already played.
+    #
+    # A PROJECTION, and it has to be. Tonight's coverage is a fact about a
+    # game that has not happened; what lands on the row is what that
+    # defence HAS been doing, which is knowable when the bet is placed.
+    # Journaling the actual would be journaling the future — the same
+    # mistake `tto_proj` exists to avoid.
+    #
+    # NULL when unmeasured, and unmeasured is the normal case early: Week
+    # 1 has no season-to-date behind it, and a season's file is only
+    # published as the weeks are played. `coverage_band` returns None for
+    # NULL rather than "balanced", so an unmeasured pick never pools with
+    # a genuinely balanced defence.
+    d["opp_zone_rate"] = _opp_zone_rate(g, d)
     return d
+
+
+#: (season, opponent) → zone rate. A season's participation file is ~49 MB
+#: and every prop on the slate asks the same question about the same dozen
+#: defences, so the answer is computed once per opponent per build.
+_ZONE_CACHE: dict = {}
+
+
+def _opp_zone_rate(g, d):
+    """The opposing defence's zone rate, or None when we cannot say.
+
+    Degrades to None on every failure path on purpose. A missing feed, a
+    season not yet published, a team code the file does not carry — all of
+    them mean "not measured", and none of them should take down a board
+    build over a dimension that prices nothing.
+    """
+    opp = (d.get("opponent") or "").strip().upper()
+    season = getattr(g, "season", None)
+    if not opp or not season:
+        return None
+    key = (season, opp)
+    if key in _ZONE_CACHE:
+        return _ZONE_CACHE[key]
+    rate = None
+    try:
+        from .sources.nflpart import coverage_rates, load_participation
+        rows = load_participation(int(season))
+        c = coverage_rates(rows, opp)
+        # The floor is not decoration. A defence with 40 labelled snaps
+        # has played about a game and a half, and its zone rate is a
+        # statement about two afternoons.
+        if c["n_labelled"] >= 200:
+            rate = c["zone_rate"]
+    except Exception:                                         # noqa: BLE001
+        rate = None
+    _ZONE_CACHE[key] = rate
+    return rate
 
 
 def _game_bets(games, config: RuleConfig) -> list[dict]:

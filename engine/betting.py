@@ -251,6 +251,29 @@ def _grade(confidence: float, net: float, odds: int | None = None) -> str:
 MIN_STAKE_UNITS = 0.1
 
 
+def _zone_for(sport, game, prop):
+    """§6's coverage tell for the veto — the opposing defence's zone rate.
+
+    A helper rather than eight lines at the call site, because
+    `tests/test_fatigue.py` asserts that `_fatigue_state` sits within 500
+    characters of the `lp_veto(` call: the two have to be read together,
+    and a block wedged between them is exactly the drift that guard
+    exists to catch. The same guard already made this repo extract
+    `_velo_for` and `_tto_for` on the MLB side.
+
+    NOT A PRICE. The veto only ever ENFORCES a slice the journal already
+    convicted, which is a different act from letting a new signal move a
+    number — see docs/THE_INFORMATION_TEST.md.
+    """
+    if sport != "nfl" or game is None:
+        return None
+    try:
+        from .pipeline import _opp_zone_rate
+        return _opp_zone_rate(game, {"opponent": getattr(prop, "opponent", "")})
+    except Exception:                                         # noqa: BLE001
+        return None
+
+
 def _kelly_stake(model_prob: float, odds: int, fraction: float = 0.25,
                  cap_units: float = 1.0) -> float:
     """Fractional-Kelly stake in units (0 = no bet).
@@ -360,6 +383,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
         from .fatigue import state_for as _fatigue_state
         _st = _fatigue_state(game, getattr(prop, "team", ""))
         _rest_days, _body_clock = _st.get("rest_days"), _st.get("body_clock")
+    _zone = _zone_for(sport, game, prop)
     pattern_block = lp_veto(sport, prop.market, side=side, odds=best.odds,
                             prob=hit, book=best.book, horizon_days=0,
                             lead_min=minutes_until(
@@ -368,6 +392,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
                             # shows, so a convicted "short week" pocket
                             # refuses the next matching pick.
                             rest_days=_rest_days, body_clock=_body_clock,
+                            opp_zone_rate=_zone,
                             **_env)
     tier = market_tier(prop.market)
     min_edge = tier_min_edge(prop.market)

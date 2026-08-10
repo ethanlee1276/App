@@ -146,10 +146,13 @@ SIGNALS = (
             "until the edge test says a new input can earn its place."},
     {"name": "alignment and coverage",
      "module": "engine/sources/nflpart.py",
-     "symbols": ("coverage_rates", "formation_rates", "show_alignment"),
-     "want": ("probe",),
-     "why": "§6. The coverage data the spec said did not exist. Probe "
-            "first; a matchup adjustment built on it would be pricing."},
+     "symbols": ("coverage_rates", "formation_rates", "show_alignment",
+                 "opp_zone_rate", "coverage_band"),
+     "want": ("probe", "journal", "gate"),
+     "why": "§6. The coverage data the spec said did not exist. Journaled "
+            "as `opp_zone_rate` so the loss miner can convict on it and "
+            "the lab can propose about it — the cheapest real test of "
+            "whether it carries anything, with nothing touching a grade."},
 )
 
 #: Where a consumer has to live to count as each kind. Checked by path,

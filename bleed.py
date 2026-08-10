@@ -203,6 +203,7 @@ def odds_bucket(b) -> str:
 from engine.losspatterns import (clock_band, horizon_band,  # noqa: E402
                                  lead_band, lineup_band, park_band,
                                  pen_band, prob_band, rest_band, wind_band, velo_band,
+                                 coverage_band,
                                  tto_band)
 
 
@@ -248,6 +249,9 @@ DIMENSIONS = {
     # not steady, and pooling them would hide the signal under every
     # hitter prop ever taken.
     "velo":        lambda b: velo_band(b.get("velo_delta")),
+    # §6's coverage tell. NFL props only, so most rows are None and the
+    # slice stays empty until the season starts.
+    "coverage":    lambda b: coverage_band(b.get("opp_zone_rate")),
     # How deep the starter has been going — a projection from his recent
     # starts, never tonight's actual depth.
     "tto":         lambda b: tto_band(b.get("tto_proj")),

@@ -118,6 +118,94 @@ def test_nothing_in_this_module_prices_anything():
         assert f"{banned} =" not in src and f"\"{banned}\"" not in src, banned
 
 
+# --- journaled as a mineable dimension ---------------------------------------
+def test_the_band_never_calls_an_unmeasured_pick_balanced():
+    """THE LOAD-BEARING NULL. Most journalled bets are not NFL props, and
+    an NFL prop in Week 1 has no season-to-date behind it. Returning
+    "balanced" for those would pool three different states — a balanced
+    defence, a sport with no coverage data, and a week too early to have
+    any — into one slice, and the miner would convict the pool."""
+    from engine.losspatterns import coverage_band
+    assert coverage_band(None) is None
+    assert coverage_band("") is None
+    assert coverage_band(1.4) is None          # not a rate
+    assert coverage_band(0.70) == "balanced (zone 65-75%)"
+
+
+def test_the_bands_split_the_league_where_the_league_actually_sits():
+    """Measured across 2022, defences ran 65-79% zone, so the cuts are the
+    league's shape rather than round numbers."""
+    from engine.losspatterns import coverage_band
+    assert coverage_band(0.60) == "heavy man (zone under 65%)"
+    assert coverage_band(0.79) == "heavy zone (75%+)"
+
+
+def test_the_dimension_reaches_the_miner_the_lab_and_the_report():
+    """The chain a signal has to complete to stop being inert:
+    features_of -> DIMS (the LLM's menu) -> bleed (the report that tests
+    it). A dimension missing from any of the three is one nobody can
+    convict on."""
+    import bleed
+    from engine.hypotheses import DIMS
+    from engine.losspatterns import features_of
+    assert features_of(sport="nfl", opp_zone_rate=0.80)["coverage"] \
+        == "heavy zone (75%+)"
+    assert "coverage" in DIMS
+    assert "coverage" in bleed.DIMENSIONS
+
+
+def test_the_journaled_value_is_a_projection_not_tonights_coverage():
+    """Tonight's coverage is a fact about a game that has not happened.
+    What lands on the row is what that defence HAS been doing — the same
+    rule `tto_proj` exists for. Pinned in the source, since the failure
+    would be invisible in the numbers."""
+    src = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "engine", "pipeline.py"), encoding="utf-8").read()
+    i = src.index("def _opp_zone_rate(")
+    assert "load_participation" in src[i:i + 1400]
+    block = src[src.index("§6's coverage tell"):i]
+    assert "PROJECTION" in block and "journaling the future" in block
+
+
+def test_a_thin_defence_sample_is_not_journaled_at_all():
+    """A defence with 40 labelled snaps has played about a game and a
+    half, and its zone rate is a statement about two afternoons."""
+    src = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "engine", "pipeline.py"), encoding="utf-8").read()
+    i = src.index("def _opp_zone_rate(")
+    assert 'c["n_labelled"] >= 200' in src[i:i + 1400]
+
+
+def test_the_column_exists_and_is_written_from_the_pick():
+    from engine import ledger
+    conn = ledger.connect(":memory:")
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(bets)").fetchall()]
+    assert "opp_zone_rate" in cols
+    src = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "engine", "ledger.py"), encoding="utf-8").read()
+    assert 'r.get("opp_zone_rate")' in src
+
+
+def test_it_is_journaled_and_never_priced():
+    """The whole point of this experiment. The miner may convict on it;
+    nothing may grade on it until stakecheck --info moves off 0.5."""
+    src = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "engine", "pipeline.py"), encoding="utf-8").read()
+    i = src.index("def _opp_zone_rate(")
+    body = src[i:i + 1400]
+    # WORD BOUNDARIES, because a substring check fails on English: the
+    # docstring says the function "degrades to None", and "degrades"
+    # contains "grade". A guard with false positives gets switched off.
+    import re as _re
+    for banned in ("edge", "hit_prob", "grade", "stake", "multiplier"):
+        assert not _re.search(rf"\b{banned}\b", body), (
+            f"{banned} must not appear in a probe path")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

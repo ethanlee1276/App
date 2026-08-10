@@ -429,11 +429,17 @@ def test_every_journaled_dimension_the_lab_can_test_is_sliceable_here():
                # what caught it: the lab gained a dimension and this
                # report could not slice it, which is the two tools
                # disagreeing about what exists.
-               "velo", "tto"}
+               "velo", "tto",
+               # §6's coverage tell, added 2026-08-10 — the opposing
+               # defence's zone rate, journaled on NFL props. Same story
+               # as velo: the lab gained a dimension and this assertion
+               # is what forces the report to gain it too.
+               "coverage"}
     assert set(DIMS) == covered, "DIMS moved; recheck bleed's coverage"
     here = set(bleed.DIMENSIONS)
     for want in ("side", "book", "price", "claimed p", "horizon", "capture lag",
                  "park", "wind", "lineup", "rest", "clock", "pen own", "velo", "tto",
+                 "coverage",
                  "pen opp"):
         assert want in here, want
 

@@ -89,7 +89,9 @@ DIMS = ("side", "odds", "prob", "horizon", "book", "lead", "park", "wind",
         # §5's velocity tell. Listed here is what puts it in the LLM's
         # menu — a dimension absent from DIMS is one the lab can never
         # propose about, however faithfully it is journaled.
-        "velo", "tto")
+        "velo", "tto",
+        # §6's coverage tell — how much zone the opposing defence plays.
+        "coverage")
 
 
 class HypothesisUnavailable(RuntimeError):
