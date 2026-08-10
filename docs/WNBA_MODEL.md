@@ -216,7 +216,7 @@ listed honestly rather than faked).
 | §5 Recency 40/30/20/10 | ✅ | `LeagueTuning.recency_weights`, applied as **nested** windows — see the note below |
 | §5 Reset rule | 📋 | Needs role-change/trade detection |
 | §5 Usage Stability Score | ✅ | `engine/nba/quality.py` `usage_stability` — measured week-to-week CV of minutes; above 35% the play is refused outright, and a reliable six-minutes-a-night role is refused too |
-| §6 Injury ripple | 🟡 | Minutes redistribution is modelled; on/off usage inheritance 📋 |
+| §6 Injury ripple | 🟡 | Minutes redistribution is modelled. **On/off inheritance MEASURED 2026-08-10** (`engine/nba/onoff.py`, `launch.py --onoff wnba LVA \"A'ja Wilson\"`): teammates' share of the team's pts/min/reb/ast/fg3m in the games she sat vs played, from box scores already ingested. Share not volume so pace cancels; absence read from the box score, not the injury report; presence judged by MINUTES so a scoreless night is still a played game; below 3 missed games the report says the shape is not evidence. Evidence only — the minutes model owns redistribution until the edge test moves |
 | §6 Schedule density | ✅ | `nba_build.schedule_density` reads a week of schedule for 3-in-4 and 4-in-6, feeding both the minutes multiplier and the grade |
 | §6 International windows · Commissioner's Cup · rookie integration · expansion | 📋 | No structured source; the stability filter catches unsettled rookie and expansion roles indirectly |
 | §6 Matchup layer | 🟡 | `nba_build.defense_ratings` — points allowed per GAME, labelled directional. Per-possession 📋 |

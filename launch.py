@@ -2910,6 +2910,35 @@ def show_arsenal(person_id=None, season: int | None = None) -> None:
     print("\n  Evidence only — nothing prices from this.\n")
 
 
+def show_onoff(league=None, team=None, player=None, stat="pts") -> None:
+    """Who inherits a sitting player's share (WNBA/NBA §6).
+
+        python3 launch.py --onoff wnba LVA "A'ja Wilson"
+        python3 launch.py --onoff wnba LVA "A'ja Wilson" min
+
+    Shares of the team's total per game, with her vs without her, from
+    the box scores already ingested. Evidence only — the minutes model
+    still owns redistribution.
+    """
+    from engine.db import connect as _c
+    from engine.nba import onoff as _oo
+    if not league or not team or not player:
+        print("\n  usage: python3 launch.py --onoff <nba|wnba> <TEAM> "
+              "\"<Player>\" [pts|min|reb|ast|fg3m]\n")
+        return
+    conn = _c()
+    rows = [dict(r) for r in conn.execute(
+        "SELECT player, team, period, market, value FROM player_game_logs "
+        "WHERE sport=? AND team=?", (str(league).lower(),
+                                     str(team).upper()))]
+    if not rows:
+        print(f"\n  No {league} logs for {team}. "
+              f"`python3 ingest.py {league}` fills them.\n")
+        return
+    print(_oo.report(_oo.inheritance(rows, str(team).upper(), player,
+                                     stat=stat)))
+
+
 def show_matchup(person_id=None, batter=None, season: int | None = None) -> None:
     """This hitter against THIS pitcher's mix — MLB_MODEL §6, complete.
 
@@ -4088,6 +4117,11 @@ def main() -> None:
         from engine import losspatterns as _lp
         print(_lp.format_both_ways(
             _lp.both_ways(_lp.records_from_ledger(_l.connect()))))
+        return
+    if "--onoff" in argv:
+        i = argv.index("--onoff")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_onoff(*(rest[:4] or [None]))
         return
     if "--matchup" in argv:
         i = argv.index("--matchup")

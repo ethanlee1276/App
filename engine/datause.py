@@ -140,13 +140,23 @@ SIGNALS = (
      "why": "The 2026-08-09 finding. Banked nightly, rendered on the "
             "Record page (web/js/app.js, outside this scan), and led with "
             "in the lab's prompt."},
+    {"name": "on/off inheritance",
+     "module": "engine/nba/onoff.py",
+     # NOT `inheritance` — "usage inheritance" is prose in the minutes
+     # engine's comments, the exact `measure`-in-120-files trap again.
+     "symbols": ("show_onoff", "onoff"),
+     "want": ("probe",),
+     "why": "WNBA §6. Who inherits a sitting player's share, measured "
+            "from box scores on disk. Probe only — the minutes model "
+            "still owns redistribution until the edge test moves."},
     {"name": "opener flag",
      "module": "engine/mlb/openers.py",
      "symbols": ("opener_flag", "looks_like_opener", "OPENER_MAX_OUTS"),
      "want": ("pipeline",),
      "why": "§5. An outs projection for a man who throws one inning is a "
-            "category error. Lands as a card WARNING on pitcher props; "
-            "gating on it is a pricing change that waits."},
+            "category error. GATES both sides of outs/K props "
+            "(Ethan-approved 2026-08-10) — a correctness refusal, not an "
+            "edge play; the gate lives in the pipeline stamping block."},
     {"name": "pitch arsenal",
      "module": "engine/mlb/arsenal.py",
      "symbols": ("mix_shift", "whiff_by_type", "show_arsenal",

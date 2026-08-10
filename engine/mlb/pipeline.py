@@ -759,16 +759,28 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
             from .velocity import projected_tto as _tp
             d["tto_proj"] = _tp(prop.person_id, _dt.date.today().year)
             # §5's opener flag — his recent starts say what his workload
-            # actually is. A WARNING, never a gate: an outs line priced
-            # for a man who throws one inning is a category error, but
-            # refusing to price it is a pricing change that waits for a
-            # human (THE_INFORMATION_TEST).
+            # actually is. A GATE as of 2026-08-10, Ethan-approved: an
+            # outs line priced for a man who throws one inning is a
+            # CATEGORY ERROR, not a small edge — the projection's central
+            # assumption (a starter's workload) is known false before the
+            # first pitch. This is the same family as block_live_games
+            # and MAX_CREDIBLE_EDGE: refusing to sell a number the model
+            # knows it computed under a false premise.
+            #
+            # BOTH SIDES are refused, and that is what keeps this a
+            # correctness gate rather than an edge play. An opener's outs
+            # UNDER might well be the good bet — but our projection is
+            # equally invalid in both directions, and "we cannot price
+            # this game" is a different statement from "the over is bad".
             from .openers import opener_flag as _of
             if _of(prop.person_id, _dt.date.today().year):
+                d["recommended"] = False
+                d["stake_units"] = 0.0
+                d["grade"] = "Pass"
                 d.setdefault("warnings", []).append(
-                    "Probable starter looks like an OPENER — his recent "
-                    "starts run 1-2 innings, and outs/K projections here "
-                    "assume a starter's workload")
+                    "OPENER — his recent starts run 1-2 innings, so this "
+                    "projection assumes a workload he will not have. Both "
+                    "sides refused: the number is invalid, not merely low")
         if getattr(game, "doubleheader", False):
             # Say WHICH game of the doubleheader this prop is for — on the
             # card, in the headline, everywhere.

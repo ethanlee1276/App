@@ -71,16 +71,35 @@ def test_a_feed_hiccup_is_not_a_role():
     op._MEMO.clear()
 
 
-def test_the_flag_is_a_warning_and_never_a_gate():
-    """Evidence only. Refusing to price opener games is a pricing change
-    that waits for a human."""
+def test_the_opener_gate_refuses_both_sides():
+    """A GATE as of 2026-08-10, Ethan-approved. This is a correctness
+    refusal, not an edge play: the projection's central assumption — a
+    starter's workload — is known false before the first pitch, which
+    puts it in the same family as block_live_games and
+    MAX_CREDIBLE_EDGE. Both sides are refused, because our number is
+    equally invalid in both directions; "we cannot price this game" is a
+    different statement from "the over is bad"."""
     src = open(os.path.join(ROOT, "engine", "mlb", "pipeline.py"),
                encoding="utf-8").read()
-    i = src.index("looks like an OPENER")
-    block = src[max(0, i - 900):i]
-    assert 'setdefault("warnings"' in block
-    for banned in ("block_", "gate_ok", "recommended = False"):
-        assert banned not in block, f"{banned}: the flag must not gate"
+    i = src.index("OPENER — his recent starts")
+    block = src[max(0, i - 1200):i]
+    assert '"recommended"] = False' in block.replace("d[", '"')  \
+        or 'd["recommended"] = False' in block
+    assert 'd["grade"] = "Pass"' in block
+    assert "BOTH SIDES" in block, "the both-sides reasoning must stay"
+
+
+def test_the_gate_only_fires_on_a_confirmed_opener():
+    """None (unknown role, thin sample, feed hiccup) must price normally.
+    A gate that fires on ignorance would empty the board every April."""
+    from engine.mlb import openers as _op
+    assert _op.looks_like_opener([2]) is None
+    assert _op.looks_like_opener([18, 17, 19]) is False
+    # Only True gates; the pipeline tests `if _of(...)` so None and False
+    # both fall through.
+    src = open(os.path.join(ROOT, "engine", "mlb", "pipeline.py"),
+               encoding="utf-8").read()
+    assert "if _of(prop.person_id" in src
 
 
 if __name__ == "__main__":
