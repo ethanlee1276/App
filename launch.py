@@ -2194,6 +2194,36 @@ def preflight() -> None:
                   f"runs at next boot. If neither happened, read "
                   f"logs/launchd-{stem}.err.")
 
+    # PLAYER FACES, per sport. The photo URL is captured DURING ingest, so
+    # a sport whose season was never re-read shows initials on every card
+    # and nothing anywhere says why — Ethan found WNBA that way on
+    # 2026-08-09, by looking at it. A count is the difference between "we
+    # have no faces for this league" and "this league has no games".
+    try:
+        from engine.db import connect as _fc
+        _fconn = _fc()
+        print("\n  Player faces (captured during ingest, not on a refresh):")
+        for _sp in ("mlb", "nfl", "nba", "wnba"):
+            try:
+                _tot = _fconn.execute(
+                    "SELECT COUNT(*) FROM player_assets WHERE sport=?",
+                    (_sp,)).fetchone()[0]
+                _has = _fconn.execute(
+                    "SELECT COUNT(*) FROM player_assets WHERE sport=? "
+                    "AND COALESCE(headshot,'') != ''", (_sp,)).fetchone()[0]
+            except Exception:                                # noqa: BLE001
+                _tot = _has = 0
+            if _has:
+                print(f"{ok} {_sp.upper()}: {_has} of {_tot} players have a "
+                      f"photo")
+            else:
+                print(f"{warn} {_sp.upper()}: no photos stored — cards show "
+                      f"initials. Re-read the season: python3 ingest.py "
+                      f"{_sp}" + (" --seasons 2025-2026"
+                                  if _sp in ("nba", "wnba") else ""))
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"{warn} Player faces: not checked ({exc})")
+
     # UFC dossiers + backups.
     doss = ROOT / "data" / "ufc_dossiers.json"
     print(f"{ok if doss.is_file() else warn} UFC dossiers: "

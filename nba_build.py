@@ -272,6 +272,30 @@ def diagnose(league: str, date: str) -> None:
               f"will be missing every player on {', '.join(sorted(miss))}.")
 
 
+def _live_block(g: dict) -> dict | None:
+    """The shared `live` shape every other board emits, from `gameStatus`.
+
+    None when the game has not started, because a `live` block that says
+    "scheduled" is indistinguishable from one the build forgot to fill —
+    and the site's own empty check is what draws the pre-game card.
+    """
+    status = g.get("status")
+    if status == 2:
+        state = "live"
+    elif status == 3:
+        state = "final"
+    else:
+        return None
+    return {"state": state,
+            "home_score": g.get("home_score"),
+            "away_score": g.get("away_score"),
+            # Scalpy's schedule feed carries no clock or period, and an
+            # invented one is worse than none: the card falls back to the
+            # state word rather than printing "Q1 12:00" for a game in the
+            # fourth.
+            "detail": "final" if state == "final" else "in progress"}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("date", nargs="?",
@@ -346,8 +370,16 @@ def main() -> None:
     # The slate's games ride in the JSON like every other board's: it's how
     # the launcher's pacer knows the slate is live, what a refresh costs,
     # and when the pre-game window opens (kickoffs are UTC ISO stamps).
+    # `live` RIDES ALONG, and its absence was a real defect. Every other
+    # board emits it and the site reads it to draw LIVE and FINAL; this
+    # one emitted home/away/date/kickoff only, so on 2026-08-09 at 8pm the
+    # WNBA board still showed three games that had finished hours earlier
+    # as though they had not started. The feed knew — `gameStatus` is 1
+    # scheduled, 2 live, 3 final, and `parse_schedule_day` has always
+    # returned it. Nothing carried it the last two inches.
     out["games"] = [{"home": g["home"], "away": g["away"], "date": args.date,
-                     "kickoff": g.get("kickoff", "")} for g in games]
+                     "kickoff": g.get("kickoff", ""),
+                     "live": _live_block(g)} for g in games]
 
     if not games and "status" not in out:
         out.update(status="offseason",

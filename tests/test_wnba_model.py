@@ -372,6 +372,71 @@ def test_the_windows_narrowness_is_recorded_where_it_can_be_seen():
     assert (hi - lo) < 0.04, "window widened — was this meant to be a loosening?"
 
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+# --- the pre-game model must not price an in-play market ---------------------
+def _prop_at(kickoff_iso, **kw):
+    base = {"player": "A", "stat": "pts", "line": 15.5, "book": "dk",
+            "over_odds": -110, "under_odds": -110, "kickoff": kickoff_iso}
+    base.update(kw)
+    return base
+
+
+def test_a_game_that_already_tipped_is_refused_not_merely_warned():
+    """ETHAN, 2026-08-09 at 8:05pm: three WNBA games that tipped at 12:30,
+    3:00 and 3:30 were still on the board as if unplayed.
+
+    `engine/pipeline.py` refuses a started game via `block_live_games` and
+    `engine/mlb/pipeline.py` has its own copy. Scalpy had NEITHER, so the
+    WNBA and NBA boards would price a finished game off pre-game numbers.
+    Blocked rather than warned: a warning is advice, a bet on a finished
+    game is a loss with no story."""
+    import datetime as _dt
+    src = open(os.path.join(ROOT, "engine", "nba", "pipeline.py"),
+               encoding="utf-8").read()
+    assert "game already started" in src
+    i = src.index("game already started")
+    # It must reach `fails`, which is what makes it a refusal.
+    assert "fails = fails + [" in src[max(0, i - 200):i]
+    del _dt
+
+
+def test_the_lead_is_computed_once_and_shared_with_the_veto():
+    """The same clock feeds the refusal and the miner's capture-lag band.
+    Two calls could disagree by a tick and put a bet in one bucket while
+    refusing it in another."""
+    src = open(os.path.join(ROOT, "engine", "nba", "pipeline.py"),
+               encoding="utf-8").read()
+    assert src.count("minutes_until(prop.get(\"kickoff\")") == 1
+    assert "lead_min=_lead" in src
+
+
+def test_the_games_payload_carries_a_live_block():
+    """Nothing on the site could draw LIVE or FINAL for these boards: the
+    payload emitted home/away/date/kickoff and nothing else, while the
+    feed had known the answer all along (`gameStatus` 1/2/3)."""
+    src = open(os.path.join(ROOT, "nba_build.py"), encoding="utf-8").read()
+    assert '"live": _live_block(g)' in src
+
+
+def test_the_live_block_is_none_before_tipoff():
+    """A `live` block saying "scheduled" is indistinguishable from one the
+    build forgot to fill, and the site's empty check is what draws the
+    pre-game card."""
+    import nba_build
+    assert nba_build._live_block({"status": 1}) is None
+    assert nba_build._live_block({}) is None
+    assert nba_build._live_block({"status": 2})["state"] == "live"
+    assert nba_build._live_block({"status": 3})["state"] == "final"
+
+
+def test_the_live_block_carries_the_score_when_final():
+    import nba_build
+    b = nba_build._live_block({"status": 3, "home_score": 88, "away_score": 79})
+    assert b["home_score"] == 88 and b["away_score"] == 79
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -114,10 +114,27 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
         fails = fails + ["this market's calibration fit hit the edge of its "
                          "search range — closed by its own fit"]
     from ..losspatterns import minutes_until
+    # THE PRE-GAME MODEL MUST NOT PRICE AN IN-PLAY MARKET, and this board
+    # was the one place that rule was never written down.
+    #
+    # `engine/pipeline.py` refuses a started game through
+    # `config.block_live_games`, and `engine/mlb/pipeline.py` has its own
+    # copy. Scalpy had neither. On 2026-08-09 the WNBA slate tipped at
+    # 12:30, 3:00 and 3:30 and the board was still offering recommended
+    # picks on all three at 8pm, priced off pre-game numbers for games
+    # that were over. Nothing in the payload even said they had started —
+    # see `_live_block` in nba_build.py for the other half of that.
+    #
+    # Blocked rather than warned. A warning on a card is advice; a bet
+    # placed on a finished game is a loss with no story, and every other
+    # engine here treats it as a refusal.
+    _lead = minutes_until(prop.get("kickoff") or prop.get("commence_time"))
+    if _lead is not None and _lead <= 0:
+        fails = fails + ["game already started — this is a pre-game model "
+                         "and cannot price an in-play market"]
     _block = lp_veto(tune.key, stat, side=side, odds=odds, prob=p_final,
                      book=prop.get("book"), horizon_days=0,
-                     lead_min=minutes_until(prop.get("kickoff")
-                                            or prop.get("commence_time")))
+                     lead_min=_lead)
     if _block:
         fails = fails + [_block]
     need = required_edge(stat, hold, tune, high_hold_market=stat == "fg3m")

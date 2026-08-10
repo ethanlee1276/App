@@ -152,13 +152,32 @@ def test_the_lab_can_propose_on_the_new_dimension():
 
 
 def test_every_gate_passes_its_clock_to_the_veto():
-    for path, needle in (
-            ("engine/betting.py", "lead_min=minutes_until"),
-            ("engine/mlb/betting.py", "lead_min=minutes_until"),
-            ("engine/nba/pipeline.py", "lead_min=minutes_until"),
-            ("engine/cfb/pipeline.py", "lead_min=minutes_until")):
+    """The clock the gate uses must be the clock the veto bands on.
+
+    FOLLOWS A VARIABLE, and it has to. This checked for the literal
+    `lead_min=minutes_until` until 2026-08-10, when the NBA/WNBA gate
+    started computing the lead ONCE — a started-game refusal and the
+    veto's capture-lag band read the same number, and two separate calls
+    could disagree by a tick and put a bet in one bucket while refusing it
+    in another. The literal check would have forced the worse code.
+
+    So: whatever is handed to `lead_min=` must trace back to
+    `minutes_until`, either inline or through a name assigned from it. A
+    gate that passes an unrelated variable still fails, which is the
+    property worth keeping.
+    """
+    import re
+    for path in ("engine/betting.py", "engine/mlb/betting.py",
+                 "engine/nba/pipeline.py", "engine/cfb/pipeline.py"):
         src = open(os.path.join(ROOT, path), encoding="utf-8").read()
-        assert needle in src, f"{path} never passes lead to the veto"
+        m = re.search(r"lead_min=([\w.]+)", src)
+        assert m, f"{path} never passes lead to the veto"
+        arg = m.group(1)
+        if arg.startswith("minutes_until"):
+            continue
+        assert re.search(rf"^\s*{re.escape(arg)}\s*=\s*minutes_until\(",
+                         src, re.M), (
+            f"{path} passes lead_min={arg}, which is not the clock")
 
 
 # --- the restated record -----------------------------------------------------
