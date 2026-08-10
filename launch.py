@@ -2910,6 +2910,87 @@ def show_arsenal(person_id=None, season: int | None = None) -> None:
     print("\n  Evidence only — nothing prices from this.\n")
 
 
+def show_matchup(person_id=None, batter=None, season: int | None = None) -> None:
+    """This hitter against THIS pitcher's mix — MLB_MODEL §6, complete.
+
+        python3 launch.py --matchup 543037 "Aaron Judge"
+
+    The pitcher's arsenal comes from playByPlay payloads the board already
+    caches; the hitter's per-pitch-type line comes from Savant's
+    pitch-arsenal board, one CSV a season. §6 called this "needs data" —
+    both halves are free.
+
+    WHAT IT REPORTS IS THE DIFFERENCE, not the level. A hitter who whiffs
+    at 40% on sliders is not a problem until he faces someone who throws
+    them 45% of the time; the league already prices the weakness, what it
+    may not price is tonight's mix.
+
+    Evidence only. Nothing prices from this.
+    """
+    import datetime as _d
+    from engine.mlb import arsenal as _ar
+    from engine.mlb.sources import savant as _sv
+    from engine.sources.oddsapi import normalize_name as _nn
+    if not person_id or not batter:
+        print("\n  usage: python3 launch.py --matchup <pitcherPersonId> "
+              "\"<Batter Name>\" [season]")
+        print("  e.g.   python3 launch.py --matchup 543037 \"Aaron Judge\"\n")
+        return
+    season = int(season or _d.date.today().year)
+    try:
+        hist = _ar.history(int(person_id), season)
+    except Exception as exc:                                # noqa: BLE001
+        print(f"\n  could not read the pitcher's starts: {exc}\n")
+        return
+    if not hist:
+        print(f"\n  No starts parsed for {person_id} in {season}.\n")
+        return
+    # His mix over the whole window, not one start — a matchup is about
+    # what he throws, and one start is a sample of that.
+    shares: dict = {}
+    for st in hist:
+        for t, sh in st["shares"].items():
+            shares[t] = shares.get(t, 0.0) + sh / len(hist)
+    try:
+        board = _sv.load_arsenal(season, "batter")
+    except Exception as exc:                                # noqa: BLE001
+        print(f"\n  Savant pitch-arsenal board unavailable: {exc}\n")
+        return
+    prof = board.get(_nn(batter))
+    if not prof:
+        print(f"\n  No arsenal line for {batter!r} in {season}. The board "
+              f"holds {len(board)} hitters.\n")
+        return
+    m = _ar.matchup(shares, prof)
+    print(f"\n{'='*70}\n  {batter.upper()} vs person {person_id} — "
+          f"{season}\n{'='*70}")
+    print(f"\n  his mix: " + ", ".join(f"{t} {sh:.0%}" for t, sh in
+                                        sorted(shares.items(),
+                                               key=lambda kv: -kv[1])))
+    if m["whiff_vs_mix"] is None:
+        print("\n  Nothing measurable: this hitter has no qualifying line "
+              "against\n  any pitch this starter throws.\n")
+        return
+    print(f"\n  whiff   {m['whiff_baseline']:.1%} normally  →  "
+          f"{m['whiff_vs_mix']:.1%} against this mix   "
+          f"({m['whiff_delta']:+.1%})")
+    if m["xwoba_delta"] is not None:
+        print(f"  xwOBA   {m['xwoba_vs_mix']:.3f} against this mix   "
+              f"({m['xwoba_delta']:+.3f})")
+    print(f"\n  by pitch")
+    for t, v in m["types"].items():
+        print(f"    {t:<4} he sees {v['share']:.0%} of it   "
+              f"whiffs {v['whiff_pct']:.0%}   ({v['pa']:.0f} PA)")
+    print(f"\n  coverage {m['coverage']:.0%} of the arsenal"
+          + ("" if m["enough"] else
+             "  ← under two thirds; this is a statement about the part we "
+             "hold,\n  not about tonight"))
+    print("\n  The DIFFERENCE is the read, not the level: the market "
+          "already knows")
+    print("  how he handles a slider. Evidence only — nothing prices from "
+          "this.\n")
+
+
 def show_alignment(team=None, season: int | None = None) -> None:
     """How a defence covers and how an offence lines up (NFL_MODEL §6).
 
@@ -3964,6 +4045,11 @@ def main() -> None:
         from engine import losspatterns as _lp
         print(_lp.format_both_ways(
             _lp.both_ways(_lp.records_from_ledger(_l.connect()))))
+        return
+    if "--matchup" in argv:
+        i = argv.index("--matchup")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_matchup(*(rest[:3] or [None]))
         return
     if "--arsenal" in argv:
         i = argv.index("--arsenal")

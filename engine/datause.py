@@ -126,12 +126,13 @@ SIGNALS = (
             "in the lab's prompt."},
     {"name": "pitch arsenal",
      "module": "engine/mlb/arsenal.py",
-     "symbols": ("mix_shift", "whiff_by_type", "show_arsenal"),
+     "symbols": ("mix_shift", "whiff_by_type", "show_arsenal",
+                 "show_matchup", "parse_arsenal"),
      "want": ("probe",),
      "why": "§6. Pitch mix and per-type whiff rate, from the SAME cached "
             "playByPlay payloads --velo already loads — no new feed. The "
-            "hitter half is still absent and PITCH_LEVEL_SCOPE names its "
-            "two possible costs."},
+            "hitter half arrived 2026-08-10: Savant's pitch-arsenal "
+            "board is one CSV a season, so §6 is complete as a probe."},
     {"name": "book sharpness",
      "module": "engine/booksharp.py",
      # NOT `measure`. That name appears in 120 files — the first cut

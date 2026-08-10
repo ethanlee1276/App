@@ -210,3 +210,78 @@ def pooled_whiff(hist, min_swings: int = MIN_SWINGS) -> dict:
     return {t: {"swings": sw, "whiffs": wh,
                 "whiff_rate": round(wh / sw, 4) if sw >= min_swings else None}
             for t, (sw, wh) in sorted(acc.items(), key=lambda kv: -kv[1][0])}
+
+
+#: A batter's line against one pitch type needs this many plate
+#: appearances before it enters a matchup. Savant publishes rows down to a
+#: handful of PA and a .600 wOBA on nine of them is a rounding artefact.
+MIN_BATTER_PA = 25
+
+
+def matchup(pitcher_shares: dict, batter: dict,
+            min_pa: int = MIN_BATTER_PA) -> dict:
+    """This hitter against THIS pitcher's mix — §6's matchup, at last.
+
+    `pitcher_shares` is `{type: share}` from `mix`; `batter` is one
+    player's `{type: {...}}` from `savant.parse_arsenal`. Returns his
+    whiff rate and expected wOBA re-weighted by what he will actually SEE
+    tonight, against the same numbers weighted by what he sees on average.
+
+    THE WHOLE POINT IS THE DIFFERENCE, not the level. A hitter with a 32%
+    whiff rate against sliders is not a problem until he faces someone who
+    throws 40% sliders; against a fastball-first starter that weakness
+    never comes up. The league already knows he whiffs at sliders — the
+    price contains it. What the price may not contain is tonight's mix.
+
+    COVERAGE IS REPORTED AND MATTERS MORE THAN THE NUMBER. If the pitcher
+    throws a splitter this batter has never faced, that share of the
+    matchup is unmeasured, and a re-weighting over 60% of the arsenal is
+    a different claim from one over 95%. Below `MIN_BATTER_PA` a type is
+    dropped rather than trusted.
+    """
+    faced, seen_w, seen_x, base_w, base_x, base_n = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    used: dict = {}
+    for t, share in (pitcher_shares or {}).items():
+        row = (batter or {}).get(t)
+        if not row:
+            continue
+        pa = row.get("pa") or 0
+        w, x = row.get("whiff_pct"), row.get("est_woba")
+        if pa < min_pa or w is None:
+            continue
+        faced += share
+        seen_w += share * w
+        if x is not None:
+            seen_x += share * x
+        used[t] = {"share": round(share, 4), "whiff_pct": w, "pa": pa}
+    # His own baseline: the same rates weighted by how often he ACTUALLY
+    # sees each pitch, which is what "his whiff rate" already means.
+    for t, row in (batter or {}).items():
+        pa, w = row.get("pa") or 0, row.get("whiff_pct")
+        u = row.get("usage")
+        if pa < min_pa or w is None or not u:
+            continue
+        base_n += u
+        base_w += u * w
+        if row.get("est_woba") is not None:
+            base_x += u * row["est_woba"]
+    if not faced or not base_n:
+        return {"coverage": round(faced, 4), "enough": False,
+                "whiff_vs_mix": None, "whiff_baseline": None,
+                "whiff_delta": None, "xwoba_vs_mix": None,
+                "xwoba_delta": None, "types": used}
+    vm, bm = seen_w / faced, base_w / base_n
+    vx, bx = (seen_x / faced if seen_x else None), (base_x / base_n if base_x else None)
+    return {
+        "coverage": round(faced, 4),
+        # Two thirds of the arsenal is where a re-weighting stops being a
+        # statement about tonight and starts being a statement about the
+        # third of it we happen to hold.
+        "enough": faced >= 0.66,
+        "whiff_vs_mix": round(vm, 4),
+        "whiff_baseline": round(bm, 4),
+        "whiff_delta": round(vm - bm, 4),
+        "xwoba_vs_mix": round(vx, 4) if vx else None,
+        "xwoba_delta": round(vx - bx, 4) if (vx and bx) else None,
+        "types": dict(sorted(used.items(), key=lambda kv: -kv[1]["share"])),
+    }

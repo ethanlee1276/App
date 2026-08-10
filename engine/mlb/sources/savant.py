@@ -209,3 +209,69 @@ if __name__ == "__main__":
     for f in sorted(CACHE_DIR.glob(f"savant_*_{year}.csv")):
         head = f.read_text(encoding="utf-8", errors="replace").splitlines()[:1]
         print(f"header of {f.name}: {head[0][:160] if head else '(empty)'}")
+
+
+# --- §6's hitter half: performance BY PITCH TYPE -----------------------------
+#
+# MLB_MODEL §6 parked the arsenal matchup behind "needs pitch-mix +
+# per-pitch-type hitter data". The pitch-mix half turned out to be free —
+# `engine/mlb/arsenal.py` reads it from playByPlay payloads the board
+# already caches. This is the other half, and it is one CSV a season.
+#
+# Header confirmed live 2026-08-10:
+#
+#   "last_name, first_name","player_id","team_name_alt","pitch_type",
+#   "pitch_name","run_value_per_100","run_value","pitches","pitch_usage",
+#   "pa","ba","slg","woba","whiff_percent","k_percent","put_away",
+#   "est_ba","est_slg","est_woba","hard_hit_percent"
+#
+# One ROW PER PLAYER PER PITCH TYPE, which is the shape that matters: every
+# other Savant board here is one row per player, so the parser below keys
+# by (player, pitch_type) rather than overwriting.
+SAVANT_ARSENAL = ("https://baseballsavant.mlb.com/leaderboard/"
+                  "pitch-arsenal-stats?type={type}&pitchType=ALL&year={year}"
+                  "&csv=true")
+
+
+def parse_arsenal(rows) -> dict[str, dict]:
+    """`{normalized name: {pitch_type: {...}}}` from the arsenal board.
+
+    Keyed by pitch type UNDER the player, because this board is the only
+    one here with several rows per person — parsing it like the others
+    would keep whichever pitch type happened to come last.
+    """
+    out: dict[str, dict] = {}
+    for r in rows:
+        raw = _row_name(r)
+        name = _norm(raw) if raw else ""
+        code = str(r.get("pitch_type") or "").strip().upper()
+        if not name or not code:
+            continue
+        out.setdefault(name, {})[code] = {
+            "pitch_name": str(r.get("pitch_name") or "").strip(),
+            "pitches": _f(r, "pitches"),
+            "usage": _pct(r, "pitch_usage"),
+            "pa": _f(r, "pa"),
+            "whiff_pct": _pct(r, "whiff_percent"),
+            "k_pct": _pct(r, "k_percent"),
+            "woba": _f(r, "woba"),
+            "est_woba": _f(r, "est_woba"),
+            "slg": _f(r, "slg"),
+            "hard_hit_pct": _pct(r, "hard_hit_percent"),
+        }
+    return out
+
+
+def load_arsenal(year: int, kind: str = "batter") -> dict[str, dict]:
+    """Fetch (or read a cached) pitch-arsenal board for a season.
+
+    `kind` is "batter" for how hitters fare against each pitch type, or
+    "pitcher" for how each pitcher's own offerings perform. The batter
+    board is the one §6 was missing.
+    """
+    local = CACHE_DIR / f"savant_arsenal_{kind}_{year}.csv"
+    if local.exists():
+        return parse_arsenal(load_local_csv(local))
+    url = SAVANT_ARSENAL.format(type=kind, year=year)
+    text = fetch_text(url, f"savant_arsenal_{kind}_{year}.csv", ttl=6 * 3600)
+    return parse_arsenal(_read_csv_text(text))

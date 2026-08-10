@@ -198,8 +198,26 @@ The reason it cannot ride tonight's fetches: a batter's whiff rate against
 sliders needs HIS season, not his opponent's five starts. That asymmetry is
 the whole difference between the two halves.
 
-**Recommendation: probe the Savant route before building anything.** One
-`curl` settles whether the cheap path exists:
+**RESOLVED 2026-08-10 — the cheap path exists.** Ethan ran the curl and it
+returned:
+
+    "last_name, first_name","player_id","team_name_alt","pitch_type",
+    "pitch_name","run_value_per_100","run_value","pitches","pitch_usage",
+    "pa","ba","slg","woba","whiff_percent","k_percent","put_away",
+    "est_ba","est_slg","est_woba","hard_hit_percent"
+
+One row per hitter per pitch type, with whiff%, wOBA, xwOBA and hard-hit%.
+`savant.load_arsenal(year, "batter")` reads it; `arsenal.matchup` combines
+it with the pitcher's mix; `launch.py --matchup <personId> "<Batter>"`.
+**§6 is complete as a probe** — both halves free, neither priced.
+
+The one design note worth keeping: this is the only Savant board here with
+SEVERAL rows per person, so the parser keys by (player, pitch_type).
+Parsing it like its neighbours would silently keep whichever pitch type
+came last.
+
+The original recommendation follows, kept because the method was the
+point — one `curl` settled a row that had been parked for months:
 
     curl -s "https://baseballsavant.mlb.com/leaderboard/pitch-arsenal-stats?type=batter&pitchType=ALL&year=2025&csv=true" | head -1
 

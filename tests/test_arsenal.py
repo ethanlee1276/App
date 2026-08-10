@@ -200,6 +200,76 @@ def test_the_pooled_view_does_not_replace_the_per_start_one():
     assert "pooled_whiff" in body and 'st["whiff"].items()' in body
 
 
+# --- §6's matchup: the hitter half, confirmed live 2026-08-10 ----------------
+_B = {"FF": {"pa": 300, "whiff_pct": 0.18, "est_woba": 0.380, "usage": 0.55},
+      "SL": {"pa": 120, "whiff_pct": 0.40, "est_woba": 0.250, "usage": 0.30},
+      "CH": {"pa": 60, "whiff_pct": 0.28, "est_woba": 0.300, "usage": 0.15}}
+
+
+def test_the_same_hitter_reads_differently_against_two_arsenals():
+    """THE WHOLE POINT IS THE DIFFERENCE, NOT THE LEVEL. A hitter who
+    whiffs at 40% against sliders is not a problem until he faces someone
+    who throws 45% sliders; against a fastball-first starter that weakness
+    never comes up. The league knows he whiffs at sliders — the price
+    contains it. What the price may not contain is tonight's mix."""
+    hot = ar.matchup({"SL": 0.45, "FF": 0.40, "CH": 0.15}, _B)
+    cold = ar.matchup({"FF": 0.70, "SL": 0.15, "CH": 0.15}, _B)
+    assert hot["whiff_delta"] > 0 and cold["whiff_delta"] < 0
+    assert hot["whiff_baseline"] == cold["whiff_baseline"], (
+        "the baseline is the hitter's own, and must not move with the "
+        "opponent")
+    assert hot["xwoba_delta"] < 0 < cold["xwoba_delta"]
+
+
+def test_a_pitch_he_has_barely_faced_is_dropped_not_trusted():
+    """Savant publishes rows down to a handful of PA, and a .600 wOBA on
+    nine of them is a rounding artefact."""
+    thin = dict(_B, FS={"pa": 6, "whiff_pct": 0.55, "est_woba": 0.150,
+                        "usage": 0.02})
+    m = ar.matchup({"FS": 0.30, "FF": 0.70}, thin)
+    assert "FS" not in m["types"]
+    assert m["coverage"] == 0.70
+
+
+def test_coverage_is_reported_and_gates_the_verdict():
+    """A re-weighting over 60% of the arsenal is a different claim from
+    one over 95%. If the pitcher throws a splitter this hitter has never
+    seen, that share is unmeasured and the report says so."""
+    m = ar.matchup({"FF": 0.40, "XX": 0.60}, _B)
+    assert m["coverage"] == 0.40
+    assert m["enough"] is False
+    assert ar.matchup({"FF": 0.70, "SL": 0.30}, _B)["enough"] is True
+
+
+def test_a_hitter_we_hold_nothing_for_returns_none_not_zero():
+    """None is "not measured"; 0.0 would read as "no edge either way"."""
+    m = ar.matchup({"FF": 1.0}, {})
+    assert m["whiff_vs_mix"] is None and m["whiff_delta"] is None
+    assert m["enough"] is False
+
+
+def test_the_savant_board_keeps_every_pitch_type_per_player():
+    """This is the only Savant board here with SEVERAL rows per person.
+    Parsing it like the others would keep whichever pitch type came last.
+    Header verified live 2026-08-10."""
+    from engine.mlb.sources.savant import parse_arsenal, _read_csv_text
+    text = ('\ufeff"last_name, first_name","player_id","team_name_alt",'
+            '"pitch_type","pitch_name","run_value_per_100","run_value",'
+            '"pitches","pitch_usage","pa","ba","slg","woba","whiff_percent",'
+            '"k_percent","put_away","est_ba","est_slg","est_woba",'
+            '"hard_hit_percent"\n'
+            '"Judge, Aaron","592450","NYY","FF","4-Seamer","2.1","14","900",'
+            '"48.5","250","0.310","0.700","0.460","22.5","24.0","18.0",'
+            '"0.300","0.680","0.450","55.0"\n'
+            '"Judge, Aaron","592450","NYY","SL","Slider","-1.4","-9","400",'
+            '"21.0","110","0.210","0.400","0.300","38.2","31.0","24.0",'
+            '"0.220","0.410","0.310","41.0"\n')
+    d = parse_arsenal(_read_csv_text(text))
+    assert set(d["aaron judge"]) == {"FF", "SL"}, "one type overwrote another"
+    assert d["aaron judge"]["SL"]["whiff_pct"] == 0.382
+    assert d["aaron judge"]["FF"]["usage"] == 0.485
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
