@@ -3981,17 +3981,24 @@ select.calc-in { width: auto; font-weight: 600; }
    visitor must not scroll past. Everything else on the page reuses the
    shared kit (.stats, .card, .chip, .agate) — the only new furniture is
    the rates strip, the exit-reason list, and the gated-row treatment. */
+/* One line closed, the whole card on demand — the base rates must be
+   unskippable without owning the fold ("you can barely see the charts").
+   The summary line carries all five numbers itself. */
 .mc-honesty {
   border-left: 3px solid var(--warn);
-  margin-bottom: 14px; padding: 12px 16px;
+  margin-bottom: 12px; padding: 9px 14px;
 }
+.mc-honesty summary { cursor: pointer; display: flex; flex-wrap: wrap;
+  align-items: baseline; gap: 6px 14px; list-style: none; }
+.mc-honesty summary::-webkit-details-marker { display: none; }
 .mc-honesty-head {
   font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--warn); margin-bottom: 8px;
+  text-transform: uppercase; color: var(--warn); white-space: nowrap;
 }
-/* Compact on purpose: the charts now lead the page, so the strip above
-   them earns its height — same five facts, smaller furniture. */
-.mc-rates { display: grid;
+.mc-honesty-line { color: var(--text-dim); font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums; }
+.mc-honesty[open] .mc-honesty-line { display: none; }
+.mc-rates { display: grid; margin-top: 10px;
   grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
   gap: 6px 14px; }
 .mc-rate { display: flex; align-items: baseline; gap: 7px;
@@ -4000,10 +4007,14 @@ select.calc-in { width: auto; font-weight: 600; }
   font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mc-honesty-foot { margin-top: 8px; color: var(--text-mute);
   font-size: var(--fs-xs); }
-/* The terminal: a strip of coin buttons over one live chart. Active pick
-   carries the brand ring; the rocket tag says which buttons cleared the
-   risk gate without making the others unclickable. */
-.mc-picker { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+/* The terminal: a strip of coin buttons over one live chart. ONE ROW,
+   scrolling sideways — twenty-seven buttons wrapping to three rows put
+   another 100px between the reader and the candles. Active pick carries
+   the brand ring; the rocket tag says who cleared the risk gate. */
+.mc-picker { display: flex; flex-wrap: nowrap; overflow-x: auto;
+  gap: 6px; margin-bottom: 12px; padding-bottom: 4px;
+  scrollbar-width: thin; }
+.mc-picker .mc-pick { flex: none; white-space: nowrap; }
 .mc-pick { display: inline-flex; align-items: baseline; gap: 7px;
   padding: 6px 10px; background: none; cursor: pointer;
   border: var(--hairline) solid var(--border); color: var(--text-dim);
@@ -4033,7 +4044,12 @@ select.calc-in { width: auto; font-weight: 600; }
 .mc-spark-wrap { margin-top: 10px; border-top: var(--hairline) solid
   var(--border-soft); padding-top: 8px; }
 .mc-spark { display: block; width: 100%; height: 44px; }
-.mc-chart-card iframe { display: block; width: 100%; height: 460px;
+/* The chart IS the product — give it the screen. 68vh with floors and
+   ceilings: DexScreener's embed carries its own txns panel at the
+   bottom, so anything under ~500px leaves the candles a letterbox
+   ("you can barely see the charts, it's so crunched"). */
+.mc-chart-card iframe { display: block; width: 100%;
+  height: clamp(500px, 68vh, 900px);
   border: 0; margin-top: 10px; background: var(--bg-2); }
 .mc-chart-link { background: none; border: 0; padding: 0; cursor: pointer;
   color: var(--brand); font: inherit; font-size: var(--fs-xs);
@@ -4127,6 +4143,11 @@ select.calc-in { width: auto; font-weight: 600; }
     scroll-behavior: auto !important;
   }
 }
+
+/* An empty hint reserves no space — on standalone pages the nav (and
+   its hint) is hidden, but the empty <p> still held its margins, part
+   of the dead band between the header and the first real content. */
+.nav-hint:empty { display: none; margin: 0; padding: 0; }
 
 /* One device pixel, on the screens where 1px stopped meaning that. */
 @media (min-resolution: 2dppx) {

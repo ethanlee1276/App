@@ -5984,6 +5984,16 @@ function enterStandaloneMode(name) {
     setSelected(x, !!x.dataset.sport && x.dataset.sport === name));
   const nav = document.getElementById("nav");
   if (nav) nav.style.display = "none";
+  // The masthead's Running ROI is the SPORTS model's record. Above the
+  // meme board it reads as meme P&L (Ethan's screenshot: "-14.9%" in
+  // red directly over the coins), and My Bets is the user's own ledger
+  // — on both pages the strip is a category error and a third of the
+  // header's height. Everywhere else it stays: it is the site's pitch.
+  const noRec = name === "memes" || name === "mybets";
+  const rec = document.getElementById("standing-record");
+  if (rec) rec.style.display = noRec ? "none" : "";
+  const mbrec = document.getElementById("mb-rec");
+  if (mbrec) mbrec.style.display = noRec ? "none" : "";
   // …and its menu label with it: a "PAGE" header over an empty space is
   // worse than no header. Standalone pages have no page list.
   const phead = document.querySelector('.menu-head[data-head="page"]');
@@ -6005,6 +6015,10 @@ function enterStandaloneMode(name) {
 function exitStandaloneMode() {
   const nav = document.getElementById("nav");
   if (nav) nav.style.display = "";
+  const rec = document.getElementById("standing-record");
+  if (rec) rec.style.display = "";
+  const mbrec = document.getElementById("mb-rec");
+  if (mbrec) mbrec.style.display = "";
   const phead = document.querySelector('.menu-head[data-head="page"]');
   if (phead) phead.style.display = "";
   document.querySelectorAll(".sport-btn").forEach((x) =>
@@ -6905,8 +6919,7 @@ window.mcShowChart = function (mint, scroll = true) {
       ${stat("Top 10", i.top10_share != null ? (i.top10_share * 100).toFixed(0) + "%" : "—")}
     </div>
     <iframe src="${src}" loading="lazy" title="Live pool chart"
-      referrerpolicy="no-referrer" allow="clipboard-write"></iframe>
-    ${mcSpark(c.spark) ? `<div class="mc-spark-wrap" title="Our own tape — one point per refresh, up to six hours">${mcSpark(c.spark)}</div>` : ""}</div>`;
+      referrerpolicy="no-referrer" allow="clipboard-write"></iframe></div>`;
   document.querySelectorAll("#view-memes .mc-pick").forEach((b) =>
     b.classList.toggle("active", b.dataset.mint === mint));
   const panel = dock.closest(".subgroup");
@@ -6947,15 +6960,22 @@ async function renderMemes() {
     if (res.ok) d = await res.json();
   } catch (e) {}
 
+  /* One line closed, the full block a tap away. The first cut of this
+     page gave the base rates a five-tile card that pushed the charts —
+     the product — below the fold ("you can barely see the charts").
+     The facts stay unskippable: the strip renders on every room, closed
+     or open, and the summary line IS the five numbers. */
   const honesty = `
-    <div class="card mc-honesty">
-      <div class="mc-honesty-head">Read this before the scores</div>
+    <details class="card mc-honesty">
+      <summary><span class="mc-honesty-head">Read this before the scores</span>
+        <span class="mc-honesty-line">~1.4% ever graduate · 60% of traders lose ·
+        82.8% artificial growth · 41.4% wash volume · median rug &lt;1h</span></summary>
       <div class="mc-rates">${MC_BASE_RATES.map(([n, t]) =>
         `<div class="mc-rate"><span class="mc-rate-n">${n}</span><span>${t}</span></div>`).join("")}</div>
       <div class="mc-honesty-foot">A tracker’s genuine value is filtering scams and enforcing
       disciplined exits, not predicting moonshots. Nothing on this page is a buy signal,
       nothing is journaled as a bet, and none of it touches the sports model.</div>
-    </div>`;
+    </details>`;
 
   if (!d || !(d.coins || []).length) {
     host.innerHTML = honesty + `
