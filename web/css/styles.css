@@ -4044,13 +4044,21 @@ select.calc-in { width: auto; font-weight: 600; }
 .mc-spark-wrap { margin-top: 10px; border-top: var(--hairline) solid
   var(--border-soft); padding-top: 8px; }
 .mc-spark { display: block; width: 100%; height: 44px; }
-/* The chart IS the product — give it the screen. 68vh with floors and
+/* The chart IS the product — give it the screen. 78vh with floors and
    ceilings: DexScreener's embed carries its own txns panel at the
-   bottom, so anything under ~500px leaves the candles a letterbox
+   bottom, so anything under ~520px leaves the candles a letterbox
    ("you can barely see the charts, it's so crunched"). */
 .mc-chart-card iframe { display: block; width: 100%;
-  height: clamp(500px, 68vh, 900px);
-  border: 0; margin-top: 10px; background: var(--bg-2); }
+  height: clamp(520px, 78vh, 1000px);
+  border: 0; margin-top: 8px; background: var(--bg-2); }
+/* The dock's numbers ride the TITLE line — a separate stats band was
+   ~60px between the reader and the candles. Wraps on a phone. */
+.mc-dock-head { flex-wrap: wrap; gap: 8px 18px; align-items: baseline; }
+.mc-dock-stats { display: flex; flex-wrap: wrap; gap: 2px 16px;
+  margin: 0; flex: 1; justify-content: flex-end; }
+.mc-dock-stats .metric { padding: 0; border: 0; background: none; }
+.mc-dock-stats .metric .k { font-size: var(--fs-xs); }
+.mc-dock-stats .metric .v { font-size: var(--fs-md); margin-top: 0; }
 .mc-chart-link { background: none; border: 0; padding: 0; cursor: pointer;
   color: var(--brand); font: inherit; font-size: var(--fs-xs);
   font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }

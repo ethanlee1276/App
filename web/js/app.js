@@ -6903,21 +6903,23 @@ window.mcShowChart = function (mint, scroll = true) {
   const i = c.ind || {};
   const stat = (k, v, color) => `<div class="metric"><div class="k">${k}</div>
     <div class="v"${color ? ` style="color:${color}"` : ""}>${v}</div></div>`;
+  // ONE header line: name, the five numbers, momentum/risk — everything
+  // above the candles is height taken from the candles.
   dock.innerHTML = `<div class="card mc-chart-card">
-    <div class="card-head"><div class="player">${mcName(c)}
+    <div class="card-head mc-dock-head"><div class="player">${mcName(c)}
       <span style="color:var(--text-mute);font-weight:400"> — live from ${
         ref.kind === "gt" ? "GeckoTerminal" : "DexScreener"}</span></div>
+      <div class="metrics mc-dock-stats">
+        ${stat("Price", mcPrice(c.price_usd))}
+        ${stat("5m", mcPct((c.price_change || {}).m5))}
+        ${stat("1h", mcPct((c.price_change || {}).h1))}
+        ${stat("Liq", mcMoney(c.liquidity))}
+        ${stat("Top 10", i.top10_share != null ? (i.top10_share * 100).toFixed(0) + "%" : "—")}
+      </div>
       <span title="MomentumScore / RiskScore" style="font-weight:800">
         <span style="color:var(--brand)">${c.momentum}</span>
         <span style="color:var(--text-mute)"> / </span>
         <span style="color:${c.risk >= 60 ? "var(--bad)" : "var(--warn)"}">${c.risk}</span></span></div>
-    <div class="metrics">
-      ${stat("Price", mcPrice(c.price_usd))}
-      ${stat("5m", mcPct((c.price_change || {}).m5))}
-      ${stat("1h", mcPct((c.price_change || {}).h1))}
-      ${stat("Liquidity", mcMoney(c.liquidity))}
-      ${stat("Top 10", i.top10_share != null ? (i.top10_share * 100).toFixed(0) + "%" : "—")}
-    </div>
     <iframe src="${src}" loading="lazy" title="Live pool chart"
       referrerpolicy="no-referrer" allow="clipboard-write"></iframe></div>`;
   document.querySelectorAll("#view-memes .mc-pick").forEach((b) =>
