@@ -450,6 +450,33 @@ def test_the_stuck_report_prints_the_repair_line():
         "the tip still promises a fix that already shipped"
 
 
+def test_a_scheduled_future_week_is_not_stuck():
+    """Seven September W01 game bets landed in the doctor's stuck list in
+    August: the week label aged as instantly-stuck, and "n_games > 0 →
+    game not found" never checked the bet's OWN game for a FINAL. A
+    scheduled week is the calendar working, not a bet stuck — and the
+    moment finals land, the same bet reads gradeable now."""
+    lconn = ledger.connect(os.path.join(tempfile.mkdtemp(), "led.db"))
+    hconn = db.connect(":memory:")
+    lconn.execute(
+        "INSERT INTO bets (sport,date,player,market,side,line,odds,grade,"
+        "stake_units,stake_dollars,status,category) VALUES ('nfl',"
+        "'2026-W01','ATL@PIT','total','OVER',44.5,-110,'A',1.0,10.0,"
+        "'open','main')")
+    lconn.commit()
+    db.upsert_games(hconn, [
+        {"sport": "nfl", "season": 2026, "period": "001",
+         "game_id": "ATL@PIT", "home": "PIT", "away": "ATL",
+         "home_score": None, "away_score": None, "spread": -3.0,
+         "total": 44.5, "roof": "open", "surface": "grass",
+         "temp": None, "wind": None, "extra": ""}])
+    rows = ledger.why_open(lconn, hconn, today=D_NOW)
+    assert rows == [], "a scheduled unplayed week must not read stuck"
+    hconn.execute("UPDATE games SET home_score=24, away_score=17")
+    rows = ledger.why_open(lconn, hconn, today=D_NOW)
+    assert len(rows) == 1 and rows[0]["reason"] == "gradeable now"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

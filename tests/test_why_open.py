@@ -158,6 +158,24 @@ def test_the_cli_is_wired_and_explains_the_three_fixes():
     assert "--check" in body                 # the NO_RESULTS fix
 
 
+def test_settle_all_with_nothing_by_date_still_runs_the_repair_audit():
+    """The doctor's grade-evidence check prescribes --settle all, but
+    with no ISO day holding an open pick, settle_all returned before the
+    repair pass ever ran — Ethan's first nightly hit exactly that: two
+    flagged bets, and the prescribed command said 'Nothing open to
+    settle.' The empty branch now runs the audit, which also grades
+    week-labelled bets the ISO sweep can never reach."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("def settle_all")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert "_repair_sweep()" in body, "the empty branch dead-ends again"
+    j = src.index("def _repair_sweep")
+    rbody = src[j:src.index("\ndef ", j + 10)]
+    for needle in ("settle_from_history", "resettle_mismatches",
+                   "parlayledger", "export_json"):
+        assert needle in rbody, f"repair audit lost {needle}"
+
+
 def test_reasons_table_covers_every_bucket():
     """Every key explain_open can return must have human copy, or the CLI
     prints a bare slug."""

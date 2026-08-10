@@ -1280,6 +1280,11 @@ def _logged_within(hist_conn, b, want: str, days: int = 1) -> str | None:
     import datetime as _dt
 
     from .sources.oddsapi import normalize_name
+    # NFL week labels are not ISO week dates, and Python ≥3.11 parses
+    # "2026-W01" as 2025-12-29 instead of raising — the ValueError guard
+    # below stopped guarding. A week has no neighbouring days.
+    if _NFL_WEEK_DATE.match(str(b["date"] or "")):
+        return None
     try:
         d0 = _dt.date.fromisoformat(b["date"] or "")
     except ValueError:
@@ -1498,12 +1503,20 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
 
     for b in rows:
         date = b["date"] or ""
-        try:
-            age = (today_d - _dt.date.fromisoformat(date)).days
-        except ValueError:
-            # A week label carries no day, so it cannot be aged. Judge it on
-            # content instead of dropping it: if its stats are stored it is
-            # gradeable and should not still be open.
+        # An NFL week label is NOT an ISO week date, and on Python ≥3.11
+        # fromisoformat("2026-W01") happily returns 2025-12-29 — which
+        # aged September's football 215 days into the PAST and put seven
+        # future game bets in the doctor's stuck list. Detect the label
+        # explicitly; a week is judged on content, never on the calendar
+        # ISO thinks it means.
+        real_age = not _NFL_WEEK_DATE.match(date)
+        if real_age:
+            try:
+                age = (today_d - _dt.date.fromisoformat(date)).days
+            except ValueError:
+                age = older_than
+                real_age = False
+        else:
             age = older_than
         if age < older_than:
             continue
@@ -1517,8 +1530,23 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
             wargs).fetchone()[0]
 
         if game_market:
-            reason = ("no results ingested" if not n_games
-                      else "game not found")
+            # Judge the bet's OWN game, and judge finals, not row
+            # existence. The schedule ingest writes September's W01 rows
+            # in August with NULL scores, and "n_games > 0 → game not
+            # found" put seven future bets in the doctor's stuck list on
+            # Ethan's first nightly — a week that has not been PLAYED is
+            # the calendar working, not a bet stuck.
+            rows_g, _ = _game_bet_evidence(hist_conn, b, where, wargs)
+            finals = [r for r in rows_g
+                      if r["home_score"] is not None
+                      and r["away_score"] is not None]
+            if finals:
+                reason = "gradeable now"
+            elif rows_g and not real_age:
+                continue          # scheduled, unplayed week — not stuck
+            else:
+                reason = ("no results ingested" if not n_games
+                          else "game not found")
         elif not n_logs:
             reason = "no results ingested"
         else:
@@ -1648,6 +1676,10 @@ def _bet_team(hist_conn, b) -> str | None:
     if not want:
         return None
     import datetime as _dt
+    # Same ≥3.11 landmine as _logged_within: a week label must not be
+    # read as the ISO week it is not.
+    if _NFL_WEEK_DATE.match(str(b["date"] or "")):
+        return None
     try:
         d0 = _dt.date.fromisoformat(str(b["date"] or ""))
     except ValueError:
@@ -1701,6 +1733,10 @@ def _neighbour_day_rows_raw(hist_conn, b, where: str, wargs: list):
 
     from .sources.oddsapi import normalize_name
     if "period=?" not in where:
+        return [], wargs
+    # Week labels have no neighbouring days; ≥3.11 would otherwise read
+    # "2026-W01" as 2025-12-29 and query days nothing is filed under.
+    if _NFL_WEEK_DATE.match(str(b["date"] or "")):
         return [], wargs
     try:
         d0 = _dt.date.fromisoformat(b["date"] or "")

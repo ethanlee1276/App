@@ -4010,6 +4010,49 @@ def why_open() -> None:
               f"props). These are expected to sit open.")
 
 
+def _repair_sweep() -> None:
+    """The audit half of --settle, runnable with nothing open by date.
+
+    The doctor's grade-evidence check prescribes `--settle all` when a
+    settled game bet has no final score behind it — but with no ISO day
+    holding an open pick, settle_all returned before the repair pass it
+    was prescribing ever ran. Ethan hit exactly that on the first
+    nightly: two flagged bets, and the recommended command answered
+    "Nothing open to settle." This runs the audit regardless, and also
+    grades any week-labelled bet whose finals have quietly arrived —
+    those live outside the ISO-day sweep by construction.
+    """
+    from engine import db, ledger, parlayledger
+    lconn = ledger.connect()
+    hconn = db.connect()
+    try:
+        n = ledger.settle_from_history(lconn, hconn)
+        if n:
+            print(f"  settled {n} bet(s) straight from stored results")
+        fixed = ledger.resettle_mismatches(lconn, hconn)
+        if fixed:
+            print(f"  ⚠️  re-graded {len(fixed)} bet(s) whose stored result "
+                  "changed: " + "; ".join(
+                      f"{f['player']} {f['market']} {f['was']}→{f['now']}"
+                      for f in fixed[:5]))
+        try:
+            pr = parlayledger.settle(lconn)
+            rp = parlayledger.resettle(lconn)
+            if pr["settled"] or rp["fixed"] or rp["reopened"]:
+                print(f"  parlays: {pr['settled']} graded, "
+                      f"{len(rp['fixed'])} re-graded, "
+                      f"{rp['reopened']} reopened with their legs")
+        except Exception as exc:  # noqa: BLE001
+            print(f"  ⚠️  parlay audit skipped: {exc}")
+        ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+        if not n and not fixed:
+            print("  repair audit: every settled game bet still matches its "
+                  "stored final — nothing to fix.")
+    finally:
+        lconn.close()
+        hconn.close()
+
+
 def settle_all() -> None:
     """Grade every day that still has picks open, oldest first.
 
@@ -4024,7 +4067,8 @@ def settle_all() -> None:
     finally:
         lconn.close()
     if not days:
-        print("Nothing open to settle.")
+        print("Nothing open to settle by date — running the repair audit …")
+        _repair_sweep()
         return
     print(f"{len(days)} day(s) with open picks: {', '.join(sorted(days))}\n")
     for day in sorted(days):        # oldest first, so history builds forward
