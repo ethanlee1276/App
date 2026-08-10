@@ -124,6 +124,14 @@ SIGNALS = (
      "why": "The 2026-08-09 finding. Banked nightly, rendered on the "
             "Record page (web/js/app.js, outside this scan), and led with "
             "in the lab's prompt."},
+    {"name": "pitch arsenal",
+     "module": "engine/mlb/arsenal.py",
+     "symbols": ("mix_shift", "whiff_by_type", "show_arsenal"),
+     "want": ("probe",),
+     "why": "§6. Pitch mix and per-type whiff rate, from the SAME cached "
+            "playByPlay payloads --velo already loads — no new feed. The "
+            "hitter half is still absent and PITCH_LEVEL_SCOPE names its "
+            "two possible costs."},
     {"name": "book sharpness",
      "module": "engine/booksharp.py",
      # NOT `measure`. That name appears in 120 files — the first cut

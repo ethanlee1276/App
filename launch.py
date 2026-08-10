@@ -2836,6 +2836,67 @@ def show_redistribution(team=None, player=None, kind="targets",
     print(redistribute.report(res))
 
 
+def show_arsenal(person_id=None, season: int | None = None) -> None:
+    """What a starter throws, how often, and how much gets missed (§6).
+
+        python3 launch.py --arsenal 543037
+
+    MLB_MODEL §6 parked the arsenal matchup behind "needs pitch-mix +
+    per-pitch-type hitter data". The pitch-mix half is a second read of
+    the SAME cached playByPlay payloads `--velo` already loads, so on a
+    night the board priced this pitcher it costs nothing but the parse.
+
+    The hitter half is genuinely absent — see docs/PITCH_LEVEL_SCOPE.md,
+    which now names the two costs instead of saying "needs data".
+
+    Evidence only. Nothing prices from this.
+    """
+    import datetime as _d
+    from engine.mlb import arsenal as _ar
+    if not person_id:
+        print("\n  usage: python3 launch.py --arsenal <mlbPersonId> [season]")
+        print("  e.g.   python3 launch.py --arsenal 543037    # Gerrit Cole\n")
+        return
+    season = int(season or _d.date.today().year)
+    try:
+        hist = _ar.history(int(person_id), season)
+    except Exception as exc:                                # noqa: BLE001
+        print(f"\n  could not read starts: {exc}\n")
+        return
+    if not hist:
+        print(f"\n  No starts parsed for {person_id} in {season}. Either he "
+              f"has not started,\n  or the payloads did not load — "
+              f"`--pbp <gamePk>` says which.\n")
+        return
+    print(f"\n{'='*70}\n  ARSENAL — person {person_id}, {season}\n{'='*70}")
+    for st in hist:
+        bits = ", ".join(f"{t} {sh:.0%}" for t, sh in st["shares"].items())
+        print(f"\n  {st['date']}   {st['n']} pitches   {bits}")
+        for t, w in st["whiff"].items():
+            if w["whiff_rate"] is None:
+                print(f"      {t:<4} {w['swings']:>3} swings   "
+                      f"whiff — (under the floor)")
+            else:
+                print(f"      {t:<4} {w['swings']:>3} swings   "
+                      f"whiff {w['whiff_rate']:.0%}")
+    sh = _ar.mix_shift(hist)
+    if sh["enough"]:
+        print(f"\n  MIX AGAINST HIS OWN BASELINE")
+        for t, v in sh["types"].items():
+            if v["dropped"]:
+                print(f"    {t:<4} SHELVED — was {v['baseline']:.0%}, "
+                      f"absent from the latest start")
+            elif v["new"]:
+                print(f"    {t:<4} NEW — {v['latest']:.0%}, no baseline")
+            elif v["delta"] is not None:
+                print(f"    {t:<4} {v['baseline']:.0%} → {v['latest']:.0%}"
+                      f"   ({v['delta']:+.0%})")
+    print("\n  Whiff is per SWING, not per pitch: a pitch nobody offers at")
+    print("  is a ball, and dividing by every pitch would measure how often")
+    print("  he is in the zone rather than how hard the pitch is to hit.")
+    print("\n  Evidence only — nothing prices from this.\n")
+
+
 def show_alignment(team=None, season: int | None = None) -> None:
     """How a defence covers and how an offence lines up (NFL_MODEL §6).
 
@@ -3890,6 +3951,12 @@ def main() -> None:
         from engine import losspatterns as _lp
         print(_lp.format_both_ways(
             _lp.both_ways(_lp.records_from_ledger(_l.connect()))))
+        return
+    if "--arsenal" in argv:
+        i = argv.index("--arsenal")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_arsenal(rest[0] if rest else None,
+                     rest[1] if len(rest) > 1 else None)
         return
     if "--booksharp" in argv:
         show_booksharp()

@@ -163,3 +163,47 @@ Velocity trend is the most promising of the three precisely because it is
 closest to *information* rather than *processing*: a pitcher who lost
 1.5 mph in his last start is a fact about the world that a book may or
 may not have priced, rather than a rearrangement of public season stats.
+
+
+---
+
+## 7. §6's arsenal matchup — the two halves cost very differently
+
+Added 2026-08-10, because "needs pitch-mix + per-pitch-type hitter data"
+hid two costs that are nothing like each other.
+
+**The pitcher half is free.** `velocity.py` already loads a starter's last
+five playByPlay payloads to read his velocity, and every pitch in them
+carries `details.type.code` and `details.call.code`. So mix share by type,
+whiff rate by type, and mix SHIFT against his own baseline are a second
+parse of games the board already fetched. `engine/mlb/arsenal.py`,
+`launch.py --arsenal <personId>`. No new feed, no new request, no credit.
+
+Two decisions inside it worth keeping:
+
+- **Whiff is per SWING, not per pitch.** A pitch nobody offers at is a
+  ball. Dividing by every pitch measures how often he is in the zone
+  rather than how hard the pitch is to hit.
+- **A foul tip is contact.** Counting `T` as a miss would inflate every
+  splitter in the league.
+
+**The hitter half is the expensive one**, and the two routes are:
+
+| route | cost | status |
+|---|---|---|
+| Savant pitch-arsenal BATTER leaderboard | one CSV per season | **unverified** — the sandbox cannot reach Savant (403 at the proxy). `engine/mlb/sources/savant.py` already fetches sibling leaderboards through the same host, so the adapter would be a small addition. Probe it on the laptop first. |
+| playByPlay, whole season | ~1.5 GB, ~2,430 games | works, and is a real ingest project |
+
+The reason it cannot ride tonight's fetches: a batter's whiff rate against
+sliders needs HIS season, not his opponent's five starts. That asymmetry is
+the whole difference between the two halves.
+
+**Recommendation: probe the Savant route before building anything.** One
+`curl` settles whether the cheap path exists:
+
+    curl -s "https://baseballsavant.mlb.com/leaderboard/pitch-arsenal-stats?type=batter&pitchType=ALL&year=2025&csv=true" | head -1
+
+If that returns a header row with a pitch-type column, the hitter half is a
+day's work. If it 404s, it is the 1.5 GB route or nothing, and the platoon
+engine stays the proxy — which is a fine answer, and better than a matchup
+built on three sliders.
