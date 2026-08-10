@@ -383,6 +383,37 @@ def test_holders_and_charts_are_wired_end_to_end():
     assert "top10_share" in js and "Top 10" in js
 
 
+def test_concurrent_builders_cannot_race_the_tape_or_the_board():
+    """The 15s live loop and the 60s refresh_all cycle both run
+    memes_build. Without exclusion, two at once each read the tape,
+    append their own snapshot, and the second write DISCARDS the
+    first's — and both truncate the board JSON under the page's poll.
+    So: one instance lock (loser skips quietly, stale locks stolen), and
+    every shared file lands by atomic os.replace, never truncate-write."""
+    import memes_build as mb
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td) / "board.json"
+        lock1 = mb._acquire_lock(out)
+        assert lock1 is not None, "first builder must win the lock"
+        assert mb._acquire_lock(out) is None, "second builder must skip"
+        # A stale lock (dead builder) is stolen rather than honored forever.
+        os.utime(lock1, (1, 1))
+        stolen = mb._acquire_lock(out)
+        assert stolen is not None, "a dead builder's lock wedged the scan"
+        stolen.rmdir()
+    # And the writes themselves: replace, not truncate.
+    build = open(os.path.join(ROOT, "memes_build.py"), encoding="utf-8").read()
+    i = build.index("def _build(")
+    assert "os.replace(tmp, out)" in build[i:]
+    assert "out.write_text(" not in build[i:], "board still truncate-writes"
+    eng = open(os.path.join(ROOT, "engine/memecoins.py"), encoding="utf-8").read()
+    j = eng.index("def record_snapshots(")
+    body = eng[j:eng.index("\ndef ", j + 10)]
+    assert "replace(tmp, path)" in body, "the tape still truncate-writes"
+
+
 def test_rugcheck_parser_is_tristate_and_never_reads_absent_as_safe():
     """True = the switch is ACTIVE, False = renounced, None = the API
     did not answer. The None case is the load-bearing one: a shape drift

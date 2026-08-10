@@ -152,7 +152,13 @@ def record_snapshots(rows: list[dict], ts: float | None = None,
             "buyers_m5": ((r.get("tx_m5") or {}).get("buyers")),
         }))
         n += 1
-    path.write_text("\n".join(keep) + ("\n" if keep else ""))
+    # Atomic replace, not truncate-and-write: the live loop rewrites this
+    # every 15 seconds while another process may be mid-load_history —
+    # a reader must see the old tape or the new one, never half a line.
+    import os as _os
+    tmp = path.with_suffix(".jsonl.tmp")
+    tmp.write_text("\n".join(keep) + ("\n" if keep else ""))
+    _os.replace(tmp, path)
     return n
 
 

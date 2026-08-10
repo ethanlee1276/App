@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -43,7 +44,11 @@ def main(argv=None) -> int:
     }
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(board, indent=1))
+    # Atomic replace — same contract as the meme board: a page fetch must
+    # see the old file or the new one, never a truncated middle.
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(board, indent=1))
+    os.replace(tmp, out)
     counts = ", ".join(f"{k} {len(v)}" for k, v in sports.items()) or "none"
     print(f"Injuries: {counts}"
           + (f"  ({len(notes)} feed(s) declined)" if notes else ""))

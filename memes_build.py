@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -161,11 +162,55 @@ def gather() -> tuple[list[dict], list[str]]:
     return rows, notes
 
 
+#: A second builder holding the lock longer than this is not "still
+#: running", it is dead mid-crash — steal the lock rather than letting
+#: one wedged process stop the scan forever (the .nightly.lock lesson).
+LOCK_STALE_S = 120
+
+
+def _acquire_lock(out: Path):
+    """One builder at a time, or the tape's read-modify-rewrite races.
+
+    The 15-second live loop and the 60-second refresh_all cycle both run
+    this script; two at once each read the tape, each append their own
+    snapshot, and the second write silently discards the first one's —
+    plus both truncate the board JSON under the page's 20-second poll.
+    mkdir is the atomic test-and-set; the loser exits quietly, because
+    its sibling is already doing the identical work.
+    """
+    lock = out.parent / ".memes_build.lock"
+    try:
+        lock.mkdir(parents=True)
+    except FileExistsError:
+        try:
+            if time.time() - lock.stat().st_mtime < LOCK_STALE_S:
+                return None
+            os.utime(lock)                   # steal, and restamp the clock
+        except OSError:
+            return None
+        return lock
+    return lock
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="web/data/memecoins.json")
     args = ap.parse_args(argv)
 
+    lock = _acquire_lock(Path(args.out))
+    if lock is None:
+        print("Rocket Radar: another build is already running — skipped.")
+        return 0
+    try:
+        return _build(args)
+    finally:
+        try:
+            lock.rmdir()
+        except OSError:
+            pass
+
+
+def _build(args) -> int:
     rows, notes = gather()
     board = {"generated_at": dt.datetime.now().isoformat(timespec="seconds"),
              "status": "live" if rows else "unavailable",
@@ -201,7 +246,11 @@ def main(argv=None) -> int:
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(board, indent=1))
+    # Atomic replace: the page polls this file every ~20 seconds, and a
+    # truncate-and-write caught mid-poll serves half a JSON document.
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(board, indent=1))
+    os.replace(tmp, out)
     print(f"Wrote {out}")
     return 0
 
