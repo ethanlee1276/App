@@ -30,6 +30,22 @@ A signal in none of them is inert. A signal in `probe` alone is a report.
 Neither is wrong, and both should be a CHOICE rather than something
 discovered months later.
 
+WHAT THIS AUDITOR CANNOT SEE, stated plainly because it looked authoritative
+and was not. It checks whether a symbol is MENTIONED in a consuming file.
+Mention is not production. On 2026-08-10 it reported the NFL coverage
+signal as living in gate, journal, pipeline and probe — all four true, every
+call site real — while `_opp_zone_rate` read `getattr(g, "season", None)`
+on a `Game` that has no `season` field, returned None on every play ever
+priced, and filled the column with silence that looked exactly like "no NFL
+props yet".
+
+A wiring audit and a value audit are different questions. The second one
+lives in the tests: each journaled dimension has a case that feeds a
+plausible input through `features_of` and asserts a BAND comes back, and
+`_opp_zone_rate` has one that asserts a number rather than a call. If you
+add a signal here, add that test too — this column will tell you the
+plumbing is connected whether or not water comes out.
+
 This module states the choice for each signal and then checks it, by
 reading the repo rather than by trusting the registry.
 """

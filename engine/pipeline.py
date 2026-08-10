@@ -302,6 +302,31 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
 _ZONE_CACHE: dict = {}
 
 
+def _season_of(g) -> int | None:
+    """The nflverse SEASON a game belongs to, from its date.
+
+    `Game` has no `season` field — it carries `date`, `week`, `home` and
+    `away` — and the first cut of `_opp_zone_rate` read
+    `getattr(g, "season", None)`. That returns None on every game ever
+    built, so the whole coverage dimension was silently inert: journaled
+    as NULL, banded as None, mined as nothing. Exactly the failure
+    `engine/datause.py` exists to catch, and exactly the one it cannot —
+    that auditor checks whether a symbol is MENTIONED, not whether it ever
+    produces a value.
+
+    A season runs September to February, so January and February belong to
+    the PREVIOUS season's year, which is how nflverse keys its files. A
+    naive `date[:4]` would ask for a 2027 participation file during the
+    2026 playoffs and get a 404 that reads as "no data".
+    """
+    d = str(getattr(g, "date", "") or "")
+    try:
+        year, month = int(d[:4]), int(d[5:7])
+    except (TypeError, ValueError):
+        return None
+    return year if month >= 3 else year - 1
+
+
 def _opp_zone_rate(g, d):
     """The opposing defence's zone rate, or None when we cannot say.
 
@@ -311,7 +336,7 @@ def _opp_zone_rate(g, d):
     build over a dimension that prices nothing.
     """
     opp = (d.get("opponent") or "").strip().upper()
-    season = getattr(g, "season", None)
+    season = _season_of(g)
     if not opp or not season:
         return None
     key = (season, opp)

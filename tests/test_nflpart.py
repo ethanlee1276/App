@@ -206,6 +206,59 @@ def test_it_is_journaled_and_never_priced():
             f"{banned} must not appear in a probe path")
 
 
+def test_the_season_is_derived_because_the_game_has_no_season_field():
+    """THE BUG THAT MADE THE WHOLE DIMENSION INERT, found 2026-08-10 while
+    checking that the wiring produced a VALUE and not merely a call.
+
+    `Game` carries date, week, home and away — there is no `season`. The
+    first cut read `getattr(g, "season", None)`, which returns None on
+    every game ever built, so `opp_zone_rate` was NULL on every row: the
+    band saw None, the miner saw nothing, and the column filled with
+    silence that looked exactly like "no NFL props yet".
+
+    `engine/datause.py` reported it as in gate, journal, pipeline and
+    probe, and was right — every symbol WAS mentioned. Mention is not
+    production, and this test is the difference."""
+    from engine.pipeline import _season_of
+
+    class G:
+        def __init__(self, d):
+            self.date = d
+
+    assert _season_of(G("2026-09-14")) == 2026
+    # January and February belong to the PREVIOUS season, which is how
+    # nflverse keys its files — `date[:4]` would ask for a 2027
+    # participation file during the 2026 playoffs and read the 404 as
+    # "no data".
+    assert _season_of(G("2027-01-11")) == 2026
+    assert _season_of(G("2027-02-08")) == 2026
+    assert _season_of(G("")) is None
+
+
+def test_the_zone_rate_produces_a_number_not_just_a_call():
+    """A pipeline that CALLS the right function and always gets None is
+    indistinguishable, from every report we have, from one that works."""
+    import engine.pipeline as pl
+
+    class G:
+        date = "2026-09-14"
+
+    rows = ([_play("2026_01_NE_SF", "NE", "ZONE_COVERAGE", "6", "4")] * 300
+            + [_play("2026_01_NE_SF", "NE", "MAN_COVERAGE", "7", "5")] * 100)
+    real = pl._opp_zone_rate
+    try:
+        # Stand in for the 49 MB download; the point is the plumbing.
+        import engine.sources.nflpart as npart
+        orig = npart.load_participation
+        npart.load_participation = lambda season: rows
+        pl._ZONE_CACHE.clear()
+        got = real(G(), {"opponent": "SF"})
+    finally:
+        npart.load_participation = orig
+        pl._ZONE_CACHE.clear()
+    assert got == 0.75, f"expected a real rate, got {got!r}"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
