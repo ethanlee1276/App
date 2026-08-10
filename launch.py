@@ -3903,6 +3903,67 @@ def show_stuck() -> None:
         print(f"  {reason} — {tips.get(reason, 'unknown')}")
 
 
+def why_open() -> None:
+    """Say why every open bet has not settled — and what to do about it.
+
+        python3 launch.py --why-open
+
+    "The bets aren't settling" has three different fixes, and the record
+    page cannot tell them apart. This groups every open bet by its actual
+    blocker (reusing the settler's own lookups, so the answer matches what
+    a settle pass would find) and then names the fix:
+
+      * READY bets still open  → the settle PASS is not running. The
+        auto-settle only fires while `python3 launch.py` is up (on start,
+        then every 15 min) or when the nightly job runs. If neither is
+        happening, `python3 launch.py --settle all` closes them now.
+      * NO-RESULTS bets         → the results ingest has not reached that
+        date. A feeds/reachability issue; `--check` probes the hosts.
+      * NO-STATLINE / NO-SOURCE → cannot grade from what exists (a DNP, a
+        name the feed spells differently, or preseason props with no feed).
+    """
+    from engine import db, ledger
+    lconn = ledger.connect()
+    hconn = db.connect()
+    try:
+        rep = ledger.explain_open(lconn, hconn)
+    finally:
+        lconn.close()
+        hconn.close()
+    if not rep["total"]:
+        print("No open bets — nothing waiting to settle.")
+        return
+    c = rep["counts"]
+    print(f"{rep['total']} open bet(s). Why each has not graded:\n")
+    order = ["ready", "waiting", "no_results", "no_statline",
+             "no_grade_source"]
+    for key in order:
+        items = rep["buckets"][key]
+        if not items:
+            continue
+        print(f"  {len(items):>3}  {key.upper():<15} "
+              f"— {ledger.OPEN_REASONS[key]}")
+        for it in sorted(items, key=lambda x: (x["sport"], x["date"] or ""))[:6]:
+            who = it["player"] or ""
+            print(f"         · {it['sport']:<4} {it['date'] or '—':<11} "
+                  f"{it['market']:<10} {who[:28]}"
+                  + ("   (stale — day is over)" if it["stale"] else ""))
+        if len(items) > 6:
+            print(f"         … and {len(items) - 6} more")
+        print()
+    if c["ready"]:
+        print(f"  → {c['ready']} bet(s) are READY. The auto-settle only runs "
+              f"while the server is up or the nightly job fires.\n"
+              f"    Close them now:  python3 launch.py --settle all")
+    if c["no_results"]:
+        print(f"  → {c['no_results']} bet(s) are missing results. Check the "
+              f"feeds:  python3 launch.py --check")
+    if c["no_statline"] or c["no_grade_source"]:
+        print(f"  → {c['no_statline'] + c['no_grade_source']} bet(s) cannot "
+              f"grade from available data (DNP, name mismatch, or preseason "
+              f"props). These are expected to sit open.")
+
+
 def settle_all() -> None:
     """Grade every day that still has picks open, oldest first.
 
@@ -4598,6 +4659,9 @@ def main() -> None:
         want = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else None
         set_paper_mode(want)
         return
+    if "--why-open" in argv:
+        why_open()
+        return
     if "--settle" in argv:
         i = argv.index("--settle")
         day = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else None
@@ -4660,6 +4724,13 @@ def main() -> None:
         _run_maintenance()
         try:
             from engine.maintenance import settle_open
+            # settle_open re-exports record.json itself when it grades
+            # anything, and this thread starts strictly AFTER the initial
+            # refresh_all() above — so a morning launch that can grade last
+            # night does grade it, and the served page catches up when this
+            # finishes. If bets still show open afterwards, they could not
+            # be graded from what exists: `--why-open` says which of the
+            # three reasons it is (results not in, DNP, or nothing running).
             settle_open(force=True)
         except Exception as exc:  # noqa: BLE001
             print(f"  ⚠️  auto-settle failed: {exc}")

@@ -3406,6 +3406,105 @@ def open_by_day(conn, today: str) -> list[dict]:
             for d in sorted(by_day, reverse=True)]
 
 
+#: The reasons an open bet has not graded, in the order that matters for
+#: acting on them. READY is the diagnostic one: a ready bet still open
+#: means the settle PASS is not running — not that results are missing.
+OPEN_REASONS = {
+    "ready": "ready to grade — results are in; a settle pass will close it",
+    "waiting": "waiting — the game is not confirmed final yet",
+    "no_results": "no results for this date in the history DB yet — "
+                  "ingest has not reached it",
+    "no_statline": "game is in, but this player has no stat line "
+                   "(did not play, or a name the feed spells differently)",
+    "no_grade_source": "this market has no automatic results source right "
+                       "now (e.g. NFL/CFB preseason player props)",
+}
+
+
+def explain_open(conn, hist_conn, today: str | None = None) -> dict:
+    """Say, per open bet, WHY it has not settled — reusing the settler's
+    own lookups so the answer matches what a real settle pass would find.
+
+    This exists because "the bets aren't settling" has three completely
+    different fixes and they are indistinguishable from the record page:
+
+      * READY bets prove the settle PASS is not running (the server is not
+        up, or the nightly job was never installed) — nothing is wrong with
+        the data, it just needs `--settle`.
+      * NO_RESULTS bets mean the results ingest has not reached that date —
+        a feed/reachability problem, not a settle problem.
+      * NO_STATLINE / NO_GRADE_SOURCE bets cannot grade from what exists:
+        a DNP, a name mismatch, or a market (preseason props) with no feed.
+
+    Never raises: a diagnostic that can crash is one more thing to debug.
+    """
+    import datetime as _dt
+    today = today or _dt.date.today().isoformat()
+    from .sources.oddsapi import normalize_name
+
+    def _reason(b) -> str:
+        try:
+            where, wargs = _hist_where(b)
+            if b["market"] in GAME_MARKETS:
+                rows, _ = _game_bet_evidence(hist_conn, b, where, wargs)
+                if rows:
+                    return "ready"
+                # No game row. Preseason team markets DO have finals, so the
+                # only "no grade source" case here is a genuinely missing
+                # feed date — report it as such and let the day tell us.
+                return ("no_results" if not _day_was_ingested(
+                    hist_conn, where, wargs) else "no_statline")
+            # Player market: mirror settle_from_history's join exactly.
+            rows = hist_conn.execute(
+                f"SELECT value FROM player_game_logs WHERE {where} "
+                f"AND market=? AND player=?",
+                (*wargs, b["market"], b["player"])).fetchall()
+            if not rows:
+                target = normalize_name(b["player"])
+                rows = [c for c in hist_conn.execute(
+                            f"SELECT player FROM player_game_logs "
+                            f"WHERE {where} AND market=?",
+                            (*wargs, b["market"]))
+                        if normalize_name(c["player"]) == target]
+            if rows:
+                return ("waiting" if _too_early_to_grade(
+                    hist_conn, where, wargs, rows[0], b["date"]) else "ready")
+            # Nothing logged for this player. Distinguish "day not ingested"
+            # from "day is in, player absent" — different fixes. "In" means
+            # the day has ANY logs for this sport/period (games-table
+            # presence is not enough — whole seasons of player logs were
+            # backfilled before the games table existed).
+            day_in = bool(hist_conn.execute(
+                f"SELECT 1 FROM player_game_logs WHERE {where} LIMIT 1",
+                wargs).fetchone()) or _day_was_ingested(hist_conn, where,
+                                                        wargs)
+            if day_in:
+                # NFL/CFB preseason player props have no weekly-stats source
+                # until the regular season; name that rather than blaming a
+                # DNP the feed would actually have logged.
+                if (b["sport"] in ("nfl", "cfb")
+                        and "pre" in (b["date"] or "").lower()):
+                    return "no_grade_source"
+                return "no_statline"
+            return "no_results"
+        except Exception:                                       # noqa: BLE001
+            return "no_results"
+
+    buckets: dict = {k: [] for k in OPEN_REASONS}
+    for b in conn.execute("SELECT * FROM bets WHERE status='open'").fetchall():
+        item = {"id": b["id"], "sport": b["sport"], "date": b["date"],
+                "market": b["market"], "player": b["player"],
+                "side": b["side"] if "side" in b.keys() else None,
+                "line": b["line"] if "line" in b.keys() else None,
+                "stale": bool(b["date"]) and (b["date"] or "") < today}
+        buckets[_reason(b)].append(item)
+    return {
+        "total": sum(len(v) for v in buckets.values()),
+        "buckets": {k: v for k, v in buckets.items()},
+        "counts": {k: len(v) for k, v in buckets.items()},
+    }
+
+
 def unstaked_scorecard(conn) -> dict:
     """Were the 0.00-unit picks actually profitable? Measure, don't argue.
 
