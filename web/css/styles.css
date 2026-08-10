@@ -4040,6 +4040,27 @@ select.calc-in { width: auto; font-weight: 600; }
 .mc-board td:nth-child(2) { max-width: 220px; overflow: hidden;
   text-overflow: ellipsis; }
 
+/* Injury report.
+   ------------------------------------------------------------------
+   All shared kit (.stats, .agate, .section-title); the only new
+   furniture is the player identity cell (face beside name), the
+   team-group header, and the small position/side tag. Status colour is
+   inline because it is DATA — availability — not decoration. */
+.inj-id { display: inline-flex; align-items: center; gap: 8px; }
+.inj-face { width: 24px; height: 24px; border-radius: 50%;
+  object-fit: cover; background: var(--fill-subtle); flex: none; }
+.inj-pos { color: var(--text-mute); font-size: var(--fs-xs);
+  font-weight: 600; }
+.inj-team-head { display: flex; align-items: baseline; gap: 8px;
+  font-weight: 800; margin: 18px 0 8px; }
+.inj-team-n { color: var(--text-mute); font-weight: 600;
+  font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.inj-table td, .inj-table th { white-space: nowrap; }
+.inj-table td:nth-last-child(3) { max-width: 260px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.inj-team-cell { max-width: 170px; overflow: hidden;
+  text-overflow: ellipsis; }
+
 /* Motion, switched off for anyone who has asked the OS to stop it.
 
    There were two narrow blocks doing this — one for a disclosure chevron,

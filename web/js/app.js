@@ -91,7 +91,10 @@ const HIDDEN_VIEWS = {
   // Futures are a SEASON market. A fight card, a prediction market and a
   // fantasy draft do not have one, and a tab that can only ever say so is
   // worse than no tab.
-  ufc: ["parlays", "futures"],
+  // No commission publishes an MMA injury report and ESPN carries no
+  // /injuries endpoint for it — what exists is camp rumor, which is
+  // exactly what this site does not publish.
+  ufc: ["parlays", "futures", "injuries"],
   polymarket: ["parlays", "futures"],
   fantasy: ["parlays", "futures"],
   // CFB has 134 programs and no free player-level feed. A roster tab that
@@ -795,6 +798,7 @@ function renderAll() {
   // header — the same class of bug as a standalone page keeping a stale
   // badge, and it looks like the switch silently failed.
   if (state.view === "rosters") renderRosters();
+  if (state.view === "injuries") renderInjuries();
   if (state.view === "standings") renderStandings();
   if (state.view === "futures") renderFutures();
 }
@@ -7105,6 +7109,126 @@ function seedsHTML(seeds) {
     </div>`).join("")}</div>`;
 }
 
+/* ============================================================
+   INJURY REPORT — every sport, one page per league
+   ============================================================
+   Ethan, 2026-08-10: "we should have it for every sport and it should
+   be easier to find them [than] digging through fantasy." This is the
+   CURRENT-STATUS board off ESPN's league feeds — what the team filed,
+   when, and the projected return. The nflverse practice-report detail
+   stays on the fantasy page, where it feeds the usage model; this page
+   answers the question you actually walk in with: who is out, league
+   wide, right now. */
+
+/* A designation's tone is about AVAILABILITY, not severity: "Out" and
+   a 60-day IL read red because the player is not playing; the
+   questionable tier reads amber because the answer is "maybe". Unknown
+   wordings stay neutral rather than guessing. */
+function injTone(status) {
+  const s = (status || "").toLowerCase();
+  if (/(^|\b)(out|injured reserve|ir\b|60-day|suspension|season)/.test(s)) return "var(--bad)";
+  if (/(doubtful|questionable|day-to-day|10-day|15-day|7-day|game-time)/.test(s)) return "var(--warn)";
+  if (/(probable|available|active)/.test(s)) return "var(--good)";
+  return "var(--text-dim)";
+}
+
+function injWhen(ts) {
+  if (!ts) return "—";
+  const days = (Date.now() - ts) / 86400e3;
+  if (days < 1) return "today";
+  if (days < 2) return "yesterday";
+  if (days < 14) return `${Math.floor(days)}d ago`;
+  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function injRow(r, withTeam) {
+  const face = r.face && /^https:\/\//.test(r.face)
+    ? `<img class="inj-face" src="${escapeHtml(r.face)}" alt="" loading="lazy"
+         onerror="this.style.display='none'">` : "";
+  return `<tr${r.comment ? ` title="${escapeHtml(r.comment)}"` : ""}>
+    ${withTeam ? `<td class="inj-team-cell">${escapeHtml(r.team)}</td>` : ""}
+    <td><span class="inj-id">${face}<b>${escapeHtml(r.player)}</b>${
+      r.pos ? ` <span class="inj-pos">${escapeHtml(r.pos)}</span>` : ""}</span></td>
+    <td><b style="color:${injTone(r.status)}">${escapeHtml(r.status)}</b></td>
+    <td>${escapeHtml(r.injury || "—")}${r.side ? ` <span class="inj-pos">${escapeHtml(r.side)}</span>` : ""}</td>
+    <td class="num" title="${escapeHtml(r.date || "")}">${injWhen(r.ts)}</td>
+    <td class="num">${escapeHtml(r.return_date || "—")}</td>
+  </tr>`;
+}
+
+const INJ_HEAD = (withTeam) => `<thead><tr>
+  ${withTeam ? "<th>Team</th>" : ""}<th>Player</th><th>Status</th>
+  <th>Injury</th><th title="When the designation was filed">Filed</th>
+  <th title="Projected return, where the team named one">Return</th>
+</tr></thead>`;
+
+async function renderInjuries() {
+  const host = document.getElementById("injuries-body");
+  if (!host) return;
+  let d = null;
+  try {
+    const res = await fetch("data/injuries.json?t=" + Date.now());
+    if (res.ok) d = await res.json();
+  } catch (e) {}
+  const sport = state.sport || "nfl";
+  const rows = (((d || {}).sports) || {})[sport] || [];
+  if (!rows.length) {
+    const note = sport === "cfb"
+      ? `College programs have no duty to report, so this feed runs sparse —
+         emptiness here is the league’s opacity, not a fault to chase.`
+      : `Either nobody in the league carries a designation right now — rare —
+         or the feed declined on the last pull. The launcher retries every
+         refresh, and <code>python3 launch.py --check</code> probes the host.`;
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
+      <div class="es-title">No injury designations to show</div>
+      <div class="es-sub">${note}</div></div>`;
+    return;
+  }
+
+  const parsed = rows.map((r) => ({ ...r, ts: Date.parse(r.date || "") || 0 }))
+    .sort((a, b) => b.ts - a.ts);
+  const outTier = parsed.filter((r) => injTone(r.status) === "var(--bad)");
+  const maybeTier = parsed.filter((r) => injTone(r.status) === "var(--warn)");
+  const fresh = parsed.filter((r) => r.ts >= Date.now() - 7 * 86400e3)
+    .slice(0, 40);
+
+  const byTeam = {};
+  for (const r of parsed) (byTeam[r.team] = byTeam[r.team] || []).push(r);
+  const teams = Object.keys(byTeam)
+    .sort((a, b) => byTeam[b].length - byTeam[a].length || a.localeCompare(b));
+
+  const tile = (k, v, sub) => `<div class="tile"><div class="k">${k}</div>
+    <div class="v">${v}</div>${sub ? `<div class="tile-sub">${sub}</div>` : ""}</div>`;
+  host.innerHTML = `
+    <div class="stats">
+      ${tile("Players listed", parsed.length, "current designations")}
+      ${tile("Out tier", outTier.length, "out, IR, long-term IL")}
+      ${tile("Questionable tier", maybeTier.length, "doubtful through day-to-day")}
+      ${tile("Teams affected", teams.length, "of the whole league")}
+    </div>
+    ${fresh.length ? `
+      <div class="section-title">Fresh this week
+        <span class="sub">— designations filed in the last seven days, newest first.
+        Hover a row for the team’s own wording.</span></div>
+      <div class="card" style="padding:0;overflow-x:auto">
+        <table class="agate inj-table">${INJ_HEAD(true)}
+        <tbody>${fresh.map((r) => injRow(r, true)).join("")}</tbody></table></div>` : ""}
+    <div class="section-title">By team
+      <span class="sub">— most banged-up first. Every current designation the league
+      lists, not just this week’s.</span></div>
+    ${teams.map((t) => `
+      <div class="inj-team-head">${escapeHtml(t)}
+        <span class="inj-team-n">${byTeam[t].length}</span></div>
+      <div class="card" style="padding:0;overflow-x:auto">
+        <table class="agate inj-table">${INJ_HEAD(false)}
+        <tbody>${byTeam[t].map((r) => injRow(r, false)).join("")}</tbody></table></div>`).join("")}
+    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
+      Statuses are the league’s own filings via ESPN’s public feed, refreshed with the
+      site on a 30-minute cache. The NFL’s practice-level detail (limited/DNP, the
+      usage model’s injury inputs) lives on the Fantasy page — this board is
+      availability, league-wide. Updated ${escapeHtml(((d || {}).generated_at || "").slice(11, 16))}.</p>`;
+}
+
 async function renderStandings() {
   const host = document.getElementById("standings-body");
   if (!host) return;
@@ -8679,7 +8803,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "parlays", "futures", "trending", "players", "rosters", "standings", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
+const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "parlays", "futures", "trending", "players", "rosters", "injuries", "standings", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
 
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -8703,6 +8827,7 @@ function switchView(name, push = false) {
     return;
   }
   if (name === "rosters") renderRosters();
+  if (name === "injuries") renderInjuries();
   if (name === "standings") renderStandings();
   if (name === "record") renderRecord();
   if (name === "lab") renderLab();

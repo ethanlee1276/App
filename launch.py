@@ -417,6 +417,20 @@ def refresh_sport_rosters(quiet: bool = False) -> bool:
     return ok
 
 
+def refresh_injuries(quiet: bool = False) -> bool:
+    """League-wide injury boards (ESPN, keyless) → web/data/injuries.json.
+
+    One cached pull per league on a 30-minute TTL, each league failing
+    independently, so riding the refresh cycle costs nothing metered and
+    a dead feed dims one sport instead of the page."""
+    ok, tail = _run_build(["injuries_build.py", "--out",
+                           "web/data/injuries.json"])
+    if not quiet:
+        print(f"  INJ  injuries: {'refreshed' if ok else 'unavailable — kept existing data'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
 def refresh_standings(quiet: bool = False) -> bool:
     """Standings and the postseason bracket. Zero network — both are
     counted from the same finished games every other board reads, so they
@@ -606,6 +620,7 @@ def refresh_all(quiet: bool = False) -> None:
     refresh_cfb(quiet=quiet)
     refresh_ufc(quiet=quiet)
     refresh_sport_rosters(quiet=quiet)
+    refresh_injuries(quiet=quiet)
     refresh_preseason(quiet=quiet)
     refresh_standings(quiet=quiet)
     _arbitrate_parlays(quiet=quiet)
@@ -1896,6 +1911,7 @@ def preflight() -> None:
         ("Sportsbook odds (all sports)", "https://api.the-odds-api.com/v4/sports/"),
         ("Weather (Open-Meteo)", "https://api.open-meteo.com/v1/forecast?latitude=40&longitude=-74&hourly=temperature_2m"),
         ("UFC fighter data (ESPN MMA)", "https://site.web.api.espn.com/apis/search/v2?query=jones&limit=1"),
+        ("Injury reports (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"),
         ("Meme coins (DexScreener)", "https://api.dexscreener.com/token-boosts/top/v1"),
         ("Meme coins (GeckoTerminal)", "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=1"),
         ("Meme coin holders (Solana RPC)", "https://api.mainnet-beta.solana.com"),
@@ -1913,6 +1929,7 @@ def preflight() -> None:
         ("Record / journal", "web/data/record.json"),
         ("Polymarket intel", "web/data/predmarkets.json"),
         ("Rocket Radar (meme coins)", "web/data/memecoins.json"),
+        ("Injury reports (all sports)", "web/data/injuries.json"),
         ("Fantasy football", "web/data/fantasy.json"),
         ("NBA (Scalpy)", "web/data/nba.json"),
         ("UFC (Scalpy MMA)", "web/data/ufc.json"),
@@ -1959,6 +1976,7 @@ def preflight() -> None:
         ("Polymarket", "web/data/predmarkets.json", ()),
         ("Rocket Radar", "web/data/memecoins.json",
          ("coins", "rocket", "exits")),
+        ("Injuries", "web/data/injuries.json", ("sports",)),
         ("Fantasy", "web/data/fantasy.json", ()),
         ("NBA", "web/data/nba.json", ()),
         ("UFC", "web/data/ufc.json", ()),

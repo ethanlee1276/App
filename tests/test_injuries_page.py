@@ -1,0 +1,151 @@
+"""The injury report page — every sport, one league-wide status board.
+
+Ethan, 2026-08-10: "Implement an injury report page for all sports...
+it should be easier to find them [than] digging through fantasy."
+
+What is pinned here: the parser reads ESPN's envelope by KEY and drops
+rather than guesses; the build fails per-league instead of whole-board;
+the page is wired end to end (nav tab, view, router, sport-switch
+re-render) with UFC's tab hidden because no MMA injury feed exists; and
+the launcher refreshes the file the page fetches. The live endpoint is
+unreachable from this sandbox — same as every ESPN feed here — so shape
+comes from fixtures and the laptop's `--check` probes the real host.
+"""
+
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+from unittest import mock
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from engine.sources import espninjuries as inj                 # noqa: E402
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+FIXTURE = {
+    "injuries": [
+        {"id": "22", "displayName": "Arizona Cardinals", "injuries": [
+            {"status": "Injured Reserve", "date": "2026-08-05T18:16Z",
+             "shortComment": "Placed on IR Tuesday.",
+             "athlete": {"displayName": "Sam Player",
+                         "position": {"abbreviation": "LB"},
+                         "headshot": {"href": "https://a.espncdn.com/x.png"}},
+             "details": {"type": "Achilles", "detail": "Tear",
+                         "side": "Left", "returnDate": "2027-09-01"}},
+            {"status": "Questionable", "date": "2026-08-09T11:00Z",
+             "athlete": {"displayName": "Jo Backup"},
+             "details": {"type": "Hamstring", "side": "Not Specified"}},
+            # No player name → not a row. No status → not a row.
+            {"status": "Out", "athlete": {}},
+            {"athlete": {"displayName": "No Status"}},
+        ]},
+        {"displayName": "Buffalo Bills", "injuries": []},
+    ],
+}
+
+
+def test_parser_reads_by_key_and_drops_rather_than_guesses():
+    rows = inj.parse_injuries(FIXTURE)
+    assert len(rows) == 2
+    a = rows[0]
+    assert a["team"] == "Arizona Cardinals"
+    assert a["player"] == "Sam Player" and a["pos"] == "LB"
+    assert a["status"] == "Injured Reserve"
+    assert a["injury"] == "Achilles Tear" and a["side"] == "Left"
+    assert a["return_date"] == "2027-09-01"
+    assert a["face"].startswith("https://")
+    b = rows[1]
+    # "Not Specified" is ESPN's null — it must come through as None, not
+    # as a word the page prints as though it meant something.
+    assert b["side"] is None
+    assert b["injury"] == "Hamstring"
+    assert b["face"] is None and b["return_date"] is None
+
+
+def test_parser_survives_garbage():
+    for junk in (None, {}, {"injuries": None}, {"injuries": [{}]},
+                 {"injuries": [{"injuries": [None]}]}):
+        try:
+            assert inj.parse_injuries(junk) == []
+        except AttributeError:
+            raise AssertionError(f"choked on {junk!r}")
+
+
+def test_every_league_has_a_feed_and_ufc_deliberately_does_not():
+    assert set(inj.LEAGUES) == {"nfl", "mlb", "nba", "wnba", "cfb"}
+    for url in inj.LEAGUES.values():
+        assert url.endswith("/injuries")
+
+
+def test_build_fails_per_league_not_whole_board():
+    """A dead basketball feed must not blank the NFL board."""
+    import injuries_build
+    from engine.sources.fetch import DataUnavailable
+
+    def half_dead(league):
+        if league in ("nba", "wnba"):
+            raise DataUnavailable("refused")
+        return FIXTURE
+
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td) / "injuries.json"
+        with mock.patch.object(injuries_build, "fetch_injuries", half_dead):
+            injuries_build.main(["--out", str(out)])
+        d = json.loads(out.read_text())
+    assert d["status"] == "live"
+    assert len(d["sports"]["nfl"]) == 2
+    assert "nba" not in d["sports"]
+    assert len(d["notes"]) == 2
+
+
+def test_the_page_is_wired_end_to_end():
+    html = open(os.path.join(ROOT, "web/index.html"), encoding="utf-8").read()
+    assert 'data-view="injuries"' in html
+    assert 'id="view-injuries"' in html and 'id="injuries-body"' in html
+    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    assert "async function renderInjuries" in js
+    assert "data/injuries.json" in js
+    assert 'if (name === "injuries") renderInjuries();' in js
+    # Switching sport while ON the page must redraw it for the new league,
+    # the same contract rosters and standings already keep.
+    assert 'if (state.view === "injuries") renderInjuries();' in js
+    order = js[js.index("const VIEW_ORDER"):]
+    assert '"injuries"' in order[:order.index("]")]
+    hidden = js[js.index("const HIDDEN_VIEWS"):]
+    ufc_line = [l for l in hidden[:hidden.index("};")].splitlines()
+                if l.strip().startswith("ufc:")]
+    assert ufc_line and '"injuries"' in ufc_line[0], \
+        "UFC has no injury feed anywhere — the tab must hide, not render empty"
+
+
+def test_the_launcher_refreshes_what_the_page_fetches():
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("def refresh_injuries")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert "injuries_build.py" in body and "web/data/injuries.json" in body
+    j = src.index("def refresh_all")
+    assert "refresh_injuries(" in src[j:src.index("\ndef ", j + 10)]
+    assert "web/data/injuries.json" in src[src.index("Product data"):]
+
+
+def test_availability_tone_is_keyword_not_exact_match():
+    """ESPN's wordings drift ("Out", "Injured Reserve", "60-Day IL").
+    The tone map must key on availability words so a new phrasing lands
+    in a sane bucket instead of silently rendering unstyled."""
+    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    fn = js[js.index("function injTone"):]
+    fn = fn[:fn.index("\n}")]
+    for word in ("injured reserve", "questionable", "day-to-day",
+                 "probable"):
+        assert word in fn, word
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")

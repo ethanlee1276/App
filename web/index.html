@@ -168,6 +168,7 @@
       <button class="nav-btn" data-view="trending" data-hint="form movers">Trending</button>
       <button class="nav-btn" data-view="players" data-hint="search a player">Players</button>
       <button class="nav-btn" data-view="rosters" data-hint="every team’s roster">Rosters</button>
+      <button class="nav-btn" data-view="injuries" data-hint="who’s out, league-wide">Injuries</button>
       <button class="nav-btn" data-view="standings" data-hint="records &amp; the bracket">Standings</button>
       <!-- Record moved OUT of this row: it is a standalone page now (the
            switcher's "The Book" group), because it is cross-sport by
@@ -369,6 +370,16 @@
         it looks. Public data, statistical flags — probabilities, never verdicts.</span>
       </div>
       <div id="intel-body"></div>
+    </section>
+
+    <!-- Injury report — per sport, league-wide -->
+    <section class="view" id="view-injuries">
+      <div class="section-title">Injury Report
+        <span class="sub">— every current designation in the league, freshest first. A
+        status board, not a diagnosis: what the team filed, when it was filed, and the
+        projected return where one exists.</span>
+      </div>
+      <div id="injuries-body"></div>
     </section>
 
     <!-- Rocket Radar (Solana meme coins) -->
