@@ -85,6 +85,38 @@ def test_day_ingested_but_player_absent_is_a_missing_statline():
     assert rep["counts"]["no_results"] == 0
 
 
+def test_a_scheduled_unplayed_game_bet_reads_waiting_not_ready():
+    """Found on Ethan's real ledger, first live run: seven NFL W01 game
+    bets read READY while --settle all said nothing to settle — the
+    schedule ingest writes September's rows in August with NULL scores,
+    and a game ROW is not a game RESULT. Back-to-back commands from the
+    same tool must not contradict each other."""
+    conn = _conn()
+    result = {"sport": "nfl", "date": "2026-W01", "recommendations": [],
+              "game_bets": [{"bet_type": "total", "recommended": True,
+                             "matchup": "ATL @ PIT", "side": "OVER",
+                             "line": 44.5,
+                             "odds": -110, "win_prob": 0.55, "edge": 0.04,
+                             "confidence": 6.0, "grade": "Play",
+                             "stake_units": 1.0}]}
+    assert ledger.log_recommendations(conn, result) == 1
+    hist = hist_db.connect(":memory:")
+    hist_db.upsert_games(hist, [
+        {"sport": "nfl", "season": 2026, "period": "001",
+         "game_id": "ATL@PIT", "home": "PIT", "away": "ATL",
+         "home_score": None, "away_score": None, "spread": -3.0,
+         "total": 44.5, "roof": "open", "surface": "grass",
+         "temp": None, "wind": None, "extra": ""}])
+    rep = ledger.explain_open(conn, hist, today=TODAY)
+    assert rep["counts"]["ready"] == 0, \
+        "a scheduled row with NULL scores must never read ready"
+    assert rep["counts"]["waiting"] == 1
+    # And once the score is real, the same bet flips to ready.
+    hist.execute("UPDATE games SET home_score=24, away_score=17")
+    rep2 = ledger.explain_open(conn, hist, today=TODAY)
+    assert rep2["counts"]["ready"] == 1
+
+
 def test_a_game_bet_with_a_final_reads_ready():
     conn = _conn()
     result = {"sport": "mlb", "date": OLD, "recommendations": [],

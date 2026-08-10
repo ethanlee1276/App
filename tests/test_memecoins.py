@@ -383,6 +383,24 @@ def test_holders_and_charts_are_wired_end_to_end():
     assert "top10_share" in js and "Top 10" in js
 
 
+def test_unreadable_liquidity_cannot_sail_through_the_gate():
+    """Ethan's first live board put a coin with NO liquidity reading on
+    the rocket list at risk 50. Liquidity is the can-you-get-out number:
+    for a protective gate, 'cannot verify an exit exists' is itself a
+    risk — smaller than proven-thin, but never zero."""
+    row = dict(_merged())
+    row["liquidity"] = None
+    s_unknown, why = mc.risk_score(row, mc.indicators(row))
+    assert any("unreadable" in w for w in why)
+    thin = dict(_merged(), liquidity=800.0)
+    s_thin, _ = mc.risk_score(thin, mc.indicators(thin))
+    known = dict(_merged())          # healthy liquidity from the fixture
+    s_known, why_known = mc.risk_score(known, mc.indicators(known))
+    assert s_known < s_unknown < s_thin, \
+        "unknown must sit between healthy and proven-thin"
+    assert not any("liquidity" in w for w in why_known)
+
+
 def test_concurrent_builders_cannot_race_the_tape_or_the_board():
     """The 15s live loop and the 60s refresh_all cycle both run
     memes_build. Without exclusion, two at once each read the tape,

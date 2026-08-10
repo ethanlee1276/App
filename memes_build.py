@@ -134,18 +134,24 @@ def gather() -> tuple[list[dict], list[str]]:
     # Phantom/Axiom holder metric the free tier reaches. Failures are
     # counted, not fatal: a coin without the measurement shows "—", and
     # unmeasured never scores as safe (or as dangerous).
-    fails = 0
+    fails, first_err = 0, None
     for r in rows[:HOLDER_LOOKUPS]:
         try:
             h = solrpc.parse_holder_slice(
                 solrpc.fetch_holder_slice(r["mint"]))
             if h:
                 r["holders"] = h
-        except DataUnavailable:
+        except DataUnavailable as exc:
             fails += 1
+            # Keep the FIRST error's text: "20/20 declined" from Ethan's
+            # first live run said something was wrong and nothing about
+            # what — the count without the cause is a symptom report.
+            if first_err is None:
+                first_err = str(exc)[:160]
     if fails:
         notes.append(f"solana rpc holders: {fails}/"
-                     f"{min(len(rows), HOLDER_LOOKUPS)} lookup(s) declined")
+                     f"{min(len(rows), HOLDER_LOOKUPS)} lookup(s) declined"
+                     + (f" — first error: {first_err}" if first_err else ""))
     # RugCheck: mint/freeze authority, LP lock, named dangers — the two
     # worst switches a dev holds, previously in the doc's PARKED table.
     fails = 0

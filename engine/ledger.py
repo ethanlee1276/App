@@ -3447,11 +3447,21 @@ def explain_open(conn, hist_conn, today: str | None = None) -> dict:
             where, wargs = _hist_where(b)
             if b["market"] in GAME_MARKETS:
                 rows, _ = _game_bet_evidence(hist_conn, b, where, wargs)
-                if rows:
+                # A game ROW is not a game RESULT: the schedule ingest
+                # writes W1 rows in August with NULL scores, and calling
+                # those "ready" sent Ethan to --settle all for bets whose
+                # games are a month out — the tool contradicting itself
+                # in back-to-back commands. Finals only.
+                final = [r for r in rows
+                         if r["home_score"] is not None
+                         and r["away_score"] is not None]
+                if final:
                     return "ready"
-                # No game row. Preseason team markets DO have finals, so the
-                # only "no grade source" case here is a genuinely missing
-                # feed date — report it as such and let the day tell us.
+                if rows:
+                    return "waiting"
+                # No game row at all. Preseason team markets DO have
+                # finals, so the only "no grade source" case here is a
+                # genuinely missing feed date — report it as such.
                 return ("no_results" if not _day_was_ingested(
                     hist_conn, where, wargs) else "no_statline")
             # Player market: mirror settle_from_history's join exactly.

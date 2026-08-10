@@ -323,6 +323,14 @@ def risk_score(row: dict, ind: dict) -> tuple[int, list[str]]:
     if liq is not None and liq < MIN_LIQ_USD:
         score += 40
         why.append(f"liquidity ${liq:,.0f} — exit-impossible thin")
+    elif liq is None:
+        # The one place unmeasured earns points: liquidity is the
+        # can-you-get-out number, and Ethan's first live board put a coin
+        # with NO liquidity reading on the rocket list. For a protective
+        # gate, "cannot verify you could exit" is itself a risk — smaller
+        # than proven-thin, but not zero.
+        score += 15
+        why.append("liquidity unreadable — cannot verify an exit exists")
     lm = ind.get("liq_mc")
     if lm is not None and lm < MIN_LIQ_MC:
         score += 25

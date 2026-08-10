@@ -7859,7 +7859,12 @@ async function renderInjuries() {
     .sort((a, b) => b.ts - a.ts);
   const outTier = parsed.filter((r) => injTone(r.status) === "var(--bad)");
   const maybeTier = parsed.filter((r) => injTone(r.status) === "var(--warn)");
-  const fresh = parsed.filter((r) => r.ts >= Date.now() - 7 * 86400e3)
+  // ESPN's NFL feed lists RETURNS too — hundreds of "Active" rows with
+  // no injury named. They stay in the by-team groups (a return IS news
+  // about that team) but out of the fresh strip, which exists to answer
+  // "who just went down", not "who practiced".
+  const fresh = parsed.filter((r) => r.ts >= Date.now() - 7 * 86400e3
+      && !(/^active$/i.test(r.status || "") && !r.injury))
     .slice(0, 40);
 
   const byTeam = {};

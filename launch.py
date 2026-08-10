@@ -2940,16 +2940,27 @@ def show_memes() -> None:
               " engine/sources/dexes.py needs a look.")
         return
 
+    def _age_txt(age):
+        # 564,669 minutes is a year-old coin printed like a countdown —
+        # Ethan's first live run made the unit obvious. Minutes only
+        # below two hours, then hours, then days.
+        if age is None:
+            return "—"
+        if age < 120:
+            return f"{age:.0f}m"
+        if age < 48 * 60:
+            return f"{age / 60:.1f}h"
+        return f"{age / 1440:.0f}d"
+
     def _line(mint):
         c = coins.get(mint) or {}
         i = c.get("ind") or {}
         name = c.get("symbol") or c.get("name") or (mint or "")[:8]
         liq = c.get("liquidity")
-        age = i.get("age_min")
         return (f"    {name[:14]:<14} momentum {c.get('momentum', 0):>3}"
                 f"  risk {c.get('risk', 0):>3}"
                 f"  liq {'$' + format(liq, ',.0f') if liq else '—':>11}"
-                f"  age {format(age, '.0f') + 'm' if age is not None else '—'}")
+                f"  age {_age_txt(i.get('age_min'))}")
 
     rocket = board.get("rocket") or []
     print(f"\n  Rocket list ({len(rocket)} clear the risk gate "

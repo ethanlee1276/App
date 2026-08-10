@@ -72,6 +72,12 @@ PREFIXES: tuple[tuple[str, str], ...] = (
     ("cooling off", "measured"),
     ("trending up", "measured"),
     ("hot bat", "measured"),
+    # Four the doctor caught unlabelled on 2026-08-10 (75.7% coverage on
+    # the live board). All computed from this slate's retrieved data.
+    ("opposing starter not confirmed", "measured"),
+    ("high humidity", "measured"),
+    ("hot stretch", "measured"),
+    ("opposing bullpen worked", "measured"),
     ("volatile week-to-week role", "measured"),
     ("elite csw%", "measured"),
     ("elite swing-and-miss", "measured"),
