@@ -2836,6 +2836,42 @@ def _settleable_days(open_days) -> list[str]:
                   if d.get("date") and "-W" not in d["date"])
 
 
+def show_injuries() -> None:
+    """Injury-board probe: pull every league's feed NOW and show counts.
+
+        python3 launch.py --injuries
+
+    The live check for ESPN's per-league /injuries endpoints (unreachable
+    from the sandbox that wrote the parser, like every ESPN feed here).
+    A league at zero in-season is suspicious; every league at zero means
+    the host is unreachable — --check has a row for it.
+    """
+    import json as _json
+    import injuries_build
+    out = ROOT / "web/data/injuries.json"
+    injuries_build.main(["--out", str(out)])
+    try:
+        board = _json.loads(out.read_text())
+    except Exception as exc:  # noqa: BLE001
+        print(f"  could not read the board back: {exc}")
+        return
+    for note in board.get("notes") or []:
+        print(f"  note: {note}")
+    rows = [r for league_rows in (board.get("sports") or {}).values()
+            for r in league_rows]
+    rows.sort(key=lambda r: r.get("date") or "", reverse=True)
+    if rows:
+        print("\n  Freshest filings, league-wide:")
+        for r in rows[:8]:
+            print(f"    {(r.get('date') or '')[:10]}  "
+                  f"{(r.get('player') or ''):<24.24} "
+                  f"{(r.get('status') or ''):<18.18} "
+                  f"{(r.get('injury') or '—'):<20.20} {r.get('team') or ''}")
+    else:
+        print("\n  Zero rows across every league — if the notes above are "
+              "fetch failures the host is unreachable from here.")
+
+
 def show_memes() -> None:
     """Rocket Radar probe: pull the free feeds NOW and show the board.
 
@@ -4297,6 +4333,9 @@ def main() -> None:
         rest = [a for a in argv[i + 1:] if not a.startswith("-")]
         show_arsenal(rest[0] if rest else None,
                      rest[1] if len(rest) > 1 else None)
+        return
+    if "--injuries" in argv:
+        show_injuries()
         return
     if "--memes" in argv:
         show_memes()

@@ -132,6 +132,37 @@ def test_the_launcher_refreshes_what_the_page_fetches():
     assert "web/data/injuries.json" in src[src.index("Product data"):]
 
 
+def test_the_recommended_board_carries_an_injury_watch():
+    """The page is the library; the WATCH is the bettor's question at
+    6pm — anyone on TONIGHT'S teams filed recently? Only fresh filings
+    show (a two-month IL entry is already in every price), an unmatched
+    team name refuses to join rather than guessing, and the async fill
+    re-judges the sub-tab rooms so the Watchlists tab tells the truth."""
+    html = open(os.path.join(ROOT, "web/index.html"), encoding="utf-8").read()
+    assert 'id="injury-watch"' in html
+    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    assert "async function renderInjuryWatch" in js
+    assert "\n  renderInjuryWatch();" in js, "missing from the load() chain"
+    rooms = js[js.index("const REC_ROOMS"):]
+    assert '"injury-watch"' in rooms[:rooms.index("];")], \
+        "the block would float outside every room"
+    fn = js[js.index("async function renderInjuryWatch"):]
+    fn = fn[:fn.index("\nfunction renderGameBets")]
+    assert "10 * 86400e3" in fn, "the ten-day recent cut is gone"
+    assert 'href="#injuries"' in fn, "no escalation to the full board"
+    assert "groupRecommended()" in fn, "async fill never re-judges the rooms"
+    assert "r.abbr && tonight.has(r.abbr)" in fn, \
+        "an unmatched team name must not join"
+
+
+def test_the_injuries_probe_is_reachable():
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    assert '"--injuries" in argv' in src
+    i = src.index("def show_injuries")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert "injuries_build" in body
+
+
 def test_availability_tone_is_keyword_not_exact_match():
     """ESPN's wordings drift ("Out", "Injured Reserve", "60-Day IL").
     The tone map must key on availability words so a new phrasing lands

@@ -776,6 +776,7 @@ function renderAll() {
   renderGameBets();
   renderIncentives();
   renderRestWatch();
+  renderInjuryWatch();
   renderPreseason();
   renderRecommended();
   // AFTER the renderers, always. Which rooms exist is decided by what
@@ -1857,6 +1858,92 @@ function renderRestWatch() {
       announced rest flips its props to Pass on this board — a season-usage
       prop on a benched rotation is a stale price, not an edge.</span></div>
     <div class="card" style="padding:0">${body}</div>`;
+}
+
+/* ------------------------------------------------------------------
+   Injury watch — tonight's teams only, joined from the league board.
+
+   The Injuries page answers "who is out, league-wide"; this block
+   answers the narrower question a bettor actually has at 6pm: is
+   anyone ON TONIGHT'S SLATE carrying a designation my price might not
+   know about yet? Only RECENT filings show (ten days) — a fresh
+   Questionable is the one that can be mispriced; a two-month IL entry
+   is already in every number on this site. Context that shades a pick
+   without being one, so it lives in the Watchlists room and journals
+   nothing. */
+let _injCache = { at: 0, data: null };
+
+/* ESPN names teams in full ("Arizona Cardinals"); the slate carries
+   abbreviations. The join goes through the sport's own TEAMS table by
+   full name first, nickname as fallback — and an unmatched name simply
+   doesn't join, because a wrong-team injury row is worse than a
+   missing one. */
+function injAbbrIndex() {
+  const idx = {};
+  for (const [abbr, t] of Object.entries(window.ACTIVE_TEAMS || {})) {
+    const v = t || {};
+    for (const key of [v.name, v.nick && `${v.loc} ${v.nick}`, v.nick]) {
+      if (key && !(String(key).toLowerCase() in idx)) {
+        idx[String(key).toLowerCase()] = abbr;
+      }
+    }
+  }
+  return idx;
+}
+
+async function renderInjuryWatch() {
+  const host = document.getElementById("injury-watch");
+  if (!host) return;
+  if (Date.now() - _injCache.at > 10 * 60e3) {
+    try {
+      const res = await fetch("data/injuries.json?t=" + Date.now());
+      if (res.ok) _injCache = { at: Date.now(), data: await res.json() };
+    } catch (e) {}
+  }
+  const rows = ((_injCache.data || {}).sports || {})[state.sport] || [];
+  const games = (state.data || {}).games || [];
+  if (!rows.length || !games.length) { host.innerHTML = ""; return; }
+
+  const idx = injAbbrIndex();
+  const tonight = new Set();
+  for (const g of games) { tonight.add(g.away); tonight.add(g.home); }
+  const cutoff = Date.now() - 10 * 86400e3;
+  const listed = rows
+    .map((r) => ({ ...r, ts: Date.parse(r.date || "") || 0,
+                   abbr: idx[(r.team || "").toLowerCase()] }))
+    .filter((r) => r.abbr && tonight.has(r.abbr));
+  const fresh = listed.filter((r) => r.ts >= cutoff)
+    .sort((a, b) => b.ts - a.ts);
+  const older = listed.length - fresh.length;
+  if (!listed.length) { host.innerHTML = ""; return; }
+
+  const body = fresh.length ? fresh.map((r) => `
+    <div style="display:flex;gap:12px;align-items:baseline;padding:8px 14px;
+        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+      <span class="chip">${escapeHtml(r.abbr)}</span>
+      <span style="min-width:140px"><b>${escapeHtml(r.player)}</b>${
+        r.pos ? ` <span class="inj-pos">${escapeHtml(r.pos)}</span>` : ""}</span>
+      <b style="color:${injTone(r.status)}">${escapeHtml(r.status)}</b>
+      <span style="flex:1;min-width:120px">${escapeHtml(r.injury || "")}</span>
+      <span style="color:var(--text-mute);font-variant-numeric:tabular-nums"
+        title="${escapeHtml(r.date || "")}">${injWhen(r.ts)}</span>
+    </div>`).join("") : `
+    <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
+      Nothing filed in the last ten days on tonight’s teams — the long-term
+      list is on the Injuries page.</p>`;
+  host.innerHTML = `
+    <div class="section-title">Injury watch — tonight’s teams
+      <span class="sub">— designations filed in the last ten days on teams playing
+      tonight. A fresh listing is the one a price may not know yet; long-term
+      entries are already in every number here.</span></div>
+    <div class="card" style="padding:0">${body}
+      <p style="padding:10px 14px;margin:0;font-size:var(--fs-sm);color:var(--text-mute);
+          border-top:1px solid rgba(255,255,255,.05)">
+        ${older ? `${older} longer-term entr${older === 1 ? "y" : "ies"} on these teams · ` : ""}
+        <a href="#injuries" style="color:var(--brand)">full league board →</a></p></div>`;
+  // The rooms were grouped before this async fill landed — re-judge, so
+  // the Watchlists tab appears/disappears with what is actually here.
+  groupRecommended();
 }
 
 function renderGameBets() {
@@ -4764,8 +4851,9 @@ const REC_ROOMS = [
    "moneyline, spread and total edges from the team model",
    ["gamebets-title", "gamebets"]],
   ["watch", "Watchlists",
-   "context that shades a pick without being one: rest, incentives, form",
-   ["preseason-board", "team-form", "incentive-watch", "rest-watch"]],
+   "context that shades a pick without being one: rest, incentives, form, injuries",
+   ["preseason-board", "team-form", "incentive-watch", "rest-watch",
+    "injury-watch"]],
 ];
 
 function groupRecommended() {
