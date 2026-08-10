@@ -69,6 +69,7 @@ primary sources those terminals themselves sit on:
 | **GeckoTerminal** (`api.geckoterminal.com`) | free, keyless, ~30 rpm | New-pools + trending-pools discovery, and the free tier's crown jewel: **unique buyers and sellers per window** — the anti-wash signal raw volume cannot fake cheaply |
 | **DexScreener** (`api.dexscreener.com`) | free, keyless, 300 rpm (pairs) | Batched pair snapshots (30 mints per call): price, liquidity, FDV, per-window volume and price change, buy/sell counts, pair age, socials, and the **paid-boost flag** |
 | **Solana public RPC** (`api.mainnet-beta.solana.com`) | free, keyless | `getTokenSupply` + `getTokenLargestAccounts` in one batched POST per mint: **holder concentration** — the one Phantom/Axiom holder metric reachable without a paid indexer. First 20 coins in discovery order, 10-minute cache, because the public RPC's rate limits are real |
+| **RugCheck** (`api.rugcheck.xyz`) | free, keyless | Per-mint on-chain audit: **mint authority** (dev can print supply), **freeze authority** (the honeypot switch), **LP locked %**, and RugCheck's own danger-level findings. Tri-state — active / renounced / *unmeasured* — and unmeasured never scores as safe. First 15 coins, 15-minute cache (renouncing is one irreversible transaction; nothing flips fast) |
 | **Our own snapshot tape** (`data/cache/memecoin_history.jsonl`) | free | Per-coin sightings each refresh; prunes at 6 h. No free endpoint hands out per-minute history, so **acceleration — the core "igniting" signal — comes from our own polling**, exactly like the sports line-movement tape. Also feeds the page's per-coin sparkline |
 
 The firehose tier the spec prices out (PumpPortal WebSockets, Helius
@@ -162,6 +163,10 @@ once must not be punished for our tape being short.
 | Wash-trade signature | +30 | the arXiv rule above |
 | Liquidity down >20% since last sighting | +40 | LP pull in progress |
 | Age < 30 minutes | +15 | median rug dies inside an hour |
+| Freeze authority ACTIVE (RugCheck) | +40 | the dev can freeze your tokens — the honeypot switch |
+| Mint authority ACTIVE (RugCheck) | +30 | supply can be printed at will |
+| LP < 50% locked (RugCheck) | +20 | unlocked liquidity can be pulled at any moment |
+| Each RugCheck danger-level finding (≤3) | +10 | their audit, named on the card |
 | Top-10 accounts (pool excluded) > 30% | +20 | the spec's insider-concentration flag |
 | One non-pool account > 15% | +15 | a single seller can crater it |
 | Paid DexScreener boost | +10 | someone is paying to be seen |
@@ -216,13 +221,17 @@ payload shape moved and `engine/sources/dexes.py` needs a look.
 ## 7. Implementation Map — built vs parked
 
 **Built, free tier:** discovery (GT new + trending + DS boost roster),
-batched enrichment, snapshot tape, volume/price/buyer acceleration,
-pressure trend, vol spike, liq/MC, wash flag, LP-drop proxy, holder
-concentration (top-10 ex-pool + single-whale, with the §4 caveat),
+**carry-tracking** (a coin that leaves trending stays on the scan while
+its tape lives — a dying coin leaves trending at exactly the moment the
+exit signals matter most), batched enrichment, snapshot tape,
+volume/price/buyer acceleration, pressure trend, vol spike, liq/MC,
+wash flag, LP-drop proxy, holder concentration (top-10 ex-pool +
+single-whale, with the §4 caveat), **mint/freeze authority + LP lock +
+named dangers via RugCheck** (tri-state; unmeasured never reads safe),
 boost and no-socials risk points, cohort-percentile MomentumScore,
-gated RiskScore with reasons, exit channel, per-coin sparklines off the
-tape, per-coin live venue chart embeds, the base-rates honesty block,
-the full dimmed-not-hidden board.
+gated RiskScore with reasons, exit channel, "new" badges from first
+sighting on our tape, per-coin sparklines, per-coin live venue chart
+embeds, the base-rates honesty block, the full dimmed-not-hidden board.
 
 **Parked — each needs the paid firehose tier, and each absence is
 stated on the page rather than silently scored as safe:**
@@ -234,7 +243,6 @@ stated on the page rather than silently scored as safe:**
 | Bundle & sniper detection (same-block coordinated buys) | block-level tx streams (PumpPortal/LaserStream) |
 | Dev-wallet sell alerts | creator-wallet tracing (Helius webhooks) |
 | Bonding-curve stage tracking (pump.fun internals) | PumpPortal WebSocket firehose |
-| Mint/freeze authority + honeypot checks | RugCheck/GoPlus API (blocked here; probe-able on the laptop) |
 
 **Never building:** RSI/MACD/Bollinger overlays (noise at this
 timescale, per §2), any buy-signal framing, any journaling of coins

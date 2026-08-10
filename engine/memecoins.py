@@ -243,6 +243,14 @@ def indicators(row: dict, hist: list[dict] | None = None) -> dict:
     out["top10_share"] = h.get("top10_ex1_share")
     out["top1_share"] = h.get("top1_share")
     out["whale_share"] = h.get("second_share")
+    # RugCheck's on-chain audit (row["rug"]). Tri-state carries through:
+    # True = the switch is ACTIVE, False = renounced, None = the API
+    # did not answer — and None must never render or score as safe.
+    rg = row.get("rug") or {}
+    out["mint_auth"] = rg.get("mint_auth")
+    out["freeze_auth"] = rg.get("freeze_auth")
+    out["lp_locked_pct"] = rg.get("lp_locked_pct")
+    out["rug_dangers"] = rg.get("dangers") or []
     # The wash rule, arXiv thresholds: big volume, no price.
     out["wash_flag"] = bool(
         out["vol_spike"] is not None and out["vol_spike"] >= WASH_VOL_SPIKE
@@ -324,6 +332,23 @@ def risk_score(row: dict, ind: dict) -> tuple[int, list[str]]:
     if a is not None and a < 30:
         score += 15
         why.append("under 30 minutes old — median rug dies inside an hour")
+    # The two worst switches a dev can hold, from RugCheck. Scored only
+    # on a positive True — an unmeasured authority adds nothing, in
+    # either direction.
+    if ind.get("freeze_auth") is True:
+        score += 40
+        why.append("freeze authority ACTIVE — the dev can freeze your "
+                   "tokens (the honeypot switch)")
+    if ind.get("mint_auth") is True:
+        score += 30
+        why.append("mint authority ACTIVE — supply can be printed at will")
+    lp_lock = ind.get("lp_locked_pct")
+    if lp_lock is not None and lp_lock < 50:
+        score += 20
+        why.append(f"only {lp_lock:.0f}% of the liquidity pool is locked")
+    for name in (ind.get("rug_dangers") or [])[:3]:
+        score += 10
+        why.append(f"RugCheck flags: {name}")
     t10 = ind.get("top10_share")
     if t10 is not None and t10 > MAX_TOP10_EX1:
         score += 20

@@ -4015,6 +4015,9 @@ select.calc-in { width: auto; font-weight: 600; }
 .mc-pick-tag { font-size: var(--fs-xs); font-weight: 800;
   letter-spacing: .06em; text-transform: uppercase; color: var(--good); }
 .mc-pick-pct { font-variant-numeric: tabular-nums; }
+/* "Just landed" — first sighting on our tape under ten minutes ago. */
+.mc-new { font-size: var(--fs-xs); font-weight: 800; color: var(--brand);
+  letter-spacing: .06em; text-transform: uppercase; margin-left: 6px; }
 .mc-exit-why { margin: 10px 0 0; padding-left: 18px;
   font-size: var(--fs-sm); color: var(--text-body); }
 .mc-exit-why li { margin-top: 4px; }

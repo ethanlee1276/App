@@ -6918,14 +6918,24 @@ window.mcShowChart = function (mint, scroll = true) {
   if (scroll) dock.scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
+/* "Just landed": first sighting on OUR tape within the last ten
+   minutes — the coins-moving-IN half of the question the scan exists
+   to answer. The badge follows the coin everywhere its name renders. */
+function mcNewTag(c) {
+  const fs = Number(c && c.first_seen);
+  if (!fs || (Date.now() / 1000 - fs) > 600) return "";
+  return `<span class="mc-new" title="First seen by our scan under ten minutes ago — this is when it reached the radar, not when the pair was created.">new</span>`;
+}
+
 /* One coin's identity cell, shared by cards and the board table. */
 function mcName(c) {
   const label = c.symbol || c.name || (c.mint || "").slice(0, 8);
   const inner = `<b>${escapeHtml(label)}</b>${c.name && c.symbol
     ? ` <span style="color:var(--text-mute);font-weight:400">${escapeHtml(String(c.name).slice(0, 28))}</span>` : ""}`;
-  return (c.url && /^https:\/\//.test(c.url))
+  const linked = (c.url && /^https:\/\//.test(c.url))
     ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener" style="color:inherit">${inner}</a>`
     : inner;
+  return linked + mcNewTag(c);
 }
 
 async function renderMemes() {
@@ -6977,6 +6987,11 @@ async function renderMemes() {
     if (i.vol_spike != null) ch.push(`<span class="chip" title="5-minute volume vs its share of the hour. 1.0 = steady pace.">vol ×${i.vol_spike.toFixed(1)}</span>`);
     if (i.buyers_m5 != null) ch.push(`<span class="chip" title="UNIQUE buying wallets in 5 minutes (GeckoTerminal) — broad wallet count is the anti-wash signal.">${i.buyers_m5} buyers/5m</span>`);
     if (i.top10_share != null) ch.push(`<span class="chip${i.top10_share > 0.30 ? " down" : ""}" title="Share of supply held by the ten largest accounts EXCLUDING the largest — which is almost always the pool’s own vault, market structure rather than an insider. Over 30% is the insider-concentration flag.">top10 ${(i.top10_share * 100).toFixed(0)}%</span>`);
+    if (i.freeze_auth === true) ch.push(`<span class="chip down" title="RugCheck: the dev can FREEZE your tokens — the honeypot switch. The single worst flag on this board.">freeze auth</span>`);
+    if (i.mint_auth === true) ch.push(`<span class="chip down" title="RugCheck: the dev can mint more supply at will.">mint auth</span>`);
+    if (i.mint_auth === false && i.freeze_auth === false) ch.push(`<span class="chip up" title="RugCheck: mint and freeze authority both renounced — the two worst switches are off. A prerequisite, not a promise.">authorities renounced</span>`);
+    if (i.lp_locked_pct != null && i.lp_locked_pct < 50) ch.push(`<span class="chip down" title="RugCheck: how much of the liquidity pool is locked. Unlocked LP can be pulled at any moment.">LP ${i.lp_locked_pct.toFixed(0)}% locked</span>`);
+    if (c.carried) ch.push(`<span class="chip" title="No longer on the trending/new lists — kept on the scan while its tape lives (2h), because a dying coin leaves trending at exactly the moment the exit signals matter most.">off-trending</span>`);
     if (i.whale_share != null && i.whale_share > 0.15) ch.push(`<span class="chip down" title="The largest single account after the pool. One seller this size can crater the chart alone.">whale ${(i.whale_share * 100).toFixed(0)}%</span>`);
     if (i.vol_accel != null) ch.push(`<span class="chip${i.vol_accel > 0 ? " up" : ""}" title="Volume second derivative off our own snapshot tape — the ignition signal.">accel ${i.vol_accel > 0 ? "+" : ""}${i.vol_accel.toFixed(0)}</span>`);
     if (i.wash_flag) ch.push(`<span class="chip down" title="Volume spiked >500% while price moved <5% — volume with no one in it (arXiv:2507.01963).">wash pattern</span>`);
@@ -7062,7 +7077,7 @@ async function renderMemes() {
       title="momentum ${c.momentum} · risk ${c.risk} · liq ${mcMoney(c.liquidity)}">
       <b>${escapeHtml((c.symbol || c.name || c.mint.slice(0, 6)).slice(0, 12))}</b>
       <span class="mc-pick-pct">${mcPct((c.price_change || {}).m5)}</span>
-      ${rocketSet.has(c.mint) ? `<span class="mc-pick-tag">rocket</span>` : ""}
+      ${rocketSet.has(c.mint) ? `<span class="mc-pick-tag">rocket</span>` : ""}${mcNewTag(c)}
     </button>`).join("");
 
   const chartsRoom = !chartable.length ? "" : `

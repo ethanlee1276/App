@@ -27,19 +27,53 @@ from engine.sources.dexes import (fetch_new_pools, fetch_pairs_for,
                                   parse_boosts, parse_dex_pairs,
                                   parse_gt_pools)
 from engine.sources.fetch import DataUnavailable
-from engine.sources import solrpc
+from engine.sources import rugcheck, solrpc
 
 #: Enrich at most this many mints per run — two DexScreener batch calls.
 MAX_TRACKED = 60
 #: Holder-concentration lookups per run: one RPC POST each, ten-minute
-#: cache, discovery order (trending first — the coins read first get
-#: measured first). The public RPC's rate limits are why this is not 60.
+#: cache, board order (the coins read first get measured first). The
+#: public RPC's rate limits are why this is not 60.
 HOLDER_LOOKUPS = 20
+#: RugCheck lookups per run — mint/freeze authority, LP lock, named
+#: dangers. Its rate limits are undocumented and the loop ticks every
+#: 15s, so this stays conservative: 15-minute cache means a coin costs
+#: ONE request per 15 minutes however fast the loop runs.
+RUGCHECK_LOOKUPS = 15
 #: Sparkline points exported per coin — the page draws price over our
 #: own tape, so the series is capped where the drawing stops earning.
 #: 120 points at the 15-second live tick is a ~30-minute window, which
 #: is a meme coin's whole arc.
 SPARK_POINTS = 120
+
+
+def _tracked_mints(discovered: list[str],
+                   history: dict) -> tuple[list[str], set[str]]:
+    """Discovery order, then CARRIED coins — mints with a live tape that
+    just fell off the trending/new lists.
+
+    A dying coin leaves trending IMMEDIATELY, which is exactly the
+    moment the danger channel needs its next sighting most — dropping it
+    right then blinded the exit signals at their one useful hour, and a
+    pumping coin that rotated off trending vanished mid-move. So any
+    mint with tape history stays on the scan until its tape ages out
+    (HISTORY_KEEP_S, 2h): the carry costs nothing extra, because the
+    DexScreener batch prices any mint it is handed. Carried coins fill
+    AFTER discovery, newest-sighting first, inside the same budget.
+    """
+    seen = set(discovered)
+    out = list(discovered)
+    carried: set[str] = set()
+    for m in sorted(history,
+                    key=lambda k: -(history[k][-1].get("ts") or 0)):
+        if len(out) >= MAX_TRACKED:
+            break
+        if m in seen or not solrpc.B58.match(m or ""):
+            continue
+        seen.add(m)
+        out.append(m)
+        carried.add(m)
+    return out[:MAX_TRACKED], carried
 
 
 def gather() -> tuple[list[dict], list[str]]:
@@ -58,14 +92,17 @@ def gather() -> tuple[list[dict], list[str]]:
     except DataUnavailable as exc:
         notes.append(f"dexscreener boosts: {exc}")
 
-    # Order matters: trending first (they have the volume), then new,
-    # then boosted-only mints — trimmed to the tracking budget.
-    seen, mints = set(), []
+    # Order matters, and it is NEW first on purpose (an earlier comment
+    # here claimed trending-first while the code did this — the code was
+    # right): the freshest pools are the ones that move in and out in
+    # minutes, and board order decides who gets the holder and RugCheck
+    # lookups. Trending follows, then boosted-only mints, then CARRY.
+    discovered, seen = [], set()
     for m in ([r["mint"] for r in gt_rows] + boosted):
         if m not in seen:
             seen.add(m)
-            mints.append(m)
-    mints = mints[:MAX_TRACKED]
+            discovered.append(m)
+    mints, carried = _tracked_mints(discovered, load_history())
 
     dex: dict = {}
     for i in range(0, len(mints), 30):
@@ -89,6 +126,7 @@ def gather() -> tuple[list[dict], list[str]]:
                     row[k] = gt[k]
             row.setdefault("created_at", gt.get("created_at"))
             row.setdefault("pool", gt.get("pool"))
+        row["carried"] = m in carried
         rows.append(row)
 
     # Holder concentration off the public Solana RPC — the one
@@ -107,6 +145,19 @@ def gather() -> tuple[list[dict], list[str]]:
     if fails:
         notes.append(f"solana rpc holders: {fails}/"
                      f"{min(len(rows), HOLDER_LOOKUPS)} lookup(s) declined")
+    # RugCheck: mint/freeze authority, LP lock, named dangers — the two
+    # worst switches a dev holds, previously in the doc's PARKED table.
+    fails = 0
+    for r in rows[:RUGCHECK_LOOKUPS]:
+        try:
+            rep = rugcheck.parse_report(rugcheck.fetch_report(r["mint"]))
+            if rep:
+                r["rug"] = rep
+        except DataUnavailable:
+            fails += 1
+    if fails:
+        notes.append(f"rugcheck: {fails}/"
+                     f"{min(len(rows), RUGCHECK_LOOKUPS)} lookup(s) declined")
     return rows, notes
 
 
@@ -127,10 +178,16 @@ def main(argv=None) -> int:
         # above is already in it) — the page's sparkline. Compact pairs,
         # capped, because the board JSON ships to every visitor.
         for c in board["coins"]:
-            c["spark"] = [[round(h["ts"]), h["price"]]
-                          for h in hist.get(c.get("mint"), [])
+            tape = hist.get(c.get("mint"), [])
+            c["spark"] = [[round(h["ts"]), h["price"]] for h in tape
                           if h.get("ts") and h.get("price") is not None
                           ][-SPARK_POINTS:]
+            # First sighting on OUR tape — the page's "new" badge. The
+            # pair's on-chain age says when the coin was born; this says
+            # when it reached the radar, which is the moment that matters
+            # for "what just landed".
+            if tape and tape[0].get("ts"):
+                c["first_seen"] = round(tape[0]["ts"])
         print(f"Rocket Radar: {board['n']} coin(s) scored, "
               f"{board['gated']} behind the risk gate, "
               f"{len(board['rocket'])} on the rocket list, "

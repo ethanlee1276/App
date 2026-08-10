@@ -1949,6 +1949,7 @@ def preflight() -> None:
         ("Meme coins (DexScreener)", "https://api.dexscreener.com/token-boosts/top/v1"),
         ("Meme coins (GeckoTerminal)", "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=1"),
         ("Meme coin holders (Solana RPC)", "https://api.mainnet-beta.solana.com"),
+        ("Meme coin safety (RugCheck)", "https://api.rugcheck.xyz/v1/stats/recent"),
     ]
     for name, url in hosts:
         up = _reachable(url)

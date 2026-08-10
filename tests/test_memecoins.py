@@ -383,6 +383,85 @@ def test_holders_and_charts_are_wired_end_to_end():
     assert "top10_share" in js and "Top 10" in js
 
 
+def test_rugcheck_parser_is_tristate_and_never_reads_absent_as_safe():
+    """True = the switch is ACTIVE, False = renounced, None = the API
+    did not answer. The None case is the load-bearing one: a shape drift
+    at RugCheck must degrade to 'unmeasured', never to 'all clear'."""
+    from engine.sources import rugcheck as rc
+    full = {"mintAuthority": "SomeDevKey111", "freezeAuthority": None,
+            "markets": [{"lp": {"lpLockedPct": 12.5}},
+                        {"lp": {"lpLockedPct": 98.0}}],
+            "risks": [{"name": "Low Liquidity", "level": "warn"},
+                      {"name": "Single holder ownership", "level": "danger"}]}
+    rep = rc.parse_report(full)
+    assert rep["mint_auth"] is True          # key present, non-null
+    assert rep["freeze_auth"] is False       # key present, null = renounced
+    assert rep["lp_locked_pct"] == 98.0      # best market speaks
+    assert rep["dangers"] == ["Single holder ownership"]   # danger only
+    # Keys absent entirely -> None, not False.
+    sparse = rc.parse_report({"markets": [{"lp": {"lpLockedPct": 5}}]})
+    assert sparse["mint_auth"] is None and sparse["freeze_auth"] is None
+    # A payload that answered nothing is no report at all.
+    assert rc.parse_report({}) is None
+    assert rc.parse_report(None) is None
+    assert rc.parse_report({"risks": [None, {"level": "danger"}]}) is None
+
+
+def test_rug_switches_gate_and_unmeasured_scores_nothing():
+    row = dict(_merged())
+    row["rug"] = {"mint_auth": True, "freeze_auth": True,
+                  "lp_locked_pct": 10.0, "dangers": ["Copycat token"]}
+    s_bad, why = mc.risk_score(row, mc.indicators(row))
+    assert s_bad >= mc.RISK_GATE, "both switches active must gate alone"
+    assert any("honeypot" in w for w in why)
+    assert any("printed" in w for w in why)
+    assert any("locked" in w for w in why)
+    assert any("RugCheck flags: Copycat token" in w for w in why)
+    # Renounced-and-locked adds nothing; unmeasured adds nothing.
+    row_ok = dict(_merged())
+    row_ok["rug"] = {"mint_auth": False, "freeze_auth": False,
+                     "lp_locked_pct": 100.0, "dangers": []}
+    bare = dict(_merged())
+    s_ok, _ = mc.risk_score(row_ok, mc.indicators(row_ok))
+    s_bare, why_bare = mc.risk_score(bare, mc.indicators(bare))
+    assert s_ok == s_bare
+    assert not any("authority" in w for w in why_bare)
+
+
+def test_a_coin_that_leaves_trending_is_carried_while_its_tape_lives():
+    """A dying coin leaves trending IMMEDIATELY — exactly when the exit
+    signals need their next sighting. The tracked list carries any mint
+    with tape history, after discovery, inside the same budget."""
+    import memes_build as mb
+    good = "So1CarriedMint" + "x" * 30
+    hist = {good: [{"ts": 100.0}], "not-base58!": [{"ts": 999.0}]}
+    mints, carried = mb._tracked_mints(["A" * 32, "B" * 32], hist)
+    assert mints[:2] == ["A" * 32, "B" * 32], "discovery order must win"
+    assert good in mints and good in carried
+    assert "not-base58!" not in mints, "a garbage mint must never be carried"
+    # The budget still binds: discovery fills first, carry never overflows.
+    many = {f"C{i:02d}" + "y" * 30: [{"ts": float(i)}] for i in range(100)}
+    full, _ = mb._tracked_mints([f"D{i:02d}" + "z" * 30 for i in range(50)],
+                                many)
+    assert len(full) == mb.MAX_TRACKED
+
+
+def test_new_and_carried_reach_the_page():
+    """first_seen is exported by the build and the page badges it; the
+    carried flag renders as the off-trending chip. A signal that stops
+    at the JSON is a signal nobody sees."""
+    build = open(os.path.join(ROOT, "memes_build.py"), encoding="utf-8").read()
+    assert '"first_seen"' in build
+    assert 'row["carried"]' in build
+    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    assert "function mcNewTag" in js
+    assert "mcNewTag(c)" in js
+    assert "off-trending" in js
+    assert "freeze auth" in js and "mint auth" in js
+    launch = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    assert "api.rugcheck.xyz" in launch, "RugCheck missing from preflight"
+
+
 def test_the_live_cadence_is_fast_but_stays_under_the_free_limits():
     """Ethan: "check like every 5 seconds ... coins move in and out
     quick." The loop is 15s and discovery ~25s, NOT 5 — GeckoTerminal's
