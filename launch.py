@@ -2615,6 +2615,82 @@ def why_many(sport: str = "mlb", days: int = 21) -> None:
           "them.\n")
 
 
+def show_gates() -> None:
+    """What the filters cost or saved — measured, not argued.
+
+        python3 launch.py --gates
+
+    "We know for a fact that there are winning MLB bets every night" is
+    true of every night in HINDSIGHT — some bets always won, and finding
+    them afterwards takes no model. The empirical version of the
+    question is: when the gates refuse a pick, does that pick go on to
+    win often enough to beat its price? That experiment has been running
+    nightly without anyone watching it: the props that JUST miss the bar
+    journal as a flat-stake paper book ('loose'), the zero-stake picks
+    are scored as 'unstaked', home runs run their own board — and every
+    bucket settles against real results. This prints the scoreboards
+    side by side with the decision rule attached, so "loosen the gates"
+    becomes a number instead of a feeling.
+    """
+    from engine import ledger
+    conn = ledger.connect()
+    try:
+        main = ledger.performance(conn)
+        loose = ledger.loose_report(conn)
+        shots = ledger.longshot_report(conn)
+        un = ledger.unstaked_scorecard(conn)
+    finally:
+        conn.close()
+
+    def row(name, p):
+        n = p.get("settled") or (p.get("wins", 0) + p.get("losses", 0)
+                                 + p.get("pushes", 0))
+        if not n:
+            return f"  {name:<22} —  nothing settled yet"
+        roi = p.get("roi")
+        roi_s = f"{roi * 100:+.1f}%" if roi is not None else "—"
+        return (f"  {name:<22} {p.get('wins', 0)}-{p.get('losses', 0)}"
+                f"-{p.get('pushes', 0)}"
+                f"  ({n} settled)   ROI {roi_s}"
+                f"   {p.get('net_units', 0):+.2f}u")
+
+    print("The gates, scored against what they refused:\n")
+    print(row("MAIN (the record)", main))
+    print(row("LOOSE (near-misses)", loose))
+    print(row("LONG SHOTS (HR/TD)", shots))
+    if un.get("n"):
+        print(f"  {'UNSTAKED (0.0u picks)':<22} {un.get('wins', 0)}-"
+              f"{un.get('losses', 0)}  ({un['n']} settled)   "
+              f"hit {un.get('hit', 0) * 100:.0f}% vs "
+              f"{un.get('be', 0) * 100:.0f}% break-even   "
+              f"{un.get('net', 0):+.2f} flat-stake units")
+
+    n_loose = loose.get("settled") or 0
+    roi_loose = loose.get("roi")
+    print("\nThe decision rule (written into the journal, not invented "
+          "tonight):")
+    if n_loose < 100:
+        print(f"  → LOOSE has {n_loose} graded of the 100 needed. Until "
+              f"then, loosening the gates is a\n    guess — the bucket "
+              f"accumulates every night on its own.")
+    elif roi_loose is not None and roi_loose > 0:
+        print(f"  → LOOSE is PROFITABLE over {n_loose} graded "
+              f"({roi_loose * 100:+.1f}%). The near-misses are winning:\n"
+              f"    the gates are too tight, and loosening them is now "
+              f"evidence, not opinion.")
+    else:
+        print(f"  → LOOSE is losing over {n_loose} graded "
+              f"({(roi_loose or 0) * 100:+.1f}%). The bets the gates "
+              f"refused went on to lose:\n    the gates are earning "
+              f"their keep, and every one of tonight's 'missing' bets\n"
+              f"    was refused by a rule that is measurably saving money.")
+    print("\n  Long shots NEVER touch the headline record — category "
+          "'longshots', flat 0.1u,\n  quarantined by the journal gate and "
+          "re-swept nightly (move_longshots_out_of_main).")
+    print("  Tonight's binding gate, prop by prop:  python3 launch.py "
+          "--why-empty")
+
+
 def why_empty(sport: str = "mlb", min_conf: float = 6.0,
               min_edge: float = 0.02, max_juice: int = -350) -> None:
     """Explain an empty board: which gate is actually filtering everything.
@@ -4751,6 +4827,9 @@ def main() -> None:
         return
     if "--why-open" in argv:
         why_open()
+        return
+    if "--gates" in argv:
+        show_gates()
         return
     if "--settle" in argv:
         i = argv.index("--settle")

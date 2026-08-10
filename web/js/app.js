@@ -9982,3 +9982,48 @@ function watchNumbers() {
   return obs;
 }
 watchNumbers();
+
+/* ==================================================================
+   Compact navigation (desktop). Ethan: "shrink that top bar so there
+   is just a three-bar menu thing at the top that you select and it
+   pulls everything up … I don't want it to hide shit."
+
+   Compact is the DEFAULT on desktop: one slim bar, and the entire
+   switcher one tap behind the same hamburger the phone already uses —
+   nothing leaves the DOM, the current page stays printed on the bar
+   (#menu-label, kept current by syncMenuLabel), and the pin persists
+   a preference for the always-expanded bar. Phones are untouched:
+   the class only ever applies above 760px. */
+const NAV_FULL_KEY = "qb_nav_full";
+
+function applyNavMode() {
+  const wide = window.matchMedia("(min-width: 761px)").matches;
+  let full = false;
+  try { full = localStorage.getItem(NAV_FULL_KEY) === "1"; } catch (e) {}
+  document.body.classList.toggle("nav-compact", wide && !full);
+  const pin = document.getElementById("nav-pin");
+  if (pin) pin.textContent = full ? "Collapse the nav bar"
+                                  : "Pin the full nav bar";
+}
+
+(function initNavMode() {
+  const pin = document.getElementById("nav-pin");
+  if (pin) pin.addEventListener("click", (e) => {
+    e.stopPropagation();          // not a sport button; must not bubble
+    let full = false;
+    try { full = localStorage.getItem(NAV_FULL_KEY) === "1"; } catch (e2) {}
+    try { localStorage.setItem(NAV_FULL_KEY, full ? "0" : "1"); } catch (e2) {}
+    applyNavMode();
+    closeMobileMenu();
+  });
+  // The dropdown closes like a menu should: outside click and Escape.
+  // (Choosing a sport or page already closes it via the phone handlers.)
+  document.addEventListener("click", (e) => {
+    if (!document.body.classList.contains("nav-compact")) return;
+    if (!document.body.classList.contains("menu-open")) return;
+    const hdr = document.querySelector("header");
+    if (hdr && !hdr.contains(e.target)) closeMobileMenu();
+  });
+  window.addEventListener("resize", applyNavMode);
+  applyNavMode();
+})();

@@ -4157,6 +4157,82 @@ select.calc-in { width: auto; font-weight: 600; }
    of the dead band between the header and the first real content. */
 .nav-hint:empty { display: none; margin: 0; padding: 0; }
 
+/* ==================================================================
+   COMPACT NAVIGATION (desktop) — Ethan: "shrink that top bar so there
+   is just a three-bar menu thing … I don't want it to hide shit."
+   So: one slim bar (hamburger + brand + where-you-are + live badges),
+   and the ENTIRE existing switcher one tap away in a dropdown — the
+   same #menu-toggle machinery the phone uses, with desktop clothes.
+   Nothing is removed from the DOM; the pin puts the full bar back
+   permanently for anyone who prefers it. Phones (≤760px) are entirely
+   untouched — their menu is its own system. */
+.nav-pin { display: none; font: inherit; font-size: var(--fs-xs);
+  font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-mute); background: none; cursor: pointer;
+  border: var(--hairline) solid var(--border); padding: 6px 10px; }
+.nav-pin:hover { color: var(--text); border-color: var(--text-mute); }
+
+@media (min-width: 761px) {
+  body.nav-compact header { display: flex; flex-wrap: wrap;
+    align-items: center; gap: 8px 20px; position: relative;
+    padding-top: 10px; padding-bottom: 10px; }
+  /* The bar: hamburger first, then brand, badges pushed right. */
+  body.nav-compact .menu-toggle { display: inline-flex; order: -1;
+    align-items: center; gap: 9px; background: none; cursor: pointer;
+    color: var(--text); font: inherit; font-size: var(--fs-sm);
+    font-weight: 700; border: var(--hairline) solid var(--border);
+    padding: 8px 13px; }
+  body.nav-compact .menu-toggle:hover { border-color: var(--text-mute); }
+  /* The three bars: solid fills on the span and its pseudo-elements —
+     borders read to the hairline audit as mis-weighted accent rules,
+     and gradients are banned from the chrome outright. */
+  body.nav-compact .mt-bars { display: inline-block; width: 15px;
+    height: 2px; background: currentColor; position: relative;
+    margin: 5px 0; }
+  body.nav-compact .mt-bars::before,
+  body.nav-compact .mt-bars::after { content: ""; position: absolute;
+    left: 0; width: 15px; height: 2px; background: currentColor; }
+  body.nav-compact .mt-bars::before { top: -5px; }
+  body.nav-compact .mt-bars::after { top: 5px; }
+  /* One ROW, enforced: a later masthead rule gives .brand flex-basis
+     100%, which stacked the bar's three slim pieces into three rows —
+     186px of "compact". */
+  body.nav-compact .brand { flex: 0 1 auto; }
+  body.nav-compact .slate-meta { margin-left: auto; flex: 0 0 auto; }
+  /* Everything fat leaves the bar (never the DOM). */
+  body.nav-compact .sport-switch, body.nav-compact .nav,
+  body.nav-compact .menu-head, body.nav-compact .nav-hint,
+  body.nav-compact #standing-record,
+  body.nav-compact .masthead-brief { display: none; }
+  /* The tap: the whole switcher as a dropdown panel under the bar,
+     groups stacked under their own labels, pages beside them. */
+  body.nav-compact.menu-open .sport-switch { display: flex;
+    flex-direction: column; align-items: stretch; gap: 8px;
+    position: absolute; top: 100%; left: 12px; z-index: 60;
+    background: var(--bg-2); border: var(--hairline) solid var(--border);
+    padding: 14px 16px 12px; min-width: 300px; }
+  body.nav-compact.menu-open .sport-switch .sport-group { display: flex;
+    flex-wrap: wrap; gap: 6px; }
+  body.nav-compact.menu-open .sport-switch .menu-head { display: block;
+    font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--text-mute); margin: 4px 0 0; }
+  body.nav-compact.menu-open .sport-more { display: contents; }
+  body.nav-compact.menu-open .more-toggle { display: none; }
+  body.nav-compact.menu-open .sport-more .sport-group { display: flex;
+    gap: 6px; }
+  body.nav-compact.menu-open .nav { display: flex; flex-wrap: wrap;
+    align-content: flex-start; gap: 6px; position: absolute; top: 100%;
+    left: 350px; z-index: 60; max-width: 560px;
+    background: var(--bg-2); border: var(--hairline) solid var(--border);
+    padding: 14px 16px; }
+  body.nav-compact.menu-open .nav .nav-indicator { display: none; }
+  body.nav-compact.menu-open .nav-pin { display: block; margin-top: 10px; }
+  /* Full mode keeps a way back to compact. */
+  body:not(.nav-compact) .nav-pin { display: inline-flex;
+    position: absolute; top: 14px; right: 14px; }
+  body:not(.nav-compact) header { position: relative; }
+}
+
 /* One device pixel, on the screens where 1px stopped meaning that. */
 @media (min-resolution: 2dppx) {
   :root { --hairline: 0.5px; }
