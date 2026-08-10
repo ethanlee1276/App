@@ -383,6 +383,49 @@ def test_holders_and_charts_are_wired_end_to_end():
     assert "top10_share" in js and "Top 10" in js
 
 
+def test_a_429_backs_the_scan_off_instead_of_hammering():
+    """Measured on Ethan's machine: 20 back-to-back holder POSTs every
+    15s = 429 on all 20, FOREVER, because failures write no cache and
+    every tick re-fired the burst. Three brakes, each pinned:
+    a cooldown stamp stands every lookup down for a window; the build
+    stops a run's remaining lookups on the first 429; and live requests
+    pace themselves."""
+    import tempfile
+    from pathlib import Path
+    from unittest import mock
+    from engine.sources import solrpc
+    from engine.sources.fetch import DataUnavailable as DU
+    import memes_build as mb
+
+    with tempfile.TemporaryDirectory() as td:
+        cd = Path(td)
+        with mock.patch.object(solrpc, "CACHE_DIR", cd), \
+             mock.patch.object(solrpc, "_COOLDOWN", cd / "sol_rpc_cooldown"):
+            solrpc._note_429()
+            try:
+                solrpc.fetch_holder_slice("A" * 40)
+                raise AssertionError("cooldown did not stand the lookup down")
+            except DU as exc:
+                assert exc.status == 429
+                assert "cooling down" in str(exc)
+            # The stamp expires: an old 429 must not gate forever.
+            os.utime(cd / "sol_rpc_cooldown", (1, 1))
+            assert solrpc._cooling() is None
+
+    # Both shipped lookup loops carry the first-429 brake: one 429 ends
+    # the run's remaining lookups instead of firing them into the limiter.
+    src = open(os.path.join(ROOT, "memes_build.py"), encoding="utf-8").read()
+    for section in ("solana rpc holders: {fails}", "rugcheck: {fails}"):
+        i = src.index(section)          # the note line ENDS each loop
+        loop = src[src.rindex("for r in rows[:", 0, i):i]
+        assert 'status", None) == 429' in loop and "break" in loop, \
+            f"the {section.split(':')[0]} loop lost its first-429 brake"
+    sol = open(os.path.join(ROOT, "engine/sources/solrpc.py"),
+               encoding="utf-8").read()
+    assert "time.sleep(PACE_S)" in sol, "requests no longer pace themselves"
+    assert "_note_429()" in sol
+
+
 def test_unreadable_liquidity_cannot_sail_through_the_gate():
     """Ethan's first live board put a coin with NO liquidity reading on
     the rocket list at risk 50. Liquidity is the can-you-get-out number:

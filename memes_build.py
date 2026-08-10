@@ -148,6 +148,11 @@ def gather() -> tuple[list[dict], list[str]]:
             # what — the count without the cause is a symptom report.
             if first_err is None:
                 first_err = str(exc)[:160]
+            if getattr(exc, "status", None) == 429:
+                # One 429 means the window is spent. Firing the rest of
+                # the lookups into a rate limiter is how a cooldown never
+                # ends — that WAS the 20/20 pattern on the first live run.
+                break
     if fails:
         notes.append(f"solana rpc holders: {fails}/"
                      f"{min(len(rows), HOLDER_LOOKUPS)} lookup(s) declined"
@@ -160,8 +165,10 @@ def gather() -> tuple[list[dict], list[str]]:
             rep = rugcheck.parse_report(rugcheck.fetch_report(r["mint"]))
             if rep:
                 r["rug"] = rep
-        except DataUnavailable:
+        except DataUnavailable as exc:
             fails += 1
+            if getattr(exc, "status", None) == 429:
+                break              # same lesson as the Solana loop
     if fails:
         notes.append(f"rugcheck: {fails}/"
                      f"{min(len(rows), RUGCHECK_LOOKUPS)} lookup(s) declined")

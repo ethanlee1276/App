@@ -47,6 +47,35 @@ RPC_URL = "https://api.mainnet-beta.solana.com"
 #: Concentration drifts in minutes, not seconds; the public RPC is shared.
 HOLDER_TTL = 600
 
+#: Measured on Ethan's machine, first live run: twenty back-to-back
+#: batch POSTs every 15 seconds = HTTP 429 on all twenty, forever —
+#: because a FAILED lookup writes no cache, so the live loop re-fired
+#: the whole burst every tick. Three mechanisms stop that:
+#:   PACE_S      a breath between actual requests (cache hits are free)
+#:   first-429   the caller stops the run's remaining lookups (fuel off)
+#:   COOLDOWN_S  a file stamp that stands ALL lookups down for a window,
+#:               file-based because every build tick is a fresh process.
+PACE_S = 0.5
+COOLDOWN_S = 180
+_COOLDOWN = CACHE_DIR / "sol_rpc_cooldown"
+
+
+def _cooling() -> float | None:
+    """Seconds of cooldown remaining, or None when clear."""
+    try:
+        age = time.time() - _COOLDOWN.stat().st_mtime
+    except OSError:
+        return None
+    return COOLDOWN_S - age if age < COOLDOWN_S else None
+
+
+def _note_429() -> None:
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        _COOLDOWN.write_text(str(time.time()))
+    except OSError:
+        pass
+
 #: A Solana address, so a mint from a third-party feed can be trusted in
 #: a URL, a filename and an onclick before anything downstream sees it.
 B58 = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{25,50}$")
@@ -62,16 +91,24 @@ def _rpc_batch(calls: list[tuple[str, list]], cache_name: str,
             return json.loads(path.read_text(encoding="utf-8"))
         except ValueError:
             path.unlink(missing_ok=True)
+    left = _cooling()
+    if left is not None:
+        raise DataUnavailable(
+            f"Solana RPC cooling down after a 429 — retries in {left:.0f}s",
+            status=429)
     payload = [{"jsonrpc": "2.0", "id": i, "method": m, "params": p}
                for i, (m, p) in enumerate(calls)]
     req = urllib.request.Request(
         RPC_URL, data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"})
+    time.sleep(PACE_S)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             text = resp.read().decode("utf-8", errors="replace")
         data = json.loads(text)
     except Exception as exc:  # noqa: BLE001 — stale cache beats no answer
+        if getattr(exc, "code", None) == 429:
+            _note_429()
         if path.exists():
             try:
                 return json.loads(path.read_text(encoding="utf-8"))
