@@ -604,6 +604,24 @@ def main() -> None:
             recs = shared_recommendations(props, lines_map, dates_map,
                                           tune=tune,
                                           assets=player_assets(conn, args.league))
+            # Movement, EVIDENCE-ONLY (§4). The snapshot history has been
+            # written for this league all along — apply_odds_to_slate
+            # records every paid pull — while the doc said "no per-prop
+            # movement history is stored yet" and nothing ever read it.
+            # `price=False` stamps line_move, the first mover and the
+            # reason/warning, and skips quality.apply_movement: movement
+            # rejecting Scalpy picks is a pricing change nobody approved,
+            # and on MLB it is vetoing on a still-unmeasured signal (#80).
+            try:
+                from engine.linemoves import (analyze, annotate_recommendations,
+                                              load_history, todays_rows)
+                _mv = analyze(todays_rows(load_history()))
+                _n_mv = annotate_recommendations(recs, _mv, price=False)
+                if _n_mv:
+                    print(f"Line movement: stamped on {_n_mv} pick(s), "
+                          f"evidence only — nothing re-graded.")
+            except Exception:                                # noqa: BLE001
+                pass
             out["recommendations"] = recs
             # SAY HOW MANY FACES JOINED. Ethan ingested 100 of 105 WNBA
             # photos and every card still drew initials, because the

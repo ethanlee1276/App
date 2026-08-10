@@ -599,6 +599,116 @@ def test_the_installer_warns_when_the_repo_is_in_a_protected_folder():
     assert "Installing anyway" in sh
 
 
+# --- the store UFC never had, and the evidence-only mode ---------------------
+def test_fight_snapshots_land_in_the_shared_row_shape(tmp_path=None):
+    """UFC §4 read "no per-fight movement history is stored yet" since it
+    was written, for a mundane reason: ufc_build calls fetch_event_odds by
+    hand and the recorder lives inside apply_odds_to_slate. Every card's
+    prices were fetched, used, and forgotten.
+
+    Two rows per book — one per fighter — in record_snapshots' exact
+    shape, so analyze, closing_lines, booksharp and opening_odds all read
+    fight history with zero changes."""
+    import json as _json
+    import tempfile
+    from pathlib import Path
+    d = Path(tempfile.mkdtemp())
+    path = d / "hist.jsonl"
+    n = lm.record_fight_snapshots(
+        [{"a": "Jon Jones", "b": "Stipe Miocic",
+          "commence": "2026-11-16T03:00:00Z",
+          "books": {"DraftKings": (-450, +350), "Pinnacle": (-425, +330)}}],
+        ts=NOW, path=path)
+    assert n == 4
+    rows = [_json.loads(x) for x in path.read_text().splitlines()]
+    jones = [r for r in rows if r["player"] == "Jon Jones"]
+    assert len(jones) == 2
+    assert all(r["market"] == "moneyline" and r["line"] == 0.5 for r in rows)
+    # Two-sided: my price is the over, my OPPONENT'S price is the under —
+    # "under 0.5 wins" IS him losing, and de-vigging needs both.
+    dk = next(r for r in jones if r["book"] == "DraftKings")
+    assert dk["over_odds"] == -450 and dk["under_odds"] == 350
+    assert all("start_ts" in r for r in rows), "in-play separation needs it"
+
+
+def test_a_fighter_with_no_price_is_skipped_not_zeroed():
+    import tempfile
+    from pathlib import Path
+    path = Path(tempfile.mkdtemp()) / "h.jsonl"
+    n = lm.record_fight_snapshots(
+        [{"a": "A", "b": "B", "books": {"dk": (None, +200)}}],
+        ts=NOW, path=path)
+    assert n == 1, "only B had a price; A must not be written as 0"
+
+
+def test_the_opener_is_the_earliest_snapshot_median_across_books():
+    """§11 wants the opener next to the close. Derived from history, not
+    banked — the banked-close column is the one that spent months wrong
+    while the rebuilt number stayed right."""
+    rows = [
+        {"ts": 100, "player": "F", "market": "moneyline", "book": "a",
+         "over_odds": -200},
+        {"ts": 100, "player": "F", "market": "moneyline", "book": "b",
+         "over_odds": -220},
+        {"ts": 100, "player": "F", "market": "moneyline", "book": "c",
+         "over_odds": -260},
+        {"ts": 500, "player": "F", "market": "moneyline", "book": "a",
+         "over_odds": -300},
+    ]
+    o = lm.opening_odds(rows)
+    assert o[("F", "moneyline")]["odds"] == -220, "median of the FIRST snap"
+    assert o[("F", "moneyline")]["books"] == 3
+
+
+def test_opening_odds_survives_garbage_rows():
+    assert lm.opening_odds([{"no": "ts"}, {"ts": "x", "player": "P",
+                                           "market": "m"}]) == {}
+
+
+def test_price_false_stamps_evidence_and_never_regrades():
+    """The evidence-only mode, for boards where a human has not approved
+    movement as a pricing input. Scalpy gets every stamp — line_move,
+    first mover, the warning — and its quality score must not move,
+    because the difference between "the card warns you" and "the pick
+    vanished off the board" is the difference between evidence and
+    pricing."""
+    hist = [
+        _snap(NOW - 7200, "dk", 50.5), _snap(NOW - 7200, "fd", 50.5),
+        _snap(NOW - 300, "dk", 53.5), _snap(NOW - 300, "fd", 53.5),
+    ]
+    reports = analyze(hist)
+    assert reports, "the fixture must actually move"
+    rec = {"player": "RB One", "market": "rush_yds", "side": "UNDER",
+           "quality": 88.0, "grade": "A", "recommended": True}
+    n = lm.annotate_recommendations([rec], reports, price=False)
+    assert n == 1
+    assert rec["line_move"]["verdict"] == "against"
+    assert rec["warnings"], "the warning is the evidence and must stay"
+    assert rec["quality"] == 88.0, "price=False must not touch the grade"
+    assert rec["recommended"] is True, "and must never reject"
+    # The default is unchanged: pricing boards still price.
+    rec2 = dict(rec)
+    lm.annotate_recommendations([rec2], reports)
+    assert rec2["quality"] != 88.0, "the default path must still apply it"
+
+
+def test_scalpy_wires_movement_evidence_only():
+    """nba_build must pass price=False — movement rejecting Scalpy picks
+    is a pricing change nobody approved."""
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "nba_build.py"), encoding="utf-8").read()
+    assert "annotate_recommendations(recs, _mv, price=False)" in src
+
+
+def test_ufc_records_only_on_a_live_pull():
+    """A cached payload is a re-read of a price already recorded;
+    appending it again manufactures a "move" out of the cache."""
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "ufc_build.py"), encoding="utf-8").read()
+    i = src.index("record_fight_snapshots")
+    assert "if args.odds:" in src[:i][-2500:] or "if args.odds:" in src[i-2500:i]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

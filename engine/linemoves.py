@@ -106,6 +106,80 @@ def record_snapshots(props, ts: float | None = None,
     return n
 
 
+
+def record_fight_snapshots(fights: list[dict], ts: float | None = None,
+                           path: str | Path | None = None) -> int:
+    """Append h2h snapshots for a card of fights — the store UFC never had.
+
+    UFC_MODEL §4 has read "no per-fight movement history is stored yet"
+    since it was written, and the reason is mundane: `ufc_build` calls
+    `fetch_event_odds` by hand instead of going through
+    `apply_odds_to_slate`, and the snapshot recorder lives inside the
+    latter. Every card's prices were fetched, used, and forgotten.
+
+    Each fight is `{"a", "b", "commence", "books": {book: (a_odds,
+    b_odds)}}`. Two rows per book — one per fighter — in the exact shape
+    `record_snapshots` writes, so `analyze`, `closing_lines`, `booksharp`
+    and the opener helper below all read fight history with zero changes:
+    player = the fighter, market = "moneyline", line = 0.5 (the journal's
+    own convention for a fight), over_odds = his price, under_odds = his
+    opponent's, because "under 0.5 wins" IS the opponent winning and the
+    two-sided price is what de-vigging needs.
+    """
+    ts = ts if ts is not None else time.time()
+    path = Path(path) if path else HISTORY_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    n = 0
+    with path.open("a") as fh:
+        for f in fights or []:
+            start = start_epoch(f.get("commence"))
+            for book, (ao, bo) in (f.get("books") or {}).items():
+                for me, mine, theirs in ((f.get("a"), ao, bo),
+                                         (f.get("b"), bo, ao)):
+                    if not me or not mine:
+                        continue
+                    row = {"ts": ts, "player": me, "market": "moneyline",
+                           "book": book, "line": 0.5,
+                           "over_odds": mine, "under_odds": theirs}
+                    if start is not None:
+                        row["start_ts"] = start
+                    fh.write(json.dumps(row) + "\n")
+                    n += 1
+    return n
+
+
+def opening_odds(rows: list[dict]) -> dict[tuple[str, str], dict]:
+    """The FIRST recorded price per (player, market) — the opener.
+
+    UFC §11 wants the opener stored so "beat the open" is answerable next
+    to "beat the close". It is derived the same way the close is — from
+    the snapshot history — rather than banked as a column, because the
+    banked-close column is the one that spent months wrong (task: the
+    2,065-row repair) while the rebuilt-from-history number stayed right.
+    Where several books are quoted in the earliest snapshot, the median,
+    same as `closing_lines`.
+    """
+    earliest: dict = {}
+    for r in rows:
+        try:
+            ts = float(r["ts"])
+            key = (r["player"], r["market"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        cur = earliest.get(key)
+        if cur is None or ts < cur[0]:
+            earliest[key] = (ts, [r])
+        elif ts == cur[0]:
+            cur[1].append(r)
+    out: dict = {}
+    for key, (ts, snaps) in earliest.items():
+        odds = sorted(o for o in (s.get("over_odds") for s in snaps)
+                      if o is not None)
+        if odds:
+            out[key] = {"ts": ts, "odds": odds[len(odds) // 2],
+                        "books": len(odds)}
+    return out
+
 def _pregame_only(items: list[dict]) -> list[dict]:
     """Drop snapshots taken at or after the game started.
 
@@ -606,7 +680,8 @@ def summary_lines(reports: list[MoveReport], limit: int = 10) -> list[str]:
 
 
 # --- the signal: movement vs OUR pick ---------------------------------------
-def annotate_recommendations(recs: list[dict], reports: list[MoveReport]) -> int:
+def annotate_recommendations(recs: list[dict], reports: list[MoveReport],
+                             price: bool = True) -> int:
     """Stamp each recommendation with how the market has moved relative to
     the side WE like since our first recorded snapshot.
 
@@ -678,7 +753,15 @@ def annotate_recommendations(recs: list[dict], reports: list[MoveReport]) -> int
         # §4/§10: movement is 15% of the unified quality grade. With-steam
         # raises the score; sharp movement against drops it — below 70 the
         # pick is rejected (fresh sharp money beats a stale model input).
-        from .quality import apply_movement
-        apply_movement(rec, with_us, rep.steam)
+        #
+        # `price=False` is the evidence-only mode, for the boards where a
+        # human has not yet approved movement as a pricing input. It keeps
+        # every stamp — line_move, first mover, the reason/warning — and
+        # skips only this call, because the difference between "the card
+        # says the market moved against us" and "the pick vanished off the
+        # board" is exactly the difference between evidence and pricing.
+        if price:
+            from .quality import apply_movement
+            apply_movement(rec, with_us, rep.steam)
         n += 1
     return n

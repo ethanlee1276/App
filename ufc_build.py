@@ -141,6 +141,27 @@ def best_h2h(payload: dict, name_a: str, name_b: str) -> dict:
     return out
 
 
+def all_h2h(payload: dict, name_a: str, name_b: str) -> dict:
+    """`{book: (a_odds, b_odds)}` — EVERY book's pair, not just the best.
+
+    `best_h2h` keeps the best price per fighter, which is right for the
+    card and wrong for a movement history: a store built from best-of
+    prices cannot say which book moved, which book led, or where the
+    market opened. The snapshot recorder needs the raw pairs.
+    """
+    out: dict = {}
+    for bm in payload.get("bookmakers", []) or []:
+        title = bm.get("title", bm.get("key", ""))
+        for mkt in bm.get("markets", []) or []:
+            if mkt.get("key") != "h2h":
+                continue
+            pair = {o.get("name", ""): o.get("price")
+                    for o in mkt.get("outcomes", []) or []}
+            if pair.get(name_a) is not None or pair.get(name_b) is not None:
+                out[title] = (pair.get(name_a), pair.get(name_b))
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--odds", action="store_true")
@@ -166,6 +187,7 @@ def main() -> None:
             events = oddsapi.list_events(key, sport="ufc",
                                          cache_only=args.cached_odds and not args.odds)
             event_label, card = select_card(events)
+            snaps: list = []
             if card:
                 for ev in card:
                     a, b = ev.get("home_team", ""), ev.get("away_team", "")
@@ -174,6 +196,14 @@ def main() -> None:
                             ev["id"], key, markets=["h2h"], sport="ufc",
                             cache_only=args.cached_odds and not args.odds)
                         prices = best_h2h(payload, a, b)
+                        # The store UFC never had (§4). Only on a LIVE
+                        # pull: a cached payload is a re-read of a price
+                        # already recorded, and appending it again would
+                        # manufacture a "move" out of the cache.
+                        if args.odds:
+                            snaps.append({"a": a, "b": b,
+                                          "commence": ev.get("commence_time"),
+                                          "books": all_h2h(payload, a, b)})
                     except oddsapi.OddsAPIError:
                         prices = {"fighter_a": a, "fighter_b": b}
                     da, na = _lookup(dossiers, a)
@@ -192,6 +222,12 @@ def main() -> None:
             for f in fights:
                 f["prices"]["venue"] = venue.get("venue", "")
                 f["prices"]["city"] = venue.get("city", "")
+            if snaps:
+                from engine.linemoves import record_fight_snapshots
+                n_snap = record_fight_snapshots(snaps)
+                print(f"Movement history: {n_snap} fight-price snapshot(s) "
+                      f"recorded — opener and open→close become derivable "
+                      f"as cards accumulate.")
         except oddsapi.OddsAPIError as exc:
             out["odds_error"] = str(exc)
 

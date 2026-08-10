@@ -210,7 +210,7 @@ listed honestly rather than faked).
 | §3.6 Tier minimums 3% / 4.5% / 6.5% | ✅ | `engine/hoops.py` `WNBA_TIER_MIN_EDGE`, applied by `prob.required_edge` |
 | §4 Truth hierarchy | 🟡 | Best two-way price across books, sharp books excluded from the bettable aggregate; per-book update-speed weighting 📋 |
 | §4 Stale-line detection | ✅ | `engine/marketscan.py` `stale_quotes` runs on the full multi-book field and journals flags |
-| §4 First-mover attribution | 📋 | No per-prop movement history is stored yet |
+| §4 First-mover attribution | 🟡 | **The "not stored" claim was wrong** — `apply_odds_to_slate` has recorded every paid WNBA pull into the snapshot history all along; nothing ever READ it for this league. As of 2026-08-10 `nba_build` runs `linemoves.analyze` and stamps picks with `annotate_recommendations(price=False)`: `line_move`, first mover, sharp-led flag, and the with/against reason or warning, journaled as `move_first_sharp` so the miner can test it. **Evidence only, deliberately** — the default annotator calls `quality.apply_movement`, which re-grades and can reject, and movement rejecting Scalpy picks is a pricing change nobody approved (on MLB it is already vetoing on an unmeasured signal, #80). What remains is accumulation across slates |
 | §5 Minutes → possessions → usage → efficiency | 🟡 | Minutes and per-minute rates are real; explicit possession and usage-rate layers 📋 (needs per-100 data we don't ingest) |
 | §5 Blowout risk compresses star minutes | ✅ | `minutes.blowout_mult` / `blowout_prob`, asymmetric by favourite/dog |
 | §5 Recency 40/30/20/10 | ✅ | `LeagueTuning.recency_weights`, applied as **nested** windows — see the note below |
