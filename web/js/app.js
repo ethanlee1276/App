@@ -6226,34 +6226,62 @@ function mcChartRef(c) {
   return null;
 }
 
+//: The rendered board, keyed by mint, so a chart click carries one
+//: validated token id instead of a bag of strings through an onclick.
+let _mcCoins = {};
+
 function mcChartBtn(c, cls) {
-  const ref = mcChartRef(c);
-  if (!ref) return "";
-  const label = escapeHtml((c.symbol || c.name || "").replace(/'/g, "")).slice(0, 20);
+  if (!mcChartRef(c) || !MC_B58.test(c.mint || "")) return "";
   return `<button class="${cls || "btn mc-chart-btn"}" type="button"
-    onclick="mcShowChart('${ref.addr}','${ref.kind}','${label}')"
+    onclick="mcShowChart('${c.mint}')"
     title="Open the venue’s own live candle chart for this pool">Live chart</button>`;
 }
 
-/* ONE chart at a time, in a dock under the tiles. Sixty live iframes is
-   a tab-killer; one, where you asked for it, is a terminal. The embed is
+/* ONE chart at a time, in the terminal room. Sixty live iframes is a
+   tab-killer; one, where you asked for it, is a terminal. The embed is
    the venue's own page for the pool, so the candles are as live as
-   Axiom's — they come from the same place. */
-window.mcShowChart = function (addr, kind, label) {
+   Axiom's — they come from the same place. Called from a card or the
+   board table it also walks you to the Charts room, because a chart
+   opening in a hidden panel is a click that did nothing. */
+window.mcShowChart = function (mint, scroll = true) {
+  const c = _mcCoins[mint];
   const dock = document.getElementById("mc-chart-dock");
-  if (!dock || !MC_B58.test(addr || "")) return;
-  const src = kind === "gt"
-    ? `https://www.geckoterminal.com/solana/pools/${addr}?embed=1&info=0&swaps=0`
-    : `https://dexscreener.com/solana/${addr}?embed=1&theme=dark&info=0`;
+  if (!c || !dock) return;
+  const ref = mcChartRef(c);
+  if (!ref || !MC_B58.test(ref.addr || "")) return;
+  const src = ref.kind === "gt"
+    ? `https://www.geckoterminal.com/solana/pools/${ref.addr}?embed=1&info=0&swaps=0`
+    : `https://dexscreener.com/solana/${ref.addr}?embed=1&theme=dark&info=0`;
+  const i = c.ind || {};
+  const stat = (k, v, color) => `<div class="metric"><div class="k">${k}</div>
+    <div class="v"${color ? ` style="color:${color}"` : ""}>${v}</div></div>`;
   dock.innerHTML = `<div class="card mc-chart-card">
-    <div class="card-head"><div class="player">${escapeHtml(label || "Live chart")}
+    <div class="card-head"><div class="player">${mcName(c)}
       <span style="color:var(--text-mute);font-weight:400"> — live from ${
-        kind === "gt" ? "GeckoTerminal" : "DexScreener"}</span></div>
-      <button class="btn" type="button"
-        onclick="document.getElementById('mc-chart-dock').innerHTML=''">Close</button></div>
+        ref.kind === "gt" ? "GeckoTerminal" : "DexScreener"}</span></div>
+      <span title="MomentumScore / RiskScore" style="font-weight:800">
+        <span style="color:var(--brand)">${c.momentum}</span>
+        <span style="color:var(--text-mute)"> / </span>
+        <span style="color:${c.risk >= 60 ? "var(--bad)" : "var(--warn)"}">${c.risk}</span></span></div>
+    <div class="metrics">
+      ${stat("Price", mcPrice(c.price_usd))}
+      ${stat("5m", mcPct((c.price_change || {}).m5))}
+      ${stat("1h", mcPct((c.price_change || {}).h1))}
+      ${stat("Liquidity", mcMoney(c.liquidity))}
+      ${stat("Top 10", i.top10_share != null ? (i.top10_share * 100).toFixed(0) + "%" : "—")}
+    </div>
     <iframe src="${src}" loading="lazy" title="Live pool chart"
-      referrerpolicy="no-referrer" allow="clipboard-write"></iframe></div>`;
-  dock.scrollIntoView({ behavior: "smooth", block: "start" });
+      referrerpolicy="no-referrer" allow="clipboard-write"></iframe>
+    ${mcSpark(c.spark) ? `<div class="mc-spark-wrap" title="Our own tape — one point per refresh, up to six hours">${mcSpark(c.spark)}</div>` : ""}</div>`;
+  document.querySelectorAll("#view-memes .mc-pick").forEach((b) =>
+    b.classList.toggle("active", b.dataset.mint === mint));
+  const panel = dock.closest(".subgroup");
+  if (panel && panel.hidden) {
+    const tab = document.querySelector(
+      '#view-memes .subnav-btn[data-subtab="charts"]');
+    if (tab) tab.click();
+  }
+  if (scroll) dock.scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
 /* One coin's identity cell, shared by cards and the board table. */
@@ -6381,14 +6409,33 @@ async function renderMemes() {
       </tr>`;
     }).join("");
 
-  host.innerHTML = honesty + `
-    <div class="stats">
-      ${tile("Coins tracked", d.n || 0, "GT new + trending, DS boosts")}
-      ${tile("Clear the risk gate", (d.n || 0) - (d.gated || 0), `RiskScore under ${d.risk_gate || 60}`)}
-      ${tile("Behind the gate", d.gated || 0, "momentum can’t buy them back")}
-      ${tile("Flashing exit", (d.exits || []).length, "the danger channel")}
-    </div>
-    <div id="mc-chart-dock"></div>
+  /* THE ROOMS. Same organization the Record page earned: the tab bar is
+     subtabbedHTML, the choice is remembered, an empty room never draws a
+     tab. Charts is the FIRST room — Ethan: the charts lead, everything
+     else is a tap away — with a coin-picker terminal that auto-opens the
+     top coin so the page lands on live candles, not on a menu. */
+  _mcCoins = byMint;
+  const rocketSet = new Set(d.rocket || []);
+  const chartable = [
+    ...(d.rocket || []).map((m) => byMint[m]).filter(Boolean),
+    ...(d.coins || []).slice()
+      .sort((a, b) => (b.momentum || 0) - (a.momentum || 0))
+      .filter((c) => !rocketSet.has(c.mint)),
+  ].filter((c) => mcChartRef(c) && MC_B58.test(c.mint || "")).slice(0, 24);
+
+  const picker = chartable.map((c) => `<button type="button"
+      class="mc-pick" data-mint="${c.mint}" onclick="mcShowChart('${c.mint}')"
+      title="momentum ${c.momentum} · risk ${c.risk} · liq ${mcMoney(c.liquidity)}">
+      <b>${escapeHtml((c.symbol || c.name || c.mint.slice(0, 6)).slice(0, 12))}</b>
+      <span class="mc-pick-pct">${mcPct((c.price_change || {}).m5)}</span>
+      ${rocketSet.has(c.mint) ? `<span class="mc-pick-tag">rocket</span>` : ""}
+    </button>`).join("");
+
+  const chartsRoom = !chartable.length ? "" : `
+    <div class="mc-picker" role="group" aria-label="Pick a coin to chart">${picker}</div>
+    <div id="mc-chart-dock"></div>`;
+
+  const rocketRoom = `
     <div class="section-title">Rocket list
       <span class="sub">— highest momentum among coins UNDER the risk gate. Momentum is
       cohort-relative order flow: acceleration and unique buyers, not RSI lines. Hover any
@@ -6398,12 +6445,22 @@ async function renderMemes() {
         <div class="es-title">Nothing clears the gate right now</div>
         <div class="es-sub">Either every tracked coin is over the risk line — common, and the
         page working as designed — or the snapshot tape is too short: acceleration needs
-        three sightings of a coin, so give the refresh loop a few minutes.</div></div>`}</div>
+        three sightings of a coin, so give the refresh loop a few minutes.</div></div>`}</div>`;
+
+  const dangerRoom = `
     <div class="section-title">Danger channel
       <span class="sub">— exit signals in the spec’s priority order, IGNORING the gate: a
       dangerous coin crashing is exactly what this channel is for.</span></div>
     <div class="cards wide">${exitCards ||
-      `<p class="loading" style="grid-column:1/-1">No exit signals on the current board.</p>`}</div>
+      `<p class="loading" style="grid-column:1/-1">No exit signals on the current board.</p>`}</div>`;
+
+  const boardRoom = `
+    <div class="stats">
+      ${tile("Coins tracked", d.n || 0, "GT new + trending, DS boosts")}
+      ${tile("Clear the risk gate", (d.n || 0) - (d.gated || 0), `RiskScore under ${d.risk_gate || 60}`)}
+      ${tile("Behind the gate", d.gated || 0, "momentum can’t buy them back")}
+      ${tile("Flashing exit", (d.exits || []).length, "the danger channel")}
+    </div>
     <div class="section-title">Full board
       <span class="sub">— every tracked coin, momentum-sorted. Dimmed rows are over the
       risk gate — shown, not hidden, because “filtered out” and “never seen” must not
@@ -6415,7 +6472,18 @@ async function renderMemes() {
         <th title="Unique buying wallets, last 5 minutes">Buyers</th>
         <th title="Supply held by the ten largest accounts, excluding the largest (almost always the pool vault). Measured for the first 20 coins in discovery order.">Top 10</th>
         <th>Momentum</th><th>Risk</th><th></th>
-      </tr></thead><tbody>${rows}</tbody></table></div>
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
+
+  host.innerHTML = honesty + subtabbedHTML("memes", [
+    ["charts", "Charts",
+     "live venue candles per coin — pick a coin, get its terminal", chartsRoom],
+    ["rocket", "Rocket list",
+     "highest momentum among coins under the risk gate", rocketRoom],
+    ["danger", "Danger channel",
+     "exit signals, gate ignored — crashes on bad coins still get seen", dangerRoom],
+    ["board", "Full board",
+     "every tracked coin, the tiles, and the holder column", boardRoom],
+  ]) + `
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
       Top-10 holder share comes from Solana’s public RPC and EXCLUDES the largest account,
       which for a live coin is almost always the trading pool’s own vault — the number
@@ -6427,6 +6495,13 @@ async function renderMemes() {
       snapshot tape and need a few sightings of a coin — young boards under-read them
       honestly. The Live chart button opens the venue’s own candle chart for the pool.
       Updated ${escapeHtml((d.generated_at || "").slice(11, 16))}; refreshes with the site.</p>`;
+  bindSubtabs(host);
+  // Land on candles, not on a menu — but never yank someone out of the
+  // room they chose last time, and never scroll a page that just opened.
+  const dock = document.getElementById("mc-chart-dock");
+  if (chartable.length && dock && !dock.closest(".subgroup").hidden) {
+    mcShowChart(chartable[0].mint, false);
+  }
 }
 
 /* ============================================================

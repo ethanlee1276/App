@@ -383,6 +383,26 @@ def test_holders_and_charts_are_wired_end_to_end():
     assert "top10_share" in js and "Top 10" in js
 
 
+def test_the_meme_page_is_a_charts_first_terminal():
+    """Ethan: 'obv we wanna show charts and shit first.' The page uses
+    the shared sub-tab rooms, Charts is the FIRST room, the terminal has
+    a coin picker, and the top coin's chart auto-opens — landing on live
+    candles, not on a menu. The preflight must probe all three hosts so
+    --check answers 'can this machine even see the feeds'."""
+    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    body = js[js.index("async function renderMemes"):]
+    body = body[:body.index("\nasync function renderFantasy")]
+    assert 'subtabbedHTML("memes"' in body
+    assert body.index('["charts", "Charts"') < body.index('["rocket",')
+    assert "mc-picker" in body and 'class="mc-pick"' in body
+    assert "mcShowChart(chartable[0].mint, false)" in body
+    assert "bindSubtabs(host)" in body
+    launch = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    for host_ in ("api.dexscreener.com", "api.geckoterminal.com",
+                  "api.mainnet-beta.solana.com"):
+        assert host_ in launch, f"{host_} missing from preflight"
+
+
 def test_the_page_shows_the_base_rates_not_just_the_scores():
     """The spec's most important content is the honesty block — the page
     must carry the base rates and the not-advice framing, and they must

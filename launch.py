@@ -1896,6 +1896,9 @@ def preflight() -> None:
         ("Sportsbook odds (all sports)", "https://api.the-odds-api.com/v4/sports/"),
         ("Weather (Open-Meteo)", "https://api.open-meteo.com/v1/forecast?latitude=40&longitude=-74&hourly=temperature_2m"),
         ("UFC fighter data (ESPN MMA)", "https://site.web.api.espn.com/apis/search/v2?query=jones&limit=1"),
+        ("Meme coins (DexScreener)", "https://api.dexscreener.com/token-boosts/top/v1"),
+        ("Meme coins (GeckoTerminal)", "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=1"),
+        ("Meme coin holders (Solana RPC)", "https://api.mainnet-beta.solana.com"),
     ]
     for name, url in hosts:
         up = _reachable(url)

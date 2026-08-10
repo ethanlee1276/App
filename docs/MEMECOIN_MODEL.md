@@ -171,6 +171,16 @@ tab-killer. Every address is base58-validated before it touches an
 `onclick` or an iframe `src` — token feeds are attacker-controlled
 strings.
 
+**The page is organized as rooms** (the site's shared sub-tab pattern):
+**Charts** first — a coin-picker terminal that auto-opens the top
+coin's live chart, so the page lands on candles, not a menu — then
+**Rocket list**, **Danger channel**, and **Full board** (tiles, the
+holder column, gated rows dimmed-not-hidden). The base-rates strip
+stays above the tab bar in every room: it is the one block a visitor
+must not be able to route around. A chart click from any room walks
+you to the Charts room — a chart opening in a hidden panel is a click
+that did nothing.
+
 | Piece | File |
 |---|---|
 | Fetches + pure parsers (GT pools, DS pairs/boosts) | `engine/sources/dexes.py` |
