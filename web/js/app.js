@@ -6395,6 +6395,247 @@ function mbMoney(v, sign) {
   return n > 0 ? "+" + s : n < 0 ? "−" + s : s;
 }
 
+/* ------------------------------------------------------------------
+   Bulk import — the free version of Juice Reel's sync.
+
+   Juice Reel auto-pulls bets by holding sportsbook credentials through
+   an aggregator (SharpSports). The zero-cost, zero-credential version
+   of the same outcome: every book — and Juice Reel itself — exports bet
+   history as a CSV, and this reads one. Columns are matched by HEADER
+   NAME, never by position (the espnhoops rule: order is not a promise
+   anyone made us), the parse is previewed before anything commits, and
+   a signature-dedupe means re-importing last month's export cannot
+   double-count a single bet. All pure functions up to the preview, so
+   the tests run the SHIPPED code under node. */
+const MB_HEADERS = {
+  date: ["date", "placed", "placed at", "date placed", "time placed",
+         "bet date", "created", "created at", "settled at", "event date"],
+  book: ["book", "sportsbook", "site", "operator", "bookmaker"],
+  sport: ["sport", "league"],
+  desc: ["bet", "description", "bet description", "selection", "pick",
+         "wager", "name", "bet name", "event", "legs", "bet info"],
+  odds: ["odds", "american odds", "price", "bet odds"],
+  stake: ["stake", "risk", "risked", "wager amount", "amount",
+          "bet amount", "stake amount", "risk amount"],
+  result: ["result", "status", "outcome", "settlement", "win/loss",
+           "won/lost", "grade"],
+};
+
+/* Quote-aware CSV/TSV split. Bet descriptions contain commas ("Judge
+   o1.5 TB, live"), so a naive split corrupts exactly the rows this
+   exists for. Delimiter is auto-detected from the header line: any tab
+   means a spreadsheet paste, otherwise comma. */
+function mbParseCSV(text) {
+  const src = String(text || "");
+  const head = src.slice(0, src.indexOf("\n") + 1 || src.length);
+  const delim = head.includes("\t") ? "\t" : ",";
+  const rows = [];
+  let row = [], cell = "", q = false;
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (q) {
+      if (c === '"') {
+        if (src[i + 1] === '"') { cell += '"'; i++; } else q = false;
+      } else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === delim) { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && src[i + 1] === "\n") i++;
+      row.push(cell); cell = "";
+      if (row.some((x) => String(x).trim())) rows.push(row);
+      row = [];
+    } else cell += c;
+  }
+  row.push(cell);
+  if (row.some((x) => String(x).trim())) rows.push(row);
+  return rows;
+}
+
+function mbMapHeaders(headerRow) {
+  const norm = (s) => String(s || "").toLowerCase()
+    .replace(/[$()._-]/g, " ").replace(/\s+/g, " ").trim();
+  const map = { date: null, book: null, sport: null, desc: null,
+                odds: null, stake: null, result: null };
+  (headerRow || []).forEach((cell, i) => {
+    const h = norm(cell);
+    for (const field of Object.keys(MB_HEADERS)) {
+      if (map[field] == null && MB_HEADERS[field].includes(h)) {
+        map[field] = i;
+        return;
+      }
+    }
+  });
+  return map;
+}
+
+/* Odds in the wild: "+150", "-110", "−110" (typographic minus from a
+   pretty export), "EVEN", and decimal "1.91". American magnitude is
+   always ≥100, so anything smaller WITH a decimal point is decimal odds
+   and converts; a bare small integer is unreadable and the row says so
+   rather than guessing. */
+function mbParseOdds(s) {
+  let t = String(s == null ? "" : s).trim().toLowerCase()
+    .replace(/[,\s]/g, "").replace(/−/g, "-");
+  if (!t) return null;
+  if (t === "even" || t === "ev" || t === "evens" || t === "pk") return 100;
+  const v = parseFloat(t);
+  if (isNaN(v)) return null;
+  if (Math.abs(v) >= 100) return Math.round(v);
+  if (v > 1 && t.includes(".")) {
+    return v >= 2 ? Math.round((v - 1) * 100) : -Math.round(100 / (v - 1));
+  }
+  return null;
+}
+
+function mbParseStake(s) {
+  const v = parseFloat(String(s == null ? "" : s).replace(/[$,\s]/g, ""));
+  return isNaN(v) ? null : v;
+}
+
+function mbParseDate(s) {
+  const t = String(s || "").trim();
+  if (!t) return null;
+  const pad = (x) => String(x).padStart(2, "0");
+  const iso = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return `${iso[1]}-${pad(iso[2])}-${pad(iso[3])}`;
+  const us = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (us) {
+    const y = us[3].length === 2 ? "20" + us[3] : us[3];
+    return `${y}-${pad(us[1])}-${pad(us[2])}`;
+  }
+  const d = new Date(t);
+  return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
+/* "Void" pays back the stake — that is a push in this ledger. A cashout
+   settled at some unknown partial value: grading it as a full win would
+   invent profit, so it lands PENDING for the user to grade by hand. */
+function mbNormResult(s) {
+  const t = String(s || "").trim().toLowerCase();
+  if (t.includes("cash")) return "pending";
+  if (["win", "won", "w", "winner", "winning"].includes(t)) return "win";
+  if (["loss", "lost", "lose", "l", "loser", "losing"].includes(t)) return "loss";
+  if (["push", "void", "voided", "tie", "canceled", "cancelled",
+       "refund", "refunded", "no action"].includes(t)) return "push";
+  return "pending";
+}
+
+/* The identity of a bet for dedupe: same day, book, wording, stake and
+   price IS the same bet — the id from an export run is not stable, so
+   ids cannot be the key the way the JSON import uses them. */
+function mbSig(b) {
+  return [b.date, b.book, String(b.desc || "").toLowerCase().trim(),
+          Number(b.stake), Number(b.odds)].join("|");
+}
+
+function mbRowsFromText(text, fallbackBook) {
+  const rows = mbParseCSV(text);
+  if (rows.length < 2) {
+    return { bets: [], skipped: [{ line: 1, reason: "need a header row "
+             + "plus at least one bet row" }], mapping: {} };
+  }
+  const map = mbMapHeaders(rows[0]);
+  if (map.desc == null || map.stake == null || map.odds == null) {
+    const missing = ["desc", "odds", "stake"].filter((k) => map[k] == null);
+    return { bets: [], skipped: [{ line: 1, reason: "header row is missing "
+             + `a recognizable ${missing.join(" + ")} column` }],
+             mapping: map };
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const bets = [], skipped = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const cell = (k) => map[k] == null ? "" : String(r[map[k]] == null ? "" : r[map[k]]).trim();
+    const desc = cell("desc");
+    if (!desc) { skipped.push({ line: i + 1, reason: "no bet description" }); continue; }
+    const odds = mbParseOdds(cell("odds"));
+    if (odds == null) {
+      skipped.push({ line: i + 1, reason: `odds unreadable (${cell("odds") || "blank"})` });
+      continue;
+    }
+    const stake = mbParseStake(cell("stake"));
+    if (stake == null || stake <= 0) {
+      skipped.push({ line: i + 1, reason: `stake unreadable (${cell("stake") || "blank"})` });
+      continue;
+    }
+    bets.push({
+      id: Date.now() + "" + i + Math.floor(Math.random() * 1e4),
+      book: cell("book") || fallbackBook || "Other",
+      sport: cell("sport").toUpperCase().slice(0, 12),
+      date: mbParseDate(cell("date")) || today,
+      desc: desc.slice(0, 90), stake, odds,
+      result: map.result == null ? "pending" : mbNormResult(cell("result")),
+    });
+  }
+  return { bets, skipped, mapping: map };
+}
+
+/* Parsed-but-not-committed rows between Preview and Add. */
+let _mbPending = null;
+
+window.mbBulkFile = function (input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { mbBulkShow(String(reader.result)); input.value = ""; };
+  reader.readAsText(file);
+};
+window.mbBulkPaste = function () {
+  const ta = document.getElementById("mb-bulk-text");
+  if (ta && ta.value.trim()) mbBulkShow(ta.value);
+};
+window.mbBulkCommit = function () {
+  if (_mbPending && _mbPending.length) {
+    mbSave(mbLoad().concat(_mbPending));
+  }
+  _mbPending = null;
+  renderMyBets();
+};
+
+function mbBulkShow(text) {
+  const box = document.getElementById("mb-bulk-preview");
+  if (!box) return;
+  const fallbackBook = (document.getElementById("mb-book") || {}).value || "Other";
+  const parsed = mbRowsFromText(text, fallbackBook);
+  const have = new Set(mbLoad().map(mbSig));
+  const seen = new Set();
+  const fresh = [], dupes = [];
+  for (const b of parsed.bets) {
+    const sig = mbSig(b);
+    if (have.has(sig) || seen.has(sig)) dupes.push(b);
+    else { seen.add(sig); fresh.push(b); }
+  }
+  _mbPending = fresh;
+  const mapped = Object.keys(parsed.mapping || {})
+    .filter((k) => parsed.mapping[k] != null);
+  const sample = fresh.slice(0, 8).map((b) => `<tr>
+      <td class="num">${escapeHtml(b.date)}</td>
+      <td>${escapeHtml(b.book)}</td>
+      <td>${escapeHtml(b.desc)}</td>
+      <td class="num">${b.odds > 0 ? "+" : ""}${b.odds}</td>
+      <td class="num">${mbMoney(b.stake)}</td>
+      <td class="num">${escapeHtml(b.result)}</td>
+    </tr>`).join("");
+  box.innerHTML = `
+    <div class="mb-bulk-summary">
+      ${fresh.length} bet(s) ready to add
+      ${dupes.length ? ` · ${dupes.length} duplicate(s) skipped (already logged)` : ""}
+      ${parsed.skipped.length ? ` · ${parsed.skipped.length} row(s) unreadable` : ""}
+      ${mapped.length ? `<span class="mb-bulk-cols">columns matched: ${mapped.join(", ")}</span>` : ""}
+    </div>
+    ${parsed.skipped.slice(0, 5).map((s) =>
+      `<div class="mb-warn">row ${s.line}: ${escapeHtml(s.reason)}</div>`).join("")}
+    ${fresh.length ? `
+      <div class="card" style="padding:0;overflow-x:auto;margin:10px 0">
+        <table class="agate"><thead><tr><th>Date</th><th>Book</th><th>Bet</th>
+          <th>Odds</th><th>Stake</th><th>Result</th></tr></thead>
+        <tbody>${sample}</tbody></table></div>
+      ${fresh.length > 8 ? `<div class="mb-import-note">…and ${fresh.length - 8} more</div>` : ""}
+      <button class="btn mb-add" type="button" onclick="mbBulkCommit()">
+        Add ${fresh.length} bet(s)</button>`
+    : `<div class="mb-import-note">Nothing new to add from that file.</div>`}`;
+}
+
 function renderMyBets() {
   const host = document.getElementById("mybets-body");
   if (!host) return;
@@ -6478,6 +6719,28 @@ function renderMyBets() {
       Everything stays in this browser; use Export to back it up or move it to another device.
     </div>
     ${form}
+    <details class="card mb-import">
+      <summary>Bulk import — a CSV from your sportsbook, or a Juice Reel export</summary>
+      <p class="mb-import-note">The free version of bet syncing: every book (and Juice
+      Reel itself) can export your bet history as a spreadsheet/CSV. Choose the file or
+      paste the rows — columns are matched by their header names (date, bet, odds,
+      stake/risk, result…), in any order. Rows without a book column are filed under the
+      Book selected in the form above. Re-importing the same export is safe: bets you
+      already logged are skipped, not doubled. Nothing uploads.</p>
+      <div class="mb-form-row">
+        <label class="btn mb-io" style="cursor:pointer">Choose CSV<input type="file"
+          accept=".csv,.txt,.tsv,text/csv,text/plain,text/tab-separated-values"
+          style="display:none" onchange="mbBulkFile(this)"></label>
+        <span style="color:var(--text-mute);font-size:var(--fs-sm)">or paste rows below,
+          then Preview:</span>
+      </div>
+      <textarea id="mb-bulk-text" rows="4" spellcheck="false"
+        placeholder="Date,Bet,Odds,Risk,Result&#10;2026-08-09,Yankees ML,-125,25,Won"></textarea>
+      <div class="mb-form-row">
+        <button class="btn" type="button" onclick="mbBulkPaste()">Preview</button>
+      </div>
+      <div id="mb-bulk-preview"></div>
+    </details>
     <div class="stats">
       ${tile("Net profit", mbMoney(st.profit, true), `${st.settled} settled bet(s)`, pcolor(st.profit))}
       ${tile("ROI", st.roi == null ? "—" : (100 * st.roi).toFixed(1) + "%", "profit ÷ staked")}

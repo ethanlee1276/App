@@ -4072,6 +4072,19 @@ select.calc-in { width: auto; font-weight: 600; }
 .mb-act.del:hover { border-color: var(--bad); color: var(--bad); }
 .mb-table td:nth-child(3) { max-width: 240px; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
+.mb-import { margin-bottom: 18px; }
+.mb-import summary { cursor: pointer; font-weight: 700;
+  color: var(--text-dim); }
+.mb-import summary:hover { color: var(--text); }
+.mb-import textarea { width: 100%; font: var(--fs-sm)/1.5 ui-monospace,
+  SFMono-Regular, Menlo, monospace; background: var(--bg-2);
+  color: var(--text); border: var(--hairline) solid var(--border);
+  padding: 8px 10px; margin: 8px 0; resize: vertical; }
+.mb-import-note { color: var(--text-mute); font-size: var(--fs-sm);
+  margin: 8px 0; }
+.mb-bulk-summary { font-weight: 700; margin-top: 10px; }
+.mb-bulk-cols { display: block; font-weight: 400; color: var(--text-mute);
+  font-size: var(--fs-xs); margin-top: 2px; }
 
 /* Injury report.
    ------------------------------------------------------------------
