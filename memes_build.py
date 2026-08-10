@@ -37,7 +37,9 @@ MAX_TRACKED = 60
 HOLDER_LOOKUPS = 20
 #: Sparkline points exported per coin — the page draws price over our
 #: own tape, so the series is capped where the drawing stops earning.
-SPARK_POINTS = 60
+#: 120 points at the 15-second live tick is a ~30-minute window, which
+#: is a meme coin's whole arc.
+SPARK_POINTS = 120
 
 
 def gather() -> tuple[list[dict], list[str]]:

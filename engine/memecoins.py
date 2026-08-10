@@ -50,9 +50,13 @@ import time
 from pathlib import Path
 
 HISTORY_PATH = Path("data/cache/memecoin_history.jsonl")
-#: Snapshots older than this are pruned on write. Meme lifecycles are
-#: minutes; six hours of history is generous, and the disk is shared.
-HISTORY_KEEP_S = 6 * 3600
+#: Snapshots older than this are pruned on write. Two hours, down from
+#: six when the scan went to a 15-second tick: the tape is rewritten in
+#: full on every record, nothing downstream reads past an hour
+#: (acceleration = last 3 sightings, LP-drop = last 1, spark ≤ 30 min),
+#: and 4x the snapshot density at the old window was 4x the file for no
+#: signal.
+HISTORY_KEEP_S = 2 * 3600
 
 # --- risk: the GATE ----------------------------------------------------------
 #: Liquidity below this is exit-impossible for anyone but the dev.

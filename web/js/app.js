@@ -6858,6 +6858,10 @@ function mcChartRef(c) {
 //: The rendered board, keyed by mint, so a chart click carries one
 //: validated token id instead of a bag of strings through an onclick.
 let _mcCoins = {};
+//: The coin whose chart is open, surviving re-renders: the board
+//: self-refreshes every few seconds and losing your coin to a data
+//: tick would make the terminal unusable.
+let _mcOpenMint = null;
 
 function mcChartBtn(c, cls) {
   if (!mcChartRef(c) || !MC_B58.test(c.mint || "")) return "";
@@ -6878,6 +6882,7 @@ window.mcShowChart = function (mint, scroll = true) {
   if (!c || !dock) return;
   const ref = mcChartRef(c);
   if (!ref || !MC_B58.test(ref.addr || "")) return;
+  _mcOpenMint = mint;
   const src = ref.kind === "gt"
     ? `https://www.geckoterminal.com/solana/pools/${ref.addr}?embed=1&info=0&swaps=0`
     : `https://dexscreener.com/solana/${ref.addr}?embed=1&theme=dark&info=0`;
@@ -7123,15 +7128,40 @@ async function renderMemes() {
       than silently scored as safe. Volume acceleration and the sparklines run off our own
       snapshot tape and need a few sightings of a coin — young boards under-read them
       honestly. The Live chart button opens the venue’s own candle chart for the pool.
-      Updated ${escapeHtml((d.generated_at || "").slice(11, 16))}; refreshes with the site.</p>`;
+      Updated ${escapeHtml((d.generated_at || "").slice(11, 16))}; the launcher rescans
+      every ~15 seconds (new-coin discovery ~25s — the free feeds’ rate-limit ceiling),
+      and this page re-pulls on the same clock without disturbing an open chart.</p>`;
   bindSubtabs(host);
   // Land on candles, not on a menu — but never yank someone out of the
   // room they chose last time, and never scroll a page that just opened.
+  // A re-render keeps the coin the user had open, falling back to the
+  // top of the board only when that coin left it.
   const dock = document.getElementById("mc-chart-dock");
   if (chartable.length && dock && !dock.closest(".subgroup").hidden) {
-    mcShowChart(chartable[0].mint, false);
+    const want = (_mcOpenMint && byMint[_mcOpenMint]
+                  && mcChartRef(byMint[_mcOpenMint]))
+      ? _mcOpenMint : chartable[0].mint;
+    mcShowChart(want, false);
   }
 }
+
+/* The board self-refreshes while you watch. The launcher rebuilds the
+   JSON every ~15 seconds (its own thread — see launch.py), so the page
+   re-pulls on a matching clock. Two refusals keep it civil: a hidden
+   tab never polls, and an OPEN live chart is never yanked — the candle
+   iframe is the venue's own stream and already moves second by second;
+   re-rendering under it would reload the chart every tick, which is
+   the one way to make a live terminal feel broken. The rocket/danger/
+   board rooms refresh freely because nothing in them holds state. */
+const MEMES_POLL_MS = 20000;
+setInterval(() => {
+  if (state.view !== "memes" || document.hidden) return;
+  const dock = document.getElementById("mc-chart-dock");
+  const watching = dock && dock.querySelector("iframe")
+    && !dock.closest(".subgroup").hidden;
+  if (watching) return;
+  renderMemes();
+}, MEMES_POLL_MS);
 
 /* ============================================================
    Fantasy Football — usage trends, buy-low/sell-high, game scripts

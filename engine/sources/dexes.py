@@ -40,11 +40,21 @@ DEX_BASE = "https://api.dexscreener.com"
 GT_BASE = "https://api.geckoterminal.com/api/v2"
 
 #: Meme coins move in minutes; a cached snapshot older than this is a
-#: painting of a market that no longer exists. Still cached, because the
-#: 60-second site refresh must not turn into 60 requests a minute.
-HOT_TTL = 55
-#: Discovery lists (trending/new/boosts) can be a little staler.
-DISCOVERY_TTL = 120
+#: painting of a market that no longer exists. The launcher's dedicated
+#: meme loop ticks every ~15s (launch.py MEMES_LIVE_S), so this must sit
+#: BELOW that or every tick is a cache no-op — and it must not go much
+#: lower, because the cache is what turns "poll fast" into "poll fast
+#: without getting the IP rate-limit banned, after which NOTHING updates".
+#: Rate math at these values: DexScreener pairs = 2 batch calls per 15s
+#: tick = 8/min against a 300/min limit.
+HOT_TTL = 12
+#: Discovery (GT new + trending — the coins-moving-IN-and-OUT feed).
+#: Ethan asked for ~5s; the reason this is 25 and not 5 is GeckoTerminal's
+#: free tier: ~30 req/min TOTAL, and discovery costs two calls. At 5s
+#: that is 24/min on discovery alone; at 25s it is ~4.8/min, leaving the
+#: rest of the budget as margin. The unique buyers/sellers ride the same
+#: payload, so this is also their refresh rate.
+DISCOVERY_TTL = 25
 
 
 def _get_json(url: str, cache_name: str, ttl: int):

@@ -1711,6 +1711,37 @@ LIVE_FAST_S = 12
 LIVE_IDLE_S = 180
 
 
+#: The meme board's own clock. Ethan: "we need that to check like every
+#: 5 seconds or whatever you think is good bc coins move in and out
+#: quick." 15, not 5, and the number is arithmetic rather than taste:
+#: GeckoTerminal's free tier is ~30 req/min and the coins-moving-in-and-
+#: out feed (new + trending pools) costs two calls per scan — at 5s that
+#: is 24/min on discovery alone, and a rate-limited IP updates NOTHING.
+#: At a 15s tick with DISCOVERY_TTL=25 the fetch layer spends ~4.8/min
+#: on GT and ~8/min on DexScreener's 300/min pair budget, which leaves
+#: room for the holder lookups and for being wrong about the limits.
+#: Every tick also lays a snapshot on the tape, so the ignition signal —
+#: a second derivative — sharpens 4x versus the old 60s ride-along.
+MEMES_LIVE_S = 15
+
+
+def _live_memes_refresher() -> None:
+    """Rebuild the meme-coin board on its own fast clock.
+
+    The UFC pattern: a dedicated thread, because a market that moves in
+    seconds cannot ride the 60-second cycle the rest of the site uses —
+    but unlike a fight card there is no idle state to back off to; the
+    Solana casino never closes. The fetch-layer TTLs are the real
+    throttle (see engine/sources/dexes.py), so a tick that arrives
+    before fresh data is cheap."""
+    while True:
+        try:
+            _run_build(["memes_build.py", "--out", "web/data/memecoins.json"])
+        except Exception:  # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(MEMES_LIVE_S)
+
+
 def _live_ufc_refresher() -> None:
     """Poll the live fight feed fast while a bout is on, slowly otherwise."""
     import json as _json
@@ -4757,6 +4788,10 @@ def main() -> None:
         threading.Thread(target=_live_ufc_refresher, daemon=True).start()
         print(f"  UFC live fights: every {LIVE_FAST_S}s while a bout is on, "
               f"{LIVE_IDLE_S}s otherwise.")
+        # And the meme board's clock — coins move in and out in minutes.
+        threading.Thread(target=_live_memes_refresher, daemon=True).start()
+        print(f"  Meme coins: every {MEMES_LIVE_S}s (discovery ~25s — the "
+              f"free tier's honest ceiling).")
         try:
             from engine.oddsbudget import summary as _bsum
             if _with_odds():

@@ -75,6 +75,21 @@ The firehose tier the spec prices out (PumpPortal WebSockets, Helius
 gRPC/LaserStream, Solana Tracker, Birdeye paid tiers) is **parked**, not
 forgotten — the map in §7 lists every signal that needs it.
 
+**Scan cadence — and why it is 15 seconds, not 5.** The launcher runs a
+dedicated meme loop (`MEMES_LIVE_S = 15`, its own thread beside the UFC
+live poller): every tick refreshes prices/volume/txns via DexScreener
+(TTL 12s → 2 batch calls per tick ≈ 8/min against a 300/min budget) and
+every ~25s the discovery feed — GT new + trending, the coins-moving-in-
+and-out signal — refreshes (TTL 25s → ~4.8/min against GT's ~30/min
+TOTAL free budget, which also carries the unique-buyer counts). At the
+5-second cadence the operator first asked for, discovery alone would
+spend 24 of GT's 30 calls per minute; the first 429 turns "faster" into
+"frozen". Every tick lays a snapshot on the tape, so acceleration — the
+ignition signal — sharpens 4x versus the old 60-second ride-along. The
+page re-pulls the board on a matching ~20s clock, never while a live
+chart is open (the candle iframe is the venue's own stream and already
+moves second-by-second — that IS the 5-second view).
+
 DexScreener boosts are read twice: once as a discovery roster (boosted
 tokens are tokens someone wants seen) and once as a **risk point** —
 paid promotion is a signal, just not the one the promoter intends.

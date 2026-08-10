@@ -383,6 +383,47 @@ def test_holders_and_charts_are_wired_end_to_end():
     assert "top10_share" in js and "Top 10" in js
 
 
+def test_the_live_cadence_is_fast_but_stays_under_the_free_limits():
+    """Ethan: "check like every 5 seconds ... coins move in and out
+    quick." The loop is 15s and discovery ~25s, NOT 5 — GeckoTerminal's
+    free tier is ~30 req/min total and discovery costs two calls, so 5s
+    would spend 24/min on discovery alone and the first 429 freezes
+    everything. These pins are the margin math; loosening them is a
+    rate-limit decision, not a style one."""
+    from engine.sources import dexes
+    launch = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    m = __import__("re").search(r"MEMES_LIVE_S\s*=\s*(\d+)", launch)
+    assert m, "the dedicated meme loop lost its clock"
+    tick = int(m.group(1))
+    assert 10 <= tick <= 30, f"tick {tick}s — under 10 risks bans, over 30 is the old crawl"
+    # Prices must actually refetch on each tick (TTL below the tick), and
+    # discovery must stay inside GT's total budget (2 calls per TTL).
+    assert dexes.HOT_TTL < tick, "every tick would be a cache no-op"
+    assert 20 <= dexes.DISCOVERY_TTL <= 60, \
+        f"discovery TTL {dexes.DISCOVERY_TTL}s breaks the 30/min GT budget math"
+    assert "_live_memes_refresher" in launch
+    assert "threading.Thread(target=_live_memes_refresher" in launch, \
+        "the loop exists but nothing starts it"
+    # And the tape window matches the density (nothing reads past 1h).
+    assert mc.HISTORY_KEEP_S <= 3 * 3600
+
+
+def test_the_page_polls_on_a_matching_clock_without_yanking_charts():
+    """A self-refreshing terminal that reloads the chart you are reading
+    every tick is worse than a stale one. The poll must refuse hidden
+    tabs and open charts, and a re-render must restore the user's coin."""
+    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    i = js.index("const MEMES_POLL_MS")
+    block = js[i:i + 900]
+    assert 'state.view !== "memes"' in block, "polls every page, not just this one"
+    assert "document.hidden" in block, "polls background tabs"
+    assert "iframe" in block and "if (watching) return;" in block, \
+        "an open live chart gets reloaded every tick"
+    assert "_mcOpenMint" in js[js.index("window.mcShowChart"):
+                               js.index("window.mcShowChart") + 600], \
+        "the open coin is not remembered across re-renders"
+
+
 def test_the_meme_page_is_a_charts_first_terminal():
     """Ethan: 'obv we wanna show charts and shit first.' The page uses
     the shared sub-tab rooms, Charts is the FIRST room, the terminal has
@@ -395,7 +436,10 @@ def test_the_meme_page_is_a_charts_first_terminal():
     assert 'subtabbedHTML("memes"' in body
     assert body.index('["charts", "Charts"') < body.index('["rocket",')
     assert "mc-picker" in body and 'class="mc-pick"' in body
-    assert "mcShowChart(chartable[0].mint, false)" in body
+    # Auto-open restores the user's coin across the self-refresh, falling
+    # back to the top of the board only when that coin left it.
+    assert "mcShowChart(want, false)" in body
+    assert "_mcOpenMint" in body and "chartable[0].mint" in body
     assert "bindSubtabs(host)" in body
     launch = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
     for host_ in ("api.dexscreener.com", "api.geckoterminal.com",
