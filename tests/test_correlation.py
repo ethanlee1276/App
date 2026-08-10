@@ -208,6 +208,77 @@ def test_non_recommended_rows_are_ignored_by_caps():
     assert rows[1]["stake_units"] == 9.0   # untouched: it isn't a bet
 
 
+# --- hoops pair flags (WNBA/NBA §7): mechanisms named, nothing priced --------
+def _hoop(player, team, opp, market="pts", side="OVER", rec=True):
+    return {"player": player, "team": team, "opponent": opp,
+            "market": market, "side": side, "recommended": rec,
+            "game_date": "2026-08-10", "quality": 80.0}
+
+
+def test_a_made_three_is_three_points():
+    """Same player, pts Over + fg3m Over: one bet wearing two markets."""
+    from engine.correlation import flag_hoops_correlations
+    a = _hoop("A Wilson", "LVA", "NYL", "pts")
+    b = _hoop("A Wilson", "LVA", "NYL", "fg3m")
+    out = flag_hoops_correlations([a, b])
+    assert out["flagged"] == 2
+    assert any("one bet wearing two markets" in c for c in a["correlations"])
+
+
+def test_a_team_stack_names_both_directions_of_the_mechanism():
+    """In hoops the same-team pair is NOT simply positive: pace helps
+    both, the same shots cannot feed both. The flag says so instead of
+    picking a side."""
+    from engine.correlation import flag_hoops_correlations
+    a = _hoop("A", "LVA", "NYL")
+    b = _hoop("B", "LVA", "NYL")
+    flag_hoops_correlations([a, b])
+    note = a["correlations"][0]
+    assert "Pace helps both" in note
+    assert "cannot feed both" in note
+
+
+def test_overs_on_both_sides_of_one_game_share_the_pace_engine():
+    from engine.correlation import flag_hoops_correlations
+    a = _hoop("A", "LVA", "NYL")
+    b = _hoop("B", "NYL", "LVA")
+    flag_hoops_correlations([a, b])
+    assert any("pace is the shared engine" in c.lower()
+               for c in a["correlations"])
+
+
+def test_hoops_never_rejects_and_that_is_the_design():
+    """Baseball has a true incoherence to reject; basketball does not.
+    Every hoops pair argument runs through pace or usage, both cut with
+    game script, and deciding they outweigh the model is pricing. A
+    rejection appearing here means somebody manufactured a rule the sport
+    does not contain."""
+    from engine.correlation import flag_hoops_correlations
+    recs = [_hoop("A", "LVA", "NYL", "pts"),
+            _hoop("A", "LVA", "NYL", "fg3m"),
+            _hoop("B", "LVA", "NYL", "pts"),
+            _hoop("C", "NYL", "LVA", "pts")]
+    out = flag_hoops_correlations(recs)
+    assert out["rejected"] == 0
+    assert all(r["recommended"] for r in recs), "flags must never reject"
+
+
+def test_unders_and_non_scoring_markets_stay_out_of_the_pace_flags():
+    from engine.correlation import flag_hoops_correlations
+    a = _hoop("A", "LVA", "NYL", "pts", side="UNDER")
+    b = _hoop("B", "NYL", "LVA", "reb")
+    out = flag_hoops_correlations([a, b])
+    assert out["flagged"] == 0
+    assert "correlations" not in a and "correlations" not in b
+
+
+def test_different_games_never_pool():
+    from engine.correlation import flag_hoops_correlations
+    a = _hoop("A", "LVA", "NYL")
+    b = _hoop("B", "SEA", "PHX")
+    assert flag_hoops_correlations([a, b])["flagged"] == 0
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

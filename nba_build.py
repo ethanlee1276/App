@@ -622,6 +622,18 @@ def main() -> None:
                           f"evidence only — nothing re-graded.")
             except Exception:                                # noqa: BLE001
                 pass
+            # §7's explicit pair flags — mechanisms named, nothing
+            # rejected. Basketball has no true incoherence to mirror
+            # baseball's; every hoops pair argument runs through pace or
+            # usage, and deciding those outweigh the model is pricing.
+            try:
+                from engine.correlation import flag_hoops_correlations
+                _corr = flag_hoops_correlations(recs)
+                if _corr["flagged"]:
+                    print(f"Correlations: {_corr['flagged']} pair flag(s) "
+                          f"named on the card — evidence, nothing rejected.")
+            except Exception:                                # noqa: BLE001
+                pass
             out["recommendations"] = recs
             # SAY HOW MANY FACES JOINED. Ethan ingested 100 of 105 WNBA
             # photos and every card still drew initials, because the

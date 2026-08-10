@@ -223,7 +223,7 @@ listed honestly rather than faked).
 | §7 Market tiers | ✅ | `WNBA_TIERS` — reb/ast/PRA tier 1, points tier 2, threes/steals/blocks tier 3. This inverts nothing from the NBA; the NBA simply has no tier table |
 | §7 Correct distribution | ✅ | `prob.p_over` — negative binomial for counts, normal for points; never an average treated as a median |
 | §7 Volatility rating | ✅ | Per-stat CV drives the spread on every card |
-| §7 Correlation engine | 🟡 | Correlated plays share the per-game cap; explicit positive/negative pair flags 📋 for this league |
+| §7 Correlation engine | 🟡 | Correlated plays share the per-game cap. **Explicit pair flags BUILT 2026-08-10** (`correlation.flag_hoops_correlations`): a made three IS three points, so one player's pts + fg3m Overs are flagged one bet wearing two markets; a same-team scoring stack names BOTH directions of its mechanism (pace helps both, the same shots cannot feed both) instead of picking a side; Overs on both sides of one game share the pace engine. **Flags and never rejects, and that is the design** — baseball has a true incoherence to reject (the same pitches), basketball does not: every hoops pair argument runs through pace or usage, both cut with game script, and deciding they outweigh the model is a pricing change. A test pins that a rejection appearing here fails |
 | §8 Unified 0–100 grade | ✅ | `quality.quality_score` with the spec's exact weights (40/20/15/10/10/5) |
 | §8 Below 70: no bet, no leans | ✅ | `LeagueTuning.min_grade = 70`, gating the WNBA only |
 | §8 Fractional Kelly | ✅ | `quality.kelly_stake` — quarter default, half only for an A+ in tier 1 |

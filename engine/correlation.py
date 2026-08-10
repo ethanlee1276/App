@@ -286,3 +286,88 @@ def apply_exposure_caps(recs: list[dict], game_bets: list[dict]) -> list[str]:
                      f"{len(dropped)} bet(s) dropped under the "
                      f"{MIN_STAKE_UNITS}u minimum")
     return notes
+
+
+#: Scalpy's scoring markets, for the hoops pair flags below.
+HOOPS_SCORING = {"pts", "fg3m"}
+HOOPS_MARKETS = {"pts", "reb", "ast", "fg3m"}
+
+
+def flag_hoops_correlations(recs: list[dict]) -> dict:
+    """WNBA/NBA §7: name the pair mechanisms — and price nothing.
+
+    Baseball has a true incoherence to reject ("the same pitches can't
+    strike out the side AND get hit"). Basketball does not: every hoops
+    pair argument runs through pace or usage, and both cut in directions
+    that depend on game script. So this flags and NEVER rejects — naming
+    a mechanism is evidence, deciding it outweighs the model is pricing,
+    and inventing a hoops incoherence to mirror baseball's would be
+    manufacturing a rule the sport does not contain.
+
+    Three structural pairs, each named by its mechanism:
+
+    SAME PLAYER, two OVERs (pts + fg3m): a made three IS three points —
+      one bet wearing two markets, the closest hoops gets to incoherence's
+      mirror image. Flagged as near-duplicate exposure.
+    SAME TEAM, two+ scoring OVERs: one offence's possessions wearing
+      several jerseys — the usage side cuts AGAINST the pair (they share
+      the same shots), the pace side cuts with it. Both named.
+    SAME GAME, scoring OVERs on BOTH teams: one bet on a fast game.
+
+    Mutates the dicts (``correlations`` lists); returns a slate summary.
+    """
+    on = [r for r in recs if r.get("recommended")]
+    flagged = 0
+
+    # Same player, several overs — a made three is three points.
+    by_player: dict = {}
+    for r in on:
+        if r.get("side") == "OVER" and r.get("market") in HOOPS_MARKETS:
+            by_player.setdefault((r.get("player"), _game_key(r)), []).append(r)
+    for rows in by_player.values():
+        mkts = {r.get("market") for r in rows}
+        if "pts" in mkts and "fg3m" in mkts:
+            for r in rows:
+                if r.get("market") in ("pts", "fg3m"):
+                    other = "fg3m" if r["market"] == "pts" else "pts"
+                    r.setdefault("correlations", []).append(
+                        "A made three IS three points — this and his "
+                        f"{other} Over are one bet wearing two markets; "
+                        "counted as combined exposure")
+                    flagged += 1
+
+    by_game: dict = {}
+    for r in on:
+        if r.get("side") == "OVER" and r.get("market") in HOOPS_SCORING:
+            by_game.setdefault(_game_key(r), []).append(r)
+    for rows in by_game.values():
+        # One offence, several jerseys — with the usage caveat named,
+        # because in hoops the same-team pair is NOT simply positive.
+        by_team: dict = {}
+        for r in rows:
+            by_team.setdefault(r.get("team"), []).append(r)
+        for team, stack in by_team.items():
+            # DISTINCT PLAYERS. One player's pts + fg3m is the near-
+            # duplicate pair above, not a stack — the first cut counted
+            # rows and printed "stacked with A Wilson" on A Wilson's own
+            # card, a flag naming the player as her own teammate.
+            players = {s.get("player") for s in stack}
+            if len(players) >= 2:
+                for r in stack:
+                    others = sorted(players - {r.get("player")})
+                    r.setdefault("correlations", []).append(
+                        f"One offence's possessions, several jerseys — "
+                        f"stacked with {', '.join(others)} ({team}). Pace "
+                        f"helps both; the same shots cannot feed both")
+                    flagged += 1
+        # Both sides of one game over — one bet on a fast game. Two
+        # teams, not two rows: a single player double-counted above must
+        # not conjure an opponent.
+        if len({t for t in by_team if t}) >= 2:
+            for r in rows:
+                r.setdefault("correlations", []).append(
+                    "Scoring Overs on both sides of one game — pace is "
+                    "the shared engine; counted as combined exposure")
+                flagged += 1
+
+    return {"flagged": flagged, "rejected": 0}
