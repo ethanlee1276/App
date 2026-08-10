@@ -27,9 +27,17 @@ from engine.sources.dexes import (fetch_new_pools, fetch_pairs_for,
                                   parse_boosts, parse_dex_pairs,
                                   parse_gt_pools)
 from engine.sources.fetch import DataUnavailable
+from engine.sources import solrpc
 
 #: Enrich at most this many mints per run — two DexScreener batch calls.
 MAX_TRACKED = 60
+#: Holder-concentration lookups per run: one RPC POST each, ten-minute
+#: cache, discovery order (trending first — the coins read first get
+#: measured first). The public RPC's rate limits are why this is not 60.
+HOLDER_LOOKUPS = 20
+#: Sparkline points exported per coin — the page draws price over our
+#: own tape, so the series is capped where the drawing stops earning.
+SPARK_POINTS = 60
 
 
 def gather() -> tuple[list[dict], list[str]]:
@@ -78,7 +86,25 @@ def gather() -> tuple[list[dict], list[str]]:
                 if gt.get(k):
                     row[k] = gt[k]
             row.setdefault("created_at", gt.get("created_at"))
+            row.setdefault("pool", gt.get("pool"))
         rows.append(row)
+
+    # Holder concentration off the public Solana RPC — the one
+    # Phantom/Axiom holder metric the free tier reaches. Failures are
+    # counted, not fatal: a coin without the measurement shows "—", and
+    # unmeasured never scores as safe (or as dangerous).
+    fails = 0
+    for r in rows[:HOLDER_LOOKUPS]:
+        try:
+            h = solrpc.parse_holder_slice(
+                solrpc.fetch_holder_slice(r["mint"]))
+            if h:
+                r["holders"] = h
+        except DataUnavailable:
+            fails += 1
+    if fails:
+        notes.append(f"solana rpc holders: {fails}/"
+                     f"{min(len(rows), HOLDER_LOOKUPS)} lookup(s) declined")
     return rows, notes
 
 
@@ -93,7 +119,16 @@ def main(argv=None) -> int:
              "notes": notes, "risk_gate": RISK_GATE}
     if rows:
         n_snap = record_snapshots(rows, ts=time.time())
-        board.update(build_board(rows, load_history()))
+        hist = load_history()
+        board.update(build_board(rows, hist))
+        # Per-coin price series off our own tape (the sighting recorded
+        # above is already in it) — the page's sparkline. Compact pairs,
+        # capped, because the board JSON ships to every visitor.
+        for c in board["coins"]:
+            c["spark"] = [[round(h["ts"]), h["price"]]
+                          for h in hist.get(c.get("mint"), [])
+                          if h.get("ts") and h.get("price") is not None
+                          ][-SPARK_POINTS:]
         print(f"Rocket Radar: {board['n']} coin(s) scored, "
               f"{board['gated']} behind the risk gate, "
               f"{len(board['rocket'])} on the rocket list, "

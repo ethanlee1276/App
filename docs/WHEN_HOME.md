@@ -462,7 +462,12 @@ coins on the first run; expect the rocket list to be THIN until the
 launcher has polled a few minutes, because acceleration needs three
 sightings of a coin on our own tape. Zero coins with fetch-failure notes
 = network; zero coins with clean fetches = a payload shape moved and
-`engine/sources/dexes.py` needs a look. It writes the board JSON and the
+`engine/sources/dexes.py` needs a look. The run also hits Solana's
+public RPC for holder concentration (top-10 % on the page) — a
+"solana rpc holders: N lookups declined" note means that host is
+unreachable or rate-limiting, and the column shows "—" instead of a
+number, which is the honest state. The Live chart buttons need nothing
+from you: they embed the venue's own chart in the browser. It writes the board JSON and the
 snapshot tape — the one non-read-only line in this section, both files
 the launcher rebuilds anyway.
 

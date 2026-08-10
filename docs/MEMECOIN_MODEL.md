@@ -68,7 +68,8 @@ primary sources those terminals themselves sit on:
 |---|---|---|
 | **GeckoTerminal** (`api.geckoterminal.com`) | free, keyless, ~30 rpm | New-pools + trending-pools discovery, and the free tier's crown jewel: **unique buyers and sellers per window** — the anti-wash signal raw volume cannot fake cheaply |
 | **DexScreener** (`api.dexscreener.com`) | free, keyless, 300 rpm (pairs) | Batched pair snapshots (30 mints per call): price, liquidity, FDV, per-window volume and price change, buy/sell counts, pair age, socials, and the **paid-boost flag** |
-| **Our own snapshot tape** (`data/cache/memecoin_history.jsonl`) | free | Per-coin sightings each refresh; prunes at 6 h. No free endpoint hands out per-minute history, so **acceleration — the core "igniting" signal — comes from our own polling**, exactly like the sports line-movement tape |
+| **Solana public RPC** (`api.mainnet-beta.solana.com`) | free, keyless | `getTokenSupply` + `getTokenLargestAccounts` in one batched POST per mint: **holder concentration** — the one Phantom/Axiom holder metric reachable without a paid indexer. First 20 coins in discovery order, 10-minute cache, because the public RPC's rate limits are real |
+| **Our own snapshot tape** (`data/cache/memecoin_history.jsonl`) | free | Per-coin sightings each refresh; prunes at 6 h. No free endpoint hands out per-minute history, so **acceleration — the core "igniting" signal — comes from our own polling**, exactly like the sports line-movement tape. Also feeds the page's per-coin sparkline |
 
 The firehose tier the spec prices out (PumpPortal WebSockets, Helius
 gRPC/LaserStream, Solana Tracker, Birdeye paid tiers) is **parked**, not
@@ -101,6 +102,20 @@ Per coin, `engine/memecoins.py::indicators` computes:
 - **LP-drop proxy** — liquidity down > 20% since our last sighting. The
   spec ranks liquidity removal as the single most destructive event a
   holder can experience, and this is the free tier's only eye on it.
+- **Holder concentration** — from the RPC's twenty largest token
+  accounts, with the caveat that makes the number honest:
+  `getTokenLargestAccounts` returns token *accounts*, not people, and
+  for a live coin the largest account is almost always the pool's own
+  vault (or the pump.fun bonding curve) — market structure, not an
+  insider. Exact vault→pool mapping needs a curated list of AMM
+  authority addresses this repo will not hand-maintain (a wrong base58
+  constant misclassifies silently), so the parser reports **both
+  readings**: `top1_share` (raw largest, usually the pool),
+  `top10_ex1_share` (accounts 2–11 — the headline "top-10 holders"
+  number, labelled on the page as excluding the largest account), and
+  `second_share` (the biggest plausible single wallet). Unmeasured is
+  `None`, never zero — "we couldn't look" and "perfectly dispersed"
+  must not be the same value.
 
 ## 5. Scoring
 
@@ -132,6 +147,8 @@ once must not be punished for our tape being short.
 | Wash-trade signature | +30 | the arXiv rule above |
 | Liquidity down >20% since last sighting | +40 | LP pull in progress |
 | Age < 30 minutes | +15 | median rug dies inside an hour |
+| Top-10 accounts (pool excluded) > 30% | +20 | the spec's insider-concentration flag |
+| One non-pool account > 15% | +15 | a single seller can crater it |
 | Paid DexScreener boost | +10 | someone is paying to be seen |
 | No socials at all | +10 | no identity to burn |
 
@@ -143,9 +160,21 @@ together (divergence).
 
 ## 6. Where It Lives
 
+**Charts, two kinds, honestly labelled.** The card sparkline is OUR
+tape — one point per launcher refresh, up to six hours, no external
+bytes. The "Live chart" button opens the venue's own embeddable candle
+chart for the coin's primary pool (DexScreener when we have the pair
+address, GeckoTerminal's pool embed otherwise) in a single dock — the
+same live candles an Axiom terminal shows, because they come from the
+same place. One iframe at a time by design; sixty live embeds is a
+tab-killer. Every address is base58-validated before it touches an
+`onclick` or an iframe `src` — token feeds are attacker-controlled
+strings.
+
 | Piece | File |
 |---|---|
 | Fetches + pure parsers (GT pools, DS pairs/boosts) | `engine/sources/dexes.py` |
+| Holder concentration (Solana RPC, batched, LP caveat) | `engine/sources/solrpc.py` |
 | Tape, indicators, both scores, gate, exits, board | `engine/memecoins.py` |
 | Discovery → enrich → score → `web/data/memecoins.json` | `memes_build.py` |
 | Launcher: refresh each cycle + `--memes` probe + doctor rows | `launch.py` |
@@ -163,10 +192,12 @@ payload shape moved and `engine/sources/dexes.py` needs a look.
 
 **Built, free tier:** discovery (GT new + trending + DS boost roster),
 batched enrichment, snapshot tape, volume/price/buyer acceleration,
-pressure trend, vol spike, liq/MC, wash flag, LP-drop proxy, boost and
-no-socials risk points, cohort-percentile MomentumScore, gated
-RiskScore with reasons, exit channel, the base-rates honesty block, the
-full dimmed-not-hidden board.
+pressure trend, vol spike, liq/MC, wash flag, LP-drop proxy, holder
+concentration (top-10 ex-pool + single-whale, with the §4 caveat),
+boost and no-socials risk points, cohort-percentile MomentumScore,
+gated RiskScore with reasons, exit channel, per-coin sparklines off the
+tape, per-coin live venue chart embeds, the base-rates honesty block,
+the full dimmed-not-hidden board.
 
 **Parked — each needs the paid firehose tier, and each absence is
 stated on the page rather than silently scored as safe:**
@@ -174,7 +205,7 @@ stated on the page rather than silently scored as safe:**
 | Parked signal | What it needs |
 |---|---|
 | Smart-money wallet scoring (following wallets with real hit rates) | indexed wallet P&L (Birdeye/Nansen-class, paid) |
-| Holder velocity (net new holders/min) | token-holder snapshots per minute (Helius gRPC) |
+| Holder velocity (net new holders/min) and exact LP-vault exclusion | token-holder snapshots per minute (Helius gRPC); curated AMM authority lists |
 | Bundle & sniper detection (same-block coordinated buys) | block-level tx streams (PumpPortal/LaserStream) |
 | Dev-wallet sell alerts | creator-wallet tracing (Helius webhooks) |
 | Bonding-curve stage tracking (pump.fun internals) | PumpPortal WebSocket firehose |

@@ -6198,6 +6198,64 @@ function mcPct(v) {
   return `<span style="color:${c};font-weight:600">${v > 0 ? "+" : ""}${v.toFixed(1)}%</span>`;
 }
 
+/* Price over our own snapshot tape — honest resolution (one point per
+   launcher refresh, up to 6h), self-contained, no external bytes. The
+   LIVE candle chart is the venue's own embed, opened per coin below. */
+function mcSpark(series, w = 300, h = 44) {
+  const pts = (series || []).filter((p) => p && p[1] != null);
+  if (pts.length < 2) return "";
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const sx = (t) => x1 === x0 ? 0 : ((t - x0) / (x1 - x0)) * (w - 2) + 1;
+  const sy = (v) => y1 === y0 ? h / 2 : h - 3 - ((v - y0) / (y1 - y0)) * (h - 6);
+  const d = pts.map((p) => `${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join(" ");
+  const up = ys[ys.length - 1] >= ys[0];
+  return `<svg class="mc-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"
+    role="img" aria-label="price over our snapshot tape"><polyline points="${d}"
+    fill="none" stroke="var(--${up ? "good" : "bad"})" stroke-width="1.5"/></svg>`;
+}
+
+/* Addresses come from third-party feeds and end up inside an onclick and
+   an iframe src — nothing that fails the base58 shape gets either. */
+const MC_B58 = /^[1-9A-HJ-NP-Za-km-z]{25,50}$/;
+
+function mcChartRef(c) {
+  if (c.pair && MC_B58.test(c.pair)) return { addr: c.pair, kind: "ds" };
+  if (c.pool && MC_B58.test(c.pool)) return { addr: c.pool, kind: "gt" };
+  return null;
+}
+
+function mcChartBtn(c, cls) {
+  const ref = mcChartRef(c);
+  if (!ref) return "";
+  const label = escapeHtml((c.symbol || c.name || "").replace(/'/g, "")).slice(0, 20);
+  return `<button class="${cls || "btn mc-chart-btn"}" type="button"
+    onclick="mcShowChart('${ref.addr}','${ref.kind}','${label}')"
+    title="Open the venue’s own live candle chart for this pool">Live chart</button>`;
+}
+
+/* ONE chart at a time, in a dock under the tiles. Sixty live iframes is
+   a tab-killer; one, where you asked for it, is a terminal. The embed is
+   the venue's own page for the pool, so the candles are as live as
+   Axiom's — they come from the same place. */
+window.mcShowChart = function (addr, kind, label) {
+  const dock = document.getElementById("mc-chart-dock");
+  if (!dock || !MC_B58.test(addr || "")) return;
+  const src = kind === "gt"
+    ? `https://www.geckoterminal.com/solana/pools/${addr}?embed=1&info=0&swaps=0`
+    : `https://dexscreener.com/solana/${addr}?embed=1&theme=dark&info=0`;
+  dock.innerHTML = `<div class="card mc-chart-card">
+    <div class="card-head"><div class="player">${escapeHtml(label || "Live chart")}
+      <span style="color:var(--text-mute);font-weight:400"> — live from ${
+        kind === "gt" ? "GeckoTerminal" : "DexScreener"}</span></div>
+      <button class="btn" type="button"
+        onclick="document.getElementById('mc-chart-dock').innerHTML=''">Close</button></div>
+    <iframe src="${src}" loading="lazy" title="Live pool chart"
+      referrerpolicy="no-referrer" allow="clipboard-write"></iframe></div>`;
+  dock.scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
 /* One coin's identity cell, shared by cards and the board table. */
 function mcName(c) {
   const label = c.symbol || c.name || (c.mint || "").slice(0, 8);
@@ -6256,6 +6314,8 @@ async function renderMemes() {
     if (i.ratio_m5 != null) ch.push(`<span class="chip${i.ratio_m5 >= 1.2 ? " up" : i.ratio_m5 < 1 ? " down" : ""}" title="Buys per sell, last 5 minutes.">b/s ${i.ratio_m5.toFixed(2)}</span>`);
     if (i.vol_spike != null) ch.push(`<span class="chip" title="5-minute volume vs its share of the hour. 1.0 = steady pace.">vol ×${i.vol_spike.toFixed(1)}</span>`);
     if (i.buyers_m5 != null) ch.push(`<span class="chip" title="UNIQUE buying wallets in 5 minutes (GeckoTerminal) — broad wallet count is the anti-wash signal.">${i.buyers_m5} buyers/5m</span>`);
+    if (i.top10_share != null) ch.push(`<span class="chip${i.top10_share > 0.30 ? " down" : ""}" title="Share of supply held by the ten largest accounts EXCLUDING the largest — which is almost always the pool’s own vault, market structure rather than an insider. Over 30% is the insider-concentration flag.">top10 ${(i.top10_share * 100).toFixed(0)}%</span>`);
+    if (i.whale_share != null && i.whale_share > 0.15) ch.push(`<span class="chip down" title="The largest single account after the pool. One seller this size can crater the chart alone.">whale ${(i.whale_share * 100).toFixed(0)}%</span>`);
     if (i.vol_accel != null) ch.push(`<span class="chip${i.vol_accel > 0 ? " up" : ""}" title="Volume second derivative off our own snapshot tape — the ignition signal.">accel ${i.vol_accel > 0 ? "+" : ""}${i.vol_accel.toFixed(0)}</span>`);
     if (i.wash_flag) ch.push(`<span class="chip down" title="Volume spiked >500% while price moved <5% — volume with no one in it (arXiv:2507.01963).">wash pattern</span>`);
     if (c.boosted) ch.push(`<span class="chip down" title="Someone is PAYING DexScreener to promote this token.">paid promo</span>`);
@@ -6279,6 +6339,8 @@ async function renderMemes() {
           style="font-weight:800;color:${riskColor(c.risk)}">risk ${c.risk}</span>
       </div>
       <div class="chips" style="margin-top:10px">${chipsFor(c)}</div>
+      ${mcSpark(c.spark) ? `<div class="mc-spark-wrap" title="Price over our own snapshot tape — one point per refresh, up to six hours">${mcSpark(c.spark)}</div>` : ""}
+      ${mcChartBtn(c) ? `<div style="margin-top:10px">${mcChartBtn(c)}</div>` : ""}
     </article>`).join("");
 
   const exitCards = (d.exits || []).map((m) => byMint[m]).filter(Boolean)
@@ -6292,6 +6354,8 @@ async function renderMemes() {
       </div>
       <ul class="mc-exit-why">${(c.exit_why || []).map((w) =>
         `<li>${escapeHtml(w)}</li>`).join("")}</ul>
+      ${mcSpark(c.spark) ? `<div class="mc-spark-wrap">${mcSpark(c.spark)}</div>` : ""}
+      ${mcChartBtn(c) ? `<div style="margin-top:10px">${mcChartBtn(c)}</div>` : ""}
     </article>`).join("");
 
   const rows = (d.coins || []).slice()
@@ -6310,8 +6374,10 @@ async function renderMemes() {
         <td class="num">${mcMoney((c.volume || {}).h1)}</td>
         <td class="num">${i.ratio_m5 != null ? i.ratio_m5.toFixed(2) : "—"}</td>
         <td class="num">${i.buyers_m5 != null ? i.buyers_m5 : "—"}</td>
+        <td class="num"${i.top10_share != null && i.top10_share > 0.30 ? ` style="color:var(--bad);font-weight:700"` : ""}>${i.top10_share != null ? (i.top10_share * 100).toFixed(0) + "%" : "—"}</td>
         <td class="num" style="color:${heat(c.momentum)};font-weight:700">${c.momentum}</td>
         <td class="num" style="color:${riskColor(c.risk)};font-weight:700">${c.risk}${gated ? `<span class="mc-gate-tag">gated</span>` : ""}</td>
+        <td>${mcChartBtn(c, "mc-chart-link") || ""}</td>
       </tr>`;
     }).join("");
 
@@ -6322,6 +6388,7 @@ async function renderMemes() {
       ${tile("Behind the gate", d.gated || 0, "momentum can’t buy them back")}
       ${tile("Flashing exit", (d.exits || []).length, "the danger channel")}
     </div>
+    <div id="mc-chart-dock"></div>
     <div class="section-title">Rocket list
       <span class="sub">— highest momentum among coins UNDER the risk gate. Momentum is
       cohort-relative order flow: acceleration and unique buyers, not RSI lines. Hover any
@@ -6346,14 +6413,19 @@ async function renderMemes() {
         <th>#</th><th>Coin</th><th>Age</th><th>Price</th><th>5m</th><th>1h</th>
         <th>Liq</th><th>Vol 1h</th><th title="Buys per sell, last 5 minutes">B/S 5m</th>
         <th title="Unique buying wallets, last 5 minutes">Buyers</th>
-        <th>Momentum</th><th>Risk</th>
+        <th title="Supply held by the ten largest accounts, excluding the largest (almost always the pool vault). Measured for the first 20 coins in discovery order.">Top 10</th>
+        <th>Momentum</th><th>Risk</th><th></th>
       </tr></thead><tbody>${rows}</tbody></table></div>
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
-      What this board cannot see (paid firehose tier, deliberately parked — the doc has the
-      map): mint/freeze authority, honeypot checks, dev-wallet sells, bundled snipers,
-      holder velocity, smart-money wallets. Their absence is stated here rather than
-      silently scored as safe. Volume acceleration is measured off our own snapshot tape
-      and needs three sightings of a coin — young boards under-read it honestly.
+      Top-10 holder share comes from Solana’s public RPC and EXCLUDES the largest account,
+      which for a live coin is almost always the trading pool’s own vault — the number
+      judges wallets, not market structure, and “—” means unmeasured, never safe.
+      What this board still cannot see (paid firehose tier, deliberately parked — the doc
+      has the map): mint/freeze authority, honeypot checks, dev-wallet sells, bundled
+      snipers, holder velocity, smart-money wallets. Their absence is stated here rather
+      than silently scored as safe. Volume acceleration and the sparklines run off our own
+      snapshot tape and need a few sightings of a coin — young boards under-read them
+      honestly. The Live chart button opens the venue’s own candle chart for the pool.
       Updated ${escapeHtml((d.generated_at || "").slice(11, 16))}; refreshes with the site.</p>`;
 }
 

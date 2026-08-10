@@ -63,6 +63,13 @@ MIN_LIQ_MC = 0.03
 #: volume spiking >500% while price moves <5% is volume with no one in it.
 WASH_VOL_SPIKE = 5.0
 WASH_PRICE_BAND = 5.0
+#: Holder concentration (Solana RPC, engine/sources/solrpc.py). The
+#: headline number EXCLUDES the largest account — almost always the
+#: pool's own vault — so these thresholds judge wallets, not market
+#: structure. >30% in the next ten accounts is the spec's insider flag;
+#: a single 15% wallet is one decision away from cratering the chart.
+MAX_TOP10_EX1 = 0.30
+MAX_SINGLE_WALLET = 0.15
 #: Risk at or above this never reaches the rocket list.
 RISK_GATE = 60
 
@@ -225,6 +232,13 @@ def indicators(row: dict, hist: list[dict] | None = None) -> dict:
         "buyers_m5": tx5.get("buyers"),
         "sellers_m5": tx5.get("sellers"),
     }
+    # Holder concentration, when the build fetched it (row["holders"],
+    # from the Solana RPC). Absent stays None — "unmeasured" and
+    # "dispersed" must never look identical.
+    h = row.get("holders") or {}
+    out["top10_share"] = h.get("top10_ex1_share")
+    out["top1_share"] = h.get("top1_share")
+    out["whale_share"] = h.get("second_share")
     # The wash rule, arXiv thresholds: big volume, no price.
     out["wash_flag"] = bool(
         out["vol_spike"] is not None and out["vol_spike"] >= WASH_VOL_SPIKE
@@ -306,6 +320,16 @@ def risk_score(row: dict, ind: dict) -> tuple[int, list[str]]:
     if a is not None and a < 30:
         score += 15
         why.append("under 30 minutes old — median rug dies inside an hour")
+    t10 = ind.get("top10_share")
+    if t10 is not None and t10 > MAX_TOP10_EX1:
+        score += 20
+        why.append(f"top-10 accounts (pool excluded) hold {t10:.0%} of "
+                   f"supply — insider-heavy (spec flags >30%)")
+    w = ind.get("whale_share")
+    if w is not None and w > MAX_SINGLE_WALLET:
+        score += 15
+        why.append(f"one account holds {w:.0%} of supply — a single "
+                   f"seller can crater it")
     if row.get("boosted"):
         score += 10
         why.append("someone is PAYING DexScreener to promote this")

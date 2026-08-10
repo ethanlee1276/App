@@ -164,6 +164,11 @@ def parse_dex_pairs(payload) -> dict:
             "symbol": (prime.get("baseToken") or {}).get("symbol", ""),
             "name": (prime.get("baseToken") or {}).get("name", ""),
             "price_usd": _f(prime.get("priceUsd")),
+            # The primary pool's pair address — the live-chart key: both
+            # DexScreener and GeckoTerminal serve an embeddable candle
+            # chart addressed by pair, so the page can show a real chart
+            # without a single byte of chart data passing through us.
+            "pair": prime.get("pairAddress"),
             "fdv": _f(prime.get("fdv")),
             "market_cap": _f(prime.get("marketCap")),
             "liquidity": sum(_f((p.get("liquidity") or {}).get("usd")) or 0

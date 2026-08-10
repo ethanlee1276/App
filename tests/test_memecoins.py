@@ -273,6 +273,62 @@ def test_nothing_journals_and_nothing_touches_the_sports_model():
         assert "log_recommendations" not in src, f
 
 
+def test_holder_parser_excludes_the_pool_reading_and_reports_both():
+    """getTokenLargestAccounts returns token ACCOUNTS, and for a live
+    coin the largest is almost always the pool vault. The parser reports
+    the raw top-1 AND the ex-largest top-10 so the risk rules can judge
+    wallets without hand-maintaining AMM authority lists."""
+    from engine.sources import solrpc
+    payload = [
+        {"id": 0, "result": {"value": {"amount": "1000000"}}},
+        {"id": 1, "result": {"value": [
+            {"address": "P", "amount": "500000"},   # the pool vault
+            {"address": "A", "amount": "200000"},   # the real whale
+            {"address": "B", "amount": "50000"},
+            {"address": "C", "amount": "30000"},
+        ]}},
+    ]
+    h = solrpc.parse_holder_slice(payload)
+    assert h["top1_share"] == 0.5
+    assert h["top10_ex1_share"] == 0.28          # 200k+50k+30k / 1M
+    assert h["second_share"] == 0.2
+    # Unanswerable stays None, never zeros: "unmeasured" and "perfectly
+    # dispersed" must not look identical downstream.
+    assert solrpc.parse_holder_slice([]) is None
+    assert solrpc.parse_holder_slice(
+        [{"id": 0, "result": {"value": {"amount": "0"}}},
+         {"id": 1, "result": {"value": [{"amount": "1"}]}}]) is None
+
+
+def test_a_garbage_mint_never_reaches_the_wire():
+    """Mints come from third-party feeds and end up in URLs and cache
+    filenames — anything that fails the base58 shape is refused before
+    a request exists."""
+    from engine.sources import solrpc
+    from engine.sources.fetch import DataUnavailable as DU
+    for bad in ("", None, "with space", "0OIl_not_b58", "x" * 51,
+                "../../../etc/passwd"):
+        try:
+            solrpc.fetch_holder_slice(bad)
+            raise AssertionError(f"accepted {bad!r}")
+        except DU:
+            pass
+
+
+def test_insider_concentration_scores_and_unmeasured_never_does():
+    row = dict(_merged())
+    row["holders"] = {"top1_share": 0.5, "top10_ex1_share": 0.45,
+                      "second_share": 0.20, "n_accounts": 20}
+    ind = mc.indicators(row)
+    s_with, why = mc.risk_score(row, ind)
+    assert any("insider-heavy" in w for w in why)
+    assert any("single seller" in w for w in why)
+    bare = dict(_merged())
+    s_wo, why_wo = mc.risk_score(bare, mc.indicators(bare))
+    assert s_with == s_wo + 20 + 15
+    assert not any("hold" in w for w in why_wo)
+
+
 def test_the_launcher_actually_refreshes_the_board():
     """Wiring, not mention: refresh_memes must exist, run memes_build
     with the path the page fetches, and be CALLED from refresh_all —
@@ -305,6 +361,26 @@ def test_the_page_is_wired_end_to_end():
     assert '"memes"' in modes[:modes.index("]")]
     order = js[js.index("const VIEW_ORDER"):]
     assert '"memes"' in order[:order.index("]")]
+
+
+def test_holders_and_charts_are_wired_end_to_end():
+    """The build must fetch holders and export the sparkline series; the
+    page must validate addresses BEFORE they touch an onclick or an
+    iframe src — token feeds are attacker-controlled strings."""
+    build = open(os.path.join(ROOT, "memes_build.py"), encoding="utf-8").read()
+    assert "parse_holder_slice" in build and "HOLDER_LOOKUPS" in build
+    assert '"spark"' in build
+    dx = open(os.path.join(ROOT, "engine/sources/dexes.py"),
+              encoding="utf-8").read()
+    assert '"pair": prime.get("pairAddress")' in dx
+    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    assert "function mcSpark" in js
+    fn = js[js.index("window.mcShowChart"):]
+    fn = fn[:fn.index("\n};")]
+    assert fn.index("MC_B58.test") < fn.index("<iframe"), \
+        "the address must be validated before the iframe src is built"
+    assert "mc-chart-dock" in js
+    assert "top10_share" in js and "Top 10" in js
 
 
 def test_the_page_shows_the_base_rates_not_just_the_scores():
