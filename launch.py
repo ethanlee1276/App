@@ -2936,14 +2936,34 @@ def show_matchup(person_id=None, batter=None, season: int | None = None) -> None
               "\"<Batter Name>\" [season]")
         print("  e.g.   python3 launch.py --matchup 543037 \"Aaron Judge\"\n")
         return
-    season = int(season or _d.date.today().year)
-    try:
-        hist = _ar.history(int(person_id), season)
-    except Exception as exc:                                # noqa: BLE001
-        print(f"\n  could not read the pitcher's starts: {exc}\n")
-        return
+    # TWO HALVES, TWO CLOCKS, and tying them to one parameter was wrong.
+    # `--matchup 543037 "Aaron Judge" 2025` asked for the 2025 Savant board
+    # — reasonable, that is the year known to have data — and dragged the
+    # PITCHER lookup back to 2025 with it, where Cole has no cached starts.
+    # The report then said "No starts parsed", which is true and answers a
+    # question nobody asked.
+    #
+    # His arsenal is inherently a NOW question: what is he throwing lately.
+    # The batter board is a season aggregate and takes the year. So the
+    # season argument governs the board only, and the pitcher is always
+    # read from the current season, falling back a year in April when the
+    # new one has no starts yet.
+    now = _d.date.today().year
+    season = int(season or now)
+    hist, p_season = [], now
+    for yr in (now, now - 1):
+        try:
+            hist = _ar.history(int(person_id), yr)
+        except Exception as exc:                            # noqa: BLE001
+            print(f"\n  could not read the pitcher's starts: {exc}\n")
+            return
+        if hist:
+            p_season = yr
+            break
     if not hist:
-        print(f"\n  No starts parsed for {person_id} in {season}.\n")
+        print(f"\n  No starts parsed for {person_id} in {now} or {now - 1}.")
+        print(f"  `python3 launch.py --arsenal {person_id}` says whether "
+              f"that is him\n  or the payloads.\n")
         return
     # His mix over the whole window, not one start — a matchup is about
     # what he throws, and one start is a sample of that.
@@ -2984,8 +3004,9 @@ def show_matchup(person_id=None, batter=None, season: int | None = None) -> None
               f"board instead.\n      This is last season's hitter, not "
               f"this one's.")
     m = _ar.matchup(shares, prof)
-    print(f"\n{'='*70}\n  {batter.upper()} vs person {person_id} — "
-          f"{season}\n{'='*70}")
+    print(f"\n{'='*70}\n  {batter.upper()} vs person {person_id}\n{'='*70}")
+    print(f"\n  his last {len(hist)} start(s), {p_season}   ·   "
+          f"hitter board {used}")
     print(f"\n  his mix: " + ", ".join(f"{t} {sh:.0%}" for t, sh in
                                         sorted(shares.items(),
                                                key=lambda kv: -kv[1])))

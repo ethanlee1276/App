@@ -309,10 +309,40 @@ def test_the_probe_distinguishes_three_different_failures():
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "launch.py"), encoding="utf-8").read()
     i = src.index("def show_matchup(")
-    body = src[i:i + 4000]
+    body = src[i:src.index("\ndef ", i + 10)]
     assert "came back EMPTY" in body
     assert "Closest names we hold" in body
     assert "last season's hitter, not" in body
+
+
+def test_the_pitcher_and_the_hitter_are_read_on_different_clocks():
+    """ETHAN, 2026-08-10: `--matchup 543037 "Aaron Judge" 2025` →
+    "No starts parsed for 543037 in 2025."
+
+    He asked for the 2025 SAVANT BOARD, which is the year his curl proved
+    has data. The season argument dragged the PITCHER lookup back to 2025
+    with it, where Cole has no cached starts, and the report answered a
+    question nobody asked.
+
+    A pitcher's arsenal is inherently a NOW question — what is he throwing
+    lately. The batter board is a season aggregate. One parameter cannot
+    mean both."""
+    src = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "launch.py"), encoding="utf-8").read()
+    i = src.index("def show_matchup(")
+    # To the END of the function, not a guessed character count. A fixed
+    # window silently stops asserting the moment the function grows past
+    # it — this test failed on its first run for exactly that reason, and
+    # a guard that quietly narrows is worse than no guard.
+    body = src[i:src.index("\ndef ", i + 10)]
+    # The board takes the argument; the pitcher takes the current year.
+    assert "load_arsenal(season," in body
+    assert "for yr in (now, now - 1):" in body
+    assert "_ar.history(int(person_id), yr)" in body
+    # And the header must say which year each half came from, or a
+    # cross-season reading looks like a same-season one.
+    assert "hitter board {used}" in body
 
 
 if __name__ == "__main__":
