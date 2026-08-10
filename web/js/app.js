@@ -5870,7 +5870,7 @@ function pmAgo(ts) {
 /* Rosters used to live here, which put "who is on this team" behind a
    tools menu and made it mean the NFL and only the NFL. It is a tab
    inside each sport now. */
-const STANDALONE_MODES = ["intel", "fantasy", "ufc", "why", "about",
+const STANDALONE_MODES = ["intel", "fantasy", "memes", "ufc", "why", "about",
                           "record", "lab"];
 
 // Header identity per standalone page — the tagline follows the ACTIVE
@@ -5879,6 +5879,7 @@ const STANDALONE_MODES = ["intel", "fantasy", "ufc", "why", "about",
 const STANDALONE_BRAND = {
   intel: { tagline: "Polymarket informed-flow intelligence" },
   fantasy: { tagline: "Fantasy football — usage, scripts, draft kit" },
+  memes: { tagline: "Rocket Radar — meme-coin flow, danger drawn loudest" },
   ufc: { tagline: "Scalpy MMA — dossier-gated fight model" },
   why: { tagline: "See the math. Know if it’s working." },
   record: { tagline: "The Book — every pick journaled, graded, learned from" },
@@ -6145,6 +6146,215 @@ async function renderIntel() {
       trader identity, which is why it appears above as a PRICE and not as flow.
       Analyzing public flow is market research; what the CFTC prosecutes
       (2026) is trading on information <i>you</i> hold a duty to keep confidential.</p>`;
+}
+
+/* ============================================================
+   ROCKET RADAR — Solana meme coins, the danger channel drawn loudest
+   ============================================================
+   The build spec's own base rates are the most important thing on the
+   page, so they render FIRST, above every score: ~1.4% graduate, 60% of
+   traders lose, 82.8% of high-return tokens show artificial growth,
+   41% of volume is wash, the median rug dies inside an hour. The page's
+   honest value is FILTERING, not prophecy — which is why momentum and
+   risk are two numbers that never blend, risk is a GATE, and nothing
+   here journals a bet or touches the sports ledger.
+
+   Token names, symbols and URLs are attacker-controlled strings — a
+   token can be NAMED an HTML payload — so everything from the feed goes
+   through escapeHtml and links render only for https URLs. */
+const MC_BASE_RATES = [
+  ["~1.4%", "of pump.fun tokens ever graduate to a real DEX listing"],
+  ["60%", "of meme-coin traders lose money; ~3% ever clear $1,000"],
+  ["82.8%", "of high-return tokens show evidence of artificial growth"],
+  ["41.4%", "of Solana meme-coin volume is wash trading (VanEck)"],
+  ["<1 hour", "median lifecycle of a rug pull; median hold is ~62 seconds"],
+];
+
+function mcMoney(v) {
+  if (v == null || isNaN(v)) return "—";
+  const a = Math.abs(v);
+  if (a >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+  if (a >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+  if (a >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+  return `$${Number(v).toFixed(0)}`;
+}
+
+function mcPrice(v) {
+  if (v == null || isNaN(v)) return "—";
+  return v >= 1 ? `$${v.toFixed(2)}` : `$${Number(v).toPrecision(3)}`;
+}
+
+function mcAge(min) {
+  if (min == null || isNaN(min)) return "—";
+  if (min < 1) return "<1m";
+  if (min < 90) return `${Math.round(min)}m`;
+  if (min < 48 * 60) return `${(min / 60).toFixed(1)}h`;
+  return `${(min / 1440).toFixed(1)}d`;
+}
+
+function mcPct(v) {
+  if (v == null || isNaN(v)) return `<span style="opacity:.45">—</span>`;
+  const c = v > 0 ? "var(--good)" : v < 0 ? "var(--bad)" : "var(--text-mute)";
+  return `<span style="color:${c};font-weight:600">${v > 0 ? "+" : ""}${v.toFixed(1)}%</span>`;
+}
+
+/* One coin's identity cell, shared by cards and the board table. */
+function mcName(c) {
+  const label = c.symbol || c.name || (c.mint || "").slice(0, 8);
+  const inner = `<b>${escapeHtml(label)}</b>${c.name && c.symbol
+    ? ` <span style="color:var(--text-mute);font-weight:400">${escapeHtml(String(c.name).slice(0, 28))}</span>` : ""}`;
+  return (c.url && /^https:\/\//.test(c.url))
+    ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener" style="color:inherit">${inner}</a>`
+    : inner;
+}
+
+async function renderMemes() {
+  const host = document.getElementById("memes-body");
+  if (!host) return;
+  let d = null;
+  try {
+    const res = await fetch("data/memecoins.json?t=" + Date.now());
+    if (res.ok) d = await res.json();
+  } catch (e) {}
+
+  const honesty = `
+    <div class="card mc-honesty">
+      <div class="mc-honesty-head">Read this before the scores</div>
+      <div class="mc-rates">${MC_BASE_RATES.map(([n, t]) =>
+        `<div class="mc-rate"><span class="mc-rate-n">${n}</span><span>${t}</span></div>`).join("")}</div>
+      <div class="mc-honesty-foot">A tracker’s genuine value is filtering scams and enforcing
+      disciplined exits, not predicting moonshots. Nothing on this page is a buy signal,
+      nothing is journaled as a bet, and none of it touches the sports model.</div>
+    </div>`;
+
+  if (!d || !(d.coins || []).length) {
+    host.innerHTML = honesty + `
+      <div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
+      <div class="es-title">No meme-coin data yet</div>
+      <div class="es-sub">The launcher polls GeckoTerminal’s new + trending Solana pools and
+      DexScreener’s pair snapshots on every refresh (free, no key). If this persists, run
+      <code>python3 launch.py --memes</code> — it says which feed is declining and why.</div></div>`;
+    return;
+  }
+  setStandaloneSource("DexScreener + GeckoTerminal free feeds",
+                      "Meme coins · live venue data");
+
+  const byMint = {};
+  for (const c of d.coins || []) byMint[c.mint] = c;
+  const heat = (m) => m >= 70 ? "var(--good)" : m >= 45 ? "var(--brand)" : "var(--text-mute)";
+  const riskColor = (r) => r >= (d.risk_gate || 60) ? "var(--bad)" : r >= 35 ? "var(--warn)" : "var(--good)";
+  const tile = (k, v, sub) => `<div class="tile"><div class="k">${k}</div>
+    <div class="v">${v}</div>${sub ? `<div class="tile-sub">${sub}</div>` : ""}</div>`;
+
+  /* Indicator chips with receipts in the hover — same contract as the
+     intel flags: every claim names its number. */
+  const chipsFor = (c) => {
+    const i = c.ind || {};
+    const ch = [];
+    ch.push(`<span class="chip" title="Pair age. Median rug dies inside an hour — under 30 minutes is a risk point.">${mcAge(i.age_min)} old</span>`);
+    if (i.liq_mc != null) ch.push(`<span class="chip${i.liq_mc < 0.03 ? " down" : ""}" title="Liquidity ÷ market cap. Under 3% means one sell craters it.">liq/MC ${(i.liq_mc * 100).toFixed(1)}%</span>`);
+    if (i.ratio_m5 != null) ch.push(`<span class="chip${i.ratio_m5 >= 1.2 ? " up" : i.ratio_m5 < 1 ? " down" : ""}" title="Buys per sell, last 5 minutes.">b/s ${i.ratio_m5.toFixed(2)}</span>`);
+    if (i.vol_spike != null) ch.push(`<span class="chip" title="5-minute volume vs its share of the hour. 1.0 = steady pace.">vol ×${i.vol_spike.toFixed(1)}</span>`);
+    if (i.buyers_m5 != null) ch.push(`<span class="chip" title="UNIQUE buying wallets in 5 minutes (GeckoTerminal) — broad wallet count is the anti-wash signal.">${i.buyers_m5} buyers/5m</span>`);
+    if (i.vol_accel != null) ch.push(`<span class="chip${i.vol_accel > 0 ? " up" : ""}" title="Volume second derivative off our own snapshot tape — the ignition signal.">accel ${i.vol_accel > 0 ? "+" : ""}${i.vol_accel.toFixed(0)}</span>`);
+    if (i.wash_flag) ch.push(`<span class="chip down" title="Volume spiked >500% while price moved <5% — volume with no one in it (arXiv:2507.01963).">wash pattern</span>`);
+    if (c.boosted) ch.push(`<span class="chip down" title="Someone is PAYING DexScreener to promote this token.">paid promo</span>`);
+    return ch.join("");
+  };
+
+  const rocketCards = (d.rocket || []).map((m) => byMint[m]).filter(Boolean)
+    .map((c) => `<article class="card" style="--grade-color:${heat(c.momentum)}">
+      <div class="card-head">
+        <div class="card-id">
+          <div class="score-ring" title="MomentumScore 0–100, percentile vs the live cohort — volume acceleration 30%, unique-buyer growth 30%, buy/sell pressure 25%, price acceleration 15%"
+            style="background:conic-gradient(${heat(c.momentum)} ${c.momentum * 3.6}deg, rgba(255,255,255,.08) 0)">
+            <span>${c.momentum}</span></div>
+          <div>
+            <div class="player">${mcName(c)}</div>
+            <div class="subtitle">${mcPrice(c.price_usd)} · liq ${mcMoney(c.liquidity)} · MC ${mcMoney(c.market_cap || c.fdv)}</div>
+            <div class="pick">5m ${mcPct((c.price_change || {}).m5)} · 1h ${mcPct((c.price_change || {}).h1)}</div>
+          </div>
+        </div>
+        <span title="RiskScore 0–100 — a coin at ${d.risk_gate || 60}+ never reaches this list${(c.risk_why || []).length ? ":\n" + c.risk_why.map((w) => "· " + w).join("\n") : ""}"
+          style="font-weight:800;color:${riskColor(c.risk)}">risk ${c.risk}</span>
+      </div>
+      <div class="chips" style="margin-top:10px">${chipsFor(c)}</div>
+    </article>`).join("");
+
+  const exitCards = (d.exits || []).map((m) => byMint[m]).filter(Boolean)
+    .map((c) => `<article class="card" style="--grade-color:var(--bad)">
+      <div class="card-head">
+        <div class="card-id"><div>
+          <div class="player">${mcName(c)}</div>
+          <div class="subtitle">${mcPrice(c.price_usd)} · liq ${mcMoney(c.liquidity)} · 5m ${mcPct((c.price_change || {}).m5)}</div>
+        </div></div>
+        <span style="font-weight:800;color:var(--bad)">risk ${c.risk}</span>
+      </div>
+      <ul class="mc-exit-why">${(c.exit_why || []).map((w) =>
+        `<li>${escapeHtml(w)}</li>`).join("")}</ul>
+    </article>`).join("");
+
+  const rows = (d.coins || []).slice()
+    .sort((a, b) => (b.momentum || 0) - (a.momentum || 0))
+    .map((c, ix) => {
+      const i = c.ind || {};
+      const gated = c.risk >= (d.risk_gate || 60);
+      return `<tr${gated ? ` class="mc-gated" title="RiskScore ${c.risk} — over the gate; excluded from the rocket list${(c.risk_why || []).length ? ":\n" + c.risk_why.map((w) => "· " + w).join("\n") : ""}"` : ""}>
+        <td class="num">${ix + 1}</td>
+        <td>${mcName(c)}</td>
+        <td class="num">${mcAge(i.age_min)}</td>
+        <td class="num">${mcPrice(c.price_usd)}</td>
+        <td class="num">${mcPct((c.price_change || {}).m5)}</td>
+        <td class="num">${mcPct((c.price_change || {}).h1)}</td>
+        <td class="num">${mcMoney(c.liquidity)}</td>
+        <td class="num">${mcMoney((c.volume || {}).h1)}</td>
+        <td class="num">${i.ratio_m5 != null ? i.ratio_m5.toFixed(2) : "—"}</td>
+        <td class="num">${i.buyers_m5 != null ? i.buyers_m5 : "—"}</td>
+        <td class="num" style="color:${heat(c.momentum)};font-weight:700">${c.momentum}</td>
+        <td class="num" style="color:${riskColor(c.risk)};font-weight:700">${c.risk}${gated ? `<span class="mc-gate-tag">gated</span>` : ""}</td>
+      </tr>`;
+    }).join("");
+
+  host.innerHTML = honesty + `
+    <div class="stats">
+      ${tile("Coins tracked", d.n || 0, "GT new + trending, DS boosts")}
+      ${tile("Clear the risk gate", (d.n || 0) - (d.gated || 0), `RiskScore under ${d.risk_gate || 60}`)}
+      ${tile("Behind the gate", d.gated || 0, "momentum can’t buy them back")}
+      ${tile("Flashing exit", (d.exits || []).length, "the danger channel")}
+    </div>
+    <div class="section-title">Rocket list
+      <span class="sub">— highest momentum among coins UNDER the risk gate. Momentum is
+      cohort-relative order flow: acceleration and unique buyers, not RSI lines. Hover any
+      chip or score for its receipt.</span></div>
+    <div class="cards wide">${rocketCards ||
+      `<div class="empty-slate" style="grid-column:1/-1"><div class="es-icon">${icon("signal", 30)}</div>
+        <div class="es-title">Nothing clears the gate right now</div>
+        <div class="es-sub">Either every tracked coin is over the risk line — common, and the
+        page working as designed — or the snapshot tape is too short: acceleration needs
+        three sightings of a coin, so give the refresh loop a few minutes.</div></div>`}</div>
+    <div class="section-title">Danger channel
+      <span class="sub">— exit signals in the spec’s priority order, IGNORING the gate: a
+      dangerous coin crashing is exactly what this channel is for.</span></div>
+    <div class="cards wide">${exitCards ||
+      `<p class="loading" style="grid-column:1/-1">No exit signals on the current board.</p>`}</div>
+    <div class="section-title">Full board
+      <span class="sub">— every tracked coin, momentum-sorted. Dimmed rows are over the
+      risk gate — shown, not hidden, because “filtered out” and “never seen” must not
+      look identical (hover for the reasons).</span></div>
+    <div class="card" style="padding:0;overflow-x:auto">
+      <table class="agate mc-board"><thead><tr>
+        <th>#</th><th>Coin</th><th>Age</th><th>Price</th><th>5m</th><th>1h</th>
+        <th>Liq</th><th>Vol 1h</th><th title="Buys per sell, last 5 minutes">B/S 5m</th>
+        <th title="Unique buying wallets, last 5 minutes">Buyers</th>
+        <th>Momentum</th><th>Risk</th>
+      </tr></thead><tbody>${rows}</tbody></table></div>
+    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
+      What this board cannot see (paid firehose tier, deliberately parked — the doc has the
+      map): mint/freeze authority, honeypot checks, dev-wallet sells, bundled snipers,
+      holder velocity, smart-money wallets. Their absence is stated here rather than
+      silently scored as safe. Volume acceleration is measured off our own snapshot tape
+      and needs three sightings of a coin — young boards under-read it honestly.
+      Updated ${escapeHtml((d.generated_at || "").slice(11, 16))}; refreshes with the site.</p>`;
 }
 
 /* ============================================================
@@ -8322,7 +8532,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "parlays", "futures", "trending", "players", "rosters", "standings", "record", "lab", "intel", "fantasy", "ufc", "why", "about"];
+const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "parlays", "futures", "trending", "players", "rosters", "standings", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
 
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -8351,6 +8561,7 @@ function switchView(name, push = false) {
   if (name === "lab") renderLab();
   if (name === "intel") renderIntel();
   if (name === "fantasy") renderFantasy();
+  if (name === "memes") renderMemes();
   if (name === "ufc") renderUFC();
   if (name === "why") renderWhy();
   if (name === "about") renderAbout();

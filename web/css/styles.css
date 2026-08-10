@@ -3974,6 +3974,43 @@ select.calc-in { width: auto; font-weight: 600; }
    this is a mark. */
 .kx-overhead { max-width: 280px; margin-bottom: 10px; }
 
+/* Rocket Radar (meme coins).
+   ------------------------------------------------------------------
+   The honesty card renders ABOVE every score on the page and borrows
+   the warn colour for its rule: the base rates are the one thing a
+   visitor must not scroll past. Everything else on the page reuses the
+   shared kit (.stats, .card, .chip, .agate) — the only new furniture is
+   the rates strip, the exit-reason list, and the gated-row treatment. */
+.mc-honesty {
+  border-left: 3px solid var(--warn);
+  margin-bottom: 20px;
+}
+.mc-honesty-head {
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--warn); margin-bottom: 10px;
+}
+.mc-rates { display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+  gap: 8px 18px; }
+.mc-rate { display: flex; align-items: baseline; gap: 8px;
+  font-size: var(--fs-sm); color: var(--text-dim); }
+.mc-rate-n { font-weight: 800; font-size: var(--fs-lg); color: var(--text);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mc-honesty-foot { margin-top: 12px; color: var(--text-mute);
+  font-size: var(--fs-sm); }
+.mc-exit-why { margin: 10px 0 0; padding-left: 18px;
+  font-size: var(--fs-sm); color: var(--text-body); }
+.mc-exit-why li { margin-top: 4px; }
+.mc-exit-why li::marker { color: var(--bad); }
+/* Gated rows stay READABLE — hiding them would make "filtered out" and
+   "never seen" look identical, and the reasons live in the hover. */
+.mc-board tr.mc-gated td { opacity: .5; }
+.mc-gate-tag { font-size: var(--fs-xs); font-weight: 800; color: var(--bad);
+  letter-spacing: .06em; text-transform: uppercase; margin-left: 6px; }
+.mc-board td, .mc-board th { white-space: nowrap; }
+.mc-board td:nth-child(2) { max-width: 220px; overflow: hidden;
+  text-overflow: ellipsis; }
+
 /* Motion, switched off for anyone who has asked the OS to stop it.
 
    There were two narrow blocks doing this — one for a disclosure chevron,

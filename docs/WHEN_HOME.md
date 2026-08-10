@@ -447,6 +447,25 @@ python3 assets.py --probe --sport nba  # confirms the face resize
 None of these write anything. Three of them are supposed to decline to answer
 right now, and knowing which three is the point of running them.
 
+**One more, new since this list was written — the meme-coin page's first
+live contact:**
+
+```
+python3 launch.py --memes   # Rocket Radar live-shape probe
+```
+
+The whole Rocket Radar stack (new "Meme Coins" tab, GeckoTerminal +
+DexScreener feeds, momentum/risk scoring) was built against fixtures
+because the sandbox can't reach either provider — the same story as
+statsapi and Savant. This run is where the parsers meet reality. Expect
+coins on the first run; expect the rocket list to be THIN until the
+launcher has polled a few minutes, because acceleration needs three
+sightings of a coin on our own tape. Zero coins with fetch-failure notes
+= network; zero coins with clean fetches = a payload shape moved and
+`engine/sources/dexes.py` needs a look. It writes the board JSON and the
+snapshot tape — the one non-read-only line in this section, both files
+the launcher rebuilds anyway.
+
 The two `assets.py` runs are new. `--probe --sport nba` should show the
 combiner at ~15KB against ~274KB raw — that measurement is already in hand
 and the run is just a regression check. `--conferences` is the one carrying

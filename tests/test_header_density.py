@@ -65,13 +65,17 @@ def test_the_switcher_has_three_named_groups_and_nothing_loose():
     # "lab" sits beside it in the same group: The Book grades the picks we
     # made, The Lab grades the model against stored history. Same question
     # ("is this working?"), two different bodies of evidence.
-    assert set(tools) == {"intel", "fantasy", "why", "about", "record", "lab"}
+    # "memes" joined the Markets group with Rocket Radar: like Polymarket
+    # and Fantasy it is a market you visit on a league's rhythm, not a
+    # page about the site.
+    assert set(tools) == {"intel", "fantasy", "memes", "why", "about",
+                          "record", "lab"}
     assert 'data-view="rosters"' in html, "the per-sport tab is missing"
 
     for sport in leagues:
         assert f'data-sport="{sport}"' in _group(html, "leagues"), sport
     markets = _group(html, "markets")
-    for sport in ("intel", "fantasy"):
+    for sport in ("intel", "fantasy", "memes"):
         assert f'data-sport="{sport}"' in markets, f"{sport} left the row"
     assert 'data-sport="record"' in _group(html, "record"), \
         "The Book left its own group"
@@ -83,7 +87,7 @@ def test_the_switcher_has_three_named_groups_and_nothing_loose():
     more = more[:more.index("</div>\n      </div>")]
     for tool in ("why", "about"):
         assert f'data-sport="{tool}"' in more, f"{tool} is loose in the row"
-    for sport in ("intel", "fantasy"):
+    for sport in ("intel", "fantasy", "memes"):
         assert f'data-sport="{sport}"' not in more, f"{sport} is still hidden"
 
 

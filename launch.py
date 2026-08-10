@@ -379,6 +379,21 @@ def refresh_predmarkets(quiet: bool = False) -> bool:
     return ok
 
 
+def refresh_memes(quiet: bool = False) -> bool:
+    """Rocket Radar: Solana meme-coin board → web/data/memecoins.json.
+
+    Free keyless feeds (GeckoTerminal + DexScreener) with short-TTL
+    caching. Runs on every refresh because the board's core signal is
+    ACCELERATION off our own snapshot tape — each pass is a sighting,
+    and three sightings of a coin is when its second derivative exists.
+    Nothing here journals a bet or touches the sports model."""
+    ok, tail = _run_build(["memes_build.py", "--out", "web/data/memecoins.json"])
+    if not quiet:
+        print(f"  MEME rocket radar: {'refreshed' if ok else 'unavailable — kept existing data'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
 def refresh_fantasy(quiet: bool = False) -> bool:
     """Fantasy usage boards from the local DB — zero network."""
     ok, tail = _run_build(["fantasy_build.py", "--out", "web/data/fantasy.json"])
@@ -584,6 +599,7 @@ def refresh_all(quiet: bool = False) -> None:
     refresh_mlb(quiet=quiet)
     refresh_nfl(quiet=quiet)
     refresh_predmarkets(quiet=quiet)
+    refresh_memes(quiet=quiet)
     refresh_fantasy(quiet=quiet)
     refresh_nba(quiet=quiet)
     refresh_wnba(quiet=quiet)
@@ -1893,6 +1909,7 @@ def preflight() -> None:
         ("NFL board", "web/data/recommendations.json"),
         ("Record / journal", "web/data/record.json"),
         ("Polymarket intel", "web/data/predmarkets.json"),
+        ("Rocket Radar (meme coins)", "web/data/memecoins.json"),
         ("Fantasy football", "web/data/fantasy.json"),
         ("NBA (Scalpy)", "web/data/nba.json"),
         ("UFC (Scalpy MMA)", "web/data/ufc.json"),
@@ -1937,6 +1954,8 @@ def preflight() -> None:
          ("recommendations", "counts")),
         ("Record", "web/data/record.json", ("overall", "recent")),
         ("Polymarket", "web/data/predmarkets.json", ()),
+        ("Rocket Radar", "web/data/memecoins.json",
+         ("coins", "rocket", "exits")),
         ("Fantasy", "web/data/fantasy.json", ()),
         ("NBA", "web/data/nba.json", ()),
         ("UFC", "web/data/ufc.json", ()),
@@ -2794,6 +2813,70 @@ def _settleable_days(open_days) -> list[str]:
     so each pass builds on the history the previous one stored."""
     return sorted(d["date"] for d in open_days
                   if d.get("date") and "-W" not in d["date"])
+
+
+def show_memes() -> None:
+    """Rocket Radar probe: pull the free feeds NOW and show the board.
+
+        python3 launch.py --memes
+
+    This is the live-shape check for the two keyless providers
+    (GeckoTerminal pools + DexScreener pairs/boosts). The sandbox that
+    wrote the parsers cannot reach either host — same story as statsapi
+    and Savant — so the first run of this command on the laptop is where
+    the fixtures meet reality. Zero coins with both sources declining
+    means the machine can't reach the feeds; zero coins with clean
+    fetches means the payload shape moved and engine/sources/dexes.py
+    needs a look. The board itself refreshes with the launcher either way.
+    """
+    import json as _json
+    import memes_build
+    out = ROOT / "web/data/memecoins.json"
+    memes_build.main(["--out", str(out)])
+    try:
+        board = _json.loads(out.read_text())
+    except Exception as exc:  # noqa: BLE001
+        print(f"  could not read the board back: {exc}")
+        return
+    for note in board.get("notes") or []:
+        print(f"  note: {note}")
+    coins = {c.get("mint"): c for c in board.get("coins") or []}
+    if not coins:
+        print("\n  Zero coins parsed. If the notes above are fetch failures,"
+              " this machine cannot reach the feeds; if the fetches"
+              " succeeded, the payload shape changed and"
+              " engine/sources/dexes.py needs a look.")
+        return
+
+    def _line(mint):
+        c = coins.get(mint) or {}
+        i = c.get("ind") or {}
+        name = c.get("symbol") or c.get("name") or (mint or "")[:8]
+        liq = c.get("liquidity")
+        age = i.get("age_min")
+        return (f"    {name[:14]:<14} momentum {c.get('momentum', 0):>3}"
+                f"  risk {c.get('risk', 0):>3}"
+                f"  liq {'$' + format(liq, ',.0f') if liq else '—':>11}"
+                f"  age {format(age, '.0f') + 'm' if age is not None else '—'}")
+
+    rocket = board.get("rocket") or []
+    print(f"\n  Rocket list ({len(rocket)} clear the risk gate "
+          f"< {board.get('risk_gate')}):")
+    for m in rocket:
+        print(_line(m))
+    if not rocket:
+        print("    none — with a fresh tape that is expected: acceleration"
+              " needs three sightings, so let the launcher poll a few"
+              " minutes and run this again.")
+    exits = board.get("exits") or []
+    if exits:
+        print(f"\n  Danger channel ({len(exits)} flashing exit):")
+        for m in exits:
+            print(_line(m))
+            for why in (coins.get(m) or {}).get("exit_why") or []:
+                print(f"      ⚠ {why}")
+    print(f"\n  {board.get('n', 0)} coin(s) scored, {board.get('gated', 0)} "
+          f"held behind the risk gate. Not advice; nothing here is journaled.")
 
 
 def show_booksharp() -> None:
@@ -4193,6 +4276,9 @@ def main() -> None:
         rest = [a for a in argv[i + 1:] if not a.startswith("-")]
         show_arsenal(rest[0] if rest else None,
                      rest[1] if len(rest) > 1 else None)
+        return
+    if "--memes" in argv:
+        show_memes()
         return
     if "--booksharp" in argv:
         show_booksharp()
