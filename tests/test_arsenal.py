@@ -83,7 +83,7 @@ def test_a_shelved_pitch_gets_its_own_flag_not_a_buried_delta():
     prior = {"n": 100, "shares": {"FF": 0.5, "SL": 0.3, "CH": 0.2},
              "whiff": {}}
     latest = {"n": 100, "shares": {"FF": 0.6, "SL": 0.4}, "whiff": {}}
-    s = ar.mix_shift([prior, prior, prior, latest])
+    s = ar.mix_shift([latest, prior, prior, prior])
     assert s["types"]["CH"]["dropped"] is True
     assert s["types"]["FF"]["dropped"] is False
     assert s["types"]["FF"]["delta"] == 0.1
@@ -92,7 +92,7 @@ def test_a_shelved_pitch_gets_its_own_flag_not_a_buried_delta():
 def test_a_new_pitch_is_flagged_rather_than_compared_to_nothing():
     prior = {"n": 100, "shares": {"FF": 1.0}, "whiff": {}}
     latest = {"n": 100, "shares": {"FF": 0.8, "ST": 0.2}, "whiff": {}}
-    s = ar.mix_shift([prior, prior, latest])
+    s = ar.mix_shift([latest, prior, prior])
     assert s["types"]["ST"]["new"] is True
     assert s["types"]["ST"]["delta"] is None, "no baseline to subtract from"
 
@@ -102,7 +102,7 @@ def test_the_biggest_move_comes_first():
              "whiff": {}}
     latest = {"n": 100, "shares": {"FF": 0.2, "SL": 0.55, "CH": 0.25},
               "whiff": {}}
-    s = ar.mix_shift([prior, prior, latest])
+    s = ar.mix_shift([latest, prior, prior])
     assert list(s["types"])[0] == "FF"
 
 
@@ -129,6 +129,43 @@ def test_nothing_here_prices_anything():
     for banned in ("hit_prob", "stake", "multiplier"):
         assert not re.search(rf"\b{banned}\b", src), banned
     assert "THE_INFORMATION_TEST" in src
+
+
+def test_the_newest_start_is_the_one_being_judged():
+    """THE BUG ETHAN'S OUTPUT EXPOSED, 2026-08-10.
+
+    `recent_start_pks` returns most-recent-FIRST — `velocity.trend` says
+    so in its docstring and reads `history[0]`. This module's first cut
+    took `hist[-1]` as the latest and the entries before it as the
+    baseline, which compares the OLDEST start against the four newer
+    ones. Backwards, and plausible enough to print: on Gerrit Cole it
+    reported "SL 18% → 28%, FF 55% → 45%" — he is leaning on the slider —
+    when the truth was the reverse, FF 52% → 57% and SL 21% → 17%.
+
+    Nothing in the numbers looks wrong when this is inverted, which is why
+    the first three tests here all passed: their fixtures put the odd
+    start at whichever end the code happened to read. A directional
+    fixture is the only kind that can catch it."""
+    newest = {"n": 100, "shares": {"FF": 0.90, "SL": 0.10}, "whiff": {}}
+    older = {"n": 100, "shares": {"FF": 0.10, "SL": 0.90}, "whiff": {}}
+    s = ar.mix_shift([newest, older, older, older])
+    assert s["types"]["FF"]["latest"] == 0.90, "read the wrong end"
+    assert s["types"]["FF"]["baseline"] == 0.10
+    assert s["types"]["FF"]["delta"] > 0
+
+
+def test_it_reads_the_same_end_of_the_list_that_velocity_does():
+    """One convention across the two modules that share a loader. If they
+    disagree, one of them describes a different start from the other while
+    both print the same date."""
+    src = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "engine", "mlb", "velocity.py"), encoding="utf-8").read()
+    assert "history[0]" in src, "velocity's convention moved; recheck this"
+    a = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "engine", "mlb", "arsenal.py"), encoding="utf-8").read()
+    assert "hist[0], hist[1:1 + baseline_starts]" in a
 
 
 if __name__ == "__main__":

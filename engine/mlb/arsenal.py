@@ -148,7 +148,17 @@ def mix_shift(hist, baseline_starts: int = 4) -> dict:
     """
     if len(hist) < 2:
         return {"n_starts": len(hist), "types": {}, "enough": False}
-    latest, prior = hist[-1], hist[-(baseline_starts + 1):-1]
+    # MOST-RECENT-FIRST, like `velocity.recent_start_pks` returns and like
+    # `velocity.trend` reads it. The first cut of this took `hist[-1]` as
+    # the latest start and the ones before it as the baseline, which is
+    # the OLDEST start against the four newer ones — the comparison
+    # backwards, and plausible enough to print. On Gerrit Cole it reported
+    # "SL 18% -> 28%, FF 55% -> 45%" (he is leaning on the slider) when
+    # the truth was the reverse: FF 52% -> 57%, SL 21% -> 17%.
+    #
+    # Nothing in the numbers looks wrong when this is inverted. It was
+    # caught by reading the printed dates against the printed verdict.
+    latest, prior = hist[0], hist[1:1 + baseline_starts]
     base: dict = {}
     for st in prior:
         for t, share in st["shares"].items():
