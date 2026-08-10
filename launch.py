@@ -2910,6 +2910,62 @@ def show_arsenal(person_id=None, season: int | None = None) -> None:
     print("\n  Evidence only — nothing prices from this.\n")
 
 
+def why_bet(args: list) -> None:
+    """Tag why a settled bet actually won or lost (§11's human layer).
+
+        python3 launch.py --why-bet                     # recent + menu
+        python3 launch.py --why-bet 1234 ump-zone
+        python3 launch.py --why-bet 1234 ump-zone "squeezed all night"
+        python3 launch.py --why-bet counts              # the readout
+
+    Controlled vocabulary, not freeform — four spellings of "umpire" are
+    four slices of nothing. The note beside the tag is where the detail
+    goes: the note is for reading, the tag is for counting.
+    """
+    from engine import ledger
+    from engine.whytags import menu_for, tag_bet, tag_counts
+    conn = ledger.connect()
+    if args and args[0] == "counts":
+        counts = tag_counts(conn)
+        if not counts:
+            print("\n  No tags yet. `--why-bet` lists recent settled bets "
+                  "to tag.\n")
+            return
+        print(f"\n  {'tag':<28} {'W':>4} {'L':>4} {'push':>5}")
+        for key, d in sorted(counts.items()):
+            print(f"  {key:<28} {d['won']:>4} {d['lost']:>4} "
+                  f"{d['push']:>5}")
+        print()
+        return
+    if len(args) >= 2:
+        try:
+            got = tag_bet(conn, int(args[0]), args[1],
+                          " ".join(args[2:]) if len(args) > 2 else "")
+        except (ValueError, TypeError) as exc:
+            print(f"\n  {exc}\n")
+            return
+        print(f"\n  #{got['id']} {got['player']} {got['market']} "
+              f"({got['sport']}) ← {got['tag']}"
+              + (f' — "{got["note"]}"' if got["note"] else "") + "\n")
+        return
+    rows = conn.execute(
+        "SELECT id, date, sport, player, market, side, status, why_tag "
+        "FROM bets WHERE status IN ('won','lost') AND category='main' "
+        "ORDER BY date DESC, id DESC LIMIT 15").fetchall()
+    print("\n  Recent settled (untagged first):")
+    for r in sorted(rows, key=lambda r: r["why_tag"] is not None):
+        mark = r["why_tag"] or "—"
+        print(f"    #{r['id']:<6} {r['date']}  {r['sport']:<4} "
+              f"{(r['player'] or '')[:22]:<22} {r['market']:<12} "
+              f"{r['status']:<4} {mark}")
+    sports = {r["sport"] for r in rows} or {"mlb"}
+    for sp in sorted(sports):
+        print(f"\n  {sp} menu:")
+        for tag, blurb in sorted(menu_for(sp).items()):
+            print(f"    {tag:<20} {blurb}")
+    print("\n  python3 launch.py --why-bet <id> <tag> [\"note\"]\n")
+
+
 def show_onoff(league=None, team=None, player=None, stat="pts") -> None:
     """Who inherits a sitting player's share (WNBA/NBA §6).
 
@@ -4117,6 +4173,10 @@ def main() -> None:
         from engine import losspatterns as _lp
         print(_lp.format_both_ways(
             _lp.both_ways(_lp.records_from_ledger(_l.connect()))))
+        return
+    if "--why-bet" in argv:
+        i = argv.index("--why-bet")
+        why_bet([a for a in argv[i + 1:] if not a.startswith("-")])
         return
     if "--onoff" in argv:
         i = argv.index("--onoff")

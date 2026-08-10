@@ -216,6 +216,13 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE bets ADD COLUMN loss_cause TEXT")
     except sqlite3.OperationalError:
         pass
+    # §11's human layer: the tag is a controlled vocabulary (mineable),
+    # the note is free text (readable). engine/whytags.py owns the menus.
+    try:
+        conn.execute("ALTER TABLE bets ADD COLUMN why_tag TEXT")
+        conn.execute("ALTER TABLE bets ADD COLUMN why_note TEXT")
+    except sqlite3.OperationalError:
+        pass
     for k, v in DEFAULTS.items():
         conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
     conn.commit()
@@ -2627,7 +2634,8 @@ def recent_settled(conn, limit: int = 30, category: str = "main",
     Each row carries its side-aware CLV and process grade so the page can
     show "won but got lucky" / "lost but beat the close" honestly."""
     q = ("SELECT date, sport, player, market, side, line, odds, grade, status, "
-         "pnl_units, hit_prob, closing_line, stake_units, loss_cause FROM bets "
+         "pnl_units, hit_prob, closing_line, stake_units, loss_cause, "
+         "why_tag, why_note FROM bets "
          "WHERE status IN ('won','lost','push') AND category=? "
          "AND stake_units > 0")
     args: list = [category]
