@@ -1745,6 +1745,9 @@ SWEEP_VIEWS = [
     ("NBA Recommended", "?sport=nba#recommended", "#view-recommended"),
     ("NBA Players", "?sport=nba#players", "#players"),
     ("UFC", "?sport=mlb#ufc", "#ufc-body"),
+    ("Rocket Radar", "?sport=mlb#memes", "#memes-body"),
+    ("Injuries (MLB)", "?sport=mlb#injuries", "#injuries-body"),
+    ("My Bets", "?sport=mlb#mybets", "#mybets-body"),
     ("Why Us", "?sport=mlb#why", "#why-body"),
 ]
 
