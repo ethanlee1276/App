@@ -183,3 +183,30 @@ def mix_shift(hist, baseline_starts: int = 4) -> dict:
     return {"n_starts": len(hist), "enough": True,
             "types": dict(sorted(types.items(),
                                  key=lambda kv: -abs(kv[1]["delta"] or 0)))}
+
+
+def pooled_whiff(hist, min_swings: int = MIN_SWINGS) -> dict:
+    """Whiff rate by type across ALL the starts, not one at a time.
+
+    WHY THE PER-START VIEW IS NOT ENOUGH, from Ethan's Gerrit Cole run:
+    every one of his five starts reported "under the floor" for the
+    slider, curve and change, because a start gives 6-11 swings on a
+    secondary pitch and the floor is 10. Three quarters of the arsenal
+    was invisible in a report about the arsenal.
+
+    Pooled, the same five starts give 52 slider swings, 34 changeups and
+    26 curves — all comfortably over. Nothing about the floor was wrong;
+    it was being applied to the wrong unit.
+
+    Per-start stays, because it is the only view that can show a pitch
+    getting worse. This is the view that can show what the pitch IS.
+    """
+    acc: dict = {}
+    for st in hist:
+        for t, w in (st.get("whiff") or {}).items():
+            a = acc.setdefault(t, [0, 0])
+            a[0] += w.get("swings", 0)
+            a[1] += w.get("whiffs", 0)
+    return {t: {"swings": sw, "whiffs": wh,
+                "whiff_rate": round(wh / sw, 4) if sw >= min_swings else None}
+            for t, (sw, wh) in sorted(acc.items(), key=lambda kv: -kv[1][0])}

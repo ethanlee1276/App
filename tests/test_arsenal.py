@@ -168,6 +168,38 @@ def test_it_reads_the_same_end_of_the_list_that_velocity_does():
     assert "hist[0], hist[1:1 + baseline_starts]" in a
 
 
+def test_pooling_rescues_the_pitches_one_start_cannot_rate():
+    """ETHAN'S COLE RUN: every one of five starts said "under the floor"
+    for the slider, curve and change — three quarters of the arsenal
+    invisible in a report about the arsenal. A start gives 6-11 swings on
+    a secondary and the floor is 10. Nothing about the floor was wrong; it
+    was being applied to the wrong unit."""
+    start = {"whiff": {"SL": {"swings": 9, "whiffs": 3, "whiff_rate": None}}}
+    assert start["whiff"]["SL"]["whiff_rate"] is None
+    p = ar.pooled_whiff([start] * 5)
+    assert p["SL"]["swings"] == 45
+    assert p["SL"]["whiff_rate"] == round(15 / 45, 4)
+
+
+def test_pooling_still_refuses_a_rate_it_cannot_support():
+    """Pooling is not a licence. Five starts of one swing each is five
+    swings, and the floor still applies."""
+    start = {"whiff": {"KC": {"swings": 1, "whiffs": 1, "whiff_rate": None}}}
+    p = ar.pooled_whiff([start] * 5)
+    assert p["KC"]["swings"] == 5 and p["KC"]["whiff_rate"] is None
+
+
+def test_the_pooled_view_does_not_replace_the_per_start_one():
+    """Per-start is the only view that can show a pitch getting WORSE;
+    pooled is the view that can show what the pitch IS. Both ship."""
+    src = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "launch.py"), encoding="utf-8").read()
+    i = src.index("def show_arsenal(")
+    body = src[i:i + 3000]
+    assert "pooled_whiff" in body and 'st["whiff"].items()' in body
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

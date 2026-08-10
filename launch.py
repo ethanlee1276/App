@@ -2879,6 +2879,19 @@ def show_arsenal(person_id=None, season: int | None = None) -> None:
             else:
                 print(f"      {t:<4} {w['swings']:>3} swings   "
                       f"whiff {w['whiff_rate']:.0%}")
+    pooled = _ar.pooled_whiff(hist)
+    if pooled:
+        print(f"\n  WHIFF ACROSS ALL {len(hist)} STARTS  (a secondary pitch "
+              f"gets 6-11 swings a start;")
+        print("  the floor is 10, so per-start it is invisible and pooled "
+              "it is not)")
+        for t, w in pooled.items():
+            if w["whiff_rate"] is None:
+                print(f"    {t:<4} {w['swings']:>4} swings   still under the "
+                      f"floor")
+            else:
+                print(f"    {t:<4} {w['swings']:>4} swings   whiff "
+                      f"{w['whiff_rate']:.0%}")
     sh = _ar.mix_shift(hist)
     if sh["enough"]:
         print(f"\n  MIX AGAINST HIS OWN BASELINE")
