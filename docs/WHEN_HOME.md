@@ -528,3 +528,22 @@ a ring (`ODDS_API_KEY`, `ODDS_API_KEY_2..n`, or `ODDS_API_KEYS` comma-
 separated), `get_api_key()` returns the first with credits left, and line 427
 swaps to the next key and retries the same call when one comes back exhausted.
 Keep both in there, dead one included — the ring skips it.
+
+## 8. Accounts — your info follows you now (2026-08-10)
+
+My Bets, the Sleeper league link and your bankroll used to live only in
+each browser's localStorage — which is why the phone and the laptop each
+made you type them in again. There's now a **Make an account** card on
+the My Bets page (and on Fantasy → Around the league): pick a name, add
+an optional 4–12-digit PIN, and those three things sync to every device
+that signs in.
+
+Where it actually lives: `data/profiles/<name>.json` on the laptop
+running the site. No cloud, no email, no third party — and still no
+sportsbook logins anywhere. The PIN is stored salted-and-hashed and
+keeps other people on your Wi-Fi out of your book; it is not
+encryption (the site is plain HTTP on your LAN), just a lock on the
+door. Sync needs the live server (`launch.py`), merges so a bet logged
+on two devices at once can never be lost, and deletions carry across.
+Sign out any time — everything stays on the device, it just stops
+syncing.

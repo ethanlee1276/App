@@ -13,9 +13,13 @@ file. Uses only the Python standard library.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
 import sys
+import threading
+import time
 from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -54,6 +58,219 @@ _SLEEPER_OK = re.compile(
 
 def sleeper_path_ok(path: str) -> bool:
     return bool(_SLEEPER_OK.match(path))
+
+
+# ---------------------------------------------------------------------------
+# Accounts — one name, every device.
+#
+# WHY: the site's personal data (My Bets, the Sleeper league link, the
+# bankroll) lived in localStorage, which is scoped to ONE browser at ONE
+# address. The laptop at localhost, the phone at the LAN address and a
+# tailscale name are three different origins — three separate empty
+# copies — and iOS evicts a site's storage after a week away. So the
+# info had to be re-typed per device (Ethan, 2026-08-10: "make an
+# account so you don't have to put in that info every time").
+#
+# WHAT AN ACCOUNT IS HERE: a JSON file under data/profiles/ on the
+# machine already running this server. No cloud, no email, no third
+# party — the data moves between devices through the same laptop that
+# serves the site, and never further. The optional PIN keeps housemates
+# on the same Wi-Fi out of your book; it is stored salted + hashed
+# (PBKDF2) and checked on every request. Honesty about its strength:
+# the site speaks plain HTTP on a LAN, so the PIN is a lock on the
+# door, not encryption in transit — the threat model is "someone else
+# on the couch", not a hostile network. Sportsbook credentials remain
+# un-asked-for, same as always.
+#
+# SYNC CONTRACT (the client POSTs its sections, gets the merged truth
+# back — one round trip is both push and pull):
+#   - fantasy / bankroll: last-writer-wins by the section's `ts` stamp.
+#   - mybets: UNION by bet signature, because a logged bet is the one
+#     thing that must never be lost to a timestamp race between two
+#     open devices. Deletions travel as signature tombstones so a
+#     deleted bet stays deleted; on a signature collision the settled
+#     copy beats the pending one (the common edit is marking a result).
+PROFILE_DIR = ROOT / "data" / "profiles"
+PROFILE_SECTIONS = ("mybets", "fantasy", "bankroll")
+MAX_PROFILE_BYTES = 1_000_000        # thousands of bets fit; junk bounces
+MAX_TOMBSTONES = 500
+_PROFILE_NAME = re.compile(r"^[A-Za-z0-9_-]{2,24}$")
+_PROFILE_PIN = re.compile(r"^\d{4,12}$")
+_PROFILE_LOCK = threading.Lock()
+
+
+def profile_name_ok(name) -> bool:
+    return isinstance(name, str) and bool(_PROFILE_NAME.match(name))
+
+
+def profile_pin_ok(pin) -> bool:
+    return isinstance(pin, str) and bool(_PROFILE_PIN.match(pin))
+
+
+def _pin_hash(pin: str, salt: str) -> str:
+    return hashlib.pbkdf2_hmac("sha256", pin.encode(), bytes.fromhex(salt),
+                               60_000).hex()
+
+
+def _pin_matches(profile: dict, pin) -> bool:
+    stored = profile.get("pin")
+    if not stored:
+        return True                  # no PIN on the account → open door
+    if not isinstance(pin, str) or not pin:
+        return False
+    return _pin_hash(pin, stored["salt"]) == stored["hash"]
+
+
+def _profile_path(name: str) -> Path:
+    return PROFILE_DIR / (name.lower() + ".json")
+
+
+def _load_profile(name: str) -> dict | None:
+    try:
+        return json.loads(_profile_path(name).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _save_profile(profile: dict) -> None:
+    """Atomic: the 20s-poll lesson from the meme board applies to any
+    file two requests can touch — write beside, then replace."""
+    path = _profile_path(profile["name"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(profile), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _num_str(v) -> str:
+    """Match how the browser prints a number into the bet signature:
+    String(25.0) is "25", String(25.5) is "25.5". Signatures computed
+    here must equal the ones the client computes, or the client's
+    tombstones would never match anything."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    return str(int(f)) if f.is_integer() else repr(f)
+
+
+def bet_sig(b: dict) -> str:
+    return "|".join([str(b.get("date", "")), str(b.get("book", "")),
+                     str(b.get("desc", "")).lower().strip(),
+                     _num_str(b.get("stake")), _num_str(b.get("odds"))])
+
+
+def _clean_section(sec) -> dict | None:
+    if not isinstance(sec, dict):
+        return None
+    try:
+        ts = int(sec.get("ts") or 0)
+    except (TypeError, ValueError):
+        ts = 0
+    return {"ts": max(0, ts), "data": sec.get("data")}
+
+
+def _merge_mybets(stored: dict | None, incoming: dict | None) -> dict:
+    """Union by signature minus tombstones — never lose a bet to a race."""
+    def rows_of(sec):
+        d = (sec or {}).get("data") or {}
+        rows = d.get("rows") if isinstance(d, dict) else None
+        return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+
+    def dels_of(sec):
+        d = (sec or {}).get("data") or {}
+        dels = d.get("deleted") if isinstance(d, dict) else None
+        return [s for s in dels if isinstance(s, str)] if isinstance(dels, list) else []
+
+    deleted = list(dict.fromkeys(dels_of(stored) + dels_of(incoming)))[-MAX_TOMBSTONES:]
+    dead = set(deleted)
+    merged: dict[str, dict] = {}
+    for r in rows_of(stored) + rows_of(incoming):     # incoming later → wins ties
+        sig = bet_sig(r)
+        if sig in dead:
+            continue
+        prev = merged.get(sig)
+        # The common edit is pending → win/loss; never let a stale
+        # pending copy from the other device un-settle a graded bet.
+        if prev and str(prev.get("result", "pending")) != "pending" \
+                and str(r.get("result", "pending")) == "pending":
+            continue
+        merged[sig] = r
+    s_ts = (stored or {}).get("ts", 0)
+    i_ts = (incoming or {}).get("ts", 0)
+    out = {"ts": max(s_ts, i_ts), "data": {"rows": list(merged.values()),
+                                           "deleted": deleted}}
+    # If the union differs from what the client just sent, bump the stamp
+    # past the client's own so it adopts the merged book on this reply.
+    sent = {bet_sig(r): str(r.get("result", "pending")) for r in rows_of(incoming)}
+    got = {k: str(v.get("result", "pending")) for k, v in merged.items()}
+    if got != sent or set(dels_of(incoming)) != dead:
+        out["ts"] = max(out["ts"], int(time.time() * 1000)) + 1
+    return out
+
+
+def merge_sections(stored: dict, incoming: dict) -> dict:
+    out = dict(stored)
+    for key in PROFILE_SECTIONS:
+        inc = _clean_section(incoming.get(key))
+        if key == "mybets":
+            if inc is not None or key in out:
+                out[key] = _merge_mybets(out.get(key), inc)
+            continue
+        if inc is None:
+            continue
+        cur = out.get(key)
+        # STRICT newer-than: an equal stamp means "nothing changed here
+        # since my last sync", and adopting it anyway would let a client
+        # whose localStorage was error-cleared (the Sleeper catch path
+        # removes ff_user without re-stamping) erase the stored copy.
+        if cur is None or inc["ts"] > cur.get("ts", 0):
+            out[key] = inc
+    return out
+
+
+def _public(profile: dict) -> dict:
+    return {"name": profile["name"], "has_pin": bool(profile.get("pin")),
+            "sections": profile.get("sections", {})}
+
+
+def profile_get(name, pin) -> tuple[int, dict]:
+    if not profile_name_ok(name):
+        return 400, {"error": "account names are 2–24 letters, digits, - or _"}
+    with _PROFILE_LOCK:
+        profile = _load_profile(name)
+    if profile is None:
+        return 404, {"error": f"no account named “{name}” — create it first"}
+    if not _pin_matches(profile, pin):
+        return 403, {"error": "wrong PIN for that account"}
+    return 200, _public(profile)
+
+
+def profile_sync(name, pin, sections) -> tuple[int, dict]:
+    """Create-or-merge. POSTing to a fresh name IS account creation (the
+    PIN sent then becomes the account's PIN); POSTing to an existing one
+    verifies the PIN, merges per the contract, and returns the result."""
+    if not profile_name_ok(name):
+        return 400, {"error": "account names are 2–24 letters, digits, - or _"}
+    if pin and not profile_pin_ok(pin):
+        return 400, {"error": "PIN must be 4–12 digits"}
+    if sections is None:
+        sections = {}
+    if not isinstance(sections, dict):
+        return 400, {"error": "sections must be an object"}
+    with _PROFILE_LOCK:
+        profile = _load_profile(name)
+        if profile is None:
+            profile = {"name": name, "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                       "sections": {}}
+            if pin:
+                salt = os.urandom(16).hex()
+                profile["pin"] = {"salt": salt, "hash": _pin_hash(pin, salt)}
+        elif not _pin_matches(profile, pin):
+            return 403, {"error": "wrong PIN for that account"}
+        profile["sections"] = merge_sections(profile.get("sections", {}), sections)
+        _save_profile(profile)
+    return 200, _public(profile)
 
 
 CONTENT_TYPES = {
@@ -112,7 +329,32 @@ class Handler(BaseHTTPRequestHandler):
             return self._api(parse_qs(parsed.query), sport="cfb")
         if parsed.path.startswith("/api/sleeper/"):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
+        if parsed.path.startswith("/api/profile/"):
+            code, body = profile_get(parsed.path[len("/api/profile/"):].strip("/"),
+                                     self.headers.get("X-Profile-Pin") or "")
+            return self._send(code, json.dumps(body).encode(), ".json")
         return self._static(parsed.path)
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        if not parsed.path.startswith("/api/profile/"):
+            return self._send(404, b'{"error":"unknown endpoint"}', ".json")
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        if length <= 0 or length > MAX_PROFILE_BYTES:
+            return self._send(413, b'{"error":"profile payload too large"}', ".json")
+        try:
+            body = json.loads(self.rfile.read(length))
+            assert isinstance(body, dict)
+        except Exception:
+            return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+        code, out = profile_sync(
+            parsed.path[len("/api/profile/"):].strip("/"),
+            body.get("pin") or self.headers.get("X-Profile-Pin") or "",
+            body.get("sections"))
+        self._send(code, json.dumps(out).encode(), ".json")
 
     def _sleeper(self, path: str):
         """Forward an allowlisted read to Sleeper's free public API. The big

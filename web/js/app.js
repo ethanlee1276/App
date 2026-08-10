@@ -6288,6 +6288,7 @@ function mbLoad() {
 }
 function mbSave(bets) {
   try { localStorage.setItem(MYBETS_KEY, JSON.stringify(bets)); } catch (e) {}
+  acctTouch("mybets");   // signed in → the account copy follows this one
 }
 
 /* American odds → decimal multiplier on the stake. +150 → 2.5, −120 →
@@ -6369,7 +6370,19 @@ window.mbResult = function (id, result) {
   if (b) { b.result = result; mbSave(bets); renderMyBets(); }
 };
 window.mbDelete = function (id) {
-  mbSave(mbLoad().filter((x) => x.id !== id));
+  const bets = mbLoad();
+  const gone = bets.find((x) => x.id === id);
+  if (gone) {
+    // A deletion has to TRAVEL: without a tombstone, the account merge
+    // (a union, so a device race can never lose a bet) would politely
+    // resurrect this bet from whichever device still holds it.
+    try {
+      const dels = acctDeleted();
+      dels.push(mbSig(gone));
+      localStorage.setItem(ACCT_DEL_KEY, JSON.stringify(dels.slice(-500)));
+    } catch (e) {}
+  }
+  mbSave(bets.filter((x) => x.id !== id));
   renderMyBets();
 };
 window.mbExport = function () {
@@ -6653,8 +6666,11 @@ function mbBulkShow(text) {
 function renderMyBets() {
   const host = document.getElementById("mybets-body");
   if (!host) return;
-  setStandaloneSource("Your device only — nothing is uploaded",
-                      "My Bets · local to this browser");
+  const acct = acctState();
+  setStandaloneSource(acct ? `Account “${acct.name}” — synced through your own server`
+                           : "Your device only — nothing is uploaded",
+                      acct ? `My Bets · account ${acct.name}`
+                           : "My Bets · local to this browser");
   const bets = mbLoad().slice().sort((a, b) =>
     (b.date || "").localeCompare(a.date || "") ||
     (b.id || "").localeCompare(a.id || ""));
@@ -6730,8 +6746,10 @@ function renderMyBets() {
       <b>No passwords, ever.</b> Sportsbooks don’t offer a login for apps, so the only way to
       pull your account automatically would be to store your password and scrape it — against
       their terms, and a risk to your account and your money. So you log bets here yourself.
-      Everything stays in this browser; use Export to back it up or move it to another device.
+      Everything stays on your own machines: this browser, plus your own computer’s server
+      when you sign in to an account below.
     </div>
+    ${acctCardHTML()}
     ${form}
     <details class="card mb-import">
       <summary>Bulk import — a CSV from your sportsbook, or a Juice Reel export</summary>
@@ -7392,7 +7410,7 @@ async function renderFantasy() {
      "what the market expects each game to look like", _ffScripts],
     ["league", "Around the league",
      "camp, the waiver wire, the offseason and the draft kit",
-     `<div id="sleeper-zone"></div>` + campHTML(d.camp)
+     acctCardHTML() + `<div id="sleeper-zone"></div>` + campHTML(d.camp)
      + waiverPulseHTML(d.trending) + offseasonHTML(off) + draftKit],
   ]) + _ffFoot;
   bindSubtabs(host);
@@ -7458,6 +7476,234 @@ function campHTML(camp) {
             (camp.fallers || []).map((r) => row(r, "var(--warn)")).join(""), accruing)}
     </div>`;
 }
+
+/* ============================================================
+   ACCOUNTS — one name, every device.
+
+   The personal data on this site (My Bets, the Sleeper league link,
+   the bankroll) lived only in localStorage — which is per-browser AND
+   per-address, so the laptop, the phone on the LAN address and a
+   tailscale name were three empty copies, and iOS quietly evicts a
+   site's storage after a week away. An account moves that data to a
+   JSON file on the machine already serving this site — no cloud, no
+   email, no third party, and still no sportsbook passwords, ever. The
+   optional PIN keeps housemates out of your book; it rides plain HTTP
+   on your own Wi-Fi, so it is a lock on the door, not cryptography.
+
+   Sync is one POST that both pushes and pulls: the server merges
+   (union by bet signature for My Bets so a device race can never lose
+   a logged bet; last-writer-wins for fantasy + bankroll) and replies
+   with the merged truth, which we adopt when its stamp is newer.
+   ============================================================ */
+const ACCT_KEY = "qb_acct_v1";       // {name, pin} — this device's sign-in
+const ACCT_TS_KEY = "qb_acct_ts_v1"; // per-section last-local-change stamps
+const ACCT_DEL_KEY = "qb_mybets_del_v1";  // deleted-bet signatures (tombstones)
+
+function acctState() {
+  try {
+    const a = JSON.parse(localStorage.getItem(ACCT_KEY));
+    return a && a.name ? a : null;
+  } catch (e) { return null; }
+}
+function acctTs() {
+  try { return JSON.parse(localStorage.getItem(ACCT_TS_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function acctDeleted() {
+  try { return JSON.parse(localStorage.getItem(ACCT_DEL_KEY)) || []; }
+  catch (e) { return []; }
+}
+
+let _acctNote = "";                  // last sync outcome, painted on the card
+let _acctPushT = null;
+
+/* Called wherever a synced section changes locally. Stamps the section
+   and (when signed in) schedules a push — debounced so typing a bet in
+   does not fire a request per keystroke. */
+function acctTouch(section) {
+  const ts = acctTs();
+  ts[section] = Date.now();
+  try { localStorage.setItem(ACCT_TS_KEY, JSON.stringify(ts)); } catch (e) {}
+  if (!acctState()) return;
+  clearTimeout(_acctPushT);
+  _acctPushT = setTimeout(() => acctSync(), 800);
+}
+
+function acctGather() {
+  const ts = acctTs(), sections = {};
+  const rows = mbLoad(), deleted = acctDeleted();
+  if (rows.length || deleted.length || ts.mybets)
+    sections.mybets = { ts: ts.mybets || 0, data: { rows, deleted } };
+  const fu = localStorage.getItem("ff_user") || "";
+  const fl = localStorage.getItem("ff_league") || "";
+  const fd = localStorage.getItem("ff_draft_id") || "";
+  if (fu || fl || fd || ts.fantasy)
+    sections.fantasy = { ts: ts.fantasy || 0,
+                         data: { user: fu, league: fl, draft: fd } };
+  const bk = localStorage.getItem("ge-bankroll") || "";
+  const up = localStorage.getItem("ge-unit-pct") || "";
+  if (bk || up || ts.bankroll)
+    sections.bankroll = { ts: ts.bankroll || 0,
+                          data: { bankroll: bk, unitPct: up } };
+  return sections;
+}
+
+/* Adopt a section the server holds a newer copy of. Writes storage
+   DIRECTLY (never through mbSave, which would re-stamp and re-push —
+   an echo loop between two open devices). */
+function acctApplySection(name, sec) {
+  const d = sec.data || {};
+  try {
+    if (name === "mybets") {
+      localStorage.setItem(MYBETS_KEY, JSON.stringify(d.rows || []));
+      localStorage.setItem(ACCT_DEL_KEY, JSON.stringify(d.deleted || []));
+    } else if (name === "fantasy") {
+      const put = (k, v) => v ? localStorage.setItem(k, v)
+                              : localStorage.removeItem(k);
+      put("ff_user", d.user); put("ff_league", d.league);
+      put("ff_draft_id", d.draft);
+    } else if (name === "bankroll") {
+      localStorage.setItem("ge-bankroll", d.bankroll || "");
+      if (d.unitPct) localStorage.setItem("ge-unit-pct", d.unitPct);
+      const el = document.getElementById("bankroll");
+      const unit = document.getElementById("unit-pct");
+      if (el) {
+        el.value = d.bankroll || "";
+        if (unit && d.unitPct) unit.value = d.unitPct;
+        el.dispatchEvent(new Event("input"));   // reuse the render cascade
+      }
+    }
+    const ts = acctTs();
+    ts[name] = sec.ts || Date.now();
+    localStorage.setItem(ACCT_TS_KEY, JSON.stringify(ts));
+  } catch (e) {}
+}
+
+async function acctSync() {
+  const a = acctState();
+  if (!a) return;
+  try {
+    const r = await fetch("/api/profile/" + encodeURIComponent(a.name), {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: a.pin || "", sections: acctGather() }),
+    });
+    const body = await r.json().catch(() => null);
+    if (!r.ok) {
+      _acctNote = (body && body.error) || `sync failed (${r.status})`;
+      acctPaintNote();
+      return;
+    }
+    const ts = acctTs();
+    let betsChanged = false;
+    Object.keys(body.sections || {}).forEach((k) => {
+      const s = body.sections[k];
+      if (s && (s.ts || 0) > (ts[k] || 0)) {
+        acctApplySection(k, s);
+        if (k === "mybets") betsChanged = true;
+      }
+    });
+    _acctNote = "synced " + new Date().toLocaleTimeString([],
+                { hour: "numeric", minute: "2-digit" });
+    if (betsChanged && state.view === "mybets") renderMyBets();
+    else acctPaintNote();
+  } catch (e) {
+    _acctNote = "server offline — changes are saved here and will sync "
+              + "when the live site is up";
+    acctPaintNote();
+  }
+}
+
+function acctPaintNote() {
+  document.querySelectorAll(".acct-note").forEach((el) => {
+    el.textContent = _acctNote;
+  });
+}
+
+/* One card, mounted on both My Bets and Fantasy. Handlers find their
+   inputs through the card element itself, so the two mounts never fight
+   over ids. */
+function acctCardHTML() {
+  const a = acctState();
+  if (a) {
+    return `<div class="card" style="margin-bottom:16px">
+      <div class="card-head"><div><div class="player">Account — ${escapeHtml(a.name)}</div>
+        <div class="subtitle">Your bets, league link and bankroll follow this name to every
+          device that signs in — stored on your own computer, nowhere else.</div></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="acctSyncNow()">Sync now</button>
+          <button class="btn" onclick="acctSignOut()">Sign out</button>
+        </div></div>
+      <div class="acct-note" style="margin-top:8px;color:var(--text-mute);font-size:0.85em">${escapeHtml(_acctNote)}</div>
+    </div>`;
+  }
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-head"><div><div class="player">Make an account (optional)</div>
+      <div class="subtitle">Pick a name and this page’s info follows you to every device —
+        it lives on your own computer, not a company’s server. The PIN is optional and
+        just keeps others on your Wi-Fi out. Still no sportsbook logins, ever.</div></div></div>
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+      <input type="text" class="acct-name" placeholder="account name" maxlength="24"
+        autocomplete="off" style="flex:1;min-width:140px;background:var(--panel-2);color:inherit;
+        border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-family:inherit"/>
+      <input type="text" class="acct-pin" placeholder="PIN (optional)" maxlength="12"
+        inputmode="numeric" autocomplete="off" style="width:120px;background:var(--panel-2);color:inherit;
+        border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-family:inherit"/>
+      <button class="btn" onclick="acctGo(this, true)">Create</button>
+      <button class="btn" onclick="acctGo(this, false)">Sign in</button>
+    </div>
+    <div class="acct-note" style="margin-top:8px;color:var(--text-mute);font-size:0.85em">${escapeHtml(_acctNote)}</div>
+  </div>`;
+}
+
+window.acctGo = async function (btn, creating) {
+  const card = btn.closest(".card");
+  const name = (card.querySelector(".acct-name").value || "").trim();
+  const pin = (card.querySelector(".acct-pin").value || "").trim();
+  const note = card.querySelector(".acct-note");
+  const say = (t) => { if (note) note.textContent = t; };
+  if (!/^[A-Za-z0-9_-]{2,24}$/.test(name))
+    return say("Account names are 2–24 letters, digits, - or _ — no spaces.");
+  if (pin && !/^\d{4,12}$/.test(pin))
+    return say("The PIN is 4–12 digits (or leave it empty).");
+  if (!creating) {
+    // Signing in verifies first — a typo must not silently CREATE an
+    // account and strand the real one.
+    try {
+      const r = await fetch("/api/profile/" + encodeURIComponent(name),
+                            { headers: { "X-Profile-Pin": pin } });
+      if (r.status === 404)
+        return say(`No account named “${name}” — check the spelling, or use Create.`);
+      if (!r.ok) {
+        const b = await r.json().catch(() => null);
+        return say((b && b.error) || `Sign-in failed (${r.status}).`);
+      }
+    } catch (e) {
+      return say("The live server is not reachable — accounts need the site "
+                 + "served by launch.py, not a static copy.");
+    }
+  }
+  try { localStorage.setItem(ACCT_KEY, JSON.stringify({ name, pin })); } catch (e) {}
+  _acctNote = creating ? "Account created — this device is now synced."
+                       : "Signed in — pulling your info…";
+  await acctSync();
+  if (state.view === "mybets") renderMyBets();
+  else if (state.view === "fantasy") renderFantasy();
+};
+
+window.acctSyncNow = function () { _acctNote = "syncing…"; acctPaintNote(); acctSync(); };
+
+window.acctSignOut = function () {
+  try { localStorage.removeItem(ACCT_KEY); } catch (e) {}
+  _acctNote = "Signed out — everything stays on this device; sign back in anytime.";
+  if (state.view === "mybets") renderMyBets();
+  else if (state.view === "fantasy") renderFantasy();
+};
+
+/* Boot: adopt anything newer from the server shortly after first paint,
+   then keep a slow heartbeat while the tab is visible, so a bet logged
+   on the phone shows up on the laptop without a reload. */
+setTimeout(() => acctSync(), 1500);
+setInterval(() => { if (!document.hidden) acctSync(); }, 60000);
 
 /* ============================================================
    Offseason panel — what changed since the stats were recorded.
@@ -8160,6 +8406,7 @@ function initDraftKit(kit) {
       return;
     }
     localStorage.setItem("ff_draft_id", m[1]);
+    acctTouch("fantasy");
     dkStart(m[1]);
   });
   document.getElementById("dk-disconnect")
@@ -8322,6 +8569,7 @@ async function renderSleeperZone(d, errMsg) {
       const v = (document.getElementById("sleeper-username").value || "").trim();
       if (!v) return;
       localStorage.setItem("ff_user", v);
+      acctTouch("fantasy");
       renderSleeperZone(d);
     });
     return;
@@ -8430,12 +8678,14 @@ function renderSleeperPanel(d, ctx) {
   const sel = document.getElementById("sleeper-league");
   if (sel) sel.addEventListener("change", () => {
     localStorage.setItem("ff_league", sel.value);
+    acctTouch("fantasy");
     renderSleeperZone(d);
   });
   const dis = document.getElementById("sleeper-disconnect");
   if (dis) dis.addEventListener("click", () => {
     localStorage.removeItem("ff_user");
     localStorage.removeItem("ff_league");
+    acctTouch("fantasy");
     renderSleeperZone(d);
   });
 }
@@ -9875,6 +10125,7 @@ function bind() {
     try {
       localStorage.setItem("ge-bankroll", state.bankroll == null ? "" : String(state.bankroll));
       localStorage.setItem("ge-unit-pct", String(state.unitPct));
+      acctTouch("bankroll");
     } catch (e) {}
     updateUnitNote();
     renderStats();

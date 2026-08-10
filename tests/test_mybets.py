@@ -77,14 +77,22 @@ def test_it_never_asks_for_a_credential():
 
 
 def test_entries_live_only_in_the_browser():
-    """Client-only by construction: localStorage, no fetch/POST to a
-    server, and a stable storage key so a redeploy does not orphan data."""
+    """Local-first by construction: localStorage with a stable key so a
+    redeploy does not orphan data, and the storage layer itself never
+    talks to the network. What CHANGED on 2026-08-10 (Ethan: "make an
+    account so you don't have to put in that info every time"): syncing
+    now exists, but as an opt-in ACCOUNT layer that ships the data to
+    the user's own laptop server and nowhere else — see
+    tests/test_accounts.py for that contract. The mechanism pinned here
+    is the separation: this block still contains no fetch; it only
+    raises its hand via acctTouch and the account layer decides."""
     body = _slice("const MYBETS_KEY", "\n/* ================")
     assert 'MYBETS_KEY = "qb_mybets_v1"' in APP
     assert "localStorage.getItem(MYBETS_KEY)" in body
     assert "localStorage.setItem(MYBETS_KEY" in body
-    # No network write of the user's bets.
+    # No network code in the storage layer — sync goes through acctTouch.
     assert "fetch(" not in body
+    assert 'acctTouch("mybets")' in body
 
 
 def test_export_and_import_exist_for_backup_and_device_move():
