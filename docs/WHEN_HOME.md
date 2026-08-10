@@ -447,12 +447,20 @@ python3 assets.py --probe --sport nba  # confirms the face resize
 None of these write anything. Three of them are supposed to decline to answer
 right now, and knowing which three is the point of running them.
 
-**One more, new since this list was written — the meme-coin page's first
-live contact:**
+**Two more, new since this list was written — first live contact for the
+two pages built while you were out:**
 
 ```
-python3 launch.py --memes   # Rocket Radar live-shape probe
+python3 launch.py --memes      # Rocket Radar live-shape probe
+python3 launch.py --injuries   # Injury Report probe — all five leagues
 ```
+
+`--injuries` should print counts for nfl/mlb/nba/wnba/cfb and the
+freshest filings league-wide. It is the same ESPN host the live scores
+already use from your machine, so anything other than instant success is
+surprising. CFB at (or near) zero is normal — schools have no duty to
+report. Once it runs, check the new Injuries tab in any sport and the
+"Injury watch — tonight's teams" block on Recommended → Watchlists.
 
 The whole Rocket Radar stack (new "Meme Coins" tab, GeckoTerminal +
 DexScreener feeds, momentum/risk scoring) was built against fixtures
