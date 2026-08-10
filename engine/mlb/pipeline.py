@@ -758,6 +758,17 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
             d["velo_delta"] = _vd(prop.person_id, _dt.date.today().year)
             from .velocity import projected_tto as _tp
             d["tto_proj"] = _tp(prop.person_id, _dt.date.today().year)
+            # §5's opener flag — his recent starts say what his workload
+            # actually is. A WARNING, never a gate: an outs line priced
+            # for a man who throws one inning is a category error, but
+            # refusing to price it is a pricing change that waits for a
+            # human (THE_INFORMATION_TEST).
+            from .openers import opener_flag as _of
+            if _of(prop.person_id, _dt.date.today().year):
+                d.setdefault("warnings", []).append(
+                    "Probable starter looks like an OPENER — his recent "
+                    "starts run 1-2 innings, and outs/K projections here "
+                    "assume a starter's workload")
         if getattr(game, "doubleheader", False):
             # Say WHICH game of the doubleheader this prop is for — on the
             # card, in the headline, everywhere.

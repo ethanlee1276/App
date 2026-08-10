@@ -140,6 +140,13 @@ SIGNALS = (
      "why": "The 2026-08-09 finding. Banked nightly, rendered on the "
             "Record page (web/js/app.js, outside this scan), and led with "
             "in the lab's prompt."},
+    {"name": "opener flag",
+     "module": "engine/mlb/openers.py",
+     "symbols": ("opener_flag", "looks_like_opener", "OPENER_MAX_OUTS"),
+     "want": ("pipeline",),
+     "why": "§5. An outs projection for a man who throws one inning is a "
+            "category error. Lands as a card WARNING on pitcher props; "
+            "gating on it is a pricing change that waits."},
     {"name": "pitch arsenal",
      "module": "engine/mlb/arsenal.py",
      "symbols": ("mix_shift", "whiff_by_type", "show_arsenal",
