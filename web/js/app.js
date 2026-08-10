@@ -5963,7 +5963,7 @@ function pmAgo(ts) {
    tools menu and made it mean the NFL and only the NFL. It is a tab
    inside each sport now. */
 const STANDALONE_MODES = ["intel", "fantasy", "memes", "ufc", "why", "about",
-                          "record", "lab"];
+                          "record", "lab", "mybets"];
 
 // Header identity per standalone page — the tagline follows the ACTIVE
 // page. Before this, opening Polymarket from the MLB tab left a baseball
@@ -5976,6 +5976,7 @@ const STANDALONE_BRAND = {
   why: { tagline: "See the math. Know if it’s working." },
   record: { tagline: "The Book — every pick journaled, graded, learned from" },
   lab: { tagline: "The Lab — the model replayed against stored history" },
+  mybets: { tagline: "My Bets — your own sportsbook P&L, kept on this device" },
 };
 
 function enterStandaloneMode(name) {
@@ -6238,6 +6239,279 @@ async function renderIntel() {
       trader identity, which is why it appears above as a PRICE and not as flow.
       Analyzing public flow is market research; what the CFTC prosecutes
       (2026) is trading on information <i>you</i> hold a duty to keep confidential.</p>`;
+}
+
+/* ============================================================
+   MY BETS — the user's OWN sportsbook bets, tracked locally
+   ============================================================
+   Ethan, 2026-08-10: "Add a way to log into sportsbook accounts and
+   track bets made by the user on the sportsbooks."
+
+   WHY THERE IS NO ACCOUNT LOGIN HERE, and why that is the right call:
+   no sportsbook publishes an API or an OAuth flow. The only way to
+   "log in" programmatically is to store your DraftKings/FanDuel password
+   and scrape the account — which their terms forbid, which trips bot
+   detection that can freeze the account and its balance, and which would
+   mean this site holding the credentials to your money. So this tracks
+   the bets you LOG yourself, the way every honest personal tracker does.
+
+   It is deliberately client-only: the entries live in this browser's
+   localStorage, never touch a server, and are separate from the model's
+   own journal (the Record page). Export writes a JSON file so you can
+   back it up or move it to another device; import reads one back. The
+   P&L math is standard American-odds payout, unit-tested by pinned
+   known answers below. */
+const MYBETS_KEY = "qb_mybets_v1";
+const MYBETS_BOOKS = ["DraftKings", "FanDuel", "BetMGM", "Caesars",
+                      "ESPN BET", "Fanatics", "bet365", "Other"];
+
+function mbLoad() {
+  try {
+    const raw = localStorage.getItem(MYBETS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+function mbSave(bets) {
+  try { localStorage.setItem(MYBETS_KEY, JSON.stringify(bets)); } catch (e) {}
+}
+
+/* American odds → decimal multiplier on the stake. +150 → 2.5, −120 →
+   1.8333. The one piece of real math on the page, so it is its own pure
+   function and the tests pin it. */
+function mbDecimal(american) {
+  const a = Number(american);
+  if (!a || isNaN(a)) return null;
+  return a > 0 ? 1 + a / 100 : 1 + 100 / Math.abs(a);
+}
+
+/* Profit (not return) on ONE settled bet. Win pays stake×(dec−1); a loss
+   is −stake; a push is zero; a pending bet has no realized number. */
+function mbProfit(bet) {
+  const stake = Number(bet.stake) || 0;
+  if (bet.result === "win") {
+    const dec = mbDecimal(bet.odds);
+    return dec == null ? 0 : stake * (dec - 1);
+  }
+  if (bet.result === "loss") return -stake;
+  return 0;                          // push or pending
+}
+
+function mbStats(bets) {
+  const settled = bets.filter((b) => ["win", "loss", "push"].includes(b.result));
+  const staked = settled.reduce((s, b) => s + (Number(b.stake) || 0), 0);
+  const profit = settled.reduce((s, b) => s + mbProfit(b), 0);
+  const wins = settled.filter((b) => b.result === "win").length;
+  const losses = settled.filter((b) => b.result === "loss").length;
+  const pushes = settled.filter((b) => b.result === "push").length;
+  const pending = bets.length - settled.length;
+  const atRisk = bets.filter((b) => b.result === "pending")
+    .reduce((s, b) => s + (Number(b.stake) || 0), 0);
+  return { n: bets.length, settled: settled.length, pending, wins, losses,
+           pushes, staked, profit, atRisk,
+           roi: staked > 0 ? profit / staked : null,
+           winPct: (wins + losses) > 0 ? wins / (wins + losses) : null };
+}
+
+function mbByBook(bets) {
+  const books = {};
+  for (const b of bets) {
+    const k = b.book || "Other";
+    const s = books[k] || (books[k] = { staked: 0, profit: 0, n: 0, pending: 0 });
+    s.n += 1;
+    if (b.result === "pending") { s.pending += 1; continue; }
+    s.staked += Number(b.stake) || 0;
+    s.profit += mbProfit(b);
+  }
+  return books;
+}
+
+/* Mutations. Global because the page rebuilds its own innerHTML, so a
+   captured closure would go stale on the first re-render. */
+window.mbAdd = function () {
+  const g = (id) => (document.getElementById(id) || {}).value || "";
+  const stake = parseFloat(g("mb-stake"));
+  const odds = parseInt(g("mb-odds"), 10);
+  const desc = g("mb-desc").trim();
+  const warn = document.getElementById("mb-form-warn");
+  if (!desc || !stake || isNaN(stake) || stake <= 0 || !odds || isNaN(odds)) {
+    if (warn) warn.textContent =
+      "Need at least a description, a stake over $0, and American odds (e.g. −110).";
+    return;
+  }
+  const bets = mbLoad();
+  bets.push({
+    id: Date.now() + "" + Math.floor(Math.random() * 1e4),
+    book: g("mb-book") || "Other", sport: g("mb-sport") || "",
+    date: g("mb-date") || new Date().toISOString().slice(0, 10),
+    desc, stake, odds, result: "pending",
+  });
+  mbSave(bets);
+  renderMyBets();
+};
+window.mbResult = function (id, result) {
+  const bets = mbLoad();
+  const b = bets.find((x) => x.id === id);
+  if (b) { b.result = result; mbSave(bets); renderMyBets(); }
+};
+window.mbDelete = function (id) {
+  mbSave(mbLoad().filter((x) => x.id !== id));
+  renderMyBets();
+};
+window.mbExport = function () {
+  const blob = new Blob([JSON.stringify(mbLoad(), null, 1)],
+                        { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "my-bets-" + new Date().toISOString().slice(0, 10) + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+window.mbImport = function (input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const arr = JSON.parse(reader.result);
+      if (!Array.isArray(arr)) throw new Error("not a list");
+      // Merge by id, so importing a backup does not wipe newer entries.
+      const have = new Set(mbLoad().map((b) => b.id));
+      const merged = mbLoad().concat(arr.filter((b) => b && !have.has(b.id)));
+      mbSave(merged);
+      renderMyBets();
+    } catch (e) {
+      const warn = document.getElementById("mb-form-warn");
+      if (warn) warn.textContent = "That file was not a My Bets export.";
+    }
+  };
+  reader.readAsText(file);
+};
+
+function mbMoney(v, sign) {
+  const n = Number(v) || 0;
+  const s = "$" + Math.abs(n).toFixed(2);
+  if (!sign) return s;
+  return n > 0 ? "+" + s : n < 0 ? "−" + s : s;
+}
+
+function renderMyBets() {
+  const host = document.getElementById("mybets-body");
+  if (!host) return;
+  setStandaloneSource("Your device only — nothing is uploaded",
+                      "My Bets · local to this browser");
+  const bets = mbLoad().slice().sort((a, b) =>
+    (b.date || "").localeCompare(a.date || "") ||
+    (b.id || "").localeCompare(a.id || ""));
+  const st = mbStats(bets);
+  const books = mbByBook(bets);
+  const pcolor = (v) => v > 0 ? "var(--good)" : v < 0 ? "var(--bad)" : "var(--text-mute)";
+  const tile = (k, v, sub, color) => `<div class="tile"><div class="k">${k}</div>
+    <div class="v"${color ? ` style="color:${color}"` : ""}>${v}</div>${
+      sub ? `<div class="tile-sub">${sub}</div>` : ""}</div>`;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const form = `
+    <div class="card mb-form">
+      <div class="mb-form-row">
+        <label>Book<select id="mb-book">${MYBETS_BOOKS.map((b) =>
+          `<option>${escapeHtml(b)}</option>`).join("")}</select></label>
+        <label>Sport<select id="mb-sport">${
+          ["", "NFL", "CFB", "MLB", "NBA", "WNBA", "UFC", "Other"].map((s) =>
+          `<option value="${s}">${s || "—"}</option>`).join("")}</select></label>
+        <label>Date<input id="mb-date" type="date" value="${today}"></label>
+      </div>
+      <div class="mb-form-row">
+        <label class="mb-grow">Bet<input id="mb-desc" type="text" maxlength="90"
+          placeholder="e.g. Yankees ML, or Judge Over 1.5 total bases"></label>
+        <label>Stake $<input id="mb-stake" type="number" min="0" step="0.01"
+          inputmode="decimal" placeholder="25"></label>
+        <label>Odds<input id="mb-odds" type="number" step="1"
+          inputmode="numeric" placeholder="-110"></label>
+        <button class="btn mb-add" type="button" onclick="mbAdd()">Log bet</button>
+      </div>
+      <div id="mb-form-warn" class="mb-warn"></div>
+    </div>`;
+
+  const bookRows = Object.keys(books).sort((a, b) =>
+    books[b].profit - books[a].profit).map((k) => {
+    const s = books[k];
+    return `<tr>
+      <td>${escapeHtml(k)}</td>
+      <td class="num">${s.n}</td>
+      <td class="num">${mbMoney(s.staked)}</td>
+      <td class="num" style="color:${pcolor(s.profit)};font-weight:700">${mbMoney(s.profit, true)}</td>
+      <td class="num">${s.staked > 0 ? (100 * s.profit / s.staked).toFixed(1) + "%" : "—"}</td>
+    </tr>`;
+  }).join("");
+
+  const resultTag = { win: ["WON", "var(--good)"], loss: ["LOST", "var(--bad)"],
+                      push: ["PUSH", "var(--text-mute)"],
+                      pending: ["PENDING", "var(--warn)"] };
+  const row = (b) => {
+    const [label, color] = resultTag[b.result] || resultTag.pending;
+    const pnl = b.result === "pending" ? "—" : mbMoney(mbProfit(b), true);
+    const actions = b.result === "pending"
+      ? `<button class="mb-act win" onclick="mbResult('${b.id}','win')">Win</button>
+         <button class="mb-act loss" onclick="mbResult('${b.id}','loss')">Loss</button>
+         <button class="mb-act push" onclick="mbResult('${b.id}','push')">Push</button>`
+      : `<button class="mb-act undo" onclick="mbResult('${b.id}','pending')">Reopen</button>`;
+    return `<tr>
+      <td class="num">${escapeHtml(b.date || "")}</td>
+      <td>${escapeHtml(b.book || "")}${b.sport ? ` <span class="inj-pos">${escapeHtml(b.sport)}</span>` : ""}</td>
+      <td>${escapeHtml(b.desc || "")}</td>
+      <td class="num">${b.odds > 0 ? "+" : ""}${escapeHtml(String(b.odds))}</td>
+      <td class="num">${mbMoney(b.stake)}</td>
+      <td class="num"><b style="color:${color}">${label}</b></td>
+      <td class="num" style="color:${pcolor(mbProfit(b))};font-weight:700">${pnl}</td>
+      <td class="mb-actions">${actions}
+        <button class="mb-act del" title="Delete this bet" aria-label="Delete"
+          onclick="mbDelete('${b.id}')">${icon("cross", 12)}</button></td>
+    </tr>`;
+  };
+
+  host.innerHTML = `
+    <div class="card mb-safety">
+      <b>No passwords, ever.</b> Sportsbooks don’t offer a login for apps, so the only way to
+      pull your account automatically would be to store your password and scrape it — against
+      their terms, and a risk to your account and your money. So you log bets here yourself.
+      Everything stays in this browser; use Export to back it up or move it to another device.
+    </div>
+    ${form}
+    <div class="stats">
+      ${tile("Net profit", mbMoney(st.profit, true), `${st.settled} settled bet(s)`, pcolor(st.profit))}
+      ${tile("ROI", st.roi == null ? "—" : (100 * st.roi).toFixed(1) + "%", "profit ÷ staked")}
+      ${tile("Record", `${st.wins}–${st.losses}${st.pushes ? `–${st.pushes}` : ""}`,
+             st.winPct == null ? "no decisions yet" : (100 * st.winPct).toFixed(0) + "% win")}
+      ${tile("At risk", mbMoney(st.atRisk), `${st.pending} pending`)}
+    </div>
+    ${bets.length ? `
+    <div class="section-title">By book
+      <span class="sub">— your realized P&L at each sportsbook, best first.</span></div>
+    <div class="card" style="padding:0;overflow-x:auto">
+      <table class="agate"><thead><tr><th>Book</th><th>Bets</th><th>Staked</th>
+        <th>Profit</th><th>ROI</th></tr></thead><tbody>${bookRows}</tbody></table></div>
+    <div class="section-title">Every bet
+      <span class="sub">— newest first. Tap Win/Loss/Push when a bet settles; the totals
+      update as you go.</span>
+      <span style="float:right;font-size:var(--fs-sm)">
+        <button class="btn mb-io" type="button" onclick="mbExport()">Export</button>
+        <label class="btn mb-io" style="cursor:pointer">Import<input type="file"
+          accept="application/json" style="display:none" onchange="mbImport(this)"></label>
+      </span></div>
+    <div class="card" style="padding:0;overflow-x:auto">
+      <table class="agate mb-table"><thead><tr>
+        <th>Date</th><th>Book</th><th>Bet</th><th>Odds</th><th>Stake</th>
+        <th>Result</th><th>P&L</th><th></th>
+      </tr></thead><tbody>${bets.map(row).join("")}</tbody></table></div>`
+    : `<div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
+        <div class="es-title">No bets logged yet</div>
+        <div class="es-sub">Add the first bet you placed at a book above. It stays on this
+        device, tracks your P&L by book, and is separate from the model’s own record.</div></div>`}
+    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
+      This is a manual log for the bets YOU place — not the model’s picks (those are on the
+      Record page) and not gambling advice. Data lives only in this browser; clearing your
+      browser data erases it, so Export now and then if you want a backup.</p>`;
 }
 
 /* ============================================================
@@ -8922,6 +9196,7 @@ function switchView(name, push = false) {
   if (name === "intel") renderIntel();
   if (name === "fantasy") renderFantasy();
   if (name === "memes") renderMemes();
+  if (name === "mybets") renderMyBets();
   if (name === "ufc") renderUFC();
   if (name === "why") renderWhy();
   if (name === "about") renderAbout();

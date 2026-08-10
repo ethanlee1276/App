@@ -4040,6 +4040,39 @@ select.calc-in { width: auto; font-weight: 600; }
 .mc-board td:nth-child(2) { max-width: 220px; overflow: hidden;
   text-overflow: ellipsis; }
 
+/* My Bets — the user's own sportsbook log.
+   ------------------------------------------------------------------
+   Reuses .stats/.agate/.card/.btn; the only new furniture is the entry
+   form, the safety banner, and the small per-row action buttons. */
+.mb-safety { border-left: 3px solid var(--good); font-size: var(--fs-sm);
+  color: var(--text-dim); margin-bottom: 16px; }
+.mb-safety b { color: var(--text); }
+.mb-form { margin-bottom: 18px; }
+.mb-form-row { display: flex; flex-wrap: wrap; gap: 10px 14px;
+  align-items: flex-end; margin-bottom: 10px; }
+.mb-form-row label { display: flex; flex-direction: column; gap: 4px;
+  font-size: var(--fs-xs); color: var(--text-mute); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .5px; }
+.mb-form-row.mb-grow, .mb-form label.mb-grow { flex: 1; min-width: 200px; }
+.mb-form input, .mb-form select { font: inherit; font-size: var(--fs-md);
+  padding: 7px 9px; background: var(--bg-2); color: var(--text);
+  border: var(--hairline) solid var(--border); text-transform: none;
+  letter-spacing: 0; }
+.mb-form input[type="number"] { max-width: 100px; }
+.mb-add { align-self: flex-end; }
+.mb-warn { color: var(--warn); font-size: var(--fs-sm); min-height: 1em; }
+.mb-io { font-size: var(--fs-xs); padding: 4px 10px; margin-left: 6px; }
+.mb-actions { display: flex; gap: 4px; white-space: nowrap; }
+.mb-act { font: inherit; font-size: var(--fs-xs); font-weight: 700;
+  padding: 3px 8px; cursor: pointer; background: none;
+  border: var(--hairline) solid var(--border); color: var(--text-dim); }
+.mb-act:hover { border-color: var(--text-mute); color: var(--text); }
+.mb-act.win:hover { border-color: var(--good); color: var(--good); }
+.mb-act.loss:hover { border-color: var(--bad); color: var(--bad); }
+.mb-act.del:hover { border-color: var(--bad); color: var(--bad); }
+.mb-table td:nth-child(3) { max-width: 240px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+
 /* Injury report.
    ------------------------------------------------------------------
    All shared kit (.stats, .agate, .section-title); the only new

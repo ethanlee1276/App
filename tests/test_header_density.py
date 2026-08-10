@@ -68,8 +68,11 @@ def test_the_switcher_has_three_named_groups_and_nothing_loose():
     # "memes" joined the Markets group with Rocket Radar: like Polymarket
     # and Fantasy it is a market you visit on a league's rhythm, not a
     # page about the site.
+    # "mybets" joined The Book group beside Record and Lab: Record is the
+    # MODEL's receipts, My Bets is the USER's own — same shelf, different
+    # ledger.
     assert set(tools) == {"intel", "fantasy", "memes", "why", "about",
-                          "record", "lab"}
+                          "record", "lab", "mybets"}
     assert 'data-view="rosters"' in html, "the per-sport tab is missing"
 
     for sport in leagues:

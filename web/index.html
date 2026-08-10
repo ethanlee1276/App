@@ -135,6 +135,7 @@
         <div class="sport-group" data-group="record">
           <button class="sport-btn" data-sport="record" data-kind="tool" title="Every pick journaled at its real price, graded in public — and the model that learns from it">Record</button>
           <button class="sport-btn" data-sport="lab" data-kind="tool" title="The walk-forward backtests — does the model actually forecast better than guessing?">The Lab</button>
+          <button class="sport-btn" data-sport="mybets" data-kind="tool" title="Track the bets YOU placed at the sportsbooks — your own P&amp;L, kept in this browser">My Bets</button>
         </div>
         <div class="menu-head" data-head="more" aria-hidden="true">More</div>
         <!-- Six leagues stay visible because the league IS the primary axis
@@ -375,6 +376,16 @@
         it looks. Public data, statistical flags — probabilities, never verdicts.</span>
       </div>
       <div id="intel-body"></div>
+    </section>
+
+    <!-- My Bets — the user's OWN sportsbook bets, tracked locally -->
+    <section class="view" id="view-mybets">
+      <div class="section-title">My Bets
+        <span class="sub">— the bets YOU placed at the sportsbooks, logged by hand and kept
+        in this browser. Your own running P&amp;L by book, separate from the model’s record.
+        Nothing leaves your machine, and no passwords are ever asked for.</span>
+      </div>
+      <div id="mybets-body"></div>
     </section>
 
     <!-- Injury report — per sport, league-wide -->
