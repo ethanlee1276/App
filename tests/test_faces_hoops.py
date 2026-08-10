@@ -178,7 +178,15 @@ def test_the_recommendation_carries_the_face():
     src = inspect.getsource(np.shared_recommendations)
     assert "assets" in inspect.signature(np.shared_recommendations).parameters
     assert '"headshot": ""' not in src, "still hardcoded empty"
-    assert '(assets or {}).get(r["player"], {}).get("headshot", "")' in src
+    # BEHAVIOUR, NOT THE LITERAL EXPRESSION. This pinned the exact source
+    # text `(assets or {}).get(r["player"], {})…` until 2026-08-10, when
+    # the lookup had to gain a normalised fallback — a raw-name join
+    # missed every "A\u2019ja Wilson" against "A'ja Wilson", which is why
+    # 100 stored WNBA photos drew initials. A test that pins the
+    # implementation blocks the fix to the implementation.
+    assert np._face({"Nikola Joki\u0107": {"headshot": "u"}},
+                    "Nikola Jokic") == "u"
+    assert np._face({"Nikola Joki\u0107": {"headshot": "u"}}, "Somebody Else") == ""
 
 
 def test_the_build_actually_passes_the_map():

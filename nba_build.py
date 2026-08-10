@@ -605,6 +605,19 @@ def main() -> None:
                                           tune=tune,
                                           assets=player_assets(conn, args.league))
             out["recommendations"] = recs
+            # SAY HOW MANY FACES JOINED. Ethan ingested 100 of 105 WNBA
+            # photos and every card still drew initials, because the
+            # lookup matched on a raw name and the two feeds disagree
+            # about apostrophes. A stored photo that never reaches a card
+            # is invisible from both ends — the ingest reports success and
+            # the site just looks plain.
+            from engine.nba.pipeline import FACE_JOIN as _fj
+            if _fj["want"]:
+                print(f"Player faces: {_fj['got']} of {_fj['want']} props "
+                      f"matched a stored photo"
+                      + ("" if _fj["got"] else
+                         "  ← none joined; check the name spellings in "
+                         "player_assets"))
             out["counts"] = {**picks_result["counts"],
                              "props_analyzed": len(recs),
                              "recommended": sum(1 for r in recs

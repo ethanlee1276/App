@@ -318,6 +318,61 @@ def _avg(vals, n=None):
     return round(sum(xs) / len(xs), 2) if xs else None
 
 
+#: How many faces the last `shared_recommendations` call actually joined,
+#: and how many it looked for. Read by nba_build so a board that quietly
+#: stops showing photos says so in the build output instead of being
+#: noticed by eye three weeks later.
+FACE_JOIN = {"want": 0, "got": 0}
+
+
+def _norm(name: str) -> str:
+    from ..sources.oddsapi import normalize_name
+    return normalize_name(name or "")
+
+
+#: id(assets) → normalised index. Built once per board rather than
+#: re-normalising a hundred names for every prop on the slate.
+_NORM_CACHE: dict = {}
+
+
+def _norm_index(assets: dict) -> dict:
+    key = id(assets)
+    hit = _NORM_CACHE.get(key)
+    if hit is None or hit[0] is not len(assets):
+        hit = (len(assets), {_norm(n): row for n, row in assets.items()})
+        _NORM_CACHE.clear()          # one board at a time; never grows
+        _NORM_CACHE[key] = hit
+    return hit[1]
+
+
+def _face(assets, player: str) -> str:
+    """This player's headshot URL, or "" — joined on a NORMALISED name.
+
+    THE EXACT LOOKUP FAILED SILENTLY. `player_assets` is keyed by the name
+    in ESPN's box score and a recommendation carries the name from the
+    odds feed, and the two disagree about apostrophes, accents, periods
+    and suffixes — "A'ja Wilson" against "Aja Wilson", "Nneka Ogwumike"
+    against "Nneka Ogwumike Jr.". Ethan ingested 100 of 105 WNBA photos on
+    2026-08-10 and every card still drew initials.
+
+    `normalize_name` is the join key the rest of this repo already uses
+    for exactly this (`records_from_ledger`, `_bet_team`, the settle
+    path). It folds case, accents, punctuation and suffixes and nothing
+    else — it does NOT fuzzy match, so two different players can never
+    collide into one face.
+    """
+    FACE_JOIN["want"] += 1
+    if not assets:
+        return ""
+    a = assets.get(player)
+    if a is None:
+        a = _norm_index(assets).get(_norm(player or ""))
+    url = (a or {}).get("headshot", "")
+    if url:
+        FACE_JOIN["got"] += 1
+    return url
+
+
 def shared_recommendations(props: list[dict],
                            lines_map: dict | None = None,
                            dates_map: dict | None = None,
@@ -373,7 +428,7 @@ def shared_recommendations(props: list[dict],
             # and nothing ever filled it, so every NBA and WNBA prop drew
             # the initials avatar while ESPN was handing us the photo URL
             # in the same payload the stat line came from.
-            "headshot": (assets or {}).get(r["player"], {}).get("headshot", ""),
+            "headshot": _face(assets, r["player"]),
             "side": r["side"], "book": r.get("book", ""),
             "line": r["line"], "odds": r["odds"],
             "projection": r["projection"],

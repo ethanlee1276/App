@@ -357,7 +357,15 @@ def normalize_name(name: str) -> str:
     import unicodedata
     s = unicodedata.normalize("NFKD", name)
     s = "".join(c for c in s if not unicodedata.combining(c))
-    s = s.lower().replace("-", " ").replace(".", " ").replace("'", "")
+    # BOTH APOSTROPHES. U+2019 (the typographic one) survives NFKD, so a
+    # feed that writes "A\u2019ja Wilson" never joined a feed that writes
+    # "A'ja Wilson" — the straight one was stripped and the curly one was
+    # not, leaving "aja wilson" against "a\u2019ja wilson". That is why 100
+    # of 105 stored WNBA photos still drew initials on 2026-08-10: the
+    # ingest was fine and the JOIN was not. Same failure was waiting for
+    # every O'Neale, D'Angelo and Ja'Marr on the other boards.
+    s = s.lower().replace("-", " ").replace(".", " ")
+    s = s.replace("'", "").replace("\u2019", "").replace("\u02bc", "")
     s = _SUFFIX.sub("", s)
     return re.sub(r"\s+", " ", s).strip()
 

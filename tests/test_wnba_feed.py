@@ -336,6 +336,49 @@ def test_a_cached_rebuild_says_when_it_had_no_prices_to_read():
     assert "res.cache_misses" in src
 
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+# --- the faces that were stored and never shown ------------------------------
+def test_both_apostrophes_fold_to_the_same_key():
+    """THE ACTUAL BUG, 2026-08-10. Ethan ingested 100 of 105 WNBA photos
+    and every card still drew initials.
+
+    `normalize_name` stripped the straight apostrophe and left U+2019 —
+    which survives NFKD — so "A'ja Wilson" normalised to "aja wilson"
+    while "A\u2019ja Wilson" normalised to "a\u2019ja wilson", and the two
+    feeds never joined. The ingest was fine; the JOIN was not. The same
+    failure was waiting for every O'Neale, D'Angelo and Ja'Marr."""
+    from engine.sources.oddsapi import normalize_name as n
+    assert n("A'ja Wilson") == n("A\u2019ja Wilson") == "aja wilson"
+    assert n("Royce O'Neale") == n("Royce O\u2019Neale")
+    assert n("Ja'Marr Chase") == n("Ja\u2019Marr Chase")
+
+
+def test_a_face_joins_through_the_normalised_name():
+    from engine.nba.pipeline import _face
+    assets = {"A\u2019ja Wilson": {"headshot": "u1"}}
+    assert _face(assets, "A'ja Wilson") == "u1"
+
+
+def test_a_name_we_do_not_hold_gets_no_face_rather_than_a_wrong_one():
+    """`normalize_name` folds punctuation and nothing else — it does NOT
+    fuzzy match, so two different players can never collide into one
+    face."""
+    from engine.nba.pipeline import _face
+    assets = {"A\u2019ja Wilson": {"headshot": "u1"}}
+    assert _face(assets, "Aja Wilsonn") == ""
+    assert _face(assets, "Breanna Stewart") == ""
+    assert _face({}, "A'ja Wilson") == ""
+
+
+def test_the_build_reports_how_many_faces_joined():
+    """A stored photo that never reaches a card is invisible from both
+    ends: the ingest reports success and the site just looks plain."""
+    src = open(os.path.join(ROOT, "nba_build.py"), encoding="utf-8").read()
+    assert "Player faces:" in src and "FACE_JOIN" in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
