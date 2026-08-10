@@ -270,6 +270,51 @@ def test_the_savant_board_keeps_every_pitch_type_per_player():
     assert d["aaron judge"]["FF"]["usage"] == 0.485
 
 
+def test_a_poisoned_cache_is_not_served_as_an_empty_season():
+    """ETHAN, 2026-08-10: "No arsenal line for 'Aaron Judge' in 2026. The
+    board holds 0 hitters."
+
+    `fetch_text` writes whatever the server returns and serves it back for
+    the whole TTL — an empty body, a maintenance page, an HTML redirect.
+    One bad response poisons six hours and the only symptom is a board
+    with nothing in it, which is indistinguishable from a season Savant
+    has not populated. The header check is what separates them."""
+    from engine.mlb.sources.savant import _looks_like_arsenal as ok
+    assert ok('"last_name, first_name","pitch_type","whiff_percent"')
+    assert not ok("<!DOCTYPE html><html><head><title>Error</title>")
+    assert not ok("")
+    # A CSV that is real but a DIFFERENT board must also be refused.
+    assert not ok('"last_name, first_name","player_id","barrel_batted_rate"')
+
+
+def test_an_empty_season_falls_back_and_says_which_year_it_used():
+    """A hitter's profile from last season is real information; an empty
+    dict is not. But the caller must be told, or a stale reading gets
+    passed off as current."""
+    src = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "engine", "mlb", "sources", "savant.py"), encoding="utf-8").read()
+    i = src.index("def load_arsenal(")
+    body = src[i:i + 2200]
+    assert 'board["_season"] = year' in body, "the year used must come back"
+    assert "load_arsenal(year - 1" in body
+    assert "fallback=False" in body, "the fallback must not recurse forever"
+
+
+def test_the_probe_distinguishes_three_different_failures():
+    """"0 hitters" was three problems in one sentence: the season is not
+    published, the fetch returned something that was not the CSV, or this
+    hitter is missing from a board that is otherwise full."""
+    src = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "launch.py"), encoding="utf-8").read()
+    i = src.index("def show_matchup(")
+    body = src[i:i + 4000]
+    assert "came back EMPTY" in body
+    assert "Closest names we hold" in body
+    assert "last season's hitter, not" in body
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

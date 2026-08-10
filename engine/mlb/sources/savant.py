@@ -262,16 +262,60 @@ def parse_arsenal(rows) -> dict[str, dict]:
     return out
 
 
-def load_arsenal(year: int, kind: str = "batter") -> dict[str, dict]:
+def _looks_like_arsenal(text: str) -> bool:
+    """Is this the CSV we asked for, or something else wearing its name?
+
+    `fetch_text` writes whatever the server returns and serves it back for
+    the whole TTL — an empty body, a maintenance page, an HTML redirect.
+    One bad response therefore poisons six hours, and the only symptom is
+    a board with nothing in it. Checking the header is what separates "the
+    season has no data" from "we cached an error page".
+    """
+    head = (text or "")[:400].lower()
+    return "pitch_type" in head and "whiff_percent" in head
+
+
+def load_arsenal(year: int, kind: str = "batter",
+                 fallback: bool = True) -> dict[str, dict]:
     """Fetch (or read a cached) pitch-arsenal board for a season.
 
     `kind` is "batter" for how hitters fare against each pitch type, or
     "pitcher" for how each pitcher's own offerings perform. The batter
     board is the one §6 was missing.
+
+    FALLS BACK ONE SEASON when the requested one is empty, and says so by
+    returning the year it actually used. A hitter's profile from last
+    season is real information; an empty dict is not, and in April — or in
+    any season Savant has not populated yet — empty is what the current
+    year returns. The caller is told which year it got so it can label the
+    reading rather than pass it off as current.
     """
-    local = CACHE_DIR / f"savant_arsenal_{kind}_{year}.csv"
+    name = f"savant_arsenal_{kind}_{year}.csv"
+    local = CACHE_DIR / name
+    text = None
     if local.exists():
-        return parse_arsenal(load_local_csv(local))
-    url = SAVANT_ARSENAL.format(type=kind, year=year)
-    text = fetch_text(url, f"savant_arsenal_{kind}_{year}.csv", ttl=6 * 3600)
-    return parse_arsenal(_read_csv_text(text))
+        text = local.read_text(encoding="utf-8", errors="replace")
+        if not _looks_like_arsenal(text):
+            # A poisoned cache is worse than none: it is served for the
+            # whole TTL and looks exactly like an empty season.
+            local.unlink(missing_ok=True)
+            text = None
+    if text is None:
+        url = SAVANT_ARSENAL.format(type=kind, year=year)
+        text = fetch_text(url, name, ttl=6 * 3600)
+        if not _looks_like_arsenal(text):
+            (CACHE_DIR / name).unlink(missing_ok=True)
+            raise DataUnavailable(
+                f"{url} did not return the arsenal CSV — got "
+                f"{len(text or '')} bytes starting "
+                f"{(text or '')[:60]!r}. The cache has been cleared, so a "
+                f"retry will re-fetch rather than re-read this.")
+    board = parse_arsenal(_read_csv_text(text))
+    if board:
+        board["_season"] = year          # what the caller actually got
+        return board
+    if fallback and year > 2015:
+        prior = load_arsenal(year - 1, kind, fallback=False)
+        if prior:
+            return prior
+    return {}

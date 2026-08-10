@@ -2956,11 +2956,33 @@ def show_matchup(person_id=None, batter=None, season: int | None = None) -> None
     except Exception as exc:                                # noqa: BLE001
         print(f"\n  Savant pitch-arsenal board unavailable: {exc}\n")
         return
+    used = board.pop("_season", season)
     prof = board.get(_nn(batter))
     if not prof:
-        print(f"\n  No arsenal line for {batter!r} in {season}. The board "
-              f"holds {len(board)} hitters.\n")
+        # SAY WHICH FAILURE IT IS. "0 hitters" is three different problems
+        # wearing one sentence: the season is not published, the fetch
+        # returned something that was not the CSV, or this hitter is not on
+        # a board that is otherwise full.
+        if not board:
+            print(f"\n  The {used} arsenal board came back EMPTY — not this "
+                  f"hitter, the whole board.")
+            print(f"  Savant publishes this per season; {used} may not be "
+                  f"populated yet.")
+            print(f"  Try a season you know has data: "
+                  f"python3 launch.py --matchup {person_id} "
+                  f"\"{batter}\" 2025\n")
+        else:
+            near = [n for n in board if _nn(batter).split()[-1] in n][:3]
+            print(f"\n  No line for {batter!r} on the {used} board "
+                  f"({len(board)} hitters).")
+            if near:
+                print(f"  Closest names we hold: {', '.join(near)}")
+            print()
         return
+    if used != season:
+        print(f"\n  ⚠️  {season} is empty on Savant — using the {used} "
+              f"board instead.\n      This is last season's hitter, not "
+              f"this one's.")
     m = _ar.matchup(shares, prof)
     print(f"\n{'='*70}\n  {batter.upper()} vs person {person_id} — "
           f"{season}\n{'='*70}")
