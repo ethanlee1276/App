@@ -178,6 +178,33 @@ def test_the_page_never_pans_sideways():
         "the status cluster stopped shrinking — the sideways pan is back"
 
 
+def test_ethans_venue_renders_are_plugged_in():
+    """Ethan, 2026-08-11: "Ok can you just plug them in for me?" — a
+    contact sheet of night renders, six lighting colours per building
+    family. Pinned: all 24 sliced files ship; a card falls back
+    team photo -> colour-matched family render -> drawing (the data-alt
+    hop); live games still never show a photo; the UFC page banners an
+    octagon picked by card identity, since no fight has a home team."""
+    vdir = os.path.join(ROOT, "web/img/venues/variants")
+    hues = ("red", "gold", "green", "blue", "violet", "steel")
+    expected = {f"{fam}-{h}.jpg" for fam in ("football", "basketball", "baseball")
+                for h in hues} | {f"octagon-{i}.jpg" for i in range(1, 7)}
+    have = {f for f in os.listdir(vdir) if f.endswith(".jpg")}
+    assert have == expected, f"variant art drifted: {have ^ expected}"
+    # Every sport with a stadium card maps to a family; the hop exists.
+    fam_line = APP[APP.index("const VENUE_FAMILY"):APP.index("const VENUE_FAMILY") + 200]
+    for sport in ("nfl", "cfb", "mlb", "nba", "wnba"):
+        assert f"{sport}:" in fam_line, f"{sport} lost its render family"
+    assert "window.vpFall" in APP and "data-alt" in APP
+    # The hop lives inside the not-live branch — the drawing keeps the
+    # ball spot, bases and wind during play.
+    slot = APP[APP.index('!isLive ? (() => {'):APP.index('!isLive ? (() => {') + 500]
+    assert "venueVariant(homeTeam)" in slot and "vpFall(this)" in slot
+    # UFC: hash-picked octagon banner, styled.
+    assert "octagon-${octN}" in APP
+    assert ".ufc-banner" in CSS
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

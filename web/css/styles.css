@@ -4220,3 +4220,10 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   object-fit: cover; z-index: 1; }
 .stadium-wrap .status-badge, .stadium-wrap .top-game-tag,
 .stadium-wrap .game-time-chip, .stadium-wrap .gc-picks { z-index: 3; }
+
+/* The UFC card banner — one octagon render per event, hash-picked in
+   renderUFC. Wide and shallow so it sets the scene without pushing the
+   numbers below the fold. */
+.ufc-banner { display: block; width: 100%; aspect-ratio: 3 / 1;
+  object-fit: cover; border-radius: var(--radius-lg);
+  border: var(--hairline) solid var(--border); margin-bottom: 14px; }

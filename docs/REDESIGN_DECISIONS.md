@@ -293,3 +293,20 @@ Qellys accounts) and Bankroll (your unit sizing).
 
 Display face: Archivo Narrow 700 (already self-hosted) wears the
 wordmark and display duties; Bodoni stays only in og-card.
+
+## Venue render art — 2026-08-11, Ethan's contact sheet
+
+"Ok can you just plug them in for me?" — a 4×6 sheet: six lighting
+colours each of a football stadium, basketball arena, baseball park and
+UFC octagon. Sliced (web/img/venues/variants/, 2× lanczos + unsharp
+from the 1536px sheet) and wired as the middle rung of the card's art
+chain: team-specific photo → colour-matched family render → drawn
+scene. The render is picked by the home team's first colour with real
+chroma (nearest of red/gold/green/blue/violet; neutral kits → steel —
+the 0.22 chroma bar exists because the White Sox' warm near-black
+otherwise read as gold). Families: football serves NFL+CFB, basketball
+serves NBA+WNBA, baseball serves MLB. Live games still always draw —
+ball spot, bases, wind. UFC has no home team, so the card page banners
+one octagon hash-picked from the event identity: same card, same arena,
+different cards rotate. Overwriting a variants/ file with a full-res
+version of the same render upgrades every card with no code change.

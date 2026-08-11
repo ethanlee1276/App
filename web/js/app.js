@@ -2179,6 +2179,50 @@ function renderGames() {
 const gameId = (g) => `${g.date || ""}_${g.away}@${g.home}${(g.game_number || 1) > 1 ? `_G${g.game_number}` : ""}`;
 const findGame = (gid) => (((state.data || {}).games) || []).find((g) => gameId(g) === gid);
 
+/* Venue render art. Ethan supplied one night render per lighting colour
+   for each building family (2026-08-11: "can you just plug them in?"),
+   sliced into web/img/venues/variants/. A card still tries the
+   team-specific photo first (img/venues/{sport}/{HOME}.jpg — the path to
+   real per-park identity stays open), and when that file does not exist
+   it hops to the family render whose lighting matches the home team's
+   colours instead of falling all the way back to the drawing. Live games
+   never show a photo — the drawing carries the ball spot, bases, wind. */
+const VENUE_FAMILY = { nfl: "football", cfb: "football", mlb: "baseball",
+                       nba: "basketball", wnba: "basketball" };
+function venueVariant(team) {
+  // First team colour with real chroma decides the lighting; neutral
+  // kits (black, silver, white) fall through to the steel render, which
+  // is why the secondary gets a vote — PIT's black defers to its gold.
+  for (const hex of [(team || {}).primary, (team || {}).secondary]) {
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex || "")) continue;
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b);
+    // 0.22, not lower: the White Sox' near-black #27251f carries 20%
+    // chroma that reads as warm grey, not gold — it must fall through
+    // to the silver secondary and land on steel.
+    if (!mx || d / mx < 0.22) continue;               // neutral — no vote
+    let h = mx === r ? (g - b) / d : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h = (h * 60 + 360) % 360;
+    let best = "steel", bd = 361;
+    for (const [name, a] of [["red", 358], ["gold", 45], ["green", 150],
+                             ["blue", 225], ["violet", 278]]) {
+      const raw = Math.abs(h - a) % 360, dd = Math.min(raw, 360 - raw);
+      if (dd < bd) { bd = dd; best = name; }
+    }
+    return best;
+  }
+  return "steel";
+}
+// The inline onerror hop: team photo missing -> family render -> if that
+// is somehow gone too, remove and let the drawn scene show.
+window.vpFall = (el) => {
+  const alt = el.dataset.alt;
+  if (alt) { el.removeAttribute("data-alt"); el.src = alt; }
+  else { el.remove(); }
+};
+
 function gameCard(g) {
   const mlb = state.sport === "mlb";
   const nba = state.sport === "nba" || state.sport === "wnba";
@@ -2298,15 +2342,20 @@ function gameCard(g) {
              role="button" tabindex="0"
              aria-label="Open picks for ${escapeHtml(teamName(g.away))} at ${escapeHtml(teamName(g.home))}">
       <div class="stadium-wrap">${art}${
-        // The drop-in photo slot (Ethan, 2026-08-11: wants the cards to
-        // look exactly like his generated renders). If
-        // web/img/venues/{sport}/{HOME}.jpg exists it covers the drawn
-        // scene; missing images remove themselves and the art shows.
-        // Live games always keep the drawing — it carries the ball
-        // spot, bases and wind, which a photo cannot.
-        !isLive ? `<img class="venue-photo" alt="" loading="lazy"
+        // The photo slot (Ethan, 2026-08-11: wants the cards to look
+        // exactly like his generated renders). A team-specific
+        // web/img/venues/{sport}/{HOME}.jpg wins when it exists; the
+        // onerror hop lands on the sliced family render whose lighting
+        // matches the home team's colours (vpFall). Live games always
+        // keep the drawing — it carries the ball spot, bases and wind,
+        // which a photo cannot.
+        !isLive ? (() => {
+          const fam = VENUE_FAMILY[state.sport];
+          return `<img class="venue-photo" alt="" loading="lazy"
           src="img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg"
-          onerror="this.remove()"/>` : ""}${badge}${
+          ${fam ? `data-alt="img/venues/variants/${fam}-${venueVariant(homeTeam)}.jpg"
+          onerror="vpFall(this)"` : `onerror="this.remove()"`}/>`;
+        })() : ""}${badge}${
         window._topGameId === gameId(g) && !isLive && !isFinal
           ? `<span class="top-game-tag">Top game</span>` : ""}${
         !isLive && !isFinal && whenLabel(g.date, g.kickoff)
@@ -9215,7 +9264,15 @@ async function renderUFC() {
   const nModeled = pl.filter((m) => ["gate", "clamp_kill"].includes(m.reason_code)).length
     + (d.picks || []).length;
   const nWaiting = pl.filter((m) => m.reason_code === "no_price").length;
+  // Card banner from Ethan's octagon renders (2026-08-11). UFC has no
+  // home team to key a colour on, so the pick is a stable hash of the
+  // card's identity — the same event always shows the same arena, and
+  // different cards rotate through all six.
+  const octN = ([...((d.event_date || "") + ((d.card_venue || {}).venue || ""))]
+    .reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7) % 6) + 1;
   host.innerHTML = `
+    <img class="ufc-banner" alt="" loading="lazy"
+      src="img/venues/variants/octagon-${octN}.jpg" onerror="this.remove()"/>
     <div class="stats">
       <div class="tile"><div class="k">Card</div><div class="v">${escapeHtml(d.event_date || "")}</div>
         <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${c.fights || 0} bouts</div></div>
