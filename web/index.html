@@ -84,16 +84,12 @@
         <div class="tagline" id="tagline">AI-powered NFL player-prop model</div>
       </div>
     </a>
-    <nav class="nav" id="nav" aria-label="Primary">
+    <!-- The old top-nav row retired 2026-08-11 (Ethan: "repeating tabs
+         … that take you to the same thing") — the SIDEBAR is the one
+         navigation surface on desktop, the tab bar + drawer on phones.
+         The element remains for the machinery that references #nav. -->
+    <nav class="nav" id="nav" aria-hidden="true" hidden>
       <div class="nav-indicator" id="nav-indicator"></div>
-      <button class="nav-btn active" data-view="recommended" data-hint="tonight’s picks">Home</button>
-      <button class="nav-btn" data-view="live" data-hint="open bets, tracked">Live<span class="live-count" id="live-count" hidden></span></button>
-      <button class="sport-btn topnav-tool" data-sport="mybets" data-kind="tool"
-              title="Track the bets YOU placed at the sportsbooks">My Bets</button>
-      <button class="nav-btn" data-view="edge" data-hint="every +EV price">Props</button>
-      <button class="sport-btn topnav-tool" data-sport="record" data-kind="tool"
-              title="Every pick journaled at its real price and graded in public">Analytics</button>
-      <button class="nav-btn" data-view="bankroll" data-hint="size your units">Bankroll</button>
     </nav>
     <div class="slate-meta">
       <button class="meta-ico" id="nav-search" title="Player search" aria-label="Player search">
@@ -127,18 +123,22 @@
     </div>
 
     <div class="sb-sec" id="sport-switch">
+      <div class="sb-label" data-head="sport">Leagues</div>
+      <div class="sb-group sb-chips" data-group="leagues">
+        <button class="sport-btn active" data-sport="nfl" data-kind="league" title="NFL">NFL</button>
+        <button class="sport-btn" data-sport="cfb" data-kind="league" title="College football">CFB</button>
+        <button class="sport-btn" data-sport="mlb" data-kind="league" title="MLB">MLB</button>
+        <button class="sport-btn" data-sport="nba" data-kind="league" title="NBA">NBA</button>
+        <button class="sport-btn" data-sport="wnba" data-kind="league" title="WNBA">WNBA</button>
+        <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC">UFC</button>
+      </div>
+
       <div class="sb-label" data-head="main">Main</div>
       <div class="sb-group" data-group="pages">
         <button class="nav-btn sb-item active" data-view="recommended" data-hint="tonight’s picks">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>
           Today</button>
-        <button class="sb-item sb-anchor" data-anchor="top-picks" data-anchor-view="recommended">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-3-5.4 3 1.1-6L3.2 9.4l6.1-.8z"/></svg>
-          Top Picks</button>
-        <button class="sb-item sb-anchor" data-anchor="games-title" data-anchor-view="recommended">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="12" rx="9" ry="5.5"/><ellipse cx="12" cy="12" rx="4" ry="2.4"/></svg>
-          Stadiums</button>
-        <button class="nav-btn sb-item" data-view="live" data-hint="open bets, tracked">
+        <button class="nav-btn sb-item" data-view="live" data-hint="live scores and open bets">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12h4l2.5-6 3.5 12 2.5-6H22"/></svg>
           Live Now <span class="sb-badge" id="sb-live-badge" hidden></span></button>
         <button class="nav-btn sb-item" data-view="edge" data-hint="every +EV price">
@@ -156,16 +156,6 @@
         <button class="nav-btn sb-item" data-view="standings" data-hint="records &amp; the bracket">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>
           Rankings</button>
-      </div>
-
-      <div class="sb-label" data-head="sport">Leagues</div>
-      <div class="sb-group sb-chips" data-group="leagues">
-        <button class="sport-btn active" data-sport="nfl" data-kind="league" title="NFL">NFL</button>
-        <button class="sport-btn" data-sport="cfb" data-kind="league" title="College football">CFB</button>
-        <button class="sport-btn" data-sport="mlb" data-kind="league" title="MLB">MLB</button>
-        <button class="sport-btn" data-sport="nba" data-kind="league" title="NBA">NBA</button>
-        <button class="sport-btn" data-sport="wnba" data-kind="league" title="WNBA">WNBA</button>
-        <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC">UFC</button>
       </div>
 
       <div class="sb-label" data-head="markets">Markets</div>
@@ -193,6 +183,9 @@
         <button class="sport-btn sb-item" data-sport="mybets" data-kind="tool" title="Your own sportsbook P&amp;L — synced with your account">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M4 9h16M8 13h5"/></svg>
           My Bets</button>
+        <button class="nav-btn sb-item" data-view="bankroll" data-hint="size your units">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5c0-1 1-1.8 2.5-1.8s2.5.7 2.5 1.7c0 2.6-5 1.6-5 4.2 0 1 1 1.7 2.5 1.7s2.5-.7 2.5-1.7"/></svg>
+          Bankroll</button>
       </div>
 
       <div class="sb-label" data-head="tools">Tools</div>
@@ -399,6 +392,10 @@
 
     <!-- Live — every open journaled bet, tracked as the games run -->
     <section class="view" id="view-live">
+      <!-- The render's LIVE NOW board: every game in progress across the
+           sports we model, with the league chips. Below it, what this
+           page always carried — our open journaled bets, tracked. -->
+      <div id="live-board"></div>
       <div id="live-picks"></div>
     </section>
 
@@ -629,6 +626,30 @@
       <b>1-800-GAMBLER</b>.
     </p>
   </footer>
+
+  <!-- The phone tab bar (Ethan's mobile render, 2026-08-11): Home,
+       Live, My Bets raised in the middle, Props, and Menu — which opens
+       the same drawer, so every other destination stays two taps away.
+       The render's center slot was the bet slip; ours is My Bets, the
+       honest version of that job. Phones only (CSS). -->
+  <nav class="tabbar" id="tabbar" aria-label="Quick navigation">
+    <button class="tb-item nav-btn" data-view="recommended" data-hint="tonight’s picks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>
+      Home</button>
+    <button class="tb-item nav-btn" data-view="live" data-hint="live scores and open bets">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12h4l2.5-6 3.5 12 2.5-6H22"/></svg>
+      Live <span class="tb-badge" id="tb-live-badge" hidden></span></button>
+    <button class="tb-item tb-center sport-btn" data-sport="mybets" data-kind="tool"
+            title="Your own sportsbook P&amp;L">
+      <span class="tb-center-disc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M4 9h16M8 13h5"/></svg></span>
+      My Bets</button>
+    <button class="tb-item nav-btn" data-view="edge" data-hint="every +EV price">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg>
+      Props</button>
+    <button class="tb-item" id="tb-menu" aria-label="Open the full menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      Menu</button>
+  </nav>
 
   <script src="js/teams.js"></script>
   <script src="js/teams_mlb.js"></script>

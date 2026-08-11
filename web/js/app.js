@@ -804,6 +804,7 @@ function renderAll() {
   // left the previous league's teams on screen under the new league's
   // header — the same class of bug as a standalone page keeping a stale
   // badge, and it looks like the switch silently failed.
+  if (state.view === "live") renderLiveBoard();
   if (state.view === "rosters") renderRosters();
   if (state.view === "injuries") renderInjuries();
   if (state.view === "standings") renderStandings();
@@ -9829,6 +9830,8 @@ const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "parl
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
   if (typeof syncRail === "function") setTimeout(syncRail, 0);
+  if (name === "live" && typeof renderLiveBoard === "function")
+    setTimeout(renderLiveBoard, 0);
   state.view = name;
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
   const target = document.getElementById(`view-${name}`);
@@ -10561,6 +10564,8 @@ function renderRail() {
   if (badge) { badge.hidden = !nLive; badge.textContent = nLive || ""; }
   const count = document.getElementById("live-count");
   if (count) { count.hidden = !nLive; count.textContent = nLive || ""; }
+  const tb = document.getElementById("tb-live-badge");
+  if (tb) { tb.hidden = !nLive; tb.textContent = nLive || ""; }
   if (nLive) {
     liv.hidden = false;
     liv.innerHTML = `<div class="rail-title">Live now <span class="live-dot"></span></div>
@@ -10660,10 +10665,129 @@ function syncStripArrows() {
   next.style.visibility = atEnd ? "hidden" : "visible";
 }
 
+/* ---------------- LIVE NOW — the render's live board -----------------
+   Every game in progress across the sports we model, one board. Each
+   league's slate is already built to web/data; this fetches them all
+   (30s cache), keeps the games whose live state says "live", and draws
+   the render's card: the night art as backdrop, the two marks with big
+   scores, the period (and outs/bases for MLB), and the real lines the
+   slate carries — spread, total, and the moneyline when a game bet
+   priced one. Only sports we actually model appear; there is no NHL
+   chip because there is no NHL model. */
+const LIVE_FEEDS = {
+  nfl: "data/recommendations.json", mlb: "data/mlb_recommendations.json",
+  nba: "data/nba.json", wnba: "data/wnba.json", cfb: "data/cfb.json",
+};
+let _liveAll = { at: 0, games: [] };
+let _liveChip = "all";
+
+async function fetchAllLive() {
+  if (Date.now() - _liveAll.at < 30000) return _liveAll.games;
+  const out = [];
+  await Promise.all(Object.entries(LIVE_FEEDS).map(async ([sport, url]) => {
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) return;
+      const d = await r.json();
+      (d.games || []).forEach((g) => {
+        if ((g.live || {}).state === "live") out.push({ sport, g,
+          bets: (d.game_bets || []).filter((b) => b.home === g.home && b.away === g.away) });
+      });
+    } catch (e) {}
+  }));
+  _liveAll = { at: Date.now(), games: out };
+  return out;
+}
+
+function liveCardHTML({ sport, g, bets }) {
+  const lv = g.live || {};
+  const teams = teamsForSport(sport);
+  const mark = (abbr) => teamMark(abbr, 34, teams, sport);
+  const mlb = sport === "mlb";
+  let situation = escapeHtml(lv.period || "");
+  if (mlb && lv.outs != null) situation += ` · ${lv.outs} out${lv.outs === 1 ? "" : "s"}`;
+  if (lv.clock) situation += ` ${escapeHtml(lv.clock)}`;
+  const ml = bets.find((b) => b.market === "moneyline" || b.market === "h2h");
+  const cell = (label, val) => val
+    ? `<div class="lb-cell"><span>${escapeHtml(label)}</span><b>${escapeHtml(val)}</b></div>` : "";
+  const spreadTxt = g.spread != null
+    ? `${g.favorite || g.home} ${(-Math.abs(g.spread)).toFixed(1)}` : "";
+  const totalTxt = g.total != null ? `O/U ${Number(g.total).toFixed(1)}` : "";
+  const mlTxt = ml && ml.odds != null ? `${ml.side === "away" ? g.away : g.home} ${ml.odds > 0 ? "+" : ""}${ml.odds}` : "";
+  return `
+  <div class="lb-card" data-gid="${escapeHtml(gameId(g))}" data-lsport="${sport}">
+    <div class="lb-head"><span class="lb-live">${icon("dot", 10)} LIVE</span>
+      <span class="lb-sit">${situation}</span>
+      <span class="lb-league">${sport.toUpperCase()}</span></div>
+    <div class="lb-score">
+      <span class="lb-team">${mark(g.away)}<em>${escapeHtml(g.away)}</em></span>
+      <b>${lv.away_score != null ? lv.away_score : "–"}</b>
+      <span class="lb-mid">${mlb && lv.bases ? miniDiamond(lv.bases) : ""}</span>
+      <b>${lv.home_score != null ? lv.home_score : "–"}</b>
+      <span class="lb-team">${mark(g.home)}<em>${escapeHtml(g.home)}</em></span>
+    </div>
+    <div class="lb-lines">${cell("Spread", spreadTxt)}${cell("Total", totalTxt)}${cell("ML", mlTxt)}</div>
+  </div>`;
+}
+
+/* The little diamond, occupied bases lit — the render's center graphic. */
+function miniDiamond(bases) {
+  const on = new Set(bases || []);
+  const pt = (n, x, y) => `<rect x="${x - 4}" y="${y - 4}" width="8" height="8"
+    transform="rotate(45 ${x} ${y})" fill="${on.has(n) ? "var(--gold)" : "none"}"
+    stroke="${on.has(n) ? "var(--gold)" : "var(--text-faint)"}" stroke-width="1.6"/>`;
+  return `<svg class="lb-diamond" viewBox="0 0 48 40" aria-hidden="true">
+    ${pt(2, 24, 8)}${pt(3, 9, 22)}${pt(1, 39, 22)}</svg>`;
+}
+
+async function renderLiveBoard() {
+  const host = document.getElementById("live-board");
+  if (!host) return;
+  const games = await fetchAllLive();
+  const bySport = {};
+  games.forEach((x) => { bySport[x.sport] = (bySport[x.sport] || 0) + 1; });
+  const chips = ["all", ...Object.keys(LIVE_FEEDS)].filter(
+    (s) => s === "all" || bySport[s]);
+  const shown = games.filter((x) => _liveChip === "all" || x.sport === _liveChip);
+  if (!games.length) {
+    host.innerHTML = `<div class="section-title">Live now
+        <span class="sub">— every game in progress across the sports we model</span></div>
+      <p class="rail-quiet" style="margin:0 0 22px">No games in progress right now —
+      the board below tracks tonight’s open bets as they start.</p>`;
+    return;
+  }
+  host.innerHTML = `
+    <div class="section-title">Live now
+      <span class="sub">— every game in progress across the sports we model</span></div>
+    <div class="lb-chips">${chips.map((s) => `
+      <button class="lb-chip ${(_liveChip === s) ? "active" : ""}" data-chip="${s}">
+        ${s === "all" ? "All" : s.toUpperCase()}
+        <b>${s === "all" ? games.length : bySport[s]}</b></button>`).join("")}
+    </div>
+    <div class="lb-grid">${shown.map(liveCardHTML).join("")}</div>`;
+  host.querySelectorAll(".lb-chip").forEach((b) =>
+    b.addEventListener("click", () => { _liveChip = b.dataset.chip; renderLiveBoard(); }));
+  host.querySelectorAll(".lb-card").forEach((el) =>
+    el.addEventListener("click", () => {
+      // Opening a game only works on its own sport's slate.
+      const s = el.dataset.lsport;
+      if (s !== state.sport) {
+        const chip = document.querySelector(`.sb-chips .sport-btn[data-sport="${s}"]`);
+        if (chip) chip.click();
+        setTimeout(() => openGame(el.dataset.gid), 900);
+      } else openGame(el.dataset.gid);
+    }));
+}
+
 (function initNewLook() {
   renderGreeting();
   initHcm();
   initGamesControls();
+  const tbMenu = document.getElementById("tb-menu");
+  if (tbMenu) tbMenu.addEventListener("click", () => {
+    const t = document.getElementById("menu-toggle");
+    if (t) t.click();
+  });
   window.addEventListener("resize", () => {
     if (typeof syncStripArrows === "function") syncStripArrows();
   });
