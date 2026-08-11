@@ -108,7 +108,10 @@ def test_the_responsible_gambling_line_is_not_hidden():
 
 
 # --- the view list ----------------------------------------------------------
-VIEWS = ["recommended", "live", "edge", "scanner", "longshots",
+#  weather + alerts joined 2026-08-12 (Ethan's Zeno sidebar render:
+#  "I like all the page options it offers so let's follow suit").
+VIEWS = ["weather", "alerts",
+         "recommended", "live", "edge", "scanner", "longshots",
          "trending", "players", "rosters", "standings", "record", "intel",
          "fantasy", "ufc", "why", "about"]
 
@@ -135,7 +138,11 @@ def test_the_record_is_a_standalone_page_not_a_sport_tab():
     grow it back, or the site has two doors disagreeing about what kind
     of page it is."""
     assert 'data-sport="record"' in HTML, "the switcher lost The Book"
-    assert 'data-group="record"' in HTML
+    # The group's NAME moved with the Zeno sidebar (2026-08-12): "The
+    # Book" items live under My Tools now (data-group="tools"). The
+    # contract this test protects is unchanged and asserted above/below:
+    # Results enters as a standalone tool, never a per-sport tab.
+    assert 'data-group="tools"' in HTML
     assert '<button class="nav-btn" data-view="record"' not in HTML, \
         "Record is back in the per-sport tab row"
     assert '"record"' in APP.split("STANDALONE_MODES = ")[1][:120], \
@@ -163,7 +170,12 @@ def test_the_per_league_nav_configuration_is_intact():
     CFB four tabs that can only ever say "no data"."""
     block = APP[APP.index("const HIDDEN_VIEWS = {"):]
     block = block[:block.index("};")]
-    assert 'nba: ["longshots"]' in block, "NBA's Long Shots exclusion is gone"
+    # Membership, not the exact list — the same principle the wnba check
+    # below states. NBA's exclusions grew "weather" on 2026-08-12 (an
+    # indoor league can't have a weather page), and the equality form of
+    # this assert read that as the Long Shots rule breaking.
+    nba = [l for l in block.splitlines() if l.strip().startswith("nba:")]
+    assert nba and '"longshots"' in nba[0], "NBA's Long Shots exclusion is gone"
     # Membership rather than the exact list: the WNBA also has no futures
     # board, and an equality check fails whenever an unrelated tab joins the
     # exclusion, which looks like this preservation rule breaking when it

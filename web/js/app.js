@@ -79,11 +79,11 @@ const SPORT_META = {
    scattered through applySport, because "which pages does this sport
    have?" is one question and it should have one answer. */
 const HIDDEN_VIEWS = {
-  nba: ["longshots"],
+  nba: ["longshots", "weather"],
   // The WNBA has no futures board: engine/futures.py has a shape for it but
   // futures_build.py does not run it, because there is no outrights key for
   // the league and its season is nearly over by the time this ships.
-  wnba: ["longshots", "futures"],
+  wnba: ["longshots", "futures", "weather"],
   // §9.1 caps UFC at two legs in ONE fight, and every construction §9.3
   // permits pairs a winner with a method, distance or round-group market.
   // We price fight winners and nothing else, so there is no pair to screen
@@ -94,12 +94,12 @@ const HIDDEN_VIEWS = {
   // No commission publishes an MMA injury report and ESPN carries no
   // /injuries endpoint for it — what exists is camp rumor, which is
   // exactly what this site does not publish.
-  ufc: ["parlays", "futures", "injuries"],
-  polymarket: ["parlays", "futures"],
-  fantasy: ["parlays", "futures"],
+  ufc: ["parlays", "futures", "injuries", "weather"],
+  polymarket: ["parlays", "futures", "weather"],
+  fantasy: ["parlays", "futures", "weather"],
   // CFB has 134 programs and no free player-level feed. A roster tab that
   // can only ever say "no data" is worse than no tab.
-  cfb: ["longshots", "trending", "players", "rosters"],
+  cfb: ["longshots", "trending", "players", "rosters", "weather"],
 };
 
 /* College football's 134 identities ride in the payload rather than a
@@ -7134,6 +7134,111 @@ function renderMyBets() {
       browser data erases it, so Export now and then if you want a backup.</p>`;
 }
 
+/* Weather — the Zeno sidebar's page (Ethan, 2026-08-12), built from
+   numbers we already price with: each game's slate weather, plus the
+   prediction desk's NWS-vs-Kalshi rows when those markets are live.
+   Hidden for leagues with no weather feed — a page that can only say
+   "indoor" is worse than no page. */
+function renderWeather() {
+  const host = document.getElementById("weather-body");
+  if (!host) return;
+  const games = ((state.data || {}).games || []).filter((g) => g.weather);
+  const row = (g) => {
+    const w = g.weather || {};
+    const windy = !w.dome && (w.wind_mph || 0) >= 12;
+    const chips = w.dome
+      ? `<span class="chip books">${icon("stadium")} Dome — weather can’t reach it</span>`
+      : [`<span class="chip">${Math.round(w.temp_f)}&deg;F</span>`,
+         `<span class="chip ${windy ? "down" : ""}">${Math.round(w.wind_mph || 0)}mph${w.wind_dir ? " " + escapeHtml(w.wind_dir) : ""}${windy ? " — moves totals" : ""}</span>`,
+         (w.precip_chance || 0) >= 0.2
+           ? `<span class="chip">${Math.round(w.precip_chance * 100)}% precip</span>` : "",
+        ].join("");
+    return `<div class="wx-row" data-gid="${escapeHtml(gameId(g))}">
+      <span class="wx-teams">${teamMark(g.away, 20)} ${escapeHtml(g.away)}
+        <em>@</em> ${teamMark(g.home, 20)} ${escapeHtml(g.home)}</span>
+      <span class="wx-park">${escapeHtml(g.park_name || (g.stadium || {}).name || "")}</span>
+      <span class="wx-chips chips">${chips}</span>
+    </div>`;
+  };
+  const deskWx = ((_railDeskCache || {}).weather || []);
+  const deskRows = deskWx.length ? `
+    <div class="section-title">The desk’s forecast board
+      <span class="sub">— NWS daily highs priced against Kalshi’s brackets. Rows that clear
+      the 8-point bar are the desk’s paper recommendations.</span></div>
+    <div class="card kx-table" style="padding:0">${deskWx.slice(0, 10).map((r) => `
+      <div class="kx-row">
+        <span class="kx-sport chip">${escapeHtml(r.city || "")}</span>
+        <span class="kx-title">${escapeHtml(r.subtitle || r.title)} · ${escapeHtml(r.date)}
+          ${r.rec ? `<span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${r.rec_side}</span>` : ""}</span>
+        <span class="kx-num">NWS ${r.forecast_f}&deg;</span>
+        <span class="kx-num">${(r.prob * 100).toFixed(0)}&cent;</span>
+        <span class="kx-num kx-e"><span style="color:var(--${r.edge_pts > 0 ? "good" : "bad"})">${r.edge_pts > 0 ? "+" : ""}${r.edge_pts}</span></span>
+      </div>`).join("")}</div>` : "";
+  host.innerHTML = (games.length ? `<div class="card" style="padding:0">
+      ${games.map(row).join("")}</div>` :
+    `<div class="empty-slate"><div class="es-icon">${icon("cloud", 30)}</div>
+      <div class="es-title">No conditions to report</div>
+      <div class="es-sub">The slate carries a weather reading for every outdoor game once
+      it builds — check back when tonight’s board is up.</div></div>`) + deskRows;
+  host.querySelectorAll(".wx-row").forEach((el) =>
+    el.addEventListener("click", () => openGame(el.dataset.gid)));
+  renderRailDesk();          // warms the cache the forecast board reads
+}
+
+/* Alerts — a DIGEST, deliberately: what changed on the data we already
+   hold (line moves, the injury watch, the desk), rebuilt each refresh.
+   Not a push service, and the page says so instead of pretending. */
+function renderAlerts() {
+  const host = document.getElementById("alerts-body");
+  if (!host) return;
+  const d = state.data || {};
+  const sections = [];
+  const moved = (d.recommendations || []).filter((r) =>
+    r.move_delta != null && (Math.abs(r.move_delta) >= 0.5 || r.move_steam));
+  if (moved.length) {
+    sections.push(`<div class="section-title">Line movement
+        <span class="sub">— tonight’s picks whose line has moved since open. Steam =
+        several books moved together, which is the market talking.</span></div>
+      <div class="card kx-table" style="padding:0">${moved.slice(0, 12).map((r) => `
+        <div class="kx-row">
+          <span class="kx-title"><b>${escapeHtml(r.player)}</b> ${escapeHtml(r.side || "")}
+            ${r.line} ${escapeHtml(r.market_label || r.market || "")}</span>
+          <span class="kx-num" style="color:var(--${r.move_delta > 0 ? "good" : "bad"})">
+            ${r.move_delta > 0 ? "+" : ""}${r.move_delta}</span>
+          ${r.move_steam ? `<span class="chip down">steam</span>` : ""}
+        </div>`).join("")}</div>`);
+  }
+  const inj = (d.injury_watch || []).filter((i) => i && i.player);
+  if (inj.length) {
+    sections.push(`<div class="section-title">Injury watch
+        <span class="sub">— designations touching tonight’s board.
+        <a href="#injuries">Full report &#8594;</a></span></div>
+      <div class="card kx-table" style="padding:0">${inj.slice(0, 12).map((i) => `
+        <div class="kx-row"><span class="kx-title"><b>${escapeHtml(i.player)}</b>
+          ${i.team ? escapeHtml(i.team) : ""}</span>
+          <span class="chip down">${escapeHtml(i.status || "")}</span></div>`).join("")}</div>`);
+  }
+  const k = _railDeskCache || {};
+  const recs = [...(k.rows || []).filter((r) => r.rec),
+                ...(k.weather || []).filter((r) => r.rec)];
+  if (recs.length) {
+    sections.push(`<div class="section-title">The desk
+        <span class="sub">— paper recommendations live right now.
+        <a href="#intel">The full board &#8594;</a></span></div>
+      <div class="card kx-table" style="padding:0">${recs.slice(0, 6).map((r) => `
+        <div class="kx-row"><span class="kx-title">${escapeHtml(r.title)}</span>
+          <span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${r.rec_side}</span>
+          <span class="kx-num">${(r.prob * 100).toFixed(0)}&cent;</span></div>`).join("")}</div>`);
+  }
+  host.innerHTML = sections.join("") || `<div class="empty-slate">
+      <div class="es-icon">${icon("signal", 30)}</div>
+      <div class="es-title">Nothing moving right now</div>
+      <div class="es-sub">Alerts fill from three real feeds — line movement on tonight’s
+      picks, the injury watch, and the prediction desk. A quiet page means a quiet
+      slate, not a broken one.</div></div>`;
+  renderRailDesk();
+}
+
 /* Bankroll page extras (Ethan's desktop render, 2026-08-11): the goal
    bar and the balance-over-time chart — read entirely from the user's
    own sizing input and My Bets log. No held balance exists anywhere. */
@@ -10259,7 +10364,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "standings", "bankroll", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
+const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
 
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -10295,6 +10400,8 @@ function switchView(name, push = false) {
   if (name === "memes") renderMemes();
   if (name === "mybets") renderMyBets();
   if (name === "bankroll") renderBankrollExtras();
+  if (name === "weather") renderWeather();
+  if (name === "alerts") renderAlerts();
   if (name === "ufc") renderUFC();
   if (name === "why") renderWhy();
   if (name === "about") renderAbout();
@@ -10540,6 +10647,11 @@ function initHeaderTuck() {
 function bind() {
   document.querySelectorAll(".nav-btn").forEach((b) =>
     b.addEventListener("click", () => {
+      // Anchor/sub-tab items wear .nav-btn for the sidebar's looks but
+      // carry no view of their own — their handlers live in initNewLook.
+      // Without this guard they fell through to switchView(undefined),
+      // which is the sport-btn More-toggle bug all over again.
+      if (!b.dataset.view) return;
       // The sidebar keeps page items on screen during standalone pages
       // (memes, My Bets, ...); the old header hid them there. Leaving
       // standalone properly restores the sport chrome first.
@@ -11435,6 +11547,24 @@ async function renderLiveBoard() {
       closeMobileMenu();
       const el = document.getElementById(b.dataset.anchor);
       if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+    }));
+  // Sub-tab items (Game Lines, Watchlist): go Home, then open the tab —
+  // through the subnav's own button so its state machinery all runs.
+  document.querySelectorAll(".sb-subtab").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
+      if (state.view !== "recommended") switchView("recommended", true);
+      closeMobileMenu();
+      // The subnav is built by the room machinery after the view lands,
+      // so the tab may not exist yet — retry briefly instead of racing.
+      let tries = 0;
+      const open = () => {
+        const tab = document.querySelector(
+          `#view-recommended .subnav [data-subtab="${b.dataset.subtab}"]`);
+        if (tab) tab.click();
+        else if (++tries < 8) setTimeout(open, 150);
+      };
+      setTimeout(open, 120);
     }));
   syncRail();
 })();

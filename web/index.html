@@ -140,26 +140,72 @@
         <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC">UFC</button>
       </div>
 
-      <div class="sb-label" data-head="main">Main</div>
+      <!-- Ethan's Zeno Props render, 2026-08-12: the grouped sidebar —
+           Dashboard up top, then RESEARCH / MODELS / MY TOOLS. Every
+           destination the old groups carried survives (preservation
+           rule); the bet slip and the Upgrade card do not exist here
+           because the site takes no money. Badges only when true:
+           the Live count is real, and nothing wears NEW as decoration. -->
       <div class="sb-group" data-group="pages">
         <button class="nav-btn sb-item active" data-view="recommended" data-hint="tonight’s picks">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>
-          Today</button>
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>
+          Dashboard</button>
         <button class="nav-btn sb-item" data-view="live" data-hint="live scores and open bets">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12h4l2.5-6 3.5 12 2.5-6H22"/></svg>
           Live Now <span class="sb-badge" id="sb-live-badge" hidden></span></button>
+      </div>
+
+      <div class="sb-label" data-head="research">Research</div>
+      <div class="sb-group" data-group="research">
+        <button class="nav-btn sb-item sb-anchor" data-anchor="top-picks" data-hint="tonight’s best grades">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l2.7 5.6 6.3.9-4.5 4.3 1 6.2-5.5-3-5.5 3 1-6.2L3 9.5l6.3-.9z"/></svg>
+          Top Picks</button>
         <button class="nav-btn sb-item" data-view="edge" data-hint="every +EV price">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg>
-          Props</button>
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+          Player Props</button>
+        <button class="nav-btn sb-item sb-subtab" data-subtab="gamebets" data-hint="moneyline, spread &amp; totals">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1.4"/><circle cx="14" cy="12" r="1.4"/><circle cx="10" cy="18" r="1.4"/></svg>
+          Game Lines</button>
+        <button class="nav-btn sb-item" data-view="scanner" data-hint="stale &amp; arb lines across books">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h5M4 4v5M20 4h-5M20 4v5M4 20h5M4 20v-5M20 20h-5M20 20v-5M7 12h10"/></svg>
+          Line Shopping</button>
         <button class="nav-btn sb-item" data-view="longshots" id="longshots-tab" data-hint="home-run darts">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2l1.8 4.2L18 8l-4.2 1.8L12 14l-1.8-4.2L6 8l4.2-1.8z"/><path d="M18 14l.9 2.1L21 17l-2.1.9L18 20l-.9-2.1L15 17l2.1-.9z"/></svg>
           Long Shots</button>
         <button class="nav-btn sb-item" data-view="futures" data-hint="the whole season, simulated">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 21h8M12 17v4M5 4h14v3a7 7 0 0 1-14 0z"/><path d="M5 6H3a3 3 0 0 0 3 4M19 6h2a3 3 0 0 1-3 4"/></svg>
           Futures</button>
+        <button class="nav-btn sb-item" data-view="injuries" data-hint="who’s out, league-wide">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 4h6v5h5v6h-5v5H9v-5H4V9h5z"/></svg>
+          Injuries &amp; News</button>
+        <button class="nav-btn sb-item" data-view="weather" data-hint="tonight’s conditions, park by park">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17a5 5 0 1 1 1-9.9A6 6 0 1 1 18 17z"/><path d="M8 21h.1M12 21h.1M16 21h.1"/></svg>
+          Weather</button>
+        <button class="nav-btn sb-item" data-view="rosters" data-hint="every team’s roster">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="8" r="3.4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="9" r="2.6"/><path d="M15.8 14.6a5.5 5.5 0 0 1 5.7 5.4"/></svg>
+          Rosters</button>
+        <button class="nav-btn sb-item" data-view="players" data-hint="search a player">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
+          Players</button>
         <button class="nav-btn sb-item" data-view="standings" data-hint="records &amp; the bracket">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>
           Rankings</button>
+      </div>
+
+      <div class="sb-label" data-head="models">Models</div>
+      <div class="sb-group" data-group="models">
+        <!-- Each entry is the real model behind a league's board — the
+             names come from the specs in docs/, not marketing. Clicking
+             one opens that league. -->
+        <button class="sport-btn sb-item sb-model" data-sport="mlb" data-kind="league" title="The Scalpy 2.0 MLB spec — docs/MLB_MODEL.md">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12h4l2.5-7 3.5 14 2.5-7H22"/></svg>
+          <span class="sb-model-words"><b>Scalpy 2.0</b><span>the MLB model</span></span></button>
+        <button class="sport-btn sb-item sb-model" data-sport="nfl" data-kind="league" title="The pro-bettor NFL spec — docs/NFL_MODEL.md">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12c3-5 6-7 9-7s6 2 9 7c-3 5-6 7-9 7s-6-2-9-7z"/><circle cx="12" cy="12" r="2.5"/></svg>
+          <span class="sb-model-words"><b>The NFL Book</b><span>the pro-bettor spec</span></span></button>
+        <button class="sport-btn sb-item sb-model" data-sport="ufc" data-kind="league" title="The Scalpy MMA doctrine — style beats talent">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 4h10v7a5 5 0 0 1-10 0z"/><path d="M9 20h6M12 16v4"/></svg>
+          <span class="sb-model-words"><b>Scalpy MMA</b><span>the fight model</span></span></button>
       </div>
 
       <div class="sb-label" data-head="markets">Markets</div>
@@ -175,40 +221,30 @@
           Meme Coins</button>
       </div>
 
-      <div class="sb-label" data-head="record">The Book</div>
-      <div class="sb-group" data-group="record">
-        <button class="sport-btn sb-item" data-sport="record" data-kind="tool"
-                title="Every pick journaled at its real price, graded in public">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h14v16l-3.5-2-3.5 2-3.5-2L5 20z"/><path d="M9 9h6M9 13h4"/></svg>
-          Results</button>
-        <button class="sport-btn sb-item" data-sport="lab" data-kind="tool" title="The walk-forward backtests">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3v6L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9V3"/><path d="M8 3h8"/></svg>
-          The Lab</button>
+      <div class="sb-label" data-head="tools">My Tools</div>
+      <div class="sb-group" data-group="tools">
         <button class="sport-btn sb-item" data-sport="mybets" data-kind="tool" title="Your own sportsbook P&amp;L — synced with your account">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M4 9h16M8 13h5"/></svg>
           My Bets</button>
+        <button class="nav-btn sb-item sb-subtab" data-subtab="watch" data-hint="rest, incentives, form, injuries">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 4l2 4.2 4.6.6-3.4 3.2.9 4.6L12 14.4l-4.1 2.2.9-4.6L5.4 8.8 10 8.2z"/></svg>
+          Watchlist</button>
+        <button class="nav-btn sb-item" data-view="alerts" data-hint="line moves, injuries, the desk">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+          Alerts</button>
+        <button class="sport-btn sb-item" data-sport="record" data-kind="tool"
+                title="Every pick journaled at its real price, graded in public">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h14v16l-3.5-2-3.5 2-3.5-2L5 20z"/><path d="M9 9h6M9 13h4"/></svg>
+          Results Tracker</button>
+        <button class="sport-btn sb-item" data-sport="lab" data-kind="tool" title="The walk-forward backtests">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3v6L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9V3"/><path d="M8 3h8"/></svg>
+          The Lab</button>
         <button class="nav-btn sb-item" data-view="bankroll" data-hint="size your units">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5c0-1 1-1.8 2.5-1.8s2.5.7 2.5 1.7c0 2.6-5 1.6-5 4.2 0 1 1 1.7 2.5 1.7s2.5-.7 2.5-1.7"/></svg>
           Bankroll</button>
-      </div>
-
-      <div class="sb-label" data-head="tools">Tools</div>
-      <div class="sb-group" data-group="tools">
         <button class="nav-btn sb-item" data-view="trending" data-hint="form movers">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
           Trending</button>
-        <button class="nav-btn sb-item" data-view="players" data-hint="search a player">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
-          Players</button>
-        <button class="nav-btn sb-item" data-view="rosters" data-hint="every team’s roster">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="8" r="3.4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="9" r="2.6"/><path d="M15.8 14.6a5.5 5.5 0 0 1 5.7 5.4"/></svg>
-          Rosters</button>
-        <button class="nav-btn sb-item" data-view="injuries" data-hint="who’s out, league-wide">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 4h6v5h5v6h-5v5H9v-5H4V9h5z"/></svg>
-          Injuries</button>
-        <button class="nav-btn sb-item" data-view="scanner" data-hint="stale &amp; arb lines">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h5M4 4v5M20 4h-5M20 4v5M4 20h5M4 20v-5M20 20h-5M20 20v-5M7 12h10"/></svg>
-          Scanner</button>
       </div>
     </div>
 
@@ -490,6 +526,29 @@
     </section>
 
     <!-- Injury report — per sport, league-wide -->
+    <!-- Weather — tonight's conditions park by park, plus the desk's
+         forecast rows when the Kalshi weather markets are priced.
+         (Ethan's Zeno sidebar render, 2026-08-12.) -->
+    <section class="view" id="view-weather">
+      <div class="section-title">Weather
+        <span class="sub">— tonight’s conditions at every outdoor venue, from the same feed
+        the model prices with. Domes say so; wind that moves a total is called out.</span>
+      </div>
+      <div id="weather-body"></div>
+    </section>
+
+    <!-- Alerts — a digest, not a push service: line movement on tonight's
+         picks, the injury watch, and the desk's recommendations, rebuilt
+         on every refresh. -->
+    <section class="view" id="view-alerts">
+      <div class="section-title">Alerts
+        <span class="sub">— what changed: line moves on tonight’s board, the injury watch,
+        and the prediction desk. Rebuilt each refresh while the site is open — nothing
+        here pushes to your phone, and it says so rather than pretending.</span>
+      </div>
+      <div id="alerts-body"></div>
+    </section>
+
     <section class="view" id="view-injuries">
       <div class="section-title">Injury Report
         <span class="sub">— every current designation in the league, freshest first. A

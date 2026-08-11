@@ -349,3 +349,23 @@ with no balance chip beside it, ever. The Home board keeps Ethan's
 typed order (top picks → stadiums → performance) over the render's
 stadiums-first arrangement: an explicit instruction he gave about this
 exact question outranks a generated mock until he says otherwise.
+
+## The Zeno sidebar — 2026-08-12, Ethan's render
+
+"I like all the page options it offers so let's follow suit." The
+sidebar regrouped to the render's shape — Dashboard + Live Now, then
+RESEARCH / MODELS / MY TOOLS — with every previous destination
+surviving (the preservation baseline re-swept). New in RESEARCH:
+Game Lines and Watchlist open Home's own sub-tabs through the subnav's
+real buttons (and correctly do nothing special on a night whose room is
+empty); Weather is a new page built from the slate's own conditions
+plus the desk's NWS-vs-Kalshi board, hidden for leagues with no weather
+feed. New in MY TOOLS: Alerts, a digest of line movement, the injury
+watch and the desk — rebuilt each refresh, explicitly NOT a push
+service. MODELS lists the real specs by their real names (Scalpy 2.0,
+the NFL book, Scalpy MMA), each opening its league. Not copied: the bet
+slip, the Upgrade card (nothing here is for sale), Zeno's green accent
+(our violet system is pinned), and decorative NEW badges — the only
+badge is the live count, which is true. The nav-btn binder also gained
+the missing-view guard: anchor items wear the class for its looks and
+fell through to switchView(undefined).

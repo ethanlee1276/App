@@ -58,8 +58,9 @@ const BROWSER = process.env.QB_CHROMIUM
    easiest page on the site to forget. The redesign spec's own inventory
    listed ten; there are seventeen. */
 export const VIEWS = ['recommended', 'live', 'edge', 'scanner', 'longshots',
-  'parlays', 'trending', 'players', 'rosters', 'standings', 'record', 'intel',
-  'fantasy', 'ufc', 'why', 'about', 'game'];
+  'futures', 'trending', 'players', 'rosters', 'injuries', 'weather',
+  'alerts', 'standings', 'bankroll', 'record', 'lab', 'intel', 'fantasy',
+  'memes', 'mybets', 'ufc', 'why', 'about', 'game'];
 export const SPORTS = ['nfl', 'cfb', 'mlb', 'nba', 'wnba', 'ufc',
   'polymarket', 'fantasy'];
 const WIDTHS = [1280, 390];
@@ -109,8 +110,15 @@ async function harvest() {
   const b = await chromium.launch({ executablePath: BROWSER });
   const out = { views: VIEWS, sports: SPORTS, widths: WIDTHS, pages: {} };
   for (const w of WIDTHS) {
+    /* The inventory measures OUR pages. Third-party hosts (live-score
+       feeds, exchanges) contribute nothing to it and, behind a proxy
+       that hangs instead of refusing, can stall every navigation for
+       its full timeout — so they are aborted outright. The app treats
+       a failed external fetch as a quiet feature everywhere already. */
     const p = await b.newPage({ viewport: { width: w, height: 1200 },
                                 reducedMotion: 'reduce' });
+    await p.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/,
+                  (r) => r.abort());
     for (const s of SPORTS) for (const v of VIEWS) {
       /* `game` has no nav tab and no bare hash — it is reached as
          #game/<date>_<away>@<home>, so the id has to be discovered from the
@@ -119,7 +127,7 @@ async function harvest() {
          the redesign spec's own inventory omitted it entirely. */
       let hash = v;
       if (v === 'game') {
-        await p.goto(url(s, 'recommended', nonce++), { waitUntil: 'networkidle' });
+        await p.goto(url(s, 'recommended', nonce++), { waitUntil: 'load' });
         await p.waitForTimeout(200);
         const gid = await p.evaluate(() => {
           const g = (typeof state !== 'undefined' && state.data
@@ -131,7 +139,11 @@ async function harvest() {
         if (!gid) continue;              // sport has no games in this slate
         hash = `game/${encodeURIComponent(gid)}`;
       }
-      await p.goto(url(s, hash, nonce++), { waitUntil: 'networkidle' });
+      /* 'load', not networkidle: an app with polling loops (live scores,
+         the meme fast-loop) never goes network-quiet, so networkidle is
+         a 30-second coin flip per page. The waits below — sport applied,
+         a settle beat, the sub-tab walk — are the real gate. */
+      await p.goto(url(s, hash, nonce++), { waitUntil: 'load' });
       /* A hidden view is routed twice — once by the hash handler on load,
          when state.sport is still the default and HIDDEN_VIEWS therefore
          says nothing is hidden, and again by applySport once the league's
