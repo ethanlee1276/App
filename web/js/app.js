@@ -5960,16 +5960,6 @@ function renderScanner() {
 /* ============================================================
    Prediction Market Intel — informed-flow detection (Polymarket)
    ============================================================ */
-function intelStatus(status) {
-  const map = {
-    Live: ["var(--good,#3ddc84)", "value still available near the flagged entry"],
-    Chasing: ["var(--warn,#e8b33e)", "price has already run — the edge is mostly gone"],
-    Historical: ["var(--text-mute,#889)", "old flag, informational only"],
-  };
-  const [color, tip] = map[status] || ["inherit", ""];
-  return `<span style="min-width:78px;text-align:right;font-weight:700;color:${color}" title="${tip}">${status}</span>`;
-}
-
 function shortWallet(w) {
   return w && w.length > 12 ? `${w.slice(0, 6)}…${w.slice(-4)}` : (w || "");
 }
