@@ -329,3 +329,23 @@ standing no-money rule: the bet slip, Place Bet, deposits, balances,
 plus Rewards and Settings by Ethan's own word. The analytics pass also
 caught and fixed a crasher: the ALL window's Infinity days reached
 toISOString and the resulting throw blanked the entire Record page.
+
+## The desktop sheet — 2026-08-11, Ethan's 10 web panels
+
+Same contract as the mobile sheet ("match everything perfectly", minus
+what we never build): the event page grew the venue-photo hero, a GAME
+LINES table off the slate's own numbers and a KEY INSIGHTS panel that
+renders the game's data fields (injuries, wind, park factors, lineup
+status) — never ATS narratives we don't compute. The Live board becomes
+full-width rows on desktop (score story left, line grid right). The
+Results analytics gained the chart-plus-rail layout and an all-time
+footer: total staked, total returned, average price (mean implied
+probability re-expressed as American odds — a plain mean of +150 and
+−110 is arithmetic on two different scales), longest win streak, all
+journal-computed in engine/ledger.performance. Bankroll gained the goal
+bar (user's own two numbers) and a logged-P&L-over-time chart read from
+My Bets. The topbar gained the avatar chip — initials when signed in —
+with no balance chip beside it, ever. The Home board keeps Ethan's
+typed order (top picks → stadiums → performance) over the render's
+stadiums-first arrangement: an explicit instruction he gave about this
+exact question outranks a generated mock until he says otherwise.

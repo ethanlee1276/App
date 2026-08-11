@@ -4319,3 +4319,66 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   .ra-stats, .ra-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
   .mbc-list { grid-template-columns: 1fr; }
 }
+
+/* ---- Desktop render-sheet pass (Ethan, 2026-08-11): event page, live
+   rows, analytics rail, props polish, avatar chip, bankroll goal. ---- */
+
+/* Event page — lines + insights side by side above the stats. */
+.gp-panel-title { font-weight: 800; letter-spacing: .02em; margin-bottom: 8px; }
+.gp-panel-sub { color: var(--text-mute); font-weight: 400; font-size: var(--fs-sm); }
+.gp-row { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 14px 0; }
+@media (min-width: 900px) { .gp-row { grid-template-columns: 1fr 1fr; } }
+.gp-lines .lb-table { border-top: none; padding-top: 0; }
+.gp-note-list { margin: 0; padding-left: 18px; color: var(--text-body);
+  font-size: var(--fs-sm); }
+.gp-note-list li { margin: 4px 0; }
+/* The hero art holds the photo the same way a strip card does. */
+.gp-art { position: relative; overflow: hidden; }
+.gp-art .venue-photo { border-radius: var(--radius); }
+
+/* Live board on desktop — the render's full-width rows: score story on
+   the left, the line grid on the right. */
+@media (min-width: 900px) {
+  .lb-grid { grid-template-columns: 1fr; }
+  .lb-card { display: grid; grid-template-columns: 1fr auto; column-gap: 26px;
+    align-items: center; }
+  .lb-card .lb-head { grid-column: 1 / -1; }
+  .lb-card .lb-table { border-top: none; padding-top: 0; margin-top: 0;
+    min-width: 300px; }
+}
+
+/* Analytics on desktop — chart left, the three stats as a right rail. */
+.ra-main { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
+.ra-main .rec-chart { margin-bottom: 0; }
+@media (min-width: 1000px) {
+  .ra-main { grid-template-columns: 1fr 235px; align-items: stretch; }
+  .ra-main .ra-stats { grid-template-columns: 1fr; margin: 0; align-content: start; }
+}
+.ra-alltime { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 640px) { .ra-alltime { grid-template-columns: repeat(2, 1fr); } }
+
+/* Props tiles grow into the render's desktop grid. */
+@media (min-width: 900px) {
+  .pm-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 11px; }
+  .pm-tile { padding: 15px 16px; }
+  .pm-tile .pm-name { font-size: var(--fs-md); }
+  .pm-tile.active { box-shadow: var(--glow); }
+}
+
+/* The avatar chip — initials when signed in, no balance beside it ever. */
+.nav-acct-init { display: inline-grid; place-items: center; width: 22px; height: 22px;
+  border-radius: 50%; background: var(--brand); color: #fff;
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .02em; }
+
+/* Bankroll — the goal bar and the logged-P&L chart. */
+.bk-goal, .bk-curve { margin-top: 12px; }
+.bk-goal-row { display: flex; align-items: center; gap: 8px; }
+.bk-goal-row input { width: 130px; }
+.bk-goal-pct { margin-left: auto; font-weight: 800; color: var(--brand-2); }
+.bk-goal-bar { height: 8px; border-radius: var(--radius-sm); background: var(--panel-2);
+  overflow: hidden; margin: 10px 0 8px; }
+.bk-goal-bar i { display: block; height: 100%; background: var(--brand); }
+.bk-curve-net { font-size: var(--fs-3xl); font-weight: 800; letter-spacing: -.5px;
+  margin: 2px 0 6px; }
+.bk-curve-span { display: flex; justify-content: space-between;
+  color: var(--text-mute); font-size: var(--fs-xs); margin-top: 4px; }

@@ -3235,10 +3235,55 @@ function renderGamePage() {
   });
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
+  // The hero wears the same venue art chain as the strip card (Ethan's
+  // desktop event-page render, 2026-08-11): team photo, else the
+  // colour-matched family render, else the drawing. Live keeps the
+  // drawing — it carries the ball spot, bases and wind.
+  const gpFam = VENUE_FAMILY[state.sport];
+  const gpPhoto = !isLive ? `<img class="venue-photo" alt="" loading="lazy"
+      src="img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg"
+      ${gpFam ? `data-alt="img/venues/variants/${gpFam}-${venueVariant((window.ACTIVE_TEAMS || {})[g.home] || {})}.jpg"
+      onerror="vpFall(this)"` : `onerror="this.remove()"`}/>` : "";
+  // The render's GAME LINES table and KEY INSIGHTS panel. Lines come
+  // straight off the slate; a cell without a real price shows a dash.
+  // Insights are the game's own data fields, not narratives.
+  const gpFav = g.favorite || g.home;
+  const gpSp = (side) => g.spread == null ? "—"
+    : `${side === gpFav ? "−" : "+"}${Math.abs(g.spread).toFixed(1)}`;
+  const gpMl = (v) => v == null ? "—" : `${v > 0 ? "+" : ""}${v}`;
+  const linesCard = (g.spread != null || g.total != null
+                     || g.away_ml != null || g.home_ml != null) ? `
+    <div class="card gp-lines"><div class="gp-panel-title">Game lines</div>
+      <div class="lb-table">
+        <span class="lb-th"></span><span class="lb-th">Spread</span>
+        <span class="lb-th">Total</span><span class="lb-th">ML</span>
+        <span class="lb-tm">${teamMark(g.away, 20)} ${escapeHtml(g.away)}</span>
+        <b>${gpSp(g.away)}</b><b>${g.total != null ? "O " + g.total.toFixed(1) : "—"}</b>
+        <b>${gpMl(g.away_ml)}</b>
+        <span class="lb-tm">${teamMark(g.home, 20)} ${escapeHtml(g.home)}</span>
+        <b>${gpSp(g.home)}</b><b>${g.total != null ? "U " + g.total.toFixed(1) : "—"}</b>
+        <b>${gpMl(g.home_ml)}</b>
+      </div></div>` : "";
+  const notes = [];
+  (g.injuries || []).slice(0, 4).forEach((i) => notes.push(
+    `${i.player} (${i.team} ${i.position || ""}) — ${i.status}`));
+  if (g.lineups_confirmed === false) notes.push("Lineups not confirmed yet");
+  if (mlb && f.hr >= 1.05) notes.push(`Park boosts home runs +${Math.round((f.hr - 1) * 100)}%`);
+  if (mlb && f.hr && f.hr <= 0.95) notes.push(`Park suppresses home runs ${Math.round((f.hr - 1) * 100)}%`);
+  if (!w.dome && (w.wind_mph || 0) >= 12) notes.push(
+    `${Math.round(w.wind_mph)}mph wind${w.wind_dir ? " " + w.wind_dir : ""}`);
+  if (!w.dome && (w.precip_chance || 0) >= 0.4) notes.push(
+    `${Math.round(w.precip_chance * 100)}% precipitation chance`);
+  if (g.doubleheader) notes.push(`Doubleheader — game ${g.game_number || 1}`);
+  const notesCard = notes.length ? `
+    <div class="card gp-notes"><div class="gp-panel-title">Key insights
+        <span class="gp-panel-sub">— this game’s own data, not narratives</span></div>
+      <ul class="gp-note-list">${notes.map((n) =>
+        `<li>${escapeHtml(n)}</li>`).join("")}</ul></div>` : "";
   host.innerHTML = `
     <button class="btn ghost gp-back" id="gp-back">← Back to the board</button>
     <div class="gp-hero">
-      <div class="gp-art">${art}
+      <div class="gp-art">${art}${gpPhoto}
         ${isLive ? `<div class="status-badge live"><span class="live-dot"></span>LIVE
           <span class="per">${escapeHtml(live.period || "")}</span></div>` : ""}
         ${isFinal ? `<div class="status-badge final">FINAL</div>` : ""}</div>
@@ -3262,6 +3307,8 @@ function renderGamePage() {
         ${mlb ? parkPanel(g) : nba ? "" : stadiumPanel(g)}
       </div>
     </div>
+
+    ${linesCard || notesCard ? `<div class="gp-row">${linesCard}${notesCard}</div>` : ""}
 
     <div class="stats gp-stats">
       <div class="tile"><div class="k">Props analyzed</div><div class="v">${props.length}</div>
@@ -3693,17 +3740,30 @@ function recAnalytics(curve, o) {
     <div class="section-title">Running P&amp;L
       <span class="sub">— every settled pick, by slate date</span>
       ${raChips(avail, rk)}</div>
-    <div class="ra-stats">
-      ${stat("Net P&L", `${net >= 0 ? "+" : ""}${net.toFixed(2)}u`, toneOf(net))}
-      ${stat("Win rate", wr == null ? "—" : (wr * 100).toFixed(1) + "%")}
-      ${stat("ROI", roi == null ? "—" : `${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}%`, toneOf(roi || 0))}
+    <div class="ra-main">
+      ${recCurveChart(sliced, { head: false })}
+      <div class="ra-stats">
+        ${stat("Net P&L", `${net >= 0 ? "+" : ""}${net.toFixed(2)}u`, toneOf(net))}
+        ${stat("Win rate", wr == null ? "—" : (wr * 100).toFixed(1) + "%")}
+        ${stat("ROI", roi == null ? "—" : `${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}%`, toneOf(roi || 0))}
+      </div>
     </div>
-    ${recCurveChart(sliced, { head: false })}
     <div class="ra-tiles">
       <div class="tile"><div class="k">Bets graded</div><div class="v">${nBets}</div></div>
       <div class="tile"><div class="k">Won</div><div class="v" style="color:var(--good)">${wins == null ? "—" : wins}</div></div>
       <div class="tile"><div class="k">Lost</div><div class="v" style="color:var(--bad)">${losses == null ? "—" : losses}</div></div>
-    </div>`;
+    </div>
+    ${o.avg_price == null && o.best_streak == null ? "" : `
+    <div class="ra-tiles ra-alltime">
+      <div class="tile"><div class="k">Total staked</div><div class="v">${(o.units_staked || 0).toFixed(1)}u</div>
+        <div class="tile-sub">all-time</div></div>
+      <div class="tile"><div class="k">Total returned</div><div class="v">${(o.returned_units || 0).toFixed(1)}u</div>
+        <div class="tile-sub">stake back + winnings, all-time</div></div>
+      <div class="tile"><div class="k">Avg price</div><div class="v">${o.avg_price == null ? "—" : (o.avg_price > 0 ? "+" : "") + o.avg_price}</div>
+        <div class="tile-sub">mean implied probability, as American odds</div></div>
+      <div class="tile"><div class="k">Best win streak</div><div class="v">${o.best_streak ?? "—"}</div>
+        <div class="tile-sub">consecutive wins, slate order</div></div>
+    </div>`}`;
 }
 function raChips(avail, rk) {
   if (avail.length < 2) return "";
@@ -7028,6 +7088,71 @@ function renderMyBets() {
       browser data erases it, so Export now and then if you want a backup.</p>`;
 }
 
+/* Bankroll page extras (Ethan's desktop render, 2026-08-11): the goal
+   bar and the balance-over-time chart — read entirely from the user's
+   own sizing input and My Bets log. No held balance exists anywhere. */
+function renderBankrollExtras() {
+  const host = document.getElementById("bk-journal");
+  if (!host) return;
+  const goal = parseFloat(localStorage.getItem("qb_bk_goal")) || 0;
+  const bank = state.bankroll || 0;
+  const pct = goal > 0 && bank > 0 ? Math.min(100, 100 * bank / goal) : 0;
+  const settled = mbLoad()
+    .filter((b) => b.result && b.result !== "pending" && b.date)
+    .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  let curveHTML = "";
+  if (settled.length > 1) {
+    let cum = 0;
+    const ys = settled.map((b) => { cum = +(cum + mbProfit(b)).toFixed(2); return cum; });
+    const lo = Math.min(0, ...ys), hi = Math.max(0, ...ys), span = (hi - lo) || 1;
+    const W = 560, H = 110;
+    const xy = ys.map((y, i) => [
+      +(i / (ys.length - 1) * W).toFixed(1),
+      +(H - 10 - (y - lo) / span * (H - 20)).toFixed(1)]);
+    const up = ys[ys.length - 1] >= 0;
+    const tone = up ? "var(--good)" : "var(--bad)";
+    const hex = up ? "#42C268" : "#DF5953";
+    const gid = `bkfill${Math.random().toString(36).slice(2, 8)}`;
+    curveHTML = `
+      <div class="card bk-curve">
+        <div class="gp-panel-title">Your logged P&amp;L over time
+          <span class="gp-panel-sub">— every settled bet in your My Bets log</span></div>
+        <div class="bk-curve-net" style="color:${tone}">${mbMoney(ys[ys.length - 1], true)}</div>
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:auto;display:block" aria-hidden="true">
+          <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${hex}" stop-opacity="0.26"/>
+            <stop offset="100%" stop-color="${hex}" stop-opacity="0"/>
+          </linearGradient></defs>
+          <path d="M0,${H} L${xy.map(([x, y]) => `${x},${y}`).join(" L")} L${W},${H} Z" fill="url(#${gid})"/>
+          <polyline points="${xy.map(([x, y]) => `${x},${y}`).join(" ")}" fill="none"
+            stroke="${tone}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
+        <div class="bk-curve-span"><span>${escapeHtml(settled[0].date)}</span>
+          <span>${escapeHtml(settled[settled.length - 1].date)}</span></div>
+      </div>`;
+  }
+  host.innerHTML = `
+    <div class="card bk-goal">
+      <div class="gp-panel-title">Bankroll goal</div>
+      <div class="bk-goal-row"><span class="pfx">$</span>
+        <input id="bk-goal-in" type="number" min="0" step="50" placeholder="5000"
+          inputmode="numeric" value="${goal || ""}">
+        <span class="bk-goal-pct">${goal > 0 && bank > 0 ? pct.toFixed(0) + "%" : "—"}</span></div>
+      <div class="bk-goal-bar"><i style="width:${pct}%"></i></div>
+      <p class="bk-note">${goal > 0
+        ? (bank > 0
+          ? "Your bankroll above measured against your goal — arithmetic on your own two numbers."
+          : "Enter your bankroll above and this bar measures it against your goal.")
+        : "Set a number to measure your bankroll against. Stored in this browser."}</p>
+    </div>
+    ${curveHTML}`;
+  const inp = document.getElementById("bk-goal-in");
+  if (inp) inp.addEventListener("change", () => {
+    localStorage.setItem("qb_bk_goal", inp.value || "0");
+    renderBankrollExtras();
+  });
+}
+
 /* ============================================================
    ROCKET RADAR — Solana meme coins, the danger channel drawn loudest
    ============================================================
@@ -10123,6 +10248,7 @@ function switchView(name, push = false) {
   if (name === "fantasy") renderFantasy();
   if (name === "memes") renderMemes();
   if (name === "mybets") renderMyBets();
+  if (name === "bankroll") renderBankrollExtras();
   if (name === "ufc") renderUFC();
   if (name === "why") renderWhy();
   if (name === "about") renderAbout();
@@ -10764,6 +10890,8 @@ function renderTopPicks() {
    wins/losses/pushes donut. Losing numbers render red, on purpose —
    showing the record IS the site. */
 let _perfCache = null;
+let _perfRange = "1m";
+window._perfSetRange = (k) => { _perfRange = k; renderHomePerf(); };
 
 async function renderHomePerf() {
   const host = document.getElementById("home-perf");
@@ -10777,7 +10905,25 @@ async function renderHomePerf() {
   } catch (e) { host.innerHTML = ""; return; }
   const o = _perfCache.overall || {};
   if (!o.settled) { host.innerHTML = ""; return; }
-  const curve = (_perfCache.curve || []).slice(-30);
+  // Range chips on the overview chart (Ethan's desktop render,
+  // 2026-08-11). They window the CHART; the tiles stay all-time and say
+  // so — mixing a 1-week chart with all-time tiles unlabeled is exactly
+  // the confusion the Results page's range block exists to avoid.
+  const full = _perfCache.curve || [];
+  const spanDays = full.length > 1
+    ? (new Date(full[full.length - 1].date) - new Date(full[0].date)) / 864e5 : 0;
+  const PR = [["1w", 7], ["1m", 30], ["3m", 91], ["all", Infinity]];
+  const avail = PR.filter(([k, d]) => k === "all" || spanDays > d);
+  const rk = avail.some(([k]) => k === _perfRange) ? _perfRange : "all";
+  const days = (avail.find(([k]) => k === rk) || [null, Infinity])[1];
+  const windowed = !isFinite(days) ? full : full.filter((p) =>
+    p.date >= new Date(Date.now() - days * 864e5).toISOString().slice(0, 10));
+  const base = windowed.length && windowed[0] !== full[0]
+    ? full[full.indexOf(windowed[0]) - 1].cum_u : 0;
+  const curve = windowed.map((p) => ({ ...p, cum_u: +(p.cum_u - base).toFixed(2) }));
+  const perfChips = avail.length > 1 ? `<span class="ra-ranges">${avail.map(([k]) =>
+    `<button class="ra-range ${k === rk ? "active" : ""}"
+       onclick="_perfSetRange('${k}')">${k.toUpperCase()}</button>`).join("")}</span>` : "";
   const pcol = (v) => v > 0 ? "var(--good)" : v < 0 ? "var(--bad)" : "var(--text-mute)";
   const u = (v, sign) => (sign && v > 0 ? "+" : "") + Number(v).toFixed(2) + "u";
   // Sparkline: cumulative units over the last 30 graded days.
@@ -10821,7 +10967,8 @@ async function renderHomePerf() {
     <div class="perf-grid">
       <div class="card perf-card">
         <div class="perf-head"><span class="rail-title">Your performance</span>
-          <span class="perf-window">${curve.length > 1 ? "last " + curve.length + " graded days" : "the whole book"}</span></div>
+          ${perfChips || `<span class="perf-window">${curve.length > 1
+            ? "last " + curve.length + " graded days" : "the whole book"}</span>`}</div>
         ${(() => {
           // The render's "TODAY'S PROFIT/LOSS" headline — the most recent
           // graded slate, dated honestly when it isn't today's.
@@ -11148,6 +11295,17 @@ async function renderLiveBoard() {
     if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
     switchView("injuries", true);
   });
+  // The avatar chip: initials for a signed-in account, never a fake name.
+  const acctBtn = document.getElementById("nav-acct");
+  if (acctBtn) {
+    const a = typeof acctState === "function" ? acctState() : null;
+    if (a && a.name) acctBtn.innerHTML =
+      `<span class="nav-acct-init">${escapeHtml(a.name.slice(0, 2).toUpperCase())}</span>`;
+    acctBtn.addEventListener("click", () => {
+      if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
+      switchView("mybets", true);
+    });
+  }
   // Anchor items (Top Picks, Stadiums): go Home, then scroll to the block.
   document.querySelectorAll(".sb-anchor").forEach((b) =>
     b.addEventListener("click", () => {

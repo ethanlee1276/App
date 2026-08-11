@@ -239,6 +239,19 @@ def test_the_render_sheet_pass_shipped_its_honest_subset():
     # The curve rows carry the per-day fields the range math needs.
     LEDGER = open(os.path.join(ROOT, "engine/ledger.py"), encoding="utf-8").read()
     assert "SUM(status='won') AS w" in LEDGER
+    # Desktop sheet (same day): the event page's lines + insights, the
+    # analytics footer, the bankroll goal, the avatar chip. The footer's
+    # average price is a mean of implied probabilities re-expressed in
+    # American odds — never a mean of the American ints themselves.
+    assert "gp-lines" in APP and "gp-note-list" in APP
+    assert "ra-alltime" in APP and "implied_breakeven(b[\"odds\"])" in LEDGER
+    assert "best_streak" in LEDGER and "returned_units" in LEDGER
+    fn = APP[APP.index("function renderBankrollExtras("):]
+    fn = fn[:fn.index("\n}")]
+    assert "qb_bk_goal" in fn and "mbProfit" in fn
+    assert 'id="nav-acct"' in HTML
+    # The insights panel renders data fields only; its title says so.
+    assert "this game’s own data, not narratives" in APP
 
 
 if __name__ == "__main__":

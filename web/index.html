@@ -98,6 +98,13 @@
       <button class="meta-ico" id="nav-bell" title="Injury report" aria-label="Injury report">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
       </button>
+      <!-- The render's avatar chip, minus the balance chip beside it (the
+           site never holds money). Initials when signed in, a plain person
+           mark when not; either way it lands on My Bets, where the
+           account card lives. -->
+      <button class="meta-ico nav-acct" id="nav-acct" title="Your account" aria-label="Your account">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+      </button>
       <span id="data-source" class="data-source" title=""></span>
       <span id="live-refresh" class="live-refresh" style="display:none"></span>
       <span id="slate-date">—</span>
@@ -410,6 +417,9 @@
         suggested-exposure tile on Home totals tonight&rsquo;s recommended stakes in
         your units. Nothing here is a deposit; it&rsquo;s arithmetic on your own number.</p>
       </div>
+      <!-- The render's goal + balance-over-time (2026-08-11), powered by
+           the user's OWN My Bets log — never a held balance. -->
+      <div id="bk-journal"></div>
     </section>
 
     <!-- Live — every open journaled bet, tracked as the games run -->

@@ -2474,6 +2474,33 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
         elif b["status"] == "lost" and g == "good":
             process["unlucky_losses"] += 1
 
+    # Three readouts for the site's analytics footer (Ethan's desktop
+    # render, 2026-08-11), each from the journal rather than invented:
+    #   avg_price   — the average implied probability of the prices this
+    #                 book actually took, expressed back in American odds.
+    #                 A plain mean of American ints is arithmetic on two
+    #                 different scales (+150 and −110 do not average to
+    #                 +20 of anything); probabilities average cleanly.
+    #   returned_u  — gross units back on wins and pushes (stake + pnl),
+    #                 the "total won" a book's cashier would report.
+    #   best_streak — longest run of consecutive wins in slate order.
+    probs = [p for p in (implied_breakeven(b["odds"]) for b in bets
+                         if b["odds"] is not None) if p]
+    avg_price = None
+    if probs:
+        p = sum(probs) / len(probs)
+        avg_price = int(round(-100 * p / (1 - p))) if p >= 0.5 \
+            else int(round(100 * (1 - p) / p))
+    returned_u = sum((b["stake_units"] or 0) + (b["pnl_units"] or 0)
+                     for b in bets if b["status"] in ("won", "push"))
+    best_streak = run = 0
+    for b in sorted(bets, key=lambda b: (b["date"] or "", b["id"])):
+        if b["status"] == "won":
+            run += 1
+            best_streak = max(best_streak, run)
+        elif b["status"] == "lost":
+            run = 0
+
     def bucket(field):
         out: dict[str, dict] = {}
         clv_lists: dict[str, list] = {}
@@ -2506,6 +2533,9 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
         "units_staked": round(staked_u, 2), "net_units": round(net_u, 2),
         "roi": (net_u / staked_u) if staked_u else 0.0,
         "net_dollars": round(net_d, 2),
+        "avg_price": avg_price,
+        "returned_units": round(returned_u, 2),
+        "best_streak": best_streak,
         "starting_bankroll": float(get_cfg(conn, "starting_bankroll")),
         "bankroll": bankroll(conn),
         # SPORT-SCOPED, and it was not. Every other number in this dict
