@@ -184,6 +184,65 @@ def store_snapshot(conn, rows: list[dict], now: float | None = None) -> int:
     return n
 
 
+def yes_team(row: dict, g: dict) -> str | None:
+    """Which side of the matched game this market's YES pays on.
+
+    A Kalshi game market is "Will TEAM win?", and TEAM can be either the
+    home or the away club. Comparing P(home) to every YES price (the
+    board's original math) had the sign backwards whenever YES was the
+    away team, which is half the league.
+
+    Four deciders, most reliable first, each documented by a real market
+    shape:
+
+    1. The TICKER's last segment — Kalshi's game tickers end in the YES
+       team's own code ("KXMLBGAME-26AUG03-NYYBOS-NYY" pays on NYY).
+       The exchange's naming beats any reading of prose.
+    2. The SUBTITLE, when it names exactly one club (yes_sub_title is
+       that club on many series).
+    3. The TITLE, when it names exactly one club ("Will the Yankees
+       win?").
+    4. First mention, when the title names BOTH ("Yankees beat the Red
+       Sox" — English puts the team the market is about first).
+
+    A market none of these decide goes unmodeled rather than modeled on
+    a coin flip.
+    """
+    tail = (row.get("ticker", "") or "").rsplit("-", 1)[-1].upper()
+    if tail and tail == g.get("home", "").upper():
+        return "home"
+    if tail and tail == g.get("away", "").upper():
+        return "away"
+    h_tok = _name_tokens(g.get("home_name", ""))
+    a_tok = _name_tokens(g.get("away_name", ""))
+    for field in ("subtitle", "title"):
+        own = _name_tokens(row.get(field, "") or "")
+        if not own:
+            continue
+        home = bool(h_tok & own or g.get("home", "").upper() in own)
+        away = bool(a_tok & own or g.get("away", "").upper() in own)
+        if home != away:
+            return "home" if home else "away"
+    title = (row.get("title", "") or "").upper()
+    h_pos = min((title.find(t) for t in h_tok if t in title), default=-1)
+    a_pos = min((title.find(t) for t in a_tok if t in title), default=-1)
+    if h_pos >= 0 and a_pos >= 0 and h_pos != a_pos:
+        return "home" if h_pos < a_pos else "away"
+    return None
+
+
+#: The recommendation gate, all three bars documented:
+#:   edge   — 6 probability points, the futures board's own honest unit;
+#:            below it the number is inside model noise.
+#:   volume — a "price" nobody trades is a stale quote, not a market.
+#:   book   — a real two-sided book only. A last-trade print can be hours
+#:            old; recommending against it claims an edge over a price
+#:            that no longer exists.
+KALSHI_MIN_EDGE_PTS = 6.0
+KALSHI_MIN_VOLUME = 250.0
+KALSHI_MAX_SPREAD_CENTS = 6.0
+
+
 def board(markets: list[dict], games_by_sport: dict | None = None,
           model_probs: dict | None = None, top: int = 25) -> dict:
     """The cross-market board: Kalshi's probability beside ours.
@@ -194,6 +253,10 @@ def board(markets: list[dict], games_by_sport: dict | None = None,
     a row missing our number still shows Kalshi's, labelled, because a
     price with no comparison is still information and pretending otherwise
     would just hide the venue.
+
+    Rows that clear the gate carry ``rec``/``rec_side`` — the desk's
+    actual recommendations, journaled as a flat-stake PAPER book until
+    the bucket earns real stakes the same way the loose book would.
     """
     rows = []
     for m in markets:
@@ -201,22 +264,31 @@ def board(markets: list[dict], games_by_sport: dict | None = None,
         if not sport:
             continue
         row = dict(m, sport=sport, matchup=None, model_p=None,
-                   edge_pts=None)
+                   edge_pts=None, yes_side=None, rec=False, rec_side=None)
         g = None
         if games_by_sport and games_by_sport.get(sport):
             g = match_game(m, games_by_sport[sport])
         if g is not None:
             key = f"{g.get('away', '')}@{g.get('home', '')}"
             row["matchup"] = key
-            p = (model_probs or {}).get((sport, key))
-            if p is not None:
-                row["model_p"] = round(float(p), 4)
+            p_home = (model_probs or {}).get((sport, key))
+            side = yes_team(m, g)
+            if p_home is not None and side is not None:
+                p_yes = float(p_home) if side == "home" else 1 - float(p_home)
+                row["yes_side"] = side
+                row["model_p"] = round(p_yes, 4)
                 # Positive: our model likes YES more than the exchange
                 # charges for it. Stated in points of probability, the same
                 # honest unit the futures board uses.
-                row["edge_pts"] = round((float(p) - m["prob"]) * 100, 1)
+                row["edge_pts"] = round((p_yes - m["prob"]) * 100, 1)
+                liquid = (m.get("price_basis") == "book"
+                          and float(m.get("volume_24h") or 0) >= KALSHI_MIN_VOLUME
+                          and (m.get("spread_cents") or 99) <= KALSHI_MAX_SPREAD_CENTS)
+                if liquid and abs(row["edge_pts"]) >= KALSHI_MIN_EDGE_PTS:
+                    row["rec"] = True
+                    row["rec_side"] = "YES" if row["edge_pts"] > 0 else "NO"
         rows.append(row)
-    rows.sort(key=lambda r: (r["edge_pts"] is None,
+    rows.sort(key=lambda r: (not r["rec"], r["edge_pts"] is None,
                              -(abs(r["edge_pts"]) if r["edge_pts"] is not None
                                else r["volume_24h"])))
     return {
@@ -227,4 +299,14 @@ def board(markets: list[dict], games_by_sport: dict | None = None,
         "n_markets": len(rows),
         "n_matched": sum(1 for r in rows if r["matchup"]),
         "n_modeled": sum(1 for r in rows if r["model_p"] is not None),
+        "n_rec": sum(1 for r in rows if r["rec"]),
     }
+
+
+def fetch_markets_by_tickers(tickers: list[str], ttl: int = 120) -> list[dict]:
+    """The settlement pull: specific markets by ticker, results included."""
+    if not tickers:
+        return []
+    url = f"{KALSHI}/markets?tickers={','.join(tickers[:40])}"
+    raw = json.loads(fetch_text(url, "kalshi_settle.json", ttl=ttl))
+    return raw.get("markets", []) or []

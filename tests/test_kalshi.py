@@ -90,13 +90,22 @@ def test_a_market_matches_only_when_both_teams_appear():
 
 
 def test_the_board_states_three_numbers_and_the_gap_in_points():
+    """RE-PINNED 2026-08-12 (the prediction-desk build): this test used
+    to assert model_p == P(home) against the YES price — but the fixture
+    market's YES pays on the YANKEES, the away team (the ticker ends in
+    -NYY and the title says "Yankees beat the Red Sox"). That WAS the
+    sign bug: the board now resolves the YES side first, so with
+    P(home BOS)=0.63 the YES-on-NYY claim is worth 0.37 against a 57c
+    price — a 20-point NO edge, not a 6-point YES one."""
     rows = kx.parse_markets([_mkt()])
     board = kx.board(rows, {"mlb": GAMES},
                      {("mlb", "NYY@BOS"): 0.63})
     r = board["rows"][0]
     assert r["matchup"] == "NYY@BOS"
-    assert r["prob"] == 0.57 and r["model_p"] == 0.63
-    assert r["edge_pts"] == 6.0
+    assert r["yes_side"] == "away"
+    assert r["prob"] == 0.57 and r["model_p"] == 0.37
+    assert r["edge_pts"] == -20.0
+    assert r["rec"] and r["rec_side"] == "NO"
     assert board["n_matched"] == 1 and board["n_modeled"] == 1
 
 

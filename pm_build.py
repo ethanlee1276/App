@@ -79,6 +79,8 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
     (same "keep last data" contract as the Polymarket path); with no
     previous board the page gets an honest note instead of silence.
     """
+    from engine import kalshiweather as kw
+    from engine import ledger
     from engine.sources import kalshi as kx
     try:
         markets = kx.parse_markets(kx.fetch_markets())
@@ -89,20 +91,73 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
         out_path.write_text(json.dumps({
             "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "venue": "kalshi", "rows": [], "n_markets": 0, "n_matched": 0,
-            "n_modeled": 0, "sports_seen": [],
-            "note": "Kalshi feed unreachable from this machine"}, indent=2))
+            "n_modeled": 0, "n_rec": 0, "sports_seen": [], "weather": [],
+            # The exception's own words, so "unreachable" stops being a
+            # diagnosis-free shrug — Ethan has only ever seen this note,
+            # never a recommendation, and the WHY is the fixable part.
+            "note": f"Kalshi feed unreachable from this machine — {exc}"},
+            indent=2))
         return
     conn = connect()
     kx.store_snapshot(conn, markets)
     games_by_sport, model_probs = _tonights_games_and_probs(data_dir)
     out = kx.board(markets, games_by_sport, model_probs)
+
+    # THE WEATHER DESK — NWS forecast priced against the daily-high
+    # brackets. Its own failure domain: a dead forecast API costs the
+    # weather rows, never the sports board.
+    weather_rows = []
+    try:
+        by_series = kw.fetch_weather_markets(kx.parse_markets)
+        today = datetime.date.today().isoformat()
+        highs = {}
+        for series, meta in kw.CITIES.items():
+            if series not in by_series:
+                continue
+            for lead in range(kw.MAX_LEAD_DAYS + 1):
+                d = (datetime.date.today()
+                     + datetime.timedelta(days=lead)).isoformat()
+                mu = kw.nws_high(meta["lat"], meta["lon"], d)
+                if mu is not None:
+                    highs[(series, d)] = mu
+        weather_rows = kw.weather_board(by_series, highs, today=today)
+        kw.log_forecasts(conn, weather_rows)
+    except Exception as exc:                       # noqa: BLE001
+        print(f"⚠️  weather desk skipped: {exc}")
+    out["weather"] = weather_rows[:20]
+
+    # Journal what cleared the gates (flat paper stakes), then grade
+    # whatever the exchange has since settled.
+    recs = ([dict(r, desk="kalshi_ml") for r in out["rows"] if r.get("rec")]
+            + [dict(r, sport="weather", desk="kalshi_wx")
+               for r in weather_rows if r.get("rec")])
+    logged = ledger.log_predmarket(conn, recs)
+    settled = 0
+    try:
+        open_tk = ledger.open_predmarket_tickers(conn)
+        results = {}
+        for m in kx.fetch_markets_by_tickers(open_tk):
+            res = (m.get("result") or "").lower()
+            if res in ("yes", "no"):
+                results[m.get("ticker", "")] = res
+        settled = ledger.resolve_predmarket(conn, results)
+    except Exception as exc:                       # noqa: BLE001
+        print(f"⚠️  desk settlement skipped: {exc}")
+    out["desk"] = {"logged_today": logged, "settled_now": settled,
+                   "paper": {k: ledger.predmarket_report(conn).get(k)
+                             for k in ("settled", "wins", "losses",
+                                       "net_units", "roi")}}
+
     stored = conn.execute(
         "SELECT COUNT(*) FROM kalshi_snapshots").fetchone()[0]
     out["tape"] = {"stored_total": stored}
     out_path.write_text(json.dumps(out, indent=2))
     print(f"Kalshi: {out['n_markets']} sports market(s), "
           f"{out['n_matched']} matched to tonight, "
-          f"{out['n_modeled']} with a model number · tape {stored:,}")
+          f"{out['n_modeled']} with a model number, "
+          f"{out.get('n_rec', 0)} recommended · weather rows "
+          f"{len(weather_rows)} · desk +{logged} logged, {settled} settled "
+          f"· tape {stored:,}")
 
 
 def main() -> None:

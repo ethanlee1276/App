@@ -6319,6 +6319,51 @@ function setStandaloneSource(label, dateLabel) {
    So the board states three numbers per matched game — Kalshi's, ours, and
    the gap in points — and where a leg is missing it says which, because a
    price with no comparison is still information. */
+/* The desk's actual recommendations (Ethan, 2026-08-11: "I've never
+   once seen a recommended bet for our prediction market"). Two honest
+   edge sources, each row saying WHY in its own numbers: our game models
+   priced against Kalshi's sports markets, and the NWS forecast priced
+   against the daily-high brackets. PAPER-staked until the bucket's own
+   graded record earns promotion — the loose book's exact contract.
+   Politics carries no recommendations on purpose: there is no public
+   number to price it against, and the flow detector below already
+   covers it with graded flags. */
+function deskSectionHTML(k) {
+  if (!k) return "";
+  const sports = (k.rows || []).filter((r) => r.rec);
+  const wx = (k.weather || []).filter((r) => r.rec);
+  const paper = ((k.desk || {}).paper) || {};
+  const side = (s) => `<span class="chip ${s === "YES" ? "up" : "down"}">${s}</span>`;
+  const row = (r, why) => `<div class="kx-row">
+      <span class="kx-sport chip">${escapeHtml((r.sport || r.city || "").toUpperCase())}</span>
+      <span class="kx-title">${escapeHtml(r.title)} ${side(r.rec_side)}
+        <span class="kx-match">· ${why}</span></span>
+      <span class="kx-num kx-k">${(r.prob * 100).toFixed(0)}¢</span>
+      <span class="kx-num kx-m">${(r.model_p * 100).toFixed(0)}%</span>
+      <span class="kx-num kx-e"><span style="color:var(--${r.edge_pts > 0 ? "good" : "bad"});font-weight:700">${r.edge_pts > 0 ? "+" : ""}${r.edge_pts} pts</span></span>
+      <span class="kx-vol">$${Number(r.volume_24h || 0).toLocaleString()}</span>
+    </div>`;
+  const rows = [
+    ...sports.map((r) => row(r, `our model ${(r.model_p * 100).toFixed(0)}% vs the exchange&rsquo;s ${(r.prob * 100).toFixed(0)}¢`)),
+    ...wx.map((r) => row(r, `NWS high ${r.forecast_f}&deg; &plusmn;${r.sigma_f}&deg; for ${escapeHtml(r.city)} ${escapeHtml(r.date)}`)),
+  ].join("");
+  const graded = paper.settled || 0;
+  const paperLine = graded
+    ? `${paper.wins || 0}&ndash;${paper.losses || 0} graded · ${((paper.roi || 0) * 100).toFixed(1)}% ROI on flat paper stakes`
+    : "nothing graded yet — daily weather markets settle same-day, so this record fills fast";
+  return `
+    <div class="section-title">The desk’s recommendations
+      <span class="sub">— every row clears a written gate (edge &ge; 6 pts sports / 8 pts weather,
+      a real two-sided book, live volume) and is journaled at a flat 0.1u PAPER stake.
+      ${paperLine}. Promotion to real stakes takes 100+ graded rows in profit — the same
+      bar every other bucket on this site has to clear.</span></div>
+    ${rows ? `<div class="card kx-table" style="padding:0">${rows}</div>`
+           : `<p class="loading" style="padding:12px">No market clears the gate right now.
+      The desk needs: the Kalshi feed reachable at build time, a game our model prices
+      (or a city the forecast covers), and a disagreement bigger than the bar. Each build
+      prints which of those was missing — nothing here is ever forced.</p>`}`;
+}
+
 function kalshiSectionHTML(k) {
   if (!k) return "";
   const rows = (k.rows || []).map((r) => {
@@ -6382,7 +6427,7 @@ async function renderIntel() {
       <div class="es-sub">The launcher pulls Kalshi’s order books and Polymarket’s public
       market list and trade tape on every refresh (free, no key needed). If this persists,
       the machine may not be able to reach the venues.</div></div>`
-      + kalshiSectionHTML(kx);
+      + deskSectionHTML(kx) + kalshiSectionHTML(kx);
     return;
   }
   setStandaloneSource("Kalshi + Polymarket public feeds", "Prediction markets · live venue data");
@@ -6501,6 +6546,7 @@ async function renderIntel() {
     <div class="section-title">Top markets
       <span class="sub">— live markets by 24h volume · YES price · resolution date</span></div>
     <div class="card" style="padding:0">${marketRows}</div>
+    ${deskSectionHTML(kx)}
     ${kalshiSectionHTML(kx)}
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Wallet-age signal
       matures as the tape accrues (it cannot be backfilled). Kalshi carries no public

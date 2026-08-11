@@ -700,6 +700,97 @@ def loose_report(conn) -> dict:
     return p
 
 
+# --- the prediction desk (Kalshi paper book) --------------------------------
+# Ethan, 2026-08-11: "I've never once seen a recommended bet for our
+# prediction market." These three functions are the missing spine: the
+# desk's recommendations journal at a flat paper stake, resolve against
+# the exchange's own settlements, and report as their own bucket — the
+# identical earn-your-stakes contract the loose book runs under. A
+# hundred-plus graded rows deciding promotion, not a feeling.
+
+PREDMARKET_FLAT_STAKE = 0.1
+
+
+def _price_to_american(prob: float) -> int:
+    """The American odds a binary price implies — display + ROI math."""
+    p = min(max(float(prob), 0.01), 0.99)
+    return int(round(-100 * p / (1 - p))) if p >= 0.5 \
+        else int(round(100 * (1 - p) / p))
+
+
+def log_predmarket(conn, recs: list[dict], date: str | None = None) -> int:
+    """Journal the desk's recommendations — category='predmarket'.
+
+    One row per market ticker per day (the bets table's unique key, with
+    the ticker in the player column). The price PAID is the side's own:
+    buying NO at a 41-cent YES market costs 59 cents. hit_prob records
+    what the desk claimed, so calibration can grade the claim later.
+    """
+    date = date or datetime.date.today().isoformat()
+    now = datetime.datetime.utcnow().isoformat(timespec="seconds")
+    n = 0
+    for r in recs:
+        if not r.get("rec") or not r.get("ticker") or r.get("prob") is None:
+            continue
+        side = r.get("rec_side") or "YES"
+        cost = float(r["prob"]) if side == "YES" else 1 - float(r["prob"])
+        model_p = r.get("model_p")
+        p_side = (float(model_p) if side == "YES" else 1 - float(model_p)) \
+            if model_p is not None else None
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, "
+            "side, line, book, odds, hit_prob, edge, grade, stake_units, "
+            "stake_dollars, status, category) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'predmarket')",
+            (now, r.get("sport", "kalshi"), date, r["ticker"],
+             r.get("desk", "kalshi_ml"), side, round(cost * 100, 1),
+             "kalshi", _price_to_american(cost), p_side,
+             (r.get("edge_pts") or 0) / 100.0,
+             r.get("title", "")[:60] or "Desk", PREDMARKET_FLAT_STAKE,
+             0.0))
+        n += cur.rowcount
+    conn.commit()
+    return n
+
+
+def open_predmarket_tickers(conn) -> list[str]:
+    return [r["player"] for r in conn.execute(
+        "SELECT DISTINCT player FROM bets WHERE category='predmarket' "
+        "AND status='open'")]
+
+
+def resolve_predmarket(conn, results: dict) -> int:
+    """Grade open desk bets against exchange settlements.
+
+    ``results``: {ticker: "yes" | "no"} for markets that finalized. A
+    binary market cannot push. P&L is the binary payout at the price
+    paid: winning a side bought at cost c returns (1-c)/c per unit."""
+    n = 0
+    for row in conn.execute(
+            "SELECT id, player, side, line, stake_units FROM bets "
+            "WHERE category='predmarket' AND status='open'").fetchall():
+        res = (results.get(row["player"]) or "").lower()
+        if res not in ("yes", "no"):
+            continue
+        won = (row["side"] or "YES").lower() == res
+        cost = max(0.01, min(0.99, (row["line"] or 50.0) / 100.0))
+        stake = row["stake_units"] or PREDMARKET_FLAT_STAKE
+        pnl = round(stake * (1 - cost) / cost, 4) if won else -stake
+        conn.execute(
+            "UPDATE bets SET status=?, pnl_units=?, pnl_dollars=0 WHERE id=?",
+            ("won" if won else "lost", pnl, row["id"]))
+        n += 1
+    conn.commit()
+    return n
+
+
+def predmarket_report(conn) -> dict:
+    """The desk's own scoreboard — never mixed into the headline record."""
+    p = performance(conn, category="predmarket")
+    p["recent"] = recent_settled(conn, limit=15, category="predmarket")
+    return p
+
+
 def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
     """Journal the scanner's stale-line flags — the sampler for our best-
     measured signal.
@@ -3845,6 +3936,10 @@ def export_json(conn, path) -> None:
         "stale_flags": stale_report(conn),
         "form_sampler": form_report(conn),
         "loose_sampler": loose_report(conn),
+        # THE PREDICTION DESK — Kalshi paper book (sports cross-model +
+        # weather-vs-forecast), earning its stakes on the same terms as
+        # every other unproven bucket. See docs/PREDICTION_DESK.md.
+        "predmarket": predmarket_report(conn),
         "ufc_record": ufc_report(conn),
         # IS THERE AN EDGE AT ALL — the 2026-08-09 finding, kept live
         # rather than re-derived by hand. `edge_now` is the latest run,

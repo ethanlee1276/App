@@ -2616,6 +2616,59 @@ def why_many(sport: str = "mlb", days: int = 21) -> None:
           "them.\n")
 
 
+def show_desk() -> None:
+    """The prediction desk's live status — why there is or isn't a rec.
+
+        python3 launch.py --desk
+
+    Ethan has only ever seen the Kalshi page say "unreachable", never a
+    recommendation, and the difference between "the feed is down", "no
+    game matched", and "no edge cleared the bar" is the difference
+    between a bug and a quiet night. This prints which one it is, plus
+    the paper book's record so promotion stays an evidence question.
+    """
+    import json as _json
+    from engine import ledger
+    p = ROOT / "web" / "data" / "kalshi.json"
+    if not p.exists():
+        print("  no kalshi.json yet — run a refresh (pm_build.py) first")
+        return
+    k = _json.loads(p.read_text())
+    print(f"  Kalshi board  · built {k.get('generated_at', '?')}")
+    if k.get("note"):
+        print(f"  ⚠️  {k['note']}")
+    print(f"  sports markets {k.get('n_markets', 0)} · matched "
+          f"{k.get('n_matched', 0)} · modeled {k.get('n_modeled', 0)} · "
+          f"recommended {k.get('n_rec', 0)}")
+    wx = k.get("weather") or []
+    print(f"  weather rows {len(wx)} · recommended "
+          f"{sum(1 for r in wx if r.get('rec'))}")
+    for r in (k.get("rows") or []):
+        if r.get("rec"):
+            print(f"    {r.get('sport', ''):4} {r.get('title', '')[:52]:52} "
+                  f"{r.get('rec_side')} · market {r.get('prob', 0) * 100:.0f}¢ "
+                  f"model {r.get('model_p', 0) * 100:.0f}% "
+                  f"({r.get('edge_pts'):+.1f} pts)")
+    for r in wx:
+        if r.get("rec"):
+            print(f"    wx   {r.get('city', ''):14} {r.get('subtitle', '')[:37]:37} "
+                  f"{r.get('rec_side')} · NWS {r.get('forecast_f')}° "
+                  f"vs {r.get('prob', 0) * 100:.0f}¢ ({r.get('edge_pts'):+.1f} pts)")
+    conn = ledger.connect()
+    try:
+        rep = ledger.predmarket_report(conn)
+    finally:
+        conn.close()
+    n = rep.get("settled") or 0
+    if n:
+        print(f"  paper book: {rep['wins']}-{rep['losses']} · "
+              f"{rep['net_units']:+.2f}u · ROI {rep['roi'] * 100:+.1f}% "
+              f"on {n} graded — promotion at 100+ graded in profit")
+    else:
+        print("  paper book: nothing graded yet — weather markets settle "
+              "same-day, so this fills fast once the feed reaches")
+
+
 def show_gates() -> None:
     """What the filters cost or saved — measured, not argued.
 
@@ -4831,6 +4884,9 @@ def main() -> None:
         return
     if "--gates" in argv:
         show_gates()
+        return
+    if "--desk" in argv:
+        show_desk()
         return
     if "--settle" in argv:
         i = argv.index("--settle")
