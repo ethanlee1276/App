@@ -271,6 +271,12 @@
            smaller than it was when that number was taken; the current
            figure is in tests/test_board_order.py and is re-measured there
            rather than remembered. -->
+      <!-- RE-ORDERED 2026-08-11 (Ethan, from his phone: "it should be
+           top bets the stadiums then roi. Feels more organized and
+           serving its function") — the picks lead, the stadiums follow,
+           the performance panel after. One order on every screen. -->
+      <div id="top-picks"></div>
+
       <!-- The render's strip header: title left, working controls right
            (league, sort, strip/grid layout). The league select mirrors
            the sidebar chips — one source of truth, two handles. -->
@@ -299,12 +305,6 @@
           ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9.5 5l7 7-7 7"/></svg></button>
       </div>
 
-      <!-- NEW LOOK: the render's home order — stadiums, then the picks
-           strip, then tonight's tiles, then YOUR performance (the real
-           journal, wins and losses alike). renderTopPicks() and
-           renderHomePerf() fill these from the same payloads the board
-           and the Record page already read — nothing new is claimed. -->
-      <div id="top-picks"></div>
 
       <div id="parlay-mode" hidden>
         <div class="section-title" id="parlays-title">Parlay tickets
@@ -651,16 +651,18 @@
     <button class="tb-item nav-btn" data-view="recommended" data-hint="tonight’s picks">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>
       Home</button>
-    <button class="tb-item nav-btn" data-view="live" data-hint="live scores and open bets">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12h4l2.5-6 3.5 12 2.5-6H22"/></svg>
-      Live <span class="tb-badge" id="tb-live-badge" hidden></span></button>
-    <button class="tb-item tb-center sport-btn" data-sport="mybets" data-kind="tool"
-            title="Your own sportsbook P&amp;L">
-      <span class="tb-center-disc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M4 9h16M8 13h5"/></svg></span>
-      My Bets</button>
     <button class="tb-item nav-btn" data-view="edge" data-hint="every +EV price">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg>
       Props</button>
+    <button class="tb-item tb-center nav-btn" data-view="live" data-hint="live scores and open bets"
+            title="What’s happening right now">
+      <span class="tb-center-disc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12h4l2.5-6 3.5 12 2.5-6H22"/></svg>
+      <span class="tb-badge" id="tb-live-badge" hidden></span></span>
+      Live</button>
+    <button class="tb-item sport-btn" data-sport="record" data-kind="tool"
+            title="Every pick journaled and graded in public">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h14v16l-3.5-2-3.5 2-3.5-2L5 20z"/><path d="M9 9h6M9 13h4"/></svg>
+      Results</button>
     <button class="tb-item" id="tb-menu" aria-label="Open the full menu">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
       Menu</button>

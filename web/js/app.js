@@ -4893,8 +4893,11 @@ const REC_ROOMS = [
    // games-head/games-outer are the strip's wrappers (controls +
    // arrows); moving the bare title/scroller out of them orphaned the
    // controls at the top of the page.
-   ["probation-note", "talent-note", "games-head", "games-outer",
-    "top-picks", "parlay-mode", "stats", "home-perf",
+   // Ethan's order, 2026-08-11, from his phone: "top bets, the
+   // stadiums, then roi." The room places blocks in THIS order — the
+   // list, not the DOM, is what a reader sees.
+   ["probation-note", "talent-note", "top-picks", "parlay-mode",
+    "games-head", "games-outer", "stats", "home-perf",
     "best-bets", "empty-slate", "rec-controls", "cards"]],
   ["gamebets", "Game bets",
    "moneyline, spread and total edges from the team model",

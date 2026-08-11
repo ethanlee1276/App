@@ -4117,7 +4117,8 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
     color: #fff; box-shadow: var(--glow); }
   .tb-center-disc svg { width: 21px; height: 21px; }
   .tb-center.active { color: var(--text); }
-  .tb-badge { position: absolute; top: -2px; right: 16%;
+  .tb-center-disc { position: relative; }
+  .tb-badge { position: absolute; top: -3px; right: -3px;
     min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
     display: inline-grid; place-items: center; background: var(--bad);
     color: #fff; font-size: var(--fs-2xs); font-weight: 800; }
@@ -4125,17 +4126,9 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   body { padding-bottom: 84px; }        /* room for the bar */
   body.menu-open .sidebar { z-index: 60; }
 
-  /* The render's phone home: performance leads, stadiums ride two-up.
-     The room panels are .subgroup (subtabbedDOM); flex order rearranges
-     the board room without touching the DOM the desktop reads. */
-  /* :not([hidden]) matters: the rooms hide with the hidden attribute,
-     and an unconditional display:flex would force this room visible
-     over whichever room is actually active. */
-  #view-recommended .subgroup[data-subgroup="board"]:not([hidden]) {
-    display: flex; flex-direction: column; }
-  #home-perf { order: -3; margin-top: 4px; }
-  #games-head { order: -2; }
-  #games-outer { order: -1; }
+  /* RE-ORDERED 2026-08-11 (Ethan: "top bets, the stadiums, then roi")
+     — the order lives in the DOM now, one order on every screen, so
+     the phone-only flex reordering retired. */
   .tp-strip { grid-auto-columns: 86vw; }
   .hero-games .game-card { min-width: 66vw; }
   .lb-grid { grid-template-columns: 1fr; }
