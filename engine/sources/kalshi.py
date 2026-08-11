@@ -108,39 +108,70 @@ def fetch_events(series_ticker: str, limit: int = 100,
     return raw.get("events", []) or []
 
 
+def _num(v) -> float | None:
+    """Kalshi serialises decimals as strings ("0.4300"); floats and ints
+    pass through; anything else is None, never a throw."""
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def parse_markets(raw: list[dict]) -> list[dict]:
     """Normalize Kalshi market objects to the fields the site prices with.
 
-    Pure, so it unit-tests offline. Prices arrive in CENTS (1–99); the mid
-    of a real two-sided book is the honest fair value, and when one side is
-    missing the last trade stands in — reported as such, because a fair
-    value with no book behind it is a weaker claim and the page says so.
+    Pure, so it unit-tests offline. FOUND BY THE LIVE AUTOPSY on Ethan's
+    machine (2026-08-11): the API migrated its price fields. Prices now
+    arrive as DOLLAR decimals — yes_bid_dollars / yes_ask_dollars /
+    last_price_dollars, 0.00-1.00 on a $1 contract — and volumes as
+    *_fp strings; the old cent-integer fields come back as None, which
+    made the parser reject every real market on the exchange. Dollars
+    are read first; the legacy cent fields remain as a fallback so old
+    fixtures and any stored snapshot still parse.
+
+    The mid of a real two-sided book is the honest fair value, and when
+    one side is missing the last trade stands in — reported as such,
+    because a fair value with no book behind it is a weaker claim and
+    the page says so.
     """
     out = []
     for m in raw or []:
-        yes_bid = m.get("yes_bid")
-        yes_ask = m.get("yes_ask")
-        last = m.get("last_price")
+        yes_bid = _num(m.get("yes_bid_dollars"))
+        yes_ask = _num(m.get("yes_ask_dollars"))
+        last = _num(m.get("last_price_dollars"))
+        if yes_bid is None and yes_ask is None and last is None:
+            # Legacy cent integers, scaled to the same 0-1 space.
+            cb, ca, cl = (_num(m.get("yes_bid")), _num(m.get("yes_ask")),
+                          _num(m.get("last_price")))
+            yes_bid = cb / 100.0 if cb is not None else None
+            yes_ask = ca / 100.0 if ca is not None else None
+            last = cl / 100.0 if cl is not None else None
         if yes_bid and yes_ask:
-            mid = (float(yes_bid) + float(yes_ask)) / 2.0
+            mid = (yes_bid + yes_ask) / 2.0
             basis = "book"
-            spread = float(yes_ask) - float(yes_bid)
+            spread = round((yes_ask - yes_bid) * 100.0, 2)
         elif last:
-            mid = float(last)
+            mid = last
             basis = "last_trade"
             spread = None
         else:
             continue                     # nothing priced — nothing to say
+        vol = _num(m.get("volume_24h_fp"))
+        if vol is None:
+            vol = _num(m.get("volume_24h")) or 0.0
+        oi = _num(m.get("open_interest_fp"))
+        if oi is None:
+            oi = _num(m.get("open_interest")) or 0.0
         out.append({
             "ticker": m.get("ticker", ""),
             "event_ticker": m.get("event_ticker", ""),
             "title": m.get("title", ""),
             "subtitle": m.get("subtitle") or m.get("yes_sub_title") or "",
-            "prob": round(mid / 100.0, 4),
+            "prob": round(mid, 4),
             "price_basis": basis,
             "spread_cents": spread,
-            "volume_24h": float(m.get("volume_24h") or 0),
-            "open_interest": float(m.get("open_interest") or 0),
+            "volume_24h": vol,
+            "open_interest": oi,
             "close_time": m.get("close_time", ""),
             "category": (m.get("category") or "").strip(),
         })

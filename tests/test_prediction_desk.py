@@ -178,6 +178,43 @@ def test_the_paper_journal_is_flat_idempotent_and_pays_binary_math():
     assert ledger.performance(conn)["settled"] == 0
 
 
+def test_the_parser_reads_the_dollars_fields_the_live_api_sends():
+    """The live autopsy on Ethan's machine (2026-08-11): Kalshi migrated
+    to dollar-decimal price fields (yes_bid_dollars as strings like
+    "0.4300") and *_fp volumes, and the cent-integer fields come back
+    None — which made the parser reject every real market on the
+    exchange. Pinned against the exact shape the autopsy printed."""
+    live_shape = {
+        "ticker": "KXMLBGAME-26AUG111840CLEDET-CLE",
+        "event_ticker": "KXMLBGAME-26AUG111840CLEDET",
+        "title": "Guardians at Tigers Winner?", "yes_sub_title": "Cleveland Guardians",
+        "status": "active",
+        "yes_bid": None, "yes_ask": None, "last_price": None,
+        "yes_bid_dollars": "0.4200", "yes_ask_dollars": "0.4600",
+        "last_price_dollars": "0.4400",
+        "volume_24h_fp": "5321.00", "open_interest_fp": "1200",
+        "close_time": "2026-08-14T22:40:00Z",
+    }
+    rows = kx.parse_markets([live_shape])
+    assert len(rows) == 1
+    r = rows[0]
+    assert r["prob"] == 0.44 and r["price_basis"] == "book"
+    assert r["spread_cents"] == 4.0
+    assert r["volume_24h"] == 5321.0 and r["open_interest"] == 1200.0
+    # One-sided book in the new shape falls back to the last trade.
+    onesided = dict(live_shape, yes_bid_dollars=None)
+    assert kx.parse_markets([onesided])[0]["price_basis"] == "last_trade"
+    # Truly unpriced still says nothing.
+    assert kx.parse_markets([dict(live_shape, yes_bid_dollars=None,
+                                  yes_ask_dollars=None,
+                                  last_price_dollars=None)]) == []
+    # The legacy cent shape keeps parsing — old fixtures and stored
+    # snapshots land in the same 0-1 space (test_kalshi covers it too).
+    legacy = {"ticker": "T", "title": "t", "yes_bid": 55, "yes_ask": 59,
+              "volume_24h": 100}
+    assert kx.parse_markets([legacy])[0]["prob"] == 0.57
+
+
 def test_sports_markets_are_fetched_by_series_not_hoped_for():
     """Ethan's first live --desk run (2026-08-11): the feed was healthy
     and the desk still saw ZERO sports markets, because the general

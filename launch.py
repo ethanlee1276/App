@@ -2771,11 +2771,14 @@ def show_desk_probe() -> None:
         print(f"  autopsy {label}: raw {len(markets)} → parsed {len(parsed)}")
         for m in markets[:3]:
             fields = {k: m.get(k) for k in
-                      ("ticker", "status", "yes_bid", "yes_ask", "last_price",
-                       "volume_24h", "close_time")}
-            gate = ("book" if m.get("yes_bid") and m.get("yes_ask")
-                    else "last_trade" if m.get("last_price")
-                    else "REJECTED — no price the parser recognises")
+                      ("ticker", "status", "yes_bid_dollars",
+                       "yes_ask_dollars", "last_price_dollars",
+                       "volume_24h_fp", "close_time")}
+            # The verdict comes from the REAL parser, one market at a
+            # time, so this line can never drift from what the build does.
+            one = parse_markets([m])
+            gate = one[0]["price_basis"] if one \
+                else "REJECTED — no price the parser recognises"
             print(f"    {gate:10.10} · {fields}")
         if markets and not parsed:
             print(f"    full first object keys: {sorted(markets[0].keys())}")
