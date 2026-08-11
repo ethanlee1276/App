@@ -111,7 +111,14 @@ def test_nothing_new_slipped_in_above_the_picks():
     # picks strip that moved up is itself picks, so the thing the page
     # exists for got closer, not further.
     allowed = {"view-recommended", "probation-note", "talent-note", "stats",
-               "games-title", "games", "top-picks", "home-perf"}
+               "games-title", "games", "top-picks", "home-perf",
+               # The strip's own chrome (2026-08-11 fidelity pass): the
+               # header wrapper with its working controls, and the
+               # scroller wrapper with its arrows. Chrome ON the strip,
+               # not new content above the picks.
+               "games-head", "games-controls", "games-sport", "games-sort",
+               "games-mode-strip", "games-mode-grid", "games-outer",
+               "games-prev", "games-next"}
     above = [m.group(1) for m in re.finditer(r'id="([\w-]+)"',
                                              html[start:picks])]
     unexpected = [x for x in above if x not in allowed]

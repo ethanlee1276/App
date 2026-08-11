@@ -156,14 +156,18 @@ def test_the_ground_rule_covers_every_renderer():
 
 
 def test_the_sky_wash_is_still_flattened_to_the_page_ground():
-    """The one rule the whole treatment rests on. `visuals.js` paints a
-    radial navy gradient behind every venue; on a near-black page that is a
-    second background showing through."""
-    block = _engraving_block(_read("web", "css", "styles.css"))
-    m = re.search(r"\.stadium > rect:first-of-type,\s*"
-                  r"\.field > rect:first-of-type\s*\{([^}]*)\}", block)
-    assert m, "the sky wash is no longer flattened to the page's ground"
-    assert "var(--bg-2)" in m.group(1), m.group(1)
+    """INVERTED 2026-08-11 (Ethan: "i want our stadiums … to look exactly
+    like this page visually"): the render draws every venue as a NIGHT
+    SCENE, so the flatten rule died and visuals.js paints the sky again
+    (nightFx — floodlight bloom, team-colour air, vignette). What this
+    now pins is that the flatten rule STAYS dead — if it comes back the
+    night art silently loses its sky and nobody notices until a
+    screenshot."""
+    css = _read("web", "css", "styles.css")
+    assert ".stadium > rect:first-of-type,\n.field > rect:first-of-type { fill: var(--bg-2)" \
+        not in css, "the sky-flatten rule is back — the night art just lost its sky"
+    vis = _read("web", "js", "visuals.js")
+    assert "function nightFx(" in vis
 
 
 def test_the_labels_survive_a_coloured_surface():

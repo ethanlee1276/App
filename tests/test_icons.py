@@ -268,8 +268,12 @@ def test_a_string_that_carries_an_icon_is_never_escaped_as_text():
         "sub is markup now; escaping the assembled string prints the SVG"
     block = src[src.index("  let sub;"):src.index("  const art = mlb ?")]
     assert "esc(" in block, "the data parts inside sub stopped being escaped"
-    for datum in ("g.attention_tier", "g.park_name"):
-        assert f"esc({datum})" in block, f"{datum} goes in unescaped"
+    assert "esc(g.attention_tier)" in block, "g.attention_tier goes in unescaped"
+    # park_name moved out of `sub` and onto the card's venue line in the
+    # 2026-08-11 fidelity pass — the escape obligation moved with it.
+    card = src[src.index("function gameCard("):]
+    card = card[:card.index("\n}")]
+    assert "esc(g.park_name)" in card, "g.park_name goes in unescaped"
 
 
 def test_the_icon_helper_is_not_shadowed_by_a_parameter():

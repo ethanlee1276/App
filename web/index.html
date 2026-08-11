@@ -265,11 +265,33 @@
            smaller than it was when that number was taken; the current
            figure is in tests/test_board_order.py and is re-measured there
            rather than remembered. -->
-      <div class="section-title hero-title" id="games-title">Tonight’s ballparks
-        <span class="sub">— real park shapes, roof state, live wind and the home-run
-        factor each one is playing to right now</span>
+      <!-- The render's strip header: title left, working controls right
+           (league, sort, strip/grid layout). The league select mirrors
+           the sidebar chips — one source of truth, two handles. -->
+      <div class="strip-head" id="games-head">
+        <div class="section-title hero-title" id="games-title">Tonight’s ballparks
+          <span class="sub">— real park shapes, roof state, live wind and the home-run
+          factor each one is playing to right now</span>
+        </div>
+        <div class="strip-controls" id="games-controls">
+          <select id="games-sport" aria-label="Switch league"></select>
+          <select id="games-sort" aria-label="Sort games">
+            <option value="start">Sort: Start Time</option>
+            <option value="picks">Sort: Most Picks</option>
+          </select>
+          <button class="meta-ico mode-btn" id="games-mode-strip" title="Scrolling strip"
+                  aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+          <button class="meta-ico mode-btn" id="games-mode-grid" title="Grid"
+                  aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></button>
+        </div>
       </div>
-      <div class="games-scroller hero-games" id="games"></div>
+      <div class="games-outer" id="games-outer">
+        <button class="strip-arrow prev" id="games-prev" aria-label="Scroll games back"
+          ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M14.5 5l-7 7 7 7"/></svg></button>
+        <div class="games-scroller hero-games" id="games"></div>
+        <button class="strip-arrow next" id="games-next" aria-label="Scroll games forward"
+          ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9.5 5l7 7-7 7"/></svg></button>
+      </div>
 
       <!-- NEW LOOK: the render's home order — stadiums, then the picks
            strip, then tonight's tiles, then YOUR performance (the real

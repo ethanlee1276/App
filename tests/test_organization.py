@@ -306,7 +306,10 @@ def test_the_venue_block_stays_in_the_room_you_land_on():
     what the picks are read against. Grouping is not licence to reorder,
     so `games-title` and `games` open room one."""
     board = _first_room()
-    assert "games-title" in board and "games" in board
+    # Since the fidelity pass the strip travels in its wrappers —
+    # games-head (title + working controls) and games-outer (scroller +
+    # arrows) — so the room moves the whole strip, chrome included.
+    assert "games-head" in board and "games-outer" in board
     # In the FIRST room, not merely somewhere in the list — the whole
     # constraint is which room you land on.
     assert "gamebets" not in board and "rest-watch" not in board

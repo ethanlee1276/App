@@ -2135,9 +2135,17 @@ function renderGames() {
   const games = [...(state.data.games || [])];
   const host = document.getElementById("games");
   if (!games.length) { host.innerHTML = ""; return; }
-  // Live games float to the front of the strip.
+  // Live games float to the front of the strip; behind them, the sort
+  // control decides — kickoff order (the render's default) or most picks.
   const rank = (g) => ((g.live || {}).state === "live" ? 0 : (g.live || {}).state === "final" ? 2 : 1);
-  games.sort((a, b) => rank(a) - rank(b));
+  let sortMode = "start";
+  try { sortMode = localStorage.getItem("qb_games_sort") || "start"; } catch (e) {}
+  const startKey = (g) => `${g.date || ""}T${g.kickoff || ""}`;
+  games.sort((a, b) => rank(a) - rank(b)
+    || (sortMode === "picks" ? gameBetCount(b) - gameBetCount(a) : 0)
+    || startKey(a).localeCompare(startKey(b)));
+  const sportSel = document.getElementById("games-sport");
+  if (sportSel && sportSel.value !== state.sport) sportSel.value = state.sport;
   // TOP GAME — the render's ribbon, earned not asserted: the game the
   // model has the most recommended bets in tonight. Ties or an empty
   // board mean no ribbon; one game only.
@@ -2150,6 +2158,7 @@ function renderGames() {
   host.innerHTML = games.map(gameCard).join("");
   revealChildren(host);
   enableTilt(host);
+  if (typeof syncStripArrows === "function") syncStripArrows();
   host.querySelectorAll(".game-card[data-gid]").forEach((el) => {
     const open = () => openGame(el.dataset.gid);
     el.addEventListener("click", open);
@@ -2199,8 +2208,9 @@ function gameCard(g) {
     if (g.spread) bits.push(`${esc(teamName(g.spread < 0 ? g.home : g.away))} ${-Math.abs(g.spread)}`);
     sub = bits.join(" · ") || "lines post closer to tip-off";
   } else if (mlb) {
+    // The park name moved up to the card's venue line (fidelity pass) —
+    // repeating it here printed "Coors Field" twice on one card.
     const bits = [`O/U ${g.total.toFixed(1)}`];
-    if (g.park_name) bits.unshift(esc(g.park_name));
     if (g.doubleheader) bits.unshift(`${iconMark("calendar", 12)}DH Game ${esc(g.game_number || 1)}`);
     if (g.lineups_confirmed === false) bits.push(`${icon('warn')} lineups pending`);
     sub = bits.join(" · ");
@@ -2263,6 +2273,20 @@ function gameCard(g) {
   // that game: role/tabindex make it a real control for keyboard and screen
   // readers, not just a div that happens to listen for clicks.
   const n = gameBetCount(g);
+  // The render's card hierarchy (2026-08-11, "exactly like this page
+  // visually"): the night scene on top wearing its chips, then a
+  // centred column — the two marks around "vs", the matchup name, the
+  // venue line, tonight's numbers small, and the weather row. The CTA
+  // row retired: the whole card is the door, the picks count rides the
+  // art as a chip, and hover says clickable.
+  const homeTeam = (window.ACTIVE_TEAMS || {})[g.home] || {};
+  const venueBits = [];
+  if (mlb && g.park_name) venueBits.push(esc(g.park_name));
+  if (homeTeam.loc) venueBits.push(esc(homeTeam.loc));
+  const venue = venueBits.length
+    ? `<div class="gc-venue">${venueBits.join(" · ")}</div>` : "";
+  const picksChip = n
+    ? `<span class="gc-picks">${n} pick${n === 1 ? "" : "s"}</span>` : "";
   return `
     <article class="game-card tilt ${isLive ? "is-live" : ""}" data-gid="${escapeHtml(gameId(g))}"
              role="button" tabindex="0"
@@ -2271,20 +2295,20 @@ function gameCard(g) {
         window._topGameId === gameId(g) && !isLive && !isFinal
           ? `<span class="top-game-tag">Top game</span>` : ""}${
         !isLive && !isFinal && whenLabel(g.date, g.kickoff)
-          ? `<span class="game-time-chip">${escapeHtml((whenLabel(g.date, g.kickoff).split("·").pop() || "").trim())}</span>` : ""}</div>
+          ? `<span class="game-time-chip">${escapeHtml((whenLabel(g.date, g.kickoff).split("·").pop() || "").trim())}</span>` : ""}${picksChip}</div>
       <div class="game-info">
-        <div class="matchup">
-          <span class="mt away">${teamMark(g.away, 18)} ${ranked("away")}${escapeHtml(teamName(g.away))} ${score("away")}</span>
-          <span class="at">@</span>
-          <span class="mt home">${teamMark(g.home, 18)} ${ranked("home")}${escapeHtml(teamName(g.home))} ${score("home")}</span></div>
+        <div class="gc-teams">
+          <span class="gc-side">${teamMark(g.away, 30)}${score("away")}</span>
+          <span class="gc-vs">${isLive || isFinal ? "@" : "vs"}</span>
+          <span class="gc-side">${teamMark(g.home, 30)}${score("home")}</span></div>
+        <div class="gc-name">${ranked("away")}${escapeHtml(teamName(g.away))} @ ${ranked("home")}${escapeHtml(teamName(g.home))}</div>
+        ${venue}
         ${starters}
         <div class="game-sub">${sub}</div>
         ${whenLabel(g.date, g.kickoff) ? `<div class="game-when">${icon('calendar')} ${escapeHtml(whenLabel(g.date, g.kickoff))}</div>` : ""}
         ${isLive && !mlb ? liveDetail : ""}
       </div>
       ${footer}
-      <div class="game-cta">${n ? `${n} pick${n === 1 ? "" : "s"} for this game` : "See this game’s board"}
-        <span class="gc-arrow">→</span></div>
     </article>`;
 }
 
@@ -4864,7 +4888,11 @@ function bindSubtabs(host) {
 const REC_ROOMS = [
   ["board", "Tonight’s board",
    "the venues, the designated picks, and every prop that cleared the bar",
-   ["probation-note", "talent-note", "stats", "games-title", "games",
+   // games-head/games-outer are the strip's wrappers (controls +
+   // arrows); moving the bare title/scroller out of them orphaned the
+   // controls at the top of the page.
+   ["probation-note", "talent-note", "games-head", "games-outer",
+    "top-picks", "stats", "home-perf",
     "best-bets", "empty-slate", "rec-controls", "cards"]],
   ["gamebets", "Game bets",
    "moneyline, spread and total edges from the team model",
@@ -7632,6 +7660,31 @@ async function acctSync() {
   }
 }
 
+/* The render's green button, honestly framed. One tap opens My Bets
+   with this pick's description, odds, book and sport already typed —
+   the stake stays yours, focused and empty. Nothing is logged until
+   you press Log bet. */
+window.tpTrack = function (i) {
+  const p = (window._tpPicks || [])[i];
+  if (!p) return;
+  enterStandaloneMode("mybets");
+  setTimeout(() => {
+    const put = (id, v) => { const el = document.getElementById(id); if (el != null && v != null && v !== "") el.value = v; };
+    const bookSel = document.getElementById("mb-book");
+    if (bookSel) {
+      const hit = [...bookSel.options].find((o) => o.value.toLowerCase() === String(p.book).toLowerCase());
+      bookSel.value = hit ? hit.value : "Other";
+    }
+    put("mb-sport", p.sport);
+    put("mb-desc", p.desc);
+    put("mb-odds", p.odds);
+    const warn = document.getElementById("mb-form-warn");
+    if (warn) warn.textContent = "Prefilled from tonight’s board — enter your stake, then Log bet.";
+    const stake = document.getElementById("mb-stake");
+    if (stake) stake.focus();
+  }, 250);
+};
+
 function acctPaintNote() {
   document.querySelectorAll(".acct-note").forEach((el) => {
     el.textContent = _acctNote;
@@ -10331,28 +10384,48 @@ function renderTopPicks() {
     .sort((a, b) => (b.quality || 0) - (a.quality || 0)).slice(0, Math.max(0, 4 - recs.length));
   if (!recs.length && !gb.length) { host.innerHTML = ""; return; }
   const odds = (o) => o == null ? "" : (o > 0 ? "+" + o : String(o));
-  const propCard = (r) => `
+  // The picks the buttons refer to, cached for tpTrack (the render's
+  // green action, honestly framed: it PREFILLS My Bets — the one thing
+  // it never invents is your stake).
+  window._tpPicks = [];
+  const track = (pick, desc) => {
+    window._tpPicks.push({ desc, odds: pick.odds, book: pick.book || "",
+                           sport: (state.sport || "").toUpperCase() });
+    return window._tpPicks.length - 1;
+  };
+  const propCard = (r) => {
+    const desc = `${r.player} ${r.side || ""} ${r.line != null ? r.line : ""} ${r.market_label || r.market || ""}`
+      .replace(/\s+/g, " ").trim();
+    const i = track(r, desc);
+    return `
     <div class="tp-card">
-      <div class="tp-top">${playerAvatar(r.player, r.team, { size: 44, headshot: r.headshot })}
+      <div class="tp-top"><span class="tp-tile">${playerAvatar(r.player, r.team, { size: 40, headshot: r.headshot })}</span>
         <div class="tp-who"><b>${escapeHtml(r.player)}</b>
           <span>${escapeHtml(r.side || "")} ${r.line != null ? r.line : ""} ${escapeHtml(r.market_label || r.market || "")}</span>
-          <span class="tp-when">${escapeHtml(r.team || "")}${r.opponent ? " vs " + escapeHtml(r.opponent) : ""}</span></div>
+          <span class="tp-when">${escapeHtml(r.team || "")}${r.opponent ? " vs " + escapeHtml(r.opponent) : ""}${r.edge != null ? ` · +${(100 * r.edge).toFixed(1)}% edge` : ""}</span></div>
         <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade || "")}</span></div>
       <div class="tp-foot"><b class="tp-odds">${odds(r.odds)}</b>
         <span class="tp-book">${escapeHtml(r.book || "")}</span>
-        <span class="tp-edge">${r.edge != null ? "+" + (100 * r.edge).toFixed(1) + "% edge" : ""}</span></div>
+        <button class="tp-add" type="button" onclick="tpTrack(${i})"
+                title="Open My Bets with this pick prefilled — you enter the stake">+ My Bets</button></div>
     </div>`;
-  const gameCardMini = (g) => `
+  };
+  const gameCardMini = (g) => {
+    const desc = `${g.pick_label || g.label || ""}`.trim() || `${g.away} @ ${g.home}`;
+    const i = track(g, desc);
+    return `
     <div class="tp-card">
-      <div class="tp-top">${teamMark(g.side === "home" ? g.home : g.away, 44) || ""}
+      <div class="tp-top"><span class="tp-tile">${teamMark(g.side === "home" ? g.home : g.away, 30) || ""}</span>
         <div class="tp-who"><b>${escapeHtml(g.pick_label || g.label || "")}</b>
           <span>${escapeHtml(g.market_label || g.market || "")}</span>
-          <span class="tp-when">${escapeHtml(g.away || "")} @ ${escapeHtml(g.home || "")}</span></div>
+          <span class="tp-when">${escapeHtml(g.away || "")} @ ${escapeHtml(g.home || "")}${g.edge != null ? ` · +${(100 * g.edge).toFixed(1)}% edge` : ""}</span></div>
         <span class="grade ${gradeClass(g.grade)}">${escapeHtml(g.grade || "")}</span></div>
       <div class="tp-foot"><b class="tp-odds">${odds(g.odds)}</b>
         <span class="tp-book">${escapeHtml(g.book || "")}</span>
-        <span class="tp-edge">${g.edge != null ? "+" + (100 * g.edge).toFixed(1) + "% edge" : ""}</span></div>
+        <button class="tp-add" type="button" onclick="tpTrack(${i})"
+                title="Open My Bets with this pick prefilled — you enter the stake">+ My Bets</button></div>
     </div>`;
+  };
   host.innerHTML = `
     <div class="section-title tp-title">Qellys’ top picks
       <span class="sub">— ${hcmOn() ? "A-grade only (High Confidence is on)" : "tonight’s best grades first"} · every one is journaled and graded in public</span>
@@ -10388,13 +10461,27 @@ async function renderHomePerf() {
     const ys = curve.map((c) => c.cum_u);
     const lo = Math.min(...ys), hi = Math.max(...ys), span = (hi - lo) || 1;
     const W = 560, H = 84;
-    const pts = ys.map((y, i) =>
-      `${(i / (ys.length - 1) * W).toFixed(1)},${(H - 6 - (y - lo) / span * (H - 12)).toFixed(1)}`);
+    const xy = ys.map((y, i) => [
+      +(i / (ys.length - 1) * W).toFixed(1),
+      +(H - 8 - (y - lo) / span * (H - 16)).toFixed(1)]);
+    const pts = xy.map(([x, y]) => `${x},${y}`).join(" ");
     const up = ys[ys.length - 1] >= ys[0];
+    const tone = up ? "var(--good)" : "var(--bad)";
+    const [ex, ey] = xy[xy.length - 1];
+    // The render's chart is a filled area with a live end-point — the
+    // fill fades to nothing so it reads as light under the line, not a
+    // second data series.
     spark = `<svg class="perf-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-      <polyline points="${pts.join(" ")}" fill="none"
-        stroke="${up ? "var(--good)" : "var(--bad)"}" stroke-width="2.5"
+      <defs><linearGradient id="perffill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${up ? "#42C268" : "#DF5953"}" stop-opacity="0.28"/>
+        <stop offset="100%" stop-color="${up ? "#42C268" : "#DF5953"}" stop-opacity="0"/>
+      </linearGradient></defs>
+      <path d="M0,${H} L${xy.map(([x, y]) => `${x},${y}`).join(" L")} L${W},${H} Z"
+            fill="url(#perffill)"/>
+      <polyline points="${pts}" fill="none" stroke="${tone}" stroke-width="2.5"
         stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${ex}" cy="${ey}" r="4" fill="${tone}"/>
+      <circle cx="${ex}" cy="${ey}" r="7.5" fill="${tone}" opacity="0.25"/>
     </svg>`;
   }
   const n = o.settled, w = o.wins || 0, l = o.losses || 0, p = o.pushes || 0;
@@ -10503,9 +10590,83 @@ function syncRail() {
   rail.style.display = home ? "" : "none";
 }
 
+/* The strip's working controls — the render's row, with real handles.
+   The league select is a MIRROR of the sidebar chips: changing it clicks
+   the chip, so every side effect (hidden tabs, taglines, standalone
+   exits) runs through the one existing pipeline. */
+function initGamesControls() {
+  const sportSel = document.getElementById("games-sport");
+  if (sportSel) {
+    ["nfl", "cfb", "mlb", "nba", "wnba", "ufc"].forEach((s) => {
+      const o = document.createElement("option");
+      o.value = s; o.textContent = s.toUpperCase();
+      sportSel.appendChild(o);
+    });
+    sportSel.value = state.sport;
+    sportSel.addEventListener("change", () => {
+      const chip = document.querySelector(`.sb-chips .sport-btn[data-sport="${sportSel.value}"]`);
+      if (chip) chip.click();
+    });
+  }
+  const sortSel = document.getElementById("games-sort");
+  if (sortSel) {
+    try { sortSel.value = localStorage.getItem("qb_games_sort") || "start"; } catch (e) {}
+    sortSel.addEventListener("change", () => {
+      try { localStorage.setItem("qb_games_sort", sortSel.value); } catch (e) {}
+      renderGames();
+    });
+  }
+  const strip = document.getElementById("games-mode-strip");
+  const grid = document.getElementById("games-mode-grid");
+  const games = document.getElementById("games");
+  const setMode = (m) => {
+    if (games) games.classList.toggle("games-grid", m === "grid");
+    if (strip) strip.setAttribute("aria-pressed", String(m !== "grid"));
+    if (grid) grid.setAttribute("aria-pressed", String(m === "grid"));
+    try { localStorage.setItem("qb_games_mode", m); } catch (e) {}
+    syncStripArrows();
+  };
+  if (strip) strip.addEventListener("click", () => setMode("strip"));
+  if (grid) grid.addEventListener("click", () => setMode("grid"));
+  let mode = "strip";
+  try { mode = localStorage.getItem("qb_games_mode") || "strip"; } catch (e) {}
+  if (mode === "grid") setMode("grid");
+  const step = (dir) => {
+    const el = document.getElementById("games");
+    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: "smooth" });
+  };
+  const prev = document.getElementById("games-prev");
+  const next = document.getElementById("games-next");
+  if (prev) prev.addEventListener("click", () => step(-1));
+  if (next) next.addEventListener("click", () => step(1));
+  if (games) games.addEventListener("scroll",
+    () => syncStripArrows(), { passive: true });
+}
+
+/* Arrows only exist while there is somewhere to scroll to. */
+function syncStripArrows() {
+  const el = document.getElementById("games");
+  const prev = document.getElementById("games-prev");
+  const next = document.getElementById("games-next");
+  if (!el || !prev || !next) return;
+  const scrollable = !el.classList.contains("games-grid")
+    && el.scrollWidth > el.clientWidth + 8;
+  prev.style.display = next.style.display = scrollable ? "" : "none";
+  if (!scrollable) return;
+  // Each arrow exists only while there is strip in its direction.
+  const atStart = el.scrollLeft <= 4;
+  const atEnd = el.scrollLeft >= el.scrollWidth - el.clientWidth - 4;
+  prev.style.visibility = atStart ? "hidden" : "visible";
+  next.style.visibility = atEnd ? "hidden" : "visible";
+}
+
 (function initNewLook() {
   renderGreeting();
   initHcm();
+  initGamesControls();
+  window.addEventListener("resize", () => {
+    if (typeof syncStripArrows === "function") syncStripArrows();
+  });
   const search = document.getElementById("nav-search");
   if (search) search.addEventListener("click", () => {
     if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
