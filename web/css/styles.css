@@ -3999,10 +3999,13 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .strip-arrow.next { right: -8px; }
 @media (max-width: 760px) { .strip-arrow { display: none !important; } }
 
-/* Grid mode: the same cards, wrapped instead of scrolled. */
+/* Grid mode: the same cards, wrapped instead of scrolled. The cards must
+   also release the strip's min-width — a 380px card in a ~326px grid cell
+   paints over its neighbour — and the scroller's overflow-y clip. */
 #games.games-grid { display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  overflow-x: visible; }
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+  overflow: visible; }
+#games.games-grid .game-card { min-width: 0; }
 
 /* The card column, centred like the render. */
 .hero-games .game-card { text-align: center; }
