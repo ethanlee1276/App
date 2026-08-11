@@ -3632,6 +3632,17 @@ select.calc-in { width: auto; font-weight: 600; }
   --grad-chip: linear-gradient(180deg, rgba(125, 59, 238, .16), rgba(125, 59, 238, .05));
 }
 
+/* The page never scrolls sideways — Ethan's screen recording
+   (2026-08-10): the whole site panned left-right on his phone because
+   the header cluster ran past the viewport and nothing clipped it.
+   Two fixes, and this is the seatbelt: even if some future element
+   overflows again, the DOCUMENT refuses to pan. `clip` rather than
+   `hidden` because hidden makes body a scroll container and silently
+   kills every position:sticky descendant. Wide content (tables, the
+   stadium strip, charts) already scrolls inside its own overflow-x
+   boxes, which clip does not touch. */
+html, body { overflow-x: clip; }
+
 /* ---------------- The bar ---------------- */
 .topbar {
   position: sticky; top: 0; z-index: 40;
@@ -3942,8 +3953,14 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   .nav { display: none; }           /* the drawer carries every destination */
   .tagline { display: none; }
   .brand-words h1 { font-size: var(--fs-md); letter-spacing: .26em; }
+  .brand-home { flex-shrink: 0; }
   #data-source { display: none; }
-  .slate-meta { gap: 6px; }
+  /* The root cause of the sideways pan: this cluster was flex:0 0 auto
+     from the desktop rule, so at 297-375px wide it OVERFLOWED a 390px
+     bar instead of shrinking. It now takes what is left and truncates. */
+  .slate-meta { gap: 6px; flex: 1 1 auto; min-width: 0; overflow: hidden;
+    justify-content: flex-end; }
+  .meta-ico, .theme-toggle { flex-shrink: 0; }
   #slate-date { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; max-width: 34vw; font-size: var(--fs-xs); }
   .perf-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }

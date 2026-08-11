@@ -161,6 +161,20 @@ def test_the_wordmark_is_gold_and_the_interface_is_violet():
     assert "#8D5BF2" in CSS[i:i + 40]
 
 
+def test_the_page_never_pans_sideways():
+    """Ethan's screen recording, 2026-08-10: the whole mobile site
+    scrolled left-right. Root cause: the header's status cluster kept
+    its desktop flex:0 0 auto on phones and overflowed the bar, and
+    nothing clipped the document. Both halves pinned — the fit (the
+    cluster shrinks on phones) and the seatbelt (the document refuses
+    horizontal overflow, with clip so sticky survives)."""
+    assert "html, body { overflow-x: clip; }" in CSS
+    i = CSS.index("@media (max-width: 760px) {", CSS.index("NEW LOOK — 2026-08-11"))
+    block = CSS[i:i + 1600]
+    assert "flex: 1 1 auto; min-width: 0" in block, \
+        "the status cluster stopped shrinking — the sideways pan is back"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
