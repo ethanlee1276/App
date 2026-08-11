@@ -369,3 +369,29 @@ slip, the Upgrade card (nothing here is for sale), Zeno's green accent
 badge is the live count, which is true. The nav-btn binder also gained
 the missing-view guard: anchor items wear the class for its looks and
 fell through to switchView(undefined).
+
+## The full-res venue renders — 2026-08-12, the WebP miner blind spot
+
+The nine renders Ethan sent "a little more zoomed in" turned out to
+have been in the session transcript the entire time: they arrived as
+WebP, and the extraction pattern only recognised JPEG (`/9j`) and PNG
+(`iVBOR`) base64 magic — `UklGR` never matched, which is why "which
+ones didnt you get" had the answer "none of them, until the pattern
+learned RIFF." All seven uniques recovered at ~1536-1774px.
+
+Cutting them retired the brightness-band slicer: the new sheets butt
+tile-to-tile with zero dark gutter, so the cutter became a colour-seam
+hunt — a straight line whose two sides disagree in colour along its
+ENTIRE length (second-smallest of eight per-segment jumps, chroma
+direction rescuing dark-on-dark night skies) is a grid seam; a field
+or court edge dies toward the corners and fails the tail test. One
+ambiguity survived: a stadium's own rim wall IS a full-width straight
+colour edge (football-neutral scored 82.5, true seams 39.8-131). No
+local metric separates those, so the filename became the contract —
+`colors`/`sheet`/`grid` means cut, anything else is one render, never
+cut, and `-neutral` pins steel. All 24 variants rebuilt at 1000-1536px
+(was ~460px upscaled); octagon-6 stays the desaturated blue until a
+real neutral octagon render exists. Old dark-gap splitting died for a
+reason worth remembering: night renders carry genuinely pitch-black
+full-width sky bands, and a threshold that finds gutters also finds
+those.

@@ -3,9 +3,10 @@
 The chat pipeline recompresses and lags, so renders travel as files:
 drop into web/img/venues/incoming/, run tools/venues_ingest.py. These
 tests build tiny synthetic renders (solid lighting glows over dark
-tiles) and prove the slicer finds the grid, the classifier reads the
-LIGHTING rather than the playing surface, neutral lands on steel, the
-octagon maps to its rotation slots, and a re-run can only upgrade.
+tiles) and prove the cutter finds padded grids AND butted grids, never
+cuts a declared single, the classifier reads the LIGHTING rather than
+the playing surface, neutral lands on steel, the octagon maps to its
+rotation slots, and a re-run can only upgrade.
 """
 
 import os
@@ -52,6 +53,26 @@ def test_the_slicer_finds_the_grid_and_leaves_singles_whole():
     assert len(slice_tiles(_tile((200, 200, 210)))) == 1
 
 
+def test_the_cutter_splits_butted_tiles_on_colour_seams():
+    # Tonight's full-res sheets butt tile-to-tile with no gutter at all.
+    # The lighting tints EVERYTHING in a real render, so each butted
+    # fixture tile gets a body tinted toward its rig colour.
+    left = _tile((200, 30, 30))
+    lp = left.load()
+    right = _tile((30, 60, 200))
+    rp = right.load()
+    for y in range(70, 200):
+        for x in range(300):
+            lp[x, y] = (46, 20, 22)
+            rp[x, y] = (20, 24, 50)
+    butted = Image.new("RGB", (600, 200))
+    butted.paste(left, (0, 0))
+    butted.paste(right, (300, 0))
+    tiles = slice_tiles(butted)
+    assert len(tiles) == 2
+    assert all(t.width > 280 for t in tiles)
+
+
 def test_the_classifier_reads_lighting_not_the_floor():
     # A green-lit tile over an amber "wood floor" must read green — the
     # bug the first hue pass had on the basketball sheet.
@@ -85,6 +106,23 @@ def test_ingest_names_families_and_octagon_slots_and_only_upgrades():
         report = ingest(inc, var)
         assert any(r.startswith("KEEP football-steel.jpg") for r in report)
         assert Image.open(var / "football-steel.jpg").width == 1000
+
+
+def test_singles_are_never_cut_no_matter_what_they_contain():
+    # A stadium's own rim wall is a straight full-width colour edge that
+    # scores exactly like a grid seam — so the filename is the contract:
+    # no sheet marker, no cutting. This fixture is a worst case, a hard
+    # horizontal edge across a big single render.
+    with tempfile.TemporaryDirectory() as td:
+        inc, var = Path(td) / "in", Path(td) / "out"
+        inc.mkdir()
+        im = Image.new("RGB", (600, 500), (10, 12, 40))
+        im.paste(Image.new("RGB", (600, 250), (120, 125, 140)), (0, 250))
+        im.save(inc / "football-neutral.png")
+        ingest(inc, var)
+        names = [p.name for p in var.glob("*.jpg")]
+        assert names == ["football-steel.jpg"]
+        assert Image.open(var / "football-steel.jpg").width == 1200
 
 
 def test_target_names_stay_on_the_site_contract():

@@ -34,27 +34,34 @@ Naming: `{sport}/{HOME_TEAM_ABBR}.jpg`
 - JPG only (the card requests .jpg).
 - Only ship images you have the rights to use.
 
-## Replacing the variant renders with full-res versions
+## Where the variants came from
 
-The `variants/` files were sliced from a 1536px contact sheet, so each
-is ~460×400 upscaled 2×. If you have the original renders as separate
-full-size images, overwrite the matching `variants/` file (same name,
-JPG) and every card sharpens up with no other change.
+The `variants/` files are cut from Ethan's full-resolution night
+renders (2026-08-11 evening batch): three neutral singles plus a
+five-colour sheet per family, ~1000-1536px per tile. The one derived
+file is `octagon-6.jpg` — no neutral octagon render exists yet, so it
+is the blue one desaturated; a real steel octagon render would replace
+it through the normal ingest below.
 
 ## Sending new renders (the incoming/ door)
 
 Chat recompresses images; files don't. To ship new renders at full
 quality:
 
-1. Save them into `web/img/venues/incoming/` — sheets or singles, any
-   mix — named with the family first: `football-colors.png`,
-   `baseball-neutral.png`, `basketball-red-blue-sheet.png`,
-   `octagon-set.png`.
-2. Run `python3 tools/venues_ingest.py`. It slices any grid, reads each
-   tile's LIGHTING colour (never the grass/wood), writes the right
-   `variants/` files, and prints every decision. A neutral white-lit
-   render lands on steel. Re-runs only ever upgrade — a smaller source
-   never overwrites a bigger file.
+1. Save them into `web/img/venues/incoming/`, named with the family
+   first (`football` / `baseball` / `basketball` / `octagon`). The
+   NAME DECLARES THE GEOMETRY: a file containing several renders must
+   say so — `colors`, `sheet` or `grid` in the name (for example
+   `football-colors.png`, `octagon-sheet.png`) — and gets cut apart on
+   its colour seams. Any other name is ONE render and is never cut
+   (a stadium's own rim wall looks exactly like a sheet seam, so
+   singles have to say they're singles). `-neutral` in the name also
+   pins the render to the steel slot.
+2. Run `python3 tools/venues_ingest.py`. It cuts declared sheets,
+   reads each tile's LIGHTING colour (never the grass/wood), writes
+   the right `variants/` files, and prints every decision. Re-runs
+   only ever upgrade — a smaller source never overwrites a bigger
+   file.
 3. Commit and push (or just push the incoming files and let the other
    side run the ingest).
 

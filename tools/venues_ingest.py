@@ -13,13 +13,18 @@ and lags; files do neither. Drop any mix of sheets and singles into
 ``football`` / ``baseball`` / ``basketball`` / ``octagon`` — and this
 does the rest:
 
-  * A GRID (multiple tiles) is sliced by brightness bands, the same
-    detector that cut the original contact sheet.
+  * A file whose name contains ``colors``/``sheet``/``grid`` holds
+    MULTIPLE renders and is cut apart on its colour seams — a straight
+    line whose two sides disagree in colour along its entire length.
+    Any other name is ONE render and is never cut (a stadium's own rim
+    wall looks exactly like a seam, so singles must say they're singles).
   * Each tile's LIGHTING colour is read from its upper region (the
     rig, not the grass/wood, which polluted naive sampling) and mapped
     to the site's names: red / gold / green / blue / violet, with a
     low-saturation tile landing on steel.
-  * Singles work the same way — a neutral white-lit render is steel.
+  * Singles work the same way — a neutral white-lit render is steel,
+    and a filename containing ``neutral`` forces steel outright (white
+    rigs over navy bowls can carry enough cool cast to read as blue).
   * Output goes to ``variants/{family}-{name}.jpg`` (octagon uses the
     1-6 rotation slots), downscaled to at most 1600px wide, gently
     sharpened, JPG q87. Existing files are only replaced when the new
@@ -37,7 +42,7 @@ import math
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageEnhance, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[1]
 INCOMING = ROOT / "web" / "img" / "venues" / "incoming"
@@ -53,44 +58,148 @@ OCTAGON_SLOTS = {"violet": 1, "blue": 2, "red": 3, "gold": 4,
 MAX_W = 1600
 
 
-def _bands(gray, axis: str, lo: int, hi: int, other_lo: int, other_hi: int,
-           min_len: int) -> list[tuple[int, int]]:
-    """Bright runs along one axis, measured by per-line max — vignetted
-    dark tiles survive a max where they vanish under a mean."""
-    px = gray.load()
-    runs, in_run, start = [], False, 0
-    for a in range(lo, hi):
-        m = 0
-        for b in range(other_lo, other_hi, 4):
-            v = px[a, b] if axis == "x" else px[b, a]
-            if v > m:
-                m = v
-        bright = m > 12
-        if bright and not in_run:
-            start, in_run = a, True
-        elif not bright and in_run:
-            if a - start >= min_len:
-                runs.append((start, a))
-            in_run = False
-    if in_run and hi - start >= min_len:
-        runs.append((start, hi))
-    return runs
+def _bright_bbox(region) -> tuple | None:
+    """Bounding box of everything brighter than the padding floor — the
+    trim step. Only trims: splitting on dark gaps shreds night renders,
+    whose skies carry genuinely pitch-black full-width bands."""
+    mask = region.convert("L").point(lambda v: 255 if v > 12 else 0)
+    return mask.getbbox()
+
+
+#: A candidate seam must jump at least this much in the cheap scan...
+SEAM_CANDIDATE = 40.0
+#: ...and score at least this on the consistency check to cut.
+SEAM_CONFIRM = 26.0
+#: No cut may leave a piece thinner than this.
+MIN_PIECE = 200
+
+
+def _line_means(rgb, axis: str):
+    """Per-line mean RGB along an axis ('x' = one entry per column)."""
+    W, H = rgb.size
+    px = rgb.load()
+    out = []
+    other = range(0, H if axis == "x" else W, 4)
+    n = float(len(other))
+    for a in range(W if axis == "x" else H):
+        r = g = b = 0
+        for o in other:
+            p = px[a, o] if axis == "x" else px[o, a]
+            r += p[0]; g += p[1]; b += p[2]
+        out.append((r / n, g / n, b / n))
+    return out
+
+
+def _seam_consistency(rgb, axis: str, pos: int, w: int = 6, K: int = 8) -> float:
+    """Second-smallest per-segment colour jump across a candidate line.
+
+    A butted-grid seam changes colour along its WHOLE length — every
+    segment of the line has differently-lit pixels on its two sides. A
+    field or court edge inside one render jumps hugely in the middle and
+    not at all in the outer segments, so its weak tail gives it away.
+    Dark-on-dark seam segments (night sky against night sky) carry little
+    absolute RGB distance but still disagree in chroma direction, so each
+    segment scores max(rgb distance, scaled direction distance)."""
+    W, H = rgb.size
+    px = rgb.load()
+    L = H if axis == "x" else W
+    scores = []
+    for k in range(K):
+        lo, hi = k * L // K, (k + 1) * L // K
+        acc = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+        n = 0
+        for o in range(lo, hi, 2):
+            for side, rng in enumerate((range(pos - w, pos),
+                                        range(pos, pos + w))):
+                for p in rng:
+                    v = px[p, o] if axis == "x" else px[o, p]
+                    acc[side][0] += v[0]; acc[side][1] += v[1]
+                    acc[side][2] += v[2]
+            n += 1
+        n = float(max(1, n) * w)
+        left = [c / n for c in acc[0]]
+        right = [c / n for c in acc[1]]
+        d_rgb = math.dist(left, right)
+        sl, sr = sum(left) + 1, sum(right) + 1
+        d_dir = math.dist([c / sl for c in left], [c / sr for c in right])
+        scores.append(max(d_rgb, 400 * d_dir))
+    return sorted(scores)[1]
+
+
+def _best_seam(region):
+    """The strongest confirmed grid seam in a region, or None.
+
+    Cheap pass: windowed jump of per-line mean colour, both axes. Every
+    local peak above SEAM_CANDIDATE then faces the consistency check;
+    the best confirmed position wins. MIN_PIECE keeps any cut from
+    shaving fragments off a real render."""
+    rgb = region.convert("RGB")
+    w = 6
+    best = None
+    for axis in ("y", "x"):
+        means = _line_means(rgb, axis)
+        span = len(means)
+        if span < 2 * MIN_PIECE:
+            continue
+        jumps = []
+        for i in range(MIN_PIECE, span - MIN_PIECE):
+            l = [sum(c[k] for c in means[i - w:i]) / w for k in range(3)]
+            r = [sum(c[k] for c in means[i:i + w]) / w for k in range(3)]
+            jumps.append((math.dist(l, r), i))
+        jumps.sort(reverse=True)
+        taken = []
+        for d, i in jumps:
+            if d < SEAM_CANDIDATE or len(taken) >= 6:
+                break
+            if any(abs(i - t) < 50 for t in taken):
+                continue
+            taken.append(i)
+            score = _seam_consistency(rgb, axis, i)
+            if score >= SEAM_CONFIRM and (best is None or score > best[0]):
+                best = (score, axis, i)
+    return best
+
+
+def _cut_region(im, box, out, depth: int = 0):
+    """Recursive slicer: trim the dark border, hunt for a grid seam,
+    recurse on the halves; emit the box when no seam is confirmed."""
+    region = im.crop(box)
+    bb = _bright_bbox(region)
+    if bb is None:                       # pure-black scrap between tiles
+        return
+    x0, y0 = box[0] + bb[0], box[1] + bb[1]
+    x1, y1 = box[0] + bb[2], box[1] + bb[3]
+    region = im.crop((x0, y0, x1, y1))
+    if depth < 5:
+        seam = _best_seam(region)
+        if seam:
+            _, axis, p = seam
+            if axis == "y":
+                _cut_region(im, (x0, y0, x1, y0 + p - 2), out, depth + 1)
+                _cut_region(im, (x0, y0 + p + 2, x1, y1), out, depth + 1)
+            else:
+                _cut_region(im, (x0, y0, x0 + p - 2, y1), out, depth + 1)
+                _cut_region(im, (x0 + p + 2, y0, x1, y1), out, depth + 1)
+            return
+    out.append((x0 + 4, y0 + 4, x1 - 4, y1 - 4))
 
 
 def slice_tiles(im: Image.Image) -> list[Image.Image]:
-    """Tiles out of a sheet; a single un-gridded render comes back whole."""
-    gray = im.convert("L")
-    W, H = im.size
-    rows = _bands(gray, "y", 0, H, 0, W, min_len=max(120, H // 8))
-    tiles = []
-    for (y0, y1) in rows:
-        cols = _bands(gray, "x", 0, W, y0, y1, min_len=max(120, W // 10))
-        for (x0, x1) in cols:
-            tiles.append(im.crop((x0 + 4, y0 + 4, x1 - 4, y1 - 4)))
-    # One row x one column that spans nearly everything = not a grid.
-    if len(tiles) <= 1:
+    """Tiles out of a sheet; a single un-gridded render comes back whole.
+
+    The cutter is a colour-seam hunt, not a gap hunt: a straight line
+    whose two sides disagree in colour along the line's ENTIRE length is
+    a grid seam — true whether the tiles butt pixel-to-pixel (tonight's
+    full-res sheets) or sit apart with padding (a padded sheet's tile
+    edge). A field or court edge inside one render never manages it,
+    because real scene boundaries die out toward the image corners.
+    Dark padding and margins are trimmed, never split on: night renders
+    carry genuinely pitch-black full-width sky bands."""
+    boxes = []
+    _cut_region(im, (0, 0, im.width, im.height), boxes)
+    if len(boxes) <= 1:
         return [im]
-    return tiles
+    return [im.crop(b) for b in boxes]
 
 
 def light_hue(tile: Image.Image) -> tuple[float, float]:
@@ -166,13 +275,24 @@ def ingest(incoming: Path = INCOMING, variants: Path = VARIANTS,
             report.append(f"SKIP {f.name}: name must start with one of "
                           f"{'/'.join(families)}")
             continue
+        # The filename declares the geometry and the intent — that's the
+        # contract. "...-colors"/"-sheet"/"-grid" means MULTIPLE renders
+        # to cut apart; anything else is ONE render, never cut. (The
+        # cutter can't be trusted on singles: a stadium's upper-rim wall
+        # is a straight full-width colour edge that scores exactly like
+        # a grid seam.) "...-neutral" additionally IS the steel render —
+        # a white-lit arena over a navy bowl can carry enough cool cast
+        # to tip the hue vote toward blue.
+        stem = f.stem.lower()
+        sheet = any(k in stem for k in ("colors", "sheet", "grid"))
+        neutral = "neutral" in stem
         try:
             im = Image.open(f)
         except Exception as exc:                    # noqa: BLE001
             report.append(f"SKIP {f.name}: unreadable ({exc})")
             continue
-        for tile in slice_tiles(im):
-            cls = classify(tile)
+        for tile in (slice_tiles(im) if sheet else [im]):
+            cls = "steel" if neutral else classify(tile)
             out = variants / target_name(fam, cls)
             done = finish(tile)
             if out.exists():
@@ -184,6 +304,15 @@ def ingest(incoming: Path = INCOMING, variants: Path = VARIANTS,
             done.save(out, quality=87, optimize=True, progressive=True)
             report.append(f"WROTE {out.name} <- {f.name} "
                           f"({done.width}x{done.height}, lighting={cls})")
+    # No neutral octagon render exists, so the steel rotation slot is the
+    # blue one desaturated to house-neutral — until a real one lands.
+    six, two = variants / "octagon-6.jpg", variants / "octagon-2.jpg"
+    if two.exists() and (not six.exists()
+                         or Image.open(six).width < Image.open(two).width):
+        muted = ImageEnhance.Color(Image.open(two).convert("RGB")).enhance(0.18)
+        muted.save(six, quality=87, optimize=True, progressive=True)
+        report.append(f"WROTE {six.name} <- {two.name} desaturated "
+                      f"({muted.width}x{muted.height}, steel slot)")
     return report
 
 
