@@ -10274,6 +10274,21 @@ function switchView(name, push = false) {
 
 function initialView() {
   const h = (location.hash || "").replace("#", "");
+  // The Parlay Zone page became Parlay Mode (2026-08-11), and the
+  // hashchange handler migrates old #parlays bookmarks — but a COLD
+  // load never fires hashchange, so the same branch has to live here
+  // too. Found by the preservation walk: deep-linking #parlays landed
+  // on Home with the mode still off. The key is a literal, not PZ_KEY:
+  // this runs during boot, before the new-look module's const at the
+  // end of the file has initialized — referencing it here is a TDZ
+  // ReferenceError that a try/catch would swallow into a silent no-op
+  // (which is exactly how the first version of this fix failed).
+  if (h === "parlays") {
+    try { localStorage.setItem("qb_pz", "1"); } catch (e) {}
+    switchView("recommended");
+    if (typeof syncParlayMode === "function") syncParlayMode();
+    return;
+  }
   // A tab this sport does not have must not be reachable by URL. CFB has
   // no roster feed, and #rosters would otherwise open a page whose own tab
   // is hidden — the nav and the content disagreeing about what exists.

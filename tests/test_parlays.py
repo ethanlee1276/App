@@ -871,6 +871,15 @@ def test_the_parlay_zone_is_a_real_page_on_the_sports_that_have_one():
     assert "function renderParlays(" in APP
     assert "renderParlays();" in APP, "the renderer is never called"
     assert "syncParlayMode" in APP and 'h === "parlays"' in APP
+    # BOTH entry paths must migrate the bookmark: hashchange for a hash
+    # typed into a running page, and initialView for a cold load, which
+    # never fires hashchange (the preservation walk caught the cold path
+    # missing). initialView runs before the new-look module's consts
+    # initialize, so it must use the literal key — PZ_KEY there is a TDZ
+    # ReferenceError that a try/catch turns into a silent no-op.
+    iv = APP[APP.index("function initialView("):]
+    iv = iv[:iv.index("\n}")]
+    assert 'h === "parlays"' in iv and '"qb_pz"' in iv
 
 
 def test_the_sports_with_no_screen_hide_the_tab_rather_than_faking_one():
