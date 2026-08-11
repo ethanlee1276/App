@@ -2678,6 +2678,74 @@ def show_desk() -> None:
               "same-day, so this fills fast once the feed reaches")
 
 
+def show_desk_probe() -> None:
+    """Raw Kalshi requests, no cache, errors shown verbatim.
+
+        python3 launch.py --desk-probe
+
+    Built for the second live run (2026-08-11): every endpoint returned
+    EMPTY — page, all sports series, all weather cities — with no error
+    raised, which is the signature of an error body being parsed as
+    "valid JSON, zero markets" or of a poisoned cache being served as
+    truth. This bypasses fetch_text entirely: direct requests, HTTP
+    status printed, body head printed whenever a count is zero, and the
+    kalshi cache files listed then cleared so the next real build
+    fetches fresh.
+    """
+    import json as _json
+    import time as _time
+    import urllib.error
+    import urllib.request
+    from engine.sources.fetch import CACHE_DIR
+    from engine.sources.kalshi import KALSHI
+
+    def hit(label, url):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "qellys-desk-probe"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                code = resp.status
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            print(f"  {label:34} HTTP {exc.code} · {body[:160]}")
+            return
+        except Exception as exc:                    # noqa: BLE001
+            print(f"  {label:34} FAILED · {exc}")
+            return
+        try:
+            j = _json.loads(body)
+            counts = {k: len(v) for k, v in j.items() if isinstance(v, list)}
+            line = " ".join(f"{k}={n}" for k, n in counts.items()) or "no lists"
+            print(f"  {label:34} HTTP {code} · {line}"
+                  + ("" if any(counts.values()) else f" · body: {body[:160]}"))
+        except ValueError:
+            print(f"  {label:34} HTTP {code} · NOT JSON · {body[:160]}")
+
+    hit("markets limit=200 status=open",
+        f"{KALSHI}/markets?limit=200&status=open")
+    hit("markets limit=1000 status=open",
+        f"{KALSHI}/markets?limit=1000&status=open")
+    hit("markets limit=200 (no status)", f"{KALSHI}/markets?limit=200")
+    hit("events KXMLBGAME status=open",
+        f"{KALSHI}/events?series_ticker=KXMLBGAME&status=open&limit=100&with_nested_markets=true")
+    hit("events KXMLBGAME (no status)",
+        f"{KALSHI}/events?series_ticker=KXMLBGAME&limit=100&with_nested_markets=true")
+    hit("events KXHIGHNY status=open",
+        f"{KALSHI}/events?series_ticker=KXHIGHNY&status=open&limit=100&with_nested_markets=true")
+    hit("series KXMLBGAME", f"{KALSHI}/series/KXMLBGAME")
+
+    stale = sorted(CACHE_DIR.glob("kalshi*"))
+    if stale:
+        print("  cache files (cleared now so the next build fetches fresh):")
+        for p in stale:
+            age = int(_time.time() - p.stat().st_mtime)
+            head = p.read_text(encoding="utf-8", errors="replace")[:80]
+            print(f"    {p.name} · {age}s old · {head!r}")
+            p.unlink(missing_ok=True)
+    else:
+        print("  no kalshi cache files present")
+
+
 def show_gates() -> None:
     """What the filters cost or saved — measured, not argued.
 
@@ -4893,6 +4961,9 @@ def main() -> None:
         return
     if "--gates" in argv:
         show_gates()
+        return
+    if "--desk-probe" in argv:
+        show_desk_probe()
         return
     if "--desk" in argv:
         show_desk()
