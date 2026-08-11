@@ -40,3 +40,23 @@ The `variants/` files were sliced from a 1536px contact sheet, so each
 is ~460×400 upscaled 2×. If you have the original renders as separate
 full-size images, overwrite the matching `variants/` file (same name,
 JPG) and every card sharpens up with no other change.
+
+## Sending new renders (the incoming/ door)
+
+Chat recompresses images; files don't. To ship new renders at full
+quality:
+
+1. Save them into `web/img/venues/incoming/` — sheets or singles, any
+   mix — named with the family first: `football-colors.png`,
+   `baseball-neutral.png`, `basketball-red-blue-sheet.png`,
+   `octagon-set.png`.
+2. Run `python3 tools/venues_ingest.py`. It slices any grid, reads each
+   tile's LIGHTING colour (never the grass/wood), writes the right
+   `variants/` files, and prints every decision. A neutral white-lit
+   render lands on steel. Re-runs only ever upgrade — a smaller source
+   never overwrites a bigger file.
+3. Commit and push (or just push the incoming files and let the other
+   side run the ingest).
+
+Per-team files ({sport}/{ABBR}.jpg) are separate and win over variants
+— that's where the real per-stadium renders go when they exist.
