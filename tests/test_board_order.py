@@ -118,7 +118,11 @@ def test_nothing_new_slipped_in_above_the_picks():
                # not new content above the picks.
                "games-head", "games-controls", "games-sport", "games-sort",
                "games-mode-strip", "games-mode-grid", "games-outer",
-               "games-prev", "games-next"}
+               "games-prev", "games-next",
+               # Parlay Mode (2026-08-11): the old Parlay Zone's tickets,
+               # hidden unless the sidebar switch is on — zero fold cost
+               # in the default state.
+               "parlay-mode", "parlays-title", "parlays-sub", "parlays-body"}
     above = [m.group(1) for m in re.finditer(r'id="([\w-]+)"',
                                              html[start:picks])]
     unexpected = [x for x in above if x not in allowed]

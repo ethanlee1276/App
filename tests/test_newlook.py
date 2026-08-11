@@ -77,10 +77,13 @@ def test_every_destination_survived_the_redesign():
     for sport in ("nfl", "cfb", "mlb", "nba", "wnba", "ufc", "intel",
                   "fantasy", "memes", "record", "lab", "mybets", "why", "about"):
         assert f'data-sport="{sport}"' in sb, f"{sport} fell out of the sidebar"
-    for view in ("recommended", "live", "edge", "longshots", "parlays",
+    # "parlays" left this list 2026-08-11: the page became Parlay Mode
+    # (the second sidebar toggle) — test_parlays.py owns that contract.
+    for view in ("recommended", "live", "edge", "longshots",
                  "futures", "standings", "trending", "players", "rosters",
                  "injuries", "scanner"):
         assert f'data-view="{view}"' in sb, f"{view} fell out of the sidebar"
+    assert 'id="pz-toggle"' in sb, "the Parlay Mode switch fell out"
 
 
 def test_the_rail_belongs_to_home_only():

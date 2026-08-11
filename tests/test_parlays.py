@@ -855,14 +855,22 @@ def _ticket_src():
 
 
 def test_the_parlay_zone_is_a_real_page_on_the_sports_that_have_one():
-    """A nav tab, a container, a renderer, and a place in the route order.
-    Miss any one and the tab is a dead link."""
-    assert 'data-view="parlays"' in HTML
-    assert 'id="view-parlays"' in HTML
+    """RE-SHAPED 2026-08-11 (Ethan: "ditch the parlay zone screen but
+    keep the same rules"): the PAGE became PARLAY MODE — a sidebar
+    switch under High Confidence that shows the same screened tickets
+    on Home. What must survive: the container, the renderer, the call,
+    the toggle — and an old #parlays bookmark still landing a person on
+    their tickets rather than nowhere."""
+    assert 'data-view="parlays"' not in HTML, "the dead page's nav item is back"
+    assert 'id="view-parlays"' not in HTML
+    assert 'id="parlay-mode"' in HTML and 'id="pz-toggle"' in HTML
     assert 'id="parlays-body"' in HTML
-    assert '"parlays"' in APP.split("const VIEW_ORDER")[1].split("]")[0]
+    i = HTML.index('id="view-recommended"')
+    assert i < HTML.index('id="parlays-body"') < HTML.index('id="view-live"'), \
+        "the tickets left the Home board"
     assert "function renderParlays(" in APP
     assert "renderParlays();" in APP, "the renderer is never called"
+    assert "syncParlayMode" in APP and 'h === "parlays"' in APP
 
 
 def test_the_sports_with_no_screen_hide_the_tab_rather_than_faking_one():

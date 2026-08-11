@@ -2698,6 +2698,7 @@ function renderParlays() {
            for the reasons above.` : ""}
     </div>`;
   revealChildren(host);
+  if (typeof syncParlayMode === "function") syncParlayMode();
 }
 
 /* One ticket, laid out the way §12 prints it: legs, then the correlation
@@ -4893,7 +4894,7 @@ const REC_ROOMS = [
    // arrows); moving the bare title/scroller out of them orphaned the
    // controls at the top of the page.
    ["probation-note", "talent-note", "games-head", "games-outer",
-    "top-picks", "stats", "home-perf",
+    "top-picks", "parlay-mode", "stats", "home-perf",
     "best-bets", "empty-slate", "rec-controls", "cards"]],
   ["gamebets", "Game bets",
    "moneyline, spread and total edges from the team model",
@@ -9909,7 +9910,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "parlays", "futures", "trending", "players", "rosters", "injuries", "standings", "bankroll", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
+const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "standings", "bankroll", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
 
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -10200,6 +10201,15 @@ function bind() {
       return;
     }
     if (h === state.view) return;
+    // The Parlay Zone page became Parlay Mode (2026-08-11) — an old
+    // #parlays bookmark turns the mode on and lands on the tickets.
+    if (h === "parlays") {
+      try { localStorage.setItem(PZ_KEY, "1"); } catch (e) {}
+      exitStandaloneMode();
+      switchView("recommended");
+      if (typeof syncParlayMode === "function") syncParlayMode();
+      return;
+    }
     if (!VIEW_ORDER.includes(h) || !document.getElementById(`view-${h}`)) return;
     // A tab this sport does not have stays unreachable by URL — and the
     // address bar is put back, because refusing to navigate while leaving
@@ -10455,6 +10465,56 @@ function initHcm() {
     renderTopPicks();
   });
   hcmPaint();
+}
+
+/* Parlay Mode — the render's second sidebar toggle, replacing the
+   Parlay Zone PAGE (Ethan, 2026-08-11: "ditch the parlay zone screen
+   but keep the same rules"). The rules did not move: the engine's
+   screen, the correlation pricing, the one-per-slate cap and the
+   Record-page journaling are exactly what they were — this is only
+   WHERE the tickets render (on Home, while the switch is on). */
+const PZ_KEY = "qb_pz";
+
+function pzOn() {
+  try { return localStorage.getItem(PZ_KEY) === "1"; } catch (e) { return false; }
+}
+
+function syncParlayMode() {
+  const wrap = document.getElementById("parlay-mode");
+  if (!wrap) return;
+  // Sports whose slates never carry a parlay screen (UFC's §9 refusal,
+  // the standalone markets) keep the section dark even with the switch
+  // on — an empty room with an explanation belongs to sports that COULD
+  // have tickets tonight.
+  const barred = (HIDDEN_VIEWS[state.sport] || []).includes("parlays");
+  wrap.hidden = barred || !pzOn();
+}
+
+function initPz() {
+  const btn = document.getElementById("pz-toggle");
+  if (!btn) return;
+  const paint = () => {
+    const on = pzOn();
+    btn.setAttribute("aria-checked", on ? "true" : "false");
+    btn.classList.toggle("on", on);
+    const s = btn.querySelector(".sb-hcm-state");
+    if (s) s.textContent = on ? "On" : "Off";
+  };
+  btn.addEventListener("click", () => {
+    try { localStorage.setItem(PZ_KEY, pzOn() ? "0" : "1"); } catch (e) {}
+    paint();
+    syncParlayMode();
+    // Turning it on means "show me the tickets" — go where they are.
+    if (pzOn()) {
+      if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
+      if (state.view !== "recommended") switchView("recommended", true);
+      const wrap = document.getElementById("parlay-mode");
+      if (wrap && !wrap.hidden)
+        setTimeout(() => wrap.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    }
+  });
+  paint();
+  syncParlayMode();
 }
 
 /* The Top Picks strip — the render's "QELLY'S TOP PICKS" row. The same
@@ -10866,6 +10926,7 @@ async function renderLiveBoard() {
 (function initNewLook() {
   renderGreeting();
   initHcm();
+  initPz();
   initGamesControls();
   const tbMenu = document.getElementById("tb-menu");
   if (tbMenu) tbMenu.addEventListener("click", () => {

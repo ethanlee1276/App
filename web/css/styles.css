@@ -4224,3 +4224,8 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   .mc-picker { max-height: 300px; }
   .mc-hero-stats { grid-template-columns: repeat(5, 1fr); gap: 6px; width: 100%; }
 }
+
+/* Parlay Mode rides directly under High Confidence — the first card
+   carries the margin-top:auto that pins the pair to the sidebar's
+   bottom; the second must not repeat it or they drift apart. */
+#sb-pz { margin-top: 0; }

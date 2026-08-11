@@ -108,18 +108,23 @@ def test_the_responsible_gambling_line_is_not_hidden():
 
 
 # --- the view list ----------------------------------------------------------
-VIEWS = ["recommended", "live", "edge", "scanner", "longshots", "parlays",
+VIEWS = ["recommended", "live", "edge", "scanner", "longshots",
          "trending", "players", "rosters", "standings", "record", "intel",
          "fantasy", "ufc", "why", "about"]
 
 
 def test_every_view_still_exists():
     """The spec's nav list names ten. Losing one of the other six during a
-    restyle would be silent — nothing links to `game` from the nav at all."""
+    restyle would be silent — nothing links to `game` from the nav at all.
+    "parlays" left this list 2026-08-11 ON PURPOSE (Ethan: "ditch the
+    parlay zone screen but keep the same rules") — the tickets moved to
+    Parlay Mode on Home, and test_parlays.py owns that contract; the
+    assert below keeps the CONTENT alive rather than the dead page."""
     for v in VIEWS:
         assert f'"{v}"' in APP, f"{v} dropped out of VIEW_ORDER"
         assert f'id="view-{v}"' in HTML, f"#view-{v} dropped out of the shell"
     assert 'id="view-game"' in HTML, "the per-game board lost its container"
+    assert 'id="parlays-body"' in HTML, "the parlay tickets lost their container"
 
 
 def test_the_record_is_a_standalone_page_not_a_sport_tab():
