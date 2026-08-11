@@ -140,6 +140,20 @@
         <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC">UFC</button>
       </div>
 
+      <!-- Ethan, 2026-08-12: "the Polly market page and fantasy page and
+           meme coin page up here" — the three markets ride the same chip
+           grid instead of hiding at the bottom of the menu. Their own
+           label, because a prediction market is not a league. -->
+      <div class="sb-label" data-head="markets">Markets</div>
+      <div class="sb-group sb-chips" data-group="markets">
+        <button class="sport-btn" data-sport="intel" data-kind="tool"
+                title="Kalshi prices + Polymarket informed flow">POLY</button>
+        <button class="sport-btn" data-sport="fantasy" data-kind="tool"
+                title="Fantasy football — usage, scripts, buy-low">FNTSY</button>
+        <button class="sport-btn" data-sport="memes" data-kind="tool"
+                title="Rocket Radar — Solana meme-coin momentum and danger">MEMES</button>
+      </div>
+
       <!-- Ethan's Zeno Props render, 2026-08-12: the grouped sidebar —
            Dashboard up top, then RESEARCH / MODELS / MY TOOLS. Every
            destination the old groups carried survives (preservation
@@ -206,19 +220,6 @@
         <button class="sport-btn sb-item sb-model" data-sport="ufc" data-kind="league" title="The Scalpy MMA doctrine — style beats talent">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 4h10v7a5 5 0 0 1-10 0z"/><path d="M9 20h6M12 16v4"/></svg>
           <span class="sb-model-words"><b>Scalpy MMA</b><span>the fight model</span></span></button>
-      </div>
-
-      <div class="sb-label" data-head="markets">Markets</div>
-      <div class="sb-group" data-group="markets">
-        <button class="sport-btn sb-item" data-sport="intel" data-kind="tool" title="Kalshi prices + Polymarket informed flow">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18M3.5 9h17M3.5 15h17"/></svg>
-          Prediction Mkts</button>
-        <button class="sport-btn sb-item" data-sport="fantasy" data-kind="tool" title="Fantasy football — usage, scripts, buy-low">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="12" rx="9" ry="6" transform="rotate(-30 12 12)"/><path d="M9.5 14.5l5-5M11 16l6.5-6.5M7.5 13l6.5-6.5"/></svg>
-          Fantasy</button>
-        <button class="sport-btn sb-item" data-sport="memes" data-kind="tool" title="Rocket Radar — Solana meme-coin momentum and danger">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2c4 3 5 8 3 13l-3 3-3-3C7 10 8 5 12 2z"/><circle cx="12" cy="9" r="1.6"/><path d="M8 18l-2 4M16 18l2 4"/></svg>
-          Meme Coins</button>
       </div>
 
       <div class="sb-label" data-head="tools">My Tools</div>
