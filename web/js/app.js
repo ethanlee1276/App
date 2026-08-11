@@ -11080,6 +11080,9 @@ function renderRail() {
   const liv = document.getElementById("rail-live");
   if (!ins || !liv) return;
   const d = state.data || {};
+  // Ethan's rail render (2026-08-11): dot-bulleted insights. His mock's
+  // bullets are ATS-trend prose we don't compute — ours stay the real
+  // sources: the model's own pick reasons, then the injury watch.
   const bullets = [];
   (d.recommendations || []).filter((r) => r.recommended)
     .sort((a, b) => (b.quality || 0) - (a.quality || 0))
@@ -11096,8 +11099,10 @@ function renderRail() {
     ins.hidden = false;
     ins.innerHTML = `<div class="rail-title">Key insights</div>
       <ul class="rail-list">${bullets.map((b) => `<li>${b}</li>`).join("")}</ul>
-      <a class="rail-more" href="#record">More on the record &#8594;</a>`;
+      <a class="rail-more" href="#record">More insights &#8594;</a>`;
   } else { ins.hidden = true; ins.innerHTML = ""; }
+
+  renderRailDesk();
 
   const games = (d.games || []).filter((g) => (g.live || {}).state === "live");
   const nLive = games.length;
@@ -11108,23 +11113,78 @@ function renderRail() {
   const tb = document.getElementById("tb-live-badge");
   if (tb) { tb.hidden = !nLive; tb.textContent = nLive || ""; }
   if (nLive) {
+    // The render's LIVE NOW box: league + LIVE tag, logos and scores,
+    // the diamond and situation on the right, tonight's line underneath
+    // — every number from the slate, dashes never invented.
+    const mlb = state.sport === "mlb";
     liv.hidden = false;
-    liv.innerHTML = `<div class="rail-title">Live now <span class="live-dot"></span></div>
-      ${games.slice(0, 4).map((g) => {
+    liv.innerHTML = `<div class="rail-title">Live now
+        <a class="rail-see" href="#live">See all</a></div>
+      ${games.slice(0, 3).map((g) => {
         const lv = g.live || {};
-        return `<div class="rail-game">
-          <span>${teamMark(g.away, 20)} ${escapeHtml(g.away)}</span><b>${lv.away_score != null ? lv.away_score : ""}</b>
-          <span>${teamMark(g.home, 20)} ${escapeHtml(g.home)}</span><b>${lv.home_score != null ? lv.home_score : ""}</b>
-          <em>${escapeHtml(lv.period || "")}${lv.clock ? " " + escapeHtml(lv.clock) : ""}</em>
+        const fav = g.favorite || g.home;
+        const sp = (side) => g.spread == null ? ""
+          : `${side} ${side === fav ? "−" : "+"}${Math.abs(g.spread).toFixed(1)}`;
+        const situation = [escapeHtml(lv.period || ""),
+          mlb && lv.outs != null ? `${lv.outs} out${lv.outs === 1 ? "" : "s"}` : "",
+          lv.clock ? escapeHtml(lv.clock) : ""].filter(Boolean).join("<br>");
+        return `<div class="rlv">
+          <div class="rlv-head"><span class="chip">${escapeHtml(state.sport.toUpperCase())}</span>
+            <span class="rlv-live"><span class="live-dot"></span>LIVE</span></div>
+          <div class="rlv-body">
+            <div class="rlv-teams">
+              <div class="rlv-row">${teamMark(g.away, 20)}
+                <span>${escapeHtml(teamName(g.away))}</span>
+                <b>${lv.away_score != null ? lv.away_score : "–"}</b></div>
+              <div class="rlv-row">${teamMark(g.home, 20)}
+                <span>${escapeHtml(teamName(g.home))}</span>
+                <b>${lv.home_score != null ? lv.home_score : "–"}</b></div>
+            </div>
+            <div class="rlv-side">${mlb && lv.bases ? miniDiamond(lv.bases) : ""}
+              <em>${situation}</em></div>
+          </div>
+          ${g.spread != null ? `<div class="rlv-lines">
+            <span>${escapeHtml(sp(g.away))}${g.away_ml != null ? ` · ${g.away_ml > 0 ? "+" : ""}${g.away_ml}` : ""}</span>
+            <span>${escapeHtml(sp(g.home))}${g.home_ml != null ? ` · ${g.home_ml > 0 ? "+" : ""}${g.home_ml}` : ""}</span>
+          </div>` : ""}
         </div>`;
-      }).join("")}
-      <a class="rail-more" href="#live">Open the live board &#8594;</a>`;
+      }).join("")}`;
   } else {
     liv.hidden = false;
     liv.innerHTML = `<div class="rail-title">Live now</div>
       <p class="rail-quiet">No games in progress right now.</p>
       <a class="rail-more" href="#live">Open the live board &#8594;</a>`;
   }
+}
+
+/* The slip-shaped slot, honestly filled: the prediction desk's current
+   recommendations, only when one exists, PAPER-labelled. Cached five
+   minutes — the rail re-renders far more often than the desk changes. */
+let _railDeskCache = null, _railDeskAt = 0;
+async function renderRailDesk() {
+  const host = document.getElementById("rail-desk");
+  if (!host) return;
+  if (!_railDeskCache || Date.now() - _railDeskAt > 300000) {
+    try {
+      const res = await fetch("data/kalshi.json?t=" + Date.now());
+      if (res.ok) { _railDeskCache = await res.json(); _railDeskAt = Date.now(); }
+    } catch (e) { /* the rail just stays quiet */ }
+  }
+  const k = _railDeskCache || {};
+  const recs = [...(k.rows || []).filter((r) => r.rec),
+                ...(k.weather || []).filter((r) => r.rec)].slice(0, 2);
+  if (!recs.length) { host.hidden = true; host.innerHTML = ""; return; }
+  host.hidden = false;
+  host.innerHTML = `<div class="rail-title">The desk
+      <span class="chip rail-paper" title="Flat 0.1u paper stakes until the bucket proves itself — see the intel page">PAPER</span></div>
+    ${recs.map((r) => `<div class="rail-rec">
+      <span class="rail-rec-t">${escapeHtml(r.title)}</span>
+      <span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${r.rec_side}</span>
+      <em>${r.forecast_f != null
+        ? `NWS ${r.forecast_f}&deg; vs ${(r.prob * 100).toFixed(0)}&cent;`
+        : `model ${(r.model_p * 100).toFixed(0)}% vs ${(r.prob * 100).toFixed(0)}&cent;`}</em>
+    </div>`).join("")}
+    <a class="rail-more" href="#intel">The desk&rsquo;s full board &#8594;</a>`;
 }
 
 /* The rail belongs to Home. Everywhere else the content gets the room. */

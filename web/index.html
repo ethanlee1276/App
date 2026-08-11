@@ -631,7 +631,13 @@
        is on right now. Filled by renderRail() from the same slate payload
        the board renders — nothing here is written by hand. -->
   <aside class="rail" id="rail" aria-label="Tonight at a glance">
+    <!-- Ethan's rail render (2026-08-11): Key insights + the Live Now
+         box, no bet slip ("Obv don't include the betslip thing").
+         The slip's slot goes to the prediction desk instead — the
+         newest thing on the site that can honestly fill it, and only
+         when a rec actually exists. -->
     <div class="rail-card" id="rail-insights" hidden></div>
+    <div class="rail-card" id="rail-desk" hidden></div>
     <div class="rail-card" id="rail-live" hidden></div>
   </aside>
   </div><!-- /.shell -->
