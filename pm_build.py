@@ -83,7 +83,16 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
     from engine import ledger
     from engine.sources import kalshi as kx
     try:
-        markets = kx.parse_markets(kx.fetch_markets())
+        # The sports SERIES first — Ethan's first live --desk run showed
+        # the general page is politics/econ wall-to-wall (an arbitrary
+        # slice of thousands of listings), so game markets have to be
+        # asked for by name. The page still runs after it, deduped, as
+        # the catch-all for anything the series map doesn't know.
+        series_markets, series_report = kx.fetch_sports_markets(kx.parse_markets)
+        page_markets = kx.parse_markets(kx.fetch_markets(limit=1000))
+        seen = {m["ticker"] for m in series_markets}
+        markets = series_markets + [m for m in page_markets
+                                    if m["ticker"] not in seen]
     except DataUnavailable as exc:
         if out_path.exists():
             print(f"⚠️  Kalshi unreachable — keeping last board.\n   {exc}")
@@ -102,6 +111,7 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
     kx.store_snapshot(conn, markets)
     games_by_sport, model_probs = _tonights_games_and_probs(data_dir)
     out = kx.board(markets, games_by_sport, model_probs)
+    out["sources"] = {"page": len(page_markets), "series": series_report}
 
     # THE WEATHER DESK — NWS forecast priced against the daily-high
     # brackets. Its own failure domain: a dead forecast API costs the

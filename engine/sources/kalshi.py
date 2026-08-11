@@ -47,6 +47,49 @@ SPORT_HINTS = {
     "ufc": ("UFC", "MMA"),
 }
 
+#: Candidate game-winner series per sport, fetched DIRECTLY. Found on
+#: Ethan's first live --desk run (2026-08-11): the general /markets page
+#: returns an arbitrary 200 of the exchange's thousands of listings —
+#: politics and econ long before any ballgame — so the desk saw zero
+#: sports markets from a perfectly healthy feed. Series are the fix, the
+#: same shape the weather desk already uses for KXHIGH*. Names are
+#: candidates on purpose: a series that doesn't exist fetches nothing
+#: and costs nothing, and every fetch is reported in the build output so
+#: the next --desk run says which names were real.
+SPORT_SERIES = {
+    "mlb": ("KXMLBGAME", "MLBGAME"),
+    "nfl": ("KXNFLGAME", "NFLGAME"),
+    "nba": ("KXNBAGAME", "KXNBA"),
+    "wnba": ("KXWNBAGAME", "KXWNBA"),
+    "cfb": ("KXNCAAFGAME",),
+}
+
+
+def fetch_sports_markets(parse) -> tuple[list[dict], dict]:
+    """Game markets straight from the sports series, plus a per-series
+    report. ``parse`` is parse_markets, injected so tests stay offline.
+
+    Returns (markets, {series: count | "error"}). A missing series is
+    simply absent from the exchange's catalog under that name — recorded
+    as 0 so the report distinguishes "wrong name" from "feed down"."""
+    out, report = [], {}
+    for sport, candidates in SPORT_SERIES.items():
+        for series in candidates:
+            try:
+                events = fetch_events(series)
+            except Exception:                     # noqa: BLE001
+                report[series] = "error"
+                continue
+            markets = []
+            for ev in events or []:
+                markets.extend(ev.get("markets") or [])
+            parsed = parse(markets)
+            report[series] = len(parsed)
+            out.extend(parsed)
+            if parsed:
+                break        # this sport's real series found; skip aliases
+    return out, report
+
 
 def fetch_markets(limit: int = 200, status: str = "open",
                   ttl: int = 300) -> list[dict]:

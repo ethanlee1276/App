@@ -2640,6 +2640,15 @@ def show_desk() -> None:
     print(f"  sports markets {k.get('n_markets', 0)} · matched "
           f"{k.get('n_matched', 0)} · modeled {k.get('n_modeled', 0)} · "
           f"recommended {k.get('n_rec', 0)}")
+    src = k.get("sources") or {}
+    if src:
+        series = " · ".join(f"{name}: {n}" for name, n
+                            in (src.get("series") or {}).items())
+        print(f"  sources — general page {src.get('page', 0)} market(s)"
+              + (f" · series {series}" if series else ""))
+    else:
+        print("  sources — (built by pre-series code: rebuild with "
+              "`python3 pm_build.py` to fetch the sports series directly)")
     wx = k.get("weather") or []
     print(f"  weather rows {len(wx)} · recommended "
           f"{sum(1 for r in wx if r.get('rec'))}")

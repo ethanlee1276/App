@@ -178,6 +178,42 @@ def test_the_paper_journal_is_flat_idempotent_and_pays_binary_math():
     assert ledger.performance(conn)["settled"] == 0
 
 
+def test_sports_markets_are_fetched_by_series_not_hoped_for():
+    """Ethan's first live --desk run (2026-08-11): the feed was healthy
+    and the desk still saw ZERO sports markets, because the general
+    /markets page is an arbitrary 200 of thousands of listings —
+    politics wall-to-wall before any ballgame. Pinned: the sports series
+    are fetched by name, a dead series name records 0 and costs nothing,
+    an erroring one records "error" without sinking the rest, and the
+    first live alias wins so the same game never loads twice."""
+    calls = []
+    def fake_events(series, **kw_):
+        calls.append(series)
+        if series == "KXMLBGAME":
+            return [{"markets": [{"ticker": "KXMLBGAME-NYY", "title": "t",
+                                  "yes_bid": 40, "yes_ask": 44,
+                                  "volume_24h": 100}]}]
+        if series == "KXNFLGAME":
+            raise RuntimeError("catalog moved")
+        return []
+    orig = kx.fetch_events
+    kx.fetch_events = fake_events
+    try:
+        markets, report = kx.fetch_sports_markets(kx.parse_markets)
+    finally:
+        kx.fetch_events = orig
+    assert [m["ticker"] for m in markets] == ["KXMLBGAME-NYY"]
+    assert report["KXMLBGAME"] == 1
+    assert "MLBGAME" not in report, "the found sport's aliases still ran"
+    assert report["KXNFLGAME"] == "error"
+    assert report["NFLGAME"] == 0
+    # The build merges series + page deduped, and reports both sources.
+    assert "fetch_sports_markets" in PM
+    assert 'if m["ticker"] not in seen' in PM
+    assert '"sources"' in PM and "series_report" in PM
+    assert 'src.get("series")' in LAUNCH
+
+
 def test_the_desk_never_recommends_without_its_reasons():
     """Page + build pins: the desk section exists, leads the intel page,
     says PAPER out loud, explains a quiet night, and politics stays with
