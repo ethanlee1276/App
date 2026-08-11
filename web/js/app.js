@@ -6972,7 +6972,7 @@ window.mcShowChart = function (mint, scroll = true) {
   // ONE header line: name, the five numbers, momentum/risk — everything
   // above the candles is height taken from the candles.
   dock.innerHTML = `<div class="card mc-chart-card">
-    <div class="card-head mc-dock-head"><div class="player">${mcName(c)}
+    <div class="card-head mc-dock-head"><div class="player mc-dock-id">${mcTile(c, 30)}${mcName(c)}
       <span style="color:var(--text-mute);font-weight:400"> — live from ${
         ref.kind === "gt" ? "GeckoTerminal" : "DexScreener"}</span></div>
       <div class="metrics mc-dock-stats">
@@ -7008,6 +7008,37 @@ function mcNewTag(c) {
   return `<span class="mc-new" title="First seen by our scan under ten minutes ago — this is when it reached the radar, not when the pair was created.">new</span>`;
 }
 
+/* The coin's monogram tile — a stable colour from the symbol, so the
+   same coin wears the same colour on the watchlist, the cards and the
+   dock. No token images on the free feeds; a typed identity beats a
+   broken-image icon. */
+function mcTile(c, size = 34) {
+  const sym = String(c.symbol || c.name || c.mint || "?").replace(/[^A-Za-z0-9]/g, "").slice(0, 4) || "?";
+  let h = 0;
+  for (const ch of sym) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return `<span class="mc-tile" style="width:${size}px;height:${size}px;
+    background:hsl(${h} 42% 24%);color:hsl(${h} 70% 78%)">${escapeHtml(sym.slice(0, 3))}</span>`;
+}
+
+/* Momentum as a bar you can read at a glance, not a bare digit. */
+function mcMomBar(m) {
+  const v = Math.max(0, Math.min(100, m || 0));
+  const tone = v >= 70 ? "var(--good)" : v >= 45 ? "var(--brand-2)" : "var(--text-mute)";
+  return `<span class="mc-mom" title="MomentumScore ${v}/100 — cohort-relative order flow: volume acceleration, unique-buyer growth, buy/sell pressure, price acceleration">
+    <i style="width:${v}%;background:${tone}"></i><b style="color:${tone}">${v}</b></span>`;
+}
+
+/* Risk as a named badge. The number alone told a newcomer nothing —
+   "risk 55" reads as noise; "ELEVATED 55" reads as a verdict. */
+function mcRiskBadge(c, gate = 60) {
+  const r = c.risk || 0;
+  const [label, tone] = r >= gate ? ["GATED", "var(--bad)"]
+    : r >= 35 ? ["ELEVATED", "var(--warn)"] : ["LOW RISK", "var(--good)"];
+  const why = (c.risk_why || []).length ? ":\n" + c.risk_why.map((w) => "· " + w).join("\n") : "";
+  return `<span class="mc-riskb" style="color:${tone};border-color:${tone}"
+    title="RiskScore ${r}/100 — authorities, LP lock, holder concentration, liquidity, age, wash pattern${why}">${label} ${r}</span>`;
+}
+
 /* One coin's identity cell, shared by cards and the board table. */
 function mcName(c) {
   const label = c.symbol || c.name || (c.mint || "").slice(0, 8);
@@ -7035,9 +7066,20 @@ async function renderMemes() {
      or open, and the summary line IS the five numbers. */
   const honesty = `
     <details class="card mc-honesty">
-      <summary><span class="mc-honesty-head">Read this before the scores</span>
+      <summary><span class="mc-honesty-head">How to read this page — and the base rates</span>
         <span class="mc-honesty-line">~1.4% ever graduate · 60% of traders lose ·
         82.8% artificial growth · 41.4% wash volume · median rug &lt;1h</span></summary>
+      <div class="mc-legend">
+        <div class="mc-leg"><b>Momentum 0–100</b><span>Percentile vs the live cohort:
+          volume acceleration 30%, unique-buyer growth 30%, buy/sell pressure 25%,
+          price acceleration 15%. It ranks motion — it does not predict.</span></div>
+        <div class="mc-leg"><b>Risk gate</b><span>Authorities, LP lock, holder
+          concentration, liquidity, age and wash patterns score 0–100; at the gate
+          the coin is barred from the rocket list no matter how hard it moves.</span></div>
+        <div class="mc-leg"><b>Danger channel</b><span>Exit signals in priority
+          order — liquidity draining, pressure flipping, price rolling over — fired
+          for every coin, gated or not. Leaving matters most on the worst coins.</span></div>
+      </div>
       <div class="mc-rates">${MC_BASE_RATES.map(([n, t]) =>
         `<div class="mc-rate"><span class="mc-rate-n">${n}</span><span>${t}</span></div>`).join("")}</div>
       <div class="mc-honesty-foot">A tracker’s genuine value is filtering scams and enforcing
@@ -7056,6 +7098,32 @@ async function renderMemes() {
   }
   setStandaloneSource("DexScreener + GeckoTerminal free feeds",
                       "Meme coins · live venue data");
+
+  // The hero — Ethan (2026-08-10): "Meme coin page has no direction. I
+  // have no clue what I'm looking at." The first thing on the page now
+  // SAYS what the page is, what the three systems do, and how live the
+  // data is. Everything in it is measured, nothing is a promise.
+  const upd = (d.generated_at || "").slice(11, 19);
+  const clear = (d.n || 0) - (d.gated || 0);
+  const hero = `
+    <div class="card mc-hero">
+      <div class="mc-hero-words">
+        <div class="mc-hero-title">Rocket Radar
+          <span class="mc-hero-live">${icon("dot", 10)} live · rescans ~15s</span></div>
+        <p>Solana meme coins, straight off the venues. <b>Momentum</b> ranks what’s
+        moving right now (order flow, not hype). The <b>risk gate</b> keeps
+        rug-shaped coins off the rocket list. The <b>danger channel</b> fires exit
+        signals — including on coins the gate already refused. Tap any coin for its
+        live chart; hover any score for its receipt.</p>
+      </div>
+      <div class="mc-hero-stats">
+        <div class="mc-hs"><b>${d.n || 0}</b><span>tracked</span></div>
+        <div class="mc-hs"><b style="color:var(--good)">${clear}</b><span>clear the gate</span></div>
+        <div class="mc-hs"><b style="color:var(--warn)">${d.gated || 0}</b><span>gated</span></div>
+        <div class="mc-hs"><b style="color:var(--bad)">${(d.exits || []).length}</b><span>flashing exit</span></div>
+        <div class="mc-hs"><b>${escapeHtml(upd || "—")}</b><span>last scan</span></div>
+      </div>
+    </div>`;
 
   const byMint = {};
   for (const c of d.coins || []) byMint[c.mint] = c;
@@ -7100,8 +7168,7 @@ async function renderMemes() {
             <div class="pick">5m ${mcPct((c.price_change || {}).m5)} · 1h ${mcPct((c.price_change || {}).h1)}</div>
           </div>
         </div>
-        <span title="RiskScore 0–100 — a coin at ${d.risk_gate || 60}+ never reaches this list${(c.risk_why || []).length ? ":\n" + c.risk_why.map((w) => "· " + w).join("\n") : ""}"
-          style="font-weight:800;color:${riskColor(c.risk)}">risk ${c.risk}</span>
+        ${mcRiskBadge(c, d.risk_gate || 60)}
       </div>
       <div class="chips" style="margin-top:10px">${chipsFor(c)}</div>
       ${mcSpark(c.spark) ? `<div class="mc-spark-wrap" title="Price over our own snapshot tape — one point per refresh, up to six hours">${mcSpark(c.spark)}</div>` : ""}
@@ -7115,7 +7182,7 @@ async function renderMemes() {
           <div class="player">${mcName(c)}</div>
           <div class="subtitle">${mcPrice(c.price_usd)} · liq ${mcMoney(c.liquidity)} · 5m ${mcPct((c.price_change || {}).m5)}</div>
         </div></div>
-        <span style="font-weight:800;color:var(--bad)">risk ${c.risk}</span>
+        ${mcRiskBadge(c, d.risk_gate || 60)}
       </div>
       <ul class="mc-exit-why">${(c.exit_why || []).map((w) =>
         `<li>${escapeHtml(w)}</li>`).join("")}</ul>
@@ -7160,17 +7227,34 @@ async function renderMemes() {
       .filter((c) => !rocketSet.has(c.mint)),
   ].filter((c) => mcChartRef(c) && MC_B58.test(c.mint || "")).slice(0, 24);
 
-  const picker = chartable.map((c) => `<button type="button"
+  // The watchlist replaced a strip of bare coin names — "It just shows
+  // coin names with rocket next to it." Every row now carries the
+  // decision surface: rank, identity tile, price, 5-minute move, the
+  // momentum bar and the named risk badge. Same machinery underneath
+  // (mc-picker / mc-pick / mcShowChart), so the poll-and-restore
+  // contract is untouched.
+  const picker = chartable.map((c, ix) => `<button type="button"
       class="mc-pick" data-mint="${c.mint}" onclick="mcShowChart('${c.mint}')"
-      title="momentum ${c.momentum} · risk ${c.risk} · liq ${mcMoney(c.liquidity)}">
-      <b>${escapeHtml((c.symbol || c.name || c.mint.slice(0, 6)).slice(0, 12))}</b>
-      <span class="mc-pick-pct">${mcPct((c.price_change || {}).m5)}</span>
-      ${rocketSet.has(c.mint) ? `<span class="mc-pick-tag">rocket</span>` : ""}${mcNewTag(c)}
+      title="Open the live chart">
+      <span class="mc-rank">${ix + 1}</span>
+      ${mcTile(c, 32)}
+      <span class="mc-pick-id"><b>${escapeHtml((c.symbol || c.name || c.mint.slice(0, 6)).slice(0, 12))}${
+        rocketSet.has(c.mint) ? ` <span class="mc-pick-tag">rocket</span>` : ""}${mcNewTag(c)}</b>
+        <em>${escapeHtml(String(c.name || "").slice(0, 22))}</em></span>
+      <span class="mc-pick-nums"><b>${mcPrice(c.price_usd)}</b>
+        <span class="mc-pick-pct">${mcPct((c.price_change || {}).m5)} 5m</span></span>
+      ${mcMomBar(c.momentum)}
     </button>`).join("");
 
   const chartsRoom = !chartable.length ? "" : `
-    <div class="mc-picker" role="group" aria-label="Pick a coin to chart">${picker}</div>
-    <div id="mc-chart-dock"></div>`;
+    <div class="mc-term">
+      <div class="mc-watch">
+        <div class="mc-watch-head">Watchlist
+          <span>momentum-ranked · tap a coin to chart it</span></div>
+        <div class="mc-picker" role="group" aria-label="Pick a coin to chart">${picker}</div>
+      </div>
+      <div id="mc-chart-dock"></div>
+    </div>`;
 
   const rocketRoom = `
     <div class="section-title">Rocket list
@@ -7211,15 +7295,15 @@ async function renderMemes() {
         <th>Momentum</th><th>Risk</th><th></th>
       </tr></thead><tbody>${rows}</tbody></table></div>`;
 
-  host.innerHTML = honesty + subtabbedHTML("memes", [
-    ["charts", "Charts",
-     "live venue candles per coin — pick a coin, get its terminal", chartsRoom],
-    ["rocket", "Rocket list",
-     "highest momentum among coins under the risk gate", rocketRoom],
-    ["danger", "Danger channel",
-     "exit signals, gate ignored — crashes on bad coins still get seen", dangerRoom],
-    ["board", "Full board",
-     "every tracked coin, the tiles, and the holder column", boardRoom],
+  host.innerHTML = hero + honesty + subtabbedHTML("memes", [
+    ["charts", "Radar",
+     "the watchlist and the live chart — where you actually sit", chartsRoom],
+    ["rocket", "Rockets",
+     "the movers that also clear the risk gate, with their receipts", rocketRoom],
+    ["danger", "Danger",
+     "exit signals — get-out warnings, including on gated coins", dangerRoom],
+    ["board", "Screener",
+     "every tracked coin, every column, momentum-sorted", boardRoom],
   ]) + `
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
       Top-10 holder share comes from Solana’s public RPC and EXCLUDES the largest account,

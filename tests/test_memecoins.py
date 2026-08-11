@@ -605,7 +605,10 @@ def test_the_meme_page_is_a_charts_first_terminal():
     body = js[js.index("async function renderMemes"):]
     body = body[:body.index("\nasync function renderFantasy")]
     assert 'subtabbedHTML("memes"' in body
-    assert body.index('["charts", "Charts"') < body.index('["rocket",')
+    # Renamed "Charts" -> "Radar" 2026-08-10 (Ethan: the page "has no
+    # direction") — the room is the watchlist + chart terminal, and its
+    # name now says so. Still the first room; still lands on candles.
+    assert body.index('["charts", "Radar"') < body.index('["rocket",')
     assert "mc-picker" in body and 'class="mc-pick"' in body
     # Auto-open restores the user's coin across the self-refresh, falling
     # back to the top of the board only when that coin left it.
