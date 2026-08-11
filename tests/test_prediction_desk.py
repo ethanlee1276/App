@@ -212,6 +212,13 @@ def test_sports_markets_are_fetched_by_series_not_hoped_for():
     assert 'if m["ticker"] not in seen' in PM
     assert '"sources"' in PM and "series_report" in PM
     assert 'src.get("series")' in LAUNCH
+    # The ledger ops run on the LEDGER's own connection — the history db
+    # has no bets table, and handing it over crashed the first live
+    # build. The paper block is also its own failure domain: the board
+    # must ship even when the journal hiccups.
+    assert "lconn = ledger.connect()" in PM
+    assert "ledger.log_predmarket(lconn" in PM
+    assert '"error": str(exc)' in PM
 
 
 def test_the_desk_never_recommends_without_its_reasons():

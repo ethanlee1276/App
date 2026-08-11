@@ -137,26 +137,38 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
     out["weather"] = weather_rows[:20]
 
     # Journal what cleared the gates (flat paper stakes), then grade
-    # whatever the exchange has since settled.
+    # whatever the exchange has since settled. On the LEDGER's own
+    # database — `conn` here is the history db (tape, snapshots), which
+    # has no bets table, and handing it to the ledger functions crashed
+    # the first live build on Ethan's machine before the board could
+    # even be written. And the whole block is one failure domain: the
+    # paper summary is garnish on the board, never the reason a healthy
+    # board fails to ship.
     recs = ([dict(r, desk="kalshi_ml") for r in out["rows"] if r.get("rec")]
             + [dict(r, sport="weather", desk="kalshi_wx")
                for r in weather_rows if r.get("rec")])
-    logged = ledger.log_predmarket(conn, recs)
-    settled = 0
+    logged = settled = 0
     try:
-        open_tk = ledger.open_predmarket_tickers(conn)
-        results = {}
-        for m in kx.fetch_markets_by_tickers(open_tk):
-            res = (m.get("result") or "").lower()
-            if res in ("yes", "no"):
-                results[m.get("ticker", "")] = res
-        settled = ledger.resolve_predmarket(conn, results)
+        lconn = ledger.connect()
+        try:
+            logged = ledger.log_predmarket(lconn, recs)
+            open_tk = ledger.open_predmarket_tickers(lconn)
+            results = {}
+            for m in kx.fetch_markets_by_tickers(open_tk):
+                res = (m.get("result") or "").lower()
+                if res in ("yes", "no"):
+                    results[m.get("ticker", "")] = res
+            settled = ledger.resolve_predmarket(lconn, results)
+            rep = ledger.predmarket_report(lconn)
+        finally:
+            lconn.close()
+        out["desk"] = {"logged_today": logged, "settled_now": settled,
+                       "paper": {k: rep.get(k)
+                                 for k in ("settled", "wins", "losses",
+                                           "net_units", "roi")}}
     except Exception as exc:                       # noqa: BLE001
-        print(f"⚠️  desk settlement skipped: {exc}")
-    out["desk"] = {"logged_today": logged, "settled_now": settled,
-                   "paper": {k: ledger.predmarket_report(conn).get(k)
-                             for k in ("settled", "wins", "losses",
-                                       "net_units", "roi")}}
+        print(f"⚠️  desk journal skipped: {exc}")
+        out["desk"] = {"error": str(exc)}
 
     stored = conn.execute(
         "SELECT COUNT(*) FROM kalshi_snapshots").fetchone()[0]
