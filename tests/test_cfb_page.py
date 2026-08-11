@@ -454,15 +454,17 @@ def test_every_league_with_a_board_is_deep_linkable():
 
 
 def test_the_phone_menu_keeps_its_height_when_a_sport_hides_pages():
-    """CFB hides three tabs; without a fixed row count the open menu got
-    52px shorter the instant you tapped it, sliding the page buttons up
-    under a finger already on its way down."""
-    css = _read("web", "css", "styles.css")
-    block = css[css.index("\n  .menu-open .nav {\n"):]
-    block = block[:block.index("\n  }")]
-    assert "grid-template-columns: 1fr 1fr" in block
-    assert "grid-template-rows: repeat(4," in block
-
+    """The failure this pinned: CFB hides pages it has no engine for, and
+    the old slide-down menu got 52px shorter the instant you tapped CFB —
+    sliding buttons up under a finger already on its way down. The NEW
+    LOOK drawer (2026-08-11) is anchored top:64px/bottom:0, so its height
+    is the viewport's and CANNOT change with the sport's page list."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    css = open(os.path.join(root, "web", "css", "styles.css"), encoding="utf-8").read()
+    i = css.index(".sidebar { position: fixed;")
+    block = css[i:i + 300]
+    assert "top: 64px" in block and "bottom: 0" in block, \
+        "the drawer's height follows content again — sport switches will resize it"
 
 def test_the_launcher_refreshes_the_board():
     launch = _read("launch.py")

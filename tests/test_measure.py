@@ -78,8 +78,11 @@ def test_the_literals_that_stay_are_the_ones_that_should():
         for m in re.finditer(rf"line-height:\s*{val}\s*[;}}]", DECLS):
             head = DECLS[max(0, m.start() - 300):m.start()]
             assert "{" in head
-    i = DECLS.index("line-height: .96")
-    assert "nowrap" in DECLS[max(0, i - 300):i]
+    # .96 was the serif masthead's optical squeeze; the NEW LOOK
+    # wordmark (2026-08-11) is tracked caps at exactly 1 — covered by the
+    # "1" case above, in the same nowrap rule.
+    i = DECLS.index("letter-spacing: .34em")
+    assert "nowrap" in DECLS[i:i + 200]
 
 
 # --- line length -------------------------------------------------------------

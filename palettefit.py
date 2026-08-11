@@ -179,23 +179,47 @@ def plan(use_target: bool = False, css: str | None = None) -> list[dict]:
     return out
 
 
-def rewrite(css: str, rows: list[dict]) -> str:
-    """Replace each token's value in the FIRST :root only.
+def _dark_spans(css: str) -> list[tuple]:
+    """[start, end) of every bare `:root {` block — the dark cascade.
+    Light-scoped blocks (`:root[data-theme=...]`) are not spans: the icon
+    and every measurement here are for the dark ground."""
+    spans = []
+    for m in re.finditer(r"(?<![\w\-\]\"]):root\s*\{", css):
+        spans.append((m.end(), css.index("}", m.end())))
+    return spans
 
-    The light theme is a separate block with its own values and its own
+
+def sub_last_dark(css: str, ink: str, newhex: str) -> tuple:
+    """Rewrite the LAST dark declaration of --ink — the one the cascade
+    actually paints. The NEW LOOK layer (2026-08-11) re-declares the
+    palette in a second bare :root at the END of the sheet, so 'the
+    first :root' stopped being where a repair lands; editing it produced
+    a diff the browser never showed."""
+    spans = _dark_spans(css)
+    pat = re.compile(r"(--%s:\s*)(#[0-9A-Fa-f]{6})" % re.escape(ink))
+    last = None
+    for m in pat.finditer(css):
+        if any(a <= m.start() < b for a, b in spans):
+            last = m
+    if last is None:
+        return css, 0
+    return css[:last.start()] + last.group(1) + newhex + css[last.end():], 1
+
+
+def rewrite(css: str, rows: list[dict]) -> str:
+    """Replace each token's winning DARK declaration only.
+
+    The light theme is a separate scope with its own values and its own
     (unmeasured) contrast; rewriting it from a dark-ground solve would be
     changing a colour nobody measured to fix a number nobody read.
     """
-    end = css.index("}", css.index(":root"))
-    head, tail = css[:end], css[end:]
     for r in rows:
-        pat = re.compile(r"(--%s:\s*)(#[0-9A-Fa-f]{6})" % re.escape(r["ink"]))
-        head, n = pat.subn(lambda m: m.group(1) + r["new"], head, count=1)
+        css, n = sub_last_dark(css, r["ink"], r["new"])
         if not n:
             raise SystemExit(
-                f"could not find --{r['ink']} as a hex value in the first "
+                f"could not find --{r['ink']} as a hex value in a dark "
                 f":root; it may be written as oklch() — fix that one by hand")
-    return head + tail
+    return css
 
 
 def main(argv: list) -> int:

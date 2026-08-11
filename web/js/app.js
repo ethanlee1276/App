@@ -655,6 +655,9 @@ function updateAgo() {
 }
 
 function passesFilters(r) {
+  // High Confidence Mode: the sidebar switch narrows the whole board to
+  // A-grades (quality >= 80 — the same band the journal grades under).
+  if (typeof hcmOn === "function" && hcmOn() && (r.quality || 0) < 80) return false;
   return r.recommended && r.confidence >= state.minConf && r.edge * 100 >= state.minEdge
     && r.odds >= state.maxJuice && r.grade !== "Pass";
 }
@@ -773,6 +776,9 @@ function renderAll() {
   renderBestBets();
   renderTeamForm();
   renderGames();
+  renderTopPicks();
+  renderHomePerf();
+  renderRail();
   renderGameBets();
   renderIncentives();
   renderRestWatch();
@@ -2132,6 +2138,15 @@ function renderGames() {
   // Live games float to the front of the strip.
   const rank = (g) => ((g.live || {}).state === "live" ? 0 : (g.live || {}).state === "final" ? 2 : 1);
   games.sort((a, b) => rank(a) - rank(b));
+  // TOP GAME — the render's ribbon, earned not asserted: the game the
+  // model has the most recommended bets in tonight. Ties or an empty
+  // board mean no ribbon; one game only.
+  let topGid = null, topN = 0;
+  games.forEach((g) => {
+    const n = gameBetCount(g);
+    if (n > topN) { topN = n; topGid = gameId(g); }
+  });
+  window._topGameId = topN > 0 ? topGid : null;
   host.innerHTML = games.map(gameCard).join("");
   revealChildren(host);
   enableTilt(host);
@@ -2252,7 +2267,11 @@ function gameCard(g) {
     <article class="game-card tilt ${isLive ? "is-live" : ""}" data-gid="${escapeHtml(gameId(g))}"
              role="button" tabindex="0"
              aria-label="Open picks for ${escapeHtml(teamName(g.away))} at ${escapeHtml(teamName(g.home))}">
-      <div class="stadium-wrap">${art}${badge}</div>
+      <div class="stadium-wrap">${art}${badge}${
+        window._topGameId === gameId(g) && !isLive && !isFinal
+          ? `<span class="top-game-tag">Top game</span>` : ""}${
+        !isLive && !isFinal && whenLabel(g.date, g.kickoff)
+          ? `<span class="game-time-chip">${escapeHtml((whenLabel(g.date, g.kickoff).split("·").pop() || "").trim())}</span>` : ""}</div>
       <div class="game-info">
         <div class="matchup">
           <span class="mt away">${teamMark(g.away, 18)} ${ranked("away")}${escapeHtml(teamName(g.away))} ${score("away")}</span>
@@ -5982,8 +6001,8 @@ const STANDALONE_BRAND = {
 function enterStandaloneMode(name) {
   document.querySelectorAll(".sport-btn").forEach((x) =>
     setSelected(x, !!x.dataset.sport && x.dataset.sport === name));
-  const nav = document.getElementById("nav");
-  if (nav) nav.style.display = "none";
+  // The top nav stays: it is global chrome in the new shell, and the
+  // sidebar (not the bar) carries the page context on standalone views.
   // The masthead's Running ROI is the SPORTS model's record. Above the
   // meme board it reads as meme P&L (Ethan's screenshot: "-14.9%" in
   // red directly over the coins), and My Bets is the user's own ledger
@@ -7685,6 +7704,7 @@ window.acctGo = async function (btn, creating) {
   try { localStorage.setItem(ACCT_KEY, JSON.stringify({ name, pin })); } catch (e) {}
   _acctNote = creating ? "Account created — this device is now synced."
                        : "Signed in — pulling your info…";
+  if (typeof renderGreeting === "function") renderGreeting();
   await acctSync();
   if (state.view === "mybets") renderMyBets();
   else if (state.view === "fantasy") renderFantasy();
@@ -7694,6 +7714,7 @@ window.acctSyncNow = function () { _acctNote = "syncing…"; acctPaintNote(); ac
 
 window.acctSignOut = function () {
   try { localStorage.removeItem(ACCT_KEY); } catch (e) {}
+  if (typeof renderGreeting === "function") renderGreeting();
   _acctNote = "Signed out — everything stays on this device; sign back in anytime.";
   if (state.view === "mybets") renderMyBets();
   else if (state.view === "fantasy") renderFantasy();
@@ -9750,10 +9771,11 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "parlays", "futures", "trending", "players", "rosters", "injuries", "standings", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
+const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "parlays", "futures", "trending", "players", "rosters", "injuries", "standings", "bankroll", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
 
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
+  if (typeof syncRail === "function") setTimeout(syncRail, 0);
   state.view = name;
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
   const target = document.getElementById(`view-${name}`);
@@ -10011,7 +10033,13 @@ function initHeaderTuck() {
 /* ---------------- wiring ---------------- */
 function bind() {
   document.querySelectorAll(".nav-btn").forEach((b) =>
-    b.addEventListener("click", () => switchView(b.dataset.view, true)));
+    b.addEventListener("click", () => {
+      // The sidebar keeps page items on screen during standalone pages
+      // (memes, My Bets, ...); the old header hid them there. Leaving
+      // standalone properly restores the sport chrome first.
+      if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
+      switchView(b.dataset.view, true);
+    }));
 
   /* The URL and the page must never disagree. Nothing listened for a hash
      change, so back, forward, a pasted #standings link and an in-page
@@ -10235,46 +10263,268 @@ function watchNumbers() {
 watchNumbers();
 
 /* ==================================================================
-   Compact navigation (desktop). Ethan: "shrink that top bar so there
-   is just a three-bar menu thing at the top that you select and it
-   pulls everything up … I don't want it to hide shit."
+   NEW LOOK (2026-08-11) — the shell around every page.
+   Ethan approved the render: sidebar of destinations, slim top bar,
+   dashboard home, right rail. Copied faithfully MINUS the balance chip
+   and the bet slip (his call, and the site's: no money is held here).
+   The compact-nav experiment that lived in this spot is superseded —
+   the sidebar IS the menu now, on every width.
+   ================================================================== */
 
-   Compact is the DEFAULT on desktop: one slim bar, and the entire
-   switcher one tap behind the same hamburger the phone already uses —
-   nothing leaves the DOM, the current page stays printed on the bar
-   (#menu-label, kept current by syncMenuLabel), and the pin persists
-   a preference for the always-expanded bar. Phones are untouched:
-   the class only ever applies above 760px. */
-const NAV_FULL_KEY = "qb_nav_full";
-
-function applyNavMode() {
-  const wide = window.matchMedia("(min-width: 761px)").matches;
-  let full = false;
-  try { full = localStorage.getItem(NAV_FULL_KEY) === "1"; } catch (e) {}
-  document.body.classList.toggle("nav-compact", wide && !full);
-  const pin = document.getElementById("nav-pin");
-  if (pin) pin.textContent = full ? "Collapse the nav bar"
-                                  : "Pin the full nav bar";
+/* Greeting — the render's "Good evening, <name>", powered by the real
+   account (accounts feature, 2026-08-10). No account → a plain welcome,
+   never a fake name. */
+function renderGreeting() {
+  const hi = document.getElementById("sb-hi");
+  const nm = document.getElementById("sb-name");
+  if (!hi || !nm) return;
+  const h = new Date().getHours();
+  const day = h < 5 ? "Up late" : h < 12 ? "Good morning"
+            : h < 17 ? "Good afternoon" : "Good evening";
+  const a = (typeof acctState === "function") ? acctState() : null;
+  hi.textContent = a ? day + "," : "Welcome";
+  nm.textContent = a ? a.name : "to the Book";
 }
 
-(function initNavMode() {
-  const pin = document.getElementById("nav-pin");
-  if (pin) pin.addEventListener("click", (e) => {
-    e.stopPropagation();          // not a sport button; must not bubble
-    let full = false;
-    try { full = localStorage.getItem(NAV_FULL_KEY) === "1"; } catch (e2) {}
-    try { localStorage.setItem(NAV_FULL_KEY, full ? "0" : "1"); } catch (e2) {}
-    applyNavMode();
-    closeMobileMenu();
+/* High Confidence Mode — a real filter with the journal's own bands:
+   ON shows A-grade picks only (quality >= 80) on the board and the Top
+   Picks strip. Persisted like the theme. */
+const HCM_KEY = "qb_hcm";
+
+function hcmOn() {
+  try { return localStorage.getItem(HCM_KEY) === "1"; } catch (e) { return false; }
+}
+
+function hcmPaint() {
+  const btn = document.getElementById("hcm-toggle");
+  if (!btn) return;
+  const on = hcmOn();
+  btn.setAttribute("aria-checked", on ? "true" : "false");
+  btn.classList.toggle("on", on);
+  const state = btn.querySelector(".sb-hcm-state");
+  if (state) state.textContent = on ? "On" : "Off";
+}
+
+function initHcm() {
+  const btn = document.getElementById("hcm-toggle");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    try { localStorage.setItem(HCM_KEY, hcmOn() ? "0" : "1"); } catch (e) {}
+    hcmPaint();
+    if (typeof renderCards === "function") renderCards();
+    renderTopPicks();
   });
-  // The dropdown closes like a menu should: outside click and Escape.
-  // (Choosing a sport or page already closes it via the phone handlers.)
-  document.addEventListener("click", (e) => {
-    if (!document.body.classList.contains("nav-compact")) return;
-    if (!document.body.classList.contains("menu-open")) return;
-    const hdr = document.querySelector("header");
-    if (hdr && !hdr.contains(e.target)) closeMobileMenu();
+  hcmPaint();
+}
+
+/* The Top Picks strip — the render's "QELLY'S TOP PICKS" row. The same
+   recommended list the board draws, compacted: best grades first, real
+   prices, and the grade badge the journal will grade it under. */
+function renderTopPicks() {
+  const host = document.getElementById("top-picks");
+  if (!host) return;
+  const d = state.data || {};
+  let recs = (d.recommendations || []).filter((r) => r.recommended);
+  if (hcmOn()) recs = recs.filter((r) => (r.quality || 0) >= 80);
+  recs = recs.slice().sort((a, b) => (b.quality || 0) - (a.quality || 0)).slice(0, 8);
+  const gb = (d.game_bets || []).filter((g) => g.recommended)
+    .sort((a, b) => (b.quality || 0) - (a.quality || 0)).slice(0, Math.max(0, 4 - recs.length));
+  if (!recs.length && !gb.length) { host.innerHTML = ""; return; }
+  const odds = (o) => o == null ? "" : (o > 0 ? "+" + o : String(o));
+  const propCard = (r) => `
+    <div class="tp-card">
+      <div class="tp-top">${playerAvatar(r.player, r.team, { size: 44, headshot: r.headshot })}
+        <div class="tp-who"><b>${escapeHtml(r.player)}</b>
+          <span>${escapeHtml(r.side || "")} ${r.line != null ? r.line : ""} ${escapeHtml(r.market_label || r.market || "")}</span>
+          <span class="tp-when">${escapeHtml(r.team || "")}${r.opponent ? " vs " + escapeHtml(r.opponent) : ""}</span></div>
+        <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade || "")}</span></div>
+      <div class="tp-foot"><b class="tp-odds">${odds(r.odds)}</b>
+        <span class="tp-book">${escapeHtml(r.book || "")}</span>
+        <span class="tp-edge">${r.edge != null ? "+" + (100 * r.edge).toFixed(1) + "% edge" : ""}</span></div>
+    </div>`;
+  const gameCardMini = (g) => `
+    <div class="tp-card">
+      <div class="tp-top">${teamMark(g.side === "home" ? g.home : g.away, 44) || ""}
+        <div class="tp-who"><b>${escapeHtml(g.pick_label || g.label || "")}</b>
+          <span>${escapeHtml(g.market_label || g.market || "")}</span>
+          <span class="tp-when">${escapeHtml(g.away || "")} @ ${escapeHtml(g.home || "")}</span></div>
+        <span class="grade ${gradeClass(g.grade)}">${escapeHtml(g.grade || "")}</span></div>
+      <div class="tp-foot"><b class="tp-odds">${odds(g.odds)}</b>
+        <span class="tp-book">${escapeHtml(g.book || "")}</span>
+        <span class="tp-edge">${g.edge != null ? "+" + (100 * g.edge).toFixed(1) + "% edge" : ""}</span></div>
+    </div>`;
+  host.innerHTML = `
+    <div class="section-title tp-title">Qellys’ top picks
+      <span class="sub">— ${hcmOn() ? "A-grade only (High Confidence is on)" : "tonight’s best grades first"} · every one is journaled and graded in public</span>
+      <a class="tp-more" href="#record">Why these picks?</a></div>
+    <div class="tp-strip">${recs.map(propCard).join("")}${gb.map(gameCardMini).join("")}</div>`;
+}
+
+/* YOUR PERFORMANCE — the render's best panel, powered by the real
+   journal export the Record page reads. Net units, win rate, ROI and
+   the W-L record, the cumulative curve as a sparkline, and the
+   wins/losses/pushes donut. Losing numbers render red, on purpose —
+   showing the record IS the site. */
+let _perfCache = null;
+
+async function renderHomePerf() {
+  const host = document.getElementById("home-perf");
+  if (!host) return;
+  try {
+    if (!_perfCache) {
+      const r = await fetch("data/record.json", { cache: "no-store" });
+      if (!r.ok) throw new Error(String(r.status));
+      _perfCache = await r.json();
+    }
+  } catch (e) { host.innerHTML = ""; return; }
+  const o = _perfCache.overall || {};
+  if (!o.settled) { host.innerHTML = ""; return; }
+  const curve = (_perfCache.curve || []).slice(-30);
+  const pcol = (v) => v > 0 ? "var(--good)" : v < 0 ? "var(--bad)" : "var(--text-mute)";
+  const u = (v, sign) => (sign && v > 0 ? "+" : "") + Number(v).toFixed(2) + "u";
+  // Sparkline: cumulative units over the last 30 graded days.
+  let spark = "";
+  if (curve.length > 1) {
+    const ys = curve.map((c) => c.cum_u);
+    const lo = Math.min(...ys), hi = Math.max(...ys), span = (hi - lo) || 1;
+    const W = 560, H = 84;
+    const pts = ys.map((y, i) =>
+      `${(i / (ys.length - 1) * W).toFixed(1)},${(H - 6 - (y - lo) / span * (H - 12)).toFixed(1)}`);
+    const up = ys[ys.length - 1] >= ys[0];
+    spark = `<svg class="perf-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points="${pts.join(" ")}" fill="none"
+        stroke="${up ? "var(--good)" : "var(--bad)"}" stroke-width="2.5"
+        stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>`;
+  }
+  const n = o.settled, w = o.wins || 0, l = o.losses || 0, p = o.pushes || 0;
+  const seg = (count, color, off) => {
+    const C = 2 * Math.PI * 40;
+    return `<circle r="40" cx="50" cy="50" fill="none" stroke="${color}" stroke-width="12"
+      stroke-dasharray="${(count / n * C).toFixed(1)} ${C.toFixed(1)}"
+      stroke-dashoffset="${(-off / n * C).toFixed(1)}" />`;
+  };
+  const pct = (x) => n ? (100 * x / n).toFixed(1) + "%" : "—";
+  host.innerHTML = `
+    <div class="perf-grid">
+      <div class="card perf-card">
+        <div class="perf-head"><span class="rail-title">Your performance</span>
+          <span class="perf-window">${curve.length > 1 ? "last " + curve.length + " graded days" : "the whole book"}</span></div>
+        <div class="perf-tiles">
+          <div class="perf-tile"><span class="k">Net P&amp;L</span>
+            <b style="color:${pcol(o.net_units)}">${u(o.net_units, true)}</b>
+            ${o.net_dollars != null ? `<span class="sub2">${(o.net_dollars < 0 ? "−$" : "+$") + Math.abs(o.net_dollars).toFixed(2)}</span>` : ""}</div>
+          <div class="perf-tile"><span class="k">Win rate</span><b>${(100 * (o.win_rate || 0)).toFixed(1)}%</b>
+            <span class="sub2">break-even ${(100 * (o.breakeven || 0)).toFixed(1)}%</span></div>
+          <div class="perf-tile"><span class="k">ROI</span>
+            <b style="color:${pcol(o.roi)}">${(o.roi > 0 ? "+" : "") + (100 * (o.roi || 0)).toFixed(1)}%</b></div>
+          <div class="perf-tile"><span class="k">Record</span><b>${w}&#8211;${l}${p ? "&#8211;" + p : ""}</b></div>
+        </div>
+        ${spark}
+      </div>
+      <div class="card perf-card perf-donut-card">
+        <div class="perf-head"><span class="rail-title">Performance breakdown</span></div>
+        <div class="perf-donut-row">
+          <svg class="perf-donut" viewBox="0 0 100 100" aria-hidden="true">
+            ${seg(w, "var(--good)", 0)}${seg(l, "var(--bad)", w)}${p ? seg(p, "var(--text-mute)", w + l) : ""}
+            <text x="50" y="47" text-anchor="middle" class="donut-n">${n}</text>
+            <text x="50" y="62" text-anchor="middle" class="donut-k">bets</text>
+          </svg>
+          <div class="perf-legend">
+            <div><i style="background:var(--good)"></i>Wins <b>${w}</b> <span>(${pct(w)})</span></div>
+            <div><i style="background:var(--bad)"></i>Losses <b>${l}</b> <span>(${pct(l)})</span></div>
+            <div><i style="background:var(--text-mute)"></i>Pushes <b>${p}</b> <span>(${pct(p)})</span></div>
+          </div>
+        </div>
+        <a class="perf-link" href="#record">Full record &#8594;</a>
+      </div>
+    </div>`;
+}
+
+/* The right rail: KEY INSIGHTS (real reasons off tonight's best picks —
+   the same notes the cards print) and LIVE NOW (games in progress from
+   the same live states the stadium strip draws). */
+function renderRail() {
+  const ins = document.getElementById("rail-insights");
+  const liv = document.getElementById("rail-live");
+  if (!ins || !liv) return;
+  const d = state.data || {};
+  const bullets = [];
+  (d.recommendations || []).filter((r) => r.recommended)
+    .sort((a, b) => (b.quality || 0) - (a.quality || 0))
+    .forEach((r) => {
+      const why = (r.reasons && r.reasons[0]) || r.why || "";
+      if (why && bullets.length < 4)
+        bullets.push(`<b>${escapeHtml(r.player)}</b> — ${escapeHtml(String(why))}`);
+    });
+  (d.injury_watch || []).slice(0, Math.max(0, 5 - bullets.length)).forEach((i) => {
+    if (i && i.player && i.status)
+      bullets.push(`<b>${escapeHtml(i.player)}</b> is ${escapeHtml(i.status)}`);
   });
-  window.addEventListener("resize", applyNavMode);
-  applyNavMode();
+  if (bullets.length) {
+    ins.hidden = false;
+    ins.innerHTML = `<div class="rail-title">Key insights</div>
+      <ul class="rail-list">${bullets.map((b) => `<li>${b}</li>`).join("")}</ul>
+      <a class="rail-more" href="#record">More on the record &#8594;</a>`;
+  } else { ins.hidden = true; ins.innerHTML = ""; }
+
+  const games = (d.games || []).filter((g) => (g.live || {}).state === "live");
+  const nLive = games.length;
+  const badge = document.getElementById("sb-live-badge");
+  if (badge) { badge.hidden = !nLive; badge.textContent = nLive || ""; }
+  const count = document.getElementById("live-count");
+  if (count) { count.hidden = !nLive; count.textContent = nLive || ""; }
+  if (nLive) {
+    liv.hidden = false;
+    liv.innerHTML = `<div class="rail-title">Live now <span class="live-dot"></span></div>
+      ${games.slice(0, 4).map((g) => {
+        const lv = g.live || {};
+        return `<div class="rail-game">
+          <span>${teamMark(g.away, 20)} ${escapeHtml(g.away)}</span><b>${lv.away_score != null ? lv.away_score : ""}</b>
+          <span>${teamMark(g.home, 20)} ${escapeHtml(g.home)}</span><b>${lv.home_score != null ? lv.home_score : ""}</b>
+          <em>${escapeHtml(lv.period || "")}${lv.clock ? " " + escapeHtml(lv.clock) : ""}</em>
+        </div>`;
+      }).join("")}
+      <a class="rail-more" href="#live">Open the live board &#8594;</a>`;
+  } else {
+    liv.hidden = false;
+    liv.innerHTML = `<div class="rail-title">Live now</div>
+      <p class="rail-quiet">No games in progress right now.</p>
+      <a class="rail-more" href="#live">Open the live board &#8594;</a>`;
+  }
+}
+
+/* The rail belongs to Home. Everywhere else the content gets the room. */
+function syncRail() {
+  const rail = document.getElementById("rail");
+  if (!rail) return;
+  const home = state.view === "recommended";
+  document.body.classList.toggle("has-rail", home);
+  rail.style.display = home ? "" : "none";
+}
+
+(function initNewLook() {
+  renderGreeting();
+  initHcm();
+  const search = document.getElementById("nav-search");
+  if (search) search.addEventListener("click", () => {
+    if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
+    switchView("players", true);
+  });
+  const bell = document.getElementById("nav-bell");
+  if (bell) bell.addEventListener("click", () => {
+    if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
+    switchView("injuries", true);
+  });
+  // Anchor items (Top Picks, Stadiums): go Home, then scroll to the block.
+  document.querySelectorAll(".sb-anchor").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
+      if (state.view !== "recommended") switchView("recommended", true);
+      closeMobileMenu();
+      const el = document.getElementById(b.dataset.anchor);
+      if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+    }));
+  syncRail();
 })();
+

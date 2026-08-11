@@ -402,123 +402,7 @@ svg text.num, svg .svg-num { font-family: var(--font-mono);
    floor above is not a style preference, it is where the face stops
    working. Emphasis stays in the sans. */
 
-/* ---------------- Top bar + nav ---------------- */
-.topbar {
-  position: sticky; top: 0; z-index: 40;
-  display: flex; align-items: center; justify-content: space-between;
-  /* Wrapping belongs to the BASE rule, not to a max-width block. It lived
-     in `@media (max-width: 1799px)`, which meant that at 1800px and up the
-     bar did not wrap at all — while the two-row layout further down still
-     asked for `.brand { flex: 1 0 100% }`. A 100%-wide item on a nowrap
-     row cannot take a line of its own; it just refuses to shrink and
-     squeezes its siblings. Measured at 1800: the switcher wrapped to FOUR
-     rows inside a crushed brand, the header went to 263px, and the page
-     nav overflowed its box by 274px. Every width below 1800 was fine,
-     which is exactly why it survived — the bug only shows on a monitor
-     bigger than the one it was designed on. */
-  flex-wrap: wrap;
-  gap: 18px; padding: 14px 26px;
-  background: var(--topbar-bg);
-  border-bottom: var(--hairline) solid var(--border-soft);
-  backdrop-filter: blur(14px);
-}
-.brand { display: flex; align-items: center; gap: 12px; }
-/* Logo + name act as the home link, so they must LOOK tappable — the
-   convention only helps if the target reads as clickable. */
-.brand-home {
-  display: flex; align-items: center; gap: 12px;
-  color: inherit; text-decoration: none; cursor: pointer;
-  border-radius: 0; padding: 2px; margin: -2px;
-  transition: opacity var(--dur-fast) var(--ease-out);
-}
-.brand-home:hover { opacity: .82; }
-.brand-home:active { opacity: .65; }
-.brand-home:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
-.logo {
-  width: 42px; height: 42px; border-radius: 0;
-  display: grid; place-items: center; font-size: var(--fs-2xl);
-  background: var(--grad-brand); box-shadow: none;
-}
-/* The Q. Hairline weight and one accent colour, matching the nav and the
-   panels rather than shouting over them. --brand (not white) because the
-   flat-chrome override further down paints the tile in --panel-2, which is
-   light in the light theme — a white Q there would be an empty box. Caps
-   stay butt (the default): a round cap on the tail bulges into the counter
-   and the whole mark reads as a magnifying glass. */
-.qmark {
-  width: 100%; height: 100%;
-  stroke: var(--brand); stroke-width: 3.4;
-}
-/* The masthead is Bodoni Moda at 900 — a weight the face actually ships,
-   so nothing is synthesised. The old note here warned against asking
-   Instrument Serif for a bold it did not have; the hazard is unchanged and
-   the answer is now to use the weight that exists rather than avoid weight
-   altogether. A Didone at masthead size is the whole point of the
-   direction: it is the one thing on the page that is not data. */
-.brand h1 { font-family: var(--font-display); font-size: var(--fs-3xl);
-  letter-spacing: -0.02em; font-weight: 900; white-space: nowrap;
-  line-height: .96; }
-/* The contextual subtitle — per-league, and a real feature (§1.1). Tracked
-   out and small so it reads as a standing line under a masthead rather
-   than as a second heading competing with it. */
-.tagline { color: var(--text-mute); font-size: var(--fs-2xs); margin-top: 5px;
-  font-weight: 700; letter-spacing: .3em; text-transform: uppercase;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 34ch; }
-
-/* §6.3. No pill backgrounds, no boxes: the bar is a row of labels over a
-   single rule, and the active one is marked by a 2px amber underline. The
-   old treatment inverted a parchment slab behind the active tab, which is
-   a button, and a section nav is not a row of buttons. */
-.nav { display: flex; gap: 22px; position: relative; background: none;
-  padding: 0; border: 0; border-bottom: var(--hairline) solid var(--border); }
-.nav-btn {
-  position: relative; z-index: 1; border: 0; background: transparent; cursor: pointer;
-  color: var(--text-mute); font-weight: 700; font-size: var(--fs-sm);
-  font-family: var(--font-sans); letter-spacing: .16em; text-transform: uppercase;
-  padding: 9px 0; display: flex; align-items: center; gap: 7px;
-  transition: color var(--dur-base) var(--ease-out);
-}
-/* The active tab's own description, under the row. Same treatment as
-   `.subnav-hint` because it answers the same question one level up. */
-.nav-hint {
-  /* The header is a flex ROW with hand-assigned `order` on every child —
-     brand 1, nav 5, standing 9, slate-meta 10. A new element defaults to
-     order 0, which sorted this line ABOVE the masthead, where it read as a
-     stray caption on the logo. It belongs immediately after the tab row it
-     describes, on a line of its own. */
-  order: 6; flex: 1 1 100%;
-  margin: 6px 0 0; min-height: 1em;
-  color: var(--text-mute); font-size: var(--fs-sm); font-style: italic;
-}
-@media (max-width: 760px) {
-  /* The phone menu already prints every hint beside its tab, so repeating
-     the active one here is a line of chrome on the screen with the least
-     of it to spare. */
-  .nav-hint { display: none; }
-}
-.nav-btn:hover { color: var(--text); }
-.nav-btn.active { color: var(--text); }
-/* Driven by transform, not by left/width. Both of those are LAYOUT
-   properties: the browser re-runs layout for the subtree on every frame of
-   the animation, and the tab strip is the one thing on the page that moves
-   on every navigation. transform runs on the compositor and touches
-   neither layout nor paint.
-
-   The 1px base width is what makes scaleX read as pixels — scaleX(96) on a
-   1px bar is a 96px bar — so moveIndicator can keep passing the measured
-   offsetWidth straight through.
-
-   Curve kept as it was: y=1.4 overshoots, which is deliberate. Previously
-   left and width overshot independently; one transform overshoots both
-   together, which is the same gesture with one less thing to desynchronise. */
-.nav-indicator {
-  position: absolute; top: auto; bottom: -1px; height: 2px; z-index: 0;
-  left: 0; width: 1px; transform-origin: left center;
-  background: var(--brand); box-shadow: none;
-  transition: transform var(--dur-slow) var(--ease-spring);
-}
-.slate-meta { display: flex; align-items: center; gap: 12px; color: var(--text-dim); font-size: var(--fs-md); }
-
+/* [old top bar — removed 2026-08-11: superseded by the NEW LOOK layer at the end of this file] */
 /* §6.11: 1px bone border, transparent fill, uppercase. Hover fills. A
    solid accent slab is the one shape this direction does not have. */
 .btn {
@@ -531,7 +415,7 @@ svg text.num, svg .svg-num { font-family: var(--font-mono);
 .btn:hover { background: var(--text); color: var(--bg); box-shadow: none; }
 .btn:active { transform: translateY(1px); }
 .btn.ghost { background: var(--panel-2); border: var(--hairline) solid var(--border); box-shadow: none; color: var(--text-dim); }
-.btn.ghost:hover { color: var(--text); border-color: var(--brand); }
+.btn.ghost:hover { color: var(--text); border-color: var(--brand-2); }
 
 /* ---------------- View container + transitions ---------------- */
 /* The tab transitions slide a view in from ±30px, which pushes the
@@ -579,7 +463,7 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
               border-color var(--dur-base) var(--ease-out);
 }
 .subnav-btn:hover { color: var(--text); }
-.subnav-btn.active { color: var(--text); border-bottom-color: var(--brand); }
+.subnav-btn.active { color: var(--text); border-bottom-color: var(--brand-2); }
 .subnav-btn:focus-visible { outline-offset: 2px; }
 
 /* The hint is the answer to "which tab has what", which is a thing Ethan
@@ -707,7 +591,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-base) var(--ease-out);
 }
 .game-card { transform-style: preserve-3d; transition: border-color var(--dur-base) var(--ease-out); }
-.game-card:hover { border-color: var(--brand); box-shadow: none; }
+.game-card:hover { border-color: var(--brand-2); box-shadow: none; }
 .stadium-wrap { line-height: 0; background: #070b16; }
 .stadium-wrap .stadium { width: 100%; height: auto; display: block; }
 .game-info { padding: 11px 15px 3px; }
@@ -1018,7 +902,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   background: var(--panel); border: var(--hairline) solid var(--border); border-radius: 0; color: var(--text);
   outline: none; transition: border-color var(--dur-base) var(--ease-out);
 }
-.search-wrap input:focus { border-color: var(--brand); box-shadow: none; }
+.search-wrap input:focus { border-color: var(--brand-2); box-shadow: none; }
 .search-wrap .ico { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-mute); font-size: var(--fs-xl); }
 
 /* The cap note on an unsearched Players page. Spans the grid rather than
@@ -1094,7 +978,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 /* The structural note answers the verdict directly above it, so it reads
    at full text weight rather than as the dimmed footnotes at the bottom. */
 .pz-note.pz-structural { color: var(--text); }
-.pz-note.pz-structural .pz-mark { flex: 0 0 auto; margin-top: 2px; color: var(--brand); }
+.pz-note.pz-structural .pz-mark { flex: 0 0 auto; margin-top: 2px; color: var(--brand-2); }
 .pz-census {
   font-size: var(--fs-xs); color: var(--text-mute); padding: 14px 0 4px;
   letter-spacing: .2px;
@@ -1163,10 +1047,10 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   font-weight: 400; margin-right: 9px; }
 .pz-rank-title { margin-top: 24px; }
 .chip.pz-g-play { color: var(--good); border-color: rgba(51,199,122,.42); }
-.chip.pz-g-marginal { color: var(--brand); border-color: rgba(255,176,0,.42); }
+.chip.pz-g-marginal { color: var(--brand-2); border-color: rgba(255,176,0,.42); }
 .chip.pz-g-short { color: var(--text-mute); }
 .pz-ticket:has(.pz-g-play) { --grade-color: var(--good); }
-.pz-ticket:has(.pz-g-marginal) { --grade-color: var(--brand); }
+.pz-ticket:has(.pz-g-marginal) { --grade-color: var(--brand-2); }
 .pz-runners-title { margin-top: 22px; }
 .pz-runners { margin: 0; padding: 0; }
 /* Each ranked ticket is its whole card, folded behind its summary row. The
@@ -1256,8 +1140,6 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   .conf-fill { transition: none; }
 }
 @media (max-width: 640px) {
-  .topbar { flex-wrap: wrap; }
-  .nav { order: 3; width: 100%; justify-content: space-between; }
   /* minmax(0, 1fr), not 1fr: a bare 1fr track still refuses to shrink
      below its content's min-content width, so one wide row inside pushed
      the column past a 320px phone and scrolled the whole page sideways. */
@@ -1320,7 +1202,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   display: grid; place-items: center; font-size: var(--fs-xl); font-family: inherit;
   transition: color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
-.theme-toggle:hover { color: var(--text); border-color: var(--brand); transform: translateY(-1px); }
+.theme-toggle:hover { color: var(--text); border-color: var(--brand-2); transform: translateY(-1px); }
 
 /* ---------------- Loading skeletons ---------------- */
 .skeleton-card {
@@ -1438,32 +1320,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   #brand-home.loading .logo { animation: none; opacity: .6; }
 }
 
-/* ---------------- Sport switcher (NFL / MLB) ---------------- */
-/* Phone-menu section labels ("Sport" / "Page") — hidden wherever the
-   full navigation is already on screen. */
-.menu-head { display: none; }
-
-.sport-switch {
-  display: flex; gap: 3px; margin-left: 14px; padding: 4px;
-  background: var(--panel); border: var(--hairline) solid var(--border-soft); border-radius: 0;
-}
-/* display:contents — the wrappers exist only to be styled as separate
-   cards on a phone; on desktop their buttons flow straight into the
-   switcher's single row as if the wrappers weren't there. */
-.sport-group { display: contents; }
-.sport-btn {
-  border: 0; background: transparent; cursor: pointer;
-  font-family: var(--font-sans);
-  color: var(--text-mute); font-weight: 700; font-size: var(--fs-sm);
-  letter-spacing: .16em; text-transform: uppercase;
-  padding: 7px 0; margin-right: 18px;
-  border-bottom: 2px solid transparent;
-  transition: color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
-}
-.sport-btn:hover { color: var(--text); }
-.sport-btn.active { color: var(--text); border-bottom-color: var(--brand); }
-:root[data-theme="light"] .sport-btn.active { color: var(--text); }
-@media (max-width: 900px) { .sport-switch { margin-left: 6px; } }
+/* [old sport switcher — removed 2026-08-11: superseded by the NEW LOOK layer at the end of this file] */
 
 /* ============================================================
    Live games — badges, pulsing dot, scores, in-play ribbon
@@ -1680,17 +1537,9 @@ td.num, .dl-num, .std-n, .pm-avatar, .clv-num, .odds,
  * switcher's box stretched to 1144px around 380px of buttons, so most of it
  * was an empty outline. The underline treatment was already there
  * underneath; these overrides were sitting on top of it. */
-.topbar { backdrop-filter: blur(10px); border-bottom: var(--hairline) solid var(--border-soft); }
-.logo { background: var(--panel-2); border: var(--hairline) solid var(--border);
-        box-shadow: none; border-radius: 0; }
-.nav { background: none; border: 0; border-bottom: var(--hairline) solid var(--border); }
-.nav-btn.active { color: var(--text); }
-.nav-indicator { background: var(--brand); border: 0; height: 2px;
-                 box-shadow: none; border-radius: 0; }
-.sport-switch { background: none; border: 0; padding: 0; }
 .btn, .btn:hover { box-shadow: none; }
 .btn { background: var(--panel-2); border: var(--hairline) solid var(--border); color: var(--text); }
-.btn:hover { border-color: var(--brand); filter: none; }
+.btn:hover { border-color: var(--brand-2); filter: none; }
 .theme-toggle { box-shadow: none; }
 
 /* Cards: flat, hairline, tight.
@@ -1780,7 +1629,7 @@ input[type="range"]::-webkit-slider-thumb { box-shadow: none; }
   width: 44px; height: 44px; border-radius: 50%; flex: 0 0 auto;
   background: var(--panel-3); border: var(--hairline) solid var(--border);
   display: grid; place-items: center; font-weight: 800; font-size: var(--fs-lg);
-  color: var(--brand); text-transform: uppercase;
+  color: var(--brand-2); text-transform: uppercase;
 }
 .pm-status { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
   border: var(--hairline) solid currentColor; border-radius: 0; padding: 3px 10px; }
@@ -1791,7 +1640,7 @@ input[type="range"]::-webkit-slider-thumb { box-shadow: none; }
   color: var(--text); font-family: inherit; font-size: var(--fs-lg); font-weight: 700;
   padding: 6px 10px; width: 92px; outline: none;
 }
-.calc-in:focus { border-color: var(--brand); }
+.calc-in:focus { border-color: var(--brand-2); }
 select.calc-in { width: auto; font-weight: 600; }
 #view-why label { color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600;
   display: inline-flex; align-items: center; gap: 6px; }
@@ -1851,7 +1700,7 @@ select.calc-in { width: auto; font-weight: 600; }
    button somebody switched off. */
 .why-toggle {
   background: none; border: 0; padding: 0 0 0 2px;
-  color: var(--brand); border-radius: 0;
+  color: var(--brand-2); border-radius: 0;
   font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: .1em; text-transform: lowercase; cursor: pointer;
   line-height: var(--lh-snug); opacity: 1;
@@ -2171,7 +2020,7 @@ select.calc-in { width: auto; font-weight: 600; }
   color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600;
   transition: color var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
 }
-.game-card:hover .game-cta { color: var(--brand); background: var(--fill-subtle); }
+.game-card:hover .game-cta { color: var(--brand-2); background: var(--fill-subtle); }
 .gc-arrow { transition: transform var(--dur-base) var(--ease-out); }
 .game-card:hover .gc-arrow { transform: translateX(3px); }
 
@@ -2293,7 +2142,7 @@ select.calc-in { width: auto; font-weight: 600; }
   color: var(--text-dim); font-family: inherit; font-size: var(--fs-sm); font-weight: 600;
   padding: 11px; letter-spacing: .2px;
 }
-.ff-more:hover { color: var(--brand); }
+.ff-more:hover { color: var(--brand-2); }
 .ff-hidden { display: none; }
 
 .ff-table { padding: 0; gap: 0; }
@@ -2365,7 +2214,7 @@ select.calc-in { width: auto; font-weight: 600; }
    making the name illegible if you want to double-check it. */
 .dk-taken { opacity: .32; }
 .dk-taken .dl-main strong, .dk-taken .dk-pn { text-decoration: line-through; }
-.dk-draftday { --grade-color: var(--brand); }
+.dk-draftday { --grade-color: var(--brand-2); }
 .dk-bestrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .dk-bl { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
   text-transform: uppercase; letter-spacing: .6px; min-width: 96px; }
@@ -2450,246 +2299,15 @@ select.calc-in { width: auto; font-weight: 600; }
 }
 
 
-/* --- Phones ------------------------------------------------------------
-   Measured, not guessed: at a 390px viewport .brand rendered 687px wide,
-   which forced the layout viewport to 714 and made phones shrink-to-fit
-   the whole desktop — roughly 9pt text. The sport switch (451px of it)
-   is a CHILD of .brand, and .brand is a non-wrapping flex row, so the
-   switch could never shrink: a flex item defaults to min-width:auto and
-   refuses to go below its content.
-
-   Two things are therefore required together, and neither works alone:
-   .brand must be allowed to wrap so the switch can drop to its own line,
-   and the switch needs min-width:0 so it may shrink and scroll. */
-/* The menu button is phone-only; desktop keeps both button rows. */
-.menu-toggle { display: none; }
-
-/* --- Tablets and laptops ----------------------------------------------
-   Measured: a 768px iPad rendered at innerWidth 1731 — a 2.3x
-   shrink-to-fit, worse than phones were before the mobile pass, because
-   the phone breakpoint stopped at 760 and everything above it kept the
-   full desktop topbar on ONE non-wrapping row (brand 687 + both button
-   rows + the status strip).
-
-   That single row measures 1745px, so it does not fit a laptop either:
-   1180, 1280, 1366, 1440, 1512 and 1728 all scrolled sideways, which is
-   every common MacBook width. The one-row bar only fits from ~1800px up,
-   so it stays a large-monitor layout and everything below stacks. Costs
-   about 60px of vertical space on a laptop; horizontal scroll costs the
-   whole page.
-   Here the bar stacks and each row wraps onto as many lines as it needs.
-   The menu stays OFF: at this width there is room to show every
-   destination at once, and hiding them behind a tap would be worse. */
-/* The topbar wraps onto its own lines below 1800px, which is every normal
-   laptop — so this is the DESKTOP layout, not a narrow-screen fallback, and
-   it was styled as though it were one. `gap: 6px` on an eleven-tab nav and a
-   seven-league switcher is what made the whole header read as one smooshed
-   block; the spacing now comes from the header-rhythm rules at the end of
-   this file. What stays here is only the wrapping itself. */
-@media (max-width: 1799px) {
-  .topbar { flex-wrap: wrap; padding: 12px 16px; }
-  .brand { flex: 1 1 100%; flex-wrap: wrap; min-width: 0; }
-  .sport-switch, .nav { min-width: 0; flex-wrap: wrap; }
-  .sport-btn, .nav-btn { flex: 0 0 auto; white-space: nowrap; }
-  .slate-meta { flex-wrap: wrap; }
-}
-
-/* The indicator cannot track a row that has wrapped onto two lines, so it
-   hides — but only once the nav ACTUALLY wraps. At 1799px it does not:
-   eleven tabs occupy about 990px of a 1390px row. Hiding it that early left
-   the active tab with no underline at any desktop width until you clicked
-   something, which is the one moment a nav most needs to say where you are. */
-@media (max-width: 1100px) {
-  .nav-indicator { display: none; }
-}
-
-/* Four stacked rows is the right answer on a tablet and a waste on a
-   wide laptop. Letting the brand block keep its natural width and pushing
-   the status strip beside it lets flex pair them whenever they fit —
-   measured, that is 1512 and up (brand 866 + strip 576 + gap), which
-   takes a 16" MacBook from 227px of header to 177px. Below that they
-   still stack, which is correct: they genuinely do not fit. */
-/* SUPERSEDED by the two-row assignment further down. This block existed to
-   pair the brand and the status strip on one line when they fitted, which
-   was the best available answer while the sport switcher was 1,195px wide
-   and forced everything else to stack. Now the switcher fits beside the
-   brand and the rows are assigned explicitly, so pairing here would only
-   fight that. Left as a comment rather than silently deleted because the
-   measurement in it is still the reason the current layout is shaped the
-   way it is. */
+/* [old tablet header wrap — removed 2026-08-11] */
 
 @media (max-width: 760px) {
-  .topbar { flex-wrap: wrap; gap: 10px; padding: 10px 12px; }
-  .brand { flex: 1 1 100%; flex-wrap: wrap; gap: 10px; min-width: 0; }
-  .brand .tagline { display: none; }
-
+  /* [old phone menu — removed 2026-08-11: the sidebar drawer replaces it] */
   /* iOS Safari zooms the WHOLE PAGE in when a focused field is smaller
      than 16px — and it never zooms back out, which leaves every later
      tap looking enlarged. Range sliders don't trigger it and keep their
      own sizing. */
   input:not([type="range"]), select, textarea { font-size: var(--fs-xl); }
-
-  .menu-toggle {
-    display: flex; align-items: center; gap: 10px; order: -1;
-    flex: 1 1 100%; min-width: 0;
-    background: var(--panel-2); border: var(--hairline) solid var(--border);
-    border-radius: 0; color: var(--text);
-    font: inherit; font-size: var(--fs-md); font-weight: 700;
-    padding: 9px 13px; cursor: pointer; text-align: left;
-  }
-  .mt-bars { position: relative; width: 16px; height: 2px; flex: 0 0 auto;
-    background: currentColor; border-radius: 0; }
-  .mt-bars::before, .mt-bars::after {
-    content: ""; position: absolute; left: 0; width: 16px; height: 2px;
-    background: currentColor; border-radius: 0; transition: transform var(--dur-base) var(--ease-out);
-  }
-  .mt-bars::before { top: -5px; } .mt-bars::after { top: 5px; }
-  .menu-open .mt-bars { background: transparent; }
-  .menu-open .mt-bars::before { transform: translateY(5px) rotate(45deg); }
-  .menu-open .mt-bars::after  { transform: translateY(-5px) rotate(-45deg); }
-  .mt-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: var(--text-dim); font-weight: 600; }
-
-  /* While the menu is up the page behind must not scroll: a different
-     sport's board is a different length, so any scrolling underneath
-     re-anchored the view and appeared to move the menu itself. */
-  body.menu-open { overflow: hidden; }
-
-  /* Both destination rows live behind the menu on a phone. */
-  .sport-switch, .nav { display: none; }
-  .menu-head { display: none; }
-  .menu-open .sport-switch, .menu-open .nav {
-    display: flex; flex: 1 1 100%; min-width: 0;
-    flex-wrap: wrap; gap: 6px; background: transparent; padding: 0;
-  }
-  /* The switcher itself stops being a card here — otherwise the "More"
-     heading sat INSIDE one outline with the leagues, which read as a
-     stray label rather than a new section. Each group carries its own
-     card instead, so the headings sit above their own boxes. */
-  .menu-open .sport-switch { border: 0; margin-left: 0; }
-  .menu-open .sport-group {
-    display: flex; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 6px;
-    background: var(--panel); border: var(--hairline) solid var(--border-soft);
-    border-radius: 0; padding: 4px;
-  }
-  .menu-open .sport-group[data-group="leagues"] { order: 1; }
-  /* Leagues, then Markets, then what's left under More. Five slots, so the
-     two new ones don't have to share an order value with anything. */
-  .menu-open .menu-head[data-head="markets"] { order: 2; margin-top: 8px; }
-  .menu-open .sport-group[data-group="markets"] { order: 3; }
-  /* The Book sits between Markets and the page list — same order value as
-     the markets group, and source order (it follows markets in the DOM)
-     settles the tie, exactly like the page-head at order 3 already does. */
-  .menu-open .menu-head[data-head="record"] { order: 3; margin-top: 8px; }
-  .menu-open .sport-group[data-group="record"] { order: 3; }
-  .menu-open .sport-group[data-group="tools"] { order: 5; }
-  /* Section labels. Two unlabelled grids of near-identical pills gave a
-     newcomer no way to know one switches SPORT and the other switches
-     PAGE — the single biggest confusion in this menu. */
-  .menu-open .menu-head {
-    display: block; flex: 1 1 100%;
-    font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .12em;
-    text-transform: uppercase; color: var(--text-mute);
-    margin: 4px 2px -2px;
-  }
-  /* Leagues: four across, compact — they're short and instantly known. */
-  .menu-open .sport-btn[data-kind="league"] {
-    flex: 1 1 calc(25% - 5px); padding: 9px 4px; font-size: var(--fs-sm);
-  }
-  /* Standalone tools get their own row so they stop reading as leagues. */
-  .menu-open .sport-btn[data-kind="tool"] {
-    flex: 1 1 calc(33.333% - 4px); padding: 9px 4px; font-size: var(--fs-sm);
-  }
-  .menu-open .sport-btn { white-space: nowrap; text-align: center;
-    overflow: hidden; text-overflow: ellipsis; }
-  /* Pages: a real two-column GRID, not wrapped flex. Flex items grow to
-     fill a row, so a long label ("Recommended · tonight's picks") took a
-     whole line to itself and left the column edges ragged. */
-  .menu-open .nav {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
-    /* FOUR rows always, whether or not this sport has all eight pages.
-       Sports hide the pages they have no engine for (CFB has no props, so
-       no Players/Trending/Long Shots), and without a fixed row count the
-       open menu got 52px shorter the instant you tapped CFB — sliding the
-       page buttons up under a finger already on its way down. Content
-       must not decide layout. Empty rows hold their space; a row whose
-       label wraps still grows. */
-    grid-template-rows: repeat(4, minmax(46px, auto));
-  }
-  /* display:block, not the base flex — the hint must sit UNDER the name
-     rather than beside it. */
-  .menu-open .nav-btn {
-    display: block; text-align: left; white-space: normal;
-    padding: 8px 10px; line-height: var(--lh-tight);
-  }
-  .menu-open .nav-btn::after {
-    content: attr(data-hint); display: block;
-    font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0;
-    text-transform: none; color: var(--text-mute); margin-top: 1px;
-  }
-  /* Where you ARE, unmistakably: filled, not merely bold. */
-  .menu-open .sport-btn.active, .menu-open .nav-btn.active {
-    background: color-mix(in srgb, var(--brand) 22%, transparent);
-    border-color: var(--brand); color: var(--text);
-  }
-  @supports not (background: color-mix(in srgb, red 10%, transparent)) {
-    .menu-open .sport-btn.active, .menu-open .nav-btn.active {
-      background: rgba(122, 139, 255, .22);
-    }
-  }
-  .menu-open .nav-btn.active::before { content: "● "; color: var(--brand); }
-  .nav-indicator { display: none; }     /* the panel marks the active tab */
-  /* Label, leagues+tools, label, pages — then status chips last so they
-     never split the menu in half. */
-  /* Inside the switcher: leagues, the Markets pair, then what's left under
-     More. Polymarket / Fantasy / Why Us are not sports and shouldn't sit
-     under a leagues heading — but Polymarket and Fantasy are somewhere you
-     go looking for a bet, so they get their own labelled card rather than
-     the bottom of the menu. */
-  .menu-open .sport-btn[data-kind="league"] { order: 1; }
-  .menu-open .menu-head[data-head="markets"] { order: 2; margin-top: 8px; }
-  .menu-open .menu-head[data-head="more"] { order: 4; margin-top: 8px; }
-  .menu-open .sport-btn[data-kind="tool"] { order: 5; }
-  .menu-open .menu-head[data-head="sport"] { order: 1; }
-  .menu-open .sport-switch { order: 2; }
-  .menu-open .menu-head[data-head="page"] { order: 3; }
-  .menu-open .nav { order: 4; }
-  /* The status row's chips vary by sport and by the day's data (a live
-     game adds the polling dot, a multi-day slate widens the date), so it
-     wraps to one line for one sport and two for the next. That changed
-     the HEADER's height mid-tap — the page appeared to grow when
-     switching sports. Reserve the two-line height so the chrome above
-     the content never moves. */
-  /* A fixed 2-column GRID, not wrapped flex. The chips' widths vary by
-     sport and by day — a live game adds the polling dot, and a multi-day
-     slate turns "Sat, Jun 20" into "Sun, Jan 4 - Mon, Jan 5" — so a
-     wrapping row landed on a different number of lines per sport and the
-     HEADER changed height mid-tap. A FIXED grid is the same height
-     whatever the text says; each chip truncates in its own cell.
-
-     One row, not two: the theme toggle moved up into the menu bar (where
-     every app puts it, and where 40px of empty space already was), which
-     freed the fourth cell. Same stability guarantee, half the height. */
-  /* FOUR columns, not three. The fourth was removed when the theme toggle
-     was lifted into the menu bar — but "lifted" meant absolutely positioned
-     on top of it, and the menu pill is a bordered box ~40px tall starting
-     at the same y, so the toggle's circle sat ON its right edge with its
-     own right side clipped by the screen. Two overlapping bordered boxes.
-     It belongs on this row, at the end, level with the date. */
-  .slate-meta { flex: 1 1 100%; order: 5; display: grid;
-    grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 8px;
-    align-items: center; justify-content: stretch; }
-  .slate-meta > * { min-width: 0; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; justify-self: start; }
-  /* The date cell must FILL its track, not size to its content. With
-     justify-self:start it took max-content width, so a range date
-     ("Wed, Oct 7 - Sat, Oct 10") pushed six pixels past the viewport
-     instead of truncating — the badges beside it are pills and do want to
-     hug their text, so only this one stretches. */
-  .slate-meta > #slate-date { justify-self: stretch; width: 100%; }
-  .theme-toggle { justify-self: end; }
-  /* Idle (nothing live) reads quieter than the polling state. */
-  .live-refresh.idle { opacity: .75; }
   /* Data rows (.drow) — Edge Board, Scanner pairs, stale lines, sharp
      anchors, fantasy sleepers. Each is a flex row whose fixed numeric
      columns sum well past a phone viewport (the Edge Board's alone need
@@ -2888,9 +2506,9 @@ select.calc-in { width: auto; font-weight: 600; }
   font: inherit; font-size: var(--fs-md); font-weight: 700; cursor: pointer;
   text-align: left;
 }
-.ros-team:hover { border-color: var(--brand); }
+.ros-team:hover { border-color: var(--brand-2); }
 .ros-team.open { border-radius: 0;
-  border-color: var(--brand); }
+  border-color: var(--brand-2); }
 .ros-mark {
   width: 30px; height: 30px; border-radius: 0; flex: 0 0 auto;
   display: grid; place-items: center; font-size: var(--fs-2xs); font-weight: 800;
@@ -3010,7 +2628,7 @@ select.calc-in { width: auto; font-weight: 600; }
 .about-card .about-body em { color: var(--text-dim); font-style: normal; }
 .about-list { margin: 4px 0 0; padding-left: 18px; }
 .about-list li { color: var(--text-body); font-size: var(--fs-md); line-height: var(--lh-body); margin-bottom: 7px; }
-.about-list a { color: var(--brand); }
+.about-list a { color: var(--brand-2); }
 /* One column: these cards are prose, and prose in two narrow columns on a
    wide screen is harder to read, not denser. */
 #about-body .cards.wide { grid-template-columns: minmax(0, 1fr); }
@@ -3034,98 +2652,7 @@ select.calc-in { width: auto; font-weight: 600; }
   }
 }
 
-/* ============================================================
-   Header density — the chrome was taking a quarter of the screen.
-
-   Eleven sport buttons made the switcher 1,195px wide, which forced the
-   status row and the page nav onto lines of their own: three stacked
-   rows, 227px, 25% of a 900px desktop and 28% of a laptop. The leagues
-   are the primary axis and stay visible; the five tools move behind a
-   "More" menu, which is enough to fit the brand, the switcher and the
-   status row on one line again.
-   ============================================================ */
-@media (min-width: 761px) {
-  /* The axis changes here. Polymarket and Fantasy sit in the same row as
-     the leagues because they are visited on the same rhythm, but a hairline
-     says they are a different KIND of thing — which is the whole reason
-     they are not simply appended to the league list. Desktop only: on a
-     phone the groups become separate labelled cards and the rule is noise.
-
-     Folded into THIS block rather than opening a second
-     `@media (min-width: 761px)`. A duplicate breakpoint has caused a
-     cascade collision here twice, and test_header_density slices the
-     stylesheet from the first match of this exact query — a third block
-     silently moved what that slice was reading. */
-  /* A GROUP IS A BOX HERE, not `display: contents`.
-     ------------------------------------------------------------------
-     With contents, all eleven buttons are direct children of the
-     switcher, so the wrap algorithm may break the row between any two of
-     them — including inside a group. Measured on HEAD: the markets pair
-     split across two rows at 960px, and the record pair at 1100, 820 and
-     768. The separator hairline below then sits on whichever button
-     happens to start row two, so the one mark that says "the axis
-     changed here" lands somewhere it does not mean, and the row reads as
-     something that has come apart. That is the "bugged out" report.
-
-     As real boxes the groups are the flex items, so a break can only
-     fall BETWEEN groups — which is the reading the hairline already
-     claims. `gap: inherit` copies the switcher's own gap, so the row
-     still looks like one row and the two stay in step when the gap
-     changes at a breakpoint (it does, at 1100).
-
-     This also brings `.sport-group { gap: 3px }` at 761-1023px to life.
-     It has been in the sheet all along and did nothing: `gap` on a
-     `display: contents` element has no box to apply to. It was written
-     by someone who believed these were boxes, which is the same model
-     this rule makes true. */
-  .sport-group { display: flex; align-items: center; gap: inherit; }
-
-  .sport-group[data-group="markets"] .sport-btn:first-child,
-  .sport-group[data-group="record"] .sport-btn:first-child {
-    margin-left: 12px; padding-left: 16px;
-    border-left: var(--hairline) solid var(--border-soft);
-  }
-  .sport-more { position: relative; display: inline-flex; }
-  .sport-more .sport-group[data-group="tools"] {
-    display: none;
-    /* left, not right. Right-aligning a 200px menu to the right edge of a
-       55px button hangs 145px of it out to the LEFT, so it opened under
-       "WNBA" and "UFC" and looked like it belonged to them — measured at
-       1440: button 630-685, menu 485-685. Anchored left it starts under the
-       word you clicked. Safe at every desktop width because the switcher is
-       centred and "More" is its last item, so there is always at least the
-       menu's width to its right (checked at 800/1024/1280/1440/1800). */
-    position: absolute; top: calc(100% + 10px); left: 0; z-index: 60;
-    flex-direction: column; gap: 2px; min-width: 200px; padding: 6px;
-    background: var(--panel-2); border: var(--hairline) solid var(--border);
-    border-radius: 0; box-shadow: none;
-  }
-  .sport-more.open .sport-group[data-group="tools"] { display: flex; }
-  .sport-more .sport-group[data-group="tools"] .sport-btn {
-    white-space: nowrap; text-align: left; justify-content: flex-start;
-    width: 100%; padding: 8px 10px;
-  }
-  .more-toggle[aria-expanded="true"] { color: var(--text); }
-  /* Where you ARE, when you're inside one of the tools. */
-  .more-toggle.has-active { color: var(--text); }
-  .more-toggle.has-active::after {
-    content: ""; width: 5px; height: 5px; border-radius: 50%;
-    background: var(--brand); margin-left: 5px;
-  }
-
-  /* Two rows, deliberately assigned rather than left to the wrap
-     algorithm. Letting flex decide produced THREE rows: the brand got
-     shrunk below its content width, which made the switcher wrap inside
-     it, and then the nav and the status row each took a line of their
-     own. Row 1 is identity + league; row 2 is page + status. */
-  .topbar { padding: 10px 20px; gap: 8px 14px; align-items: center; }
-  .brand { flex: 1 0 100%; flex-wrap: nowrap; order: 1; }
-  /* Row 2 reads left to right the way the page does: where you can go,
-     then how fresh what you're looking at is. */
-  .nav { flex: 0 1 auto; min-width: 0; order: 2; }
-  .slate-meta { margin-left: auto; flex: 0 1 auto; min-width: 0; order: 3;
-    justify-content: flex-end; }
-}
+/* [old More menu — removed 2026-08-11] */
 
 /* Which EDGE of the More button the menu hangs from, decided by whether
    the button ends its row.
@@ -3180,95 +2707,13 @@ select.calc-in { width: auto; font-weight: 600; }
   .more-toggle { display: none !important; }
 }
 
-/* A laptop is not a desktop. At 1280 the page nav and the status row want
-   1,243px and have 1,240 — three pixels short, which cost a whole third
-   row. Slightly tighter tabs buy it back rather than pushing the status
-   row down for the sake of six pixels of padding. */
-@media (min-width: 761px) and (max-width: 1439px) {
-  .nav-btn { padding: 9px 12px; font-size: var(--fs-md); }
-  .slate-meta { gap: 9px; font-size: var(--fs-sm); }
-}
+/* [old header sizing — removed 2026-08-11] */
 
-/* On a phone the status row wrapped to two lines: badge + freshness chip,
-   then date + theme toggle. The toggle belongs in the menu bar — that is
-   where every app puts it, the row is already there, and it is otherwise
-   40px of empty space. That alone gets the status back to one line. */
-@media (max-width: 760px) {
-  .topbar { position: sticky; }
-  /* NOT absolutely positioned over the bar. It was, at top:8/right:14, and
-     the menu bar's own bordered pill starts at ~14 and is ~40px tall — so
-     the toggle's circle sat ON the pill's right edge with its own right
-     side clipped by the viewport. Two overlapping bordered boxes is what
-     "bugged in" looks like. padding-right kept the LABEL clear and did
-     nothing about the box.
-     As a flex sibling they share the row: the pill takes what is left, the
-     toggle keeps its 40px, and the gap between them is the topbar's. */
-  /* Back in the flow. `.slate-meta` is its parent and is a GRID, which is
-     why ordering it against `.menu-toggle` did nothing and margin-left:auto
-     did nothing — neither is a flex sibling of anything here. It simply
-     takes the fourth column restored above. */
-  /* `relative`, not `static` — and the difference is not cosmetic. This
-     rule is an ID (1,0,0) and beat the `.slate-meta .theme-toggle`
-     declaration below (0,2,0), so the toggle was genuinely unpositioned.
-     Its 44px reach pseudo-element then resolved against the nearest
-     positioned ancestor, which is the sticky `.topbar` — so the invisible
-     hit target sat 44x44 in the DEAD CENTRE of the header on every phone
-     view, swallowing taps on whatever happened to be there.
-     `relative` lays out identically to `static` (no offsets are set) and
-     makes the toggle the containing block its own pseudo needs. */
-  #theme-toggle { position: relative; }
-  /* Tighter gap and a slightly smaller toggle: giving the toggle its own
-     column costs the date ~48px, and "Sat, Jun …" truncating the month is
-     a worse trade than 6px of breathing room. 36px still clears the 36px
-     touch floor for a control sitting inside a larger tappable row. */
-  .slate-meta { gap: 6px; flex-wrap: nowrap; overflow: hidden; }
-  .slate-meta .theme-toggle { width: 36px; height: 36px; font-size: var(--fs-xl); }
-  /* The BOX shrinks, the reach does not — same trick the "why?" pill uses.
-     36px is under Apple's 44px minimum, and a control you have to aim at
-     is a control you stop using. */
-  .slate-meta .theme-toggle::after {
-    content: ""; position: absolute; top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 44px; height: 44px;
-  }
-  #slate-date { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; }
-}
+/* [old phone toggle lift — removed 2026-08-11] */
 
-/* Below ~1200px the page nav and the status row can no longer reliably
-   share a line — and "reliably" is the whole point. CFB hides three tabs
-   it has no engine for, so its nav is narrower than MLB's; at 1024 that
-   meant MLB got a three-row header and CFB got two, and switching sports
-   moved the whole page by 48px under your finger.
+/* [old status-row wrap — removed 2026-08-11] */
 
-   So below the threshold the status row always takes its own line, for
-   every sport. Content must not decide layout — a header that is one
-   pixel taller for one league is a header that jumps. */
-@media (min-width: 761px) and (max-width: 1199px) {
-  .slate-meta { flex: 1 0 100%; margin-left: 0; justify-content: flex-start; }
-}
-
-/* Between the phone menu and a wide desktop, the page nav and the status
-   row cannot share a line: with all eight tabs they need ~1,208px and a
-   1,024px window has 984. So below the width where they DO fit, the
-   status row takes its own line — for every sport.
-
-   That last part is the whole point. Left to the wrap algorithm, college
-   football (which hides three tabs it has no engine for) fitted on one
-   line at 1,024 while every other sport wrapped, so the header was 120px
-   on one board and 168px on the next. Content must not decide layout. */
-@media (min-width: 761px) and (max-width: 1247px) {
-  .slate-meta { flex: 1 0 100%; margin-left: 0; justify-content: flex-start; }
-  /* It used to be lifted "up in the corner" to stop the 40px button setting
-     this row's height. The corner is not empty: at 761-1247px it landed on
-     top of the sport-switch pill's right end, overlapping its border — the
-     same fault reported on the phone, one breakpoint over, found by the
-     test written for the phone one. Seven pixels of row height is a cheaper
-     price than a button that looks bolted on. */
-  #theme-toggle { position: static; margin-left: auto; flex: 0 0 auto;
-                  width: 36px; height: 36px; font-size: var(--fs-xl); }
-  #slate-date { min-width: 0; }
-}
+/* [old status-row wrap — removed 2026-08-11] */
 
 /* ============================================================
    Standings + the postseason bracket
@@ -3511,7 +2956,7 @@ select.calc-in { width: auto; font-weight: 600; }
 }
 .rec-scope:hover { color: var(--text); }
 .rec-scope.active {
-  background: none; border-bottom-color: var(--brand);
+  background: none; border-bottom-color: var(--brand-2);
   color: var(--text);
 }
 /* The count is the honest part: a scope with nothing in it still appears,
@@ -3678,133 +3123,7 @@ select.calc-in { width: auto; font-weight: 600; }
   font-weight: 500; }
 
 
-/* §9 — the standing record line.
-   "The site currently shows -14.0% ROI and a declining P&L curve on a
-   sub-page. In this direction, publishing your own losses is the central
-   argument, so surface the running ROI and record in the masthead."
-
-   Deliberately quiet type on a loud position: it sits under the 3px rule in
-   mono at caption size, because the point is that it is ALWAYS there, not
-   that it shouts. A number that shouts on a good night shouts on a bad one
-   too, and the whole claim is that this one does not move. */
-.standing {
-  /* The topbar is a WRAPPING FLEX row, not a grid — `grid-column: 1/-1`
-     meant nothing here, so this landed as an auto-width item at the default
-     order 0 and rendered ABOVE the masthead. `flex: 1 1 100%` takes the
-     whole row and a high order puts it last, under the nav where §6.2 has
-     it. Checked by rendering; reading the rule would not have shown it. */
-  flex: 1 1 100%; order: 9;
-  display: flex; gap: 20px; flex-wrap: wrap; align-items: baseline;
-  padding: 8px 0 2px; margin-top: 6px;
-  border-top: var(--hairline) solid var(--border-soft);
-  font-family: var(--font-mono); font-size: var(--fs-2xs);
-  letter-spacing: .05em; color: var(--text-mute); text-decoration: none;
-}
-.standing:hover { color: var(--text-dim); }
-.standing b { font-weight: 600; color: var(--good); }
-.standing b.neg { color: var(--bad); }
-.standing .lbl { text-transform: uppercase; letter-spacing: .18em;
-  font-family: var(--font-sans); font-weight: 700; color: var(--text-mute); }
-.standing:empty { display: none; }
-@media (max-width: 760px) { .standing { gap: 12px; font-size: var(--fs-2xs); } }
-
-
-/* ---------------- Header rhythm ----------------
- * The topbar carries THREE layers of information and used to render them as
- * one 157px slab: identity and league on the first line, eleven page tabs
- * and the freshness chips fighting for the second, the running record on a
- * third pressed up underneath. Rows sat 9 and 15px apart with no rule
- * between them, so nothing told the eye where one thing ended and the next
- * began.
- *
- * Three fixes, no new ink:
- *   1. Separate the layers with space and a single hairline, so identity is
- *      visibly not navigation.
- *   2. Give the page tabs the whole width by moving the status chips down
- *      onto the record line, where they belong anyway — freshness and record
- *      are both "how much should you trust this", and eleven tabs sharing a
- *      line with them left the nav squeezed into half the bar.
- *   3. Let the two label rows differ. They were the same weight, so they
- *      competed; the league is the primary axis of the site and reads
- *      louder, the page tabs read quieter and smaller underneath it.
- */
-.topbar { padding: 16px 26px 12px; row-gap: 4px; }
-
-/* The league row hugs its buttons instead of stretching a container across
-   the bar, and closes with a hairline that separates identity from pages. */
-.brand { flex: 1 1 100%; align-items: flex-start; gap: 18px;
-  padding-bottom: 13px; border-bottom: var(--hairline) solid var(--border-soft); }
-/* Spacing comes from the container's gap, not from a margin on each button.
-   `.sport-btn:last-child` matches the last button of its GROUP rather than
-   the last button of the row, so zeroing its margin ran "UFC" straight into
-   "MORE". A gap has no such edge case.
-   (The groups were `display: contents` when that was written, which made
-   every button a direct child of this row; they are boxes on desktop now —
-   see the `min-width: 761px` block — and the hazard is the same either
-   way.) */
-.sport-switch { flex: 0 1 auto; margin-left: 22px; margin-top: 6px;
-  gap: 26px; flex-wrap: wrap; }
-
-/* Below 1248px the switcher takes the whole width instead of squeezing in
-   beside the wordmark, because there it measurably does not fit beside it:
-   the brand block is 318px and the eleven buttons want 860-900px, so at
-   1100px they are 86px short of what is left over and at 960px they are
-   346px short. That is not a near miss tighter spacing recovers — the
-   switcher wrapped to two rows at 960 and three at 900, and each of those
-   is ~44px of header. Given its own line it has 886px at 960 and fits on
-   one row.
-
-   THIS BLOCK HAS TO SIT AFTER THE RULES ABOVE, and the first attempt put
-   it at line ~3150 with the other 761-1247 rules, where every declaration
-   in it was silently overridden by `.sport-switch { flex: 0 1 auto;
-   margin-left: 22px }` further down this file. Same specificity, later
-   wins, and a media query adds none. The layout appeared to change anyway
-   — `.brand { flex-wrap: wrap }` was doing all the work from the earlier
-   block — so the measurement looked like a success while four of the five
-   declarations did nothing.
-
-   Above 1248px nothing here applies: the two genuinely fit side by side
-   (1178px of content in 1228px) and the `min-width: 761px` block's
-   `flex-wrap: nowrap` holds that layout. */
-@media (min-width: 761px) and (max-width: 1247px) {
-  /* row-gap, because the wordmark and the switcher are STACKED here and
-     the 18px that separated them across a row is too much between lines.
-     Left at the row values the stack cost 24px of air and the header grew
-     even though the switcher had stopped wrapping. */
-  .brand { flex-wrap: wrap; row-gap: 2px; }
-  .sport-switch { flex: 1 1 100%; margin-left: 0; margin-top: 0; }
-}
-.sport-btn { font-size: var(--fs-md); letter-spacing: .14em;
-  padding: 5px 0 9px; margin-right: 0; }
-
-/* Page tabs: the full width, quieter than the league row above them. */
-.nav { flex: 1 1 100%; order: 5; gap: 26px; margin-top: 11px; }
-.nav-btn { font-size: var(--fs-sm); letter-spacing: .1em; font-weight: 600;
-  padding: 7px 0 10px; }
-
-/* Status: freshness and the running record on one line, under everything. */
-/* order 10 against the record's 9: the record leads the status line and the
-   chips close it, which is the reading order the sentence has anyway. In
-   DOM order the chips come first, so without this they landed on the left
-   and the record was pushed into the middle of the bar. */
-.slate-meta { order: 10; flex: 0 1 auto; margin-left: auto; gap: 14px;
-  justify-content: flex-end; font-size: var(--fs-sm); padding-top: 11px; }
-.standing { flex: 1 1 auto; order: 9; border-top: 0; margin-top: 0;
-  padding: 15px 18px 2px 0; gap: 22px; }
-
-/* The tagline was clipping mid-word ("AI-POWERED MLB PLA…") because it was
-   capped at 34ch inside a column that had room for more. It sits under the
-   masthead on its own line now, so it can simply be as long as it is. */
-.tagline { max-width: none; }
-
-@media (max-width: 1100px) {
-  .nav { gap: 18px; }
-  .sport-switch { gap: 18px; }
-}
-@media (max-width: 900px) {
-  .brand { padding-bottom: 0; border-bottom: 0; }
-  .slate-meta, .standing { padding-top: 0; }
-}
+/* [old masthead / standing / masthead-brief — removed 2026-08-11] */
 
 /* The Kalshi board. Six cells: sport chip, the market's own title (the one
    unbounded column, so it takes the flexible track and the ellipsis),
@@ -3858,103 +3177,6 @@ select.calc-in { width: auto; font-weight: 600; }
 .lab-bar { display: inline-block; height: 8px; min-width: 1px; border-radius: 0; background: var(--good); opacity: .55; }
 .lab-bar.neg { background: var(--bad); }
 .lab-bins td, .lab-bins th { white-space: nowrap; }
-
-
-/* ============================================================
-   The masthead, after you have met it
-   ============================================================
-   Measured on an iPhone 13, the full masthead is ~790px: mark, wordmark,
-   tagline, running ROI, record, the journaling promise, and the status
-   chips. More than a phone screen of "what this is and why trust it",
-   ahead of the picks, on every single load.
-
-   That block is doing a real job for a first-time reader and no job at
-   all for the fifth visit. So it runs once. After that the same two facts
-   — what this is, and what the record is — sit on one line, and the full
-   block is one tap away. Nothing is removed; the pitch is just not
-   re-delivered to someone who has heard it.
-
-   Keyed off <html class="intro-seen">, set before first paint.
-
-   Only below 1248px, and that number is measured, not chosen for
-   tidiness. Above it the header lays the identity and the status row out
-   side by side, so removing the wordmark buys nothing: the picks sat at
-   369px with the full masthead and 370px without it. Trading the name of
-   the site for negative one pixel is not a trade. Below it the header is
-   stacked and the saving is real — 43px at 1024, 54px at 760, 105px on a
-   phone — which is where the complaint came from. */
-.masthead-brief { display: none; }
-
-@media (max-width: 1247px) {
-
-/* Hidden only while the brief line is COLLAPSED, rather than hidden and
-   then un-hidden. `display: revert` was the obvious way to bring them
-   back and it is wrong: both the `none` and the original `flex` are
-   author-origin declarations, so reverting drops the whole author origin
-   and lands on the UA default — `.brand-home` came back as an inline <a>,
-   which stacked the mark above the wordmark and ran the record into one
-   paragraph. Expanded has to be pixel-identical to a first visit, so the
-   rule simply must not match there. */
-:root.intro-seen:not(:has(.masthead-brief[aria-expanded="true"])) .brand-home,
-:root.intro-seen:not(:has(.masthead-brief[aria-expanded="true"])) .standing {
-  display: none;
-}
-
-:root.intro-seen .masthead-brief {
-  display: flex; align-items: center; gap: 10px;
-  width: 100%; padding: 10px 0; background: none; border: 0;
-  border-bottom: var(--hairline) solid var(--border-soft);
-  color: var(--text-dim); cursor: pointer; text-align: left;
-  font: inherit;
-}
-.masthead-brief .mb-mark { flex: 0 0 auto; width: 20px; height: 20px; }
-.masthead-brief .mb-mark svg {
-  width: 100%; height: 100%; stroke: var(--brand); stroke-width: 3.5;
-}
-.masthead-brief .mb-name {
-  font-family: var(--font-display); font-size: var(--fs-md);
-  color: var(--text); letter-spacing: .01em;
-}
-/* The record is the point of the line — it is the one claim this site
-   makes that a picks service will not. Numeric font so it lines up with
-   every other figure on the page. */
-.masthead-brief .mb-rec {
-  margin-left: auto; font-variant-numeric: tabular-nums;
-  font-size: var(--fs-sm); letter-spacing: .02em;
-  /* Same colour rule as the full masthead's ROI. A running record that
-     reads neutral whether it is up or down is the one presentation this
-     site cannot make — a losing number has to look like one. */
-  color: var(--good);
-}
-.masthead-brief .mb-rec.neg { color: var(--bad); }
-.masthead-brief:hover .mb-name { color: var(--brand); }
-
-/* Expanded again, by tap: the full block comes back — the same state a
-   first visit is in — and this button stays, demoted to a "Hide" at the
-   end of the header. It does NOT disappear. A control that removes itself
-   on activation leaves no way back without a reload, and drops keyboard
-   focus onto nothing at the moment it is being used. */
-.masthead-brief .mb-hide { display: none; }
-:root.intro-seen .masthead-brief[aria-expanded="true"] {
-  /* Past .slate-meta's order:10, so it closes the header instead of
-     opening it — the full masthead is the identity now, and this is only
-     the way out of it. */
-  order: 11; padding: 4px 0 0; border-bottom: 0;
-  font-size: var(--fs-2xs); letter-spacing: .16em; text-transform: uppercase;
-}
-:root.intro-seen .masthead-brief[aria-expanded="true"] .mb-mark,
-:root.intro-seen .masthead-brief[aria-expanded="true"] .mb-name,
-:root.intro-seen .masthead-brief[aria-expanded="true"] .mb-rec {
-  display: none;
-}
-:root.intro-seen .masthead-brief[aria-expanded="true"] .mb-hide {
-  display: inline; margin-left: auto;
-}
-:root.intro-seen .masthead-brief[aria-expanded="true"]:hover .mb-hide {
-  color: var(--brand);
-}
-
-} /* end @media (max-width: 1247px) — the compact masthead */
 
 
 /* The Overhead, where it sits outside a venue card.
@@ -4021,13 +3243,13 @@ select.calc-in { width: auto; font-weight: 600; }
   font: inherit; font-size: var(--fs-sm); }
 .mc-pick b { color: var(--text); font-weight: 700; }
 .mc-pick:hover { border-color: var(--text-mute); }
-.mc-pick.active { border-color: var(--brand); color: var(--text);
+.mc-pick.active { border-color: var(--brand-2); color: var(--text);
   background: var(--fill-subtle); }
 .mc-pick-tag { font-size: var(--fs-xs); font-weight: 800;
   letter-spacing: .06em; text-transform: uppercase; color: var(--good); }
 .mc-pick-pct { font-variant-numeric: tabular-nums; }
 /* "Just landed" — first sighting on our tape under ten minutes ago. */
-.mc-new { font-size: var(--fs-xs); font-weight: 800; color: var(--brand);
+.mc-new { font-size: var(--fs-xs); font-weight: 800; color: var(--brand-2);
   letter-spacing: .06em; text-transform: uppercase; margin-left: 6px; }
 .mc-exit-why { margin: 10px 0 0; padding-left: 18px;
   font-size: var(--fs-sm); color: var(--text-body); }
@@ -4060,7 +3282,7 @@ select.calc-in { width: auto; font-weight: 600; }
 .mc-dock-stats .metric .k { font-size: var(--fs-xs); }
 .mc-dock-stats .metric .v { font-size: var(--fs-md); margin-top: 0; }
 .mc-chart-link { background: none; border: 0; padding: 0; cursor: pointer;
-  color: var(--brand); font: inherit; font-size: var(--fs-xs);
+  color: var(--brand-2); font: inherit; font-size: var(--fs-xs);
   font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .mc-chart-link:hover { text-decoration: underline; }
 .mc-board td, .mc-board th { white-space: nowrap; }
@@ -4157,81 +3379,7 @@ select.calc-in { width: auto; font-weight: 600; }
    of the dead band between the header and the first real content. */
 .nav-hint:empty { display: none; margin: 0; padding: 0; }
 
-/* ==================================================================
-   COMPACT NAVIGATION (desktop) — Ethan: "shrink that top bar so there
-   is just a three-bar menu thing … I don't want it to hide shit."
-   So: one slim bar (hamburger + brand + where-you-are + live badges),
-   and the ENTIRE existing switcher one tap away in a dropdown — the
-   same #menu-toggle machinery the phone uses, with desktop clothes.
-   Nothing is removed from the DOM; the pin puts the full bar back
-   permanently for anyone who prefers it. Phones (≤760px) are entirely
-   untouched — their menu is its own system. */
-.nav-pin { display: none; font: inherit; font-size: var(--fs-xs);
-  font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--text-mute); background: none; cursor: pointer;
-  border: var(--hairline) solid var(--border); padding: 6px 10px; }
-.nav-pin:hover { color: var(--text); border-color: var(--text-mute); }
-
-@media (min-width: 761px) {
-  body.nav-compact header { display: flex; flex-wrap: wrap;
-    align-items: center; gap: 8px 20px; position: relative;
-    padding-top: 10px; padding-bottom: 10px; }
-  /* The bar: hamburger first, then brand, badges pushed right. */
-  body.nav-compact .menu-toggle { display: inline-flex; order: -1;
-    align-items: center; gap: 9px; background: none; cursor: pointer;
-    color: var(--text); font: inherit; font-size: var(--fs-sm);
-    font-weight: 700; border: var(--hairline) solid var(--border);
-    padding: 8px 13px; }
-  body.nav-compact .menu-toggle:hover { border-color: var(--text-mute); }
-  /* The three bars: solid fills on the span and its pseudo-elements —
-     borders read to the hairline audit as mis-weighted accent rules,
-     and gradients are banned from the chrome outright. */
-  body.nav-compact .mt-bars { display: inline-block; width: 15px;
-    height: 2px; background: currentColor; position: relative;
-    margin: 5px 0; }
-  body.nav-compact .mt-bars::before,
-  body.nav-compact .mt-bars::after { content: ""; position: absolute;
-    left: 0; width: 15px; height: 2px; background: currentColor; }
-  body.nav-compact .mt-bars::before { top: -5px; }
-  body.nav-compact .mt-bars::after { top: 5px; }
-  /* One ROW, enforced: a later masthead rule gives .brand flex-basis
-     100%, which stacked the bar's three slim pieces into three rows —
-     186px of "compact". */
-  body.nav-compact .brand { flex: 0 1 auto; }
-  body.nav-compact .slate-meta { margin-left: auto; flex: 0 0 auto; }
-  /* Everything fat leaves the bar (never the DOM). */
-  body.nav-compact .sport-switch, body.nav-compact .nav,
-  body.nav-compact .menu-head, body.nav-compact .nav-hint,
-  body.nav-compact #standing-record,
-  body.nav-compact .masthead-brief { display: none; }
-  /* The tap: the whole switcher as a dropdown panel under the bar,
-     groups stacked under their own labels, pages beside them. */
-  body.nav-compact.menu-open .sport-switch { display: flex;
-    flex-direction: column; align-items: stretch; gap: 8px;
-    position: absolute; top: 100%; left: 12px; z-index: 60;
-    background: var(--bg-2); border: var(--hairline) solid var(--border);
-    padding: 14px 16px 12px; min-width: 300px; }
-  body.nav-compact.menu-open .sport-switch .sport-group { display: flex;
-    flex-wrap: wrap; gap: 6px; }
-  body.nav-compact.menu-open .sport-switch .menu-head { display: block;
-    font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em;
-    text-transform: uppercase; color: var(--text-mute); margin: 4px 0 0; }
-  body.nav-compact.menu-open .sport-more { display: contents; }
-  body.nav-compact.menu-open .more-toggle { display: none; }
-  body.nav-compact.menu-open .sport-more .sport-group { display: flex;
-    gap: 6px; }
-  body.nav-compact.menu-open .nav { display: flex; flex-wrap: wrap;
-    align-content: flex-start; gap: 6px; position: absolute; top: 100%;
-    left: 350px; z-index: 60; max-width: 560px;
-    background: var(--bg-2); border: var(--hairline) solid var(--border);
-    padding: 14px 16px; }
-  body.nav-compact.menu-open .nav .nav-indicator { display: none; }
-  body.nav-compact.menu-open .nav-pin { display: block; margin-top: 10px; }
-  /* Full mode keeps a way back to compact. */
-  body:not(.nav-compact) .nav-pin { display: inline-flex;
-    position: absolute; top: 14px; right: 14px; }
-  body:not(.nav-compact) header { position: relative; }
-}
+/* [compact navigation — removed 2026-08-11: the sidebar IS the menu now] */
 
 /* One device pixel, on the screens where 1px stopped meaning that. */
 @media (min-resolution: 2dppx) {
@@ -4400,3 +3548,412 @@ select.calc-in { width: auto; font-weight: 600; }
    card you are re-reading after a loss. The other two are facts about the
    world and need no emphasis. */
 .r-inference { color: var(--text-dim); font-style: italic; }
+
+/* ============================================================
+   NEW LOOK — 2026-08-11, from Ethan's render, shipped faithfully.
+   ============================================================
+   "go new look … copy my render and ship it fully."
+
+   The dialect: near-black with a violet cast, one electric accent
+   (--brand violet), gold reserved for the Qellys mark, green for
+   money-good and red for money-bad, soft 12-14px radii, and light
+   built from GLOW (violet shadow tokens) instead of the old
+   hairline-and-bone newspaper look. Gradients and shadows are now
+   legal — but only through the tokens below, so the page stays one
+   system instead of fifty opinions (tests/test_newlook.py).
+
+   Deliberately not shipped, per Ethan and per what this site is:
+   no balance chip, no bet slip, no "Place Bet", no deposits. The
+   slip-shaped hole is filled by the honest equivalents — My Bets
+   (your own log) and Bankroll (your unit sizing).
+   ============================================================ */
+:root {
+  --bg: #07070C;
+  --bg-2: #0A0A13;
+  --panel: #10101B;
+  --panel-2: #161626;
+  --panel-3: #1D1D30;
+  --border: #272741;
+  --border-soft: #1C1C2F;
+  --text: #F1F1FA;
+  --text-dim: #BCBCD4;
+  --text-body: #D6D6E8;
+  --text-mute: #9999B3;
+  --text-faint: #7B7B91;
+  --brand: #8D5BF2;
+  --brand-2: #A88FF7;
+  --brand-ink: #F1F1FA;
+  --gold: #F5B93B;
+  --good: #42C268;
+  --bad: #DF5953;
+  --warn: #F79D00;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 14px;
+  --topbar-bg: rgba(7, 7, 12, .82);
+  /* Light lives in tokens so every glow on the site is the SAME glow. */
+  --glow: 0 0 0 1px rgba(141, 91, 242, .28), 0 6px 28px rgba(141, 91, 242, .16);
+  --glow-soft: 0 10px 30px rgba(0, 0, 0, .45);
+  --grad-brand: linear-gradient(135deg, #8D5BF2, #6B2BD6);
+  --grad-card: radial-gradient(130% 100% at 50% 0%, rgba(141, 91, 242, .18), rgba(7, 7, 12, 0) 62%);
+  --grad-chip: linear-gradient(180deg, rgba(141, 91, 242, .22), rgba(141, 91, 242, .08));
+  --font-display: "Archivo Narrow", var(--font-sans);
+}
+:root[data-theme="light"] {
+  --bg: #F4F4FB;
+  --bg-2: #ECECF6;
+  --panel: #FFFFFF;
+  --panel-2: #F6F5FD;
+  --panel-3: #EEECF9;
+  --border: #D9D7EC;
+  --border-soft: #E6E4F4;
+  --text: #17172A;
+  --text-dim: #43436A;
+  --text-body: #2B2B4A;
+  --text-mute: #6E6E92;
+  --text-faint: #A9A9C6;
+  --brand: #7D3BEE;
+  --brand-2: #8D5BF2;
+  --brand-ink: #FFFFFF;
+  --gold: #B87E10;
+  /* Amber stays the material-conditions colour — but it can no longer
+     alias --brand (violet since the pivot). Its own value, both themes. */
+  --warn: #B45309;
+  /* The original light block declares its own --grad-brand (old amber)
+     at higher specificity than the base :root — re-pin the violet here
+     or TOP GAME and the active league chip go amber in light. */
+  --grad-brand: linear-gradient(135deg, #7D3BEE, #8D5BF2);
+  --topbar-bg: rgba(244, 244, 251, .88);
+  --glow: 0 0 0 1px rgba(125, 59, 238, .22), 0 6px 24px rgba(125, 59, 238, .12);
+  --glow-soft: 0 10px 26px rgba(23, 23, 42, .10);
+  --grad-card: radial-gradient(130% 100% at 50% 0%, rgba(125, 59, 238, .10), rgba(244, 244, 251, 0) 62%);
+  --grad-chip: linear-gradient(180deg, rgba(125, 59, 238, .16), rgba(125, 59, 238, .05));
+}
+
+/* ---------------- The bar ---------------- */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 18px;
+  height: 64px; padding: 0 20px;
+  background: var(--topbar-bg);
+  backdrop-filter: blur(16px);
+  border-bottom: var(--hairline) solid var(--border-soft);
+}
+.menu-toggle { display: none; }
+.brand-home { display: flex; align-items: center; gap: 11px; color: inherit;
+  text-decoration: none; flex: 0 0 auto; }
+.logo { width: 38px; height: 38px; display: grid; place-items: center;
+  background: none; border: 0; }
+.qmark { width: 100%; height: 100%; stroke: var(--gold); stroke-width: 3.4; }
+.brand-words h1 { font-family: var(--font-display); font-size: var(--fs-xl);
+  font-weight: 700; letter-spacing: .34em; line-height: 1; white-space: nowrap;
+  text-transform: uppercase; }
+.brand-words h1 span { color: var(--text-mute); font-weight: 600; }
+.tagline { color: var(--text-mute); font-size: var(--fs-2xs); margin-top: 3px;
+  font-weight: 700; letter-spacing: .22em; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 34ch; }
+
+.nav { display: flex; align-items: center; gap: 4px; margin: 0 auto; min-width: 0; }
+.nav-indicator { display: none; }
+.nav-btn, .topnav-tool {
+  border: 0; background: transparent; cursor: pointer; color: var(--text-mute);
+  font: inherit; font-size: var(--fs-sm); font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase;
+  padding: 9px 13px; border-radius: var(--radius-sm); white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.nav-btn:hover, .topnav-tool:hover { color: var(--text); background: var(--panel-2); }
+.nav .nav-btn.active, .nav .topnav-tool.active {
+  color: var(--text); background: var(--panel-2); box-shadow: inset 0 -2px 0 var(--brand); }
+.live-count { display: inline-grid; place-items: center; min-width: 17px; height: 17px;
+  margin-left: 6px; padding: 0 4px; border-radius: 999px; background: var(--bad);
+  color: #fff; font-size: var(--fs-2xs); font-weight: 800; letter-spacing: 0; }
+.live-count[hidden] { display: none; }
+
+.slate-meta { display: flex; align-items: center; gap: 10px; color: var(--text-dim);
+  font-size: var(--fs-sm); flex: 0 0 auto; margin-left: auto; min-width: 0; }
+.meta-ico { display: grid; place-items: center; width: 34px; height: 34px;
+  border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-mute);
+  cursor: pointer; transition: color var(--dur-fast) var(--ease-out),
+  background var(--dur-fast) var(--ease-out); }
+.meta-ico:hover { color: var(--text); background: var(--panel-2); }
+.meta-ico svg { width: 17px; height: 17px; }
+.nav-hint { display: none; }
+
+/* ---------------- The shell: sidebar · content · rail ---------------- */
+.shell { display: grid; grid-template-columns: 240px minmax(0, 1fr);
+  max-width: 1760px; margin: 0 auto; align-items: start; }
+body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
+.shell main { max-width: none; margin: 0; min-width: 0; }
+
+.sidebar { position: sticky; top: 64px; height: calc(100vh - 64px);
+  overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 18px 14px 20px; border-right: var(--hairline) solid var(--border-soft);
+  background: var(--bg-2); scrollbar-width: thin; }
+
+.sb-greet { padding: 2px 10px 0; line-height: var(--lh-tight); }
+.sb-greet span { display: block; color: var(--text-mute); font-size: var(--fs-sm); }
+.sb-greet b { display: block; font-size: var(--fs-xl); font-weight: 800;
+  color: var(--text); overflow: hidden; text-overflow: ellipsis; }
+
+.sb-sec { display: flex; flex-direction: column; gap: 4px; }
+.sb-label { margin: 12px 10px 4px; font-size: var(--fs-2xs); font-weight: 800;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--text-mute); }
+.sb-group { display: flex; flex-direction: column; gap: 2px; }
+
+.sb-item { display: flex; align-items: center; gap: 11px; width: 100%;
+  border: 0; background: transparent; cursor: pointer; text-align: left;
+  color: var(--text-dim); font: inherit; font-size: var(--fs-md); font-weight: 600;
+  padding: 9px 10px; border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.sb-item:hover { background: var(--panel-2); color: var(--text); }
+.sb-item.active { background: var(--grad-chip); color: var(--text);
+  box-shadow: inset 2px 0 0 var(--brand); }
+.sb-ico { width: 17px; height: 17px; flex: 0 0 auto; color: var(--text-mute); }
+.sb-item.active .sb-ico, .sb-item:hover .sb-ico { color: var(--brand-2); }
+.sb-badge { margin-left: auto; display: inline-grid; place-items: center;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--bad); color: #fff; font-size: var(--fs-2xs); font-weight: 800; }
+.sb-badge[hidden] { display: none; }
+
+.sb-chips { flex-direction: row; flex-wrap: wrap; gap: 6px; padding: 0 4px; }
+.sb-chips .sport-btn { flex: 1 1 calc(33.3% - 6px); border: var(--hairline) solid var(--border);
+  background: var(--panel); color: var(--text-mute); cursor: pointer; font: inherit;
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em;
+  padding: 8px 2px; border-radius: var(--radius-sm); text-align: center; text-transform: uppercase;
+  transition: all var(--dur-fast) var(--ease-out); }
+.sb-chips .sport-btn:hover { color: var(--text); border-color: var(--brand-2); }
+.sb-chips .sport-btn.active { background: var(--grad-brand); border-color: transparent;
+  color: #fff; box-shadow: var(--glow); }
+
+/* High Confidence — the render's toggle card, wired to a real filter. */
+.sb-hcm { margin-top: auto; display: flex; flex-direction: column; gap: 10px;
+  padding: 13px 13px 12px; border-radius: var(--radius);
+  border: var(--hairline) solid var(--border);
+  background: var(--panel) }
+.sb-hcm { background-image: var(--grad-card); }
+.sb-hcm-words { display: flex; gap: 10px; align-items: flex-start; }
+.sb-hcm-words svg { width: 20px; height: 20px; color: var(--brand-2); flex: 0 0 auto; }
+.sb-hcm-words b { display: block; font-size: var(--fs-md); }
+.sb-hcm-words span { display: block; color: var(--text-mute); font-size: var(--fs-xs);
+  margin-top: 2px; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; }
+.sb-hcm-switch { display: flex; align-items: center; gap: 9px; border: 0;
+  background: transparent; cursor: pointer; color: var(--text-mute);
+  font: inherit; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; padding: 0; }
+.sb-hcm-switch .knob { position: relative; width: 40px; height: 22px;
+  border-radius: 999px; background: var(--panel-3); border: var(--hairline) solid var(--border);
+  transition: background var(--dur-base) var(--ease-out); }
+.sb-hcm-switch .knob::after { content: ""; position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%; background: var(--text-mute);
+  transition: transform var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out); }
+.sb-hcm-switch.on .knob { background: var(--grad-brand); border-color: transparent; }
+.sb-hcm-switch.on .knob::after { transform: translateX(18px); background: #fff; }
+.sb-hcm-switch.on { color: var(--text); }
+
+.sb-foot { display: flex; flex-direction: column; gap: 10px; padding: 2px 6px 0; }
+.standing { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline;
+  color: var(--text-mute); font-size: var(--fs-2xs); font-family: var(--font-mono);
+  text-decoration: none; line-height: var(--lh-snug); }
+.standing:hover { color: var(--text-dim); }
+.standing b { font-weight: 600; color: var(--good); }
+.standing b.neg { color: var(--bad); }
+.standing .lbl { text-transform: uppercase; letter-spacing: .14em; font-weight: 700; }
+.standing:empty { display: none; }
+.sb-foot-links { display: flex; gap: 4px; }
+.sb-foot-links .sport-btn { border: 0; background: transparent; color: var(--text-mute);
+  cursor: pointer; font: inherit; font-size: var(--fs-xs); font-weight: 700;
+  padding: 5px 8px; border-radius: var(--radius-sm); letter-spacing: .06em; }
+.sb-foot-links .sport-btn:hover { color: var(--text-dim); background: var(--panel-2); }
+.sb-foot-links .sport-btn.active { color: var(--text); }
+
+/* ---------------- The rail ---------------- */
+.rail { position: sticky; top: 64px; max-height: calc(100vh - 64px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 14px; padding: 22px 18px 22px 4px;
+  scrollbar-width: thin; }
+.rail-card { border: var(--hairline) solid var(--border); border-radius: var(--radius);
+  background: var(--panel); background-image: var(--grad-card); padding: 15px 16px; }
+.rail-title { display: flex; align-items: center; gap: 8px;
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-dim); }
+.rail-list { list-style: none; margin: 11px 0 0; padding: 0; display: flex;
+  flex-direction: column; gap: 9px; }
+.rail-list li { position: relative; padding-left: 15px; color: var(--text-body);
+  font-size: var(--fs-sm); line-height: var(--lh-body); }
+.rail-list li::before { content: ""; position: absolute; left: 0; top: .52em;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--brand); }
+.rail-list b { color: var(--text); }
+.rail-more { display: inline-block; margin-top: 12px; color: var(--brand-2);
+  font-size: var(--fs-xs); font-weight: 700; text-decoration: none;
+  letter-spacing: .04em; }
+.rail-more:hover { color: var(--text); }
+.rail-quiet { margin: 10px 0 0; color: var(--text-mute); font-size: var(--fs-sm); }
+.rail-game { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px;
+  padding: 9px 0; border-bottom: var(--hairline) solid var(--border-soft);
+  font-size: var(--fs-sm); align-items: center; }
+.rail-game:last-of-type { border-bottom: 0; }
+.rail-game span { display: flex; align-items: center; gap: 7px; color: var(--text-dim); }
+.rail-game b { font-family: var(--font-mono); }
+.rail-game em { grid-column: 1 / -1; font-style: normal; color: var(--text-mute);
+  font-size: var(--fs-2xs); }
+
+/* ---------------- Home: stadium strip dressing ---------------- */
+.hero-games .game-card { border: var(--hairline) solid var(--border); border-radius: var(--radius-lg);
+  background-color: var(--panel); background-image: var(--grad-card);
+  overflow: hidden; transition: border-color var(--dur-fast) var(--ease-out),
+  box-shadow var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.hero-games .game-card:hover { border-color: var(--brand-2); box-shadow: var(--glow);
+  transform: translateY(-2px); }
+.stadium-wrap { position: relative; }
+.top-game-tag { position: absolute; top: 10px; right: 10px; z-index: 3;
+  padding: 4px 9px; border-radius: var(--radius-sm); background: var(--grad-brand); color: #fff;
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+  box-shadow: var(--glow); }
+.game-time-chip { position: absolute; top: 10px; left: 10px; z-index: 3;
+  padding: 4px 9px; border-radius: var(--radius-sm); background: rgba(7, 7, 12, .72);
+  border: var(--hairline) solid var(--border); color: var(--text-dim);
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em; font-family: var(--font-mono); }
+:root[data-theme="light"] .game-time-chip { background: rgba(255, 255, 255, .78);
+  color: var(--text-dim); }
+
+/* ---------------- Home: Top Picks strip ---------------- */
+.tp-title { align-items: baseline; flex-wrap: wrap; }
+.tp-more { margin-left: auto; color: var(--brand-2); font-size: var(--fs-xs);
+  font-weight: 700; text-decoration: none; }
+.tp-more:hover { color: var(--text); }
+#top-picks { margin: 26px 0 6px; }
+.tp-strip { display: grid; grid-auto-flow: column; grid-auto-columns: 292px;
+  gap: 12px; overflow-x: auto; padding: 4px 2px 12px;
+  scrollbar-width: thin; scroll-snap-type: x proximity; }
+.tp-card { scroll-snap-align: start; border: var(--hairline) solid var(--border);
+  border-radius: var(--radius); background-color: var(--panel);
+  background-image: var(--grad-card); padding: 13px 14px 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+.tp-card:hover { border-color: var(--brand-2); box-shadow: var(--glow); }
+.tp-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tp-who { min-width: 0; flex: 1; line-height: var(--lh-tight); }
+.tp-who b { display: block; font-size: var(--fs-md); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.tp-who span { display: block; color: var(--text-dim); font-size: var(--fs-xs);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tp-who .tp-when { color: var(--text-mute); }
+.tp-foot { display: flex; align-items: baseline; gap: 10px;
+  border-top: var(--hairline) solid var(--border-soft); padding-top: 9px; }
+.tp-odds { font-family: var(--font-mono); font-size: var(--fs-lg); color: var(--text); }
+.tp-book { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; }
+.tp-edge { margin-left: auto; color: var(--good); font-size: var(--fs-xs);
+  font-weight: 700; font-family: var(--font-mono); }
+
+/* ---------------- Home: performance panels ---------------- */
+#home-perf { margin: 8px 0 26px; }
+.perf-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 12px; }
+.perf-card { border: var(--hairline) solid var(--border); border-radius: var(--radius);
+  background-color: var(--panel); background-image: var(--grad-card);
+  padding: 15px 16px; }
+.perf-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.perf-window { margin-left: auto; color: var(--text-mute); font-size: var(--fs-2xs);
+  font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.perf-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px; margin-bottom: 8px; }
+.perf-tile .k { display: block; color: var(--text-mute); font-size: var(--fs-2xs);
+  font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.perf-tile b { display: block; margin-top: 4px; font-family: var(--font-mono);
+  font-size: var(--fs-2xl); font-weight: 600; }
+.perf-tile .sub2 { display: block; color: var(--text-mute); font-size: var(--fs-2xs);
+  margin-top: 2px; }
+.perf-spark { width: 100%; height: 84px; display: block; margin-top: 6px; }
+.perf-donut-row { display: flex; align-items: center; gap: 18px; }
+.perf-donut { width: 118px; height: 118px; flex: 0 0 auto;
+  transform: rotate(-90deg); }
+.perf-donut text { transform: rotate(90deg); transform-origin: 50px 50px;
+  fill: var(--text); }
+.donut-n { font-size: var(--fs-2xl); font-weight: 700; font-family: var(--font-mono); }
+.donut-k { font-size: var(--fs-2xs); fill: var(--text-mute); letter-spacing: .14em;
+  text-transform: uppercase; }
+.perf-legend { display: flex; flex-direction: column; gap: 8px; font-size: var(--fs-sm);
+  color: var(--text-dim); min-width: 0; }
+.perf-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px;
+  margin-right: 8px; }
+.perf-legend b { color: var(--text); margin: 0 3px; }
+.perf-legend span { color: var(--text-mute); }
+.perf-link { display: inline-block; margin-top: 12px; color: var(--brand-2);
+  font-size: var(--fs-xs); font-weight: 700; text-decoration: none; }
+.perf-link:hover { color: var(--text); }
+
+/* ---------------- Bankroll view ---------------- */
+.bk-card { max-width: 620px; padding: 18px; border-radius: var(--radius);
+  background-image: var(--grad-card); }
+.bk-note { margin: 14px 0 0; color: var(--text-mute); font-size: var(--fs-sm);
+  line-height: var(--lh-body); max-width: var(--measure); }
+
+/* ---------------- Soft radii for the system's shared shapes ---------------- */
+.card, .controls, .stats .tile, .btn, .empty-slate { border-radius: var(--radius); }
+.btn { border-color: var(--border); }
+.btn:hover { background: var(--grad-brand); border-color: transparent; color: #fff; }
+
+/* ---------------- Responsive: rail folds, sidebar becomes drawer ------- */
+@media (max-width: 1279px) {
+  body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr); }
+  .rail { position: static; max-height: none; grid-column: 2;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: start; padding: 0 26px 26px; }
+  .perf-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 900px) {
+  .shell, body.has-rail .shell { display: block; }
+  .rail { padding: 0 16px 22px; }
+
+  .menu-toggle { display: grid; place-items: center; width: 42px; height: 42px;
+    border: var(--hairline) solid var(--border); border-radius: var(--radius-sm); background: transparent;
+    color: var(--text); cursor: pointer; flex: 0 0 auto; }
+  .mt-bars { position: relative; width: 16px; height: 2px; border-radius: 1px;
+    background: currentColor; }
+  .mt-bars::before, .mt-bars::after { content: ""; position: absolute; left: 0;
+    width: 16px; height: 2px; border-radius: 1px; background: currentColor;
+    transition: transform var(--dur-base) var(--ease-out); }
+  .mt-bars::before { top: -5px; }
+  .mt-bars::after { top: 5px; }
+  .menu-open .mt-bars { background: transparent; }
+  .menu-open .mt-bars::before { transform: translateY(5px) rotate(45deg); }
+  .menu-open .mt-bars::after { transform: translateY(-5px) rotate(-45deg); }
+  .mt-label { display: none; }
+
+  /* The drawer: the SAME sidebar, slid in from the left under the bar.
+     Nothing is a second copy of anything — one rail, two positions. */
+  .sidebar { position: fixed; top: 64px; left: 0; bottom: 0; z-index: 50;
+    width: min(84vw, 330px); height: auto;
+    transform: translateX(-102%); transition: transform var(--dur-base) var(--ease-spring);
+    border-right: var(--hairline) solid var(--border); box-shadow: none; }
+  body.menu-open .sidebar { transform: translateX(0); box-shadow: var(--glow-soft); }
+  body.menu-open { overflow: hidden; }
+  body.menu-open::after { content: ""; position: fixed; inset: 64px 0 0 0;
+    background: rgba(3, 3, 8, .55); backdrop-filter: blur(2px); z-index: 45; }
+}
+
+@media (max-width: 760px) {
+  .topbar { gap: 10px; padding: 0 12px; }
+  .nav { display: none; }           /* the drawer carries every destination */
+  .tagline { display: none; }
+  .brand-words h1 { font-size: var(--fs-md); letter-spacing: .26em; }
+  #data-source { display: none; }
+  .slate-meta { gap: 6px; }
+  #slate-date { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; max-width: 34vw; font-size: var(--fs-xs); }
+  .perf-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .tp-strip { grid-auto-columns: 84vw; }
+}
+
+/* Sidebar items are sentence-case whatever class machinery they carry —
+   .nav-btn's uppercase is top-bar clothing, not the item's. */
+.sidebar .sb-item { text-transform: none; letter-spacing: .01em;
+  font-size: var(--fs-md); font-weight: 600; }
+/* Phone: the freshness chip must truncate, never push past the edge. */
+@media (max-width: 760px) {
+  .live-refresh, #data-source { max-width: 30vw; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+}

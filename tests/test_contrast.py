@@ -39,20 +39,28 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #: places would make this brittle against a one-bit rounding change, so it
 #: is whole Lc.
 BASELINE = {
-    ("text", "bg"): 90, ("text", "panel"): 90,
-    ("text", "panel-2"): 89, ("text", "panel-3"): 89,
-    ("brand", "bg"): 68, ("brand", "panel"): 68,
-    ("brand", "panel-2"): 68, ("brand", "panel-3"): 67,
-    ("text-dim", "bg"): 61, ("text-dim", "panel"): 61,
-    ("text-dim", "panel-2"): 61, ("text-dim", "panel-3"): 60,
-    ("good", "bg"): 59, ("good", "panel"): 59,
-    ("good", "panel-2"): 59, ("good", "panel-3"): 58,
-    ("text-mute", "bg"): 46, ("text-mute", "panel"): 46,
-    ("text-mute", "panel-2"): 46, ("text-mute", "panel-3"): 46,
-    ("bad", "bg"): 36, ("bad", "panel"): 36,
-    ("bad", "panel-2"): 35, ("bad", "panel-3"): 35,
-    ("text-faint", "bg"): 31, ("text-faint", "panel"): 31,
-    ("text-faint", "panel-2"): 30, ("text-faint", "panel-3"): 30,
+    # Re-measured 2026-08-11, the NEW LOOK re-baseline (Ethan's render:
+    # violet-cast near-blacks, violet accent). Every TEXT tier measured
+    # equal or better than the 08-07 numbers. --brand fell from 68 to 32
+    # BY DESIGN: the old brand was amber and painted text; the violet
+    # brand is an ACCENT (borders, fills, glows) and its text duty moved
+    # to --brand-2 (Lc ~50, checked in the audit's floor below) — every
+    # `color: var(--brand)` in the sheet was switched to --brand-2 in
+    # the same commit as this table.
+    ("text", "bg"): 99, ("text", "panel"): 98,
+    ("text", "panel-2"): 98, ("text", "panel-3"): 97,
+    ("brand", "bg"): 32, ("brand", "panel"): 32,
+    ("brand", "panel-2"): 31, ("brand", "panel-3"): 30,
+    ("text-dim", "bg"): 67, ("text-dim", "panel"): 66,
+    ("text-dim", "panel-2"): 66, ("text-dim", "panel-3"): 65,
+    ("good", "bg"): 57, ("good", "panel"): 57,
+    ("good", "panel-2"): 56, ("good", "panel-3"): 55,
+    ("text-mute", "bg"): 48, ("text-mute", "panel"): 47,
+    ("text-mute", "panel-2"): 47, ("text-mute", "panel-3"): 46,
+    ("bad", "bg"): 37, ("bad", "panel"): 37,
+    ("bad", "panel-2"): 36, ("bad", "panel-3"): 35,
+    ("text-faint", "bg"): 33, ("text-faint", "panel"): 32,
+    ("text-faint", "panel-2"): 32, ("text-faint", "panel-3"): 31,
 }
 #: How far a pair may slip before it counts as a regression.
 SLACK = 1.0

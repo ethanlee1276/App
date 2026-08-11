@@ -139,7 +139,10 @@ def test_the_old_name_is_gone():
 
 def test_the_name_is_spelled_the_same_everywhere():
     html = _read("web", "index.html")
-    assert "<h1>Qellys Book</h1>" in html
+    # NEW LOOK (2026-08-11): the wordmark is two words in one h1 — the
+    # span carries the quieter BOOK; CSS uppercases both. The spelling is
+    # still typed exactly once and matches the title/og everywhere.
+    assert "<h1>Qellys <span>Book</span></h1>" in html
     assert "<title>Qellys Book" in html
     assert 'apple-mobile-web-app-title" content="Qellys Book"' in html
     # A bare "Qelly" anywhere means a rename only got half-applied.
@@ -147,7 +150,12 @@ def test_the_name_is_spelled_the_same_everywhere():
                  "server.py", "launch.py",
                  os.path.join("web", "index.html"),
                  os.path.join("docs", "PHONE.md")):
-        assert not re.search(r"Qelly(?!s Book)", _read(name)), name
+        # NEW LOOK (2026-08-11): the wordmark splits across a span, the My
+        # Bets copy says "a Qellys account", and the picks strip is
+        # "Qellys' top picks" — the brand can stand alone now. What the
+        # pin still catches: "Qelly" without the s (the typo it was born
+        # for), and the canonical name drifting in title/og.
+        assert not re.search(r"Qelly(?!s)", _read(name)), name
 
 
 def test_the_mark_matches_the_design_system():
@@ -166,10 +174,14 @@ def test_the_mark_matches_the_design_system():
     # against the wrong ground. make_icon.token reads the first :root
     # block and understands both notations.
     panel_2 = "#%02X%02X%02X" % make_icon.token("panel-2")
-    brand = "#%02X%02X%02X" % make_icon.token("brand")
+    # NEW LOOK (2026-08-11): the UI accent went violet, and the MARK went
+    # gold — the render's one gold element is the Qellys ellipse, so the
+    # tab, the home-screen tile and the header agree on --gold while the
+    # violet stays interface-only. Same one-token discipline, new token.
+    gold = "#%02X%02X%02X" % make_icon.token("gold")
     assert panel_2.lower() in svg.lower(), "tile drifted off --panel-2"
-    assert brand.lower() in svg.lower(), "stroke drifted off --brand"
-    assert make_icon.INK == tuple(int(brand[i:i + 2], 16) for i in (1, 3, 5))
+    assert gold.lower() in svg.lower(), "stroke drifted off --gold"
+    assert make_icon.INK == tuple(int(gold[i:i + 2], 16) for i in (1, 3, 5))
     assert make_icon.TOP == make_icon.BOT, "the tile must stay flat"
 
 
@@ -189,7 +201,7 @@ def test_the_masthead_is_set_in_the_display_face():
     test used to duplicate that check against a hardcoded 400 and went
     stale the moment the family changed."""
     css = _read("web", "css", "styles.css")
-    rule = css[css.index(".brand h1 {"):]
+    rule = css[css.index(".brand-words h1 {"):]
     rule = rule[:rule.index("}") + 1]
     assert "font-family: var(--font-display)" in rule, \
         "the masthead fell back to the body face"

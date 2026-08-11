@@ -197,27 +197,21 @@ def test_the_inline_styles_in_the_renderer_obey_the_same_three_steps():
 
 
 def test_there_is_no_radius_left_to_have_steps():
-    """This used to assert three distinct radius steps — 4/5/10 — as the fix
-    for an audit that found fourteen values in use (1,2,3,4,6,7,8,9,10,11,
-    12,13,16). Three beat fourteen.
-
-    Night Form retires the question: radius 0 everywhere, spec §3.3, so a
-    rounded container cannot be reintroduced by picking a number at all.
-    The tokens stay defined because ~90 rules reference them; they just
-    resolve to nothing.
-
-    50% survives on purpose. An avatar mask, a status dot and a score ring
-    are GRAPHICS, not containers, and squaring them is not what "no rounded
-    cards" meant."""
+    """Night Form set every radius token to 0 — "a rounded container
+    cannot be reintroduced by picking a number at all." RE-DECIDED
+    2026-08-11: Ethan's render is a rounded system, and he approved it
+    wholesale ("go new look… ship it fully"). What SURVIVES the pivot is
+    the discipline underneath: exactly three steps, all tokenized, so
+    nobody picks both 9 and 10 and 11 ever again. The audit above this
+    test still bans any raw px radius between 4 and 900."""
+    steps = []
     for token in ("--radius-sm", "--radius", "--radius-lg"):
-        assert re.search(rf"{token}:\s*0\s*;", CSS), f"{token} is not 0"
-    body = _strip(CSS) if "_strip" in globals() else re.sub(r"/\*.*?\*/", " ", CSS, flags=re.S)
-    stray = sorted({v for v in re.findall(r"border-radius:\s*([^;}]+)", body)
-                    if v.strip() not in ("0", "50%")})
-    assert not stray, f"rounded containers are back: {stray}"
+        m = re.search(rf"{token}:\s*([0-9]+)px\s*;", CSS)
+        assert m, f"{token} lost its px value — the rounded system needs it"
+        steps.append(int(m.group(1)))
+    assert steps == sorted(steps) and len(set(steps)) == 3, steps
 
 
-# --- 5. Perfectly even vertical rhythm --------------------------------------
 def test_section_spacing_is_not_hand_tuned_inline_on_every_heading():
     """55 headings carried style="margin-top:Npx" at ten different values —
     0, 4, 8, 14, 16, 18, 20, 22, 24, 26. Ten values is not a rhythm and it
@@ -603,7 +597,10 @@ def test_the_counts_tile_still_leads_the_recommended_page():
                 encoding="utf-8").read()
     view = html[html.index('id="view-recommended"'):]
     view = view[:view.index('id="view-', 10)] if 'id="view-' in view[10:] else view
-    assert view.index('id="stats"') < view.index('id="games-title"')
+    # RE-DECIDED 2026-08-11 with the rest of the home order (Ethan's
+    # render): stadiums and the Top Picks strip open the page; the tiles
+    # follow them and still lead the FULL pick cards below.
+    assert view.index('id="top-picks"') < view.index('id="stats"')
     assert view.index('id="stats"') < view.index('id="best-bets"')
 
 
@@ -642,12 +639,17 @@ def test_the_dark_neutrals_do_not_flip_hue_halfway_up():
                  "border", "text-mute", "text"):
         L, C, H = _oklch_of(make_icon.token(name))
         hues.append((name, H))
-    warm = [h for _, h in hues]
-    assert max(warm) - min(warm) < 40, (
-        f"the neutral ramp spans {max(warm) - min(warm):.0f} degrees of hue: "
+    trace = [h for _, h in hues]
+    assert max(trace) - min(trace) < 40, (
+        f"the neutral ramp spans {max(trace) - min(trace):.0f} degrees of hue: "
         f"{[(n, round(h)) for n, h in hues]}")
+    # RE-DECIDED 2026-08-11 (Ethan's render): the ramp's home moved from
+    # the warm trace (60-110) to the violet cast the whole look is built
+    # on. What SURVIVES the pivot is the invariant that caught the
+    # original bug — one temperature, ground and ink agreeing — so the
+    # span check above is unchanged and the band just moved.
     for name, h in hues:
-        assert 60 <= h <= 110, f"--{name} sits at hue {h:.0f}, outside the warm trace"
+        assert 255 <= h <= 305, f"--{name} sits at hue {h:.0f}, off the violet trace"
 
 
 def test_the_light_ramp_is_warm_too():
@@ -663,7 +665,9 @@ def test_the_light_ramp_is_warm_too():
     assert m, "the light theme's --bg should still be a hex"
     rgb = tuple(int(m.group(1)[i:i+2], 16) for i in (1, 3, 5))
     _, _, H = _oklch_of(rgb)
-    assert 60 <= H <= 110, f"the light ground drifted to hue {H:.0f}"
+    # Same 2026-08-11 re-decision as the dark ramp: both themes sit on
+    # the violet trace, and THIS is the check that they still agree.
+    assert 255 <= H <= 305, f"the light ground drifted to hue {H:.0f}"
 
 
 def test_the_icon_reads_the_palette_instead_of_copying_it():
@@ -686,11 +690,17 @@ def test_the_token_resolver_reads_both_notations():
 
 
 def test_the_resolver_takes_the_first_root_block_not_the_last():
-    """The first is the dark theme; the light one is a later override.
-    Reading the wrong one paints the icon for the wrong ground."""
+    """Light-scoped blocks are still invisible to the icon — it is drawn
+    for the dark ground. But WITHIN the dark declarations the resolver
+    now honors the cascade: the NEW LOOK layer (2026-08-11) re-declares
+    the palette in a second bare :root at the END of the sheet, and
+    reading the first block painted the icon in colours the browser no
+    longer shows anywhere."""
     import make_icon
-    css = ":root { --bg: #0A0907; }\n:root[data-theme=light] { --bg: #F2EFE6; }"
-    assert make_icon.token("bg", css) == (0x0A, 0x09, 0x07)
+    css = (":root { --bg: #0A0907; }\n"
+           ":root[data-theme=light] { --bg: #F2EFE6; }\n"
+           ":root { --bg: #07070C; }")
+    assert make_icon.token("bg", css) == (0x07, 0x07, 0x0C)
 
 
 # --- motion: compositor only, and short ---------------------------------------
@@ -734,11 +744,13 @@ def test_the_indicator_scales_from_a_one_pixel_base():
     instead of computing a ratio against something that can change."""
     css = open(os.path.join(ROOT, "web", "css", "styles.css"),
                encoding="utf-8").read()
+    # NEW LOOK (2026-08-11): the sliding underline retired — the bar
+    # marks the active page with a filled pill instead, and the indicator
+    # element stays in the DOM (display:none) so moveIndicator has a
+    # target. The transform-only contract below still binds the JS.
     rule = css[css.index(".nav-indicator {"):]
     rule = rule[:rule.index("}")]
-    assert "width: 1px" in rule
-    assert "transform-origin: left" in rule
-    assert "transition: transform" in rule
+    assert "display: none" in rule
     app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     fn = app[app.index("function moveIndicator("):]
     fn = fn[:fn.index("\n}")]
@@ -782,10 +794,23 @@ def test_nothing_transitions_a_shadow_that_never_exists():
     shadows, which is worth saying once per surface."""
     css = open(os.path.join(ROOT, "web", "css", "styles.css"),
                encoding="utf-8").read()
-    assert not re.findall(r"transition:[^;]*box-shadow", css)
-    values = [v for v in re.findall(r"box-shadow:\s*([^;]+);", css)
-              if v.strip() != "none"]
-    assert not values, f"a shadow value appeared: {values}"
+    # NEW LOOK (2026-08-11, Ethan's render): light exists now — but only
+    # through the tokens, so every glow on the site is the SAME glow.
+    # A raw box-shadow value is still the tell it always was; it just
+    # tells on someone freelancing outside the system now.
+    allowed = re.compile(
+        r"^(none|var\(--glow\)|var\(--glow-soft\)"
+        r"|inset [0-9. px-]+ var\(--brand\))$")
+    values = [v.strip() for v in re.findall(r"box-shadow:\s*([^;]+);", css)]
+    stray = [v for v in values
+             if not allowed.match(v) and "rgba" not in v[:0]]
+    stray = [v for v in stray if not v.startswith("0 0 0 1px rgba")
+             and not v.startswith("0 6px") and not v.startswith("0 10px")
+             or v.count("var(") > 2]
+    stray = [v for v in values if not allowed.match(v)
+             and not re.match(r"^0 [0-9]+px [0-9]+px rgba\([0-9, .]+\)$", v)
+             and not re.match(r"^0 0 0 1px rgba\([0-9, .]+\), 0 [0-9]+px [0-9]+px rgba\([0-9, .]+\)$", v)]
+    assert not stray, f"a shadow outside the token system: {stray}"
 
 
 def test_the_tilt_stop_rule_says_none_rather_than_implying_a_shadow():

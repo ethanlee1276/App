@@ -120,15 +120,13 @@ def test_the_panel_moves_up_for_a_gap_and_back_afterwards():
 
 # --- the More menu ----------------------------------------------------------
 def test_the_more_menu_opens_under_its_own_button():
-    """Right-aligning a 200px menu to the right edge of a 55px button hangs
-    145px of it out to the left, so it opened under "WNBA" and "UFC".
-    Measured at 1440 before the fix: button 630-685, menu 485-685."""
-    i = CSS.index('.sport-more .sport-group[data-group="tools"] {')
-    block = CSS[i:CSS.index("}", CSS.index("z-index: 60", i))]
-    assert re.search(r"position: absolute;[^}]*left: 0;", block), \
-        "the dropdown is not anchored to the button's left edge"
-    assert "right: 0" not in block
-
+    """The More menu is gone (NEW LOOK, 2026-08-11): its whole reason to
+    exist was a header with no room, and the sidebar has room for every
+    destination. What must survive redesigns is the DESTINATIONS — Why Us
+    and About stay reachable, one click, no popover."""
+    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    assert 'data-sport="why"' in html and 'data-sport="about"' in html
+    assert html.index('data-sport="why"') > html.index('id="sidebar"')
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

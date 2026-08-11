@@ -69,16 +69,26 @@ def test_they_are_still_different_hues():
 
 
 def test_warn_is_an_alias_and_cannot_silently_split_from_brand():
-    """Two independent hexes agreeing is a coincidence one edit away from
-    ending. §1 of the redesign decisions says amber is ONE colour."""
-    assert re.search(r"--warn:\s*var\(--brand\)", DECLS), "warn is not an alias"
-    assert mi.token("warn") == mi.token("brand")
+    """INVERTED 2026-08-11 with the brand itself: the alias existed
+    because the old brand WAS amber ("amber is ONE colour", §1). The NEW
+    LOOK brand is violet — a violet warning is a category error — so
+    warn now owns its amber outright, and the pin flips: warn must NEVER
+    resolve to the brand again."""
+    assert mi.token("warn") != mi.token("brand"), \
+        "warn is riding the violet brand — warnings have gone purple"
+    L, C, H = pf.srgb_to_oklch(mi.token("warn"))
+    assert 45 <= H <= 95, f"warn drifted off amber (hue {H:.0f})"
 
 
 def test_both_themes_carry_the_alias():
     """The light theme is a separate block, and a fix applied to one half
-    of a two-theme palette is half a fix."""
-    assert len(re.findall(r"--warn:\s*var\(--brand\)", DECLS)) == 2
+    of a two-theme palette is half a fix. Since the split, that means:
+    BOTH themes declare their own --warn hex after the old alias lines,
+    so neither can fall back to the violet brand."""
+    vals = [v.strip() for v in re.findall(r"--warn:\s*([^;]+);", DECLS)]
+    # Cascade order: the old aliases still exist upstream and LOSE; the
+    # two WINNING declarations (dark layer, then light layer) are hexes.
+    assert len(vals) >= 2 and vals[-1].startswith("#") and vals[-2].startswith("#"), vals
 
 
 def test_the_token_reader_follows_an_alias():

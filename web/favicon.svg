@@ -7,12 +7,12 @@
        and read as a magnifying glass at 16px.
 
        Flat tile, one stroke, no gradient: the same chrome as everything
-       else. Colours are --panel-2 and --brand from web/css/styles.css.
+       else. Colours are --panel-2 and --gold from web/css/styles.css.
        Identical geometry to the header tile in index.html and to
        apple-touch-icon.png — change all three together, or the tab, the
        home screen and the page stop looking like one brand. -->
-  <rect width="48" height="48" fill="#13110D"/>
-  <g fill="none" stroke="#FFB000" stroke-width="3.4">
+  <rect width="48" height="48" fill="#161626"/>
+  <g fill="none" stroke="#F5B93B" stroke-width="3.4">
     <ellipse cx="24" cy="24" rx="17" ry="11.5"/>
   </g>
 </svg>

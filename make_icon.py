@@ -85,11 +85,20 @@ def token(name: str, css: str | None = None, _hops: int = 0) -> tuple:
     if css is None:
         css = (Path(__file__).resolve().parent / "web" / "css"
                / "styles.css").read_text(encoding="utf-8")
-    root = css[css.index(":root"):]
-    root = root[:root.index("}")]
-    m = re.search(rf"--{re.escape(name)}:\s*([^;]+);", root)
-    if not m:
+    # EVERY bare `:root {` block, cascade order — the NEW LOOK layer
+    # (2026-08-11) re-declares the dark tokens at the END of the sheet,
+    # so "the first block" stopped being the truth the browser paints.
+    # `[data-theme="light"]`-scoped blocks are still excluded: the icon
+    # is drawn for the dark ground. The LAST declaration wins, exactly
+    # like the cascade it mirrors.
+    root = ""
+    for m0 in re.finditer(r"(?<![\]\w\-\"]):root\s*\{", css):
+        block = css[m0.end():css.index("}", m0.end())]
+        root += block + "\n"
+    hits = re.findall(rf"--{re.escape(name)}:\s*([^;]+);", root)
+    if not hits:
         raise KeyError(name)
+    m = re.search(r"(.+)", hits[-1])
     val = m.group(1).strip()
     if val.startswith("#"):
         return tuple(int(val[i:i + 2], 16) for i in (1, 3, 5))
@@ -109,7 +118,7 @@ def token(name: str, css: str | None = None, _hops: int = 0) -> tuple:
 # stylesheet rather than transcribed, so the tile cannot drift off the
 # palette the way it already did once.
 TOP = BOT = token("panel-2")
-INK = token("brand")
+INK = token("gold")
 
 SS = 4                           # supersampling factor per axis
 

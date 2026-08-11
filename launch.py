@@ -1779,6 +1779,7 @@ SWEEP_VIEWS = [
     ("Rocket Radar", "?sport=mlb#memes", "#memes-body"),
     ("Injuries (MLB)", "?sport=mlb#injuries", "#injuries-body"),
     ("My Bets", "?sport=mlb#mybets", "#mybets-body"),
+    ("Bankroll", "?sport=mlb#bankroll", "#view-bankroll"),
     ("Why Us", "?sport=mlb#why", "#why-body"),
 ]
 

@@ -70,11 +70,15 @@ def test_the_scroller_follows_its_own_heading():
 
 
 def test_the_summary_tiles_still_lead():
-    """The four-number strip is a summary of the page, so it stays at the
-    top. Putting the venues above it would push the one line that says how
-    many picks there are below a row of stadium diagrams."""
+    """RE-DECIDED 2026-08-11 (Ethan's render: "copy it and ship it"):
+    the home page opens like the render — stadium strip, then the Top
+    Picks strip, THEN tonight's tiles and the performance panels. The
+    tiles still sit above the full pick cards, so the count still leads
+    the thing it counts."""
     html = _html()
-    assert html.index('class="stats"') < html.index('id="games-title"')
+    assert html.index('id="top-picks"') < html.index('class="stats"')
+    assert html.index('class="stats"') < html.index('id="home-perf"')
+    assert html.index('id="home-perf"') < html.index('id="best-bets"')
 
 
 def test_the_preseason_stays_under_the_picks():
@@ -102,8 +106,12 @@ def test_nothing_new_slipped_in_above_the_picks():
     # carry ids too, and counting those measures the whole document rather
     # than the thing above the picks.
     start = html.index('id="view-recommended"')
+    # 2026-08-11: top-picks and home-perf joined by Ethan's explicit
+    # call — the render's home IS a dashboard above the full board. The
+    # picks strip that moved up is itself picks, so the thing the page
+    # exists for got closer, not further.
     allowed = {"view-recommended", "probation-note", "talent-note", "stats",
-               "games-title", "games"}
+               "games-title", "games", "top-picks", "home-perf"}
     above = [m.group(1) for m in re.finditer(r'id="([\w-]+)"',
                                              html[start:picks])]
     unexpected = [x for x in above if x not in allowed]

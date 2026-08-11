@@ -257,15 +257,15 @@ def test_the_hint_is_set_on_first_load_too():
 
 
 def test_the_hint_sits_under_the_tabs_rather_than_wherever_flex_put_it():
-    """MEASURED IN CHROMIUM: the header is a flex ROW with hand-assigned
-    order on every child — brand 1, nav 5, standing 9, slate-meta 10. A new
-    element defaults to order 0, and this line rendered ABOVE the masthead,
-    reading as a stray caption on the logo."""
+    """The insider-shorthand problem the hint solved is solved by the
+    sidebar now (NEW LOOK, 2026-08-11): every page item carries its
+    data-hint, and the bar's running hint line retired — display:none,
+    not deleted, so syncNavHint keeps a target and nothing null-crashes."""
     css = _read("web", "css", "styles.css")
     i = css.index(".nav-hint {")
-    block = css[i:i + 400]
-    assert "order:" in block, "no order — flex will sort it to the front"
-    assert "flex: 1 1 100%" in block, "no line of its own"
+    assert "display: none" in css[i:i + 120]
+    html = _read("web", "index.html")
+    assert html.count("data-hint=") >= 10, "the per-page hints are gone"
 
 
 def _first_room():

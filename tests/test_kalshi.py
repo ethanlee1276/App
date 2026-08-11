@@ -175,7 +175,7 @@ def test_the_page_shows_both_venues_and_names_their_roles():
                 encoding="utf-8").read()
     app = open(os.path.join(ROOT, "web", "js", "app.js"),
                encoding="utf-8").read()
-    assert ">Prediction Mkts<" in html
+    assert "Prediction Mkts</button>" in html   # sidebar item (icon + label)
     flat = " ".join(html.split())
     assert "Kalshi" in flat and "Polymarket" in flat
     assert "function kalshiSectionHTML" in app

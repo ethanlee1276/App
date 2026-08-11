@@ -252,3 +252,44 @@ of prose is set in is a bigger change than a hierarchy repair.
 `tests/test_contrast.py` pins the ladder as an **order**, not as four
 floors. Four independent floor checks would stay green through an
 inversion, which is the exact failure this started as.
+
+---
+
+## THE NEW LOOK — 2026-08-11, Ethan's render
+
+Ethan drew the site he wanted (a dark violet sportsbook-style dashboard:
+left rail of destinations, slim top bar, stadium cards, a Top Picks
+strip, a performance dashboard, insights + live-now in a right rail) and
+said: **"go new look … copy my render and ship it fully. make sure to do
+mobile as well."** This supersedes Night Form's aesthetic decisions
+wholesale. It is the owner's call, made looking at both.
+
+**Excluded by Ethan, and by what this site is:** the balance chip and
+the bet slip. This site never holds money — no "Place Bet", no deposits,
+no balance, no "To Win". `tests/test_newlook.py` pins the ban. The
+slip-shaped needs are served honestly: My Bets (your own log, synced by
+Qellys accounts) and Bankroll (your unit sizing).
+
+**What the pivot changed** (each with its receipt in the tests named):
+- Violet-cast neutral ramp + violet accent; the warm one-hue rule became
+  a violet one-hue rule — the invariant (ground and ink agree, span
+  < 40°) survived, the band moved (`test_design_tells`).
+- The MARK is gold; the interface is violet (`test_newlook`,
+  `test_brand`). favicon/touch icon re-rasterized from the tokens.
+- Shadows and gradients are legal, but only through tokens
+  (--glow/--glow-soft/--grad-*/--skeleton) — one light, one system.
+- Radii came back as three tokenized steps (8/12/14) — same "no picking
+  9 AND 10 AND 11" discipline, non-zero values.
+- Text tiers re-solved with APCA on the new grounds (faint was Lc 13
+  when eyeballed; shipped at 31+). --brand stopped being a text colour;
+  --brand-2 (Lc ~50) carries accent text, and every `color: var(--brand)`
+  moved to it.
+- The header's four generations of layout CSS (~49KB) were deleted, not
+  overridden. Sidebar = drawer = one element. The nav-indicator, More
+  menu, masthead-brief, compact-nav and phone menu-grid all retired.
+- Home = the render's dashboard: stadiums → Top Picks → tonight's tiles
+  → Your Performance (real journal, losses in red) → the full board.
+  Board-order pins updated with this paragraph as the receipt.
+
+Display face: Archivo Narrow 700 (already self-hosted) wears the
+wordmark and display duties; Bodoni stays only in og-card.

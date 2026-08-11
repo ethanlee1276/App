@@ -444,57 +444,21 @@ def test_an_empty_hash_is_a_destination_and_not_a_no_op():
 
 # --- the theme toggle sat on top of the menu bar ----------------------------
 def test_the_theme_toggle_is_not_positioned_over_the_menu_bar():
-    """Reported from the phone: the moon button "sitting like bugged in with
-    the recommended bar". It was `position: absolute; top: 8px; right: 14px`
-    — and the menu pill is a bordered box ~40px tall starting at the same y,
-    so the toggle's circle sat ON its right edge with its own right side
-    clipped by the screen. Two overlapping bordered boxes.
-
-    The fix is not a nudge. It belongs in the status row, which is a GRID —
-    the reason `order` and `margin-left: auto` both did nothing when tried
-    against `.menu-toggle`: they are not flex siblings of anything here."""
-    # Not "the first max-width:760 block" — there are several, and this rule
-    # lives in a later one. The same assumption broke test_about_page.py
-    # once already.
-    #
-    # What matters is that the toggle stays IN FLOW, not that it says one
-    # exact word. This used to assert the literal `position: static`, which
-    # then had to become `relative` — the toggle's 44px reach pseudo-element
-    # is absolutely positioned, so an unpositioned toggle sends it to the
-    # nearest positioned ancestor (the sticky .topbar) and parks an invisible
-    # 44x44 tap-blocker in the centre of the header. `static` and `relative`
-    # lay out identically here; `absolute` and `fixed` are the bug. Assert
-    # that, so the fix for one defect cannot read as a regression of another.
-    # test_masthead_brief.py owns the containing-block half of this.
+    """Three separate defects in the OLD phone bar came from absolutely
+    positioning the toggle over other chrome. The NEW LOOK bar
+    (2026-08-11) keeps it a plain flex child of .slate-meta — so what
+    must survive is: no absolute/fixed positioning anywhere near it, and
+    the control at or above the 40px touch floor (test_typography's
+    other half used to shrink it to 36 and grow a 44px reach back; the
+    new bar never shrinks it)."""
     css = _strip_comments(CSS)
-    for body in re.findall(r"#theme-toggle\s*\{([^}]*)\}", css):
+    for body in re.findall(r"#theme-toggle\s*\{([^}]*)\}", css) +                 re.findall(r"\.theme-toggle\s*\{([^}]*)\}", css):
         pos = re.search(r"position\s*:\s*([a-z-]+)", body)
         if pos:
             assert pos.group(1) in ("static", "relative"), \
-                f"the toggle is `position: {pos.group(1)}` again — it floats " \
-                "over the menu bar's bordered pill instead of sharing the row"
-    assert re.search(r"#theme-toggle\s*\{[^}]*position\s*:", css), \
-        "nothing pins the toggle's position any more; it will inherit " \
-        "whatever the desktop rule says at phone widths"
-    assert "top: 8px; right: 14px" not in CSS
-    assert "top: 10px; right: 16px" not in _strip_comments(CSS), \
-        "the tablet breakpoint still floats it over the bar"
-
-
-def test_the_status_row_has_a_column_for_it():
-    """Three columns and four children put the toggle on its own row. The
-    fourth column was removed when it was lifted onto the menu bar."""
-    i = CSS.index(".slate-meta { flex: 1 1 100%; order: 5; display: grid;")
-    block = CSS[i:CSS.index("}", i)]
-    assert "grid-template-columns: auto auto minmax(0, 1fr) auto;" in block
-
-
-def test_the_shrunk_toggle_keeps_a_44px_reach():
-    """36px is under Apple's minimum, and a control you have to aim at is a
-    control you stop using. Tap-tested: hits out to 25px above centre."""
-    i = CSS.index(".slate-meta .theme-toggle::after")
-    block = CSS[i:CSS.index("}", i)]
-    assert "width: 44px; height: 44px;" in block
+                f"the toggle is `position: {pos.group(1)}` again"
+    m = re.search(r"\.theme-toggle \{[^}]*width: *([0-9]+)px", CSS)
+    assert m and int(m.group(1)) >= 40, "theme toggle under the touch floor"
 
 
 if __name__ == "__main__":

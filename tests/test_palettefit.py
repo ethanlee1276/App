@@ -37,8 +37,7 @@ def _darken(css: str, ink: str, target: float) -> str:
     L, C, H = pf.srgb_to_oklch(mi.token(ink, css))
     _newL, rgb = pf.solve(target, C, H, mi.token(pf.BINDING_GROUND, css))
     hexv = "#%02X%02X%02X" % rgb
-    out, n = re.subn(r"(--%s:\s*)(#[0-9A-Fa-f]{6})" % ink,
-                     lambda m: m.group(1) + hexv, css, count=1)
+    out, n = pf.sub_last_dark(css, ink, hexv)   # the declaration that WINS
     assert n == 1, ink
     return out
 
@@ -63,8 +62,11 @@ def test_the_solver_hits_the_lc_it_was_asked_for():
 
 # --- it repairs what the ratchet actually complains about --------------------
 def test_a_darkened_token_is_brought_back_over_its_baseline():
-    """The real case: --good at Lc 55 against a recorded 59."""
-    css = _darken(CSS, "good", 55)
+    """The real case, re-numbered with the 2026-08-11 re-baseline: the
+    NEW LOOK's --good records Lc 55 on the binding ground, so the
+    fixture drops it to 50 — clearly through the floor, as the original
+    55-against-59 was."""
+    css = _darken(CSS, "good", 50)
     rows = pf.plan(css=css)
     assert [r["ink"] for r in rows] == ["good"], rows
     fixed = pf.rewrite(css, rows)
@@ -107,12 +109,12 @@ def test_a_passing_token_is_left_alone():
     panel-2 — read as short and four passing tokens were proposed for
     rewriting."""
     assert pf.plan(css=CSS) == [], pf.plan(css=CSS)
-    css = _darken(CSS, "good", 55)
+    css = _darken(CSS, "good", 50)
     assert [r["ink"] for r in pf.plan(css=css)] == ["good"]
 
 
 def test_only_the_named_token_changes_in_the_file():
-    css = _darken(CSS, "good", 55)
+    css = _darken(CSS, "good", 50)
     fixed = pf.rewrite(css, pf.plan(css=css))
     a = [l for l in css.split("\n")]
     b = [l for l in fixed.split("\n")]
@@ -122,14 +124,24 @@ def test_only_the_named_token_changes_in_the_file():
     assert "--good" in a[differing[0]]
 
 
+def _light_blocks(css):
+    """Every `:root[data-theme="light"]` block, brace-matched. There are
+    TWO since the NEW LOOK layer (2026-08-11) — the original theme and
+    the layer's re-tint — and "everything after the first one" stopped
+    being a light-only slice the day the layer added a dark :root after
+    it."""
+    out = []
+    for m in re.finditer(r':root\[data-theme="light"\]\s*\{', css):
+        out.append(css[m.end():css.index("}", m.end())])
+    return out
+
+
 def test_the_light_theme_is_never_rewritten():
     """It has its own values and its own unmeasured contrast. Rewriting it
     from a dark-ground solve changes a colour nobody measured."""
-    css = _darken(CSS, "good", 55)
+    css = _darken(CSS, "good", 50)
     fixed = pf.rewrite(css, pf.plan(css=css))
-    light = fixed[fixed.index(':root[data-theme="light"]'):]
-    was = css[css.index(':root[data-theme="light"]'):]
-    assert light == was
+    assert _light_blocks(fixed) == _light_blocks(css)
 
 
 # --- what it refuses to do ---------------------------------------------------

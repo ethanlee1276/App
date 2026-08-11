@@ -81,12 +81,15 @@ def test_the_ladder_has_three_rungs_and_they_are_ordered():
 
 def test_only_one_thing_overshoots():
     """A spring on everything is a toy. It belongs on the element whose
-    job is to feel physical — the nav indicator — and nowhere else."""
+    job is to feel physical, and nowhere else. That element used to be
+    the nav indicator; the NEW LOOK (2026-08-11) removed the indicator
+    and the spring moved to the sidebar drawer — the one thing on the
+    page that physically arrives."""
     springy = [t for t in TRANSITIONS if "--ease-spring" in t]
     assert len(springy) == 1, springy
     i = DECLS.index("var(--ease-spring)")
     block = DECLS[max(0, i - 400):i]
-    assert "nav-indicator" in block, block[-200:]
+    assert ".sidebar" in block, block[-200:]
 
 
 def test_the_spring_actually_overshoots():
