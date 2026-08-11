@@ -2745,6 +2745,50 @@ def show_desk_probe() -> None:
     else:
         print("  no kalshi cache files present")
 
+    # THE AUTOPSY (third live round, 2026-08-11): the feed returns real
+    # markets and the parser returns zero, so one of them is wrong about
+    # the shape. Fetch a handful raw, run the REAL parser on them, and
+    # print the first object's price-bearing fields plus which gate each
+    # market died at — the next paste names the field, not the vibe.
+    from engine.sources.kalshi import parse_markets
+
+    def autopsy(label, url, key, nested):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "qellys-desk-probe"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                j = _json.loads(resp.read().decode("utf-8", errors="replace"))
+        except Exception as exc:                    # noqa: BLE001
+            print(f"  autopsy {label}: fetch failed · {exc}")
+            return
+        rows = j.get(key) or []
+        markets = []
+        for r in rows:
+            if nested:
+                markets.extend(r.get("markets") or [])
+            else:
+                markets.append(r)
+        parsed = parse_markets(markets)
+        print(f"  autopsy {label}: raw {len(markets)} → parsed {len(parsed)}")
+        for m in markets[:3]:
+            fields = {k: m.get(k) for k in
+                      ("ticker", "status", "yes_bid", "yes_ask", "last_price",
+                       "volume_24h", "close_time")}
+            gate = ("book" if m.get("yes_bid") and m.get("yes_ask")
+                    else "last_trade" if m.get("last_price")
+                    else "REJECTED — no price the parser recognises")
+            print(f"    {gate:10.10} · {fields}")
+        if markets and not parsed:
+            print(f"    full first object keys: {sorted(markets[0].keys())}")
+
+    autopsy("markets page", f"{KALSHI}/markets?limit=5&status=open",
+            "markets", nested=False)
+    autopsy("KXMLBGAME nested",
+            f"{KALSHI}/events?series_ticker=KXMLBGAME&status=open&limit=3&with_nested_markets=true",
+            "events", nested=True)
+    autopsy("KXHIGHNY nested",
+            f"{KALSHI}/events?series_ticker=KXHIGHNY&status=open&limit=3&with_nested_markets=true",
+            "events", nested=True)
+
 
 def show_gates() -> None:
     """What the filters cost or saved — measured, not argued.
