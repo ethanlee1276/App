@@ -310,6 +310,70 @@ def test_the_stats_source_still_wins_over_the_roster():
     assert block.index("for r in list(stats)") < block.index("for name, row in roster.items()")
     assert block.index("for name, row in roster.items()") < block.index("prior_stats")
 
+
+# --- which mark a bet wears -------------------------------------------------
+def test_a_bet_wears_the_mark_of_whatever_it_belongs_to():
+    """Ethan, 2026-08-12: "head shots or team logos next to the props
+    depending on if they are a player prop or team prop. if its a game
+    total or something, we can show the sports logo."
+
+    One decider, `betMark`, so the picks list, the Game Lines room and the
+    open-bet tracker can never disagree about who a bet belongs to. The
+    rule: a side (moneyline / spread / team total) wears its team, a game
+    total wears the league, anything else is a player prop and wears the
+    face."""
+    js = _read("web", "js", "app.js")
+    i = js.index("function betMark(")
+    body = js[i:i + 900]
+    assert 'market === "total"' in body and "leagueMark(" in body, \
+        "a game total must wear the league mark"
+    assert "TEAM_SIDE_MARKETS" in body and "teamMark(" in body, \
+        "a team side must wear its team logo"
+    assert "playerAvatar(" in body, "a player prop must wear the face"
+    m = re.search(r"const TEAM_SIDE_MARKETS = new Set\(\[(.*?)\]\)", js, re.S)
+    assert m, "the team-side market list is gone"
+    for market in ("moneyline", "spread", "team_total"):
+        assert market in m.group(1), market
+    # "total_bases" is a PROP and must never be read as the game total.
+    assert '"total"' in body and "total_bases" not in body
+
+
+def test_every_board_reads_that_one_decider():
+    """Three surfaces show bets: the recommended list, the Game Lines
+    room, and the open-bet tracker. Each must call betMark rather than
+    deciding for itself — the previous inline version drifted the moment
+    a fourth market appeared."""
+    js = _read("web", "js", "app.js")
+    assert js.count("betMark(") >= 5, "a board is deciding its own mark again"
+    # The tracker's rows and the picks list both carry the identity slot.
+    assert js.count('class="pick-id"') >= 2
+
+
+def test_the_tracker_never_prints_a_journal_key_as_a_name():
+    """A game total is journaled under "AWAY@HOME" and a team market under
+    an abbreviation. Printing either verbatim reads as a name — which is
+    what the row did before the marks landed beside it."""
+    js = _read("web", "js", "app.js")
+    i = js.index("const betTxt = (r) =>")
+    body = js[i:i + 1200]
+    assert 'r.market === "total"' in body, "the game total still prints its key"
+    assert "market_label" in body
+    assert body.count("teamName(r.player)") >= 3, \
+        "team markets must resolve their abbreviation to a name"
+
+
+def test_the_league_mark_falls_back_to_a_drawn_chip():
+    """Same contract as the team logos: the image is layered OVER a drawn
+    monogram, so a dead CDN lands on a chip rather than a gap. No emoji —
+    the drawn-art module is emoji-free and its suite enforces it."""
+    js = _js()
+    i = js.index("function leagueMark(")
+    body = js[i:i + 1400]
+    assert "onerror=" in body and "this.remove()" in body, "no fallback"
+    assert "<svg" in body, "nothing underneath the image"
+    assert "combiner/i?img=" in body, "raw path — 3.5x the bytes"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -1042,6 +1042,27 @@ async function loadRecordOnce() {
   return _recordCache;
 }
 
+/* WHO a bet belongs to, as one mark — the rule every board reads from.
+   Ethan, 2026-08-12: "head shots or team logos next to the props
+   depending on if they are a player prop or team prop. if its a game
+   total or something, we can show the sports logo."
+
+   A player prop wears the player's face. A side (moneyline, spread,
+   team total) wears that team's logo. A game total belongs to the game
+   itself and wears the league's mark — the only honest answer when both
+   teams are equally the subject. Every layer falls back to the drawn
+   chip underneath it, so a dead CDN costs nothing. */
+const TEAM_SIDE_MARKETS = new Set(["moneyline", "spread", "team_total"]);
+
+function betMark(r, size = 30) {
+  const market = String(r.market || r.bet_type || "").toLowerCase();
+  if (market === "total") return leagueMark(state.sport, size);
+  if (TEAM_SIDE_MARKETS.has(market) || (!r.player && r.team))
+    return teamMark(r.team || r.player, size);
+  // A prop: a real name, and the face if the payload carries one.
+  return playerAvatar(r.player, r.team, { size, headshot: r.headshot });
+}
+
 async function renderBestBets() {
   const host = document.getElementById("best-bets");
   if (!host) return;
@@ -1073,7 +1094,7 @@ async function renderBestBets() {
     // them), so a big EV can be eyeballed instead of trusted.
     const anchor = (b.reasons || []).find((x) => String(x).startsWith("Sharp anchor"));
     picks.push({ tag: "SHARP", color: "var(--cyan)", quality: 95 + (b.ev_per_unit || 0),
-      id: b.team ? teamMark(b.team, 30) : leagueMark(state.sport, 30),
+      id: betMark(b),
       label: `${b.headline} · ${b.matchup} ${american(b.odds)}`,
       game: whenLabel(b.date, b.kickoff),
       metric: `${signedPct(b.ev_per_unit)} EV`, stake: b.stake_units, grade: b.grade,
@@ -1081,7 +1102,7 @@ async function renderBestBets() {
   }
   for (const b of sig.modelBets) {
     picks.push({ tag: "GAME", color: "var(--brand)", quality: b.quality || b.confidence * 10 || 0,
-      id: b.team ? teamMark(b.team, 30) : leagueMark(state.sport, 30),
+      id: betMark(b),
       label: `${b.headline} · ${b.matchup} ${american(b.odds)}`,
       game: whenLabel(b.date, b.kickoff),
       metric: signedPct(b.edge), stake: b.stake_units, grade: b.grade,
@@ -1090,7 +1111,7 @@ async function renderBestBets() {
   for (const r of sig.props) {
     const twin = staleByKey.get(propKey(r.player, r.market));
     picks.push({ tag: "PROP", color: "var(--brand)", quality: r.quality || r.confidence * 10 || 0,
-      id: playerAvatar(r.player, r.team, { size: 30, headshot: r.headshot }),
+      id: betMark(r),
       label: `${r.player} ${r.side} ${r.line} ${r.market_label} ${american(r.odds)} (${r.book})`,
       game: propGameLine(r),
       metric: signedPct(r.edge), stake: r.stake_units, grade: r.grade,
@@ -1438,9 +1459,22 @@ function renderLivePicks() {
   }
 
   const ml = (r) => r.market === "moneyline";
-  const betTxt = (r) => ml(r)
-    ? `${escapeHtml(teamName(r.player))} Moneyline`
-    : `${escapeHtml(r.player)} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
+  /* A team market's `player` field holds an ABBREVIATION and a game
+     total's holds the journal key "AWAY@HOME" — neither is a name to
+     print. The matchup already sits on the line below every row, so a
+     total says what it is and lets the row underneath say which game. */
+  const betTxt = (r) => {
+    if (ml(r)) return `${escapeHtml(teamName(r.player))} Moneyline`;
+    if (r.market === "total")
+      return `${escapeHtml(r.market_label)} ${escapeHtml(r.side)} ${r.line}`;
+    if (r.market === "spread")
+      // Every journaled spread carries side OVER — the signed number is
+      // what states the direction, so print that instead of the word.
+      return `${escapeHtml(teamName(r.player))} ${r.line > 0 ? "+" : ""}${r.line} ${escapeHtml(r.market_label)}`;
+    if (r.market === "team_total")
+      return `${escapeHtml(teamName(r.player))} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
+    return `${escapeHtml(r.player)} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
+  };
   // What the board recommends at the CURRENT prices — so a journaled bet
   // whose pick has since dropped off (line moved, gate re-closed) can say
   // so instead of looking like a contradiction with Tonight's Picks.
@@ -1568,6 +1602,7 @@ function renderLivePicks() {
                     border-bottom:1px solid rgba(255,255,255,.05)${r.phase === "upcoming" ? ";opacity:.75" : ""}">
           ${r.phase === "live" ? `<span class="live-dot" style="flex-shrink:0"></span>`
             : `<span style="width:8px;flex-shrink:0"></span>`}
+          <span class="pick-id">${betMark(r, 28)}</span>
           <span style="flex:1;min-width:0">
             <strong>${betTxt(r)}</strong>
             <span style="color:var(--text-mute)"> · placed ${american(r.odds)}${
@@ -2018,8 +2053,13 @@ function gameBetCard(r) {
     title = `${escapeHtml(teamName(r.team))} <span class="ml-odds">${ln}</span> <span class="book">${american(r.odds)}</span>`;
     sub = "Spread · cover the number";
   } else if (r.bet_type === "total") {
+    // A game total belongs to the GAME, so it wears the league's mark
+    // rather than either team's. The direction rides as a corner pip —
+    // the arrow used to BE the badge, and dropping it entirely would
+    // cost the over/under scan cue this board is read with.
     const arrow = r.side === "Over" ? "▲" : "▼";
-    mark = `<span class="total-badge ${r.side === "Over" ? "over" : "under"}">${arrow}</span>`;
+    mark = `<span class="mark-stack">${leagueMark(state.sport, 34)}
+      <span class="mark-pip ${r.side === "Over" ? "over" : "under"}">${arrow}</span></span>`;
     title = `${escapeHtml(r.side)} ${r.line} <span class="book">${american(r.odds)}</span>`;
     sub = "Total · combined score";
   } else if (r.bet_type === "team_total") {

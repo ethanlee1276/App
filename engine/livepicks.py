@@ -72,7 +72,8 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             "line": float(b.get("line") or 0),
             "odds": b.get("odds"), "stake_units": b.get("stake_units") or 0,
             "current": None, "status": "unmapped", "phase": "upcoming",
-            "team": "", "game": {}, "category": b.get("category", "main"),
+            "team": "", "headshot": "", "game": {},
+            "category": b.get("category", "main"),
         }
 
     out = []
@@ -170,6 +171,10 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             # will silently mismatch without it.
             "category": b.get("category", "main"),
             "team": (rec or {}).get("team", b.get("player", "")),
+            # The face, for the tracker's identity column. Only a prop has
+            # one — a team market's `player` field holds an ABBREVIATION,
+            # and a game total's holds "AWAY@HOME".
+            "headshot": (rec or {}).get("headshot", ""),
             "game": {"home": g.get("home"), "away": g.get("away"),
                      "game_number": g.get("game_number", 1),
                      "doubleheader": g.get("doubleheader", False),
