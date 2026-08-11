@@ -100,6 +100,21 @@ def main() -> None:
                     if adds is not None or drops is not None else None)
         usage = fantasy.usage_board(conn, season)
         buy_sell = fantasy.buy_sell_board(conn, season)
+        # Faces ride along from the roster file already on disk — the DB
+        # rows these boards are built from carry stats, not photographs.
+        # The UI falls back to the helmet avatar wherever the map is empty,
+        # so an unavailable roster file costs nothing.
+        try:
+            from engine.sources import nflverse
+            faces = nflverse.headshot_map(season)
+        except Exception:
+            faces = {}
+        for rows in (usage, buy_sell.get("buy_low") or [],
+                     buy_sell.get("sell_high") or [],
+                     (trending or {}).get("adds") or [],
+                     (trending or {}).get("drops") or []):
+            for r in rows:
+                r["headshot"] = faces.get(r.get("player") or "", "")
         # Trades must show on EVERY board, not just the draft kit — usage
         # and buy/sell rows come out of the DB wearing last season's teams.
         # The kit was stamped inside build_offseason; these join its moves

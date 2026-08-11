@@ -3475,6 +3475,11 @@ select.calc-in { width: auto; font-weight: 600; }
    near-square and a Texans bull is wide. Cropping to fill would cut the
    part of a logo people recognise. */
 .team-mark-wrap > .team-logo { object-fit: contain; }
+/* One pick, one face: the identity column on the recommended list —
+   a player's face for a prop, a team's mark for a side, the league's
+   for a game total. */
+.pick-id { flex: 0 0 auto; display: inline-flex; align-items: center; }
+.pick-id .avatar-photo, .pick-id .avatar { border-radius: 50%; }
 
 /* --- Is there an edge at all? -------------------------------------------
    The Record page's frame, above the ROI rather than beside it. A -28% ROI

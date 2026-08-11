@@ -320,6 +320,39 @@ function teamMark(abbr, size = 20, src = null, sport = null) {
   </svg>${img}</span>`;
 }
 
+/* The league's own mark, for bets that belong to the GAME rather than to a
+   team or a player — an over/under has no side to wear. Same combiner
+   resize the team logos use; the drawn monogram underneath (the same
+   chip shape teamMark falls back to, in house neutrals) shows only when
+   the CDN image is absent, so a dead host changes nothing. */
+function leagueMark(sport, size = 20) {
+  const s = (sport || "").toLowerCase();
+  const key = ESPN_LEAGUE[s];
+  const uid = "lm" + Math.random().toString(36).slice(2, 7);
+  const label = (key === "ncaa" ? "NCAA" : s.toUpperCase() || "?");
+  const img = key
+    ? `<img class="team-logo" src="https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/${key}.png&w=${size * 2}&h=${size * 2}"
+            width="${size}" height="${size}" alt="" loading="lazy"
+            decoding="async" onerror="this.remove()">`
+    : "";
+  return `<span class="team-mark-wrap league-mark" style="width:${size}px;height:${size}px"
+                role="img" aria-label="${escapeAttr(label)}">
+  <svg class="team-mark" width="${size}" height="${size}" viewBox="0 0 24 24"
+       aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="${uid}" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#3a4668"/>
+        <stop offset="100%" stop-color="#232c49"/>
+      </linearGradient>
+    </defs>
+    <rect x="1" y="1" width="22" height="22" rx="6.5" fill="url(#${uid})"
+          stroke="#1a2138" stroke-width="1"/>
+    <text x="12" y="15.4" text-anchor="middle" font-family="system-ui, sans-serif"
+          font-size="${label.length > 3 ? 6 : 7.5}" font-weight="800"
+          fill="#ffffff">${escapeAttr(label.slice(0, 4))}</text>
+  </svg>${img}</span>`;
+}
+
 /* ---------------- Animated wind gauge ------------------------------------ */
 const COMPASS = { N:0, NNE:22.5, NE:45, ENE:67.5, E:90, ESE:112.5, SE:135, SSE:157.5,
   S:180, SSW:202.5, SW:225, WSW:247.5, W:270, WNW:292.5, NW:315, NNW:337.5,

@@ -1073,6 +1073,7 @@ async function renderBestBets() {
     // them), so a big EV can be eyeballed instead of trusted.
     const anchor = (b.reasons || []).find((x) => String(x).startsWith("Sharp anchor"));
     picks.push({ tag: "SHARP", color: "var(--cyan)", quality: 95 + (b.ev_per_unit || 0),
+      id: b.team ? teamMark(b.team, 30) : leagueMark(state.sport, 30),
       label: `${b.headline} · ${b.matchup} ${american(b.odds)}`,
       game: whenLabel(b.date, b.kickoff),
       metric: `${signedPct(b.ev_per_unit)} EV`, stake: b.stake_units, grade: b.grade,
@@ -1080,6 +1081,7 @@ async function renderBestBets() {
   }
   for (const b of sig.modelBets) {
     picks.push({ tag: "GAME", color: "var(--brand)", quality: b.quality || b.confidence * 10 || 0,
+      id: b.team ? teamMark(b.team, 30) : leagueMark(state.sport, 30),
       label: `${b.headline} · ${b.matchup} ${american(b.odds)}`,
       game: whenLabel(b.date, b.kickoff),
       metric: signedPct(b.edge), stake: b.stake_units, grade: b.grade,
@@ -1088,6 +1090,7 @@ async function renderBestBets() {
   for (const r of sig.props) {
     const twin = staleByKey.get(propKey(r.player, r.market));
     picks.push({ tag: "PROP", color: "var(--brand)", quality: r.quality || r.confidence * 10 || 0,
+      id: playerAvatar(r.player, r.team, { size: 30, headshot: r.headshot }),
       label: `${r.player} ${r.side} ${r.line} ${r.market_label} ${american(r.odds)} (${r.book})`,
       game: propGameLine(r),
       metric: signedPct(r.edge), stake: r.stake_units, grade: r.grade,
@@ -1121,6 +1124,7 @@ async function renderBestBets() {
     <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
                 border-bottom:1px solid rgba(255,255,255,.05)">
       <span style="opacity:.45;min-width:18px;font-weight:700">${i + 1}</span>
+      ${p.id ? `<span class="pick-id">${p.id}</span>` : ""}
       <span class="grade ${gradeClass(p.grade)}" style="flex-shrink:0">${escapeHtml(p.grade || "")}</span>
       <span style="flex:1;min-width:0"><strong>${escapeHtml(p.label)}</strong>
         ${p.game ? `<span style="display:block;font-size:var(--fs-sm);margin-top:2px">${(SPORT_META[state.sport] || {}).logo || ""} ${escapeHtml(p.game)}</span>` : ""}
@@ -3039,7 +3043,7 @@ function longShotCard(r) {
     <article class="card longshot" style="--grade-color:${gradeColor(r.grade)}">
       ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
       <div class="card-head">
-        <div class="card-id">${playerAvatar(r.player, r.team, { map: nflMap() })}
+        <div class="card-id">${playerAvatar(r.player, r.team, { map: nflMap(), headshot: r.headshot })}
           <div>
             <div class="player">${escapeHtml(r.player)} <span class="ml-odds">${american(r.odds)}</span></div>
             <div class="subtitle">${escapeHtml(r.matchup)}${whenLabel(r.game_date, r.game_kickoff)
@@ -7841,7 +7845,7 @@ async function renderFantasy() {
   };
   const usageRow = (u) => `
     <div class="ff-row">
-      <span class="ff-who">${playerAvatar(u.player, u.team, { map: nflMap() })}
+      <span class="ff-who">${playerAvatar(u.player, u.team, { map: nflMap(), headshot: u.headshot })}
         <span class="ff-name"><strong>${escapeHtml(u.player)}</strong>
           <span class="ff-pos">${escapeHtml(u.position)} · ${nflName(u.team)}${
             u.moved_from ? ` <b style="color:var(--warn)">← traded from ${nflName(u.moved_from)}</b>` : ""}${
@@ -7875,7 +7879,7 @@ async function renderFantasy() {
     const buy = kind === "buy";
     return `<article class="card" style="--grade-color:${buy ? "var(--good)" : "var(--warn)"}">
       <div class="card-head">
-        <div class="card-id">${playerAvatar(r.player, r.team, { map: nflMap() })}
+        <div class="card-id">${playerAvatar(r.player, r.team, { map: nflMap(), headshot: r.headshot })}
           <div><div class="player">${escapeHtml(r.player)}</div>
             <div class="subtitle">${escapeHtml(r.position)} · ${nflName(r.team)}${
               r.moved_from ? ` <b style="color:var(--warn)">← traded from ${nflName(r.moved_from)}</b>` : ""}${
@@ -8329,7 +8333,7 @@ function waiverPulseHTML(t) {
       <div style="font-weight:800;margin-bottom:8px">${title}</div>
       ${rows.slice(0, 8).map((r) => `
         <div class="dl-row">
-          <span class="dl-main">${playerAvatar(r.player, r.team, { size: 26, map: nflMap() })}
+          <span class="dl-main">${playerAvatar(r.player, r.team, { size: 26, map: nflMap(), headshot: r.headshot })}
             <span><strong>${escapeHtml(r.player)}</strong>
               <span class="dl-sub">${escapeHtml(r.position || "")} · ${escapeHtml(nflName(r.team))}</span></span></span>
           <span class="dl-num strong" style="color:${tone}"
@@ -9240,7 +9244,7 @@ function renderSleeperPanel(d, ctx) {
   const rowHTML = (r) => `
     <div class="drow" style="display:flex;align-items:center;gap:12px;padding:8px 16px;
         border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="flex:0 0 auto">${playerAvatar(r.name, r.team, { map: nflMap() })}</span>
+      <span style="flex:0 0 auto">${playerAvatar(r.name, r.team, { map: nflMap(), headshot: (r.u || {}).headshot })}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
         <strong>${escapeHtml(r.name)}</strong>
         <span style="color:var(--text-mute)"> ${escapeHtml(r.pos)} · ${escapeHtml(r.team || "FA")}${r.starter ? " · starter" : ""}</span>

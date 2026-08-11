@@ -232,6 +232,25 @@ def roster_index(season: int) -> dict[str, dict]:
     return out
 
 
+def headshot_map(season: int) -> dict[str, str]:
+    """``{player: headshot_url}`` for everyone the roster file knows.
+
+    Unlike ``roster_index`` this keeps EVERY status — a face on the usage
+    board does not stop being his face because he moved to IR. Faces are
+    polish, so an unreachable roster file is an empty map, not an error."""
+    out: dict[str, str] = {}
+    try:
+        rows = load_rosters(season)
+    except DataUnavailable:
+        return out
+    for r in rows:
+        name = _s(r, "full_name", "player_name", "football_name")
+        url = _s(r, "headshot_url", "headshot")
+        if name and url:
+            out.setdefault(name, url)
+    return out
+
+
 def _regular_season(rows: list[dict]) -> list[dict]:
     return [r for r in rows if _s(r, "season_type", "game_type", default="REG") in ("REG", "")]
 
