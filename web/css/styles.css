@@ -3972,8 +3972,17 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .sidebar .sb-item { text-transform: none; letter-spacing: .01em;
   font-size: var(--fs-md); font-weight: 600; }
 /* Phone: the freshness chip must truncate, never push past the edge. */
+.lr-short { display: none; }
 @media (max-width: 760px) {
-  .live-refresh, #data-source { max-width: 30vw; overflow: hidden;
+  /* The bar was cutting its own chips off (Ethan's screenshot): the
+     date is on the board already, so it leaves; the freshness chip
+     drops to its bare age ("3m"), colour still saying updated/stale,
+     the full sentence in the hover title. */
+  #slate-date { display: none; }
+  .lr-full { display: none; }
+  .lr-short { display: inline; }
+  .live-refresh { max-width: none; overflow: visible; }
+  #data-source { max-width: 30vw; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; }
 }
 
@@ -4222,3 +4231,10 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    carries the margin-top:auto that pins the pair to the sidebar's
    bottom; the second must not repeat it or they drift apart. */
 #sb-pz { margin-top: 0; }
+
+/* The venue photo covers the drawn scene when present; every chip and
+   badge rides above it. Missing files remove themselves (onerror). */
+.venue-photo { position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; z-index: 1; }
+.stadium-wrap .status-badge, .stadium-wrap .top-game-tag,
+.stadium-wrap .game-time-chip, .stadium-wrap .gc-picks { z-index: 3; }

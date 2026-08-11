@@ -644,8 +644,13 @@ function updateAgo() {
   const stale = known && (Date.now() - state.builtAt) > STALE_AFTER_MS;
   // Same wording either way so the chip's width barely moves; the live dot
   // is what says "and it's polling because games are running".
+  // Two widths of the same fact: the sentence for desktop, the bare age
+  // for phones (Ethan, 2026-08-11: the bar was "way too crowded and
+  // cutting itself off"). CSS picks; the title carries the sentence
+  // everywhere, and the chip's colour already says updated-vs-stale.
   el.innerHTML = (state.livePolling && !stale ? `<span class="live-dot"></span>` : "")
-    + (stale ? `Stale — built ${ago} ago` : `Updated ${ago} ago`);
+    + `<span class="lr-full">${stale ? `Stale — built ${ago} ago` : `Updated ${ago} ago`}</span>`
+    + `<span class="lr-short">${ago}</span>`;
   el.classList.toggle("idle", !state.livePolling && !stale);
   el.classList.toggle("stale", stale);
   el.title = stale
@@ -2292,7 +2297,16 @@ function gameCard(g) {
     <article class="game-card tilt ${isLive ? "is-live" : ""}" data-gid="${escapeHtml(gameId(g))}"
              role="button" tabindex="0"
              aria-label="Open picks for ${escapeHtml(teamName(g.away))} at ${escapeHtml(teamName(g.home))}">
-      <div class="stadium-wrap">${art}${badge}${
+      <div class="stadium-wrap">${art}${
+        // The drop-in photo slot (Ethan, 2026-08-11: wants the cards to
+        // look exactly like his generated renders). If
+        // web/img/venues/{sport}/{HOME}.jpg exists it covers the drawn
+        // scene; missing images remove themselves and the art shows.
+        // Live games always keep the drawing — it carries the ball
+        // spot, bases and wind, which a photo cannot.
+        !isLive ? `<img class="venue-photo" alt="" loading="lazy"
+          src="img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg"
+          onerror="this.remove()"/>` : ""}${badge}${
         window._topGameId === gameId(g) && !isLive && !isFinal
           ? `<span class="top-game-tag">Top game</span>` : ""}${
         !isLive && !isFinal && whenLabel(g.date, g.kickoff)

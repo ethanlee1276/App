@@ -391,44 +391,73 @@ function windGauge(weather, opts = {}) {
    No <rect> inside a <g> — the plaque rule in the stylesheet hollows
    those (fill:none), which is exactly the bug the on-base comment below
    documents. Ellipses and paths only. */
-function nightFx(uid, home, away) {
+function nightFx(uid, home, away, opts = {}) {
   const defs = `
-    <filter id="${uid}bloom" x="-120%" y="-120%" width="340%" height="340%">
-      <feGaussianBlur stdDeviation="4.5"/>
+    <filter id="${uid}bloom" x="-160%" y="-160%" width="420%" height="420%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+    <filter id="${uid}soft" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <filter id="${uid}grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"
+        stitchTiles="stitch" result="n"/>
+      <feColorMatrix in="n" type="matrix"
+        values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.55 0 0 0 0"/>
     </filter>
     <radialGradient id="${uid}gA" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="${away.primary}" stop-opacity="0.55"/>
+      <stop offset="0%" stop-color="${away.primary}" stop-opacity="0.6"/>
       <stop offset="100%" stop-color="${away.primary}" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="${uid}gH" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="${home.primary}" stop-opacity="0.55"/>
+      <stop offset="0%" stop-color="${home.primary}" stop-opacity="0.6"/>
       <stop offset="100%" stop-color="${home.primary}" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="${uid}vig" cx="50%" cy="46%" r="72%">
+    <radialGradient id="${uid}vig" cx="50%" cy="44%" r="74%">
       <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="62%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#02030A" stop-opacity="0.88"/>
+      <stop offset="58%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#010208" stop-opacity="0.94"/>
     </radialGradient>
     <radialGradient id="${uid}pool" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#F4F8FF" stop-opacity="0.20"/>
-      <stop offset="70%" stop-color="#F4F8FF" stop-opacity="0.05"/>
+      <stop offset="0%" stop-color="#F4F8FF" stop-opacity="0.26"/>
+      <stop offset="65%" stop-color="#F4F8FF" stop-opacity="0.07"/>
       <stop offset="100%" stop-color="#F4F8FF" stop-opacity="0"/>
-    </radialGradient>`;
-  // The colour wash: each side's air carries its team.
+    </radialGradient>
+    <linearGradient id="${uid}rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#DCE6FF" stop-opacity="0.34"/>
+      <stop offset="45%" stop-color="#DCE6FF" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#DCE6FF" stop-opacity="0"/>
+    </linearGradient>`;
+  // Under the architecture: each side's air carries its team, and a
+  // soft haze hangs over the whole bowl the way stadium light does.
   const under = `
-    <ellipse cx="26" cy="118" rx="120" ry="86" fill="url(#${uid}gA)"/>
-    <ellipse cx="214" cy="118" rx="120" ry="86" fill="url(#${uid}gH)"/>`;
-  // The floodlights, twice: a hard head and a bloomed halo — plus the
-  // light POOL on the playing surface that says "night game" at 240px.
+    <ellipse cx="26" cy="118" rx="122" ry="90" fill="url(#${uid}gA)"/>
+    <ellipse cx="214" cy="118" rx="122" ry="90" fill="url(#${uid}gH)"/>
+    <ellipse cx="120" cy="64" rx="120" ry="52" fill="#8FA8E8" opacity="0.07"
+      filter="url(#${uid}soft)"/>`;
+  // The bowl's rim light — the photographic tell of an aerial night
+  // shot: the top edge of the stands catches the floodlights.
+  const bowl = opts.bowl;
+  const rim = bowl ? `
+    <ellipse cx="${bowl.cx}" cy="${bowl.cy}" rx="${bowl.rx}" ry="${bowl.ry}"
+      fill="none" stroke="url(#${uid}rim)" stroke-width="3.2"/>
+    <ellipse cx="${bowl.cx}" cy="${bowl.cy}" rx="${bowl.rx * 0.82}" ry="${bowl.ry * 0.8}"
+      fill="none" stroke="#050817" stroke-opacity="0.5" stroke-width="2"/>` : "";
+  // The floodlights: bloomed halo, hard head, a lens streak, and the
+  // cone falling toward the field. Then darkness at the edges, and a
+  // pass of film grain so the scene reads as a photograph, not a chart.
   const heads = [[30, 26], [210, 26], [12, 96], [228, 96]];
   const over = `
-    <ellipse cx="120" cy="86" rx="86" ry="42" fill="url(#${uid}pool)"/>
+    <ellipse cx="120" cy="86" rx="88" ry="44" fill="url(#${uid}pool)"/>
+    ${rim}
     <rect x="0" y="0" width="240" height="150" fill="url(#${uid}vig)"/>
     ${heads.map(([x, y]) => `
-      <ellipse cx="${x}" cy="${y}" rx="7" ry="3.4" fill="#FFF6D8" opacity="0.9" filter="url(#${uid}bloom)"/>
+      <ellipse cx="${x}" cy="${y}" rx="9" ry="4.4" fill="#FFF6D8" opacity="0.95" filter="url(#${uid}bloom)"/>
       <ellipse cx="${x}" cy="${y}" rx="3.6" ry="1.7" fill="#FFFDF4"/>
-      <path d="M${x} ${y} L${x + (x < 120 ? 44 : -44)} ${y + 52} L${x + (x < 120 ? 14 : -14)} ${y + 56} Z"
-            fill="#F4F8FF" opacity="0.05"/>`).join("")}`;
+      <rect x="${x - 13}" y="${y - 0.6}" width="26" height="1.2" fill="#FFF6D8" opacity="0.5" filter="url(#${uid}bloom)"/>
+      <path d="M${x} ${y} L${x + (x < 120 ? 46 : -46)} ${y + 54} L${x + (x < 120 ? 15 : -15)} ${y + 58} Z"
+            fill="#F4F8FF" opacity="0.06"/>`).join("")}
+    <rect x="0" y="0" width="240" height="150" filter="url(#${uid}grain)" opacity="0.1"/>`;
   return { defs, under, over };
 }
 
@@ -441,10 +470,11 @@ function stadium(game, opts = {}) {
   const retractable = roof === "open";
   const turf = /turf|astro|matrix|sport/.test((game.surface || "grass").toLowerCase());
   // Night palette: the field reads as grass under lights, not daylight.
-  const grass = turf ? "#15603A" : "#1B7A46";
-  const grassDark = turf ? "#0F4A2C" : "#145C35";
+  const grass = turf ? "#0F4A2C" : "#136040";
+  const grassDark = turf ? "#0A3A22" : "#0E4A30";
   const uid = "s" + Math.random().toString(36).slice(2, 7);
-  const fx = nightFx(uid, team(game.home), team(game.away));
+  const fx = nightFx(uid, team(game.home), team(game.away),
+                     { bowl: { cx: 120, cy: 80, rx: 112, ry: 64 } });
   const yardLines = Array.from({ length: 9 }, (_, i) =>
     `<line x1="${70 + i * 12}" y1="52" x2="${70 + i * 12}" y2="108" stroke="#ffffff" stroke-opacity="0.5" stroke-width="1"/>`
   ).join("");
@@ -540,7 +570,7 @@ function stadium(game, opts = {}) {
     <!-- field -->
     <rect x="52" y="50" width="136" height="60" rx="6" fill="${grass}"/>
     <!-- mow stripes -->
-    ${Array.from({length:6},(_,i)=>`<rect x="${52+i*22.7}" y="50" width="11.3" height="60" fill="${grassDark}" opacity="0.35"/>`).join("")}
+    ${Array.from({length:6},(_,i)=>`<rect x="${52+i*22.7}" y="50" width="11.3" height="60" fill="${grassDark}" opacity="0.22"/>`).join("")}
     <!-- end zones -->
     <rect x="52" y="50" width="18" height="60" rx="6" fill="${home.primary}"/>
     <rect x="170" y="50" width="18" height="60" rx="6" fill="${away.primary}"/>
@@ -581,7 +611,8 @@ function court(game, opts = {}) {
   const w = opts.w || 240, h = opts.h || 150;
   const home = team(game.home), away = team(game.away);
   const uid = "c" + Math.random().toString(36).slice(2, 7);
-  const nfx = nightFx(uid, home, away);
+  const nfx = nightFx(uid, home, away,
+                      { bowl: { cx: 120, cy: 80, rx: 114, ry: 62 } });
   return `
   <svg class="field" viewBox="0 0 ${w} ${h}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img"
        aria-label="${escapeAttr(game.away)} at ${escapeAttr(game.home)}">
@@ -647,9 +678,9 @@ function ballpark(game, opts = {}) {
   const covered = roof === "dome" || roof === "closed";
   const turf = /turf/.test((game.surface || "grass").toLowerCase());
   // Night palette — grass under floodlights, dirt gone dusk-warm.
-  const grass = turf ? "#15603A" : "#1B7A46";
-  const grassDark = turf ? "#0F4A2C" : "#145C35";
-  const dirt = "#96683D";
+  const grass = turf ? "#0F4A2C" : "#136040";
+  const grassDark = turf ? "#0A3A22" : "#0E4A30";
+  const dirt = "#7E5533";
   const uid = "bp" + Math.random().toString(36).slice(2, 7);
   const nfx = nightFx(uid, home, away);
   // Occupied bases, live only. `live.bases` is [1], [2, 3], … — the same
@@ -715,6 +746,14 @@ function ballpark(game, opts = {}) {
     <!-- stands: horseshoe bowl open toward the outfield (top) -->
     <path d="M120 152 m-116 -34 a116 96 0 1 1 232 0 l-26 12 a92 74 0 1 0 -180 0 z"
           fill="url(#${uid}stand)" stroke="${shade(home.primary, -40)}" stroke-width="2"/>
+    <!-- The bowl owns the frame (2026-08-11, Ethan: the cards read
+         "cheap" while the bright fan filled them — a night aerial is
+         mostly darkness and seats). The seating apron fills the ring
+         the shrink opens; the field scales as ONE group so every
+         live marker keeps its geometry. -->
+    <ellipse cx="120" cy="92" rx="102" ry="68" fill="${shade(home.primary, -38)}"/>
+    <ellipse cx="120" cy="92" rx="102" ry="68" fill="#05060F" opacity="0.35"/>
+    <g transform="translate(120,100) scale(0.76) translate(-120,-100)">
     <!-- field: outfield grass fan -->
     <path d="M120 132 L34 60 A116 92 0 0 1 206 60 Z" fill="${grass}"/>
     ${/* Mow stripes. Classed so the engraving layer can drop them: as FILLED
@@ -725,7 +764,7 @@ function ballpark(game, opts = {}) {
           are rectangles, which outline into parallel lines. */""}
     ${Array.from({ length: 5 }, (_, i) =>
       `<path class="mow" d="M120 132 L${44 + i * 16} ${56 - i * 2} A116 92 0 0 1 ${72 + i * 20} 34 Z"
-         fill="${grassDark}" opacity="0.18"/>`).join("")}
+         fill="${grassDark}" opacity="0.12"/>`).join("")}
     <!-- outfield wall -->
     <path d="M34 60 A116 92 0 0 1 206 60" fill="none"
           stroke="${shade(home.secondary, -10)}" stroke-width="4" opacity="0.9"/>
@@ -798,6 +837,7 @@ function ballpark(game, opts = {}) {
           fill="#ffffff" opacity="0.85" font-family="system-ui">${escapeAttr(game.park_name || "")}</text>
     ${hrBadge}
     ${altBadge}
+        </g>
     ${nfx.over}
     ${roofOverlay}
   </svg>`;
