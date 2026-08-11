@@ -310,3 +310,22 @@ ball spot, bases, wind. UFC has no home team, so the card page banners
 one octagon hash-picked from the event identity: same card, same arena,
 different cards rotate. Overwriting a variants/ file with a full-res
 version of the same render upgrades every card with no code change.
+
+## The render-sheet pass — 2026-08-11, Ethan's 12 mobile panels
+
+"We should be matching these pages too a tee. Obviously we won't use
+some of the pages like the settings page or rewards." The honest subset
+shipped: My Bets became the sheet's card list (status chips, sport
+filter, legs, stake → to-win arithmetic on the user's own price); the
+Results page grew the analytics header (1W/1M/3M/ALL range chips whose
+NET / WIN RATE / ROI are computed inside the window — pnl_curve now
+carries per-day wins/losses/stake so a 1-month chart never sits above
+all-time numbers); the Live board's cards grew the per-team
+SPREAD|TOTAL|ML grid (no side juice is invented — cells without a real
+number show a dash); the Props page leads with one tile per market
+actually priced tonight, tap to filter; game-card art carries the
+sheet's temp·wind chip when a real reading exists. Excluded on the
+standing no-money rule: the bet slip, Place Bet, deposits, balances,
+plus Rewards and Settings by Ethan's own word. The analytics pass also
+caught and fixed a crasher: the ALL window's Infinity days reached
+toISOString and the resulting throw blanked the entire Record page.

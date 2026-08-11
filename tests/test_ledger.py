@@ -296,7 +296,12 @@ def test_pnl_curve_runs_cumulative_by_date():
 
     curve = ledger.pnl_curve(conn)
     assert [p["date"] for p in curve] == ["2026-07-24", "2026-07-25"]
-    assert curve[0] == {"date": "2026-07-24", "day_u": 1.0, "cum_u": 1.0, "n": 1}
+    assert {k: curve[0][k] for k in ("date", "day_u", "cum_u", "n")} \
+        == {"date": "2026-07-24", "day_u": 1.0, "cum_u": 1.0, "n": 1}
+    # The rows also carry per-day wins/losses/stake so the site's range
+    # analytics (Ethan's render, 2026-08-11) can do window math honestly.
+    assert (curve[0]["w"], curve[0]["l"]) == (1, 0)
+    assert curve[1]["l"] == 1 and curve[0]["staked"] > 0
     # Running total nets the loss against day 1's win.
     assert curve[1]["day_u"] == -1.0 and curve[1]["cum_u"] == 0.0
 

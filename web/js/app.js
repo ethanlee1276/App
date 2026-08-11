@@ -2359,7 +2359,11 @@ function gameCard(g) {
         window._topGameId === gameId(g) && !isLive && !isFinal
           ? `<span class="top-game-tag">Top game</span>` : ""}${
         !isLive && !isFinal && whenLabel(g.date, g.kickoff)
-          ? `<span class="game-time-chip">${escapeHtml((whenLabel(g.date, g.kickoff).split("·").pop() || "").trim())}</span>` : ""}${picksChip}</div>
+          ? `<span class="game-time-chip">${escapeHtml((whenLabel(g.date, g.kickoff).split("·").pop() || "").trim())}</span>` : ""}${
+        // Temp + wind on the art itself (Ethan's stadium render rows,
+        // 2026-08-11) — only outdoors, only when a real reading exists.
+        !isLive && !isFinal && w.temp_f != null && !w.dome && !nba
+          ? `<span class="game-wx-chip">${Math.round(w.temp_f)}° · ${Math.round(w.wind_mph || 0)}mph</span>` : ""}${picksChip}</div>
       <div class="game-info">
         <div class="gc-teams">
           <span class="gc-side">${teamMark(g.away, 30)}${score("away")}</span>
@@ -3573,7 +3577,7 @@ function recBucketTable(title, bucket) {
       ${rows}</div></div>`;
 }
 
-function recCurveChart(curve) {
+function recCurveChart(curve, opts = {}) {
   if (!curve || curve.length < 2) return "";
   const w = 640, h = 190, padL = 46, padR = 14, padT = 16, padB = 28;
   const cums = curve.map((p) => p.cum_u);
@@ -3607,9 +3611,11 @@ function recCurveChart(curve) {
   const area = `M${padL},${y(0)} L${path} L${x(curve.length - 1).toFixed(1)},${y(0)} Z`;
   const gid = `pnlfill${Math.random().toString(36).slice(2, 8)}`;
   const net = last.cum_u;
-  return `
+  const head = `
     <div class="section-title">Running P&amp;L
-      <span class="sub">— every settled pick, by slate date</span></div>
+      <span class="sub">— every settled pick, by slate date</span></div>`;
+  return `
+    ${opts.head === false ? "" : head}
     <div class="card rec-chart">
       <div class="rc-head">
         <div class="rc-net ${toneOf(net)}">${net >= 0 ? "+" : ""}${net.toFixed(2)}u</div>
@@ -3637,6 +3643,73 @@ function recCurveChart(curve) {
       <div class="rc-foot">Hover a dot for that day’s bets. Flat units — every pick
         weighted by its stake, no bankroll compounding.</div>
     </div>`;
+}
+
+/* The analytics block from Ethan's render sheet (2026-08-11): range
+   chips over the equity curve, with NET / WIN RATE / ROI and the bet
+   counts computed INSIDE the chosen window — the curve rows carry each
+   day's wins, losses and stake precisely so a 1-month chart never sits
+   above all-time numbers. Negative numbers stay red; a window with no
+   graded bets says so instead of showing zeros. */
+let _recRange = "all";
+window._recSetRange = (k) => { _recRange = k; renderRecord(); };
+function recAnalytics(curve, o) {
+  if (!curve || curve.length < 2) return recCurveChart(curve);
+  const spanDays = (new Date(curve[curve.length - 1].date)
+                    - new Date(curve[0].date)) / 864e5;
+  const RANGES = [["1w", 7], ["1m", 30], ["3m", 91], ["all", Infinity]];
+  // A chip only exists when it would show a different window than ALL.
+  const avail = RANGES.filter(([k, d]) => k === "all" || spanDays > d);
+  let rk = avail.some(([k]) => k === _recRange) ? _recRange : "all";
+  const days = (avail.find(([k]) => k === rk) || [null, Infinity])[1];
+  // Guard the Date math: Infinity days (the ALL window) must never reach
+  // toISOString — an invalid Date throws and, because the page is one
+  // template literal, one throw blanks every section of the Record page.
+  const rows = !isFinite(days) ? curve : curve.filter((p) =>
+    p.date >= new Date(Date.now() - days * 864e5).toISOString().slice(0, 10));
+  if (!rows.length) {
+    return `<div class="section-title">Running P&amp;L
+        <span class="sub">— every settled pick, by slate date</span>
+        ${raChips(avail, rk)}</div>
+      <p class="rail-quiet" style="margin:0 0 18px">Nothing settled in this
+        window — pick a longer range.</p>`;
+  }
+  // Rebase the running total so the window tells the window's story.
+  const first = curve.indexOf(rows[0]);
+  const base = first > 0 ? curve[first - 1].cum_u : 0;
+  const sliced = rows.map((p) => ({ ...p, cum_u: +(p.cum_u - base).toFixed(2) }));
+  const net = sliced[sliced.length - 1].cum_u;
+  const hasWL = rows.every((p) => p.w != null);
+  const wins = hasWL ? rows.reduce((a, p) => a + p.w, 0) : (rk === "all" ? o.wins : null);
+  const losses = hasWL ? rows.reduce((a, p) => a + p.l, 0) : (rk === "all" ? o.losses : null);
+  const staked = hasWL ? rows.reduce((a, p) => a + (p.staked || 0), 0)
+    : (rk === "all" ? o.units_staked : null);
+  const nBets = rows.reduce((a, p) => a + (p.n || 0), 0);
+  const roi = staked ? net / staked : null;
+  const wr = wins != null && (wins + losses) > 0 ? wins / (wins + losses) : null;
+  const stat = (k, v, tone) => `<div class="ra-stat"><span class="k">${k}</span>
+    <b class="v ${tone || ""}">${v}</b></div>`;
+  return `
+    <div class="section-title">Running P&amp;L
+      <span class="sub">— every settled pick, by slate date</span>
+      ${raChips(avail, rk)}</div>
+    <div class="ra-stats">
+      ${stat("Net P&L", `${net >= 0 ? "+" : ""}${net.toFixed(2)}u`, toneOf(net))}
+      ${stat("Win rate", wr == null ? "—" : (wr * 100).toFixed(1) + "%")}
+      ${stat("ROI", roi == null ? "—" : `${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}%`, toneOf(roi || 0))}
+    </div>
+    ${recCurveChart(sliced, { head: false })}
+    <div class="ra-tiles">
+      <div class="tile"><div class="k">Bets graded</div><div class="v">${nBets}</div></div>
+      <div class="tile"><div class="k">Won</div><div class="v" style="color:var(--good)">${wins == null ? "—" : wins}</div></div>
+      <div class="tile"><div class="k">Lost</div><div class="v" style="color:var(--bad)">${losses == null ? "—" : losses}</div></div>
+    </div>`;
+}
+function raChips(avail, rk) {
+  if (avail.length < 2) return "";
+  return `<span class="ra-ranges">${avail.map(([k]) =>
+    `<button class="ra-range ${k === rk ? "active" : ""}"
+       onclick="_recSetRange('${k}')">${k.toUpperCase()}</button>`).join("")}</span>`;
 }
 
 function recEraSection(er) {
@@ -5501,7 +5574,7 @@ async function renderRecord() {
       not tracked bets.`)}
     ${unstaked}
     ${small}
-    ${recCurveChart(src.curve)}
+    ${recAnalytics(src.curve, o)}
     <div class="section-title">Splits
       <span class="sub">— where the units actually came from. The bar is win rate;
       the number that matters is net.</span></div>
@@ -5764,6 +5837,7 @@ function edgeBoardRows() {
       label: `${r.player} · ${r.side} ${r.line} ${r.market_label}`,
       sub: `${r.book || ""} · ${teamName(r.team)} vs ${teamName(r.opponent)}`,
       odds: r.odds, model: r.hit_prob, implied: r.fair_prob,
+      market: r.market_label || r.market || "Props",
       // The check means "on the Recommended page RIGHT NOW", so it must apply the
       // user's sliders — the build-time flag can disagree with them.
       ev: r.ev_per_unit, grade: r.grade, rec: passesFilters(r),
@@ -5773,6 +5847,7 @@ function edgeBoardRows() {
     .map((b) => ({
       label: b.pick_label, sub: `${b.matchup} · ${b.market_label}`,
       odds: b.odds, model: b.win_prob, implied: b.fair_prob,
+      market: "Game lines",
       ev: b.ev_per_unit, grade: b.grade, rec: passesGameBet(b),
     }));
   return [...props, ...games].sort((a, b) => b.ev - a.ev);
@@ -5824,13 +5899,27 @@ function renderEdgeBoard() {
     market always prices positive — the two sides' edges sum to zero by
     construction — so the length of this list is not a signal. Checked = a tracked
     bet; everything else is a watchlist.`;
-  host.innerHTML = EDGE_BANDS.map(([title, test]) => {
-    const band = rows.filter((r) => test(r.odds));
+  // The render's market grid (Ethan, 2026-08-11): one tile per market
+  // actually priced tonight, its count real, tap to filter the board.
+  const byMarket = {};
+  rows.forEach((r) => { byMarket[r.market] = (byMarket[r.market] || 0) + 1; });
+  const markets = Object.keys(byMarket).sort((a, b) => byMarket[b] - byMarket[a]);
+  let mk = window._edgeMarket || "";
+  if (mk && !byMarket[mk]) mk = "";
+  const grid = markets.length > 1 ? `<div class="pm-grid">
+      ${markets.map((m, i) => `<button class="pm-tile hue${i % 6} ${mk === m ? "active" : ""}"
+        onclick="window._edgeMarket=window._edgeMarket==='${escapeHtml(m)}'?'':'${escapeHtml(m)}';renderEdgeBoard()">
+        <span class="pm-name">${escapeHtml(m)}</span>
+        <span class="pm-count">${byMarket[m]} priced</span></button>`).join("")}
+    </div>` : "";
+  const shown = mk ? rows.filter((r) => r.market === mk) : rows;
+  host.innerHTML = grid + (EDGE_BANDS.map(([title, test]) => {
+    const band = shown.filter((r) => test(r.odds));
     if (!band.length) return "";
     return `<div class="section-title">${title}
         <span class="sub">— ${band.length} bet(s)</span></div>
       <div class="card" style="padding:0">${band.map(edgeRowHTML).join("")}</div>`;
-  }).join("") || "";
+  }).join("") || "");
 }
 
 /* ============================================================
@@ -6823,27 +6912,54 @@ function renderMyBets() {
 
   const resultTag = { win: ["WON", "var(--good)"], loss: ["LOST", "var(--bad)"],
                       push: ["PUSH", "var(--text-mute)"],
-                      pending: ["PENDING", "var(--warn)"] };
-  const row = (b) => {
+                      pending: ["OPEN", "var(--warn)"] };
+  // Status chips + sport filter (Ethan's My Bets render, 2026-08-11).
+  // "Open/Won/Lost" as top-level tabs, sports as a dropdown, and each
+  // bet as a card with its stake and what it stands to return.
+  const stF = window._mbStatus || "all";
+  const spF = window._mbSport || "";
+  const sportsSeen = [...new Set(bets.map((b) => b.sport).filter(Boolean))];
+  const shown = bets.filter((b) =>
+    (stF === "all" || (stF === "open" ? b.result === "pending" : b.result === stF))
+    && (!spF || b.sport === spF));
+  const chip = (val, label) => `<button class="mbc-chip ${stF === val ? "active" : ""}"
+      onclick="window._mbStatus='${val}';renderMyBets()">${label}</button>`;
+  const filterBar = bets.length ? `
+    <div class="mbc-filters">
+      <div class="mbc-chips">${chip("all", "All")}${chip("open", "Open")}${chip("win", "Won")}${chip("loss", "Lost")}${chip("push", "Push")}</div>
+      ${sportsSeen.length > 1 ? `<select class="mbc-sport" onchange="window._mbSport=this.value;renderMyBets()">
+        <option value="">All Sports</option>${sportsSeen.map((s) =>
+          `<option${s === spF ? " selected" : ""}>${escapeHtml(s)}</option>`).join("")}</select>` : ""}
+    </div>` : "";
+  // What a pending bet stands to return — plain American-odds arithmetic
+  // on the user's own stake and price, never a projection.
+  const mbToWin = (b) => !b.odds || !b.stake ? 0
+    : (b.odds > 0 ? b.stake * b.odds / 100 : b.stake * 100 / Math.abs(b.odds));
+  const card = (b) => {
     const [label, color] = resultTag[b.result] || resultTag.pending;
-    const pnl = b.result === "pending" ? "—" : mbMoney(mbProfit(b), true);
+    const legs = (b.desc || "").includes(" + ") ? (b.desc || "").split(" + ") : null;
     const actions = b.result === "pending"
       ? `<button class="mb-act win" onclick="mbResult('${b.id}','win')">Win</button>
          <button class="mb-act loss" onclick="mbResult('${b.id}','loss')">Loss</button>
          <button class="mb-act push" onclick="mbResult('${b.id}','push')">Push</button>`
       : `<button class="mb-act undo" onclick="mbResult('${b.id}','pending')">Reopen</button>`;
-    return `<tr>
-      <td class="num">${escapeHtml(b.date || "")}</td>
-      <td>${escapeHtml(b.book || "")}${b.sport ? ` <span class="inj-pos">${escapeHtml(b.sport)}</span>` : ""}</td>
-      <td>${escapeHtml(b.desc || "")}</td>
-      <td class="num">${b.odds > 0 ? "+" : ""}${escapeHtml(String(b.odds))}</td>
-      <td class="num">${mbMoney(b.stake)}</td>
-      <td class="num"><b style="color:${color}">${label}</b></td>
-      <td class="num" style="color:${pcolor(mbProfit(b))};font-weight:700">${pnl}</td>
-      <td class="mb-actions">${actions}
-        <button class="mb-act del" title="Delete this bet" aria-label="Delete"
-          onclick="mbDelete('${b.id}')">${icon("cross", 12)}</button></td>
-    </tr>`;
+    const outcome = b.result === "pending"
+      ? `To win <b>${mbMoney(mbToWin(b))}</b>`
+      : `<b style="color:${pcolor(mbProfit(b))}">${mbMoney(mbProfit(b), true)}</b>`;
+    return `<article class="mbc ${b.result === "pending" ? "open" : escapeHtml(b.result)}">
+      <div class="mbc-head">
+        <span class="mbc-title">${legs ? `${legs.length}-leg parlay` : escapeHtml(b.desc || "")}</span>
+        <b class="mbc-odds">${b.odds > 0 ? "+" : ""}${escapeHtml(String(b.odds ?? ""))}</b>
+        <b class="mbc-tag" style="color:${color}">${label}</b></div>
+      ${legs ? `<ul class="mbc-legs">${legs.map((l) =>
+        `<li>${escapeHtml(l)}</li>`).join("")}</ul>` : ""}
+      <div class="mbc-sub">${escapeHtml(b.book || "")}${b.sport ? ` · ${escapeHtml(b.sport)}` : ""} · ${escapeHtml(b.date || "")}</div>
+      <div class="mbc-foot"><span class="mbc-stake">${mbMoney(b.stake)} staked</span>
+        <span class="mbc-outcome">${outcome}</span>
+        <span class="mb-actions">${actions}
+          <button class="mb-act del" title="Delete this bet" aria-label="Delete"
+            onclick="mbDelete('${b.id}')">${icon("cross", 12)}</button></span></div>
+    </article>`;
   };
 
   host.innerHTML = `
@@ -6899,11 +7015,9 @@ function renderMyBets() {
         <label class="btn mb-io" style="cursor:pointer">Import<input type="file"
           accept="application/json" style="display:none" onchange="mbImport(this)"></label>
       </span></div>
-    <div class="card" style="padding:0;overflow-x:auto">
-      <table class="agate mb-table"><thead><tr>
-        <th>Date</th><th>Book</th><th>Bet</th><th>Odds</th><th>Stake</th>
-        <th>Result</th><th>P&L</th><th></th>
-      </tr></thead><tbody>${bets.map(row).join("")}</tbody></table></div>`
+    ${filterBar}
+    <div class="mbc-list">${shown.map(card).join("")
+      || `<p class="rail-quiet" style="margin:4px 0 18px">Nothing matches this filter.</p>`}</div>`
     : `<div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
         <div class="es-title">No bets logged yet</div>
         <div class="es-sub">Add the first bet you placed at a book above. It stays on this
@@ -10708,6 +10822,17 @@ async function renderHomePerf() {
       <div class="card perf-card">
         <div class="perf-head"><span class="rail-title">Your performance</span>
           <span class="perf-window">${curve.length > 1 ? "last " + curve.length + " graded days" : "the whole book"}</span></div>
+        ${(() => {
+          // The render's "TODAY'S PROFIT/LOSS" headline — the most recent
+          // graded slate, dated honestly when it isn't today's.
+          const lastPt = curve[curve.length - 1];
+          if (!lastPt || lastPt.day_u == null) return "";
+          const today = new Date().toISOString().slice(0, 10);
+          const label = lastPt.date === today ? "Today’s profit/loss"
+            : `Last slate (${escapeHtml(lastPt.date)})`;
+          return `<div class="perf-day"><span class="k">${label}</span>
+            <b style="color:${pcol(lastPt.day_u)}">${u(lastPt.day_u, true)}</b></div>`;
+        })()}
         <div class="perf-tiles">
           <div class="perf-tile"><span class="k">Net P&amp;L</span>
             <b style="color:${pcol(o.net_units)}">${u(o.net_units, true)}</b>
@@ -10915,13 +11040,26 @@ function liveCardHTML({ sport, g, bets }) {
   let situation = escapeHtml(lv.period || "");
   if (mlb && lv.outs != null) situation += ` · ${lv.outs} out${lv.outs === 1 ? "" : "s"}`;
   if (lv.clock) situation += ` ${escapeHtml(lv.clock)}`;
-  const ml = bets.find((b) => b.market === "moneyline" || b.market === "h2h");
-  const cell = (label, val) => val
-    ? `<div class="lb-cell"><span>${escapeHtml(label)}</span><b>${escapeHtml(val)}</b></div>` : "";
-  const spreadTxt = g.spread != null
-    ? `${g.favorite || g.home} ${(-Math.abs(g.spread)).toFixed(1)}` : "";
-  const totalTxt = g.total != null ? `O/U ${Number(g.total).toFixed(1)}` : "";
-  const mlTxt = ml && ml.odds != null ? `${ml.side === "away" ? g.away : g.home} ${ml.odds > 0 ? "+" : ""}${ml.odds}` : "";
+  // The render's line grid (Ethan, 2026-08-11): SPREAD | TOTAL | ML as
+  // columns with one row per team. Only real numbers render — the slate
+  // carries the line and both moneylines, but not per-side juice, so a
+  // cell without a real price shows a dash, never an invented one.
+  const fav = g.favorite || g.home;
+  const sp = (side) => g.spread == null ? "—"
+    : `${side === fav ? "−" : "+"}${Math.abs(g.spread).toFixed(1)}`;
+  const mlOdds = (v) => v == null ? "—" : `${v > 0 ? "+" : ""}${v}`;
+  const linesGrid = (g.spread != null || g.total != null
+                     || g.away_ml != null || g.home_ml != null) ? `
+    <div class="lb-table">
+      <span class="lb-th"></span><span class="lb-th">Spread</span>
+      <span class="lb-th">Total</span><span class="lb-th">ML</span>
+      <span class="lb-tm">${escapeHtml(g.away)}</span><b>${sp(g.away)}</b>
+      <b>${g.total != null ? "O " + Number(g.total).toFixed(1) : "—"}</b>
+      <b>${mlOdds(g.away_ml)}</b>
+      <span class="lb-tm">${escapeHtml(g.home)}</span><b>${sp(g.home)}</b>
+      <b>${g.total != null ? "U " + Number(g.total).toFixed(1) : "—"}</b>
+      <b>${mlOdds(g.home_ml)}</b>
+    </div>` : "";
   return `
   <div class="lb-card" data-gid="${escapeHtml(gameId(g))}" data-lsport="${sport}">
     <div class="lb-head"><span class="lb-live">${icon("dot", 10)} LIVE</span>
@@ -10934,7 +11072,7 @@ function liveCardHTML({ sport, g, bets }) {
       <b>${lv.home_score != null ? lv.home_score : "–"}</b>
       <span class="lb-team">${mark(g.home)}<em>${escapeHtml(g.home)}</em></span>
     </div>
-    <div class="lb-lines">${cell("Spread", spreadTxt)}${cell("Total", totalTxt)}${cell("ML", mlTxt)}</div>
+    ${linesGrid}
   </div>`;
 }
 

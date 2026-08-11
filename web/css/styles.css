@@ -4080,13 +4080,8 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   font-weight: 600; }
 .lb-mid { min-width: 48px; display: grid; place-items: center; }
 .lb-diamond { width: 48px; height: 40px; }
-.lb-lines { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
-  border-top: var(--hairline) solid var(--border-soft); padding-top: 10px; }
-.lb-cell { text-align: center; }
-.lb-cell span { display: block; color: var(--text-mute); font-size: var(--fs-2xs);
-  font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.lb-cell b { display: block; margin-top: 2px; font-family: var(--font-mono);
-  font-size: var(--fs-sm); }
+/* .lb-lines/.lb-cell retired 2026-08-11: the card grew the render's
+   per-team SPREAD | TOTAL | ML grid (.lb-table, later in this file). */
 
 @media (max-width: 760px) {
   /* The tab bar replaces the top-bar hamburger: same drawer, thumb reach. */
@@ -4227,3 +4222,100 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .ufc-banner { display: block; width: 100%; aspect-ratio: 3 / 1;
   object-fit: cover; border-radius: var(--radius-lg);
   border: var(--hairline) solid var(--border); margin-bottom: 14px; }
+
+/* ---- Render-sheet pass (Ethan, 2026-08-11): My Bets cards, Results
+   analytics, Live line grid, Props market tiles, art weather chip. ---- */
+
+/* My Bets — status chips, sport filter, bet cards. */
+.mbc-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 2px 0 12px; }
+.mbc-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.mbc-chip { background: var(--panel-2); color: var(--text-mute);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius);
+  padding: 6px 13px; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
+.mbc-chip.active { background: var(--brand); border-color: var(--brand);
+  color: #fff; }
+.mbc-sport { margin-left: auto; }
+.mbc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr));
+  gap: 10px; margin-bottom: 18px; }
+.mbc { background: var(--panel); border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-lg); padding: 12px 14px; }
+.mbc.open { border-left: 3px solid var(--warn); }
+.mbc.win { border-left: 3px solid var(--good); }
+.mbc.loss { border-left: 3px solid var(--bad); }
+.mbc.push { border-left: 3px solid var(--border); }
+.mbc-head { display: flex; align-items: baseline; gap: 10px; }
+.mbc-title { flex: 1; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+.mbc-odds { color: var(--brand-2); }
+.mbc-tag { font-size: var(--fs-xs); letter-spacing: .06em; }
+.mbc-legs { margin: 6px 0 0; padding-left: 18px; color: var(--text-body);
+  font-size: var(--fs-sm); }
+.mbc-legs li { margin: 2px 0; }
+.mbc-sub { color: var(--text-mute); font-size: var(--fs-xs); margin-top: 5px; }
+.mbc-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 9px; font-size: var(--fs-sm); }
+.mbc-stake { color: var(--text-mute); }
+.mbc-outcome { color: var(--text-mute); }
+.mbc-foot .mb-actions { margin-left: auto; display: flex; gap: 5px; }
+
+/* Results — the range-scoped analytics block. */
+.ra-ranges { float: right; display: inline-flex; gap: 4px; }
+.ra-range { background: none; color: var(--text-mute);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-sm);
+  padding: 3px 9px; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
+.ra-range.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+.ra-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  margin: 0 0 10px; }
+.ra-stat { background: var(--panel); border: var(--hairline) solid var(--border);
+  border-radius: var(--radius); padding: 10px 14px; }
+.ra-stat .k { display: block; color: var(--text-mute); font-size: var(--fs-xs);
+  text-transform: uppercase; letter-spacing: .07em; }
+.ra-stat .v { font-size: var(--fs-xl); }
+.ra-stat .v.good { color: var(--good); }
+.ra-stat .v.bad { color: var(--bad); }
+.ra-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  margin: 10px 0 18px; }
+
+/* Live board — the SPREAD | TOTAL | ML grid, one row per team. */
+.lb-table { display: grid; grid-template-columns: 1fr auto auto auto;
+  gap: 3px 16px; margin-top: 10px; padding-top: 9px;
+  border-top: var(--hairline) solid var(--border); }
+.lb-table .lb-th { color: var(--text-mute); font-size: var(--fs-xs);
+  text-transform: uppercase; letter-spacing: .07em; text-align: right; }
+.lb-table .lb-th:first-child { text-align: left; }
+.lb-table .lb-tm { color: var(--text-mute); font-size: var(--fs-sm); }
+.lb-table b { text-align: right; font-family: var(--font-mono);
+  font-size: var(--fs-sm); }
+
+/* Props — one tile per market priced tonight. */
+.pm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 9px; margin: 4px 0 16px; }
+.pm-tile { background: var(--panel); border: var(--hairline) solid var(--border);
+  border-radius: var(--radius); padding: 11px 13px; text-align: left;
+  cursor: pointer; color: var(--text); }
+.pm-tile.active { border-color: var(--brand); background: var(--panel-2); }
+.pm-tile .pm-name { display: block; font-weight: 700; font-size: var(--fs-sm); }
+.pm-tile .pm-count { color: var(--text-mute); font-size: var(--fs-xs); }
+.pm-tile.hue0 { border-left: 3px solid var(--brand); }
+.pm-tile.hue1 { border-left: 3px solid var(--good); }
+.pm-tile.hue2 { border-left: 3px solid var(--cyan); }
+.pm-tile.hue3 { border-left: 3px solid var(--warn); }
+.pm-tile.hue4 { border-left: 3px solid var(--plum); }
+.pm-tile.hue5 { border-left: 3px solid var(--bad); }
+
+/* The temp · wind chip on the card art, opposite the time chip. */
+.game-wx-chip { position: absolute; left: 10px; bottom: 10px; z-index: 3;
+  background: rgba(7, 7, 12, 0.72); color: var(--text-mute);
+  border-radius: var(--radius-sm); padding: 3px 8px; font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums; }
+
+/* Home — the render's profit/loss headline over the perf tiles. */
+.perf-day { display: flex; align-items: baseline; gap: 10px; margin: 2px 0 8px; }
+.perf-day .k { color: var(--text-mute); font-size: var(--fs-xs);
+  text-transform: uppercase; letter-spacing: .07em; }
+.perf-day b { font-size: var(--fs-3xl); font-weight: 800; letter-spacing: -.5px; }
+
+@media (max-width: 640px) {
+  .ra-stats, .ra-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+  .mbc-list { grid-template-columns: 1fr; }
+}

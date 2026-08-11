@@ -2629,7 +2629,9 @@ def pnl_curve(conn, sport: str | None = None) -> list[dict]:
 
     One point per date with anything settled: that day's net units, the
     running total, and how many bets graded."""
-    q = ("SELECT date, SUM(pnl_units) AS day_u, COUNT(*) AS n FROM bets "
+    q = ("SELECT date, SUM(pnl_units) AS day_u, COUNT(*) AS n, "
+         "SUM(status='won') AS w, SUM(status='lost') AS l, "
+         "SUM(stake_units) AS staked FROM bets "
          "WHERE status IN ('won','lost','push') AND category='main' "
          "AND stake_units > 0")
     args: list = []
@@ -2640,8 +2642,13 @@ def pnl_curve(conn, sport: str | None = None) -> list[dict]:
     out, cum = [], 0.0
     for r in conn.execute(q, args):
         cum += r["day_u"] or 0.0
+        # w/l/staked ride along so the site can compute an HONEST stat
+        # block for any date range (Ethan's analytics render, 2026-08-11)
+        # instead of showing all-time numbers under a 1-month chart.
         out.append({"date": r["date"], "day_u": round(r["day_u"] or 0.0, 2),
-                    "cum_u": round(cum, 2), "n": r["n"]})
+                    "cum_u": round(cum, 2), "n": r["n"],
+                    "w": r["w"] or 0, "l": r["l"] or 0,
+                    "staked": round(r["staked"] or 0.0, 2)})
     return out
 
 

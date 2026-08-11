@@ -164,7 +164,9 @@ def test_panels_read_one_source_rather_than_being_filtered_each_time():
     fn = js[js.index("async function renderRecord()"):
             js.index("function recStaleSection(")]
     assert "const src = scoped || d;" in fn
-    for panel in ("recCurveChart(src.curve)", "recCalibrationSection(src.calibration"):
+    # recAnalytics wraps recCurveChart since Ethan's analytics render
+    # (2026-08-11) — same scoping contract, now with range chips.
+    for panel in ("recAnalytics(src.curve", "recCalibrationSection(src.calibration"):
         assert panel in fn, f"{panel} still reads the combined payload"
 
 

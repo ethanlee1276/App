@@ -205,6 +205,42 @@ def test_ethans_venue_renders_are_plugged_in():
     assert ".ufc-banner" in CSS
 
 
+def test_the_render_sheet_pass_shipped_its_honest_subset():
+    """Ethan's 12-panel mobile sheet, 2026-08-11: "matching these pages
+    to a tee ... Obviously we won't use some of the pages". What shipped:
+    My Bets as status-filtered cards, the Results range analytics, the
+    Live board's per-team line grid, the Props market tiles, the art
+    weather chip. What must NEVER ship from that sheet stays pinned by
+    test_the_site_never_cosplays_a_sportsbook."""
+    # My Bets: the card list with status chips replaced the agate table.
+    fn = APP[APP.index("function renderMyBets("):]
+    fn = fn[:fn.index("\n}")]
+    assert "mbc-chip" in fn and "mbc-list" in fn
+    assert 'chip("open", "Open")' in fn and 'chip("win", "Won")' in fn
+    # "To win" is arithmetic on the user's own stake and price — pinned
+    # to the formula so nobody swaps in a projection later.
+    assert "b.stake * b.odds / 100" in fn
+    # Results: the analytics block computes INSIDE the window and the
+    # ALL window can never reach toISOString (Invalid Date blanks the page).
+    fn = APP[APP.index("function recAnalytics("):]
+    fn = fn[:fn.index("\nfunction recEraSection")]
+    assert "isFinite(days)" in fn
+    assert "rows.reduce((a, p) => a + p.w, 0)" in fn
+    # Live board: SPREAD | TOTAL | ML as columns, no invented -110 juice
+    # (the form placeholder elsewhere may SAY -110; the live grid never
+    # renders one it didn't get from the slate).
+    fn = APP[APP.index("function liveCardHTML("):]
+    fn = fn[:fn.index("function miniDiamond")]
+    assert "lb-table" in fn and "-110" not in fn
+    # Props: tiles counted from what is actually priced tonight.
+    assert "pm-grid" in APP and "byMarket[r.market]" in APP
+    # The art chip only speaks when a real reading exists, never live.
+    assert "w.temp_f != null && !w.dome" in APP
+    # The curve rows carry the per-day fields the range math needs.
+    LEDGER = open(os.path.join(ROOT, "engine/ledger.py"), encoding="utf-8").read()
+    assert "SUM(status='won') AS w" in LEDGER
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
