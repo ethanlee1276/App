@@ -105,8 +105,15 @@ def test_the_sizing_path_cannot_produce_the_stake_that_shipped():
     """THE PROOF, in two lines. Ask the sizing module for the smallest
     positive stake it will ever emit, and compare it to the stake the
     ledger actually carries. 0.047 is below the floor, so the floor was
-    not the last thing to touch that number."""
-    assert to_units(0.0000001, 106) == MIN_STAKE_UNITS
+    not the last thing to touch that number.
+
+    The floor is now reached from the other direction. The price ladder
+    starts every qualifying bet near a unit and only a caller-side
+    downweight can push one under the minimum, so the smallest emittable
+    stake is still MIN_STAKE_UNITS and 0.047 is still unreachable.
+    """
+    assert to_units(0.02, -110, mult=0.001) == MIN_STAKE_UNITS
+    assert to_units(0.0000001, 106) >= MIN_STAKE_UNITS
     assert kelly_units(0.501, 106) in (0.0, MIN_STAKE_UNITS) or \
         kelly_units(0.501, 106) >= MIN_STAKE_UNITS
     assert 0.047 < MIN_STAKE_UNITS
@@ -172,7 +179,7 @@ def test_the_intended_stake_is_recomputed_not_guessed():
     """The whole tool rests on this: hit_prob and odds are both stored,
     so quarter-Kelly can be replayed exactly rather than estimated."""
     r = {"hit_prob": 0.60, "odds": 106, "grade": "A"}
-    assert stakecheck.intended_stake(r) == kelly_units(0.60, 106, 0.25, 1.0)
+    assert stakecheck.intended_stake(r) == kelly_units(0.60, 106, 0.25)
 
 
 def test_a_row_with_no_model_probability_is_skipped_not_invented():
@@ -183,20 +190,37 @@ def test_a_row_with_no_model_probability_is_skipped_not_invented():
     assert stakecheck.intended_stake({"hit_prob": 0.5, "odds": None}) is None
 
 
-def test_the_grade_cap_is_honoured_in_the_replay():
-    """A B+ bet cannot be staked past 0.5u however good Kelly thinks it
-    is. Replaying without the cap would report a shortfall that the rules
-    never asked for."""
+def test_the_replay_follows_the_price_not_the_grade():
+    """The replay has to reproduce the rules AS THEY ARE, or its verdict
+    is about a system nobody runs.
+
+    Since 2026-08-12 the grade does not scale a stake — the price does
+    (engine/staking.py). So two bets at one price with different letters
+    replay identically, and the same bet at a longer price replays
+    smaller. Asserting a grade cap here would re-introduce the retired
+    rule inside the tool built to audit it.
+    """
     hot = {"hit_prob": 0.80, "odds": 200, "grade": "B+"}
-    assert stakecheck.intended_stake(hot) <= 0.5
+    same_price = {"hit_prob": 0.80, "odds": 200, "grade": "A+"}
+    assert stakecheck.intended_stake(hot) == stakecheck.intended_stake(same_price)
+    shorter = {"hit_prob": 0.80, "odds": -110, "grade": "B+"}
+    assert stakecheck.intended_stake(shorter) > stakecheck.intended_stake(hot)
 
 
-def test_the_price_cap_is_honoured_in_the_replay():
-    """+200 and longer is dime territory whatever the model thinks — the
-    receipts on home-run overs are why. Ignoring it in the replay would
-    invent a shortfall on exactly the bets we deliberately keep small."""
-    assert stakecheck.intended_stake(
-        {"hit_prob": 0.80, "odds": 250, "grade": "A+"}) == 0.1
+def test_the_price_ladder_is_honoured_in_the_replay():
+    """Long prices are still de-rated, on a slope now rather than a cliff.
+
+    The old rule flattened everything at +200 or longer to a single dime,
+    so a +250 and a +900 replayed identically. The ladder keeps de-rating
+    past the old cliff, which is the behaviour the replay has to mirror or
+    it invents a shortfall on exactly the bets we keep small on purpose.
+    """
+    at250 = stakecheck.intended_stake({"hit_prob": 0.80, "odds": 250,
+                                       "grade": "A+"})
+    at900 = stakecheck.intended_stake({"hit_prob": 0.80, "odds": 900,
+                                       "grade": "A+"})
+    assert at250 == 0.55 and at900 == 0.35
+    assert at250 > at900
 
 
 def test_the_eras_are_reported_apart():
@@ -267,10 +291,14 @@ def test_the_replay_keeps_the_strongest_bets_first():
     """The entire claim of trimming is that the model's own ranking picks
     a better subset than crowding does. If the replay kept them in ledger
     order it would be measuring nothing."""
-    # Verified stakes: A+ at .58/-110 caps at 2.0u, B+ at .60/-110 at 0.5u.
+    # Both bets are at -110 and therefore stake the same 1.0u under the
+    # price ladder — which is the point of the ladder and the reason the
+    # cap here is 1.5u rather than the old 2.0u. With equal stakes the
+    # only thing that can decide which one survives is the RANKING, so
+    # this now tests the ranking and nothing else.
     rows = [_sim_row("B+", 0.02, 0.60, -110, "lost"),
             _sim_row("A+", 0.09, 0.58, -110, "won")]
-    out = stakecheck.simulate_trim(rows, cap=2.0)
+    out = stakecheck.simulate_trim(rows, cap=1.5)
     assert out["kept"] == 1 and out["dropped"] == 1, out
     assert out["net"] > 0, "it kept the B+ loser over the A+ winner"
 
@@ -340,9 +368,13 @@ def test_the_replay_stops_at_the_budget_rather_than_packing_it():
     Skipping a bet that does not fit and taking smaller, weaker ones
     behind it would fill the budget more efficiently and simulate a rule
     that is not in the code."""
-    rows = [_sim_row("A+", 0.09, 0.58, -110, "won"),     # 2.0u
-            _sim_row("B+", 0.03, 0.60, -110, "won")]     # 0.5u
-    out = stakecheck.simulate_trim(rows, cap=1.0)
+    # Under the price ladder both of these stake 1.0u, so a 0.6u budget
+    # fits neither. A packing rule would still take the second one after
+    # skipping the first; a prefix rule takes nothing, which is what the
+    # shipped code does.
+    rows = [_sim_row("A+", 0.09, 0.58, -110, "won"),     # 1.0u
+            _sim_row("B+", 0.03, 0.60, 250, "won")]      # 0.55u — fits!
+    out = stakecheck.simulate_trim(rows, cap=0.6)
     assert out["kept"] == 0, "it packed the budget with the weaker bet"
     assert out["dropped"] == 2
 
@@ -396,10 +428,11 @@ def test_the_uniform_replay_preserves_every_ratio_it_keeps():
     so the two cannot drift apart. One factor across the slate cannot
     change the relationship between any two stakes."""
     rows = [_sim_row("A+", 0.09, 0.58, -110, "won"),      # 2.0u
-            _sim_row("A", 0.09, 0.58, -110, "won")]       # 1.0u (grade cap)
+            _sim_row("A", 0.09, 0.58, -110, "won")]       # 1.0u (the ladder)
     out = stakecheck.simulate_uniform(rows, cap=1.5)
-    # 3.0u asked against 1.5u: factor 0.5, so 1.0u and 0.5u, both above
-    # the floor, and the 2:1 relationship survives.
+    # Both are at -110, so both ask for the base unit: 2.0u against a
+    # 1.5u cap is a factor of 0.75, both land at 0.75u, both stay above
+    # the floor, and their (now equal) relationship survives untouched.
     assert out["kept"] == 2, out
     assert abs(out["staked"] - 1.5) < 1e-9, out["staked"]
 
@@ -407,12 +440,14 @@ def test_the_uniform_replay_preserves_every_ratio_it_keeps():
 def test_the_uniform_replay_drops_what_falls_under_the_floor():
     """The only thing that can move ROI in this policy, so it must be the
     only thing the replay does beyond scaling."""
-    # Verified stakes: A+ at .58/-110 caps at 2.0u; a B+ at .525 is a
-    # hairline edge that already floors at 0.1u before any scaling, so it
-    # is the first thing a factor pushes through the floor. 60 A+ bets
-    # put the slate 8x over, which is the shape the real board has.
+    # Under the price ladder the smallest bet on a board is the longest
+    # priced one, not the thinnest edge — a +900 ticket sits on the
+    # ladder's 0.35u floor while every -110 pick asks for a full unit. So
+    # the long shot is what a slate factor pushes through the minimum
+    # first. 60 standard picks put the slate 4x over its cap, which is
+    # the shape the real board has.
     rows = ([_sim_row("A+", 0.09, 0.58, -110, "won")] * 60
-            + [_sim_row("B+", 0.02, 0.525, -110, "lost")])
+            + [_sim_row("B+", 0.02, 0.30, 900, "lost")])
     out = stakecheck.simulate_uniform(rows, cap=15.0)
     assert out["dropped"] == 1, out
     assert out["kept"] == 60, out
@@ -420,10 +455,10 @@ def test_the_uniform_replay_drops_what_falls_under_the_floor():
 
 
 def test_the_uniform_replay_leaves_a_slate_inside_its_cap_untouched():
-    rows = [_sim_row("A+", 0.09, 0.58, -110, "won")]      # 2.0u
+    rows = [_sim_row("A+", 0.09, 0.58, -110, "won")]      # 1.0u
     out = stakecheck.simulate_uniform(rows, cap=15.0)
     assert out["kept"] == 1 and out["dropped"] == 0
-    assert abs(out["staked"] - 2.0) < 1e-9
+    assert abs(out["staked"] - 1.0) < 1e-9
 
 
 def test_the_uniform_replay_does_not_select_on_the_outcome():

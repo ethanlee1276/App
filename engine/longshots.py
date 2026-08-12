@@ -125,16 +125,28 @@ def _grade(confidence: float, edge: float) -> str:
     return "Pass"
 
 
+#: The long-shot book's own ticket size. It used to be inherited from
+#: `staking.LONGSHOT_CAP_U`, which the price ladder retired on 2026-08-12
+#: — and the ladder would hand a +450 home-run ticket 0.35u, six times
+#: what this book has ever staked.
+#:
+#: That is right for the main board and wrong here, because this is a
+#: MEASUREMENT book. It prices every long shot on the slate so the record
+#: can say whether the signal is real, under the house rule that a new
+#: source earns its stakes at a flat nominal size first. Letting the
+#: general sizing rule quietly re-scale a sampler would turn a
+#: measurement into an exposure nobody chose. Its own constant, stated
+#: here, so raising it is a decision someone makes on purpose.
+LONGSHOT_TICKET_U = 0.1
+
+
 def _stake(model_prob: float, odds: int, fraction: float = 0.2) -> float:
-    """Fractional Kelly through the shared scale. Long shots live at the
-    prices where our probability estimates are least trustworthy, and the
-    shared price-band ceiling (0.1u at +200 and longer) is the point —
-    whatever Kelly thinks of a +450, it stakes a dime."""
-    from .staking import kelly_fraction, to_units
+    """A flat nominal ticket, gated by Kelly. See LONGSHOT_TICKET_U."""
+    from .staking import kelly_fraction
     kelly = kelly_fraction(model_prob, odds)
     if kelly <= 0:
         return 0.0
-    return to_units(clamp(kelly * fraction, 0.0, 0.03), odds)
+    return LONGSHOT_TICKET_U if clamp(kelly * fraction, 0.0, 0.03) > 0 else 0.0
 
 
 #: Hold assumed when only one side of a market is published.

@@ -67,15 +67,21 @@ def test_positive_kelly_never_rounds_away_to_zero():
         assert _kelly_stake(american_to_prob(o) - 0.01, o) == 0.0
 
 
-def test_stake_scales_with_edge_and_stays_capped():
-    # On the 1u = 1% scale a solid edge REACHES the cap (that is the fix —
-    # the old ruler kept everything at pocket change), so the ordering is
-    # strict below the cap and flat at it.
+def test_stake_does_not_scale_with_edge_any_more():
+    """The inversion of the old test, and the point of the change.
+
+    This used to assert `small < mid <= big` — more claimed edge, more
+    money. Our own record says that ordering put the most money on the
+    worst bets (largest stake quartile: 34.5% hit, -33.9%; grade A+
+    -18.3% against A's -7.9%), so the ordering is gone on purpose. Three
+    very different claimed edges at one price now stake the same.
+    """
     small = _kelly_stake(0.53, -110)
     mid = _kelly_stake(0.56, -110)
     big = _kelly_stake(0.75, -110)
-    assert MIN_STAKE_UNITS <= small < mid <= big <= 1.0
-    assert big == 1.0, "a strong edge at an ordinary price stakes the cap"
+    assert small == mid == big == 1.0
+    # What DOES separate two bets is the price they are taken at.
+    assert _kelly_stake(0.56, -110) > _kelly_stake(0.56, 250)
 
 
 def test_grade_ladder_requires_real_net_edge():
@@ -153,35 +159,62 @@ def test_confidence_does_not_penalise_underdogs():
 # price awareness at all, so a solid -110 play displayed next to a +475
 # dime at nearly the same size, and the ROI denominator inherited it.
 
-def test_a_solid_ordinary_prop_finally_stakes_a_real_unit():
-    """Quarter Kelly at p=.57 / -110 is ~2.4% of bankroll — the grade cap
-    (1u for an A) binds, and the board shows a unit, not pocket change."""
-    from engine.quality import STAKE_CAP_U
-    assert _kelly_stake(0.57, -110, 0.25, STAKE_CAP_U["A"]) == 1.0
-    assert _kelly_stake(0.60, -110, 0.5, STAKE_CAP_U["A+"]) == 2.0
-
-
-def test_a_longshot_is_a_dime_whatever_kelly_thinks():
-    """Kelly at long odds LIKES a big claimed edge (21% at +475 is a fat
-    fraction) — but that is exactly where our probabilities are least
-    trustworthy, per the home-run receipts (said 14%, hit 11%). The price
-    cap outranks the conviction."""
+def test_a_standard_prop_stakes_the_base_unit():
+    """Ethan, 2026-08-12: "we should have our base line unit at 1 or
+    something." A standard -110 prop is exactly one unit — at 1u = 1% of
+    a $1,000 bankroll, the $10 ticket he asked for."""
     from engine import staking as S
-    from engine.quality import STAKE_CAP_U
-    assert _kelly_stake(0.24, 350, 0.25, STAKE_CAP_U["A"]) == 0.1
-    assert _kelly_stake(0.21, 475, 0.5, STAKE_CAP_U["A+"]) == 0.1
-    assert S.price_cap_units(200) == S.LONGSHOT_CAP_U
-    assert S.price_cap_units(150) == S.DOG_CAP_U
-    assert S.price_cap_units(119) == float("inf")
+    assert S.units_for_price(-110) == S.BASE_UNITS == 1.0
+    assert _kelly_stake(0.57, -110, 0.25) == 1.0
+    # And the conviction no longer moves it. Same price, wildly different
+    # claimed edges, identical stake — that IS the change.
+    assert _kelly_stake(0.53, -110, 0.25) == _kelly_stake(0.75, -110, 0.5)
 
 
-def test_the_separation_ethan_asked_for_holds():
-    """"1 unit on the regular props and .1 on the homer props" — the
-    exact request, as arithmetic."""
-    from engine.quality import STAKE_CAP_U
-    regular = _kelly_stake(0.57, -105, 0.25, STAKE_CAP_U["A"])
-    homer = _kelly_stake(0.24, 350, 0.25, STAKE_CAP_U["A"])
-    assert regular == 1.0 and homer == 0.1
+def test_the_price_sets_the_size_and_nothing_else_does():
+    """"i dont think we should be judging how many units we put on a pick
+    based on the grade we give it but we should base it on the line of the
+    prop."
+
+    Supported by our own record, which is why it is the rule and not a
+    preference: grade A+ returned -18.3% against grade A's -7.9%, and the
+    largest stake quartile was the worst of four. Sizing on conviction was
+    putting the most money on the worst bets.
+    """
+    from engine import staking as S
+    ladder = [S.units_for_price(o) for o in (-250, -150, -110, 100, 200, 400)]
+    assert ladder == sorted(ladder, reverse=True), ladder
+    # Equal variance per bet: stake x payout is flat between the ends.
+    from engine.odds import american_to_decimal
+    mid = [S.units_for_price(o) * american_to_decimal(o) for o in (-150, -110, 100, 200)]
+    # Flat to within the rounding: stakes are quoted to the cent-of-a-unit,
+    # so the product wobbles by about that much and no more.
+    assert max(mid) - min(mid) < 0.03, mid
+    # The ends are clamped, deliberately, and say so.
+    assert S.units_for_price(-400) == S.MAX_PRICED_U
+    assert S.units_for_price(900) == S.MIN_PRICED_U
+
+
+def test_a_long_price_is_still_a_real_bet_just_a_smaller_one():
+    """The old rule dropped every +200-or-longer pick to a flat 0.1u — a
+    dime, whatever the price. The ladder de-rates smoothly instead, so a
+    +200 is two thirds of a unit and a +475 is a third, rather than both
+    being the same token."""
+    from engine import staking as S
+    assert 0.6 < S.units_for_price(200) < 0.7
+    assert 0.3 < S.units_for_price(475) < 0.4
+    assert S.units_for_price(200) > S.units_for_price(475)
+
+
+def test_kelly_still_vetoes_even_though_it_no_longer_sizes():
+    """The half of Kelly that was right is kept. A price that beats the
+    edge is no bet at any size — dropping the sizing must not quietly
+    turn the gate off too."""
+    from engine import staking as S
+    assert S.units_with_reason(0.0, -110)[0] == 0.0
+    assert S.units_with_reason(-0.1, -110)[0] == 0.0
+    assert "price beats the edge" in S.units_with_reason(0.0, -110)[1]
+    assert _kelly_stake(0.40, -110, 0.25) == 0.0      # 40% at -110 is a loser
 
 
 def test_every_sport_converts_through_the_shared_scale():
@@ -198,15 +231,25 @@ def test_every_sport_converts_through_the_shared_scale():
 
 def test_ufc_lands_on_the_same_scale():
     from engine.ufc.model import stake_units as ufc_stake
-    # Fifth Kelly under the spec's 2.5%-of-bankroll cap: a strong read
-    # stakes real units now, and a live dog at +250 stakes the dime.
-    assert ufc_stake(0.65, -150) == 2.5
-    assert ufc_stake(0.45, 250) == 0.1
+    # A strong read at a short price takes the ladder's ceiling; a live
+    # dog at +250 takes the ladder's rung for +250 rather than the flat
+    # dime the retired price band gave every underdog.
+    assert ufc_stake(0.65, -150) == 1.15
+    assert ufc_stake(0.45, 250) == 0.55
+    assert ufc_stake(0.20, 250) == 0.0            # Kelly still vetoes
 
 
 def test_the_longshot_engine_still_deals_dimes():
-    from engine.longshots import _stake
-    assert _stake(0.24, 350) == 0.1
+    """A measurement book keeps its own ticket, on purpose.
+
+    The price ladder would give a +450 home-run ticket 0.35u. This book
+    exists to find out whether the signal is real, not to carry six times
+    the exposure it has ever carried, so it holds a flat nominal dime —
+    see `longshots.LONGSHOT_TICKET_U`.
+    """
+    from engine.longshots import _stake, LONGSHOT_TICKET_U
+    assert _stake(0.24, 350) == LONGSHOT_TICKET_U == 0.1
+    assert _stake(0.30, 450) == 0.1
     assert _stake(0.10, 800) == 0.0                    # no edge → no bet
 
 
@@ -216,7 +259,10 @@ def test_the_mult_downweights_and_zero_kills():
     b = S.to_units(0.02, -110, mult=0.5)
     assert b < a
     assert S.to_units(0.02, -110, mult=0.0) == 0.0
-    assert S.to_units(0.0005, -110) == S.MIN_STAKE_UNITS
+    # A downweight severe enough to round the ticket away still lands on
+    # the floor rather than on nothing — the caller asked for less, not
+    # for no bet.
+    assert S.to_units(0.02, -110, mult=0.01) == S.MIN_STAKE_UNITS
 
 
 def test_history_is_not_restated():
@@ -236,31 +282,77 @@ def test_every_stake_can_say_which_rule_set_it():
     """Ethan, 2026-08-12, on a board reading 0.25 / 0.25 / 0.25 / 0.15 /
     0.05: "It doesn't make any sense and feels random."
 
-    It was not random — four rules can set a stake and the board showed
-    none of them. When a cap binds, the stake stops carrying information
-    about the edge (five different edges all print the cap), and without
-    the reason beside it that is indistinguishable from noise."""
+    It was not random — several rules could set a stake and the board
+    showed none of them. One rule sets it now, and the string still has
+    to name which rung, because "1.25u" and "1.25u because that is as
+    high as the ladder goes" are different facts about the same bet."""
     from engine.staking import units_with_reason, kelly_fraction
 
-    # A fat edge at a long price: the price band decides, not Kelly.
-    u, why = units_with_reason(kelly_fraction(0.45, 250) * 0.25, 250, 2.0)
-    assert u == 0.1 and "price band" in why, (u, why)
+    u, why = units_with_reason(kelly_fraction(0.45, 250) * 0.25, 250)
+    assert u == 0.55 and "+250" in why, (u, why)
 
-    # The same conviction at a short price: Kelly decides.
-    u, why = units_with_reason(kelly_fraction(0.55, -110) * 0.25, -110, 2.0)
-    assert "Kelly" in why and u > 0.1, (u, why)
+    u, why = units_with_reason(kelly_fraction(0.55, -110) * 0.25, -110)
+    assert u == 1.0 and "base unit" in why, (u, why)
 
-    # A grade cap below what Kelly asked for.
-    u, why = units_with_reason(kelly_fraction(0.75, -110) * 0.25, -110, 0.5)
-    assert u == 0.5 and "grade" in why, (u, why)
+    # The same price, five times the claimed edge, the same stake — and
+    # the reason says the price set it, so nobody reads the number as a
+    # statement of conviction.
+    u2, why2 = units_with_reason(kelly_fraction(0.75, -110) * 0.25, -110)
+    assert (u2, why2) == (u, why)
 
-    # A hairline edge lands on the floor, and says so rather than
-    # implying Kelly asked for the minimum.
-    u, why = units_with_reason(0.0002, -110, 2.0)
-    assert u == 0.1 and "floor" in why.lower(), (u, why)
+    u, why = units_with_reason(0.02, -400)
+    assert u == 1.25 and "ceiling" in why, (u, why)
+    u, why = units_with_reason(0.02, 900)
+    assert u == 0.35 and "floor" in why, (u, why)
 
-    # No bet is no bet.
+    # A caller-side downweight is named as one, so it can never be
+    # mistaken for the ladder having a second opinion about the price.
+    u, why = units_with_reason(0.02, -110, 0.5)
+    assert u == 0.5 and "downweight" in why, (u, why)
+
     assert units_with_reason(0.0, -110)[0] == 0.0
+
+
+def test_no_caller_passes_a_third_positional_argument():
+    """The hazard created by retiring `cap_units`.
+
+    It was the third positional parameter; `mult` is now. A stale
+    four-argument call raises TypeError and gets found immediately, but a
+    stale THREE-argument one silently reinterprets a grade cap as a
+    multiplier — 0.5 becomes a halving, 2.0 becomes a doubling. This test
+    caught exactly that in this file, where `units_with_reason(f, 250,
+    2.0)` came back 1.1u instead of the 0.1u it asserted.
+    """
+    import re as _re
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    bad = []
+    for dirpath, _dirs, files in os.walk(root):
+        if any(x in dirpath for x in (".git", "__pycache__", "/tests")):
+            continue
+        for f in files:
+            if not f.endswith(".py"):
+                continue
+            path = os.path.join(dirpath, f)
+            src = open(path, encoding="utf-8").read()
+            for call in _re.finditer(
+                    r"\b(to_units|units_with_reason)\(([^()]*(?:\([^()]*\)[^()]*)*)\)",
+                    src, _re.S):
+                args = call.group(2)
+                depth, parts, cur = 0, [], ""
+                for ch in args:
+                    if ch in "([{":
+                        depth += 1
+                    elif ch in ")]}":
+                        depth -= 1
+                    if ch == "," and depth == 0:
+                        parts.append(cur); cur = ""
+                    else:
+                        cur += ch
+                parts.append(cur)
+                parts = [x.strip() for x in parts if x.strip()]
+                if len(parts) >= 3 and "=" not in parts[2]:
+                    bad.append(f"{os.path.relpath(path, root)}: {call.group(0)[:60]}")
+    assert not bad, "third argument must be keyword (mult=): " + "; ".join(bad)
 
 
 def test_the_recommendation_carries_the_margin_over_the_real_price():

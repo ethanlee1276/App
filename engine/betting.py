@@ -327,7 +327,7 @@ def _kelly_stake(model_prob: float, odds: int, fraction: float = 0.25,
     Zero has one meaning here: Kelly says this price is not beatable at
     our estimated probability."""
     from .staking import kelly_units
-    return kelly_units(model_prob, odds, fraction, cap_units)
+    return kelly_units(model_prob, odds, fraction)
 
 
 def evaluate_prop(prop: Prop, proj: Projection,
@@ -442,10 +442,11 @@ def evaluate_prop(prop: Prop, proj: Projection,
     if grade == "Pass":
         stake, stake_basis = 0.0, "no bet — did not clear the gate"
     else:
+        # The grade decides WHETHER (above); the price decides HOW MUCH.
+        # STAKE_CAP_U no longer participates — see engine/staking.py.
         from .staking import kelly_fraction, units_with_reason
-        _full = kelly_fraction(hit, best.odds)
         stake, stake_basis = units_with_reason(
-            _full * fraction, best.odds, STAKE_CAP_U[grade])
+            kelly_fraction(hit, best.odds) * fraction, best.odds)
 
     reasons = list(proj.reasons)
     if pattern_block:

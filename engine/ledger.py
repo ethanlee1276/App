@@ -3128,10 +3128,12 @@ def restated_performance(conn, sport: str | None = None) -> dict:
         if p is None or odds is None or not 0.0 < float(p) < 1.0:
             excluded += 1
             continue
+        # The grade no longer scales a stake — the price does (see
+        # engine/staking.py's ladder). It still picks the Kelly fraction
+        # used as the VETO, which is the only job it has left here.
         grade = str(b["grade"] or "")
         frac = 0.5 if grade == "A+" else 0.25
-        stake = kelly_units(float(p), int(odds), frac,
-                            STAKE_CAP_U.get(grade, 1.0))
+        stake = kelly_units(float(p), int(odds), frac)
         if stake <= 0:
             excluded += 1
             continue

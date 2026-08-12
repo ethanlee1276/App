@@ -1,4 +1,5 @@
-"""One scale for every stake: 1 unit = 1% of bankroll, priced for trust.
+"""One scale for every stake: 1 unit = 1% of bankroll, and the PRICE
+sets the size.
 
 The journal was quoting stakes off TWO different rulers. The parlay spec
 pinned 1u = 1% of bankroll, but every prop path converted its Kelly
@@ -9,27 +10,14 @@ symptom straight off the board: "we put .1 on home runs AND .1 on
 regular -100 props." The ROI line inherited the distortion, because
 units staked is its denominator.
 
-Everything now converts through here at BANKROLL_UNITS = 100, and the
-per-grade caps (2u / 1u / 0.5u) become the working range instead of a
-ceiling nothing reached: a real edge at an ordinary price stakes ~1u, a
-hairline edge stakes under it, and Kelly still zeroes anything below
-break-even at the offered price.
-
-The second ruler is TRUST, and it caps by PRICE. Kelly assumes the
-probability fed to it is right; ours is least right exactly where the
-payout is long — the receipts say so (home-run overs: said 14%, hit 11%,
-q=0.003, and the market self-closed on that evidence). So odds bands cap
-what any model conviction may stake:
-
-    +200 and longer     0.1u  — dime territory, whatever Kelly thinks
-    +120 to +199        0.5u
-    shorter than +120   the grade cap alone
-
-A price cap is not a second opinion about the edge; it is honesty about
-the error bars on our own probability at that price.
+Everything converts through here at BANKROLL_UNITS = 100. What changed on
+2026-08-12 is what decides the number of units, and it is no longer
+Kelly-times-grade — see the ladder note below for the three measurements
+that retired that, and `docs/SELECTION_CORRECTION.md` for the related
+correction to the claims those stakes were computed from.
 
 Settled history is NOT restated: those stakes were the bets as made, and
-the Record page is receipts. The scale change dates a new model era and
+the Record page is receipts. A scale change dates a new model era and
 reads honestly from here forward.
 """
 
@@ -43,11 +31,61 @@ BANKROLL_UNITS = 100.0
 #: Any positive stake floors here so a real edge never displays as 0.00u.
 MIN_STAKE_UNITS = 0.1
 
-#: Price-band ceilings, in units.
-LONGSHOT_ODDS = 200
-LONGSHOT_CAP_U = 0.1
-DOG_ODDS = 120
-DOG_CAP_U = 0.5
+# --- the price ladder ------------------------------------------------------
+#
+# Ethan, 2026-08-12: "with these unit sizes that means we are putting 30
+# cents or 50 cents or a couple dollars on our bets ... we should have our
+# base line unit at 1 or something", and "i dont think we should be judging
+# how many units we put on a pick based on the grade we give it but we
+# should base it on the line of the prop."
+#
+# Both halves are supported by our own record, which is why this replaced
+# Kelly-times-grade rather than sitting beside it. `stakecheck.py` on 113
+# settled bets in the current era:
+#
+#   flat 1u on every bet          -12.96%   <- best of the three
+#   as actually staked            -20.96%
+#   what the sizing rules asked   -25.49%   <- following our own sizing
+#                                              MORE closely lost MORE
+#
+#   largest stake quartile   0.972u avg, 34.5% hit, -33.9%   <- the worst
+#   grade A+  -18.3%   ·   grade A  -7.9%                    <- inverted
+#
+# Three independent readings of the same thing: our conviction signal is
+# anti-correlated with what happens next. Sizing on conviction therefore
+# puts the most money on the worst bets, and the fix is not a better
+# conviction weight — it is to stop weighting by conviction at all.
+#
+# WHAT SETS THE SIZE INSTEAD. The price, on one stated principle: equal
+# variance per bet. A stake s at decimal odds d has return variance
+# proportional to s²d², so holding s·d constant across prices holds each
+# bet's contribution to bankroll swing constant. Normalised so a standard
+# -110 prop is exactly the base unit:
+#
+#     -200   1.25u (capped)      +150   0.76u
+#     -110   1.00u               +200   0.64u
+#     +100   0.95u               +400   0.38u
+#
+# It is smooth, so two picks a few cents apart in price cannot end up a
+# factor of five apart in stake — the artefact Ethan read off the board as
+# ".05 units on a +100 pick then .25 on a +100".
+#
+# WHAT KELLY STILL DOES. It vetoes. A negative Kelly means the price beats
+# the edge and there is no bet at any size; that judgement is sound and is
+# kept. What is dropped is Kelly's opinion about how MUCH, because the
+# quartile table above says that opinion is worse than useless.
+
+#: The standard bet, at the reference price. 1u = 1% of bankroll, so at a
+#: $1,000 bankroll this is $10 — the floor Ethan asked for.
+BASE_UNITS = 1.0
+#: The price the base unit is defined at: standard two-way prop juice.
+REF_ODDS = -110
+#: The ladder's ends. The ceiling stops heavy chalk from turning a "safe"
+#: price into a big bet (short prices are exactly where the model's
+#: over-claim was measured worst); the floor keeps a long price a real
+#: wager rather than a token.
+MAX_PRICED_U = 1.25
+MIN_PRICED_U = 0.35
 
 
 def kelly_fraction(p: float, odds: int) -> float:
@@ -58,57 +96,88 @@ def kelly_fraction(p: float, odds: int) -> float:
     return max(0.0, (b * p - (1.0 - p)) / b)
 
 
+def units_for_price(odds: int) -> float:
+    """The stake this price gets, before any caller-side downweight.
+
+    Equal variance per bet: ``s ∝ 1/d``, normalised so the reference
+    price stakes :data:`BASE_UNITS`. See the ladder note above for why
+    the price and not the grade decides this.
+    """
+    d = american_to_decimal(odds)
+    if d <= 1.0:
+        return 0.0
+    raw = BASE_UNITS * (american_to_decimal(REF_ODDS) / d)
+    return round(min(MAX_PRICED_U, max(MIN_PRICED_U, raw)), 2)
+
+
 def price_cap_units(odds: int) -> float:
-    """The most units ANY conviction may stake at this price."""
-    if odds >= LONGSHOT_ODDS:
-        return LONGSHOT_CAP_U
-    if odds >= DOG_ODDS:
-        return DOG_CAP_U
-    return float("inf")
+    """Back-compat shim: the ladder IS the price rule now.
+
+    Kept because `launch.py --stakes` and the restatement paths ask "what
+    would this price allow?", which used to be a ceiling over Kelly and is
+    now simply the stake. Returning the ladder's answer keeps those
+    readouts honest instead of quoting a rule that no longer runs.
+    """
+    return units_for_price(odds)
 
 
 def units_with_reason(fraction: float, odds: int,
-                      cap_units: float = float("inf"),
                       mult: float = 1.0) -> tuple[float, str]:
     """``(units, why)`` — the stake and the rule that actually set it.
 
+    ``fraction`` is Kelly's answer and is used ONLY as a veto: at or
+    below zero the price beats the edge and there is no bet. Its size is
+    ignored, deliberately — see the ladder note at the top of this file
+    for the three measurements that retired it.
+
     Ethan, 2026-08-12, reading a board of 0.25 / 0.25 / 0.25 / 0.15 /
     0.05: "It doesn't make any sense and feels random." It was not
-    random, but it was unreadable, because four different rules can set
-    a stake and the board showed none of them. When a cap binds, the
-    stake stops carrying information about the edge — five picks with
-    five different edges all print 0.25u — and without the reason beside
-    it there is no way to tell that from noise.
+    random, but it was unreadable, because four different rules could set
+    a stake and the board showed none of them. Now one rule sets it and
+    the string says which rung.
+
+    The ``cap_units`` argument is GONE rather than ignored. It carried
+    the per-grade ceiling, and a parameter that silently stops working is
+    how a retired rule keeps looking alive at every call site.
     """
     if fraction <= 0 or mult <= 0:
-        return 0.0, "no bet"
-    want = fraction * BANKROLL_UNITS * mult
-    price = price_cap_units(odds)
-    stake, why = want, "quarter-Kelly on the price offered"
-    if price < stake:
-        stake, why = price, f"capped at {price:g}u by the price band"
-    if cap_units < stake:
-        stake, why = cap_units, f"capped at {cap_units:g}u by the grade"
-    if stake < MIN_STAKE_UNITS:
+        return 0.0, "no bet — the price beats the edge"
+    stake = units_for_price(odds)
+    if stake >= MAX_PRICED_U:
+        why = f"{stake:g}u — the ladder's ceiling for a price this short"
+    elif stake <= MIN_PRICED_U:
+        why = f"{stake:g}u — the ladder's floor for a payout this long"
+    elif odds == REF_ODDS:
+        why = f"{stake:g}u — the base unit, at standard juice"
+    else:
+        why = f"{stake:g}u — the ladder's size for {odds:+d}"
+    if mult != 1.0:
+        # NOT rounded here. Rounding before the floor check turns a
+        # severe downweight (×0.001) into 0.0, which reads as "no bet"
+        # — a decision the caller never made. The floor exists precisely
+        # to catch stakes this small, so it has to see them first.
+        stake = stake * mult
+        why += f", ×{mult:.2f} for the caller's own downweight"
+    if 0 < stake < MIN_STAKE_UNITS:
         stake, why = MIN_STAKE_UNITS, f"floored at the {MIN_STAKE_UNITS}u minimum"
     return round(stake, 2), why
 
 
-def to_units(fraction: float, odds: int,
-             cap_units: float = float("inf"), mult: float = 1.0) -> float:
-    """Bankroll fraction → display units, price-capped, floored.
+def to_units(fraction: float, odds: int, mult: float = 1.0) -> float:
+    """Kelly veto + the price ladder → display units.
 
-    ``fraction`` is the already-fractioned Kelly (or any bankroll share);
-    ``cap_units`` is the caller's own ceiling (per-grade, per-play);
-    ``mult`` is a caller-side downweight (e.g. the NBA minutes grade).
+    ``fraction`` decides only whether there is a bet; ``odds`` decides how
+    big; ``mult`` is a caller-side downweight for something that is not
+    conviction (the NBA minutes uncertainty, say).
     """
-    return units_with_reason(fraction, odds, cap_units, mult)[0]
+    return units_with_reason(fraction, odds, mult=mult)[0]
 
 
-def kelly_units(p: float, odds: int, fraction: float = 0.25,
-                cap_units: float = float("inf")) -> float:
-    """The whole path in one call: full Kelly, fractioned, scaled, capped."""
+def kelly_units(p: float, odds: int, fraction: float = 0.25) -> float:
+    """The whole path in one call: Kelly decides IF, the price decides how
+    much. ``fraction`` is retained because a caller may want a stricter
+    veto than full Kelly, and it cannot change the size."""
     full = kelly_fraction(p, odds)
     if full <= 0:
         return 0.0
-    return to_units(full * fraction, odds, cap_units)
+    return to_units(full * fraction, odds)

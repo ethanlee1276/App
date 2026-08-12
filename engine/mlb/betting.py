@@ -251,8 +251,7 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         # guessing the reason from the price.
         from ..staking import kelly_fraction, units_with_reason
         stake, stake_basis = units_with_reason(
-            kelly_fraction(hit, best.odds) * fraction, best.odds,
-            STAKE_CAP_U[grade])
+            kelly_fraction(hit, best.odds) * fraction, best.odds)
 
     reasons = list(proj.reasons)
     if pattern_block:

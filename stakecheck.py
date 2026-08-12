@@ -113,8 +113,7 @@ def intended_stake(r: dict) -> float | None:
     p, odds = r.get("hit_prob"), r.get("odds")
     if p is None or odds is None:
         return None
-    cap = STAKE_CAP_U.get(r.get("grade") or "", float("inf"))
-    return kelly_units(float(p), int(odds), 0.25, cap)
+    return kelly_units(float(p), int(odds), 0.25)
 
 
 def _roi(net: float, staked: float) -> float:

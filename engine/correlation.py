@@ -187,6 +187,20 @@ def _uniform_factor(by_game: dict, live: list[dict]) -> tuple[float, str]:
     right, so it is correct whether the grade turns out to be predictive
     or inverted.
 
+    **2026-08-12: the open question closed, and it closed the wrong way
+    for any ranked policy.** `stakecheck.py` on the current era: grade A+
+    returned -18.3% against grade A's -7.9%, and the largest stake
+    quartile was the worst of the four (34.5% hit, -33.9%). The grade is
+    not merely unproven, it is inverted — so a rule that keeps the
+    highest-graded bets keeps the losers, which is exactly what the 888-bet
+    replay saw. Uniform stays.
+
+    The price ladder (engine/staking.py, same day) makes this bind less
+    often rather than more: stakes no longer stack up from a Kelly that
+    asked for six times the cap. When it does bind, `stake_basis` names it
+    on the card, because a board of identical scaled stakes with no reason
+    beside them is the thing Ethan read as random in the first place.
+
     The game caps and the slate cap are satisfied by taking the most
     binding of them. One crowded fixture therefore shrinks the whole
     board, which is conservative — and in practice invisible, because

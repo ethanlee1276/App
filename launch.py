@@ -3283,6 +3283,158 @@ def show_stakes() -> None:
           " fixes.")
 
 
+#: Price bands for --bands. Chosen before looking at any result, and
+#: written down here so they cannot be quietly re-cut until one of them
+#: looks profitable. That is the difference between a measurement and a
+#: search.
+PRICE_BANDS = (
+    ("−250 and shorter", -10000, -250),
+    ("−249 to −150", -249, -150),
+    ("−149 to −111", -149, -111),
+    ("−110 to +100", -110, 100),
+    ("+101 to +199", 101, 199),
+    ("+200 to +399", 200, 399),
+    ("+400 and longer", 400, 100000),
+)
+
+
+def show_bands(sport: str | None = None) -> None:
+    """Where the money actually comes from, by price. Read-only.
+
+    python3 launch.py --bands
+    python3 launch.py --bands mlb
+
+    Ethan, 2026-08-12: "you need to figure out where our roi is best and
+    we are making the most profit."
+
+    THE TRAP THIS TOOL IS BUILT TO AVOID. Cutting a few hundred settled
+    bets into seven buckets and reporting the best one is a maximum of
+    seven draws. On a journal this size each band's ROI carries a
+    standard error of tens of points, so the winner is whichever band got
+    lucky — and it will look convincing, because a table always does. The
+    same mistake is why `barcheck.py` refuses to name a recommended edge
+    bar.
+
+    So every band prints its own error bar, and the verdict at the bottom
+    is computed rather than eyeballed: a band is only called out if its
+    ROI clears the pooled ROI by more than the spread you would expect
+    from the best of seven noisy draws. Usually nothing clears, and the
+    honest headline is "no band is distinguishable yet" — which is a real
+    answer to the question, not a failure to answer it.
+    """
+    import math
+    from engine import ledger
+    from engine.odds import american_to_decimal
+
+    where = "WHERE status IN ('won','lost') AND category = 'main'"
+    args: list = []
+    if sport:
+        where += " AND sport = ?"
+        args.append(sport.lower())
+    with ledger.connect() as conn:
+        rows = conn.execute(
+            f"SELECT sport, market, odds, stake_units, pnl_units, status, grade"
+            f" FROM bets {where}", args).fetchall()
+    if not rows:
+        print("  No settled bets in the main book yet"
+              + (f" for {sport}." if sport else "."))
+        return
+
+    def band_of(o):
+        for name, lo, hi in PRICE_BANDS:
+            if lo <= o <= hi:
+                return name
+        return None
+
+    # Flat one unit per bet, deliberately. The question is which PRICES
+    # are worth betting, and grading them at their historical stakes would
+    # answer a different question — how well the old sizing rule happened
+    # to line up with them.
+    buckets: dict = {}
+    for r in rows:
+        o = int(r["odds"] or 0)
+        b = band_of(o)
+        if b is None:
+            continue
+        e = buckets.setdefault(b, {"n": 0, "won": 0, "net": 0.0, "b": 0.0})
+        e["n"] += 1
+        e["b"] += american_to_decimal(o) - 1.0
+        if r["status"] == "won":
+            e["won"] += 1
+            e["net"] += american_to_decimal(o) - 1.0
+        else:
+            e["net"] -= 1.0
+
+    tot_n = sum(e["n"] for e in buckets.values())
+    tot_net = sum(e["net"] for e in buckets.values())
+    pooled = tot_net / tot_n if tot_n else 0.0
+
+    print(f"  {tot_n} settled bet(s)"
+          + (f" · {sport}" if sport else " · every sport")
+          + "  ·  graded at a flat 1u so the PRICE is the only variable\n")
+    print(f"  {'band':<18}{'n':>5}{'hit':>7}{'net':>9}{'ROI':>8}{'±1se':>8}"
+          f"   what that means")
+    best = None
+    for name, _lo, _hi in PRICE_BANDS:
+        e = buckets.get(name)
+        if not e or not e["n"]:
+            print(f"  {name:<18}{'—':>5}{'':>7}{'':>9}{'':>8}{'':>8}"
+                  f"   no bets at this price")
+            continue
+        n, roi = e["n"], e["net"] / e["n"]
+        hit = e["won"] / n
+        # Per-bet return SE, using the band's own average payout. A
+        # binomial SE on the win rate would understate this badly at long
+        # prices, where a single winner moves the ROI by whole points: a
+        # 1u bet returns +b or -1, so its variance is p(1-p)(1+b)².
+        avg_b = e["b"] / n
+        var = hit * (1 - hit) * (1.0 + avg_b) ** 2
+        se = math.sqrt(max(var, 1e-9) / n)
+        note = ("thin — read the error bar, not the ROI" if n < 30
+                else "" if abs(roi) < se else
+                ("ahead of the pool" if roi > pooled else "behind the pool"))
+        print(f"  {name:<18}{n:>5}{hit * 100:>6.1f}%{e['net']:>+9.2f}"
+              f"{roi * 100:>+7.1f}%{se * 100:>7.1f}%   {note}")
+        if n >= 30 and (best is None or roi > best[1]):
+            best = (name, roi, se, n)
+
+    print(f"\n  {'POOLED':<18}{tot_n:>5}{'':>7}{tot_net:>+9.2f}"
+          f"{pooled * 100:>+7.1f}%")
+
+    # The multiplicity bar. With k bands the best-looking one is the
+    # maximum of k draws, so it has to clear the pool by more than a
+    # single standard error to mean anything. 2.1 SE is the Bonferroni
+    # 5% two-sided bar at k = 7.
+    k = len([1 for name, _l, _h in PRICE_BANDS if (buckets.get(name) or {}).get("n")])
+    bar = 2.1
+    print()
+    if best is None:
+        print("  VERDICT: no band has 30 settled bets yet. Nothing here can"
+              " rank prices;\n  it can only tell you where the sample is"
+              " going.")
+    else:
+        name, roi, se, n = best
+        z = (roi - pooled) / se if se else 0.0
+        if z >= bar:
+            print(f"  VERDICT: {name} is genuinely ahead — {roi * 100:+.1f}%"
+                  f" against the pool's {pooled * 100:+.1f}%,\n  which is"
+                  f" {z:.1f} standard errors clear and survives the"
+                  f" best-of-{k} correction.")
+        else:
+            print(f"  VERDICT: nothing is distinguishable. The best band"
+                  f" ({name}, {roi * 100:+.1f}%)\n  sits {z:.1f} standard"
+                  f" errors above the pool, and picking the best of {k}"
+                  f" bands needs\n  {bar:.1f} to mean anything. On this"
+                  f" journal that is a coin landing heads, not a price"
+                  f" band\n  worth betting more on.")
+    if pooled < 0:
+        print(f"\n  And the number that outranks all of them: the pool is"
+              f" {pooled * 100:+.1f}% at a flat\n  unit. There is no band"
+              f" allocation that turns a negative pool positive — that is"
+              f"\n  a job for the claims (launch.py --haircut), not for the"
+              f" stakes.")
+
+
 def show_haircut(refit: bool = False) -> None:
     """What we claimed vs what landed, and the correction it earns.
 
@@ -5000,6 +5152,11 @@ def main() -> None:
         return
     if "--haircut" in argv:
         show_haircut("--refit" in argv)
+        return
+    if "--bands" in argv:
+        i = argv.index("--bands")
+        rest = [x for x in argv[i + 1:] if not x.startswith("-")]
+        show_bands(rest[0] if rest else None)
         return
     if "--memes" in argv:
         show_memes()
