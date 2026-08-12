@@ -311,6 +311,86 @@ def test_the_workflow_does_not_quietly_grow_a_dependency():
     assert "pip install" not in steps
 
 
+def _stdlib(root):
+    """Is this import root satisfied by a bare interpreter? 3.10+ can just
+    answer; 3.9 (still in the test matrix) has to be asked where the module
+    came from, and site-packages is the answer that disqualifies it."""
+    names = getattr(sys, "stdlib_module_names", None)
+    if names is not None:
+        return root in names
+    import importlib.util
+    import sysconfig
+    try:
+        spec = importlib.util.find_spec(root)
+    except (ImportError, ValueError):
+        return False
+    if spec is None:
+        return False
+    origin = spec.origin or ""
+    if origin in ("built-in", "frozen"):
+        return True
+    return (origin.startswith(sysconfig.get_paths()["stdlib"])
+            and "site-packages" not in origin)
+
+
+def test_no_test_file_imports_a_third_party_module_unguarded():
+    """The sibling test above guards the WORKFLOW against growing a
+    dependency, and that turned out to be the wrong half of the door. The
+    venue intake tool is the repo's one Pillow user, and its test imported
+    PIL at module scope — no pip install anywhere, workflow still clean,
+    and the entire suite red on every machine without Pillow, GitHub
+    included, from the night the tool landed.
+
+    So state the invariant where it actually bites: a module-scope import
+    in tests/ must be standard library or first-party. Anything else has
+    to sit inside a try/except that skips the file, which keeps a hand-run
+    tool's dependency from becoming the suite's dependency. Imports nested
+    in a try or inside a function are not module-scope and pass freely —
+    that is the escape hatch, and it is deliberate.
+    """
+    import ast
+    local = {f[:-3] for f in os.listdir(ROOT) if f.endswith(".py")}
+    local |= {d for d in os.listdir(ROOT)
+              if os.path.isdir(os.path.join(ROOT, d))
+              and not d.startswith(".")}
+    bad = []
+    for f in sorted(os.listdir(os.path.join(ROOT, "tests"))):
+        if not (f.startswith("test_") and f.endswith(".py")):
+            continue
+        path = os.path.join(ROOT, "tests", f)
+        tree = ast.parse(open(path, encoding="utf-8").read())
+        for node in tree.body:          # top level only: try/def bodies are not
+            if isinstance(node, ast.Import):
+                roots = [a.name.split(".")[0] for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                # A relative import has no module of its own to resolve.
+                roots = [node.module.split(".")[0]] if node.level == 0 \
+                    and node.module else []
+            else:
+                continue
+            for r in roots:
+                if r not in local and not _stdlib(r):
+                    bad.append(f"{f}: {r}")
+    assert not bad, ("module-scope third-party imports in tests/ — guard "
+                     f"them with try/except + a SKIP line: {bad}")
+
+
+def test_a_skipped_test_file_is_not_reported_as_a_pass():
+    """The skip has to be louder than a green zero. run_tests.py prints
+    "✅ name  0 tests" for any file that exits clean without running
+    anything, which is indistinguishable from a file whose tests all
+    vanished — so the runner reads the SKIP line and says so, on the
+    per-file row and on the summary line doctor.py reports."""
+    src = open(os.path.join(ROOT, "run_tests.py"), encoding="utf-8").read()
+    assert 'r"^SKIP (.+)$"' in src, "the runner no longer reads SKIP lines"
+    assert "skipped" in src
+    # And the file that needs it still says it.
+    vi = open(os.path.join(ROOT, "tests", "test_venue_ingest.py"),
+              encoding="utf-8").read()
+    assert "except ModuleNotFoundError" in vi
+    assert 'print("SKIP ' in vi
+
+
 # --- the tripwires for the August bugs ---------------------------------------
 def test_the_new_invariant_checks_are_registered_in_both_lists():
     """A check that exists but is not in CHECKS never runs; one missing

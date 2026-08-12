@@ -7,6 +7,22 @@ tiles) and prove the cutter finds padded grids AND butted grids, never
 cuts a declared single, the classifier reads the LIGHTING rather than
 the playing surface, neutral lands on steel, the octagon maps to its
 rotation slots, and a re-run can only upgrade.
+
+Pillow is the one thing in this repo that is not standard library, and
+it lives here on purpose: tools/venues_ingest.py is a hand-run laptop
+tool for turning renders into site assets, not part of the engine. The
+engine, the site build and every other test stay stdlib-only, which is
+what lets CI run with no install step at all.
+
+So this file must SKIP rather than fail when Pillow is absent. When it
+imported PIL unconditionally it took the whole suite down with it on
+every machine that had no Pillow — GitHub Actions included, red on
+every push from the night the ingest tool landed. A tool's optional
+dependency is not allowed to be the suite's dependency.
+
+The skip is printed, not silent: run_tests.py reads the SKIP line and
+reports the file as skipped rather than as a green zero, because a
+skipped file that renders as a pass is how coverage quietly disappears.
 """
 
 import os
@@ -16,7 +32,13 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from PIL import Image  # noqa: E402
+try:
+    from PIL import Image  # noqa: E402
+except ModuleNotFoundError:
+    print("SKIP Pillow is not installed; tools/venues_ingest.py is a "
+          "hand-run laptop tool and the rest of the suite is stdlib-only")
+    print("\n0 tests passed.")
+    raise SystemExit(0)
 
 from tools.venues_ingest import (classify, ingest, slice_tiles,  # noqa: E402
                                  target_name)
