@@ -54,6 +54,29 @@ def cfb_conferences() -> dict:
     return out
 
 
+def _live_table(sport: str, season: int, confs: dict | None):
+    """``(table, error)`` — the league's own standings, or why not.
+
+    Failure is a STRING, not a silence. A page that quietly falls back to
+    counting our own rows looks identical to one reading the league's
+    table, and that is precisely the confusion this whole change exists to
+    end. Any exception counts: an unreachable host, a moved envelope and a
+    parser that returned nothing are all "we do not have the league's
+    numbers", and all of them must fall back rather than blank the page.
+    """
+    try:
+        from engine.sources import leaguestandings
+        rows = leaguestandings.fetch(sport, season)
+        if not rows:
+            return None, "the standings feed answered with no teams"
+        table = standings.from_feed(sport, rows, season, conferences=confs)
+        if not table.get("groups"):
+            return None, "no fetched team matched our division table"
+        return table, ""
+    except Exception as exc:                        # noqa: BLE001
+        return None, f"{type(exc).__name__}: {exc}"
+
+
 def build(sport: str, season: int | None = None,
           today: str | None = None) -> dict:
     day = today or datetime.date.today().isoformat()
@@ -61,8 +84,16 @@ def build(sport: str, season: int | None = None,
     conn = connect()
     try:
         confs = cfb_conferences() if sport == "cfb" else None
-        table = standings.compute(conn, sport, season=season, today=day,
-                                  conferences=confs)
+        # THE LEAGUE'S OWN TABLE FIRST. Counting our ingested games answers
+        # a different question, and on a partially-ingested season it
+        # answers it wrongly enough to reorder a division — which is what
+        # Ethan was looking at. The count stays as the fallback, and the
+        # payload says which one ran.
+        table, feed_error = _live_table(sport, season, confs)
+        if table is None:
+            table = standings.compute(conn, sport, season=season, today=day,
+                                      conferences=confs)
+            table["feed_error"] = feed_error
         bracket = playoffs.bracket(conn, sport, season=season, today=day)
     finally:
         conn.close()
@@ -77,6 +108,16 @@ def build(sport: str, season: int | None = None,
         else standings.conference_seeds(table))
     table["team_count"] = teams
     table["note"] = "" if teams else _empty_note(sport, season, day)
+    if teams and table.get("source") == "computed":
+        # Said on the page, not just in the log: these are OUR counted
+        # games, which is a weaker claim than the league's own table.
+        table["note"] = (
+            "Counted from the "
+            f"{table.get('games_counted', 0)} finished game(s) we have "
+            f"ingested — the league's own standings feed was unavailable"
+            + (f" ({table['feed_error']})" if table.get("feed_error") else "")
+            + ". Records here can differ from the league's until the ingest "
+              "catches up.")
     return table
 
 

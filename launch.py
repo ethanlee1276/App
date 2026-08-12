@@ -3186,6 +3186,45 @@ def show_injuries() -> None:
               "fetch failures the host is unreachable from here.")
 
 
+def show_standings() -> None:
+    """Rebuild every standings table NOW and say where each came from.
+
+        python3 launch.py --standings
+
+    The one command that answers "are these the real standings?". A sport
+    on `league` is the league's own table; a sport on `computed` fell back
+    to counting our ingested games and prints the reason it had to — which
+    is the state Ethan caught the MLB page in, with clubs carrying ties in
+    a sport that has none. Neither feed is reachable from the sandbox that
+    wrote the parsers, so this command on the laptop is where they meet
+    the real envelopes.
+    """
+    import standings_build
+    print("Rebuilding standings from the leagues' own feeds…\n")
+    for sport in standings_build.SPORTS:
+        try:
+            blob = standings_build.write(sport)
+        except Exception as exc:                    # noqa: BLE001
+            print(f"  {sport.upper():<5} build failed: "
+                  f"{type(exc).__name__}: {exc}")
+            continue
+        src = blob.get("source") or "?"
+        teams = blob.get("team_count") or 0
+        mark = "LIVE" if src == "league" else "ours"
+        print(f"  {sport.upper():<5} {mark:<5} {teams:>3} teams  "
+              f"season {blob.get('season')}")
+        if src != "league":
+            why = blob.get("feed_error") or blob.get("note") or "no reason given"
+            print(f"        └─ fell back to our own count: {why}")
+        else:
+            top = ((blob.get("groups") or [{}])[0].get("teams") or [{}])[0]
+            if top.get("team"):
+                print(f"        └─ e.g. {top.get('team')} "
+                      f"{top.get('record')} ({top.get('pct')})")
+    print("\n  LIVE = the league's own table. ours = counted from ingested "
+          "games,\n  which is a weaker claim and now says so on the page.")
+
+
 def show_memes() -> None:
     """Rocket Radar probe: pull the free feeds NOW and show the board.
 
@@ -4766,6 +4805,9 @@ def main() -> None:
         return
     if "--injuries" in argv:
         show_injuries()
+        return
+    if "--standings" in argv:
+        show_standings()
         return
     if "--memes" in argv:
         show_memes()

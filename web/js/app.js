@@ -8935,9 +8935,20 @@ async function renderStandings() {
     `${(SPORT_META[sport] || {}).label || sport.toUpperCase()} standings `;
   const sub = document.getElementById("standings-sub");
   if (sub) {
+    /* WHERE THE NUMBERS CAME FROM. The page used to say "counted from our
+       own results" whatever had happened — including when that count was
+       a half-ingested season showing baseball clubs with ties. The build
+       now stamps `source`, and this line reports it rather than asserting
+       one of the two. */
+    const live = d.source === "league";
     sub.textContent = d.season
-      ? `— ${d.season} regular season · ${(d.games_counted || 0).toLocaleString()} games counted from our own results · ${d.order_note || ""}`
-      : "— counted from our own results.";
+      ? `— ${d.season} regular season · `
+        + (live
+          ? "the league’s own records, refreshed with the site"
+          : `${(d.games_counted || 0).toLocaleString()} games counted from our own results (the league’s feed was unavailable)`)
+        + ` · ${d.order_note || ""}`
+      : (live ? "— the league’s own records."
+              : "— counted from our own results.");
   }
   const groups = d.groups || [];
   if (!groups.length) {
@@ -8947,7 +8958,16 @@ async function renderStandings() {
     return;
   }
   const b = d.bracket || {};
+  /* A fallback table that LOOKS official is the failure this page just
+     had. When the league’s feed was unavailable and these are our own
+     counted games, say so above the table — not only in a note the empty
+     state would have shown. */
+  const fallbackBanner = (d.source === "computed" && d.note) ? `
+    <div class="card" style="border-left:3px solid var(--warn);margin-bottom:14px">
+      <p style="margin:0;font-size:var(--fs-md)">${icon('warn')} <b>These are our
+        counted games, not the league’s table.</b> ${escapeHtml(d.note)}</p></div>` : "";
   host.innerHTML = `
+    ${fallbackBanner}
     ${b.started ? `<div class="section-title tight">Postseason
         <span class="sub">— every matchup here was played. Series scores are
         games won, so an unfinished series shows where it stands.</span></div>

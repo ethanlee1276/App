@@ -238,6 +238,167 @@ def test_every_sport_with_a_board_gets_standings_except_ufc():
     assert set(standings_build.SPORTS) == {"nfl", "mlb", "nba", "wnba", "cfb"}
 
 
+
+# --- the league's own table, and the tie that never happened ---------------
+# Ethan, 2026-08-12: "This is not live or real data at all. We need too fix
+# that so our standings pages displays the actual standings of the current
+# seasons LIVE DATA." The MLB page showed 70-69-1 and 66-68-4 — ties, in a
+# sport that has none — and the order followed them.
+
+def test_a_sport_without_ties_never_records_one():
+    """An equal-score row in baseball is a suspended, postponed or
+    unscored game, not half a result. Counting it inflated games played,
+    moved every pct and diff, and put a .504 club atop the AL Central."""
+    conn = _seed(sport="mlb", season=2026, games=[
+        ("2026-04-01", "NYY", "BOS", 5, 3),
+        ("2026-04-02", "NYY", "BOS", 2, 4),
+        ("2026-04-03", "NYY", "BOS", 0, 0),     # never finished
+    ])
+    t = standings.compute(conn, "mlb", season=2026, today="2026-08-12")
+    row = [r for g in t["groups"] for r in g["teams"] if r["team"] == "NYY"][0]
+    assert row["ties"] == 0, "baseball does not play ties"
+    assert row["record"] == "1-1", row["record"]
+    assert row["games"] == 2, "the unfinished game must not count as played"
+    assert t["unfinished_skipped"] == 1
+    assert t["games_counted"] == 2
+
+
+def test_football_still_counts_the_ties_it_actually_plays():
+    """The other half: the NFL does play them, so nothing changes there."""
+    conn = _seed(sport="nfl", season=2025, games=[
+        ("001", "NE", "BUF", 20, 20), ("002", "NE", "MIA", 24, 17)])
+    t = standings.compute(conn, "nfl", season=2025, today="2025-12-01")
+    row = [r for g in t["groups"] for r in g["teams"] if r["team"] == "NE"][0]
+    assert row["ties"] == 1 and row["record"] == "1-0-1"
+
+
+def test_the_computed_table_admits_what_it_is():
+    conn = _seed(sport="mlb", season=2026,
+                 games=[("2026-04-01", "NYY", "BOS", 5, 3)])
+    t = standings.compute(conn, "mlb", season=2026, today="2026-08-12")
+    assert t["source"] == "computed"
+
+
+MLB_FEED = {"records": [
+    {"standingsType": "regularSeason", "division": {"id": 201},
+     "teamRecords": [
+        {"team": {"id": 147, "name": "New York Yankees"},
+         "wins": 79, "losses": 62, "runsScored": 700, "runsAllowed": 644,
+         "streak": {"streakCode": "W1"},
+         "records": {"homeRecord": "44-27", "awayRecord": "35-35"}},
+        {"team": {"id": 111, "name": "Boston Red Sox"},
+         "wins": 72, "losses": 68, "runsScored": 690, "runsAllowed": 648,
+         "streak": {"streakCode": "L4"},
+         "records": {"homeRecord": "40-30", "awayRecord": "32-38"}},
+        {"team": {"id": 999, "name": "Not A Club"}, "wins": 1},   # dropped
+     ]},
+]}
+
+
+def test_the_mlb_feed_parses_by_key_and_drops_rather_than_guesses():
+    from engine.sources import leaguestandings as ls
+    rows = ls.parse_mlb(MLB_FEED)
+    assert len(rows) == 2, "a club with no win/loss pair is not a row"
+    nyy = [r for r in rows if r["team"] == "NYY"][0]
+    assert (nyy["wins"], nyy["losses"], nyy["ties"]) == (79, 62, 0)
+    assert nyy["streak"] == 1 and nyy["points_for"] == 700
+    assert (nyy["home_wins"], nyy["away_losses"]) == (44, 35)
+    bos = [r for r in rows if r["team"] == "BOS"][0]
+    assert bos["streak"] == -4, "L4 is a losing streak, and must be signed"
+    assert ls.parse_mlb({}) == [] and ls.parse_mlb(None) == []
+
+
+ESPN_FEED = {"children": [
+    {"name": "American Football Conference", "children": [
+        {"name": "AFC East", "standings": {"entries": [
+            {"team": {"abbreviation": "BUF"}, "stats": [
+                {"name": "wins", "value": 13}, {"name": "losses", "value": 4},
+                {"name": "ties", "value": 0},
+                {"name": "pointsFor", "value": 483},
+                {"name": "pointsAgainst", "value": 350},
+                {"name": "streak", "value": 3},
+                {"name": "Home", "displayValue": "7-1"},
+                {"name": "Road", "displayValue": "6-3"}]},
+            {"team": {"abbreviation": "MIA"}, "stats": [
+                {"name": "wins", "value": 8}, {"name": "losses", "value": 9},
+                {"name": "streak", "value": -2}]},
+            {"team": {"abbreviation": "NOPE"}, "stats": []},      # dropped
+        ]}},
+    ]},
+]}
+
+
+def test_the_espn_feed_is_walked_at_whatever_depth_it_nests():
+    from engine.sources import leaguestandings as ls
+    rows = ls.parse_espn(ESPN_FEED)
+    assert len(rows) == 2, "an entry with no wins/losses is not a row"
+    buf = [r for r in rows if r["team"] == "BUF"][0]
+    assert (buf["wins"], buf["losses"]) == (13, 4)
+    assert buf["points_for"] == 483 and buf["streak"] == 3
+    assert (buf["home_wins"], buf["home_losses"]) == (7, 1)
+    assert [r for r in rows if r["team"] == "MIA"][0]["streak"] == -2
+    assert ls.parse_espn({}) == []
+
+
+def test_from_feed_keeps_our_grouping_and_our_order():
+    """The feed supplies NUMBERS. Divisions come from our own table and the
+    sort from our own key, so one envelope moving cannot reorganize the
+    league or make the page disagree with itself."""
+    from engine.sources import leaguestandings as ls
+    t = standings.from_feed("mlb", ls.parse_mlb(MLB_FEED), 2026)
+    assert t["source"] == "league"
+    grp = [g for g in t["groups"] if g["teams"]][0]
+    assert grp["conference"] == "AL" and grp["division"] == "East"
+    assert [r["team"] for r in grp["teams"]] == ["NYY", "BOS"], "our sort"
+    nyy = grp["teams"][0]
+    assert nyy["record"] == "79-62" and nyy["streak_label"] == "W1"
+    assert nyy["diff"] == 56
+    # Baseball rows can never carry a tie, whatever a feed sends.
+    assert all(r["ties"] == 0 for r in grp["teams"])
+
+
+def test_the_build_falls_back_loudly_when_the_feed_is_down():
+    """A fallback that looks official is the whole defect. The payload must
+    carry the reason, and the page must have something to print."""
+    import standings_build
+    from unittest import mock
+    with mock.patch.object(standings_build, "_live_table",
+                           lambda *a, **k: (None, "HTTPError: 403")):
+        blob = standings_build.build("mlb", season=2026, today="2026-08-12")
+    assert blob["source"] == "computed"
+    assert blob["feed_error"] == "HTTPError: 403"
+
+
+def test_the_page_reports_which_source_it_is_showing():
+    app = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "web", "js", "app.js"), encoding="utf-8").read()
+    i = app.index("async function renderStandings()")
+    fn = app[i:app.index("\nasync function ", i + 10)]
+    assert 'd.source === "league"' in fn
+    # Typographic apostrophe — the house rule for visible copy.
+    assert "the league\u2019s own records" in fn
+    assert "fallbackBanner" in fn, "a fallback table must not look official"
+
+
+def test_last_ten_is_the_leagues_number_or_a_dash_never_a_zero():
+    """An empty ordered run rendered as "0-0", which reads as a measured
+    10-game record of nothing. Neither feed publishes the run, so: the
+    league's own last-ten where it sends one, a dash where it does not."""
+    from engine.sources import leaguestandings as ls
+    feed = {"records": [{"teamRecords": [
+        {"team": {"id": 147}, "wins": 79, "losses": 62,
+         "records": {"splitRecords": [
+             {"type": "lastTen", "wins": 6, "losses": 4}]}},
+        {"team": {"id": 111}, "wins": 72, "losses": 68, "records": {}},
+    ]}]}
+    rows = ls.parse_mlb(feed)
+    assert [r["last10"] for r in rows] == ["6-4", ""]
+    t = standings.from_feed("mlb", rows, 2026)
+    by = {r["team"]: r for g in t["groups"] for r in g["teams"]}
+    assert by["NYY"]["last10_label"] == "6-4"
+    assert by["BOS"]["last10_label"] == "\u2014", "no fabricated 0-0"
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

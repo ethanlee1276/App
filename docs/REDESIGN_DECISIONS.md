@@ -421,3 +421,32 @@ measured at 1280x900 — 2.75 screens stacked became 1.37 on the tab that
 opens. The venue chip is deliberately NOT colour-coded: amber is the
 one accent and it means "live or material" (§1), which a venue name is
 not, so the word does the work.
+
+## Standings: the league's table, not our count — 2026-08-12
+
+"This is not live or real data at all. We need too fix that so our
+standings pages displays the actual standings of the current seasons LIVE
+DATA." The tell was in the table: MLB clubs carrying TIES — 70-69-1,
+66-68-4 — in a sport that has none, with the White Sox atop the AL
+Central on a .504 record.
+
+Two causes, both real. Standings were COUNTED from the games we had
+ingested, which answers "what do our rows say" rather than "what are the
+standings"; on a partially-ingested season those are different numbers,
+not rounded ones. And the count treated any equal-score row as a tie, so
+every unfinished, postponed or unscored game became half a result that
+moved games played, win percentage, differential and the order.
+
+The league's own feed is now the primary path — statsapi for MLB, ESPN's
+v2 standings for the other four, both keyless and both already trusted
+elsewhere here. The count stays as the FALLBACK, and the payload stamps
+which one ran: a computed table now wears a banner saying so and carries
+the feed's error, because a fallback that looks official is the whole
+defect. `--standings` prints LIVE or ours per sport.
+
+What we deliberately do not take from the feed is the grouping or the
+order — divisions come from our own table and the sort from our own key,
+so one envelope moving cannot reorganize a league or make the page
+disagree with itself. And last-ten is the league's number where it sends
+one, a dash where it does not: the empty ordered run was rendering as
+"0-0", which reads as a measured record of nothing.
