@@ -3133,6 +3133,14 @@ select.calc-in { width: auto; font-weight: 600; }
   padding: 8px 14px; border-bottom: var(--hairline) solid var(--border-soft);
 }
 .kx-row:last-child { border-bottom: 0; }
+/* The venue column: which exchange the row is priced on, now that both
+   share one table. Deliberately NOT colour-coded — amber is the one
+   accent and it means "live or material" (§1), which a venue name is
+   not. The word does the work; the model and edge columns already say
+   the thing that actually differs between the two feeds. */
+.kx-venue { display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .04em;
+  padding: 4px 6px; }
 .kx-title { min-width: 0; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; font-size: var(--fs-sm); }
 .kx-match { color: var(--text-mute); }

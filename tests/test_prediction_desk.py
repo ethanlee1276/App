@@ -263,9 +263,13 @@ def test_the_desk_never_recommends_without_its_reasons():
     says PAPER out loud, explains a quiet night, and politics stays with
     the graded flow detector rather than gaining an oracle."""
     assert "function deskSectionHTML(" in APP
-    assert APP.index("deskSectionHTML(kx)") < APP.index("kalshiSectionHTML(kx)")
+    # The desk leads the merged board — recommendations before the
+    # full market list, on the tab that opens first.
+    board = APP[APP.index("function predBoardHTML("):]
+    board = board[:board.index("\nfunction ")]
+    assert board.index("deskSectionHTML(kx)") < board.index("The board")
     fn = APP[APP.index("function deskSectionHTML("):]
-    fn = fn[:fn.index("\nfunction kalshiSectionHTML")]
+    fn = fn[:fn.index("\nfunction ")]
     assert "PAPER" in fn and "No market clears the gate" in fn
     assert "Politics carries no recommendations" in APP
     # Build wiring: journal, settle, and the exception surfaced in words.

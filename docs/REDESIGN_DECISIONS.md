@@ -395,3 +395,29 @@ real neutral octagon render exists. Old dark-gap splitting died for a
 reason worth remembering: night renders carry genuinely pitch-black
 full-width sky bands, and a threshold that finds gutters also finds
 those.
+
+## One prediction board, three rooms — 2026-08-12
+
+"Combine the kalshi and polly market board. There is too much too
+scroll through and they are basically the same thing." As PRICES they
+are: both venues sell event contracts quoted in cents, and reading them
+as two stacked tables meant scrolling past one to compare against the
+other. So venue became a COLUMN, the two tables became one, and the
+single ranking is 24h volume — the one measure both venues report the
+same way.
+
+What did NOT get flattened is where they actually differ. Kalshi runs a
+two-sided book we can price against, so those rows carry our number and
+the gap; Polymarket publishes a trade tape with wallet identity, which
+answers "who is betting", not "what is it worth". A Polymarket row
+therefore shows a dash in the model and edge columns. Filling that
+column with a number nobody computed would be exactly the fake symmetry
+the merge was supposed to remove — and it is why the desk's
+recommendations now say out loud that they are all Kalshi.
+
+The scroll itself was three questions stacked: what to bet, who is
+betting, whether the flow signal has ever been right. Three subtabs,
+measured at 1280x900 — 2.75 screens stacked became 1.37 on the tab that
+opens. The venue chip is deliberately NOT colour-coded: amber is the
+one accent and it means "live or material" (§1), which a venue name is
+not, so the word does the work.

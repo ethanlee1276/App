@@ -6403,7 +6403,9 @@ function deskSectionHTML(k) {
     : "nothing graded yet — daily weather markets settle same-day, so this record fills fast";
   return `
     <div class="section-title">The desk’s recommendations
-      <span class="sub">— every row clears a written gate (edge &ge; 6 pts sports / 8 pts weather,
+      <span class="sub">— all on Kalshi, because a recommendation needs a price we can
+      model against and Polymarket rows carry no model number.
+      Every row clears a written gate (edge &ge; 6 pts sports / 8 pts weather,
       a real two-sided book, live volume) and is journaled at a flat 0.1u PAPER stake.
       ${paperLine}. Promotion to real stakes takes 100+ graded rows in profit — the same
       bar every other bucket on this site has to clear.</span></div>
@@ -6414,49 +6416,103 @@ function deskSectionHTML(k) {
       prints which of those was missing — nothing here is ever forced.</p>`}`;
 }
 
-function kalshiSectionHTML(k) {
-  if (!k) return "";
-  const rows = (k.rows || []).map((r) => {
-    const edge = r.edge_pts == null ? `<span style="opacity:.45">—</span>`
-      : `<span style="color:var(--${r.edge_pts > 0 ? "good" : "bad"});font-weight:700">
-           ${r.edge_pts > 0 ? "+" : ""}${r.edge_pts} pts</span>`;
-    const basis = r.price_basis === "last_trade"
-      ? ` <span class="chip" title="One side of the book is empty — this is the last trade, not a two-sided mid">last trade</span>` : "";
-    return `<div class="kx-row">
-      <span class="kx-sport chip">${escapeHtml((r.sport || "").toUpperCase())}</span>
-      <span class="kx-title" title="${escapeHtml(r.title)}">${escapeHtml(r.title)}
-        ${r.matchup ? `<span class="kx-match">· ${escapeHtml(r.matchup)}</span>` : ""}${basis}</span>
-      <span class="kx-num kx-k" title="Kalshi mid — the exchange’s own probability">${(r.prob * 100).toFixed(0)}%</span>
-      <span class="kx-num kx-m" title="Our model’s probability for the same claim">${r.model_p == null ? "—" : (r.model_p * 100).toFixed(0) + "%"}</span>
-      <span class="kx-num kx-e">${edge}</span>
-      <span class="kx-vol" title="24h volume">$${Number(r.volume_24h || 0).toLocaleString()}</span>
-    </div>`;
-  }).join("");
-  const empty = (k.rows || []).length ? "" : `
-    <p class="loading" style="padding:12px">${escapeHtml(k.note
-      || "No open sports markets seen on the last pull — the board fills as Kalshi lists games.")}</p>`;
+/* ONE board out of two venues.
+   ------------------------------------------------------------------
+   Ethan, 2026-08-12: "Combine the kalshi and polly market board. There
+   is too much too scroll through and they are basically the same
+   thing." They are: both are event contracts priced in cents, and
+   reading them as two tables meant scrolling past one to compare with
+   the other. So the row shape is normalized here and the venue becomes
+   a COLUMN rather than a section heading.
+
+   What does NOT get flattened is where the two feeds genuinely differ.
+   Kalshi gives a two-sided book we can price against, so those rows
+   carry a model number and an edge. Polymarket gives a public trade
+   tape with wallet identity, which is flow — a different question, and
+   it keeps its own tab. Where a venue has no answer the cell is a dash;
+   inventing a model number for a Polymarket row to fill the column
+   would be the kind of fake symmetry this merge is supposed to kill. */
+function pmVenueRows(kx, d) {
+  const rows = [];
+  for (const r of ((kx || {}).rows || [])) {
+    rows.push({
+      venue: "KALSHI", title: r.title,
+      sub: [(r.sport || "").toUpperCase(), r.matchup].filter(Boolean).join(" · "),
+      price: r.prob, model: r.model_p, edge: r.edge_pts,
+      vol: r.volume_24h, basis: r.price_basis, url: "",
+    });
+  }
+  for (const m of ((d || {}).markets || [])) {
+    rows.push({
+      venue: "POLY", title: m.question,
+      sub: m.end_date ? `resolves ${m.end_date}` : "",
+      price: m.yes, model: null, edge: null,
+      vol: m.vol24, basis: "", url: m.slug
+        ? `https://polymarket.com/market/${m.slug}` : "",
+    });
+  }
+  // Volume is the one measure both venues report the same way, so it is
+  // the only honest way to rank a mixed table.
+  rows.sort((a, b) => (Number(b.vol) || 0) - (Number(a.vol) || 0));
+  return rows;
+}
+
+const PM_BOARD_SHOWN = 40;
+
+function pmBoardRowHTML(r) {
+  const edge = r.edge == null ? `<span style="opacity:.45">—</span>`
+    : `<span style="color:var(--${r.edge > 0 ? "good" : "bad"});font-weight:700">
+         ${r.edge > 0 ? "+" : ""}${r.edge} pts</span>`;
+  const basis = r.basis === "last_trade"
+    ? ` <span class="chip" title="One side of the book is empty — this is the last trade, not a two-sided mid">last trade</span>` : "";
+  const title = r.url
+    ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener"
+          style="color:inherit">${escapeHtml(r.title)}</a>`
+    : escapeHtml(r.title);
+  return `<div class="kx-row">
+    <span class="kx-sport chip kx-venue">${r.venue}</span>
+    <span class="kx-title" title="${escapeAttr(r.title)}">${title}
+      ${r.sub ? `<span class="kx-match">· ${escapeHtml(r.sub)}</span>` : ""}${basis}</span>
+    <span class="kx-num kx-k" title="The venue’s own price for YES">${
+      r.price == null ? "—" : (r.price * 100).toFixed(0) + "¢"}</span>
+    <span class="kx-num kx-m" title="Our model’s probability for the same claim">${
+      r.model == null ? "—" : (r.model * 100).toFixed(0) + "%"}</span>
+    <span class="kx-num kx-e">${edge}</span>
+    <span class="kx-vol" title="24h volume">$${Number(r.vol || 0).toLocaleString()}</span>
+  </div>`;
+}
+
+function predBoardHTML(kx, d) {
+  const all = pmVenueRows(kx, d);
+  const shown = all.slice(0, PM_BOARD_SHOWN);
+  const k = kx || {};
+  const modeled = ((k.rows) || []).filter((r) => r.model_p != null);
+  const nRec = ((k.rows) || []).filter((r) => r.rec).length
+    + ((k.weather) || []).filter((r) => r.rec).length;
+  const tile = (label, v, sub) => `<div class="tile"><div class="k">${label}</div>
+    <div class="v">${v}</div>${sub ? `<div class="tile-sub">${sub}</div>` : ""}</div>`;
   return `
-    <div class="section-title">Kalshi board
-      <span class="sub">— CFTC-regulated event contracts, all fifty states. The mid of a
-      two-sided book is the market’s probability with no vig to strip; "edge" is our model
-      minus that, in points, and only appears where both numbers exist.</span></div>
-    ${/* The Overhead for a market that has no building: the space a price
-          is set in IS the probability line. One drawing for the whole
-          board rather than one per row — the Kalshi board is an agate
-          table and a venue-sized diagram on every line would bury it.
-          Each market is a segment from the exchange's number to ours, so
-          length is disagreement and the shape of the night is readable
-          before a single figure is. */""}
-    ${(k.rows || []).length
-      ? `<div class="kx-overhead">${marketRule(k.rows, { title: "KALSHI BOARD" })}</div>` : ""}
+    ${deskSectionHTML(kx)}
+    <div class="section-title">The board
+      <span class="sub">— every live market from both venues in one table, ranked by
+      24h volume. Kalshi runs a two-sided book we can price against, so those rows
+      carry our number and the gap; Polymarket rows show the venue’s price and link
+      out. A dash means we do not price that market, not that the edge is zero.</span></div>
+    ${modeled.length
+      ? `<div class="kx-overhead">${marketRule(modeled, { title: "MODEL vs MARKET" })}</div>` : ""}
     <div class="stats">
-      <div class="tile"><div class="k">Sports markets</div><div class="v">${k.n_markets || 0}</div></div>
-      <div class="tile"><div class="k">Matched to tonight</div><div class="v">${k.n_matched || 0}</div></div>
-      <div class="tile"><div class="k">With a model number</div><div class="v">${k.n_modeled || 0}</div></div>
-      <div class="tile"><div class="k">Tape stored</div><div class="v">${((k.tape || {}).stored_total || 0).toLocaleString()}</div>
-        <div class="tile-sub">snapshots — order books can’t be backfilled</div></div>
+      ${tile("Markets tracked", all.length, "both venues, live now")}
+      ${tile("Priced by our model", modeled.length, "Kalshi two-sided books")}
+      ${tile("Clearing the gate", nRec, "the desk’s recommendations")}
+      ${tile("Matched to tonight", k.n_matched || 0, "a game on our slate")}
     </div>
-    <div class="card kx-table" style="padding:0">${rows}${empty}</div>`;
+    <div class="card kx-table" style="padding:0">${
+      shown.map(pmBoardRowHTML).join("") || `
+      <p class="loading" style="padding:12px">${escapeHtml(k.note
+        || "No open markets on the last pull — the board fills as the venues list events.")}</p>`}</div>
+    ${all.length > shown.length
+      ? `<p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:8px">
+         Showing the ${shown.length} biggest by volume of ${all.length} live markets.</p>` : ""}`;
 }
 
 async function renderIntel() {
@@ -6471,13 +6527,16 @@ async function renderIntel() {
     const res = await fetch("data/kalshi.json?t=" + Date.now());
     if (res.ok) kx = await res.json();
   } catch (e) {}
+  // Polymarket silent does not mean the page is empty: Kalshi is half of
+  // this board and renders on its own. Same merged table, one venue in it.
   if (!d || (!(d.flow || []).length && !(d.markets || []).length)) {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
-      <div class="es-title">No prediction-market data yet</div>
+      <div class="es-title">No Polymarket data on this pull</div>
       <div class="es-sub">The launcher pulls Kalshi’s order books and Polymarket’s public
-      market list and trade tape on every refresh (free, no key needed). If this persists,
-      the machine may not be able to reach the venues.</div></div>`
-      + deskSectionHTML(kx) + kalshiSectionHTML(kx);
+      market list and trade tape on every refresh (free, no key needed). Kalshi’s side of
+      the board is below; if both stay empty, the machine may not be able to reach the
+      venues.</div></div>`
+      + predBoardHTML(kx, d);
     return;
   }
   setStandaloneSource("Kalshi + Polymarket public feeds", "Prediction markets · live venue data");
@@ -6561,48 +6620,47 @@ async function renderIntel() {
     </article>`;
   }).join("");
 
-  const marketRows = (d.markets || []).slice(0, 20).map((m, i) => `
-    <div class="dl-row pm-market">
-      <span class="dl-rank">${i + 1}</span>
-      <span class="dl-main pm-q">
-        <a href="https://polymarket.com/market/${escapeHtml(m.slug)}" target="_blank" rel="noopener"
-           style="color:inherit;font-weight:600">${escapeHtml(m.question)}</a></span>
-      <span class="dl-num strong">${cents(m.yes)}</span>
-      <span class="dl-num vol">${usd(m.vol24)} / 24h</span>
-      <span class="dl-num end">${escapeHtml(m.end_date || "")}</span>
-    </div>`).join("");
-
-  host.innerHTML = `
-    <div class="stats">
-      ${tile("Trades on tape", Number(tape.stored_total || 0).toLocaleString(), `+${tape.new_this_pull || 0} this pull`)}
-      ${tile("Wallets seen", Number(tape.wallets_seen || 0).toLocaleString(), "recording since day one")}
-      ${tile("Flow flags · 24h", (d.flow || []).length, "$5K+ scored trades")}
-      ${tile("Updated", escapeHtml((d.generated_at || "").slice(11, 16)), "refreshes with the site")}
-    </div>
-    ${intelVerdict(d.validation)}
-    <div class="section-title">Informed flow
-      <span class="sub">— large trades scored for anomaly signals, with receipts on every chip
-      (hover). Probabilities, never verdicts.</span></div>
-    <div class="cards wide">${flagCards ||
-      `<div class="empty-slate" style="grid-column:1/-1"><div class="es-icon">${icon("signal", 30)}</div>
-        <div class="es-title">No flagged flow yet</div>
-        <div class="es-sub">The feed scores the last 24h of recorded tape and accumulates
-        across refreshes — big trades are a few per hour.</div></div>`}</div>
-    ${intelReportCard(d.validation)}
-    <div class="section-title">Top traders
-      <span class="sub">— ${escapeHtml(d.traders_note || "by realized profit")}</span></div>
-    <div class="cards wide">${traderCards ||
-      `<p class="loading" style="grid-column:1/-1">No trader data yet — fills on the next refresh.</p>`}</div>
-    <div class="section-title">Top markets
-      <span class="sub">— live markets by 24h volume · YES price · resolution date</span></div>
-    <div class="card" style="padding:0">${marketRows}</div>
-    ${deskSectionHTML(kx)}
-    ${kalshiSectionHTML(kx)}
-    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Wallet-age signal
-      matures as the tape accrues (it cannot be backfilled). Kalshi carries no public
-      trader identity, which is why it appears above as a PRICE and not as flow.
-      Analyzing public flow is market research; what the CFTC prosecutes
-      (2026) is trading on information <i>you</i> hold a duty to keep confidential.</p>`;
+  /* THREE ROOMS, not one scroll. The page carried the desk, a Kalshi
+     table, a Polymarket table, flow cards, trader cards and two
+     validation blocks end to end — Ethan's "too much too scroll
+     through". They are three different questions, so they are three
+     tabs: what to bet, who is betting, and whether any of it works. */
+  host.innerHTML = subtabbedHTML("intel", [
+    ["board", "Board",
+     "every live market from Kalshi and Polymarket in one table, plus the desk’s picks",
+     predBoardHTML(kx, d)],
+    ["flow", "Flow",
+     "who is betting — Polymarket’s public tape, which Kalshi does not publish",
+     `<div class="stats">
+        ${tile("Trades on tape", Number(tape.stored_total || 0).toLocaleString(), `+${tape.new_this_pull || 0} this pull`)}
+        ${tile("Wallets seen", Number(tape.wallets_seen || 0).toLocaleString(), "recording since day one")}
+        ${tile("Flow flags · 24h", (d.flow || []).length, "$5K+ scored trades")}
+        ${tile("Updated", escapeHtml((d.generated_at || "").slice(11, 16)), "refreshes with the site")}
+      </div>
+      <div class="section-title">Informed flow
+        <span class="sub">— large trades scored for anomaly signals, with receipts on every chip
+        (hover). Probabilities, never verdicts.</span></div>
+      <div class="cards wide">${flagCards ||
+        `<div class="empty-slate" style="grid-column:1/-1"><div class="es-icon">${icon("signal", 30)}</div>
+          <div class="es-title">No flagged flow yet</div>
+          <div class="es-sub">The feed scores the last 24h of recorded tape and accumulates
+          across refreshes — big trades are a few per hour.</div></div>`}</div>
+      <div class="section-title">Top traders
+        <span class="sub">— ${escapeHtml(d.traders_note || "by realized profit")}</span></div>
+      <div class="cards wide">${traderCards ||
+        `<p class="loading" style="grid-column:1/-1">No trader data yet — fills on the next refresh.</p>`}</div>
+      <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Wallet-age signal
+        matures as the tape accrues (it cannot be backfilled). Kalshi carries no public
+        trader identity, which is why it appears on the board as a PRICE and never here.
+        Analyzing public flow is market research; what the CFTC prosecutes
+        (2026) is trading on information <i>you</i> hold a duty to keep confidential.</p>`],
+    ["proof", "Does it work?",
+     "the flow signal graded against what actually happened",
+     `${intelVerdict(d.validation)}${intelReportCard(d.validation)}`],
+  ]);
+  // Every other subtabbed page binds its rooms after writing them; without
+  // this the tabs render and do nothing.
+  bindSubtabs(host);
 }
 
 /* ============================================================

@@ -189,7 +189,11 @@ def test_the_page_shows_both_venues_and_names_their_roles():
     assert 'data-sport="intel"' in html and ">POLY</button>" in html
     flat = " ".join(html.split())
     assert "Kalshi" in flat and "Polymarket" in flat
-    assert "function kalshiSectionHTML" in app
+    # One board out of two venues (Ethan, 2026-08-12: "combine the
+    # kalshi and polly market board ... they are basically the same
+    # thing"). The Kalshi-only section it replaced is gone.
+    assert "function predBoardHTML" in app
+    assert "function kalshiSectionHTML" not in app
     assert 'fetch("data/kalshi.json' in app
     # Named phone columns — every cell is a <span>, and :nth-of-type counts
     # tags, so positional selectors grab the sport chip or nothing.
@@ -202,6 +206,49 @@ def test_the_page_shows_both_venues_and_names_their_roles():
     for cls in (".kx-k", ".kx-m", ".kx-e"):
         assert cls in seg, cls
 
+
+
+def test_one_board_carries_both_venues_without_faking_symmetry():
+    """Ethan, 2026-08-12: "Combine the kalshi and polly market board.
+    There is too much too scroll through and they are basically the same
+    thing."
+
+    They are, as PRICES — so venue became a column and the two tables
+    became one, ranked by the single measure both venues report the same
+    way. What must NOT be flattened is the part where they differ:
+    Kalshi runs a two-sided book we price against, Polymarket does not,
+    so a Polymarket row shows a dash in the model and edge columns
+    rather than a number nobody computed."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    fn = app[app.index("function pmVenueRows("):]
+    fn = fn[:fn.index("\nconst PM_BOARD_SHOWN")]
+    assert '"KALSHI"' in fn and '"POLY"' in fn
+    # Kalshi rows carry our number; Polymarket rows explicitly do not.
+    assert "model: r.model_p" in fn and "edge: r.edge_pts" in fn
+    assert "model: null" in fn and "edge: null" in fn
+    # One ranking, and it is the one both venues actually report.
+    assert "sort(" in fn and "vol" in fn
+    row = app[app.index("function pmBoardRowHTML("):]
+    row = row[:row.index("\nfunction ")]
+    assert 'r.model == null ? "—"' in row, "a missing model must read as a dash"
+    assert 'r.edge == null' in row
+
+
+def test_the_prediction_page_is_rooms_not_one_long_scroll():
+    """Three questions, three tabs: what to bet, who is betting, and
+    whether the flow signal has ever been right. The scroll Ethan hit was
+    all three stacked."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    i = app.index("async function renderIntel()")
+    fn = app[i:app.index("\n/* =====", i)]
+    assert 'subtabbedHTML("intel"' in fn, "the page is still one scroll"
+    for room in ('"board"', '"flow"', '"proof"'):
+        assert room in fn, room
+    # Flow is Polymarket-only by nature and must say why rather than
+    # implying Kalshi has a tape we failed to fetch.
+    assert "Kalshi does not publish" in fn or "Kalshi carries no public" in fn
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
