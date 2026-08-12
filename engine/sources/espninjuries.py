@@ -26,7 +26,10 @@ page's tab hides for that sport rather than rendering an empty promise.
 
 from __future__ import annotations
 
-from .fetch import DEFAULT_AGENT, fetch_json
+import re
+import time
+
+from .fetch import CACHE_DIR, DEFAULT_AGENT, fetch_json
 
 ROOT = "https://site.api.espn.com/apis/site/v2/sports"
 
@@ -44,11 +47,66 @@ LEAGUES = {
 INJURY_TTL = 1800
 
 
+def _cache_file(league: str):
+    return CACHE_DIR / f"espn_injuries_{league}.json"
+
+
+def cache_age_s(league: str) -> float | None:
+    """Seconds since this league's cached board was last WRITTEN, or None
+    if nothing is cached.
+
+    The load-bearing measurement behind the staleness banner. ``fetch_json``
+    answers a failed request with the cached copy and raises nothing — the
+    right call for a board that should survive a blip, but it means a build
+    can stamp ``generated_at`` on data collected days ago and every surface
+    reads it as current. The cache file's mtime only advances on a
+    SUCCESSFUL fetch, so its age is the true age of the rows: under the TTL
+    means fresh, far over it means the feed has been declining and nobody
+    was told."""
+    p = _cache_file(league)
+    try:
+        return max(0.0, time.time() - p.stat().st_mtime)
+    except OSError:
+        return None
+
+
 def fetch_injuries(league: str):
     """The raw board for one league. KeyError for a league with no feed
     is the right failure — callers iterate LEAGUES, they don't guess."""
     return fetch_json(LEAGUES[league], f"espn_injuries_{league}.json",
                       ttl=INJURY_TTL, user_agent=DEFAULT_AGENT)
+
+
+#: ESPN keeps a player in the injuries feed after he is cleared, with the
+#: status "Active" and no injury named. That is a RETURN notice, not a
+#: designation — real news about a team, but the opposite of being hurt.
+_ACTIVE = re.compile(r"^\s*active\s*$", re.I)
+
+
+def is_return(row: dict) -> bool:
+    """True for a cleared-to-play notice rather than a designation."""
+    return bool(_ACTIVE.match(row.get("status") or "")) and not row.get("injury")
+
+
+def current_rows(rows: list[dict]) -> list[dict]:
+    """One row per player: the NEWEST filing that player carries.
+
+    ESPN lists every item a player has accumulated, so a man who was hurt,
+    returned, and was hurt again appears three times. Rendered verbatim
+    that reads as three separate players and lets a months-old "Active"
+    sit beside a current "Out" — which is exactly how an injured player
+    ends up looking available. Newest wins; undated rows lose to dated
+    ones and otherwise keep the feed's own order."""
+    best: dict[tuple, tuple[str, int, dict]] = {}
+    for i, r in enumerate(rows):
+        key = ((r.get("team") or "").lower(), (r.get("player") or "").lower())
+        stamp = r.get("date") or ""
+        prev = best.get(key)
+        # ISO-8601 from one source sorts lexically; an undated row only
+        # wins when nothing dated has been seen for that player.
+        if prev is None or (stamp, -i) > (prev[0], -prev[1]):
+            best[key] = (stamp, i, r)
+    return [v[2] for v in sorted(best.values(), key=lambda v: v[1])]
 
 
 def parse_injuries(payload) -> list[dict]:

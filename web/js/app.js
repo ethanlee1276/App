@@ -1962,7 +1962,13 @@ async function renderInjuryWatch() {
   const listed = rows
     .map((r) => ({ ...r, ts: Date.parse(r.date || "") || 0,
                    abbr: idx[(r.team || "").toLowerCase()] }))
-    .filter((r) => r.abbr && tonight.has(r.abbr));
+    // A cleared-to-play notice is not an injury. ESPN keeps a player in
+    // this feed after he is available again, status "Active" and no
+    // injury named — which this box printed in green, on a board headed
+    // "Injury watch", making a listed player look hurt and an actually
+    // hurt one look fine. The page's fresh strip already cut them; two
+    // surfaces reading one file must not disagree about what a row means.
+    .filter((r) => r.abbr && tonight.has(r.abbr) && !isReturnRow(r));
   const fresh = listed.filter((r) => r.ts >= cutoff)
     .sort((a, b) => b.ts - a.ts);
   const older = listed.length - fresh.length;
@@ -8712,12 +8718,30 @@ function seedsHTML(seeds) {
    a 60-day IL read red because the player is not playing; the
    questionable tier reads amber because the answer is "maybe". Unknown
    wordings stay neutral rather than guessing. */
+/* A cleared-to-play notice, not a designation. ESPN keeps a player in the
+   injuries feed after he is available again — status "Active", no injury
+   named — and every surface that treats those as injuries reports healthy
+   players as hurt. Mirrors engine/sources/espninjuries.is_return. */
+function isReturnRow(r) {
+  return /^\s*active\s*$/i.test((r || {}).status || "") && !(r || {}).injury;
+}
+
 function injTone(status) {
   const s = (status || "").toLowerCase();
   if (/(^|\b)(out|injured reserve|ir\b|60-day|suspension|season)/.test(s)) return "var(--bad)";
   if (/(doubtful|questionable|day-to-day|10-day|15-day|7-day|game-time)/.test(s)) return "var(--warn)";
   if (/(probable|available|active)/.test(s)) return "var(--good)";
   return "var(--text-dim)";
+}
+
+/* A duration in seconds, said the way a person says it. */
+function ageText(seconds) {
+  const mins = (Number(seconds) || 0) / 60;
+  if (mins < 90) return `${Math.round(mins)} min`;
+  const hours = mins / 60;
+  if (hours < 36) return `${Math.round(hours)} hours`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"}`;
 }
 
 function injWhen(ts) {
@@ -8782,8 +8806,24 @@ async function renderInjuries() {
   // about that team) but out of the fresh strip, which exists to answer
   // "who just went down", not "who practiced".
   const fresh = parsed.filter((r) => r.ts >= Date.now() - 7 * 86400e3
-      && !(/^active$/i.test(r.status || "") && !r.injury))
+      && !isReturnRow(r))
     .slice(0, 40);
+
+  /* WHEN these rows were collected, which is not when this file was
+     written. A declining feed is answered from cache and raises nothing,
+     so the build stamps a fresh `generated_at` over data that stopped
+     moving days ago — the page then reports it with full confidence.
+     The builder measures the cache's own age; if it is far past the TTL
+     this says so, loudly, instead of letting a stale board pass as live. */
+  const ageS = (((d || {}).ages_s) || {})[sport];
+  const staleAfter = (d || {}).stale_after_s || 3600;
+  const staleBanner = (ageS != null && ageS > staleAfter) ? `
+    <div class="card" style="border-left:3px solid var(--warn);margin-bottom:14px">
+      <p style="margin:0;font-size:var(--fs-md)">${icon('warn')} <b>These designations are
+        ${escapeHtml(ageText(ageS))} old.</b> ESPN’s feed has been declining, so the board is
+        being served from the last successful pull — treat every status here as
+        unconfirmed until it clears. Run <code>python3 launch.py --injuries</code> to see
+        the error the feed is returning.</p></div>` : "";
 
   const byTeam = {};
   for (const r of parsed) (byTeam[r.team] = byTeam[r.team] || []).push(r);
@@ -8793,8 +8833,10 @@ async function renderInjuries() {
   const tile = (k, v, sub) => `<div class="tile"><div class="k">${k}</div>
     <div class="v">${v}</div>${sub ? `<div class="tile-sub">${sub}</div>` : ""}</div>`;
   host.innerHTML = `
+    ${staleBanner}
     <div class="stats">
-      ${tile("Players listed", parsed.length, "current designations")}
+      ${tile("Players listed", parsed.filter((r) => !isReturnRow(r)).length,
+             "carrying a designation")}
       ${tile("Out tier", outTier.length, "out, IR, long-term IL")}
       ${tile("Questionable tier", maybeTier.length, "doubtful through day-to-day")}
       ${tile("Teams affected", teams.length, "of the whole league")}
@@ -8817,9 +8859,12 @@ async function renderInjuries() {
         <tbody>${byTeam[t].map((r) => injRow(r, false)).join("")}</tbody></table></div>`).join("")}
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
       Statuses are the league’s own filings via ESPN’s public feed, refreshed with the
-      site on a 30-minute cache. The NFL’s practice-level detail (limited/DNP, the
-      usage model’s injury inputs) lives on the Fantasy page — this board is
-      availability, league-wide. Updated ${escapeHtml(((d || {}).generated_at || "").slice(11, 16))}.</p>`;
+      site on a 30-minute cache, one row per player — his newest filing. The NFL’s
+      practice-level detail (limited/DNP, the usage model’s injury inputs) lives on the
+      Fantasy page — this board is availability, league-wide.
+      ${ageS != null
+        ? `Designations collected ${escapeHtml(ageText(ageS))} ago.`
+        : `Page built ${escapeHtml(((d || {}).generated_at || "").slice(11, 16))}.`}</p>`;
 }
 
 async function renderStandings() {

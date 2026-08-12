@@ -175,6 +175,125 @@ def test_availability_tone_is_keyword_not_exact_match():
         assert word in fn, word
 
 
+
+# --- the "showing active while injured" class of defect ---------------------
+# Ethan, 2026-08-12: "nfl injuries are not updating. there is lions players
+# injured that are showing active on the site." Three separate causes, all
+# pinned below: ESPN keeps a cleared player in the feed as "Active" with no
+# injury; it accumulates every filing a player has ever had; and a declining
+# feed is answered from cache with no error, so old rows wear a fresh stamp.
+
+RETURNED_THEN_HURT = {
+    "injuries": [
+        {"displayName": "Detroit Lions", "injuries": [
+            # Oldest first, deliberately: the feed's order is not chronology.
+            {"status": "Out", "date": "2026-08-01T12:00Z",
+             "athlete": {"displayName": "Two Filings",
+                         "position": {"abbreviation": "WR"}},
+             "details": {"type": "Hamstring"}},
+            {"status": "Active", "date": "2026-08-06T12:00Z",
+             "athlete": {"displayName": "Two Filings",
+                         "position": {"abbreviation": "WR"}},
+             "details": {}},
+            # ...then hurt again, which is the row that must win.
+            {"status": "Injured Reserve", "date": "2026-08-11T12:00Z",
+             "athlete": {"displayName": "Two Filings",
+                         "position": {"abbreviation": "WR"}},
+             "details": {"type": "Knee"}},
+            {"status": "Active", "date": "2026-08-10T12:00Z",
+             "athlete": {"displayName": "Fully Cleared",
+                         "position": {"abbreviation": "RB"}},
+             "details": {}},
+        ]},
+    ],
+}
+
+
+def test_a_cleared_player_is_not_a_designation():
+    """"Active" with no injury named is a RETURN notice. Counting it as a
+    designation reports healthy players as hurt; showing it in green on a
+    board headed "Injury watch" reports hurt players as available."""
+    rows = inj.parse_injuries(RETURNED_THEN_HURT)
+    cleared = [r for r in rows if r["player"] == "Fully Cleared"][0]
+    assert inj.is_return(cleared)
+    hurt = [r for r in rows if r["status"] == "Injured Reserve"][0]
+    assert not inj.is_return(hurt)
+    # An "Active" row that DOES name an injury is a real designation
+    # (a player active but carrying something) — not a return.
+    assert not inj.is_return({"status": "Active", "injury": "Knee"})
+
+
+def test_only_the_newest_filing_per_player_survives():
+    """The exact shape of Ethan's report: a Lion who was hurt, cleared, and
+    hurt again. All three filings rendered means one player reads as three,
+    and the stale "Active" can sit above the live "Injured Reserve"."""
+    rows = inj.current_rows(inj.parse_injuries(RETURNED_THEN_HURT))
+    assert len(rows) == 2, "one row per player"
+    by_name = {r["player"]: r for r in rows}
+    assert by_name["Two Filings"]["status"] == "Injured Reserve"
+    assert by_name["Two Filings"]["injury"] == "Knee"
+    assert by_name["Fully Cleared"]["status"] == "Active"
+
+
+def test_the_build_dedupes_and_reports_how_old_the_rows_are():
+    """`fetch_json` answers a failed request from cache and raises nothing,
+    so the build stamps `generated_at` = now over data that stopped moving
+    days ago. The age of the CACHE FILE is the age of the rows."""
+    import injuries_build
+
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td) / "injuries.json"
+        with mock.patch.object(injuries_build, "fetch_injuries",
+                               lambda league: RETURNED_THEN_HURT), \
+             mock.patch.object(injuries_build, "cache_age_s",
+                               lambda league: 4 * 86400):
+            injuries_build.main(["--out", str(out)])
+        d = json.loads(out.read_text())
+    assert len(d["sports"]["nfl"]) == 2, "the build must dedupe per player"
+    assert d["ages_s"]["nfl"] == 4 * 86400
+    assert d["stale_after_s"] > 0
+    assert any("declining" in n for n in d["notes"]), \
+        "four-day-old rows must say so"
+
+
+def test_a_fresh_pull_raises_no_staleness_note():
+    """The banner has to stay quiet on a healthy day, or it is noise."""
+    import injuries_build
+
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td) / "injuries.json"
+        with mock.patch.object(injuries_build, "fetch_injuries",
+                               lambda league: RETURNED_THEN_HURT), \
+             mock.patch.object(injuries_build, "cache_age_s",
+                               lambda league: 60.0):
+            injuries_build.main(["--out", str(out)])
+        d = json.loads(out.read_text())
+    assert not d["notes"], d["notes"]
+    assert d["ages_s"]["nfl"] == 60
+
+
+def test_both_surfaces_agree_on_what_a_row_means():
+    """The page's fresh strip cut returns; the recommended board's injury
+    watch did not, and read the same file. One helper, both callers."""
+    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    assert "function isReturnRow(" in js
+    i = js.index("async function renderInjuryWatch(")
+    watch = js[i:i + 2000]
+    assert "isReturnRow(" in watch, "the watch still lists cleared players"
+    j = js.index("async function renderInjuries(")
+    page = js[j:js.index("\nasync function ", j + 10)]
+    assert "isReturnRow(" in page
+
+
+def test_the_page_says_when_the_data_stopped_moving():
+    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    i = js.index("async function renderInjuries(")
+    page = js[i:js.index("\nasync function ", i + 10)]
+    assert "ages_s" in page and "stale_after_s" in page
+    assert "staleBanner" in page
+    # And the footer must stop claiming a refresh time it cannot vouch for.
+    assert "Designations collected" in page
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

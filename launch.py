@@ -3146,8 +3146,33 @@ def show_injuries() -> None:
         return
     for note in board.get("notes") or []:
         print(f"  note: {note}")
+
+    # HOW OLD ARE THE ROWS. `fetch_json` answers a failed request with the
+    # cached copy and raises nothing, so "not updating" looks identical to
+    # "updating fine" from the file alone — this is the line that tells
+    # them apart, and it is the first thing to read when a designation
+    # looks wrong.
+    from engine.sources.espninjuries import INJURY_TTL, is_return
+    ages = board.get("ages_s") or {}
+    if ages:
+        print("\n  Data age per league (the cache's own mtime — a number far"
+              f" over {INJURY_TTL // 60} min means the feed is declining):")
+        for league, age in sorted(ages.items()):
+            n = len((board.get("sports") or {}).get(league) or [])
+            mins = age / 60
+            txt = (f"{round(mins)} min" if mins < 90
+                   else f"{mins / 60:.1f}h" if mins < 2160
+                   else f"{mins / 1440:.1f}d")
+            flag = "  ← STALE" if age > INJURY_TTL * 2 else ""
+            print(f"    {league:<5} {n:>4} players   collected {txt} ago{flag}")
+
     rows = [r for league_rows in (board.get("sports") or {}).values()
             for r in league_rows]
+    returns = [r for r in rows if is_return(r)]
+    if returns:
+        print(f"\n  {len(returns)} of {len(rows)} rows are cleared-to-play"
+              " notices (status Active, no injury named) — they are kept on"
+              " the by-team board as news but never counted as designations.")
     rows.sort(key=lambda r: r.get("date") or "", reverse=True)
     if rows:
         print("\n  Freshest filings, league-wide:")
