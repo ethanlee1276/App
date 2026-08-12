@@ -3186,6 +3186,87 @@ def show_injuries() -> None:
               "fetch failures the host is unreachable from here.")
 
 
+def show_stakes() -> None:
+    """What tonight's board would be staked under each policy.
+
+        python3 launch.py --stakes
+
+    Ethan, 2026-08-12: "idk why we are being pussies with how much we
+    bet ... it feels like we should be doing at least 1 unit a bet."
+
+    Answering that from a screenshot is guessing; this answers it from
+    the board. For every pick it prints the margin over the price we can
+    ACTUALLY GET (not the headline edge, which is measured against the
+    de-vigged fair and is bigger by the juice), then what full, half and
+    quarter Kelly each ask for, and the slate totals against the 15u
+    exposure cap.
+
+    The point is the SHAPE, not the size. Kelly asks for more where the
+    margin is bigger; a flat unit asks for the same on a 1.3-point edge
+    and a 0.2-point one, which is the pick most likely to be noise. Read
+    the two columns side by side and the trade is visible instead of
+    argued.
+    """
+    import json as _json
+    from engine.odds import american_to_decimal
+    from engine.staking import kelly_fraction, price_cap_units
+
+    rows, seen = [], []
+    for name in ("recommendations", "mlb_recommendations", "nba", "wnba", "cfb"):
+        p = ROOT / f"web/data/{name}.json"
+        if not p.exists():
+            continue
+        try:
+            blob = _json.loads(p.read_text())
+        except ValueError:
+            continue
+        for r in (blob.get("recommendations") or []):
+            if r.get("recommended") and (r.get("stake_units") or 0) > 0:
+                rows.append(r)
+        seen.append(name)
+    if not rows:
+        print("  No recommended picks on the built boards yet — run the "
+              "launcher once, then this.")
+        return
+
+    print(f"  {len(rows)} recommended pick(s) across {', '.join(seen)}\n")
+    print(f"  {'pick':<30}{'odds':>6}{'net':>7}{'full':>7}{'1/2':>7}"
+          f"{'1/4':>7}{'now':>7}  what set it")
+    tot = {"full": 0.0, "half": 0.0, "quarter": 0.0, "now": 0.0, "flat": 0.0}
+    for r in sorted(rows, key=lambda x: -(x.get("stake_units") or 0))[:25]:
+        odds = int(r.get("odds") or -110)
+        b = american_to_decimal(odds) - 1.0
+        # net_edge is emitted by the model now; older payloads fall back to
+        # deriving it, and say nothing they cannot support.
+        net = r.get("net_edge")
+        if net is None:
+            hit = r.get("hit_prob")
+            net = (hit - 1.0 / (b + 1.0)) if hit is not None else None
+        if net is None:
+            continue
+        p_model = 1.0 / (b + 1.0) + net
+        full = kelly_fraction(p_model, odds) * 100
+        now = float(r.get("stake_units") or 0)
+        label = f"{r.get('player', '')} {r.get('side', '')} {r.get('line', '')}"
+        tot["full"] += full; tot["half"] += full * .5
+        tot["quarter"] += full * .25; tot["now"] += now; tot["flat"] += 1
+        cap = price_cap_units(odds)
+        why = (r.get("stake_basis")
+               or ("price cap %.1fu" % cap if cap != float("inf") else "Kelly"))
+        print(f"  {label[:30]:<30}{odds:>+6}{net * 100:>6.1f}%{full:>7.2f}"
+              f"{full * .5:>7.2f}{full * .25:>7.2f}{now:>7.2f}  {why[:38]}")
+    print(f"\n  {'SLATE TOTAL':<30}{'':>6}{'':>7}{tot['full']:>7.1f}"
+          f"{tot['half']:>7.1f}{tot['quarter']:>7.1f}{tot['now']:>7.1f}"
+          f"   (flat 1u would be {tot['flat']:.0f}u; cap 15u)")
+    print("\n  net  = margin over the price you actually get. Kelly sizes on"
+          " THIS.\n  full/half/quarter = what each policy asks for."
+          " now = what shipped.\n"
+          "\n  Size multiplies whatever edge is really there — it does not"
+          " create one.\n  `python3 stakecheck.py` says whether the journal's"
+          " ROI is a sizing\n  problem or a model problem; they have opposite"
+          " fixes.")
+
+
 def show_standings() -> None:
     """Rebuild every standings table NOW and say where each came from.
 
@@ -4808,6 +4889,9 @@ def main() -> None:
         return
     if "--standings" in argv:
         show_standings()
+        return
+    if "--stakes" in argv:
+        show_stakes()
         return
     if "--memes" in argv:
         show_memes()

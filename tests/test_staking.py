@@ -286,6 +286,24 @@ def test_the_slate_scaling_gets_the_last_word_in_the_reason():
     assert 'r["stake_basis"] = (' in src
     assert "scaled" in src and "slate cap" in src
 
+
+def test_the_stakes_preview_reads_the_board_and_names_the_policies():
+    """Ethan, 2026-08-12: "We need too figure out the basics and how much
+    we should be putting on each bet." A screenshot cannot answer that;
+    the board can. `--stakes` prints the margin over the REAL price and
+    what each Kelly fraction asks for, so the trade is visible."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    assert '"--stakes" in argv' in src and "def show_stakes" in src
+    fn = src[src.index("def show_stakes"):src.index("def show_standings")]
+    # It must price off the margin over the OFFERED price, not the
+    # headline edge — that distinction is the whole point.
+    assert "net_edge" in fn and "kelly_fraction" in fn
+    for policy in ("full", "half", "quarter"):
+        assert policy in fn, policy
+    # And it must not imply size fixes a losing edge.
+    assert "Size multiplies whatever edge is really there" in fn
+    assert "stakecheck.py" in fn
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
