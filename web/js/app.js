@@ -1115,7 +1115,18 @@ async function renderBestBets() {
       label: `${r.player} ${r.side} ${r.line} ${r.market_label} ${american(r.odds)} (${r.book})`,
       game: propGameLine(r),
       metric: signedPct(r.edge), stake: r.stake_units, grade: r.grade,
+      /* THE NUMBER THAT SIZED THE BET, beside the one that headlines it.
+         `edge` is measured against the de-vigged fair; Kelly sizes on the
+         margin over the PRICE WE GET, which is smaller by the juice. A
+         board showing only the first advertises +4.3% on a bet with 0.6
+         points of real margin, and the stake beside it then looks
+         arbitrary — Ethan, 2026-08-12: "It doesn't make any sense and
+         feels random." It never was; it was unreadable. */
       why: (r.quality != null ? `quality ${r.quality}/100 · Tier ${r.tier} · ${r.volatility}` : "cleared every gate")
+        + (r.net_edge != null
+           ? ` · ${signedPct(r.net_edge)} over the price you get`
+           : "")
+        + (r.stake_basis ? ` · stake: ${r.stake_basis}` : "")
         + (twin ? ` · BONUS: ${twin.book} is lagging the field at ${american(twin.odds)} — take the cheaper price` : "") });
   }
   picks.sort((a, b) => b.quality - a.quality);

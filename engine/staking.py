@@ -67,6 +67,33 @@ def price_cap_units(odds: int) -> float:
     return float("inf")
 
 
+def units_with_reason(fraction: float, odds: int,
+                      cap_units: float = float("inf"),
+                      mult: float = 1.0) -> tuple[float, str]:
+    """``(units, why)`` — the stake and the rule that actually set it.
+
+    Ethan, 2026-08-12, reading a board of 0.25 / 0.25 / 0.25 / 0.15 /
+    0.05: "It doesn't make any sense and feels random." It was not
+    random, but it was unreadable, because four different rules can set
+    a stake and the board showed none of them. When a cap binds, the
+    stake stops carrying information about the edge — five picks with
+    five different edges all print 0.25u — and without the reason beside
+    it there is no way to tell that from noise.
+    """
+    if fraction <= 0 or mult <= 0:
+        return 0.0, "no bet"
+    want = fraction * BANKROLL_UNITS * mult
+    price = price_cap_units(odds)
+    stake, why = want, "quarter-Kelly on the price offered"
+    if price < stake:
+        stake, why = price, f"capped at {price:g}u by the price band"
+    if cap_units < stake:
+        stake, why = cap_units, f"capped at {cap_units:g}u by the grade"
+    if stake < MIN_STAKE_UNITS:
+        stake, why = MIN_STAKE_UNITS, f"floored at the {MIN_STAKE_UNITS}u minimum"
+    return round(stake, 2), why
+
+
 def to_units(fraction: float, odds: int,
              cap_units: float = float("inf"), mult: float = 1.0) -> float:
     """Bankroll fraction → display units, price-capped, floored.
@@ -75,11 +102,7 @@ def to_units(fraction: float, odds: int,
     ``cap_units`` is the caller's own ceiling (per-grade, per-play);
     ``mult`` is a caller-side downweight (e.g. the NBA minutes grade).
     """
-    if fraction <= 0 or mult <= 0:
-        return 0.0
-    stake = min(fraction * BANKROLL_UNITS * mult, cap_units,
-                price_cap_units(odds))
-    return round(max(stake, MIN_STAKE_UNITS), 2)
+    return units_with_reason(fraction, odds, cap_units, mult)[0]
 
 
 def kelly_units(p: float, odds: int, fraction: float = 0.25,

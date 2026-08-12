@@ -278,6 +278,14 @@ def apply_exposure_caps(recs: list[dict], game_bets: list[dict]) -> list[str]:
     for r in live:
         if r.get("recommended"):
             r["stake_units"] = round(r["stake_units"], 2)
+            # The scaling is the LAST word on the stake, so it is the last
+            # word in the reason too. Without this the card would credit
+            # Kelly for a number the slate cap actually chose — five picks
+            # printing an identical 0.25u with no way to see why.
+            if factor < 1.0:
+                r["stake_basis"] = (
+                    (r.get("stake_basis") or "sized")
+                    + f", then scaled ×{factor:.2f} to fit the slate cap")
 
     if factor < 1.0:
         kept = sum(r["stake_units"] for r in live if r.get("recommended"))

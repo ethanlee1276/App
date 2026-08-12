@@ -13,6 +13,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 from engine.betting import (MARKET_SHRINK, MAX_CREDIBLE_EDGE, MIN_STAKE_UNITS,
                             _grade, _kelly_stake, favourite_surcharge, net_edge)
 from engine.odds import american_to_prob, devig_two_way, expected_value
@@ -227,6 +229,62 @@ def test_history_is_not_restated():
     for banned in ("UPDATE", "INSERT", "sqlite", "ledger"):
         assert banned not in src, banned
 
+
+
+# --- why a stake is the number it is ----------------------------------------
+def test_every_stake_can_say_which_rule_set_it():
+    """Ethan, 2026-08-12, on a board reading 0.25 / 0.25 / 0.25 / 0.15 /
+    0.05: "It doesn't make any sense and feels random."
+
+    It was not random — four rules can set a stake and the board showed
+    none of them. When a cap binds, the stake stops carrying information
+    about the edge (five different edges all print the cap), and without
+    the reason beside it that is indistinguishable from noise."""
+    from engine.staking import units_with_reason, kelly_fraction
+
+    # A fat edge at a long price: the price band decides, not Kelly.
+    u, why = units_with_reason(kelly_fraction(0.45, 250) * 0.25, 250, 2.0)
+    assert u == 0.1 and "price band" in why, (u, why)
+
+    # The same conviction at a short price: Kelly decides.
+    u, why = units_with_reason(kelly_fraction(0.55, -110) * 0.25, -110, 2.0)
+    assert "Kelly" in why and u > 0.1, (u, why)
+
+    # A grade cap below what Kelly asked for.
+    u, why = units_with_reason(kelly_fraction(0.75, -110) * 0.25, -110, 0.5)
+    assert u == 0.5 and "grade" in why, (u, why)
+
+    # A hairline edge lands on the floor, and says so rather than
+    # implying Kelly asked for the minimum.
+    u, why = units_with_reason(0.0002, -110, 2.0)
+    assert u == 0.1 and "floor" in why.lower(), (u, why)
+
+    # No bet is no bet.
+    assert units_with_reason(0.0, -110)[0] == 0.0
+
+
+def test_the_recommendation_carries_the_margin_over_the_real_price():
+    """`edge` is measured against the de-vigged fair; Kelly sizes on the
+    margin over the PRICE WE GET, which is smaller by the juice. Showing
+    only the first advertises +4.3% on a bet with ~1.3 points of real
+    margin — the gap that made the stakes look arbitrary."""
+    from engine.betting import Recommendation
+    f = Recommendation.__dataclass_fields__
+    assert "net_edge" in f and "stake_basis" in f
+    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    assert "over the price you get" in app
+    assert "r.stake_basis" in app
+
+
+def test_the_slate_scaling_gets_the_last_word_in_the_reason():
+    """The exposure cap is the last thing to touch a stake, so it must be
+    the last thing in the explanation — otherwise the card credits Kelly
+    for a number the slate cap chose."""
+    src = open(os.path.join(ROOT, "engine", "correlation.py"),
+               encoding="utf-8").read()
+    assert 'r["stake_basis"] = (' in src
+    assert "scaled" in src and "slate cap" in src
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

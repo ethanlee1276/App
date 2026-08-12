@@ -337,6 +337,7 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "fair_consensus": rec.fair_consensus,
         "consensus_books": rec.consensus_books,
         "edge": rec.edge, "ev_per_unit": rec.ev_per_unit,
+        "net_edge": rec.net_edge, "stake_basis": rec.stake_basis,
         "confidence": rec.confidence, "stake_units": rec.stake_units,
         "grade": rec.grade, "has_market": rec.has_market, "trend": rec.trend,
         # §9/§10 — the unified 0–100 grade, market tier and volatility.

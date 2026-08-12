@@ -65,6 +65,10 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "consensus_books": rec.consensus_books,
         "fair_prob": rec.fair_prob,
         "edge": rec.edge,
+        # The margin over the PRICE, and the rule that set the stake —
+        # the two numbers that make a board of stakes readable.
+        "net_edge": rec.net_edge,
+        "stake_basis": rec.stake_basis,
         "ev_per_unit": rec.ev_per_unit,
         "confidence": rec.confidence,
         "stake_units": rec.stake_units,

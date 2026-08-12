@@ -79,6 +79,20 @@ class Recommendation:
     grade: str                # "A+" / "A" / "B+" / "Pass" — no Leans (§10)
     reasons: list[str] = field(default_factory=list)
     trend: str = "flat"
+    #: Model probability minus the break-even implied by the PRICE WE CAN
+    #: ACTUALLY GET — the number Kelly sizes on, and the one that decides
+    #: whether a bet makes money. `edge` above is measured against the
+    #: de-vigged fair, so it is systematically larger: the gap between
+    #: them is the juice. A board showing only `edge` advertises +4.3%
+    #: on a bet whose real margin over the offered price is 0.6 points,
+    #: which is exactly why the stakes beside it looked arbitrary
+    #: (Ethan, 2026-08-12: "It doesn't make any sense and feels random").
+    net_edge: float = 0.0
+    #: WHICH RULE SET THE STAKE — "quarter-Kelly on the price offered",
+    #: a price-band cap, a grade cap, the floor, or the slate's exposure
+    #: scaling appended downstream. When a cap binds, the stake stops
+    #: carrying information about the edge, and the board has to say so.
+    stake_basis: str = ""
     quality: int = 0          # the unified 0–100 grade (engine.quality)
     tier: int = 2             # §8 market tier
     volatility: str = "HIGH"  # LOW / MEDIUM / HIGH / EXTREME
@@ -402,8 +416,13 @@ def evaluate_prop(prop: Prop, proj: Projection,
                and net > favourite_surcharge(best.odds))
     grade = quality_letter(quality) if gate_ok else "Pass"
     fraction = 0.5 if (grade == "A+" and tier == 1) else 0.25
-    stake = (_kelly_stake(hit, best.odds, fraction, STAKE_CAP_U[grade])
-             if grade != "Pass" else 0.0)
+    if grade == "Pass":
+        stake, stake_basis = 0.0, "no bet — did not clear the gate"
+    else:
+        from .staking import kelly_fraction, units_with_reason
+        _full = kelly_fraction(hit, best.odds)
+        stake, stake_basis = units_with_reason(
+            _full * fraction, best.odds, STAKE_CAP_U[grade])
 
     reasons = list(proj.reasons)
     if pattern_block:
@@ -445,6 +464,8 @@ def evaluate_prop(prop: Prop, proj: Projection,
         consensus_books=(_field[1] if _field else 0),
         edge=round(edge, 4),
         ev_per_unit=round(ev, 4),
+        net_edge=round(net, 4),
+        stake_basis=stake_basis,
         confidence=confidence,
         stake_units=round(stake, 2),
         grade=grade,
