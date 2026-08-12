@@ -1063,6 +1063,27 @@ function betMark(r, size = 30) {
   return playerAvatar(r.player, r.team, { size, headshot: r.headshot });
 }
 
+/* One line on the board when the selection haircut is actually moving the
+   numbers under it. Silent when it is not: a measured-but-not-applied fit
+   is a Record-page detail, and the amber rail means "a condition is live",
+   never "there is a page about this somewhere". */
+function haircutLine(sh) {
+  if (!sh || !sh.live) return "";
+  const p = sh.pooled || {};
+  const applied = Object.values(sh.sports || {}).filter((e) => e && e.applied);
+  const lead = p.applied ? p : (applied[0] || {});
+  if (lead.claimed == null) return "";
+  return `<p style="margin:0;padding:8px 14px;border-left:3px solid var(--brand);
+             background:var(--panel-3);font-size:var(--fs-sm);color:var(--text-body)">
+    <b style="color:var(--brand)">These probabilities are already cut.</b>
+    Over ${lead.n} settled bets we claimed ${(lead.claimed * 100).toFixed(1)}% and
+    landed ${(lead.landed * 100).toFixed(1)}%, so every claim below is moved
+    ${lead.shift.toFixed(3)} in log-odds before its edge, EV and stake are
+    computed — a 55% call ships as ${(lead.example_55 * 100).toFixed(1)}%. Fewer
+    picks clear the bar and the ones that do ask for less. The working is on the
+    <b style="color:var(--text)">Record</b> page.</p>`;
+}
+
 async function renderBestBets() {
   const host = document.getElementById("best-bets");
   if (!host) return;
@@ -1151,6 +1172,10 @@ async function renderBestBets() {
   const journalNote = perf.settled
     ? `The journal so far: ${perf.wins}-${perf.losses} (${signedPct(perf.roi || 0)} ROI) — every pick below is graded there nightly.`
     : "Every pick below is journaled at its real price and graded nightly on the Record page.";
+  // Every probability below is post-haircut. Said once, here, rather than
+  // on 26 rows: the numbers are already corrected, and a reader who does
+  // not know that will read them as the model's raw opinion.
+  const haircutNote = haircutLine(rec.selection_haircut);
 
   const pickRow = (p, i) => `
     <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
@@ -1175,6 +1200,7 @@ async function renderBestBets() {
         Same count as the tile above, ranked by quality. ${escapeHtml(journalNote)}${
         asOf ? ` Prices are from the ${escapeHtml(asOf)} odds pull — always confirm the number still stands before betting.` : ""}
         Every journaled bet is tracked on the <b style="color:var(--text)">Live</b> tab through settlement.</p>
+      ${haircutNote}
       ${picks.map(pickRow).join("")}
       <details class="rec-disclose" style="margin:2px 14px 10px">
         <summary>Why only ${picks.length}? — where the other props died</summary>
@@ -4692,6 +4718,114 @@ function recHypothesisLab(hl, sport) {
       as provisional and re-earned forever after.</p>`)}`;
 }
 
+/* The selection haircut — engine/selectionfit.py, rendered.
+
+   The chart above this one grades the model's probability SURFACE, over
+   every prop it can price. This grades the subset we actually bet, which
+   is a different population and a much less flattering one: picking the
+   top edges out of a noisy estimator picks, preferentially, the spots
+   where the estimate is too high. A model can sit on the diagonal up
+   there and still be nine points hot down here.
+
+   Ethan asked for the lower number to be the one on display. So this
+   block leads with the two figures side by side — what we claimed, what
+   landed — and then says plainly what is being subtracted from every
+   probability on the board as a result. */
+function recSelectionHaircut(sh, scope) {
+  if (!sh) return "";
+  const pooled = sh.pooled || {};
+  const sports = sh.sports || {};
+  // Sport pages show their own row (and the pooled one they may be
+  // borrowing); the all-sports page shows everything.
+  const keys = Object.keys(sports).filter((s) => !scope || s === scope);
+  if (!pooled.n && !keys.length) {
+    return `<div class="section-title minor">The selection haircut
+        <span class="sub">— not measured yet.</span></div>
+      <div class="card"><p style="margin:0;font-size:var(--fs-sm);color:var(--text-mute)">
+        Nothing has been fitted. The haircut is measured from settled bets at
+        settle time; until a sport reaches ${sh.min_settled || 100} of them the
+        board runs on the model’s own numbers.</p></div>`;
+  }
+  const pct = (v) => (v == null ? "—" : `${(v * 100).toFixed(1)}%`);
+  // Deliberately NOT .rl-row: that grid has six fixed tracks sized for the
+  // receipts table, and dropping three children into it crushes the middle
+  // one to a 90px column. This is its own flex row.
+  const row = (name, e, using) => {
+    const live = !!e.applied;
+    const gap = e.gap == null ? null : e.gap * 100;
+    return `<div style="display:flex;gap:12px;align-items:flex-start;
+                padding:9px 0;border-bottom:var(--hairline) solid var(--border-soft)">
+      <span style="min-width:52px;color:var(--text-mute);font-size:var(--fs-sm);
+            text-transform:uppercase;letter-spacing:.04em;padding-top:1px">${
+        escapeHtml(name)}</span>
+      <span style="flex:1;min-width:0">
+        <span style="font-variant-numeric:tabular-nums">claimed
+          <strong>${pct(e.claimed)}</strong> · landed
+          <strong class="${gap == null ? "" : toneOf(gap)}">${pct(e.landed)}</strong>
+          ${gap == null ? "" : `<span class="${toneOf(gap)}">(${gap >= 0 ? "+" : ""}${
+            gap.toFixed(1)} pts, ±${((e.se || 0) * 100).toFixed(1)})</span>`}
+          · ${e.n || 0} settled</span>
+        <div style="font-size:var(--fs-sm);color:var(--text-mute);margin-top:3px">
+          ${escapeHtml(e.reason || "")}</div></span>
+      <span class="chip" style="flex-shrink:0${live || using === "pooled"
+        ? ";color:var(--brand)" : ""}">${
+        live ? `${e.shift.toFixed(3)} log-odds`
+             : using === "pooled" ? "on the pooled cut" : "not applied"}</span></div>`;
+  };
+  const rows = keys.map((s) => row(s, sports[s], (sh.using || {})[s])).join("");
+  // The sentence that answers "so what does it actually do to a bet?".
+  // Break-even at −110 is 52.38%, so a claim that used to clear the bar
+  // by two points can stop clearing it at all — which is the intended
+  // consequence, not a side effect, and the copy says so.
+  const live = keys.filter((s) => sports[s].applied).length || pooled.applied;
+  const ex = (pooled.applied ? pooled : (sports[keys.find(
+    (s) => sports[s].applied)] || {}));
+  const effect = !live ? "" : `
+    <p style="margin:10px 0 0;font-size:var(--fs-sm);color:var(--text-body)">
+      Every probability on the board is moved by this before anything is
+      computed from it. A pick the model called <strong>55.0%</strong> now
+      ships as <strong>${pct(ex.example_55)}</strong> — under the 52.4%
+      a −110 price needs — so its edge, its EV and its stake all fall,
+      and picks that only just cleared the bar stop clearing it. That is
+      the correction working, not the board breaking.</p>`;
+  // The held-out test is the reason to believe any of this, so it gets its
+  // own sentence rather than living inside a row's fine print.
+  const h = (ex || {}).holdout || {};
+  const heldOut = !h.ran ? "" : `
+    <p style="margin:8px 0 0;font-size:var(--fs-sm);color:var(--text-mute)">
+      Validated out of sample before it was allowed to price anything: fitted on
+      the first ${h.train_n} settled bets, then scored on the ${h.test_n} it had
+      never seen. On those, the gap between claim and result went
+      ${(h.gap_before * 100).toFixed(1)} → <strong>${(h.gap_after * 100).toFixed(1)}</strong>
+      points and the Brier score ${h.brier_before.toFixed(4)} →
+      <strong>${h.brier_after.toFixed(4)}</strong>. A correction that only
+      improved the data it was fitted on would be refused here.</p>`;
+  const borrowed = keys.filter((s) => (sh.using || {})[s] === "pooled");
+  const borrowNote = !borrowed.length ? "" : `
+    <p style="margin:8px 0 0;font-size:var(--fs-sm);color:var(--text-mute)">
+      ${borrowed.map((s) => escapeHtml(s.toUpperCase())).join(", ")} ${
+      borrowed.length > 1 ? "are" : "is"}
+      still under the ${sh.min_settled || 100}-bet floor and ${
+      borrowed.length > 1 ? "are" : "is"} borrowing the pooled number. What is
+      being corrected is a property of how we SELECT — taking the top edges out
+      of a noisy estimate — and that is shared by every sport on the board.</p>`;
+  return `<div class="section-title">The selection haircut
+      <span class="sub">— the chart above grades the model’s whole surface.
+      This grades the bets we actually made.</span></div>
+    <div class="card">
+      <p style="margin:0 0 10px;font-size:var(--fs-sm);color:var(--text-mute)">
+        Selecting the biggest edges selects for our own overestimates, so the
+        picks run hotter than the surface they came from. Measured on settled
+        bets, pooled across markets, per sport — one number, shrunk by its own
+        standard error and never applied upward.</p>
+      ${pooled.n && !scope ? row("all", pooled, "own") : ""}${rows}
+      ${effect}${heldOut}${borrowNote}
+      <p style="margin:10px 0 0;font-size:var(--fs-sm);color:var(--text-faint)">
+        Last fitted ${escapeHtml(sh.fitted_at || "—")} · refits every settle
+        pass, un-doing its own prior correction first so it cannot compound.</p>
+    </div>`;
+}
+
 function recCalibrationSection(cal, era) {
   if (!cal || !cal.n || !(cal.buckets || []).length) return "";
   const rows = calBucketRows(cal.buckets);
@@ -5793,6 +5927,7 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      "did “60%” actually mean 60%?",
      (scoped ? "" : recEraSection(d.model_eras))
      + recCalibrationSection(src.calibration, src.calibration_era)
+     + recSelectionHaircut(d.selection_haircut, scoped ? scope : null)
      + (scoped ? "" : recCalibrationSplits(d.calibration_splits))
      + (scoped ? "" : recForecastLog(d.forecast_log))],
     ["learning", "What it learned",

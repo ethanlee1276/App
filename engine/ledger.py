@@ -3173,6 +3173,21 @@ def _loss_patterns_block(conn) -> dict:
         return {"n_records": 0, "tested": 0, "findings": [], "closed": []}
 
 
+def _selection_haircut_block() -> dict:
+    """selectionfit's stored verdict, for export_json.
+
+    Reads the STORE rather than refitting, so the page always shows the
+    correction the board was actually priced with. Refitting here would
+    print a number no pick has ever been sized on — which is the exact
+    kind of "true but not what happened" the Record page exists to avoid.
+    """
+    try:
+        from . import selectionfit
+        return selectionfit.report()
+    except Exception:                              # noqa: BLE001
+        return {}
+
+
 def _self_tuning_block() -> dict:
     """self_tuning_report with its own history connection, for export_json.
 
@@ -3964,6 +3979,14 @@ def export_json(conn, path) -> None:
         # on one market and cold on another, which is the pair of errors
         # most worth finding.
         "calibration_splits": calibration_splits(conn),
+        # The selection haircut. Sits beside the calibration chart because
+        # it is the same question asked of a different population: that
+        # chart grades the probability surface, this grades the SUBSET we
+        # bet, and the gap between them is what selecting on our own
+        # estimation error costs. Emitted even when nothing is applied —
+        # "measured and calibrated" and "never measured" have to be
+        # distinguishable on the page.
+        "selection_haircut": _selection_haircut_block(),
         # Sealed first, so the published head covers everything journaled up
         # to this export rather than lagging it by a run.
         "forecast_log": (seal_forecasts(conn), verify_forecast_log(conn))[1],

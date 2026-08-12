@@ -31,6 +31,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import db, lab
 
+# These tests price synthetic slates and assert on what comes out. The
+# selection haircut reads a store fitted from the REAL journal at settle
+# time, so on a live laptop a −0.35 shift empties the board and this file
+# fails for a reason that has nothing to do with what it tests. Switched
+# off here, deliberately and visibly — see engine/selectionfit.set_enabled.
+from engine import selectionfit as _sf                          # noqa: E402
+_sf.set_enabled(False)
+
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 

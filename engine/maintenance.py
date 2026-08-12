@@ -416,6 +416,21 @@ def settle_open(log=print, state_path: Path | None = None,
                             f"({f['players']} corrected)")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  journal fit skipped: {exc}")
+            # The selection haircut: one pooled number per sport, measuring
+            # what OUR PICKS are worth rather than what the surface is.
+            # Refits every settle pass; un-shifts its own prior work first.
+            try:
+                from . import selectionfit
+                sf = selectionfit.refresh(lconn)
+                for name, e in [("pooled", sf["pooled"])] + sorted(
+                        sf["sports"].items()):
+                    if e.get("applied"):
+                        log(f"  selection haircut ({name}): claimed "
+                            f"{e['claimed'] * 100:.1f}%, landed "
+                            f"{e['landed'] * 100:.1f}% over {e['n']} bets — "
+                            f"shift {e['shift']:+.3f} log-odds")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  selection haircut skipped: {exc}")
             # The hypothesis lab's free step: every stored hypothesis
             # re-earns its status against the grown journal. Arithmetic
             # only — the paid propose step is CLI-invoked, never here.

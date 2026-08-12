@@ -26,6 +26,15 @@ from engine import ledger                                     # noqa: E402
 from engine import losspatterns as lp                         # noqa: E402
 from engine import playerfit as pf                            # noqa: E402
 
+# These tests price synthetic slates and assert on what comes out. The
+# selection haircut reads a store fitted from the REAL journal at settle
+# time, so on a live laptop a −0.35 shift empties the board and this file
+# fails for a reason that has nothing to do with what it tests. Switched
+# off here, deliberately and visibly — see engine/selectionfit.set_enabled.
+from engine import selectionfit as _sf                          # noqa: E402
+_sf.set_enabled(False)
+
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HOOPS_PROP = {"player": "A Test", "market": "pts", "line": 18.5,
               "over_odds": -110, "under_odds": -110,

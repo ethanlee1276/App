@@ -102,17 +102,18 @@ def test_sample_slate_recommends_one_tier1_play():
     """The demo slate embodies the spec: pass on nearly everything, bet the
     one Tier-1 strikeout prop that clears every gate — no leans anywhere.
 
-    Run with calibration OFF. `is_reliable` reads a fitted file from
-    data/models, so on a machine that has fitted its own temperatures the
-    pipeline closes different markets and the sample slate produces a
-    different count — this asserted a hard `== 1` and failed on Ethan's
-    laptop while passing on a dev checkout with no fit. The slate is a
-    fixture; the fit is machine-local state; a test that mixes them is
-    measuring the machine.
+    Run with calibration OFF, and with the selection haircut off for the
+    same reason. Both read fitted files from data/models, so on a machine
+    that has fitted its own the pipeline closes different markets and the
+    sample slate produces a different count — this asserted a hard `== 1`
+    and failed on Ethan's laptop while passing on a dev checkout with no
+    fit. The slate is a fixture; a fit is machine-local state; a test that
+    mixes them is measuring the machine. (The haircut arrived later and
+    reproduced the failure exactly, which is how it got added here.)
     """
     from engine.mlb.pipeline import run_mlb_slate
-    from engine import calibrate
-    with calibrate.disabled():
+    from engine import calibrate, selectionfit
+    with calibrate.disabled(), selectionfit.disabled():
         out = run_mlb_slate("data/mlb_sample_slate.json")
     recs = out["recommendations"]
     on = [r for r in recs if r["recommended"]]

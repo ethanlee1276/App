@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 
 from ..betting import (
-    Recommendation, _kelly_stake, net_edge, favourite_surcharge,
+    Recommendation, apply_selection, net_edge, favourite_surcharge,
     pick_side, temper_edge,
 )
 from ..calibrate import apply_temperature, correction_for, is_reliable
@@ -161,6 +161,11 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     hit, edge, credible = temper_edge(hit_raw, fair, best.book,
                                       allow_synthetic_line,
                                       shrink=mlb_tier_shrink(prop.market))
+    # The selection haircut, measured on our OWN settled bets. Applied
+    # here — after the side is chosen, so it can never flip one — and
+    # before edge/EV/net/stake, so every downstream number is the
+    # corrected one rather than the corrected one plus an old headline.
+    hit, edge = apply_selection(hit, edge, "mlb")
     has_market = allow_synthetic_line or (best.book or "").lower() != "proxy"
     if not has_market:
         # No real price to beat — don't report a number that reads as an edge.
@@ -236,8 +241,18 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
                and net > favourite_surcharge(best.odds))
     grade = mlb_letter(quality) if gate_ok else "Pass"
     fraction = 0.5 if (grade == "A+" and tier == 1) else 0.25
-    stake = (_kelly_stake(hit, best.odds, fraction, STAKE_CAP_U[grade])
-             if grade != "Pass" else 0.0)
+    if grade == "Pass":
+        stake, stake_basis = 0.0, "no bet — did not clear the gate"
+    else:
+        # Same call the generic engine makes, for the same reason: the
+        # stake has to be able to say which rule set it. MLB was still on
+        # the older helper that returns a bare number, so every MLB pick
+        # on the board carried an EMPTY basis and the site fell back to
+        # guessing the reason from the price.
+        from ..staking import kelly_fraction, units_with_reason
+        stake, stake_basis = units_with_reason(
+            kelly_fraction(hit, best.odds) * fraction, best.odds,
+            STAKE_CAP_U[grade])
 
     reasons = list(proj.reasons)
     if pattern_block:
@@ -281,6 +296,13 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         fair_consensus=(round(_field[0], 4) if _field else None),
         consensus_books=(_field[1] if _field else 0),
         edge=round(edge, 4), ev_per_unit=round(ev, 4),
+        # `net` was computed above and then thrown away. Recommendation
+        # defaults net_edge to 0.0, so every MLB pick published a margin
+        # of EXACTLY ZERO over the price — a fabricated number, printed on
+        # the board as "+0.0% over the price you get" and read by
+        # `launch.py --stakes` as "Kelly asks for 0.00u" on all 26 picks.
+        # The value was always there; nobody passed it.
+        net_edge=round(net, 4), stake_basis=stake_basis,
         confidence=confidence, stake_units=round(stake, 2), grade=grade,
         reasons=reasons, trend=proj.form.trend,
         has_market=has_market,

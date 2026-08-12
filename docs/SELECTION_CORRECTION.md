@@ -1,6 +1,9 @@
-# The selection correction — a proposal, not a decision
+# The selection correction — built, gated, live
 
-**Status: proposed. Nothing is built. Step 1 is a test that can kill it.**
+**Status: SHIPPED 2026-08-12 as `engine/selectionfit.py`. Sections 1–11
+below are the design as written before anything existed; §12 records what
+was actually built, which of the pre-registered gates it passed, and the
+two places it deliberately departs from this plan.**
 
 ---
 
@@ -543,3 +546,71 @@ settle announces the milestone once it is crossed.
 
 Either answer is a **pricing change** and wants a human. The command
 reports and stops; there is deliberately no `--apply` on that path.
+
+
+---
+
+## 12. What shipped — 2026-08-12
+
+Ethan, reading `stakecheck.py`'s verdict: *"well we should make it where we
+get a lower roi then and fix it on the website so it would display the new
+number."* That is this document's §4, so it got built:
+`engine/selectionfit.py`, with `launch.py --haircut` as the probe and its
+own block on the Record page.
+
+### The four pre-registered gates
+
+| gate | where | verdict |
+|---|---|---|
+| §3 edge-slope | `selcheck.py` | flat (z −0.66) at 47% power — **not fatal, see below** |
+| §9 one book? | `selcheck --across` | cleared: survives within book at z 2.84 (§11) |
+| §7 out-of-sample | **now `_holdout()`, a hard gate in code** | required to apply |
+| §6 runaway | cap + shrinkage + un-shift on refit | three guards, all tested |
+
+**§3 came back flat, and the instrument changed because of it.** A flat gap
+across claimed-edge buckets says the miss is a LEVEL error on the selected
+population, not one that grows with the size of the disagreement. §4
+proposed a temperature-and-bias pair — a shrink toward 50%. A shrink is the
+wrong shape for a flat error; an intercept is exactly the right one. So
+what shipped is **bias only**: one log-odds shift, no temperature. That
+change is the diagnostic being obeyed rather than argued with, and it is
+why the flat result is not the abandonment §9 anticipated. §11's
+between-group difference (+9.1% to +13.6% across five adjustment schemes,
+all positive, four of five above +11%) is the evidence that the level error
+is a property of *selection* rather than of the model everywhere.
+
+**§7 is no longer a step someone has to remember.** `_holdout()` splits the
+journal chronologically, fits on the first 70%, and scores the last 30%
+with and without the correction. **Both** the claimed-vs-landed gap and the
+Brier score must improve on bets the fit never saw, or `applied` stays
+false and the store says which test refused it. On 40 simulated journals
+at the size of the real one, the gate fires 28+ times on a genuine
+nine-point bias and ≤6 times on an unbiased journal — it has power and it
+does not invent corrections.
+
+### Departures from the plan above
+
+1. **Pooled per sport, not keyed `sport:market`.** §5 already argued for
+   pooling first; the store is keyed by sport with a cross-sport pool
+   underneath it, and a sport below the 100-bet floor borrows the pool.
+   Selection is a property of the procedure, and the procedure is shared.
+2. **Applied downward only.** A fit saying we UNDER-claim is measured,
+   stored and shown on the site, and never used. Haircutting a model that
+   turns out to be fine costs some winners; inflating one on a hundred rows
+   of good luck raises stakes on an edge that may not exist.
+
+### §8 was right and it is worth re-reading
+
+"Correcting that honestly will not trim the board. **It may empty it.**"
+On the sandbox board the one recommended pick — Zack Wheeler UNDER 8.5 at
++105, hit 0.5009, edge +4.17%, 0.64u — comes out the other side at hit
+0.4181, edge −4.11%, **no bet**. That is the intended behaviour of a
+correct measurement, and the site now says so in as many words rather than
+quietly showing a shorter list.
+
+### The switch
+
+`selectionfit.set_enabled(False)` / `with selectionfit.disabled():` turns
+it off process-wide, exactly as `calibrate.disabled` does. Three test files
+that price synthetic slates use it, because otherwise they assert on
+whatever last night's settle pass fitted from a real journal.

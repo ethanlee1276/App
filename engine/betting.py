@@ -201,6 +201,28 @@ def pick_side(lines, p_over_at):
     return "UNDER", under, under_win, under.fair_prob, under_edge
 
 
+def apply_selection(hit: float, edge: float, sport: str) -> tuple[float, float]:
+    """Apply the measured selection haircut to a claim and its edge.
+
+    See engine/selectionfit.py for what is being corrected and why the
+    per-market calibrators could not see it. Two properties matter here:
+
+    * It runs AFTER ``pick_side``. The haircut can shrink a bet out of
+      existence but never turn an OVER into an UNDER — changing sides on
+      a bias correction would be a different model, not a corrected one.
+    * ``edge`` moves by exactly the same amount as ``hit``, because edge
+      is ``hit − fair`` and the haircut does not touch the market's fair.
+      Re-deriving it any other way is how a board ends up advertising a
+      headline edge its own stake no longer agrees with.
+
+    No store on disk (fresh clone, CI, a journal under the floor) → the
+    shift is 0.0 and both numbers come back untouched.
+    """
+    from .selectionfit import apply_haircut
+    cut = apply_haircut(sport, hit)
+    return cut, edge + (cut - hit)
+
+
 def net_edge(hit: float, odds: int) -> float:
     """Model probability minus the break-even implied by the REAL price.
 
@@ -339,6 +361,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
     hit, edge, credible = temper_edge(hit_raw, fair, best.book,
                                       allow_synthetic_line,
                                       shrink=tier_shrink(prop.market))
+    hit, edge = apply_selection(hit, edge, sport)      # see apply_selection
     has_market = allow_synthetic_line or (best.book or "").lower() != "proxy"
     if not has_market:
         # No real price to beat — don't report a number that reads as an edge.

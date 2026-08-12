@@ -3232,16 +3232,27 @@ def show_stakes() -> None:
     print(f"  {len(rows)} recommended pick(s) across {', '.join(seen)}\n")
     print(f"  {'pick':<30}{'odds':>6}{'net':>7}{'full':>7}{'1/2':>7}"
           f"{'1/4':>7}{'now':>7}  what set it")
+    stale = 0
     tot = {"full": 0.0, "half": 0.0, "quarter": 0.0, "now": 0.0, "flat": 0.0}
     for r in sorted(rows, key=lambda x: -(x.get("stake_units") or 0))[:25]:
         odds = int(r.get("odds") or -110)
         b = american_to_decimal(odds) - 1.0
         # net_edge is emitted by the model now; older payloads fall back to
         # deriving it, and say nothing they cannot support.
+        #
+        # The 0.0 case is its own trap and Ethan hit it: MLB computed `net`
+        # and never passed it, so every MLB row published net_edge EXACTLY
+        # 0.0 — not missing, so no fallback fired — and this probe printed
+        # "net 0.0%, Kelly 0.00" on all 26 picks beside stakes of 0.05-0.38u
+        # that Kelly had plainly sized on something. A stored zero that the
+        # row's own hit_prob contradicts is a stale board, not a flat edge.
+        hit = r.get("hit_prob")
+        derived = (hit - 1.0 / (b + 1.0)) if hit is not None else None
         net = r.get("net_edge")
-        if net is None:
-            hit = r.get("hit_prob")
-            net = (hit - 1.0 / (b + 1.0)) if hit is not None else None
+        if net is None or (net == 0.0 and derived not in (None, 0.0)):
+            if net == 0.0:
+                stale += 1
+            net = derived
         if net is None:
             continue
         p_model = 1.0 / (b + 1.0) + net
@@ -3258,6 +3269,11 @@ def show_stakes() -> None:
     print(f"\n  {'SLATE TOTAL':<30}{'':>6}{'':>7}{tot['full']:>7.1f}"
           f"{tot['half']:>7.1f}{tot['quarter']:>7.1f}{tot['now']:>7.1f}"
           f"   (flat 1u would be {tot['flat']:.0f}u; cap 15u)")
+    if stale:
+        print(f"\n  ⚠️  {stale} row(s) carried net_edge = 0.0 with a hit_prob"
+              " that disagrees — those\n      boards were built before the MLB"
+              " path passed the field. The net shown is\n      derived from"
+              " hit_prob; rebuild (python3 launch.py) for the stored one.")
     print("\n  net  = margin over the price you actually get. Kelly sizes on"
           " THIS.\n  full/half/quarter = what each policy asks for."
           " now = what shipped.\n"
@@ -3265,6 +3281,85 @@ def show_stakes() -> None:
           " create one.\n  `python3 stakecheck.py` says whether the journal's"
           " ROI is a sizing\n  problem or a model problem; they have opposite"
           " fixes.")
+
+
+def show_haircut(refit: bool = False) -> None:
+    """What we claimed vs what landed, and the correction it earns.
+
+        python3 launch.py --haircut            # what is live right now
+        python3 launch.py --haircut --refit    # remeasure and store it
+
+    Ethan, 2026-08-12: "we should make it where we get a lower roi then
+    and fix it on the website so it would display the new number."
+
+    This is the number. `stakecheck.py` measured the model claiming 51.5%
+    and landing 42.5% over 113 bets, and 59.7% against 49.7% over the 197
+    before that — a nine-to-ten point over-claim on two different gate
+    configurations, well outside both standard errors. Every edge, EV
+    figure and Kelly stake on the board was computed from a probability
+    that far too high, which is why following our own sizing more closely
+    LOST MORE than flat-staking did.
+
+    engine/selectionfit.py fits one pooled log-odds shift per sport from
+    the journal's own settled bets, shrinks it by its standard error,
+    caps it, and never applies it upward. This prints what it found, what
+    is live, and what it does to a bet at each price band.
+    """
+    from engine import ledger, selectionfit as sf
+
+    if refit:
+        with ledger.connect() as lconn:
+            blob = sf.refresh(lconn)
+        print("  refit and stored.\n")
+    else:
+        blob = sf.load()
+        if not blob:
+            print("  Nothing fitted yet — run `python3 launch.py --haircut "
+                  "--refit`,\n  or just settle tonight (the settle pass does "
+                  "it automatically).")
+            return
+
+    rows = [("all sports", blob.get("pooled") or {})]
+    rows += sorted((blob.get("sports") or {}).items())
+    print(f"  fitted {blob.get('fitted_at') or '—'} · "
+          f"floor {blob.get('min_settled', sf.MIN_SETTLED)} settled bets\n")
+    print(f"  {'':<12}{'n':>5}{'claimed':>9}{'landed':>8}{'gap':>8}{'±se':>7}"
+          f"{'shift':>8}   verdict")
+    for name, e in rows:
+        if not e.get("n"):
+            continue
+        print(f"  {name[:12]:<12}{e['n']:>5}{e['claimed'] * 100:>8.1f}%"
+              f"{e['landed'] * 100:>7.1f}%{e['gap'] * 100:>+7.1f}p"
+              f"{e['se'] * 100:>6.1f}p{e['shift']:>+8.3f}   "
+              f"{'LIVE' if e.get('applied') else 'off'} — {e.get('reason', '')}")
+
+    live = [(n, e) for n, e in rows if e.get("applied")]
+    if not live:
+        print("\n  Nothing is being applied. The board runs on the model's own"
+              " numbers.")
+        return
+    # Name whose cut this is. Each sport uses its OWN when it has one and
+    # the pool otherwise, so an unlabelled table would be a number the
+    # reader cannot attach to any particular pick.
+    lead_name, lead = live[0]
+    h = lead.get("holdout") or {}
+    if h.get("ran"):
+        print(f"\n  Held out before it was allowed to price anything: fitted on"
+              f" the first {h['train_n']},\n  scored on the {h['test_n']} it had"
+              f" never seen — gap {h['gap_before'] * 100:.1f} →"
+              f" {h['gap_after'] * 100:.1f} pts,"
+              f"\n  Brier {h['brier_before']:.4f} → {h['brier_after']:.4f}.")
+    print(f"\n  What the {lead_name} cut ({lead['shift']:+.3f} log-odds) does"
+          f" to a claim:")
+    print(f"  {'model says':>12}{'ships as':>11}{'lost':>8}   at −110 (52.4% "
+          f"break-even)")
+    for p in (0.50, 0.55, 0.60, 0.65, 0.70):
+        out = sf.shift_prob(p, lead["shift"])
+        print(f"  {p * 100:>11.1f}%{out * 100:>10.1f}%{(out - p) * 100:>7.1f}p"
+              f"   {'still a bet' if out > 0.5238 else 'no longer clears'}")
+    print("\n  The board gets shorter and the stakes get smaller. That is the"
+          "\n  correction landing, not the model breaking — the picks it drops"
+          "\n  are the ones whose whole edge was the over-claim.")
 
 
 def show_standings() -> None:
@@ -4626,6 +4721,16 @@ def settle_now(day: str | None = None) -> None:
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠️  journal fit skipped: {exc}")
     try:
+        from engine import selectionfit
+        sf = selectionfit.refresh(lconn)
+        for name, e in [("pooled", sf["pooled"])] + sorted(sf["sports"].items()):
+            if e.get("applied"):
+                print(f"  selection haircut ({name}): claimed "
+                      f"{e['claimed'] * 100:.1f}%, landed {e['landed'] * 100:.1f}%"
+                      f" over {e['n']} bets — shift {e['shift']:+.3f} log-odds")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  selection haircut skipped: {exc}")
+    try:
         from engine import hypotheses
         hs = hypotheses.retest(lconn)
         closed_h = [h for h in hs.get("hypotheses") or []
@@ -4892,6 +4997,9 @@ def main() -> None:
         return
     if "--stakes" in argv:
         show_stakes()
+        return
+    if "--haircut" in argv:
+        show_haircut("--refit" in argv)
         return
     if "--memes" in argv:
         show_memes()
