@@ -62,32 +62,39 @@ MIN_STAKE_UNITS = 0.1
 # bet's contribution to bankroll swing constant. Normalised so a standard
 # -110 prop is exactly the base unit:
 #
-#     -200   1.25u (ceiling)     +150   1.00u (floor)
-#     -110   1.00u               +200   1.00u (floor)
-#     +100   1.00u (floor)       +400   1.00u (floor)
+#     -200   1.25u (ceiling)     +150   0.76u
+#     -110   1.00u               +200   0.64u
+#     +100   0.95u               +400   0.38u
 #
 # It is smooth, so two picks a few cents apart in price cannot end up a
 # factor of five apart in stake — the artefact Ethan read off the board as
 # ".05 units on a +100 pick then .25 on a +100".
 #
-# THE FLOOR IS A DOLLAR DECISION, AND IT OVERRIDES THE PRINCIPLE ABOVE.
-# Ethan, 2026-08-12: "change the ladder floor so nothing is under 10
-# dollars." At 1u = 1% of bankroll that means the floor IS the base unit,
-# so the ladder now only slopes on the minus side and everything from
-# -110 out to +900 stakes a flat unit.
+# THE FLOOR, AND THE ROUND TRIP IT TOOK. Ethan first asked for "nothing
+# under 10 dollars", which at 1u = 1% of bankroll puts the floor ON the
+# base unit and flattens the entire plus side to a flat unit. Shipped,
+# then reverted the same day on his read: "that might completely contradict
+# what you just did ... i just want it to where we make the most money and
+# the roi is at the lowest loss."
 #
-# Say plainly what that gives up, because it is real: equal variance no
-# longer holds above the reference price. A +400 at 1u carries roughly
-# five times the payout swing of a -110 at 1u, so a night that is heavy
-# on long prices moves the bankroll further than the unit count suggests.
-# That is the accepted cost of a minimum ticket, not an oversight — the
-# alternative was quoting $3.80 bets, which is not a thing you can place
-# and read like a bet.
+# He is right, and the reason is worth keeping. A flat unit from -110 out
+# to +900 abandons the principle that set the ladder in the first place —
+# a +400 at one unit carries about five times the payout swing of a -110
+# at one unit, so a night heavy on long prices moves the bankroll much
+# further than the unit count says. Buying a round dollar figure with
+# that much extra variance is not the trade he was asking for.
 #
-# It is also CONDITIONAL. "Nothing under $10" is true when 1u = $10, i.e.
-# bankroll x unit% = 10. At a $500 bankroll on 1% the same floor is $5.
-# The engine works in units and cannot see dollars; the site converts and
-# says what the smallest ticket on tonight's board actually is.
+# The thing he actually wanted is already satisfied here without the
+# contradiction: "the .005 and .1 unit bets are unacceptable, no one wants
+# to bet 50 cents." Those came from the RETIRED Kelly-times-grade rule,
+# not from this ladder. At 1u = $10 the ladder's smallest possible ticket
+# is $3.50 and a standard prop is $10 — nothing on the board can be a
+# 50-cent bet any more, and the slope survives.
+#
+# The dollar figures are CONDITIONAL on 1u = $10, i.e. bankroll x unit% =
+# 10. At a $500 bankroll on 1% every number above halves. The engine works
+# in units and cannot see dollars; the site converts and prints the dollar
+# amount beside every stake.
 #
 # WHAT KELLY STILL DOES. It vetoes. A negative Kelly means the price beats
 # the edge and there is no bet at any size; that judgement is sound and is
@@ -103,12 +110,12 @@ REF_ODDS = -110
 #: price into a big bet — short prices are exactly where the model's
 #: over-claim was measured worst.
 MAX_PRICED_U = 1.25
-#: The floor is the base unit itself: "nothing under 10 dollars", which at
-#: 1u = 1% of bankroll is one unit. Written as ``BASE_UNITS`` rather than
-#: 1.0 so the two cannot drift apart — if the base moves, the minimum
-#: ticket moves with it, which is the relationship Ethan actually asked
-#: for. See the ladder note above for what this costs.
-MIN_PRICED_U = BASE_UNITS
+#: The floor keeps a long price a real wager rather than a token: 0.35u
+#: is $3.50 at 1u = $10, where the retired rule was quoting 50 cents.
+#: Briefly raised to the base unit and reverted — see the round trip in
+#: the ladder note, and do not raise it again without deciding what to do
+#: about the variance a flat plus-side carries.
+MIN_PRICED_U = 0.35
 
 
 def kelly_fraction(p: float, odds: int) -> float:
@@ -169,14 +176,14 @@ def units_with_reason(fraction: float, odds: int,
     if stake >= MAX_PRICED_U:
         why = f"{stake:g}u — the ladder's ceiling for a price this short"
     elif odds == REF_ODDS:
-        # Checked BEFORE the floor. The floor now SITS ON the base unit,
-        # so the reference price satisfies both, and calling -110 "the
-        # minimum ticket" would hide that it is the price the whole
-        # ladder is normalised to.
+        # Kept ahead of the floor test from the reverted round trip. It is
+        # a no-op while the floor sits below the base unit, and it is the
+        # difference between "-110 is the price this ladder is normalised
+        # to" and "-110 is the smallest ticket we allow" if anyone raises
+        # the floor again.
         why = f"{stake:g}u — the base unit, at standard juice"
     elif stake <= MIN_PRICED_U:
-        why = (f"{stake:g}u — the minimum ticket; the ladder does not go "
-               f"under the base unit")
+        why = f"{stake:g}u — the ladder's floor for a payout this long"
     else:
         why = f"{stake:g}u — the ladder's size for {odds:+d}"
     if mult != 1.0:

@@ -80,9 +80,8 @@ def test_stake_does_not_scale_with_edge_any_more():
     mid = _kelly_stake(0.56, -110)
     big = _kelly_stake(0.75, -110)
     assert small == mid == big == 1.0
-    # What DOES separate two bets is the price they are taken at — on the
-    # minus side, where the minimum ticket is not binding.
-    assert _kelly_stake(0.70, -200) > _kelly_stake(0.56, -110)
+    # What DOES separate two bets is the price they are taken at.
+    assert _kelly_stake(0.56, -110) > _kelly_stake(0.56, 250)
 
 
 def test_grade_ladder_requires_real_net_edge():
@@ -185,13 +184,9 @@ def test_the_price_sets_the_size_and_nothing_else_does():
     from engine import staking as S
     ladder = [S.units_for_price(o) for o in (-250, -150, -110, 100, 200, 400)]
     assert ladder == sorted(ladder, reverse=True), ladder
-    # Equal variance per bet, on the stretch where the floor is not
-    # binding: stake x payout is flat between the ceiling and the base.
-    # Above the reference price the minimum ticket takes over and this
-    # relationship is deliberately abandoned — see the ladder note.
+    # Equal variance per bet: stake x payout is flat between the ends.
     from engine.odds import american_to_decimal
-    mid = [S.units_for_price(o) * american_to_decimal(o)
-           for o in (-190, -150, -125, -110)]
+    mid = [S.units_for_price(o) * american_to_decimal(o) for o in (-150, -110, 100, 200)]
     # Flat to within the rounding: stakes are quoted to the cent-of-a-unit,
     # so the product wobbles by about that much and no more.
     assert max(mid) - min(mid) < 0.03, mid
@@ -200,24 +195,15 @@ def test_the_price_sets_the_size_and_nothing_else_does():
     assert S.units_for_price(900) == S.MIN_PRICED_U
 
 
-def test_the_minimum_ticket_holds_across_the_whole_plus_side():
-    """Ethan, 2026-08-12: "change the ladder floor so nothing is under 10
-    dollars."
-
-    At 1u = 1% of bankroll that puts the floor ON the base unit, so the
-    ladder only slopes on the minus side. What it gives up is stated
-    rather than hidden: equal variance no longer holds above the
-    reference price, and a +400 at one unit carries roughly five times
-    the payout swing of a -110 at one unit. That is the accepted cost of
-    a minimum ticket.
-    """
+def test_a_long_price_is_still_a_real_bet_just_a_smaller_one():
+    """The old rule dropped every +200-or-longer pick to a flat 0.1u — a
+    dime, whatever the price. The ladder de-rates smoothly instead, so a
+    +200 is two thirds of a unit and a +475 is a third, rather than both
+    being the same token."""
     from engine import staking as S
-    assert S.MIN_PRICED_U == S.BASE_UNITS == 1.0
-    for odds in (-110, 100, 150, 200, 400, 900):
-        assert S.units_for_price(odds) >= S.BASE_UNITS, odds
-    # The minus side still slopes, and still stops at the ceiling.
-    assert S.units_for_price(-150) > S.units_for_price(-110)
-    assert S.units_for_price(-400) == S.MAX_PRICED_U
+    assert 0.6 < S.units_for_price(200) < 0.7
+    assert 0.3 < S.units_for_price(475) < 0.4
+    assert S.units_for_price(200) > S.units_for_price(475)
 
 
 def test_kelly_still_vetoes_even_though_it_no_longer_sizes():
@@ -249,7 +235,7 @@ def test_ufc_lands_on_the_same_scale():
     # dog at +250 takes the ladder's rung for +250 rather than the flat
     # dime the retired price band gave every underdog.
     assert ufc_stake(0.65, -150) == 1.15
-    assert ufc_stake(0.45, 250) == 1.0            # the minimum ticket
+    assert ufc_stake(0.45, 250) == 0.55
     assert ufc_stake(0.20, 250) == 0.0            # Kelly still vetoes
 
 
@@ -303,7 +289,7 @@ def test_every_stake_can_say_which_rule_set_it():
     from engine.staking import units_with_reason, kelly_fraction
 
     u, why = units_with_reason(kelly_fraction(0.45, 250) * 0.25, 250)
-    assert u == 1.0 and "minimum ticket" in why, (u, why)
+    assert u == 0.55 and "+250" in why, (u, why)
 
     u, why = units_with_reason(kelly_fraction(0.55, -110) * 0.25, -110)
     assert u == 1.0 and "base unit" in why, (u, why)
@@ -317,7 +303,7 @@ def test_every_stake_can_say_which_rule_set_it():
     u, why = units_with_reason(0.02, -400)
     assert u == 1.25 and "ceiling" in why, (u, why)
     u, why = units_with_reason(0.02, 900)
-    assert u == 1.0 and "minimum ticket" in why, (u, why)
+    assert u == 0.35 and "floor" in why, (u, why)
 
     # A caller-side downweight is named as one, so it can never be
     # mistaken for the ladder having a second opinion about the price.

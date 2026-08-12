@@ -203,31 +203,24 @@ def test_the_replay_follows_the_price_not_the_grade():
     hot = {"hit_prob": 0.80, "odds": 200, "grade": "B+"}
     same_price = {"hit_prob": 0.80, "odds": 200, "grade": "A+"}
     assert stakecheck.intended_stake(hot) == stakecheck.intended_stake(same_price)
-    # The price still separates them, on the minus side where the minimum
-    # ticket is not binding: a -250 replays above a -110, which replays at
-    # the base unit.
-    shorter = {"hit_prob": 0.90, "odds": -250, "grade": "B+"}
+    shorter = {"hit_prob": 0.80, "odds": -110, "grade": "B+"}
     assert stakecheck.intended_stake(shorter) > stakecheck.intended_stake(hot)
 
 
 def test_the_price_ladder_is_honoured_in_the_replay():
-    """The replay sizes off the price, exactly as the board does.
+    """Long prices are still de-rated, on a slope now rather than a cliff.
 
-    If it kept a rule the engine has retired it would report a shortfall
-    the rules never asked for — which is the whole failure mode this tool
-    exists to detect, so it must not commit it itself.
+    The old rule flattened everything at +200 or longer to a single dime,
+    so a +250 and a +900 replayed identically. The ladder keeps de-rating
+    past the old cliff, which is the behaviour the replay has to mirror or
+    it invents a shortfall on exactly the bets we keep small on purpose.
     """
-    # Since the floor was raised to the base unit ("nothing under 10
-    # dollars") the plus side is flat, so the de-rating the replay has to
-    # mirror lives on the minus side: a -110 stakes the base unit and a
-    # -250 stakes the ceiling.
     at250 = stakecheck.intended_stake({"hit_prob": 0.80, "odds": 250,
                                        "grade": "A+"})
     at900 = stakecheck.intended_stake({"hit_prob": 0.80, "odds": 900,
                                        "grade": "A+"})
-    assert at250 == at900 == 1.0
-    assert stakecheck.intended_stake(
-        {"hit_prob": 0.80, "odds": -250, "grade": "A+"}) == 1.25
+    assert at250 == 0.55 and at900 == 0.35
+    assert at250 > at900
 
 
 def test_the_eras_are_reported_apart():
@@ -447,20 +440,17 @@ def test_the_uniform_replay_preserves_every_ratio_it_keeps():
 def test_the_uniform_replay_drops_what_falls_under_the_floor():
     """The only thing that can move ROI in this policy, so it must be the
     only thing the replay does beyond scaling."""
-    # The ladder gives every qualifying bet at least the base unit, so a
-    # board no longer contains a small bet for the factor to push under
-    # the floor first — the floor is reached only when the slate is long
-    # enough that scaling puts EVERYTHING under it. 160 picks against a
-    # 15u cap is a factor of 0.094, i.e. nine-cent tickets, and those are
-    # rounding artefacts with a ticket rather than bets.
-    many = [_sim_row("A+", 0.09, 0.58, -110, "won")] * 160
-    out = stakecheck.simulate_uniform(many, cap=15.0)
-    assert out["kept"] == 0 and out["dropped"] == 160, out
-
-    # One rung back from that, the same board ships intact at the floor.
-    fits = [_sim_row("A+", 0.09, 0.58, -110, "won")] * 150
-    out = stakecheck.simulate_uniform(fits, cap=15.0)
-    assert out["dropped"] == 0 and out["kept"] == 150, out
+    # Under the price ladder the smallest bet on a board is the longest
+    # priced one, not the thinnest edge — a +900 ticket sits on the
+    # ladder's 0.35u floor while every -110 pick asks for a full unit. So
+    # the long shot is what a slate factor pushes through the minimum
+    # first. 60 standard picks put the slate 4x over its cap, which is
+    # the shape the real board has.
+    rows = ([_sim_row("A+", 0.09, 0.58, -110, "won")] * 60
+            + [_sim_row("B+", 0.02, 0.30, 900, "lost")])
+    out = stakecheck.simulate_uniform(rows, cap=15.0)
+    assert out["dropped"] == 1, out
+    assert out["kept"] == 60, out
     assert out["staked"] <= 15.0 + 1e-9
 
 
