@@ -215,8 +215,8 @@ def test_the_restated_record_resizes_without_touching_history():
     # size on the price rather than on Kelly-times-grade. Every row here
     # is at a standard-ish price, so each restates near the base unit
     # instead of the old 1 / 1 / 0.1 / 1 spread.
-    assert abs(r["units_staked"] - 3.42) < 0.05
-    assert abs(r["net_units"] - 2.29) < 0.10
+    assert abs(r["units_staked"] - 4.0) < 0.05
+    assert abs(r["net_units"] - 4.32) < 0.10
     # And the journal rows still say what was actually bet.
     assert {row[0] for row in conn.execute(
         "SELECT stake_units FROM bets")} == {0.1}

@@ -62,13 +62,32 @@ MIN_STAKE_UNITS = 0.1
 # bet's contribution to bankroll swing constant. Normalised so a standard
 # -110 prop is exactly the base unit:
 #
-#     -200   1.25u (capped)      +150   0.76u
-#     -110   1.00u               +200   0.64u
-#     +100   0.95u               +400   0.38u
+#     -200   1.25u (ceiling)     +150   1.00u (floor)
+#     -110   1.00u               +200   1.00u (floor)
+#     +100   1.00u (floor)       +400   1.00u (floor)
 #
 # It is smooth, so two picks a few cents apart in price cannot end up a
 # factor of five apart in stake — the artefact Ethan read off the board as
 # ".05 units on a +100 pick then .25 on a +100".
+#
+# THE FLOOR IS A DOLLAR DECISION, AND IT OVERRIDES THE PRINCIPLE ABOVE.
+# Ethan, 2026-08-12: "change the ladder floor so nothing is under 10
+# dollars." At 1u = 1% of bankroll that means the floor IS the base unit,
+# so the ladder now only slopes on the minus side and everything from
+# -110 out to +900 stakes a flat unit.
+#
+# Say plainly what that gives up, because it is real: equal variance no
+# longer holds above the reference price. A +400 at 1u carries roughly
+# five times the payout swing of a -110 at 1u, so a night that is heavy
+# on long prices moves the bankroll further than the unit count suggests.
+# That is the accepted cost of a minimum ticket, not an oversight — the
+# alternative was quoting $3.80 bets, which is not a thing you can place
+# and read like a bet.
+#
+# It is also CONDITIONAL. "Nothing under $10" is true when 1u = $10, i.e.
+# bankroll x unit% = 10. At a $500 bankroll on 1% the same floor is $5.
+# The engine works in units and cannot see dollars; the site converts and
+# says what the smallest ticket on tonight's board actually is.
 #
 # WHAT KELLY STILL DOES. It vetoes. A negative Kelly means the price beats
 # the edge and there is no bet at any size; that judgement is sound and is
@@ -81,11 +100,15 @@ BASE_UNITS = 1.0
 #: The price the base unit is defined at: standard two-way prop juice.
 REF_ODDS = -110
 #: The ladder's ends. The ceiling stops heavy chalk from turning a "safe"
-#: price into a big bet (short prices are exactly where the model's
-#: over-claim was measured worst); the floor keeps a long price a real
-#: wager rather than a token.
+#: price into a big bet — short prices are exactly where the model's
+#: over-claim was measured worst.
 MAX_PRICED_U = 1.25
-MIN_PRICED_U = 0.35
+#: The floor is the base unit itself: "nothing under 10 dollars", which at
+#: 1u = 1% of bankroll is one unit. Written as ``BASE_UNITS`` rather than
+#: 1.0 so the two cannot drift apart — if the base moves, the minimum
+#: ticket moves with it, which is the relationship Ethan actually asked
+#: for. See the ladder note above for what this costs.
+MIN_PRICED_U = BASE_UNITS
 
 
 def kelly_fraction(p: float, odds: int) -> float:
@@ -145,10 +168,15 @@ def units_with_reason(fraction: float, odds: int,
     stake = units_for_price(odds)
     if stake >= MAX_PRICED_U:
         why = f"{stake:g}u — the ladder's ceiling for a price this short"
-    elif stake <= MIN_PRICED_U:
-        why = f"{stake:g}u — the ladder's floor for a payout this long"
     elif odds == REF_ODDS:
+        # Checked BEFORE the floor. The floor now SITS ON the base unit,
+        # so the reference price satisfies both, and calling -110 "the
+        # minimum ticket" would hide that it is the price the whole
+        # ladder is normalised to.
         why = f"{stake:g}u — the base unit, at standard juice"
+    elif stake <= MIN_PRICED_U:
+        why = (f"{stake:g}u — the minimum ticket; the ladder does not go "
+               f"under the base unit")
     else:
         why = f"{stake:g}u — the ladder's size for {odds:+d}"
     if mult != 1.0:
