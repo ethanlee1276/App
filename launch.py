@@ -3435,6 +3435,163 @@ def show_bands(sport: str | None = None) -> None:
               f" stakes.")
 
 
+def show_learning() -> None:
+    """Has any of the self-tuning ever changed a number? Read-only.
+
+        python3 launch.py --learning
+
+    Ethan, 2026-08-16, looking at the Record and Lab pages: "Check to see
+    if the hypothesis lab and the model ai thing we have learn from itself
+    has even been doing anything and bettering the model ... I wanna know
+    if these are even doing anything or helping us."
+
+    Six loops run nightly and every one of them has a page. A page proves
+    the loop RAN; it does not prove the loop DID anything. This asks the
+    only question that separates those: for each loop, is there a number
+    on tonight's board that is different because it exists — and is there
+    evidence the difference helped?
+
+    A loop that runs and declines to adopt is not broken. Declining is the
+    correct output when the evidence is not there, and four of these have
+    been declining for months on samples large enough to mean it. That is
+    worth knowing plainly rather than reading as activity.
+    """
+    import json as _json
+    from engine import ledger
+
+    ROWS: list = []
+
+    def row(name, fired, changed, evidence):
+        ROWS.append((name, fired, changed, evidence))
+
+    # 1. the market temperatures — the only loop that is known to move a
+    #    number the board prices from.
+    try:
+        from engine import calibrate as cal
+        _p = Path(cal.DEFAULT_PATH)
+        stored = _json.loads(_p.read_text()) if _p.is_file() else {}
+        live = {k: v for k, v in stored.items()
+                if isinstance(v, dict)
+                and (v.get("temperature", 1.0) != 1.0
+                     or v.get("intercept", 0.0) != 0.0)}
+        gain = [(v.get("brier_before", 0) - v.get("brier_after", 0))
+                for v in live.values() if v.get("brier_before")]
+        avg = (sum(gain) / len(gain)) if gain else 0.0
+        row("market temperatures", f"{len(stored)} market(s) fitted",
+            f"{len(live)} carry a correction",
+            (f"mean Brier gain {avg:+.4f} per corrected market" if gain
+             else "nothing fitted yet"))
+    except Exception as exc:                          # noqa: BLE001
+        row("market temperatures", "—", "—", f"unreadable: {exc}")
+
+    # 2-3. the projection dial and the player memory, both fitted per
+    #      (sport, market) and both stored with an adoption flag.
+    from engine import formfit as _ff, playerfit as _pf
+    for label, mod in (("projection dial", _ff), ("player memory", _pf)):
+        try:
+            # The fitter's OWN DEFAULT_PATH, read at call time. Rebuilding
+            # the path here would be a second opinion about where the
+            # store lives, and the two would drift the day one moved.
+            p = Path(mod.DEFAULT_PATH)
+            blob = _json.loads(p.read_text()) if p.is_file() else {}
+            entries = [v for v in blob.values() if isinstance(v, dict)]
+            adopted = [v for v in entries if v.get("adopted")]
+            row(label, f"{len(entries)} key(s) fitted",
+                f"{len(adopted)} adopted",
+                "every fit kept the default" if entries and not adopted
+                else ("nothing fitted yet" if not entries else "in force"))
+        except Exception as exc:                      # noqa: BLE001
+            row(label, "—", "—", f"unreadable: {exc}")
+
+    # 4. the loss miner — slices convicted AND enforcing.
+    try:
+        # Key names read off `losspatterns.mine`'s return, not guessed:
+        # n_records / tested / findings / closed, where `closed` is the
+        # subset whose action is "close" and is the only part that vetoes
+        # a pick. A finding that is not closed changes nothing.
+        from engine import losspatterns as lp
+        blob = lp.load()
+        found = blob.get("findings") or []
+        closed = blob.get("closed") or []
+        row("loss miner",
+            f"{blob.get('n_records', 0)} rows, {blob.get('tested', 0)} slices",
+            f"{len(found)} found · {len(closed)} enforcing",
+            "found a pattern but nothing convicted" if found and not closed
+            else ("nothing convicted" if not found else "vetoing picks"))
+    except Exception as exc:                          # noqa: BLE001
+        row("loss miner", "—", "—", f"unreadable: {exc}")
+
+    # 5. the hypothesis lab — the paid one. Worth its own honesty.
+    try:
+        from engine import hypotheses as hyp
+        blob = hyp.load()
+        # `store["hypotheses"]` is a LIST of dicts carrying status
+        # (collecting / tested / confirmed / rejected) and action, where
+        # only action == "close" reaches a pick. See tribunal().
+        hs = blob.get("hypotheses") or []
+        if isinstance(hs, dict):
+            hs = list(hs.values())
+        conf = [h for h in hs if h.get("status") == "confirmed"]
+        enf = [h for h in hs if h.get("action") == "close"]
+        spend = hyp.llm_spend_report()
+        row("hypothesis lab", f"{len(hs)} proposed",
+            f"{len(conf)} confirmed · {len(enf)} enforcing",
+            f"${spend.get('total_usd', 0):.2f} spent"
+            + (" — nothing it proposed is changing a pick"
+               if not enf else ""))
+    except Exception as exc:                          # noqa: BLE001
+        row("hypothesis lab", "—", "—", f"unreadable: {exc}")
+
+    # 6. the selection haircut — the newest, and the one with a hard
+    #    out-of-sample gate, so its evidence is the strongest available.
+    try:
+        from engine import selectionfit as sf
+        blob = sf.load()
+        sports = blob.get("sports") or {}
+        applied = [k for k, v in sports.items() if (v or {}).get("applied")]
+        pooled = blob.get("pooled") or {}
+        if pooled.get("applied"):
+            applied.append("pooled")
+        h = (pooled if pooled.get("applied") else {}).get("holdout") or {}
+        ev = (f"held out: gap {h['gap_before'] * 100:.1f} → "
+              f"{h['gap_after'] * 100:.1f} pts on {h['test_n']} unseen bets"
+              if h.get("ran") else "not validated")
+        row("selection haircut", f"{pooled.get('n', 0)} settled bet(s) read",
+            f"{len(applied)} book(s) corrected", ev)
+    except Exception as exc:                          # noqa: BLE001
+        row("selection haircut", "—", "—", f"unreadable: {exc}")
+
+    print(f"  {'loop':<22}{'it ran':<26}{'it changed':<28}evidence")
+    for name, fired, changed, ev in ROWS:
+        print(f"  {name:<22}{str(fired)[:25]:<26}{str(changed)[:27]:<28}{ev}")
+
+    # --- the paper book -----------------------------------------------
+    with ledger.connect() as conn:
+        on = ledger.paper_mode(conn)
+        counts = dict(conn.execute(
+            "SELECT category, COUNT(*) FROM bets WHERE status IN "
+            "('won','lost') GROUP BY category").fetchall())
+        first_paper = conn.execute(
+            "SELECT MIN(date) FROM bets WHERE category = 'paper'").fetchone()[0]
+        paper = ledger.performance(conn, category="paper")
+        main = ledger.performance(conn)
+
+    print(f"\n  PAPER MODE: {'ON' if on else 'off'}"
+          + (f" since {first_paper}" if first_paper else ""))
+    print(f"  paper book   {paper.get('wins', 0)}-{paper.get('losses', 0)}"
+          f"  {paper.get('roi', 0) * 100:+.1f}% ROI on "
+          f"{paper.get('units_staked', 0):.1f}u")
+    print(f"  main book    {main.get('wins', 0)}-{main.get('losses', 0)}"
+          f"  {main.get('roi', 0) * 100:+.1f}% ROI on "
+          f"{main.get('units_staked', 0):.1f}u")
+    print("  settled rows by book: "
+          + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+    print("\n  Paper mode changes exactly two things: the row's category, and"
+          "\n  the dollar column. Picks are still made, journaled, settled and"
+          "\n  measured for CLV identically — so everything IS being recorded."
+          "\n  Every loop above reads the paper book except where noted.")
+
+
 def show_haircut(refit: bool = False) -> None:
     """What we claimed vs what landed, and the correction it earns.
 
@@ -5152,6 +5309,9 @@ def main() -> None:
         return
     if "--haircut" in argv:
         show_haircut("--refit" in argv)
+        return
+    if "--learning" in argv:
+        show_learning()
         return
     if "--bands" in argv:
         i = argv.index("--bands")

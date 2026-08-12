@@ -215,18 +215,37 @@ def _keep_fraction(gap: float, se: float) -> float:
     return max(0.0, 1.0 - (se / abs(gap)) ** 2)
 
 
-def _settled(lconn, category: str = "main") -> list:
-    """Settled real picks: claim, side, outcome, and when it was logged.
+#: The books this fitter learns from: the published board, whether or not
+#: money was on it.
+#:
+#: 'main' is the board with money on it. 'paper' is THE SAME BOARD with
+#: the money off — `ledger.log_recommendations` files a row as paper when
+#: paper mode is on and changes nothing else about it: same picks, same
+#: sizing, same settlement, same CLV. So a paper row is exactly the
+#: population this correction is about.
+#:
+#: Excluding it was a real defect and it was mine. Paper mode went on
+#: 2026-08-09; the haircut shipped 2026-08-12 reading 'main' only, which
+#: means it fitted on a journal frozen at the day the money came off and
+#: could never see another row while paper mode stayed on. Ethan asked
+#: exactly the right question — "check to see if we have been learning
+#: anything since we turned on the paper bets" — and for this loop the
+#: answer was no, structurally.
+#:
+#: The other books stay out, and they are a different thing: the home-run
+#: sampler, the priced-out and loose-book shadows and the stale-line
+#: sampler grade signals we deliberately do NOT publish. Pooling those in
+#: would fit a correction for a board nobody sees.
+LEARNING_CATEGORIES = ("main", "paper")
 
-    ``category`` is 'main' by design. The measurement-only books (the
-    home-run sampler, the priced-out and loose-book shadows) exist to
-    grade signals we deliberately are NOT betting, and pooling them in
-    would fit a correction for a board we do not publish.
-    """
+
+def _settled(lconn, categories=LEARNING_CATEGORIES) -> list:
+    """Settled picks off the published board: claim, side, outcome, when."""
+    marks = ",".join("?" * len(categories))
     return lconn.execute(
-        "SELECT sport, market, side, hit_prob, odds, status, ts "
-        "FROM bets WHERE status IN ('won','lost') AND category = ? "
-        "ORDER BY ts, rowid", (category,)).fetchall()
+        f"SELECT sport, market, side, hit_prob, odds, status, ts "
+        f"FROM bets WHERE status IN ('won','lost') AND category IN ({marks}) "
+        f"ORDER BY ts, rowid", tuple(categories)).fetchall()
 
 
 def _pairs(rows, prior_shift: float, stamp: str) -> list:
