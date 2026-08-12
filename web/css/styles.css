@@ -1291,6 +1291,12 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   border-radius: 50%; object-fit: cover; object-position: top;
   box-shadow: none;
 }
+/* Same rule as the team marks, same reason: a headshot is a cut-out on
+   transparent ground, so the drawn helmet was showing through every real
+   face. It leaves on load — and the stack keeps a plain disc, because a
+   cut-out with nothing behind it floats on the page. */
+.avatar-stack.art-on > .avatar { display: none; }
+.avatar-stack.art-on { background: var(--panel-3); border-radius: 50%; }
 
 /* procedural team monogram */
 .team-mark { display: inline-block; vertical-align: -4px; }
@@ -3497,6 +3503,15 @@ select.calc-in { width: auto; font-weight: 600; }
    near-square and a Texans bull is wide. Cropping to fill would cut the
    part of a logo people recognise. */
 .team-mark-wrap > .team-logo { object-fit: contain; }
+
+/* THE DRAWING IS A FALLBACK, SO IT LEAVES WHEN THE REAL ONE ARRIVES.
+   Every logo and headshot the CDNs serve is a transparent PNG, and this
+   layer sat UNDER them permanently — so the monogram's diagonal band,
+   colour block and abbreviation showed through the artwork on every row
+   (Ethan, 2026-08-12, circling exactly that on the picks list and the
+   live board). `art-on` is set by the image's own onload, which means the
+   chip is visible in precisely the case it exists for: no image. */
+.team-mark-wrap.art-on > .team-mark { display: none; }
 /* One pick, one face: the identity column on the recommended list —
    a player's face for a prop, a team's mark for a side, the league's
    for a game total. */

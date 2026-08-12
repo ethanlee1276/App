@@ -106,10 +106,16 @@ function playerAvatar(name, abbr, opts = {}) {
     const swap = small === opts.headshot ? "this.remove()"
       : "if(this.dataset.full){this.src=this.dataset.full;this.removeAttribute('data-full');}"
         + "else{this.remove();}";
+    /* Same rule as the team marks: a headshot is a CUT-OUT on transparent
+       ground, so the drawn helmet showed through every real face. The
+       drawing steps aside on load and the stack keeps a plain disc for the
+       face to sit on; on error the photo removes itself and the helmet is
+       back, which is the whole point of drawing one. */
     return `<span class="avatar-stack" style="width:${size}px;height:${size}px">${inner}
       <img class="avatar-photo" src="${escapeAttr(small)}" alt="" loading="lazy"
            decoding="async"${small === opts.headshot ? ""
              : ` data-full="${escapeAttr(opts.headshot)}"`}
+           onload="this.parentNode.classList.add('art-on')"
            onerror="${swap}"/></span>`;
   }
   const t = team(abbr, opts.map);
@@ -294,11 +300,18 @@ function teamMark(abbr, size = 20, src = null, sport = null) {
   const league = sport || (typeof src === "string" ? src : "")
     || (typeof state !== "undefined" ? state.sport : "") || "nfl";
   const url = logoUrl(t.id || abbr, league, size);
-  // The monogram stays underneath. `onerror` removes only the image, so a
-  // bad abbreviation or a dead CDN lands on the chip this used to be.
+  /* The monogram stays underneath, and STEPS ASIDE once a real logo
+     paints. Ethan, 2026-08-12, with the rows circled: "the logos overlap
+     whatever is underneath". A team logo is a transparent PNG, so the
+     chip's diagonal band, colour block and abbreviation showed straight
+     through every one of them. `onload` is the whole fix — the drawing is
+     a FALLBACK, so it must be visible exactly when the image is not.
+     `onerror` still removes only the image, so a bad abbreviation or a
+     dead CDN lands on the chip this used to be. */
   const img = url
     ? `<img class="team-logo" src="${escapeAttr(url)}" width="${size}"
             height="${size}" alt="" loading="lazy" decoding="async"
+            onload="this.parentNode.classList.add('art-on')"
             onerror="this.remove()">`
     : "";
   return `<span class="team-mark-wrap" style="width:${size}px;height:${size}px"
@@ -333,7 +346,8 @@ function leagueMark(sport, size = 20) {
   const img = key
     ? `<img class="team-logo" src="https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/${key}.png&w=${size * 2}&h=${size * 2}"
             width="${size}" height="${size}" alt="" loading="lazy"
-            decoding="async" onerror="this.remove()">`
+            decoding="async" onload="this.parentNode.classList.add('art-on')"
+            onerror="this.remove()">`
     : "";
   return `<span class="team-mark-wrap league-mark" style="width:${size}px;height:${size}px"
                 role="img" aria-label="${escapeAttr(label)}">

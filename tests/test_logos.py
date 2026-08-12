@@ -94,7 +94,9 @@ def test_the_monogram_is_still_drawn_underneath():
     wrong abbreviation or no network is the OLD behaviour, not a hole."""
     js = _js()
     i = js.index("function teamMark(")
-    body = js[i:i + 1800]
+    # To the end of the function, not a fixed window: a comment added above
+    # the markup used to push `${img}` out of the slice and fail this.
+    body = js[i:js.index("\n/* ", i)]
     assert "team-mark-wrap" in body
     assert "<svg" in body and "team-mark" in body, "the chip is gone"
     assert body.index("<svg") < body.index("${img}"), \
@@ -373,6 +375,49 @@ def test_the_league_mark_falls_back_to_a_drawn_chip():
     assert "<svg" in body, "nothing underneath the image"
     assert "combiner/i?img=" in body, "raw path — 3.5x the bytes"
 
+
+
+# --- the drawing is a fallback, not a backdrop -------------------------------
+def test_the_drawn_chip_leaves_when_a_real_image_lands():
+    """Ethan, 2026-08-12, circling the picks list and the live board: "the
+    logos overlap whatever is underneath the logos ... the team logos are
+    behind the head shots."
+
+    Every logo and headshot these CDNs serve is a transparent PNG, and the
+    drawn art sat under them PERMANENTLY — so the monogram's diagonal
+    band, colour block and abbreviation showed straight through the
+    artwork, and the helmet showed through every face. The image's own
+    onload is the fix: the drawing is a fallback, so it must be visible in
+    exactly the case it exists for, and gone in the other."""
+    js = _js()
+    for fn_name in ("function teamMark(", "function leagueMark("):
+        i = js.index(fn_name)
+        body = js[i:i + 1600]
+        assert "onload=" in body and "art-on" in body, fn_name
+        assert "onerror=" in body, f"{fn_name} lost its fallback"
+    av = js[js.index("function playerAvatar("):]
+    av = av[:av.index("\n  const t = team(")]
+    assert "onload=" in av and "art-on" in av, "the helmet still shows through faces"
+
+    css = _read("web", "css", "styles.css")
+    assert ".team-mark-wrap.art-on > .team-mark { display: none; }" in css
+    assert ".avatar-stack.art-on > .avatar { display: none; }" in css
+    # A cut-out face with the helmet gone needs ground, or it floats.
+    assert ".avatar-stack.art-on { background:" in css
+
+
+def test_a_dead_cdn_still_lands_on_the_drawn_chip():
+    """The half that must NOT change: onerror removes only the image, and
+    nothing marks art-on, so an unreachable host renders exactly the chip
+    that shipped before real logos existed."""
+    js = _js()
+    i = js.index("function teamMark(")
+    body = js[i:i + 1600]
+    assert 'onerror="this.remove()"' in body
+    # art-on is set by onload ALONE — never at build time, or the chip
+    # would be hidden under an image that never arrives.
+    assert "classList.add('art-on')" in body
+    assert body.count("art-on") == 1, "art-on must come from onload only"
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
