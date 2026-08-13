@@ -119,6 +119,75 @@ def test_only_one_generation_of_venue_art_can_reach_a_card():
         assert f'"{colour}"' in APP, f"the {colour} rung was deleted, not gated"
 
 
+def test_a_live_game_shows_the_same_art_as_every_other_card():
+    """Ethan reported "the stadium issue" THREE times. This was the cause
+    the first two fixes could not reach.
+
+    Live cards suppressed the photo entirely — `!isLive ? <img> : ""` —
+    and drew the SVG ballpark instead, because the drawing lights the
+    occupied bases and the status line below it had been changed to stop
+    repeating them. So one card on the strip was a flat vector diagram
+    beside photoreal stadiums, permanently, on every slate with a live
+    game. That is a much bigger visual break than either the stale cache
+    or the mixed generations, and it is the one his screenshot showed.
+
+    Photo everywhere now, runners overlaid — his call, and the overlay is
+    what makes it cost nothing.
+    """
+    assert "!isLive ? (() => {" not in APP, "live cards must not suppress the photo"
+    assert "mlb && isLive ? runnerOverlay(g)" in APP
+
+
+def test_the_runner_overlay_does_not_rest_on_colour_alone():
+    """An occupied base is a FILLED bag, an empty one a hollow outline —
+    a shape difference, not a hue difference — and the whole base state is
+    stated in words for anything that reads neither."""
+    vis = open(os.path.join(ROOT, "web", "js", "visuals.js"),
+               encoding="utf-8").read()
+    fn = vis[vis.index("function runnerOverlay"):vis.index("function ballpark")]
+    assert 'fill="none"' in fn, "an empty base must be an outline, not a colour"
+    assert 'class="on-base"' in fn, "an occupied base must be a filled bag"
+    assert "runnerLabel(runners)" in fn, "the base state must be stated in words"
+    # The class exists because `.stadium g rect { fill: none }` hollows out
+    # every rect in the art and beats a presentation attribute — the exact
+    # trap the drawn version paid for and documented.
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    assert ".venue-runners .on-base { fill:" in css
+
+
+def test_the_overlay_does_not_land_on_top_of_another_chip():
+    """Five things already sit on this art. Adding a sixth that overlaps
+    one of them trades a visual bug for a visual bug.
+
+    The map, measured rather than assumed:
+
+        .status-badge    top-left        (LIVE / FINAL)
+        .game-time-chip  top-left        (non-live only)
+        .top-game-tag    top-right       (non-live only)
+        .game-wx-chip    BOTTOM-LEFT     (non-live only)
+        .gc-picks        bottom-CENTRE
+
+    Bottom-left is shared with the weather chip, and that is SAFE for
+    exactly one reason: the weather chip renders only when the game is
+    not live and the overlay renders only when it is, so the two can
+    never be on one card. That invariant is the whole reason the corner
+    is free, so it is asserted rather than trusted — showing weather on a
+    live card later would silently stack them.
+    """
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    m = re.search(r"\.venue-runners \{([^}]*)\}", css)
+    assert m, "the overlay must be positioned explicitly"
+    assert "left" in m.group(1) and "bottom" in m.group(1), m.group(1)
+    # The overlay is live-only.
+    assert "mlb && isLive ? runnerOverlay(g)" in APP
+    # The weather chip — the other bottom-left occupant — is not.
+    i = APP.index("game-wx-chip")
+    assert "!isLive && !isFinal" in APP[max(0, i - 400):i], \
+        "the weather chip reached a live card — it now stacks on the runners"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

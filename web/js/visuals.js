@@ -718,6 +718,50 @@ function runnerLabel(runners) {
 }
 
 
+/* THE RUNNERS, AS AN OVERLAY ON A PHOTO.
+//
+// Ethan, 2026-08-13, third report of the same symptom: "also still having
+// the stadium issue." The screenshot finally showed what the two previous
+// fixes could not reach — a LIVE game was drawing the SVG ballpark while
+// every other card showed a photo render, because live cards deliberately
+// suppressed the photo. The drawing carried the lit bases, and the status
+// line under it had been changed to stop repeating them, so the drawing
+// could not simply be swapped out without losing the runners.
+//
+// His call: photo everywhere, runners on top. This is the "on top" half —
+// a small corner diamond so a live card keeps the one thing the drawing
+// was there for. It reads at a glance and it does not need the whole
+// 240x150 scene to do it.
+//
+// COLOUR IS NOT THE ONLY ENCODING. An occupied base is a filled bag on a
+// dark disc, an empty one is a hollow outline — a SHAPE difference, not a
+// hue difference — and `runnerLabel` states the whole base state in words
+// for anything that cannot see either. Same three-readings rule the bars
+// on the prop card follow. */
+function runnerOverlay(game) {
+  const lv = (game || {}).live || {};
+  if (lv.state !== "live") return "";
+  const runners = new Set(lv.bases || []);
+  // Home plate is bottom-centre; first, second and third read clockwise
+  // from the right, the way they do on a scoreboard.
+  const spots = { 1: [30, 20], 2: [20, 10], 3: [10, 20] };
+  const bags = [1, 2, 3].map((n) => {
+    const [cx, cy] = spots[n];
+    return runners.has(n)
+      ? `<rect class="on-base" x="${cx - 4}" y="${cy - 4}" width="8" height="8"
+           transform="rotate(45 ${cx} ${cy})" fill="#ffd24a" stroke="#ffffff"
+           stroke-width="1"/>`
+      : `<rect x="${cx - 3.2}" y="${cy - 3.2}" width="6.4" height="6.4"
+           transform="rotate(45 ${cx} ${cy})" fill="none" stroke="#ffffff"
+           stroke-opacity=".85" stroke-width="1.4"/>`;
+  }).join("");
+  return `<svg class="venue-runners" viewBox="0 0 40 32" width="40" height="32"
+       role="img" aria-label="${escapeAttr(runnerLabel(runners))}">
+    <rect x="0" y="0" width="40" height="32" rx="6" fill="#0c1020" opacity=".62"/>
+    ${bags}</svg>`;
+}
+
+
 function ballpark(game, opts = {}) {
   const w = opts.w || 240, h = opts.h || 150;
   const home = team(game.home), away = team(game.away);

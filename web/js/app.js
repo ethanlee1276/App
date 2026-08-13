@@ -2490,17 +2490,27 @@ function gameCard(g) {
         // The photo slot (Ethan, 2026-08-11: wants the cards to look
         // exactly like his generated renders). A team-specific
         // web/img/venues/{sport}/{HOME}.jpg wins when it exists; the
-        // onerror hop lands on the sliced family render whose lighting
-        // matches the home team's colours (vpFall). Live games always
-        // keep the drawing — it carries the ball spot, bases and wind,
-        // which a photo cannot.
-        !isLive ? (() => {
+        // onerror hop lands on the family render (vpFall).
+        //
+        // LIVE GAMES GET THE PHOTO TOO, since 2026-08-13. They used to
+        // suppress it and show only the drawn scene, because the drawing
+        // lights the occupied bases and the status line below had been
+        // changed to stop repeating them. The cost was a flat vector
+        // diagram sitting beside photoreal stadiums on the same strip —
+        // which is the third and largest cause of the "old renders on
+        // some games, new on others" Ethan reported three times, and the
+        // one neither the cache token nor the one-generation gate could
+        // reach. He chose photo-everywhere with the runners kept on top;
+        // `runnerOverlay` is that, and it is why nothing is lost here.
+        (() => {
           const fam = VENUE_FAMILY[state.sport];
           return `<img class="venue-photo" alt="" loading="lazy"
           src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
           ${fam ? `data-alt="${venueSrc(`img/venues/variants/${fam}-${venueVariant(homeTeam)}.jpg`)}"
           onerror="vpFall(this)"` : `onerror="this.remove()"`}/>`;
-        })() : ""}${badge}${
+        })()}${
+        // The one thing the drawing carried that a photo cannot.
+        mlb && isLive ? runnerOverlay(g) : ""}${badge}${
         window._topGameId === gameId(g) && !isLive && !isFinal
           ? `<span class="top-game-tag">Top game</span>` : ""}${
         !isLive && !isFinal && whenLabel(g.date, g.kickoff)

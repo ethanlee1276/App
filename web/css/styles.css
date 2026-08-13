@@ -4268,6 +4268,15 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   object-fit: cover; z-index: 1; }
 .stadium-wrap .status-badge, .stadium-wrap .top-game-tag,
 .stadium-wrap .game-time-chip, .stadium-wrap .gc-picks { z-index: 3; }
+/* The live base diamond, over the photo. Bottom-left is the one corner
+   nothing else on this card claims: the LIVE badge is top-left, the time
+   and weather chips are top-right, and the picks chip is bottom-right. */
+.venue-runners { position: absolute; left: 8px; bottom: 8px; z-index: 3; }
+/* Occupied bases carry a class because `.stadium g rect { fill: none }`
+   hollows out every rect in the art and a presentation attribute loses to
+   any CSS rule — the exact trap the drawn version documented, and this
+   overlay lives close enough to inherit it. */
+.venue-runners .on-base { fill: #ffd24a; }
 
 /* The UFC card banner — one octagon render per event, hash-picked in
    renderUFC. Wide and shallow so it sets the scene without pushing the
