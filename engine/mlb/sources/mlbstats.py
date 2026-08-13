@@ -442,26 +442,93 @@ def parse_transactions(data: dict) -> list[dict]:
     return out
 
 
+def _roster_entry(e: dict) -> dict:
+    """One roster row, in the shape the page and the ledger expect."""
+    person = e.get("person") or {}
+    return {
+        "name": person.get("fullName", ""),
+        "position": ((e.get("position") or {}).get("abbreviation") or "").upper(),
+        "number": e.get("jerseyNumber") or None,
+        "status": ((e.get("status") or {}).get("description") or ""),
+        "person_id": person.get("id") or 0,
+    }
+
+
+def _rosters_per_team(teams: list[dict], ttl: int) -> dict:
+    """The documented per-team roster endpoint, one call per club.
+
+    THE FALLBACK EXISTS BECAUSE THE CHEAP PATH WENT QUIET. Ethan's
+    diagnostic on 2026-08-13 returned 30 teams and `has roster? False`:
+    `hydrate=roster(person)` is being ignored, so every club came back
+    without the key the parser reads, `fetch_active_rosters` returned {}
+    WITHOUT RAISING, and the rosters page fell back to appearances — where
+    pitchers never bat and therefore do not exist. Half a roster, no
+    error, for days.
+
+    Thirty requests instead of one is the price, and it is the right
+    trade: this is a keyless endpoint on a six-hour cache behind a daily
+    build. A parameter that can be silently stopped honouring should not
+    be the only way to answer "who is on this team".
+    """
+    out: dict[str, list] = {}
+    for t in teams:
+        tid = t.get("id")
+        ab = TEAM_ID_ABBR.get(tid, (t.get("abbreviation") or "").upper())
+        if not tid or not ab:
+            continue
+        try:
+            blob = _get_json(
+                f"{STATS_BASE}/teams/{tid}/roster?rosterType=active",
+                f"mlb_roster_{tid}.json", ttl=ttl)
+        except Exception:                                     # noqa: BLE001
+            continue          # one club short beats no page at all
+        players = [_roster_entry(e) for e in (blob.get("roster") or [])]
+        players = [p for p in players if p["name"]]
+        if players:
+            out[ab] = players
+    return out
+
+
 def fetch_active_rosters(ttl: int = 21600) -> dict:
     """{team_abbr: [{name, position, number, status, person_id}]} — every
-    club's ACTIVE roster, one request.
+    club's ACTIVE roster.
 
-    The hydrate parameter folds all thirty rosters into a single response,
-    so a daily refresh costs one keyless call rather than thirty. TTL six
-    hours: a trade-deadline move shows up the same afternoon, which is the
-    whole reason this exists — the rosters page used to be built from our
-    own game logs, where a player joins his new club only after he has
-    PLAYED for it and we have ingested that game, and where a reliever
-    never appears at all because relievers get no props and therefore no
-    log rows. "Who is on the team" is a question the league answers
-    directly; deriving it from appearances was answering a different
-    question and calling it the same one.
+    TTL six hours: a trade-deadline move shows up the same afternoon,
+    which is the whole reason this exists — the rosters page used to be
+    built from our own game logs, where a player joins his new club only
+    after he has PLAYED for it and we have ingested that game, and where a
+    reliever never appears at all because relievers get no props and
+    therefore no log rows. "Who is on the team" is a question the league
+    answers directly; deriving it from appearances was answering a
+    different question and calling it the same one.
+
+    TWO PATHS, IN PRICE ORDER. The hydrate parameter folds all thirty
+    rosters into a single response and is tried first. When it comes back
+    unhydrated — which is what happened on 2026-08-13, 30 teams and not
+    one `roster` key — the per-team endpoint takes over. See
+    `_rosters_per_team` for why the extra requests are worth it.
     """
     data = _get_json(
         f"{STATS_BASE}/teams?sportId=1&hydrate=roster(person)",
         "mlb_active_rosters.json", ttl=ttl)
+    teams = data.get("teams", []) or []
+    out = _parse_hydrated(teams)
+    if out:
+        return out
+    if teams:
+        # LOUD, not silent. The previous version of this failure printed
+        # nothing anywhere and cost a week of pitcher-less rosters.
+        print("  ⚠️  MLB: hydrate=roster(person) returned no rosters for any "
+              f"of {len(teams)} teams — falling back to the per-team "
+              "endpoint (30 requests).")
+        return _rosters_per_team(teams, ttl)
+    return out
+
+
+def _parse_hydrated(teams: list[dict]) -> dict:
+    """Rosters out of the hydrated /teams response, or {} if unhydrated."""
     out: dict[str, list] = {}
-    for t in data.get("teams", []) or []:
+    for t in teams:
         ab = TEAM_ID_ABBR.get(t.get("id"),
                               (t.get("abbreviation") or "").upper())
         if not ab:
@@ -475,15 +542,8 @@ def fetch_active_rosters(ttl: int = 21600) -> dict:
         r = t.get("roster") or {}
         entries = (r.get("roster") or []) if isinstance(r, dict) else r
         for e in entries or []:
-            person = e.get("person") or {}
-            pos = ((e.get("position") or {}).get("abbreviation") or "").upper()
-            players.append({
-                "name": person.get("fullName", ""),
-                "position": pos,
-                "number": e.get("jerseyNumber") or None,
-                "status": ((e.get("status") or {}).get("description") or ""),
-                "person_id": person.get("id") or 0,
-            })
+            players.append(_roster_entry(e))
+        players = [p for p in players if p["name"]]
         if players:
             out[ab] = players
     return out

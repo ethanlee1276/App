@@ -257,6 +257,74 @@ def test_the_fallback_note_names_the_blind_spot_it_creates():
     assert "pitchers don" in src and "missing from this" in src
 
 
+def test_an_unhydrated_teams_response_falls_back_instead_of_returning_nothing():
+    """Ethan's diagnostic, 2026-08-13: 30 teams, `has roster? False`.
+
+    `hydrate=roster(person)` stopped being honoured. Every club came back
+    without the key the parser reads, so `fetch_active_rosters` returned
+    {} — WITHOUT RAISING — the builder caught that as "the league feed
+    returned no players", and the rosters page fell back to appearances,
+    where pitchers never bat and therefore do not exist. Half a roster,
+    no error, and until the note was surfaced, nothing on the page said
+    so. That is the whole failure chain, and this pins the link that
+    starts it.
+    """
+    from engine.mlb.sources import mlbstats as m
+    unhydrated = [{"id": 112, "abbreviation": "CHC"},
+                  {"id": 143, "abbreviation": "PHI"}]
+    assert m._parse_hydrated(unhydrated) == {}, \
+        "an unhydrated response must be detectable, not silently empty"
+
+    calls = []
+
+    def fake_get(url, cache, ttl=0):
+        calls.append(url)
+        return {"roster": [{"person": {"fullName": "Zack Wheeler", "id": 554430},
+                            "position": {"abbreviation": "P"},
+                            "jerseyNumber": "45",
+                            "status": {"description": "Active"}}]}
+
+    orig = m._get_json
+    try:
+        m._get_json = fake_get
+        out = m._rosters_per_team(unhydrated, ttl=0)
+    finally:
+        m._get_json = orig
+
+    assert set(out) == {"CHC", "PHI"}, out
+    assert out["PHI"][0]["person_id"] == 554430
+    # A PITCHER, which is the entire point: the appearance fallback cannot
+    # see one, because in the DH era pitchers never bat.
+    assert out["PHI"][0]["position"] == "P"
+    assert all("/roster?rosterType=active" in u for u in calls), calls
+
+
+def test_both_hydrated_shapes_still_parse():
+    """The hydrated roster arrives as {"roster": [...]} on some API
+    versions and as a bare list on others; assuming the dict shape once
+    made every pitcher vanish while a dict-shaped fixture stayed green."""
+    from engine.mlb.sources import mlbstats as m
+    entry = {"person": {"fullName": "Pete Crow-Armstrong", "id": 691718},
+             "position": {"abbreviation": "CF"}}
+    as_dict = m._parse_hydrated([{"id": 112, "abbreviation": "CHC",
+                                  "roster": {"roster": [entry]}}])
+    as_list = m._parse_hydrated([{"id": 112, "abbreviation": "CHC",
+                                  "roster": [entry]}])
+    assert as_dict == as_list
+    assert as_dict["CHC"][0]["person_id"] == 691718
+
+
+def test_the_fallback_announces_itself():
+    """The previous version of this failure printed nothing anywhere and
+    cost days of pitcher-less rosters. A degraded path that is silent is
+    how the same bug comes back."""
+    import inspect
+    from engine.mlb.sources import mlbstats as m
+    src = inspect.getsource(m.fetch_active_rosters)
+    assert "hydrate=roster(person) returned no rosters" in src
+    assert "print(" in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
