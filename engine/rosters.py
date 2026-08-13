@@ -196,6 +196,80 @@ MLB_POSITION_ORDER = {"SP": 0, "P": 1, "RP": 2, "TWP": 3, "C": 4, "1B": 5,
                       "RF": 12, "OF": 13, "DH": 14}
 
 
+def identity_map(conn, sport: str) -> dict:
+    """``{player: {"team": abbr, "headshot": url}}`` — who a player IS.
+
+    Ethan, 2026-08-13, on a Live Now screenshot: "it says it couldnt map
+    the game AND its not showing the heashshots of the players."
+
+    ONE CAUSE, BOTH SYMPTOMS. The open-bet tracker placed a player prop on
+    the field by looking the name up in TONIGHT'S BOARD — and the board is
+    the one thing that does not survive first pitch. A pitcher prop whose
+    market the book pulls when the game goes live has no row to look up,
+    so `_unmapped` fired; and `_unmapped` took the face from the same
+    missing row, so the row lost its photo too. Every unmapped name in his
+    screenshot was a pitcher and every mapped one a hitter, which is the
+    shape of a board-availability bug rather than a name-matching one.
+
+    A bet's player is on a team whether or not the book is still pricing
+    him, so this answers the question from a source that has nothing to do
+    with tonight's prices:
+
+    * **MLB** — the league's own active rosters (cached six hours). The
+      current club, not the last one he was logged for, and it includes
+      relievers and bench arms who have no prop and therefore no logs.
+    * **Everyone else** — our game logs, most recent club wins, across
+      EVERY market rather than the appearance market. That distinction is
+      not cosmetic: `from_game_logs` keys on plate appearances for
+      baseball, and in the universal-DH era no pitcher ever has one, so an
+      appearance-built map would be missing exactly the players this was
+      built to rescue.
+
+    Faces come from :func:`_faces`, so they follow the same per-sport rule
+    the roster page uses — constructed for MLB, taken from `player_assets`
+    for the hoops. Keyed on the RAW name; callers normalise with their own
+    key function, which keeps this from silently disagreeing with a
+    normaliser it does not own.
+    """
+    faces = _faces(conn, sport)
+    out: dict[str, dict] = {}
+    if sport == "mlb":
+        try:
+            from .mlb.sources import mlbstats
+            for ab, players in (mlbstats.fetch_active_rosters() or {}).items():
+                for p in players or []:
+                    name = p.get("name") or ""
+                    if not name:
+                        continue
+                    out[name] = {
+                        "team": ab,
+                        "headshot": (mlbstats.headshot_url(p.get("person_id"))
+                                     or face_of(faces, name)),
+                    }
+        except Exception:                                     # noqa: BLE001
+            pass          # no feed: fall through to the logs below
+    if conn is None:
+        return out
+    try:
+        rows = conn.execute(
+            "SELECT player, team, MAX(period) AS last_seen FROM "
+            "player_game_logs WHERE sport=? AND team IS NOT NULL AND team!='' "
+            "GROUP BY player, team", (sport,)).fetchall()
+    except Exception:                                         # noqa: BLE001
+        return out        # no logs table is no identities, not a crash
+    latest: dict[str, str] = {}
+    for r in rows:
+        player, seen = r[0], str(r[2])
+        if seen > latest.get(player, ""):
+            latest[player] = seen
+    for r in rows:
+        player, team = r[0], r[1]
+        if str(r[2]) != latest.get(player) or player in out:
+            continue      # an old club, or the league feed already answered
+        out[player] = {"team": team, "headshot": face_of(faces, player)}
+    return out
+
+
 def mlb_feed_rosters(feed: dict, games_by_player: dict | None = None,
                      faces: dict | None = None) -> dict:
     """The league's own active rosters, in the page's payload shape.

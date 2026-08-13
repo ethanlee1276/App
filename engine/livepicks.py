@@ -24,7 +24,8 @@ TEAM_MARKETS = {"moneyline", "spread", "team_total"}
 def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
                         games: list[dict],
                         progress: dict | None = None,
-                        longshots: list[dict] | None = None) -> list[dict]:
+                        longshots: list[dict] | None = None,
+                        identity: dict | None = None) -> list[dict]:
     """One row per open journaled pick whose game is LIVE right now.
 
     ``progress``: {normalized player name: {market: current value}} from
@@ -36,6 +37,11 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
     journal. Without them here, every home-run bet the site recommends maps
     to nothing and reports itself as unmapped, which is how a full night of
     live long shots renders as an empty tracker.
+
+    ``identity``: {player: {team, headshot}} from engine.rosters.identity_map
+    — who a player IS, independent of tonight's prices. THIS IS THE ONE
+    SOURCE HERE THAT SURVIVES FIRST PITCH, and the reason it had to exist
+    is below.
     """
     progress = progress or {}
     rec_idx = {(normalize_name(r.get("player", "")), r.get("market", "")): r
@@ -45,6 +51,38 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
     for r in (longshots or []):
         rec_idx.setdefault(
             (normalize_name(r.get("player", "")), r.get("market", "")), r)
+
+    # THREE PLACES TO LOOK, IN DESCENDING ORDER OF WHAT THEY KNOW.
+    #
+    # Ethan, 2026-08-13, on a Live Now screenshot: "it says it couldnt map
+    # the game AND its not showing the heashshots of the players." Both
+    # symptoms, one cause — a row was placed on the field ONLY by an exact
+    # (player, market) hit on tonight's board, and the face was taken from
+    # that same row, so a miss cost the game AND the photo together.
+    #
+    # And the board is precisely the thing that does not survive first
+    # pitch. A book pulls its pre-game pitcher markets when the game goes
+    # live; that prop then has no row tonight, no matter how correctly it
+    # was journaled two hours earlier. Every unmapped name in his
+    # screenshot was a pitcher (strikeouts, outs) and every mapped one a
+    # hitter on the home-run board, which is the fingerprint of market
+    # availability rather than of name matching.
+    #
+    # The page's own footnote already promised the opposite behaviour — "a
+    # bet stays here until it settles, even if the pick later drops off
+    # Tonight's Picks because prices moved" — so this was the mapping
+    # contradicting the design, not the design being unclear.
+    #
+    # 1. exact (player, market): the full context — team, opponent, leg,
+    #    face, and the ONLY row allowed to name this bet's market.
+    # 2. the same player on ANY market tonight: he is in a game and it is
+    #    the same game whatever he is priced for.
+    # 3. the identity map: the club he plays for, from the league's own
+    #    roster feed. Needs no board at all.
+    player_idx: dict[str, dict] = {}
+    for r in list(recommendations) + list(longshots or []):
+        player_idx.setdefault(normalize_name(r.get("player", "")), r)
+    id_idx = {normalize_name(k): v for k, v in (identity or {}).items()}
 
     def _game_for(team, opp=None, gn=0):
         matches = []
@@ -61,7 +99,31 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
                 if ((g.get("live") or {}).get("state")) == "live"]
         return (live or matches or [None])[0]
 
-    def _unmapped(b):
+    def _face(b):
+        """This player's photo, from whichever source still has one.
+
+        Deliberately independent of whether the bet could be placed on a
+        game: not knowing which field a man is on is no reason to stop
+        knowing what he looks like, and the unmapped rows losing their
+        faces is half of what Ethan reported.
+
+        Returns "" for anything that is not a player prop. `player` holds
+        a team ABBREVIATION on a moneyline and "AWAY@HOME" on a game
+        total, so a name lookup there is a lookup for a player who does
+        not exist — and any hit would be a collision, not a face.
+        """
+        m = b.get("market", "")
+        if m in TEAM_MARKETS or m == "total":
+            return ""
+        n = normalize_name(b.get("player", ""))
+        for src in (rec_idx.get((n, b.get("market", ""))),
+                    player_idx.get(n), id_idx.get(n)):
+            face = (src or {}).get("headshot") or ""
+            if face:
+                return face
+        return ""
+
+    def _unmapped(b, face=""):
         """An open bet the current board can't place — NEVER drop it: the
         section's count must always match the Record's, and a bet we can't
         map is a fact worth showing, not hiding."""
@@ -72,14 +134,14 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             "line": float(b.get("line") or 0),
             "odds": b.get("odds"), "stake_units": b.get("stake_units") or 0,
             "current": None, "status": "unmapped", "phase": "upcoming",
-            "team": "", "headshot": "", "game": {},
+            "team": "", "headshot": face, "game": {},
             "category": b.get("category", "main"),
         }
 
     out = []
     for b in open_bets:
         market = b.get("market", "")
-        rec = None
+        rec = where = None
         if market in TEAM_MARKETS:
             g = _game_for(b.get("player"))
         elif market == "total":
@@ -87,14 +149,21 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             g = next((x for x in games
                       if f"{x.get('away', '')}@{x.get('home', '')}" == key), None)
         else:
-            rec = rec_idx.get((normalize_name(b.get("player", "")), market))
-            if rec is None:
-                out.append(_unmapped(b))
+            n = normalize_name(b.get("player", ""))
+            rec = rec_idx.get((n, market))
+            # `rec` stays EXACT-MARKET ONLY below this line. It is the row
+            # that gets to say "Home Runs 0.5+", and a cross-market match
+            # would relabel a strikeouts bet with a home-run market label —
+            # trading an honest "unmapped" for a confident wrong one.
+            # Placement is a different question, so it gets its own answer.
+            where = rec or player_idx.get(n) or id_idx.get(n)
+            if where is None:
+                out.append(_unmapped(b, _face(b)))
                 continue
-            g = _game_for(rec.get("team"), rec.get("opponent"),
-                          rec.get("game_number") or 0)
+            g = _game_for(where.get("team"), where.get("opponent"),
+                          where.get("game_number") or 0)
         if not g:
-            out.append(_unmapped(b))
+            out.append(_unmapped(b, _face(b)))
             continue
         live = g.get("live") or {}
         state = live.get("state") or "scheduled"
@@ -170,11 +239,12 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             # row, and anything reconciling this list against the journal
             # will silently mismatch without it.
             "category": b.get("category", "main"),
-            "team": (rec or {}).get("team", b.get("player", "")),
+            "team": (where or {}).get("team", b.get("player", "")),
             # The face, for the tracker's identity column. Only a prop has
             # one — a team market's `player` field holds an ABBREVIATION,
-            # and a game total's holds "AWAY@HOME".
-            "headshot": (rec or {}).get("headshot", ""),
+            # and a game total's holds "AWAY@HOME" — which is why this asks
+            # the sources rather than inventing a lookup for every row.
+            "headshot": _face(b),
             "game": {"home": g.get("home"), "away": g.get("away"),
                      "game_number": g.get("game_number", 1),
                      "doubleheader": g.get("doubleheader", False),

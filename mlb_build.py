@@ -464,11 +464,27 @@ def main() -> None:
             if sit and isinstance(gd.get("live"), dict):
                 gd["live"]["situation"] = sit
         _ls = result.get("long_shots") or []
+        # Who these players ARE, from the league's roster feed rather than
+        # from tonight's prices. A book pulls its pre-game pitcher markets
+        # the moment the game goes live, so the board — the tracker's only
+        # source until now — stops being able to place exactly the bets
+        # that are in progress. Cached six hours; a failure here is a
+        # missing fallback, never a missing tracker.
+        try:
+            from engine import db as _lp_db
+            from engine.rosters import identity_map
+            _hconn = _lp_db.connect()
+            _ident = identity_map(_hconn, "mlb")
+            _hconn.close()
+        except Exception as _exc:                             # noqa: BLE001
+            print(f"  ⚠️  identity map unavailable: {_exc}")
+            _ident = {}
         rows = assemble_live_picks(open_today, result["recommendations"],
-                                   result["games"], progress, _ls)
+                                   result["games"], progress, _ls, _ident)
         rows += [r for r in assemble_live_picks(open_near,
                                                 result["recommendations"],
-                                                result["games"], progress, _ls)
+                                                result["games"], progress, _ls,
+                                                _ident)
                  if r["status"] != "unmapped"]
         result["live_picks"] = rows
         # Every other open bet, so the page's count always reconciles with
