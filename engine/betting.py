@@ -15,7 +15,7 @@ from .projection import Projection
 from .odds import (best_over_line, best_under_line, consensus_fair,
                    devig_two_way, expected_value)
 from .statmath import prob_over, prob_over_discrete, clamp
-from .calibrate import apply_temperature, correction_for
+from .calibrate import apply_temperature, calibrated, correction_for
 
 # --- calibration guards -----------------------------------------------------
 # The prop model is not yet calibrated to real outcomes, and live feeds
@@ -355,7 +355,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
         else:
             raw = prob_over(line, proj.mean, proj.std)
         # Calibrate before the side is chosen — see engine/mlb/betting.py.
-        return apply_temperature(raw, temp, bias)
+        return calibrated(sport, prop.market, raw)
 
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
     hit, edge, credible = temper_edge(hit_raw, fair, best.book,

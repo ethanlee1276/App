@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_PATH = Path(__file__).parent.parent / "data" / "models" / "calibration.json"
@@ -174,6 +174,15 @@ class Calibration:
     #: journal fitter's, because the ones already on disk are the deep
     #: fitter's and guessing the other way is the expensive mistake.
     basis: str = ""
+    #: The isotonic curve, when one won the bake-off — ``{}`` otherwise.
+    #: Stored beside the temperature rather than instead of it, so an
+    #: entry always carries a readable one-number summary and a reader
+    #: who ignores this field gets the old behaviour rather than none.
+    curve: dict = field(default_factory=dict)
+    #: How the winner was chosen: held-out scores for every candidate,
+    #: including the "apply nothing" baseline it had to beat. Kept so the
+    #: decision is reconstructable from the store instead of trusted.
+    bake_off: dict = field(default_factory=dict)
 
     @property
     def at_boundary(self) -> bool:
@@ -216,17 +225,95 @@ class Calibration:
             "brier_after": round(self.brier_after, 5),
             "market": self.market, "sport": self.sport,
             "fitted_at": self.fitted_at, "basis": self.basis,
+            "curve": self.curve, "bake_off": self.bake_off,
         }
+
+
+#: Share of the sample held back to judge the two candidate correctors.
+#: Chronological, not random: `logwalk.walk` emits pairs in time order and
+#: a random split leaks the same weeks into both halves, which is how a
+#: flexible fit passes a test it should fail.
+HOLDOUT_FRACTION = 0.30
+#: Below this the held-out slice cannot separate anything and the bake-off
+#: is skipped — temperature only, as before.
+MIN_HOLDOUT = 400
+
+
+def bake_off(pairs: list[tuple[float, int]],
+             min_samples: int = 200) -> tuple[str, dict]:
+    """Temperature vs isotonic vs nothing, judged out of sample.
+
+    Ethan, 2026-08-16, after asking what more the self-learning could do.
+    The answer his own Record page gives: the calibrator has one knob and
+    the error has more than one sign. A single temperature is a monotone
+    squeeze around 50%, so above 50% its correction is one-signed — and
+    MLB hits needs 66% pushed UP by 21 points and 83% pulled DOWN by 2.
+    Measured on that shape, the temperature fit takes a claimed 83% to
+    95% against a realised 81%: it makes the band FOURTEEN POINTS WORSE
+    than applying nothing at all, while still improving the average
+    because 92% of the samples sit in one middle bucket.
+
+    So both are fitted on the earlier part of the sample and scored on the
+    later part, and the winner has to beat doing NOTHING on that later
+    part or neither is adopted. Isotonic can bend where the data bends,
+    which also means it can bend where the noise bends; the held-out slice
+    is the only thing standing between those two, and it is not optional.
+
+    Returns ``(winner, detail)`` with winner in {"none", "temperature",
+    "isotonic"} and detail carrying every score, so the decision is
+    reconstructable from the store rather than trusted.
+    """
+    from . import isotonic as iso
+
+    n = len(pairs)
+    cut = int(n * (1.0 - HOLDOUT_FRACTION))
+    train, test = pairs[:cut], pairs[cut:]
+    if len(test) < MIN_HOLDOUT or len(train) < min_samples:
+        t, b = fit_correction(pairs, min_samples=min_samples)
+        return ("temperature" if (t, b) != (1.0, 0.0) else "none",
+                {"ran": False,
+                 "reason": f"held-out judge needs {MIN_HOLDOUT} later samples, "
+                           f"has {len(test)}"})
+
+    t, b = fit_correction(train, min_samples=min_samples)
+    curve = iso.fit(train)
+    scores = {"none": brier(test, 1.0, 0.0),
+              "temperature": brier(test, t, b),
+              "isotonic": iso.brier(test, curve) if curve else float("inf")}
+    winner = min(scores, key=scores.get)
+    return winner, {
+        "ran": True, "train_n": len(train), "test_n": len(test),
+        "knots": len(curve.knots),
+        "held_out": {k: round(v, 5) for k, v in scores.items()
+                     if v != float("inf")},
+        "margin": round(scores["none"] - scores[winner], 5),
+    }
 
 
 def fit(pairs: list[tuple[float, int]], sport: str = "", market: str = "",
         min_samples: int = 200) -> Calibration:
-    """Fit a calibration from settled predictions."""
+    """Fit a calibration from settled predictions.
+
+    Two candidate correctors compete and a held-out slice picks the
+    winner — see :func:`bake_off`. Whichever form wins is then refitted on
+    the WHOLE sample, which is the standard split: the held-out part
+    chooses the model, and the full data estimates it. Refitting is safe
+    here precisely because the choice was already made without it.
+    """
+    from . import isotonic as iso
+
+    winner, detail = bake_off(pairs, min_samples=min_samples)
     t, b = fit_correction(pairs, min_samples=min_samples)
+    curve = iso.fit(pairs) if winner == "isotonic" else iso.Curve()
+    if winner == "none":
+        t, b = 1.0, 0.0
+    after = (iso.brier(pairs, curve) if winner == "isotonic"
+             else brier(pairs, t, b))
     return Calibration(
         temperature=t, intercept=b, samples=len(pairs),
-        brier_before=brier(pairs, 1.0), brier_after=brier(pairs, t, b),
+        brier_before=brier(pairs, 1.0), brier_after=after,
         sport=sport, market=market,
+        curve=curve.to_dict() if curve else {}, bake_off=detail,
     )
 
 
@@ -269,6 +356,33 @@ def load(path: Path | str = DEFAULT_PATH) -> dict:
                 out[key] = (float(val["temperature"]), float(val.get("intercept", 0.0)))
             except (TypeError, ValueError):
                 continue
+    return out
+
+
+def load_curves(path: Path | str = DEFAULT_PATH) -> dict:
+    """``{"<sport>:<market>": Curve}`` for the entries that carry one.
+
+    Deliberately a SECOND accessor rather than a wider return from
+    `load`. That function's contract — a plain (temperature, intercept)
+    per key — is depended on by the runtime path, the journal fitter and
+    every test, and widening it to accommodate a shape most entries do
+    not have is how a small addition becomes a large one. An entry with
+    no curve is simply absent here.
+    """
+    from .isotonic import Curve
+    path = Path(path)
+    if not path.is_file():
+        return {}
+    try:
+        raw = json.loads(path.read_text())
+    except (ValueError, OSError):
+        return {}
+    out: dict = {}
+    for key, val in raw.items():
+        if isinstance(val, dict) and val.get("curve"):
+            c = Curve.from_dict(val["curve"])
+            if c:
+                out[key] = c
     return out
 
 
@@ -326,6 +440,46 @@ def correction_for(sport: str, market: str,
     return (temp, bias)
 
 
+_curves: dict | None = None
+
+
+def calibrated(sport: str, market: str, p: float,
+               path: Path | str | None = None) -> float:
+    """Apply whatever correction this market carries. THE entry point.
+
+    A stored isotonic curve wins over the temperature, because the curve
+    only exists when it beat the temperature on a held-out slice (see
+    `bake_off`). Everything else — the disable switch, the boundary rule
+    that refuses to apply a capped fit — behaves exactly as it does for
+    the temperature, since those are statements about whether a
+    correction may be trusted at all rather than about its shape.
+
+    A market with no curve takes the old path unchanged, so an entry
+    written before any of this existed prices identically to before.
+    """
+    global _curves
+    if not _enabled:
+        return float(p)
+    if _curves is None:
+        _curves = load_curves(DEFAULT_PATH if path is None else path)
+    temp, bias = correction_for(sport, market, path)
+    if (temp, bias) == (1.0, 0.0):
+        # correction_for neutralises a boundary fit; a curve fitted on the
+        # same unreliable market must not sneak past that veto.
+        curve = _curves.get(f"{sport}:{market}")
+        stored = load(DEFAULT_PATH if path is None else path).get(
+            f"{sport}:{market}")
+        if stored and stored[0] in (GRID_MIN, GRID_MAX):
+            return float(p)
+        if curve:
+            return curve.apply(p)
+        return float(p)
+    curve = _curves.get(f"{sport}:{market}")
+    if curve:
+        return curve.apply(p)
+    return apply_temperature(p, temp, bias)
+
+
 def is_reliable(sport: str, market: str,
                 path: Path | str | None = None) -> bool:
     """False when this market's fit ran to the edge of the search range.
@@ -357,5 +511,7 @@ def temperature_for(sport: str, market: str, path: Path | str = DEFAULT_PATH) ->
 
 def reset_cache() -> None:
     """Drop the cached calibration file (used by tests and after refitting)."""
+    global _curves
+    _curves = None
     global _cache
     _cache = None

@@ -15,7 +15,8 @@ from ..betting import (
     Recommendation, apply_selection, net_edge, favourite_surcharge,
     pick_side, temper_edge,
 )
-from ..calibrate import apply_temperature, correction_for, is_reliable
+from ..calibrate import (apply_temperature, calibrated, correction_for,
+                        is_reliable)
 from ..losspatterns import veto as lp_veto
 from ..odds import consensus_fair, expected_value
 from ..statmath import prob_over, clamp
@@ -155,7 +156,13 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         # probability would still decide OVER vs UNDER, so a model known to be
         # over-confident would keep picking the same side and the correction
         # would only ever shave the edge it had already committed to.
-        return apply_temperature(raw, temp, bias)
+        #
+        # `calibrated` applies whichever correction this market carries —
+        # an isotonic curve when one beat the temperature out of sample,
+        # the temperature otherwise. `temp`/`bias` are still read above
+        # because the LEDGER journals them per row; the correction that
+        # was live has to be recoverable from the row itself.
+        return calibrated("mlb", prop.market, raw)
 
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
     hit, edge, credible = temper_edge(hit_raw, fair, best.book,
