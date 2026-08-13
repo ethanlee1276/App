@@ -240,9 +240,17 @@ def test_the_export_and_the_page_carry_the_restated_view():
     # quote glyph it is set with. Hardcoding the curly form would break the
     # moment anyone straightened it and vice versa.
     fn = _flat(fn)
-    for needle in (_flat("At today's sizing"), "receipts as bet", "Restated ROI",
+    # "sizing" became "model" when the restatement started replaying the
+    # selection haircut as well as the stake — it re-prices now, not just
+    # re-sizes, and the heading has to say which.
+    for needle in (_flat("At today's model"), "receipts as bet", "Restated ROI",
                    "excluded"):
         assert needle in fn, needle
+    # The all-refused case must SAY so rather than render as an absence.
+    # `if (!r.settled) return ""` hid the single loudest thing this block
+    # can report: that today's model would not have placed one of them.
+    assert "refuses all" in fn, "the empty restatement needs its own copy"
+    assert "record above is unchanged" in fn
     assert "recRestatedSection(d.restated, scoped ? scope : null)" in app
     assert "recRestatedSection(d.restated, scope)" in app
 

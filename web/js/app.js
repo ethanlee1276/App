@@ -4311,22 +4311,46 @@ function recForecastLog(f) {
    invisible — and a learning loop nobody can see is indistinguishable from
    a static model. */
 function recRestatedSection(rs, sport) {
-  // The record re-sized on today's staking scale (1u = 1% of bankroll,
-  // grade caps, price-band ceilings). The official record stays the
-  // receipts of bets as they were made — this answers "what WOULD it
-  // read" without editing a settled row.
+  // The record re-priced AND re-sized by the model we have now: the
+  // selection haircut applied to the claim, then the price ladder on the
+  // stake. The official record stays the receipts of bets as they were
+  // made — this answers "what WOULD it read" without editing a row.
   if (!rs) return "";
   const r = sport ? (rs.by_sport || {})[sport] : rs.overall;
-  if (!r || !r.settled) return "";
+  if (!r) return "";
+  // NOT `!r.settled`. A restatement where the corrected probabilities
+  // clear nothing is the loudest result this block can produce — today's
+  // model would have refused the whole book — and returning "" made it
+  // render as an absence. It has its own copy now.
+  if (!r.settled) {
+    return !r.excluded ? "" : `
+      <div class="section-title">At today’s model
+        <span class="sub">— the same graded picks, re-priced and re-staked
+        by the board as it now runs.</span></div>
+      <div class="card" style="border-left:3px solid var(--brand)">
+        <p style="margin:0;font-size:var(--fs-md)">
+          <b style="color:var(--brand)">It refuses all
+          ${r.excluded.toLocaleString()} of them.</b> Corrected by the
+          selection haircut, not one of these claims still clears
+          break-even at the price it was taken at — so today’s model would
+          not have placed the bet.</p>
+        <p style="margin:8px 0 0;font-size:var(--fs-sm);color:var(--text-mute)">
+          That is a statement about the CLAIMS, not the results. It does not
+          mean these were bad nights; it means the probabilities behind them
+          were about nine points too high, which is the gap the haircut was
+          measured on. The record above is unchanged and stays unchanged —
+          those bets were made at those stakes and the money moved.</p>
+      </div>`;
+  }
   const roi = (r.roi ?? 0) * 100;
   const tone = (v) => v >= 0 ? "var(--good)" : "var(--bad)";
   return `
-    <div class="section-title">At today’s sizing
-      <span class="sub">— the same graded picks, re-staked by the current
-      model: 1u = 1% of bankroll, conviction plays near a unit, +200-or-longer
-      capped at a dime. The official record above is the receipts as bet;
-      this is what those picks would have returned under the sizing that now
-      governs the board.</span></div>
+    <div class="section-title">At today’s model
+      <span class="sub">— the same graded picks, re-priced by the selection
+      haircut and re-staked by the price ladder. Picks the corrected
+      probability no longer clears are dropped, not re-sized. The official
+      record above is the receipts as bet; this is what those nights would
+      have returned under the board as it now runs.</span></div>
     <div class="stats">
       <div class="tile"><div class="k">Restated record</div>
         <div class="v">${r.wins}-${r.losses}${r.pushes ? `-${r.pushes}` : ""}</div>

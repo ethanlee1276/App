@@ -3097,14 +3097,35 @@ def restated_performance(conn, sport: str | None = None) -> dict:
     made, including the era when every path sized off a twenty-unit
     ruler and a conviction play weighed the same as a lottery ticket.
     This view answers Ethan's question about that era honestly: what
-    would the record and ROI read if every settled pick had been staked
-    by the current model (1u = 1% of bankroll, grade caps, price-band
-    ceilings)? Read-only, computed fresh from journaled probability,
-    price and grade — history itself is never edited.
+    would the record and ROI read if every settled pick had been priced
+    and staked by the CURRENT model? Read-only, computed fresh from
+    journaled probability, price and grade — history itself is never
+    edited.
 
-    A pick today's Kelly refuses at its journaled probability and price
-    (the vig-eaten ones an old grader shipped) is EXCLUDED and counted,
-    because today's model would not have made that bet at all.
+    TWO changes are replayed, and the second is the one that moves it.
+
+    * The stake: the price ladder, 1u = 1% of bankroll, no grade cap.
+    * The CLAIM: the selection haircut. This is the important one.
+      Re-sizing alone answers "what if we had bet these differently",
+      which is a smaller question than the one worth asking — the
+      haircut changes WHICH bets exist, because a probability shifted
+      down by nine points stops clearing break-even at its own price and
+      Kelly refuses it outright. Restating the stakes while leaving the
+      claims uncorrected would describe a model that never existed:
+      today's sizing on yesterday's optimism.
+
+    A pick today's Kelly refuses at its HAIRCUT probability and journaled
+    price is EXCLUDED and counted, because today's model would not have
+    made that bet at all.
+
+    WHAT THIS IS NOT. It is not the record and the page must never let it
+    be read as one. Ethan, 2026-08-16: "our roi shows the right number
+    ... it should get better with our changes." The record cannot get
+    better from a code change — those bets were made at those stakes and
+    the money moved. What CAN answer his question is this: the same
+    nights, priced by the model we have now. If the changes are worth
+    anything, the gap between this line and the record is where it shows
+    up first — long before enough new bets settle to prove it forward.
 
     MAIN only, exactly like performance(): the headline record describes
     the picks the model stands behind, and the long-shot dimes have their
@@ -3113,7 +3134,7 @@ def restated_performance(conn, sport: str | None = None) -> dict:
     buckets exist to prevent.
     """
     from .odds import american_to_decimal
-    from .quality import STAKE_CAP_U
+    from .selectionfit import apply_haircut
     from .staking import kelly_units
     q = ("SELECT sport, status, odds, hit_prob, grade FROM bets "
          "WHERE status IN ('won','lost','push') AND category='main'")
@@ -3128,6 +3149,11 @@ def restated_performance(conn, sport: str | None = None) -> dict:
         if p is None or odds is None or not 0.0 < float(p) < 1.0:
             excluded += 1
             continue
+        # The haircut FIRST, on the sport that bet was made in. Applying
+        # it here and not at all is the difference between "what if we
+        # had sized these differently" and "what would today's model have
+        # done" — and only the second is worth printing beside a record.
+        p = apply_haircut(str(b["sport"] or "").lower(), float(p))
         # The grade no longer scales a stake — the price does (see
         # engine/staking.py's ladder). It still picks the Kelly fraction
         # used as the VETO, which is the only job it has left here.
