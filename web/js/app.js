@@ -804,6 +804,7 @@ function renderAll() {
   // 60s refresh replaces the data under an open game page — both need the
   // view redrawn once the new data is actually here.
   if (state.view === "game") renderGamePage();
+  if (state.view === "prop") renderPropPage();
   // Rosters live in their own per-sport payload rather than the slate, so
   // nothing above redraws them. Switching leagues while sitting on the tab
   // left the previous league's teams on screen under the new league's
@@ -2774,7 +2775,9 @@ function cardHTML(r) {
     : `Stake ${r.stake_units.toFixed(2)}u`;
   const stakeChip = r._ok ? `<span class="chip stake">${stakeTxt}</span>` : "";
   return `
-    <article class="card ${r._ok ? "" : "faded"}" style="--grade-color:${gradeColor(r.grade)}">
+    <article class="card openable ${r._ok ? "" : "faded"}"
+      data-prop="${escapeAttr(propId(r))}"
+      style="--grade-color:${gradeColor(r.grade)}">
       ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
       <div class="card-head">
         <div class="card-id">${playerAvatar(r.player, r.team, { headshot: r.headshot })}
@@ -3188,7 +3191,8 @@ function longShotCard(r) {
     .map((c) => `<div class="warning">${icon('warn')} ${escapeHtml(c)}</div>`).join("");
   const oppLabel = state.sport === "mlb" ? "Expected PAs" : "RZ chances";
   return `
-    <article class="card longshot" style="--grade-color:${gradeColor(r.grade)}">
+    <article class="card longshot openable" data-prop="${escapeAttr(propId(r))}"
+      style="--grade-color:${gradeColor(r.grade)}">
       ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
       <div class="card-head">
         <div class="card-id">${playerAvatar(r.player, r.team, { map: nflMap(), headshot: r.headshot })}
@@ -3225,6 +3229,202 @@ function longShotCard(r) {
    had to go hunt the board for the props that play in it. Each card is now
    the door into that game, and this view is the room behind it.
    ============================================================ */
+/* ============================================================
+   ONE PROP — the page behind a recommended pick.
+   ============================================================
+   Ethan, 2026-08-13: "we should add a feature where we can click on the
+   prop we recommend and it takes us to a page like the players page that
+   shows the last 5 games of information for that prop including the bar
+   graph we just added."
+
+   WHAT MADE THIS WORTH BUILDING RATHER THAN FAKING. Every card on the
+   board already carries a `logs` array the site had never rendered: 12-16
+   entries, each with the opponent, the week, whether it was at home, the
+   value, and the sport's own extra — wind for the NFL, the park and its
+   HR factor for baseball. `form` carries the same player's last 1 / 3 / 5
+   / 10 / season / career averages. All of it real, all of it already in
+   the payload, none of it on screen anywhere before this.
+
+   So the page states the case rather than restating the headline: the
+   chart he just approved at full width, the last five games with WHO
+   they came against, and the form ladder read against tonight's line so
+   the reader can see which way the recent trend cuts.
+
+   The prop's identity is (player, market, side, line) — not an index into
+   a list, which would point at a different pick the moment the board
+   rebuilds and a bookmarked link would quietly lie.  */
+function propId(r) {
+  return [r.player || "", r.market || "", r.side || "", r.line == null ? "" : r.line]
+    .join("|");
+}
+
+function allProps() {
+  const d = state.data || {};
+  return [...(d.recommendations || []), ...(d.long_shots || []),
+          ...(d.longshot_watch || [])];
+}
+
+/* ONE DELEGATED LISTENER, on the document. Prop cards are re-rendered
+   constantly — every slider move, every refresh, every sport switch — so
+   binding per card would leak a handler on each rebuild and miss every
+   card drawn after the bind. Delegation survives all of it.
+
+   `closest("a, button, input, label, select")` is the guard that matters:
+   these cards carry a Play link and My Bets controls, and a card-wide
+   click would otherwise swallow them. The inner control wins; anywhere
+   else on the card opens the prop. */
+document.addEventListener("click", (e) => {
+  if (e.target.closest("a, button, input, label, select, .chip")) return;
+  const card = e.target.closest("[data-prop]");
+  if (!card) return;
+  openProp(card.dataset.prop);
+});
+
+/* Keyboard parity: a card you can click is a control, and a control that
+   only answers a mouse is not finished. */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const card = e.target.closest && e.target.closest("[data-prop]");
+  if (!card || e.target.closest("a, button, input, select")) return;
+  e.preventDefault();
+  openProp(card.dataset.prop);
+});
+
+function openProp(id) {
+  state.propId = id;
+  switchView("prop");
+}
+
+/* The last N games, with the context the bar chart cannot draw. A bar
+   says how big; this says who against, where, and in what weather —
+   which is the difference between "he went under twice" and "he went
+   under twice against the two best defenses he has seen". */
+function propLogRows(r, logs, line, over, n) {
+  const won = (v) => (over ? v > line : v < line);
+  const sport = state.sport;
+  return logs.slice(0, n).map((g) => {
+    const v = Number(g.value);
+    const ok = Number.isFinite(v) && won(v);
+    const when = g.date ? String(g.date).slice(5)
+      : (g.week != null ? `Wk ${g.week}` : "—");
+    const extra = [];
+    if (g.wind != null) extra.push(`${g.wind} mph wind`);
+    if (g.park) extra.push(String(g.park));
+    if (g.park_hr != null) extra.push(`park ${Number(g.park_hr).toFixed(2)}× HR`);
+    return `<div class="pp-log">
+      <span class="pp-when">${escapeHtml(when)}</span>
+      <span class="pp-opp">${g.home ? "vs" : "@"} ${escapeHtml(
+        typeof teamName === "function" ? teamName(g.opponent) : (g.opponent || "?"))}</span>
+      <span class="pp-extra">${escapeHtml(extra.join(" · "))}</span>
+      <span class="pp-val ${ok ? "pos" : "neg"}">${
+        Number.isFinite(v) ? v : "—"}</span>
+      <span class="pp-hit ${ok ? "pos" : "neg"}">${ok ? "CLEARED" : "MISSED"}</span>
+    </div>`;
+  }).join("");
+}
+
+/* The form ladder against tonight's number. Averages on their own are
+   trivia; averages beside the line are the argument. */
+function propFormRows(form, line, over) {
+  const LABELS = [["last1", "Last game"], ["last3", "Last 3"],
+                  ["last5", "Last 5"], ["last10", "Last 10"],
+                  ["season", "This season"], ["career", "Career"],
+                  ["vs_opponent", "vs tonight’s opponent"]];
+  return LABELS.map(([k, label]) => {
+    const v = (form || {})[k];
+    if (v == null) return "";
+    const side = over ? v > line : v < line;
+    const diff = v - line;
+    return `<div class="pp-form">
+      <span class="pp-fk">${escapeHtml(label)}</span>
+      <span class="pp-fv">${Number(v).toFixed(1)}</span>
+      <span class="pp-fd ${side ? "pos" : "neg"}">${
+        diff >= 0 ? "+" : ""}${diff.toFixed(1)} vs line</span>
+    </div>`;
+  }).join("");
+}
+
+function renderPropPage() {
+  const host = document.getElementById("prop-body");
+  if (!host) return;
+  const r = allProps().find((x) => propId(x) === state.propId);
+  if (!r) {
+    // A bookmarked or stale link. Say so — a blank page reads as broken.
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("search", 30)}</div>
+      <h3>That pick is not on tonight’s board</h3>
+      <p>Props are rebuilt every slate, so a link to one only lives as long
+      as the pick does.</p>
+      <button class="btn ghost gp-back" id="pp-back">← Back to the board</button></div>`;
+    const b0 = document.getElementById("pp-back");
+    if (b0) b0.addEventListener("click", () => switchView("recommended"));
+    return;
+  }
+  const over = String(r.side || "OVER").toUpperCase() === "OVER";
+  const line = Number(r.line);
+  const logs = (r.logs || []).filter((g) => Number.isFinite(Number(g.value)));
+  const N = 5;
+  const shown = Math.min(N, logs.length);
+  const proj = r.projection != null
+    ? `<div class="metric"><div class="k">Projection</div><div class="v">${
+        Number(r.projection).toFixed(1)}${r.proj_low != null
+        ? ` <span class="sub">(${Number(r.proj_low).toFixed(0)}–${
+            Number(r.proj_high).toFixed(0)})</span>` : ""}</div></div>` : "";
+  const reasons = (r.reasons || []).slice(0, 8)
+    .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+  host.innerHTML = `
+    <button class="btn ghost gp-back" id="pp-back">← Back to the board</button>
+    <article class="card pp-card">
+      <div class="card-head">
+        <div class="card-id">${betMark(r, 56)}
+          <div>
+            <div class="player">${escapeHtml(r.player || "")}
+              <span class="ml-odds">${r.odds > 0 ? "+" : ""}${r.odds}</span></div>
+            <div class="subtitle">${escapeHtml([r.position,
+              typeof teamName === "function" ? teamName(r.team) : r.team,
+              r.opponent ? `vs ${typeof teamName === "function"
+                ? teamName(r.opponent) : r.opponent}` : ""]
+              .filter(Boolean).join(" · "))}</div>
+            <div class="pick">${escapeHtml(r.side || "")} ${
+              Number.isFinite(line) ? escapeHtml(String(line)) : ""} ${
+              escapeHtml(r.market_label || r.market || "")}</div>
+          </div>
+        </div>
+        ${r.grade ? `<span class="grade ${gradeClass(r.grade)}">${
+          escapeHtml(r.grade)}</span>` : ""}
+      </div>
+      <div class="metrics">
+        ${proj}
+        ${r.hit_prob != null ? `<div class="metric"><div class="k">Model</div>
+          <div class="v">${pct(r.hit_prob)}</div></div>` : ""}
+        ${r.edge != null ? `<div class="metric primary"><div class="k">Edge</div>
+          <div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>` : ""}
+        ${/* EV deliberately absent: the chart's own stat row below carries
+              it, and a number twice on one screen is the duplication Ethan
+              had just finished pointing at on the prop cards. Three
+              metrics also fill the row instead of wrapping one onto a
+              second line by itself. */""}
+      </div>
+      ${propAnalysis(r)}
+    </article>
+
+    ${shown ? `<div class="section-title">Last ${shown} game${shown === 1 ? "" : "s"}
+      <span class="sub">— every one measured against tonight’s
+      ${Number.isFinite(line) ? escapeHtml(String(line)) : "line"}, newest
+      first, with who it came against.</span></div>
+    <div class="card pp-logs">${propLogRows(r, logs, line, over, N)}</div>` : ""}
+
+    ${(r.form && Object.keys(r.form).length) ? `<div class="section-title minor">Form
+      <span class="sub">— the same player over longer windows, each read
+      against the same number.</span></div>
+    <div class="card pp-forms">${propFormRows(r.form, line, over)}</div>` : ""}
+
+    ${reasons ? `<div class="section-title minor">Why this pick</div>
+      <div class="card"><ul class="reasons">${reasons}</ul></div>` : ""}`;
+  const b = document.getElementById("pp-back");
+  if (b) b.addEventListener("click", () => switchView("recommended"));
+  if (typeof fillMeters === "function") fillMeters(host);
+}
+
 function openGame(gid) {
   state.gameId = gid;
   switchView("game");
@@ -10858,7 +11058,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
+const VIEW_ORDER = ["recommended", "prop", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
 
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -10874,9 +11074,16 @@ function switchView(name, push = false) {
   target.classList.add("active");
   // The game view has no tab of its own — it belongs to the board it came
   // from, so Recommended stays lit while you're inside a game.
-  const lit = name === "game" ? "recommended" : name;
+  // Neither the game page nor the prop page has a tab. Both belong to the
+  // board they were opened from, so Recommended stays lit inside them.
+  const lit = (name === "game" || name === "prop") ? "recommended" : name;
   document.querySelectorAll(".nav-btn").forEach((b) => setSelected(b, b.dataset.view === lit));
   syncNavHint(lit);
+  if (name === "prop") {
+    renderPropPage();
+    if (state.propId)
+      history.replaceState(null, "", `#prop/${encodeURIComponent(state.propId)}`);
+  }
   if (name === "game") {
     renderGamePage();
     if (state.gameId) history.replaceState(null, "", `#game/${encodeURIComponent(state.gameId)}`);
@@ -10944,6 +11151,7 @@ function initialView() {
     return;
   }
   if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
+  if (h.startsWith("prop/")) { openProp(decodeURIComponent(h.slice(5))); return; }
   if (h === "nba") {           // legacy hash from when NBA was standalone
     state.sport = "nba"; applySport(); load(); switchView("recommended"); return;
   }
@@ -11161,6 +11369,7 @@ function bind() {
   window.addEventListener("hashchange", () => {
     const h = (location.hash || "").replace("#", "");
     if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
+  if (h.startsWith("prop/")) { openProp(decodeURIComponent(h.slice(5))); return; }
     // An EMPTY hash is a destination, not a no-op: it is the entry the
     // first tab tap pushed on top of, so backing all the way out landed on
     // "/" with the last tab still on screen and the URL claiming the board.

@@ -4545,3 +4545,40 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 /* The bar wraps on a phone rather than scrolling; the plot is already
    full width at every size now that nothing shares the row with it. */
 @media (max-width: 720px) { .pa-who2 { margin-left: 0; } }
+
+
+/* --- One prop, its own page (Ethan, 2026-08-13) ------------------------
+   Reached by clicking a recommended pick. The card says it is a door the
+   way the game cards do — a cursor and a lift on hover — and the rows
+   below use the same agate idiom as the rest of the site's tables. */
+.card.openable { cursor: pointer; }
+.card.openable:hover { border-color: var(--brand-2); }
+.card.openable:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.pp-card { padding: 14px; }
+.pp-log, .pp-form {
+  display: grid; align-items: center; gap: 10px;
+  padding: 9px 12px; border-bottom: var(--hairline) solid var(--border-soft);
+}
+.pp-log { grid-template-columns: 62px 96px minmax(0, 1fr) 62px 84px; }
+.pp-form { grid-template-columns: minmax(0, 1fr) 70px 120px; }
+.pp-log:last-child, .pp-form:last-child { border-bottom: none; }
+.pp-when, .pp-fk { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; }
+.pp-opp { font-size: var(--fs-sm); font-weight: 700; }
+/* --text-mute, not --text-faint: the faint token is on an 8-use budget
+   precisely so every new column cannot argue itself into being the
+   exception. Size carries this column's rank instead of colour. */
+.pp-extra { color: var(--text-mute); font-size: var(--fs-2xs); min-width: 0;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-val, .pp-fv { text-align: right; font-weight: 800; font-size: var(--fs-md);
+                  font-variant-numeric: tabular-nums; }
+.pp-hit, .pp-fd { text-align: right; font-size: var(--fs-2xs); font-weight: 800;
+                  letter-spacing: .06em; font-variant-numeric: tabular-nums; }
+.pp-val.pos, .pp-hit.pos, .pp-fd.pos { color: var(--good); }
+.pp-val.neg, .pp-hit.neg, .pp-fd.neg { color: var(--bad); }
+.pp-fv { color: var(--text); }
+/* On a phone the context column is the one that gives: who and how much
+   are the two facts that must survive. */
+@media (max-width: 720px) {
+  .pp-log { grid-template-columns: 54px minmax(0, 1fr) 54px 72px; }
+  .pp-extra { display: none; }
+}

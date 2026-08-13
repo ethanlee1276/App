@@ -32,7 +32,8 @@ def test_every_player_prop_chart_is_bars_now():
     do not fit, so it keeps the bare bars.
     """
     assert "sparkline(r.recent_values" not in APP
-    assert APP.count("propAnalysis(r)") == 3
+    # Four now: the three boards, plus the prop page the boards open.
+    assert APP.count("propAnalysis(r)") == 4
     assert APP.count("gamelogBars(r.recent_values") == 1
     # The profile trend and the meme price chart stay lines: those ARE
     # continuous quantities, where the connection between points is real.
