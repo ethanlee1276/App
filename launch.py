@@ -3446,24 +3446,37 @@ def relearn(sport: str) -> None:
     times per sport, so nobody ever did, and every other model has been
     pricing with T=1.0 since the day it shipped.
 
-    ORDER MATTERS AND IT IS NOT ALPHABETICAL. Calibration goes first
-    because the other two fit through the pricing path and would
-    otherwise learn against an uncorrected probability, then have the
-    correction applied on top of what they learned. Each fitter already
-    disables the live correction while fitting its OWN quantity; running
-    them in this order keeps the same discipline across them.
+    ORDER MATTERS, AND THE FIRST VERSION HAD IT BACKWARDS. Calibration
+    ran first, on the theory that the other two should fit against a
+    corrected probability. Ethan's NFL run printed the refutation in its
+    own output — formfit, after adopting three dials:
+
+        "Adopted weights change the model — refit its temperature next,
+         on the new model: python3 calibrate.py --from-db data/history.db"
+
+    Which is right. The dial and the memory change what the model SAYS;
+    the temperature corrects what it says. Fit the correction first and
+    then move the model underneath it and the correction is describing a
+    model that no longer exists. NFL shipped that way for one run: three
+    adopted dials sitting under temperatures fitted before them.
+
+    So: dial, then memory, then temperature LAST — and the temperature is
+    refitted unconditionally rather than only when something was adopted,
+    because "adopted" is a per-market verdict and one market moving is
+    enough to make the whole sweep stale.
 
     It runs the real CLIs rather than reimplementing them, so there is
     exactly one definition of each fit and this command cannot drift from
     the thing it invokes.
     """
     import subprocess
-    steps = [("temperatures", [sys.executable, "calibrate.py",
-                               "--from-db", "data/history.db", "--sport", sport]),
-             ("recency dial", [sys.executable, "formfit.py",
+    steps = [("recency dial", [sys.executable, "formfit.py",
                                "--from-db", "data/history.db", "--sport", sport]),
              ("player memory", [sys.executable, "playerfit.py",
-                                "--from-db", "data/history.db", "--sport", sport])]
+                                "--from-db", "data/history.db", "--sport", sport]),
+             ("temperatures (last — the two above move the model)",
+              [sys.executable, "calibrate.py",
+               "--from-db", "data/history.db", "--sport", sport])]
     hist = ROOT / "data" / "history.db"
     if not hist.is_file():
         print(f"  No history DB at {hist}. Nothing to fit from — ingest that"
@@ -3673,12 +3686,35 @@ def show_learning() -> None:
 
     print(f"\n  PAPER MODE: {'ON' if on else 'off'}"
           + (f" since {first_paper}" if first_paper else ""))
-    print(f"  paper book   {paper.get('wins', 0)}-{paper.get('losses', 0)}"
-          f"  {paper.get('roi', 0) * 100:+.1f}% ROI on "
-          f"{paper.get('units_staked', 0):.1f}u")
-    print(f"  main book    {main.get('wins', 0)}-{main.get('losses', 0)}"
-          f"  {main.get('roi', 0) * 100:+.1f}% ROI on "
-          f"{main.get('units_staked', 0):.1f}u")
+
+    # WITH ITS ERROR BAR, ALWAYS. Ethan read "+17.8% ROI" off this line
+    # and asked why the site disagreed. The site was right and the line
+    # was underdressed: 74 settled bets carry a standard error near 12
+    # points, so +17.8% and 0% are not distinguishable, and a naked
+    # percentage on a sample that small invites exactly the read it got.
+    import math
+
+    def _book(label, perf):
+        n = (perf.get("wins", 0) or 0) + (perf.get("losses", 0) or 0)
+        roi = perf.get("roi", 0) or 0.0
+        staked = perf.get("units_staked", 0) or 0.0
+        # Per-bet return SD from the realised win rate and average payout,
+        # which is what a mixed-price book actually swings on.
+        hit = (perf.get("wins", 0) or 0) / n if n else 0.0
+        avg_b = ((perf.get("net_units", 0) or 0) / max(perf.get("wins", 1), 1)
+                 / max(staked / n, 1e-9)) if n and perf.get("wins") else 1.0
+        avg_b = min(max(avg_b, 0.5), 5.0)
+        se = (math.sqrt(max(hit * (1 - hit), 1e-9)) * (1 + avg_b)
+              / math.sqrt(n)) if n else 0.0
+        z = (roi / se) if se else 0.0
+        verdict = ("distinguishable from zero" if abs(z) >= 2
+                   else f"{abs(z):.1f} SE from zero — not yet a result")
+        print(f"  {label:<12} {perf.get('wins', 0)}-{perf.get('losses', 0)}"
+              f"  {roi * 100:+.1f}% ± {se * 100:.1f}% on {staked:.1f}u"
+              f"   {verdict}")
+
+    _book("paper book", paper)
+    _book("main book", main)
     print("  settled rows by book: "
           + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
     print("\n  Paper mode changes exactly two things: the row's category, and"

@@ -5912,7 +5912,7 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
   return subtabbedHTML("record", [
     ["receipts", "Receipts",
      "what happened, in units — the curve, the splits, every settled pick",
-     receipts],
+     (scoped ? "" : recPaperBook(d.paper, d.overall, d.paper_mode)) + receipts],
     ["products", "By product",
      "the buckets deliberately kept out of the main P&L",
      (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recParlaySection(d.parlays))
@@ -5940,6 +5940,64 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      "whether this account survives being right",
      (scoped ? "" : recHealthSection(d.account_health))],
   ]);
+}
+
+/* The paper book, which the export has always carried and the page has
+   never shown. Ethan, 2026-08-16: "so did we learn something in paper
+   mode??? i see its +17% roi but im not seeing that reflected in the roi
+   on the website." He was right that it was missing and right to ask —
+   `record.json` carries `paper` and `paper_mode` and nothing read either.
+
+   The block leads with the fact that makes the comparison mean something:
+   paper mode does not change a pick, a price or a settlement. It changes
+   the row's category and the dollar column. So a gap between the two
+   books is not something paper mode DID — it is an era effect, and the
+   question it raises is what else changed on that date. */
+function recPaperBook(paper, main, on) {
+  if (!paper || !(paper.settled || paper.wins || paper.losses)) return "";
+  const band = (perf) => {
+    const n = (perf.wins || 0) + (perf.losses || 0);
+    if (!n) return null;
+    const hit = (perf.wins || 0) / n;
+    const staked = perf.units_staked || 0;
+    let b = perf.wins ? ((perf.net_units || 0) / perf.wins)
+                        / Math.max(staked / n, 1e-9) : 1;
+    b = Math.min(Math.max(b, 0.5), 5);
+    const se = Math.sqrt(Math.max(hit * (1 - hit), 1e-9)) * (1 + b) / Math.sqrt(n);
+    return { n, roi: perf.roi || 0, se, z: se ? (perf.roi || 0) / se : 0 };
+  };
+  const rows = [["Paper — no money on it", paper], ["Main — money on it", main]]
+    .map(([label, perf]) => {
+      const s = band(perf);
+      if (!s) return "";
+      const sig = Math.abs(s.z) >= 2
+        ? "distinguishable from zero"
+        : `${Math.abs(s.z).toFixed(1)} SE from zero — not yet a result`;
+      return `<div style="display:flex;gap:12px;align-items:baseline;
+                  padding:9px 0;border-bottom:var(--hairline) solid var(--border-soft)">
+        <span style="flex:1;min-width:0">${escapeHtml(label)}
+          <span class="sub">${perf.wins || 0}&ndash;${perf.losses || 0} ·
+          ${(perf.units_staked || 0).toFixed(1)}u staked</span></span>
+        <span style="font-variant-numeric:tabular-nums" class="${toneOf(s.roi)}">
+          <strong>${s.roi >= 0 ? "+" : ""}${(s.roi * 100).toFixed(1)}%</strong>
+          ± ${(s.se * 100).toFixed(1)}%</span>
+        <span class="chip" style="flex-shrink:0">${sig}</span></div>`;
+    }).join("");
+  return `<div class="section-title">The two books
+      <span class="sub">— the same model with the money on and off.</span></div>
+    <div class="card">
+      <p style="margin:0 0 10px;font-size:var(--fs-sm);color:var(--text-mute)">
+        Paper mode${on ? " is on and" : ""} changes two things: which book a row
+        is filed in, and the dollar column. The pick, the price, the settlement
+        and the CLV are identical. So a gap between these two lines is not
+        something paper mode did — it is an <b style="color:var(--text)">era</b>
+        effect, and what it asks is what else changed on the date they split.</p>
+      ${rows}
+      <p style="margin:10px 0 0;font-size:var(--fs-sm);color:var(--text-faint)">
+        Both figures carry a standard error because neither book is large. A
+        percentage on 74 bets without one is how a coin flip gets read as a
+        turnaround.</p>
+    </div>`;
 }
 
 /* The stale-line sampler: every pre-game scanner flag, journaled at a flat

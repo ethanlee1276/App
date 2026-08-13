@@ -40,6 +40,17 @@ MARKET_LABELS = {**_GEN_LABELS, **_MLB_LABELS}
 SPORT_MARKETS = {
     "mlb": ["total_bases", "hits", "strikeouts"],
     "nfl": ["pass_yds", "rush_yds", "rec_yds", "receptions"],
+    # Hoops props go through their own pricing machinery but land in the
+    # SAME history table, keyed (sport, market) — so the deep fit works
+    # here the moment game logs are ingested. It was never wired up, which
+    # is why `--learning` showed zeros for both: `--sport` validates
+    # against this dict, so nba was not even a legal value to type.
+    "nba": ["pts", "reb", "ast", "fg3m", "pra"],
+    "wnba": ["pts", "reb", "ast", "fg3m", "pra"],
+    # CFB and UFC are deliberately absent. College is priced at GAME level
+    # (spread / total / moneyline) and has no player-prop logs to walk, and
+    # UFC has no game logs at all. Both learn from the journal only, and
+    # listing them here would offer a fit that can never run.
 }
 
 
