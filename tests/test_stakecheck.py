@@ -153,8 +153,25 @@ def test_it_never_writes_to_the_ledger():
     own subject is not a diagnostic."""
     src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
     assert "mode=ro" in src and "uri=True" in src
-    for verb in ("INSERT", "UPDATE", "DELETE", "DROP", "conn.commit"):
-        assert verb not in src, f"{verb} in a read-only tool"
+    # CODE, NOT PROSE. The first version scanned the whole file for the
+    # bare words and fired on the comment "enforcing the floor by
+    # DROPPING the bet" — a false positive that invites the next person to
+    # reword their explanation rather than take the guard seriously.
+    # Comments and docstrings are stripped, so what is scanned is what
+    # actually executes.
+    import io as _io
+    import tokenize as _tok
+    TRIPLE = ('"' * 3, "'" * 3)
+    parts = []
+    for t in _tok.generate_tokens(_io.StringIO(src).readline):
+        if t.type == _tok.COMMENT:
+            continue
+        if t.type == _tok.STRING and t.line.strip().startswith(TRIPLE):
+            continue                      # a docstring, not a query
+        parts.append(t.string)
+    code = " ".join(parts)
+    for verb in ("INSERT", "UPDATE", "DELETE", "DROP ", "conn.commit"):
+        assert verb not in code, f"{verb.strip()} in a read-only tool"
 
 
 def test_the_flat_control_pays_the_real_price():
@@ -2074,6 +2091,67 @@ def test_the_information_finding_doc_still_matches_the_tool():
     assert "cannot be told apart from noise" in sc
     assert "test_auc_ignores_the_vig_because_it_is_rank_based" in \
         pathlib.Path(__file__).read_text()
+
+
+def test_the_floor_report_says_whether_the_bug_is_still_live():
+    """Ethan, 2026-08-13, reading the sub-floor block: it named
+    `correlation.apply_exposure_caps` as the culprit and stopped there.
+
+    That was true when written and stopped being true on 2026-08-09,
+    when apply_exposure_caps began enforcing the floor by DROPPING the
+    bet instead of rescaling past it (commit 89b2d03). All 43 sub-floor
+    rows in his journal predate that. Read as written, the message sends
+    someone to patch working code — a diagnostic that cannot tell a fixed
+    bug from a live one is worse than one that says nothing.
+
+    The dates decide it, so the dates are printed and the verdict follows
+    them.
+    """
+    import io
+    import contextlib
+    import stakecheck
+
+    def run(dates_and_stakes):
+        rows = [_row(player=f"P{i}", category="main", stake_units=st,
+                     date=d, status="lost", pnl_units=-1.0)
+                for i, (d, st) in enumerate(dates_and_stakes)]
+        path = _db(rows)
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                stakecheck.main_argv(["--db", path, "--since", "2026-01-01"]) \
+                    if hasattr(stakecheck, "main_argv") else _run_main(path)
+        finally:
+            os.unlink(path)
+        return buf.getvalue()
+
+    def _run_main(path):
+        import sys as _s
+        was = _s.argv
+        _s.argv = ["stakecheck.py", "--db", path, "--since", "2026-01-01"]
+        try:
+            stakecheck.main()
+        finally:
+            _s.argv = was
+
+    # Everything predates the fix — history, not a defect.
+    out = run([("2026-07-25", 0.05), ("2026-08-01", 0.07)]
+              + [("2026-08-02", 1.0)] * 20)
+    assert "ALL PREDATE the fix" in out, out
+    assert "Nothing to fix in the code" in out
+
+    # One row after it — the bug would be back, and it must say so.
+    out2 = run([("2026-07-25", 0.05), ("2026-08-12", 0.06)]
+               + [("2026-08-13", 1.0)] * 20)
+    assert "STILL emitting sub-floor stakes" in out2, out2
+
+
+def test_the_floor_fix_date_is_a_named_constant():
+    """A date buried in a print is a date nobody updates when the next
+    fix lands."""
+    src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
+    assert 'FLOOR_FIX_DATE = "2026-08-09"' in src
+    assert "89b2d03" in src, "the commit that changed it should be named"
 
 
 if __name__ == "__main__":

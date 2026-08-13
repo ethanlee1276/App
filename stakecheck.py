@@ -35,6 +35,12 @@ READ-ONLY. It opens the ledger in immutable mode and writes nothing.
 
 from __future__ import annotations
 
+#: When `correlation.apply_exposure_caps` started enforcing the stake floor
+#: by DROPPING sub-floor bets instead of rescaling past them (commit
+#: 89b2d03). Rows older than this are receipts from the era of the bug;
+#: rows newer than it would mean the bug is back.
+FLOOR_FIX_DATE = "2026-08-09"
+
 import argparse
 import os
 import sqlite3
@@ -392,12 +398,36 @@ def report(rows: list[dict]) -> None:
           f"flattens the line")
     if below:
         lo = min(r["stake_units"] for r in below)
+        smallest = min(below, key=lambda r: r["stake_units"])
         print(f"    smallest: {lo:.3f}u  "
-              f"({below[0]['player']} {below[0]['market']}, "
-              f"{below[0]['date']})")
-        print(f"    `staking.to_units` cannot emit these. Whatever produced "
-              f"them ran AFTER\n         the floor was applied — see "
-              f"`correlation.apply_exposure_caps`.")
+              f"({smallest['player']} {smallest['market']}, "
+              f"{smallest['date']})")
+        # IS THIS STILL HAPPENING, OR IS IT HISTORY? The first version of
+        # this message said "whatever produced them ran AFTER the floor
+        # was applied — see correlation.apply_exposure_caps" and left it
+        # there. That was true when it was written and stopped being true
+        # on 2026-08-09, when apply_exposure_caps started enforcing the
+        # floor by DROPPING rather than rescaling past it. Ethan read the
+        # message on 2026-08-13 and reasonably took it as an open defect.
+        #
+        # A diagnostic that cannot tell a fixed bug from a live one sends
+        # someone to patch working code. The dates decide it, so the dates
+        # are printed.
+        dates = sorted(r["date"] for r in below if r["date"])
+        after = [d for d in dates if d >= FLOOR_FIX_DATE]
+        span = f"{dates[0]} → {dates[-1]}" if dates else "unknown dates"
+        print(f"    all of them: {span}")
+        if not after:
+            print(f"    ALL PREDATE the fix on {FLOOR_FIX_DATE}, when "
+                  f"`correlation.apply_exposure_caps`\n         began "
+                  f"enforcing the floor by DROPPING the bet instead of "
+                  f"scaling past it.\n         Nothing to fix in the code; "
+                  f"these are receipts from before it.")
+        else:
+            print(f"    {len(after)} of them are dated ON OR AFTER the "
+                  f"{FLOOR_FIX_DATE} fix, so something\n         is STILL "
+                  f"emitting sub-floor stakes — start at "
+                  f"`correlation.apply_exposure_caps`.")
 
     # --- intended vs actual ---------------------------------------------
     have = [(r, intended_stake(r)) for r in rows]
