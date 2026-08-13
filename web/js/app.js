@@ -2302,6 +2302,36 @@ const VENUE_FAMILY = { nfl: "football", cfb: "football", mlb: "baseball",
    whole failure mode, and nothing else in the chain can detect it. */
 const VENUE_ART_V = "20260812";
 const venueSrc = (path) => `${path}?v=${VENUE_ART_V}`;
+/* WHICH COLOUR SLOTS HOLD ART THAT MATCHES THE REST.
+//
+// Ethan, 2026-08-13, after the cache-bust shipped: "the stadium issue is
+// not fixed." He was right and my diagnosis was wrong. Busting the cache
+// fixed a real problem, but not HIS problem.
+//
+// `variants/` holds TWO GENERATIONS. The three `*-steel.jpg` are the
+// neutral SINGLES from the 2026-08-11 batch — full 1536x1024 renders,
+// sharp, detailed. The fifteen colour files are TILES CUT OUT OF a
+// five-colour sheet, ~1000-1500px each and visibly softer: different
+// framing, less detail, heavier tint. Put a steel card beside a gold one
+// and they do not look like the same site.
+//
+// And it is DETERMINISTIC, not random, which is why a hard refresh could
+// never fix it: the rule below picks the slot from the home team's kit,
+// so a neutral-kitted club shows the sharp render and a colour-kitted
+// club shows a sheet tile, the same way every time. "Some games old, some
+// new" is exactly what that produces.
+//
+// Until a matched colour set exists, only the generation we have all of
+// is used. The colour rule below is deliberately LEFT INTACT rather than
+// deleted — it is correct, it is tested, and the day fifteen matching
+// renders land in incoming/ this is one line to revert. Ethan chose this
+// over the alternatives on 2026-08-13, knowing it costs the tinting.
+//
+// TO RESTORE THE COLOURS: generate colour renders at the steel files'
+// quality, drop them in web/img/venues/incoming/ named per the README,
+// run `python3 tools/venues_ingest.py`, then add their names here. */
+const VENUE_MATCHED = new Set(["steel"]);
+
 function venueVariant(team) {
   // First team colour with real chroma decides the lighting; neutral
   // kits (black, silver, white) fall through to the steel render, which
@@ -2324,7 +2354,9 @@ function venueVariant(team) {
       const raw = Math.abs(h - a) % 360, dd = Math.min(raw, 360 - raw);
       if (dd < bd) { bd = dd; best = name; }
     }
-    return best;
+    // The colour this kit earns — served only while that slot's art
+    // belongs to the same generation as everything else on screen.
+    return VENUE_MATCHED.has(best) ? best : "steel";
   }
   return "steel";
 }

@@ -4,25 +4,27 @@ Ethan, 2026-08-16, at work: "the stadiums will show old renders of the
 stadiums on some games and the new renders on the others" — on the site
 AND on the phone.
 
-Nothing was wrong with the files. `web/img/venues/variants/` holds one
-generation and the per-team photo directories are empty, so every card
-falls to a variant. The bug is that the variants were REBUILT three times
-(the 4x cinematic upscale, the re-cut from the PNG original, the
-colour-seam slicer) and every rebuild wrote the same filenames.
-`baseball-blue.jpg` is a different picture than it was last week and its
-URL never changed, so a browser holding the old bytes has no reason to
-ask for them again.
+TWO BUGS WERE HERE, AND THE FIRST DIAGNOSIS ONLY FOUND THE SMALLER ONE.
 
-That is also why it looked random rather than broken: which cards are
-stale depends on which VARIANT each one uses and when that particular
-file entered the cache. Two cards on one screen legitimately pull
-different files, so one can be current and the other a week old.
+The stale-cache one is real: the variants were rebuilt three times (the
+4x cinematic upscale, the re-cut from the PNG original, the colour-seam
+slicer) and every rebuild wrote the SAME filenames, so a browser holding
+the old bytes had no reason to ask again. The version token fixes it, and
+the first half of this file pins it.
 
-These tests pin the property that fixes it — every venue URL carries the
-version token — because the failure is invisible in development. A fresh
-checkout has an empty cache and looks perfect no matter what the markup
-says; only a browser that visited before the rebuild can see it, which
-means code review is the only place it can be caught.
+But Ethan hard-refreshed and reported back: "the stadium issue is not
+fixed." The bigger cause was in the files all along. `variants/` holds
+TWO GENERATIONS — the three `*-steel.jpg` are the full 1536x1024 neutral
+renders from the 2026-08-11 batch, and the fifteen colour files are TILES
+CUT OUT OF a five-colour sheet, ~1000-1500px and visibly softer. The
+picker chooses between them from the home team's kit, so which cards look
+old is deterministic and permanent. That is what "some games old, some
+new" actually was, and no cache token could ever have touched it.
+
+Both failures are invisible in development, which is why they are pinned
+here rather than trusted to a look: a fresh checkout has an empty cache,
+and a developer who never sets two differently-kitted teams side by side
+sees nothing wrong. Code review is the only place either one is catchable.
 """
 
 import os
@@ -82,6 +84,39 @@ def test_the_fallback_hop_keeps_the_version():
     for m2 in re.finditer(r'data-alt="([^"]*)"', APP):
         if "img/venues/" in m2.group(1):
             assert "venueSrc(" in m2.group(1), m2.group(1)
+
+
+def test_only_one_generation_of_venue_art_can_reach_a_card():
+    """Ethan, 2026-08-13, after the cache-bust shipped: "the stadium issue
+    is not fixed."
+
+    He was right, and the first diagnosis was wrong. `variants/` holds TWO
+    generations: the three `*-steel.jpg` are full 1536x1024 neutral
+    renders, and the fifteen colour files are tiles cut out of a colour
+    sheet at ~1000-1500px, visibly softer and more heavily tinted. The
+    picker chooses between them from the home team's kit, so which cards
+    look old is DETERMINISTIC — which is why no amount of refreshing ever
+    fixed it, and why it reads as "some games" rather than "the site".
+
+    The colour rule stays; only the slots with matched art are served.
+    """
+    assert "VENUE_MATCHED" in APP
+    m = re.search(r"const VENUE_MATCHED = new Set\(\[([^\]]*)\]\)", APP)
+    assert m, "the matched-art set must be one named, greppable constant"
+    slots = {x.strip().strip('"\'') for x in m.group(1).split(",") if x.strip()}
+    assert slots, "an empty set would serve nothing"
+    # Every slot named here must be backed by a file that exists, or the
+    # gate hands out 404s instead of pictures.
+    variants = os.path.join(ROOT, "web", "img", "venues", "variants")
+    have = set(os.listdir(variants)) if os.path.isdir(variants) else set()
+    for slot in slots:
+        for fam in ("football", "baseball", "basketball"):
+            assert f"{fam}-{slot}.jpg" in have, f"{fam}-{slot}.jpg is missing"
+    # And the colour rule itself must survive — deleting it would make
+    # restoring the colours a rewrite instead of a one-line revert.
+    assert "VENUE_MATCHED.has(best)" in APP
+    for colour in ("red", "gold", "green", "blue", "violet"):
+        assert f'"{colour}"' in APP, f"the {colour} rung was deleted, not gated"
 
 
 if __name__ == "__main__":
