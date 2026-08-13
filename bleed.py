@@ -381,6 +381,21 @@ def split_report(rows: list[dict], on: str) -> int:
     print("=" * 74)
     print(f"BEFORE {on}  vs  {on} ONWARD")
     print("=" * 74)
+    # SAY WHAT WAS LOADED. This tool and `performance()` disagreed about
+    # the size of the paper book — 118 here against 74 on the site — and
+    # the disagreement was invisible because neither printed its
+    # population. They apply different filters (performance requires
+    # stake_units > 0 and counts pushes; this does neither), and a
+    # journal that grows between two commands can separate them again.
+    # A report that does not name its own sample cannot be reconciled
+    # with another one.
+    _books = sorted({str(b.get("category") or "main") for b in rows})
+    _dates = [str(b.get("date") or "") for b in rows if b.get("date")]
+    print(f"  loaded {len(rows)} settled row(s) · book(s): {', '.join(_books)}"
+          + (f" · {min(_dates)} to {max(_dates)}" if _dates else "")
+          + "\n  (won/lost only; no stake filter — `performance()` on the site"
+            " counts pushes\n   and requires stake_units > 0, so its totals"
+            " can differ from these)\n")
     if not before or not after:
         print(f"  One side is empty ({len(before)} before, {len(after)} after)."
               f" Nothing to compare.")
