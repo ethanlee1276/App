@@ -2136,7 +2136,7 @@ function gameBetCard(r) {
       ${confMeter(r)}
       ${(r.recent_values || []).length > 2
         ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
-             ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
+             ${gamelogBars(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
         : ""}
       <div class="chips">${stakeChip}${condChip}${tierChip}</div>
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
@@ -2757,7 +2757,7 @@ function cardHTML(r) {
       ${confMeter(r)}
       ${(r.recent_values || []).length > 2
         ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
-             ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
+             ${gamelogBars(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
         : ""}
       <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${booksChip(r)}${stakeChip}</div>
       ${corr}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
@@ -3116,7 +3116,7 @@ function watchlistHTML(watch, mlb) {
     const ev = (r.ev_per_unit * 100).toFixed(0);
     const evColor = r.ev_per_unit > 0 ? "var(--good, #3ddc84)" : "var(--text-mute, #889)";
     const spark = (r.recent_values || []).length > 2
-      ? sparkline(r.recent_values, { line: 0.5, stroke: teamPrimary(r.team), w: 64, h: 22 })
+      ? gamelogBars(r.recent_values, { line: 0.5, stroke: teamPrimary(r.team), w: 64, h: 22 })
       : "";
     return `<div class="drow" style="display:flex;align-items:center;gap:12px;padding:7px 14px;
         border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden">
@@ -3175,7 +3175,7 @@ function longShotCard(r) {
       ${confMeter(r)}
       ${(r.recent_values || []).length > 2
         ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
-             ${sparkline(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
+             ${gamelogBars(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
         : ""}
       <div class="chips"><span class="chip stake">${stakeTxt}</span></div>
       <div class="ls-primary">${escapeHtml(r.primary_reason)}</div>

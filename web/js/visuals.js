@@ -1061,6 +1061,93 @@ function countStrip(live) {
     </span>`;
 }
 
+/* ---------------- Game-log bars (a prop against its line) ---------------- */
+/* Ethan, 2026-08-16: "instead of line charts for the player stats we should
+   be using bar graphs instead. They are easier to read and we can label
+   things better."
+
+   He is right, and the reason is stronger than preference. A line implies
+   the value moved CONTINUOUSLY between two points, and there is no such
+   thing between Tuesday's game and Thursday's — the player did not pass
+   through 1.4 hits on Wednesday. These are independent measurements
+   against a threshold, which is a bar's job: one mark per game, sitting
+   on a common baseline, read against a rule.
+
+   WHAT THE COLOUR IS ALLOWED TO CARRY. Cleared/missed is drawn in the
+   site's status pair, and the validator is blunt about that pair:
+   #42C268 against #DF5953 is ΔE 7.5 under deuteranopia — inside the 6–8
+   floor band, which is legal ONLY with a second, non-colour encoding.
+   Red-green is the textbook CVD collision and this is the textbook use
+   of it.
+
+   So colour here is REDUNDANT, never load-bearing. The threshold rule is
+   drawn, and a bar clearing it is taller than it — position against a
+   visible line reads with no colour vision at all. The count label says
+   the same fact in words. Colour is the third telling, not the first.  */
+function gamelogBars(values, opts = {}) {
+  const w = opts.w || 260, h = opts.h || 46;
+  const padX = 2, padTop = 4, base = h - 11;      // room for the count line
+  const line = opts.line;
+  const raw = [...(values || [])];
+  const rawLabs = opts.labels ? [...opts.labels] : null;
+  const keep = raw.map((v, i) => ({ v: Number(v), i }))
+    .filter((d) => Number.isFinite(d.v));
+  if (!keep.length) return `<svg width="${w}" height="${h}"></svg>`;
+  // Newest-first in, oldest-first out — a bar chart reads left to right as
+  // time, and the newest game is the one the eye should land on last.
+  const capped = keep.slice(0, Math.max(3, Math.floor(w / 9))).reverse();
+  const data = capped.map((d) => d.v);
+  const labs = rawLabs ? capped.map((d) => rawLabs[d.i]) : null;
+
+  // The scale starts at ZERO. A bar's length IS its value, so a clipped
+  // baseline makes a 2 look twice a 1.5 — the single most common way a
+  // bar chart lies, and the reason this is not just a restyled sparkline.
+  const hi = Math.max(...data, line ?? 0) || 1;
+  const n = data.length;
+  const slot = (w - padX * 2) / n;
+  const bw = Math.max(3, slot - 2);               // 2px surface gap
+  const bx = (i) => padX + i * slot + (slot - bw) / 2;
+  const by = (v) => base - (v / hi) * (base - padTop);
+
+  const cleared = line == null ? null
+    : data.filter((v) => v > line).length;
+  const bars = data.map((v, i) => {
+    const top = by(v);
+    // A ZERO IS DATA. At `Math.max(1, ...)` a 0-hit game rendered as a
+    // 1px sliver, which on a dark panel is indistinguishable from empty
+    // space — so a night the player was blanked read as a night he did
+    // not play. Caught by looking at the render, not by any check: the
+    // arithmetic was right and the picture lied. A floor of 3px makes a
+    // blank game a visible, clearly-missed bar sitting on the baseline.
+    const hgt = Math.max(3, base - top);
+    const c = line == null ? (opts.stroke || "var(--brand)")
+      : (v > line ? "var(--good)" : "var(--bad)");
+    const tip = (labs && labs[i] ? labs[i] + " — " : "") + v;
+    // rx rounds the data-end; the bar is anchored to the baseline.
+    return `<rect x="${bx(i).toFixed(1)}" y="${(base - hgt).toFixed(1)}"
+      width="${bw.toFixed(1)}" height="${hgt.toFixed(1)}" rx="${Math.min(2, bw / 2)}"
+      fill="${c}" opacity="${i === n - 1 ? 1 : 0.72}"
+      data-tip="${escapeAttr(tip)}" style="pointer-events:all;cursor:pointer"/>`;
+  }).join("");
+
+  const rule = line == null ? "" : `
+    <line x1="0" y1="${by(line).toFixed(1)}" x2="${w}" y2="${by(line).toFixed(1)}"
+      stroke="var(--warn)" stroke-width="1" stroke-dasharray="4 3" opacity=".85"/>`;
+  // The label Ethan asked for. Text in a text token, never the series
+  // colour, and it states the fact the colours encode so the chart does
+  // not depend on telling green from red.
+  const label = cleared == null ? "" : `
+    <text x="0" y="${h - 1}" fill="var(--text-mute)" font-size="9"
+      font-variant-numeric="tabular-nums">${cleared}/${n} cleared ${line}</text>`;
+  return `
+  <svg class="glbars" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"
+       role="img" aria-label="${escapeAttr(
+         cleared == null ? `last ${n} games`
+           : `${cleared} of the last ${n} games cleared ${line}`)}">
+    ${rule}${bars}${label}
+  </svg>`;
+}
+
 /* ---------------- Sparkline (game-log trend) ----------------------------- */
 function sparkline(values, opts = {}) {
   const w = opts.w || 240, h = opts.h || 64, pad = 8;
