@@ -3435,6 +3435,55 @@ def show_bands(sport: str | None = None) -> None:
               f" stakes.")
 
 
+def relearn(sport: str) -> None:
+    """Run every deep fitter for ONE sport, in the order that is safe.
+
+        python3 launch.py --relearn nfl
+
+    The three deep fitters each take `--sport` and each DEFAULT TO MLB.
+    That default is why `--learning` shows four fitted markets and all
+    four of them are baseball: nobody was going to type the flag three
+    times per sport, so nobody ever did, and every other model has been
+    pricing with T=1.0 since the day it shipped.
+
+    ORDER MATTERS AND IT IS NOT ALPHABETICAL. Calibration goes first
+    because the other two fit through the pricing path and would
+    otherwise learn against an uncorrected probability, then have the
+    correction applied on top of what they learned. Each fitter already
+    disables the live correction while fitting its OWN quantity; running
+    them in this order keeps the same discipline across them.
+
+    It runs the real CLIs rather than reimplementing them, so there is
+    exactly one definition of each fit and this command cannot drift from
+    the thing it invokes.
+    """
+    import subprocess
+    steps = [("temperatures", [sys.executable, "calibrate.py",
+                               "--from-db", "data/history.db", "--sport", sport]),
+             ("recency dial", [sys.executable, "formfit.py",
+                               "--from-db", "data/history.db", "--sport", sport]),
+             ("player memory", [sys.executable, "playerfit.py",
+                                "--from-db", "data/history.db", "--sport", sport])]
+    hist = ROOT / "data" / "history.db"
+    if not hist.is_file():
+        print(f"  No history DB at {hist}. Nothing to fit from — ingest that"
+              f"\n  sport's game logs first, then run this again.")
+        return
+    print(f"  Refitting {sport} from {hist}\n")
+    for label, cmd in steps:
+        print(f"  --- {label} " + "-" * (56 - len(label)))
+        r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+        out = (r.stdout or "").strip() or (r.stderr or "").strip()
+        for line in out.splitlines()[-14:]:
+            print(f"    {line}")
+        if r.returncode:
+            print(f"    ⚠️  exited {r.returncode} — nothing was stored for this"
+                  f" step")
+        print()
+    print("  Now `python3 launch.py --learning` to see what landed, and"
+          "\n  rebuild the boards so tonight's picks price through it.")
+
+
 def show_learning() -> None:
     """Has any of the self-tuning ever changed a number? Read-only.
 
@@ -3564,6 +3613,52 @@ def show_learning() -> None:
     print(f"  {'loop':<22}{'it ran':<26}{'it changed':<28}evidence")
     for name, fired, changed, ev in ROWS:
         print(f"  {name:<22}{str(fired)[:25]:<26}{str(changed)[:27]:<28}{ev}")
+
+    # --- which SPORTS the learning has actually reached ----------------
+    #
+    # Ethan, 2026-08-16: "i wanna make sure the self learning and all of
+    # that shit is wrapped into nfl too."
+    #
+    # The code paths are sport-agnostic and have been since the ladder was
+    # extended. The DATA is not. Every deep fitter — calibrate.py,
+    # formfit.py, playerfit.py — takes `--sport` and DEFAULTS TO MLB, so
+    # unless someone typed the flag, only baseball has ever been fitted.
+    # The store keys are the receipt, and they are what this table reads.
+    from engine.ledger import TRACKED_SPORTS
+    stores = {}
+    for label, mod_name, fname in (("temps", "calibrate", "calibration.json"),
+                                   ("dial", "formfit", "formfit.json"),
+                                   ("memory", "playerfit", "playerfit.json")):
+        try:
+            mod = __import__(f"engine.{mod_name}", fromlist=["DEFAULT_PATH"])
+            p = Path(mod.DEFAULT_PATH)
+            stores[label] = _json.loads(p.read_text()) if p.is_file() else {}
+        except Exception:                             # noqa: BLE001
+            stores[label] = {}
+    with ledger.connect() as conn:
+        journal = dict(conn.execute(
+            "SELECT sport, COUNT(*) FROM bets WHERE status IN ('won','lost') "
+            "AND category IN ('main','paper') GROUP BY sport").fetchall())
+
+    print(f"\n  {'sport':<8}{'temps':>7}{'dial':>7}{'memory':>8}"
+          f"{'settled':>9}   what it is running on")
+    for sp in TRACKED_SPORTS:
+        n = {k: sum(1 for key in v if key.startswith(f"{sp}:"))
+             for k, v in stores.items()}
+        graded = journal.get(sp, 0)
+        if not any(n.values()) and not graded:
+            note = "nothing fitted and nothing journaled — raw model"
+        elif not any(n.values()):
+            note = f"raw model; {graded} settled bets, no deep fit yet"
+        else:
+            note = "fitted"
+        print(f"  {sp:<8}{n['temps']:>7}{n['dial']:>7}{n['memory']:>8}"
+              f"{graded:>9}   {note}")
+    print("\n  A sport with zeros across the first three columns prices with"
+          "\n  T=1.0, the spec's default recency dial and no player memory —"
+          "\n  the model as written, never corrected by an outcome. Fix it"
+          "\n  with `python3 launch.py --relearn <sport>`, which needs that"
+          "\n  sport's game logs in the history DB first.")
 
     # --- the paper book -----------------------------------------------
     with ledger.connect() as conn:
@@ -5312,6 +5407,14 @@ def main() -> None:
         return
     if "--learning" in argv:
         show_learning()
+        return
+    if "--relearn" in argv:
+        i = argv.index("--relearn")
+        rest = [x for x in argv[i + 1:] if not x.startswith("-")]
+        if not rest:
+            print("  Which sport? e.g. python3 launch.py --relearn nfl")
+            return
+        relearn(rest[0].lower())
         return
     if "--bands" in argv:
         i = argv.index("--bands")

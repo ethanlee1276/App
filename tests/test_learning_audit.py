@@ -135,6 +135,86 @@ def test_the_audit_reproduces_the_pages_it_is_auditing():
     assert "3 proposed" in out and "0 confirmed" in out, out
 
 
+def test_the_per_sport_table_names_a_sport_that_has_never_been_fitted():
+    """Ethan: "i wanna make sure the self learning ... is wrapped into nfl
+    too."
+
+    The code paths are sport-agnostic; the DATA is not. All three deep
+    fitters take --sport and DEFAULT TO MLB, so unless someone typed the
+    flag only baseball has ever been fitted — which is exactly what his
+    Record page shows, four markets and all four of them mlb:. A per-loop
+    table cannot show that, because a loop with four fitted markets reads
+    as working. Only a per-SPORT table shows the hole.
+    """
+    tmp = Path(tempfile.mkdtemp())
+    models = tmp / "data" / "models"
+    models.mkdir(parents=True)
+    (models / "calibration.json").write_text(json.dumps(
+        {f"mlb:{m}": {"temperature": 1.4}
+         for m in ("hits", "home_runs", "strikeouts", "total_bases")}))
+    (models / "formfit.json").write_text(json.dumps({}))
+    (models / "playerfit.json").write_text(json.dumps({}))
+    (models / "losspatterns.json").write_text(json.dumps({}))
+    (models / "hypotheses.json").write_text(json.dumps({}))
+
+    import contextlib
+    import io
+    from engine import calibrate, formfit, hypotheses, losspatterns, playerfit
+    import launch
+
+    mods = {calibrate: "calibration.json", formfit: "formfit.json",
+            playerfit: "playerfit.json", losspatterns: "losspatterns.json",
+            hypotheses: "hypotheses.json"}
+    was = {m: m.DEFAULT_PATH for m in mods}
+    was_cwd = os.getcwd()
+    buf = io.StringIO()
+    try:
+        for m, name in mods.items():
+            m.DEFAULT_PATH = models / name
+        losspatterns._cache.clear(); hypotheses._cache.clear()
+        os.chdir(tmp)
+        with contextlib.redirect_stdout(buf):
+            launch.show_learning()
+    finally:
+        os.chdir(was_cwd)
+        for m, orig in was.items():
+            m.DEFAULT_PATH = orig
+        losspatterns._cache.clear(); hypotheses._cache.clear()
+    out = buf.getvalue()
+
+    # Every tracked sport gets a row, so a sport with nothing cannot be
+    # absent-and-therefore-invisible.
+    from engine.ledger import TRACKED_SPORTS
+    for sp in TRACKED_SPORTS:
+        assert f"\n  {sp:<8}" in out, (sp, out)
+    # MLB counted; NFL named as running on nothing.
+    assert "mlb" in out and "nfl" in out
+    nfl_line = [ln for ln in out.splitlines() if ln.strip().startswith("nfl")][0]
+    assert "raw model" in nfl_line, nfl_line
+    mlb_line = [ln for ln in out.splitlines() if ln.strip().startswith("mlb")][0]
+    assert "4" in mlb_line and "fitted" in mlb_line, mlb_line
+
+
+def test_relearn_refuses_rather_than_pretending_when_there_is_no_history():
+    """A fitter with no data to fit must say so. Printing three empty
+    sections would read as three fits that found nothing, which is a
+    different and much more discouraging claim."""
+    import contextlib
+    import io
+    import launch
+    tmp = Path(tempfile.mkdtemp())
+    was = launch.ROOT
+    buf = io.StringIO()
+    try:
+        launch.ROOT = tmp
+        with contextlib.redirect_stdout(buf):
+            launch.relearn("nfl")
+    finally:
+        launch.ROOT = was
+    out = buf.getvalue()
+    assert "No history DB" in out and "ingest" in out, out
+
+
 def test_the_haircut_learns_from_the_paper_book_too():
     """The defect this audit found in the audit's own author's work.
 
