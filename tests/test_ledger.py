@@ -2087,8 +2087,28 @@ def test_paper_mode_journals_the_pick_with_zero_dollars():
     assert row[2] == 0.0, "paper mode must move no dollars"
 
 
-def test_paper_bets_never_enter_the_headline_record():
-    """The one guarantee the whole feature rests on."""
+def test_paper_bets_never_move_dollars_or_the_bankroll():
+    """This test used to say paper bets never enter the headline record at
+    all, and called that "the one guarantee the whole feature rests on".
+    HALF of that is retired, on Ethan's instruction, 2026-08-13: "Combine
+    our paper record and normal money record. Combined all won and loss
+    picks and continue on recording how we usually do."
+
+    He is right on the merits, which is why this moved rather than being
+    argued with. Paper mode never changed a pick — `log_recommendations`
+    sets `category = "paper" if paper else "main"` and touches nothing
+    else — so the two categories were one strategy either side of a
+    bookkeeping switch. Quarantining half the sample made both halves
+    underpowered and invited exactly the misreading he drew off it: a
+    +17.8% paper line beside a -15.2% money line, read as two models when
+    it was one model in two time windows.
+
+    THE HALF THAT SURVIVES IS THE HALF THAT KEEPS THE SITE HONEST. A
+    paper row staked zero dollars. Its units are real and pool cleanly;
+    its dollars are not and must never reach the money columns, or the
+    record would claim a bankroll result that never happened. That is
+    what is asserted here now.
+    """
     conn = ledger.connect(":memory:")
     ledger.set_paper_mode(conn, True)
     ledger.log_recommendations(conn, _paper_result())
@@ -2096,7 +2116,14 @@ def test_paper_bets_never_enter_the_headline_record():
                  "pnl_dollars=0.0")
     conn.commit()
     perf = ledger.performance(conn, "mlb")
-    assert perf["settled"] == 0, f"a paper bet reached the record: {perf}"
+    # It counts, in units — that is the combine.
+    assert perf["settled"] == 1 and perf["paper_bets"] == 1
+    assert perf["net_units"] == 0.36
+    # It moves no money, and it is not counted as a money bet.
+    assert perf["net_dollars"] == 0, "a paper row reached the dollar column"
+    assert perf["money_bets"] == 0
+    assert perf["bankroll"] == perf["starting_bankroll"], \
+        "a paper row moved the bankroll"
 
 
 def test_paper_mode_is_off_unless_it_was_turned_on():
@@ -2147,9 +2174,17 @@ def test_the_site_payload_carries_the_paper_book_and_the_switch():
     finally:
         os.unlink(path)
     assert out["paper_mode"] is True
+    # The paper book is still exported on its own — the split is kept so
+    # the page can show what rode money and what did not.
     assert out["paper"]["settled"] == 1
-    assert out["overall"]["settled"] == 0, "the paper win reached the record"
     assert out["paper"]["net_units"] == 0.36
+    # And since 2026-08-13 it is ALSO inside the headline, because Ethan
+    # asked for one combined record and the two categories were never two
+    # strategies. See test_paper_bets_never_move_dollars_or_the_bankroll
+    # for the half of the old quarantine that still holds.
+    assert out["overall"]["settled"] == 1
+    assert out["overall"]["net_units"] == 0.36
+    assert out["overall"]["net_dollars"] == 0, "a paper row moved money"
 
 
 def _with_history(rows, fn):

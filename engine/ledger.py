@@ -2522,21 +2522,46 @@ def _book_breakeven(bets) -> float | None:
     return (sum(rates) / len(rates)) if rates else None
 
 
-def performance(conn, sport: str | None = None, category: str = "main") -> dict:
+#: THE BOOK, as one thing. Ethan, 2026-08-13: "Combine our paper record
+#: and normal money record. Combined all won and loss picks and continue
+#: on recording how we usually do."
+#:
+#: This is the right unit of account and it always was, because paper mode
+#: never changed a pick. `log_recommendations` does
+#: `category = "paper" if paper else "main"` and touches nothing else —
+#: same model, same projections, same gates, same pick_side, same
+#: settlement. The two categories are one strategy either side of a
+#: bookkeeping switch, so measuring them apart split one sample into two
+#: underpowered halves and invited exactly the reading Ethan drew off it.
+#:
+#: WHAT STAYS SEPARATE, AND WHY IT HAS TO. Paper rows staked zero DOLLARS.
+#: Their units are real (stakes are kept as sized, which is the whole
+#: point of the book), so unit ROI pools honestly. Dollars do not: pooling
+#: them would put money through the bankroll that was never at risk. Every
+#: dollar figure below therefore stays real-money-only, and the payload
+#: says which is which rather than leaving the reader to assume.
+BOOK = ("main", "paper")
+
+
+def performance(conn, sport: str | None = None,
+                category: str | tuple[str, ...] = BOOK) -> dict:
     # ``stake_units > 0`` everywhere below: rows staked at zero were never
     # bets (an old grading bug shipped picks the vig had already eaten).
     # Counting them would inflate the W-L column with wagers nobody could
     # have won a unit on. They're reported separately as ``unstaked``.
-    q = ("SELECT * FROM bets WHERE status IN ('won','lost','push') "
-         "AND category=? AND stake_units > 0")
-    args: list = [category]
+    cats = (category,) if isinstance(category, str) else tuple(category)
+    marks = ",".join("?" * len(cats))
+    q = (f"SELECT * FROM bets WHERE status IN ('won','lost','push') "
+         f"AND category IN ({marks}) AND stake_units > 0")
+    args: list = list(cats)
     if sport:
         q += " AND sport=?"; args.append(sport)
     bets = conn.execute(q, args).fetchall()
 
-    uq = ("SELECT COUNT(*) FROM bets WHERE status IN ('won','lost','push') "
-          "AND category=? AND (stake_units IS NULL OR stake_units <= 0)")
-    uargs: list = [category]
+    uq = (f"SELECT COUNT(*) FROM bets WHERE status IN ('won','lost','push') "
+          f"AND category IN ({marks}) "
+          f"AND (stake_units IS NULL OR stake_units <= 0)")
+    uargs: list = list(cats)
     if sport:
         uq += " AND sport=?"; uargs.append(sport)
     unstaked = conn.execute(uq, uargs).fetchone()[0]
@@ -2623,7 +2648,17 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
         "breakeven": _book_breakeven(bets),
         "units_staked": round(staked_u, 2), "net_units": round(net_u, 2),
         "roi": (net_u / staked_u) if staked_u else 0.0,
+        # REAL MONEY ONLY, and it is that way by construction rather than
+        # by filter: a paper row settles with pnl_dollars 0 because no
+        # dollars were ever at risk on it. Pooling the books in units is
+        # honest; pooling them in dollars would run money through the
+        # bankroll that never existed. The two counts below say the split
+        # out loud so a reader never has to infer it from a suspiciously
+        # small dollar figure beside a large unit one.
         "net_dollars": round(net_d, 2),
+        "money_bets": sum(1 for b in bets
+                          if b["status"] != "push" and (b["pnl_dollars"] or 0)),
+        "paper_bets": sum(1 for b in bets if b["category"] == "paper"),
         "avg_price": avg_price,
         "returned_units": round(returned_u, 2),
         "best_streak": best_streak,
@@ -2635,9 +2670,10 @@ def performance(conn, sport: str | None = None, category: str = "main") -> dict:
         # bets as baseball's. Invisible while one board was live, and
         # exactly wrong the moment six are.
         "open": conn.execute(
-            "SELECT COUNT(*) FROM bets WHERE status='open' AND category=?"
+            f"SELECT COUNT(*) FROM bets WHERE status='open' "
+            f"AND category IN ({marks})"
             + (" AND sport=?" if sport else "") + " AND stake_units > 0",
-            ((category, sport) if sport else (category,))).fetchone()[0],
+            (tuple(cats) + (sport,)) if sport else tuple(cats)).fetchone()[0],
         "unstaked": unstaked,
         "avg_clv": (sum(clvs) / len(clvs)) if clvs else None,
         # CLV coverage, because an average over 44% of the book is not a
@@ -2705,7 +2741,9 @@ def era_report(conn) -> dict:
     eras = []
     for i, e in enumerate(MODEL_ERAS):
         start, end = e["start"], starts[i + 1] if i + 1 < len(starts) else None
-        where = "category='main' AND stake_units > 0"
+        # The whole book, same as the headline — an era is a period of
+        # the model's life, and paper mode did not start a new model.
+        where = ("category IN ('main','paper') AND stake_units > 0")
         args: list = []
         if start:
             where += " AND date >= ?"
@@ -2753,7 +2791,8 @@ def pnl_curve(conn, sport: str | None = None) -> list[dict]:
     q = ("SELECT date, SUM(pnl_units) AS day_u, COUNT(*) AS n, "
          "SUM(status='won') AS w, SUM(status='lost') AS l, "
          "SUM(stake_units) AS staked FROM bets "
-         "WHERE status IN ('won','lost','push') AND category='main' "
+         "WHERE status IN ('won','lost','push') "
+         "AND category IN ('main','paper') "
          "AND stake_units > 0")
     args: list = []
     if sport:
@@ -3137,7 +3176,8 @@ def restated_performance(conn, sport: str | None = None) -> dict:
     from .selectionfit import apply_haircut
     from .staking import kelly_units
     q = ("SELECT sport, status, odds, hit_prob, grade FROM bets "
-         "WHERE status IN ('won','lost','push') AND category='main'")
+         "WHERE status IN ('won','lost','push') "
+         "AND category IN ('main','paper')")
     args: list = []
     if sport:
         q += " AND sport=?"

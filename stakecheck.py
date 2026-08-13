@@ -72,8 +72,18 @@ def _rows(db: str, sport: str | None, since: str | None,
     read it: 1,787 of 2,582 bets priced at +200 and longer, which is a
     home-run board, not a betting record.
 
-    `ledger.py` scores the record as `category='main' AND stake_units >
-    0`, and that is now the default here. Nothing else is a bet.
+    `ledger.py` scores the record as `category IN ('main','paper') AND
+    stake_units > 0`, and that is the default here. Nothing else is a bet.
+
+    THE BOOK WIDENED ON 2026-08-13 and this followed it deliberately, not
+    by drift — test_the_default_matches_how_the_ledger_itself_scores_the
+    _record exists to force exactly this reconciliation. Ethan: "combine
+    our paper record and normal money record." Paper rows are the same
+    model at the same prices with the stake kept as sized; only the
+    dollar column differs, and this tool measures units. Leaving them out
+    would now have this tool scoring a different population from the
+    Record page, which is the failure the docstring above describes
+    happening the other way round.
     """
     args: list = []
     uri = f"file:{db}?mode=ro"
@@ -87,7 +97,7 @@ def _rows(db: str, sport: str | None, since: str | None,
         q += " AND category=? AND stake_units > 0"
         args_pre = [category]
     elif not measurement:
-        q += " AND category='main' AND stake_units > 0"
+        q += " AND category IN ('main','paper') AND stake_units > 0"
         args_pre = []
     else:
         args_pre = []

@@ -6059,7 +6059,8 @@ function recPaperBook(paper, main, on, recent) {
     const se = Math.sqrt(Math.max(hit * (1 - hit), 1e-9)) * (1 + b) / Math.sqrt(n);
     return { n, roi: perf.roi || 0, se, z: se ? (perf.roi || 0) / se : 0 };
   };
-  const rows = [["Paper — no money on it", paper], ["Main — money on it", main]]
+  const rows = [["Paper rows — no money on them", paper],
+                ["Money rows", main]]
     .map(([label, perf]) => {
       const s = band(perf);
       if (!s) return "";
@@ -6076,20 +6077,28 @@ function recPaperBook(paper, main, on, recent) {
           ± ${(s.se * 100).toFixed(1)}%</span>
         <span class="chip" style="flex-shrink:0">${sig}</span></div>`;
     }).join("");
-  return `<div class="section-title">The two books
-      <span class="sub">— the same model with the money on and off.</span></div>
+  return `<div class="section-title">Inside the record
+      <span class="sub">— the same model, split by whether money rode on
+      it.</span></div>
     <div class="card">
       <p style="margin:0 0 10px;font-size:var(--fs-sm);color:var(--text-mute)">
-        Paper mode${on ? " is on and" : ""} changes two things: which book a row
-        is filed in, and the dollar column. The pick, the price, the settlement
-        and the CLV are identical. So a gap between these two lines is not
-        something paper mode did — it is an <b style="color:var(--text)">era</b>
-        effect, and what it asks is what else changed on the date they split.</p>
+        <b style="color:var(--text)">These two lines are already added
+        together in the record above.</b> Ethan, 2026-08-13: "combine our
+        paper record and normal money record." They are one strategy, because
+        paper mode${on ? " is on and" : ""} changes exactly two things — which
+        book a row is filed in, and the dollar column. The pick, the price, the
+        settlement and the CLV are identical, so there is no second model here
+        to separate out. The split is kept below only because the DOLLARS
+        differ: unit ROI pools honestly, dollars stay real-money-only, and no
+        paper row has ever moved the bankroll.</p>
       ${rows}
       <p style="margin:10px 0 0;font-size:var(--fs-sm);color:var(--text-faint)">
-        Both figures carry a standard error because neither book is large. A
-        percentage on 74 bets without one is how a coin flip gets read as a
-        turnaround.</p>
+        Each line carries a standard error because neither half is large, and
+        a gap between them is an <b style="color:var(--text)">era</b> effect
+        rather than something paper mode did — which is why pooling them is
+        the honest read and separating them was the misleading one. A
+        percentage on 74 bets without an error bar is how a coin flip gets
+        read as a turnaround.</p>
     </div>
     ${!(recent || []).length ? "" : `
       <div class="section-title minor">Every paper bet

@@ -270,6 +270,79 @@ def test_the_paper_mode_line_does_not_glue_the_state_to_someone_elses_date():
     assert "the paper book opened" in src
 
 
+def test_the_record_pools_both_books_but_not_their_dollars():
+    """Ethan, 2026-08-13: "Combine our paper record and normal money
+    record. Combined all won and loss picks."
+
+    The right unit of account, and it always was: paper mode never
+    changed a pick, so the two categories are one strategy either side of
+    a bookkeeping switch. Measuring them apart split one sample into two
+    underpowered halves and invited the reading he drew off it.
+
+    THE DOLLARS ARE THE PART THAT CANNOT POOL. A paper row staked zero
+    dollars. Its UNITS are real — stakes are kept as sized, which is the
+    whole point of the book — so unit ROI adds up honestly. Pooling
+    dollars would run money through the bankroll that was never at risk,
+    which is the one way this change could have made the record dishonest.
+    """
+    import os
+    import tempfile
+    from engine import ledger
+
+    conn = ledger.connect(os.path.join(tempfile.mkdtemp(), "t.db"))
+    n = [0]
+
+    def add(cat, status, pnl_u, pnl_d, date):
+        n[0] += 1
+        conn.execute(
+            "INSERT INTO bets (sport,date,category,status,stake_units,odds,"
+            "pnl_units,pnl_dollars,player,market) VALUES"
+            " ('mlb',?,?,?,1.0,-110,?,?,?,'hits')",
+            (date, cat, status, pnl_u, pnl_d, f"P{n[0]}"))
+
+    for _ in range(2):
+        add("main", "won", 0.91, 9.1, "2026-08-01")
+    for _ in range(3):
+        add("main", "lost", -1.0, -10.0, "2026-08-02")
+    for _ in range(3):
+        add("paper", "won", 0.91, 0.0, "2026-08-10")
+    add("paper", "lost", -1.0, 0.0, "2026-08-11")
+    conn.commit()
+
+    whole = ledger.performance(conn)
+    main = ledger.performance(conn, category="main")
+    paper = ledger.performance(conn, category="paper")
+
+    assert whole["wins"] == main["wins"] + paper["wins"] == 5
+    assert whole["losses"] == main["losses"] + paper["losses"] == 4
+    assert abs(whole["net_units"]
+               - (main["net_units"] + paper["net_units"])) < 1e-6
+    # The dollars must be the money book's, untouched.
+    assert abs(whole["net_dollars"] - main["net_dollars"]) < 1e-6, \
+        "a paper row reached the dollar column"
+    assert whole["paper_bets"] == 4 and whole["money_bets"] == 5
+    # And the equity curve follows the headline rather than disagreeing
+    # with it one panel down.
+    curve = ledger.pnl_curve(conn)
+    assert abs(curve[-1]["cum_u"] - whole["net_units"]) < 1e-6
+
+
+def test_the_page_says_the_two_lines_are_already_added_up():
+    """A reader who saw -16.0% yesterday and a different number today
+    needs the page to say the SCOPE changed, not leave them to assume a
+    bet was restated. Settled history is receipts and none of it moved —
+    what moved is which rows the headline counts."""
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    app = open(os.path.join(root, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    assert "already added" in app
+    assert "dollars stay real-money-only" in app
+    # The old framing called them "two books", which is the thing that is
+    # no longer true of the headline.
+    assert 'class="section-title">The two books' not in app
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -533,9 +533,15 @@ def test_the_default_matches_how_the_ledger_itself_scores_the_record():
     this test fails and the two are reconciled deliberately rather than
     drifting into two different truths about the same money."""
     led = open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
-    assert "category='main' AND stake_units > 0" in led
     src = open(os.path.join(ROOT, "stakecheck.py"), encoding="utf-8").read()
-    assert "category='main' AND stake_units > 0" in src
+    # The book widened to both categories on 2026-08-13 (Ethan: "combine
+    # our paper record and normal money record"). This test is what forced
+    # the two to move together instead of quietly disagreeing about which
+    # rows are the record — which is the whole reason it exists.
+    scope = "category IN ('main','paper') AND stake_units > 0"
+    assert scope in src, "stakecheck no longer scores what the ledger scores"
+    assert "BOOK = (\"main\", \"paper\")" in led
+    assert "AND category IN ({marks}) AND stake_units > 0" in led
 
 
 def test_a_zero_stake_row_is_not_a_bet():
