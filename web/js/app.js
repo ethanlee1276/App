@@ -5842,35 +5842,7 @@ async function renderRecord() {
     <div class="section-title">Recent settled picks
       <span class="sub">— newest first, at the price we actually got</span></div>
     <div class="card rec-list">
-      ${(src.recent || []).map((b) => {
-        const won = b.status === "won";
-        const push = b.status === "push";
-        const pnl = b.pnl_units || 0;
-        // Process chip: judge the decision against the close, out loud.
-        let procChip = `<span class="rl-proc none">no close</span>`;
-        if (b.process === "bad" && won)
-          procChip = `<span class="rl-proc warn" title="Won, but the market closed against us — a bad bet that got lucky">${iconMark("dot", 10)}lucky</span>`;
-        else if (b.process === "good" && b.status === "lost")
-          procChip = `<span class="rl-proc good" title="Lost, but we beat the closing line — good bet, bad night">${iconMark("rising", 11)}beat close</span>`;
-        else if (b.clv != null)
-          procChip = `<span class="rl-proc ${b.clv >= 0 ? "good" : "bad"}"
-            title="Closing-line value — how far the market moved our way after the bet">${b.clv >= 0 ? "+" : ""}${b.clv.toFixed(1)} CLV</span>`;
-        // Cause chip: the settle pass's measured circumstance on a loss.
-        // Only the exceptional ones get a chip — "variance" is the story
-        // a lost row already tells by itself.
-        const causeChip = (b.status === "lost" && b.cause && !/^variance/.test(b.cause))
-          ? `<span class="rl-proc warn" title="Measured at settle from the ingested results — the circumstance, not an excuse">${escapeHtml(b.cause)}</span>`
-          : "";
-        return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
-          <span class="rl-icon">${push ? icon('dash') : won ? icon('check') : icon('cross')}</span>
-          <span class="rl-date">${escapeHtml(b.date || "")}</span>
-          <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
-            <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
-          ${procChip}${causeChip}
-          <span class="rl-odds">${american(b.odds)}</span>
-          <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
-        </div>`;
-      }).join("") || `<p class="loading" style="padding:12px">Nothing settled yet.</p>`}
+      ${(src.recent || []).map(recSettledRow).join("") || `<p class="loading" style="padding:12px">Nothing settled yet.</p>`}
     </div>
   `;
   host.innerHTML = scopeBar
@@ -5912,7 +5884,7 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
   return subtabbedHTML("record", [
     ["receipts", "Receipts",
      "what happened, in units — the curve, the splits, every settled pick",
-     (scoped ? "" : recPaperBook(d.paper, d.overall, d.paper_mode)) + receipts],
+     (scoped ? "" : recPaperBook(d.paper, d.overall, d.paper_mode, d.paper_recent)) + receipts],
     ["products", "By product",
      "the buckets deliberately kept out of the main P&L",
      (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recParlaySection(d.parlays))
@@ -5942,6 +5914,41 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
   ]);
 }
 
+/* One settled row. Extracted so the paper book renders through the SAME
+   function as the main receipts rather than a lookalike — Ethan asked for
+   the paper bets posted, and a second copy of this markup would drift
+   from the first the next time either is touched, leaving two lists that
+   disagree about what a "lucky" chip means. */
+function recSettledRow(b) {
+        const won = b.status === "won";
+        const push = b.status === "push";
+        const pnl = b.pnl_units || 0;
+        // Process chip: judge the decision against the close, out loud.
+        let procChip = `<span class="rl-proc none">no close</span>`;
+        if (b.process === "bad" && won)
+          procChip = `<span class="rl-proc warn" title="Won, but the market closed against us — a bad bet that got lucky">${iconMark("dot", 10)}lucky</span>`;
+        else if (b.process === "good" && b.status === "lost")
+          procChip = `<span class="rl-proc good" title="Lost, but we beat the closing line — good bet, bad night">${iconMark("rising", 11)}beat close</span>`;
+        else if (b.clv != null)
+          procChip = `<span class="rl-proc ${b.clv >= 0 ? "good" : "bad"}"
+            title="Closing-line value — how far the market moved our way after the bet">${b.clv >= 0 ? "+" : ""}${b.clv.toFixed(1)} CLV</span>`;
+        // Cause chip: the settle pass's measured circumstance on a loss.
+        // Only the exceptional ones get a chip — "variance" is the story
+        // a lost row already tells by itself.
+        const causeChip = (b.status === "lost" && b.cause && !/^variance/.test(b.cause))
+          ? `<span class="rl-proc warn" title="Measured at settle from the ingested results — the circumstance, not an excuse">${escapeHtml(b.cause)}</span>`
+          : "";
+        return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
+          <span class="rl-icon">${push ? icon('dash') : won ? icon('check') : icon('cross')}</span>
+          <span class="rl-date">${escapeHtml(b.date || "")}</span>
+          <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
+            <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
+          ${procChip}${causeChip}
+          <span class="rl-odds">${american(b.odds)}</span>
+          <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
+        </div>`;
+      }
+
 /* The paper book, which the export has always carried and the page has
    never shown. Ethan, 2026-08-16: "so did we learn something in paper
    mode??? i see its +17% roi but im not seeing that reflected in the roi
@@ -5953,7 +5960,7 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
    the row's category and the dollar column. So a gap between the two
    books is not something paper mode DID — it is an era effect, and the
    question it raises is what else changed on that date. */
-function recPaperBook(paper, main, on) {
+function recPaperBook(paper, main, on, recent) {
   if (!paper || !(paper.settled || paper.wins || paper.losses)) return "";
   const band = (perf) => {
     const n = (perf.wins || 0) + (perf.losses || 0);
@@ -5997,7 +6004,13 @@ function recPaperBook(paper, main, on) {
         Both figures carry a standard error because neither book is large. A
         percentage on 74 bets without one is how a coin flip gets read as a
         turnaround.</p>
-    </div>`;
+    </div>
+    ${!(recent || []).length ? "" : `
+      <div class="section-title minor">Every paper bet
+        <span class="sub">— all ${recent.length}, newest first, at the price
+        we would have got. Same list, same grading, same closing-line check
+        as the money book above it.</span></div>
+      <div class="card rec-list">${recent.map(recSettledRow).join("")}</div>`}`;
 }
 
 /* The stale-line sampler: every pre-game scanner flag, journaled at a flat

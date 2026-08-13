@@ -3969,6 +3969,14 @@ def export_json(conn, path) -> None:
         # stretch where we deliberately were not paying it.
         "paper": performance(conn, category="paper"),
         "paper_mode": paper_mode(conn),
+        # THE PAPER BETS THEMSELVES, not just their total. Ethan,
+        # 2026-08-16: "post all of those bets please." The book was
+        # already exported as a summary and the page did not even show
+        # that; a percentage with no rows under it is a claim, and this
+        # book's whole purpose is to be checkable. Same shape and same
+        # function as the main receipts, so the two lists read alike and
+        # can be compared line for line.
+        "paper_recent": recent_settled(conn, 100, category="paper"),
         # Per-sport, so each model can be tuned on its own evidence rather
         # than on the average of six.
         "by_sport": {sp: sport_report(conn, sp) for sp in TRACKED_SPORTS},
