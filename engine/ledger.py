@@ -3102,6 +3102,26 @@ def verify_forecast_log(conn) -> dict:
             "broken_at": None, "verified_through": len(rows)}
 
 
+def _prereg_block(conn) -> dict:
+    """Preregistered tests, evaluated against the journal.
+
+    Registered forward on Ethan's instruction (2026-08-13) after
+    `gradecheck` declined to convict the B+ bucket: 2.1 standard errors
+    is not enough when the bucket was chosen for looking bad. See
+    engine/prereg.py for the three properties that make it a
+    preregistration rather than a note.
+    """
+    try:
+        from . import prereg
+        rows = [dict(r) for r in conn.execute(
+            "SELECT date, sport, grade, odds, status FROM bets "
+            "WHERE status IN ('won','lost') "
+            "AND category IN ('main','paper') AND stake_units > 0")]
+        return {"tests": prereg.report(rows)}
+    except Exception:                                         # noqa: BLE001
+        return {"tests": []}
+
+
 def _hypothesis_lab_block() -> dict:
     """The stored hypothesis-lab state, for export_json. Store-read only —
     a missing store is the designed empty state, never a failure."""
@@ -4081,6 +4101,7 @@ def export_json(conn, path) -> None:
         # tribunal's verdicts. Read from the store — the export never
         # calls an API; the paid propose step is CLI-only.
         "hypothesis_lab": _hypothesis_lab_block(),
+        "prereg": _prereg_block(conn),
         # The prose lanes: the nightly postmortem and the weekly model
         # brief, read from their stores — the paid calls happen in the
         # settle pass (capped) and the CLI, never here.

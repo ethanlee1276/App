@@ -4961,6 +4961,46 @@ function recLossPatternsSection(lp, sport) {
       anything that lands in it, and the veto’s reason names this page.</p>`)}`;
 }
 
+/* PREREGISTERED TESTS — the terms written down before the data.
+   Ethan, 2026-08-13: "yeah do that, wire it into the lab."
+
+   It sits beside the hypothesis lab and reads deliberately unlike it. The
+   lab reports what a search FOUND; this reports what we said we would
+   look for, and how far along it is. Those are different claims and the
+   page must not let them look like the same one — a running total that
+   reads like a result is exactly what preregistration is for. So a test
+   still collecting shows PROGRESS and no number, and only a decided test
+   shows a verdict. */
+function recPrereg(pr) {
+  const tests = (pr && pr.tests) || [];
+  if (!tests.length) return "";
+  const row = (t) => {
+    if (t.status === "void") {
+      return `<div class="pr-row"><span class="pr-claim">${escapeHtml(t.claim)}</span>
+        <span class="chip down">void — terms changed</span></div>`;
+    }
+    if (t.status === "collecting") {
+      const pct = Math.min(100, Math.round((t.n / t.min_n) * 100));
+      return `<div class="pr-row">
+        <span class="pr-claim">${escapeHtml(t.claim)}
+          <span class="sub">registered ${escapeHtml(t.registered)} · deciding at
+          ${t.min_n} bets, and not before</span></span>
+        <span class="pr-prog"><i style="width:${pct}%"></i></span>
+        <span class="pr-n">${t.n} / ${t.min_n}</span></div>`;
+    }
+    const tone = t.supported ? "down" : "";
+    return `<div class="pr-row">
+      <span class="pr-claim">${escapeHtml(t.claim)}
+        <span class="sub">${escapeHtml(t.reading || "")}</span></span>
+      <span class="chip ${tone}">${t.supported ? "supported" : "not supported"}</span></div>`;
+  };
+  return `<div class="section-title">Preregistered
+      <span class="sub">— written down before the data arrived, and decided
+      once at a sample size named in advance. A test still collecting shows
+      progress, never a running result.</span></div>
+    <div class="card">${tests.map(row).join("")}</div>`;
+}
+
 function recHypothesisLab(hl, sport) {
   if (!hl) return "";
   // Sport scope: each league's page shows the hypotheses ABOUT it. The
@@ -6054,7 +6094,7 @@ async function renderRecord() {
       + recProseSection(d.prose, scope)
       + recSelfTuningSection(d.self_tuning, scope)
       + recLossPatternsSection(d.loss_patterns, scope)
-      + recHypothesisLab(d.hypothesis_lab, scope);
+      + recPrereg(d.prereg) + recHypothesisLab(d.hypothesis_lab, scope);
     bindRecordScopes(host);
     return;
   }
@@ -6225,6 +6265,7 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      recRestatedSection(d.restated, scoped ? scope : null) + recProseSection(d.prose, scoped ? scope : null)
      + recSelfTuningSection(d.self_tuning, scoped ? scope : null)
      + recLossPatternsSection(d.loss_patterns, scoped ? scope : null)
+     + recPrereg(d.prereg)
      + recHypothesisLab(d.hypothesis_lab, scoped ? scope : null)],
     ["health", "Health",
      "whether this account survives being right",

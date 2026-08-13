@@ -4591,3 +4591,22 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   .pp-log { grid-template-columns: 54px minmax(0, 1fr) 54px 72px; }
   .pp-extra { display: none; }
 }
+
+
+/* --- Preregistered tests (Ethan, 2026-08-13) ---------------------------
+   Deliberately not styled like a result. A test still collecting gets a
+   progress bar and a count and NO percentage, because a running total
+   that reads like a finding is the thing preregistration exists to
+   prevent. */
+.pr-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center; gap: 12px; padding: 10px 14px;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.pr-row:last-child { border-bottom: none; }
+.pr-claim { min-width: 0; font-size: var(--fs-sm); font-weight: 700; }
+.pr-claim .sub { display: block; font-weight: 400; color: var(--text-mute);
+  font-size: var(--fs-2xs); margin-top: 2px; }
+.pr-prog { display: block; width: 120px; height: 6px; border-radius: 3px;
+  background: var(--panel-3); overflow: hidden; }
+.pr-prog i { display: block; height: 100%; background: var(--brand); }
+.pr-n { font-size: var(--fs-2xs); color: var(--text-mute); font-weight: 700;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }

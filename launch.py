@@ -3497,6 +3497,43 @@ def relearn(sport: str) -> None:
           "\n  rebuild the boards so tonight's picks price through it.")
 
 
+def show_prereg() -> None:
+    """Preregistered tests and how far along they are. Read-only.
+
+        python3 launch.py --prereg
+
+    Ethan, 2026-08-13, after gradecheck declined to convict the B+
+    bucket at 2.1 SE: "yeah do that, wire it into the lab." This is the
+    terminal view of the same thing the Lab page renders.
+
+    It prints PROGRESS while a test is collecting and a verdict only at
+    the sample size the terms named. That restraint is the feature — a
+    running total watched daily and called the moment it crosses a line
+    finds significance in noise, which is the exact failure a
+    preregistration is written to avoid.
+    """
+    from engine import ledger, prereg
+    with ledger.connect() as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT date, sport, grade, odds, status FROM bets "
+            "WHERE status IN ('won','lost') "
+            "AND category IN ('main','paper') AND stake_units > 0")]
+    out = prereg.report(rows)
+    if not out:
+        print("\n  No preregistered tests.\n")
+        return
+    print(f"\n  {len(out)} preregistered test(s)\n")
+    for t in out:
+        print(f"  {t['claim']}")
+        print(f"    registered {t['registered']}  ·  status {t['status']}")
+        print(f"    {t['reading']}")
+        print()
+    print("  Registered forward, decided once, on bets that did not exist "
+          "when the\n  idea did. Terms are hashed — changing them voids the "
+          "test rather than\n  quietly rewriting what we said we would "
+          "look for.\n")
+
+
 def show_learning() -> None:
     """Has any of the self-tuning ever changed a number? Read-only.
 
@@ -5451,6 +5488,9 @@ def main() -> None:
         return
     if "--haircut" in argv:
         show_haircut("--refit" in argv)
+        return
+    if "--prereg" in argv:
+        show_prereg()
         return
     if "--learning" in argv:
         show_learning()
