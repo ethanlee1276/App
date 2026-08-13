@@ -9134,9 +9134,18 @@ function rosterPlayerHTML(p, byAppearance) {
   const slot = byAppearance
     ? (p.games != null ? String(p.games) : "—")
     : (p.depth_order ? `${escapeHtml(p.depth_pos || p.position)}${p.depth_order}` : "—");
+  // The weekly designation, which the roster read for the first time on
+  // 2026-08-13. "Questionable" is not unavailable — he may well play —
+  // but it is the single most useful flag on a board where you are about
+  // to price his volume, so it shows in its own right rather than being
+  // flattened into "active".
   const tags = [
     p.rookie ? `<span class="chip">rookie</span>` : "",
-    p.unavailable ? `<span class="chip down">${escapeHtml(p.status || "out")}</span>` : "",
+    p.unavailable ? `<span class="chip down">${escapeHtml(p.status || "out")}${
+      p.injury ? ` · ${escapeHtml(p.injury)}` : ""}</span>` : "",
+    (!p.unavailable && p.questionable)
+      ? `<span class="chip warn">${escapeHtml(p.status || "questionable")}${
+          p.injury ? ` · ${escapeHtml(p.injury)}` : ""}</span>` : "",
   ].join("");
   const colA = byAppearance
     ? (p.last_seen ? escapeHtml(String(p.last_seen).slice(5)) : "—")

@@ -28,14 +28,44 @@ SPECIAL = ("K", "P", "LS")
 GROUPS = (("Offense", OFFENCE), ("Defense", DEFENCE), ("Special teams", SPECIAL))
 POSITION_ORDER = {p: i for i, p in enumerate(OFFENCE + DEFENCE + SPECIAL)}
 
-# Statuses that mean "on the roster but not available this week". Anything
-# else Sleeper reports is passed through verbatim rather than guessed at.
+# ROSTER status — where a player sits on the org's list. Anything else
+# Sleeper reports is passed through verbatim rather than guessed at.
 UNAVAILABLE = {"injured reserve", "ir", "pup", "non football injury",
-               "suspended", "physically unable to perform"}
+               "suspended", "physically unable to perform", "inactive"}
+
+# GAME-DAY designation — a DIFFERENT Sleeper field, and the one that was
+# missing entirely.
+#
+# Ethan, 2026-08-13: "Nfl injuries are not updating still. Cade mays is
+# injured on lions and he's showing active on the website."
+#
+# He was right, and the cause is that Sleeper answers "is he hurt" in two
+# places and this file only ever read one. `status` is the ROSTER slot —
+# Active, Injured Reserve, PUP, Suspended. `injury_status` is the WEEKLY
+# designation — Out, Doubtful, Questionable. A player carrying a real
+# injury is very often `status: "Active"` with `injury_status: "Out"`,
+# because he IS on the active roster and simply is not playing.
+#
+# `injury_status` appears nowhere in this repo before now — not in the
+# rosters, not in the props, not in the fantasy layer. So every
+# questionable, doubtful and out designation in the league was invisible
+# to the site, which is exactly the report: injuries "not updating" when
+# in fact they were never being read.
+#
+# OUT and DOUBTFUL make a player unavailable. QUESTIONABLE does not — he
+# may well play — but it is the single most useful flag on a prop board,
+# so it is carried and shown rather than flattened away.
+INJURY_OUT = {"out", "doubtful", "ir", "injured reserve"}
+INJURY_FLAG = {"questionable", "probable"}
 
 
 def _is_unavailable(status: str) -> bool:
     return (status or "").strip().lower() in UNAVAILABLE
+
+
+def _injury_designation(p: dict) -> str:
+    """Sleeper's weekly designation for this player, normalised, or ""."""
+    return (p.get("injury_status") or "").strip()
 
 
 def _player_row(p: dict) -> dict | None:
@@ -53,6 +83,12 @@ def _player_row(p: dict) -> dict | None:
     pos = (p.get("position") or "").upper()
     order = p.get("depth_chart_order")
     exp = p.get("years_exp")
+    # The two answers, reconciled. The designation wins the display when
+    # there is one, because "Out" is what a bettor needs to see, not
+    # "Active".
+    desig = _injury_designation(p)
+    dl = desig.lower()
+    roster_out = _is_unavailable(p.get("status") or "")
     return {
         "player": name,
         "team": team,
@@ -61,8 +97,13 @@ def _player_row(p: dict) -> dict | None:
         # position (a slot receiver shows SWR, a nickel corner NB).
         "depth_pos": (p.get("depth_chart_position") or pos).upper(),
         "depth_order": order if isinstance(order, int) else None,
-        "status": (p.get("status") or "").strip(),
-        "unavailable": _is_unavailable(p.get("status") or ""),
+        "status": desig or (p.get("status") or "").strip(),
+        "injury_status": desig,
+        # Flagged but expected to play — not unavailable, still worth
+        # seeing on a board where you are about to price his volume.
+        "questionable": dl in INJURY_FLAG,
+        "unavailable": roster_out or dl in INJURY_OUT,
+        "injury": (p.get("injury_body_part") or "").strip(),
         "rookie": exp in (0, "0"),
         "years_exp": exp if isinstance(exp, int) else None,
         "number": p.get("number") if isinstance(p.get("number"), int) else None,
@@ -180,6 +221,7 @@ def mlb_feed_rosters(feed: dict, games_by_player: dict | None = None,
                 "depth_order": None,
                 "status": status if unavailable else "",
                 "unavailable": unavailable,
+                "injury_status": "", "questionable": False, "injury": "",
                 "rookie": False,
                 "years_exp": None,
                 "number": p.get("number"),
@@ -376,6 +418,10 @@ def from_game_logs(conn, sport: str, seasons: list[int] | None = None,
             "status": f"not in a game since {last}" if cold else "",
             "unavailable": cold,
             "rookie": False,
+            # Same keys as the feed-built rows so the page has one shape
+            # to render. Game logs carry no injury designation — the honest
+            # value is empty, not a guess.
+            "injury_status": "", "questionable": False, "injury": "",
             "years_exp": None, "number": None, "age": None,
             "games": int(r["games"]), "last_seen": last,
             "headshot": face_of(faces, r["player"]),

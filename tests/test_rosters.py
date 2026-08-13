@@ -325,6 +325,62 @@ def test_the_fallback_announces_itself():
     assert "print(" in src
 
 
+def test_the_weekly_injury_designation_is_read_at_all():
+    """Ethan, 2026-08-13: "Nfl injuries are not updating still. Cade mays
+    is injured on lions and he's showing active on the website."
+
+    They were not failing to update — they were never being read. Sleeper
+    answers "is he hurt" in TWO fields and this file only ever looked at
+    one. `status` is the ROSTER slot (Active, Injured Reserve, PUP,
+    Suspended); `injury_status` is the WEEKLY designation (Out, Doubtful,
+    Questionable). A genuinely injured player is very often
+    `status: "Active"` with `injury_status: "Out"`, because he IS on the
+    active roster and simply is not playing.
+
+    `injury_status` appeared nowhere in the repo before this — not the
+    rosters, not the props, not the fantasy layer — so every out,
+    doubtful and questionable designation in the league was invisible.
+    """
+    from engine import rosters
+
+    def row(**kw):
+        base = {"full_name": "X", "team": "DET", "position": "G",
+                "status": "Active"}
+        return rosters._player_row({**base, **kw})
+
+    # THE EXACT CASE HE REPORTED: on the active roster, designated Out.
+    out = row(full_name="Cade Mays", injury_status="Out",
+              injury_body_part="Knee")
+    assert out["unavailable"] is True, "an Out player still reads as active"
+    assert out["status"] == "Out", "the designation must win the display"
+    assert out["injury"] == "Knee"
+
+    # Doubtful is out too; questionable is NOT, but must be flagged.
+    assert row(injury_status="Doubtful")["unavailable"] is True
+    q = row(injury_status="Questionable")
+    assert q["unavailable"] is False, "questionable players do play"
+    assert q["questionable"] is True, "and the board has to see it"
+
+    # Healthy stays healthy, and a roster-level status still counts.
+    assert row()["unavailable"] is False and row()["questionable"] is False
+    assert row(status="Injured Reserve")["unavailable"] is True
+
+
+def test_every_roster_producer_emits_the_same_keys():
+    """Three producers feed one page. A key present on some rows and
+    missing on others renders as `undefined` on exactly the sports nobody
+    checked."""
+    from engine import rosters
+    feed = rosters.mlb_feed_rosters(
+        {"CHC": [{"name": "A B", "position": "CF", "person_id": 1}]})
+    got = feed["teams"]["CHC"]["players"][0]
+    for k in ("injury_status", "questionable", "injury", "unavailable"):
+        assert k in got, f"{k} missing from the MLB feed rows"
+    nfl = rosters.build_rosters(_blob(_p("Signed Guy", "SF")))
+    for k in ("injury_status", "questionable", "injury", "unavailable"):
+        assert k in nfl["teams"]["SF"]["players"][0], f"{k} missing from NFL rows"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
