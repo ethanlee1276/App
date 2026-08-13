@@ -247,6 +247,29 @@ def test_paper_mode_changes_only_the_category_and_the_dollars():
     assert "stake_units" in src
 
 
+def test_the_paper_mode_line_does_not_glue_the_state_to_someone_elses_date():
+    """It printed "PAPER MODE: off since 2026-08-09".
+
+    Read plainly that says the mode has been OFF since the 9th. The truth
+    is the opposite: the 9th is when the paper book OPENED — the date came
+    from `MIN(date) WHERE category = 'paper'` — and 118 paper rows settled
+    after it. The state and the date are two different facts and the
+    string welded them into one false sentence, while every number
+    underneath it was correct. That is the dangerous shape: nothing looks
+    broken.
+    """
+    import inspect
+    import launch
+    src = inspect.getsource(launch.show_learning)
+    assert '"PAPER MODE: {state}"' in src or "PAPER MODE: {state}" in src
+    # The date must not be concatenated onto the state.
+    assert "if on else 'off'" not in src
+    assert 'f" since {first_paper}"' not in src
+    # And it must still say when the book opened — dropping the date
+    # would fix the sentence by deleting a fact.
+    assert "the paper book opened" in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

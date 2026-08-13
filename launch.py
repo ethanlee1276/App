@@ -3684,8 +3684,19 @@ def show_learning() -> None:
         paper = ledger.performance(conn, category="paper")
         main = ledger.performance(conn)
 
-    print(f"\n  PAPER MODE: {'ON' if on else 'off'}"
-          + (f" since {first_paper}" if first_paper else ""))
+    # THE DATE BELONGS TO THE BOOK, NOT TO THE STATE. This printed
+    # "PAPER MODE: off since 2026-08-09", which reads as "it has been off
+    # since the 9th" — the exact opposite of the truth. 2026-08-09 is the
+    # date of the FIRST PAPER BET, i.e. when the book opened; the mode has
+    # since been switched back off. Gluing a state to a date that means
+    # something else is how a status line lies while every number under it
+    # is correct. The two facts are printed as two facts now.
+    state = ("ON — new picks journal to the paper book" if on
+             else "off — new picks stake real money")
+    print(f"\n  PAPER MODE: {state}")
+    if first_paper:
+        print(f"  the paper book opened {first_paper} and holds"
+              f" {counts.get('paper', 0)} settled row(s)")
 
     # WITH ITS ERROR BAR, ALWAYS. Ethan read "+17.8% ROI" off this line
     # and asked why the site disagreed. The site was right and the line
