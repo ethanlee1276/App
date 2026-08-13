@@ -4551,9 +4551,18 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    Reached by clicking a recommended pick. The card says it is a door the
    way the game cards do — a cursor and a lift on hover — and the rows
    below use the same agate idiom as the rest of the site's tables. */
-.card.openable { cursor: pointer; }
+/* Every surface that lists a prop is a door, per Ethan 2026-08-13:
+   "anywhere we show a prop, we need to offer the option to click on it".
+   Cards, dashboard rows, edge-board rows and Top Picks tiles all wear the
+   same class, so the affordance is identical wherever it appears — and
+   only where `propOpenable` says there is a page behind it. */
+.openable { cursor: pointer; }
 .card.openable:hover { border-color: var(--brand-2); }
-.card.openable:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.openable:focus-visible { outline: 2px solid var(--brand-2); outline-offset: -2px; }
+/* The list rows are not cards, so they say "clickable" the way rows do. */
+.ls-row.openable:hover, div.openable:not(.card):not(.tp-card):hover {
+  background: var(--panel-3); }
+.tp-card.openable:hover { border-color: var(--brand-2); }
 .pp-card { padding: 14px; }
 .pp-log, .pp-form {
   display: grid; align-items: center; gap: 10px;

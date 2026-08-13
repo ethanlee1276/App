@@ -1133,7 +1133,7 @@ async function renderBestBets() {
   for (const r of sig.props) {
     const twin = staleByKey.get(propKey(r.player, r.market));
     picks.push({ tag: "PROP", color: "var(--brand)", quality: r.quality || r.confidence * 10 || 0,
-      id: betMark(r),
+      id: betMark(r), open: propAttrs(r),
       label: `${r.player} ${r.side} ${r.line} ${r.market_label} ${american(r.odds)} (${r.book})`,
       game: propGameLine(r),
       metric: signedPct(r.edge), stake: r.stake_units, grade: r.grade,
@@ -1179,7 +1179,8 @@ async function renderBestBets() {
   const haircutNote = haircutLine(rec.selection_haircut);
 
   const pickRow = (p, i) => `
-    <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
+    <div class="${p.open ? "openable" : ""}"${p.open || ""}
+         style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
                 border-bottom:1px solid rgba(255,255,255,.05)">
       <span style="opacity:.45;min-width:18px;font-weight:700">${i + 1}</span>
       ${p.id ? `<span class="pick-id">${p.id}</span>` : ""}
@@ -2775,8 +2776,7 @@ function cardHTML(r) {
     : `Stake ${r.stake_units.toFixed(2)}u`;
   const stakeChip = r._ok ? `<span class="chip stake">${stakeTxt}</span>` : "";
   return `
-    <article class="card openable ${r._ok ? "" : "faded"}"
-      data-prop="${escapeAttr(propId(r))}"
+    <article class="card ${propOpenable(r) ? "openable" : ""} ${r._ok ? "" : "faded"}"${propAttrs(r)}
       style="--grade-color:${gradeColor(r.grade)}">
       ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
       <div class="card-head">
@@ -3191,7 +3191,7 @@ function longShotCard(r) {
     .map((c) => `<div class="warning">${icon('warn')} ${escapeHtml(c)}</div>`).join("");
   const oppLabel = state.sport === "mlb" ? "Expected PAs" : "RZ chances";
   return `
-    <article class="card longshot openable" data-prop="${escapeAttr(propId(r))}"
+    <article class="card longshot ${propOpenable(r) ? "openable" : ""}"${propAttrs(r)}
       style="--grade-color:${gradeColor(r.grade)}">
       ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
       <div class="card-head">
@@ -3256,6 +3256,38 @@ function longShotCard(r) {
 function propId(r) {
   return [r.player || "", r.market || "", r.side || "", r.line == null ? "" : r.line]
     .join("|");
+}
+
+/* IS THIS ROW A DOOR? One definition, used by every surface that lists a
+   prop — the dashboard's best bets, the Edge Board, Top Picks, the rail,
+   the game page and the two card boards.
+
+   Ethan, 2026-08-13: "anywhere we show a prop, we need to offer the
+   option to click on it and show more data of that prop with the bar
+   graph like u just did."
+
+   Two conditions, and both matter for the same reason — a door that
+   opens onto nothing is worse than no door:
+
+   * It has to be a PLAYER prop. Moneylines, spreads and game totals sit
+     in these same lists and have no player and no game log, so the page
+     would have nothing to draw.
+   * It has to have HISTORY. `propAnalysis` itself returns "" under three
+     values, so a prop with no log would open a page whose centrepiece is
+     missing.
+
+   Rows that fail either test simply are not clickable, which is honest:
+   the affordance appears exactly where there is something behind it. */
+function propOpenable(r) {
+  if (!r || !r.player) return false;
+  const logs = (r.logs || []).length;
+  const vals = (r.recent_values || []).length;
+  return logs >= 3 || vals >= 3;
+}
+
+function propAttrs(r) {
+  return propOpenable(r)
+    ? ` data-prop="${escapeAttr(propId(r))}" tabindex="0" role="link"` : "";
 }
 
 function allProps() {
@@ -6463,6 +6495,7 @@ function edgeBoardRows() {
       // The check means "on the Recommended page RIGHT NOW", so it must apply the
       // user's sliders — the build-time flag can disagree with them.
       ev: r.ev_per_unit, grade: r.grade, rec: passesFilters(r),
+      open: propAttrs(r),
     }));
   const games = (state.data.game_bets || [])
     .filter((b) => b.grade !== "Pass" && (b.ev_per_unit || 0) > 0.005)
@@ -6477,7 +6510,8 @@ function edgeBoardRows() {
 
 function edgeRowHTML(r, i) {
   const evPct = (r.ev * 100).toFixed(1);
-  return `<div class="ls-row drow" style="display:flex;align-items:center;gap:14px;
+  return `<div class="ls-row drow ${r.open ? "openable" : ""}"${r.open || ""}
+       style="display:flex;align-items:center;gap:14px;
        padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
     <span style="opacity:.5;min-width:20px">${i + 1}</span>
     <span style="flex:1"><strong>${escapeHtml(r.label)}</strong>
@@ -11725,7 +11759,7 @@ function renderTopPicks() {
       .replace(/\s+/g, " ").trim();
     const i = track(r, desc);
     return `
-    <div class="tp-card">
+    <div class="tp-card ${propOpenable(r) ? "openable" : ""}"${propAttrs(r)}>
       <div class="tp-top"><span class="tp-tile">${playerAvatar(r.player, r.team, { size: 40, headshot: r.headshot })}</span>
         <div class="tp-who"><b>${escapeHtml(r.player)}</b>
           <span>${escapeHtml(r.side || "")} ${r.line != null ? r.line : ""} ${escapeHtml(r.market_label || r.market || "")}</span>

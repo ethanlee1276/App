@@ -45,9 +45,14 @@ def test_a_prop_is_identified_by_what_it_is_not_where_it_sat():
     """An index into tonight's list points at a different pick the moment
     the board rebuilds, and a bookmarked link would quietly lie rather
     than break. Identity is (player, market, side, line)."""
-    fn = APP[APP.index("function propId("):APP.index("function allProps(")]
+    # Sliced to propId's OWN body. A looser slice caught `tabindex` in the
+    # helper below it and failed on a substring — a test that fires on
+    # something it does not mean is a test nobody will trust twice.
+    fn = APP[APP.index("function propId("):]
+    fn = fn[:fn.index("\n}\n")]
     assert "r.player" in fn and "r.market" in fn and "r.side" in fn and "r.line" in fn
-    assert "index" not in fn.lower()
+    for word in ("[i]", "idx", "indexOf", "slice("):
+        assert word not in fn, f"identity must not be positional: {word}"
 
 
 def test_the_view_is_registered_everywhere_a_view_has_to_be():
@@ -82,7 +87,7 @@ def test_the_card_is_a_control_for_a_keyboard_too():
     a mouse is not finished."""
     assert 'document.addEventListener("keydown"' in APP
     assert 'e.key !== "Enter" && e.key !== " "' in APP
-    assert ".card.openable:focus-visible" in CSS
+    assert ".openable:focus-visible" in CSS
 
 
 def test_a_stale_link_says_so_rather_than_rendering_blank():
@@ -116,6 +121,43 @@ def test_the_log_table_grades_each_game_the_same_way_the_bars_do():
     assert "over ? v > line : v < line" in fn
     # Home and away are not the same spot, and the table says which.
     assert 'g.home ? "vs" : "@"' in fn
+
+
+def test_every_surface_that_lists_a_prop_offers_the_door():
+    """Ethan, 2026-08-13: "anywhere we show a prop, we need to offer the
+    option to click on it and show more data of that prop with the bar
+    graph like u just did."
+
+    The first cut wired only the two cards that already drew the chart,
+    which missed the dashboard, the Edge Board and Top Picks — the three
+    places a prop is most often seen. Every surface routes through the
+    same helper now, so a new one cannot be half-wired.
+    """
+    for fn in ("cardHTML", "longShotCard"):
+        i = APP.index(f"function {fn}(")
+        body = APP[i:i + 3000]
+        assert "propAttrs(r)" in body, f"{fn} is not a door"
+        assert "propOpenable(r)" in body, f"{fn} claims the class unconditionally"
+    # The dashboard's best-bets rows, the Edge Board rows and Top Picks.
+    assert "id: betMark(r), open: propAttrs(r)" in APP, "dashboard rows"
+    assert 'ev: r.ev_per_unit, grade: r.grade, rec: passesFilters(r),\n      open: propAttrs(r),' in APP \
+        or "open: propAttrs(r)," in APP, "edge board rows"
+    assert '<div class="tp-card ${propOpenable(r) ? "openable" : ""}"${propAttrs(r)}>' in APP
+
+
+def test_a_game_bet_is_never_dressed_as_a_prop():
+    """Moneylines, spreads and game totals sit in these same lists. They
+    have no player and no game log, so a door on one would open a page
+    with nothing to draw. `propOpenable` is where that is decided, once."""
+    fn = APP[APP.index("function propOpenable("):APP.index("function propAttrs(")]
+    assert "if (!r || !r.player) return false" in fn
+    # And history is required too, because propAnalysis itself renders
+    # nothing under three values.
+    assert "logs >= 3 || vals >= 3" in fn
+    # The game-line rows on the Edge Board must not carry the attribute.
+    gb = APP[APP.index("const games = (state.data.game_bets || [])"):]
+    gb = gb[:gb.index("return [...props, ...games]")]
+    assert "propAttrs" not in gb, "a game line became clickable"
 
 
 if __name__ == "__main__":
