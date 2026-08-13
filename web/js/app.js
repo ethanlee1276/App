@@ -2276,6 +2276,35 @@ const findGame = (gid) => (((state.data || {}).games) || []).find((g) => gameId(
    never show a photo — the drawing carries the ball spot, bases, wind. */
 const VENUE_FAMILY = { nfl: "football", cfb: "football", mlb: "baseball",
                        nba: "basketball", wnba: "basketball" };
+
+/* THE RENDER VERSION, and why every venue URL has to carry it.
+   ------------------------------------------------------------------
+   Ethan, 2026-08-16: "the stadiums will show old renders of the
+   stadiums on some games and the new renders on the others" — on both
+   the site and the phone.
+
+   Nothing is wrong with the files. `web/img/venues/variants/` holds one
+   generation and the per-team photo directories are empty, so every card
+   falls to a variant. The bug is that the variants were REBUILT three
+   times (the 4x cinematic upscale, the re-cut from the PNG original, the
+   colour-seam slicer) and every rebuild wrote the SAME filenames.
+   `variants/baseball-blue.jpg` is a different picture than it was last
+   week and its URL never changed, so a browser holding the old bytes has
+   no reason to ask for them again.
+
+   That is also why it looks random rather than broken: which cards are
+   stale depends on which VARIANT each one uses and when that particular
+   file entered the cache. Two cards on one screen legitimately pull
+   different files, so one can be current and the other a week old.
+   Phones show it worse because mobile browsers hold image caches longer
+   and evict less eagerly.
+
+   Bumping this string changes every venue URL, so every cached copy
+   misses once and refetches. BUMP IT WHENEVER THE RENDERS ARE REBUILT —
+   `tools/venues_ingest.py` writing new bytes under an old name is the
+   whole failure mode, and nothing else in the chain can detect it. */
+const VENUE_ART_V = "20260812";
+const venueSrc = (path) => `${path}?v=${VENUE_ART_V}`;
 function venueVariant(team) {
   // First team colour with real chroma decides the lighting; neutral
   // kits (black, silver, white) fall through to the steel render, which
@@ -2439,8 +2468,8 @@ function gameCard(g) {
         !isLive ? (() => {
           const fam = VENUE_FAMILY[state.sport];
           return `<img class="venue-photo" alt="" loading="lazy"
-          src="img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg"
-          ${fam ? `data-alt="img/venues/variants/${fam}-${venueVariant(homeTeam)}.jpg"
+          src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
+          ${fam ? `data-alt="${venueSrc(`img/venues/variants/${fam}-${venueVariant(homeTeam)}.jpg`)}"
           onerror="vpFall(this)"` : `onerror="this.remove()"`}/>`;
         })() : ""}${badge}${
         window._topGameId === gameId(g) && !isLive && !isFinal
@@ -3328,8 +3357,8 @@ function renderGamePage() {
   // drawing — it carries the ball spot, bases and wind.
   const gpFam = VENUE_FAMILY[state.sport];
   const gpPhoto = !isLive ? `<img class="venue-photo" alt="" loading="lazy"
-      src="img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg"
-      ${gpFam ? `data-alt="img/venues/variants/${gpFam}-${venueVariant((window.ACTIVE_TEAMS || {})[g.home] || {})}.jpg"
+      src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
+      ${gpFam ? `data-alt="${venueSrc(`img/venues/variants/${gpFam}-${venueVariant((window.ACTIVE_TEAMS || {})[g.home] || {})}.jpg`)}"
       onerror="vpFall(this)"` : `onerror="this.remove()"`}/>` : "";
   // The render's GAME LINES table and KEY INSIGHTS panel. Lines come
   // straight off the slate; a cell without a real price shows a dash.
@@ -10070,7 +10099,7 @@ async function renderUFC() {
     .reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7) % 6) + 1;
   host.innerHTML = `
     <img class="ufc-banner" alt="" loading="lazy"
-      src="img/venues/variants/octagon-${octN}.jpg" onerror="this.remove()"/>
+      src="${venueSrc(`img/venues/variants/octagon-${octN}.jpg`)}" onerror="this.remove()"/>
     <div class="stats">
       <div class="tile"><div class="k">Card</div><div class="v">${escapeHtml(d.event_date || "")}</div>
         <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${c.fights || 0} bouts</div></div>
