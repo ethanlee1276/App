@@ -149,7 +149,12 @@ def test_the_card_tint_carries_a_fact():
     alternation is decoration. A coloured border on a betting card that
     means nothing is worse than no border, so ours carries the same fact
     the bars do: whether recent form backs the side we took."""
-    assert "const backs = hits * 2 >= n" in PA
+    # The rule moved from "at least half" to "at least break-even" on
+    # 2026-08-13 — see
+    # test_the_hit_rate_is_judged_against_the_price_not_a_coin_flip. What
+    # this test guards is unchanged: the tint means SOMETHING, and it is
+    # the same something the bars and the stat tile mean.
+    assert "const backs = n > 0 && (hits / n) >= be" in PA
     assert 'const tone = backs ? "good" : "bad"' in PA
     assert 'class="prop-analysis pa-${tone}"' in PA
     # And the stat row reads off the SAME variable, so the tint and the
@@ -177,12 +182,18 @@ def test_the_chart_sizes_from_its_own_ratio():
     assert "const FS = narrow ? 13 : 10" in PA
 
 
-def test_the_identity_panel_cannot_collide_with_the_odds():
-    """The first cut ran a 168px panel with two equal columns inside it,
-    which put STRIKEOUTS through (UNDER) at 69px a column. Caught by
-    rendering it."""
-    assert "grid-template-columns: 208px minmax(0, 1fr)" in CSS
-    assert ".pa-cell { min-width: 0; overflow-wrap: anywhere; }" in CSS
+def test_the_prop_bar_cannot_collide_with_itself():
+    """The identity panel this used to guard is gone — it was the
+    duplicated face Ethan flagged, and the two-equal-columns version of
+    it had put STRIKEOUTS through (UNDER) at 69px a column.
+
+    The same hazard survives the redesign in smaller form: PROP, LINE and
+    ODDS now share one horizontal bar, so a long market label must wrap
+    rather than run into the price beside it.
+    """
+    assert ".pa-bar { display: flex" in CSS
+    assert "flex-wrap: wrap" in CSS
+    assert "overflow-wrap: anywhere" in CSS
 
 
 def test_the_retired_header_markup_left_no_dead_rules_behind():
@@ -192,6 +203,71 @@ def test_the_retired_header_markup_left_no_dead_rules_behind():
     for dead in (".pa-who ", ".pa-sub "):
         assert dead not in CSS, f"{dead} styles markup that is gone"
     assert "pa-who2" in CSS and "pa-who2" in PA
+
+
+def test_an_anytime_market_gets_the_threshold_it_actually_has():
+    """Ethan's Long Shots board, 2026-08-13: every card read "LINE NaN",
+    "0 / 10", "0%", ten red bars.
+
+    Not a rendering fault — the arithmetic ran against NaN. A long shot is
+    an ANYTIME market ("does he homer at all"), so the row carries
+    recent_values and no `line`, and `v > NaN` is false for every game
+    ever played. The chart was stating that Brandon Nimmo had not homered
+    in ten games while drawing the bars that show three.
+
+    "1 or more" is a threshold, written down elsewhere: 0.5. Reading it
+    off the market is not inventing a number. Anything with no derivable
+    threshold renders NOTHING, because a chart against an unknown line is
+    the same bug wearing a coat.
+    """
+    assert "Number.isFinite(line)" in PA
+    assert "line = 0.5" in PA
+    assert "return \"\";" in PA or "return '';" in PA
+
+
+def test_the_hit_rate_is_judged_against_the_price_not_a_coin_flip():
+    """It compared `hits * 2 >= n` — at least half — which is the right
+    question only at even money. Nimmo homered in 3 of 10 at +550 and the
+    card called it bad; break-even there is 15.4%, so 30% is about double
+    what the bet needs. A card contradicting the pick above it is worse
+    than a card with no colour on it.
+
+    Checked as arithmetic across the ladder, because the failure was in
+    the comparison rather than in the markup.
+    """
+    assert "r.odds > 0 ? 100 / (r.odds + 100)" in PA
+    assert "(hits / n) >= be" in PA
+
+    def be(odds):
+        return 100 / (odds + 100) if odds > 0 else -odds / (-odds + 100)
+
+    def backs(odds, hits, n):
+        return (hits / n) >= be(odds)
+
+    # A long shot clearing its price is backed, however far from 50%.
+    assert backs(550, 3, 10), "a 30% rate at +550 is roughly double break-even"
+    assert backs(375, 4, 10)
+    # Even money is unchanged: the old rule and the new agree near -110.
+    assert backs(-110, 6, 10) and not backs(-110, 5, 10)
+    # And heavy chalk has to clear a HIGHER bar, which the old rule missed
+    # in the other direction.
+    assert not backs(-200, 6, 10), "60% does not clear break-even at -200"
+
+
+def test_the_panel_does_not_repeat_a_face_the_card_already_shows():
+    """Ethan, 2026-08-13: "we are definitely showing the players face too
+    much here." Structural, not a one-page slip — the props card, the long
+    shot card and the top-picks card all lead with `playerAvatar`, so the
+    92px portrait inside this block was the same photograph twice, forty
+    pixels apart. Removing it is also what gave the chart its width."""
+    assert "betMark(r, 92)" not in PA
+    assert "pa-shot" not in PA and "pa-side" not in PA
+    assert ".pa-shot" not in CSS and ".pa-side" not in CSS
+    # The prop bar replaced it — the reader still needs the threshold and
+    # the price the chart is drawn against.
+    assert "pa-bar" in PA and ".pa-bar" in CSS
+    # And the plot is no longer sharing its row with anything.
+    assert "grid-template-columns: 208px" not in CSS
 
 
 if __name__ == "__main__":

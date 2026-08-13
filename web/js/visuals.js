@@ -1128,7 +1128,33 @@ function countStrip(live) {
 function propAnalysis(r, opts = {}) {
   const vals = (r.recent_values || []).filter((v) => Number.isFinite(Number(v)));
   if (vals.length < 3) return "";
-  const line = Number(r.line);
+  // THE LINE, WHEN THE MARKET DOES NOT HAVE ONE.
+  //
+  // Ethan's Long Shots board, 2026-08-13: every card read "LINE NaN",
+  // "0 / 10", "0%", with all ten bars red. Not a rendering bug — the
+  // arithmetic was being done against NaN. A long shot is an ANYTIME
+  // market ("does he homer at all"), so the row carries recent_values
+  // and no `line` at all, and `v > NaN` is false for every game on
+  // earth. The chart was confidently reporting that Brandon Nimmo has
+  // not homered in ten games while drawing the bars that show he has.
+  //
+  // "1 or more" IS a threshold, it is just written down elsewhere: it is
+  // 0.5. Deriving it here is not inventing a number, it is reading the
+  // market's own definition. Anything we still cannot pin a threshold
+  // for renders nothing, because a chart against an unknown line is the
+  // failure above wearing a different coat.
+  // Each field tested on its own. Joining them into one string and
+  // anchoring with ^...$ matched nothing at all — caught by rendering the
+  // exact rows off Ethan's board rather than by reading the pattern.
+  const ANYTIME = /^(anytime_?td|home_?runs|to_?score|first_?td)$/i;
+  const ANYTIME_LABEL = /\banytime\b|\bhome runs?\b|\b1\+|\bto score\b/i;
+  let line = Number(r.line);
+  if (!Number.isFinite(line)) {
+    const mk = String(r.market || "").trim();
+    const lb = String(r.market_label || "").trim();
+    if (!ANYTIME.test(mk) && !ANYTIME_LABEL.test(lb)) return "";
+    line = 0.5;
+  }
   const data = vals.slice(0, 10).map(Number).reverse();   // oldest -> newest
   const n = data.length;
   const over = (r.side || "OVER").toUpperCase() === "OVER";
@@ -1142,7 +1168,22 @@ function propAnalysis(r, opts = {}) {
   // there the alternation is decorative. A coloured border on a betting
   // card that means nothing is worse than no border, so this one carries
   // the same fact the bars do: whether recent form backs the side we took.
-  const backs = hits * 2 >= n;
+  // AGAINST THE PRICE, NOT AGAINST A COIN FLIP.
+  //
+  // This asked `hits * 2 >= n` — is the strike rate at least half — and
+  // that is only the right question at even money. Ethan's Long Shots
+  // board made the error obvious the moment the chart started working:
+  // Brandon Nimmo homered in 3 of 10 at +550 and the card called it bad.
+  // Break-even at +550 is 15.4%, so a 30% rate is roughly double what
+  // the bet needs. Red on that is not a quibble, it is the card
+  // contradicting the pick sitting above it.
+  //
+  // The honest threshold is the one the wager actually has to clear, so
+  // the tint and the hit-rate tile both read against the offered price.
+  // At -110 that is 52.4% and nothing about the old behaviour changes;
+  // out at plus money it stops punishing bets for being long shots.
+  const be = r.odds > 0 ? 100 / (r.odds + 100) : -r.odds / (-r.odds + 100);
+  const backs = n > 0 && (hits / n) >= be;
   const tone = backs ? "good" : "bad";
 
   // GEOMETRY, BY VIEWPORT. The SVG scales to its column, so a wide
@@ -1153,7 +1194,12 @@ function propAnalysis(r, opts = {}) {
   // 760px cut in app.js.
   const narrow = typeof window !== "undefined" && window.matchMedia
     ? window.matchMedia("(max-width: 760px)").matches : false;
-  const W = narrow ? 360 : 520, H = narrow ? 200 : 210;
+  // Sized for the full card width, not a side column. Ethan, 2026-08-13:
+  // "the graph should be bigger to." Widening the viewBox alone would
+  // have made it SMALLER on the glass — the SVG scales to its container,
+  // so more units across the same pixels means finer type. The height
+  // grows with it so the plot keeps a readable aspect at full width.
+  const W = narrow ? 360 : 720, H = narrow ? 200 : 260;
   const L = narrow ? 28 : 34, R = narrow ? 46 : 58, T = 18, B = 26;
   // Type is in viewBox units, so it has to grow as the box narrows to
   // land at the same physical size on the glass.
@@ -1216,22 +1262,33 @@ function propAnalysis(r, opts = {}) {
   // either prints what it has instead of an empty separator.
   const who = [r.position, (typeof teamName === "function"
     ? teamName(r.team) : r.team)].filter(Boolean).join(" · ");
+  // ONE FACE PER CARD. Ethan, 2026-08-13, on the Long Shots board: "we
+  // are definitely showing the players face too much here". He is right
+  // and it is structural, not a one-page slip: every card that renders
+  // this block already draws the player in its own head — the props
+  // card, the long shot card and the top-picks card all lead with
+  // `playerAvatar`. The 92px portrait his render asked for made sense as
+  // a standalone card; inside a card that has already introduced the
+  // player it is the same photograph twice, forty pixels apart.
+  //
+  // Dropping it is also what makes the chart bigger, which was his
+  // second ask and the same fix: the identity column was eating a third
+  // of the width to repeat information, and the plot now spans the card.
+  // Name and team stay in the head where they already were; what this
+  // block still owes the reader is the PROP / LINE / ODDS it is charting
+  // against, so that becomes a slim bar over a full-width plot.
   return `
   <div class="prop-analysis pa-${tone}">
-    <aside class="pa-side">
-      <div class="pa-shot">${betMark(r, 92)}</div>
-      <div class="pa-name">${escapeHtml(r.player || "")}</div>
-      ${who ? `<div class="pa-who2">${escapeHtml(who)}</div>` : ""}
-      <div class="pa-box">
-        <div class="pa-cell"><div class="pa-k">PROP</div>
-          <div class="pa-m">${escapeHtml(r.market_label || r.market || "")}</div>
-          <div class="pa-big">${escapeHtml(String(line))}</div>
-          <div class="pa-k">LINE</div></div>
-        <div class="pa-cell"><div class="pa-k">ODDS (${over ? "OVER" : "UNDER"})</div>
-          <div class="pa-big ${tone === "good" ? "pos" : "neg"}">${
-            r.odds > 0 ? "+" : ""}${r.odds}</div></div>
-      </div>
-    </aside>
+    <div class="pa-bar">
+      <span class="pa-cell"><span class="pa-k">PROP</span>
+        <span class="pa-m">${escapeHtml(r.market_label || r.market || "")}</span></span>
+      <span class="pa-cell"><span class="pa-k">LINE</span>
+        <span class="pa-big">${escapeHtml(String(line))}</span></span>
+      <span class="pa-cell"><span class="pa-k">ODDS (${over ? "OVER" : "UNDER"})</span>
+        <span class="pa-big ${tone === "good" ? "pos" : "neg"}">${
+          r.odds > 0 ? "+" : ""}${r.odds}</span></span>
+      ${who ? `<span class="pa-who2">${escapeHtml(who)}</span>` : ""}
+    </div>
     <div class="pa-chart">
       <div class="pa-head"><span>LAST ${n} GAMES vs PROP LINE</span>
         <span class="pa-legend"><i class="ok"></i>OVER<i class="no"></i>UNDER</span></div>
