@@ -186,7 +186,11 @@ def mlb_feed_rosters(feed: dict, games_by_player: dict | None = None,
                 "age": None,
                 "games": int(games.get((ab, p.get("name", "")), 0)),
                 "last_seen": "",
-                "headshot": face_of(faces, p.get("name", "")),
+                # The id is RIGHT HERE, so this path needs no name join at
+                # all — `faces` stays only as an override for a caller that
+                # has a better URL than the constructed one.
+                "headshot": (face_of(faces, p.get("name", ""))
+                             or _mlb_face(p.get("person_id"))),
             })
         rows.sort(key=lambda r: (MLB_POSITION_ORDER.get(r["position"], 99),
                                  -r["games"], r["player"]))
@@ -241,6 +245,19 @@ def face_of(faces: dict | None, name: str) -> str:
             or "")
 
 
+def _mlb_face(person_id) -> str:
+    """MLB's own headshot for a Stats API person id, or ``""``.
+
+    Constructed rather than taken — see mlbstats.HEADSHOT for why that is
+    a deliberate, probed guess and how it degrades when wrong.
+    """
+    try:
+        from .mlb.sources.mlbstats import headshot_url
+    except Exception:                                         # noqa: BLE001
+        return ""
+    return headshot_url(person_id)
+
+
 def _faces(conn, sport: str) -> dict:
     """``{normalised name: headshot URL}`` for one sport, or ``{}``.
 
@@ -263,16 +280,34 @@ def _faces(conn, sport: str) -> dict:
     A database with no `player_assets` table is a database with no faces,
     not a broken roster page, which is why db.player_assets swallows.
     """
+    out: dict[str, str] = {}
+    # MLB IS NOT IN `player_assets` AND NEVER WAS. Only the hoops ingest
+    # writes that table (ESPN's box score hands over a photo href, so the
+    # NBA/WNBA faces are TAKEN). The Stats API publishes no photo URL, so
+    # MLB's face is CONSTRUCTED from the person id — the same path the MLB
+    # prop board has used since the splits work. Pointing the roster at
+    # player_assets for baseball looked right and returned nothing, which
+    # is why the first cut shipped with the logos working and every face
+    # still an initials chip.
+    if sport == "mlb":
+        try:
+            from .mlb.sources import mlbstats
+            for players in (mlbstats.fetch_active_rosters() or {}).values():
+                for p in players or []:
+                    url = mlbstats.headshot_url(p.get("person_id"))
+                    if url and p.get("name"):
+                        out[_norm_key(p["name"])] = url
+        except Exception:                                     # noqa: BLE001
+            pass      # no feed, no faces — initials, not a broken page
+        return out
     try:
         from . import db as _db
-        from .sources.oddsapi import normalize_name
     except Exception:                                         # noqa: BLE001
         return {}
-    out = {}
     for name, a in (_db.player_assets(conn, sport) or {}).items():
         url = (a or {}).get("headshot") or ""
         if url:
-            out[normalize_name(name)] = url
+            out[_norm_key(name)] = url
     return out
 
 

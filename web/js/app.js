@@ -9319,8 +9319,22 @@ async function renderRosters() {
   }
   // One match is unambiguous — open it instead of making you tap again.
   const open = shown.length === 1 ? shown[0] : _rosterOpen;
-  const stale = d.feed === "unavailable"
-    ? `<div class="warning" style="margin-bottom:12px">${icon('warn')} ${escapeHtml(d.note || "")}</div>` : "";
+  // ANY note the build wrote gets shown, not just the unavailable one.
+  //
+  // `rosters_build` captures exactly why it fell back to appearances —
+  // "built from appearances because the league feed failed (...) —
+  // pitchers don't bat, so they are missing from this view" — and then
+  // this line dropped it on the floor, because the fallback payload is
+  // stamped feed:"live" (it IS live data, just from a different source).
+  //
+  // So the page Ethan looked at on 2026-08-13 listed 18 Cubs, every one
+  // of them a position player, with nothing anywhere saying a whole half
+  // of the roster was missing or why. The build had already done the work
+  // of explaining itself; the page just had to print it. A missing
+  // pitcher that announces itself is a known gap. A silent one is a
+  // wrong roster.
+  const stale = (d.note || "")
+    ? `<div class="warning" style="margin-bottom:12px">${icon('warn')} ${escapeHtml(d.note)}</div>` : "";
   // Team changes come from diffing daily roster snapshots, which only the
   // NFL feed produces. Showing an empty "recent moves" panel for a sport
   // that cannot detect one would read as "no trades happened".
