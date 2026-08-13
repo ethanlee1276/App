@@ -82,7 +82,7 @@ def _sort_key(r: dict) -> tuple:
             r["player"])
 
 
-def build_rosters(blob: dict | None) -> dict:
+def build_rosters(blob: dict | None, faces: dict | None = None) -> dict:
     """``{teams: {ABBR: {...}}, counts, generated_from}`` from the feed.
 
     Pure: give it the players blob and it returns the payload the page
@@ -96,6 +96,7 @@ def build_rosters(blob: dict | None) -> dict:
         # players Sleeper keeps) carry no team and drop out above.
         if row is None or not row["position"]:
             continue
+        row["headshot"] = face_of(faces, row["player"])
         teams.setdefault(row["team"], []).append(row)
 
     out: dict[str, dict] = {}
@@ -154,7 +155,8 @@ MLB_POSITION_ORDER = {"SP": 0, "P": 1, "RP": 2, "TWP": 3, "C": 4, "1B": 5,
                       "RF": 12, "OF": 13, "DH": 14}
 
 
-def mlb_feed_rosters(feed: dict, games_by_player: dict | None = None) -> dict:
+def mlb_feed_rosters(feed: dict, games_by_player: dict | None = None,
+                     faces: dict | None = None) -> dict:
     """The league's own active rosters, in the page's payload shape.
 
     ``feed`` is fetch_active_rosters()'s output. ``games_by_player`` (from
@@ -184,6 +186,7 @@ def mlb_feed_rosters(feed: dict, games_by_player: dict | None = None) -> dict:
                 "age": None,
                 "games": int(games.get((ab, p.get("name", "")), 0)),
                 "last_seen": "",
+                "headshot": face_of(faces, p.get("name", "")),
             })
         rows.sort(key=lambda r: (MLB_POSITION_ORDER.get(r["position"], 99),
                                  -r["games"], r["player"]))
@@ -212,6 +215,65 @@ def mlb_games_by_player(conn, seasons: list[int] | None = None) -> dict:
     q += " GROUP BY player, team"
     return {(r["team"], r["player"]): int(r["n"])
             for r in conn.execute(q, args)}
+
+
+def _norm_key(name: str) -> str:
+    """The repo's shared name-join key, or the raw name if it is missing."""
+    try:
+        from .sources.oddsapi import normalize_name
+    except Exception:                                         # noqa: BLE001
+        return (name or "").strip().lower()
+    return normalize_name(name or "")
+
+
+def face_of(faces: dict | None, name: str) -> str:
+    """This player's photo URL, joined on the normalised name, or ``""``.
+
+    Exact-string lookup is the trap here and it has been sprung before:
+    a photo table keyed by one feed's spelling against rows carrying
+    another's disagrees on apostrophes, accents, periods and suffixes.
+    See :func:`_faces` for what that cost.
+    """
+    if not faces or not name:
+        return ""
+    return (faces.get(name)
+            or faces.get(_norm_key(name))
+            or "")
+
+
+def _faces(conn, sport: str) -> dict:
+    """``{normalised name: headshot URL}`` for one sport, or ``{}``.
+
+    Ethan, 2026-08-13: "we are not showing player headshots or logos on
+    the roster page either." The logos were a markup problem; the faces
+    were this — `player_assets` has carried a photo URL per player since
+    the hoops ingest started storing them, and the roster payload has
+    never once looked at that table.
+
+    JOINED ON A NORMALISED NAME, not the exact string. `player_assets` is
+    keyed by the name in ESPN's box score and these rows come from
+    `player_game_logs`, and the two disagree about apostrophes, accents,
+    periods and suffixes. The identical mistake cost a whole WNBA photo
+    ingest on 2026-08-10 — 100 of 105 faces stored, every card still
+    drawing initials — so this uses the same join key the settle path and
+    the hoops board already use. It folds case, accents, punctuation and
+    suffixes and NOTHING else, so two different players cannot collide
+    into one face.
+
+    A database with no `player_assets` table is a database with no faces,
+    not a broken roster page, which is why db.player_assets swallows.
+    """
+    try:
+        from . import db as _db
+        from .sources.oddsapi import normalize_name
+    except Exception:                                         # noqa: BLE001
+        return {}
+    out = {}
+    for name, a in (_db.player_assets(conn, sport) or {}).items():
+        url = (a or {}).get("headshot") or ""
+        if url:
+            out[normalize_name(name)] = url
+    return out
 
 
 def from_game_logs(conn, sport: str, seasons: list[int] | None = None,
@@ -262,6 +324,8 @@ def from_game_logs(conn, sport: str, seasons: list[int] | None = None,
         if seen is None or str(r["last_seen"]) > seen:
             latest[r["player"]] = str(r["last_seen"])
 
+    faces = _faces(conn, sport)
+
     teams: dict[str, list] = {}
     for r in rows:
         last = str(r["last_seen"])
@@ -279,6 +343,7 @@ def from_game_logs(conn, sport: str, seasons: list[int] | None = None,
             "rookie": False,
             "years_exp": None, "number": None, "age": None,
             "games": int(r["games"]), "last_seen": last,
+            "headshot": face_of(faces, r["player"]),
         })
 
     out: dict[str, dict] = {}

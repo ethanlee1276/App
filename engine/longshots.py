@@ -68,6 +68,14 @@ class LongShot:
     game_date: str = ""
     game_kickoff: str = ""
     live: bool = False
+    #: The player's photo URL, carried from the prop the pick was built
+    #: from. Ethan, 2026-08-13: "we are not showing headshots on the
+    #: longshot page either." The page was never the problem — it has
+    #: always called `playerAvatar(..., {headshot: r.headshot})`. This
+    #: field did not exist, so `r.headshot` was undefined on every row and
+    #: every card fell through to the drawn chip. The prop object beside
+    #: the candidate had the URL the whole time; nothing copied it across.
+    headshot: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -84,7 +92,7 @@ class LongShot:
             "reasons": self.reasons, "caveats": self.caveats,
             "matchup": f"{self.team} vs {self.opponent}",
             "game_date": self.game_date, "game_kickoff": self.game_kickoff,
-            "live": self.live,
+            "live": self.live, "headshot": self.headshot,
             "headline": f"{self.player} — {self.market_label} ({self.odds:+d})",
         }
 
@@ -208,7 +216,8 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
                book: str, odds: int, model_prob: float, under_odds: int | None,
                opportunities: float, opp_target: float, primary_reason: str,
                reasons: list[str], caveats: list[str], sport: str,
-               data_quality: float = 1.0) -> LongShot | None:
+               data_quality: float = 1.0,
+               headshot: str = "") -> LongShot | None:
     """Price a modelled probability against the book and grade it."""
     _t, _b = correction_for(sport, market)
     raw_prob = clamp(apply_temperature(model_prob, _t, _b), 1e-4, 0.999)
@@ -248,6 +257,7 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
         confidence=confidence, stake_units=_stake(model_prob, odds) if grade != "Pass" else 0.0,
         grade=grade, expected_opportunities=opportunities,
         primary_reason=primary_reason, reasons=reasons, caveats=caveats,
+        headshot=headshot,
     )
 
 

@@ -50,7 +50,17 @@ def _write_rosters(path: Path, blob: dict | None) -> None:
         print("Rosters: feed unavailable — wrote an empty payload that says so.")
         return
     today = datetime.date.today().isoformat()
-    out = _r.build_rosters(blob)
+    # The same photo map the usage and buy/sell boards already use, so the
+    # roster page shows the face the rest of the site shows. Faces are
+    # polish: an unreachable roster file is an empty map and initials, not
+    # a failed build.
+    try:
+        from engine.sources import nflverse as _nv
+        from engine.seasons import season_of as _season_of
+        _faces = _nv.headshot_map(_season_of("nfl", today))
+    except Exception:                                          # noqa: BLE001
+        _faces = {}
+    out = _r.build_rosters(blob, faces=_faces)
     # Transactions come from diffing OUR OWN daily snapshots. No news feed,
     # nothing to curate, and it covers every rostered player rather than
     # the ones somebody thought to mention.

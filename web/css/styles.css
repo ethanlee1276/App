@@ -2511,11 +2511,19 @@ select.calc-in { width: auto; font-weight: 600; }
 .ros-team:hover { border-color: var(--brand-2); }
 .ros-team.open { border-radius: 0;
   border-color: var(--brand-2); }
+/* The team's real logo, not a coloured square with the abbreviation in
+   it. Ethan, 2026-08-13: "we are not showing player headshots or logos on
+   the roster page". `teamMark` draws a monogram underneath and steps
+   aside when the logo paints, so this slot must not paint a ground of its
+   own — a background here shows through every transparent logo PNG. */
 .ros-mark {
-  width: 30px; height: 30px; border-radius: 0; flex: 0 0 auto;
-  display: grid; place-items: center; font-size: var(--fs-2xs); font-weight: 800;
-  color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+  width: 30px; height: 30px; flex: 0 0 auto;
+  display: grid; place-items: center;
 }
+.ros-mark svg, .ros-mark img { display: block; }
+/* The face sits on the baseline of the name, and never squeezes it: the
+   name column is the one that gives, so the avatar is fixed. */
+.ros-name .avatar, .ros-name .avatar-stack { flex: 0 0 auto; }
 .ros-team-name { flex: 1 1 auto; min-width: 0; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
 .ros-team-n { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 600;

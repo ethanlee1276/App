@@ -335,6 +335,49 @@ def test_the_recommended_page_features_the_same_three():
     assert len(featured) <= 3
 
 
+def test_a_long_shot_carries_the_photo_its_prop_already_had():
+    """Ethan, 2026-08-13: "we are not showing headshots on the longshot
+    page either."
+
+    The page was never the problem — it has always rendered
+    `playerAvatar(..., {headshot: r.headshot})`. The LongShot dataclass
+    simply had no such field, so `r.headshot` was undefined on every row
+    and every card fell through to the drawn chip, while the prop object
+    sitting beside the candidate carried the URL the whole time.
+
+    Pinned on the dataclass and its dict because that is where the fact
+    went missing; the two builders read it off the prop with getattr, so a
+    prop without one costs a picture and never a board.
+    """
+    from engine.longshots import LongShot
+    import dataclasses
+    fields = {f.name for f in dataclasses.fields(LongShot)}
+    assert "headshot" in fields, "the row cannot carry what it has no field for"
+    ls = LongShot(
+        player="X", team="SF", opponent="LA", market="anytime_td",
+        market_label="Anytime TD", book="dk", odds=150, model_prob=0.4,
+        implied_prob=0.38, edge=0.02, ev_per_unit=0.05, confidence=6.0,
+        stake_units=0.5, grade="B", expected_opportunities=2.0,
+        primary_reason="r", headshot="https://x/face.png")
+    assert ls.to_dict()["headshot"] == "https://x/face.png"
+    # Default is the empty string, so the key is always present: a missing
+    # key and an empty one render identically and debug very differently.
+    bare = dataclasses.replace(ls, headshot="")
+    assert bare.to_dict()["headshot"] == ""
+
+
+def test_both_long_shot_builders_read_the_photo_off_the_prop():
+    """One field on the dataclass is only half a fix — the two builders
+    have to actually copy it across, and neither may crash on a prop
+    (or a test fixture) that predates the attribute."""
+    import inspect
+    from engine import touchdowns
+    from engine.mlb import homeruns
+    for mod in (touchdowns, homeruns):
+        src = inspect.getsource(mod)
+        assert 'headshot=getattr(prop, "headshot", "")' in src, mod.__name__
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

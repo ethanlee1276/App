@@ -8860,7 +8860,8 @@ function rosterPlayerHTML(p, byAppearance) {
     ? "" : (p.years_exp != null ? (p.years_exp === 0 ? "R" : p.years_exp) : "—");
   return `<div class="ros-row${p.unavailable ? " out" : ""}">
     <span class="ros-slot">${escapeHtml(slot)}</span>
-    <span class="ros-name">${escapeHtml(p.player)}${tags}</span>
+    <span class="ros-name">${playerAvatar(p.player, p.team,
+        { size: 26, map: nflMap(), headshot: p.headshot })}${escapeHtml(p.player)}${tags}</span>
     <span class="ros-pos">${escapeHtml(p.position)}</span>
     <span class="ros-n">${colA}</span>
     <span class="ros-n">${colB}</span>
@@ -8874,7 +8875,7 @@ function rosterTeamHTML(abbr, team, expanded, byAppearance) {
   const label = meta.name || abbr;
   if (!expanded) {
     return `<button class="ros-team" data-team="${escapeHtml(abbr)}">
-      <span class="ros-mark" style="background:${escapeHtml(meta.primary || "#39405166")}">${escapeHtml(abbr)}</span>
+      <span class="ros-mark">${teamMark(abbr, 30, null, state.sport)}</span>
       <span class="ros-team-name">${escapeHtml(label)}</span>
       <span class="ros-team-n">${team.count}</span>
     </button>`;
@@ -8897,7 +8898,7 @@ function rosterTeamHTML(abbr, team, expanded, byAppearance) {
   }
   return `<div class="card ros-card">
     <button class="ros-team open" data-team="${escapeHtml(abbr)}">
-      <span class="ros-mark" style="background:${escapeHtml(meta.primary || "#39405166")}">${escapeHtml(abbr)}</span>
+      <span class="ros-mark">${teamMark(abbr, 30, null, state.sport)}</span>
       <span class="ros-team-name">${escapeHtml(label)}</span>
       <span class="ros-team-n">${team.count}${byAppearance ? "" : ` · ${team.rookies} rookie${team.rookies === 1 ? "" : "s"}`}${team.unavailable ? ` · ${team.unavailable} ${byAppearance ? "cold" : "out"}` : ""}</span>
     </button>

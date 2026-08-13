@@ -148,6 +148,43 @@ def test_history_survives_the_cache_pruner():
     assert not rosters.SNAPSHOT_FILE.startswith(PRUNABLE_CACHE_PREFIXES)
 
 
+def test_the_roster_page_carries_a_face_for_every_player_it_can():
+    """Ethan, 2026-08-13: "we are not showing player headshots or logos on
+    the roster page either."
+
+    He was right and it was not a rendering bug: NO roster producer had
+    ever emitted a `headshot` key, so the page had nothing to draw even
+    when `player_assets` held the photo. All three producers emit it now,
+    and a producer that emits nothing is the failure this pins.
+    """
+    from engine import rosters
+    faces = {"Signed Guy": "https://x/face.png"}
+    out = rosters.build_rosters(_blob(_p("Signed Guy", "SF")), faces=faces)
+    row = out["teams"]["SF"]["players"][0]
+    assert row["headshot"] == "https://x/face.png"
+    # And a player with no photo gets the empty string, never a missing
+    # key — `undefined` and "" render the same but debug very differently.
+    out2 = rosters.build_rosters(_blob(_p("Faceless", "SF")), faces=faces)
+    assert out2["teams"]["SF"]["players"][0]["headshot"] == ""
+
+
+def test_the_face_join_survives_the_punctuation_two_feeds_disagree_on():
+    """The photo table is keyed by one feed's spelling and the roster rows
+    carry another's. An exact-string join is why 100 of 105 WNBA photos
+    were ingested on 2026-08-10 and every card still drew initials.
+
+    `face_of` folds case, accents, punctuation and suffixes — and NOTHING
+    else, so two different players can never collide into one face.
+    """
+    from engine.rosters import face_of
+    faces = {"aja wilson": "https://x/aja.png"}
+    assert face_of(faces, "A'ja Wilson") == "https://x/aja.png"
+    # Different people stay different people.
+    assert face_of(faces, "Jordan Wilson") == ""
+    # No map, no name, no crash.
+    assert face_of(None, "Anyone") == "" and face_of(faces, "") == ""
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

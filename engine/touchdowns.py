@@ -263,6 +263,11 @@ def build_td_longshots(candidates: list[dict], limit: int = 6,
             opportunities=info["opportunities"], opp_target=2.0,
             primary_reason=info["primary_reason"], reasons=info["reasons"],
             caveats=info["caveats"], sport="nfl", data_quality=info["data_quality"],
+            # The same photo the prop board shows for this player. Read off
+            # the prop with getattr rather than attribute access: a Prop
+            # built by an older path (or a test fixture) has no headshot,
+            # and a long-shot board is not worth crashing over a picture.
+            headshot=getattr(prop, "headshot", "") or "",
         )
         if pick:
             pick.game_date = getattr(game, "date", "")

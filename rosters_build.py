@@ -67,7 +67,11 @@ def payload_for(conn, sport: str, today: str | None = None) -> dict:
             from engine.mlb.sources.mlbstats import fetch_active_rosters
             feed = fetch_active_rosters()
             out = _r.mlb_feed_rosters(
-                feed, _r.mlb_games_by_player(conn, seasons=[season]))
+                feed, _r.mlb_games_by_player(conn, seasons=[season]),
+                # Faces the ingest already stored, joined on the normalised
+                # name — see engine/rosters._faces for why the exact string
+                # is the wrong key.
+                faces=_r._faces(conn, "mlb"))
             if out["player_count"]:
                 out.update({
                     "sport": sport, "season": season,

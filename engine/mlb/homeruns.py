@@ -350,6 +350,11 @@ def build_hr_longshots(candidates: list[dict], limit: int = 3,
             opportunities=info["opportunities"], opp_target=4.5,
             primary_reason=info["primary_reason"], reasons=info["reasons"],
             caveats=info["caveats"], sport="mlb", data_quality=info["data_quality"],
+            # The same photo the prop board shows for this player. Read off
+            # the prop with getattr rather than attribute access: a Prop
+            # built by an older path (or a test fixture) has no headshot,
+            # and a long-shot board is not worth crashing over a picture.
+            headshot=getattr(prop, "headshot", "") or "",
         )
         if pick:
             pick.game_date = getattr(game, "date", "")
