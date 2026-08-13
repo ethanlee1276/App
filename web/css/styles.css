@@ -4480,3 +4480,24 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   .wx-row { flex-wrap: wrap; gap: 8px; }
   .wx-park { flex-basis: 100%; }
 }
+
+/* --- Prop analysis (Ethan's render, 2026-08-16) -------------------------
+   Face on the left, chart on the right, stat row under it. The card the
+   render shows is this block inside the prop card that already carries
+   the grade, the reasons and the stake — those are not repeated here. */
+.prop-analysis { margin-top: 10px; border-top: var(--hairline) solid var(--border-soft); padding-top: 10px; }
+.pa-who { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.pa-name { font-weight: 800; font-size: var(--fs-md); letter-spacing: .01em; }
+.pa-sub { font-size: var(--fs-sm); color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.pa-head { display: flex; justify-content: space-between; align-items: center;
+           font-size: var(--fs-2xs); letter-spacing: .08em; color: var(--text-mute); }
+.pa-legend { display: inline-flex; align-items: center; gap: 5px; }
+.pa-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.pa-legend i.ok { background: var(--good); }
+.pa-legend i.no { background: var(--bad); margin-left: 8px; }
+.pa-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+            border-top: var(--hairline) solid var(--border-soft); padding-top: 8px; margin-top: 4px; }
+.pa-tile { text-align: center; min-width: 0; }
+.pa-v { font-weight: 800; font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
+.pa-v.pos { color: var(--good); } .pa-v.neg { color: var(--bad); }
+.pa-k { font-size: var(--fs-2xs); letter-spacing: .08em; color: var(--text-mute); }

@@ -24,12 +24,50 @@ FN = VIS[VIS.index("function gamelogBars"):VIS.index("/* ---------------- Sparkl
 
 
 def test_every_player_prop_chart_is_bars_now():
-    """All four prop call sites moved. The two survivors are deliberate."""
+    """No prop chart is a line any more.
+
+    Three of the four became the full `propAnalysis` block Ethan's render
+    specifies; the fourth is a 64x22 inline chip where axes and a stat row
+    do not fit, so it keeps the bare bars.
+    """
     assert "sparkline(r.recent_values" not in APP
-    assert APP.count("gamelogBars(r.recent_values") == 4
+    assert APP.count("propAnalysis(r)") == 3
+    assert APP.count("gamelogBars(r.recent_values") == 1
     # The profile trend and the meme price chart stay lines: those ARE
     # continuous quantities, where the connection between points is real.
     assert APP.count("sparkline(") == 2
+
+
+PA = VIS[VIS.index("function propAnalysis"):VIS.index("/* ---------------- Game-log bars")]
+
+
+def test_the_hit_rate_is_computed_not_copied_from_the_render():
+    """Ethan's render says 8/10 beside ten bars of which five are green.
+    It is a mockup and its stat row is placeholder text. Copying 8/10
+    would have put a number on the site that its own chart contradicts,
+    so the count comes from the data every time."""
+    assert "data.filter(won).length" in PA
+    assert "8 / 10" not in PA and "80%" not in PA
+
+
+def test_an_under_bet_is_not_painted_backwards():
+    """"Cleared" means the BET cashed. For an UNDER that is the value
+    falling below the line, so colouring on `v > line` regardless of side
+    would paint an under-bet's winners red."""
+    assert "over ? v > line : v < line" in PA
+
+
+def test_the_line_pill_has_its_own_gutter():
+    """It sat inside the plot and covered the last bar's value label —
+    caught by rendering it, like the zero-height bar before it."""
+    assert "R = 58" in PA
+    assert "${W - R + 6}" in PA
+
+
+def test_the_value_labels_survive_the_threshold_rule():
+    """A dashed rule ran straight through the labels it crossed. The
+    knockout halo is what keeps both readable."""
+    assert 'paint-order="stroke"' in PA
 
 
 def test_the_scale_starts_at_zero():

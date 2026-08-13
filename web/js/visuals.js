@@ -1061,6 +1061,112 @@ function countStrip(live) {
     </span>`;
 }
 
+/* ---------------- Prop analysis card (Ethan's render) -------------------- */
+/* Ethan, 2026-08-16, with three renders: "use these renders for what I want
+   the bar graphs too look like. I want the player faces in it as it looks
+   more professional. Match these renders exactly."
+
+   Everything in his render is drawn from data we already journal — the
+   per-game values, the line, the price, the model's EV and its grade. The
+   two HIT RATE tiles are the same fact twice (a count and a percentage),
+   which is how the render has it, so it is how this has it.
+
+   The chart area is the render's, element for element: y-axis labels on
+   faint gridlines, the value printed above every bar, an OVER/UNDER
+   legend, game numbers along the bottom, and the line drawn dashed with
+   its own pill at the right edge.
+
+   The pill and the legend matter beyond decoration. The site's status
+   pair is ΔE 7.5 under deuteranopia, so cleared-vs-missed can never rest
+   on colour alone: the drawn rule makes it positional, the value label
+   makes it numeric, and the legend names both colours. Three readings,
+   only one of which needs colour vision.                                */
+function propAnalysis(r, opts = {}) {
+  const vals = (r.recent_values || []).filter((v) => Number.isFinite(Number(v)));
+  if (vals.length < 3) return "";
+  const line = Number(r.line);
+  const data = vals.slice(0, 10).map(Number).reverse();   // oldest -> newest
+  const n = data.length;
+  const over = (r.side || "OVER").toUpperCase() === "OVER";
+  // "Cleared" means the bet cashed, which for an UNDER is the value
+  // falling BELOW the line. Colouring by `v > line` regardless of side
+  // would paint an under-bet's winners red.
+  const won = (v) => (over ? v > line : v < line);
+  const hits = data.filter(won).length;
+
+  const W = 520, H = 210, L = 34, R = 58, T = 18, B = 26;
+  const hi = Math.max(...data, line) * 1.12 || 1;
+  const step = Math.pow(10, Math.floor(Math.log10(hi || 1)));
+  const tick = Math.ceil(hi / (step * 4)) * step;         // 4 clean gridlines
+  const top = tick * 4;
+  const y = (v) => T + (1 - v / top) * (H - T - B);
+  const slot = (W - L - R) / n, bw = Math.min(30, slot - 8);
+  const bx = (i) => L + i * slot + (slot - bw) / 2;
+
+  let grid = "";
+  for (let k = 0; k <= 4; k++) {
+    const v = tick * k;
+    grid += `<line x1="${L}" y1="${y(v)}" x2="${W - R}" y2="${y(v)}"
+        stroke="var(--border-soft)" stroke-width="1" opacity=".6"/>
+      <text x="${L - 6}" y="${y(v) + 3.5}" text-anchor="end" font-size="10"
+        fill="var(--text-faint)" font-variant-numeric="tabular-nums">${
+        Number(v.toFixed(2))}</text>`;
+  }
+  const bars = data.map((v, i) => {
+    const c = won(v) ? "var(--good)" : "var(--bad)";
+    const yt = y(v), h = Math.max(3, y(0) - yt);
+    return `<rect x="${bx(i).toFixed(1)}" y="${(y(0) - h).toFixed(1)}"
+        width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${c}"
+        data-tip="Game ${i + 1} — ${v}" style="pointer-events:all;cursor:pointer"/>
+      <text x="${(bx(i) + bw / 2).toFixed(1)}" y="${(yt - 5).toFixed(1)}"
+        text-anchor="middle" font-size="10" fill="${c}"
+        paint-order="stroke" stroke="var(--panel)" stroke-width="3"
+        font-variant-numeric="tabular-nums">${v}</text>
+      <text x="${(bx(i) + bw / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle"
+        font-size="10" fill="var(--text-faint)">${i + 1}</text>`;
+  }).join("");
+  const ly = y(line);
+  const pill = `<g>
+      <rect x="${W - R + 6}" y="${ly - 9}" width="46" height="18" rx="3"
+        fill="var(--panel-3)" stroke="var(--border)"/>
+      <text x="${W - R + 29}" y="${ly + 3.5}" text-anchor="middle" font-size="10"
+        fill="var(--text)" font-variant-numeric="tabular-nums">${line}</text>
+      <text x="${W - R + 29}" y="${ly + 17}" text-anchor="middle" font-size="8"
+        fill="var(--text-faint)">LINE</text></g>`;
+
+  const tile = (v, k, tone) => `<div class="pa-tile">
+      <div class="pa-v ${tone || ""}">${v}</div><div class="pa-k">${k}</div></div>`;
+  const ev = r.ev_per_unit;
+  const conf = r.confidence >= 8 ? "HIGH" : r.confidence >= 6 ? "MEDIUM" : "LOW";
+  return `
+  <div class="prop-analysis">
+    <div class="pa-who">${betMark(r, 46)}
+      <div class="pa-id"><div class="pa-name">${escapeHtml(r.player || "")}</div>
+        <div class="pa-sub">${escapeHtml(r.market_label || r.market || "")} ·
+          ${escapeHtml(String(line))} · ${r.odds > 0 ? "+" : ""}${r.odds}</div></div>
+    </div>
+    <div class="pa-chart">
+      <div class="pa-head"><span>LAST ${n} GAMES vs PROP LINE</span>
+        <span class="pa-legend"><i class="ok"></i>OVER<i class="no"></i>UNDER</span></div>
+      <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img"
+           aria-label="${escapeAttr(`${hits} of the last ${n} games cleared ${line}`)}">
+        ${grid}
+        <line x1="${L}" y1="${ly}" x2="${W - R + 4}" y2="${ly}" stroke="var(--text)"
+          stroke-width="1" stroke-dasharray="5 4" opacity=".75"/>
+        ${bars}${pill}
+      </svg>
+      <div class="pa-stats">
+        ${tile(`${hits} / ${n}`, "HIT RATE", hits * 2 >= n ? "pos" : "neg")}
+        ${tile(`${Math.round((hits / n) * 100)}%`, "HIT RATE",
+               hits * 2 >= n ? "pos" : "neg")}
+        ${tile(ev == null ? "—" : `${ev >= 0 ? "+" : ""}${ev.toFixed(2)}`, "EV",
+               (ev || 0) >= 0 ? "pos" : "neg")}
+        ${tile(conf, "CONFIDENCE", conf === "LOW" ? "neg" : "pos")}
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ---------------- Game-log bars (a prop against its line) ---------------- */
 /* Ethan, 2026-08-16: "instead of line charts for the player stats we should
    be using bar graphs instead. They are easier to read and we can label

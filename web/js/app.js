@@ -2134,10 +2134,7 @@ function gameBetCard(r) {
         <div class="metric primary"><div class="k">Edge</div><div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>
       </div>
       ${confMeter(r)}
-      ${(r.recent_values || []).length > 2
-        ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
-             ${gamelogBars(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
-        : ""}
+      ${propAnalysis(r)}
       <div class="chips">${stakeChip}${condChip}${tierChip}</div>
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
@@ -2755,10 +2752,7 @@ function cardHTML(r) {
         <div class="metric"><div class="k">EV / unit</div><div class="v ${r.ev_per_unit >= 0 ? "pos" : "neg"}">${signedPct(r.ev_per_unit)}</div></div>
       </div>
       ${confMeter(r)}
-      ${(r.recent_values || []).length > 2
-        ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
-             ${gamelogBars(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
-        : ""}
+      ${propAnalysis(r)}
       <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${booksChip(r)}${stakeChip}</div>
       ${corr}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
@@ -3173,10 +3167,7 @@ function longShotCard(r) {
         <div class="metric"><div class="k">${oppLabel}</div><div class="v">${r.expected_opportunities}</div></div>
       </div>
       ${confMeter(r)}
-      ${(r.recent_values || []).length > 2
-        ? `<div class="mini" style="margin-top:8px" title="Last ${r.recent_values.length} games — dashed line is the prop line">
-             ${gamelogBars(r.recent_values, { line: r.line, stroke: teamPrimary(r.team), w: 260, h: 46 })}</div>`
-        : ""}
+      ${propAnalysis(r)}
       <div class="chips"><span class="chip stake">${stakeTxt}</span></div>
       <div class="ls-primary">${escapeHtml(r.primary_reason)}</div>
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
