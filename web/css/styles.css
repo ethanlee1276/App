@@ -4485,10 +4485,27 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    Face on the left, chart on the right, stat row under it. The card the
    render shows is this block inside the prop card that already carries
    the grade, the reasons and the stake — those are not repeated here. */
-.prop-analysis { margin-top: 10px; border-top: var(--hairline) solid var(--border-soft); padding-top: 10px; }
-.pa-who { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.pa-name { font-weight: 800; font-size: var(--fs-md); letter-spacing: .01em; }
-.pa-sub { font-size: var(--fs-sm); color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.prop-analysis { margin-top: 10px; border-top: var(--hairline) solid var(--border-soft);
+                 padding-top: 10px; display: grid;
+                 grid-template-columns: 208px minmax(0, 1fr); gap: 14px; }
+/* The tint is the card's verdict at a glance — whether recent form backs
+   the side we took. It is a stripe on the leading edge, which is why it
+   may be heavier than a hairline; see propAnalysis for what it means. */
+.prop-analysis.pa-good { border-left: 3px solid var(--good); padding-left: 12px; }
+.prop-analysis.pa-bad { border-left: 3px solid var(--bad); padding-left: 12px; }
+.pa-side { min-width: 0; }
+.pa-shot { margin-bottom: 8px; }
+.pa-name { font-weight: 800; font-size: var(--fs-lg); line-height: var(--lh-tight);
+           text-transform: uppercase; letter-spacing: .01em; }
+.pa-who2 { font-size: var(--fs-2xs); letter-spacing: .06em; color: var(--text-mute);
+           text-transform: uppercase; margin-top: 3px; }
+.pa-box { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;
+          border: var(--hairline) solid var(--border); border-radius: var(--radius-sm);
+          padding: 9px 10px; }
+.pa-cell { min-width: 0; overflow-wrap: anywhere; }
+.pa-m { font-weight: 700; font-size: var(--fs-sm); text-transform: uppercase; }
+.pa-big { font-weight: 800; font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
+.pa-big.pos { color: var(--good); } .pa-big.neg { color: var(--bad); }
 .pa-head { display: flex; justify-content: space-between; align-items: center;
            font-size: var(--fs-2xs); letter-spacing: .08em; color: var(--text-mute); }
 .pa-legend { display: inline-flex; align-items: center; gap: 5px; }
@@ -4501,3 +4518,11 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .pa-v { font-weight: 800; font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
 .pa-v.pos { color: var(--good); } .pa-v.neg { color: var(--bad); }
 .pa-k { font-size: var(--fs-2xs); letter-spacing: .08em; color: var(--text-mute); }
+/* The chart sizes from its own viewBox ratio rather than a fixed height:
+   a hard height letterboxes it inside its column on a narrow screen —
+   the chart shrinks to fit the width and the leftover height is dead
+   band. Ratio-sizing removes the band at every width. */
+.pa-chart svg { display: block; width: 100%; height: auto; }
+/* Below the phone breakpoint the identity panel would squeeze the chart
+   past reading width, so the two columns stack instead. */
+@media (max-width: 720px) { .prop-analysis { grid-template-columns: 1fr; } }

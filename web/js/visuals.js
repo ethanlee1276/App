@@ -1093,11 +1093,40 @@ function propAnalysis(r, opts = {}) {
   // would paint an under-bet's winners red.
   const won = (v) => (over ? v > line : v < line);
   const hits = data.filter(won).length;
+  // THE CARD TINT. Ethan's render alternates a red and a green card border
+  // between two cards that are both OVER bets at similar confidence, so
+  // there the alternation is decorative. A coloured border on a betting
+  // card that means nothing is worse than no border, so this one carries
+  // the same fact the bars do: whether recent form backs the side we took.
+  const backs = hits * 2 >= n;
+  const tone = backs ? "good" : "bad";
 
-  const W = 520, H = 210, L = 34, R = 58, T = 18, B = 26;
+  // GEOMETRY, BY VIEWPORT. The SVG scales to its column, so a wide
+  // viewBox squeezed into a phone shrinks every label with it — ten
+  // games at 520 units wide inside a 340px card renders 10-unit type at
+  // 6.5px, which is not a label. A narrower box on a phone means less
+  // downscale, so the type survives. Same precedent as the board's own
+  // 760px cut in app.js.
+  const narrow = typeof window !== "undefined" && window.matchMedia
+    ? window.matchMedia("(max-width: 760px)").matches : false;
+  const W = narrow ? 360 : 520, H = narrow ? 200 : 210;
+  const L = narrow ? 28 : 34, R = narrow ? 46 : 58, T = 18, B = 26;
+  // Type is in viewBox units, so it has to grow as the box narrows to
+  // land at the same physical size on the glass.
+  const FS = narrow ? 13 : 10;
   const hi = Math.max(...data, line) * 1.12 || 1;
-  const step = Math.pow(10, Math.floor(Math.log10(hi || 1)));
-  const tick = Math.ceil(hi / (step * 4)) * step;         // 4 clean gridlines
+  // A ROUND AXIS THAT STILL FITS THE DATA. Rounding the tick to a power
+  // of ten put a 90-yard game on an axis that ran to 400 — the bars used
+  // the bottom quarter of the plot and every difference between them was
+  // flattened to nothing. That is the same failure as a clipped baseline,
+  // pointing the other way, so the step comes off a nice-number ladder
+  // instead: the smallest round tick whose four gridlines still cover the
+  // data. 90 now tops out at 120, not 400.
+  const raw = hi / 4;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+  const norm = (raw || 1) / mag;
+  const tick = ([1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]
+    .find((c) => c >= norm - 1e-9) || 10) * mag;
   const top = tick * 4;
   const y = (v) => T + (1 - v / top) * (H - T - B);
   const slot = (W - L - R) / n, bw = Math.min(30, slot - 8);
@@ -1108,7 +1137,7 @@ function propAnalysis(r, opts = {}) {
     const v = tick * k;
     grid += `<line x1="${L}" y1="${y(v)}" x2="${W - R}" y2="${y(v)}"
         stroke="var(--border-soft)" stroke-width="1" opacity=".6"/>
-      <text x="${L - 6}" y="${y(v) + 3.5}" text-anchor="end" font-size="10"
+      <text x="${L - 6}" y="${y(v) + FS * .35}" text-anchor="end" font-size="${FS}"
         fill="var(--text-faint)" font-variant-numeric="tabular-nums">${
         Number(v.toFixed(2))}</text>`;
   }
@@ -1119,36 +1148,50 @@ function propAnalysis(r, opts = {}) {
         width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${c}"
         data-tip="Game ${i + 1} — ${v}" style="pointer-events:all;cursor:pointer"/>
       <text x="${(bx(i) + bw / 2).toFixed(1)}" y="${(yt - 5).toFixed(1)}"
-        text-anchor="middle" font-size="10" fill="${c}"
+        text-anchor="middle" font-size="${FS}" fill="${c}"
         paint-order="stroke" stroke="var(--panel)" stroke-width="3"
         font-variant-numeric="tabular-nums">${v}</text>
       <text x="${(bx(i) + bw / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle"
-        font-size="10" fill="var(--text-faint)">${i + 1}</text>`;
+        font-size="${FS}" fill="var(--text-faint)">${i + 1}</text>`;
   }).join("");
   const ly = y(line);
   const pill = `<g>
-      <rect x="${W - R + 6}" y="${ly - 9}" width="46" height="18" rx="3"
+      <rect x="${W - R + 6}" y="${ly - FS}" width="${R - 12}" height="${FS * 2}" rx="3"
         fill="var(--panel-3)" stroke="var(--border)"/>
-      <text x="${W - R + 29}" y="${ly + 3.5}" text-anchor="middle" font-size="10"
+      <text x="${W - R + (R - 12) / 2 + 6}" y="${ly + FS * .35}" text-anchor="middle" font-size="${FS}"
         fill="var(--text)" font-variant-numeric="tabular-nums">${line}</text>
-      <text x="${W - R + 29}" y="${ly + 17}" text-anchor="middle" font-size="8"
+      <text x="${W - R + (R - 12) / 2 + 6}" y="${ly + FS * 1.9}" text-anchor="middle" font-size="${FS * .8}"
         fill="var(--text-faint)">LINE</text></g>`;
 
   const tile = (v, k, tone) => `<div class="pa-tile">
       <div class="pa-v ${tone || ""}">${v}</div><div class="pa-k">${k}</div></div>`;
   const ev = r.ev_per_unit;
   const conf = r.confidence >= 8 ? "HIGH" : r.confidence >= 6 ? "MEDIUM" : "LOW";
+  // Position and team are both journaled, so the render's "QB · KANSAS
+  // CITY CHIEFS" line is real data rather than a caption. A prop missing
+  // either prints what it has instead of an empty separator.
+  const who = [r.position, (typeof teamName === "function"
+    ? teamName(r.team) : r.team)].filter(Boolean).join(" · ");
   return `
-  <div class="prop-analysis">
-    <div class="pa-who">${betMark(r, 46)}
-      <div class="pa-id"><div class="pa-name">${escapeHtml(r.player || "")}</div>
-        <div class="pa-sub">${escapeHtml(r.market_label || r.market || "")} ·
-          ${escapeHtml(String(line))} · ${r.odds > 0 ? "+" : ""}${r.odds}</div></div>
-    </div>
+  <div class="prop-analysis pa-${tone}">
+    <aside class="pa-side">
+      <div class="pa-shot">${betMark(r, 92)}</div>
+      <div class="pa-name">${escapeHtml(r.player || "")}</div>
+      ${who ? `<div class="pa-who2">${escapeHtml(who)}</div>` : ""}
+      <div class="pa-box">
+        <div class="pa-cell"><div class="pa-k">PROP</div>
+          <div class="pa-m">${escapeHtml(r.market_label || r.market || "")}</div>
+          <div class="pa-big">${escapeHtml(String(line))}</div>
+          <div class="pa-k">LINE</div></div>
+        <div class="pa-cell"><div class="pa-k">ODDS (${over ? "OVER" : "UNDER"})</div>
+          <div class="pa-big ${tone === "good" ? "pos" : "neg"}">${
+            r.odds > 0 ? "+" : ""}${r.odds}</div></div>
+      </div>
+    </aside>
     <div class="pa-chart">
       <div class="pa-head"><span>LAST ${n} GAMES vs PROP LINE</span>
         <span class="pa-legend"><i class="ok"></i>OVER<i class="no"></i>UNDER</span></div>
-      <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img"
+      <svg viewBox="0 0 ${W} ${H}" role="img"
            aria-label="${escapeAttr(`${hits} of the last ${n} games cleared ${line}`)}">
         ${grid}
         <line x1="${L}" y1="${ly}" x2="${W - R + 4}" y2="${ly}" stroke="var(--text)"
@@ -1156,9 +1199,8 @@ function propAnalysis(r, opts = {}) {
         ${bars}${pill}
       </svg>
       <div class="pa-stats">
-        ${tile(`${hits} / ${n}`, "HIT RATE", hits * 2 >= n ? "pos" : "neg")}
-        ${tile(`${Math.round((hits / n) * 100)}%`, "HIT RATE",
-               hits * 2 >= n ? "pos" : "neg")}
+        ${tile(`${hits} / ${n}`, "HIT RATE", backs ? "pos" : "neg")}
+        ${tile(`${Math.round((hits / n) * 100)}%`, "HIT %", backs ? "pos" : "neg")}
         ${tile(ev == null ? "—" : `${ev >= 0 ? "+" : ""}${ev.toFixed(2)}`, "EV",
                (ev || 0) >= 0 ? "pos" : "neg")}
         ${tile(conf, "CONFIDENCE", conf === "LOW" ? "neg" : "pos")}
