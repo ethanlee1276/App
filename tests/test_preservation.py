@@ -7,10 +7,10 @@ step would remove information, the redesign step is wrong."*
 
 That rule needs teeth. Two layers give it teeth:
 
-  1. `tools/inventory.mjs` renders all 17 views x 8 sports x 2 widths in a
+  1. `tools/inventory.mjs` renders all 24 views x 8 sports x 2 widths in a
      real browser and records every visible string, affordance and
-     structural count into `docs/inventory-baseline.json` — 256 pages,
-     3472 distinct strings. `--diff` reports anything that stopped
+     structural count into `docs/inventory-baseline.json` — 369 pages,
+     2424 distinct strings. `--diff` reports anything that stopped
      rendering. That is the full net, and it needs a browser.
 
   2. This file, which runs in the ordinary suite with no browser. It pins
@@ -262,6 +262,45 @@ def test_the_why_chips_are_counted_across_the_site():
     total = sum(v.get("counts", {}).get("why", 0)
                 for k, v in inv["pages"].items() if k.startswith("1280|"))
     assert total >= 50, f"only {total} why? chips render across the desktop site"
+
+
+def test_the_generated_inventory_matches_the_baseline_it_is_generated_from():
+    """`docs/INVENTORY.md` says "generated, do not hand-edit" at the top and
+    is the readable half of the §1 contract — the half anyone actually
+    opens. It is generated from `docs/inventory-baseline.json`, but by a
+    script someone has to remember to run, and re-harvesting the baseline
+    is the memorable step.
+
+    Nobody ran it. The baseline moved to 369 pages and 24 views while the
+    document went on describing 266 pages and 17, so eight whole views —
+    futures, injuries, weather, alerts, bankroll, lab, memes, mybets —
+    were absent from the contract that is supposed to say what must
+    survive. A preservation net that silently stops listing what it covers
+    is the exact failure `tools/inventory_doc.py` was written to prevent,
+    turned on the tool itself.
+
+    So make it a property of the repo rather than of someone's memory: the
+    document must be what the generator produces from the checked-in
+    baseline, on this machine, with no browser and no harvest."""
+    import importlib.util
+    import tempfile
+
+    src = os.path.join(ROOT, "tools", "inventory_doc.py")
+    spec = importlib.util.spec_from_file_location("inventory_doc", src)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        # Point the generator at scratch, never at the repo: a test that
+        # rewrites the file it is checking always passes.
+        mod.OUT = os.path.join(tmp, "INVENTORY.md")
+        mod.main()
+        fresh = open(mod.OUT, encoding="utf-8").read()
+
+    committed = _read("docs", "INVENTORY.md")
+    assert fresh == committed, (
+        "docs/INVENTORY.md is stale against docs/inventory-baseline.json — "
+        "run: python3 tools/inventory_doc.py")
 
 
 def test_no_test_reads_the_live_board_or_the_real_database():

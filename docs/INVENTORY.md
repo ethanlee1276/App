@@ -9,7 +9,7 @@ preservation contract. The prose contract says what must survive; this
 says what is actually there, and `node tools/inventory.mjs --diff
 docs/inventory-baseline.json` says whether it still is.
 
-**266 pages · 1419 distinct strings · 258 classes · 17 views × 8 sports × 2 widths**
+**369 pages · 2424 distinct strings · 478 classes · 24 views × 8 sports × 2 widths**
 
 ---
 
@@ -17,23 +17,30 @@ docs/inventory-baseline.json` says whether it still is.
 
 | View | Sports | Components | Explanatory prose | Expanders | Inputs |
 |---|---|---|---|---|---|
-| Recommended | 8/8 | 106 | 19 | 4 | 4 |
-| Live | 8/8 | 13 | 3 | 0 | 0 |
-| Edge Board | 8/8 | 17 | 6 | 0 | 0 |
-| Scanner / Market Scanner | 8/8 | 15 | 8 | 0 | 1 |
-| Long Shots | 8/8 | 63 | 10 | 0 | 4 |
-| parlays | 8/8 | 28 | 12 | 0 | 0 |
-| Trending | 8/8 | 47 | 4 | 0 | 4 |
-| Players | 8/8 | 58 | 3 | 0 | 5 |
-| Rosters | 8/8 | 33 | 6 | 0 | 8 |
-| Standings | 8/8 | 37 | 6 | 0 | 0 |
-| Record | 8/8 | 51 | 6 | 1 | 0 |
-| Polymarket / Informed Flow | 8/8 | 10 | 3 | 0 | 0 |
-| Fantasy | 8/8 | 10 | 3 | 0 | 0 |
-| UFC | 8/8 | 9 | 2 | 0 | 0 |
-| Reference (why) | 8/8 | 12 | 27 | 0 | 2 |
-| About | 8/8 | 16 | 25 | 0 | 0 |
-| Game board (no nav tab — reached from a venue card) | 5/8 | 84 | 14 | 0 | 0 |
+| Recommended | 8/8 | 173 | 31 | 4 | 3 |
+| Live | 8/8 | 35 | 3 | 0 | 0 |
+| Edge Board | 8/8 | 35 | 6 | 0 | 0 |
+| Scanner / Market Scanner | 8/8 | 22 | 8 | 0 | 1 |
+| Long Shots | 8/8 | 93 | 10 | 0 | 3 |
+| futures | 8/8 | 81 | 9 | 1 | 3 |
+| Trending | 8/8 | 77 | 4 | 0 | 3 |
+| Players | 8/8 | 91 | 5 | 0 | 4 |
+| Rosters | 8/8 | 63 | 7 | 0 | 7 |
+| injuries | 8/8 | 36 | 5 | 0 | 0 |
+| weather | 8/8 | 58 | 5 | 0 | 3 |
+| alerts | 8/8 | 5 | 3 | 0 | 0 |
+| Standings | 8/8 | 45 | 6 | 0 | 0 |
+| bankroll | 8/8 | 31 | 3 | 0 | 3 |
+| Record | 8/8 | 57 | 9 | 2 | 0 |
+| lab | 8/8 | 20 | 5 | 1 | 0 |
+| Polymarket / Informed Flow | 8/8 | 26 | 4 | 0 | 0 |
+| Fantasy | 8/8 | 92 | 24 | 0 | 4 |
+| memes | 8/8 | 82 | 9 | 1 | 0 |
+| mybets | 8/8 | 41 | 7 | 1 | 8 |
+| UFC | 8/8 | 22 | 4 | 0 | 0 |
+| Reference (why) | 8/8 | 20 | 27 | 0 | 2 |
+| About | 8/8 | 24 | 25 | 0 | 0 |
+| Game board (no nav tab — reached from a venue card) | 1/8 | 90 | 6 | 0 | 0 |
 
 ---
 
@@ -43,52 +50,77 @@ docs/inventory-baseline.json` says whether it still is.
 thing on screen that has to still be a thing on screen):
 
 ```
-at  away  bankroll  bankroll-inputs  base  base-label
-book  books  card  card-head  card-id  cards
-chip  chips  cond  conf-fill  conf-meter  conf-num
-conf-wrap  control  controls  dome  empty-slate  es-icon
-es-sub  es-title  game-card  game-cta  game-info  game-sub
-game-when  gamebet  gamebets-wrap  games-scroller  gb-group  gb-group-label
-gc-arrow  grade  hero-games  hero-title  home  idle
-in  is-live  k  labels  lean  legend
-line  line-dot  live  live-detail  live-dot  live-footer
-live-ribbon  loading  low  matchup  med  metric
-metrics  mini  ml-odds  mt  nav  nav-btn
-nav-indicator  per  pfx  pick  play  player
-pos  primary  proj  proj-dot  projbar  range
-reasons  rec-disclose  reveal  sample  score  sfx
-sm  src-dot  stadium-wrap  stake  stale  stats
-status-badge  strong  sub  subhead  subtitle  tile
-tile-sub  tilt  toggle  track  up  v
-when  why-toggle  wind  wind-wrap
+at  book  books  card  card-head  card-id
+cards  chip  chips  cnt-outs  cond  conf-fill
+conf-meter  conf-num  conf-wrap  control  controls  count
+count-label  data-source  dome  empty-slate  es-icon  es-sub
+es-title  game-card  game-info  game-sub  game-time-chip  game-when
+game-wx-chip  gamebet  gamebets-wrap  games-outer  games-scroller  gb-group
+gb-group-label  gc-name  gc-picks  gc-side  gc-teams  gc-venue
+gc-vs  grade  hero-games  hero-title  ico-mark  in
+inj-pos  is-live  k  labels  lbl  lead
+lean  legend  line  line-dot  live  live-detail
+live-dot  live-footer  live-refresh  live-ribbon  loading  low
+lr-full  lr-short  med  metric  metrics  mini
+ml-odds  mode-btn  nav  next  p-detail  per
+perf-card  perf-day  perf-donut-card  perf-donut-row  perf-grid  perf-head
+perf-legend  perf-link  perf-tile  perf-tiles  perf-window  pick
+play  player  pos  prev  primary  proj
+proj-dot  projbar  rail  rail-card  rail-list  rail-more
+rail-quiet  rail-see  rail-title  range  reasons  rec-disclose
+reveal  rlv  rlv-body  rlv-head  rlv-lines  rlv-live
+rlv-row  rlv-side  rlv-teams  sample  sb-badge  score
+skeleton-card  sm  src-dot  stadium-wrap  stake  stale
+standing  starters  stats  status-badge  strip-arrow  strip-controls
+strip-head  strong  sub  sub2  subgroup  subhead
+subnav  subnav-btn  subnav-hint  subnav-wrap  subtitle  tagline
+tb-badge  team-logo  team-mark-wrap  tile  tile-sub  tilt
+toggle  top-game-tag  tp-add  tp-book  tp-card  tp-foot
+tp-more  tp-odds  tp-strip  tp-tile  tp-title  tp-top
+tp-when  tp-who  track  up  v  venue-photo
+warning  when  why-toggle  wind  wind-wrap
 ```
 
 **Expanders:** `Tracked signals tonight (2) — measurements, not picks` · `Tracked signals tonight (4) — measurements, not picks` · `Why only 1? — where the other props died` · `Why only 6? — where the other props died`
 
-**Inputs:** `1000` · `checkbox` · `number` · `range`
+**Inputs:** `checkbox` · `range` · `select-one`
 
-**Explanatory prose — 19 passage(s), must survive
+**Links:** `Full record →` · `Why these picks?` · `full league board →`
+
+**Explanatory prose — 31 passage(s), must survive
 verbatim:**
 
 - 10 more analyzed prop(s) not shown — held (unconfirmed lineup, edge below the bar, or no real price yet) or featured elsewhere. Toggle “show non-recommended” to browse everything.
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- Amon-Ra St. Brown OVER 0.5 Anytime TD -97 (FanDuel) — the field prices it -107
+- Amon-Ra St. Brown OVER 0.5 Anytime TD −97 (FanDuel) — the field prices it −107
 - Bryce Harper OVER 0.5 Home Runs +400 (FanDuel) — the field prices it +372
+- Comps disagree: the model says 54% but 443 similar past spots went 26% to the over. The comps assume no distribution — they just count what happened — so a gap this wide is usually the model's tail shape, not bad luck
+- Comps: 1,518 past spots with this line and a similar 10-game form (48.77–65.98) went 45% to the over
+- Comps: 443 past spots with this line and a similar 10-game form (73.78–99.82) went 26% to the over
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
 - Favorable defensive matchup — opponent ranked 27th vs the run (+10% vs avg)
-- If is running, it builds every sport on its next refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.
-- Jahmyr Gibbs OVER 0.5 Anytime TD -103 (FanDuel) — the field prices it -113
-- Josh Jacobs OVER 0.5 Anytime TD -139 (FanDuel) — the field prices it -149
+- Game script: 6.5-pt favorite — projected leading script leans pass volume down (×0.97)
+- Game script: 6.5-pt favorite — projected leading script leans run volume up (×1.04)
+- Jahmyr Gibbs OVER 0.5 Anytime TD −103 (FanDuel) — the field prices it −113
+- Josh Jacobs OVER 0.5 Anytime TD −139 (FanDuel) — the field prices it −149
+- Market tiers, tier minimums, the 0-100 grade, the role-stability filter and the bankroll caps are the WNBA spec's own. What is still inherited from the NBA are the fitted numbers — margin SD, blowout curves, stat spreads — which are not yet fitted to WNBA results. Picks are journaled and graded on probation; they do not count as bets until the bucket clears the promotion bar. Everything below is priced and journaled exactly as a live board would be, so the record it builds is real — it just doesn’t stake anything until that record clears the promotion bar (the numbers are the NBA model’s for now).
 - Model margin +0.1 vs the KC -2.5 line — BUF +2.5 (+3.5% edge after the market haircut)
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
 - Model projects BUF for 24.1 points vs the 22 team total — Over (+4.4% edge after the market haircut)
 - Model projects KC for 22.6 points vs the 25 team total — Under (+5.0% edge after the market haircut)
 - Model sides UNDER — the mean is 9.05 but a few big games inflate it; his actual game log clears 8.5 less often than the price implies
 - Model win probability 37% vs book's 33% — a +4.2% edge on CHI after the market haircut
+- No incentives on file yet — they land with December reporting. Add entries to data/nfl_incentives.json (schema in engine/incentives.py) and the tracker measures them against our own ingested logs on the next build.
+- Nothing is scheduled or in progress for this slate yet. Check back closer to game time — the board refreshes automatically.
 - Same count as the tile above, ranked by quality. The journal so far: 1-0 (+90.9% ROI) — every pick below is graded there nightly. Every journaled bet is tracked on the tab through settlement.
-- These are NOT recommendations. They're the signal families the site paper-tracks in quarantined Record buckets — each has a fixed promotion bar, and none is money tonight.
+- These are NOT recommendations. They’re the signal families the site paper-tracks in quarantined Record buckets — each has a fixed promotion bar, and none is money tonight.
 - Wind 16 mph — real passing downgrade; pass yardage and deep-target props shaded down
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
+- context that shades a pick without being one: rest, incentives, form, injuries
 - one book lagging the field — beat the close 64.8% of 30k quotes · paper-tracked at 0.1u
 - strict HR tier (+11% ROI over its first 214) · tracked in the long-shot bucket, never a headline pick
+- — Favorable defensive matchup — opponent ranked 27th vs the run (+10% vs avg)
+- — Favorable defensive matchup — opponent vs slot receivers (+9% vs avg)
+- — Model sides UNDER — the mean is 9.05 but a few big games inflate it; his actual game log clears 8.5 less often than the price implies
+- — tonight’s best grades first · every one is journaled and graded in public
 
 ---
 
@@ -98,17 +130,20 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-card  from-right  ico-mark  idle  live-dot  loading
-nav  nav-btn  nav-indicator  sample  src-dot  stale
-sub
+card  data-source  from-right  ico-mark  lb-card  lb-chip
+lb-chips  lb-grid  lb-head  lb-league  lb-live  lb-mid
+lb-score  lb-sit  lb-table  lb-team  lb-th  lb-tm
+lbl  live  live-dot  live-refresh  loading  lr-full
+lr-short  nav  sample  sb-badge  src-dot  stale
+standing  sub  tagline  tb-badge  team-mark-wrap
 ```
 
 **Explanatory prose — 3 passage(s), must survive
 verbatim:**
 
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- No open bets on today's card. A pick journals the moment it's recommended and lives here until it settles — live progress bars, at-bat situation, and provisional grades as the games run.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- No open bets on today’s card. A pick journals the moment it’s recommended and lives here until it settles — live progress bars, at-bat situation, and provisional grades as the games run.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
 
 ---
 
@@ -118,19 +153,22 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-card  drow  empty-slate  es-icon  from-right  idle
-live-dot  longshot-note  ls-row  nav  nav-btn  nav-indicator
-sample  src-dot  stale  sub  why-toggle
+card  data-source  drow  empty-slate  es-icon  from-right
+hue0  hue1  hue2  hue3  hue4  hue5
+lbl  live  live-dot  live-refresh  loading  longshot-note
+lr-full  lr-short  ls-row  nav  pm-count  pm-grid
+pm-name  pm-tile  sample  sb-badge  src-dot  stale
+standing  sub  tagline  tb-badge  why-toggle
 ```
 
 **Explanatory prose — 6 passage(s), must survive
 verbatim:**
 
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- The Edge Board lists every bet whose real price beats the model's probability — including small edges and long odds that don't clear the Recommended bar. Expected value is honest math, not a guarantee: a +5% EV bet still loses often; the edge shows up over hundreds of bets.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- The Edge Board lists every bet whose real price beats the model’s probability — including small edges and long odds that don’t clear the Recommended bar. Expected value is honest math, not a guarantee: a +5% EV bet still loses often; the edge shows up over hundreds of bets.
 - Waiting on real sportsbook prices — picks are never recommended against placeholder lines. The board fills automatically as real prices arrive.
-- clear your current sliders · 15 market(s) priced against a real book number. One side of every two-way market always prices positive — the two sides' edges sum to zero by construction — so the length of this list is not a signal. Checked = a tracked bet; everything else is a watchlist.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
+- clear your current sliders · 12 market(s) priced against a real book number. One side of every two-way market always prices positive — the two sides' edges sum to zero by construction — so the length of this list is not a signal. Checked = a tracked bet; everything else is a watchlist.
 - clear your current sliders · 4 market(s) priced against a real book number. One side of every two-way market always prices positive — the two sides' edges sum to zero by construction — so the length of this list is not a signal. Checked = a tracked bet; everything else is a watchlist.
 
 ---
@@ -141,9 +179,10 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-card  drow  from-right  idle  live-dot  loading
-ls-note  nav  nav-btn  nav-indicator  sample  src-dot
-stale  sub  why-toggle
+card  data-source  drow  from-right  lbl  live
+live-dot  live-refresh  loading  lr-full  lr-short  ls-note
+nav  sample  sb-badge  src-dot  stale  standing
+sub  tagline  tb-badge  why-toggle
 ```
 
 **Inputs:** `number`
@@ -151,14 +190,14 @@ stale  sub  why-toggle
 **Explanatory prose — 8 passage(s), must survive
 verbatim:**
 
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
 - No arbitrage pairs right now. Real arbs across legal US books appear a few times a week and last minutes — this scanner checks every refresh.
 - No book is currently out of line with the field. This fills in as books update at different speeds — most often right after lineups post.
 - No middle windows open — books currently agree on every line. Gaps open when one book moves before the others.
-- No plus-money quotes on today's board — main props or long shots. That's the cheap place to be.
-- Nothing sharp-flagged right now. Sharp-anchor picks appear when a soft book's price beats the sharp book's fair value; steam appears when several books re-price together inside an hour.
-- Positive-EV bets live on the and pages — that's the model's job. This page needs no model: it's the books disagreeing with each other. Arbitrage and middle prices move fast; verify at the book before betting. Books limit accounts that only arb — mix it into normal betting.
+- No plus-money quotes on today’s board — main props or long shots. That’s the cheap place to be.
+- Nothing sharp-flagged right now. Sharp-anchor picks appear when a soft book’s price beats the sharp book’s fair value; steam appears when several books re-price together inside an hour.
+- Positive-EV bets live on the and pages — that’s the model’s job. This page needs no model: it’s the books disagreeing with each other. Arbitrage and middle prices move fast; verify at the book before betting. Books limit accounts that only arb — mix it into normal betting.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
 
 ---
 
@@ -168,65 +207,84 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-bankroll  bankroll-inputs  book  card  card-head  card-id
-cards  chip  chips  conf-fill  conf-meter  conf-num
-conf-wrap  control  controls  drow  empty-slate  es-icon
-es-sub  es-title  from-right  gamebets-wrap  games-scroller  grade
-hero-games  idle  in  k  lean  live-dot
-longshot  longshot-note  ls-note  ls-primary  metric  metrics
-mini  ml-odds  nav  nav-btn  nav-indicator  pfx
-pick  play  player  pos  primary  reasons
-reveal  sample  sfx  src-dot  stake  stale
-stats  sub  subtitle  tile  tile-sub  toggle
+book  card  card-head  card-id  cards  chip
+chips  conf-fill  conf-meter  conf-num  conf-wrap  control
+controls  data-source  drow  empty-slate  es-icon  es-sub
+es-title  from-right  games-outer  games-scroller  grade  hero-games
+ico-mark  in  k  lbl  lead  lean
+live  live-dot  live-refresh  loading  longshot  longshot-note
+lr-full  lr-short  ls-note  ls-primary  metric  metrics
+mini  ml-odds  mode-btn  nav  next  perf-card
+perf-day  perf-donut-card  perf-donut-row  perf-grid  perf-head  perf-legend
+perf-link  perf-tile  perf-tiles  perf-window  pick  play
+player  pos  prev  primary  rail  rail-card
+rail-more  rail-quiet  rail-title  reasons  reveal  sample
+sb-badge  src-dot  stake  stale  standing  stats
+strip-arrow  strip-controls  strip-head  sub  sub2  subgroup
+subtitle  tagline  tb-badge  tile  tile-sub  toggle
 v  warning  why-toggle
 ```
 
-**Inputs:** `1000` · `checkbox` · `number` · `range`
+**Inputs:** `checkbox` · `range` · `select-one`
+
+**Links:** `Full record →`
 
 **Explanatory prose — 10 passage(s), must survive
 verbatim:**
 
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
 - Baseline from 0.12 HR/game over 25 games; 4.4 expected plate appearances batting 3
-- If is running, it builds every sport on its next refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- Market tiers, tier minimums, the 0-100 grade, the role-stability filter and the bankroll caps are the WNBA spec's own. What is still inherited from the NBA are the fitted numbers — margin SD, blowout curves, stat spreads — which are not yet fitted to WNBA results. Picks are journaled and graded on probation; they do not count as bets until the bucket clears the promotion bar. Everything below is priced and journaled exactly as a live board would be, so the record it builds is real — it just doesn’t stake anything until that record clears the promotion bar (the numbers are the NBA model’s for now).
+- Nothing is scheduled or in progress for this slate yet. Check back closer to game time — the board refreshes automatically.
 - Red-zone usage inferred from overall opportunity share (play-by-play not ingested) — the biggest source of error here
-- Rockies vs Yankees · Coors Field plays big for home runs (+22% HR factor)
 - Share of team TDs from 0.62 TD/game over 8 games, blended with the RB baseline
-- Top 1 pick(s), ranked by , never by payout — the same one featured on the Recommended page. Every other real-priced home run is ranked below.
-- Top 1 pick(s), ranked by , never by payout — the same one featured on the Recommended page. Every other real-priced scorer is ranked below.
+- Top 1 pick(s), ranked by , never by payout — the same one featured on the Recommended page.
+- Top 1 pick(s), ranked by , never by payout — the same one featured on the Recommended page. Topped up to three with the model’s most likely home runs, shown for context and not journaled as bets.
 - Yankees vs Rockies · Elite barrel rate 14.5% (1.93× league) — top-tier power profile
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
 
 ---
 
-## parlays  `#parlays`
+## futures  `#futures`
 
 **Components** (CSS classes unique to this view — each is a
 thing on screen that has to still be a thing on screen):
 
 ```
-empty-slate  es-icon  es-sub  es-title  from-right  idle
-in  live-dot  nav  nav-btn  nav-indicator  pz-census
-pz-doctrine  pz-kill-who  pz-kill-why  pz-ledger  pz-ledger-title  pz-mark
-pz-no  pz-note  pz-probation  pz-sub  pz-verdict  reveal
-sample  src-dot  stale  sub
+card  cards  control  controls  data-source  empty-slate
+es-icon  es-sub  es-title  from-right  fx-band  fx-div
+fx-grp  fx-head  fx-note  fx-po  fx-prior  fx-proj
+fx-rec  fx-row  fx-table  fx-team  fx-ttl  games-outer
+games-scroller  hero-games  ico-mark  in  k  lbl
+lead  live  live-dot  live-refresh  loading  lr-full
+lr-short  mode-btn  nav  next  perf-card  perf-day
+perf-donut-card  perf-donut-row  perf-grid  perf-head  perf-legend  perf-link
+perf-tile  perf-tiles  perf-window  player  pos  prev
+rail  rail-card  rail-more  rail-quiet  rail-title  rec-disclose
+rec-stamp  reveal  sample  sb-badge  src-dot  stale
+standing  stats  strip-arrow  strip-controls  strip-head  sub
+sub2  subgroup  tagline  tb-badge  tile  tile-sub
+toggle  v  why-toggle
 ```
 
-**Explanatory prose — 12 passage(s), must survive
+**Expanders:** `How these numbers are made`
+
+**Inputs:** `checkbox` · `range` · `select-one`
+
+**Links:** `Full record →`
+
+**Explanatory prose — 9 passage(s), must survive
 verbatim:**
 
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- A parlay is not a bet type, it is a pricing structure. It is only ever correct when that structure is mispriced — never because three plays look good together.
-- Every candidate on tonight's board died in the screen. §14 is the reason that is the normal result: a ticket has to survive a real, positive, mechanically explainable correlation before it is worth the tax, and almost nothing does.
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- Nothing on tonight's board can even form a candidate: §14 says a ticket arrives only after every leg has independently earned a place as a single, and no single game has two eligible legs left.
-- Parlays are graded, never staked. The bar is 100 graded tickets clearing positive flat-stake ROI, aggregate leg-level CLV at or above zero, and z of at least 2 — and the singles board has to clear its own promotion bar first. Until then every ticket here is a tracked observation worth nothing.
-- Screened 0 candidate tickets built from 1 eligible leg on tonight's board.
-- Screened 1 candidate ticket built from 2 eligible legs on tonight's board. 2 were killed for the reasons above.
-- This slate was built before the parlay screen ran. It will appear on the next refresh — nothing is wrong with the picks above it.
-- Tonight's 1 eligible leg(s) come from 1 different game(s) — no single game has two. A correlated ticket needs two legs sharing one game, because the correlation IS the shared game; without that there is nothing to price but the straight product, and §0.3 shows singles beat that every time. In baseball this is usually the lineup rule (§5): hitters stay ineligible until the card is posted, so before first pitch each game offers only its starter.
-- Type 2: Josh Jacobs + CHI ML — backing one team while betting the other's player over — the two legs pull against each other
-- wind 16 mph — §4.4 kills passing constructions outright regardless of edge
+- Built 2026-08-08T20:20:45 · 272 game(s) left to play · 20,000 simulations.
+- Every number here comes from simulating the rest of the season twenty thousand times, not from reading a price. Futures are the market a book posts earliest and revisits least, which is where the edge argument comes from — and the market least likely to hold a sure thing, because the horizon is months and the stake is tied up for all of it. Each remaining game is one draw from the two teams' ratings plus home advantage; wins accumulate, division winners are the most wins, the playoff field fills per the league’s own shape, and the bracket is played out game by game. Assumed, and worth knowing: ratings hold for the rest of the season — no injuries, no trades, no regression — every game is independent, and home advantage is one constant per sport.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- Market tiers, tier minimums, the 0-100 grade, the role-stability filter and the bankroll caps are the WNBA spec's own. What is still inherited from the NBA are the fitted numbers — margin SD, blowout curves, stat spreads — which are not yet fitted to WNBA results. Picks are journaled and graded on probation; they do not count as bets until the bucket clears the promotion bar. Everything below is priced and journaled exactly as a live board would be, so the record it builds is real — it just doesn’t stake anything until that record clears the promotion bar (the numbers are the NBA model’s for now).
+- No book price attached. The probability stands on its own — what the season looks like from here, whatever anyone is charging for it.
+- Nothing is scheduled or in progress for this slate yet. Check back closer to game time — the board refreshes automatically.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
+- no unplayed games found — the season is over, or its schedule is not published yet
+- preseason: every rating here is last season's, decayed. This is a prior, not a projection. Read it as a prior, not a projection — these numbers are real arithmetic on stale inputs, and they will be replaced by this year’s evidence within a few weeks of kickoff.
 
 ---
 
@@ -236,25 +294,32 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-bankroll  bankroll-inputs  cards  colsub  control  controls
-cyan  empty  empty-slate  es-icon  es-sub  es-title
-from-right  gamebets-wrap  games-scroller  hero-games  ico-mark  idle
-in  k  live-dot  mini  mk  nav
-nav-btn  nav-indicator  neg  nm  pfx  pos
-reveal  sample  sfx  src-dot  stale  stats
-sub  tile  tile-sub  toggle  trank  trend-col
+card  cards  colsub  control  controls  cyan
+data-source  empty  empty-slate  es-icon  es-sub  es-title
+from-right  games-outer  games-scroller  hero-games  ico-mark  in
+k  lbl  lead  live  live-dot  live-refresh
+loading  lr-full  lr-short  mini  mk  mode-btn
+nav  neg  next  nm  perf-card  perf-day
+perf-donut-card  perf-donut-row  perf-grid  perf-head  perf-legend  perf-link
+perf-tile  perf-tiles  perf-window  pos  prev  rail
+rail-card  rail-more  rail-quiet  rail-title  reveal  sample
+sb-badge  src-dot  stale  standing  stats  strip-arrow
+strip-controls  strip-head  sub  sub2  subgroup  tagline
+tb-badge  tile  tile-sub  toggle  trank  trend-col
 trend-grid  trow  v  val  who
 ```
 
-**Inputs:** `1000` · `checkbox` · `number` · `range`
+**Inputs:** `checkbox` · `range` · `select-one`
+
+**Links:** `Full record →`
 
 **Explanatory prose — 4 passage(s), must survive
 verbatim:**
 
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- If is running, it builds every sport on its next refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
 - Model vs the sportsbook line — a big edge is not automatically a play; the approval gates decide
+- Nothing is scheduled or in progress for this slate yet. Check back closer to game time — the board refreshes automatically.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
 
 ---
 
@@ -264,26 +329,36 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-bankroll  bankroll-inputs  cards  conf-fill  conf-meter  conf-num
-conf-wrap  control  controls  empty  empty-slate  es-icon
-es-sub  es-title  form-tile  form-tiles  from-right  gamebets-wrap
-games-scroller  grade  hero-games  hit  ico  idle
-in  k  lean  live-dot  log-table  meta
-miss  nav  nav-btn  nav-indicator  nm  num
-pass  pfx  play  player-grid  pos  profile
-profile-head  profile-pick  profile-spark  reveal  sample  search-wrap
-sfx  src-dot  stale  stats  strong  sub
-tile  tile-sub  toggle  v
+browse-note  card  cards  conf-fill  conf-meter  conf-num
+conf-wrap  control  controls  data-source  empty  empty-slate
+es-icon  es-sub  es-title  form-tile  form-tiles  from-right
+games-outer  games-scroller  grade  hero-games  hit  ico
+in  k  lbl  lead  lean  live
+live-dot  live-refresh  loading  log-table  lr-full  lr-short
+meta  miss  mode-btn  nav  next  nm
+num  pass  perf-card  perf-day  perf-donut-card  perf-donut-row
+perf-grid  perf-head  perf-legend  perf-link  perf-tile  perf-tiles
+perf-window  play  player-grid  pos  prev  profile
+profile-head  profile-pick  profile-spark  rail  rail-card  rail-more
+rail-quiet  rail-title  reveal  sample  sb-badge  search-wrap
+src-dot  stale  standing  stats  strip-arrow  strip-controls
+strip-head  strong  sub  sub2  subgroup  tagline
+tb-badge  team-logo  team-mark-wrap  tile  tile-sub  toggle
+v
 ```
 
-**Inputs:** `1000` · `Search a player… (e.g. Amon-Ra, Jacobs)` · `checkbox` · `number` · `range`
+**Inputs:** `Search a player… (e.g. Amon-Ra, Jacobs)` · `checkbox` · `range` · `select-one`
 
-**Explanatory prose — 3 passage(s), must survive
+**Links:** `Full record →`
+
+**Explanatory prose — 5 passage(s), must survive
 verbatim:**
 
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- If is running, it builds every sport on its next refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- Nothing is scheduled or in progress for this slate yet. Check back closer to game time — the board refreshes automatically.
+- Showing 4 of 7 players with a prop on tonight’s board — type a name to find anyone else.
+- Showing 4 of 8 players with a prop on tonight’s board — type a name to find anyone else.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
 
 ---
 
@@ -293,25 +368,109 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-bankroll  bankroll-inputs  cards  control  controls  empty-slate
-es-icon  es-sub  es-title  from-right  gamebets-wrap  games-scroller
-hero-games  ico  idle  k  live-dot  nav
-nav-btn  nav-indicator  pfx  pos  sample  search-wrap
-sfx  src-dot  stale  stats  tile  tile-sub
+card  cards  control  controls  data-source  empty-slate
+es-icon  es-sub  es-title  from-right  games-outer  games-scroller
+hero-games  ico  k  lbl  lead  live
+live-dot  live-refresh  loading  lr-full  lr-short  mode-btn
+nav  next  perf-card  perf-day  perf-donut-card  perf-donut-row
+perf-grid  perf-head  perf-legend  perf-link  perf-tile  perf-tiles
+perf-window  pos  prev  rail  rail-card  rail-more
+rail-quiet  rail-title  sample  sb-badge  search-wrap  src-dot
+stale  standing  stats  strip-arrow  strip-controls  strip-head
+sub2  subgroup  tagline  tb-badge  tile  tile-sub
 toggle  v  why-toggle
 ```
 
-**Inputs:** `1000` · `Search a team or a player… (e.g. 49ers, SF, Purdy)` · `Search a team or a player… (e.g. Celtics, BOS, Tatum)` · `Search a team or a player… (e.g. Liberty, NYL, Stewart)` · `Search a team or a player… (e.g. Yankees, NYY, Judge)` · `checkbox` · `number` · `range`
+**Inputs:** `Search a team or a player… (e.g. 49ers, SF, Purdy)` · `Search a team or a player… (e.g. Celtics, BOS, Tatum)` · `Search a team or a player… (e.g. Liberty, NYL, Stewart)` · `Search a team or a player… (e.g. Yankees, NYY, Judge)` · `checkbox` · `range` · `select-one`
 
-**Explanatory prose — 6 passage(s), must survive
+**Links:** `Full record →`
+
+**Explanatory prose — 7 passage(s), must survive
 verbatim:**
 
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- If is running, it builds every sport on its next refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- No MLB game logs on file for 2025. Rosters here are built from who actually appeared, so they fill in with the history ingest: python3 ingest.py mlb --seasons 2025
-- No NBA game logs on file for 2024. Rosters here are built from who actually appeared, so they fill in with the history ingest: python3 ingest.py nba --seasons 2024
-- No WNBA game logs on file for 2025. Rosters here are built from who actually appeared, so they fill in with the history ingest: python3 ingest.py wnba --seasons 2025
+- Built from appearances because the league feed failed (DataUnavailable: Could not fetch https://statsapi.mlb.com/api/v1/teams?sportId=1&hydrate=roster(person): <urlopen error Tunnel connection failed: 403 Forbidden>. This host may be blocked by the environment's egress policy — run where statsapi.mlb.com / api.open-meteo.com are reachable, or place a cached response at /home/user/App/data/cache/mlb_active_rosters.json.) — pitchers don't bat, so they are missing from this view until the league feed recovers. No MLB game logs on file. Rosters here are built from who actually appeared, so they fill in with the history ingest: python3 ingest.py mlb --seasons 2026
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- No NBA game logs on file. Rosters here are built from who actually appeared, so they fill in with the history ingest: python3 ingest.py nba --seasons 2025
+- No WNBA game logs on file. Rosters here are built from who actually appeared, so they fill in with the history ingest: python3 ingest.py wnba --seasons 2026
+- Nothing is scheduled or in progress for this slate yet. Check back closer to game time — the board refreshes automatically.
+- The roster feed was unreachable on this build, so this is not an empty league — it is no data. Try `python3 launch.py --refresh-rosters`.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
+
+---
+
+## injuries  `#injuries`
+
+**Components** (CSS classes unique to this view — each is a
+thing on screen that has to still be a thing on screen):
+
+```
+agate  card  data-source  empty-slate  es-icon  es-sub
+es-title  from-right  inj-id  inj-pos  inj-table  inj-team-cell
+inj-team-head  inj-team-n  k  lbl  live  live-dot
+live-refresh  loading  lr-full  lr-short  nav  num
+sample  sb-badge  src-dot  stale  standing  stats
+tagline  tb-badge  tile  tile-sub  v  why-toggle
+```
+
+**Explanatory prose — 5 passage(s), must survive
+verbatim:**
+
+- College programs have no duty to report, so this feed runs sparse — emptiness here is the league’s opacity, not a fault to chase.
+- Either nobody in the league carries a designation right now — rare — or the feed declined on the last pull. The launcher retries every refresh, and probes the host.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- Statuses are the league’s own filings via ESPN’s public feed, refreshed with the site on a 30-minute cache. The NFL’s practice-level detail (limited/DNP, the usage model’s injury inputs) lives on the Fantasy page — this board is availability, league-wide. Updated 21:00.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
+
+---
+
+## weather  `#weather`
+
+**Components** (CSS classes unique to this view — each is a
+thing on screen that has to still be a thing on screen):
+
+```
+card  cards  control  controls  data-source  empty-slate
+es-icon  es-sub  es-title  from-right  games-outer  games-scroller
+hero-games  ico-mark  k  lbl  lead  live
+live-refresh  lr-full  lr-short  mode-btn  nav  next
+perf-card  perf-day  perf-donut-card  perf-donut-row  perf-grid  perf-head
+perf-legend  perf-link  perf-tile  perf-tiles  perf-window  player
+pos  prev  rail  rail-card  rail-more  rail-quiet
+rail-title  src-dot  stale  standing  stats  strip-arrow
+strip-controls  strip-head  sub  sub2  subgroup  tagline
+tile  tile-sub  toggle  v
+```
+
+**Inputs:** `checkbox` · `range` · `select-one`
+
+**Links:** `Full record →`
+
+**Explanatory prose — 5 passage(s), must survive
+verbatim:**
+
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- Market tiers, tier minimums, the 0-100 grade, the role-stability filter and the bankroll caps are the WNBA spec's own. What is still inherited from the NBA are the fitted numbers — margin SD, blowout curves, stat spreads — which are not yet fitted to WNBA results. Picks are journaled and graded on probation; they do not count as bets until the bucket clears the promotion bar. Everything below is priced and journaled exactly as a live board would be, so the record it builds is real — it just doesn’t stake anything until that record clears the promotion bar (the numbers are the NBA model’s for now).
+- Nothing is scheduled or in progress for this slate yet. Check back closer to game time — the board refreshes automatically.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
+- — tonight’s conditions at every outdoor venue, from the same feed the model prices with. Domes say so; wind that moves a total is called out.
+
+---
+
+## alerts  `#alerts`
+
+**Components** (CSS classes unique to this view — each is a
+thing on screen that has to still be a thing on screen):
+
+```
+data-source  from-right  nav  sub  tagline
+```
+
+**Explanatory prose — 3 passage(s), must survive
+verbatim:**
+
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
+- — what changed: line moves on tonight’s board, the injury watch, and the prediction desk. Rebuilt each refresh while the site is open — nothing here pushes to your phone, and it says so rather than pretending.
 
 ---
 
@@ -322,23 +481,49 @@ thing on screen that has to still be a thing on screen):
 
 ```
 bad  brk  brk-match  brk-matches  brk-round  brk-round-name
-brk-score  brk-side  brk-team  card  empty-slate  es-icon
-from-right  good  idle  live-dot  nav  nav-btn
-nav-indicator  ros-teams  sample  src-dot  stale  std-card
+brk-score  brk-side  brk-team  card  data-source  empty-slate
+es-icon  from-right  good  lbl  live  live-dot
+live-refresh  loading  lr-full  lr-short  nav  ros-teams
+sample  sb-badge  src-dot  stale  standing  std-card
 std-group  std-head  std-mark  std-n  std-name  std-rank
-std-rec  std-row  std-wide  sub  tight  why-toggle
-won
+std-rec  std-row  std-wide  sub  tagline  tb-badge
+tight  why-toggle  won
 ```
 
 **Explanatory prose — 6 passage(s), must survive
 verbatim:**
 
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
 - No finished MLB games on file for 2026. Standings are counted from our own results: python3 ingest.py mlb --seasons 2026
 - No finished NBA games on file for 2025. Standings are counted from our own results: python3 ingest.py nba --seasons 2025
 - No finished WNBA games on file for 2026. Standings are counted from our own results: python3 ingest.py wnba --seasons 2026
 - The 2026 CFB season has not started yet — first games 2026-08-15. Standings count our own results, so this table fills itself in as the season is played.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
+
+---
+
+## bankroll  `#bankroll`
+
+**Components** (CSS classes unique to this view — each is a
+thing on screen that has to still be a thing on screen):
+
+```
+bankroll  bankroll-inputs  bk-card  bk-goal  bk-goal-bar  bk-goal-pct
+bk-goal-row  bk-note  card  control  data-source  from-right
+gp-panel-title  lbl  live  live-dot  live-refresh  loading
+lr-full  lr-short  nav  pfx  sample  sb-badge
+sfx  src-dot  stale  standing  tagline  tb-badge
+why-toggle
+```
+
+**Inputs:** `1000` · `5000` · `number`
+
+**Explanatory prose — 3 passage(s), must survive
+verbatim:**
+
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- One unit is the percentage above of whatever you enter — the standard is 1–2%. A Strong Play stakes more units than a Play, and the suggested-exposure tile on Home totals tonight’s recommended stakes in your units. Nothing here is a deposit; it’s arithmetic on your own number.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
 
 ---
 
@@ -348,28 +533,57 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-card  empty-slate  es-icon  es-sub  es-title  from-right
-idle  k  lead  live-dot  loading  nav
-nav-btn  nav-indicator  none  pos  rb-bar  rb-head
-rb-labels  rb-name  rb-net  rb-row  rb-rows  rb-wl
-rec-bucket  rec-buckets  rec-disclose  rec-kpis  rec-list  rec-scope
-rec-scope-n  rec-scopes  rec-stamp  rl-bet  rl-date  rl-icon
-rl-main  rl-odds  rl-pnl  rl-proc  rl-row  sample
-src-dot  stale  stats  sub  tile  tile-sub
+card  chip  data-source  from-right  k  lbl
+lead  live-dot  live-refresh  loading  lr-full  lr-short
+nav  none  pos  rb-bar  rb-head  rb-labels
+rb-name  rb-net  rb-row  rb-rows  rb-wl  rec-bucket
+rec-buckets  rec-disclose  rec-kpis  rec-list  rec-scope  rec-scope-n
+rec-scopes  rec-stamp  rl-bet  rl-date  rl-icon  rl-main
+rl-odds  rl-pnl  rl-proc  rl-row  sb-badge  stale
+standing  stats  sub  subgroup  subnav  subnav-btn
+subnav-hint  subnav-wrap  tagline  tb-badge  tile  tile-sub
 v  why-toggle  won
 ```
 
-**Expanders:** `What counts as a tracked bet`
+**Expanders:** `What counts as a tracked bet` · `Why the AI only proposes`
 
-**Explanatory prose — 6 passage(s), must survive
+**Explanatory prose — 9 passage(s), must survive
 verbatim:**
 
-- 1 settled pick(s) for mlb — results this small are mostly luck. Judge the model after 100+, and judge the process by CLV before that.
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- Journals every bet — the same count the "Recommended bets" tile shows on each sport's board: player props plus game bets (moneyline, spread & totals, sharp-anchor and model alike) — at the real book price shown when it was recommended. One entry per player & market per day. Long Shots and stale-line flags are tracked in their own buckets at a flat 0.1u — never mixed into this record — and the Edge Board is a watchlist, not tracked bets.
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- This board has not recommended a bet that reached a result. It fills itself in — every pick is journaled at its real price the moment it is made, and grades when the games settle.
+- 1 settled pick(s) — results this small are mostly luck. Judge the model after 100+, and judge the process by CLV before that.
+- CLV (closing-line value) is the fast signal — beating the close consistently shows up weeks before the W-L means anything. Judge the new era on CLV first, ROI once it has 50+ graded bets.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- Every pick is hashed together with the hash before it, so editing or deleting any past forecast changes every hash after it and the chain reports where. The log holds only what was CLAIMED — never the result, the P&L or the closing line, which arrive later and would mean writing into a row that is supposed to be frozen. Write this number down: if it ever covers a different past, that is detectable rather than deniable.
+- Journals every bet — the same count the "Recommended bets" tile shows on each sport’s board: player props plus game bets (moneyline, spread & totals, sharp-anchor and model alike) — at the real book price shown when it was recommended. One entry per player & market per day. Long Shots and stale-line flags are tracked in their own buckets at a flat 0.1u — never mixed into this record — and the Edge Board is a watchlist, not tracked bets.
+- The lab is idle. Add to secrets.local and run — the model reads the record’s own summary and proposes slice intersections the miner doesn’t test. Every proposal faces the same statistics as everything else on this page; nothing an AI writes here can ever set a probability.
+- The recorded rule stands: a language model never sets a probability, because it cannot be re-run, swept, or audited. Its one structural advantage is hypothesis generation — the miner tests every single dimension of the record but never their intersections, and a model that has read the summary can name the few worth testing. So proposals are constrained to the miner’s own menu of dimensions, convicted or acquitted by the same statistics that govern every number on this page, and re-tried nightly as new bets settle — a confirmation that was luck decays on its own. The model saw the record before proposing, which is exactly why first confirmations are treated as provisional and re-earned forever after.
 - Updated <timestamp> · settles automatically as results are ingested each day.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
+
+---
+
+## lab  `#lab`
+
+**Components** (CSS classes unique to this view — each is a
+thing on screen that has to still be a thing on screen):
+
+```
+agate  data-source  from-right  lbl  live-dot  live-refresh
+loading  lr-full  lr-short  mini  minor  nav
+rec-disclose  sb-badge  stale  standing  sub  tagline
+tb-badge  why-toggle
+```
+
+**Expanders:** `What this page is, and what it isn’t`
+
+**Explanatory prose — 5 passage(s), must survive
+verbatim:**
+
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- Replayed automatically every 7 days as part of the maintenance pass · last run 2026-08-11 01:26:40
+- The Book grades the picks we actually made, going forward. This page grades the , by replaying it over history it never saw at the time — projections for each game are built only from games before it, then settled against what actually happened. That is the only evidence that accrues faster than a forward record, which is why it exists. It is also the easiest thing in betting to fool yourself with: A prop priced against a NAIVE baseline line measures predictive skill, not an edge over the market. Only book-priced rows speak to beating a sportsbook.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
+- nflverse has not published weekly player stats for 2026 (HTTP 404). These appear once games have been played, so before a season's Week 1 this is the expected answer rather than something to fix. If 2026 is already under way, check whether nflverse renamed the release.
 
 ---
 
@@ -379,16 +593,20 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-empty-slate  es-icon  es-sub  es-title  from-right  has-active
-idle  live-dot  stale  why-toggle
+card  data-source  empty-slate  es-icon  es-sub  es-title
+from-right  k  kx-table  lbl  live-dot  live-refresh
+loading  lr-full  lr-short  nav  sb-badge  stale
+standing  stats  tagline  tb-badge  tile  tile-sub
+v  why-toggle
 ```
 
-**Explanatory prose — 3 passage(s), must survive
+**Explanatory prose — 4 passage(s), must survive
 verbatim:**
 
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- The launcher pulls Polymarket's public market list and trade tape on every refresh (free, no key needed). If this persists, the machine may not be able to reach gamma-api.polymarket.com.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- No market clears the gate right now. The desk needs: the Kalshi feed reachable at build time, a game our model prices (or a city the forecast covers), and a disagreement bigger than the bar. Each build prints which of those was missing — nothing here is ever forced.
+- The launcher pulls Kalshi’s order books and Polymarket’s public market list and trade tape on every refresh (free, no key needed). If this persists, the machine may not be able to reach the venues.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
 
 ---
 
@@ -398,16 +616,126 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-empty-slate  es-icon  es-sub  es-title  from-right  has-active
-idle  live-dot  stale  why-toggle
+acct-name  acct-note  acct-pin  btn  card  card-head
+card-id  cards  chip  chip-suffix  data-source  dim
+dk-draftday  dk-pn  dk-posbody  dk-poscard  dk-posrow  dk-pp
+dk-pr  dk-pt  dk-row  dk-slrow  dk-tier  dk-tierlabel
+dl-main  dl-num  dl-rank  dl-row  dl-sub  down
+ff-bar  ff-bar-h  ff-head  ff-more  ff-n  ff-name
+ff-pos  ff-row  ff-table  ff-who  from-right  ico-mark
+k  lbl  lead  live  live-dot  live-refresh
+loading  lr-full  lr-short  ls-note  metric  metrics
+mute  nav  neg  os-arrow  os-before  os-body
+os-card  os-now  os-row  os-team  player  pm-status
+pos  primary  rz  sb-badge  src-dot  stale
+standing  stats  strong  sub  subgroup  subnav
+subnav-btn  subnav-hint  subnav-wrap  subtitle  tagline  tb-badge
+team-mark-wrap  tile  trend  up  v  warning
+why-toggle  wide
 ```
 
-**Explanatory prose — 3 passage(s), must survive
+**Inputs:** `PIN (optional)` · `Sleeper username` · `account name` · `https://sleeper.com/draft/nfl/… or draft ID`
+
+**Explanatory prose — 24 passage(s), must survive
 verbatim:**
 
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
-- Run `python3 ingest.py nfl` once — usage rows (targets, carries, air yards, PPR points) ride along with the normal player-log ingest, then this page fills automatically.
+- BAL has a new head coach (Jesse Minter) — last season’s tendencies (PROE included) may not carry
+- CLE has a new head coach (Todd Monken) — last season’s tendencies (PROE included) may not carry
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- Expected points are fit from this season’s own data (league value per target and per carry by position) — volume-based, so a player can legitimately sustain a positive gap; only gaps beyond ~1.5 PPG are flagged. Updated <timestamp>.
+- Expected points value every opportunity by WHERE it happened — his say the production is coming.
+- Free and read-only: see YOUR roster’s usage trends, trade flags, and who’s unrostered in YOUR league. No password — just your Sleeper username.
+- High total, big spread — favorite's RB gets clock-killing volume; underdog WRs get garbage-time targets. Underdog RB nearly unstartable.
+- High total, close spread — the best environment in fantasy. Prime stacking.
+- LV has a new head coach (Klint Kubliak) — last season’s tendencies (PROE included) may not carry
+- Low total, big spread — favorite's RB is a floor play; fade the underdog backfield entirely.
+- MIA has a new head coach (Jeff Hafley) — last season’s tendencies (PROE included) may not carry
+- NYG has a new head coach (John Harbaugh) — last season’s tendencies (PROE included) may not carry
+- PIT has a new head coach (Mike McCarthy) — last season’s tendencies (PROE included) may not carry
+- Paste your Sleeper draft link (or its ID) once the draft room opens. Taken players cross off everywhere on this page and the best-available list stays current.
+- Pick a name and this page’s info follows you to every device — it lives on your own computer, not a company’s server. The PIN is optional and just keeps others on your Wi-Fi out. Still no sportsbook logins, ever.
+- Producing above what the opportunity supports — beyond the ~1.5 PPG a good player sustains.
+- Projections are last season's volume run forward — the board knows nothing about rookies (they are not on it), coaching changes, or free agency. Draft by tier, not rank: inside a tier the differences are noise, and your read on camp news beats the model's. VORP is points over the best freely-available player at the same position — it is why the 4th-best QB is worth less than the 15th-best WR.
+- Roster feed unreachable on the last build — team moves and rookies may be missing here until the next refresh. Coaching changes still current (they come from the schedule file).
+- Scoring above what his situations support — beyond the ~1.5 PPG a good player sustains.
+- Shares are of TEAM volume: targets for WR/TE/QB, carries for RB. The delta column is the money — a riser at 42% beats a flat 60%.
+- TEN has a new head coach (Robert Saleh) — last season’s tendencies (PROE included) may not carry
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
+- their stats came from a different offense — flagged, never re-projected
+- — the gaps are the information: inside a tier the differences are noise
+
+---
+
+## memes  `#memes`
+
+**Components** (CSS classes unique to this view — each is a
+thing on screen that has to still be a thing on screen):
+
+```
+agate  btn  card  card-head  card-id  cards
+chip  chips  data-source  down  from-right  k
+live  live-dot  live-refresh  loading  lr-full  lr-short
+mc-board  mc-chart-btn  mc-chart-card  mc-chart-link  mc-dock-head  mc-dock-id
+mc-dock-stats  mc-exit-why  mc-gate-tag  mc-gated  mc-hero  mc-hero-live
+mc-hero-stats  mc-hero-title  mc-hero-words  mc-honesty  mc-honesty-foot  mc-honesty-head
+mc-honesty-line  mc-hs  mc-leg  mc-legend  mc-mom  mc-pick
+mc-pick-id  mc-pick-nums  mc-pick-pct  mc-pick-tag  mc-picker  mc-rank
+mc-rate  mc-rate-n  mc-rates  mc-riskb  mc-spark-wrap  mc-term
+mc-tile  mc-watch  mc-watch-head  metric  metrics  nav
+num  pick  player  sb-badge  score-ring  src-dot
+stale  stats  subgroup  subnav  subnav-btn  subnav-hint
+subnav-wrap  subtitle  tagline  tb-badge  tile  tile-sub
+up  v  why-toggle  wide
+```
+
+**Expanders:** `How to read this page — and the base rates ~1.4% ever graduate · 60% of traders lose · 82.8% artificial growth · 41.4% wash volume · median rug <1h`
+
+**Links:** `DIE DIE coin` · `PUMP PUMP coin` · `RUG RUG coin` · `WIF WIF coin`
+
+**Explanatory prose — 9 passage(s), must survive
+verbatim:**
+
+- A tracker’s genuine value is filtering scams and enforcing disciplined exits, not predicting moonshots. Nothing on this page is a buy signal, nothing is journaled as a bet, and none of it touches the sports model.
+- Authorities, LP lock, holder concentration, liquidity, age and wash patterns score 0–100; at the gate the coin is barred from the rocket list no matter how hard it moves.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- Exit signals in priority order — liquidity draining, pressure flipping, price rolling over — fired for every coin, gated or not. Leaving matters most on the worst coins.
+- Percentile vs the live cohort: volume acceleration 30%, unique-buyer growth 30%, buy/sell pressure 25%, price acceleration 15%. It ranks motion — it does not predict.
+- Solana meme coins, straight off the venues. ranks what’s moving right now (order flow, not hype). The keeps rug-shaped coins off the rocket list. The fires exit signals — including on coins the gate already refused. Tap any coin for its live chart; hover any score for its receipt.
+- Top-10 holder share comes from Solana’s public RPC and EXCLUDES the largest account, which for a live coin is almost always the trading pool’s own vault — the number judges wallets, not market structure, and “—” means unmeasured, never safe. What this board still cannot see (paid firehose tier, deliberately parked — the doc has the map): mint/freeze authority, honeypot checks, dev-wallet sells, bundled snipers, holder velocity, smart-money wallets. Their absence is stated here rather than silently scored as safe. Volume acceleration and the sparklines run off our own snapshot tape and need a few sightings of a coin — young boards under-read them honestly. The Live chart button opens the venue’s own candle chart for the pool. Updated 22:00; the launcher rescans every ~15 seconds (new-coin discovery ~25s — the free feeds’ rate-limit ceiling), and this page re-pulls on the same clock without disturbing an open chart.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
+- ~1.4% ever graduate · 60% of traders lose · 82.8% artificial growth · 41.4% wash volume · median rug <1h
+
+---
+
+## mybets  `#mybets`
+
+**Components** (CSS classes unique to this view — each is a
+thing on screen that has to still be a thing on screen):
+
+```
+acct-name  acct-note  acct-pin  btn  card  card-head
+data-source  empty-slate  es-icon  es-sub  es-title  from-left
+k  live  live-dot  live-refresh  loading  lr-full
+lr-short  mb-add  mb-form  mb-form-row  mb-grow  mb-import
+mb-import-note  mb-io  mb-safety  mb-warn  nav  player
+sb-badge  src-dot  stale  stats  subtitle  tagline
+tb-badge  tile  tile-sub  v  why-toggle
+```
+
+**Expanders:** `Bulk import — a CSV from your sportsbook, or a Juice Reel export`
+
+**Inputs:** `-110` · `25` · `Date,Bet,Odds,Risk,Result 2026-08-09,Yankees ML,-125,25,Won` · `PIN (optional)` · `account name` · `date` · `e.g. Yankees ML, or Judge Over 1.5 total bases` · `select-one`
+
+**Explanatory prose — 7 passage(s), must survive
+verbatim:**
+
+- Add the first bet you placed at a book above. It stays on this device, tracks your P&L by book, and is separate from the model’s own record.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- Pick a name and this page’s info follows you to every device — it lives on your own computer, not a company’s server. The PIN is optional and just keeps others on your Wi-Fi out. Still no sportsbook logins, ever.
+- Sportsbooks don’t offer a login for apps, so the only way to pull your account automatically would be to store your password and scrape it — against their terms, and a risk to your account and your money. So you log bets here yourself. Everything stays on your own machines: this browser, plus your own computer’s server when you sign in to an account below.
+- The free version of bet syncing: every book (and Juice Reel itself) can export your bet history as a spreadsheet/CSV. Choose the file or paste the rows — columns are matched by their header names (date, bet, odds, stake/risk, result…), in any order. Rows without a book column are filed under the Book selected in the form above. Re-importing the same export is safe: bets you already logged are skipped, not doubled. Nothing uploads.
+- This is a manual log for the bets YOU place — not the model’s picks (those are on the Record page) and not gambling advice. Data lives only in this browser; clearing your browser data erases it, so Export now and then if you want a backup.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
 
 ---
 
@@ -417,15 +745,19 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-empty-slate  es-icon  es-sub  es-title  from-right  idle
-live-dot  stale  why-toggle
+data-source  empty-slate  es-icon  es-sub  es-title  from-right
+lbl  live  live-dot  live-refresh  loading  lr-full
+lr-short  ls-note  nav  sb-badge  src-dot  stale
+standing  tagline  tb-badge  why-toggle
 ```
 
-**Explanatory prose — 2 passage(s), must survive
+**Explanatory prose — 4 passage(s), must survive
 verbatim:**
 
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
+- No UFC bouts inside the 8-day window (or no odds requested). The engine — scorecard, joint method model, clamp, gate — is built and tested; it runs when a card is.
+- The Scalpy MMA doctrine, ready: style beats talent (highest-weight input) · win probability hard-capped at 88% — four-ounce gloves mean nobody is safer · method of victory is a JOINT distribution that must sum to 100% · durability weighs 1.5× finishing ability · the humility clamp kills any 15-point market disagreement · never worse than −300 · no cap on how many fights qualify — money is capped instead, and a 13-fight card with zero bets is a valid output.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
 
 ---
 
@@ -435,8 +767,10 @@ verbatim:**
 thing on screen that has to still be a thing on screen):
 
 ```
-btn  calc-in  card  from-right  ghost  has-active
-k  stats  sub  tile  v  why-toggle
+btn  calc-in  card  data-source  from-right  ghost
+k  lbl  live-refresh  loading  nav  sb-badge
+standing  stats  sub  tagline  tb-badge  tile
+v  why-toggle
 ```
 
 **Inputs:** `number` · `select-one`
@@ -444,23 +778,22 @@ k  stats  sub  tile  v  why-toggle
 **Explanatory prose — 27 passage(s), must survive
 verbatim:**
 
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
 - A journal that logs every pick automatically at its real price — it cannot be groomed after the fact.
-- A −110/−110 line isn't 50/50 — it's 52.4% + 52.4% = 104.8%. The extra 4.8% is the book's hold. Enter both sides of any market:
+- A −110/−110 line isn’t 50/50 — it’s 52.4% + 52.4% = 104.8%. The extra 4.8% is the book’s hold. Enter both sides of any market:
 - Approval gates, humility clamps toward the market, hard pick caps, and pass lists that say why each game was skipped. "No qualifying plays tonight" is a correct output here — a service that must sell picks every night can never say it.
 - EV per unit · full Kelly of bankroll · at your fraction: = of your $1000
-- Enter 2–3 legs. Win % is optional — left blank, each leg is assumed to hit exactly as often as the book's price implies.
-- Even a real edge loses often — that's variance, not failure, and it's why stakes here are fractions of bankroll, never "bet big to catch up." 21+ only. Never bet money you can't afford to lose. If it stops feeling like a decision, call or text or the National Problem Gambling Helpline at — free, confidential, 24/7.
+- Enter 2–3 legs. Win % is optional — left blank, each leg is assumed to hit exactly as often as the book’s price implies.
+- Even a real edge loses often — that’s variance, not failure, and it’s why stakes here are fractions of bankroll, never "bet big to catch up." 21+ only. Never bet money you can’t afford to lose. If it stops feeling like a decision, call or text or the National Problem Gambling Helpline at — free, confidential, 24/7.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
 - Every recommended pick journals at its real book price the moment it appears and grades itself against the final result — wins, losses, closing-line value, and a calibration curve that says whether "60%" meant 60%. Long shots are tracked in a separate bucket, never blended into the headline record.
 - Full Kelly assumes your probability is exactly right — it never is. Betting a quarter to a fifth of Kelly gives up little growth and cuts drawdowns enormously; the engines here stake fractional Kelly for exactly that reason. If the number feels big, your probability is too confident.
 - Given your edge, how much should the bet be? The answer is usually "less than you think" and sometimes "zero".
 - Graded on process too: a win that closed worse than we bet is flagged as lucky; a loss that beat the close was a good bet.
 - Hard caps and pass lists. The NBA engine maxes at 4 picks a slate; UFC passes on most of every card, with reasons.
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
 - Most betting sites sell certainty. This one sells measurement — every probability is computed from data you can name, every pick is graded in public, and the math is on this page for you to check by hand.
 - Named factors on every card, red marks on the negatives, and the pricing math open on this page.
 - No "premium tier" where the real picks supposedly live — everything the models produce is on these pages.
-- No guarantees, locks, or "can't-miss" anything — that language is how touts talk, and it's always false.
+- No guarantees, locks, or "can’t-miss" anything — that language is how touts talk, and it’s always false.
 - No hiding losses — the Record page keeps every settled pick, and the lucky wins are labeled as lucky.
 - No parlay pushing — the calculator below shows exactly what parlays cost, which is why books advertise them.
 - No placing bets and no handling money — this recommends, journals, and grades. The decisions stay yours.
@@ -469,7 +802,8 @@ verbatim:**
 - This is why books push parlays: at standard −110 juice each leg keeps ~4.5% hold, and a parlay charges it on every leg at once. Correlated same-game legs can flip this — but the books price those separately for exactly that reason.
 - Where the three agree, trust the number. Where they split, the truth is in the range — that honesty is the feature. Every board on this site prices edges against de-vigged probabilities, never raw juice.
 - Win % left blank, so each leg is valued at its price with a standard 4.8% overround removed — what the leg is really worth. Enter your own probabilities to test a specific edge.
-- — the singles are the better bet — the parlay multiplies the book's margin into every leg.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
+- — the singles are the better bet — the parlay multiplies the book’s margin into every leg.
 - — these numbers come from the actual journal, right now, losses included.
 
 ---
@@ -481,8 +815,9 @@ thing on screen that has to still be a thing on screen):
 
 ```
 about-body  about-card  about-lede  about-list  card  cards
-from-right  has-active  ico-mark  in  ls-note  player
-reveal  sub  why-toggle  wide
+data-source  from-right  ico-mark  in  lbl  live-refresh
+loading  ls-note  nav  player  reveal  sb-badge
+standing  sub  tagline  tb-badge  why-toggle  wide
 ```
 
 **Links:** `begambleaware.org` · `gamblersanonymous.org` · `ncpgambling.org`
@@ -491,28 +826,28 @@ reveal  sub  why-toggle  wide
 verbatim:**
 
 - , and not with the NFL, MLB, NBA, WNBA, UFC, the NCAA or any team, school or league. Book names appear only to identify where a price was quoted. All trademarks belong to their owners.
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
 - Data can be wrong, feeds can break and models can be miscalibrated. Everything here is provided as-is, with no guarantee of accuracy or fitness for any purpose, and we accept no liability for losses arising from its use.
 - Every decision you make with this information is yours alone, and so is every outcome. If you would not be comfortable losing the money, do not put it at risk.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
 - Every play the model publishes is recorded at the price and time it was published, then graded against the real result — wins and losses both — on the page. Nothing is quietly deleted after it loses.
 - Everything published here is , produced by our model from public data. It is not financial advice, investment advice, or a recommendation that you place any particular wager. We are not your advisor and we have no idea what your circumstances are.
-- For each market it builds a full , not a pick. Not "this player goes over" but "here is the range of outcomes and how likely each one is." It removes the book's built-in margin (the "vig") to find what the market really believes, compares that to our number, and then — because a model that trusts itself completely is a model that has stopped noticing it can be wrong.
+- For each market it builds a full , not a pick. Not "this player goes over" but "here is the range of outcomes and how likely each one is." It removes the book’s built-in margin (the "vig") to find what the market really believes, compares that to our number, and then — because a model that trusts itself completely is a model that has stopped noticing it can be wrong.
 - Gambling is genuinely addictive, and a tool that makes betting feel more rigorous can make it easier to bet more, not less. Bet only money you can afford to lose. Never chase a loss. Set a limit before you start rather than during. Take breaks. Betting is not a way to make a living or to fix a financial problem.
 - If it has stopped being fun, or someone close to you thinks it has, help is free and confidential:
-- It claims something much smaller: that across hundreds of bets, taking prices that are better than they should be works out better than taking prices that aren't. Even if every number on this site were perfect, you would still have long losing runs. That is not a bug in the method — it is what randomness looks like from the inside.
+- It claims something much smaller: that across hundreds of bets, taking prices that are better than they should be works out better than taking prices that aren’t. Even if every number on this site were perfect, you would still have long losing runs. That is not a bug in the method — it is what randomness looks like from the inside.
 - Laws differ by country, state and province and they change. It is your responsibility to know the rules where you are and to follow them.
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
 - Most sportsbooks also offer deposit limits, time-outs and self-exclusion. Using them is a sign of good process, not weakness.
 - Newer models are marked : they are tracked and graded like everything else, but they have not yet earned the right to be staked. Where we are missing a data source, the page says so instead of filling the hole with a guess.
 - None of the data here is secret. Box scores, injury reports, depth charts, park factors, weather, recruiting rankings, fighter records — anyone can look all of it up. The problem is that "anyone" would need a dozen browser tabs and two hours per slate, and the line will have moved before they finish.
 - Nothing here is a guarantee, a lock, a sure thing, or a prediction. Past results — including ours — do not predict future results.
 - Odds shown were correct when fetched and may be stale by the time you read them. The timestamp on each page tells you how old the data is — check it. Always confirm the current price at your book.
 - Sports are random and betting is gambling. A 90% favourite loses one time in ten, and that one time can be tonight, and it can happen three nights in a row. A quarterback rolls an ankle on the first drive. A fighter who has never been stopped gets caught by a punch he did not see. A game gets called for weather in the sixth inning.
-- Then it does the only thing that actually matters: it compares that probability to the price. When our number and the book's number disagree by enough to survive our own margin for error, the board shows it. When they don't, the board says and shows you nothing. That happens often, and it is the system working rather than failing.
+- Then it does the only thing that actually matters: it compares that probability to the price. When our number and the book’s number disagree by enough to survive our own margin for error, the board shows it. When they don’t, the board says and shows you nothing. That happens often, and it is the system working rather than failing.
 - This is a private analytics tool. It is not a licensed gambling operator or a paid tipping service, and nothing on it is an offer to provide one.
-- This site does that gathering continuously and automatically, then prices it against . Two books quoting the same game differently is a real, ordinary occurrence, and on a two-way market a twenty-cent difference in price can be the whole margin. You cannot beat a book on information it also has; you can beat it on information it hasn't bothered to price carefully, and on being at the right window.
+- This site does that gathering continuously and automatically, then prices it against . Two books quoting the same game differently is a real, ordinary occurrence, and on a two-way market a twenty-cent difference in price can be the whole margin. You cannot beat a book on information it also has; you can beat it on information it hasn’t bothered to price carefully, and on being at the right window.
 - Whatever survives that gets graded 0–100 and sized by a fraction of the Kelly criterion, a standard bankroll formula. Anything under the bar is not shown as a weaker suggestion. It is not shown.
-- You cannot place a bet here and no money changes hands on this site. What it does is take the same public information the sportsbooks use — every game, every player's recent form, injuries, weather, venues, and the live prices at ten different books — pull it into one place, and estimate its own probability for each outcome.
+- You cannot place a bet here and no money changes hands on this site. What it does is take the same public information the sportsbooks use — every game, every player’s recent form, injuries, weather, venues, and the live prices at ten different books — pull it into one place, and estimate its own probability for each outcome.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
 - we gather every number in one place and tell you when a price looks wrong — you decide what, if anything, to do about it, and the result is never guaranteed.
 - where you are. That is 21 in most of the United States and 18 in some jurisdictions. If you are under it, this site is not for you.
 
@@ -526,36 +861,29 @@ thing on screen that has to still be a thing on screen):
 ```
 book  books  btn  card  card-head  card-id
 cards  chip  chips  conf-fill  conf-meter  conf-num
-conf-wrap  from-left  gamebet  ghost  gp-art  gp-at
-gp-back  gp-cards  gp-chips  gp-hero  gp-meta  gp-stats
-gp-sub  gp-teams  grade  in  k  labels
-lean  legend  line  line-dot  live-dot  loading
-longshot  ls-primary  metric  metrics  mini  ml-odds
-nav  nav-btn  nav-indicator  pick  pk-dim  pk-dims
-pk-factor  pk-factors  pk-facts  pk-fbar  pk-fk  pk-fv
-pk-head  pk-note  pk-panel  pk-plays  play  player
+conf-wrap  from-left  ghost  gp-art  gp-at  gp-back
+gp-cards  gp-chips  gp-hero  gp-lines  gp-meta  gp-note-list
+gp-notes  gp-panel-sub  gp-panel-title  gp-row  gp-stats  gp-sub
+gp-teams  grade  in  k  labels  lb-table
+lb-th  lb-tm  lbl  legend  line  line-dot
+live-dot  live-refresh  loading  longshot  lr-short  ls-primary
+metric  metrics  mini  ml-odds  pick  pk-dim
+pk-dims  pk-factor  pk-factors  pk-facts  pk-fbar  pk-fk
+pk-fv  pk-head  pk-panel  pk-plays  play  player
 pos  primary  proj  proj-dot  projbar  range
-reasons  reveal  s  sample  src-dot  stake
-stale  stats  strong  sub  subtitle  tile
-tile-sub  track  up  v  warning  when
+reasons  reveal  s  sb-badge  stake  standing
+stats  sub  subtitle  tb-badge  team-mark-wrap  tile
+tile-sub  track  up  v  venue-photo  when
 ```
 
-**Explanatory prose — 14 passage(s), must survive
+**Explanatory prose — 6 passage(s), must survive
 verbatim:**
 
-- 2 more analyzed props in this game are held (edge below the bar, no real price, or lineup unconfirmed).
-- 21+. Please bet responsibly — never money you can't afford to lose. Problem gambling help: call or text (US, 24/7).
 - 3 more analyzed props in this game are held (edge below the bar, no real price, or lineup unconfirmed).
 - Baseline from 0.12 HR/game over 25 games; 4.4 expected plate appearances batting 3
-- Favorable defensive matchup — opponent ranked 27th vs the run (+10% vs avg)
-- Football fields are the same size everywhere, so a venue's effect is almost entirely its environment — indoors vs outdoors first, then altitude. The live weather above is the number that moves a total.
-- Model output, not betting advice — every number is a probability, never a promise, and every pick is journaled and graded on the Record page. No model wins every night; anyone who says otherwise is selling something.
+- Every number here is a probability, not a promise. Every pick is recorded at the price we found it and graded in public on the Record page, so you can always check for yourself whether the model is winning or losing. No model wins every night — be suspicious of anyone who claims theirs does.
 - Model sides UNDER — the mean is 9.05 but a few big games inflate it; his actual game log clears 8.5 less often than the price implies
-- Model win probability 37% vs book's 33% — a +4.2% edge on CHI after the market haircut
-- Red-zone usage inferred from overall opportunity share (play-by-play not ingested) — the biggest source of error here
-- Share of team TDs from 0.62 TD/game over 8 games, blended with the RB baseline
 - The most weather-dependent park in baseball. Wind off Lake Michigan blowing out turns it into a launching pad; blowing in, the same park plays like a pitcher's park. Check the wind before anything else here.
-- Wind 16 mph — real passing downgrade; pass yardage and deep-target props shaded down
-- Wind off Lake Michigan is the story — swirling and hard to predict, and the single biggest reason kickers and passing games underperform here.
+- You must be 21 or older to bet. Please bet responsibly, and never bet money you cannot afford to lose. If gambling stops being fun, free and confidential help is available 24/7 in the US — call or text .
 
 ---
