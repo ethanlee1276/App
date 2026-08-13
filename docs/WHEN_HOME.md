@@ -1,6 +1,6 @@
 # When you get home — the laptop checklist
 
-Written 2026-08-07, revised 2026-08-09. Everything here needs the Mac,
+Written 2026-08-07, revised 2026-08-13. Everything here needs the Mac,
 because the container has no ledger, no route to the sports APIs, and no
 browser you can look at.
 
@@ -11,9 +11,137 @@ browser you can look at.
 
 ## WHAT IS ACTUALLY LEFT
 
-Two things. Everything below the line is closed and kept for the record —
-this list was 450 lines of finished work with the two live items buried in
-it, which is a checklist nobody reads.
+### 0. Pull — 14 commits from 2026-08-13
+
+```
+cd ~/App && git pull origin claude/sports-betting-app-vhgmho
+```
+
+Then run the six commands below IN THIS ORDER. The order is not cosmetic:
+each one changes an input the next one reads.
+
+### 1. Re-run the NFL refit — it shipped in the wrong order
+
+```
+python3 launch.py --relearn nfl
+```
+
+`--relearn` used to run calibration FIRST. Your own NFL run printed the
+refutation in formfit's output: "Adopted weights change the model — refit
+its temperature next, on the new model." The dial and the memory change
+what the model SAYS; the temperature corrects what it says. Fit the
+correction first, then move the model underneath it, and the correction
+describes a model that no longer exists. NFL shipped exactly one run that
+way, so it is currently carrying three adopted dials sitting under
+temperatures fitted before them. This re-lands it on dial → memory →
+temperature.
+
+### 2. Refit MLB — it has never run through the new calibrator
+
+```
+python3 launch.py --relearn mlb
+```
+
+MLB has only ever had temperature scaling, which is a one-knob correction
+and is structurally incapable of fitting a curve that CROSSES: at a
+claimed 83% it moves the number to 95% when the truth is 81%. The
+isotonic calibrator can bend, and `calibrate.py` now runs a three-way
+bake-off (isotonic vs temperature vs nothing) judged on a chronological
+held-out slice. This is the first run that lets it pick.
+
+### 3. Hoops — check the logs are there, then fit
+
+```
+python3 ingest.py status
+```
+
+NBA and WNBA were not merely unfitted before today, they were an ILLEGAL
+`--sport` argument — all three deep fitters validated against a dict that
+held mlb and nfl only. That is fixed, but a fit needs game logs. If
+`status` shows NBA/WNBA player-game rows:
+
+```
+python3 launch.py --relearn nba
+python3 launch.py --relearn wnba
+```
+
+If it shows nothing, ingest first (`python3 ingest.py nba --seasons
+2021-2026`), which is a long backfill and resumable.
+
+### 4. Remeasure the selection haircut
+
+```
+python3 launch.py --haircut --refit
+```
+
+This has to be re-run because of a defect I shipped and you found:
+`selectionfit` read `category='main'` only, so it stopped seeing new
+evidence on 2026-08-09, the day paper mode started. It reads main AND
+paper now, so the fit is sitting on ~5 days of bets it never counted.
+
+### 5. Rebuild, so tonight's board prices through all of it
+
+```
+python3 launch.py
+```
+
+Three things changed underneath the board today and NONE of them are
+visible until a rebuild: the price ladder (the stake comes off the odds,
+not the grade), the refreshed haircut, and whatever step 1-3 adopted.
+
+### 6. Read back what landed
+
+```
+python3 launch.py --learning     # which loops have ever changed a number
+python3 launch.py --stakes       # what tonight's board costs
+```
+
+`--learning` is the one that answers your original question. `--stakes`
+is the check on the ladder: nothing on the board should be a 50-cent
+ticket any more — the smallest possible is 0.35u and a standard -110 prop
+is 1.00u. Those are $3.50 and $10 ONLY IF 1u = $10, i.e. bankroll x
+unit_pct = 10. Yours is stored in the ledger config
+(`starting_bankroll`, `unit_pct`); if the bankroll is not $1,000 at 1%,
+every dollar figure scales and the floor is not $3.50.
+
+### 7. Look at four things in the browser — ten minutes
+
+`python3 launch.py` serves it. Hard-refresh ONCE (Cmd-Shift-R) on both
+the laptop and the phone before judging anything.
+
+- **The stadiums.** The fix was cache-busting, not new art — the variant
+  files were rebuilt three times under the same filenames, so your browser
+  was holding a mix of generations. One hard refresh clears it. If any
+  card is still stale after that, tell me, because then it is not the
+  cache.
+- **The prop cards.** Bar graphs instead of lines, and the card built to
+  your render: face, name, PROP/LINE/ODDS box, labelled axes, stat row.
+  NOTE: the NFL board may have nothing to show — every carried prop in
+  the Week-1 slate grades Pass, so the cards do not render there. Look at
+  the MLB board.
+- **The Record page, Receipts tab.** It now leads with BOTH books, main
+  and paper, each with a standard error. That is the +17.8% you asked
+  about, printed next to what it actually means.
+- **The stake chips.** Every one says which rung of the ladder set it.
+
+### 8. Standing rule, easy to forget
+
+`VENUE_ART_V` in `web/js/app.js` must be BUMPED whenever the venue
+renders are rebuilt. A cache-busting token nobody changes is worse than
+none — it reads as solved while the next rebuild quietly reintroduces the
+exact bug you reported today.
+
+### 9. Still open from before, unchanged
+
+- **Which key is `5dc51e48` (#76)** — ten seconds, see below. Not urgent.
+- **NFL Week 1 is on a clock (#41).** Unless the NFL logs are ingested and
+  refitted before it opens, that board goes live with a model no outcome
+  has ever corrected, sitting beside an MLB model carrying corrections
+  fitted on 280,000+ player-games. Step 1 is half of this.
+
+---
+
+## PREVIOUS ROUND (2026-08-09) — both closed or unchanged
 
 ### A. Which key is `5dc51e48` (#76) — ten seconds
 
