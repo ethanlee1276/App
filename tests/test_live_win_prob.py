@@ -177,13 +177,89 @@ def test_a_moneyline_with_no_track_yet_gets_nothing():
     assert _one([_bet("CHC", "moneyline", line=0.5)])["live_prob"] is None
 
 
-def test_spread_and_total_get_nothing():
-    """Both would need a live run-scoring model we do not have, and the
-    market prices them on separate keys that cost a credit each per pull.
-    Neither is built, so neither gets a number."""
+def test_spread_and_total_still_get_no_probability():
+    """No longer a COST problem — both markets are pulled now. It is the
+    alternate-line problem: the market quotes them at ITS number, and a
+    live price on -0.5 says nothing directly about a -1.5 ticket."""
     for market, line in (("spread", -1.5), ("total", 8.5)):
         r = _one([_bet("CHC", market, line=line)], games=[_ml_game()])
         assert r["live_prob"] is None, market
+
+
+# --- the live line, reported as a fact ---------------------------------------
+def _lined_game(spread=-0.5, total=10.5):
+    g = _ml_game()
+    g["line_track"]["spread"] = spread
+    g["line_track"]["total"] = total
+    return g
+
+
+def test_a_spread_bet_learns_where_the_market_moved():
+    r = _one([_bet("CHC", "spread", line=-1.5)], games=[_lined_game()])
+    assert r["live_market"] == -0.5
+
+
+def test_the_spread_is_flipped_for_an_away_ticket():
+    """THE ONE THAT WOULD READ AS A HUGE MOVE AND BE NOTHING. `livelines`
+    stores the HOME spread; a journaled bet is signed for the side taken.
+    Handing a MIL +1.5 ticket the stored -0.5 puts the comparison on the
+    wrong side of zero."""
+    r = _one([_bet("MIL", "spread", line=1.5, team="MIL")],
+             games=[_lined_game()])
+    assert r["live_market"] == 0.5
+
+
+def test_a_total_bet_learns_where_the_market_moved():
+    r = _one([_bet("MIL@CHC", "total", line=8.5)], games=[_lined_game()])
+    assert r["live_market"] == 10.5
+
+
+def test_a_moneyline_has_no_line_to_compare():
+    """It is the one market with no number, which is exactly why it is the
+    one that gets a real probability."""
+    assert _one([_bet("CHC", "moneyline", line=0.5)],
+                games=[_lined_game()])["live_market"] is None
+
+
+def test_a_prop_gets_no_market_line():
+    """Props are not on the board pull at all."""
+    assert _one([_bet("Ian Happ", "total_bases")],
+                games=[_lined_game()])["live_market"] is None
+
+
+def test_a_game_with_no_line_pulled_yet_reports_nothing():
+    r = _one([_bet("CHC", "spread", line=-1.5)], games=[_ml_game()])
+    assert r["live_market"] is None
+
+
+def test_the_good_direction_on_a_spread_is_the_smaller_number():
+    """CAUGHT IN CHROMIUM. The first version painted "market now -0.5"
+    green on a -1.5 ticket. A bet on -1.5 needs the team to win by two;
+    a market at -0.5 expects them to win by one, so that move is the bet
+    getting WORSE. More favoured than the number you took means a SMALLER
+    signed spread."""
+    i = APP.index("const better = r.market === \"total\"")
+    block = APP[i:i + 220]
+    assert "Number(now) < Number(r.line)" in block
+
+
+def test_the_good_direction_on_a_total_follows_the_side():
+    i = APP.index("const better = r.market === \"total\"")
+    block = APP[i:i + 220]
+    assert 'r.side === "OVER" ? now > r.line : now < r.line' in block
+
+
+def test_the_market_line_is_labelled_as_not_a_forecast():
+    """Beside rows that DO carry a probability, an unlabelled number reads
+    as one."""
+    i = APP.index("const marketLine = (r) =>")
+    block = APP[i:APP.index("\n  };", i)]
+    assert "no forecast" in block
+
+
+def test_the_row_renders_the_market_line():
+    i = APP.index("${winProb(r)}")
+    assert "${marketLine(r)}" in APP[i:i + 80]
 
 
 # --- the bullpen reaching the live number -----------------------------------

@@ -39,9 +39,14 @@ def _live_prob(bet, market, side, line, current, game, live, progress,
     anything we could infer, and using ours instead would be inventing a
     disagreement with a price we already paid for.
 
-    SPREAD and TOTAL get nothing. They would need a live run-scoring
-    model, which this is not, and the market prices them on separate
-    market keys that cost a credit each per pull. Neither is built.
+    SPREAD and TOTAL still get nothing, and it is NOT a cost problem any
+    more — both markets are pulled now. It is the alternate-line problem:
+    the live market quotes them at ITS number, not ours. A bet on −1.5
+    gets no answer from a live price on −0.5, and Over 8.5 gets none from
+    a market that has moved to 10.5. Converting between the two needs the
+    dispersion of final results around a live line, which nothing here has
+    a sample of. `live_market` carries where the market sits instead,
+    which is a fact rather than a forecast.
     """
     if (live or {}).get("state") != "live":
         return None
@@ -142,6 +147,33 @@ def _live_prob(bet, market, side, line, current, game, live, progress,
     pa_left = lp.remaining_pa(spot, at_bat_spot, team_outs)
     return lp.hitter_probability(rates, market, line, side,
                                  current or 0.0, pa_left)
+
+
+def _live_market(market, game, live, bet=None):
+    """The market's current number for a spread or total bet, or None.
+
+    ORIENTED TO THE BET'S OWN TEAM. `livelines` stores the HOME spread,
+    which is the feed's convention; a journaled spread is signed for
+    whichever side was taken. Handing an away bet the home number puts the
+    comparison on the wrong side of zero — "market now −0.5, you have
+    +1.5" reads as a huge move when nothing happened.
+
+    Deliberately NOT converted into a probability. A bettor holding Over
+    8.5 while the live market has moved to 10.5 has learned something real
+    and exact; dressing it up as a win chance needs the one conversion
+    this module refuses to guess at.
+    """
+    if (live or {}).get("state") != "live" or market not in ("spread", "total"):
+        return None
+    t = (game or {}).get("line_track") or {}
+    if market == "total":
+        now = t.get("total")
+        return None if now is None else float(now)
+    now = t.get("spread")
+    if now is None:
+        return None
+    pick_home = (bet or {}).get("player") == (game or {}).get("home")
+    return float(now) if pick_home else -float(now)
 
 
 def _mlb_pen_multiplier(game, opponent) -> float:
@@ -300,7 +332,7 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             # game has no live probability by definition, and every row
             # carrying the same keys is what stops a consumer from having
             # to know which shape it got.
-            "live_prob": None,
+            "live_prob": None, "live_market": None,
             "team": "", "headshot": face, "game": {},
             "category": b.get("category", "main"),
         }
@@ -419,6 +451,10 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             # player has banked against what he has left to bank it in.
             # None whenever any input is missing; see engine/mlb/liveprops.
             "live_prob": live_prob,
+            # Where the market's own number sits right now, for the two
+            # markets that carry a line. A fact, not a forecast — see
+            # `_live_prob` on why these get no probability.
+            "live_market": _live_market(market, g, live, b),
             # Which journal bucket this came from. The same player can hold a
             # bet in two buckets at once — a long shot and a stale-line flag
             # on the same homer — so name + market alone does not identify a

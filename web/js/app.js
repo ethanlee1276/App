@@ -1725,6 +1725,39 @@ function renderLivePicks() {
         <b style="color:${tone};font-size:var(--fs-sm)">${pct}%</b> to cash from here
         · <span style="opacity:.85">${src}</span></span>`;
   };
+  /* Where the market has moved, for the two bets that carry a line.
+
+     A spread or total gets no live win probability and the reason is not
+     cost — both markets are pulled now. It is that the market quotes them
+     at ITS number: a live price on −0.5 says nothing directly about a
+     −1.5 ticket. Converting needs the dispersion of finals around a live
+     line, which we have no sample of, so this reports the fact instead of
+     manufacturing the forecast. */
+  const marketLine = (r) => {
+    const now = r.live_market;
+    if (now == null || r.phase !== "live") return "";
+    const sign = (v) => `${v > 0 ? "+" : ""}${Number(v).toFixed(1)}`;
+    const mine = r.market === "total"
+      ? `${escapeHtml(r.side)} ${Number(r.line).toFixed(1)}` : sign(r.line);
+    const theirs = r.market === "total"
+      ? Number(now).toFixed(1) : sign(now);
+    /* Which way is GOOD is not obvious and the first version had the
+       spread backwards. A ticket on CHC -1.5 needs CHC to win by two; a
+       market that has drifted to -0.5 now expects them to win by one, so
+       the number moving UP (toward zero, or past it) is the bet getting
+       worse. The team being MORE favoured than the number you took is the
+       good direction, which on a signed spread is a SMALLER number.
+       Totals are the intuitive way round: an over wants the line to
+       climb. Both are compared on the bet's own side — `_live_market`
+       flips the stored home spread for an away ticket. */
+    const better = r.market === "total"
+      ? (r.side === "OVER" ? now > r.line : now < r.line)
+      : Number(now) < Number(r.line);
+    return `
+      <span style="display:block;margin-top:5px;font-size:var(--fs-xs);color:var(--text-mute)">
+        market now <b style="color:${better ? "var(--good)" : "var(--bad)"}">${theirs}</b>
+        · you have ${mine} · <span style="opacity:.85">live line, no forecast</span></span>`;
+  };
   const nLive = rows.filter((r) => r.phase === "live").length;
 
   host.innerHTML = `
@@ -1752,6 +1785,7 @@ function renderLivePicks() {
               ${american(r.odds)} as placed (also listed under Tonight’s Picks).</span>` : ""}
             ${progressBar(r)}
             ${winProb(r)}
+            ${marketLine(r)}
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
         </div>`).join("")}

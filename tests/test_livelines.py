@@ -47,16 +47,33 @@ TEAMS = {"Chicago Cubs": "CHC", "Milwaukee Brewers": "MIL"}
 
 
 # --- the cost, which is the whole question ----------------------------------
-def test_one_market_is_asked_for():
-    """Every name on this list is another credit on every pull, forever."""
-    assert tuple(ll.LIVE_MARKETS) == ("h2h",)
+def test_the_market_list_is_the_whole_bill():
+    """Every name here is another credit on every pull, forever. It was
+    `h2h` alone on a 500-credit month; Ethan upgraded a key to 100k
+    (pool 105,284) and three markets became 6.2% of it."""
+    assert tuple(ll.LIVE_MARKETS) == ("h2h", "spreads", "totals")
 
 
-def test_a_pull_costs_one_credit_regardless_of_slate_size():
-    """The board endpoint bills per market, not per game. This is the
-    entire reason live tracking is affordable at all."""
-    assert ll.credits_per_pull() == 1
+def test_a_pull_costs_one_credit_PER_MARKET_whatever_the_slate_size():
+    """The board endpoint bills per market, not per game. That is the
+    entire reason live tracking is affordable at all — thirty games cost
+    the same as three."""
+    assert ll.credits_per_pull() == 3
+    assert ll.credits_per_pull(("h2h",)) == 1
     assert ll.credits_per_pull(("h2h", "totals")) == 2
+
+
+def test_only_the_moneyline_can_answer_a_bet():
+    """Recorded here because it is a MODELLING limit, not a cost one, and
+    the two are easy to confuse now that all three markets are pulled. A
+    moneyline has no line, so de-vigging today's price answers exactly the
+    question the bet asks. A spread or total is quoted at the MARKET's
+    number: a live price on -0.5 says nothing direct about a -1.5 ticket.
+    Converting needs the dispersion of finals around a live line, and no
+    sample of that exists yet — the recording is what will build one."""
+    import inspect
+    src = inspect.getsource(ll)
+    assert "alternate" in src.lower() or "ITS number" in src
 
 
 def test_the_cadence_follows_the_plan_rather_than_a_guess():

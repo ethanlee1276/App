@@ -1,4 +1,4 @@
-"""The in-play line, tracked over the game — one credit a pull.
+"""The in-play line, tracked over the game — one credit per market.
 
 Ethan, 2026-08-14, with a sportsbook's live chart on screen: "when games
 are live, can we track the live line like this. Like we pull the updated
@@ -21,13 +21,25 @@ and which one you get depends entirely on which endpoint you call:
     and bills per market REGARDLESS OF GAME COUNT. One market, one
     region, one credit — for the whole slate, three games or thirty.
 
-So this module asks for exactly one market, ``h2h``, from the board
-endpoint. A pull costs 1 credit. At a 30-minute cadence across a six-hour
-window that is ~12 credits a night, inside the free plan's ~16/day; at 15
-minutes it is ~24, which needs a paid plan. The cadence is therefore a
-constant here rather than a hard-coded five minutes, and the pacer that
-guards pre-game pricing is consulted before any of it — a live chart is a
-nice-to-have and must never be the reason tonight's board went unpriced.
+So this module asks the BOARD endpoint for `LIVE_MARKETS` — three of
+them, at one credit each per pull, for the whole slate. `gap_for` then
+sizes the cadence from the plan's measured allowance rather than a
+hard-coded interval, so a free month crawls at 30 minutes and a paid one
+sits at the 5-minute floor. Across a six-hour night that is 216 credits,
+and the pacer that guards pre-game pricing is consulted before any of it
+— a live chart is a nice-to-have and must never be the reason tonight's
+board went unpriced.
+
+ONLY THE MONEYLINE YIELDS A WIN PROBABILITY, and the reason is worth
+stating here because it is easy to assume otherwise. A moneyline has no
+line: de-vigging today's price answers exactly the question the bet asks.
+A spread or total does have one, and the live market quotes it at ITS
+number, not at ours — a bet on −1.5 gets no answer from a live price on
+−0.5, and a bet on Over 8.5 gets none from a market that has moved to
+10.5. Converting between them needs the dispersion of final results
+around a live line, which is a measurable thing we have no sample of yet.
+So those two are recorded as LINES, honestly labelled, and the recording
+is what will eventually make the conversion fittable.
 
 WHAT GETS CHARTED, AND WHY IT IS NOT THE PRICE.
 
@@ -65,9 +77,18 @@ from .sources.fetch import CACHE_DIR
 
 HISTORY_PATH = CACHE_DIR / "live_lines.jsonl"
 
-#: The one market we ask for. Every extra name on this list is another
-#: credit on every pull, forever — see the module docstring.
-LIVE_MARKETS = ("h2h",)
+#: What we ask the board for. Every name here is another credit on every
+#: pull, forever — see the module docstring.
+#:
+#: It was `h2h` alone while the ring held 500 credits a month. Ethan,
+#: 2026-08-14, after upgrading a key: pool 105,284, of which three markets
+#: at a five-minute cadence cost ~6,480 a month — 6.2%. The moneyline is
+#: still the only one that yields a WIN PROBABILITY (see the alternate-line
+#: note in `livepicks._live_prob`); spreads and totals are pulled because
+#: where the market has moved relative to a bet's own number is worth
+#: knowing on its own, and because storing them is what makes the
+#: probability fittable later.
+LIVE_MARKETS = ("h2h", "spreads", "totals")
 
 #: Slowest and fastest this will ever poll, whatever the plan says.
 #:
@@ -201,7 +222,8 @@ def snapshot_rows(events, teams: dict, sport: str, ts: float | None = None,
     point is the in-play line. Pre-game movement is already recorded by
     `linemoves.record_snapshots` and does not need paying for twice.
     """
-    from .sources.oddsapi import parse_event_h2h_by_book
+    from .sources.oddsapi import (parse_event_h2h_by_book,
+                                  parse_event_spreads, parse_event_totals)
     ts = time.time() if ts is None else ts
     now = ts if now is None else now
     out: list[dict] = []
@@ -218,10 +240,21 @@ def snapshot_rows(events, teams: dict, sport: str, ts: float | None = None,
         agg = event_probability(parse_event_h2h_by_book(ev, team_map), home, away)
         if agg is None:
             continue
-        out.append({"ts": round(float(ts), 3), "sport": sport,
-                    "event_id": ev.get("id", ""), "home": home, "away": away,
-                    "p_home": round(agg["p_home"], 5), "books": agg["books"],
-                    "home_odds": agg["home_odds"], "away_odds": agg["away_odds"]})
+        row = {"ts": round(float(ts), 3), "sport": sport,
+               "event_id": ev.get("id", ""), "home": home, "away": away,
+               "p_home": round(agg["p_home"], 5), "books": agg["books"],
+               "home_odds": agg["home_odds"], "away_odds": agg["away_odds"]}
+        # The other two markets ride along on the same pull. Recorded as
+        # LINES, not probabilities — a live spread of −0.5 says where the
+        # market now sits, and turning that into "will my −1.5 cash" needs
+        # something this does not have. See `livepicks._live_prob`.
+        sp = parse_event_spreads(ev, team_map, home, away)
+        if sp:
+            row["spread"] = float(sp[0])
+        tot = parse_event_totals(ev)
+        if tot:
+            row["total"] = float(tot[0])
+        out.append(row)
     return out
 
 
@@ -322,6 +355,11 @@ def track_for(rows: list[dict], home: str, away: str, sport: str | None = None,
         "now": round(pts[-1]["p_home"] * 100.0, 1),
         "home_odds": pts[-1].get("home_odds"),
         "away_odds": pts[-1].get("away_odds"),
+        # Where the market sits NOW on the other two markets. Not a
+        # probability and never presented as one — the number a bet's own
+        # line gets compared against.
+        "spread": pts[-1].get("spread"),
+        "total": pts[-1].get("total"),
         "points": len(pts),
     }
 
