@@ -1977,7 +1977,45 @@ function preseasonGameHTML(g) {
     ${mark(g.away)}<span class="pre-at">@</span>${mark(g.home)}
     ${preseasonScoreHTML(g)}
     ${g.indoor ? '<span class="pre-roof">indoor</span>' : ""}
+    ${starterScanHTML(g)}
   </div>`;
+}
+
+/* WHO IS LIKELY TO PLAY, per side.
+
+   Ethan, 2026-08-14: "make sure to implement scanning to see which teams
+   will be playing starters and which ones wont."
+
+   The measurement is the starting quarterback's preseason attempt count,
+   because he is on the field exactly as long as the staff wants the first
+   team out there and he is the one man guaranteed to leave a mark in a
+   box score when he is. Bands come from the league's own distribution
+   (`prestarters.bands`), not from a number somebody picked.
+
+   A FIXTURE THAT HAS NOT BEEN PLAYED HAS NO TEAM SHEET, and no free feed
+   announces who is sitting. What this shows is a HABIT — what the same
+   staff has done before — and it says so, because a habit printed as a
+   fact is the exact way this feature would start lying. */
+function starterScanHTML(g) {
+  const scan = ((state.preseason || {}).starter_scan || {});
+  const row = (scan.games || []).find(
+    (x) => x.home === g.home && x.away === g.away && x.date === g.date);
+  if (!row) return "";
+  const tone = { rested: "down", limited: "warn", extended: "up" };
+  const cells = ["away", "home"].map((side) => {
+    const s = row.sides[side];
+    if (!s || s.verdict === "unknown") return "";
+    return `<span class="pre-scan-side">
+      <b>${escapeHtml(s.team)}</b>
+      <span class="chip ${tone[s.verdict] || ""}">${escapeHtml(s.verdict)}</span>
+      ${s.expect_att != null
+        ? `<span class="pre-scan-n">${Number(s.expect_att).toFixed(0)} att
+             over ${s.games_seen} past outing${s.games_seen === 1 ? "" : "s"}</span>`
+        : ""}</span>`;
+  }).filter(Boolean).join("");
+  if (!cells) return "";
+  return `<div class="pre-scan">${cells}
+    <span class="pre-scan-note">habit, not a team sheet</span></div>`;
 }
 
 async function renderPreseason() {

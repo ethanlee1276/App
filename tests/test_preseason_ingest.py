@@ -188,11 +188,24 @@ def test_a_row_with_no_season_type_is_still_regular():
     assert ingest.nfl_player_log_rows(rows, 2021)
 
 
-# --- it still prices nothing ------------------------------------------------
-def test_no_pricing_path_reads_the_preseason_table():
-    """The line this whole change is not allowed to cross. If a pipeline
-    ever reads it, that is a decision to price August and it should look
-    like one in the diff."""
+# --- what may read it, and what still may not -------------------------------
+#: Files allowed to read `preseason_player_logs`, each for a stated reason.
+#:
+#: This list started empty and the test below said so: "if a pipeline ever
+#: reads it, that is a decision to price August and it should look like one
+#: in the diff." Ethan made that decision on 2026-08-14 — "i wanna show
+#: props for the pre season … make sure to implement scanning to see which
+#: teams will be playing starters" — so the boundary MOVES rather than
+#: disappearing, and this is where the move is recorded.
+PRESEASON_READERS = {
+    "engine/nfl/prestarters.py",   # describes usage; computes no price
+}
+
+
+def test_only_the_declared_readers_touch_the_preseason_table():
+    """The line, redrawn. Reading the table to say WHAT HAPPENED is now
+    allowed and named; reading it to produce a NUMBER SOMEBODY BETS is
+    still the thing that has to show up in a diff as its own decision."""
     import glob
     hits = []
     for path in glob.glob(os.path.join(ROOT, "engine", "**", "*.py"),
@@ -201,9 +214,23 @@ def test_no_pricing_path_reads_the_preseason_table():
         if base in ("db.py", "ingest.py"):
             continue
         src = open(path, encoding="utf-8").read()
-        if "preseason_player_logs" in src:
-            hits.append(os.path.relpath(path, ROOT))
-    assert not hits, f"the preseason table is read outside the ingest: {hits}"
+        rel = os.path.relpath(path, ROOT)
+        if "preseason_player_logs" in src and rel not in PRESEASON_READERS:
+            hits.append(rel)
+    assert not hits, f"undeclared reader of the preseason table: {hits}"
+
+
+def test_the_declared_reader_still_produces_no_price():
+    """`prestarters` may read the table because it reports a HABIT — how
+    many attempts a starting quarterback has taken in past Augusts. The
+    moment it starts emitting an edge, a stake or a probability, it has
+    become a pricing path wearing a scanner's name."""
+    src = open(os.path.join(ROOT, "engine", "nfl", "prestarters.py"),
+               encoding="utf-8").read()
+    body = "\n".join(l for l in src.splitlines()
+                     if not l.strip().startswith(("#", '"', "*")))
+    for word in ("edge", "stake_units", "hit_prob", "fair_prob", "ev_per_unit"):
+        assert word not in body, f"the scanner is computing {word!r}"
 
 
 def test_the_cli_says_it_prices_nothing():

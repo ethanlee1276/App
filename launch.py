@@ -316,6 +316,25 @@ def refresh_preseason(quiet: bool = False) -> bool:
         if not quiet:
             print(f"  preseason: {type(exc).__name__}: {str(exc)[:70]}")
         return False
+    # WHO IS LIKELY TO PLAY. Ethan, 2026-08-14: "make sure to implement
+    # scanning to see which teams will be playing starters and which ones
+    # wont." Free — it reads the logs we already store — and it degrades
+    # to "unknown" per side rather than guessing when the preseason
+    # ingest has not run.
+    try:
+        from engine import db as _psdb
+        from engine.nfl import prestarters as _ps
+        for w in payload.get("weeks", []):
+            for g in w.get("games", []):
+                g.setdefault("week", w.get("week"))
+        _upcoming = [g for w in payload.get("weeks", [])
+                     for g in w.get("games", [])]
+        _conn = _psdb.connect()
+        payload["starter_scan"] = _ps.scan(_conn, _upcoming, season)
+        _conn.close()
+    except Exception as _exc:                                 # noqa: BLE001
+        if not quiet:
+            print(f"  preseason scan unavailable: {type(_exc).__name__}")
     path = ROOT / "web" / "data" / "nfl_preseason.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=1), encoding="utf-8")
@@ -3250,6 +3269,77 @@ def show_venues() -> None:
     print()
 
 
+def show_prescan(season: int | None = None) -> None:
+    """Preseason starter scan: who is likely to play their first team.
+
+        python3 launch.py --prescan
+
+    Ethan, 2026-08-14: "make sure to implement scanning to see which teams
+    will be playing starters and which ones wont."
+
+    A preseason game is a contest between two coaching decisions, and the
+    decision is how long the first string is out there. The starting
+    quarterback's attempt count is the measurement — he is on the field
+    exactly as long as the staff wants the starters there, and he is the
+    one man guaranteed to leave a mark in a box score when he is.
+
+    Needs `python3 ingest.py nflpre --seasons 2021-2026` to have run;
+    without it every team reads "unknown", which is the honest answer
+    rather than a guess.
+    """
+    import datetime as _dt
+    import json as _json
+    from engine import db as _db
+    from engine.nfl import prestarters as _ps
+    season = int(season or _dt.date.today().year)
+    conn = _db.connect()
+    path = ROOT / "web" / "data" / "nfl_preseason.json"
+    try:
+        board = _json.loads(path.read_text(encoding="utf-8"))
+    except OSError:
+        print("No preseason board yet — run a refresh first.")
+        return
+    today = _dt.date.today().isoformat()
+    # The week lives on the GROUP, not the game, so stamp it down before
+    # the scan reads it — a fixture with no week cannot be matched to a
+    # tendency measured per week.
+    for w in board.get("weeks", []):
+        for g in w.get("games", []):
+            g.setdefault("week", w.get("week"))
+    games = [g for w in board.get("weeks", []) for g in w.get("games", [])
+             if (g.get("date") or "") >= today]
+    out = _ps.scan(conn, games, season)
+    cuts = out["bands"]
+    print(f"\nPRESEASON STARTER SCAN — {season}\n")
+    if not cuts:
+        print("  No ingested preseason to cut bands from. Every read below "
+              "will say \"unknown\".")
+        print("  Fix: python3 ingest.py nflpre --seasons "
+              f"{season - 5}-{season}\n")
+    else:
+        print(f"  Bands from {cuts['n']} past starting-QB outings: "
+              f"rested <= {cuts['lo']:.0f} attempts, "
+              f"extended >= {cuts['hi']:.0f}.\n")
+    if not out["games"]:
+        print("  No unplayed preseason fixtures.\n")
+        return
+    for g in out["games"]:
+        print(f"  Week {g['week']}  {g['date']}  "
+              f"{g['sides'].get('away',{}).get('team','?')} @ "
+              f"{g['sides'].get('home',{}).get('team','?')}")
+        for side in ("away", "home"):
+            s = g["sides"].get(side)
+            if not s:
+                continue
+            att = "—" if s["expect_att"] is None else f"{s['expect_att']:.1f}"
+            print(f"     {s['team']:<4} {s['verdict']:<9} "
+                  f"QB {s['qb'] or '?':<20} expect {att} att "
+                  f"({s['games_seen']} past outing(s))")
+        print()
+    print("  A tendency is a HABIT, not a team sheet. No free feed announces "
+          "who is sitting;\n  this is what the same staff has done before.\n")
+
+
 def show_injuries() -> None:
     """Injury-board probe: pull every league's feed NOW and show counts.
 
@@ -5613,6 +5703,11 @@ def main() -> None:
         return
     if "--venues" in argv:
         show_venues()
+        return
+    if "--prescan" in argv:
+        i = argv.index("--prescan")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_prescan(int(rest[0]) if rest else None)
         return
     if "--standings" in argv:
         show_standings()
