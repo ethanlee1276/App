@@ -59,11 +59,56 @@ def test_a_pull_costs_one_credit_regardless_of_slate_size():
     assert ll.credits_per_pull(("h2h", "totals")) == 2
 
 
-def test_the_cadence_keeps_a_night_inside_the_free_plan():
-    """500 credits a month is ~16 a day. A six-hour window at this gap
-    has to fit under that with room for the board's own pricing."""
-    a_night = (6 * 3600) / ll.LIVE_GAP_S * ll.credits_per_pull()
-    assert a_night <= 16, f"{a_night:.0f} credits a night is over the daily allowance"
+def test_the_cadence_follows_the_plan_rather_than_a_guess():
+    """Ethan, 2026-08-14: "i upgraded 1 of the api keys to 100k credits a
+    month so we can adjust acordingly."
+
+    The first version pinned the gap at 30 minutes because that is what a
+    500-credit free month can carry. That was a fact about ONE PLAN
+    written into the code as if it were a fact about the world, and the
+    moment the plan changed the chart kept crawling for no reason. The
+    budget already learns the real quota from the API's own
+    `x-requests-remaining` header; the cadence now asks it."""
+    starved = ll.gap_for(0)
+    free = ll.gap_for(16)                    # ~500/month
+    paid = ll.gap_for(2763)                  # ~100k/month
+    assert starved == ll.LIVE_GAP_CEILING_S
+    assert free == ll.LIVE_GAP_CEILING_S
+    assert paid == ll.LIVE_GAP_FLOOR_S
+    assert paid < free, "a bigger plan does not poll faster"
+
+
+def test_the_gap_never_leaves_its_bounds():
+    """However rich or broke the month, the answer stays sane. An
+    unbounded division is how a 10-million-credit plan ends up polling
+    every two seconds for a chart that redraws once a minute."""
+    for allowance in (0, 1, 16, 100, 541, 2763, 10 ** 7):
+        gap = ll.gap_for(allowance)
+        assert ll.LIVE_GAP_FLOOR_S <= gap <= ll.LIVE_GAP_CEILING_S, (allowance, gap)
+
+
+def test_the_floor_exists_because_faster_buys_the_same_picture():
+    """`series` collapses consecutive identical prices, so polling a quiet
+    market harder spends credits and draws the same line. Five minutes is
+    where the extra spend stops buying signal."""
+    assert ll.LIVE_GAP_FLOOR_S == 5 * 60
+
+
+def test_the_chart_never_gets_more_than_its_share_of_the_day():
+    """The board's own pricing is the thing that makes money. A
+    nice-to-have must not be able to outbid it however large the plan
+    gets."""
+    for allowance in (16, 541, 2763, 10 ** 6):
+        a_night = (ll.LIVE_WINDOW_S / ll.gap_for(allowance)) * ll.credits_per_pull()
+        assert a_night <= max(1.0, allowance * ll.LIVE_BUDGET_SHARE) + 1e-9 \
+            or ll.gap_for(allowance) == ll.LIVE_GAP_CEILING_S, allowance
+
+
+def test_a_broke_month_falls_back_to_the_slowest_cadence():
+    """Not to zero, and not to an exception: the chart keeps drawing from
+    stored history either way, and the pull is separately budget-gated."""
+    assert ll.gap_for(0) == ll.LIVE_GAP_CEILING_S
+    assert ll.gap_for(-5) == ll.LIVE_GAP_CEILING_S
 
 
 def test_the_narrow_pull_does_not_clobber_the_full_board_cache():
@@ -87,8 +132,8 @@ def test_the_cadence_gate_is_only_about_time():
     """Budget is `oddsbudget`'s answer, asked separately. If this function
     ever started deciding affordability too, a live chart could become the
     reason tonight's board went unpriced."""
-    assert ll.affordable(0, now=ll.LIVE_GAP_S) is True
-    assert ll.affordable(100, now=100 + ll.LIVE_GAP_S - 1) is False
+    assert ll.affordable(0, now=600, gap=600) is True
+    assert ll.affordable(100, now=699, gap=600) is False
     # The names the compiled body actually reaches for — the docstring
     # explains the separation, so it has to be the CODE that is checked.
     names = set(ll.affordable.__code__.co_names)

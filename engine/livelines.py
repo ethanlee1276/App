@@ -69,10 +69,59 @@ HISTORY_PATH = CACHE_DIR / "live_lines.jsonl"
 #: credit on every pull, forever — see the module docstring.
 LIVE_MARKETS = ("h2h",)
 
-#: Minimum seconds between live-line pulls. 30 minutes ≈ 12 credits over a
-#: six-hour night, which the free plan's ~16/day can carry. Raising the
-#: cadence is a plan decision, not a code one, so it lives here in the open.
-LIVE_GAP_S = 30 * 60
+#: Slowest and fastest this will ever poll, whatever the plan says.
+#:
+#: THE CADENCE FOLLOWS THE PLAN, NOT A GUESS. The first version pinned this
+#: at 30 minutes because that is what a 500-credit free month can carry
+#: (~12 credits over a six-hour night against an allowance near 16/day).
+#: That number was a fact about one plan written into the code as if it
+#: were a fact about the world, and the moment the plan changed the chart
+#: kept crawling for no reason. `gap_for` now asks the budget — which
+#: already learns the real quota from the API's own
+#: ``x-requests-remaining`` header — and the constants below only bound
+#: the answer.
+#:
+#: The floor is 5 minutes because a line chart does not get better below
+#: it: `series` already collapses consecutive identical prices, so faster
+#: polling on a quiet market buys more credits and the same picture.
+LIVE_GAP_FLOOR_S = 5 * 60
+LIVE_GAP_CEILING_S = 30 * 60
+#: A night of live baseball, for turning an allowance into a cadence.
+LIVE_WINDOW_S = 6 * 3600
+#: Share of the day's live allowance the CHART may spend. The rest stays
+#: for the board's own pricing, which is the thing that actually makes
+#: money — a nice-to-have never gets to outbid it.
+LIVE_BUDGET_SHARE = 0.25
+
+#: Back-compat default for callers that do not pass an allowance.
+LIVE_GAP_S = LIVE_GAP_CEILING_S
+
+
+def gap_for(daily_allowance: float | None = None) -> float:
+    """Seconds between live pulls, sized to what the plan can afford.
+
+    ``daily_allowance`` is credits, as `oddsbudget.daily_allowance`
+    reports it — which is measured from the API's own quota header once a
+    paid pull has happened, and only falls back to an assumption before
+    that. None reads it live.
+
+    A tiny allowance lands on the ceiling and a large one on the floor;
+    the interesting behaviour is in between, and it is linear in what a
+    night costs. Nothing here can spend more than `LIVE_BUDGET_SHARE` of
+    the day.
+    """
+    if daily_allowance is None:
+        try:
+            from . import oddsbudget
+            daily_allowance = oddsbudget.daily_allowance()
+        except Exception:                                     # noqa: BLE001
+            return LIVE_GAP_CEILING_S
+    pulls = (max(0.0, float(daily_allowance)) * LIVE_BUDGET_SHARE
+             / max(1, credits_per_pull()))
+    if pulls <= 0:
+        return LIVE_GAP_CEILING_S
+    gap = LIVE_WINDOW_S / pulls
+    return max(LIVE_GAP_FLOOR_S, min(LIVE_GAP_CEILING_S, gap))
 
 #: A chart needs a shape, not a dot. Below this many points there is
 #: nothing to draw and the caller shows the current price instead.
@@ -285,14 +334,22 @@ def _clock(ts) -> str:
 
 
 def affordable(last_ts: float, now: float | None = None,
-               gap: float = LIVE_GAP_S) -> bool:
+               gap: float | None = None) -> bool:
     """Has enough time passed since the last live pull?
 
     Deliberately only the CADENCE. Whether there is budget at all is
     `oddsbudget`'s answer and is asked separately by the caller, so that a
     live chart can never be the thing that spends the credit tonight's
     board needed.
+
+    The gap itself is sized by `gap_for` from the plan's measured
+    allowance — a bigger plan polls faster — but this function still only
+    ever compares two clocks. It does not read a balance and must not
+    start to: the moment "is it time yet" and "can we afford it" answer in
+    one place, a rich month can talk the chart into spending the board's
+    credits.
     """
+    gap = gap_for() if gap is None else gap
     return (time.time() if now is None else now) - float(last_ts or 0) >= gap
 
 
