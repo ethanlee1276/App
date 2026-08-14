@@ -1015,6 +1015,40 @@ function renderEmptySlate() {
   }
   const live = String(state.data.generated_from || "").startsWith("live");
   el.style.display = "";
+
+  /* PRESEASON IS NOT "NOTHING SCHEDULED". Ethan, 2026-08-14: "preseason
+     started every other team for NFL yesterday and we didn't recommend
+     props or anything like that."
+
+     Not pricing preseason is deliberate and the Preseason block below
+     says so in as many words. The failure was that the block below is
+     BELOW: at the top of the same page, where he actually looked, this
+     panel was saying "No games on the board right now — nothing is
+     scheduled or in progress", with sixteen exhibition games listed
+     further down the same screen. One page, two answers, and the one
+     that reads first was the wrong one.
+
+     The reason has to travel to where the question gets asked. */
+  const pre = state.preseason;
+  const preLeft = pre && pre.total ? (pre.total - (pre.complete || 0)) : 0;
+  const preOn = !!pre && (state.sport || "nfl") === "nfl" && !!pre.total
+    && (!pre.show_until || new Date().toISOString().slice(0, 10) <= pre.show_until);
+  if (preOn) {
+    el.innerHTML = `<div class="es-icon">${icon("calendar", 30)}</div>
+      <div class="es-title">Preseason is on — and nothing in it is priced</div>
+      <div class="es-sub">${pre.complete || 0} of ${pre.total} exhibition
+      game(s) played${preLeft ? `, ${preLeft} still to come` : ""}. The
+      schedule and scores are below.<br><br>
+      This board stays empty on purpose. Every prop here is volume ×
+      efficiency over prior games, and in August a starter plays a series
+      and a half behind a line that will not start together again — a
+      number built on last season’s snaps is not a worse answer, it is an
+      answer about a different event. We have also never ingested a
+      preseason snap, so there is nothing to fit a preseason model on.
+      The regular-season board opens in Week 1.</div>`;
+    document.getElementById("games-title").style.display = "none";
+    return;
+  }
   el.innerHTML = state.data.status === "not built"
     ? `<div class="es-icon">${icon("clock", 30)}</div><div class="es-title">This slate hasn’t been built yet</div>
        <div class="es-sub">If <code>launch.py</code> is running, it builds every sport on its next
@@ -1857,6 +1891,12 @@ async function renderPreseason() {
   if ((state.sport || "nfl") !== "nfl") return;
   const data = await loadPreseason();
   if (!data || !data.total || !data.weeks) return;
+  // The empty-slate panel needs this too, and it runs SYNCHRONOUSLY well
+  // before the fetch lands. Stashing it here and re-running that panel is
+  // what lets the top of the page stop contradicting the bottom of it —
+  // see the note in renderEmptySlate.
+  state.preseason = data;
+  if (typeof renderEmptySlate === "function") setTimeout(renderEmptySlate, 0);
 
   // Self-retiring. `show_until` is the last fixture's date; once it is
   // past, this block stops existing without anyone editing anything.

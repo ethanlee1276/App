@@ -2886,9 +2886,37 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
     if not p.is_file():
         print(f"No board built yet at {rel} — start the launcher first.")
         return
-    recs = _json.loads(p.read_text()).get("recommendations", [])
+    blob = _json.loads(p.read_text())
+    recs = blob.get("recommendations", [])
     if not recs:
         print(f"{rel} has no analyzed props at all.")
+        # AND SAY WHY, WHEN THE REASON IS THE CALENDAR. Ethan, 2026-08-14:
+        # "preseason started every other team for NFL yesterday and we
+        # didn't recommend props." An empty NFL board in August is not a
+        # gate filtering anything — there is no regular-season slate to
+        # filter. A probe whose whole job is explaining an empty board and
+        # that cannot explain the most predictable empty board of the year
+        # is not finished.
+        if sport == "nfl":
+            _pre = ROOT / "web" / "data" / "nfl_preseason.json"
+            try:
+                pd = _json.loads(_pre.read_text())
+            except Exception:                                 # noqa: BLE001
+                pd = None
+            import datetime as _dt
+            today = _dt.date.today().isoformat()
+            if pd and pd.get("total") and today <= (pd.get("show_until") or ""):
+                print(f"\n  It is PRESEASON: {pd.get('complete', 0)} of "
+                      f"{pd['total']} exhibition game(s) played, through "
+                      f"{pd.get('last')}.")
+                print("  Nothing in it is priced, on purpose. The projection "
+                      "is volume x efficiency\n  over prior games, and in "
+                      "August a starter plays a series behind a line that\n"
+                      "  will not start together again. We have also never "
+                      "ingested a preseason\n  snap (engine/sources/nflverse "
+                      "keeps season_type REG), so there is no\n  history to "
+                      "fit a preseason model on even if we wanted one.")
+                print("  The regular-season board opens in Week 1.")
         return
 
     real = [r for r in recs if r.get("has_market") is not False]
