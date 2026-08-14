@@ -80,7 +80,17 @@ def _live_prob(bet, market, side, line, current, game, live, progress,
                                 is_home=not is_home,
                                 home_score=live.get("home_score"),
                                 away_score=live.get("away_score"))
-        left = lp.bf_left(opp_outs, stat.get("bf", 0)) if still_in else 0.0
+        # His OWN pen's measured workload stretches the leash: a manager
+        # with nobody available rides the starter longer, which is more
+        # batters faced and more chances at the strikeout number. Same
+        # function and same reading the pre-game outs model uses.
+        own_pen = (game.get("bullpen_fatigue") or {}).get(
+            bet.get("team") or ("home" if is_home else ""))
+        if own_pen is None:
+            own_pen = (game.get("bullpen_fatigue") or {}).get(
+                game.get("home") if is_home else game.get("away"))
+        left = lp.bf_left(opp_outs, stat.get("bf", 0),
+                          own_pen_score=own_pen) if still_in else 0.0
         mean = (rec_means.get(name) or {}).get("strikeouts")
         bf_seen = float(stat.get("bf") or 0)
         if mean is None or bf_seen <= 0:
@@ -106,11 +116,51 @@ def _live_prob(bet, market, side, line, current, game, live, progress,
     rates = lp.rates_for(market, rec_means.get(name) or {}, spot)
     if rates is None:
         return None
+
+    # WHICH PITCHER THE REST OF HIS NIGHT IS AGAINST. The rates come from a
+    # whole-game projection, and that projection has the opposing pen's
+    # factor baked flat across it — a blend of the innings he faces the
+    # starter and the innings he faces relievers. Live, that blend is
+    # knowable: the opposing starter is either still out there or he is
+    # not. `pen_rebase` divides the pen bonus back out while he is in and
+    # applies it at reliever strength once he is gone.
+    opp = game.get("away") if is_home else game.get("home")
+    opp_starter = ((game.get("pitchers") or {}).get(
+        "away" if is_home else "home") or {}).get("name", "")
+    # None, not False, when the starter is not named: we cannot tell who is
+    # pitching, and `pen_rebase` leaves the projection alone rather than
+    # adjusting it on a missing field.
+    facing_pen = (normalize_name(opp_starter) not in (pitching or set())
+                  if opp_starter else None)
+    shift = lp.pen_rebase(
+        _mlb_pen_multiplier(game, opp),
+        facing_pen=facing_pen)
+    rates = lp.scale_rates(rates, shift)
+
     team_outs = lp.outs_left(inning, half, sit.get("outs", 0), is_home,
                              live.get("home_score"), live.get("away_score"))
     pa_left = lp.remaining_pa(spot, at_bat_spot, team_outs)
     return lp.hitter_probability(rates, market, line, side,
                                  current or 0.0, pa_left)
+
+
+def _mlb_pen_multiplier(game, opponent) -> float:
+    """The whole-game opposing-pen factor this projection already carries.
+
+    Returns 1.0 when the build did not measure a pen — an unmeasured pen
+    contributed nothing to the projection, so there is nothing to take
+    back out, and assuming otherwise would move a number on the strength
+    of a missing input.
+    """
+    if not opponent:
+        return 1.0
+    try:
+        from .mlb.bullpen import pen_multiplier
+    except Exception:                                         # noqa: BLE001
+        return 1.0
+    return pen_multiplier(
+        rank=(game.get("bullpen_rank") or {}).get(opponent),
+        fatigue=(game.get("bullpen_fatigue") or {}).get(opponent))
 
 
 def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],

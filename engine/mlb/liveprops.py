@@ -231,6 +231,89 @@ def p_at_least(outcomes, need: float, pa: float) -> float:
     return p_lo * (1 - frac) + p_hi * frac
 
 
+#: Floor and ceiling on the per-plate-appearance pen factor `pen_rebase`
+#: produces. NOT a new number: `matchup._hitter_matchup` clamps its entire
+#: matchup multiplier to [0.88, 1.15], so the engine has already said how
+#: far a matchup may move a HITTER. Un-blending must not quietly exceed
+#: the bound the blended version was held to.
+#:
+#: The hitter bound, specifically. `matchup` uses three different clamps —
+#: 1.15 for hitters, 1.12 for strikeouts, 1.10 for outs — and this factor
+#: only ever scales a hitter's table. Reaching for the wrong one was the
+#: first version of this constant, caught by the test that reads the
+#: clamp out of `_hitter_matchup` rather than trusting a comment.
+PEN_PER_PA_CAP = (0.88, 1.15)
+
+
+def pen_rebase(applied: float, facing_pen: bool, share: float = None) -> float:
+    """Re-aim a pre-game pen adjustment at the plate appearances LEFT.
+
+    `matchup._hitter_matchup` multiplies a hitter's WHOLE-GAME mean by the
+    opposing pen's factor — a tired or badly-ranked pen is worth something
+    extra late. Right shape for a number that has to cover a whole game
+    before it starts; wrong shape once the game is running, because by
+    then we know what the pre-game model could not: which pitcher the
+    remaining plate appearances are against.
+
+    Read the applied factor ``A`` as the blend it is::
+
+        A = s·1 + (1 − s)·p
+
+    ``s`` is the share of plate appearances against the STARTER, where the
+    pen bonus does not apply at all, and ``p`` is the per-plate-appearance
+    factor against the pen. Inverting gives ``p = 1 + (A − 1)/(1 − s)``.
+    The rates carry ``A``, so they are re-based by ``1/A`` while the
+    starter is in and by ``p/A`` once he is gone.
+
+    THE STARTER-IN CASE IS THE COMMON ONE AND THE UNAMBIGUOUS ONE.
+    Whatever the pre-game factor was meant to describe, it cannot describe
+    a plate appearance against the starter, so dividing it out is right
+    under every reading. The facing-pen case depends on reading ``A`` as a
+    blend rather than a flat bump — a defensible reading, and the reason
+    its result is capped to the bound `matchup` already holds itself to
+    rather than being trusted to arbitrary size.
+
+    ``facing_pen`` IS THREE-STATE, and the third state is why. ``None``
+    means we could not tell who is pitching — no probable starter on the
+    game, a feed that missed him — and it returns 1.0, leaving the
+    pre-game blend exactly as it was. Collapsing "unknown" into "facing
+    the starter" would divide the pen bonus out of every game whose
+    pitcher feed came up empty, which is a real adjustment made on the
+    strength of a missing field.
+    """
+    from .bullpen import RELIEF_SHARE
+    share = RELIEF_SHARE if share is None else share
+    applied = float(applied or 1.0)
+    if applied == 1.0 or applied <= 0 or facing_pen is None:
+        return 1.0
+    if not facing_pen:
+        return 1.0 / applied
+    if not 0 < share < 1:
+        return 1.0
+    lo, hi = PEN_PER_PA_CAP
+    per_pa = max(lo, min(hi, 1.0 + (applied - 1.0) / share))
+    return per_pa / applied
+
+
+def scale_rates(rates, factor: float):
+    """A rate table with every REACHING outcome scaled by ``factor``.
+
+    ``out`` absorbs the difference so the table still sums to one, which is
+    why this cannot simply multiply every field — the same discipline
+    `gamesim._scale_reaching` already encodes, and this defers to it for a
+    real `BatterRates`. Walks scale with the rest: a tired pen issues more
+    of those too, and holding them fixed would silently change what share
+    of a hitter's plate appearances are walks every time the factor moved.
+    """
+    if factor == 1.0 or rates is None:
+        return rates
+    if isinstance(rates, _Binomial):
+        return _Binomial(min(0.999, max(0.0, rates.rate * float(factor))),
+                         rates.market)
+    from .gamesim import _scale_reaching
+    return _scale_reaching(rates, float(factor))
+
+
 def rates_for(market: str, means: dict, spot: int = 0):
     """A per-PA outcome table for one live prop, or None.
 
@@ -338,14 +421,29 @@ def pitcher_probability(rates_k_per_bf: float, line: float, side: str,
 
 
 def bf_left(outs_left_for_opponent: float, banked_bf: float,
-            leash: float = STARTER_BF) -> float:
+            leash: float = STARTER_BF, own_pen_score: float = None) -> float:
     """Batters a pitcher still in the game is expected to face.
 
     Two limits, whichever binds first: the game does not have infinite
     batters left, and neither does the manager's patience. Without the
     second, a starter cruising in the third gets credit for every hitter
     remaining in the game — an outing nobody actually makes.
+
+    ``own_pen_score`` is his OWN bullpen's measured two-day workload, and
+    it stretches the patience limit through `bullpen.leash_factor` — the
+    same function, with the same `market_is_outs=True` reading, that the
+    pre-game outs model already uses for exactly this. A manager with no
+    available relievers rides his starter longer; that is the most
+    reliably observable managerial behaviour in baseball and it lands
+    straight on how many more hitters this man will face.
+
+    It moves only the LEASH, never the game limit. A short pen cannot
+    conjure batters that do not exist in the innings remaining.
     """
+    leash = float(leash)
+    if own_pen_score is not None:
+        from .bullpen import leash_factor
+        leash *= leash_factor(own_pen_score, market_is_outs=True)
     from_game = max(0.0, float(outs_left_for_opponent)) * PA_PER_OUT
-    from_leash = max(0.0, float(leash) - float(banked_bf or 0.0))
+    from_leash = max(0.0, leash - float(banked_bf or 0.0))
     return max(0.0, min(from_game, from_leash))

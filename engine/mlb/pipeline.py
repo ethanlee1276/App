@@ -481,6 +481,13 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
             "surface": park.surface, "plays": park.plays,
         },
         "lineups_confirmed": g.lineups_confirmed,
+        # Bullpen state, both sides. Pre-game these only ever reached the
+        # projection; the LIVE path needs them too, because once a game is
+        # running the pen stops being a whole-game average and becomes the
+        # specific arm a remaining plate appearance faces. See
+        # engine/mlb/liveprops.pen_rebase and bf_left.
+        "bullpen_fatigue": dict(g.bullpen_fatigue or {}),
+        "bullpen_rank": dict(g.bullpen_rank or {}),
         # The probable starters, for the ballpark card — the first thing a
         # bettor asks about a game the model already knows the answer to.
         # Display fields only; the matchup math consumes g.pitchers itself.

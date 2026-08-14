@@ -77,6 +77,43 @@ LEASH_MAX = 1.05
 #: same per-batter stuff, and a tiring starter's rate usually falls.
 LEASH_K_SHARE = 0.5
 
+#: Relief innings in a NORMAL nine-inning game — the midpoint of the
+#: "~3-3.5 relief innings a night" this module's docstring opens with, and
+#: that `TIRED_MIN` was set to sit above.
+#:
+#: Named here because the LIVE path needs something the pre-game path
+#: never did: not whether a pen is tired, but what SHARE of a game it
+#: pitches. The factors below are applied to a hitter's whole-game mean,
+#: which blends the innings he faces the starter with the innings he faces
+#: the pen. Once a game is running we know which of the two a remaining
+#: plate appearance belongs to, and un-blending needs this number. See
+#: `liveprops.pen_rebase`.
+NORMAL_RELIEF_INNINGS = 3.25
+RELIEF_SHARE = NORMAL_RELIEF_INNINGS / 9.0
+
+
+def pen_multiplier(rank=None, fatigue=None) -> float:
+    """The whole-game opposing-pen multiplier `matchup` applies to hitters.
+
+    Reproduced here from the same two inputs, in the same order, so the
+    live path can take it back OUT of a projection instead of guessing how
+    big it was. It lives beside the factors it composes because that is
+    what stops it drifting from the code it mirrors: if
+    `matchup._hitter_matchup` changes its pen handling, this has to change
+    with it, and `test_liveprops` pins the two together.
+    """
+    mult = 1.0
+    if rank:
+        if rank >= 24:
+            mult *= 1.03
+        elif rank <= 6:
+            mult *= 0.98
+    if fatigue is not None:
+        f = fatigue_factor(fatigue)
+        if f > 1.0:
+            mult *= f
+    return mult
+
 
 def leash_factor(score: float, market_is_outs: bool = True) -> float:
     """Own-pen workload → multiplier on the STARTER's own length.

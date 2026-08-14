@@ -186,6 +186,94 @@ def test_spread_and_total_get_nothing():
         assert r["live_prob"] is None, market
 
 
+# --- the bullpen reaching the live number -----------------------------------
+def _pen_game(fatigue=None, rank=None, starter="Ace Starter"):
+    g = _game()
+    g["bullpen_fatigue"] = fatigue or {}
+    g["bullpen_rank"] = rank or {}
+    g["pitchers"] = {"home": {"name": "Cubs Starter"},
+                     "away": {"name": starter}}
+    return g
+
+
+def _happ(g, pitching):
+    return assemble_live_picks([_bet("Ian Happ", "total_bases")], MEANS, [g],
+                               PROGRESS, [], {}, pitching)[0]["live_prob"]
+
+
+TIRED = {"MIL": 9.0, "CHC": 9.0}
+BAD = {"MIL": 27}
+BOTH_IN = {"ace starter", "cubs starter"}
+STARTER_OUT = {"cubs starter"}
+
+
+def test_the_pen_bonus_comes_off_while_the_opposing_starter_is_in():
+    """Ian Happ bats for CHC against MIL. A tired, badly-ranked MIL pen
+    lifted his whole-game projection — but the starter is still out there,
+    so the innings that remain are not the ones that bonus was about."""
+    base = _happ(_pen_game(), BOTH_IN)
+    with_pen = _happ(_pen_game(TIRED, BAD), BOTH_IN)
+    assert with_pen < base
+
+
+def test_the_pen_bonus_lands_once_the_opposing_starter_is_gone():
+    """Same game, same hitter, one difference: he is facing the pen now."""
+    base = _happ(_pen_game(), BOTH_IN)
+    vs_pen = _happ(_pen_game(TIRED, BAD), STARTER_OUT)
+    assert vs_pen > base
+
+
+def test_the_starter_and_the_pen_bracket_the_pre_game_number():
+    """The blend the pre-game model applied sits between the two live
+    readings — which is what makes it a blend rather than either one."""
+    in_ = _happ(_pen_game(TIRED, BAD), BOTH_IN)
+    out = _happ(_pen_game(TIRED, BAD), STARTER_OUT)
+    assert in_ < _happ(_pen_game(), BOTH_IN) < out
+
+
+def test_a_game_with_no_pen_data_is_untouched_either_way():
+    """An unmeasured pen contributed nothing to the projection, so neither
+    reading may move the number. This is the guard against the live path
+    inventing a signal out of a missing field."""
+    assert _happ(_pen_game(), BOTH_IN) == _happ(_pen_game(), STARTER_OUT)
+
+
+def test_the_opposing_pen_is_read_not_the_hitters_own():
+    """Happ bats for CHC; the pen that matters is MIL's. Reading his own
+    team's would move his number on his own relievers' workload, which
+    has nothing to do with his at-bats."""
+    own_only = _happ(_pen_game({"CHC": 9.0}, {"CHC": 27}), BOTH_IN)
+    assert own_only == _happ(_pen_game(), BOTH_IN)
+
+
+def test_an_unnamed_opposing_starter_is_not_assumed_to_be_gone():
+    """Without a probable starter on the game we cannot tell whether the
+    pen is in. Treating that as "reliever" would apply the bonus to every
+    game the pitcher feed missed."""
+    g = _pen_game(TIRED, BAD, starter="")
+    assert _happ(g, BOTH_IN) == _happ(_pen_game(), BOTH_IN)
+
+
+def test_the_starters_own_pen_stretches_his_strikeout_forecast():
+    """The other direction the bullpen matters live: MIL's pen is gassed,
+    so MIL's starter gets ridden longer, faces more hitters, and has more
+    chances at his strikeout number."""
+    def ace(g):
+        return assemble_live_picks(
+            [_bet("Ace Starter", "strikeouts", line=5.5, team="MIL")],
+            MEANS, [g], PROGRESS, [], {}, BOTH_IN)[0]["live_prob"]
+    assert ace(_pen_game(TIRED)) > ace(_pen_game())
+
+
+def test_the_build_ships_the_bullpen_on_the_game():
+    """None of the above can happen if the payload drops the fields — the
+    pre-game path only ever passed them to the projection."""
+    pipe = open(os.path.join(ROOT, "engine", "mlb", "pipeline.py"),
+                encoding="utf-8").read()
+    assert '"bullpen_fatigue": dict(g.bullpen_fatigue or {})' in pipe
+    assert '"bullpen_rank": dict(g.bullpen_rank or {})' in pipe
+
+
 # --- the build wiring -------------------------------------------------------
 def test_the_build_passes_who_is_pitching():
     assert "pitching |= current_pitchers(_box)" in BUILD

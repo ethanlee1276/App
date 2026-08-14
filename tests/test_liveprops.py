@@ -298,6 +298,174 @@ def test_a_nonsense_rate_gets_no_number():
         assert lp.pitcher_probability(bad, 5.5, "OVER", 5, 8) is None
 
 
+# --- the bullpen, re-aimed at the innings that are left ---------------------
+def test_the_reproduced_pen_multiplier_matches_the_matchup_code():
+    """`bullpen.pen_multiplier` exists to be SUBTRACTED from a projection,
+    so it has to be the same number `matchup._hitter_matchup` added. This
+    reads the two side by side: if the matchup code changes its pen
+    handling and the mirror does not, the live path starts dividing out a
+    factor nobody put in."""
+    import inspect
+    from engine.mlb import matchup
+    from engine.mlb.bullpen import pen_multiplier
+    src = inspect.getsource(matchup._hitter_matchup)
+    # The rank nudges, exactly as the matchup applies them.
+    assert "mult *= 1.03" in src and "pen >= 24" in src
+    assert "mult *= 0.98" in src and "pen <= 6" in src
+    assert abs(pen_multiplier(rank=27) - 1.03) < 1e-9
+    assert abs(pen_multiplier(rank=3) - 0.98) < 1e-9
+    assert pen_multiplier(rank=15) == 1.0
+    # And fatigue rides on top of it, same as there.
+    from engine.mlb.bullpen import fatigue_factor
+    assert abs(pen_multiplier(rank=27, fatigue=9.0)
+               - 1.03 * fatigue_factor(9.0)) < 1e-9
+
+
+def test_an_unmeasured_pen_changes_nothing():
+    """No pen data contributed nothing to the projection, so there is
+    nothing to take back out. Moving a number on a missing input is how a
+    live display invents a signal."""
+    from engine.mlb.bullpen import pen_multiplier
+    assert pen_multiplier() == 1.0
+    assert lp.pen_rebase(1.0, facing_pen=True) == 1.0
+    assert lp.pen_rebase(1.0, facing_pen=False) == 1.0
+
+
+def test_an_unknown_pitcher_leaves_the_projection_alone():
+    """CAUGHT BY THE WIRING TEST. `facing_pen` is three-state: None means
+    the game named no probable starter, so we cannot tell who is on the
+    mound. Collapsing that into "facing the starter" divided the pen bonus
+    out of every game whose pitcher feed came up empty — a real adjustment
+    made on the strength of a missing field."""
+    assert lp.pen_rebase(1.06, facing_pen=None) == 1.0
+    assert lp.pen_rebase(0.98, facing_pen=None) == 1.0
+    assert lp.pen_rebase(1.06, facing_pen=False) != 1.0
+
+
+def test_the_pen_bonus_is_divided_out_while_the_starter_is_in():
+    """THE UNAMBIGUOUS HALF. Whatever the pre-game factor was meant to
+    describe, it cannot describe a plate appearance against the starter.
+    A tired-pen bonus left in place there flatters every hitter for
+    innings the pen is not pitching."""
+    assert lp.pen_rebase(1.03, facing_pen=False) < 1.0
+    assert abs(lp.pen_rebase(1.03, facing_pen=False) - 1 / 1.03) < 1e-9
+    # And a GOOD pen's penalty comes back off the same way.
+    assert lp.pen_rebase(0.98, facing_pen=False) > 1.0
+
+
+def test_the_pen_bonus_lands_harder_once_the_starter_is_gone():
+    """Un-blended: a whole-game 3% bump earned entirely in the third of
+    the game the pen pitches is worth more than 3% per plate appearance
+    against the pen itself."""
+    A = 1.03
+    vs_pen = lp.pen_rebase(A, facing_pen=True)
+    assert vs_pen > 1.0
+    assert A * vs_pen > A, "the per-PA pen factor is not stronger than the blend"
+
+
+def test_the_two_sides_of_the_blend_bracket_the_applied_factor():
+    """Sanity on the algebra itself: dividing out has to sit below 1 and
+    the reliever factor above it, with the pre-game factor in between."""
+    for A in (1.03, 1.06, 0.98):
+        st = A * lp.pen_rebase(A, facing_pen=False)
+        pen = A * lp.pen_rebase(A, facing_pen=True)
+        assert abs(st - 1.0) < 1e-9
+        assert (pen > A) == (A > 1.0)
+
+
+def test_the_reliever_factor_cannot_exceed_the_engines_own_matchup_bound():
+    """`matchup._hitter_matchup` clamps its whole multiplier to
+    [0.88, 1.15]. Un-blending divides by roughly a third, so an unclamped
+    version hands a hitter a 1.25 per-plate-appearance factor — further
+    than the engine allows any matchup to move anyone.
+
+    THIS TEST EARNED ITS KEEP IMMEDIATELY: the cap first shipped as 1.12,
+    which is `matchup`'s STRIKEOUT bound, not its hitter one. Reading the
+    clamp out of the function instead of trusting the comment beside the
+    constant is what caught it."""
+    worst = 1.06 * 1.03                       # tired AND badly ranked
+    per_pa = worst * lp.pen_rebase(worst, facing_pen=True)
+    lo, hi = lp.PEN_PER_PA_CAP
+    assert per_pa <= hi + 1e-9
+    assert per_pa > 1.12, "the cap is binding lower than the hitter bound"
+    from engine.mlb import matchup
+    import inspect
+    assert f"clamp(mult, {lo}, {hi})" in inspect.getsource(matchup._hitter_matchup), \
+        "the matchup bound moved — PEN_PER_PA_CAP has to move with it"
+
+
+def test_scaling_keeps_the_table_a_distribution():
+    """`out` absorbs the change; the six outcomes still sum to one. A
+    plain multiply-everything would leave a table that is not a
+    probability distribution and quietly break every downstream count."""
+    rates = _rates()
+    for f in (0.94, 1.0, 1.12):
+        s = lp.scale_rates(rates, f)
+        total = s.out + s.bb + s.single + s.double + s.triple + s.hr
+        assert abs(total - 1.0) < 1e-9, (f, total)
+
+
+def test_scaling_moves_the_reaching_outcomes_in_the_right_direction():
+    rates = _rates()
+    up, down = lp.scale_rates(rates, 1.10), lp.scale_rates(rates, 0.90)
+    assert up.hr > rates.hr > down.hr
+    assert up.out < rates.out < down.out
+
+
+def test_scaling_works_on_the_single_market_table_too():
+    """`hits` and `home_runs` use the duck-typed binomial table, which is
+    not a `BatterRates` and would throw in `_scale_reaching`."""
+    b = lp.rates_for("hits", {"hits": 1.05}, 3)
+    s = lp.scale_rates(b, 1.10)
+    assert abs(s.rate - b.rate * 1.10) < 1e-9
+    assert abs(s.out + s.single - 1.0) < 1e-9
+
+
+def test_a_scaled_rate_cannot_reach_certainty():
+    """Scaling a high rate up must not produce a table where the hitter
+    reaches base every time — `p_at_least` would then report 1.0 on a bet
+    that is not won."""
+    b = lp.rates_for("hits", {"hits": 4.2}, 3)      # a mean equal to his PA
+    s = lp.scale_rates(b, 1.12)
+    assert s.rate < 1.0
+
+
+# --- the leash, for the man still on the mound ------------------------------
+def test_a_gassed_pen_lengthens_the_start():
+    """The measured behaviour `leash_factor` was built for, now reaching
+    the live number: no available relievers means more batters faced, and
+    more batters faced is more chances at a strikeout line."""
+    normal = lp.bf_left(18, banked_bf=10, own_pen_score=None)
+    gassed = lp.bf_left(18, banked_bf=10, own_pen_score=12.0)
+    assert gassed > normal
+
+
+def test_a_rested_pen_does_not_shorten_the_start():
+    """`leash_factor` floors at 1.0 by design — the tired-pen effect is
+    the reliably observable one. The live path must inherit that
+    one-directionality rather than inventing the mirror."""
+    assert lp.bf_left(18, 10, own_pen_score=0.0) == lp.bf_left(18, 10)
+
+
+def test_the_leash_never_conjures_batters_the_game_does_not_have():
+    """A short pen stretches the manager's patience, not the innings. In
+    the ninth there are only so many hitters left however gassed the pen
+    is."""
+    assert lp.bf_left(2, banked_bf=5, own_pen_score=20.0) \
+        == lp.bf_left(2, banked_bf=5)
+
+
+def test_the_leash_uses_the_outs_reading_not_the_strikeout_one():
+    """`leash_factor` has two strengths. This is a question about LENGTH —
+    how many more hitters he faces — which is the outs reading. The
+    halved strikeout reading describes the per-batter rate, and applying
+    it here would understate the extra work."""
+    from engine.mlb.bullpen import leash_factor
+    score = 12.0
+    grew = lp.bf_left(30, 0, own_pen_score=score) / lp.bf_left(30, 0)
+    assert abs(grew - leash_factor(score, market_is_outs=True)) < 1e-9
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
