@@ -61,6 +61,30 @@ def _write_rosters(path: Path, blob: dict | None) -> None:
     except Exception:                                          # noqa: BLE001
         _faces = {}
     out = _r.build_rosters(blob, faces=_faces)
+    # THE SECOND OPINION. Sleeper knows who is on every roster; ESPN's
+    # injury report knows what is wrong with the ones who are hurt, and
+    # often files first. Until now the two lived on different pages and
+    # disagreed in public — a player on the ESPN board with no Sleeper
+    # designation showed as Active here. `injurymerge` takes availability
+    # from whichever feed is more pessimistic and detail from whichever
+    # has it, and never clears anyone. Cached feed; a failure leaves the
+    # roster exactly as Sleeper reported it.
+    try:
+        from engine import injurymerge as _im
+        from engine.sources import espninjuries as _ei
+        _rows = _ei.current_rows(_ei.parse_injuries(_ei.fetch_injuries("nfl")))
+        out = _im.apply(out, _rows)
+        _m = out.get("injury_merge") or {}
+        print(f"Injury merge: {_m.get('matched', 0)} of {_m.get('espn_filings', 0)}"
+              f" ESPN filings matched a rostered player"
+              + (f" · {_m['newly_unavailable']} newly unavailable"
+                 if _m.get("newly_unavailable") else "")
+              + (f" · {_m['conflicts']} disagreement(s)"
+                 if _m.get("conflicts") else "")
+              + (f" · {_m['unmatched_count']} unmatched"
+                 if _m.get("unmatched_count") else ""))
+    except Exception as _exc:                                  # noqa: BLE001
+        print(f"  ⚠️  ESPN injury merge unavailable: {_exc}")
     # Transactions come from diffing OUR OWN daily snapshots. No news feed,
     # nothing to curate, and it covers every rostered player rather than
     # the ones somebody thought to mention.

@@ -9624,13 +9624,26 @@ function rosterPlayerHTML(p, byAppearance) {
   // but it is the single most useful flag on a board where you are about
   // to price his volume, so it shows in its own right rather than being
   // flattened into "active".
+  // Where the ESPN injury report adds something the roster feed did not.
+  // `back` is the return date; `contested` fires only when BOTH feeds
+  // filed and they disagree about whether he plays — a gap the merge
+  // filled is not a disagreement, and marking those would flag most of
+  // the board.
+  const back = p.return_date
+    ? ` · back ${escapeHtml(String(p.return_date).slice(5))}` : "";
+  const contested = p.injury_conflict
+    ? `<span class="chip warn" title="Sleeper and the ESPN injury report
+         disagree about whether he plays. The more pessimistic reading is
+         shown — this board never clears a player on one feed’s word.">${
+         icon("warn")} feeds disagree</span>` : "";
   const tags = [
     p.rookie ? `<span class="chip">rookie</span>` : "",
     p.unavailable ? `<span class="chip down">${escapeHtml(p.status || "out")}${
-      p.injury ? ` · ${escapeHtml(p.injury)}` : ""}</span>` : "",
+      p.injury ? ` · ${escapeHtml(p.injury)}` : ""}${back}</span>` : "",
     (!p.unavailable && p.questionable)
       ? `<span class="chip warn">${escapeHtml(p.status || "questionable")}${
-          p.injury ? ` · ${escapeHtml(p.injury)}` : ""}</span>` : "",
+          p.injury ? ` · ${escapeHtml(p.injury)}` : ""}${back}</span>` : "",
+    contested,
   ].join("");
   const colA = byAppearance
     ? (p.last_seen ? escapeHtml(String(p.last_seen).slice(5)) : "—")
