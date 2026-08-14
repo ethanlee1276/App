@@ -97,6 +97,23 @@ apart; and whether the one-parameter cut that just went live helps from
 several walk-forward origins or only from the single 70/30 boundary that
 happened to pass.
 
+### 4c. Collect the preseason (new, and it prices nothing)
+
+```
+python3 ingest.py nflpre --seasons 2021-2026
+```
+
+Why it exists: nflverse publishes no preseason player stats, so this repo
+has never held a single preseason snap — 2021-2025 are periods 001-022,
+regular and post only. "Should we model August" is unanswerable while
+that is true, and this is the step that makes it answerable next year.
+ESPN's box scores are the source; one cached request per played game.
+
+It lands in `preseason_player_logs`, a **separate table**, and nothing
+reads it. The board stays empty in August exactly as before. The run
+takes a few minutes for five seasons and is resumable — re-running skips
+nothing but costs only cached reads.
+
 ### 5. Rebuild, so tonight's board prices through all of it
 
 ```

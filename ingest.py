@@ -273,8 +273,8 @@ def _walk_days(conn, sport: str, dates: list, ingest_day, scores_only: bool,
 def main() -> None:
     ap = argparse.ArgumentParser(description="Populate the historical database.")
     ap.add_argument("sport",
-                    choices=["nfl", "mlb", "nba", "wnba", "cfb", "ufc",
-                             "status"])
+                    choices=["nfl", "nflpre", "mlb", "nba", "wnba", "cfb",
+                             "ufc", "status"])
     # NO default. It used to carry the NFL's "last five seasons", which
     # meant `python3 ingest.py nba` with no arguments silently launched a
     # 1,366-day backfill instead of printing usage. A command that starts
@@ -309,6 +309,21 @@ def main() -> None:
         print(f"Ingesting NFL seasons {seasons[0]}-{seasons[-1]} → {args.db}")
         res = ingest.ingest_nfl(conn, seasons)
         print(f"  games: {res['games']:,}   player-log rows: {res['player_logs']:,}")
+    elif args.sport == "nflpre":
+        # Preseason box scores, into their own table. Prices nothing — see
+        # engine/ingest.ingest_nfl_preseason and the schema note in db.py.
+        seasons = parse_seasons(args.seasons or str(datetime.date.today().year))
+        print(f"Ingesting NFL PRESEASON {seasons[0]}-{seasons[-1]} → {args.db}")
+        print("  Nothing here is priced. This is the history that has to "
+              "exist\n  before August can be modelled at all.")
+        res = ingest.ingest_nfl_preseason(conn, seasons)
+        print(f"  games: {res['games']:,}   preseason rows: "
+              f"{res['player_logs']:,}")
+        for note in res["skipped"][:5]:
+            print(f"  skipped: {note}")
+        if not res["player_logs"]:
+            print("  Nothing stored. ESPN's summary endpoint is refused by "
+                  "policy in the\n  cloud container — run this on the laptop.")
     elif args.sport == "cfb":
         # College football's results come from the same keyless ESPN feed
         # the board reads, one request per day. Everything downstream needs

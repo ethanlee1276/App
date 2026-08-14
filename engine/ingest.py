@@ -42,10 +42,27 @@ def nfl_game_rows(schedule_rows: list[dict], seasons: set[int]) -> list[dict]:
     return out
 
 
+#: Season types the regular tables accept. nflverse ships REG and POST
+#: today and no preseason at all, so this filter changes nothing right
+#: now — it exists because the day that stops being true is the day
+#: preseason weeks 1-3 would silently merge into regular weeks 1-3 under
+#: the same `period`, and nobody would see it until a September
+#: projection came back wrong. Preseason has its own table; see
+#: `ingest_nfl_preseason`.
+REGULAR_TYPES = ("REG", "POST", "")
+
+
+def _is_regular(row: dict) -> bool:
+    from .sources.nflverse import _s
+    return _s(row, "season_type", "game_type", default="REG").upper() in REGULAR_TYPES
+
+
 def nfl_player_log_rows(stats_rows: list[dict], season: int) -> list[dict]:
     from .sources.nflverse import _s, _f, POSITION_MARKETS, MARKET_COLUMNS
     out = []
     for r in stats_rows:
+        if not _is_regular(r):
+            continue
         pos = _s(r, "position", "position_group").upper()
         if pos not in POSITION_MARKETS:
             continue
@@ -84,6 +101,8 @@ def nfl_usage_rows(stats_rows: list[dict], season: int) -> list[dict]:
     from .sources.nflverse import _s, _f, POSITION_MARKETS
     out = []
     for r in stats_rows:
+        if not _is_regular(r):
+            continue
         pos = _s(r, "position", "position_group").upper()
         if pos not in POSITION_MARKETS:
             continue
@@ -116,6 +135,8 @@ def nfl_td_rows(stats_rows: list[dict], season: int) -> list[dict]:
     from .sources.nflverse import _s, _f, POSITION_MARKETS
     out = []
     for r in stats_rows:
+        if not _is_regular(r):
+            continue
         pos = _s(r, "position", "position_group").upper()
         if pos not in POSITION_MARKETS:
             continue
@@ -194,6 +215,54 @@ def ingest_nfl_results(conn, season: int) -> dict:
     except DataUnavailable as exc:
         result["skipped"].append(f"nfl snap counts {season}: {exc}")
     db.log_ingest(conn, "nfl", "weekly_results", str(season),
+                  result["player_logs"])
+    return result
+
+
+def ingest_nfl_preseason(conn, seasons: list[int], quiet: bool = False) -> dict:
+    """Exhibition box scores into `preseason_player_logs`. Prices nothing.
+
+    Ethan, 2026-08-14: "yeah keep going" — the collection step under the
+    question of whether August can ever be modelled. It cannot be answered
+    today for a reason that is about data rather than taste: nflverse
+    publishes no preseason player stats, so this repo has never held one
+    snap of it, and there is nothing to fit on.
+
+    THE ROWS GO IN THEIR OWN TABLE, which is the entire safety story — see
+    the schema note in engine/db.py. Every consumer of `player_game_logs`
+    reads it by (sport, season, period) with no season-type filter, because
+    until now there was nothing to filter; a preseason row in there would
+    quietly enter the roster page's "last seen", the identity map, the
+    team-log charts and every form window.
+
+    One request per game, cached six hours, finals only.
+    """
+    from .sources import nflpreseason as pre
+    result = {"games": 0, "player_logs": 0, "skipped": []}
+    for season in seasons:
+        try:
+            games = pre.preseason_games(season)
+        except DataUnavailable as exc:
+            result["skipped"].append(f"nfl preseason {season}: {exc}")
+            continue
+        played = [g for g in games if g.get("state") == "post"]
+        result["games"] += len(played)
+        for g in played:
+            gid = g.get("game_id")
+            if not gid:
+                continue
+            try:
+                rows = pre.parse_boxscore(pre.fetch_boxscore(gid), g)
+            except DataUnavailable as exc:
+                # One unreadable game must not cost the other 47.
+                result["skipped"].append(f"nfl preseason box {gid}: {exc}")
+                continue
+            result["player_logs"] += db.upsert_preseason_logs(conn, rows)
+        if not quiet:
+            print(f"  {season}: {len(played)} played game(s), "
+                  f"{result['player_logs']:,} row(s) so far")
+    db.log_ingest(conn, "nfl", "preseason_box",
+                  f"seasons {min(seasons)}-{max(seasons)}",
                   result["player_logs"])
     return result
 

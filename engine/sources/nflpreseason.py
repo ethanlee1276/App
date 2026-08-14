@@ -317,3 +317,155 @@ def days_until(games: list[dict], today: _dt.date | None = None) -> int | None:
     except ValueError:
         return None
     return (first - (today or _dt.date.today())).days
+
+
+# --- BOX SCORES ------------------------------------------------------------
+#
+# Ethan, 2026-08-14, when preseason opened without a board: "we didn't
+# recommend props or anything like that", and then "yeah keep going" to the
+# collection step underneath it.
+#
+# NOTHING BELOW PRICES ANYTHING. It stores what happened in exhibition
+# games, which is the one thing that has to exist before the question
+# "should we price preseason" can even be asked with a number attached.
+# nflverse does not publish preseason player stats — its weekly file is REG
+# and POST — so five Augusts of history do not exist anywhere in this repo.
+# Measured on the ingested DB: 2021-2025 hold periods 001-022 and not one
+# preseason snap.
+#
+# ESPN's summary endpoint carries the box score for the same event ids the
+# scoreboard already hands us, so this is the same source, one call deeper.
+
+#: Six hours. A final box score never changes; a live one is not what this
+#: is for. The ingest asks for finals only.
+BOXSCORE_TTL = 21600
+
+#: ESPN's stat blocks → our market names, by the LABEL each column carries
+#: rather than by position in the row. Positions move when ESPN adds a
+#: column; labels are what the page prints and are stable.
+#:
+#: Only the four markets the prop model actually uses, plus the two counts
+#: that make a touchdown line readable. Storing every column ESPN sends
+#: would be a wider table nobody reads and a bigger surface to be wrong on.
+BOX_MARKETS = {
+    "passing":   {"YDS": "pass_yds"},
+    "rushing":   {"YDS": "rush_yds", "CAR": "carries", "TD": "rush_td"},
+    "receiving": {"YDS": "rec_yds", "REC": "receptions", "TGTS": "targets",
+                  "TD": "rec_td"},
+}
+
+
+def boxscore_url(game_id: str) -> str:
+    return (f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/"
+            f"summary?event={game_id}")
+
+
+def fetch_boxscore(game_id: str) -> dict:
+    """The raw summary payload for one event, cached before it is read.
+
+    Same discipline as the scoreboard fetch above: the bytes land on disk
+    first, so a parser that turns out to be wrong costs an edit and not a
+    second round of requests.
+    """
+    name = f"espn_nfl_box_{game_id}.json"
+    text = fetch_text(boxscore_url(game_id), name, ttl=BOXSCORE_TTL,
+                      user_agent=DEFAULT_AGENT)
+    try:
+        return json.loads(text)
+    except ValueError as exc:
+        raise DataUnavailable(
+            f"ESPN returned something that is not JSON for event {game_id}; "
+            f"the raw body is cached at {CACHE_DIR / name}") from exc
+
+
+def _stat(value: str) -> float | None:
+    """One cell of an ESPN stat row, as a number.
+
+    Passing is sent as "18/25" for completions/attempts and rushing yards
+    can be "-3". A cell this cannot read returns None and is skipped rather
+    than stored as zero — a player with no receiving line did not catch
+    zero passes, he did not have a receiving line.
+    """
+    v = str(value or "").strip()
+    if not v or v == "--":
+        return None
+    if "/" in v:                     # C/ATT — the yards column is separate
+        return None
+    try:
+        return float(v)
+    except ValueError:
+        return None
+
+
+def parse_boxscore(data: dict, game: dict) -> list[dict]:
+    """Summary payload → one row per player, market and game.
+
+    Raises on a shape it does not recognise, for the same reason
+    `parse_games` does: an empty list is what a game nobody played looks
+    like, so returning it for "I could not read this" would hide a broken
+    parser behind an ordinary-looking August.
+    """
+    box = (data.get("boxscore") or {})
+    teams = box.get("players")
+    if teams is None:
+        raise DataUnavailable(
+            "ESPN summary has no `boxscore.players` — the shape has changed, "
+            "or this is an error body. Nothing was parsed.")
+
+    home = game.get("home") or ""
+    away = game.get("away") or ""
+    out: list[dict] = []
+    seen: set = set()
+    for side in teams:
+        team = _abbr(((side.get("team") or {}).get("abbreviation") or ""))
+        opp = away if team == home else home
+        for block in side.get("statistics") or []:
+            wanted = BOX_MARKETS.get(str(block.get("name") or "").lower())
+            if not wanted:
+                continue
+            labels = [str(x).upper() for x in (block.get("labels") or [])]
+            cols = {lab: i for i, lab in enumerate(labels)}
+            for ath in block.get("athletes") or []:
+                who = (ath.get("athlete") or {})
+                name = who.get("displayName") or who.get("shortName") or ""
+                if not name:
+                    continue
+                stats = ath.get("stats") or []
+                pos = ((who.get("position") or {}).get("abbreviation")
+                       if isinstance(who.get("position"), dict)
+                       else who.get("position")) or ""
+                for label, market in wanted.items():
+                    i = cols.get(label)
+                    if i is None or i >= len(stats):
+                        continue
+                    val = _stat(stats[i])
+                    if val is None:
+                        continue
+                    key = (name, market)
+                    if key in seen:
+                        continue      # a player listed in two blocks once
+                    seen.add(key)
+                    out.append({
+                        "sport": "nfl", "season": game.get("season"),
+                        "week": game.get("week"), "game_id": game.get("game_id"),
+                        "player": name, "team": team, "opponent": opp,
+                        "position": str(pos).upper(),
+                        "home": 1 if team == home else 0,
+                        "market": market, "value": val,
+                    })
+    # A touchdown line is the two scoring columns added, and it is derived
+    # here rather than stored twice: the long-shot market is "did he score
+    # at all", which neither column answers on its own.
+    tds: dict = {}
+    for r in out:
+        if r["market"] in ("rush_td", "rec_td"):
+            k = (r["player"], r["team"])
+            tds[k] = tds.get(k, 0.0) + r["value"]
+    base = {r["player"]: r for r in out}
+    for (name, team), total in tds.items():
+        seed = base.get(name)
+        if not seed:
+            continue
+        out.append({**seed, "market": "anytime_td",
+                    "value": 1.0 if total > 0 else 0.0})
+    return out

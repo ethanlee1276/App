@@ -41,6 +41,31 @@ CREATE TABLE IF NOT EXISTS ingest_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sport TEXT, kind TEXT, detail TEXT, rows INTEGER, ts TEXT
 );
+-- PRESEASON, IN ITS OWN TABLE ON PURPOSE.
+--
+-- Ethan, 2026-08-14, after preseason opened: "we didn't recommend props or
+-- anything like that." Nothing prices August and nothing here changes that
+-- — this is the collection step that has to happen first, because the
+-- reason we cannot model preseason is that we have never stored a snap of
+-- it: `engine/sources/nflverse` keeps season_type REG at ingest, and
+-- nflverse does not publish preseason player stats at all.
+--
+-- THE SEPARATE TABLE IS THE WHOLE SAFETY ARGUMENT. Every consumer of
+-- `player_game_logs` reads it by (sport, season, period) and none of them
+-- filter by season type, because until now none of them had to. Preseason
+-- rows in that table would poison the roster page's "last seen", the
+-- identity map's current club, the team-log charts, the projections and
+-- every form window — silently, and in August, when a starter's series and
+-- a half would land in the same average as a full September game.
+--
+-- Sharing a table and remembering to filter is a rule someone has to keep.
+-- A different table is a rule the schema keeps for them.
+CREATE TABLE IF NOT EXISTS preseason_player_logs (
+    sport TEXT, season INTEGER, week INTEGER, game_id TEXT,
+    player TEXT, team TEXT, opponent TEXT, position TEXT, home INTEGER,
+    market TEXT, value REAL,
+    PRIMARY KEY (sport, season, week, game_id, player, market)
+);
 -- Who a player IS, as opposed to what he did in one game.
 --
 -- A SEPARATE TABLE, not a column on player_game_logs, for two reasons. An
@@ -245,6 +270,25 @@ def upsert_player_logs(conn, rows: list[dict]) -> int:
 
 def upsert_odds_history(conn, rows: list[dict]) -> int:
     return _upsert(conn, "odds_history", ODDS_HIST_COLS, rows)
+
+
+PRESEASON_COLS = ["sport", "season", "week", "game_id", "player", "team",
+                  "opponent", "position", "home", "market", "value"]
+
+
+def upsert_preseason_logs(conn, rows: list[dict]) -> int:
+    """Store exhibition box-score lines. Same shape as a player log, a
+    different table — see the schema note for why that separation is
+    structural rather than a convention."""
+    if not rows:
+        return 0
+    cols = ",".join(PRESEASON_COLS)
+    marks = ",".join("?" * len(PRESEASON_COLS))
+    conn.executemany(
+        f"INSERT OR REPLACE INTO preseason_player_logs ({cols}) VALUES ({marks})",
+        [tuple(r.get(c) for c in PRESEASON_COLS) for r in rows])
+    conn.commit()
+    return len(rows)
 
 
 ASSET_COLS = ["sport", "player", "espn_id", "headshot", "seen"]
