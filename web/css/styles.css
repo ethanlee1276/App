@@ -4272,6 +4272,16 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    nothing else on this card claims: the LIVE badge is top-left, the time
    and weather chips are top-right, and the picks chip is bottom-right. */
 .venue-runners { position: absolute; left: 8px; bottom: 8px; z-index: 3; }
+/* THE OVERLAY IS A CHIP, NOT ART. `.gp-art svg { width: 100% }` stretches
+   every SVG in the hero to the container so the drawn ballpark fills it —
+   and the runner overlay is an SVG in the same box, so on the game page it
+   inflated to three bases the size of the outfield. Caught on the live
+   game page rather than the strip card, because the card's box is small
+   enough that the difference did not read as wrong. Pinned in both
+   containers at the size it is drawn at. */
+.gp-art .venue-runners, .stadium-wrap .venue-runners {
+  width: 40px; height: 32px; max-height: 32px; flex: none;
+}
 /* Occupied bases carry a class because `.stadium g rect { fill: none }`
    hollows out every rect in the art and a presentation attribute loses to
    any CSS rule — the exact trap the drawn version documented, and this

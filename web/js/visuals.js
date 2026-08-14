@@ -1212,18 +1212,32 @@ function propAnalysis(r, opts = {}) {
   // pointing the other way, so the step comes off a nice-number ladder
   // instead: the smallest round tick whose four gridlines still cover the
   // data. 90 now tops out at 120, not 400.
-  const raw = hi / 4;
+  //
+  // AND THE AXIS HAS TO BE ABLE TO GO BELOW ZERO, which it never did
+  // while the only thing charted was a player stat. Ethan, 2026-08-13,
+  // circling a run line: "i should be able to click on this prop and it
+  // shows more info … and it will show the bar graph too." A game bet's
+  // quantity is a MARGIN, and a team that lost by three has a value of
+  // −3. Clamping the floor at zero would have drawn that as a 3-unit
+  // stub above the baseline — a loss rendered as a win, which is a
+  // wrong chart rather than a missing one.
+  const lo = Math.min(0, ...data, line);
+  const raw = Math.max(hi, -lo * 1.12) / 4;
   const mag = Math.pow(10, Math.floor(Math.log10(raw || 1)));
   const norm = (raw || 1) / mag;
   const tick = ([1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]
     .find((c) => c >= norm - 1e-9) || 10) * mag;
-  const top = tick * 4;
-  const y = (v) => T + (1 - v / top) * (H - T - B);
+  // Rungs are counted each way from zero so the baseline is always ON a
+  // gridline: four above, and only as many below as the data needs.
+  const upRungs = Math.max(1, Math.ceil((hi || 1) / tick - 1e-9));
+  const downRungs = Math.max(0, Math.ceil(-lo / tick - 1e-9));
+  const top = tick * upRungs, bottom = -tick * downRungs;
+  const y = (v) => T + (1 - (v - bottom) / (top - bottom)) * (H - T - B);
   const slot = (W - L - R) / n, bw = Math.min(30, slot - 8);
   const bx = (i) => L + i * slot + (slot - bw) / 2;
 
   let grid = "";
-  for (let k = 0; k <= 4; k++) {
+  for (let k = -downRungs; k <= upRungs; k++) {
     const v = tick * k;
     grid += `<line x1="${L}" y1="${y(v)}" x2="${W - R}" y2="${y(v)}"
         stroke="var(--border-soft)" stroke-width="1" opacity=".6"/>
@@ -1233,11 +1247,15 @@ function propAnalysis(r, opts = {}) {
   }
   const bars = data.map((v, i) => {
     const c = won(v) ? "var(--good)" : "var(--bad)";
-    const yt = y(v), h = Math.max(3, y(0) - yt);
-    return `<rect x="${bx(i).toFixed(1)}" y="${(y(0) - h).toFixed(1)}"
+    // A bar hangs DOWN from the baseline when its value is negative. The
+    // label follows it, or it would sit inside the bar it describes.
+    const yt = y(v), y0 = y(0), down = v < 0;
+    const h = Math.max(3, Math.abs(y0 - yt));
+    return `<rect x="${bx(i).toFixed(1)}" y="${(down ? y0 : y0 - h).toFixed(1)}"
         width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${c}"
         data-tip="Game ${i + 1} — ${v}" style="pointer-events:all;cursor:pointer"/>
-      <text x="${(bx(i) + bw / 2).toFixed(1)}" y="${(yt - 5).toFixed(1)}"
+      <text x="${(bx(i) + bw / 2).toFixed(1)}" y="${
+        (down ? y0 + h + FS : yt - 5).toFixed(1)}"
         text-anchor="middle" font-size="${FS}" fill="${c}"
         paint-order="stroke" stroke="var(--panel)" stroke-width="3"
         font-variant-numeric="tabular-nums">${v}</text>
@@ -1280,18 +1298,22 @@ function propAnalysis(r, opts = {}) {
   return `
   <div class="prop-analysis pa-${tone}">
     <div class="pa-bar">
-      <span class="pa-cell"><span class="pa-k">PROP</span>
+      <span class="pa-cell"><span class="pa-k">${escapeHtml(opts.what || "PROP")}</span>
         <span class="pa-m">${escapeHtml(r.market_label || r.market || "")}</span></span>
       <span class="pa-cell"><span class="pa-k">LINE</span>
         <span class="pa-big">${escapeHtml(String(line))}</span></span>
-      <span class="pa-cell"><span class="pa-k">ODDS (${over ? "OVER" : "UNDER"})</span>
+      <span class="pa-cell"><span class="pa-k">ODDS (${escapeHtml(
+        opts.sideLabel || (over ? "OVER" : "UNDER"))})</span>
         <span class="pa-big ${tone === "good" ? "pos" : "neg"}">${
           r.odds > 0 ? "+" : ""}${r.odds}</span></span>
       ${who ? `<span class="pa-who2">${escapeHtml(who)}</span>` : ""}
     </div>
     <div class="pa-chart">
-      <div class="pa-head"><span>LAST ${n} GAMES vs PROP LINE</span>
-        <span class="pa-legend"><i class="ok"></i>OVER<i class="no"></i>UNDER</span></div>
+      <div class="pa-head"><span>${escapeHtml(
+          opts.head || `LAST ${n} GAMES vs PROP LINE`)}</span>
+        <span class="pa-legend"><i class="ok"></i>${escapeHtml(
+          (opts.legend || ["OVER", "UNDER"])[0])}<i class="no"></i>${escapeHtml(
+          (opts.legend || ["OVER", "UNDER"])[1])}</span></div>
       <svg viewBox="0 0 ${W} ${H}" role="img"
            aria-label="${escapeAttr(`${hits} of the last ${n} games cleared ${line}`)}">
         ${grid}

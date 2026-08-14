@@ -365,6 +365,14 @@ def main() -> None:
         if hot or cold:
             print(f"Team form (7d): {len(hot)} hot / {len(cold)} cold — "
                   + ", ".join(f"{r['team']} {r['w']}-{r['l']}" for r in hot[:3]))
+        # The last ten results for every club on tonight's card. This is
+        # what lets a GAME bet open a page with a chart on it: a run line
+        # has no player game log, but it has the team's own margins, and
+        # they are already in the DB we grade ourselves against.
+        from engine.teamlogs import recent_games
+        on_slate = {t for g in slate.games for t in (g.home, g.away) if t}
+        result["team_recent"] = recent_games(hconn, "mlb", on_slate,
+                                             before=args.date)
     except Exception as exc:
         print(f"⚠️  team form skipped: {exc}")
 

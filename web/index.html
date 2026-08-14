@@ -468,6 +468,16 @@
       <div id="live-picks"></div>
     </section>
 
+    <!-- TONIGHT — every recommended bet, each with its own chart.
+         Ethan, 2026-08-13: "where it shows the 'props' button on the
+         mobile site, that should be replaced with a page that shows
+         todays reccomended bets with the bar graphs and shit like we
+         have." The phone tab pointed at the Edge Board, which is a
+         wall of prices — a research table, not tonight's card. -->
+    <section class="view" id="view-tonight">
+      <div id="tonight-body"></div>
+    </section>
+
     <!-- One game — reached by clicking a card in the stadium strip -->
     <section class="view" id="view-game">
       <div id="game-body"></div>
@@ -732,9 +742,9 @@
     <button class="tb-item nav-btn" data-view="recommended" data-hint="tonight’s picks">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>
       Home</button>
-    <button class="tb-item nav-btn" data-view="edge" data-hint="every +EV price">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg>
-      Props</button>
+    <button class="tb-item nav-btn" data-view="tonight" data-hint="tonight’s bets, with the charts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15v-4M12 15V9M16 15v-7"/></svg>
+      Tonight</button>
     <button class="tb-item tb-center nav-btn" data-view="live" data-hint="live scores and open bets"
             title="What’s happening right now">
       <span class="tb-center-disc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12h4l2.5-6 3.5 12 2.5-6H22"/></svg>

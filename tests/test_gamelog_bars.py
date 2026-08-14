@@ -27,13 +27,24 @@ FN = VIS[VIS.index("function gamelogBars"):VIS.index("/* ---------------- Sparkl
 def test_every_player_prop_chart_is_bars_now():
     """No prop chart is a line any more.
 
-    Three of the four became the full `propAnalysis` block Ethan's render
-    specifies; the fourth is a 64x22 inline chip where axes and a stat row
-    do not fit, so it keeps the bare bars.
+    The prop boards draw the full `propAnalysis` block Ethan's render
+    specifies; one 64x22 inline chip, where axes and a stat row do not
+    fit, keeps the bare bars.
+
+    THE COUNT WENT 4 → 3 ON 2026-08-13 AND THAT WAS A DEAD CALL BEING
+    REMOVED, not a chart being lost. `gameBetCard` called
+    `propAnalysis(r)` on a GAME bet, which has no `recent_values` at all
+    — the function's first line returns "" under three values, so that
+    call had never once drawn anything. It now calls `gameBetChart`,
+    which builds the series out of the team's own results. A call that
+    can never render is worse than a missing one: it reads as covered.
     """
     assert "sparkline(r.recent_values" not in APP
-    # Four now: the three boards, plus the prop page the boards open.
-    assert APP.count("propAnalysis(r)") == 4
+    # The two prop boards plus the prop page they open.
+    assert APP.count("propAnalysis(r)") == 3
+    # And the game-bet card charts too — through the team-log series,
+    # which is the only shape that can carry a run line.
+    assert APP.count("gameBetChart(r)") == 1
     assert APP.count("gamelogBars(r.recent_values") == 1
     # The profile trend and the meme price chart stay lines: those ARE
     # continuous quantities, where the connection between points is real.

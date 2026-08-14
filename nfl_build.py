@@ -282,6 +282,20 @@ def main() -> None:
                 "reset": list(e["reset"]) if e.get("reset") else None}
             for p, e in carry_report["carried"].items()}
 
+    # The last ten results for every club on the card — what a GAME bet
+    # charts, the way a player prop charts its game log. Same source we
+    # grade our own game bets against.
+    try:
+        from engine.db import connect as _tl_connect
+        from engine.teamlogs import recent_games
+        _tlc = _tl_connect()
+        result["team_recent"] = recent_games(
+            _tlc, "nfl", {t for g in slate.games for t in (g.home, g.away) if t},
+            before=result.get("date"))
+        _tlc.close()
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  ⚠️  team logs skipped: {exc}")
+
     # §10 drawdown circuit-breaker: after a 10u peak-to-trough drawdown on
     # the settled journal, every stake is halved until the peak is recovered.
     # Applied before journaling so the ledger records what we'd actually bet.

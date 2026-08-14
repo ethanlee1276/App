@@ -794,6 +794,11 @@ function renderAll() {
   // they just wrote — grouping first would judge every block empty and
   // draw a single tab.
   groupRecommended();
+  // Tonight owns its own host and is not one of the board's rooms, so it
+  // draws after the grouping rather than between the board and it — a
+  // call inserted in that gap reads as part of the sequence the grouping
+  // depends on, which is exactly what a test caught it as.
+  renderTonight();
   renderEdgeBoard();
   renderScanner();
   renderLongShots();
@@ -2118,7 +2123,9 @@ function gameBetCard(r) {
   }
 
   return `
-    <article class="card gamebet ${r._ok ? "" : "faded"}" style="--grade-color:${gradeColor(r.grade)}">
+    <article class="card gamebet ${r._ok ? "" : "faded"} ${
+        gameBetOpenable(r) ? "openable" : ""}"${gameBetAttrs(r)}
+        style="--grade-color:${gradeColor(r.grade)}">
       ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
       <div class="card-head">
         <div class="card-id">${mark}
@@ -2136,7 +2143,7 @@ function gameBetCard(r) {
         <div class="metric primary"><div class="k">Edge</div><div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>
       </div>
       ${confMeter(r)}
-      ${propAnalysis(r)}
+      ${gameBetChart(r)}
       <div class="chips">${stakeChip}${condChip}${tierChip}</div>
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
@@ -2563,6 +2570,58 @@ function fillMeters(host) {
     if (state.quiet) { el.style.transition = "none"; el.style.transform = to; }
     else requestAnimationFrame(() => (el.style.transform = to));
   });
+}
+
+/* ============================================================
+   TONIGHT — every recommended bet, each with its own chart.
+   ============================================================
+   Ethan, 2026-08-13: "where it shows the 'props' button on the mobile
+   site, that should be replaced with a page that shows todays reccomended
+   bets with the bar graphs and shit like we have."
+
+   The phone's second tab pointed at the Edge Board, which is the wrong
+   page for that slot: it is a research table of every positively-priced
+   number on the card, sorted by EV, most of which we are not betting.
+   What a phone wants is tonight's actual card — the picks, the charts,
+   nothing else — and that page did not exist on any screen size.
+
+   It is the SAME cards the board draws, deliberately. `cardHTML` and
+   `gameBetCard` already carry the chart, the grade, the price and the
+   reasons; rebuilding a phone-shaped version of them would be a second
+   place for the two to drift apart. What is different here is the
+   selection — recommended only, props and game bets in one list — and
+   the absence of everything else on the board page.  */
+function renderTonight() {
+  const host = document.getElementById("tonight-body");
+  if (!host) return;
+  const d = state.data || {};
+  const props = (d.recommendations || [])
+    .map((r) => ({ ...r, _ok: passesFilters(r) }))
+    .filter((r) => r._ok && r.hr_featured !== false);
+  const bets = (d.game_bets || [])
+    .map((b) => ({ ...b, _ok: passesGameBet(b) }))
+    .filter((b) => b._ok);
+  const shots = (d.long_shots || []).slice(0, 3);
+  const n = props.length + bets.length;
+  if (!n && !shots.length) {
+    host.innerHTML = `<div class="section-title">Tonight’s bets</div>
+      <div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
+      <h3>Nothing clears the bar right now</h3>
+      <p>${noMarketExplainer()}</p></div>`;
+    return;
+  }
+  host.innerHTML = `
+    <div class="section-title">Tonight’s bets
+      <span class="sub">— every pick that clears the bar, with the last
+      games it is priced against. ${n} bet(s) · journaled and graded in
+      public on the Record page.</span></div>
+    <div class="cards">${props.map(cardHTML).join("")}</div>
+    ${bets.length ? `<div class="section-title minor">Game lines</div>
+      <div class="cards">${bets.map(gameBetCard).join("")}</div>` : ""}
+    ${shots.length ? `<div class="section-title minor">Long shots
+      <span class="sub">— plus-money swings, sized like lottery tickets.</span></div>
+      <div class="cards">${shots.map(longShotCard).join("")}</div>` : ""}`;
+  if (typeof fillMeters === "function") fillMeters(host);
 }
 
 function renderRecommended() {
@@ -3290,6 +3349,121 @@ function propAttrs(r) {
     ? ` data-prop="${escapeAttr(propId(r))}" tabindex="0" role="link"` : "";
 }
 
+/* ---- GAME BETS ARE DOORS TOO -------------------------------------------
+   Ethan, 2026-08-13, circling MIL +1.5 on the dashboard: "i dont think u
+   get what im saying. i should be able to click on this prop and it shows
+   more info for the prop and it will show the bar graph too."
+
+   He was right and I had built half the feature. The pick he circled is a
+   GAME bet, and `propOpenable` requires `r.player` — a run line has no
+   player, so every card like it stayed inert while the props beside it
+   opened. The gate was not wrong about props; it was answering the wrong
+   question, which was "is this a player prop" instead of "is there
+   anything behind this door".
+
+   THE HISTORY A GAME BET HAS is the team's own last games, and the site
+   has been ingesting those all along to grade itself with — see
+   engine/teamlogs.py. Each market charts a different quantity out of the
+   same row, and charting the wrong one would be worse than charting
+   nothing:
+
+       moneyline    the picked team's margin, against 0
+       spread       the picked team's margin, against the handicap
+       team total   what that team SCORED, against the number
+       game total   the combined score, against the number
+
+   A game bet's identity is the matchup, the market, the side and the
+   line — same shape as a prop's, so one id space, one listener, one page.  */
+function gameBetId(b) {
+  return ["game", `${b.away || ""}@${b.home || ""}`, b.market || b.bet_type || "",
+          b.side || b.team || "", b.line == null ? "" : b.line].join("|");
+}
+
+function teamRecent(team) {
+  return ((state.data || {}).team_recent || {})[team] || [];
+}
+
+/* What this bet's bar chart is made of: the values, the threshold they
+   are read against, and the words for both. Returns null when the market
+   is one we have no honest series for — an unknown market draws nothing
+   rather than a chart of the wrong number. */
+function gameBetSeries(b) {
+  const kind = b.bet_type || b.market || "";
+  const team = b.team || (b.side === "home" ? b.home : b.away);
+  const rows = kind === "total"
+    ? teamRecent(b.home) : teamRecent(team);
+  if (rows.length < 3) return null;
+  // The chart head is set in caps, so the team name is upper-cased here
+  // rather than left to CSS — `text-transform` would not survive a copy
+  // out of the page, and a lower-case club name inside an upper-case
+  // heading reads as a bug rather than a choice.
+  const proper = (t) => (typeof teamName === "function" ? teamName(t) : t);
+  const nm = (t) => String(proper(t) || "").toUpperCase();
+  if (kind === "moneyline") {
+    return { values: rows.map((g) => g.margin), line: 0, over: true,
+             what: "MONEYLINE", head: `LAST ${rows.length} ${nm(team)} RESULTS`,
+             legend: ["WON", "LOST"], sideLabel: "WIN",
+             note: "the margin in each game — above the line is a win" };
+  }
+  if (kind === "spread") {
+    // A +1.5 handicap covers whenever the margin beats −1.5, so the
+    // threshold is the handicap with its sign flipped. Getting this
+    // backwards would colour every cover as a miss.
+    return { values: rows.map((g) => g.margin), line: -Number(b.line),
+             over: true, what: "SPREAD",
+             head: `LAST ${rows.length} ${nm(team)} MARGINS`,
+             legend: ["COVERED", "MISSED"], sideLabel: "COVER",
+             note: `each game’s margin against the ${
+               b.line > 0 ? "+" : ""}${b.line} it has to beat` };
+  }
+  if (kind === "team_total") {
+    return { values: rows.map((g) => g.scored), line: Number(b.line),
+             over: String(b.side || "Over").toUpperCase() === "OVER",
+             what: "TEAM TOTAL", head: `LAST ${rows.length} ${nm(team)} SCORES`,
+             legend: ["OVER", "UNDER"],
+             note: "what this team alone scored in each of its last games" };
+  }
+  if (kind === "total") {
+    return { values: rows.map((g) => g.total), line: Number(b.line),
+             over: String(b.side || "Over").toUpperCase() === "OVER",
+             what: "GAME TOTAL",
+             head: `LAST ${rows.length} ${nm(b.home)} GAMES — COMBINED`,
+             legend: ["OVER", "UNDER"],
+             note: `both teams' combined score in ${proper(b.home)}'s last games`,
+             also: b.away };
+  }
+  return null;
+}
+
+/* The chart itself, wherever a game bet is drawn in full. Reuses
+   `propAnalysis` rather than growing a second chart — one block, one set
+   of rules about what colour is allowed to mean, one place to fix. */
+function gameBetChart(b) {
+  const s = gameBetSeries(b);
+  if (!s) return "";
+  const team = b.team || (b.side === "home" ? b.home : b.away);
+  return propAnalysis({
+    recent_values: s.values, line: s.line, side: s.over ? "OVER" : "UNDER",
+    odds: b.odds, market: b.market, market_label: b.market_label || b.market,
+    ev_per_unit: b.ev_per_unit, confidence: b.confidence, team: team,
+  }, { head: s.head, what: s.what, legend: s.legend, sideLabel: s.sideLabel });
+}
+
+function gameBetOpenable(b) {
+  return !!(b && b.home && b.away && gameBetSeries(b));
+}
+
+function gameBetAttrs(b) {
+  return gameBetOpenable(b)
+    ? ` data-prop="${escapeAttr(gameBetId(b))}" tabindex="0" role="link"` : "";
+}
+
+/* One call for either kind, so a list holding both does not have to know
+   which it is holding. */
+function betAttrs(r) {
+  return (r && r.player) ? propAttrs(r) : gameBetAttrs(r);
+}
+
 function allProps() {
   const d = state.data || {};
   return [...(d.recommendations || []), ...(d.long_shots || []),
@@ -3376,9 +3550,99 @@ function propFormRows(form, line, over) {
   }).join("");
 }
 
+/* The same page, for a bet that has a team instead of a player. It reuses
+   `propAnalysis` rather than growing a second chart: the block already
+   knows how to draw values against a threshold, and one chart with one
+   set of rules is the only way two surfaces stay honest with each other.
+   The labels come in as options because a run line is not an "over". */
+function renderGameBetPage(b) {
+  const host = document.getElementById("prop-body");
+  const s = gameBetSeries(b);
+  const nm = (t) => (typeof teamName === "function" ? teamName(t) : t);
+  const kind = b.bet_type || b.market || "";
+  const team = b.team || (b.side === "home" ? b.home : b.away);
+  const mark = kind === "total" ? leagueMark(state.sport, 56) : teamMark(team, 56);
+  // The chart wants a prop-shaped row. Only the fields it reads are set,
+  // and the values are the team's real results — nothing is synthesised.
+  const asProp = s ? {
+    recent_values: s.values, line: s.line, side: s.over ? "OVER" : "UNDER",
+    odds: b.odds, market: b.market, market_label: b.market_label || b.market,
+    ev_per_unit: b.ev_per_unit, confidence: b.confidence, team: team,
+  } : null;
+  const rows = (kind === "total" ? teamRecent(b.home) : teamRecent(team))
+    .slice(0, 5);
+  const won = (v) => (s ? (s.over ? v > s.line : v < s.line) : false);
+  const val = (g) => kind === "team_total" ? g.scored
+    : kind === "total" ? g.total : g.margin;
+  const logRows = s ? rows.map((g) => {
+    const v = val(g), ok = won(v);
+    return `<div class="pp-log">
+      <span class="pp-when">${escapeHtml(String(g.when).slice(5))}</span>
+      <span class="pp-opp">${g.home ? "vs" : "@"} ${escapeHtml(nm(g.opponent))}</span>
+      <span class="pp-extra">${escapeHtml(`${g.scored}–${g.allowed}`)}</span>
+      <span class="pp-val ${ok ? "pos" : "neg"}">${v > 0 && kind !== "team_total"
+        && kind !== "total" ? "+" : ""}${v}</span>
+      <span class="pp-hit ${ok ? "pos" : "neg"}">${ok
+        ? (s.legend[0]) : (s.legend[1])}</span>
+    </div>`;
+  }).join("") : "";
+  const reasons = (b.reasons || []).slice(0, 8)
+    .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+  const warn = (b.warnings || []).slice(0, 4)
+    .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+  host.innerHTML = `
+    <button class="btn ghost gp-back" id="pp-back">← Back to the board</button>
+    <article class="card pp-card">
+      <div class="card-head">
+        <div class="card-id">${mark}
+          <div>
+            <div class="player">${escapeHtml(b.pick_label || b.headline || "")}
+              <span class="ml-odds">${b.odds > 0 ? "+" : ""}${b.odds}</span></div>
+            <div class="subtitle">${escapeHtml(b.matchup
+              || `${b.away} @ ${b.home}`)}</div>
+            <div class="pick">${escapeHtml(b.market_label || b.market || "")}</div>
+          </div>
+        </div>
+        ${b.grade ? `<span class="grade ${gradeClass(b.grade)}">${
+          escapeHtml(b.grade)}</span>` : ""}
+      </div>
+      <div class="metrics">
+        ${b.win_prob != null ? `<div class="metric"><div class="k">Model</div>
+          <div class="v">${pct(b.win_prob)}</div></div>` : ""}
+        ${b.fair_prob != null ? `<div class="metric"><div class="k">Market</div>
+          <div class="v">${pct(b.fair_prob)}</div></div>` : ""}
+        ${b.edge != null ? `<div class="metric primary"><div class="k">Edge</div>
+          <div class="v ${b.edge >= 0 ? "pos" : "neg"}">${signedPct(b.edge)}</div></div>` : ""}
+      </div>
+      ${asProp ? propAnalysis(asProp, { head: s.head, what: s.what,
+        legend: s.legend, sideLabel: s.sideLabel }) : `
+      <p class="loading">No recent results for this team yet — the chart
+      needs at least three games we have ingested.</p>`}
+    </article>
+
+    ${logRows ? `<div class="section-title">Last ${rows.length} game${
+      rows.length === 1 ? "" : "s"}
+      <span class="sub">— ${escapeHtml(s.note)}, newest first.</span></div>
+    <div class="card pp-logs">${logRows}</div>` : ""}
+
+    ${reasons ? `<div class="section-title minor">Why this pick</div>
+      <div class="card"><ul class="reasons">${reasons}</ul></div>` : ""}
+    ${warn ? `<div class="section-title minor">What argues against it
+      <span class="sub">— the model’s own objections, not hidden.</span></div>
+      <div class="card"><ul class="reasons">${warn}</ul></div>` : ""}`;
+  const bk = document.getElementById("pp-back");
+  if (bk) bk.addEventListener("click", () => switchView("recommended"));
+  if (typeof fillMeters === "function") fillMeters(host);
+}
+
 function renderPropPage() {
   const host = document.getElementById("prop-body");
   if (!host) return;
+  if (String(state.propId || "").startsWith("game|")) {
+    const b = (state.data.game_bets || [])
+      .find((x) => gameBetId(x) === state.propId);
+    if (b) return renderGameBetPage(b);
+  }
   const r = allProps().find((x) => propId(x) === state.propId);
   if (!r) {
     // A bookmarked or stale link. Say so — a blank page reads as broken.
@@ -3618,13 +3882,25 @@ function renderGamePage() {
 
   // The hero wears the same venue art chain as the strip card (Ethan's
   // desktop event-page render, 2026-08-11): team photo, else the
-  // colour-matched family render, else the drawing. Live keeps the
-  // drawing — it carries the ball spot, bases and wind.
+  // colour-matched family render, else the drawing.
+  //
+  // AND A LIVE GAME GETS THE PHOTO TOO. Ethan, 2026-08-13: "when you
+  // click on the stadium, it still shows the old stadium on this page."
+  // The strip card had exactly this bug and exactly this cause — a
+  // `!isLive` guard that suppressed the photograph and left the drawn
+  // ballpark showing — and fixing it there left the game page, which is
+  // where you land when you click the card, still doing it. So the same
+  // stadium changed appearance between the strip and the page behind it,
+  // which reads as two different venues rather than one bug.
+  //
+  // The drawing carried the live bases, which is why the guard existed.
+  // The runner overlay carries them now, over the photo, so nothing is
+  // lost by showing it.
   const gpFam = VENUE_FAMILY[state.sport];
-  const gpPhoto = !isLive ? `<img class="venue-photo" alt="" loading="lazy"
+  const gpPhoto = `<img class="venue-photo" alt="" loading="lazy"
       src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
       ${gpFam ? `data-alt="${venueSrc(`img/venues/variants/${gpFam}-${venueVariant((window.ACTIVE_TEAMS || {})[g.home] || {})}.jpg`)}"
-      onerror="vpFall(this)"` : `onerror="this.remove()"`}/>` : "";
+      onerror="vpFall(this)"` : `onerror="this.remove()"`}/>`;
   // The render's GAME LINES table and KEY INSIGHTS panel. Lines come
   // straight off the slate; a cell without a real price shows a dash.
   // Insights are the game's own data fields, not narratives.
@@ -3665,6 +3941,7 @@ function renderGamePage() {
     <button class="btn ghost gp-back" id="gp-back">← Back to the board</button>
     <div class="gp-hero">
       <div class="gp-art">${art}${gpPhoto}
+        ${mlb && isLive ? runnerOverlay(g) : ""}
         ${isLive ? `<div class="status-badge live"><span class="live-dot"></span>LIVE
           <span class="per">${escapeHtml(live.period || "")}</span></div>` : ""}
         ${isFinal ? `<div class="status-badge final">FINAL</div>` : ""}</div>
@@ -6537,6 +6814,11 @@ function edgeBoardRows() {
       // user's sliders — the build-time flag can disagree with them.
       ev: r.ev_per_unit, grade: r.grade, rec: passesFilters(r),
       open: propAttrs(r),
+      // Ethan, 2026-08-13: "we need to show headshots on this page." Every
+      // other board leads with the player; this one was a wall of text,
+      // which makes it the slowest list on the site to scan even though it
+      // is the one with the most rows.
+      mark: betMark(r, 30),
     }));
   const games = (state.data.game_bets || [])
     .filter((b) => b.grade !== "Pass" && (b.ev_per_unit || 0) > 0.005)
@@ -6545,6 +6827,9 @@ function edgeBoardRows() {
       odds: b.odds, model: b.win_prob, implied: b.fair_prob,
       market: "Game lines",
       ev: b.ev_per_unit, grade: b.grade, rec: passesGameBet(b),
+      open: gameBetAttrs(b),
+      mark: (b.bet_type === "total" ? leagueMark(state.sport, 30)
+             : teamMark(b.team || b.home, 30)),
     }));
   return [...props, ...games].sort((a, b) => b.ev - a.ev);
 }
@@ -6555,6 +6840,7 @@ function edgeRowHTML(r, i) {
        style="display:flex;align-items:center;gap:14px;
        padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
     <span style="opacity:.5;min-width:20px">${i + 1}</span>
+    <span class="pick-id" style="flex-shrink:0">${r.mark || ""}</span>
     <span style="flex:1"><strong>${escapeHtml(r.label)}</strong>
       <span style="display:block;opacity:.6;font-size:.85em">${escapeHtml(r.sub)}</span></span>
     <span style="min-width:64px;text-align:right">${r.odds > 0 ? "+" : ""}${r.odds}</span>
@@ -11142,7 +11428,7 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "prop", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
+const VIEW_ORDER = ["recommended", "prop", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
 
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -11175,6 +11461,7 @@ function switchView(name, push = false) {
     window.scrollTo({ top: 0, behavior: state.quiet ? "auto" : "smooth" });
     return;
   }
+  if (name === "tonight") renderTonight();
   if (name === "rosters") renderRosters();
   if (name === "injuries") renderInjuries();
   if (name === "standings") renderStandings();
@@ -11825,8 +12112,8 @@ function renderTopPicks() {
     const desc = `${g.pick_label || g.label || ""}`.trim() || `${g.away} @ ${g.home}`;
     const i = track(g, desc);
     return `
-    <div class="tp-card">
-      <div class="tp-top"><span class="tp-tile">${teamMark(g.side === "home" ? g.home : g.away, 30) || ""}</span>
+    <div class="tp-card ${gameBetOpenable(g) ? "openable" : ""}"${gameBetAttrs(g)}>
+      <div class="tp-top"><span class="tp-tile">${teamMark(g.team || (g.side === "home" ? g.home : g.away), 30) || ""}</span>
         <div class="tp-who"><b>${escapeHtml(g.pick_label || g.label || "")}</b>
           <span>${escapeHtml(g.market_label || g.market || "")}</span>
           <span class="tp-when">${escapeHtml(g.away || "")} @ ${escapeHtml(g.home || "")}${g.edge != null ? ` · +${(100 * g.edge).toFixed(1)}% edge` : ""}</span></div>
