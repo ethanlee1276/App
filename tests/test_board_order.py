@@ -122,7 +122,16 @@ def test_nothing_new_slipped_in_above_the_picks():
                # Parlay Mode (2026-08-11): the old Parlay Zone's tickets,
                # hidden unless the sidebar switch is on — zero fold cost
                # in the default state.
-               "parlay-mode", "parlays-title", "parlays-sub", "parlays-body"}
+               "parlay-mode", "parlays-title", "parlays-sub", "parlays-body",
+               # slate-horizon (2026-08-14): says WHEN the strip above is,
+               # when that is not now. Costs ZERO fold in the state this
+               # test is measuring — `renderSlateHorizon` returns before
+               # writing anything once the nearest fixture is today or
+               # tomorrow, which is every day of a real season, and the
+               # div has no styling of its own to give an empty element
+               # height. It appears in the offseason and the preseason,
+               # where the picks it would push down do not exist either.
+               "slate-horizon"}
     above = [m.group(1) for m in re.finditer(r'id="([\w-]+)"',
                                              html[start:picks])]
     unexpected = [x for x in above if x not in allowed]

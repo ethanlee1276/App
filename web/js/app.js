@@ -781,6 +781,7 @@ function renderAll() {
   renderBestBets();
   renderTeamForm();
   renderGames();
+  renderSlateHorizon();
   renderTopPicks();
   renderHomePerf();
   renderRail();
@@ -1992,6 +1993,10 @@ async function renderPreseason() {
   // see the note in renderEmptySlate.
   state.preseason = data;
   if (typeof renderEmptySlate === "function") setTimeout(renderEmptySlate, 0);
+  // The horizon note reads `state.preseason`, and on the first pass this
+  // fetch lands after it has already drawn. Re-run it now that the answer
+  // exists — the same reason renderEmptySlate is poked above.
+  if (typeof renderSlateHorizon === "function") setTimeout(renderSlateHorizon, 0);
 
   // Self-retiring. `show_until` is the last fixture's date; once it is
   // past, this block stops existing without anyone editing anything.
@@ -2363,6 +2368,67 @@ function renderStats() {
        ${t.sub ? `<div class="tile-sub">${t.sub}</div>` : ""}</div>`
   ).join("");
   if (!instant) document.querySelectorAll("#stats .v[data-to]").forEach(countUp);
+}
+
+/* WHEN the slate above actually is, whenever that is not now.
+
+   Ethan, 2026-08-14: "there is games tonight yet they are not showing on
+   the website … its displaying the first week of the regular season."
+
+   The board was never wrong about WHAT it was showing. `_current_nfl_week`
+   reads nflverse's schedule, nflverse carries no preseason at all, so the
+   nearest fixture it can see in mid-August is Week 1 — three weeks out and
+   comfortably inside the 45-day run-up window. It builds that week and it
+   is right to: Week 1 prep is the whole point of August.
+
+   The lie was the TITLE. "This week's stadiums" over fixtures from
+   September, while the football actually being played sat 900px further
+   down under a heading nobody scrolls to. A static string cannot say
+   when, so this says it instead.
+
+   It draws NOTHING when the slate is today or tomorrow, which is every
+   day of a real season — this is a note about an unusual state, and a
+   note that appears constantly stops being read. */
+function renderSlateHorizon() {
+  const host = document.getElementById("slate-horizon");
+  if (!host) return;
+  host.innerHTML = "";
+  const games = (state.data || {}).games || [];
+  if (!games.length) return;
+  const dates = games.map((g) => String(g.date || "").slice(0, 10))
+                     .filter(Boolean).sort();
+  if (!dates.length) return;
+  const first = dates[0];
+  const today = new Date().toISOString().slice(0, 10);
+  // Midday, not midnight: a date-only difference across a DST boundary can
+  // land on 0.96 of a day and floor to the wrong number.
+  const days = Math.round(
+    (new Date(first + "T12:00:00") - new Date(today + "T12:00:00")) / 86400000);
+  if (days <= 1) return;                 // today or tomorrow — say nothing
+
+  // Preseason is the only thing that can be on INSTEAD, and only for NFL.
+  // `state.preseason` is stashed by renderPreseason; it may not have
+  // landed yet on the first pass, and its absence simply means no pointer.
+  const pre = state.sport === "nfl" ? state.preseason : null;
+  const soon = pre && (pre.weeks || []).some(
+    (w) => (w.games || []).some((g) => (g.date || "") >= today));
+  /* A LINK, NOT A HOIST. The obvious fix was to move the preseason block
+     above the strip while preseason is on. It does not survive:
+     `groupRecommended` re-parents this whole view into subgroups AFTER
+     every renderer has run, so a DOM move made here is undone moments
+     later — measured, not guessed, when the two elements came back in
+     different subgroups. Re-architecting the grouping to carry an
+     ordering exception is a much larger change than the problem needs,
+     so the note points at the block instead and gets you there in one
+     click. */
+  const pointer = soon
+    ? ` <a href="#preseason-board" class="slate-jump">Preseason is what is
+        being played now →</a>`
+    : "";
+  host.innerHTML = `
+    <p class="slate-horizon">${icon("clock", 14)}
+      This board is <b>${escapeHtml(formatGameDate(first))}</b> — ${days}
+      days out. Nothing on it is tonight.${pointer}</p>`;
 }
 
 function renderGames() {

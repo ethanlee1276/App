@@ -341,6 +341,17 @@
                   aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></button>
         </div>
       </div>
+      <!-- WHEN the slate above actually is, when that is not now.
+
+           Ethan, 2026-08-14: "there is games tonight yet they are not
+           showing on the website … its displaying the first week of the
+           regular season." He was right, and the title was the lie: the
+           strip says "This week's stadiums" over Week 1 fixtures that
+           are three weeks away, because `_current_nfl_week` reads
+           nflverse's schedule and nflverse has no preseason in it. The
+           board was never wrong about WHAT it was showing, only about
+           WHEN — and a static title cannot say when. -->
+      <div id="slate-horizon"></div>
       <div class="games-outer" id="games-outer">
         <button class="strip-arrow prev" id="games-prev" aria-label="Scroll games back"
           ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M14.5 5l-7 7 7 7"/></svg></button>

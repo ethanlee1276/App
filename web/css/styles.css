@@ -4638,3 +4638,14 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .pr-prog i { display: block; height: 100%; background: var(--brand); }
 .pr-n { font-size: var(--fs-2xs); color: var(--text-mute); font-weight: 700;
   font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* The slate-horizon note: when the board above is not tonight. Amber rail
+   because it is a condition that is live, not a link to a page. */
+.slate-horizon { display: flex; align-items: baseline; gap: 7px;
+  margin: 0 0 12px; padding: 8px 12px; border-left: 3px solid var(--warn);
+  background: var(--panel-3); border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--text-body); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.slate-horizon b { color: var(--text); }
+.slate-jump { color: var(--brand); font-weight: 700; text-decoration: none;
+  white-space: nowrap; }
+.slate-jump:hover { text-decoration: underline; }
