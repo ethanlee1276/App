@@ -212,6 +212,71 @@ def test_the_missing_list_names_files_and_says_why():
     assert all("variants/" in line and "(" in line for line in todo)
 
 
+# --- what the probe TELLS you to do -----------------------------------------
+def test_a_sheet_in_incoming_is_named_as_a_sheet():
+    """Mirrors the ingest's own rule, and the two must agree — this
+    module tells a reader what running that tool would do."""
+    k = va.classify_incoming(["football-colors.png", "football-red.png",
+                              "octagon-sheet.png", "baseball-grid.jpg"])
+    assert k["sheets"] == ["football-colors.png", "octagon-sheet.png",
+                           "baseball-grid.jpg"]
+    assert k["singles"] == ["football-red.png"]
+
+
+def test_the_already_installed_sources_are_not_offered_as_work():
+    """CAUGHT ON ETHAN'S LAPTOP, TWICE.
+
+    The first probe said "Run `python3 tools/venues_ingest.py` to cut and
+    install them" about seven files that were the ORIGINAL 2026-08-11
+    sources — the sheets whose tiles the same output had just rejected
+    fifteen times, three inches higher up the screen.
+
+    The second version learned to say "4 of those are SHEETS" and then
+    told him "3 single render(s) ready" about the three `-neutral` files,
+    which ARE the steel references already installed. Right
+    classification, same useless instruction. So it now checks the target
+    slot instead of classifying the filename."""
+    t = va.incoming_targets(
+        ["baseball-colors.png", "baseball-neutral.png",
+         "football-neutral.png"], va.survey())
+    assert t["sheets"] == ["baseball-colors.png"]
+    assert set(t["noop"]) == {"baseball-neutral.png", "football-neutral.png"}
+    assert t["useful"] == [], "already-installed sources offered as work"
+
+
+def test_real_new_colours_are_offered_as_work():
+    """The gate must not be stuck shut — the whole point is to say YES the
+    day fifteen good renders land."""
+    t = va.incoming_targets(
+        ["football-red.png", "baseball-violet.png", "basketball-gold.png"],
+        va.survey())
+    assert len(t["useful"]) == 3 and not t["noop"]
+
+
+def test_a_mixed_drop_is_split_three_ways():
+    t = va.incoming_targets(
+        ["football-red.png", "football-neutral.png", "football-colors.png"],
+        va.survey())
+    assert t["useful"] == ["football-red.png"]
+    assert t["noop"] == ["football-neutral.png"]
+    assert t["sheets"] == ["football-colors.png"]
+
+
+def test_a_file_we_cannot_place_is_left_for_the_tool_to_judge():
+    """Guessing "no-op" about a name we do not understand would silently
+    hide a render the ingest could have used."""
+    t = va.incoming_targets(["mystery.png", "octagon-2.png"], va.survey())
+    assert t["useful"] == ["mystery.png", "octagon-2.png"]
+
+
+def test_the_probe_does_not_offer_a_run_that_would_change_nothing():
+    src = (ROOT / "launch.py").read_text(encoding="utf-8")
+    i = src.index("def show_venues()")
+    body = src[i:src.index("\ndef ", i + 1)]
+    assert "incoming_targets" in body
+    assert "Nothing here to install" in body
+
+
 # --- the probe and the kit --------------------------------------------------
 def test_the_probe_is_wired_into_the_launcher():
     src = (ROOT / "launch.py").read_text(encoding="utf-8")

@@ -72,6 +72,74 @@ MIN_PIXEL_RATIO = 0.90
 MIN_DETAIL_RATIO = 0.80
 
 
+#: Words that declare a file in ``incoming/`` to hold MULTIPLE renders.
+#: Mirrors `tools/venues_ingest.py`'s own rule (``sheet = any(k in stem
+#: for k in ("colors", "sheet", "grid"))``). The two must agree, because
+#: this module tells a reader what running that tool would do.
+SHEET_WORDS = ("colors", "sheet", "grid")
+
+
+def classify_incoming(names) -> dict:
+    """Split ``incoming/`` into ``{"sheets": [...], "singles": [...]}``.
+
+    THE DISTINCTION IS THE POINT, and the probe got it wrong on its first
+    real run. Ethan, 2026-08-14, ran `--venues` on his laptop and was told
+    "Run `python3 tools/venues_ingest.py` to cut and install them" about
+    seven files that were the ORIGINAL 2026-08-11 sources — the very
+    sheets whose tiles the same output had just rejected fifteen times,
+    three inches higher up the screen.
+
+    Following that advice would have been harmless: the ingest replaces a
+    file only when the new source carries MORE pixels, and re-cutting a
+    sheet yields the same tile sizes, so nothing would be overwritten. But
+    harmless is not the bar. It was an instruction that could not work,
+    printed directly beneath the evidence that it could not work, and a
+    probe that says that is worse than a probe that says nothing.
+    """
+    sheets, singles = [], []
+    for name in (names or []):
+        stem = str(name).rsplit(".", 1)[0].lower()
+        (sheets if any(k in stem for k in SHEET_WORDS) else singles).append(name)
+    return {"sheets": sheets, "singles": singles}
+
+
+def incoming_targets(names, data) -> dict:
+    """What running the ingest on ``incoming/`` would actually change.
+
+    ``{"useful": [...], "noop": [...], "sheets": [...]}``.
+
+    The second version of the probe still got this wrong. Having learned
+    to say "4 of those are SHEETS", it then told Ethan "3 single render(s)
+    ready — the ingest installs them" about `baseball-neutral.png` and its
+    two siblings, which are the STEEL REFERENCES ALREADY INSTALLED. Right
+    classification, same useless instruction.
+
+    So this stops classifying and starts checking: a single is worth
+    ingesting only when the slot it lands in does not already hold art
+    that passes. `-neutral` in a name pins the render to steel, which is
+    the ingest's own rule and the reason those three resolve to a
+    finished slot.
+    """
+    kinds = classify_incoming(names)
+    useful, noop = [], []
+    for name in kinds["singles"]:
+        stem = str(name).rsplit(".", 1)[0].lower()
+        family = next((f for f in FAMILIES if stem.startswith(f)), None)
+        if family is None:
+            useful.append(name)          # unknown family — let the tool judge
+            continue
+        colour = REFERENCE if "neutral" in stem else next(
+            (c for c in COLOURS if c in stem), None)
+        slot = (data.get("families", {}).get(family, {})
+                .get("slots") or {}).get(colour) if colour else None
+        # Missing slot, or one still flagged, is a slot worth filling.
+        if slot is None or (colour != REFERENCE and not slot.get("matches")):
+            useful.append(name)
+        else:
+            noop.append(name)
+    return {"useful": useful, "noop": noop, "sheets": kinds["sheets"]}
+
+
 def jpeg_size(path) -> tuple[int, int] | None:
     """``(width, height)`` from a JPEG's SOF marker, or None.
 

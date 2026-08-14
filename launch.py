@@ -3208,10 +3208,24 @@ def show_venues() -> None:
         print(f"  held back: {', '.join(held)} — a colour is served on every "
               f"sport, so one family's soft tile disqualifies it everywhere.")
     if d["incoming"]:
-        print(f"\n  incoming/ holds {len(d['incoming'])} file(s): "
-              f"{', '.join(d['incoming'][:6])}"
-              + ("…" if len(d["incoming"]) > 6 else ""))
-        print("  Run `python3 tools/venues_ingest.py` to cut and install them.")
+        t = va.incoming_targets(d["incoming"], d)
+        print(f"\n  incoming/ holds {len(d['incoming'])} file(s).")
+        # A SHEET IN incoming/ IS NOT NEW ART. The rejected tiles above
+        # were cut out of these, so re-cutting reproduces them exactly.
+        if t["sheets"]:
+            print(f"    {len(t['sheets'])} sheet(s) — {', '.join(t['sheets'])}")
+            print("      the sources the off-generation tiles above were cut "
+                  "from; re-cutting reproduces them.")
+        if t["noop"]:
+            print(f"    {len(t['noop'])} already installed — "
+                  f"{', '.join(t['noop'])}")
+        if t["useful"]:
+            print(f"    {len(t['useful'])} worth installing — "
+                  f"{', '.join(t['useful'])}")
+            print("      `python3 tools/venues_ingest.py`")
+        else:
+            print("    Nothing here to install. New art has to be generated "
+                  "first — one full render per colour, never a sheet.")
     todo = va.missing(d)
     if todo:
         print(f"\n  STILL WANTED ({len(todo)}):")
