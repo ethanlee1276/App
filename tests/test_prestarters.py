@@ -148,6 +148,25 @@ def test_bands_need_a_real_sample_before_they_cut_anything():
     assert ps.bands(c) == {}
 
 
+def test_a_column_that_never_moves_makes_no_bands():
+    """THE ONE THAT SHIPPED. `pass_att` was missing from the preseason box
+    parser's market list, so every stored attempt count was 0.0. Two
+    hundred zeros sailed past the sample-size check, cut into lo = hi = 0,
+    and `verdict(0.0, cuts)` took its `<= lo` branch — every team in the
+    league read "rested", with a 200-outing sample cited for it.
+
+    Three bands need three distinct values. Fewer means the column is
+    empty rather than the league unanimous, and the honest output is no
+    bands at all, which renders as "unknown" per side."""
+    c = _db()
+    for i in range(40):
+        team = f"T{i}"
+        _reg(c, team, 2025, f"QB{i}", "QB", 0.9, att=400)
+        _pre(c, team, 2026, 2, f"QB{i}", "pass_att", 0)
+    assert ps.bands(c) == {}
+    assert ps.verdict(0, ps.bands(c)) == "unknown"
+
+
 def test_bands_are_terciles_of_what_actually_happened():
     c = _db()
     for i in range(40):

@@ -159,6 +159,19 @@ def bands(conn, seasons=None) -> dict:
             atts.append(u["qb_att"])
     if len(atts) < 30:
         return {}
+    # A COLUMN THAT NEVER MOVES HAS NO TERCILES, and this guard is here
+    # because its absence shipped. `pass_att` was not among the markets the
+    # preseason box parser stored (engine/sources/nflpreseason.BOX_MARKETS,
+    # fixed 2026-08-14), so every `qb_att` in the table was 0.0. Two
+    # hundred zeros passed the count check above, cut into lo = hi = 0, and
+    # `verdict(0.0, cuts)` took its `<= lo` branch — the scan reported all
+    # thirty-two teams resting their starters and cited a 200-outing sample
+    # for it. Nothing raised and nothing looked empty.
+    #
+    # Fewer than three distinct values cannot make three bands, so the
+    # honest answer is no bands, which renders as "unknown" per side.
+    if len(set(atts)) < 3:
+        return {}
     atts.sort()
     return {"lo": atts[len(atts) // 3], "hi": atts[2 * len(atts) // 3],
             "n": len(atts)}

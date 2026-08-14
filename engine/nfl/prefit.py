@@ -262,6 +262,8 @@ def mechanism(rows: list[dict]) -> dict:
             "n": len(xs), "r": None if r is None else round(r, 4),
             "slope": None if not fit else round(fit[0], 4),
             "p": permutation_p(xs, ys) if len(xs) >= MIN_ROWS else None,
+            # WHETHER THE PREDICTOR MOVED AT ALL. See `verdict`.
+            "distinct_x": len(set(xs)),
         }
     return out
 
@@ -319,12 +321,40 @@ def forecast(rows: list[dict]) -> dict:
 
 
 # --- the verdict ------------------------------------------------------------
+def dead_predictors(report: dict) -> list[str]:
+    """Tested predictors that never took a second value. Should be empty.
+
+    A column of two hundred identical numbers is not evidence of anything;
+    it is a column nobody filled. It correlates with nothing by
+    construction, so every downstream test comes back null and the whole
+    report reads exactly like an honest negative result.
+
+    THIS IS NOT HYPOTHETICAL. On 2026-08-14 the first real run of this fit
+    returned 203 joined games and a verdict of "no" — from `qb_att` values
+    that were all 0.0, because `pass_att` was missing from the preseason
+    box parser's market list. The finding was "starter usage does not
+    predict an August result". The truth was that starter usage had never
+    been measured. Those two must never again produce the same output.
+
+    A CONSTANT IS ONLY DIAGNOSABLE AT SCALE, so this needs the same
+    ``MIN_ROWS`` everything else does. Four games where both staffs
+    happened to throw five times is a coincidence, not a broken feed, and
+    calling it one would put "your data is empty" on a screen whose real
+    problem is that August has barely started.
+    """
+    return sorted(name for name, v in
+                  (report.get("mechanism", {}).get("pairs", {}) or {}).items()
+                  if v.get("n", 0) >= MIN_ROWS and v.get("distinct_x", 2) < 2)
+
+
 def verdict(report: dict) -> str:
-    """"insufficient" / "no" / "measured", against the bar set above.
+    """"unmeasurable" / "insufficient" / "no" / "measured", against the bar.
 
     "measured" is the strongest thing this file can say and it is not
     "tradeable" — see `prices_allowed`.
     """
+    if dead_predictors(report):
+        return "unmeasurable"
     if int(report.get("n", 0)) < MIN_ROWS:
         return "insufficient"
     mech = report.get("mechanism", {}).get("pairs", {})
@@ -368,6 +398,7 @@ def fit(conn, seasons=None) -> dict:
         "forecast": forecast(rows) if rows else {"pairs": {}},
     }
     report["verdict"] = verdict(report)
+    report["dead"] = dead_predictors(report)
     report["prices_allowed"] = prices_allowed(report)
     return report
 
@@ -376,6 +407,13 @@ def explain(report: dict) -> str:
     """One paragraph a human can read, matched to the verdict."""
     v = report.get("verdict")
     n = report.get("n", 0)
+    if v == "unmeasurable":
+        dead = ", ".join(report.get("dead") or ["a predictor"])
+        return (f"{n} game(s) joined, but {dead} never took a second value "
+                f"— the column is empty, not flat. NOTHING was measured "
+                f"here and no conclusion of any kind follows. Re-run "
+                f"`python3 ingest.py nflpre --seasons 2021-2026`; if it "
+                f"persists, the box parser is not storing the market.")
     if v == "insufficient":
         return (f"{n} joined game(s); the bar is {MIN_ROWS}. Run "
                 f"`python3 ingest.py nflpre --seasons 2021-2026` and ask "

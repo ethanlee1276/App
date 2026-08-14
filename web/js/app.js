@@ -2075,6 +2075,12 @@ function preseasonFitHTML(data) {
   const span = (f.seasons || []).length
     ? ` across ${f.seasons.length} August${f.seasons.length === 1 ? "" : "s"}`
     : "";
+  if (f.verdict === "unmeasurable") {
+    // A predictor that never took a second value. NOT a negative result —
+    // the two look identical in a report and must not look identical here.
+    return `The measurement could not run — a predictor it needs is empty
+      in our data, so nothing has been concluded either way.`;
+  }
   if (f.verdict === "insufficient") {
     return `Measured on ${f.n} game(s)${span} — not enough to conclude
       anything either way.`;

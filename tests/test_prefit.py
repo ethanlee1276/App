@@ -272,6 +272,105 @@ def test_signal_points_reads_negative_when_the_model_hurts():
     assert abs(pf.signal_points(10.0, 6.0) - 8.0) < 1e-9
 
 
+# --- a dead column is not a finding -----------------------------------------
+def _flat_db():
+    """Every starting quarterback threw exactly zero attempts.
+
+    Which is what the table actually held on 2026-08-14: `pass_att` was
+    missing from the preseason box parser's market list, so `qb_att` was
+    0.0 for all 203 joined games.
+    """
+    c = _db()
+    rng = random.Random(3)
+    gid = 0
+    for season in SEASONS:
+        _roles(c, season)
+        for week in (1, 2, 3):
+            order = TEAMS[:]
+            rng.shuffle(order)
+            for i in range(0, 32, 2):
+                gid += 1
+                _game(c, gid, season, week, order[i], order[i + 1], 0, 0,
+                      38 + rng.gauss(0, 9))
+    c.commit()
+    return c
+
+
+FLAT = _flat_db()
+
+
+def test_a_predictor_that_never_moved_is_named_as_such():
+    rep = _fit(FLAT)
+    assert rep["n"] >= pf.MIN_ROWS
+    assert "att_sum~total" in rep["dead"]
+    assert rep["mechanism"]["pairs"]["att_sum~total"]["distinct_x"] == 1
+
+
+def test_a_dead_column_can_never_read_as_a_negative_result():
+    """THE ONE THIS FILE EXISTS FOR AFTER 2026-08-14. The first real run
+    returned 203 joined games and said "starter usage does not predict an
+    August result". The truth was that starter usage had never been
+    measured — the column was all zeros. A finding and a data fault must
+    never produce the same output."""
+    assert pf.verdict(_fit(FLAT)) == "unmeasurable"
+    assert pf.verdict(_fit(FLAT)) != "no"
+
+
+def test_the_explanation_sends_you_at_the_data_not_at_the_league():
+    text = pf.explain(_fit(FLAT))
+    assert "NOTHING was measured" in text
+    assert "ingest.py nflpre" in text
+    assert "does not predict" not in text
+
+
+def test_a_small_sample_is_insufficient_rather_than_dead():
+    """A constant is only diagnosable at scale. Four games where both
+    staffs happened to throw five times is a coincidence, and calling it a
+    broken feed would print "your data is empty" at a page whose real
+    problem is that August has barely started."""
+    c = _db()
+    _roles(c, 2025)
+    for gid in range(4):
+        _game(c, gid, 2025, 2, TEAMS[gid * 2], TEAMS[gid * 2 + 1], 5, 5, 40)
+    c.commit()
+    rep = pf.fit(c)
+    assert rep["dead"] == [] and rep["verdict"] == "insufficient"
+
+
+def test_a_real_null_is_still_allowed_to_say_no():
+    """The guard must not swallow honest negatives — that would make the
+    whole measurement unable to return its most likely answer."""
+    assert pf.dead_predictors(_fit(NULL)) == []
+    assert pf.verdict(_fit(NULL)) == "no"
+
+
+def test_the_probe_leads_with_the_fault_rather_than_the_table():
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("def show_prefit(")
+    body = src[i:src.index("\ndef ", i + 1)]
+    assert 'rep.get("dead")' in body
+    assert body.index('rep.get("dead")') < body.index("A. MECHANISM")
+
+
+def test_the_verdict_reaches_disk_on_every_branch_that_reached_one():
+    """An "unmeasurable" that never got written would leave the card
+    saying "not measured yet" — the wrong half of the truth. It WAS run,
+    and it could not answer."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("def show_prefit(")
+    body = src[i:src.index("\ndef ", i + 1)]
+    assert body.index("out.write_text(") < body.index('rep.get("dead")')
+
+
+def test_the_card_says_it_could_not_run_rather_than_going_quiet():
+    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    i = app.index("function preseasonFitHTML(")
+    body = app[i:app.index("\n}", i)]
+    assert '"unmeasurable"' in body
+    assert "could not run" in body
+
+
 # --- the verdict ------------------------------------------------------------
 def test_too_few_games_is_insufficient_not_no():
     """"We looked and there is nothing" and "we could not look" are

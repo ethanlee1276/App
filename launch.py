@@ -3338,10 +3338,29 @@ def show_prescan(season: int | None = None) -> None:
     cuts = out["bands"]
     print(f"\nPRESEASON STARTER SCAN — {season}\n")
     if not cuts:
-        print("  No ingested preseason to cut bands from. Every read below "
-              "will say \"unknown\".")
-        print("  Fix: python3 ingest.py nflpre --seasons "
-              f"{season - 5}-{season}\n")
+        # TWO DIFFERENT CAUSES, and they need opposite responses. An empty
+        # table means run the ingest. A table full of rows whose attempt
+        # counts are all identical means the ingest ran and did not store
+        # the market — which is what happened when `pass_att` was missing
+        # from the box parser, and which the first message alone would have
+        # sent Ethan to fix by re-running the thing that already worked.
+        stored = 0
+        try:
+            stored = conn.execute(
+                "SELECT COUNT(*) FROM preseason_player_logs "
+                "WHERE sport='nfl' AND market='pass_att'").fetchone()[0]
+        except Exception:                                     # noqa: BLE001
+            stored = 0
+        if stored:
+            print(f"  {stored:,} attempt row(s) are stored and they do not "
+                  "vary — the column is\n  flat, which is a parser fault "
+                  "rather than a quiet league. Every read below\n  will say "
+                  "\"unknown\", which is correct: nothing was measured.\n")
+        else:
+            print("  No ingested preseason attempts to cut bands from. Every "
+                  "read below\n  will say \"unknown\".")
+            print("  Fix: python3 ingest.py nflpre --seasons "
+                  f"{season - 5}-{season}\n")
     else:
         print(f"  Bands from {cuts['n']} past starting-QB outings: "
               f"rested <= {cuts['lo']:.0f} attempts, "
@@ -3407,11 +3426,35 @@ def show_prefit(seasons: str = "") -> None:
     print(f"  Bar, set before the answer: at least {_pf.MIN_ROWS} joined "
           f"games, p <= {_pf.MAX_P},\n  and at least "
           f"{_pf.MIN_SIGNAL_POINTS} point(s) of out-of-sample adjustment.\n")
+    # WRITTEN BEFORE ANYTHING IS PRINTED, so every terminating branch below
+    # leaves the board reading the same verdict this run reached. An
+    # "unmeasurable" that never reached disk would leave the card saying
+    # "not measured yet", which is the wrong half of the truth: it WAS run,
+    # and it could not answer.
+    out = ROOT / "web" / "data" / "nfl_prefit.json"
+    if rep["n"]:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(_json.dumps(rep, indent=1), encoding="utf-8")
     print(f"  Joined games: {rep['n']}")
     if not rep["n"]:
         print("\n  Nothing joined. Either the preseason box scores or the "
               "finals are missing:\n    python3 ingest.py nflpre --seasons "
               f"{_dt.date.today().year - 5}-{_dt.date.today().year}\n")
+        return
+    # THE DATA FAULT COMES FIRST, LOUDLY. A predictor that never took a
+    # second value correlates with nothing by construction, and the report
+    # underneath it reads exactly like an honest negative result — which is
+    # how the first real run of this reported "starter usage does not
+    # predict an August result" from a column of two hundred zeros.
+    if rep.get("dead"):
+        print("\n  ⚠  NOTHING WAS MEASURED. These predictors never took a "
+              "second value:")
+        for name in rep["dead"]:
+            v = rep["mechanism"]["pairs"][name]
+            print(f"       {name}  n={v['n']}  distinct values={v['distinct_x']}")
+        print("\n  " + _pf.explain(rep) + "\n")
+        print(f"  Written to {out.relative_to(ROOT)} — the board reads the "
+              f"verdict from there and will say it could not run.\n")
         return
     print("\n  A. MECHANISM — what actually happened, against the final:")
     for name, v in rep["mechanism"]["pairs"].items():
@@ -3429,9 +3472,6 @@ def show_prefit(seasons: str = "") -> None:
               f"seasons scored: {v['seasons_scored'] or '—'}")
     print(f"\n  VERDICT: {rep['verdict'].upper()}")
     print("  " + _pf.explain(rep) + "\n")
-    out = ROOT / "web" / "data" / "nfl_prefit.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(_json.dumps(rep, indent=1), encoding="utf-8")
     print(f"  Written to {out.relative_to(ROOT)} — the board reads the "
           f"verdict from there.\n")
 

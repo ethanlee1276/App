@@ -115,6 +115,49 @@ def test_the_completions_cell_is_not_read_as_a_number():
     assert pre._stat("-3") == -3
 
 
+def test_the_paired_cell_is_unpacked_into_both_halves():
+    """AND SOMETHING HAS TO READ IT. `_stat` was right to refuse the cell
+    and for a day nothing else asked — so `pass_att` was never stored, and
+    everything built on it read zero.
+
+    WHAT THAT COST, because it is the most expensive shape of bug here:
+    `prestarters` measures how long a first string played by the starting
+    quarterback's attempts. With every count at 0.0, `bands()` cut its
+    terciles out of two hundred zeros, returned lo = hi = 0, and
+    `verdict(0.0, cuts)` took the `<= lo` branch — the scan reported all
+    thirty-two teams RESTING THEIR STARTERS and cited a 200-outing sample.
+    Nothing raised, nothing looked empty, and the page was exactly as
+    confident as it would have been with real data."""
+    assert pre._split("12/18") == (12.0, 18.0)
+    assert pre._split("--") == (None, None)
+    assert pre._split("18") == (None, None)
+    assert pre._split("1/2/3") == (None, None)
+
+
+def test_the_attempts_actually_land_in_the_rows():
+    got = {(r["player"], r["market"]): r["value"] for r in _rows()}
+    assert got[("Mitch Trubisky", "pass_att")] == 18
+    assert got[("Mitch Trubisky", "pass_cmp")] == 12
+    # And the yards column is still its own number, not the split's.
+    assert got[("Mitch Trubisky", "pass_yds")] == 141
+
+
+def test_the_scan_s_own_market_is_in_the_parser_s_list():
+    """The join that broke: `prestarters` reads `market='pass_att'` and the
+    parser has to be the thing that writes it. Asserting the two names
+    match is cheap; discovering they do not from a confident wrong answer
+    on a live page is not."""
+    from engine.nfl import prestarters
+    src = open(os.path.join(ROOT, "engine", "nfl", "prestarters.py"),
+               encoding="utf-8").read()
+    assert "market='pass_att'" in src
+    emitted = {m for halves in pre.SPLIT_CELLS.values()
+               for pair in halves.values() for m in pair}
+    emitted |= {m for cols in pre.BOX_MARKETS.values() for m in cols.values()}
+    assert "pass_att" in emitted
+    assert prestarters is not None
+
+
 def test_a_touchdown_becomes_the_market_the_board_bets():
     """The long-shot market is "did he score at all", which neither the
     rushing nor the receiving column answers alone."""
@@ -201,6 +244,11 @@ def test_a_row_with_no_season_type_is_still_regular():
 PRESEASON_READERS = {
     "engine/nfl/prestarters.py",   # describes usage; computes no price
     "engine/nfl/prefit.py",        # measures whether usage predicts a result
+    # `--prescan` counts the stored attempt rows to tell two failures
+    # apart: an empty table (run the ingest) and a table whose attempts
+    # never vary (the parser is not storing the market). The first message
+    # alone sent the reader to re-run the thing that already worked.
+    "launch.py",
 }
 
 #: `preseason_games` — the finals — is under the same rule, added with the

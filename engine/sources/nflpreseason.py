@@ -348,10 +348,30 @@ BOXSCORE_TTL = 21600
 #: that make a touchdown line readable. Storing every column ESPN sends
 #: would be a wider table nobody reads and a bigger surface to be wrong on.
 BOX_MARKETS = {
-    "passing":   {"YDS": "pass_yds"},
+    "passing":   {"YDS": "pass_yds", "TD": "pass_td", "INT": "pass_int"},
     "rushing":   {"YDS": "rush_yds", "CAR": "carries", "TD": "rush_td"},
     "receiving": {"YDS": "rec_yds", "REC": "receptions", "TGTS": "targets",
                   "TD": "rec_td"},
+}
+
+#: Cells holding TWO numbers separated by a slash, and what each half is.
+#:
+#: ESPN sends a quarterback's line as "12/18" under a single `C/ATT`
+#: column. `_stat` refuses it, correctly — float("12/18") is not 12 — but
+#: for a while nothing else read it either, and THE ATTEMPTS ARE THE ONE
+#: NUMBER THE PRESEASON SCAN IS BUILT ON.
+#:
+#: What that cost, recorded because it is the most expensive kind of bug
+#: this repo can have: `prestarters` measures how long a first string
+#: played by the starting quarterback's attempts. With no `pass_att` row
+#: in the table the count was 0.0 for every game ever stored, `bands()`
+#: cut its terciles out of two hundred zeros and returned lo = hi = 0, and
+#: `verdict(0.0, …)` took the `<= lo` branch — so the scan reported all
+#: thirty-two teams RESTING THEIR STARTERS, with a two-hundred-outing
+#: sample behind the claim. Nothing was empty, nothing raised, and the
+#: page looked exactly as confident as it would have with real data.
+SPLIT_CELLS = {
+    "passing": {"C/ATT": ("pass_cmp", "pass_att")},
 }
 
 
@@ -389,12 +409,31 @@ def _stat(value: str) -> float | None:
     v = str(value or "").strip()
     if not v or v == "--":
         return None
-    if "/" in v:                     # C/ATT — the yards column is separate
+    if "/" in v:                     # two numbers in one cell — see _split
         return None
     try:
         return float(v)
     except ValueError:
         return None
+
+
+def _split(value: str):
+    """"12/18" → ``(12.0, 18.0)``. Anything else → ``(None, None)``.
+
+    Deliberately separate from `_stat` rather than folded into it. `_stat`
+    answers "what number is in this cell", and the honest answer for a
+    paired cell is that there isn't one — a version that returned 12 would
+    store a completion count as passing yards. This answers the different
+    question, and only the columns named in `SPLIT_CELLS` are asked it.
+    """
+    v = str(value or "").strip()
+    if v.count("/") != 1:
+        return None, None
+    a, b = v.split("/")
+    try:
+        return float(a.strip()), float(b.strip())
+    except ValueError:
+        return None, None
 
 
 def parse_boxscore(data: dict, game: dict) -> list[dict]:
@@ -420,9 +459,12 @@ def parse_boxscore(data: dict, game: dict) -> list[dict]:
         team = _abbr(((side.get("team") or {}).get("abbreviation") or ""))
         opp = away if team == home else home
         for block in side.get("statistics") or []:
-            wanted = BOX_MARKETS.get(str(block.get("name") or "").lower())
-            if not wanted:
+            kind = str(block.get("name") or "").lower()
+            wanted = BOX_MARKETS.get(kind)
+            paired = SPLIT_CELLS.get(kind) or {}
+            if not wanted and not paired:
                 continue
+            wanted = wanted or {}
             labels = [str(x).upper() for x in (block.get("labels") or [])]
             cols = {lab: i for i, lab in enumerate(labels)}
             for ath in block.get("athletes") or []:
@@ -434,11 +476,34 @@ def parse_boxscore(data: dict, game: dict) -> list[dict]:
                 pos = ((who.get("position") or {}).get("abbreviation")
                        if isinstance(who.get("position"), dict)
                        else who.get("position")) or ""
-                for label, market in wanted.items():
+                cells = [(label, market, _stat)
+                         for label, market in wanted.items()]
+                # The paired cells, unpacked into one market per half.
+                for label, halves in paired.items():
                     i = cols.get(label)
                     if i is None or i >= len(stats):
                         continue
-                    val = _stat(stats[i])
+                    for market, val in zip(halves, _split(stats[i])):
+                        if val is None:
+                            continue
+                        key = (name, market)
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        out.append({
+                            "sport": "nfl", "season": game.get("season"),
+                            "week": game.get("week"),
+                            "game_id": game.get("game_id"),
+                            "player": name, "team": team, "opponent": opp,
+                            "position": str(pos).upper(),
+                            "home": 1 if team == home else 0,
+                            "market": market, "value": val,
+                        })
+                for label, market, read in cells:
+                    i = cols.get(label)
+                    if i is None or i >= len(stats):
+                        continue
+                    val = read(stats[i])
                     if val is None:
                         continue
                     key = (name, market)
