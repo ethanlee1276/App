@@ -3200,13 +3200,26 @@ def show_venues() -> None:
         print(f"  octagon: missing {', '.join(gone)}\n")
 
     ok = va.matched_colours(d)
-    print(f"  SERVED BY THE SITE: {', '.join(ok)}")
-    print(f"  web/js/app.js should read: const VENUE_MATCHED = "
-          f"new Set([{', '.join(chr(34) + c + chr(34) for c in ok)}]);")
-    held = [c for c in va.COLOURS if c not in ok]
+    served = va.served_by_site()
+    print(f"  SERVED BY THE SITE: {', '.join(served) or '(none)'}")
+    print(f"  MEASUREMENT ENDORSES: {', '.join(ok)}")
+    extra = [c for c in served if c not in ok]
+    held = [c for c in ok if c not in served]
+    if extra:
+        # A DELIBERATE OVERRIDE, NOT A FAULT. Ethan restored the colours on
+        # 2026-08-14 knowing the tiles are off-generation, because a board
+        # of white stadiums was the worse of the two problems. Repeating
+        # "you should change this" every run would be nagging him about a
+        # decision he already made with the evidence in front of him.
+        print(f"  Serving {', '.join(extra)} beyond what the measurement "
+              f"endorses — a deliberate choice (see the note above "
+              f"VENUE_MATCHED in web/js/app.js). Colour-kitted clubs show a "
+              f"softer tile than neutral-kitted ones until matched renders "
+              f"land; the list below is what would end that.")
     if held:
-        print(f"  held back: {', '.join(held)} — a colour is served on every "
-              f"sport, so one family's soft tile disqualifies it everywhere.")
+        print(f"  {', '.join(held)} passes but is not served — paste "
+              f"new Set([{', '.join(chr(34) + c + chr(34) for c in ok)}]) "
+              f"into web/js/app.js.")
     if d["incoming"]:
         t = va.incoming_targets(d["incoming"], d)
         print(f"\n  incoming/ holds {len(d['incoming'])} file(s).")

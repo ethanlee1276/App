@@ -2444,7 +2444,7 @@ const VENUE_FAMILY = { nfl: "football", cfb: "football", mlb: "baseball",
    misses once and refetches. BUMP IT WHENEVER THE RENDERS ARE REBUILT —
    `tools/venues_ingest.py` writing new bytes under an old name is the
    whole failure mode, and nothing else in the chain can detect it. */
-const VENUE_ART_V = "20260812";
+const VENUE_ART_V = "20260814";
 const venueSrc = (path) => `${path}?v=${VENUE_ART_V}`;
 /* WHICH COLOUR SLOTS HOLD ART THAT MATCHES THE REST.
 //
@@ -2473,8 +2473,26 @@ const venueSrc = (path) => `${path}?v=${VENUE_ART_V}`;
 //
 // TO RESTORE THE COLOURS: generate colour renders at the steel files'
 // quality, drop them in web/img/venues/incoming/ named per the README,
-// run `python3 tools/venues_ingest.py`, then add their names here. */
-const VENUE_MATCHED = new Set(["steel"]);
+// run `python3 tools/venues_ingest.py`, then add their names here.
+//
+// RESTORED 2026-08-14, and NOT because new art arrived. Ethan, seeing a
+// board of white-lit stadiums: "what the fuck happened to all my colored
+// renders. its only showing white renders for all sports. i want my
+// colored renders back."
+//
+// So this now serves all six, and the 2026-08-13 trade is taken the
+// other way round: a colour-kitted club shows its tinted sheet tile and
+// a neutral-kitted one still shows the sharp steel single, which is the
+// mismatch that started this. Both complaints are real and they point in
+// opposite directions — there is no setting that is sharp, consistent
+// AND coloured until fifteen matching renders exist. Given the choice,
+// Ethan wants the colour.
+//
+// `launch.py --venues` still measures honestly and will still report
+// fifteen files as off-generation. That is not a warning to act on any
+// more; it is the standing description of what is being served on
+// purpose. The probe says so rather than nagging. */
+const VENUE_MATCHED = new Set(["steel", "red", "gold", "green", "blue", "violet"]);
 
 function venueVariant(team) {
   // First team colour with real chroma decides the lighting; neutral

@@ -143,19 +143,50 @@ def test_the_detail_measure_is_per_family_not_global():
 
 
 # --- against the real art ---------------------------------------------------
-def test_the_survey_agrees_with_the_shipped_set():
-    """THE ONE THAT MATTERS. Run on the actual files, the measurement
-    independently arrives at the same answer a human reached by eye on
-    2026-08-13 and hard-coded into `VENUE_MATCHED`. Two unrelated methods,
-    one result — which is what makes the measurement trustworthy enough to
-    widen the set later."""
-    served = va.matched_colours(va.survey())
+def test_the_measurement_reproduces_the_2026_08_13_call():
+    """Run on the actual files, the measurement independently arrives at
+    exactly the answer Ethan reached by eye on 2026-08-13 — steel alone.
+    Two unrelated methods, one result, which is what makes the measurement
+    worth trusting at all.
+
+    Note this asserts the MEASUREMENT, not what the site serves. Those are
+    allowed to differ; see below."""
+    assert va.matched_colours(va.survey()) == ["steel"]
+
+
+def test_the_site_may_serve_more_than_the_measurement_endorses():
+    """2026-08-14: "i want my colored renders back."
+
+    A measurement is evidence, not a veto. Ethan restored all six colours
+    knowing the tiles are off-generation, because a board of white
+    stadiums was the worse of the two problems — and there is no setting
+    that is sharp, consistent AND coloured until fifteen matching renders
+    exist.
+
+    So the test asserts the SHAPE of the disagreement rather than
+    forbidding it: everything the measurement endorses must be served
+    (never withhold art that passes), and anything extra is a documented
+    override. A site serving LESS than it could would be a real bug."""
+    endorsed = set(va.matched_colours(va.survey()))
+    served = set(va.served_by_site())
+    assert endorsed <= served, f"art that passes is being withheld: {endorsed - served}"
     app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    i = app.index("const VENUE_MATCHED = new Set([")
-    line = app[i:app.index("]", i)]
-    for colour in va.COLOURS:
-        assert (f'"{colour}"' in line) == (colour in served), \
-            f"{colour}: the site and the measurement disagree"
+    if served - endorsed:
+        i = app.index("const VENUE_MATCHED = new Set(")
+        note = app[max(0, i - 1400):i]
+        assert "RESTORED" in note, \
+            "serving unendorsed art with nothing on record saying why"
+
+
+def test_restoring_the_colours_bumped_the_cache_key():
+    """New bytes under an old filename is the one failure nothing else in
+    the chain can detect — but so is an old CACHED file under a filename
+    whose meaning changed. Every card's venue URL had to miss once for the
+    colours to actually appear."""
+    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    i = app.index("const VENUE_ART_V = ")
+    assert '"20260812"' not in app[i:i + 40], \
+        "the colours came back but the cache key did not move"
 
 
 def test_every_family_has_its_reference():
@@ -283,14 +314,40 @@ def test_the_probe_is_wired_into_the_launcher():
     assert '"--venues" in argv' in src and "show_venues()" in src
 
 
-def test_the_probe_prints_the_line_to_paste():
-    """Reading a verdict and then hand-translating it into JavaScript is
-    where the transcription error lives."""
+def test_the_probe_points_at_the_switch_and_the_cache_key():
+    """Reading a verdict and then hunting for where to apply it is where
+    the time goes; hand-translating it into JavaScript is where the
+    transcription error lives. So the probe names the constant, offers a
+    paste-able line when there IS something to paste, and reminds about
+    the cache key."""
     src = (ROOT / "launch.py").read_text(encoding="utf-8")
     i = src.index("def show_venues()")
     body = src[i:src.index("\ndef ", i + 1)]
-    assert "VENUE_MATCHED = " in body
+    assert "VENUE_MATCHED" in body
+    assert "new Set([" in body, "no paste-able line when art starts passing"
     assert "VENUE_ART_V" in body, "nothing reminds anyone to bust the cache"
+
+
+def test_the_probe_reports_both_sets_rather_than_assuming_they_match():
+    """Once the site can legitimately serve more than the measurement
+    endorses, printing one number is a lie by omission — the reader needs
+    to see the gap to know it is intentional."""
+    src = (ROOT / "launch.py").read_text(encoding="utf-8")
+    i = src.index("def show_venues()")
+    body = src[i:src.index("\ndef ", i + 1)]
+    assert "SERVED BY THE SITE" in body and "MEASUREMENT ENDORSES" in body
+    assert "served_by_site" in body
+
+
+def test_the_probe_does_not_nag_about_a_deliberate_override():
+    """Ethan restored the colours with the evidence in front of him.
+    Repeating "you should change this" every run would be arguing with a
+    decision, not reporting a fact."""
+    src = (ROOT / "launch.py").read_text(encoding="utf-8")
+    i = src.index("def show_venues()")
+    body = src[i:src.index("\ndef ", i + 1)]
+    assert "deliberate choice" in body
+    assert "should read" not in body, "the probe is still issuing orders"
 
 
 def test_the_prompt_pack_exists_and_pins_the_geometry():

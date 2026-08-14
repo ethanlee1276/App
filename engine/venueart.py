@@ -278,6 +278,27 @@ def matched_colours(data: dict) -> list[str]:
     return ok
 
 
+def served_by_site(app_js=None) -> list[str]:
+    """The colours `VENUE_MATCHED` actually holds, read from the source.
+
+    The measurement and the site can legitimately disagree. On 2026-08-14
+    Ethan looked at a board of white-lit stadiums and asked for the colour
+    back knowing the tiles are off-generation, which is his call to make —
+    so this reads what is SERVED rather than assuming it equals what the
+    measurement endorses.
+    """
+    from pathlib import Path as _P
+    path = _P(app_js) if app_js else (
+        _P(__file__).parent.parent / "web" / "js" / "app.js")
+    try:
+        src = path.read_text(encoding="utf-8")
+        i = src.index("const VENUE_MATCHED = new Set(")
+        block = src[i:src.index(")", i)]
+    except (OSError, ValueError):
+        return []
+    return [c for c in COLOURS if f'"{c}"' in block]
+
+
 def missing(data: dict) -> list[str]:
     """Filenames the kit still wants, in the order they should be made."""
     out = []
