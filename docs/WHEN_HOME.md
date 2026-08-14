@@ -79,6 +79,24 @@ This has to be re-run because of a defect I shipped and you found:
 evidence on 2026-08-09, the day paper mode started. It reads main AND
 paper now, so the fit is sitting on ~5 days of bets it never counted.
 
+**Done — it came back LIVE at -0.301 pooled (451 bets, claimed 53.8%,
+landed 45.9%).** MLB's own fit was refused by its held-out test on very
+nearly the same rows, and MLB borrows the pooled cut anyway. That
+disagreement is what step 4b looks at.
+
+### 4b. Check the shape, and whether the cut is stable
+
+```
+python3 launch.py --shape
+```
+
+Read-only, changes nothing. Three answers, in this order: whether the
+over-claim is the same size at every confidence (a bias) or grows with
+it (a slope); how much leverage the journal actually has to tell those
+apart; and whether the one-parameter cut that just went live helps from
+several walk-forward origins or only from the single 70/30 boundary that
+happened to pass.
+
 ### 5. Rebuild, so tonight's board prices through all of it
 
 ```

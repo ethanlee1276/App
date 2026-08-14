@@ -3848,6 +3848,12 @@ def show_haircut(refit: bool = False) -> None:
     print("\n  The board gets shorter and the stakes get smaller. That is the"
           "\n  correction landing, not the model breaking — the picks it drops"
           "\n  are the ones whose whole edge was the over-claim.")
+    # A live cut earns the next question rather than closing the subject:
+    # one pooled number assumes the error is the same size at every
+    # confidence, and this table cannot tell whether that is true.
+    print("\n  `python3 launch.py --shape` asks the two things this table"
+          "\n  cannot: whether one parameter is the right SHAPE, and whether"
+          "\n  the cut survives more than the single split that passed it.")
 
 
 def show_standings() -> None:
@@ -5488,6 +5494,15 @@ def main() -> None:
         return
     if "--haircut" in argv:
         show_haircut("--refit" in argv)
+        return
+    if "--shape" in argv:
+        import shapecheck
+        rest = argv[argv.index("--shape") + 1:]
+        args = []
+        for flag in ("--sport", "--since"):
+            if flag in rest:
+                args += [flag, rest[rest.index(flag) + 1]]
+        shapecheck.main(args)
         return
     if "--prereg" in argv:
         show_prereg()
