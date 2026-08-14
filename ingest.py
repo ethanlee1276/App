@@ -318,7 +318,7 @@ def main() -> None:
               "exist\n  before August can be modelled at all.")
         res = ingest.ingest_nfl_preseason(conn, seasons)
         print(f"  games: {res['games']:,}   preseason rows: "
-              f"{res['player_logs']:,}")
+              f"{res['player_logs']:,}   finals stored: {res.get('finals', 0):,}")
         for note in res["skipped"][:5]:
             print(f"  skipped: {note}")
         if not res["player_logs"]:

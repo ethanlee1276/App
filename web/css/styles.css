@@ -4659,3 +4659,18 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .pre-scan-n { color: var(--text-mute); font-size: var(--fs-xs); }
 .pre-scan-note { margin-left: auto; color: var(--text-mute);
   font-size: var(--fs-xs); font-style: italic; }
+/* The MARKET's number, and styled to read as one: tabular figures, muted,
+   no accent colour anywhere. A posted price given the same emphasis as a
+   recommendation is how a page starts making claims it has not earned. */
+/* SPANS THE WHOLE ROW. `.pre-game` is a six-column grid; without this the
+   line lands in whichever cell is left over — the wide 1fr when there is
+   no starter scan, and the narrow trailing `auto` when there is, where it
+   stacked one number per line and looked like a different component. */
+.pre-line { grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+  margin-top: 4px; font-size: var(--fs-xs); color: var(--text-mute);
+  font-variant-numeric: tabular-nums; }
+.pre-line-lab { text-transform: uppercase; letter-spacing: .06em;
+  font-size: var(--fs-xs); opacity: .8; }
+.pre-line-n { color: var(--text); }
+.pre-line-books { margin-left: auto; }

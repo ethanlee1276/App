@@ -1978,6 +1978,7 @@ function preseasonGameHTML(g) {
     ${preseasonScoreHTML(g)}
     ${g.indoor ? '<span class="pre-roof">indoor</span>' : ""}
     ${starterScanHTML(g)}
+    ${preseasonLineHTML(g)}
   </div>`;
 }
 
@@ -2016,6 +2017,75 @@ function starterScanHTML(g) {
   if (!cells) return "";
   return `<div class="pre-scan">${cells}
     <span class="pre-scan-note">habit, not a team sheet</span></div>`;
+}
+
+/* WHAT THE BOOK THINKS, beside what the coaches have done.
+
+   Ethan, 2026-08-14: "i wanna show props for the pre season. i wanna show
+   either money lines or over unders or whatever i dont car."
+
+   This is the MARKET's number and only the market's number. There is no
+   model price beside it, no edge and no pick, because the fit that would
+   justify one has not convicted — `engine/nfl/prefit` measures whether
+   starter usage moves an August result and `prices_allowed()` is hard
+   False until the residual has been checked against posted lines we only
+   started recording on 2026-08-14.
+
+   So: posted numbers, and the reader draws their own line between "SF has
+   played its starters 22 attempts a game in past Augusts" and "the market
+   has them -3". Deliberately RAW prices rather than an implied
+   percentage — a de-vigged probability on a card looks like a forecast,
+   and this page does not have one. */
+function preseasonLineHTML(g) {
+  const m = g.market;
+  if (!m) return "";
+  const px = (v) => `${v > 0 ? "+" : ""}${v}`;
+  const bits = [];
+  if (m.spread != null) {
+    // Stored from the HOME team's side — see parse_event_spreads.
+    bits.push(`${escapeHtml(g.home)} ${px(Number(m.spread))}`);
+  }
+  if (m.total != null) bits.push(`o/u ${Number(m.total)}`);
+  if (m.away_odds != null && m.home_odds != null) {
+    bits.push(`${escapeHtml(g.away)} ${px(m.away_odds)}`
+      + ` / ${escapeHtml(g.home)} ${px(m.home_odds)}`);
+  }
+  if (!bits.length) return "";
+  return `<div class="pre-line">
+    <span class="pre-line-lab">market</span>
+    ${bits.map(b => `<span class="pre-line-n">${b}</span>`).join("")}
+    ${m.books ? `<span class="pre-line-books">${m.books} book${
+      m.books === 1 ? "" : "s"}</span>` : ""}
+  </div>`;
+}
+
+/* WHY THERE IS A LINE AND NO PICK — said once, at the top, in the state
+   the measurement is actually in.
+
+   Three answers, and "never measured" is a different sentence from "we
+   measured and there is nothing there". A block that just stays quiet
+   makes those two look identical, which is how a page ends up implying it
+   checked something it never ran. */
+function preseasonFitHTML(data) {
+  const f = (data || {}).fit;
+  if (!f || !f.verdict) {
+    return `Whether any of it is <i>predictable</i> has not been measured
+      yet — run <code>python3 launch.py --prefit</code>.`;
+  }
+  const span = (f.seasons || []).length
+    ? ` across ${f.seasons.length} August${f.seasons.length === 1 ? "" : "s"}`
+    : "";
+  if (f.verdict === "insufficient") {
+    return `Measured on ${f.n} game(s)${span} — not enough to conclude
+      anything either way.`;
+  }
+  if (f.verdict === "no") {
+    return `Measured on ${f.n} game(s)${span}: starter usage does not
+      predict an August result by enough to bet, so nothing is.`;
+  }
+  return `Measured on ${f.n} game(s)${span}: the effect is real. It is
+    still not priced — that needs the posted numbers checked against it,
+    and those only started being recorded this August.`;
 }
 
 async function renderPreseason() {
@@ -2061,11 +2131,11 @@ async function renderPreseason() {
         when ? ", " + escapeHtml(when) : ""}</span>
     </div>
     <div class="card pre-card">
-      <p class="pre-note">Schedule and results only — <b>nothing here is
-        priced</b>. Preseason usage is not the season’s: starters play a
-        series behind a line that will not start together again, so a
-        projection built on last year’s snaps is a number about a different
-        event.</p>
+      <p class="pre-note">Schedule, results and the <b>book’s</b> posted
+        number — <b>nothing here is ours</b>. Preseason usage is not the
+        season’s: starters play a series behind a line that will not start
+        together again, so a projection built on last year’s snaps is a
+        number about a different event. ${preseasonFitHTML(data)}</p>
       ${data.weeks.map(w => preseasonWeekHTML(w, w === openWeek)).join("")}
     </div>`;
 }

@@ -26,6 +26,7 @@ someone has to keep; a different table is a rule the schema keeps.
 
 import json
 import os
+import re
 import sqlite3
 import sys
 
@@ -199,12 +200,20 @@ def test_a_row_with_no_season_type_is_still_regular():
 #: disappearing, and this is where the move is recorded.
 PRESEASON_READERS = {
     "engine/nfl/prestarters.py",   # describes usage; computes no price
+    "engine/nfl/prefit.py",        # measures whether usage predicts a result
 }
 
+#: `preseason_games` — the finals — is under the same rule, added with the
+#: table on 2026-08-14. The match has to be on the SQL rather than on the
+#: bare name: `nflpreseason.preseason_games()` is a FUNCTION that fetches
+#: the schedule, and half the launcher calls it.
+_TABLE_SQL = re.compile(
+    r"preseason_player_logs|(?:FROM|INTO|TABLE|UPDATE|JOIN)\s+preseason_games")
 
-def test_only_the_declared_readers_touch_the_preseason_table():
-    """The line, redrawn. Reading the table to say WHAT HAPPENED is now
-    allowed and named; reading it to produce a NUMBER SOMEBODY BETS is
+
+def test_only_the_declared_readers_touch_the_preseason_tables():
+    """The line, redrawn. Reading the tables to say WHAT HAPPENED is now
+    allowed and named; reading them to produce a NUMBER SOMEBODY BETS is
     still the thing that has to show up in a diff as its own decision."""
     import glob
     hits = []
@@ -215,9 +224,19 @@ def test_only_the_declared_readers_touch_the_preseason_table():
             continue
         src = open(path, encoding="utf-8").read()
         rel = os.path.relpath(path, ROOT)
-        if "preseason_player_logs" in src and rel not in PRESEASON_READERS:
+        if _TABLE_SQL.search(src) and rel not in PRESEASON_READERS:
             hits.append(rel)
-    assert not hits, f"undeclared reader of the preseason table: {hits}"
+    assert not hits, f"undeclared reader of the preseason tables: {hits}"
+
+
+def test_the_fitter_reads_the_finals_and_still_prices_nothing():
+    """`prefit` is the newest reader and the one closest to the line: it
+    exists to decide whether August is priceable. It answers that question
+    and does not act on it — `prices_allowed` is hard False, because a
+    measured effect is not evidence the book missed it."""
+    from engine.nfl import prefit
+    assert prefit.prices_allowed() is False
+    assert prefit.prices_allowed({"verdict": "measured"}) is False
 
 
 def test_the_declared_reader_still_produces_no_price():

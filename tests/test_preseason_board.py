@@ -121,18 +121,36 @@ def test_the_payload_has_nowhere_to_put_a_price():
     walk(p)
 
 
-def test_the_block_says_out_loud_that_it_is_not_priced():
+def test_the_block_says_out_loud_that_the_numbers_are_not_ours():
     """A schedule sitting under a board of picks reads as picks unless it
     says otherwise, and the reader who needs telling is the one who will
-    not go looking for a docstring."""
+    not go looking for a docstring.
+
+    THE WORDING CHANGED ON 2026-08-14 AND HAD TO. This block used to claim
+    "nothing here is priced", which was true when it showed only a
+    schedule. It now carries the BOOK's posted spread, total and moneyline
+    — Ethan: "i wanna show ... either money lines or over unders or
+    whatever i dont car" — so the old sentence would have been a false
+    statement sitting directly above a price. The claim that survives, and
+    the one that actually matters, is that none of those numbers are ours.
+    """
     js = _read("web", "js", "app.js")
     i = js.index("async function renderPreseason(")
     # Whitespace-normalised: this is copy inside a template literal, so it
     # wraps wherever the source line ended and a contiguous-substring match
     # fails on prose that is present and correct.
     block = " ".join(js[i:i + 2600].split())
-    assert "nothing here is priced" in block
+    assert "nothing here is ours" in block
     assert "a number about a different event" in block
+
+
+def test_the_block_explains_why_there_is_a_line_and_no_pick():
+    """Showing a market number without saying why we are not answering it
+    is the gap this feature could most easily fall into."""
+    js = _read("web", "js", "app.js")
+    i = js.index("async function renderPreseason(")
+    block = " ".join(js[i:i + 2600].split())
+    assert "preseasonFitHTML(data)" in block
 
 
 # --- it is on the page, and it leaves ----------------------------------------

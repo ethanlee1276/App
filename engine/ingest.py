@@ -238,7 +238,7 @@ def ingest_nfl_preseason(conn, seasons: list[int], quiet: bool = False) -> dict:
     One request per game, cached six hours, finals only.
     """
     from .sources import nflpreseason as pre
-    result = {"games": 0, "player_logs": 0, "skipped": []}
+    result = {"games": 0, "player_logs": 0, "finals": 0, "skipped": []}
     for season in seasons:
         try:
             games = pre.preseason_games(season)
@@ -247,6 +247,20 @@ def ingest_nfl_preseason(conn, seasons: list[int], quiet: bool = False) -> dict:
             continue
         played = [g for g in games if g.get("state") == "post"]
         result["games"] += len(played)
+        # THE FINALS, which are the only thing the usage scan can ever be
+        # tested against. A quarterback's nine attempts are a fact about
+        # the game; whether that fact moved the scoreboard is a question,
+        # and it is unanswerable while the scoreboard is not on disk.
+        # Scheduled rows ride along so the table also holds the fixture
+        # list; `upsert_preseason_games` refuses to null a stored final.
+        result["finals"] = result.get("finals", 0) + db.upsert_preseason_games(
+            conn, [{"sport": "nfl", "season": season, "week": g.get("week"),
+                    "game_id": g.get("game_id"), "date": g.get("date"),
+                    "home": g.get("home"), "away": g.get("away"),
+                    "home_score": g.get("home_score"),
+                    "away_score": g.get("away_score"),
+                    "completed": 1 if g.get("completed") else 0,
+                    "venue": g.get("venue")} for g in games])
         for g in played:
             gid = g.get("game_id")
             if not gid:

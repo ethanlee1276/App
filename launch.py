@@ -335,6 +335,32 @@ def refresh_preseason(quiet: bool = False) -> bool:
     except Exception as _exc:                                 # noqa: BLE001
         if not quiet:
             print(f"  preseason scan unavailable: {type(_exc).__name__}")
+    # WHAT THE BOOK THINKS, beside what the coaches have done. Ethan asked
+    # for "either money lines or over unders or whatever" on the preseason
+    # board; this is that, and it is the MARKET's number rather than ours,
+    # because `engine/nfl/prefit` has not established that starter usage
+    # predicts an August result by enough to bet. Three credits for the
+    # whole board, six-hour cache, and only while a fixture is unplayed.
+    try:
+        from engine.nfl import prelines as _pl
+        _n, _note = _pl.refresh(payload)
+        if not quiet:
+            print(f"  preseason lines: {_note}")
+    except Exception as _exc:                                 # noqa: BLE001
+        if not quiet:
+            print(f"  preseason lines unavailable: {type(_exc).__name__}")
+    # THE FIT'S VERDICT RIDES ALONG so the page can say why it is showing a
+    # line and no pick. Absent file = never measured, which the board
+    # renders as exactly that rather than as a quiet nothing.
+    try:
+        _fit = ROOT / "web" / "data" / "nfl_prefit.json"
+        if _fit.exists():
+            _r = json.loads(_fit.read_text(encoding="utf-8"))
+            payload["fit"] = {"verdict": _r.get("verdict"), "n": _r.get("n"),
+                              "seasons": _r.get("seasons"),
+                              "prices_allowed": bool(_r.get("prices_allowed"))}
+    except Exception:                                         # noqa: BLE001
+        pass
     path = ROOT / "web" / "data" / "nfl_preseason.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=1), encoding="utf-8")
@@ -3340,6 +3366,76 @@ def show_prescan(season: int | None = None) -> None:
           "who is sitting;\n  this is what the same staff has done before.\n")
 
 
+def show_prefit(seasons: str = "") -> None:
+    """Does starter usage actually move a preseason result? Measure it.
+
+        python3 launch.py --prefit
+        python3 launch.py --prefit 2021-2026
+
+    The step between "we can see who is playing" and "we can price it".
+    The scan describes a coaching decision; this asks whether that decision
+    shows up on the scoreboard by enough to bet, and it asks with the bar
+    written down in engine/nfl/prefit.py BEFORE the answer exists.
+
+    Two questions, and the first can kill the second. Question A uses what
+    actually happened — information no bettor has — purely to falsify: if
+    knowing the attempt counts in advance does not move the final, nothing
+    built on forecasting them can. Question B uses only each team's habit
+    from EARLIER Augusts and is scored out of sample, season forward, which
+    is the only version that was ever bettable.
+
+    Needs the preseason ingest AND its finals:
+        python3 ingest.py nflpre --seasons 2021-2026
+
+    Nothing here prices anything. `prefit.prices_allowed` is hard False —
+    a measured effect is not proof the book missed it.
+    """
+    import datetime as _dt
+    import json as _json
+    from engine import db as _db
+    from engine.nfl import prefit as _pf
+    yrs = None
+    if seasons:
+        from engine.seasons import parse_seasons as _ps2
+        yrs = _ps2(seasons)
+    conn = _db.connect()
+    rep = _pf.fit(conn, yrs)
+    conn.close()
+    span = rep.get("seasons") or []
+    print("\nPRESEASON PRICE FIT — "
+          + (f"{span[0]}-{span[-1]}" if span else "no data") + "\n")
+    print(f"  Bar, set before the answer: at least {_pf.MIN_ROWS} joined "
+          f"games, p <= {_pf.MAX_P},\n  and at least "
+          f"{_pf.MIN_SIGNAL_POINTS} point(s) of out-of-sample adjustment.\n")
+    print(f"  Joined games: {rep['n']}")
+    if not rep["n"]:
+        print("\n  Nothing joined. Either the preseason box scores or the "
+              "finals are missing:\n    python3 ingest.py nflpre --seasons "
+              f"{_dt.date.today().year - 5}-{_dt.date.today().year}\n")
+        return
+    print("\n  A. MECHANISM — what actually happened, against the final:")
+    for name, v in rep["mechanism"]["pairs"].items():
+        p = "—" if v["p"] is None else f"{v['p']:.4f}"
+        r = "—" if v["r"] is None else f"{v['r']:+.3f}"
+        slope = "—" if v["slope"] is None else f"{v['slope']:+.3f}"
+        print(f"     {name:<18} n={v['n']:<5} r={r}  slope={slope}  p={p}")
+    print("\n  B. FORECAST — habit from earlier Augusts only, scored forward:")
+    for name, v in rep["forecast"]["pairs"].items():
+        sp = "—" if v["signal_points"] is None else f"{v['signal_points']:+.2f}"
+        p = "—" if v.get("p") is None else f"{v['p']:.4f}"
+        print(f"     {name:<18} n={v['n']:<5} baseline rmse="
+              f"{v['base_rmse']}  model rmse={v['model_rmse']}")
+        print(f"     {'':<18} signal {sp} point(s)  p={p}  "
+              f"seasons scored: {v['seasons_scored'] or '—'}")
+    print(f"\n  VERDICT: {rep['verdict'].upper()}")
+    print("  " + _pf.explain(rep) + "\n")
+    out = ROOT / "web" / "data" / "nfl_prefit.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(_json.dumps(rep, indent=1), encoding="utf-8")
+    print(f"  Written to {out.relative_to(ROOT)} — the board reads the "
+          f"verdict from there.\n")
+
+
 def show_injuries() -> None:
     """Injury-board probe: pull every league's feed NOW and show counts.
 
@@ -5708,6 +5804,11 @@ def main() -> None:
         i = argv.index("--prescan")
         rest = [a for a in argv[i + 1:] if not a.startswith("-")]
         show_prescan(int(rest[0]) if rest else None)
+        return
+    if "--prefit" in argv:
+        i = argv.index("--prefit")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_prefit(rest[0] if rest else "")
         return
     if "--standings" in argv:
         show_standings()

@@ -66,6 +66,26 @@ CREATE TABLE IF NOT EXISTS preseason_player_logs (
     market TEXT, value REAL,
     PRIMARY KEY (sport, season, week, game_id, player, market)
 );
+-- Preseason FINALS, in the same quarantine as the box scores above.
+--
+-- Added 2026-08-14 for one reason: without an outcome column there is
+-- nothing for the usage scan to be fitted AGAINST. `preseason_player_logs`
+-- says a starting quarterback threw nine times; only this table says the
+-- game ended 20-17, and a claim that resting starters moves a total is
+-- untestable until both are on disk.
+--
+-- SAME ARGUMENT AS THE LOGS, one table down. Every consumer of `games`
+-- reads it by (sport, season, period) and none filter by season type, so
+-- an August exhibition landing in there would enter team ratings, the
+-- form windows, the strength-of-schedule work and the moneyline backtest
+-- — all of which would then be quietly averaging a game whose starters
+-- left in the first quarter beside one that decided a division.
+CREATE TABLE IF NOT EXISTS preseason_games (
+    sport TEXT, season INTEGER, week INTEGER, game_id TEXT, date TEXT,
+    home TEXT, away TEXT, home_score REAL, away_score REAL,
+    completed INTEGER, venue TEXT,
+    PRIMARY KEY (sport, season, game_id)
+);
 -- Who a player IS, as opposed to what he did in one game.
 --
 -- A SEPARATE TABLE, not a column on player_game_logs, for two reasons. An
@@ -289,6 +309,45 @@ def upsert_preseason_logs(conn, rows: list[dict]) -> int:
         [tuple(r.get(c) for c in PRESEASON_COLS) for r in rows])
     conn.commit()
     return len(rows)
+
+
+PRESEASON_GAME_COLS = ["sport", "season", "week", "game_id", "date",
+                       "home", "away", "home_score", "away_score",
+                       "completed", "venue"]
+
+
+def upsert_preseason_games(conn, rows: list[dict]) -> int:
+    """Exhibition finals. A SCHEDULED game never overwrites a played one.
+
+    The scoreboard is re-read every six hours all August, and a fixture
+    that has already finished is still listed — but ESPN sends `score: "0"`
+    for anything unplayed, which `parse_games` correctly nulls out. If a
+    later read of an unchanged row were allowed to write those nulls back
+    the finals would erase themselves the morning after each game, which is
+    the exact failure `drop_unplayed` exists to prevent one table over.
+    """
+    if not rows:
+        return 0
+    cols = ",".join(PRESEASON_GAME_COLS)
+    marks = ",".join("?" * len(PRESEASON_GAME_COLS))
+    n = 0
+    for r in rows:
+        if not r.get("game_id"):
+            continue
+        if r.get("home_score") is None:
+            cur = conn.execute(
+                "SELECT home_score FROM preseason_games "
+                "WHERE sport=? AND season=? AND game_id=?",
+                (r.get("sport", "nfl"), int(r.get("season") or 0),
+                 str(r["game_id"]))).fetchone()
+            if cur is not None and cur[0] is not None:
+                continue                    # a final already stands here
+        conn.execute(
+            f"INSERT OR REPLACE INTO preseason_games ({cols}) VALUES ({marks})",
+            tuple(r.get(c) for c in PRESEASON_GAME_COLS))
+        n += 1
+    conn.commit()
+    return n
 
 
 ASSET_COLS = ["sport", "player", "espn_id", "headshot", "seen"]

@@ -109,10 +109,44 @@ regular and post only. "Should we model August" is unanswerable while
 that is true, and this is the step that makes it answerable next year.
 ESPN's box scores are the source; one cached request per played game.
 
-It lands in `preseason_player_logs`, a **separate table**, and nothing
-reads it. The board stays empty in August exactly as before. The run
+It lands in `preseason_player_logs` and `preseason_games`, **separate
+tables**, quarantined from everything the season models read. The run
 takes a few minutes for five seasons and is resumable — re-running skips
 nothing but costs only cached reads.
+
+**Re-run it even if you already have**, because the finals table is new
+(2026-08-14). The box scores say a starting quarterback threw nine times;
+only `preseason_games` says the game ended 20-17, and without an outcome
+column there is nothing for step 4d to fit against. The second run is
+cheap — the schedule is cached and the box scores are already stored.
+
+### 4d. Then ask whether August is priceable at all
+
+```
+python3 launch.py --prescan     # who is likely to play their starters
+python3 launch.py --prefit      # does that actually move the scoreboard
+```
+
+`--prescan` is descriptive: each side's starting quarterback and how many
+attempts the same staff has taken in past Augusts, with "rested / limited
+/ extended" cut from the league's own distribution rather than a number
+somebody picked.
+
+`--prefit` is the measurement underneath it, and it is the one with a
+verdict. The bar is written into `engine/nfl/prefit.py` ABOVE the answer —
+60 joined games, p ≤ 0.01, at least one point of out-of-sample adjustment
+— so it cannot be talked into place afterwards. Two questions, in order:
+whether the attempts move the final at all (using information no bettor
+has, purely to falsify), and whether a team's habit from EARLIER Augusts
+predicts it out of sample. It writes `web/data/nfl_prefit.json`, and the
+preseason board prints the verdict rather than staying quiet — "we
+measured and there is nothing" and "we never measured" are different
+sentences.
+
+Nothing prices off it either way. `prefit.prices_allowed()` is hard False:
+a measured effect is not evidence the book missed it, and that second
+question needs preseason closing lines, which only started being recorded
+this August.
 
 ### 5. Rebuild, so tonight's board prices through all of it
 
