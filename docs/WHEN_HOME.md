@@ -616,6 +616,7 @@ two pages built while you were out:**
 ```
 python3 launch.py --memes      # Rocket Radar live-shape probe
 python3 launch.py --injuries   # Injury Report probe — all five leagues
+python3 launch.py --venues     # Stadium-art probe — is it one set of pictures?
 ```
 
 `--injuries` should print counts for nfl/mlb/nba/wnba/cfb and the
@@ -624,6 +625,22 @@ already use from your machine, so anything other than instant success is
 surprising. CFB at (or near) zero is normal — schools have no duty to
 report. Once it runs, check the new Injuries tab in any sport and the
 "Injury watch — tonight's teams" block on Recommended → Watchlists.
+
+`--venues` needs no network — it measures the files already in the repo.
+It exists because of the one bug nothing else in that chain could see:
+`variants/` held two GENERATIONS of art, and since the card picks a slot
+from the home team's kit, a neutral-kitted club got the sharp render and
+a colour-kitted club got a soft sheet tile, deterministically. You spotted
+it by eye on 2026-08-13; this measures it.
+
+It should print `SERVED BY THE SITE: steel` and list fifteen colour files
+as off-generation — that is the CURRENT, KNOWN state, not a new problem.
+Fixing it means generating fifteen replacement renders; the prompts, the
+exact filenames and the check-in steps are in `docs/VENUE_PROMPTS.md`. The
+short version: one full render per colour (never a five-up sheet),
+1536x1024 3:2, tint the FLOODLIGHTS not the grass. Then
+`python3 tools/venues_ingest.py`, re-run `--venues`, paste the
+`VENUE_MATCHED` line it prints, and bump `VENUE_ART_V`.
 
 The whole Rocket Radar stack (new "Meme Coins" tab, GeckoTerminal +
 DexScreener feeds, momentum/risk scoring) was built against fixtures

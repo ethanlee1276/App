@@ -3153,6 +3153,76 @@ def _settleable_days(open_days) -> list[str]:
                   if d.get("date") and "-W" not in d["date"])
 
 
+def show_venues() -> None:
+    """Venue-art probe: is the stadium art one set of pictures?
+
+        python3 launch.py --venues
+
+    Ethan, 2026-08-13: "the stadium issue is not fixed." He was right and
+    the first diagnosis was wrong — the cache-bust fixed a real problem
+    but not his. `variants/` held two GENERATIONS of art, and because
+    `venueVariant` picks a slot from the home team's kit, a neutral club
+    got the sharp render and a colour-kitted club got a soft sheet tile,
+    deterministically. Nothing in the chain could see that; a person had
+    to notice two cards looking wrong beside each other.
+
+    This is the thing that sees it. Every render measured against its own
+    family's reference, and a printed answer to the only question that
+    matters: which colours can `VENUE_MATCHED` safely hold.
+    """
+    from engine import venueart as va
+    d = va.survey()
+    print(f"\nVENUE ART — {d['present']} of {d['expected']} files present\n")
+    for family in va.FAMILIES:
+        blk = d["families"][family]
+        ref = blk["reference"]
+        if not ref:
+            print(f"  {family}: no {va.REFERENCE} reference — nothing to "
+                  f"measure the rest against.\n")
+            continue
+        print(f"  {family}  reference {ref['width']}x{ref['height']}")
+        for colour in va.COLOURS:
+            slot = blk["slots"].get(colour)
+            if slot is None:
+                print(f"    {colour:<8} — missing")
+                continue
+            if colour == va.REFERENCE:
+                mark = "reference"
+            else:
+                mark = "matches" if slot["matches"] else "OFF-GENERATION"
+            print(f"    {colour:<8} {slot['width']}x{slot['height']:<6} {mark}")
+            for issue in slot.get("issues", []):
+                print(f"             · {issue}")
+        print()
+
+    gone = [n for n, v in (d.get("octagon") or {}).items() if v is None]
+    if gone:
+        print(f"  octagon: missing {', '.join(gone)}\n")
+
+    ok = va.matched_colours(d)
+    print(f"  SERVED BY THE SITE: {', '.join(ok)}")
+    print(f"  web/js/app.js should read: const VENUE_MATCHED = "
+          f"new Set([{', '.join(chr(34) + c + chr(34) for c in ok)}]);")
+    held = [c for c in va.COLOURS if c not in ok]
+    if held:
+        print(f"  held back: {', '.join(held)} — a colour is served on every "
+              f"sport, so one family's soft tile disqualifies it everywhere.")
+    if d["incoming"]:
+        print(f"\n  incoming/ holds {len(d['incoming'])} file(s): "
+              f"{', '.join(d['incoming'][:6])}"
+              + ("…" if len(d["incoming"]) > 6 else ""))
+        print("  Run `python3 tools/venues_ingest.py` to cut and install them.")
+    todo = va.missing(d)
+    if todo:
+        print(f"\n  STILL WANTED ({len(todo)}):")
+        for line in todo[:20]:
+            print(f"    {line}")
+        print("\n  Prompts and the filename checklist: docs/VENUE_PROMPTS.md")
+        print("  After any ingest, BUMP VENUE_ART_V in web/js/app.js or the "
+              "old bytes stay cached.")
+    print()
+
+
 def show_injuries() -> None:
     """Injury-board probe: pull every league's feed NOW and show counts.
 
@@ -5513,6 +5583,9 @@ def main() -> None:
         return
     if "--injuries" in argv:
         show_injuries()
+        return
+    if "--venues" in argv:
+        show_venues()
         return
     if "--standings" in argv:
         show_standings()
