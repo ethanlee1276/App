@@ -3393,6 +3393,11 @@ function gameBetSeries(b) {
   const rows = kind === "total"
     ? teamRecent(b.home) : teamRecent(team);
   if (rows.length < 3) return null;
+  // Who each bar was against — same fact the prop charts take from a
+  // player's game log, taken here from the team's. Newest first, like
+  // the values beside them; the chart reverses both together.
+  const labels = rows.map((g) => (g.home ? "" : "@")
+    + String(g.opponent || "").toUpperCase());
   // The chart head is set in caps, so the team name is upper-cased here
   // rather than left to CSS — `text-transform` would not survive a copy
   // out of the page, and a lower-case club name inside an upper-case
@@ -3401,7 +3406,7 @@ function gameBetSeries(b) {
   const nm = (t) => String(proper(t) || "").toUpperCase();
   if (kind === "moneyline") {
     return { values: rows.map((g) => g.margin), line: 0, over: true,
-             what: "MONEYLINE", head: `LAST ${rows.length} ${nm(team)} RESULTS`,
+             what: "MONEYLINE", labels, head: `LAST ${rows.length} ${nm(team)} RESULTS`,
              legend: ["WON", "LOST"], sideLabel: "WIN",
              note: "the margin in each game — above the line is a win" };
   }
@@ -3410,7 +3415,7 @@ function gameBetSeries(b) {
     // threshold is the handicap with its sign flipped. Getting this
     // backwards would colour every cover as a miss.
     return { values: rows.map((g) => g.margin), line: -Number(b.line),
-             over: true, what: "SPREAD",
+             over: true, what: "SPREAD", labels,
              head: `LAST ${rows.length} ${nm(team)} MARGINS`,
              legend: ["COVERED", "MISSED"], sideLabel: "COVER",
              note: `each game’s margin against the ${
@@ -3419,14 +3424,14 @@ function gameBetSeries(b) {
   if (kind === "team_total") {
     return { values: rows.map((g) => g.scored), line: Number(b.line),
              over: String(b.side || "Over").toUpperCase() === "OVER",
-             what: "TEAM TOTAL", head: `LAST ${rows.length} ${nm(team)} SCORES`,
+             what: "TEAM TOTAL", labels, head: `LAST ${rows.length} ${nm(team)} SCORES`,
              legend: ["OVER", "UNDER"],
              note: "what this team alone scored in each of its last games" };
   }
   if (kind === "total") {
     return { values: rows.map((g) => g.total), line: Number(b.line),
              over: String(b.side || "Over").toUpperCase() === "OVER",
-             what: "GAME TOTAL",
+             what: "GAME TOTAL", labels,
              head: `LAST ${rows.length} ${nm(b.home)} GAMES — COMBINED`,
              legend: ["OVER", "UNDER"],
              note: `both teams' combined score in ${proper(b.home)}'s last games`,
@@ -3446,7 +3451,8 @@ function gameBetChart(b) {
     recent_values: s.values, line: s.line, side: s.over ? "OVER" : "UNDER",
     odds: b.odds, market: b.market, market_label: b.market_label || b.market,
     ev_per_unit: b.ev_per_unit, confidence: b.confidence, team: team,
-  }, { head: s.head, what: s.what, legend: s.legend, sideLabel: s.sideLabel });
+  }, { head: s.head, what: s.what, legend: s.legend, sideLabel: s.sideLabel,
+       labels: s.labels });
 }
 
 /* A GAME BET IS ALWAYS A DOOR, and that is a deliberate departure from
@@ -3632,7 +3638,7 @@ function renderGameBetPage(b) {
           <div class="v ${b.edge >= 0 ? "pos" : "neg"}">${signedPct(b.edge)}</div></div>` : ""}
       </div>
       ${asProp ? propAnalysis(asProp, { head: s.head, what: s.what,
-        legend: s.legend, sideLabel: s.sideLabel }) : `
+        legend: s.legend, sideLabel: s.sideLabel, labels: s.labels }) : `
       <p class="loading">No recent results for this team yet — the chart
       needs at least three games we have ingested.</p>`}
     </article>

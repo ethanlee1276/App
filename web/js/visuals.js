@@ -1236,6 +1236,60 @@ function propAnalysis(r, opts = {}) {
   const slot = (W - L - R) / n, bw = Math.min(30, slot - 8);
   const bx = (i) => L + i * slot + (slot - bw) / 2;
 
+  /* WHO EACH BAR WAS AGAINST. Ethan, 2026-08-13, circling the row of
+     1-10 under the bars: "instead of showing 1-10 under the graphs, we
+     should show 'vs whatever team they played that game'."
+
+     He is right and the numbers were never information — they counted
+     the bars, which the reader can already see. The opponent is the one
+     thing a bar cannot say for itself and the first thing you ask about
+     a three-strikeout game: three against WHO.
+
+     The data needs no new source. `recent_values` is built as
+     `[g.value for g in prop.logs]` in every pipeline, so `logs` is
+     index-aligned with it — same order, same rows. The chart reverses
+     to oldest-first, so the labels reverse with it or every bar would be
+     captioned with the wrong game, which is worse than a number.
+
+     `@` means away, nothing means home — the convention every box score
+     uses, and it costs one character where there is no room for three.  */
+  const labelsOf = (src) => {
+    if (!Array.isArray(src) || src.length < n) return null;
+    const out = src.slice(0, n).map((g) => {
+      const opp = String((g && g.opponent) || "").toUpperCase();
+      if (!opp) return null;
+      return (g.home === false ? "@" : "") + opp;
+    }).reverse();                       // oldest -> newest, as the bars are
+    return out.every(Boolean) ? out : null;
+  };
+  // `opts.labels` arrives in the SAME order as `recent_values` — newest
+  // first — so it is reversed here exactly like the log-derived ones.
+  // Two orders for one argument is how a chart ends up captioning every
+  // bar with the wrong game and looking fine while doing it.
+  const labels = (opts.labels && opts.labels.length >= n
+    ? opts.labels.slice(0, n).map(String).reverse()
+    : null) || labelsOf(r.logs);
+  // TYPE THAT DOES NOT FIT IS NOT A LABEL. Ten clubs under ten bars on a
+  // phone is 28 viewBox units per name, and "@SDP" set to fill that
+  // leaves under two units of gutter — legible in the abstract, a smear
+  // in the hand.
+  //
+  // So the row STAGGERS before it shrinks: alternate names drop a line,
+  // which doubles the room each one has and keeps the type at the size
+  // every other label on the chart is set in. Shrinking to fit is the
+  // fallback, not the first move, and below a floor the opponent is
+  // dropped for the bar's number rather than printed too small to read.
+  const CW = 0.58;                     // rough width per character, in ems
+  const widest = labels ? Math.max(...labels.map((t) => t.length)) : 1;
+  const fits = (room) => (room - 4) / (widest * CW);
+  const stagger = !!labels && fits(slot) < FS && fits(2 * slot) >= FS * 0.85;
+  const axisFS = labels
+    ? Math.min(FS, Math.max(6.5, fits(stagger ? 2 * slot : slot))) : FS;
+  const axisText = (i) => (labels && axisFS >= 6.6) ? labels[i] : String(i + 1);
+  // Two rows live inside the bottom margin the plot already reserves, so
+  // nothing overlaps the lowest gridline.
+  const axisY = (i) => (stagger ? (i % 2 ? H - 4 : H - 16) : H - 8);
+
   let grid = "";
   for (let k = -downRungs; k <= upRungs; k++) {
     const v = tick * k;
@@ -1253,14 +1307,16 @@ function propAnalysis(r, opts = {}) {
     const h = Math.max(3, Math.abs(y0 - yt));
     return `<rect x="${bx(i).toFixed(1)}" y="${(down ? y0 : y0 - h).toFixed(1)}"
         width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${c}"
-        data-tip="Game ${i + 1} — ${v}" style="pointer-events:all;cursor:pointer"/>
+        data-tip="${escapeAttr(labels ? `${labels[i]} — ${v}`
+          : `Game ${i + 1} — ${v}`)}" style="pointer-events:all;cursor:pointer"/>
       <text x="${(bx(i) + bw / 2).toFixed(1)}" y="${
         (down ? y0 + h + FS : yt - 5).toFixed(1)}"
         text-anchor="middle" font-size="${FS}" fill="${c}"
         paint-order="stroke" stroke="var(--panel)" stroke-width="3"
         font-variant-numeric="tabular-nums">${v}</text>
-      <text x="${(bx(i) + bw / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle"
-        font-size="${FS}" fill="var(--text-faint)">${i + 1}</text>`;
+      <text x="${(bx(i) + bw / 2).toFixed(1)}" y="${axisY(i)}" text-anchor="middle"
+        font-size="${axisFS.toFixed(1)}" fill="var(--text-faint)">${
+        escapeHtml(axisText(i))}</text>`;
   }).join("");
   const ly = y(line);
   const pill = `<g>
