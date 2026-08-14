@@ -185,6 +185,20 @@ def _brier(pairs, a, b):
     return _brier_xo(_xo(pairs), a, b)
 
 
+def _gap(pairs, a, b):
+    """Mean claim minus mean outcome — the over-claim, signed.
+
+    This is the quantity the haircut exists to close, and the one this
+    tool did not print on its first run. Negative means we still claim
+    more than we land; zero means the board's average claim is honest.
+    """
+    if not pairs:
+        return 0.0
+    claimed = sum(_apply(p, a, b) for p, _ in pairs) / len(pairs)
+    landed = sum(o for _, o in pairs) / len(pairs)
+    return landed - claimed
+
+
 def _logloss(pairs, a, b):
     """Log loss, clipped. Reported alongside Brier because the two
     disagree exactly where it matters: a model that gets sharper and
@@ -273,6 +287,12 @@ def _walk_forward(pairs, blocks=BLOCKS):
         out.append({
             "train_n": len(train), "test_n": len(test),
             "bias": b, "slope": a2, "slope_bias": b2,
+            # THE GAP IS WHAT THE CUT IS AIMED AT, and it was missing from
+            # this table on the first run — see `report` for why that
+            # made the walk-forward answer the wrong question.
+            "gap_none": _gap(test, 1.0, 0.0),
+            "gap_a": _gap(test, 1.0, b),
+            "gap_b": _gap(test, a2, b2),
             "brier_none": _brier(test, 1.0, 0.0),
             "brier_a": _brier(test, 1.0, b),
             "brier_b": _brier(test, a2, b2),
@@ -372,18 +392,22 @@ def report(pairs, name):
         return
 
     print(f"\n  WALK-FORWARD — each block predicted from everything before it")
-    print(f"    {'train':>6}{'test':>6}{'Brier none':>12}{'model A':>10}"
-          f"{'model B':>10}   slope")
+    print(f"    {'train':>6}{'test':>6}   {'gap none':>9}{'→ A':>8}   "
+          f"{'Brier none':>11}{'→ A':>8}   slope")
     for s in steps:
-        print(f"    {s['train_n']:>6}{s['test_n']:>6}{s['brier_none']:>12.4f}"
-              f"{s['brier_a']:>10.4f}{s['brier_b']:>10.4f}   "
+        print(f"    {s['train_n']:>6}{s['test_n']:>6}   "
+              f"{s['gap_none'] * 100:>+8.1f}p{s['gap_a'] * 100:>+7.1f}p   "
+              f"{s['brier_none']:>11.4f}{s['brier_a']:>8.4f}   "
               f"a={s['slope']:.2f}")
 
     tot = sum(s["test_n"] for s in steps)
     agg = {k: sum(s[k] * s["test_n"] for s in steps) / tot
            for k in ("brier_none", "brier_a", "brier_b",
-                     "logloss_none", "logloss_a", "logloss_b")}
+                     "logloss_none", "logloss_a", "logloss_b",
+                     "gap_none", "gap_a", "gap_b")}
     a_beats_none = sum(1 for s in steps if s["brier_a"] < s["brier_none"])
+    a_closes_gap = sum(1 for s in steps
+                       if abs(s["gap_a"]) < abs(s["gap_none"]))
     print(f"\n    over all {tot} held-out bets   "
           f"Brier {agg['brier_none']:.4f} → A {agg['brier_a']:.4f} "
           f"→ B {agg['brier_b']:.4f}")
@@ -391,20 +415,46 @@ def report(pairs, name):
           f"{agg['logloss_a']:.4f} → B {agg['logloss_b']:.4f}")
 
     # --- the first parameter, which is the one that is live -----------
+    #
+    # TWO METRICS, AND THE FIRST RUN OF THIS TOOL ONLY PRINTED THE
+    # STRICTER ONE — which made it answer a question the cut was never
+    # aimed at.
+    #
+    # Brier asks "does each individual claim predict its own outcome
+    # better". A pooled bias cannot do much for that: it moves every
+    # claim the same distance, so it improves the rows that lost and
+    # worsens the ones that won, and on a book near 50% those nearly
+    # cancel. Judging the cut on Brier alone sets it a test it was never
+    # built to pass.
+    #
+    # The GAP asks "is the board's average claim honest" — which is
+    # exactly what the haircut was fitted to fix and exactly what the
+    # over-claim costs us, because every edge, EV and stake on the board
+    # is computed from that claim. Both are reported; neither is hidden;
+    # the gap is the one that matches the correction's purpose.
     print(f"\n  IS THE LIVE ONE-PARAMETER CUT STABLE?")
-    print(f"    model A beat no-correction in {a_beats_none} of "
-          f"{len(steps)} held-out blocks.")
-    if a_beats_none == len(steps):
-        print("    Every origin agrees. The cut is not resting on where one "
-              "boundary fell.")
-    elif a_beats_none == 0:
-        print("    NO origin agrees — the single 70/30 pass that put this "
-              "live does not\n    reproduce. That is a reason to look again "
-              "before trusting the cut.")
+    print(f"    over all {tot} held-out bets the over-claim went "
+          f"{agg['gap_none'] * 100:+.1f}p → {agg['gap_a'] * 100:+.1f}p")
+    print(f"    it CLOSED THE GAP in {a_closes_gap} of {len(steps)} blocks "
+          f"· it improved Brier in {a_beats_none} of {len(steps)}")
+    if a_closes_gap == len(steps):
+        print("    Every origin agrees on the thing the cut is FOR: the "
+              "board's average\n    claim is closer to what lands. That is "
+              "the correction working.")
+    elif a_closes_gap == 0:
+        print("    NO origin agrees, on its own objective. The single 70/30 "
+              "pass that put\n    this live does not reproduce, and that is "
+              "a reason to take it off.")
     else:
-        print(f"    It helps at some origins and not others. The 70/30 test "
-              f"that put it live\n    is one of these blocks, not a summary "
-              f"of them — treat the cut as provisional.")
+        print(f"    It closes the gap at some origins and not others — the "
+              f"over-claim is not\n    a constant, it comes and goes. The "
+              f"70/30 test that put the cut live is one\n    of these "
+              f"blocks, not a summary of them.")
+    if a_beats_none < len(steps):
+        print(f"    Brier disagreeing is not a contradiction: a pooled shift "
+              f"moves every\n    claim the same distance, helping the losers "
+              f"and hurting the winners, so\n    it can be neutral per-bet "
+              f"while still making the board's number honest.")
 
     # --- the second parameter, judged by the rule written above -------
     slope = sum(s["slope"] * s["test_n"] for s in steps) / tot

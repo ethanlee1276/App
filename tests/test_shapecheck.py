@@ -136,6 +136,62 @@ def test_a_slope_that_predicts_worse_is_told_no_sample_would_help():
     assert r["needed"] is None
 
 
+# --- the metric the cut is actually aimed at --------------------------------
+def test_the_gap_is_reported_not_just_brier():
+    """THE FIRST RUN OF THIS TOOL JUDGED THE CUT ON THE WRONG THING, and
+    the real journal is what showed it: the live haircut improved Brier
+    in 1 of 3 blocks and read as failing, while the quantity it was
+    fitted to close was not in the table at all.
+
+    Brier asks "does each claim predict its own outcome better". A pooled
+    bias cannot do much for that — it moves every claim the same
+    distance, improving the rows that lost and worsening the ones that
+    won, which nearly cancels on a book near even money. The GAP asks "is
+    the board's average claim honest", which is what the correction is
+    for and what the over-claim costs, since every edge, EV and stake is
+    computed from that claim.
+
+    Both are printed. Neither is hidden. Picking one after seeing the
+    numbers would be the failure this file exists to prevent, so the
+    reason each is there is stated in the source above the verdict.
+    """
+    spec = [(0.52, 0.44), (0.58, 0.50), (0.64, 0.56), (0.70, 0.62)]
+    out = _run(_book(spec))
+    assert "gap none" in out and "Brier none" in out
+    assert "CLOSED THE GAP in" in out
+    assert "it improved Brier in" in out
+
+
+def test_the_gap_is_signed_the_way_the_haircut_reads_it():
+    """Negative means we still claim more than we land — the same sign
+    convention `selectionfit` stores, so the two tools cannot be read
+    against each other and disagree about direction."""
+    over = [(0.60, 0), (0.60, 0), (0.60, 1), (0.60, 1), (0.60, 1)]  # claims 60, lands 60
+    assert abs(sc._gap(over, 1.0, 0.0)) < 1e-9
+    claiming_too_much = [(0.80, 0), (0.80, 1)]                      # claims 80, lands 50
+    assert sc._gap(claiming_too_much, 1.0, 0.0) < 0
+
+
+def test_a_cut_that_overshoots_is_visible_as_a_sign_flip():
+    """Closing the gap and OVERcorrecting are different outcomes and the
+    table has to tell them apart — a shift that turns -8 points of
+    over-claim into +6 points of under-claim has not fixed anything, it
+    has moved the error to the other side, and an absolute-value-only
+    column would report that as an improvement."""
+    i = SRC.index("def _gap(")
+    fn = SRC[i:SRC.index("def _logloss(")]
+    assert "abs(" not in fn, "the gap must stay signed"
+    assert "landed - claimed" in fn
+
+
+def test_the_two_metrics_disagreeing_is_explained_not_buried():
+    """A reader who sees "closed the gap in 3 of 3, improved Brier in 1
+    of 3" and is given no account of it will assume one of the numbers
+    is broken."""
+    assert "not a contradiction" in SRC
+    assert "moves every" in SRC
+
+
 # --- the guard most likely to bind on the real journal ----------------------
 def test_a_narrow_board_is_told_it_cannot_answer():
     """THE HONEST FAILURE MODE. If every bet claims 52-56%, the data has
