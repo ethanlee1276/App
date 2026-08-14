@@ -1597,6 +1597,14 @@ function renderLivePicks() {
     if (r.status === "busted")
       return `<span style="color:var(--bad);font-weight:800">${icon('cross')} BUSTED</span>
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${r.current} already — under ${r.line} can’t cash</span>`;
+    /* No chances left: the stat never passed the line, but nothing can
+       move it now — the pitcher is out of the game, or the hitter's last
+       turn through the order has gone by. Without this the row read
+       "tracking · needs 2 more" all night about a bet that was over. */
+    if (r.status === "dead")
+      return `<span style="color:var(--bad);font-weight:800">${icon('cross')} NO CHANCES LEFT</span>
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">stuck on ${r.current} — ${
+          r.market === "strikeouts" ? "out of the game" : "won’t bat again"}</span>`;
     if (r.status === "won_pending")
       return `<span style="color:var(--good);font-weight:800">${icon('check')} WON</span>
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${ml(r) ? "final" : `finished at ${r.current}`} — settles officially overnight</span>`;
@@ -1670,7 +1678,8 @@ function renderLivePicks() {
     const fillPct = Math.min(100, Math.max(0, (r.current / span) * 100));
     const tickPct = Math.min(98.5, (r.line / span) * 100);
     const good = r.status === "cleared" || r.status === "won_pending";
-    const bad = r.status === "busted" || r.status === "lost_pending";
+    const bad = r.status === "busted" || r.status === "lost_pending"
+      || r.status === "dead";
     const color = good ? "var(--good)" : bad ? "var(--bad)" : "var(--brand)";
     return `
       <span style="display:block;position:relative;margin-top:7px;height:5px;border-radius:3px;
@@ -1682,6 +1691,39 @@ function renderLivePicks() {
       </span>
       <span style="display:block;font-size:var(--fs-xs);color:var(--text-mute);margin-top:3px">
         ${r.current} now · line ${r.line}</span>`;
+  };
+  /* What the bet is worth RIGHT NOW.
+
+     Ethan, 2026-08-14: "Are we able too track the win probability of bets
+     we have made live too?" For a moneyline this is the live market's own
+     de-vigged price; for a prop it is ours, computed from what the player
+     has banked against how many cracks at it he has left — because books
+     pull prop markets at first pitch and charge per game to be asked.
+
+     The two are labelled differently on purpose. A market number and a
+     model number are not the same kind of claim, and a reader who cannot
+     tell which one they are looking at cannot tell whether we agree with
+     the book or ARE the book. */
+  const winProb = (r) => {
+    const p = r.live_prob;
+    if (p == null || r.phase !== "live") return "";
+    // Certainty is not a forecast: a banked over says CLEARED and a bet
+    // with no chances left says NO CHANCES LEFT, both in words, in the
+    // verdict column. Repeating either as a percentage adds nothing and
+    // reads as a model boasting about a fact it did not predict.
+    if (p <= 0 || p >= 1) return "";
+    // A long shot at 0.4% is not 0%, and rounding it there would put the
+    // same number on it as a bet that is already dead. The two are very
+    // different things to be holding.
+    const pct = p < 0.005 ? "<1" : p > 0.995 ? ">99" : String(Math.round(p * 100));
+    const src = r.market === "moneyline"
+      ? "live market, de‑vigged"
+      : "our model, from what’s left";
+    const tone = p >= 0.60 ? "var(--good)" : p <= 0.25 ? "var(--bad)" : "var(--text)";
+    return `
+      <span style="display:block;margin-top:5px;font-size:var(--fs-xs);color:var(--text-mute)">
+        <b style="color:${tone};font-size:var(--fs-sm)">${pct}%</b> to cash from here
+        · <span style="opacity:.85">${src}</span></span>`;
   };
   const nLive = rows.filter((r) => r.phase === "live").length;
 
@@ -1709,6 +1751,7 @@ function renderLivePicks() {
               ${icon('warn')} the price has moved off the bar since this was journaled — riding at
               ${american(r.odds)} as placed (also listed under Tonight’s Picks).</span>` : ""}
             ${progressBar(r)}
+            ${winProb(r)}
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
         </div>`).join("")}

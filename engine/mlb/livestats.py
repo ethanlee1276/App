@@ -62,6 +62,44 @@ def parse_live_stats(boxscore: dict) -> dict[str, dict]:
                            total_bases=float(h + d2 + 2 * t3 + 3 * hr))
             if pit.get("strikeOuts") is not None or pit.get("inningsPitched"):
                 row["strikeouts"] = float(pit.get("strikeOuts") or 0)
+            # WHERE HE BATS AND HOW OFTEN HE HAS BATTED. Neither is a
+            # market, so neither belongs in the bar-vs-line display — they
+            # are what `liveprops` needs to work out how many more cracks
+            # at it he has left, which is the whole difference between "he
+            # needs one more base" and "he needs one more base and is not
+            # coming up again".
+            #
+            # `battingOrder` is a three-digit string: "300" is the number
+            # three hitter, "301" the first player to replace him there.
+            # Only the slot matters here, so the last two digits go.
+            order = str(p.get("battingOrder") or "")
+            if order.isdigit():
+                row["spot"] = int(order) // 100
+            if bat.get("plateAppearances") is not None:
+                row["pa"] = float(bat.get("plateAppearances") or 0)
+            if pit.get("battersFaced") is not None:
+                row["bf"] = float(pit.get("battersFaced") or 0)
             if row:
                 out[normalize_name(name)] = row
+    return out
+
+
+def current_pitchers(boxscore: dict) -> set:
+    """Whoever is on the mound for each side, normalized.
+
+    The API lists each team's ``pitchers`` in the order they appeared, so
+    the last id is the one currently throwing. A starter who is NOT in
+    this set has finished: his strikeout prop cannot move again, which
+    turns a live probability into a settled one.
+    """
+    out = set()
+    for side in ("home", "away"):
+        team = ((boxscore.get("teams") or {}).get(side) or {})
+        ids = team.get("pitchers") or []
+        if not ids:
+            continue
+        p = (team.get("players") or {}).get(f"ID{ids[-1]}") or {}
+        name = ((p.get("person") or {}).get("fullName")) or ""
+        if name:
+            out.add(normalize_name(name))
     return out

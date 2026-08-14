@@ -460,7 +460,8 @@ def main() -> None:
     try:
         from engine import ledger as _lp_ledger
         from engine.livepicks import assemble_live_picks
-        from engine.mlb.livestats import parse_live_stats, parse_situation
+        from engine.mlb.livestats import (parse_live_stats, parse_situation,
+                                          current_pitchers)
         from engine.mlb.sources.statslogs import fetch_boxscore, fetch_linescore
         _lpc = _lp_ledger.connect()
         # Two filters used to sit here, and between them they hid most of a
@@ -493,6 +494,11 @@ def main() -> None:
             tuple(_near))]
         progress: dict = {}
         situations: dict = {}
+        # Who is on the mound right now, across every live game. A starter
+        # missing from this set has finished: his strikeout prop cannot
+        # move again, so the tracker reports a certainty rather than a
+        # forecast. Free — it comes out of the boxscore already fetched.
+        pitching: set = set()
         for g in slate.games:
             # Finals too: a finished game's boxscore grades the bet
             # provisionally on the spot instead of going dark until the
@@ -500,7 +506,10 @@ def main() -> None:
             if (g.live and g.live.state in ("live", "final")
                     and getattr(g, "game_pk", 0)):
                 try:
-                    progress.update(parse_live_stats(fetch_boxscore(g.game_pk)))
+                    _box = fetch_boxscore(g.game_pk)
+                    progress.update(parse_live_stats(_box))
+                    if g.live.state == "live":
+                        pitching |= current_pitchers(_box)
                 except Exception:
                     pass
                 if g.live.state == "live":
@@ -562,7 +571,8 @@ def main() -> None:
             print(f"  ⚠️  identity map unavailable: {_exc}")
             _ident = {}
         rows = assemble_live_picks(open_today, result["recommendations"],
-                                   result["games"], progress, _ls, _ident)
+                                   result["games"], progress, _ls, _ident,
+                                   pitching)
         rows += [r for r in assemble_live_picks(open_near,
                                                 result["recommendations"],
                                                 result["games"], progress, _ls,

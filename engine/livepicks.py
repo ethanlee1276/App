@@ -21,11 +21,104 @@ from .sources.oddsapi import normalize_name
 TEAM_MARKETS = {"moneyline", "spread", "team_total"}
 
 
+def _live_prob(bet, market, side, line, current, game, live, progress,
+               rec_means, pitching):
+    """The bet's win probability right now, or None.
+
+    NONE IS A REAL ANSWER HERE and is returned far more often than a
+    number. Every input this needs can be missing — the game may not be
+    live, the boxscore may not name the hitter, total bases may be on the
+    board without the hits and home-run means that give it a shape — and
+    in each case the honest output is no number, not a number computed
+    from a stand-in.
+
+    MONEYLINE is the one market that does NOT go through the model here.
+    Its answer is already sitting on the game: `livelines` pulls the live
+    de-vigged price for the whole slate for one credit, so for a
+    moneyline the market's own number is both cheaper and better than
+    anything we could infer, and using ours instead would be inventing a
+    disagreement with a price we already paid for.
+
+    SPREAD and TOTAL get nothing. They would need a live run-scoring
+    model, which this is not, and the market prices them on separate
+    market keys that cost a credit each per pull. Neither is built.
+    """
+    if (live or {}).get("state") != "live":
+        return None
+    if market == "moneyline":
+        # The live market, de-vigged, from the chart already on the card.
+        t = (game or {}).get("line_track") or {}
+        p_home = t.get("now")
+        if p_home is None:
+            return None
+        pick_home = bet.get("player") == game.get("home")
+        p = float(p_home) / 100.0
+        return p if pick_home else 1.0 - p
+    if market in TEAM_MARKETS or market == "total":
+        return None
+    try:
+        from .mlb import liveprops as lp
+    except Exception:                                         # noqa: BLE001
+        return None
+
+    name = normalize_name(bet.get("player", ""))
+    stat = (progress or {}).get(name) or {}
+    sit = (live or {}).get("situation") or {}
+    inning, half = sit.get("inning"), sit.get("half")
+    if not inning:
+        return None
+    is_home = (bet.get("team") or "") == game.get("home") \
+        or stat.get("side") == "home"
+
+    if market in lp.PITCHER_MARKETS:
+        # A pitcher who has left the game cannot add to his line. That is
+        # not an estimate — it is the whole prop, settled, and it is the
+        # single most useful thing this can say about a strikeout bet.
+        still_in = name in (pitching or set())
+        # He works against the OTHER team's remaining outs.
+        opp_outs = lp.outs_left(inning, half, sit.get("outs", 0),
+                                is_home=not is_home,
+                                home_score=live.get("home_score"),
+                                away_score=live.get("away_score"))
+        left = lp.bf_left(opp_outs, stat.get("bf", 0)) if still_in else 0.0
+        mean = (rec_means.get(name) or {}).get("strikeouts")
+        bf_seen = float(stat.get("bf") or 0)
+        if mean is None or bf_seen <= 0:
+            # Without a rate there is no forecast — but a finished outing
+            # still has a definite answer, and withholding it because the
+            # projection is missing would hide the certain case behind the
+            # uncertain one.
+            if left <= 0 and current is not None:
+                return 1.0 if ((current > line) == (side != "UNDER")) else 0.0
+            return None
+        # Strikeouts per batter faced, from tonight's own projection over
+        # the batters a starter is expected to face.
+        return lp.pitcher_probability(float(mean) / lp.STARTER_BF, line,
+                                      side, current or 0.0, left)
+
+    if market not in lp.HITTER_MARKETS:
+        return None
+    spot = stat.get("spot")
+    at_bat = (progress or {}).get(normalize_name(sit.get("batter", ""))) or {}
+    at_bat_spot = at_bat.get("spot")
+    if not spot or not at_bat_spot:
+        return None
+    rates = lp.rates_for(market, rec_means.get(name) or {}, spot)
+    if rates is None:
+        return None
+    team_outs = lp.outs_left(inning, half, sit.get("outs", 0), is_home,
+                             live.get("home_score"), live.get("away_score"))
+    pa_left = lp.remaining_pa(spot, at_bat_spot, team_outs)
+    return lp.hitter_probability(rates, market, line, side,
+                                 current or 0.0, pa_left)
+
+
 def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
                         games: list[dict],
                         progress: dict | None = None,
                         longshots: list[dict] | None = None,
-                        identity: dict | None = None) -> list[dict]:
+                        identity: dict | None = None,
+                        pitching: set | None = None) -> list[dict]:
     """One row per open journaled pick whose game is LIVE right now.
 
     ``progress``: {normalized player name: {market: current value}} from
@@ -42,6 +135,11 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
     — who a player IS, independent of tonight's prices. THIS IS THE ONE
     SOURCE HERE THAT SURVIVES FIRST PITCH, and the reason it had to exist
     is below.
+
+    ``pitching``: normalized names of whoever is currently on the mound,
+    from engine.mlb.livestats.current_pitchers. A starter absent from it
+    has finished, which turns his strikeout prop from a forecast into a
+    settled fact.
     """
     progress = progress or {}
     rec_idx = {(normalize_name(r.get("player", "")), r.get("market", "")): r
@@ -83,6 +181,20 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
     for r in list(recommendations) + list(longshots or []):
         player_idx.setdefault(normalize_name(r.get("player", "")), r)
     id_idx = {normalize_name(k): v for k, v in (identity or {}).items()}
+
+    # TONIGHT'S OWN PROJECTIONS, per player per market. The live
+    # probability is built from these rather than from a fresh model run,
+    # so the number on the tracker and the number that priced the bet come
+    # from one source. Both boards are read: a home-run long shot is not on
+    # the main list, and its mean is exactly what its live probability
+    # needs. The main board wins a collision, matching `rec_idx` above.
+    rec_means: dict[str, dict] = {}
+    for r in list(longshots or []) + list(recommendations):
+        proj = r.get("projection")
+        if proj is None:
+            continue
+        rec_means.setdefault(normalize_name(r.get("player", "")), {})[
+            r.get("market", "")] = float(proj)
 
     def _game_for(team, opp=None, gn=0):
         matches = []
@@ -134,6 +246,11 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             "line": float(b.get("line") or 0),
             "odds": b.get("odds"), "stake_units": b.get("stake_units") or 0,
             "current": None, "status": "unmapped", "phase": "upcoming",
+            # Present and empty, not absent. A bet we could not place on a
+            # game has no live probability by definition, and every row
+            # carrying the same keys is what stops a consumer from having
+            # to know which shape it got.
+            "live_prob": None,
             "team": "", "headshot": face, "game": {},
             "category": b.get("category", "main"),
         }
@@ -224,6 +341,18 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
                 won = (actual > line) == (side == "OVER")
                 status = "won_pending" if won else "lost_pending"
                 current = actual
+        live_prob = _live_prob(b, market, side, line, current, g,
+                               live, progress, rec_means, pitching)
+        # A BET WITH NO CHANCES LEFT IS NOT STILL RUNNING. The status
+        # buckets above only knew one way for a bet to die — the stat
+        # passing the line the wrong way — so a starter pulled two
+        # strikeouts short read "tracking · needs 2 more" for the rest of
+        # the night. He is not getting them; there is nobody left for him
+        # to face. Same for a hitter whose last turn through the order has
+        # gone by. The probability already knows this, and it is the only
+        # thing that does, so it is what says so.
+        if status == "tracking" and live_prob == 0.0:
+            status = "dead"
         out.append({
             "player": b.get("player"), "market": market,
             "market_label": (rec or {}).get("market_label")
@@ -233,6 +362,13 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             "side": side, "line": line,
             "odds": b.get("odds"), "stake_units": b.get("stake_units") or 0,
             "current": current, "status": status, "phase": phase,
+            # WHAT THE BET IS WORTH RIGHT NOW. Ethan, 2026-08-14: "Are we
+            # able to track the win probability of bets we have made live
+            # too?" Not from the book — props vanish from the board at
+            # first pitch and cost per game to ask for — but from what the
+            # player has banked against what he has left to bank it in.
+            # None whenever any input is missing; see engine/mlb/liveprops.
+            "live_prob": live_prob,
             # Which journal bucket this came from. The same player can hold a
             # bet in two buckets at once — a long shot and a stale-line flag
             # on the same homer — so name + market alone does not identify a
@@ -257,7 +393,7 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
         })
     # Live action first (good news leads), then finals awaiting the official
     # settle, then tonight's not-yet-started bets.
-    order = {"cleared": 0, "tracking": 1, "busted": 2,
+    order = {"cleared": 0, "tracking": 1, "busted": 2, "dead": 2,
              "won_pending": 3, "push_pending": 4, "lost_pending": 5,
              "final_pending": 6, "upcoming": 7, "unmapped": 8}
     out.sort(key=lambda r: (order.get(r["status"], 7), -(r["stake_units"] or 0)))
