@@ -12167,12 +12167,26 @@ async function renderHomePerf() {
       _perfCache = await r.json();
     }
   } catch (e) { host.innerHTML = ""; return; }
-  const o = _perfCache.overall || {};
-  if (!o.settled) { host.innerHTML = ""; return; }
+  const all = _perfCache.overall || {};
+  if (!all.settled) { host.innerHTML = ""; return; }
   // Range chips on the overview chart (Ethan's desktop render,
-  // 2026-08-11). They window the CHART; the tiles stay all-time and say
-  // so — mixing a 1-week chart with all-time tiles unlabeled is exactly
-  // the confusion the Results page's range block exists to avoid.
+  // 2026-08-11). They used to window the CHART ONLY, with the tiles
+  // staying all-time — and Ethan caught it on the phone: "when I click
+  // the 1 week button here for the record, it still displays all the
+  // information from our all time record."
+  //
+  // The old note here claimed the split was the safe choice, on the
+  // grounds that a windowed chart over unlabelled all-time tiles is
+  // confusing. It IS confusing — that is the bug, not the defence. A
+  // panel with a range control on it is making one statement about one
+  // period, and half of it silently answering a different question is
+  // worse than either option, because nothing on the card says which
+  // half is which. The number a bettor reads first was the wrong one.
+  //
+  // Every figure below now comes from the SAME window: the curve carries
+  // per-day wins, losses, stake, dollars and each day's own break-even,
+  // so a range block is arithmetic on real rows rather than a scaled
+  // guess at them.
   const full = _perfCache.curve || [];
   const spanDays = full.length > 1
     ? (new Date(full[full.length - 1].date) - new Date(full[0].date)) / 864e5 : 0;
@@ -12185,9 +12199,47 @@ async function renderHomePerf() {
   const base = windowed.length && windowed[0] !== full[0]
     ? full[full.indexOf(windowed[0]) - 1].cum_u : 0;
   const curve = windowed.map((p) => ({ ...p, cum_u: +(p.cum_u - base).toFixed(2) }));
+  // THE WINDOW'S OWN RECORD. Summed from the days on screen; falls back
+  // to the stored all-time block when the range IS all-time, so the
+  // headline figures still come from `performance()` — the one place
+  // that decides what the record means — rather than being recomputed
+  // slightly differently here.
+  const windowStats = (rows) => {
+    const sum = (k) => rows.reduce((t, r) => t + (Number(r[k]) || 0), 0);
+    const w = sum("w"), l = sum("l"), n = sum("n");
+    const staked = sum("staked"), net = sum("day_u");
+    const beN = sum("be_n"), beSum = sum("be_sum");
+    return {
+      settled: n, wins: w, losses: l, pushes: Math.max(0, n - w - l),
+      net_units: +net.toFixed(2),
+      net_dollars: rows.some((r) => r.day_d != null) ? +sum("day_d").toFixed(2) : null,
+      units_staked: +staked.toFixed(2),
+      roi: staked ? net / staked : 0,
+      win_rate: (w + l) ? w / (w + l) : 0,
+      breakeven: beN ? beSum / beN : null,
+    };
+  };
+  // An older record.json has no per-day dollars or break-even. Rather
+  // than print a window computed from half the fields, the panel says it
+  // is showing the whole book until the ledger is rebuilt — a stale
+  // build should cost the feature, never the truth.
+  const canWindow = full.every((r) => r.be_n != null && r.day_d != null);
+  const o = (!isFinite(days) || !canWindow || !curve.length)
+    ? all : windowStats(curve);
+  const partial = isFinite(days) && !canWindow;
   const perfChips = avail.length > 1 ? `<span class="ra-ranges">${avail.map(([k]) =>
     `<button class="ra-range ${k === rk ? "active" : ""}"
        onclick="_perfSetRange('${k}')">${k.toUpperCase()}</button>`).join("")}</span>` : "";
+  // What the numbers cover, in words, on every range including all-time.
+  // The chip says which button is lit; this says what was counted, which
+  // is the thing that was ambiguous.
+  const scopeLine = partial
+    ? `<span class="perf-window">showing the whole book — rebuild the
+       record for per-week figures</span>`
+    : `<span class="perf-window">${!isFinite(days)
+        ? `all ${all.settled} settled bet(s)`
+        : `${o.settled} settled bet(s) over ${curve.length} graded day(s)`
+      }</span>`;
   const pcol = (v) => v > 0 ? "var(--good)" : v < 0 ? "var(--bad)" : "var(--text-mute)";
   const u = (v, sign) => (sign && v > 0 ? "+" : "") + Number(v).toFixed(2) + "u";
   // Sparkline: cumulative units over the last 30 graded days.
@@ -12233,6 +12285,7 @@ async function renderHomePerf() {
         <div class="perf-head"><span class="rail-title">Your performance</span>
           ${perfChips || `<span class="perf-window">${curve.length > 1
             ? "last " + curve.length + " graded days" : "the whole book"}</span>`}</div>
+        ${perfChips ? scopeLine : ""}
         ${(() => {
           // The render's "TODAY'S PROFIT/LOSS" headline — the most recent
           // graded slate, dated honestly when it isn't today's.
@@ -12249,7 +12302,8 @@ async function renderHomePerf() {
             <b style="color:${pcol(o.net_units)}">${u(o.net_units, true)}</b>
             ${o.net_dollars != null ? `<span class="sub2">${(o.net_dollars < 0 ? "−$" : "+$") + Math.abs(o.net_dollars).toFixed(2)}</span>` : ""}</div>
           <div class="perf-tile"><span class="k">Win rate</span><b>${(100 * (o.win_rate || 0)).toFixed(1)}%</b>
-            <span class="sub2">break-even ${(100 * (o.breakeven || 0)).toFixed(1)}%</span></div>
+            ${o.breakeven != null ? `<span class="sub2">break-even ${
+              (100 * o.breakeven).toFixed(1)}%</span>` : ""}</div>
           <div class="perf-tile"><span class="k">ROI</span>
             <b style="color:${pcol(o.roi)}">${(o.roi > 0 ? "+" : "") + (100 * (o.roi || 0)).toFixed(1)}%</b></div>
           <div class="perf-tile"><span class="k">Record</span><b>${w}&#8211;${l}${p ? "&#8211;" + p : ""}</b></div>

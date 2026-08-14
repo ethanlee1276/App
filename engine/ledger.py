@@ -2788,9 +2788,37 @@ def pnl_curve(conn, sport: str | None = None) -> list[dict]:
 
     One point per date with anything settled: that day's net units, the
     running total, and how many bets graded."""
+    # Everything a DATE RANGE needs to state its own record, so the site
+    # never has to fall back on all-time numbers under a windowed chart.
+    #
+    # Ethan, 2026-08-13, on the phone: "when I click the 1 week button
+    # here for the record, it still displays all the information from our
+    # all time record." He is right, and the data for the fix was already
+    # half here — w, l and staked have ridden along since this function
+    # was written, and the tiles never read them.
+    #
+    # Two more are added because a window CANNOT derive them:
+    #   * dollars, which are not units × a constant. A paper row settles
+    #     with pnl_dollars 0 by construction, so scaling a window's units
+    #     by the all-time dollars-per-unit would run money through the
+    #     bankroll that never existed.
+    #   * the break-even, which is the mean of each bet's OWN implied
+    #     rate. A week of −200 favourites needs 66.7% and a week of +150
+    #     dogs needs 40%; carrying the all-time average into either is
+    #     the same category of error, one column over. The sum and the
+    #     count ride separately so any set of days can be averaged
+    #     without weighting one day's price by another day's volume.
+    be = ("CASE WHEN odds > 0 THEN 100.0 / (odds + 100.0) "
+          "ELSE -odds / (-odds + 100.0) END")
+    graded = "status != 'push' AND odds IS NOT NULL AND odds != 0"
     q = ("SELECT date, SUM(pnl_units) AS day_u, COUNT(*) AS n, "
          "SUM(status='won') AS w, SUM(status='lost') AS l, "
-         "SUM(stake_units) AS staked FROM bets "
+         "SUM(stake_units) AS staked, "
+         "SUM(COALESCE(pnl_dollars, 0)) AS day_d, "
+         "SUM(COALESCE(stake_dollars, 0)) AS staked_d, "
+         f"SUM(CASE WHEN {graded} THEN {be} ELSE 0 END) AS be_sum, "
+         f"SUM(CASE WHEN {graded} THEN 1 ELSE 0 END) AS be_n "
+         "FROM bets "
          "WHERE status IN ('won','lost','push') "
          "AND category IN ('main','paper') "
          "AND stake_units > 0")
@@ -2808,7 +2836,11 @@ def pnl_curve(conn, sport: str | None = None) -> list[dict]:
         out.append({"date": r["date"], "day_u": round(r["day_u"] or 0.0, 2),
                     "cum_u": round(cum, 2), "n": r["n"],
                     "w": r["w"] or 0, "l": r["l"] or 0,
-                    "staked": round(r["staked"] or 0.0, 2)})
+                    "staked": round(r["staked"] or 0.0, 2),
+                    "day_d": round(r["day_d"] or 0.0, 2),
+                    "staked_d": round(r["staked_d"] or 0.0, 2),
+                    "be_sum": round(r["be_sum"] or 0.0, 4),
+                    "be_n": r["be_n"] or 0})
     return out
 
 
