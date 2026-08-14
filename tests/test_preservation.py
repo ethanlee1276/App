@@ -314,10 +314,24 @@ def test_no_test_reads_the_live_board_or_the_real_database():
       * test_why_pick copied the REAL board aside, edited it, and put it back
         — on the machine that runs the builds, with launch.py possibly
         mid-refresh
+      * test_prop_page read web/data/recommendations.json for its `logs`
+        array, so it was green on the laptop and red in every clone
 
     Each looked like a code defect and was really a difference in tonight's
     games. A test is allowed to touch these paths; it is not allowed to touch
     them without building its own copy first, and tempfile is the tell.
+
+    THE FOURTH ONE SLIPPED THROUGH THIS GUARD, which is why the scan is no
+    longer one line at a time. test_prop_page named the path on one line and
+    opened it on the next:
+
+        path = os.path.join(ROOT, "web", "data", "recommendations.json")
+        rows = json.load(open(path, encoding="utf-8"))["recommendations"]
+
+    Neither line carries both halves, so a per-line AND matched nothing —
+    and splitting a long call over two lines is the normal way to write it,
+    not a way to dodge the check. So a name bound to a live path is now
+    followed to wherever it is read.
     """
     import re
     here = os.path.dirname(os.path.abspath(__file__))
@@ -326,13 +340,24 @@ def test_no_test_reads_the_live_board_or_the_real_database():
     # opening it, and flagging that is noise that gets a guard switched off.
     live = re.compile(r'"web",\s*"data"|web/data|DEFAULT_DB|calibration\.json')
     uses = re.compile(r'open\(|read_text|json\.load|connect\(|cwd=_?ROOT')
+    # `x = <a live path>` — the binding that carries the path to the read.
+    binds = re.compile(r'^\s*(\w+)\s*=\s*(.+)$')
     offenders = {}
     for name in sorted(os.listdir(here)):
         if not (name.startswith("test_") and name.endswith(".py")):
             continue
         src = open(os.path.join(here, name), encoding="utf-8").read()
-        hits = [ln for ln in src.splitlines()
-                if live.search(ln) and uses.search(ln)]
+        lines = src.splitlines()
+        hits = [ln for ln in lines if live.search(ln) and uses.search(ln)]
+        # Names bound to a live path, then read somewhere else in the file.
+        # The lookbehind keeps a variable called `path` from matching the
+        # `path` inside `os.path.join`, which flagged three innocent lines.
+        carriers = [re.compile(r'(?<![\w.])' + re.escape(m.group(1)) + r'\b')
+                    for ln in lines
+                    if (m := binds.match(ln)) and live.search(m.group(2))]
+        hits += [ln for ln in lines
+                 if uses.search(ln) and any(c.search(ln) for c in carriers)
+                 and not (binds.match(ln) and live.search(ln))]
         if not hits:
             continue
         # A fixture of its own is the licence. tempfile/mkdtemp means the

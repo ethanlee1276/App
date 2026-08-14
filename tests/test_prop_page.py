@@ -14,11 +14,12 @@ in the payload, none of it on screen. The page states the case from data
 we already had rather than inventing a narrative to fill a layout.
 """
 
-import json
 import os
 import re
+import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
 HTML = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
@@ -27,18 +28,40 @@ HTML = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
 def test_the_payload_really_carries_per_game_logs():
     """The page's whole claim is that this is measured, not narrated. If
     the build ever stops shipping `logs`, the page becomes a shell and
-    this fails before a user finds out."""
-    path = os.path.join(ROOT, "web", "data", "recommendations.json")
-    rows = json.load(open(path, encoding="utf-8"))["recommendations"]
-    withlogs = [r for r in rows if r.get("logs")]
-    assert withlogs, "no recommendation carries per-game logs"
-    g = withlogs[0]["logs"][0]
-    # The four fields the table is built from, present on every sport.
-    for k in ("value", "opponent", "home"):
-        assert k in g, f"{k} missing from a game log"
-    assert "week" in g or "date" in g, "a log row must be placeable in time"
-    form = withlogs[0].get("form") or {}
-    assert "last5" in form and "season" in form
+    this fails before a user finds out.
+
+    Read against the BUILDERS, not against web/data/recommendations.json.
+    That file is a build artefact and web/data/ is gitignored, so the
+    first version of this test asserted something only Ethan's laptop
+    could satisfy: green there, red in every fresh clone, for a reason
+    that has nothing to do with the code being wrong. Same mistake
+    test_prose.py made reaching for the live hypothesis store, and
+    test_doctor_learning.py reading the real rung files.
+
+    Driving the committed sample slates through the real pipelines costs
+    a few seconds and buys three things the old form did not have: it
+    holds on any machine, it names the builder that broke rather than the
+    board that happened to be sitting on disk, and it covers BOTH sports
+    instead of whichever one was built last."""
+    from engine.mlb.pipeline import run_mlb_slate
+    from engine.pipeline import run_slate
+
+    for sport, out in (
+        ("nfl", run_slate(os.path.join(ROOT, "data", "sample_slate.json"))),
+        ("mlb", run_mlb_slate(os.path.join(ROOT, "data",
+                                           "mlb_sample_slate.json"))),
+    ):
+        rows = out["recommendations"]
+        withlogs = [r for r in rows if r.get("logs")]
+        assert withlogs, f"{sport}: no recommendation carries per-game logs"
+        g = withlogs[0]["logs"][0]
+        # The fields the table is built from, present on every sport.
+        for k in ("value", "opponent", "home"):
+            assert k in g, f"{sport}: {k} missing from a game log"
+        assert "week" in g or "date" in g, \
+            f"{sport}: a log row must be placeable in time"
+        form = withlogs[0].get("form") or {}
+        assert "last5" in form and "season" in form, f"{sport}: form ladder"
 
 
 def test_a_prop_is_identified_by_what_it_is_not_where_it_sat():
