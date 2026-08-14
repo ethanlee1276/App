@@ -272,7 +272,17 @@ def build_live_slate(date: str, season: int | None = None,
                 box = fetch_boxscore(game_pk) if game_pk else {}
             except DataUnavailable:
                 box = {}
-            lineups_confirmed = bool(box.get("teams", {}).get("home", {}).get("battingOrder"))
+            # BOTH cards, not just the home one. This flag is the §5 hold on
+            # every hitter in the game, and pass 2 below fills an unposted
+            # side from `projected_lineup` — last game's order. Reading only
+            # the home side meant that the moment the home card posted, every
+            # AWAY hitter cleared the gate on a projected spot with nothing
+            # official behind it: `lineup_spot != 0` because we guessed it,
+            # `lineups_confirmed` True because the other dugout was ready.
+            _cards = box.get("teams", {})
+            lineups_confirmed = all(
+                bool(_cards.get(side, {}).get("battingOrder"))
+                for side in ("home", "away"))
 
             game = MLBGame(home=home_ab, away=away_ab, park=park,
                            date=day.get("date", date), kickoff=g.get("gameDate", ""),

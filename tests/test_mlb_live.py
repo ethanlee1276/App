@@ -228,7 +228,10 @@ def test_build_live_slate_offline():
         slate = sl.build_live_slate("2024-06-20", hitter_markets=(TOTAL_BASES,))
         assert slate.games and slate.props
         assert slate.games[0].home == "CHC" and slate.games[0].park == "wrigley"
-        assert slate.games[0].lineups_confirmed is True
+        # BOX posts the home card and leaves the away one empty, which is
+        # exactly the half-posted state the flag has to report honestly:
+        # the game is NOT confirmed until both dugouts have handed one in.
+        assert slate.games[0].lineups_confirmed is False
         # 3 confirmed home hitters (1 market each) + 1 probable pitcher K prop.
         hitters = [p for p in slate.props if p.market == TOTAL_BASES]
         pitchers = [p for p in slate.props if p.market == STRIKEOUTS]

@@ -148,16 +148,44 @@ def main() -> None:
         if kicks:
             import time as _t
             _now = _t.time()
-            _in_window = oddsbudget.prime_window(kicks, _now)
+            # ESTIMATE IT UNDER THE RULES THAT WILL BE IN FORCE, NOT THE
+            # ONES IN FORCE NOW.
+            #
+            # Ethan, 2026-08-14, at 11:38 with a 2:20 first pitch: "how do
+            # we have 711 no props found when there is games at start in
+            # like 2 hrs". The line above it read "today's pricing starts
+            # 11:50 AM · next paid pull 2:21 PM" — twelve minutes before
+            # the window opened, and a minute AFTER the first game began.
+            # Both numbers came off the same clock and contradicted each
+            # other, and the one a reader acts on says the board will not
+            # be priced until the game is already under way.
+            #
+            # The pacer was never going to behave that way. It re-decides
+            # every cycle, and at 11:50 the window opens: the off-peak
+            # stretch comes off, the burst share goes on, and the gap
+            # collapses. The ESTIMATE was the thing frozen in the past —
+            # computed with off-peak pacing that had minutes left to live.
+            #
+            # So it is computed as the pacer will compute it once the
+            # window is open, and floored at the window opening: no paid
+            # pull happens before then by design, and none is held past it
+            # by arithmetic left over from the morning.
+            _opens = min(kicks) - oddsbudget.PRIME_BEFORE_S
+            _at = max(_now, _opens)          # the moment being predicted
+            _in_window = oddsbudget.prime_window(kicks, _at)
             _kw = {}
             if _in_window is True:
                 _kw["active_hours"] = max(
-                    1.0, oddsbudget._window_hours_left(kicks, _now))
+                    1.0, oddsbudget._window_hours_left(kicks, _at))
             _share = oddsbudget.PRIME_BURST if _in_window is True else 1.0
             _gap = oddsbudget.min_seconds_between(
                 len(slate.games) + 1, _st, share=_share, **_kw)
             if _gap != float("inf"):
-                odds_status["next_pull_at"] = _priced + _gap if _priced else _now
+                _next = (_priced + _gap) if _priced else _now
+                # Off-peak the pacer stretches the gap; inside the window it
+                # does not. Predicting a moment inside the window with an
+                # un-stretched gap is what the pacer will actually apply.
+                odds_status["next_pull_at"] = max(_next, _opens)
     except Exception:      # telemetry must never fail a build
         pass
 
