@@ -119,9 +119,31 @@ def test_an_unknown_market_draws_nothing():
     assert "values:" not in tail.split("return null;")[1]
 
 
-def test_a_team_with_no_history_is_not_a_door():
+def test_the_chart_needs_history_but_the_DOOR_does_not():
+    """Two different questions, and conflating them is how this bug comes
+    back wearing a disguise.
+
+    The CHART needs three games — fewer is not a trend, it is a rumour.
+    The DOOR does not: a game bet's page carries the model's number
+    against the market's, the edge, the reasons and the model's own
+    objections whether or not we have ingested that club's results.
+
+    Gating the door on the chart made the card's clickability depend on
+    the history DB — so a thin ingest, a season boundary or a club we
+    have not stored would silently reproduce the exact symptom this file
+    exists to fix, arriving by a route that has nothing to do with the
+    click handling. The page states a missing series in a line instead.
+    """
     b = _series_block()
-    assert "rows.length < 3" in b, "three games is the floor the chart itself needs"
+    assert "rows.length < 3" in b, "three games is the floor the chart needs"
+    fn = APP[APP.index("function gameBetOpenable("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert "gameBetSeries" not in fn, \
+        "the door is gated on the chart again — a thin ingest makes the " \
+        "card unclickable and it looks like the click is broken"
+    i = APP.index("function renderGameBetPage(")
+    assert "No recent results for this team yet" in APP[i:i + 4000], \
+        "a missing chart must be stated, not left as an empty frame"
 
 
 # --- the chart has to be able to go below zero ------------------------------

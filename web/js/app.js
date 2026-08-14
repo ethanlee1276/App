@@ -3449,8 +3449,25 @@ function gameBetChart(b) {
   }, { head: s.head, what: s.what, legend: s.legend, sideLabel: s.sideLabel });
 }
 
+/* A GAME BET IS ALWAYS A DOOR, and that is a deliberate departure from
+   the rule player props follow.
+
+   `propOpenable` demands history because the prop page's whole centre is
+   the chart — open one without a game log and you get an empty frame. A
+   game bet's page is not like that: the model's number against the
+   market's, the edge, the reasons and the model's own objections are all
+   there whether or not we have ingested three of that club's games. The
+   door leads somewhere either way.
+
+   It also removes a way for this to look broken through no fault of the
+   page. `team_recent` is built from the history DB at build time, so a
+   thin ingest, a season boundary or a club we have not stored yet would
+   make the card silently unclickable again — which is exactly the
+   symptom Ethan reported, arriving by a different route. When the series
+   is missing the page says so in a line, which is a fact rather than a
+   dead end. */
 function gameBetOpenable(b) {
-  return !!(b && b.home && b.away && gameBetSeries(b));
+  return !!(b && b.home && b.away && (b.market || b.bet_type));
 }
 
 function gameBetAttrs(b) {
