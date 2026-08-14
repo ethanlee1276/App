@@ -316,12 +316,32 @@ def api_keys(explicit: str | None = None) -> list[str]:
 
 
 def get_api_key(explicit: str | None = None) -> str:
-    """The key to spend next: the first on the ring with credits left.
+    """The key to spend next: the SMALLEST live balance on the ring.
 
-    A key we have never called is not spent — unknown is not zero. If every
-    key is known to be empty this still returns the first, so the caller gets
-    the API's own "out of credits" answer rather than a guess from a state
-    file that may be a month stale.
+    Ethan, 2026-08-14, holding one 5,284-credit key and one 100,000-credit
+    key: "use up the small key first."
+
+    That was already happening, but only by accident — the ring is ordered
+    by environment variable (``ODDS_API_KEY``, then ``_2``, ``_3``) and the
+    small key happened to be the primary. Swap the two values and the
+    behaviour silently inverts, draining the big plan while a nearly-empty
+    one sits untouched. A preference nobody stated is a preference nobody
+    can rely on, so it is a rule now.
+
+    WHY SMALLEST-FIRST IS THE RIGHT POLICY. Plans refill on their own
+    monthly cycles and a part-used small plan is the perishable one: credits
+    left on it at the reset are gone. Draining it first converts the whole
+    ring into "the big plan, plus whatever the small ones still had".
+
+    A key we have never called is NOT spent — unknown is not zero — but it
+    is also not known to be small, so it sorts after every measured key and
+    behind ring order. That costs one cycle at most: `record_quota` writes a
+    balance for every key the moment it is used, so a fresh ring follows
+    environment order once and is sorted by real balances thereafter.
+
+    If every key is known to be empty this still returns the first, so the
+    caller gets the API's own "out of credits" answer rather than a guess
+    from a state file that may be a month stale.
     """
     ring = api_keys(explicit)
     if not ring:
@@ -331,10 +351,19 @@ def get_api_key(explicit: str | None = None) -> str:
             "key at https://the-odds-api.com."
         )
     try:
-        from ..oddsbudget import key_is_spent
-        for k in ring:
-            if not key_is_spent(k):
-                return k
+        from ..oddsbudget import key_is_spent, key_state
+        live = [k for k in ring if not key_is_spent(k)]
+        if not live:
+            return ring[0]
+
+        def _rank(item):
+            i, k = item
+            rem = key_state(k).get("remaining")
+            # float("inf") for an unmeasured key: it goes last among live
+            # keys, and ring position breaks every tie.
+            return (float("inf") if rem is None else float(rem), i)
+
+        return min(((i, k) for i, k in enumerate(live)), key=_rank)[1]
     except Exception:                    # budgeting must never block a fetch
         pass
     return ring[0]
