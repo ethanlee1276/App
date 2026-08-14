@@ -1257,7 +1257,25 @@ async function renderBestBets() {
         : `That sentence is the system working, not failing — every market tonight either
            missed the tier’s edge bar, failed a gate, or graded below 70. Loosening the
            sliders shows what was held and why.`}</p>
-      ${censusFunnelHTML()}
+      ${/* THE FUNNEL IS NOT REPEATED HERE. Ethan, 2026-08-14: "we are
+            showing 'where props died' twice."
+
+            Two independent blocks were drawing it, and on the one night
+            that matters — nothing recommended — both fired: this card,
+            and the board's own empty message a scroll below. Same table,
+            same numbers, twice on one screen, which reads as a rendering
+            fault rather than as an explanation.
+
+            It stays on the BOARD rather than here, and that is a
+            deliberate choice rather than a coin flip: the funnel is an
+            answer to "why is this list blank", the list is down there,
+            and the sliders its copy tells you to loosen sit beside it.
+            This card keeps its own sentence, which stands on its own.
+
+            A first-come-wins flag would have been the other way to do it
+            and it would have been worse — `renderBestBets` is async, so
+            which block won the race would change between refreshes and
+            the table would appear to move around the page. */""}
     </div>`;
 
   // ======= SPACE 2: tracked signals — measurements, NOT picks =======
