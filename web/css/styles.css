@@ -4359,6 +4359,24 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .lb-table b { text-align: right; font-family: var(--font-mono);
   font-size: var(--fs-sm); }
 
+/* Live line track — how the market has moved since first pitch. The chart
+   is a plain sparkline; everything here is the frame around it. */
+.lb-track { margin-top: 10px; padding-top: 9px;
+  border-top: var(--hairline) solid var(--border); }
+.lb-track-head { display: flex; justify-content: space-between; align-items: baseline;
+  gap: 10px; color: var(--text-mute); font-size: var(--fs-xs);
+  text-transform: uppercase; letter-spacing: .07em; }
+.lb-track .spark { width: 100%; height: 52px; margin-top: 4px; display: block; }
+.lb-move { font-family: var(--font-mono); letter-spacing: 0; }
+.lb-move.up { color: var(--good); }
+.lb-move.down { color: var(--bad); }
+.lb-move.flat { color: var(--text-mute); }
+/* Readable tier, not faint: this sentence says whose number the chart is
+   showing, which is the difference between reading the market's opinion
+   and reading ours. Text a reader must read is never demoted. */
+.lb-track-foot { margin: 3px 0 0; color: var(--text-mute);
+  font-size: var(--fs-xs); line-height: var(--lh-snug); }
+
 /* Props — one tile per market priced tonight. */
 .pm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 9px; margin: 4px 0 16px; }

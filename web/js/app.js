@@ -12662,7 +12662,45 @@ function liveCardHTML({ sport, g, bets }) {
       <span class="lb-team">${mark(g.home)}<em>${escapeHtml(g.home)}</em></span>
     </div>
     ${linesGrid}
+    ${lineTrackHTML(g)}
   </div>`;
+}
+
+/* How the market has moved since first pitch.
+
+   Ethan, 2026-08-14: "when games are live, can we track the live line
+   like this." It costs one credit a pull for the entire slate (see
+   engine/livelines.py), and drawing it costs nothing at all — the
+   history is already on disk by the time this runs.
+
+   THE AXIS IS PROBABILITY, NOT THE PRICE. American odds have a hole in
+   the middle: a team sliding from a hair-favourite to a hair-dog goes
+   −101 → +101 and never takes a value between, so a chart of the raw
+   number draws a cliff where the market barely twitched. The de-vigged
+   probability is the same information, continuous, on an axis a reader
+   already knows how to read.
+
+   The dashed rule sits at 50% — the point where the market stops calling
+   this team the favourite, which is the one crossing worth marking. */
+function lineTrackHTML(g) {
+  const t = g && g.line_track;
+  if (!t || !(t.values || []).length) return "";
+  const move = t.now - t.opened;
+  // A move of nothing is not a story; only a real swing gets a colour.
+  const cls = Math.abs(move) < 1 ? "flat" : (move > 0 ? "up" : "down");
+  const pct = (v) => `${Number(v).toFixed(0)}%`;
+  return `
+    <div class="lb-track">
+      <div class="lb-track-head">
+        <span>${escapeHtml(t.home)} win probability, live market</span>
+        <span class="lb-move ${cls}">${pct(t.opened)} → ${pct(t.now)}</span>
+      </div>
+      ${sparkline(t.values, { w: 268, h: 52, line: 50, labels: t.labels,
+                              stroke: "var(--brand)", minSpan: 20 })}
+      <p class="lb-track-foot">${t.points} price${t.points === 1 ? "" : "s"}
+        pulled since first pitch · de‑vigged across the books quoting both
+        sides · the market’s number, not ours</p>
+    </div>`;
 }
 
 /* The little diamond, occupied bases lit — the render's center graphic. */

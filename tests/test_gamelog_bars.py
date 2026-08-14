@@ -46,9 +46,15 @@ def test_every_player_prop_chart_is_bars_now():
     # which is the only shape that can carry a run line.
     assert APP.count("gameBetChart(r)") == 1
     assert APP.count("gamelogBars(r.recent_values") == 1
-    # The profile trend and the meme price chart stay lines: those ARE
-    # continuous quantities, where the connection between points is real.
-    assert APP.count("sparkline(") == 2
+    # The profile trend, the meme price chart and the live line track stay
+    # LINES: those ARE continuous quantities, where the segment between two
+    # points is a real claim — the price existed at every instant between
+    # two pulls, unlike a player's hit total between two games, which has
+    # no value on the days he did not play. The live track joined this
+    # list on 2026-08-14 and belongs in it for exactly that reason; a
+    # fourth line chart over a per-GAME quantity would not.
+    assert APP.count("sparkline(") == 3
+    assert APP.count("sparkline(t.values") == 1     # the live line track
 
 
 PA = VIS[VIS.index("function propAnalysis"):VIS.index("/* ---------------- Game-log bars")]

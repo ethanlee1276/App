@@ -519,7 +519,8 @@ def list_events(api_key: str | None = None, ttl: int = 300,
 def fetch_sport_odds(sport: str, api_key: str | None = None,
                      markets: list[str] | None = None,
                      books: list[str] | None = None,
-                     ttl: int = 600, cache_only: bool = False) -> tuple[list, Quota]:
+                     ttl: int = 600, cache_only: bool = False,
+                     cache_tag: str = "") -> tuple[list, Quota]:
     """Every game's full-game lines in ONE request.
 
     The event-scoped endpoint above costs a request per game, which is the
@@ -528,6 +529,13 @@ def fetch_sport_odds(sport: str, api_key: str | None = None,
     board for the price of one call per market. On a 60-game college
     Saturday that is the difference between three credits and sixty, and
     the budget pacer would simply never authorise sixty.
+
+    ``cache_tag`` separates callers asking for DIFFERENT market sets. The
+    cache is keyed by sport alone, so a one-market live pull and a
+    three-market board pull would otherwise overwrite each other: the
+    board would read back a payload with no spreads or totals in it and
+    conclude the books had stopped posting them. Callers narrowing the
+    market list must pass a tag.
     """
     key = get_api_key(api_key)
     cfg = SPORT_CONFIG[sport]
@@ -540,8 +548,8 @@ def fetch_sport_odds(sport: str, api_key: str | None = None,
     }
     url = (f"{ODDS_BASE}/sports/{cfg['sport_key']}/odds"
            f"?{urllib.parse.urlencode(params)}")
-    data, quota = _request(url, f"odds_board_{sport}.json", ttl=ttl,
-                           cache_only=cache_only)
+    name = f"odds_board_{sport}{('_' + cache_tag) if cache_tag else ''}.json"
+    data, quota = _request(url, name, ttl=ttl, cache_only=cache_only)
     return (data if isinstance(data, list) else []), quota
 
 

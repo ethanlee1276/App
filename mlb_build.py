@@ -34,6 +34,22 @@ def _shift_day(date: str, days: int) -> str:
     return d.isoformat()
 
 
+def _dt_since(date: str) -> float:
+    """Epoch seconds for the start of the BASEBALL day being built.
+
+    The live-line file is append-only across the whole season, and the
+    same two teams meet each other a dozen times. Without a cut, tonight's
+    chart opens with a price from a game in May. 5 AM matches
+    `launch._slate_date`, which is the day this board belongs to.
+    """
+    try:
+        d = datetime.date.fromisoformat(date)
+    except (TypeError, ValueError):
+        return 0.0
+    return datetime.datetime.combine(
+        d, datetime.time(hour=5)).timestamp()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build a live MLB slate and run the model.")
     ap.add_argument("date", help="slate date, YYYY-MM-DD")
@@ -499,6 +515,36 @@ def main() -> None:
                                   gd.get("game_number") or 1))
             if sit and isinstance(gd.get("live"), dict):
                 gd["live"]["situation"] = sit
+
+        # THE LIVE LINE, tracked over the game. Ethan asked for this "only
+        # if it doesn't cost us an arm and a leg" — it costs ONE credit a
+        # pull for the whole slate, because it asks the board endpoint for
+        # one market instead of asking the event endpoint for eight
+        # markets per game. See engine/livelines.py for the arithmetic.
+        #
+        # ATTACHING IS FREE AND ALWAYS HAPPENS: the history is on disk, so
+        # the chart draws on every 60-second rebuild. Only the PULL is
+        # paid for, only when a game is live, and only after the same
+        # budget check that guards the board's own pricing has already
+        # said yes — a live chart must never be the reason tonight's
+        # slate went unpriced.
+        try:
+            from engine import livelines as _ll
+            from engine.sources.oddsapi import MLB_TEAM_ABBR as _mlb_names
+            _live_games = [g for g in result["games"]
+                           if (g.get("live") or {}).get("state") == "live"]
+            if _live_games and args.odds:
+                _n, _note = _ll.pull_and_record("mlb", _mlb_names)
+                if _n:
+                    print(f"  Live line: {_note}")
+            # Midnight of the slate date, so an earlier meeting between the
+            # same two teams cannot open tonight's chart.
+            _since = _dt_since(args.date)
+            _tracked = _ll.attach(result["games"], "mlb", since=_since)
+            if _tracked:
+                print(f"  Live line: charting {_tracked} game(s)")
+        except Exception as _exc:                             # noqa: BLE001
+            print(f"  ⚠️  live line tracking unavailable: {_exc}")
         _ls = result.get("long_shots") or []
         # Who these players ARE, from the league's roster feed rather than
         # from tonight's prices. A book pulls its pre-game pitcher markets

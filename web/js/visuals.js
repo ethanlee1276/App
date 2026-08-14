@@ -1499,8 +1499,22 @@ function sparkline(values, opts = {}) {
   const uid = "sp" + Math.random().toString(36).slice(2, 7);
   if (data.length < 2) return `<svg width="${w}" height="${h}"></svg>`;
 
-  const lo = Math.min(...data, line ?? Infinity);
-  const hi = Math.max(...data, line ?? -Infinity);
+  let lo = Math.min(...data, line ?? Infinity);
+  let hi = Math.max(...data, line ?? -Infinity);
+  // A sparkline autoscales to whatever it is given, which is right when
+  // the caller has no idea what range to expect and WRONG when it does.
+  // The live-line track knows: win probability moves on a 0-100 scale, so
+  // a half-point wobble handed to a bare autoscale fills the full chart
+  // height and draws a dramatic collapse where the market did nothing.
+  // `minSpan` pins a floor on the vertical domain, centred on the data,
+  // so small movement looks small. Default 0 = autoscale, unchanged for
+  // every caller that does not ask.
+  const minSpan = Number(opts.minSpan) || 0;
+  if (hi - lo < minSpan) {
+    const mid = (hi + lo) / 2;
+    lo = mid - minSpan / 2;
+    hi = mid + minSpan / 2;
+  }
   const span = (hi - lo) || 1;
   const x = (i) => pad + (i / (data.length - 1)) * (w - pad * 2);
   const y = (v) => h - pad - ((v - lo) / span) * (h - pad * 2);
