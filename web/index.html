@@ -2,12 +2,36 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- viewport-fit=cover + the safe-area insets in styles.css are what
+       stop the notch and the home indicator eating the header and the
+       tab bar once this runs WITHOUT Safari's chrome around it. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Qellys Book · multi-sport betting model</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <!-- iOS ignores SVG icons; this is what "Add to Home Screen" uses. -->
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Qellys Book" />
+
+  <!-- INSTALLABLE. Three separate mechanisms, because the two platforms
+       do not agree on any of it:
+         * the manifest is what Android/Chrome reads to offer "Install",
+           and without it there is no prompt at all;
+         * apple-mobile-web-app-capable is what makes iOS launch it
+           standalone. Without it "Add to Home Screen" still works and
+           still uses the icon — it just opens inside Safari, with the
+           address bar, which is the difference between a bookmark and
+           something that feels like an app;
+         * mobile-web-app-capable is the standardised spelling. Both are
+           needed: older iOS reads only the apple- one.
+       All of it requires HTTPS. On plain http:// the manifest is ignored
+       and the service worker cannot register, so none of this does
+       anything until the site is behind TLS. -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <!-- black-translucent lets the page paint under the status bar, which
+       is why theme-color and --bg have to match. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <!-- Matches --bg. It said #0f1420 through the whole Night Form redesign,
        which is the OLD panel colour — so the phone painted its chrome a
        different near-black to the page under it. -->
@@ -780,5 +804,6 @@
   <script src="js/teams_wnba.js"></script>
   <script src="js/visuals.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/register-sw.js"></script>
 </body>
 </html>

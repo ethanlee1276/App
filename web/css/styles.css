@@ -3649,11 +3649,31 @@ select.calc-in { width: auto; font-weight: 600; }
    boxes, which clip does not touch. */
 html, body { overflow-x: clip; }
 
+/* The bar's real height, notch included. Four other rules pin themselves
+   to the bottom of the bar (the sidebar, the rail, the mobile drawer and
+   its scrim) and every one of them said a bare 64px. Once the bar grew by
+   the safe-area inset on an installed iPhone, all four would have sat that
+   many pixels too high — a gap under the header on exactly the devices
+   this feature exists for. One token, so they cannot drift again. */
+:root {
+  --topbar-h: calc(64px + env(safe-area-inset-top));
+}
+
 /* ---------------- The bar ---------------- */
+/* THE NOTCH. Installed to the home screen, this runs with no Safari
+   chrome and `apple-mobile-web-app-status-bar-style: black-translucent`,
+   so the page paints UNDER the status bar and the clock sits on top of
+   the wordmark. `env(safe-area-inset-top)` is zero everywhere else — in
+   a browser tab, on desktop, on Android — so this costs nothing there
+   and is not behind a media query.
+   The bottom tab bar has had its own inset rule for a while, but it was
+   inert until `viewport-fit=cover` landed in index.html alongside this:
+   without cover the insets are all reported as 0. */
 .topbar {
   position: sticky; top: 0; z-index: 40;
   display: flex; align-items: center; gap: 18px;
-  height: 64px; padding: 0 20px;
+  height: var(--topbar-h);
+  padding: env(safe-area-inset-top) 20px 0;
   background: var(--topbar-bg);
   backdrop-filter: blur(16px);
   border-bottom: var(--hairline) solid var(--border-soft);
@@ -3705,7 +3725,7 @@ html, body { overflow-x: clip; }
 body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .shell main { max-width: none; margin: 0; min-width: 0; }
 
-.sidebar { position: sticky; top: 64px; height: calc(100vh - 64px);
+.sidebar { position: sticky; top: var(--topbar-h); height: calc(100vh - var(--topbar-h));
   overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: 14px;
   padding: 18px 14px 20px; border-right: var(--hairline) solid var(--border-soft);
@@ -3788,7 +3808,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .sb-foot-links .sport-btn.active { color: var(--text); }
 
 /* ---------------- The rail ---------------- */
-.rail { position: sticky; top: 64px; max-height: calc(100vh - 64px); overflow-y: auto;
+.rail { position: sticky; top: var(--topbar-h); max-height: calc(100vh - var(--topbar-h)); overflow-y: auto;
   display: flex; flex-direction: column; gap: 14px; padding: 22px 18px 22px 4px;
   scrollbar-width: thin; }
 .rail-card { border: var(--hairline) solid var(--border); border-radius: var(--radius);
@@ -3934,13 +3954,13 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 
   /* The drawer: the SAME sidebar, slid in from the left under the bar.
      Nothing is a second copy of anything — one rail, two positions. */
-  .sidebar { position: fixed; top: 64px; left: 0; bottom: 0; z-index: 50;
+  .sidebar { position: fixed; top: var(--topbar-h); left: 0; bottom: 0; z-index: 50;
     width: min(84vw, 330px); height: auto;
     transform: translateX(-102%); transition: transform var(--dur-base) var(--ease-spring);
     border-right: var(--hairline) solid var(--border); box-shadow: none; }
   body.menu-open .sidebar { transform: translateX(0); box-shadow: var(--glow-soft); }
   body.menu-open { overflow: hidden; }
-  body.menu-open::after { content: ""; position: fixed; inset: 64px 0 0 0;
+  body.menu-open::after { content: ""; position: fixed; inset: var(--topbar-h) 0 0 0;
     background: rgba(3, 3, 8, .55); backdrop-filter: blur(2px); z-index: 45; }
 }
 

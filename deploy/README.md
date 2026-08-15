@@ -77,6 +77,36 @@ python3 server.py --live --bind 127.0.0.1 8000
 …but then something else has to run the pipeline, or the mirror is a
 museum.
 
+## Installing it to a phone's home screen
+
+Once the site is on HTTPS this works with nothing else to do: **iPhone**
+Share → *Add to Home Screen*; **Android** the browser offers *Install app*
+by itself, or ⋮ → *Install app*. It then launches full-screen with its own
+icon, no address bar, and its own entry in the app switcher.
+
+**All of it requires TLS and none of it works before that.** On plain
+`http://` the manifest is ignored and the service worker cannot register,
+so testing this on the LAN address or over Tailscale will show nothing —
+that is the browser being correct, not a bug to chase.
+
+Two things this Caddyfile does for it, both easy to miss:
+
+* `.webmanifest` is not in Caddy's MIME table, so it is given an explicit
+  `Content-Type`. Served as `text/plain` the install prompt simply never
+  appears — no error, no console message.
+* `/sw.js` is sent `Cache-Control: no-cache`. The service worker is the
+  one file that can make every other file stale, and a cached worker
+  keeps serving its own old shell — while the fix, shipping a new worker,
+  is exactly what the cache stops arriving.
+
+**The worker is network-first on purpose**, which is the opposite of the
+usual PWA advice. This site's value is that its numbers are current, and
+the standard "serve the cache, refresh in the background" pattern would
+show last night's board inside a window with no address bar to hint that
+anything was wrong. `/data/` and `/api/` are never cached at all; the
+cache holds the shell only, so an offline launch shows the app and its own
+honest empty states rather than stale prices. See `web/sw.js`.
+
 ## Three things that are easy to get wrong
 
 **Rotate the keys.** Everything currently in `secrets.local` has lived in

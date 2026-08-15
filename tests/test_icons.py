@@ -53,6 +53,15 @@ def _strip_css_comments(src):
     return re.sub(r"/\*.*?\*/", " ", src, flags=re.S)
 
 
+def _strip_html_comments(src):
+    """An <!-- --> comment fetches nothing, so it must not count as a
+    fetch. The CSS side has been stripped since this file was written;
+    the HTML side was not, and the first note explaining that PWA
+    installs need https:// (mentioning the http:// they do not work on)
+    failed the guard below for describing the rule it obeys."""
+    return re.sub(r"<!--.*?-->", " ", src, flags=re.S)
+
+
 def _lex(src):
     """Classify every character of a JS source as one of:
 
@@ -191,9 +200,9 @@ def test_the_icons_are_defined_in_this_repo_and_not_imported():
         assert bad not in HTML.lower(), f"{bad} reached the page"
     # An icon font would arrive the same way a webfont does, and this page
     # is supposed to render with the network unplugged.
+    shell = _strip_html_comments(HTML).lower().replace("http://www.w3.org", "")
     for host in ("http://", "https://", "//cdn.", "//unpkg", "//fonts.g"):
-        assert host not in HTML.lower().replace("http://www.w3.org", ""), \
-            f"{host} is being fetched by the page shell"
+        assert host not in shell, f"{host} is being fetched by the page shell"
 
 
 def test_every_icon_inherits_the_colour_of_what_says_it():

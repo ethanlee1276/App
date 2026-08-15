@@ -408,6 +408,45 @@ def test_every_page_with_a_nav_entry_is_in_the_browser_sweep():
         assert f'("{page}"' in block, f"{page} is not swept"
 
 
+def test_caddy_sends_the_same_csp_the_app_does():
+    """In production Caddy serves index.html off disk, so the app's own
+    headers never touch the one response that executes scripts.
+
+    The Caddyfile's security block had every header EXCEPT the CSP, which
+    meant the policy applied to `/api/*` JSON — where it does almost
+    nothing — and not to the document. The page would have shipped with
+    no CSP at all and nothing would have looked wrong.
+
+    Duplicated headers drift, so this compares them character for
+    character rather than checking that both merely exist.
+    """
+    import server as _srv
+    caddy = _read("deploy", "Caddyfile")
+    m = re.search(r'Content-Security-Policy\s+"([^"]+)"', caddy)
+    assert m, "the Caddyfile serves the document with no CSP"
+    assert m.group(1) == dict(_srv.SECURITY_HEADERS)["Content-Security-Policy"], \
+        "the proxy's CSP and the app's have drifted apart"
+
+
+def test_the_service_worker_is_not_cached_by_the_proxy():
+    """The one file that can make every other file stale. A worker cached
+    for a year keeps serving its own old shell, and the fix — shipping a
+    new worker — is exactly what the cache stops from arriving."""
+    caddy = _read("deploy", "Caddyfile")
+    i = caddy.index("path /sw.js")
+    assert "no-cache" in caddy[i:i + 200]
+
+
+def test_the_manifest_goes_out_as_a_manifest():
+    """Caddy's MIME table does not know .webmanifest. Served as
+    text/plain the install prompt never appears — no error, no console
+    message, just no prompt, which is the hardest kind of bug to chase."""
+    caddy = _read("deploy", "Caddyfile")
+    assert "manifest.webmanifest" in caddy
+    i = caddy.index("path /manifest.webmanifest")
+    assert "application/manifest+json" in caddy[i:i + 200]
+
+
 def test_the_sweep_judges_our_page_not_the_charts_we_embed():
     """A red nobody can fix is one people learn to ignore.
 

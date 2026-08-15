@@ -463,7 +463,13 @@ def test_the_phone_menu_keeps_its_height_when_a_sport_hides_pages():
     css = open(os.path.join(root, "web", "css", "styles.css"), encoding="utf-8").read()
     i = css.index(".sidebar { position: fixed;")
     block = css[i:i + 300]
-    assert "top: 64px" in block and "bottom: 0" in block, \
+    # `top` moved from a bare 64px to var(--topbar-h) when the bar learned
+    # to grow by the notch inset on an installed iPhone. What this test
+    # cares about is unchanged and is the pair: anchored to BOTH edges, so
+    # the height is the viewport's and cannot follow the content.
+    assert ("top: var(--topbar-h)" in block or "top: 64px" in block), \
+        "the drawer is no longer anchored to the bottom of the bar"
+    assert "bottom: 0" in block, \
         "the drawer's height follows content again — sport switches will resize it"
 
 def test_the_launcher_refreshes_the_board():

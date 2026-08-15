@@ -44,13 +44,40 @@ qellys.example.com {
 	# The app sets its own security headers on every response. These
 	# cover the static files Caddy serves directly, which never pass
 	# through it. HSTS is Caddy's job — it knows TLS is really on.
+	#
+	# THE CSP HAS TO BE HERE TOO, and its absence was a real hole. Look at
+	# the handle block above: index.html is served by `file_server`
+	# straight off disk, so the app never sees that request and the CSP it
+	# sets never reaches the document. The policy would have applied to
+	# /api/* JSON — where it does almost nothing — and not to the one
+	# response that actually executes scripts. In production the page
+	# would have had no CSP at all, and nothing would have looked wrong.
+	#
+	# Duplicated from server.py's SECURITY_HEADERS, which is a real cost:
+	# two copies drift. tests/test_public_server.py compares them
+	# character for character so they cannot.
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		X-Frame-Options "DENY"
+		Content-Security-Policy "default-src 'self'; img-src 'self' https: data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; frame-src https://dexscreener.com https://www.dexscreener.com https://geckoterminal.com https://www.geckoterminal.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 		-Server
 	}
+
+	# THE SERVICE WORKER MUST NOT BE CACHED. It is the one file that can
+	# make every other file stale: a worker cached for a year keeps
+	# serving its own old shell, and the fix — shipping a new worker —
+	# is the exact thing the cache prevents from arriving. `no-cache`
+	# means revalidate every time, not "never store".
+	@sw path /sw.js
+	header @sw Cache-Control "no-cache"
+
+	# Caddy's built-in MIME table does not know .webmanifest, so without
+	# this it goes out as text/plain and the install prompt silently never
+	# appears — no error, no console message, just no prompt.
+	@manifest path /manifest.webmanifest
+	header @manifest Content-Type "application/manifest+json"
 
 	# Built JSON changes on a schedule, not per request. A minute of
 	# cache takes the repeat-visit load off the box without anyone ever
