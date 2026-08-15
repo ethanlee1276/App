@@ -99,6 +99,48 @@ PROFILE_SECTIONS = ("mybets", "fantasy", "bankroll", "search")
 #: — an XSS bug should not also be a session theft — and SameSite=Lax so
 #: another site cannot ride it.
 SESSION_COOKIE = "qb_session"
+
+#: Sent on every response. Cheap, and the kind of thing that is obvious in
+#: hindsight after it matters — measured 2026-08-15, the server was
+#: sending none of them.
+#:
+#: `connect-src 'self'` is a REAL restriction here rather than decoration:
+#: the page makes no browser-side request to any external host — Sleeper,
+#: ESPN, Yahoo and Stripe are all reached by the SERVER — so an injected
+#: script has nowhere to send what it steals.
+#:
+#: `script-src` still needs `'unsafe-inline'`, and that is honest rather
+#: than ideal: the page carries 33 inline `onclick=` handlers. Removing
+#: them is what would let this become a real defence against injection;
+#: until then the value here is blocking EXTERNAL script sources, which it
+#: does. Written down so the weakness is a known debt and not a surprise.
+SECURITY_HEADERS = (
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "strict-origin-when-cross-origin"),
+    ("X-Frame-Options", "DENY"),
+    ("Content-Security-Policy",
+     "default-src 'self'; "
+     # Headshots and team art come from ESPN/MLB CDNs at render time.
+     "img-src 'self' https: data:; "
+     "script-src 'self' 'unsafe-inline'; "
+     "style-src 'self' 'unsafe-inline'; "
+     "font-src 'self'; "
+     "connect-src 'self'; "
+     "frame-ancestors 'none'; "
+     "base-uri 'self'; "
+     "form-action 'self'"),
+)
+
+#: The legacy name+PIN store is Ethan's own, from before real accounts.
+#: POSTing a name that does not exist CREATES it, with no credential — on
+#: a LAN that was the feature, and on a public server it is free disk for
+#: anyone who finds the path. Verified 2026-08-15: three profiles created
+#: from curl with no auth. New accounts go through email and password now;
+#: this store keeps working for whoever already has one.
+_PROFILE_LOCAL_ONLY = (
+    "New profiles cannot be created from another machine. This is the old "
+    "PIN-based store, kept working for existing local use — make an "
+    "account with an email and password instead.")
 #: Shown when a password would have to cross a network in the clear.
 #: Names the fix rather than just refusing — "insecure connection" on its
 #: own leaves someone with no idea what to do next.
@@ -434,6 +476,13 @@ class Handler(BaseHTTPRequestHandler):
             assert isinstance(body, dict)
         except Exception:
             return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+        # CREATING one is local-only; syncing an existing one is not, so a
+        # phone that already has a profile keeps working exactly as before.
+        _name = parsed.path[len("/api/profile/"):].strip("/")
+        if (profile_name_ok(_name) and _load_profile(_name) is None
+                and not (self._local_only() or self._via_tailnet())):
+            return self._send(403, json.dumps({"error": _PROFILE_LOCAL_ONLY}
+                                              ).encode(), ".json")
         code, out = profile_sync(
             parsed.path[len("/api/profile/"):].strip("/"),
             body.get("pin") or self.headers.get("X-Profile-Pin") or "",
@@ -1263,6 +1312,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", CONTENT_TYPES.get(suffix, "application/octet-stream"))
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
+        # HSTS only over HTTPS. On a plain-HTTP LAN address it does
+        # nothing at best; announced from a name that later needs to serve
+        # HTTP it is a self-inflicted outage browsers remember for months.
+        if self._is_https():
+            self.send_header("Strict-Transport-Security",
+                             "max-age=31536000; includeSubDomains")
         for name, value in (headers or []):
             self.send_header(name, value)
         # When the payload came from a file on disk, say when that file was
