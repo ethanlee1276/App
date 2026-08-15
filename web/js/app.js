@@ -9337,6 +9337,9 @@ async function renderFantasy() {
      _ffTrade],
     ["scripts", "Game scripts",
      "what the market expects each game to look like", _ffScripts],
+    ["ranks", "Rankings",
+     "every source we can read without a password, and where they argue",
+     rankBoardHTML(d.ranks)],
     ["league", "Around the league",
      "camp, the waiver wire, the offseason and the draft kit",
      acctCardHTML() + `<div id="sleeper-zone"></div>` + campHTML(d.camp)
@@ -9352,6 +9355,8 @@ async function renderFantasy() {
       : `Show ${allUsage.length - USAGE_SHOWN} more movers ▾`;
   });
   initDraftKit(d.draft_kit);
+  window._ffRanks = d.ranks || null;
+  initRankBoard();
   renderSleeperZone(d);
 }
 
@@ -9466,9 +9471,12 @@ function acctGather() {
   const fu = localStorage.getItem("ff_user") || "";
   const fl = localStorage.getItem("ff_league") || "";
   const fd = localStorage.getItem("ff_draft_id") || "";
-  if (fu || fl || fd || ts.fantasy)
+  // The pasted ranking rides along: it is typed once and wanted on the
+  // phone at the draft table, which is the whole reason accounts exist.
+  const fr = localStorage.getItem(FF_IMPORT_KEY) || "";
+  if (fu || fl || fd || fr || ts.fantasy)
     sections.fantasy = { ts: ts.fantasy || 0,
-                         data: { user: fu, league: fl, draft: fd } };
+                         data: { user: fu, league: fl, draft: fd, ranks: fr } };
   const bk = localStorage.getItem("ge-bankroll") || "";
   const up = localStorage.getItem("ge-unit-pct") || "";
   if (bk || up || ts.bankroll)
@@ -9490,7 +9498,7 @@ function acctApplySection(name, sec) {
       const put = (k, v) => v ? localStorage.setItem(k, v)
                               : localStorage.removeItem(k);
       put("ff_user", d.user); put("ff_league", d.league);
-      put("ff_draft_id", d.draft);
+      put("ff_draft_id", d.draft); put(FF_IMPORT_KEY, d.ranks);
     } else if (name === "bankroll") {
       localStorage.setItem("ge-bankroll", d.bankroll || "");
       if (d.unitPct) localStorage.setItem("ge-unit-pct", d.unitPct);
@@ -10335,6 +10343,227 @@ const TIER_COLORS = ["var(--good)", "var(--cyan)", "var(--brand)",
                      "var(--warn)", "var(--text-mute)"];
 const tierColor = (t) => TIER_COLORS[Math.min(t - 1, TIER_COLORS.length - 1)];
 
+/* ---------------- Rankings, side by side --------------------------------
+
+   Ethan, 2026-08-15: "add where we show every books ranking side by side".
+
+   TWO OF THE FOUR COLUMNS ARE BUILT SERVER-SIDE (our VORP board, and
+   Sleeper's own search_rank out of the players blob) and arrive in the
+   payload. The other two only exist in this browser: the live pick order
+   in YOUR draft, and whatever list you pasted. So the merge happens here
+   — `ffRankMerge` overlays those two onto the built rows and recomputes
+   the consensus, which is the one piece of arithmetic that has to exist
+   in both languages. It is median / min / max and nothing else, kept
+   deliberately small for exactly that reason.
+
+   THE TABLE IS NOT THE POINT — THE DISAGREEMENT IS. Four columns in
+   near-identical order tells you nothing. The row where our board has a
+   man thirty spots above Sleeper is either the edge or the bug, so that
+   view is drawn FIRST and the full table sits under it. */
+const FF_RANK_SOURCES = [["ours", "Our board"], ["sleeper", "Sleeper"],
+                         ["adp", "Your draft"], ["imported", "Imported"]];
+const FF_IMPORT_KEY = "ff_ranks_import";
+
+function ffRankParseImport(text) {
+  // Mirrors engine/fantasy_ranks.parse_import: a leading number is
+  // trusted when present (a keeper list numbered 1,2,5 means those gaps);
+  // otherwise position in the file is the rank.
+  const out = {};
+  let seen = 0;
+  for (const raw of String(text || "").split("\n")) {
+    const line = raw.trim().replace(/,+$/, "");
+    if (!line || line.startsWith("#")) continue;
+    let cells = line.split(",").map((c) => c.trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+    if (!cells.length) continue;
+    let rank = null;
+    let m = cells[0].match(/^(\d{1,3})[.)]?$/);
+    if (m) { rank = +m[1]; cells = cells.slice(1); }
+    else {
+      m = cells[0].match(/^(\d{1,3})[.)]?\s+(.*)$/);
+      if (m) { rank = +m[1]; cells = [m[2]].concat(cells.slice(1)); }
+    }
+    if (!cells.length) continue;
+    const key = ffNorm(cells[0]);
+    if (!key || ["player", "name", "rank", "overall"].includes(key)) continue;
+    if (out[key] != null) continue;
+    seen += 1;
+    out[key] = rank == null ? seen : rank;
+  }
+  return out;
+}
+
+function ffRankMerge(rows, extra) {
+  // `extra` is {key: {adp, imported}}. Rows the overlay knows about but
+  // the build did not are APPENDED rather than dropped — a rookie taken
+  // in your draft is absent from our board by construction, and losing
+  // him here would hide the pick that just happened.
+  const byKey = {};
+  const out = (rows || []).map((r) => {
+    const copy = { ...r, ranks: { ...r.ranks } };
+    byKey[r.key] = copy;
+    return copy;
+  });
+  Object.entries(extra || {}).forEach(([key, add]) => {
+    let row = byKey[key];
+    if (!row) {
+      row = { key, player: (add.player || key), sources: 0,
+              ranks: { ours: null, sleeper: null, adp: null, imported: null } };
+      byKey[key] = row;
+      out.push(row);
+    }
+    if (add.adp != null) row.ranks.adp = add.adp;
+    if (add.imported != null) row.ranks.imported = add.imported;
+  });
+  out.forEach((r) => {
+    const have = Object.values(r.ranks).filter((v) => v != null).sort((a, b) => a - b);
+    r.sources = have.length;
+    r.best = have.length ? have[0] : null;
+    r.worst = have.length ? have[have.length - 1] : null;
+    // Median, matching the engine: mean of the middle two when even.
+    const n = have.length, mid = n >> 1;
+    r.consensus = !n ? null
+      : n % 2 ? have[mid] : Math.round(((have[mid - 1] + have[mid]) / 2) * 10) / 10;
+    // A spread needs two opinions; one source disagreeing with nothing
+    // is not a disagreement, and an ABSENCE is never a low opinion.
+    r.spread = n >= 2 ? r.worst - r.best : null;
+  });
+  out.sort((a, b) => (a.consensus - b.consensus) || a.player.localeCompare(b.player));
+  return out;
+}
+
+function ffRankDisagreements(rows, limit) {
+  const out = [];
+  for (const r of rows) {
+    if (!r.spread || r.sources < 2) continue;     // 0 spread is agreement
+    const per = Object.entries(r.ranks).filter(([, v]) => v != null);
+    per.sort((a, b) => a[1] - b[1]);
+    out.push({ ...r, high_source: per[0][0], low_source: per[per.length - 1][0] });
+  }
+  out.sort((a, b) => (b.spread - a.spread) || (a.consensus - b.consensus));
+  return out.slice(0, limit || 12);
+}
+
+const ffSrcLabel = (k) => (FF_RANK_SOURCES.find((s) => s[0] === k) || [k, k])[1];
+
+function rankBoardHTML(ranks) {
+  if (!ranks) return "";
+  return `
+    <div class="section-title">Rankings, side by side
+      <span class="sub">— every source we can read without a password, and
+        where they argue</span></div>
+    <div class="card" id="rank-card">
+      <p class="pre-note" id="rank-coverage"></p>
+      <div id="rank-fight"></div>
+      <div id="rank-table" class="rank-scroll"></div>
+      <details class="rank-import">
+        <summary>Add a ranking of your own ▾</summary>
+        <p class="rank-help">Paste any list you can already see — a
+          FantasyPros export, your league’s board, a friend’s tiers. One
+          player per line, or <code>rank,player</code>. This is the honest
+          route to the sites this app can’t fetch: their rankings sit
+          behind a paid key or a login, and this app never takes a
+          password.</p>
+        <textarea id="rank-paste" rows="6" spellcheck="false"
+          placeholder="1,Ja’Marr Chase&#10;2,Bijan Robinson&#10;3,Justin Jefferson"></textarea>
+        <div class="rank-btns">
+          <button class="btn" id="rank-apply">Apply</button>
+          <button class="btn ghost" id="rank-clear">Clear</button>
+          <span id="rank-import-note"></span>
+        </div>
+      </details>
+    </div>`;
+}
+
+function renderRankBoard() {
+  const host = document.getElementById("rank-table");
+  if (!host || !window._ffRanks) return;
+  const built = window._ffRanks.rows || [];
+  const extra = {};
+  // Your draft's real pick order — the only ADP that is about YOUR league.
+  Object.entries(dkState.adp || {}).forEach(([k, v]) => {
+    (extra[k] = extra[k] || {}).adp = v.rank;
+    extra[k].player = v.player;
+  });
+  let imported = {};
+  try { imported = ffRankParseImport(localStorage.getItem(FF_IMPORT_KEY) || ""); }
+  catch (e) { imported = {}; }
+  Object.entries(imported).forEach(([k, v]) => {
+    (extra[k] = extra[k] || {}).imported = v;
+  });
+  const rows = ffRankMerge(built, extra);
+  const counts = {};
+  FF_RANK_SOURCES.forEach(([k]) => {
+    counts[k] = rows.filter((r) => r.ranks[k] != null).length;
+  });
+  const cov = document.getElementById("rank-coverage");
+  if (cov) {
+    cov.innerHTML = FF_RANK_SOURCES.map(([k, label]) =>
+      `<span class="chip ${counts[k] ? "" : "ff-dim"}">${escapeHtml(label)}: ${
+        counts[k] ? counts[k] : "—"}</span>`).join(" ")
+      + ` <span class="rank-help">A blank cell means that source doesn’t
+          list him — not that it ranked him last. Every rookie is absent
+          from our board by construction, and scoring that as rank 999
+          would put the whole rookie class at the top of the arguments.</span>`;
+  }
+  const fight = document.getElementById("rank-fight");
+  const dis = ffRankDisagreements(rows, 10);
+  if (fight) {
+    fight.innerHTML = !dis.length ? "" : `
+      <div class="rank-fight-head">Where they disagree most</div>
+      <div class="rank-fight-rows">${dis.map((r) => `
+        <div class="rank-fight-row">
+          <b>${escapeHtml(r.player)}</b>
+          <span class="chip up">${escapeHtml(ffSrcLabel(r.high_source))} ${
+            r.ranks[r.high_source]}</span>
+          <span class="chip down">${escapeHtml(ffSrcLabel(r.low_source))} ${
+            r.ranks[r.low_source]}</span>
+          <span class="rank-spread">${r.spread} apart</span>
+        </div>`).join("")}</div>`;
+  }
+  const cell = (v) => v == null ? `<td class="rank-none">—</td>`
+    : `<td>${v}</td>`;
+  host.innerHTML = `<table class="rank-table"><thead><tr>
+      <th>Player</th>${FF_RANK_SOURCES.map(([, l]) =>
+        `<th>${escapeHtml(l)}</th>`).join("")}
+      <th>Consensus</th><th>Spread</th></tr></thead><tbody>
+      ${rows.slice(0, 200).map((r) => `<tr>
+        <td class="rank-name">${escapeHtml(r.player)}</td>
+        ${FF_RANK_SOURCES.map(([k]) => cell(r.ranks[k])).join("")}
+        <td>${r.consensus == null ? "—" : r.consensus}</td>
+        ${cell(r.spread)}</tr>`).join("")}
+    </tbody></table>`;
+}
+
+function initRankBoard() {
+  const apply = document.getElementById("rank-apply");
+  const box = document.getElementById("rank-paste");
+  const note = document.getElementById("rank-import-note");
+  if (!apply || !box) return;
+  const saved = localStorage.getItem(FF_IMPORT_KEY) || "";
+  if (saved) box.value = saved;
+  const say = () => {
+    const n = Object.keys(ffRankParseImport(box.value)).length;
+    if (note) note.textContent = n ? `${n} player(s) read` : "";
+  };
+  say();
+  apply.addEventListener("click", () => {
+    localStorage.setItem(FF_IMPORT_KEY, box.value);
+    acctTouch("fantasy");
+    say();
+    renderRankBoard();
+  });
+  const clear = document.getElementById("rank-clear");
+  if (clear) clear.addEventListener("click", () => {
+    box.value = "";
+    localStorage.removeItem(FF_IMPORT_KEY);
+    acctTouch("fantasy");
+    say();
+    renderRankBoard();
+  });
+  renderRankBoard();
+}
+
 function draftKitHTML(kit) {
   if (!kit || !(kit.board || []).length) return "";
   const BOARD_SHOWN = 15;
@@ -10406,6 +10635,7 @@ function draftKitHTML(kit) {
         <button class="btn" id="dk-connect">Connect</button>
         <button class="btn ghost ff-hidden" id="dk-disconnect">Stop</button>
       </div>
+      <div id="dk-advice"></div>
       <div id="dk-best" class="ff-hidden" style="margin-top:12px"></div>
     </div>
     <div class="section-title">Overall board
@@ -10426,7 +10656,7 @@ function draftKitHTML(kit) {
 
 /* Live draft sync. One poll loop, keyed off the fantasy view being open —
    navigating away stops it, reconnecting resumes it. */
-const dkState = { timer: null, kit: null };
+const dkState = { timer: null, kit: null, adp: {} };
 
 function dkStop(msg) {
   if (dkState.timer) { clearInterval(dkState.timer); dkState.timer = null; }
@@ -10434,6 +10664,11 @@ function dkStop(msg) {
   if (st) { st.textContent = msg || "NOT CONNECTED"; st.style.color = "var(--text-mute)"; }
   const dis = document.getElementById("dk-disconnect");
   if (dis) dis.classList.add("ff-hidden");
+  // Drop the pick order with the connection. A disconnected draft's
+  // column would otherwise sit there labelled "Your draft" long after it
+  // stopped being live, which is the same lie as a stale price.
+  dkState.adp = {};
+  if (typeof renderRankBoard === "function") renderRankBoard();
 }
 
 function initDraftKit(kit) {
@@ -10483,13 +10718,85 @@ function dkStart(draftId) {
     const taken = new Set((picks || []).map((p) =>
       ffNorm(`${(p.metadata || {}).first_name || ""} ${(p.metadata || {}).last_name || ""}`))
       .filter((n) => n));
+    // THE PICK ORDER IS A RANKING, and it is the only one that is about
+    // YOUR league rather than a national average of strangers. Recorded
+    // here so the side-by-side board gains a "Your draft" column the
+    // moment picks start.
+    dkState.adp = {};
+    (picks || []).forEach((p, i) => {
+      const meta = p.metadata || {};
+      const name = `${meta.first_name || ""} ${meta.last_name || ""}`.trim();
+      const key = ffNorm(name);
+      if (!key || dkState.adp[key]) return;
+      dkState.adp[key] = { rank: p.pick_no > 0 ? p.pick_no : i + 1, player: name };
+    });
+    if (typeof renderRankBoard === "function") renderRankBoard();
     st.textContent = `LIVE · ${taken.size} PICKED`; st.style.color = "var(--good)";
     document.querySelectorAll("[data-ffp]").forEach((el) =>
       el.classList.toggle("dk-taken", taken.has(el.dataset.ffp)));
     dkBestAvailable(taken);
+    dkAdvice(draftId);
   };
   tick();
   dkState.timer = setInterval(tick, 12000);
+}
+
+/* PICK-BY-PICK ADVICE. Ethan, 2026-08-15: "We need to show pick by pick
+   advice."
+
+   The arithmetic lives in engine/fantasy_pick.py and is served by
+   /api/draftadvice — it reads the SAME cached pick feed this loop is
+   already polling, so it costs no extra request, and it stays unit
+   tested rather than becoming another hundred lines of untested
+   JavaScript deciding what to do with a first-round pick.
+
+   What it adds over "best available" is the only question that actually
+   decides a pick: which of these men will NOT be here at my next turn. */
+async function dkAdvice(draftId) {
+  const host = document.getElementById("dk-advice");
+  if (!host) return;
+  const me = (window._slUser && window._slUser.user_id) || "";
+  let a;
+  try {
+    const r = await fetch(`/api/draftadvice?draft=${encodeURIComponent(draftId)}`
+      + `&user=${encodeURIComponent(me)}`);
+    a = await r.json();
+    if (!r.ok) throw new Error(a && a.error);
+  } catch (e) { host.innerHTML = ""; return; }
+  if (!a || a.slot == null) {
+    // No seat in this draft means we are watching, not drafting. Saying
+    // so beats inventing advice for a team that is not yours.
+    host.innerHTML = `<div class="dk-advice-note">Connected as a spectator —
+      no seat in this draft, so there is no "your next pick" to advise on.
+      ${me ? "" : "Connect your Sleeper username above to claim your seat."}</div>`;
+    return;
+  }
+  const pct = (x) => `${Math.round(x * 100)}%`;
+  const tone = { gone: "down", "toss-up": "warn", safe: "up" };
+  const take = a.take;
+  host.innerHTML = `
+    <div class="dk-advice">
+      <div class="dk-advice-head">
+        Seat ${a.slot} of ${a.teams} · ${a.on_the_clock ? "ON THE CLOCK"
+          : `next pick ${a.next_pick} — ${a.picks_until} pick(s) away`}
+        <span class="dk-window">room reach ${a.window} deep${
+          a.window_fitted ? "" : " (prior — too few picks to fit yet)"}</span>
+      </div>
+      ${take ? `<div class="dk-take">
+        <b>${escapeHtml(take.player)}</b>
+        <span class="chip">${escapeHtml(take.position)}</span>
+        <span class="chip ${tone[take.verdict] || ""}">${
+          take.verdict === "gone" ? "won’t last" :
+          take.verdict === "safe" ? "will last" : "toss-up"} · ${
+          pct(take.survives)} to be here at ${a.next_pick || "your next pick"}</span>
+        ${take.fills_need ? `<span class="chip up">fills a starting slot</span>` : ""}
+      </div>` : ""}
+      ${a.can_wait && a.can_wait.length ? `<div class="dk-wait">
+        <span class="dk-bl">Can wait</span>
+        ${a.can_wait.slice(0, 4).map((r) => `<span class="chip">${
+          escapeHtml(r.player)} · ${pct(r.survives)}</span>`).join("")}</div>` : ""}
+      <div class="dk-advice-note">${escapeHtml(a.note || "")}</div>
+    </div>`;
 }
 
 function dkBestAvailable(taken) {
@@ -10644,6 +10951,10 @@ async function renderSleeperZone(d, errMsg) {
       sleeperGet(`league/${leagueId}/users`),
     ]);
     if (!window._slPlayers) window._slPlayers = await sleeperGet("players/nfl");
+    // Stashed for the draft room: the advice endpoint needs the user id
+    // to find your SEAT, and without it the panel correctly says it is
+    // watching rather than inventing advice for somebody else's team.
+    window._slUser = user;
     renderSleeperPanel(d, { username, user, leagues, leagueId, rosters,
                             lgUsers, seasonTried });
   } catch (e) {

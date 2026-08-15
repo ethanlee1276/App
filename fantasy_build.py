@@ -19,7 +19,7 @@ import datetime
 import json
 from pathlib import Path
 
-from engine import fantasy, fantasy_draft, offseason, preseason
+from engine import fantasy, fantasy_draft, fantasy_ranks, offseason, preseason
 from engine.db import connect
 from engine.sources.fetch import DataUnavailable
 
@@ -197,6 +197,14 @@ def main() -> None:
             "draft_kit": kit,
             "offseason": off,
             "trending": trending,
+            # EVERY RANKING WE CAN LEGITIMATELY READ, side by side. Ethan,
+            # 2026-08-15: "add where we show every books ranking side by
+            # side." Two columns are built here — our VORP board and
+            # Sleeper's own `search_rank`, read out of the players blob
+            # already in memory, so this costs no request. The other two
+            # (your live draft's pick order, and any list you paste) are
+            # filled in the browser because they only exist there.
+            "ranks": fantasy_ranks.build(kit, blob or {}),
         }
     conn.close()
 

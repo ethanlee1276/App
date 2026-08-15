@@ -327,6 +327,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api(parse_qs(parsed.query), sport="wnba")
         if parsed.path in ("/api/cfb/recommendations", "/api/cfb/recommendations/"):
             return self._api(parse_qs(parsed.query), sport="cfb")
+        if parsed.path in ("/api/draftadvice", "/api/draftadvice/"):
+            return self._draft_advice(parse_qs(parsed.query))
         if parsed.path.startswith("/api/sleeper/"):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
         if parsed.path.startswith("/api/profile/"):
@@ -355,6 +357,87 @@ class Handler(BaseHTTPRequestHandler):
             body.get("pin") or self.headers.get("X-Profile-Pin") or "",
             body.get("sections"))
         self._send(code, json.dumps(out).encode(), ".json")
+
+    def _draft_advice(self, query: dict):
+        """Pick-by-pick advice for a live Sleeper draft.
+
+        WHY THIS IS A SERVER ENDPOINT rather than more JavaScript. The
+        survival model has real arithmetic in it — a reach window fitted
+        from the room's own picks, and a probability derived from it — and
+        arithmetic that decides what to do with a first-round pick belongs
+        somewhere it can be unit-tested. The browser already polls the
+        picks; this reads the SAME cached fetch, so the endpoint costs no
+        extra request to Sleeper.
+
+        Both reads go through the allowlist, exactly as `_sleeper` does.
+        """
+        draft_id = (query.get("draft") or [""])[0].strip()
+        user_id = (query.get("user") or [""])[0].strip()
+        if not re.fullmatch(r"\d{1,25}", draft_id):
+            return self._send(400, b'{"error":"bad draft id"}', ".json")
+        from engine import fantasy_pick, fantasy_ranks
+        from engine.sources.fetch import fetch_text, DataUnavailable
+
+        def grab(path, ttl):
+            if not sleeper_path_ok(path):
+                raise DataUnavailable(f"path not allowlisted: {path}")
+            cache = "sleeper_" + re.sub(r"[^A-Za-z0-9]+", "_", path) + ".json"
+            return json.loads(fetch_text(SLEEPER_BASE + path, cache, ttl=ttl))
+
+        try:
+            # Same TTLs the proxy uses: the draft's shape barely moves,
+            # the picks are polled DURING a live draft and ten seconds is
+            # already the floor. Reusing them means this endpoint rides
+            # the browser's existing poll rather than doubling it.
+            draft = grab(f"draft/{draft_id}", ttl=300)
+            raw = grab(f"draft/{draft_id}/picks", ttl=10)
+        except (DataUnavailable, ValueError) as exc:
+            return self._send(502, json.dumps({"error": str(exc)}).encode(),
+                              ".json")
+
+        picks = []
+        for p in raw or []:
+            meta = (p or {}).get("metadata") or {}
+            name = " ".join(x for x in (meta.get("first_name"),
+                                        meta.get("last_name")) if x)
+            key = fantasy_ranks.normalize(name)
+            if key:
+                picks.append({"key": key, "player": name,
+                              "picked_by": str(p.get("picked_by") or ""),
+                              "pick_no": p.get("pick_no")})
+
+        # The board and the consensus ranks come off the built payload —
+        # the same file the page is already showing.
+        try:
+            blob = json.loads((WEB / "data" / "fantasy.json").read_text())
+        except Exception:                                     # noqa: BLE001
+            blob = {}
+        board = []
+        for i, row in enumerate((blob.get("draft_kit") or {}).get("board") or []):
+            key = fantasy_ranks.normalize(row.get("player"))
+            if key:
+                board.append({**row, "key": key})
+        ranks = {r["key"]: (r.get("consensus") or i + 1)
+                 for i, r in enumerate((blob.get("ranks") or {}).get("rows") or [])
+                 if r.get("key")}
+        if not ranks:                       # no ranks built yet: use the board
+            ranks = {r["key"]: i + 1 for i, r in enumerate(board)}
+
+        # STARTER SLOTS COME FROM THE DRAFT, NOT FROM A GUESS. Sleeper's
+        # settings carry slots_qb / slots_rb / … , so a superflex or a
+        # 3-WR league gets its own needs rather than a 12-team default
+        # that would tell a superflex room to take one quarterback.
+        st = draft.get("settings") or {}
+        slots = {}
+        for pos in ("QB", "RB", "WR", "TE"):
+            n = st.get("slots_" + pos.lower())
+            if isinstance(n, (int, float)) and n > 0:
+                slots[pos] = int(n)
+        if not slots:
+            slots = {"QB": 1, "RB": 2, "WR": 2, "TE": 1}
+        out = fantasy_pick.advice(draft, picks, ranks, board, user_id, slots)
+        out["slots"] = slots
+        self._send(200, json.dumps(out).encode(), ".json")
 
     def _sleeper(self, path: str):
         """Forward an allowlisted read to Sleeper's free public API. The big
