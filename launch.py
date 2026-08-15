@@ -2141,8 +2141,17 @@ def preflight() -> None:
             _miss = _unreg(_rs)
             _cov = 100.0 * sum(1 for r in _rs if _tier(r)) / len(_rs)
             if _miss:
+                # SAY HOW MANY, not just the first four. The truncated
+                # version read as a complete list: Ethan's board showed
+                # four names at 75.7% coverage, and four names is also
+                # what it would have shown at 30% with forty more behind
+                # them. Registering the four you can see and expecting
+                # 100% is then a surprise — so the count comes first and
+                # the sample is labelled as a sample.
+                _more = f" (+{len(_miss) - 4} more)" if len(_miss) > 4 else ""
                 print(f"{warn} Knowledge tiers: {_cov:.1f}% of {len(_rs)} "
-                      f"reasons labelled — unregistered: "
+                      f"reasons labelled — {len(_miss)} unregistered "
+                      f"opening(s){_more}, e.g.: "
                       + ", ".join(_miss[:4])
                       + " (add to engine/knowledge.py PREFIXES)")
             else:

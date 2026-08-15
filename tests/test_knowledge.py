@@ -120,6 +120,44 @@ def test_both_builds_stamp_before_they_write():
             "json.dump(result, fh, indent=2)"), f
 
 
+def test_the_four_the_live_board_caught_are_classified_from_their_source():
+    """Ethan's board on 2026-08-15: 75.7% labelled, four openings unknown.
+
+    Each is registered by reading the module that WRITES it, which is the
+    rule this file's subject insists on — a guessed tier is worse than no
+    tier, because a label that is sometimes wrong poisons the ones that
+    are right. The evidence, in one line each:
+
+      * "Official season split"  engine/mlb/platoon.py — THIS season's
+        official SLG vs LHP/RHP from the MLB Stats API, quoted with its
+        own PA count. Moves through the season, so (a), by the same
+        argument already applied to the Statcast leaderboards.
+      * "Market moving toward"   engine/linemoves.py — movement measured
+        between our own stored snapshots and now. Retrieved and stamped.
+      * "Cold stretch"           engine/mlb/streaks.py — written by the
+        same function as "Hot stretch", from the same last-N game logs.
+      * "Coherence"              engine/mlb/pipeline.py — reconcile_triple
+        nudging our own hits/TB/HR projections until they stop
+        contradicting each other. No new fact about the world enters.
+
+    And the one that must NOT move with them: "Platoon edge" is the
+    handedness matchup itself, which genuinely does not change, so it
+    stays (b). Registering the season split as (a) while leaving that as
+    (b) is the distinction, not an inconsistency.
+    """
+    cases = {
+        "Official season split: slugs lefties (.412 SLG in 88 PA, +9% vs his blend)": "measured",
+        "Market moving toward the Over — 2.5 to 2.5 (-115 to -130) since our first snapshot": "measured",
+        "Cold stretch — last 10 games 0.71 vs his usual 1.02. Measured league-wide": "measured",
+        "Coherence: total bases raised to stay above hits": "inference",
+        "Platoon edge — LHB vs RHP": "historical",
+    }
+    for reason, want in cases.items():
+        got = kn.tier_of(reason)
+        assert got == want, f"{reason[:40]!r} -> {got}, expected {want}"
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

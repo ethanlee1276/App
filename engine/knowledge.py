@@ -96,6 +96,23 @@ PREFIXES: tuple[tuple[str, str], ...] = (
     # to the season, so (a) rather than (b) — they move every week.
     ("elite barrel rate", "measured"),
     ("hard-hit rate", "measured"),
+    # Three the doctor caught on Ethan's live board, 2026-08-15 (75.7%
+    # coverage). Each classified by reading what writes it, per the rule
+    # at the top of this file — a guessed tier is worse than none.
+    #
+    # `engine/mlb/platoon.py` — THIS season's official SLG split vs LHP or
+    # RHP, pulled from the MLB Stats API for this slate and quoted with
+    # its own PA count. Same argument as the Statcast lines above: it
+    # moves through the season, so (a). NOT the same thing as "platoon
+    # edge" below, which is the handedness matchup itself and genuinely
+    # does not move.
+    ("official season split", "measured"),
+    # `engine/linemoves.py` — movement measured between our own stored
+    # snapshots and now. A retrieved, timestamped fact about the market.
+    ("market moving toward", "measured"),
+    # `engine/mlb/streaks.py` — the exact mirror of "hot stretch" above,
+    # written by the same function from the same last-N game logs.
+    ("cold stretch", "measured"),
 
     # (b) stable historical data — things that do not move
     ("comps", "historical"),
@@ -118,6 +135,12 @@ PREFIXES: tuple[tuple[str, str], ...] = (
     ("edge +", "inference"),
     ("edge -", "inference"),
     ("conditional until", "inference"),
+    # `engine/mlb/pipeline.py` — reconcile_triple nudging our OWN hits,
+    # total-bases and home-run projections until they stop contradicting
+    # each other. No new fact about the world enters: it is the model's
+    # arithmetic about the model's numbers, which is the same argument
+    # that puts "edge +" here.
+    ("coherence", "inference"),
 )
 
 #: A park name we do not hold is still a park. These catch the shapes the
