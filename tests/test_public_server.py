@@ -279,6 +279,50 @@ def test_there_is_a_restore_drill_and_it_notices_staleness():
     assert "STALE" in sh
 
 
+# --- the crash a static suite cannot see -------------------------------------
+def test_the_prediction_desk_cache_is_declared_before_it_is_read():
+    """WEATHER AND ALERTS BOTH CRASHED ON LOAD, and 4,414 passing tests
+    said nothing.
+
+    `let _railDeskCache` sat 5,000 lines BELOW the two renderers that read
+    it. `let` is hoisted but stays in the temporal dead zone until its
+    declaration line actually RUNS, so both pages threw "cannot access
+    before initialization" and came up blank below the fold. The file
+    parses perfectly; the fault only exists at runtime, in one execution
+    order, on two pages nothing was opening.
+
+    Pinned narrowly rather than as a general rule: a dozen other
+    top-level bindings are referenced above their declaration and are
+    perfectly fine, because the code that reads them runs later. A test
+    that flagged all of them would be noise, and noise gets ignored."""
+    app = _read("web", "js", "app.js")
+    decl = app.index("let _railDeskCache")
+    first_use = app.index("_railDeskCache ||")
+    assert decl < first_use, \
+        "the cache is declared after a reader again — Weather and Alerts crash"
+
+
+def test_every_page_with_a_nav_entry_is_in_the_browser_sweep():
+    """The reason that crash survived: Weather and Alerts were not in the
+    launcher's sweep list, so nothing ever opened them. A page absent from
+    that list is a page nobody looks at until a user does."""
+    src = _read("launch.py")
+    block = src[src.index('("MLB Recommended"'):src.index("]\n\n_SWEEP_JS")]
+    for page in ("Weather", "Alerts", "Standings", "Rosters", "Live",
+                 "About", "Terms", "Privacy"):
+        assert f'("{page}"' in block, f"{page} is not swept"
+
+
+def test_the_server_does_not_announce_its_python_version():
+    """The default `BaseHTTP/0.6 Python/3.11.15` hands an attacker the
+    exact stack and patch level to look up CVEs against, for nothing in
+    return."""
+    assert "server_version = " in SERVER
+    assert "sys_version = \"\"" in SERVER
+    i = SERVER.index("server_version = ")
+    assert "BaseHTTP" not in SERVER[i:i + 80]
+
+
 def test_the_undocumented_feed_risk_is_called_out():
     """The finding most likely to be missed, because nothing breaks when
     you get it wrong — it just becomes somebody else's decision later."""

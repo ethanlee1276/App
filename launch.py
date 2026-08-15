@@ -1835,6 +1835,26 @@ SWEEP_VIEWS = [
     ("My Bets", "?sport=mlb#mybets", "#mybets-body"),
     ("Bankroll", "?sport=mlb#bankroll", "#view-bankroll"),
     ("Why Us", "?sport=mlb#why", "#why-body"),
+    # ADDED 2026-08-15, AND THIS IS WHY. Weather and Alerts were missing
+    # from this list, and both crashed on load — `_railDeskCache` was a
+    # top-level `let` declared 5,000 lines BELOW the two renderers that
+    # read it, so both threw "cannot access before initialization" and
+    # came up blank below the fold. The whole 4,400-test suite passed the
+    # entire time: the file parses perfectly and the fault only exists at
+    # runtime, in one execution order, on the two pages nothing opened.
+    #
+    # A page absent from this list is a page nobody looks at until a user
+    # does. Everything with a nav entry is here now.
+    ("Weather", "?sport=mlb#weather", "#weather-body"),
+    ("Alerts", "?sport=mlb#alerts", "#alerts-body"),
+    ("Standings", "?sport=mlb#standings", "#standings-body"),
+    ("Rosters", "?sport=mlb#rosters", "#rosters-body"),
+    ("Live", "?sport=mlb#live", "#view-live"),
+    ("About", "?sport=mlb#about", "#about-body"),
+    ("Futures", "?sport=mlb#futures", "#futures-body"),
+    ("The Lab", "?sport=mlb#lab", "#lab-body"),
+    ("Terms", "terms.html", ".legal"),
+    ("Privacy", "privacy.html", ".legal"),
 ]
 
 _SWEEP_JS = r"""

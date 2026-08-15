@@ -78,6 +78,17 @@ const SPORT_META = {
 /* Pages a sport has no engine for. Listed here rather than as conditions
    scattered through applySport, because "which pages does this sport
    have?" is one question and it should have one answer. */
+/* THE PREDICTION-DESK CACHE, DECLARED UP HERE ON PURPOSE.
+   `let` is hoisted but stays in the temporal dead zone until its
+   declaration line RUNS, so a `let` sitting near its own function at the
+   bottom of a 14,000-line file throws for anything that reads it sooner.
+   Weather and Alerts do exactly that — both read it while rendering, both
+   crashed with "Cannot access '_railDeskCache' before initialization",
+   and both pages came up blank below the fold. Found by opening every
+   view in a browser; nothing in the test suite noticed, because the file
+   parses perfectly and the fault only exists at runtime in one order. */
+let _railDeskCache = null, _railDeskAt = 0;
+
 const HIDDEN_VIEWS = {
   nba: ["longshots", "weather"],
   // The WNBA has no futures board: engine/futures.py has a shape for it but
@@ -13870,8 +13881,10 @@ function renderRail() {
 
 /* The slip-shaped slot, honestly filled: the prediction desk's current
    recommendations, only when one exists, PAPER-labelled. Cached five
-   minutes — the rail re-renders far more often than the desk changes. */
-let _railDeskCache = null, _railDeskAt = 0;
+   minutes — the rail re-renders far more often than the desk changes.
+
+   The cache itself is declared far ABOVE, next to the other module state,
+   and the reason is written there. */
 async function renderRailDesk() {
   const host = document.getElementById("rail-desk");
   if (!host) return;

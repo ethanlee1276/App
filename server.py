@@ -1412,6 +1412,15 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, target.read_bytes(), target.suffix,
                    mtime=target.stat().st_mtime)
 
+    #: What we tell the world we are. The default is
+    #: `BaseHTTP/0.6 Python/3.11.15`, which hands an attacker the exact
+    #: stack and patch level to look up CVEs against — free reconnaissance
+    #: for nothing in return. Caddy strips it too, but that only helps
+    #: when Caddy is in front, and the app should not be volunteering it
+    #: in the first place.
+    server_version = "Qellys"
+    sys_version = ""
+
     def _send(self, code: int, body: bytes, suffix: str, mtime: float | None = None,
               headers: list | None = None):
         self.send_response(code)
