@@ -328,6 +328,34 @@ def test_the_jumped_to_block_clears_the_sticky_masthead():
     assert px >= 64, f"{px}px does not clear the 64px masthead"
 
 
+def test_a_dead_menu_anchor_says_so_instead_of_doing_nothing():
+    """The third way this bug can come back, closed.
+
+    The sidebar menu items scroll to a block by id. Every id there is our
+    own `data-anchor`, so `revealAnchor` returning null does not mean "an
+    ordinary page anchor the browser could still handle" — it means the
+    block was renamed or deleted, and the menu item now navigates home and
+    stops. That is exactly what Ethan reported about the preseason button:
+    "doesn't do anything and isn't displaying anything."
+
+    The two other call sites are allowed to fall through quietly, and
+    should: the slate jump hands an unknown hash back to the browser, and
+    the hashchange router checks the element exists before it reveals.
+    Only this one is a guaranteed defect, so only this one shouts — and it
+    shouts through console.error, which the headless render sweep already
+    fails on. That turns a future dead menu item from a bug report into a
+    red line in `launch.py --check`.
+    """
+    js = _read("web", "js", "app.js")
+    i = js.index("revealAnchor(b.dataset.anchor)")
+    block = js[i:i + 700]
+    assert "console.error" in block, \
+        "a missing menu target is swallowed again — silent dead button"
+    assert "dead menu anchor" in block
+    # And it must not then try to scroll a null.
+    assert block.index("console.error") < block.index("scrollIntoView")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

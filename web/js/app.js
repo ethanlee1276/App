@@ -12905,7 +12905,19 @@ function watchSectionSubs() {
   obs.observe(main, { childList: true, subtree: true });
 }
 
-const VIEW_ORDER = ["recommended", "prop", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
+/* Left-to-right nav order, used ONLY to pick which way a view slides in.
+   Every routable view belongs here: `switchView` looks up both names with
+   indexOf, and a missing one comes back -1, which is not "unknown" — it is
+   "further left than everything", so the view always animates as though
+   you had gone backwards to reach it.
+
+   `mybets` and `game` were both missing. Measured: opening My Bets from
+   Recommended slid in from-LEFT while its own neighbours Record and The
+   Lab slid from-right, so the one page about the user's own money was the
+   one that felt like a step back. Nothing else was affected — the view
+   still switched correctly, which is why it survived: the bug is only
+   visible as a 200ms animation going the wrong way. */
+const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "mybets", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
 
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -14212,7 +14224,18 @@ async function renderLiveBoard() {
       // current target is in the default room, so this changes nothing
       // today — it is here so the next one added cannot be a dead button.
       const el = revealAnchor(b.dataset.anchor);
-      if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+      // A null here is never legitimate: unlike a page anchor the browser
+      // could still try, this id is OUR OWN data-anchor. Missing means the
+      // block was renamed or removed and this menu item now navigates home
+      // and stops — the precise shape of the preseason bug, silent again.
+      // Said out loud so the headless render sweep (which fails on console
+      // errors) catches the next one instead of a user reporting a button
+      // that "doesn't do anything".
+      if (!el) {
+        console.error(`dead menu anchor: #${b.dataset.anchor} has no element`);
+        return;
+      }
+      setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
     }));
   // Sub-tab items (Game Lines, Watchlist): go Home, then open the tab —
   // through the subnav's own button so its state machinery all runs.

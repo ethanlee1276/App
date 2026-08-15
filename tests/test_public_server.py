@@ -122,6 +122,47 @@ def test_the_inline_script_weakness_is_written_down_not_hidden():
         "the handlers are gone — tighten script-src and update this test"
 
 
+def test_frame_src_names_every_host_the_page_actually_embeds():
+    """The CSP must not silently switch off a feature.
+
+    `default-src 'self'` covers frames when `frame-src` is absent, so the
+    first version of these headers refused BOTH pool-chart embeds on
+    Rocket Radar — the chart panel that is the entire point of that page
+    came up empty. Nothing failed: the page renders perfectly and it is
+    the browser that declines the frame, with the refusal only in the
+    console. 4,400 tests could not see it; a headless sweep reading the
+    console found it in one pass.
+
+    So the rule is derived from the page rather than typed by hand: every
+    host app.js builds an iframe src from must appear in `frame-src`, and
+    `frame-src` must not be a wildcard — `https:` would let any injected
+    iframe load anything, which is most of what frame protection is for.
+    """
+    # Read the assembled header, not the source text. Grepping the source
+    # broke the moment the directive was split across two Python string
+    # literals for line length: the regex captured the first literal only
+    # and the test failed on a host that was in fact allowed. What the
+    # browser sees is the concatenated value, so that is what to check.
+    import server as _srv
+    csp = dict(_srv.SECURITY_HEADERS)["Content-Security-Policy"]
+    assert "frame-src" in csp, \
+        "no frame-src, so default-src 'self' silently blocks the charts"
+    frame_src = next(d for d in csp.split(";") if d.strip().startswith("frame-src"))
+    frame_src = frame_src.strip()[len("frame-src"):].strip()
+    assert "*" not in frame_src and frame_src.split() != ["https:"], \
+        f"frame-src is a wildcard: {frame_src!r}"
+
+    # Every embed URL in the page, not a window around one call site: a
+    # windowed search silently found nothing when the URLs sat twenty
+    # lines above the <iframe>, and a test that finds nothing passes.
+    assert "<iframe" in APP, "no iframe left — drop frame-src and this test"
+    embedded = set(re.findall(r'https://([a-z0-9.-]+)/[^`"\']*embed=1', APP))
+    assert embedded, "could not find the embed URLs — this test has gone stale"
+    for host in sorted(embedded):
+        assert host in frame_src, \
+            f"the page frames {host} but frame-src does not allow it"
+
+
 def test_clickjacking_is_refused_twice():
     """`X-Frame-Options` for old browsers, `frame-ancestors` for the rest.
     A betting page framed inside somebody else's site is a phishing page

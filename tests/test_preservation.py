@@ -130,6 +130,43 @@ def test_every_view_still_exists():
     assert 'id="parlays-body"' in HTML, "the parlay tickets lost their container"
 
 
+def test_every_routable_view_is_in_VIEW_ORDER():
+    """Parse the list, don't grep for the name.
+
+    `test_every_view_still_exists` above asserts `f'"{v}"' in APP` — true
+    for any name that appears ANYWHERE in a 14,000-line file. "mybets"
+    appears a dozen times (STANDALONE_MODES, the brand table, the sync
+    keys), so that check stayed green for weeks while `mybets` was missing
+    from VIEW_ORDER entirely. A substring test over a whole file cannot
+    tell you which list a string is in.
+
+    What the omission cost: `switchView` computes the slide direction as
+    `VIEW_ORDER.indexOf(target) - VIEW_ORDER.indexOf(current)`, and a
+    missing name gives -1 — not "unknown" but "left of everything". So
+    My Bets always animated in from the LEFT, as though you had gone
+    backwards, while its own neighbours Record and The Lab came from the
+    right. Measured in a browser before and after.
+
+    The view still switched, which is why nothing caught it: the whole
+    symptom is a 200ms animation pointing the wrong way.
+    """
+    order = re.search(r"const VIEW_ORDER = \[(.*?)\];", APP, re.S)
+    assert order, "VIEW_ORDER is gone or no longer a flat literal"
+    names = [s.strip().strip('"') for s in order.group(1).split(",") if s.strip()]
+    assert len(names) == len(set(names)), "a view is listed twice"
+
+    routable = set(re.findall(r'id="view-([a-z0-9_-]+)"', HTML))
+    missing = sorted(routable - set(names))
+    assert not missing, (
+        f"routable but absent from VIEW_ORDER, so they animate backwards: "
+        f"{missing}")
+
+    phantom = sorted(set(names) - routable)
+    assert not phantom, (
+        f"in VIEW_ORDER with no #view-* container — switchView would throw "
+        f"on null: {phantom}")
+
+
 def test_the_record_is_a_standalone_page_not_a_sport_tab():
     """Promoted by request: the Record holds the receipts for every sport
     plus the whole learning loop, and it was buried twelfth in each

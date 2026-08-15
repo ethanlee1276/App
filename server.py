@@ -126,6 +126,30 @@ SECURITY_HEADERS = (
      "style-src 'self' 'unsafe-inline'; "
      "font-src 'self'; "
      "connect-src 'self'; "
+     # Rocket Radar embeds the live pool chart for the selected coin from
+     # whichever of the two indexers has that pool. WITHOUT THIS LINE
+     # `default-src 'self'` applies to frames and both are refused — the
+     # chart panel that is the whole point of the page comes up empty,
+     # silently, with the refusal only in the browser console. It was
+     # broken from the moment the security headers shipped until a
+     # headless sweep read the console and said so; nothing in 4,400
+     # tests could see it, because the page renders perfectly and it is
+     # the BROWSER that declines to load the frame.
+     #
+     # Named hosts, not a wildcard: these are the only things this site
+     # frames, and `frame-src https:` would let any injected iframe
+     # anywhere load — which is most of what framing protection is for.
+     #
+     # BOTH apex and www for each, because CSP re-checks every redirect
+     # hop: if dexscreener.com answers with a 301 to www (or geckoterminal
+     # the other way), the frame is refused at the second hop and the
+     # chart is blank again for a reason that looks nothing like this
+     # line. Whether they actually redirect could not be measured from
+     # here — the dev container's egress policy blocks both hosts — so
+     # this covers the case instead of guessing at it. Four named hosts
+     # is still a closed list.
+     "frame-src https://dexscreener.com https://www.dexscreener.com "
+     "https://geckoterminal.com https://www.geckoterminal.com; "
      "frame-ancestors 'none'; "
      "base-uri 'self'; "
      "form-action 'self'"),
