@@ -112,6 +112,15 @@ NFL_USAGE_MARKETS = {
     "rush_yds": ("rushing_yards",),
     "pass_td": ("passing_tds",),
     "pass_int": ("interceptions", "passing_interceptions"),
+    # AND THE TWO TOUCHDOWN COMPONENTS, added 2026-08-15 with the Yahoo
+    # adapter. Every adapter already produces `rush_td` and `rec_td` keys
+    # — Sleeper by that name, ESPN as stat ids 25 and 43, Yahoo as
+    # "Rushing Touchdowns" — and until now nothing consumed them: a
+    # league scoring a rushing touchdown at 4 was scored at PPR's 6
+    # without a word. Storing the parts is what lets that be adjusted for,
+    # and lets it be REPORTED when it cannot be.
+    "rush_td": ("rushing_tds",),
+    "rec_td": ("receiving_tds",),
 }
 #: Markets that only exist for a quarterback. Writing a zero for everyone
 #: else would make "he threw no touchdowns" and "he is a wide receiver"

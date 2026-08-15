@@ -30,6 +30,12 @@ secrets.local
 secrets.local.*
 secrets.local~
 *.local.save
+# The Yahoo OAuth token. Not an API key but the same class of object and
+# worse to leak: it is scoped to ONE person's fantasy account and grants
+# read access until it is revoked. `data/` is not ignored as a directory
+# here — only named files under it are — so this needs saying explicitly,
+# which is exactly the hole `data/*.pre-rescale-*` below was added for.
+data/yahoo_token.json
 
 # OS / editor
 .DS_Store

@@ -286,6 +286,14 @@ it there are no NFL team ratings, so `game_bets` is empty and the
 moneyline/total/spread board cannot price at all — which is most of what the
 NFL board is for during the three weeks its props are dark (§3a).
 
+**It now also carries the fantasy scoring components** — `rec_yds`,
+`rush_yds`, `pass_td`, `pass_int` (added with the lineup optimiser) and
+`rush_td`, `rec_td` (added with the Yahoo adapter). Until it runs, the
+league desk scores every league off nflverse's PPR total with **no**
+custom-scoring adjustment, and says so on the page: a quarterback row
+reads "could not be adjusted for: pass_int, pass_td". That warning is the
+symptom of this command not having run, and it disappears when it does.
+
 What you should see afterwards: photos instead of initials on NBA, WNBA and
 MLB prop cards, real logos beside team names everywhere, and the offseason
 coach-change rows rendering at all — they were throwing a TypeError and

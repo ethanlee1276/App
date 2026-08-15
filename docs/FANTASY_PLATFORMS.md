@@ -79,18 +79,53 @@ page that the site is holding an ESPN session token.
 
 ## Tier 3 — needs a registered app. The *correct* pattern, but real work.
 
-### Yahoo
+### Yahoo — **adapter built, 2026-08-15**
 Yahoo has a proper, documented **Fantasy Sports API** with OAuth2. You
 register an application at `developer.yahoo.com`, get a client ID and
 secret, and the user grants access through Yahoo's own consent screen.
 No password ever touches this app, the token refreshes, and you can
 revoke it from your Yahoo account page at any time.
 
-This is the right way to do third-party access and it is the only Tier-3
-platform worth the effort. The cost is real though: an app registration,
-a redirect URI (awkward for a site served on a LAN address), a token
-store, and a refresh loop. Call it a day of work versus an hour for a
-Tier-1 platform.
+**This is the only credential this project holds, and it is held because
+of what it is, not despite it.** A session cookie cannot be scoped,
+cannot be revoked short of logging out everywhere, and grants whatever
+your logged-in browser can do. An OAuth token is scoped to fantasy read
+access, expires, refreshes, and dies the moment you click revoke. Those
+are different objects and the rule was never "no secrets" — it was never
+hold a credential you cannot hand back.
+
+**What you do once.** Register the app (free), put `YAHOO_CLIENT_ID` and
+`YAHOO_CLIENT_SECRET` in `secrets.local`, then click connect on the
+Fantasy tab. Yahoo shows a short code; you paste it back.
+
+**Three things worth knowing about how it is built.**
+
+*The redirect problem.* Yahoo wants a redirect URI and this site is
+served on a LAN address with no public HTTPS name, so the usual web flow
+does not fit. `oob` — Yahoo shows a code to paste — is supported for
+exactly this shape and is the default. A real redirect URI can be passed
+if you ever have one.
+
+*Connecting is loopback-only.* Reading the site is LAN-wide, as it always
+has been. Granting or revoking a third party's access to a Yahoo account
+is not the same class of action, so `/api/yahoo/connect` and
+`/api/yahoo/disconnect` only answer requests from the machine running the
+server. A phone on the same coffee-shop wifi can read your lineup; it
+cannot connect or disconnect your Yahoo account.
+
+*Scoring is mapped by NAME, not by stat id.* Yahoo hands back both — and
+sends **two different names for the same stat** (`name` "Passing Yards",
+`display_name` "Pass Yds"). Both spellings are in the map, because a map
+holding one of them scores a league silently wrong: every rule reads as
+"agrees with PPR" and nothing errors. Anything that still cannot be
+placed comes back in `unmapped` and reaches the page. Kicker and defense
+rules are reported separately as `not_modelled`, because this app has
+never projected them — that is a known limit, not a gap in the map, and
+one number for both would hide a real miss inside twenty expected ones.
+
+The token is stored at `data/yahoo_token.json` with owner-only
+permissions set at creation, is never sent to the browser, and is never
+logged.
 
 ---
 
@@ -107,18 +142,28 @@ Tier-1 platform.
 
 ---
 
-## What I would build, in order
+## Where this stands
 
-1. **MFL and Fleaflicker.** Tier 1, no credentials, ~an hour each, and
-   they reuse the Sleeper adapter shape exactly.
-2. **ESPN public leagues.** Same work, plus a clear message when the
-   league is private that names the setting to change.
-3. **Yahoo OAuth** — only if you actually have a Yahoo league. It is a
-   day of work and pointless otherwise.
+Ethan answered the open question on 2026-08-15: **"All of them besides
+MFL and Fleaflicker"** — so Sleeper, ESPN and Yahoo, and all three are
+built.
 
-**The open question is which of these you actually play in.** Building
-Yahoo's OAuth flow for a league that doesn't exist is a day spent on
-nothing. Tell me the platforms and I will do them in that order.
+| Platform | Status | What it needs from you |
+|---|---|---|
+| Sleeper | in production | nothing |
+| ESPN | built | the league set to viewable by the public |
+| Yahoo | built | one free app registration, then one approval click |
+| MFL | not built | nothing (public leagues) — deliberately skipped |
+| Fleaflicker | not built | nothing (public leagues) — deliberately skipped |
+
+MFL and Fleaflicker are the *cheapest* two to add and are not built,
+because Ethan does not play on them. Each is roughly an hour if that ever
+changes.
+
+**The desk above them never learns which platform it is talking to.** All
+three adapters return the same shape, so `fantasy_lineup` and
+`fantasy_trade` are shared and there is exactly one lineup optimiser and
+one trade generator to be right or wrong.
 
 ---
 

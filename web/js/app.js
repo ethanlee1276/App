@@ -9343,7 +9343,9 @@ async function renderFantasy() {
     ["league", "Around the league",
      "camp, the waiver wire, the offseason and the draft kit",
      acctCardHTML() + `<div id="sleeper-zone"></div>`
-     + `<div id="league-desk"></div>` + campHTML(d.camp)
+     + `<div id="league-desk"></div>`
+     + `<div id="yahoo-zone"></div><div id="yahoo-desk"></div>`
+     + campHTML(d.camp)
      + waiverPulseHTML(d.trending) + offseasonHTML(off) + draftKit],
   ]) + _ffFoot;
   bindSubtabs(host);
@@ -9359,6 +9361,7 @@ async function renderFantasy() {
   window._ffRanks = d.ranks || null;
   initRankBoard();
   renderSleeperZone(d);
+  renderYahooZone();
 }
 
 /* The Fantasy page is ALWAYS football, whatever sport tab the user
@@ -10360,15 +10363,16 @@ const tierColor = (t) => TIER_COLORS[Math.min(t - 1, TIER_COLORS.length - 1)];
    insult. It does not show a probability, because there is nothing to fit
    one on: this app has never stored a proposed trade. The note says so,
    and the log button is what makes it answerable later. */
-async function renderLeagueDesk(leagueId, userId) {
-  const host = document.getElementById("league-desk");
+async function renderLeagueDesk(leagueId, userId, platform, hostId) {
+  const host = document.getElementById(hostId || "league-desk");
   if (!host) return;
   if (!leagueId) { host.innerHTML = ""; return; }
   host.innerHTML = `<p class="loading">Reading your league\u2019s scoring and rosters\u2026</p>`;
   let d;
   try {
     const r = await fetch(`/api/leaguedesk?league=${encodeURIComponent(leagueId)}`
-      + `&user=${encodeURIComponent(userId || "")}`);
+      + `&user=${encodeURIComponent(userId || "")}`
+      + `&platform=${encodeURIComponent(platform || "sleeper")}`);
     d = await r.json();
     if (!r.ok) throw new Error(d && d.error);
   } catch (e) {
@@ -10382,7 +10386,7 @@ async function renderLeagueDesk(leagueId, userId) {
       right league above.</div>`;
     return;
   }
-  host.innerHTML = ffLineupHTML(d) + ffTradesHTML(d);
+  host.innerHTML = ffLineupHTML(d) + ffScoringGapsHTML(d) + ffTradesHTML(d);
   host.querySelectorAll("[data-logtrade]").forEach((b) =>
     b.addEventListener("click", () => ffLogTrade(b)));
 }
@@ -10425,6 +10429,164 @@ function ffLineupHTML(d) {
         rules are not reflected.</p>` : ""}
       <p class="rank-help">${escapeHtml(L.note || "")}</p>
     </div>`;
+}
+
+/* The rules we did NOT apply, split in two because they mean opposite
+   things. `unmapped` is a gap in our map and a bug to fix; `not_modelled`
+   is the kicker and defense scoring this app has never projected. Showing
+   one number for both would hide a real miss inside a known limit — which
+   is the shape of the `pass_att` bug this repo already paid for. */
+function ffScoringGapsHTML(d) {
+  const un = d.unmapped_scoring || [];
+  const nm = d.not_modelled_scoring || [];
+  if (!un.length && !nm.length) return "";
+  const name = (u) => escapeHtml(String(u.name || u.statId || u.stat_id || "?"))
+    + ` <span class="rank-none">${u.points > 0 ? "+" : ""}${u.points}</span>`;
+  return `<div class="card">
+    ${un.length ? `<p class="rank-help">${icon("warn")} <b>Scoring rules we
+      could not read</b>, so they are not in any projection above:
+      ${un.map(name).join(", ")}. That is a gap in our map, not in your
+      league — tell me and it is a one-line fix.</p>` : ""}
+    ${nm.length ? `<p class="rank-help">Kicker and defense scoring is read
+      but never projected — this app models offensive production only, so
+      those ${nm.length} rule${nm.length === 1 ? "" : "s"} sit unused and
+      those slots are filled by eligibility alone.</p>` : ""}
+  </div>`;
+}
+
+/* ---------------- Yahoo, the one platform that needs approval ----------
+
+   Ethan, 2026-08-15, plays on Sleeper, ESPN and Yahoo.
+
+   WHY THERE IS A CONNECT BUTTON HERE AND NOWHERE ELSE ON THIS SITE.
+   Sleeper is public. ESPN is public when a league says so. Yahoo has no
+   public read at all — but it has the RIGHT kind of private one: you
+   approve it on Yahoo’s own screen, this app never sees a password, and
+   you can revoke it from your Yahoo account page whenever you like. That
+   is the opposite of pasting a session cookie, which is why a private
+   ESPN league is still refused and this is not.
+
+   The token never reaches this page. The browser is told THAT it is
+   connected, never what makes it work. */
+async function renderYahooZone() {
+  const zone = document.getElementById("yahoo-zone");
+  if (!zone) return;
+  let s;
+  try {
+    const r = await fetch("/api/yahoo/status");
+    s = await r.json();
+  } catch (e) { zone.innerHTML = ""; return; }
+
+  if (!s.app_registered) {
+    zone.innerHTML = `<div class="card">
+      <div class="section-title">Yahoo league
+        <span class="sub">— one free registration, then no password ever</span></div>
+      <p class="rank-help">Yahoo is the only platform here that needs
+        approval, and the only one whose access you can hand back. Register
+        a free app at <b>developer.yahoo.com</b> (any name, permission
+        “Fantasy Sports read”), then put the two values it gives you into
+        <b>secrets.local</b> as <b>YAHOO_CLIENT_ID</b> and
+        <b>YAHOO_CLIENT_SECRET</b>. Restart the server and this panel turns
+        into a connect button.</p>
+      <p class="rank-help">Those identify the APP, not you. On their own
+        they cannot read anybody’s league — a human still has to approve it
+        on Yahoo’s screen.</p></div>`;
+    return;
+  }
+  if (!s.connected) {
+    zone.innerHTML = `<div class="card">
+      <div class="section-title">Yahoo league
+        <span class="sub">— approve once on Yahoo’s own page</span></div>
+      <p class="rank-help">Yahoo will show you a short code. Paste it back
+        here. No password is shared with this app, and you can revoke it
+        from your Yahoo account page at any time.</p>
+      <div class="ld-connect">
+        <button class="btn" id="yahoo-open">Open Yahoo’s approval page</button>
+        <input id="yahoo-code" class="rank-input" placeholder="Paste the code Yahoo shows"
+          autocomplete="off" spellcheck="false">
+        <button class="btn ghost" id="yahoo-connect">Connect</button>
+      </div>
+      <p class="rank-help" id="yahoo-msg"></p></div>`;
+    const msg = document.getElementById("yahoo-msg");
+    document.getElementById("yahoo-open").addEventListener("click", async () => {
+      try {
+        const r = await fetch("/api/yahoo/start");
+        const d = await r.json();
+        if (!r.ok) throw new Error(d && d.error);
+        window.open(d.url, "_blank", "noopener");
+      } catch (e) {
+        msg.textContent = String((e && e.message) || e);
+      }
+    });
+    document.getElementById("yahoo-connect").addEventListener("click", async () => {
+      const code = (document.getElementById("yahoo-code").value || "").trim();
+      msg.textContent = "Exchanging the code…";
+      try {
+        const r = await fetch("/api/yahoo/connect", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d && d.error);
+        renderYahooZone();
+      } catch (e) {
+        msg.textContent = String((e && e.message) || e);
+      }
+    });
+    return;
+  }
+
+  zone.innerHTML = `<div class="card"><p class="loading">Reading your Yahoo
+    leagues…</p></div>`;
+  let leagues = [];
+  try {
+    const r = await fetch("/api/yahoo/leagues");
+    const d = await r.json();
+    if (!r.ok) throw new Error(d && d.error);
+    leagues = d.leagues || [];
+  } catch (e) {
+    zone.innerHTML = `<div class="card"><div class="warning">${icon("warn")}
+      Yahoo connected, but the league list failed: ${
+        escapeHtml(String((e && e.message) || e))}</div></div>`;
+    return;
+  }
+  let picked = localStorage.getItem("ff_yahoo_league") || "";
+  if (!leagues.some((l) => l.league_key === picked))
+    picked = (leagues[0] || {}).league_key || "";
+
+  zone.innerHTML = `<div class="card">
+    <div class="card-head">
+      <div><div class="player">Yahoo league</div>
+        <div class="subtitle">connected · read-only · revocable from your
+          Yahoo account page</div></div>
+      <div class="ld-connect">
+        ${leagues.length ? `<select id="yahoo-league" class="rank-input">
+          ${leagues.map((l) => `<option value="${escapeHtml(l.league_key)}"
+            ${l.league_key === picked ? "selected" : ""}>${
+            escapeHtml(l.name)}${l.season ? ` · ${escapeHtml(l.season)}` : ""}
+            </option>`).join("")}</select>` : ""}
+        <button class="btn ghost" id="yahoo-disconnect">Disconnect</button>
+      </div>
+    </div>
+    ${leagues.length ? "" : `<p class="rank-help">This Yahoo account is not
+      in any NFL league right now.</p>`}</div>`;
+
+  document.getElementById("yahoo-disconnect").addEventListener("click", async () => {
+    await fetch("/api/yahoo/disconnect", { method: "POST" });
+    const desk = document.getElementById("yahoo-desk");
+    if (desk) desk.innerHTML = "";
+    renderYahooZone();
+  });
+  const sel = document.getElementById("yahoo-league");
+  if (sel) sel.addEventListener("change", () => {
+    localStorage.setItem("ff_yahoo_league", sel.value);
+    acctTouch("fantasy");
+    renderLeagueDesk(sel.value, "", "yahoo", "yahoo-desk");
+  });
+  if (picked) {
+    localStorage.setItem("ff_yahoo_league", picked);
+    renderLeagueDesk(picked, "", "yahoo", "yahoo-desk");
+  }
 }
 
 function ffTradesHTML(d) {

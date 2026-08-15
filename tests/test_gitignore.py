@@ -39,6 +39,11 @@ MUST_IGNORE = (
     "data/history.db.backup",
     "data/llm_spend.json",
     "data/sim_gate_failures.json",
+    # The Yahoo OAuth token, 2026-08-15. `data/` is not ignored wholesale
+    # — only named files under it are — so this needed saying explicitly,
+    # and it is worse to leak than an API key: it is scoped to ONE
+    # person's fantasy account and reads it until it is revoked.
+    "data/yahoo_token.json",
     "secrets.local",
     "secrets.local.old",
     "web/data/recommendations.json",

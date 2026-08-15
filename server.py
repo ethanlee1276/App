@@ -93,6 +93,13 @@ def sleeper_path_ok(path: str) -> bool:
 PROFILE_DIR = ROOT / "data" / "profiles"
 PROFILE_SECTIONS = ("mybets", "fantasy", "bankroll")
 MAX_PROFILE_BYTES = 1_000_000        # thousands of bets fit; junk bounces
+#: Connecting or disconnecting Yahoo is the one action on this server that
+#: changes what a third party may see, so it is restricted to the machine
+#: running it. Reading stays LAN-wide like the rest of the site.
+_YAHOO_LOCAL = ("Connect Yahoo from the computer running this server. "
+                "Reading works from anywhere on your network, but granting "
+                "or revoking access to a Yahoo account should not be "
+                "possible from another device on the same wifi.")
 MAX_TOMBSTONES = 500
 _PROFILE_NAME = re.compile(r"^[A-Za-z0-9_-]{2,24}$")
 _PROFILE_PIN = re.compile(r"^\d{4,12}$")
@@ -331,6 +338,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._draft_advice(parse_qs(parsed.query))
         if parsed.path in ("/api/leaguedesk", "/api/leaguedesk/"):
             return self._league_desk(parse_qs(parsed.query))
+        if parsed.path.startswith("/api/yahoo/"):
+            return self._yahoo(parsed.path[len("/api/yahoo/"):].strip("/"),
+                               parse_qs(parsed.query))
         if parsed.path.startswith("/api/sleeper/"):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
         if parsed.path.startswith("/api/profile/"):
@@ -341,6 +351,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/yahoo/"):
+            return self._yahoo_post(
+                parsed.path[len("/api/yahoo/"):].strip("/"))
         if not parsed.path.startswith("/api/profile/"):
             return self._send(404, b'{"error":"unknown endpoint"}', ".json")
         try:
@@ -455,10 +468,19 @@ class Handler(BaseHTTPRequestHandler):
         league_id = (query.get("league") or [""])[0].strip()
         user_id = (query.get("user") or [""])[0].strip()
         platform = (query.get("platform") or ["sleeper"])[0].strip().lower()
+        if platform not in ("sleeper", "espn", "yahoo"):
+            return self._send(400, b'{"error":"unknown platform"}', ".json")
+        # THE ID CHECK IS PER PLATFORM. `\d{1,25}` is right for Sleeper
+        # and ESPN and rejects every Yahoo league key ever issued — they
+        # look like `461.l.1234567`, and a shared regex would have made
+        # the Yahoo path unreachable while looking like a bad league id.
+        if platform == "yahoo":
+            if not re.fullmatch(r"[0-9]{1,6}\.l\.[0-9]{1,12}", league_id):
+                return self._send(
+                    400, b'{"error":"bad yahoo league key"}', ".json")
+            return self._league_desk_yahoo(league_id, query)
         if not re.fullmatch(r"\d{1,25}", league_id):
             return self._send(400, b'{"error":"bad league id"}', ".json")
-        if platform not in ("sleeper", "espn"):
-            return self._send(400, b'{"error":"unknown platform"}', ".json")
         from engine import fantasy_lineup, fantasy_ranks, fantasy_trade
         from engine.db import connect
         from engine.sources.fetch import fetch_text, DataUnavailable
@@ -583,6 +605,155 @@ class Handler(BaseHTTPRequestHandler):
             # response.
             "unmapped_scoring": lg.get("unmapped") or [],
         }
+        self._send(200, json.dumps(out).encode(), ".json")
+
+    def _league_desk_yahoo(self, league_key: str, query: dict):
+        """The same desk again, reading a Yahoo league through OAuth2.
+
+        The only platform here that needs anything of yours, and the only
+        one whose access can be handed back: you approve it on Yahoo's own
+        screen, this app never sees a password, and revoking it from a
+        Yahoo account page kills the token dead. That is why Yahoo is
+        built and a private ESPN league is not.
+
+        WHO IS "ME" IS NOT TYPED. Yahoo flags your own team in the
+        payload, so there is no id to look up and no way to select
+        somebody else's roster by accident.
+        """
+        from engine import fantasy_lineup, fantasy_trade
+        from engine.db import connect
+        from engine.sources import yahoofantasy
+        from engine.sources.fetch import DataUnavailable
+        try:
+            lg = yahoofantasy.league(league_key)
+        except DataUnavailable as exc:
+            return self._send(502, json.dumps({"error": str(exc)}).encode(),
+                              ".json")
+
+        conn = connect()
+        try:
+            stat_season = max((int(s[0]) for s in conn.execute(
+                "SELECT DISTINCT season FROM player_game_logs WHERE sport='nfl'"
+            ).fetchall()), default=0)
+            means = (fantasy_lineup.per_game(conn, stat_season)
+                     if stat_season else {})
+        finally:
+            conn.close()
+
+        rosters = dict(lg.get("rosters") or {})
+        mine = rosters.pop(lg.get("mine"), []) if lg.get("mine") else []
+        slots = fantasy_lineup.starting_slots(lg.get("slots"))
+        scoring = lg.get("scoring") or {}
+        trades = (fantasy_trade.generate(mine, rosters, slots, scoring, means)
+                  if mine and rosters else [])
+        out = {
+            "platform": "yahoo", "league": lg.get("name"),
+            "season": stat_season, "slots": slots, "has_me": bool(mine),
+            "my_team": lg.get("mine"),
+            "lineup": (fantasy_lineup.lineup(mine, slots, scoring, means)
+                       if mine else None),
+            "trades": trades[:12],
+            "trade_summary": fantasy_trade.summary(trades),
+            # THE RULES WE DID NOT APPLY, split in two because they mean
+            # different things: `unmapped_scoring` is a gap in our map and
+            # a bug to fix, `not_modelled_scoring` is the kicker and
+            # defense scoring this app has never projected. Reporting them
+            # as one number would hide the first inside the second.
+            "unmapped_scoring": lg.get("unmapped") or [],
+            "not_modelled_scoring": lg.get("not_modelled") or [],
+        }
+        self._send(200, json.dumps(out).encode(), ".json")
+
+    # --- Yahoo's connection, which is the only credential this app holds ----
+    def _local_only(self) -> bool:
+        """True when the request came from this machine.
+
+        READING the site is LAN-wide, as everything here always has been.
+        GRANTING or REVOKING Yahoo access is not: it is the one action on
+        this server that changes what a third party may see, and a phone
+        on the same coffee-shop wifi should not be able to take it.
+        """
+        host = (self.client_address or ("",))[0]
+        return host in ("127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost")
+
+    def _yahoo(self, path: str, query: dict):
+        from engine.sources import yahoofantasy as yf
+        from engine.sources.fetch import DataUnavailable
+        if path == "status":
+            # Deliberately says whether a token EXISTS, never what it is.
+            try:
+                cid, _ = yf.credentials()
+                app = True
+            except DataUnavailable:
+                app = False
+            return self._send(200, json.dumps(
+                {"connected": yf.connected(), "app_registered": app}).encode(),
+                ".json")
+        if path == "start":
+            if not self._local_only():
+                return self._send(403, json.dumps({"error": _YAHOO_LOCAL}
+                                                  ).encode(), ".json")
+            try:
+                cid, _ = yf.credentials()
+            except DataUnavailable as exc:
+                return self._send(400, json.dumps({"error": str(exc)}).encode(),
+                                  ".json")
+            return self._send(200, json.dumps(
+                {"url": yf.authorize_url(cid)}).encode(), ".json")
+        if path == "leagues":
+            try:
+                return self._send(200, json.dumps(
+                    {"leagues": yf.my_leagues()}).encode(), ".json")
+            except DataUnavailable as exc:
+                return self._send(502, json.dumps({"error": str(exc)}).encode(),
+                                  ".json")
+        return self._send(404, b'{"error":"unknown yahoo endpoint"}', ".json")
+
+    def _yahoo_post(self, path: str):
+        from engine.sources import yahoofantasy as yf
+        from engine.sources.fetch import DataUnavailable
+        if path not in ("connect", "disconnect"):
+            return self._send(404, b'{"error":"unknown yahoo endpoint"}',
+                              ".json")
+        if not self._local_only():
+            return self._send(403, json.dumps({"error": _YAHOO_LOCAL}).encode(),
+                              ".json")
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = {}
+        if 0 < length <= 4096:
+            try:
+                body = json.loads(self.rfile.read(length)) or {}
+            except Exception:                                # noqa: BLE001
+                body = {}
+        elif length > 4096:
+            # An approval code is a few dozen characters. Anything larger
+            # is not one — and the body goes UNREAD, so the connection has
+            # to close rather than let keep-alive parse those bytes as the
+            # next request.
+            self.close_connection = True
+            return self._send(413, b'{"error":"body too large"}', ".json")
+        if path == "disconnect":
+            try:
+                Path(yf.TOKEN_PATH).unlink(missing_ok=True)
+            except OSError as exc:
+                return self._send(500, json.dumps({"error": str(exc)}).encode(),
+                                  ".json")
+            return self._send(200, b'{"connected":false}', ".json")
+        code = str((body or {}).get("code") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9._~-]{4,128}", code):
+            return self._send(400, json.dumps(
+                {"error": "That does not look like a Yahoo approval code. "
+                          "It is the short string Yahoo shows after you "
+                          "approve the app."}).encode(), ".json")
+        try:
+            out = yf.exchange_code(code)
+        except DataUnavailable as exc:
+            return self._send(502, json.dumps({"error": str(exc)}).encode(),
+                              ".json")
+        # `out` carries no token — only that it worked. See exchange_code.
         self._send(200, json.dumps(out).encode(), ".json")
 
     def _sleeper(self, path: str):

@@ -4684,6 +4684,16 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .ld-trade-head { display: flex; flex-wrap: wrap; align-items: center;
   gap: 8px; }
 .ld-trade-body { margin-top: 6px; font-size: var(--fs-sm); }
+/* The Yahoo connect row. Wraps rather than scrolls: on a phone the code
+   box and its button end up stacked, which is the only arrangement where
+   both stay tappable. */
+.ld-connect { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-top: 8px; }
+.ld-connect .rank-input { flex: 1 1 220px; min-width: 0; }
+.rank-input { padding: 8px 11px; background: var(--panel-2); color: inherit;
+  font-family: inherit; font-size: var(--fs-sm);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius); }
 
 /* --- Pick-by-pick advice, in the draft room ------------------------------ */
 .dk-advice { margin-top: 12px; padding-top: 10px;

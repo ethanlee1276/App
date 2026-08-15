@@ -54,12 +54,25 @@ from __future__ import annotations
 PPR_BASELINE = {
     "rec": 1.0, "rec_yd": 0.1, "rush_yd": 0.1, "pass_yd": 0.04,
     "pass_td": 4.0, "pass_int": -2.0,
+    # The two touchdown rates, added 2026-08-15. Every adapter already
+    # produced these keys and nothing read them, so a league scoring a
+    # rushing touchdown at 4 was scored at PPR's 6 in silence. Listing
+    # them here is what makes the difference get applied — or, when the
+    # component has not been ingested, REPORTED as missing instead of
+    # passing as "agrees with PPR".
+    "rush_td": 6.0, "rec_td": 6.0,
 }
 #: Sleeper's scoring key → the per-game market that scales it.
 SCORING_MARKET = {
     "rec": "receptions", "rec_yd": "rec_yds", "rush_yd": "rush_yds",
     "pass_yd": "pass_yds", "pass_td": "pass_td", "pass_int": "pass_int",
+    "rush_td": "rush_td", "rec_td": "rec_td",
 }
+#: Components only a quarterback produces. The ingest stores these for
+#: quarterbacks alone, so for anyone else an absent value means zero —
+#: which is a fact, not a gap. Rushing and receiving touchdowns are NOT
+#: here: quarterbacks rush for plenty of them.
+QB_ONLY_COMPONENTS = {"pass_yd", "pass_td", "pass_int"}
 #: Slot name → the positions allowed in it. Anything not listed is a
 #: bench seat and is never started.
 SLOT_ELIGIBILITY = {
@@ -121,6 +134,16 @@ def league_points(means: dict, scoring: dict) -> dict:
         market = SCORING_MARKET[key]
         have = (means or {}).get(market)
         if have is None:
+            # A RECEIVER'S PASSING TOUCHDOWNS ARE ZERO, NOT UNKNOWN. The
+            # ingest stores the passing markets for quarterbacks only
+            # (`NFL_QB_ONLY`), so without this every wide receiver, back
+            # and tight end carried `exact: false` and a permanent
+            # "could not adjust for: pass_int, pass_td" — seen on CeeDee
+            # Lamb the first time a Yahoo league rendered. A warning that
+            # fires on every row of the table is one nobody reads, and it
+            # would have buried a real gap the day one appeared.
+            if key in QB_ONLY_COMPONENTS and pos and pos != "QB":
+                continue
             missing.append(key)
             continue
         pts += (float(want) - ppr_rate) * float(have)

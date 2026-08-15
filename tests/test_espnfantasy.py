@@ -245,7 +245,7 @@ def test_the_desk_serves_espn_through_the_same_endpoint():
     why the two platforms get separate handlers rather than one branched
     inline where they could drift into each other's assumptions."""
     src = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
-    assert 'platform not in ("sleeper", "espn")' in src
+    assert 'platform not in ("sleeper", "espn", "yahoo")' in src
     assert "def _league_desk_espn(" in src
     i = src.index("def _league_desk_espn(")
     body = src[i:src.index("\n    def ", i + 1)]
