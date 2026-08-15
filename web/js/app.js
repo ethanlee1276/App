@@ -9784,12 +9784,30 @@ function acctSignedInHTML(u) {
 
 function acctSignInHTML() {
   const legacy = acctState();
+  // THE WARNING COMES BEFORE THE FORM, not after the password is typed.
+  // The server refuses these requests anyway, but a refusal arrives too
+  // late to be useful: by then the password is already in the box, and on
+  // a phone it is already in the keyboard's suggestion history.
+  const insecure = _acctUser && _acctUser.insecure;
   return `<div class="card" style="margin-bottom:16px">
     <div class="card-head"><div>
       <div class="player">Make an account</div>
       <div class="subtitle">Email and a password. Your bets, fantasy
         leagues and search history are stored with it, so they are there on
         every device you sign in on.</div></div></div>
+    ${insecure ? `<div class="warning">${icon("warn")} <b>${
+      _acctUser.allowed ? "This connection is not private."
+                        : "Not over this connection."}</b>
+      This page came over plain HTTP from another machine, so a password
+      typed here crosses your network readable by anyone on it — and it is
+      usually a password used somewhere else too.
+      ${_acctUser.allowed
+        ? `The server was started with <code>QB_ALLOW_INSECURE_LOGIN=1</code>,
+           so it will accept it anyway. That setting removed the refusal,
+           not the risk.`
+        : `Sign in from the computer running the server, or give it an HTTPS
+           address — <code>tailscale serve --bg 8000</code> prints one that
+           works from anywhere.`}</div>` : ""}
     <div class="acct-row">
       <input type="email" class="acct-email" placeholder="you@example.com"
         autocomplete="email" maxlength="254" spellcheck="false">
@@ -10018,10 +10036,15 @@ setTimeout(async () => {
   // browser's opening sync goes down the legacy path (or nowhere) and
   // the card paints "make an account" over an account that exists.
   await acctWho(true);
-  if (_acctUser && _acctUser.signed_in) {
-    if (state.view === "mybets") renderMyBets();
-    else if (state.view === "fantasy") renderFantasy();
-  }
+  // REPAINT WHATEVER THE ANSWER IS. The first cut only re-rendered when
+  // signed IN, which left the not-signed-in card exactly as it was drawn
+  // before the server answered — and that card is the one carrying the
+  // "this connection is not private" warning. So the warning was invisible
+  // in precisely the case it exists for. Found by opening the LAN address
+  // in a browser; the source-level test passed the whole time, because the
+  // string was there and only the timing was wrong.
+  if (state.view === "mybets") renderMyBets();
+  else if (state.view === "fantasy") renderFantasy();
   acctSync();
 }, 1500);
 setInterval(() => { if (!document.hidden) acctSync(); }, 60000);
@@ -14067,7 +14090,12 @@ async function renderLiveBoard() {
       if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
       if (state.view !== "recommended") switchView("recommended", true);
       closeMobileMenu();
-      const el = document.getElementById(b.dataset.anchor);
+      // Through `revealAnchor` for the same reason the preseason pointer
+      // is: if a target ever sits in a sub-tab that is not the open one,
+      // a bare scroll lands nowhere and the menu item looks broken. Every
+      // current target is in the default room, so this changes nothing
+      // today — it is here so the next one added cannot be a dead button.
+      const el = revealAnchor(b.dataset.anchor);
       if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
     }));
   // Sub-tab items (Game Lines, Watchlist): go Home, then open the tab —

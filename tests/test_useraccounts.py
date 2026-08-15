@@ -49,6 +49,9 @@ def _read(*parts):
 SERVER = _read("server.py")
 APP = _read("web", "js", "app.js")
 GOOD = "correct-horse-battery"
+#: The whole refusal message, from its assignment to the closing paren.
+_INSECURE = SERVER[SERVER.index("_INSECURE_LOGIN = ("):]
+_INSECURE = _INSECURE[:_INSECURE.index('before starting the server.)"') + 30]
 
 
 def _db():
@@ -428,6 +431,103 @@ def test_the_docs_say_what_is_true_now():
     for must in ("scrypt", "email + password", "still never asked for",
                  "TLS", "Stripe"):
         assert must in d, must
+
+
+# --- the transport ----------------------------------------------------------
+#
+# THE HASHING DOES NOTHING FOR THIS, which is the whole reason it needed a
+# guard of its own. scrypt protects the password at rest; a password typed
+# into a plain-HTTP page has already crossed the network readable before it
+# ever reaches the hash, and anyone on that Wi-Fi has it — for this site
+# and for wherever else it was reused.
+def test_a_password_cannot_cross_a_cleartext_network_by_default():
+    i = SERVER.index("def _password_transport_ok(")
+    body = SERVER[i:SERVER.index("\n    def ", i + 1)]
+    assert "_transport_is_cleartext()" in body
+    j = SERVER.index("PASSWORD_PATHS = ")
+    paths = SERVER[j:j + 200]
+    for p in ("signup", "login", "password", "delete"):
+        assert p in paths, p
+    k = SERVER.index("def _account_post(")
+    post = SERVER[k:SERVER.index("\n    def ", k + 1)]
+    assert "self.PASSWORD_PATHS" in post and "_password_transport_ok()" in post
+
+
+def test_loopback_is_not_treated_as_a_network():
+    """http://localhost crosses nothing. Refusing it would break the way
+    this app is actually used and buy exactly no safety."""
+    i = SERVER.index("def _transport_is_cleartext(")
+    body = SERVER[i:SERVER.index("\n    def ", i + 1)]
+    assert "_local_only()" in body and "_is_https()" in body
+
+
+def test_the_refusal_names_the_fix():
+    """"Insecure connection" on its own leaves someone with nowhere to go."""
+    assert "tailscale serve" in _INSECURE
+    assert "QB_ALLOW_INSECURE_LOGIN" in _INSECURE
+    assert "computer running the server" in _INSECURE
+
+
+def test_the_override_removes_the_refusal_and_not_the_risk():
+    """`insecure` is a fact about the wire and stays true under the
+    override. Reporting a private connection because somebody set an
+    environment variable would be the page telling a comfortable lie."""
+    i = SERVER.index("def _transport_is_cleartext(")
+    body = SERVER[i:SERVER.index("\n    def ", i + 1)]
+    assert "QB_ALLOW_INSECURE_LOGIN" not in body, \
+        "the override leaked into the statement of fact"
+    j = SERVER.index('if path == "me"')
+    me = SERVER[j:j + 500]
+    assert '"insecure": self._transport_is_cleartext()' in me
+    assert '"allowed": self._password_transport_ok()' in me
+
+
+def test_the_page_warns_before_the_password_is_typed():
+    """A refusal arrives too late to help: by then it is in the box, and
+    on a phone it is already in the keyboard's suggestion history."""
+    i = APP.index("function acctSignInHTML")
+    body = APP[i:APP.index("\nwindow.acctAuth", i)]
+    assert "_acctUser.insecure" in body or "insecure" in body
+    assert "tailscale serve" in body
+    # And the warning still shows when the override is on, worded for it.
+    assert "_acctUser.allowed" in body
+    assert "not the risk" in body
+
+
+def test_the_card_repaints_once_the_server_has_answered():
+    """THE TIMING BUG THIS FILE ALMOST MISSED.
+
+    `_acctUser` arrives 1.5s after the card first draws, so the warning
+    cannot be in the first paint — the card has to be redrawn when the
+    answer lands. The first cut redrew only when signed IN, which left the
+    signed-OUT card exactly as it was: and the signed-out card is the one
+    carrying the warning. The warning was invisible in precisely the case
+    it exists for.
+
+    Every source-level check above passed the whole time, because the
+    string was present and only the ORDER was wrong. It was found by
+    opening the LAN address in a browser. This test pins the repaint as
+    unconditional; the browser check is what pins the result."""
+    i = APP.index("await acctWho(true)")
+    body = APP[i:i + 900]
+    repaint = body.index("renderMyBets()")
+    guard = body.find("signed_in")
+    assert guard == -1 or guard > repaint, \
+        "the repaint is behind a signed-in check again"
+
+
+def test_reads_are_not_blocked_by_the_guard():
+    """Only the password paths are refused. Blocking reads would break a
+    phone on the LAN for no gain — the session cookie is a different and
+    smaller exposure than a reused password, and that is Ethan's call to
+    make with the override."""
+    i = SERVER.index("def _account_post(")
+    post = SERVER[i:SERVER.index("\n    def ", i + 1)]
+    guard = post[post.index("PASSWORD_PATHS") if "PASSWORD_PATHS" in post else 0:]
+    assert '"data"' not in guard.split("\n")[0]
+    j = SERVER.index("PASSWORD_PATHS = ")
+    assert '"data"' not in SERVER[j:j + 200]
+    assert '"logout"' not in SERVER[j:j + 200]
 
 
 def test_the_tls_gap_is_written_down_rather_than_left_to_be_discovered():

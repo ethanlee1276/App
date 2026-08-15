@@ -99,6 +99,17 @@ PROFILE_SECTIONS = ("mybets", "fantasy", "bankroll", "search")
 #: — an XSS bug should not also be a session theft — and SameSite=Lax so
 #: another site cannot ride it.
 SESSION_COOKIE = "qb_session"
+#: Shown when a password would have to cross a network in the clear.
+#: Names the fix rather than just refusing — "insecure connection" on its
+#: own leaves someone with no idea what to do next.
+_INSECURE_LOGIN = (
+    "This page is being served over plain HTTP from another machine, so a "
+    "password typed here would cross the network readable by anyone on it "
+    "— and it is usually a password used somewhere else too. Sign in from "
+    "the computer running the server, or put HTTPS in front of it: "
+    "`tailscale serve --bg 8000` prints an https:// link that works from "
+    "anywhere. (If this really is a network you trust, set "
+    "QB_ALLOW_INSECURE_LOGIN=1 before starting the server.)")
 MAX_PROFILE_BYTES = 1_000_000        # thousands of bets fit; junk bounces
 #: Connecting or disconnecting Yahoo is the one action on this server that
 #: changes what a third party may see, so it is restricted to the machine
@@ -694,10 +705,14 @@ class Handler(BaseHTTPRequestHandler):
         try:
             who = self._account(conn)
             if path == "me":
-                if not who:
-                    return self._send(200, b'{"signed_in":false}', ".json")
-                return self._send(200, json.dumps(
-                    {"signed_in": True, "email": who["email"]}).encode(), ".json")
+                # `insecure` lets the page say so BEFORE anybody types a
+                # password, rather than only refusing after they have.
+                out = {"signed_in": bool(who),
+                       "insecure": self._transport_is_cleartext(),
+                       "allowed": self._password_transport_ok()}
+                if who:
+                    out["email"] = who["email"]
+                return self._send(200, json.dumps(out).encode(), ".json")
             if not who:
                 return self._send(401, b'{"error":"sign in first"}', ".json")
             if path == "data":
@@ -715,12 +730,58 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+    #: Endpoints that carry a PASSWORD in the body. These are the ones
+    #: refused over a cleartext connection to another machine — see
+    #: `_password_transport_ok`.
+    PASSWORD_PATHS = ("signup", "login", "password", "delete")
+
+    def _transport_is_cleartext(self) -> bool:
+        """Whether this connection would carry a password readable.
+
+        A FACT ABOUT THE WIRE, kept separate from whether we allow it.
+        The override below removes the refusal; it does not make the
+        connection private, and reporting `insecure: false` because
+        somebody set an environment variable would be the page telling a
+        comfortable lie about the network.
+        """
+        return not (self._is_https() or self._local_only())
+
+    def _password_transport_ok(self) -> bool:
+        """Whether a password may cross this connection at all.
+
+        THE HASHING ON OUR END DOES NOTHING FOR THIS. scrypt protects the
+        password at rest; a password typed into a plain-HTTP page has
+        already crossed the network in the clear before it ever reaches
+        the hash, and anyone on that Wi-Fi has it — for this site and for
+        wherever else they reused it.
+
+        Three cases, and only the middle one is a refusal:
+
+          * LOOPBACK — the browser is on this machine. Nothing crosses a
+            network, so http://localhost is genuinely fine and blocking it
+            would break the normal way this app is used.
+          * ANOTHER MACHINE, no TLS — refused, with the fix named.
+          * TLS in front (X-Forwarded-Proto: https) — fine.
+
+        `QB_ALLOW_INSECURE_LOGIN=1` overrides it for someone who has read
+        this and decided their network is theirs. Deliberately an
+        environment variable rather than a settings toggle: it should take
+        a decision, not a mis-tap.
+        """
+        if not self._transport_is_cleartext():
+            return True
+        import os as _os
+        return _os.environ.get("QB_ALLOW_INSECURE_LOGIN", "") == "1"
+
     def _account_post(self, path: str, body: dict):
         A = _acct()
         if path not in ("signup", "login", "logout", "data", "password",
                         "delete"):
             return self._send(404, b'{"error":"unknown account endpoint"}',
                               ".json")
+        if path in self.PASSWORD_PATHS and not self._password_transport_ok():
+            return self._send(400, json.dumps({"error": _INSECURE_LOGIN}
+                                              ).encode(), ".json")
         conn = A.connect()
         try:
             if path in ("signup", "login"):

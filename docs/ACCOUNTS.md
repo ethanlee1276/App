@@ -149,13 +149,40 @@ restart clearing it is not the threat being defended against.
 
 ## Before real users: two things that are not optional
 
-**1. TLS.** `server.py` is a stdlib `http.server` speaking plain HTTP.
-Over a LAN that was fine for a PIN. It is **not** fine for real passwords
-on the open internet — every password would cross the network in
-cleartext. Put TLS in front before anyone who is not Ethan signs up.
-`tailscale serve --bg 8000` prints an HTTPS URL and is the cheapest
-version; any reverse proxy also works. The cookie code already notices
-and sets `Secure` on its own once that is true.
+**1. TLS — now enforced rather than only documented.** `server.py` is a
+stdlib `http.server` speaking plain HTTP. Over a LAN that was fine for a
+PIN; it is **not** fine for real passwords, because scrypt does nothing
+about this. Hashing protects the password *at rest*. A password typed
+into a plain-HTTP page has already crossed the network readable before it
+reaches the hash, and anyone on that Wi-Fi has it — for this site and for
+wherever else it was reused.
+
+So the server refuses it. `signup`, `login`, `password` and `delete` are
+rejected when the connection is cleartext **and** the browser is on
+another machine:
+
+| | |
+|---|---|
+| loopback over HTTP | **allowed** — nothing crosses a network |
+| another machine, no TLS | **refused**, with the fix named |
+| `X-Forwarded-Proto: https` | **allowed** |
+
+Reads and syncs are *not* blocked — that would break a phone on the LAN
+for no gain, and a session cookie is a smaller and shorter-lived exposure
+than a reused password.
+
+The fix is `tailscale serve --bg 8000`, which prints an HTTPS URL that
+works from anywhere; any reverse proxy also does. The cookie code notices
+on its own and adds `Secure` once that is true.
+
+`QB_ALLOW_INSECURE_LOGIN=1` overrides the refusal for someone who has
+read this and decided the network is theirs. An environment variable
+rather than a settings toggle, so it takes a decision rather than a
+mis-tap — and note that **it removes the refusal, not the risk**: the
+page still says the connection is not private, because it still is not.
+`/api/account/me` reports `insecure` (a fact about the wire) separately
+from `allowed` (our policy), so the page can never claim a private
+connection because somebody set a variable.
 
 **2. Payments go through a processor.** When subscription billing lands
 it should be Stripe Checkout or equivalent — card numbers never touch
