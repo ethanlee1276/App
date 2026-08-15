@@ -137,6 +137,48 @@ SECURITY_HEADERS = (
 #: anyone who finds the path. Verified 2026-08-15: three profiles created
 #: from curl with no auth. New accounts go through email and password now;
 #: this store keeps working for whoever already has one.
+#: Per-IP request ceilings, sliding one-minute window. IN THE APP rather
+#: than the proxy on purpose: Caddy has no built-in rate limiting (it
+#: needs a third-party plugin), and a protection that depends on someone
+#: remembering to install a plugin is one that will be missing on the day
+#: it is needed.
+#:
+#: The read limit is deliberately generous — the board polls every 30s and
+#: the meme page every 15s, so a real user in two tabs is already dozens of
+#: requests a minute, and a limit that trips on normal use gets raised to
+#: infinity by the first person it annoys.
+RATE_READ_PER_MIN = 300
+#: Auth is different: nobody legitimately signs in twenty times a minute.
+#: This sits ON TOP of the per-email throttle in `engine.accounts` — that
+#: one stops guessing at one account, this one stops spraying across many.
+RATE_AUTH_PER_MIN = 20
+_RATE: dict = {}
+_RATE_LOCK = threading.Lock()
+
+
+def rate_ok(key: str, limit: int, now: float | None = None) -> bool:
+    """Sliding-window counter. False when this caller is over the limit."""
+    import time as _t
+    now = _t.time() if now is None else now
+    with _RATE_LOCK:
+        hits = [t for t in _RATE.get(key, []) if now - t < 60.0]
+        if len(hits) >= limit:
+            _RATE[key] = hits
+            return False
+        hits.append(now)
+        _RATE[key] = hits
+        # Bounded: this is memory, and an attacker with a botnet would
+        # otherwise be filling it one key at a time.
+        if len(_RATE) > 8192:
+            for k in [k for k, v in list(_RATE.items())
+                      if not v or now - v[-1] > 120][:2048]:
+                _RATE.pop(k, None)
+        return True
+
+
+_RATE_LIMITED = ('{"error":"Too many requests — slow down and try again '
+                 'in a minute."}')
+
 _PROFILE_LOCAL_ONLY = (
     "New profiles cannot be created from another machine. This is the old "
     "PIN-based store, kept working for existing local use — make an "
@@ -393,8 +435,27 @@ class Handler(BaseHTTPRequestHandler):
             return
         super().handle_one_request()
 
+    def _rate_limited(self, limit: int, bucket: str = "read") -> bool:
+        """True when this caller is over the ceiling.
+
+        SEPARATE BUCKETS PER KIND, which the first cut got wrong: with one
+        counter per IP, the strict auth limit saw every ordinary page poll
+        too, so a couple of minutes of normal browsing would have locked
+        the same person out of signing in. Measured — 19 of 25 signups got
+        through instead of 20, and the missing one was a GET.
+
+        The caller is `_client_ip`, so behind a proxy one busy user cannot
+        spend everybody's budget by all of them looking like 127.0.0.1.
+        """
+        if rate_ok(f"{bucket}:{self._client_ip()}", limit):
+            return False
+        self._send(429, _RATE_LIMITED.encode(), ".json")
+        return True
+
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/") and self._rate_limited(RATE_READ_PER_MIN):
+            return
         if parsed.path in ("/api/recommendations", "/api/recommendations/"):
             return self._api(parse_qs(parsed.query), sport="nfl")
         if parsed.path in ("/api/mlb/recommendations", "/api/mlb/recommendations/"):
@@ -428,6 +489,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        # The Stripe webhook is EXEMPT: it is already authenticated by
+        # signature, and a retry burst during an incident is exactly when
+        # we least want to start dropping payment events on the floor.
+        if not parsed.path.startswith("/api/billing/webhook"):
+            auth = parsed.path.startswith("/api/account/")
+            if self._rate_limited(
+                    RATE_AUTH_PER_MIN if auth else RATE_READ_PER_MIN,
+                    "auth" if auth else "read"):
+                return
         if parsed.path.startswith("/api/yahoo/"):
             return self._yahoo_post(
                 parsed.path[len("/api/yahoo/"):].strip("/"))
@@ -742,6 +812,34 @@ class Handler(BaseHTTPRequestHandler):
                 return v
         return ""
 
+    def _client_ip(self) -> str:
+        """Who is actually calling, once there is a proxy in front.
+
+        BEHIND CADDY, `self.client_address` IS CADDY. Every request would
+        arrive from 127.0.0.1, `_local_only()` would be true for the whole
+        internet, and both guards built on it — the cleartext-password
+        refusal and local-only profile creation — would be open doors that
+        still looked shut. Found while writing the deploy config, before
+        any of it shipped, which is the only reason it is a note rather
+        than an incident.
+
+        THE LAST ENTRY, NOT THE FIRST. `X-Forwarded-For` is a list a
+        client can start and each hop appends to, so the first entry is
+        whatever the caller felt like claiming. The last is the one OUR
+        proxy wrote, describing the peer it actually saw.
+
+        And it is trusted ONLY when the connection came from loopback —
+        i.e. from the proxy on this machine. A direct caller can set the
+        header to anything, and believing it would let anyone claim to be
+        127.0.0.1.
+        """
+        peer = (self.client_address or ("",))[0]
+        if peer not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            return peer
+        raw = self.headers.get("X-Forwarded-For") or ""
+        hops = [p.strip() for p in raw.split(",") if p.strip()]
+        return hops[-1] if hops else peer
+
     def _is_https(self) -> bool:
         """Whether the browser's leg of this request was encrypted.
 
@@ -833,7 +931,7 @@ class Handler(BaseHTTPRequestHandler):
         nets = (ipaddress.ip_network("100.64.0.0/10"),      # Tailscale IPv4
                 ipaddress.ip_network("fd7a:115c:a1e0::/48"))  # …and IPv6
         try:
-            peer = ipaddress.ip_address(self.client_address[0])
+            peer = ipaddress.ip_address(self._client_ip())
             mine = ipaddress.ip_address(self.connection.getsockname()[0])
         except (ValueError, IndexError, OSError, AttributeError):
             return False
@@ -1127,7 +1225,10 @@ class Handler(BaseHTTPRequestHandler):
         this server that changes what a third party may see, and a phone
         on the same coffee-shop wifi should not be able to take it.
         """
-        host = (self.client_address or ("",))[0]
+        # Through `_client_ip`, NOT the raw peer: behind a reverse proxy
+        # the peer is always the proxy, and reading it directly would make
+        # this true for the entire internet.
+        host = self._client_ip()
         return host in ("127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost")
 
     def _yahoo(self, path: str, query: dict):
@@ -1356,15 +1457,27 @@ def _lan_ip():
 def main() -> None:
     args = sys.argv[1:]
     live = "--live" in args
+    # `--bind 127.0.0.1` for a public deployment: the app sits behind a
+    # reverse proxy that terminates TLS, and binding all interfaces would
+    # leave the plain-HTTP port reachable from outside as well — the proxy
+    # in front then protects nothing, because anyone can go around it.
+    bind = "0.0.0.0"
+    if "--bind" in args:
+        i = args.index("--bind")
+        if i + 1 < len(args):
+            bind = args[i + 1]
+            args = args[:i] + args[i + 2:]
     ports = [a for a in args if not a.startswith("--")]
     port = int(ports[0]) if ports else 8000
 
-    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    server = ThreadingHTTPServer((bind, port), Handler)
     server.live_mode = live  # read by Handler._api
 
     mode = "LIVE data" if live else "sample data"
     print(f"Qellys Book running ({mode}) → http://localhost:{port}")
-    lan = _lan_ip()
+    if bind != "0.0.0.0":
+        print(f"  Bound to {bind} only — reachable through a proxy, not directly.")
+    lan = _lan_ip() if bind == "0.0.0.0" else None
     if lan:
         print(f"  On your phone (same Wi-Fi): http://{lan}:{port}")
     if live:

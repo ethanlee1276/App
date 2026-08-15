@@ -1,0 +1,87 @@
+# Qellys Book — the public front door.
+#
+# Caddy rather than nginx for one reason: it gets and renews the TLS
+# certificate itself, with no certbot and no cron job to forget. The
+# commonest way a small site goes down is an expired certificate nobody
+# was watching.
+#
+#   sudo apt install caddy
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile     # edit the name first
+#   sudo systemctl reload caddy
+#
+# The app must be started with `--bind 127.0.0.1` (see qellys.service).
+# Binding all interfaces would leave the plain-HTTP port reachable from
+# outside as well, and a proxy you can walk around protects nothing.
+
+qellys.example.com {
+	encode gzip zstd
+
+	# --- the API: proxied to the app ---------------------------------
+	# X-Forwarded-* is what lets the app see the REAL caller. Without it
+	# every request looks like it came from 127.0.0.1, which would make
+	# `_local_only()` true for the entire internet — and that guard is
+	# what stops strangers creating profiles and posting passwords over
+	# cleartext. Caddy sets these by default; they are written out here
+	# so nobody "tidies them away" later.
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# --- everything else: files straight off disk --------------------
+	# Python is not in the path for static files at all. The app is a
+	# stdlib http.server; Caddy serves assets far better and it keeps the
+	# single-threaded-ish app for the work only it can do.
+	handle {
+		root * /srv/qellys/web
+		try_files {path} /index.html
+		file_server
+	}
+
+	# The app sets its own security headers on every response. These
+	# cover the static files Caddy serves directly, which never pass
+	# through it. HSTS is Caddy's job — it knows TLS is really on.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		-Server
+	}
+
+	# Built JSON changes on a schedule, not per request. A minute of
+	# cache takes the repeat-visit load off the box without anyone ever
+	# seeing a board more than a minute stale.
+	@built path /data/*.json
+	header @built Cache-Control "public, max-age=60"
+
+	log {
+		output file /var/log/caddy/qellys.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}
+
+# Staging: same box, separate database, separate app process. This is
+# what makes it safe to keep shipping once real people have accounts.
+# stage.qellys.example.com {
+# 	encode gzip zstd
+# 	handle /api/* {
+# 		reverse_proxy 127.0.0.1:8001
+# 	}
+# 	handle {
+# 		root * /srv/qellys-stage/web
+# 		try_files {path} /index.html
+# 		file_server
+# 	}
+# 	# Keep it out of search results and off the public record.
+# 	header X-Robots-Tag "noindex, nofollow"
+# 	basicauth {
+# 		# caddy hash-password --plaintext 'something'
+# 		ethan $2a$14$REPLACE_WITH_A_REAL_HASH
+# 	}
+# }

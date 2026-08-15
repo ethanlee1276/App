@@ -155,6 +155,130 @@ def test_the_plan_names_the_audit_findings_rather_than_generalities():
     assert "already correct" in PLAN
 
 
+# --- the proxy, which quietly breaks everything above ------------------------
+def test_the_real_caller_is_read_from_the_proxy_header():
+    """FOUND WHILE WRITING THE DEPLOY CONFIG, before any of it shipped.
+
+    Behind Caddy, `client_address` is Caddy. Every request would arrive
+    from 127.0.0.1, `_local_only()` would be true for the entire internet,
+    and both guards built on it — cleartext-password refusal and
+    local-only profile creation — would be open doors that still looked
+    shut."""
+    i = SERVER.index("def _client_ip(")
+    body = SERVER[i:SERVER.index("\n    def ", i + 1)]
+    assert "X-Forwarded-For" in body
+    # THE LAST HOP, not the first: a client can start the list with
+    # anything it likes; the last entry is the one our proxy wrote.
+    assert "hops[-1]" in body
+    # …and trusted only from loopback, or anyone could claim to be local.
+    assert "127.0.0.1" in body
+    # The guards must go through it rather than reading the peer.
+    for fn in ("def _local_only(", "def _via_tailnet("):
+        j = SERVER.index(fn)
+        guard = SERVER[j:SERVER.index("\n    def ", j + 1)]
+        assert "_client_ip()" in guard, fn
+        assert "self.client_address" not in guard, \
+            f"{fn} reads the raw peer, which is the proxy behind a proxy"
+
+
+def test_the_caddyfile_forwards_the_headers_the_guards_depend_on():
+    caddy = _read("deploy", "Caddyfile")
+    assert "X-Forwarded-For" in caddy and "X-Forwarded-Proto" in caddy
+    # Bound to loopback, or the proxy in front is optional for an attacker.
+    unit = _read("deploy", "qellys.service")
+    assert "--bind 127.0.0.1" in unit
+    assert "--live" in unit, "it would run the whole pipeline per request"
+
+
+# --- rate limiting -----------------------------------------------------------
+def test_reads_and_auth_have_separate_budgets():
+    """The first cut shared one counter per IP, so ordinary page polling
+    ate the strict auth budget — measured: 19 of 25 signups got through
+    instead of 20, and the missing one was a GET. A couple of minutes of
+    browsing would have locked the same person out of signing in."""
+    i = SERVER.index("def _rate_limited(")
+    body = SERVER[i:SERVER.index("\n    def ", i + 1)]
+    assert 'bucket: str = "read"' in body
+    assert 'f"{bucket}:{self._client_ip()}"' in body
+    post = SERVER[SERVER.index("def do_POST("):]
+    post = post[:post.index("\n    def ", 1)]
+    assert '"auth" if auth else "read"' in post
+
+
+def test_the_limits_are_generous_enough_for_normal_use():
+    """A limit that trips on real browsing gets raised to infinity by the
+    first person it annoys. The board polls every 30s and the meme page
+    every 15s, so two tabs is already dozens a minute."""
+    import re as _re
+    read = int(_re.search(r"RATE_READ_PER_MIN = (\d+)", SERVER).group(1))
+    auth = int(_re.search(r"RATE_AUTH_PER_MIN = (\d+)", SERVER).group(1))
+    assert read >= 120, "too tight for a page that polls"
+    assert auth <= 60 and auth >= 10, "auth limit is either useless or hostile"
+    assert auth < read
+
+
+def test_the_stripe_webhook_is_not_rate_limited():
+    """It is authenticated by signature already, and a retry burst during
+    an incident is exactly when dropping payment events costs most."""
+    post = SERVER[SERVER.index("def do_POST("):]
+    post = post[:post.index("\n    def ", 1)]
+    i = post.index("_rate_limited")
+    assert 'not parsed.path.startswith("/api/billing/webhook")' in post[:i]
+
+
+def test_the_limiter_bounds_its_own_memory():
+    """Otherwise it is the denial of service it was added to prevent."""
+    i = SERVER.index("def rate_ok(")
+    body = SERVER[i:SERVER.index("\n\n\n", i)]
+    assert "len(_RATE) >" in body
+
+
+# --- deployment --------------------------------------------------------------
+def test_the_deploy_script_gates_on_the_suite():
+    sh = _read("deploy", "deploy.sh")
+    assert "run_tests.py" in sh
+    i = sh.index("run_tests.py")
+    assert "systemctl restart" not in sh[:i], \
+        "it restarts before the tests have had their say"
+    assert "TESTS FAILED" in sh
+    # …and it proves the site answers rather than trusting the restart.
+    assert "curl" in sh[sh.index("systemctl restart"):]
+
+
+def test_the_deploy_script_backs_up_before_it_changes_anything():
+    sh = _read("deploy", "deploy.sh")
+    assert sh.index("backup.sh") < sh.index("git pull")
+
+
+def test_the_backup_covers_what_cannot_be_rebuilt_and_skips_what_can():
+    sh = _read("deploy", "backup.sh")
+    assert "accounts.db" in sh and "ledger.db" in sh
+    assert "history.db" in sh and "rebuilds from" in sh
+
+
+def test_the_backup_does_not_need_a_package_that_is_not_installed():
+    """Found by running it: the `sqlite3` CLI is a separate package and is
+    not present by default. Python already is, and a backup that depends
+    on something missing is missing on the day it is needed."""
+    sh = _read("deploy", "backup.sh")
+    assert "python3 -" in sh
+    assert ".backup" in sh or "s.backup(d)" in sh
+    for line in sh.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#") or not stripped:
+            continue
+        assert not stripped.startswith("sqlite3 "), \
+            f"shells out to the sqlite3 CLI: {stripped}"
+
+
+def test_there_is_a_restore_drill_and_it_notices_staleness():
+    """A backup nobody has restored is a hope."""
+    sh = _read("deploy", "backup.sh")
+    assert "--check" in sh
+    assert "integrity_check" in sh
+    assert "STALE" in sh
+
+
 def test_the_undocumented_feed_risk_is_called_out():
     """The finding most likely to be missed, because nothing breaks when
     you get it wrong — it just becomes somebody else's decision later."""

@@ -1,0 +1,64 @@
+# Qellys Book — the app process.
+#
+#   sudo cp deploy/qellys.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now qellys
+#   systemctl status qellys
+#   journalctl -u qellys -f
+#
+# Runs as an unprivileged user. If the app is ever compromised, what it
+# can reach is what this user can reach — which is why it is not root and
+# why the hardening below is not decoration.
+
+[Unit]
+Description=Qellys Book
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=qellys
+Group=qellys
+WorkingDirectory=/srv/qellys
+
+# --bind 127.0.0.1 is the important half. Caddy is the only thing that
+# should be able to reach this port; bound to 0.0.0.0 the plain-HTTP port
+# is reachable from outside too and the TLS in front becomes optional
+# for an attacker.
+# --live serves the JSON the build wrote, instead of running the whole
+# pipeline on every request — which is both far faster and not
+# trivially DoS-able.
+ExecStart=/usr/bin/python3 /srv/qellys/server.py --live --bind 127.0.0.1 8000
+
+Restart=always
+RestartSec=3
+# Give up only if it is crash-looping, so a genuine bug is visible in
+# the status rather than hidden by an infinite restart.
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Secrets come from a file root owns and this user can only read.
+# Never put them on the ExecStart line: /proc makes command lines
+# readable by every account on the box.
+EnvironmentFile=-/etc/qellys/env
+
+# --- hardening ------------------------------------------------------
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# The only writable paths: the databases, the caches, and the built JSON.
+ReadWritePaths=/srv/qellys/data /srv/qellys/web/data
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+# Outbound HTTPS to the data feeds and Stripe; nothing exotic.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

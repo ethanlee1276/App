@@ -71,7 +71,30 @@ feature from the public site while keeping it locally.
 schedules need a paid provider — a real recurring cost, and worth knowing
 before pricing is set.
 
-### 0.3 Is a paid picks service regulated where you are?
+### 0.3 Michigan: is a paid picks service regulated here?
+
+**Answered in part, 2026-08-15.** Ethan is in Michigan, which has legal
+online sports betting regulated by the **Michigan Gaming Control Board**
+(MGCB) under the Lawful Sports Betting Act. And, in his words: *"this
+isn't a website you make bets on, it's just a betting tool."* That
+distinction is the right one and it is the one the whole design already
+holds — no wagers accepted, no funds held, no bet slip.
+
+**What that likely means, and why it still needs a lawyer:** operating a
+sportsbook is licensed; publishing analysis is ordinarily speech. The
+question is where a *paid* service that recommends specific bets sits
+between them, and that is a Michigan-specific answer I should not guess
+at.
+
+**The sharpest line to ask about is affiliate money.** Taking revenue
+share or referral fees from a sportsbook is a different activity from
+selling analysis, and Michigan regulates sports betting vendors and
+suppliers. **Do not add sportsbook affiliate links or a "bet this at DK"
+handoff until this is answered** — it is the change most likely to pull
+the business inside a licensing regime, and it is easy to add later and
+painful to unwind.
+
+Ask an attorney licensed in Michigan:
 
 **The risk:** selling sports-betting information for money is regulated in
 some jurisdictions, separately from operating a sportsbook. This is a
@@ -79,19 +102,25 @@ narrow, answerable question that a lawyer can resolve quickly — and
 guessing at it is exactly the kind of thing that reads fine until it
 doesn't.
 
-**Ask a lawyer licensed in your state**, specifically:
-
-1. Does this state regulate paid sports-betting information / handicapping
-   services, and does anything need registering?
-2. If subscribers are in other states, does that change it?
-3. Are there rules on **advertising** a paid picks service — required
-   disclaimers, prohibited claims, minimum age statements?
-4. Does taking sportsbook **affiliate** revenue later change the answer?
-   (It usually does — affiliates are separately registered in several
-   states. Worth asking now even if the answer is "not yet".)
+1. Does Michigan regulate paid sports-betting information or handicapping
+   services, and does anything need registering with the MGCB?
+2. Subscribers will be in other states. Does that change it, and are there
+   states to geo-block?
+3. Rules on **advertising** a paid picks service — required disclaimers,
+   prohibited claims, minimum-age statements?
+4. Does taking sportsbook **affiliate** revenue change the answer? (See
+   above. Ask now even though the answer today is "we don't".)
 
 Budget a couple of hours of a gaming/regulatory attorney's time. That is
 the cheapest insurance on this list.
+
+### 0.1 revisited — Stripe
+
+Ethan, 2026-08-15: *"if stripe allows it then we will use stripe but if
+not then we will find an alternative."* Right call, and the code is built
+for it: everything Stripe-specific is in `engine/billing.py`, and the rest
+of the app only ever asks "is this account entitled". A different
+processor is a rewrite of one file, not of the feature.
 
 ---
 
@@ -159,6 +188,27 @@ right call. Public, it needs a real front door.
 | Path traversal on static files | **already correct** — resolved paths + `is_relative_to` |
 | Passwords over cleartext | **already refused** (`docs/ACCOUNTS.md`) |
 | Webhook forgery | **already refused** (`docs/BILLING.md`) |
+
+**And one found while writing the deploy config, before any of it
+shipped.** Behind a reverse proxy, `client_address` is *the proxy* —
+every request arrives from 127.0.0.1. `_local_only()` would have been
+true for the entire internet, which would have silently opened both
+guards above: strangers could create profiles again, and passwords would
+have been accepted over cleartext. The app now reads the real caller from
+`X-Forwarded-For`, trusting it **only** when the connection came from
+loopback (i.e. from our own proxy) and taking the **last** hop rather than
+the first, since a client can put anything in the front of that list.
+This is the single most important line in the Caddyfile, and it is
+commented there so nobody removes it as noise.
+
+**Rate limiting is in the app, not the proxy.** Caddy has no built-in rate
+limiter — it needs a third-party plugin, and a protection that depends on
+somebody remembering to install a plugin will be missing on the day it
+matters. 300 reads/min and 20 auth requests/min per caller, in separate
+buckets: the first cut shared one counter, so ordinary page polling ate
+the auth budget and would have locked people out of signing in. The Stripe
+webhook is exempt — it is authenticated by signature, and a retry burst
+during an incident is when we least want to drop payment events.
 
 ### 2.2 The shape to deploy
 
