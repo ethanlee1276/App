@@ -362,6 +362,21 @@ def test_the_verdict_reaches_disk_on_every_branch_that_reached_one():
     assert body.index("out.write_text(") < body.index('rep.get("dead")')
 
 
+def test_the_card_separates_the_two_negatives_too():
+    """The same distinction the explanation makes has to survive the trip
+    to the page, or the terminal and the board disagree about what was
+    found."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    i = app.index("function preseasonFitHTML(")
+    body = app[i:app.index("\n}", i)]
+    assert "f.noisy" in body and "cannot resolve it" in body
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    j = src.index("def refresh_preseason(")
+    ref = src[j:src.index("\ndef ", j + 1)]
+    assert 'limited_by") == ["significance"]' in ref
+
+
 def test_the_card_says_it_could_not_run_rather_than_going_quiet():
     app = open(os.path.join(ROOT, "web", "js", "app.js"),
                encoding="utf-8").read()
@@ -369,6 +384,87 @@ def test_the_card_says_it_could_not_run_rather_than_going_quiet():
     body = app[i:app.index("\n}", i)]
     assert '"unmeasurable"' in body
     assert "could not run" in body
+
+
+# --- one line, one sample ---------------------------------------------------
+def test_the_p_and_the_rmse_describe_the_same_rows():
+    """THE REPORTING DEFECT FOUND ON THE FIRST REAL RESULT. The p was
+    computed over every row carrying a forecast input; the RMSE beside it
+    over the smaller subset a walk-forward could actually score — 154
+    against 105 on Ethan's data — and the two were printed on one line as
+    though they were one measurement. Neither number was wrong; the line
+    was."""
+    rows = pf.sample(REAL)
+    wf = pf.walk_forward(rows, "exp_sum", "total")
+    scored = [r for r in rows
+              if r["season"] in wf["seasons_scored"] and r["exp_sum"] is not None]
+    assert wf["n"] == len(scored)
+    # And the correlation reported is that same set's, not the wider one.
+    wide = [r for r in rows if r.get("exp_sum") is not None]
+    assert len(wide) > wf["n"], "fixture no longer exercises the difference"
+    exact = pf.pearson([r["exp_sum"] for r in scored],
+                       [r["total"] for r in scored])
+    assert abs(wf["r"] - exact) < 1e-4         # the report rounds to 4dp
+    # The wider set gives a DIFFERENT number, which is what makes this a
+    # real check rather than an arithmetic identity.
+    assert abs(pf.pearson([r["exp_sum"] for r in wide],
+                          [r["total"] for r in wide]) - exact) > 1e-4
+
+
+# --- what kind of "no" -------------------------------------------------------
+def test_the_two_bars_are_reported_separately():
+    assert pf.limited_by({"signal_points": 5.0, "p": 0.5}) == ["significance"]
+    assert pf.limited_by({"signal_points": 0.1, "p": 0.001}) == ["effect"]
+    assert pf.limited_by({"signal_points": 0.1, "p": 0.5}) == ["effect",
+                                                               "significance"]
+    assert pf.limited_by({"signal_points": 5.0, "p": 0.001}) == []
+
+
+def test_the_sample_size_needed_grows_as_the_effect_shrinks():
+    big, small = pf.n_for_p(0.40), pf.n_for_p(0.10)
+    assert big < small
+    # r = 0.10 at p <= 0.01 is a few hundred games; the exact figure is a
+    # normal approximation and is not quoted to three digits anywhere.
+    assert 500 < small < 800
+    assert pf.n_for_p(0.0) is None and pf.n_for_p(None) is None
+
+
+def test_a_noisy_but_real_effect_is_not_called_absent():
+    """"Starter usage does not move an August result" is a claim about
+    football. "We cannot tell at 105 games whether it does" is a claim
+    about our sample, and only the second is what a p of 0.14 supports.
+
+    This is the exact shape of the real 2026 result: `exp_gap~margin`
+    cleared the effect bar and missed only significance."""
+    rep = {"n": 200, "seasons": [2022, 2023, 2024, 2025], "verdict": "no",
+           "mechanism": {"pairs": {"att_gap~margin": {"p": 0.0047}}},
+           "forecast": {"pairs": {"exp_gap~margin": {
+               "signal_points": 1.13, "p": 0.138, "n": 105, "r": 0.12,
+               "n_for_p": 460, "limited_by": ["significance"]}}}}
+    text = pf.explain(rep)
+    assert "NOT a demonstration there is none" in text
+    assert "460" in text
+    assert "does not predict" not in text
+
+
+def test_an_effect_too_small_to_matter_is_still_called_that():
+    """The guard must not turn every negative into "come back later". A
+    pair that failed the EFFECT bar has been measured and is too small."""
+    rep = {"n": 200, "seasons": [2022], "verdict": "no",
+           "mechanism": {"pairs": {"att_gap~margin": {"p": 0.001}}},
+           "forecast": {"pairs": {"exp_gap~margin": {
+               "signal_points": 0.05, "p": 0.0001, "n": 105,
+               "limited_by": ["effect"]}}}}
+    text = pf.explain(rep)
+    assert "does not predict" in text
+    assert "NOT a demonstration" not in text
+
+
+def test_the_probe_prints_what_it_would_take():
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("def show_prefit(")
+    body = src[i:src.index("\ndef ", i + 1)]
+    assert 'lim == ["significance"]' in body and "n_for_p" in body
 
 
 # --- the verdict ------------------------------------------------------------

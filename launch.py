@@ -359,6 +359,15 @@ def refresh_preseason(quiet: bool = False) -> bool:
             payload["fit"] = {"verdict": _r.get("verdict"), "n": _r.get("n"),
                               "seasons": _r.get("seasons"),
                               "prices_allowed": bool(_r.get("prices_allowed"))}
+            # WHICH KIND OF "no". A pair that cleared the effect bar and
+            # missed only significance has not been shown to be absent,
+            # and the card must not say it was.
+            for _pair in (_r.get("forecast", {}).get("pairs", {}) or {}).values():
+                if _pair.get("limited_by") == ["significance"]:
+                    payload["fit"].update(
+                        noisy=True, n_scored=_pair.get("n"),
+                        n_for_p=_pair.get("n_for_p"))
+                    break
     except Exception:                                         # noqa: BLE001
         pass
     path = ROOT / "web" / "data" / "nfl_preseason.json"
@@ -3470,6 +3479,15 @@ def show_prefit(seasons: str = "") -> None:
               f"{v['base_rmse']}  model rmse={v['model_rmse']}")
         print(f"     {'':<18} signal {sp} point(s)  p={p}  "
               f"seasons scored: {v['seasons_scored'] or '—'}")
+        # WHICH BAR STOPPED IT, and what it would take. A pair that clears
+        # the effect and misses only significance has not been shown to be
+        # absent — it has been shown to be unresolvable at this sample.
+        lim = v.get("limited_by") or []
+        if lim == ["significance"] and v.get("n_for_p"):
+            print(f"     {'':<18} ↳ cleared the effect bar; too noisy to "
+                  f"confirm. Resolving r={v.get('r')} at p<={_pf.MAX_P}\n"
+                  f"     {'':<18}   needs ~{v['n_for_p']:,} scored games "
+                  f"(~{max(1, round(v['n_for_p'] / 49))} August(s) at 49 a year).")
     print(f"\n  VERDICT: {rep['verdict'].upper()}")
     print("  " + _pf.explain(rep) + "\n")
     print(f"  Written to {out.relative_to(ROOT)} — the board reads the "

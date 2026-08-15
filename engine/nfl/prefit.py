@@ -281,7 +281,14 @@ def walk_forward(rows: list[dict], x: str, y: str) -> dict:
     model_err: list[float] = []
     base_err: list[float] = []
     scored: list[int] = []
-    tested = 0
+    # THE ROWS ACTUALLY SCORED, kept so that every number on this line
+    # describes the SAME sample. The first cut computed p over every row
+    # carrying a forecast input and the RMSE over the subset a walk-forward
+    # could reach — 154 rows against 105 on the real data — and printed
+    # them side by side as though they were one measurement. Neither number
+    # was wrong; the line was.
+    seen_x: list[float] = []
+    seen_y: list[float] = []
     for season in seasons:
         past = [r for r in usable if r["season"] < season]
         now = [r for r in usable if r["season"] == season]
@@ -295,15 +302,24 @@ def walk_forward(rows: list[dict], x: str, y: str) -> dict:
         for r in now:
             model_err.append(r[y] - (a + b * r[x]))
             base_err.append(r[y] - mean)
-        tested += len(now)
+            seen_x.append(r[x])
+            seen_y.append(r[y])
         scored.append(season)
+    tested = len(seen_x)
     m, base = rmse(model_err), rmse(base_err)
+    r_val = pearson(seen_x, seen_y)
     return {
         "x": x, "y": y, "n": tested,
         "seasons_scored": scored,
         "model_rmse": None if m is None else round(m, 3),
         "base_rmse": None if base is None else round(base, 3),
         "signal_points": None if m is None else round(signal_points(base, m), 3),
+        "r": None if r_val is None else round(r_val, 4),
+        "p": permutation_p(seen_x, seen_y) if tested >= MIN_ROWS else None,
+        # How many games it would take to resolve an effect THIS SIZE at
+        # the declared bar. See `n_for_p` — this is what turns "no" from a
+        # claim about football into a statement about our sample.
+        "n_for_p": n_for_p(r_val),
     }
 
 
@@ -313,10 +329,44 @@ def forecast(rows: list[dict]) -> dict:
     for x, y in PAIRS:
         fx = {"att_sum": "exp_sum", "att_gap": "exp_gap"}[x]
         wf = walk_forward(rows, fx, y)
-        usable = [r for r in rows if r.get(fx) is not None]
-        wf["p"] = (permutation_p([r[fx] for r in usable], [r[y] for r in usable])
-                   if len(usable) >= MIN_ROWS else None)
+        wf["limited_by"] = limited_by(wf)
         out["pairs"][f"{fx}~{y}"] = wf
+    return out
+
+
+def n_for_p(r: float | None, target: float = MAX_P) -> int | None:
+    """Games needed to resolve a correlation of size ``r`` at ``target``.
+
+    THE DIFFERENCE BETWEEN TWO SENTENCES THAT LOOK THE SAME. "Starter
+    usage does not move an August result" is a claim about football.
+    "We cannot tell at 105 games whether it does" is a claim about our
+    sample, and only the second one is what a p of 0.14 supports.
+
+    A normal approximation to the t-test, which is the right precision for
+    a number whose job is to say "another two Augusts" or "another two
+    decades" — not to be quoted to three figures.
+    """
+    if r is None or abs(r) < 1e-6:
+        return None
+    from statistics import NormalDist
+    z = NormalDist().inv_cdf(1.0 - target / 2.0)
+    return int(math.ceil(2 + (z * math.sqrt(1 - r * r) / abs(r)) ** 2))
+
+
+def limited_by(pair: dict) -> list[str]:
+    """Which half of the bar a forecast pair failed: effect, significance.
+
+    Both bars exist for different reasons — an effect too small to bet is
+    useless even if certain, and an effect too noisy to confirm is not
+    something we know. Recording WHICH one stopped it is what lets the
+    explanation avoid claiming more than happened.
+    """
+    out = []
+    sp, p = pair.get("signal_points"), pair.get("p")
+    if sp is None or sp < MIN_SIGNAL_POINTS:
+        out.append("effect")
+    if p is None or p > MAX_P:
+        out.append("significance")
     return out
 
 
@@ -419,11 +469,35 @@ def explain(report: dict) -> str:
                 f"`python3 ingest.py nflpre --seasons 2021-2026` and ask "
                 f"again — nothing can be concluded from this yet.")
     if v == "no":
-        return (f"{n} game(s) across {len(report.get('seasons', []))} "
-                f"season(s): starter usage does not predict the preseason "
-                f"result by enough to bet. The board keeps showing the scan "
-                f"and the market's number as information, and prices "
-                f"nothing.")
+        head = (f"{n} game(s) across {len(report.get('seasons', []))} "
+                f"season(s): not enough to bet on, so nothing is priced. ")
+        # WHICH KIND OF NO, because they are not the same finding. A pair
+        # that failed on effect size has been measured and is too small to
+        # matter. A pair that cleared the effect and failed only on
+        # significance has NOT been shown to be absent — it has been shown
+        # to be unresolvable at this sample, and saying otherwise claims
+        # more than the arithmetic did.
+        best = None
+        for name, pair in (report.get("forecast", {}).get("pairs", {})
+                           or {}).items():
+            if pair.get("limited_by") == ["significance"]:
+                if best is None or (pair.get("signal_points") or 0) > (
+                        best[1].get("signal_points") or 0):
+                    best = (name, pair)
+        if best:
+            name, pair = best
+            need = pair.get("n_for_p")
+            return head + (
+                f"But {name} is not a dead end: it cleared the effect bar "
+                f"({pair['signal_points']:+} point(s) out of sample) and "
+                f"failed only on significance (p={pair['p']:.3f} at "
+                f"n={pair['n']}). That is a sample too small to resolve an "
+                f"effect this size, NOT a demonstration there is none"
+                + (f" — it would take about {need:,} scored games, and an "
+                   f"August supplies roughly 49." if need else "."))
+        return head + ("Starter usage does not predict the preseason result "
+                       "by a margin worth acting on. The board keeps showing "
+                       "the scan and the market's number as information.")
     return (f"{n} game(s): the effect is real and large enough to be worth "
             f"pricing against a line. It is NOT priced yet — that needs the "
             f"posted preseason numbers, which we started recording "

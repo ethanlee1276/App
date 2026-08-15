@@ -2086,6 +2086,18 @@ function preseasonFitHTML(data) {
       anything either way.`;
   }
   if (f.verdict === "no") {
+    // TWO DIFFERENT NEGATIVES. A pair that failed on effect size has been
+    // measured and is too small to matter. A pair that cleared the effect
+    // and missed only significance has NOT been shown to be absent — it is
+    // unresolvable at this sample — and printing the first sentence for
+    // the second case claims more than the arithmetic did.
+    if (f.noisy) {
+      return `Measured on ${f.n} game(s)${span}: an effect may be there but
+        ${f.n_scored || "this"} game(s) cannot resolve it${
+        f.n_for_p ? ` — that would take roughly ${f.n_for_p.toLocaleString()},
+        and an August supplies about 49` : ""}. Nothing is priced on a
+        maybe.`;
+    }
     return `Measured on ${f.n} game(s)${span}: starter usage does not
       predict an August result by enough to bet, so nothing is.`;
   }
