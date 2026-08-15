@@ -94,7 +94,29 @@ NFL_USAGE_MARKETS = {
     "air_yards": ("receiving_air_yards", "air_yards"),
     "fp_ppr": ("fantasy_points_ppr",),
     "pass_att": ("attempts", "passing_attempts"),
+    # THE SCORING COMPONENTS, added 2026-08-15 for the lineup optimiser.
+    #
+    # `fp_ppr` is nflverse's own PPR total and is exactly right for a PPR
+    # league — but almost nobody plays default PPR. Half-PPR, TE premium
+    # and six-point passing touchdowns all change which eleven men you
+    # should start, and none of them can be computed from a points total.
+    # They can be computed from the parts.
+    #
+    # Yardage was already stored, but only for the ONE position each
+    # market was a prop for: `rec_yds` for wide receivers and `rush_yds`
+    # for running backs (POSITION_MARKETS). That leaves a pass-catching
+    # back and every tight end with no receiving yards at all, which is
+    # exactly who a half-PPR setting moves. Storing them here covers all
+    # four positions on the same fetch.
+    "rec_yds": ("receiving_yards",),
+    "rush_yds": ("rushing_yards",),
+    "pass_td": ("passing_tds",),
+    "pass_int": ("interceptions", "passing_interceptions"),
 }
+#: Markets that only exist for a quarterback. Writing a zero for everyone
+#: else would make "he threw no touchdowns" and "he is a wide receiver"
+#: the same row.
+NFL_QB_ONLY = {"pass_att", "pass_td", "pass_int"}
 
 
 def nfl_usage_rows(stats_rows: list[dict], season: int) -> list[dict]:
@@ -115,7 +137,7 @@ def nfl_usage_rows(stats_rows: list[dict], season: int) -> list[dict]:
         if not name:
             continue
         for market, cols in NFL_USAGE_MARKETS.items():
-            if market == "pass_att" and pos != "QB":
+            if market in NFL_QB_ONLY and pos != "QB":
                 continue
             out.append({
                 "sport": "nfl", "season": season, "period": f"{wk:03d}",

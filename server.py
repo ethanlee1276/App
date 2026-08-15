@@ -329,6 +329,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api(parse_qs(parsed.query), sport="cfb")
         if parsed.path in ("/api/draftadvice", "/api/draftadvice/"):
             return self._draft_advice(parse_qs(parsed.query))
+        if parsed.path in ("/api/leaguedesk", "/api/leaguedesk/"):
+            return self._league_desk(parse_qs(parsed.query))
         if parsed.path.startswith("/api/sleeper/"):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
         if parsed.path.startswith("/api/profile/"):
@@ -437,6 +439,150 @@ class Handler(BaseHTTPRequestHandler):
             slots = {"QB": 1, "RB": 2, "WR": 2, "TE": 1}
         out = fantasy_pick.advice(draft, picks, ranks, board, user_id, slots)
         out["slots"] = slots
+        self._send(200, json.dumps(out).encode(), ".json")
+
+    def _league_desk(self, query: dict):
+        """Your optimal lineup and the trades worth proposing, in one read.
+
+        Both answers need the same three things — the league's SCORING,
+        its ROSTER SLOTS, and every roster in it — so they are fetched
+        once and answered together rather than twice. The scoring and the
+        slots come from the league itself: a half-PPR TE-premium
+        superflex league does not have the same best lineup as the
+        default, and using a default here would quietly answer a
+        different league's question.
+        """
+        league_id = (query.get("league") or [""])[0].strip()
+        user_id = (query.get("user") or [""])[0].strip()
+        platform = (query.get("platform") or ["sleeper"])[0].strip().lower()
+        if not re.fullmatch(r"\d{1,25}", league_id):
+            return self._send(400, b'{"error":"bad league id"}', ".json")
+        if platform not in ("sleeper", "espn"):
+            return self._send(400, b'{"error":"unknown platform"}', ".json")
+        from engine import fantasy_lineup, fantasy_ranks, fantasy_trade
+        from engine.db import connect
+        from engine.sources.fetch import fetch_text, DataUnavailable
+
+        if platform == "espn":
+            return self._league_desk_espn(league_id, user_id, query)
+
+        def grab(path, ttl):
+            if not sleeper_path_ok(path):
+                raise DataUnavailable(f"path not allowlisted: {path}")
+            cache = "sleeper_" + re.sub(r"[^A-Za-z0-9]+", "_", path) + ".json"
+            return json.loads(fetch_text(SLEEPER_BASE + path, cache, ttl=ttl))
+
+        try:
+            league = grab(f"league/{league_id}", ttl=600)
+            rosters = grab(f"league/{league_id}/rosters", ttl=300)
+            users = grab(f"league/{league_id}/users", ttl=600)
+            players = grab("players/nfl", ttl=86400)
+        except (DataUnavailable, ValueError) as exc:
+            return self._send(502, json.dumps({"error": str(exc)}).encode(),
+                              ".json")
+
+        def rows_for(roster):
+            out = []
+            for pid in (roster or {}).get("players") or []:
+                p = (players or {}).get(str(pid)) or {}
+                name = " ".join(x for x in (p.get("first_name"),
+                                            p.get("last_name")) if x)
+                pos = (p.get("position") or "").upper()
+                if name and pos:
+                    out.append({"player": name, "position": pos})
+            return out
+
+        owner = {}
+        for u in users or []:
+            owner[str(u.get("user_id"))] = (u.get("display_name")
+                                            or u.get("username") or "?")
+        mine, rivals = [], {}
+        for r in rosters or []:
+            who = str(r.get("owner_id") or "")
+            rows = rows_for(r)
+            if who == str(user_id):
+                mine = rows
+            elif rows:
+                rivals[owner.get(who, f"Team {r.get('roster_id')}")] = rows
+
+        conn = connect()
+        try:
+            season = max((int(s[0]) for s in conn.execute(
+                "SELECT DISTINCT season FROM player_game_logs WHERE sport='nfl'"
+            ).fetchall()), default=0)
+            means = fantasy_lineup.per_game(conn, season) if season else {}
+        finally:
+            conn.close()
+
+        scoring = league.get("scoring_settings") or {}
+        slots = fantasy_lineup.starting_slots(league.get("roster_positions"))
+        out = {
+            "league": league.get("name"), "season": season,
+            "slots": slots, "has_me": bool(mine),
+            "lineup": fantasy_lineup.lineup(mine, slots, scoring, means)
+                      if mine else None,
+        }
+        trades = (fantasy_trade.generate(mine, rivals, slots, scoring, means)
+                  if mine and rivals else [])
+        out["trades"] = trades[:12]
+        out["trade_summary"] = fantasy_trade.summary(trades)
+        self._send(200, json.dumps(out).encode(), ".json")
+
+    def _league_desk_espn(self, league_id: str, member_id: str, query: dict):
+        """The same desk, reading an ESPN league instead of a Sleeper one.
+
+        Split out rather than branched inline so the two platforms cannot
+        drift into each other's assumptions — the ANSWER is shared
+        (`fantasy_lineup` and `fantasy_trade` never learn where the league
+        came from), the READING is not.
+        """
+        from engine import fantasy_lineup, fantasy_trade
+        from engine.db import connect
+        from engine.sources import espnfantasy
+        from engine.sources.fetch import DataUnavailable
+        import datetime as _dt
+        try:
+            season = int((query.get("season") or [""])[0])
+        except (TypeError, ValueError):
+            season = _dt.date.today().year
+        try:
+            lg = espnfantasy.league(season, league_id)
+        except DataUnavailable as exc:
+            return self._send(502, json.dumps({"error": str(exc)}).encode(),
+                              ".json")
+
+        conn = connect()
+        try:
+            stat_season = max((int(s[0]) for s in conn.execute(
+                "SELECT DISTINCT season FROM player_game_logs WHERE sport='nfl'"
+            ).fetchall()), default=0)
+            means = (fantasy_lineup.per_game(conn, stat_season)
+                     if stat_season else {})
+        finally:
+            conn.close()
+
+        rosters = dict(lg.get("rosters") or {})
+        mine_label = espnfantasy.owner_of(
+            espnfantasy.fetch_league(season, league_id), member_id)
+        mine = rosters.pop(mine_label, []) if mine_label else []
+        slots = fantasy_lineup.starting_slots(lg.get("slots"))
+        scoring = lg.get("scoring") or {}
+        trades = (fantasy_trade.generate(mine, rosters, slots, scoring, means)
+                  if mine and rosters else [])
+        out = {
+            "platform": "espn", "league": lg.get("name"),
+            "season": stat_season, "slots": slots, "has_me": bool(mine),
+            "lineup": (fantasy_lineup.lineup(mine, slots, scoring, means)
+                       if mine else None),
+            "trades": trades[:12],
+            "trade_summary": fantasy_trade.summary(trades),
+            # THE SCORING RULES WE COULD NOT READ. Reported to the page,
+            # not swallowed: a rule silently ignored is a lineup silently
+            # wrong, and ESPN describes scoring as numeric ids this
+            # container has never been able to confirm against a live
+            # response.
+            "unmapped_scoring": lg.get("unmapped") or [],
+        }
         self._send(200, json.dumps(out).encode(), ".json")
 
     def _sleeper(self, path: str):

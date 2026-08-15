@@ -41,11 +41,27 @@ standings, rosters and scoreboard. No auth for public leagues.
 
 ## Tier 2 — readable without a credential *if a setting is right*.
 
-### ESPN
+### ESPN — **adapter built, 2026-08-15**
 ESPN's fantasy read API is reachable without any login **when the league
 is set to viewable by the public.** That is a league setting, not a
 credential — if your league is already public, or the commissioner will
-flip it, ESPN drops into Tier 1 and costs the same work as MFL.
+flip it, ESPN drops into Tier 1.
+
+`engine/sources/espnfantasy.py` reads it: scoring, roster slots and every
+team's roster, in the same shape the Sleeper path already produces so the
+league desk never learns which platform it is talking to. A private
+league raises with a message naming the setting to change, rather than
+asking for cookies.
+
+**Two things to know before the first real run.** ESPN describes scoring
+as numeric `statId`s, and this container cannot reach ESPN to confirm the
+mapping — a probe to both hosts returned nothing through the proxy. So
+only the ids the app can act on are mapped, and **anything unknown comes
+back in `unmapped` rather than being dropped**. If your league scores
+something we ignored, the page will say so with the id, and adding it is
+a one-line change. This discipline is a direct response to the `pass_att`
+bug: a market read from a column that did not exist, where everything
+downstream quietly read zero.
 
 A **private** ESPN league is a different story. Reading it requires two
 cookies, `espn_s2` and `SWID`, copied out of a logged-in browser. Those

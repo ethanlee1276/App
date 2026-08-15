@@ -9342,7 +9342,8 @@ async function renderFantasy() {
      rankBoardHTML(d.ranks)],
     ["league", "Around the league",
      "camp, the waiver wire, the offseason and the draft kit",
-     acctCardHTML() + `<div id="sleeper-zone"></div>` + campHTML(d.camp)
+     acctCardHTML() + `<div id="sleeper-zone"></div>`
+     + `<div id="league-desk"></div>` + campHTML(d.camp)
      + waiverPulseHTML(d.trending) + offseasonHTML(off) + draftKit],
   ]) + _ffFoot;
   bindSubtabs(host);
@@ -10343,6 +10344,134 @@ const TIER_COLORS = ["var(--good)", "var(--cyan)", "var(--brand)",
                      "var(--warn)", "var(--text-mute)"];
 const tierColor = (t) => TIER_COLORS[Math.min(t - 1, TIER_COLORS.length - 1)];
 
+/* ---------------- League desk: lineup + trades --------------------------
+
+   Ethan, 2026-08-15: "since league after draft to optimize line ups each
+   week" and "Have a trade generator to generate trades and know if they
+   will m be accepted or not."
+
+   Both answers come from /api/leaguedesk, which reads the league's OWN
+   scoring and roster slots. That matters more than it sounds: a half-PPR
+   TE-premium superflex league does not have the same best lineup as the
+   default, and a generic ranking answers a different league's question.
+
+   ON ACCEPTANCE — the panel shows whether THEIR starting lineup improves
+   too, by how much, and whether the deal is lopsided enough to read as an
+   insult. It does not show a probability, because there is nothing to fit
+   one on: this app has never stored a proposed trade. The note says so,
+   and the log button is what makes it answerable later. */
+async function renderLeagueDesk(leagueId, userId) {
+  const host = document.getElementById("league-desk");
+  if (!host) return;
+  if (!leagueId) { host.innerHTML = ""; return; }
+  host.innerHTML = `<p class="loading">Reading your league\u2019s scoring and rosters\u2026</p>`;
+  let d;
+  try {
+    const r = await fetch(`/api/leaguedesk?league=${encodeURIComponent(leagueId)}`
+      + `&user=${encodeURIComponent(userId || "")}`);
+    d = await r.json();
+    if (!r.ok) throw new Error(d && d.error);
+  } catch (e) {
+    host.innerHTML = `<div class="warning">${icon("warn")} League desk unavailable: ${
+      escapeHtml(String((e && e.message) || e))}</div>`;
+    return;
+  }
+  if (!d.has_me) {
+    host.innerHTML = `<div class="warning">${icon("warn")} No roster in this
+      league belongs to you, so there is no lineup to optimise. Pick the
+      right league above.</div>`;
+    return;
+  }
+  host.innerHTML = ffLineupHTML(d) + ffTradesHTML(d);
+  host.querySelectorAll("[data-logtrade]").forEach((b) =>
+    b.addEventListener("click", () => ffLogTrade(b)));
+}
+
+function ffLineupHTML(d) {
+  const L = d.lineup || {};
+  const starters = L.starters || [];
+  return `
+    <div class="section-title">Your best lineup
+      <span class="sub">\u2014 scored under ${escapeHtml(d.league || "your league")}\u2019s
+        own settings, not a generic ranking</span></div>
+    <div class="card">
+      <div class="ld-total">${L.total ?? 0} projected points</div>
+      <div class="rank-scroll"><table class="rank-table"><thead><tr>
+        <th>Slot</th><th class="rank-name">Player</th><th>Pos</th>
+        <th>Proj</th><th>PPR base</th>
+        </tr></thead><tbody>
+        ${starters.map((s) => `<tr>
+          <td class="rank-name">${escapeHtml(s.slot)}</td>
+          <td class="rank-name">${s.player ? escapeHtml(s.player)
+            : '<span class="rank-none">\u2014 nobody eligible</span>'}${
+            s.thin ? ' <span class="chip warn">thin sample</span>' : ""}</td>
+          <td>${escapeHtml(s.position || "")}</td>
+          <td>${s.points ?? "\u2014"}</td>
+          <td class="rank-none">${s.base_ppr ?? "\u2014"}</td></tr>`).join("")}
+      </tbody></table></div>
+      ${(L.swaps || []).length ? `<div class="ld-swaps">
+        <div class="rank-fight-head">Change these</div>
+        ${L.swaps.map((w) => `<div class="rank-fight-row">
+          <b>${escapeHtml(w.slot)}</b>
+          <span class="chip down">out ${escapeHtml(w.out)}</span>
+          <span class="chip up">in ${escapeHtml(w.in)}</span>
+          <span class="rank-spread">+${w.gain}</span></div>`).join("")}
+      </div>` : `<p class="rank-help">Nothing to change \u2014 this is already
+        the best legal lineup on your roster.</p>`}
+      ${L.exact === false ? `<p class="rank-help">${icon("warn")} Scored from
+        the PPR baseline with your league\u2019s differences applied where we
+        store the component. These could not be adjusted for:
+        <b>${(L.missing || []).map(escapeHtml).join(", ")}</b> \u2014 so those
+        rules are not reflected.</p>` : ""}
+      <p class="rank-help">${escapeHtml(L.note || "")}</p>
+    </div>`;
+}
+
+function ffTradesHTML(d) {
+  const trades = d.trades || [];
+  const sum = d.trade_summary || {};
+  return `
+    <div class="section-title">Trades worth proposing
+      <span class="sub">\u2014 only deals where BOTH starting lineups improve</span></div>
+    <div class="card">
+      ${trades.length ? trades.map((t, i) => `
+        <div class="ld-trade">
+          <div class="ld-trade-head">
+            <b>${escapeHtml(t.with)}</b>
+            <span class="chip up">you +${t.my_gain}</span>
+            <span class="chip ${t.their_gain > 0 ? "up" : "down"}">them +${t.their_gain}</span>
+            ${t.lopsided ? `<span class="chip down">lopsided by ${t.gap}
+              \u2014 will read as a fleece</span>` : ""}
+          </div>
+          <div class="ld-trade-body">
+            <span class="rank-none">you send</span> ${t.give.map(escapeHtml).join(", ")}
+            <span class="rank-none">\u2192 you get</span> ${t.get.map(escapeHtml).join(", ")}
+          </div>
+          <button class="btn ghost" data-logtrade="${i}"
+            data-trade="${escapeHtml(JSON.stringify(t))}">Log as sent</button>
+        </div>`).join("")
+        : `<p class="rank-help">No trade improves both starting lineups right
+           now. That is a real answer \u2014 a deal that only helps you is a
+           request, not a trade.</p>`}
+      <p class="rank-help">${escapeHtml(sum.acceptance_note || "")}</p>
+    </div>`;
+}
+
+function ffLogTrade(btn) {
+  // Kept on this device, like My Bets. The point is to accumulate rows so
+  // "will they accept" can eventually be answered from evidence.
+  let log = [];
+  try { log = JSON.parse(localStorage.getItem("ff_trade_log") || "[]"); }
+  catch (e) { log = []; }
+  let trade = null;
+  try { trade = JSON.parse(btn.dataset.trade); } catch (e) { return; }
+  log.push({ ts: Date.now(), sent: true, outcome: "", ...trade });
+  localStorage.setItem("ff_trade_log", JSON.stringify(log));
+  acctTouch("fantasy");
+  btn.textContent = "Logged \u2713";
+  btn.disabled = true;
+}
+
 /* ---------------- Rankings, side by side --------------------------------
 
    Ethan, 2026-08-15: "add where we show every books ranking side by side".
@@ -10957,6 +11086,9 @@ async function renderSleeperZone(d, errMsg) {
     window._slUser = user;
     renderSleeperPanel(d, { username, user, leagues, leagueId, rosters,
                             lgUsers, seasonTried });
+    // The lineup and the trades both need the league's OWN scoring and
+    // slots, which only exist once a league is chosen.
+    renderLeagueDesk(leagueId, user.user_id);
   } catch (e) {
     localStorage.removeItem("ff_user");
     renderSleeperZone(d, String(e.message || e));
