@@ -164,8 +164,34 @@ another machine:
 | | |
 |---|---|
 | loopback over HTTP | **allowed** — nothing crosses a network |
+| **over a Tailscale tailnet** | **allowed** — see below |
 | another machine, no TLS | **refused**, with the fix named |
 | `X-Forwarded-Proto: https` | **allowed** |
+
+**`http://` over a tailnet is not cleartext.** Tailscale is WireGuard:
+packets are encrypted device-to-device before they touch any network, so
+the scheme in the address bar describes the last inch rather than the
+wire. Ethan reaches the site at `http://100.87.149.86:8000` from his
+phone, and refusing that would be refusing a genuinely private link —
+worse than useless in practice, because the way round it is
+`QB_ALLOW_INSECURE_LOGIN=1`, which switches the check off *everywhere*
+including the coffee shop.
+
+The check requires **both ends** to be in Tailscale's range
+(`100.64.0.0/10`, or `fd7a:115c:a1e0::/48` for IPv6). That range is RFC
+6598 shared space — Tailscale uses it and so do some ISPs for
+carrier-grade NAT — so a client address alone proves nothing; requiring
+our own socket for the connection to be a tailnet address too means the
+packet arrived on the tailnet interface, which a CGNAT'd public path does
+not do. The limit, stated rather than hidden: a network that really did
+put both machines inside `100.64.0.0/10` would read as a tailnet here.
+That is narrow — home LANs are `192.168`/`10.x` and CGNAT sits upstream
+of the router — and a far smaller hole than the blanket override.
+
+The session cookie still does **not** get the `Secure` flag over a
+tailnet, and that is correct: browsers reject `Secure` cookies on
+`http://`, so setting it would silently break sign-in. `Secure` follows
+TLS, which is a different question from whether the link is private.
 
 Reads and syncs are *not* blocked — that would break a phone on the LAN
 for no gain, and a session cookie is a smaller and shorter-lived exposure

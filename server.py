@@ -754,16 +754,55 @@ class Handler(BaseHTTPRequestHandler):
     #: `_password_transport_ok`.
     PASSWORD_PATHS = ("signup", "login", "password", "delete")
 
+    def _via_tailnet(self) -> bool:
+        """Whether this request arrived through the Tailscale tunnel.
+
+        `http://` OVER A TAILNET IS NOT CLEARTEXT. Tailscale is WireGuard:
+        the packets are encrypted device-to-device before they touch any
+        network, so the scheme in the address bar describes the last inch
+        rather than the wire. Refusing a password here would be refusing
+        a connection that is genuinely private — and worse in practice
+        than allowing it, because the way round it is
+        QB_ALLOW_INSECURE_LOGIN=1, which disables the check EVERYWHERE
+        including the coffee shop.
+
+        BOTH ENDS ARE CHECKED, and that is the point. `100.64.0.0/10` is
+        RFC 6598 shared space: Tailscale uses it, but so do some ISPs for
+        carrier-grade NAT, so a client address in that range proves
+        nothing on its own. Requiring that OUR OWN socket for this
+        connection is also a tailnet address means the packet arrived on
+        the tailnet interface — which a CGNAT'd public path does not do,
+        because that lands on the LAN or WAN address instead.
+
+        The limit, stated rather than hidden: a network that put both
+        machines inside 100.64.0.0/10 for real would read as a tailnet
+        here. That is a narrow shape — home LANs are 192.168/10.x and
+        CGNAT sits upstream of the router, not on it — and a much smaller
+        hole than the blanket override it replaces.
+        """
+        import ipaddress
+        nets = (ipaddress.ip_network("100.64.0.0/10"),      # Tailscale IPv4
+                ipaddress.ip_network("fd7a:115c:a1e0::/48"))  # …and IPv6
+        try:
+            peer = ipaddress.ip_address(self.client_address[0])
+            mine = ipaddress.ip_address(self.connection.getsockname()[0])
+        except (ValueError, IndexError, OSError, AttributeError):
+            return False
+        inside = lambda a: any(a in n for n in nets)        # noqa: E731
+        return inside(peer) and inside(mine)
+
     def _transport_is_cleartext(self) -> bool:
         """Whether this connection would carry a password readable.
 
         A FACT ABOUT THE WIRE, kept separate from whether we allow it.
-        The override below removes the refusal; it does not make the
-        connection private, and reporting `insecure: false` because
-        somebody set an environment variable would be the page telling a
-        comfortable lie about the network.
+        The override removes the refusal; it does not make the connection
+        private, and reporting `insecure: false` because somebody set an
+        environment variable would be the page telling a comfortable lie
+        about the network. A tailnet is a different case entirely: there
+        the encryption is real, it is just not TLS.
         """
-        return not (self._is_https() or self._local_only())
+        return not (self._is_https() or self._local_only()
+                    or self._via_tailnet())
 
     def _password_transport_ok(self) -> bool:
         """Whether a password may cross this connection at all.

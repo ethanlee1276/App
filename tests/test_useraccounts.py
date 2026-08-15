@@ -461,6 +461,49 @@ def test_loopback_is_not_treated_as_a_network():
     assert "_local_only()" in body and "_is_https()" in body
 
 
+def test_a_tailnet_is_not_treated_as_cleartext():
+    """Ethan, 2026-08-15, uses `http://100.87.149.86:8000` from his phone.
+
+    `http://` OVER A TAILNET IS NOT CLEARTEXT. Tailscale is WireGuard —
+    packets are encrypted device-to-device before they touch any network,
+    so the scheme in the address bar describes the last inch rather than
+    the wire. The first cut of this guard refused that connection, which
+    was a false positive on a genuinely private link and worse than
+    useless in practice: the way round it is QB_ALLOW_INSECURE_LOGIN=1,
+    which disables the check EVERYWHERE, including the coffee shop.
+
+    BOTH ENDS have to be in the range. `100.64.0.0/10` is RFC 6598 shared
+    space — Tailscale uses it and so do some ISPs for carrier-grade NAT —
+    so a client address there proves nothing alone. Requiring our own
+    socket to be a tailnet address too means the packet arrived on the
+    tailnet interface."""
+    import ipaddress
+    i = SERVER.index("def _via_tailnet(")
+    body = SERVER[i:SERVER.index("\n    def ", i + 1)]
+    assert "100.64.0.0/10" in body
+    assert "fd7a:115c:a1e0::/48" in body, "IPv6 tailnet addresses are missed"
+    assert "getsockname()" in body, "only the client end is being checked"
+    assert "inside(peer) and inside(mine)" in body
+    # The address Ethan actually uses.
+    assert (ipaddress.ip_address("100.87.149.86")
+            in ipaddress.ip_network("100.64.0.0/10"))
+    # …and it feeds the cleartext decision.
+    j = SERVER.index("def _transport_is_cleartext(")
+    ct = SERVER[j:SERVER.index("\n    def ", j + 1)]
+    assert "_via_tailnet()" in ct
+
+
+def test_the_tailnet_carve_out_states_its_own_limit():
+    """A network that really did put both machines inside 100.64.0.0/10
+    would read as a tailnet here. Narrow, but real, and an exception
+    nobody wrote down gets "fixed" later by someone who does not know it
+    was a choice."""
+    i = SERVER.index("def _via_tailnet(")
+    body = SERVER[i:SERVER.index("\n    def ", i + 1)]
+    assert "carrier-grade NAT" in body
+    assert "narrow shape" in body or "narrow" in body
+
+
 def test_the_refusal_names_the_fix():
     """"Insecure connection" on its own leaves someone with nowhere to go."""
     assert "tailscale serve" in _INSECURE
