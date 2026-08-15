@@ -91,7 +91,14 @@ def sleeper_path_ok(path: str) -> bool:
 #     deleted bet stays deleted; on a signature collision the settled
 #     copy beats the pending one (the common edit is marking a result).
 PROFILE_DIR = ROOT / "data" / "profiles"
-PROFILE_SECTIONS = ("mybets", "fantasy", "bankroll")
+#: `search` joins the list with real accounts, 2026-08-15 — Ethan asked
+#: for search history stored alongside bets and fantasy. The merge rule
+#: for it is the same last-writer-wins every non-bets section uses.
+PROFILE_SECTIONS = ("mybets", "fantasy", "bankroll", "search")
+#: The signed-in session cookie. HttpOnly so page scripts cannot read it
+#: — an XSS bug should not also be a session theft — and SameSite=Lax so
+#: another site cannot ride it.
+SESSION_COOKIE = "qb_session"
 MAX_PROFILE_BYTES = 1_000_000        # thousands of bets fit; junk bounces
 #: Connecting or disconnecting Yahoo is the one action on this server that
 #: changes what a third party may see, so it is restricted to the machine
@@ -104,6 +111,17 @@ MAX_TOMBSTONES = 500
 _PROFILE_NAME = re.compile(r"^[A-Za-z0-9_-]{2,24}$")
 _PROFILE_PIN = re.compile(r"^\d{4,12}$")
 _PROFILE_LOCK = threading.Lock()
+
+
+def _acct():
+    """`engine.accounts`, imported on first use.
+
+    Deferred because importing it builds the dummy scrypt verifier that
+    equalizes login timing — 40ms of work that a launcher which never
+    serves an account request should not pay at startup.
+    """
+    from engine import accounts as _a
+    return _a
 
 
 def profile_name_ok(name) -> bool:
@@ -341,6 +359,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/yahoo/"):
             return self._yahoo(parsed.path[len("/api/yahoo/"):].strip("/"),
                                parse_qs(parsed.query))
+        if parsed.path.startswith("/api/account/"):
+            return self._account_get(
+                parsed.path[len("/api/account/"):].strip("/"))
         if parsed.path.startswith("/api/sleeper/"):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
         if parsed.path.startswith("/api/profile/"):
@@ -354,6 +375,22 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/yahoo/"):
             return self._yahoo_post(
                 parsed.path[len("/api/yahoo/"):].strip("/"))
+        if parsed.path.startswith("/api/account/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length > MAX_PROFILE_BYTES:
+                self.close_connection = True     # body goes unread
+                return self._send(413, b'{"error":"body too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                assert isinstance(body, dict)
+            except Exception:                                # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}',
+                                  ".json")
+            return self._account_post(
+                parsed.path[len("/api/account/"):].strip("/"), body)
         if not parsed.path.startswith("/api/profile/"):
             return self._send(404, b'{"error":"unknown endpoint"}', ".json")
         try:
@@ -607,6 +644,138 @@ class Handler(BaseHTTPRequestHandler):
         }
         self._send(200, json.dumps(out).encode(), ".json")
 
+    # --- accounts: email and password, ours ---------------------------------
+    #
+    # Ethan, 2026-08-15: "make a feature where you can make an account on
+    # our website with email and password so we can store peoples bets and
+    # fantasy leauges and search history".
+    #
+    # The older name+PIN profile store still answers on /api/profile/ so
+    # nobody's existing data disappears; this is the path that replaces it.
+    # The MERGE is shared — `merge_sections` and the bet-signature rules
+    # below are the same code both stores use, because two implementations
+    # of "never lose a logged bet to a device race" is one too many.
+    def _cookie(self, name: str) -> str:
+        raw = self.headers.get("Cookie") or ""
+        for part in raw.split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == name:
+                return v
+        return ""
+
+    def _is_https(self) -> bool:
+        """Whether the browser's leg of this request was encrypted.
+
+        The server itself speaks plain HTTP; a Tailscale serve or any
+        reverse proxy in front terminates TLS and says so in a header.
+        This decides the cookie's `Secure` flag — setting it
+        unconditionally would make sign-in silently impossible over the
+        LAN address, and never setting it would let the cookie ride a
+        plaintext request when there IS a TLS front.
+        """
+        fwd = (self.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip()
+        return fwd.lower() == "https"
+
+    def _session_cookie(self, token: str, clear: bool = False) -> list:
+        bits = [f"{SESSION_COOKIE}={'' if clear else token}", "Path=/",
+                "HttpOnly", "SameSite=Lax",
+                f"Max-Age={0 if clear else _acct().SESSION_TTL}"]
+        if self._is_https():
+            bits.append("Secure")
+        return [("Set-Cookie", "; ".join(bits))]
+
+    def _account(self, conn):
+        """The signed-in account for this request, or None."""
+        return _acct().session_user(conn, self._cookie(SESSION_COOKIE))
+
+    def _account_get(self, path: str):
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if path == "me":
+                if not who:
+                    return self._send(200, b'{"signed_in":false}', ".json")
+                return self._send(200, json.dumps(
+                    {"signed_in": True, "email": who["email"]}).encode(), ".json")
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "data":
+                return self._send(200, json.dumps(
+                    {"email": who["email"],
+                     "sections": A.get_sections(conn, who["id"])}).encode(),
+                    ".json")
+            if path == "export":
+                # Everything we hold, on request. If we are going to keep
+                # people's data we have to be able to hand it back.
+                return self._send(200, json.dumps(
+                    A.export_user(conn, who["id"]), indent=1).encode(), ".json")
+            return self._send(404, b'{"error":"unknown account endpoint"}',
+                              ".json")
+        finally:
+            conn.close()
+
+    def _account_post(self, path: str, body: dict):
+        A = _acct()
+        if path not in ("signup", "login", "logout", "data", "password",
+                        "delete"):
+            return self._send(404, b'{"error":"unknown account endpoint"}',
+                              ".json")
+        conn = A.connect()
+        try:
+            if path in ("signup", "login"):
+                fn = A.create_user if path == "signup" else A.authenticate
+                code, out = fn(conn, body.get("email"), body.get("password"))
+                if code != 200:
+                    return self._send(code, json.dumps(out).encode(), ".json")
+                token = A.start_session(conn, out["id"])
+                # The token goes in the cookie and NOWHERE in the body: a
+                # page script that can read it can also exfiltrate it, and
+                # HttpOnly is only a promise if we keep it.
+                return self._send(200, json.dumps(
+                    {"signed_in": True, "email": out["email"]}).encode(),
+                    ".json", headers=self._session_cookie(token))
+            token = self._cookie(SESSION_COOKIE)
+            if path == "logout":
+                A.end_session(conn, token)
+                return self._send(200, b'{"signed_in":false}', ".json",
+                                  headers=self._session_cookie("", clear=True))
+            who = A.session_user(conn, token)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "data":
+                sections = body.get("sections")
+                if not isinstance(sections, dict):
+                    return self._send(400, b'{"error":"sections must be an object"}',
+                                      ".json")
+                stored = A.get_sections(conn, who["id"])
+                merged = merge_sections(stored, sections)
+                A.save_sections(conn, who["id"], merged)
+                A.touch_session(conn, token)
+                return self._send(200, json.dumps(
+                    {"email": who["email"], "sections": merged}).encode(),
+                    ".json")
+            if path == "password":
+                code, out = A.change_password(conn, who["id"],
+                                              body.get("old"), body.get("new"))
+                if code != 200:
+                    return self._send(code, json.dumps(out).encode(), ".json")
+                # change_password drops every session, this one included.
+                return self._send(200, json.dumps(out).encode(), ".json",
+                                  headers=self._session_cookie("", clear=True))
+            if path == "delete":
+                # Typing the password again, because this is not undoable
+                # and a mis-tap should not be able to do it.
+                code, _ = A.authenticate(conn, who["email"],
+                                         body.get("password"))
+                if code != 200:
+                    return self._send(403, b'{"error":"wrong password"}', ".json")
+                A.delete_user(conn, who["id"])
+                return self._send(200, b'{"deleted":true}', ".json",
+                                  headers=self._session_cookie("", clear=True))
+        finally:
+            conn.close()
+
     def _league_desk_yahoo(self, league_key: str, query: dict):
         """The same desk again, reading a Yahoo league through OAuth2.
 
@@ -852,11 +1021,14 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, target.read_bytes(), target.suffix,
                    mtime=target.stat().st_mtime)
 
-    def _send(self, code: int, body: bytes, suffix: str, mtime: float | None = None):
+    def _send(self, code: int, body: bytes, suffix: str, mtime: float | None = None,
+              headers: list | None = None):
         self.send_response(code)
         self.send_header("Content-Type", CONTENT_TYPES.get(suffix, "application/octet-stream"))
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for name, value in (headers or []):
+            self.send_header(name, value)
         # When the payload came from a file on disk, say when that file was
         # last written. The site's freshness chip used to time its own
         # fetch, which is always a few seconds old — so a phone across town

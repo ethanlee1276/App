@@ -60,20 +60,31 @@ console.log("ok");
         os.unlink(path)
 
 
-def test_it_never_asks_for_a_credential():
-    """The whole safety argument in one assertion: no password field, no
-    sportsbook login, nowhere on the page."""
+def test_it_never_asks_for_a_SPORTSBOOK_credential():
+    """NARROWED 2026-08-15, and the narrowing is the point.
+
+    This used to assert that no password field existed on the page at all.
+    Ethan then asked for real accounts — *"we will be storing user
+    information and passwords and logins"* — so the page now carries a
+    Qellys sign-in, and the old assertion would have failed for the right
+    reason at the wrong target.
+
+    The rule underneath it survives intact: no field on this page asks for
+    a DRAFTKINGS password. Ours can be scoped, changed and deleted by us;
+    theirs cannot, which was always the actual argument. The bet-entry
+    form is checked directly, so a credential field appearing THERE — the
+    place a "connect your book" feature would land — still fails."""
     body = _slice("function renderMyBets(", "\n/* ================")
-    # No credential INPUT anywhere on the page (the WORD "password" IS on
-    # the page — its whole point is saying it never asks for one — so the
-    # check is for a real field, not the noun).
-    assert 'type="password"' not in (body + HTML).lower()
-    # Only the manual-entry inputs exist; none of them is a secret.
-    input_types = set(re.findall(r'type="([a-z]+)"', body))
+    form = _slice("const form = ", "host.innerHTML = ")
+    # The manual-entry form takes no secret of any kind.
+    input_types = set(re.findall(r'type="([a-z]+)"', form))
+    assert "password" not in input_types, \
+        f"a credential field appeared on the bet form: {input_types}"
     assert input_types <= {"text", "number", "date", "button", "file"}, \
-        f"unexpected input types on My Bets: {input_types}"
-    # And it states the choice, so the absence reads as deliberate.
-    assert "No passwords" in body
+        f"unexpected input types on the My Bets form: {input_types}"
+    # And the page still states the choice, so the absence reads as
+    # deliberate rather than forgotten.
+    assert "No sportsbook passwords" in body
 
 
 def test_entries_live_only_in_the_browser():

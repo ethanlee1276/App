@@ -160,22 +160,48 @@ def test_the_browser_and_server_compute_the_same_signature():
     assert json.loads(out.stdout) == [bet_sig(b) for b in fixtures]
 
 
-def test_the_account_card_asks_for_no_password():
-    """Same safety contract as My Bets itself: name + optional numeric
-    PIN, nothing shaped like a credential to anything external."""
-    i = APP.index("ACCOUNTS — one name, every device")
-    block = APP[i:APP.index("Offseason panel", i)]
+def test_the_legacy_card_still_asks_only_for_a_name_and_a_pin():
+    """SUPERSEDED, NOT DELETED. This used to assert that no password
+    field existed anywhere on the site — Ethan, 2026-08-15: *"we will be
+    storing user information and passwords and logins"*, so the site now
+    has real accounts and `type="password"` is expected on the new card.
+
+    What is checked here is the OLD card, which still exists and still
+    works so nobody's stored book vanishes the day they upgrade. It never
+    grew a password field, and it should not: it is a different store
+    with a different key, and bolting one on would make two half-migrated
+    login systems out of one working one and one new one."""
+    i = APP.index("function acctLegacyCardHTML")
+    block = APP[i:APP.index("\nwindow.acctGo", i)]
     assert 'type="password"' not in block.lower()
     assert 'inputmode="numeric"' in block
-    assert "no sportsbook logins, ever" in block.lower()
 
 
-def test_sync_talks_only_to_our_own_profile_endpoint():
+def test_the_rule_that_survived_is_the_third_party_one():
+    """The distinction the whole change turns on. Our own password is
+    scopable, rotatable and deletable by us; a DraftKings password is
+    none of those. The new card has to keep saying so, because that is
+    the sentence people will look for when they see a password box appear
+    on a betting site."""
+    i = APP.index("function acctSignInHTML")
+    block = APP[i:APP.index("\nwindow.acctAuth", i)]
+    assert "sportsbook" in block.lower()
+    assert "revoked" in block.lower()
+
+
+def test_sync_talks_only_to_our_own_endpoints():
+    """WIDENED 2026-08-15, not weakened. This used to allow exactly one
+    URL because there was exactly one — now there is an email/password
+    store beside the PIN one, and both are OURS. What the test is for is
+    unchanged: nothing in the account block may talk to a third party,
+    because that is the block holding the personal data."""
     i = APP.index("ACCOUNTS — one name, every device")
     block = APP[i:APP.index("Offseason panel", i)]
     import re
-    targets = re.findall(r'fetch\(\s*"([^"]+)"', block)
-    assert targets and all(t == "/api/profile/" for t in targets), targets
+    targets = re.findall(r'fetch\(\s*[`"]([^`"]+)[`"]', block)
+    assert targets, "the account block stopped talking to the server at all"
+    for t in targets:
+        assert t.startswith("/api/profile/") or t.startswith("/api/account/"), t
 
 
 def test_every_synced_surface_touches_the_account():

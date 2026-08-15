@@ -8467,11 +8467,12 @@ function renderMyBets() {
 
   host.innerHTML = `
     <div class="card mb-safety">
-      <b>No passwords, ever.</b> Sportsbooks don’t offer a login for apps, so the only way to
-      pull your account automatically would be to store your password and scrape it — against
-      their terms, and a risk to your account and your money. So you log bets here yourself.
-      Everything stays on your own machines: this browser, plus your own computer’s server
-      when you sign in to an account below.
+      <b>No sportsbook passwords, ever.</b> Sportsbooks don’t offer a login for apps, so the
+      only way to pull your account automatically would be to store your DraftKings or FanDuel
+      password and scrape it — against their terms, and a risk to your account and your money.
+      So you log bets here yourself. A <b>Qellys</b> account is a different thing: it is ours,
+      you can change or delete it whenever you like, and it is what carries this log to your
+      other devices.
     </div>
     ${acctCardHTML()}
     ${form}
@@ -9533,6 +9534,14 @@ function acctGather() {
   if (bk || up || ts.bankroll)
     sections.bankroll = { ts: ts.bankroll || 0,
                           data: { bankroll: bk, unitPct: up } };
+  // Search history, new with real accounts. Rides the same last-writer-wins
+  // rule as fantasy and bankroll — it is a convenience, not a ledger, and
+  // it is the one section with a Clear button of its own.
+  let searches = [];
+  try { searches = JSON.parse(localStorage.getItem(ACCT_SEARCH_KEY) || "[]"); }
+  catch (e) { searches = []; }
+  if (searches.length || ts.search)
+    sections.search = { ts: ts.search || 0, data: searches };
   return sections;
 }
 
@@ -9550,6 +9559,9 @@ function acctApplySection(name, sec) {
                               : localStorage.removeItem(k);
       put("ff_user", d.user); put("ff_league", d.league);
       put("ff_draft_id", d.draft); put(FF_IMPORT_KEY, d.ranks);
+    } else if (name === "search") {
+      if (Array.isArray(d))
+        localStorage.setItem(ACCT_SEARCH_KEY, JSON.stringify(d));
     } else if (name === "bankroll") {
       localStorage.setItem("ge-bankroll", d.bankroll || "");
       if (d.unitPct) localStorage.setItem("ge-unit-pct", d.unitPct);
@@ -9568,6 +9580,12 @@ function acctApplySection(name, sec) {
 }
 
 async function acctSync() {
+  // A REAL ACCOUNT WINS WHEN THERE IS ONE. The email/password store and
+  // the older name+PIN store answer the same shapes and share the same
+  // merge on the server, so this is a change of address, not of contract
+  // — and the legacy path stays live so nobody's existing book vanishes
+  // the day they make an account.
+  if (_acctUser && _acctUser.signed_in) return acctSyncAccount();
   const a = acctState();
   if (!a) return;
   try {
@@ -9632,10 +9650,276 @@ function acctPaintNote() {
   });
 }
 
+/* ---------------- Qellys accounts: email and password -------------------
+
+   Ethan, 2026-08-15: "make a feature where you can make an account on our
+   website with email and password so we can store peoples bets and
+   fantasy leauges and search history or anything like that."
+
+   THE SESSION NEVER TOUCHES THIS FILE. Sign-in returns a cookie marked
+   HttpOnly, which means page scripts — including this one — cannot read
+   it. That is deliberate: if a script could read the token, then so could
+   any script that ever got injected into the page. Everything below asks
+   the server "am I signed in?" rather than inspecting a token, because
+   asking is the only thing it is allowed to do.
+
+   The password is typed, POSTed once, and never stored anywhere on the
+   device. What comes back is a session, not a credential.
+
+   WHAT WE DO NOT DO, still: this asks for an account HERE. It does not
+   ask for a DraftKings or ESPN password, because a credential to somebody
+   else's service cannot be scoped or revoked by us, and ours can. */
+let _acctUser = null;                 // {signed_in, email} — server's answer
+const ACCT_SEARCH_KEY = "qb_search_v1";
+const SEARCH_KEEP = 100;
+
+async function acctWho(force) {
+  if (_acctUser && !force) return _acctUser;
+  try {
+    const r = await fetch("/api/account/me", { credentials: "same-origin" });
+    _acctUser = r.ok ? await r.json() : { signed_in: false };
+  } catch (e) { _acctUser = { signed_in: false }; }
+  return _acctUser;
+}
+
+async function acctSyncAccount() {
+  try {
+    const r = await fetch("/api/account/data", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sections: acctGather() }),
+    });
+    if (r.status === 401) {              // session expired underneath us
+      _acctUser = { signed_in: false };
+      _acctNote = "Signed out — sign in again to keep syncing.";
+      acctPaintNote();
+      return;
+    }
+    const body = await r.json().catch(() => null);
+    if (!r.ok) {
+      _acctNote = (body && body.error) || `sync failed (${r.status})`;
+      return acctPaintNote();
+    }
+    const ts = acctTs();
+    let betsChanged = false;
+    Object.keys(body.sections || {}).forEach((k) => {
+      const s = body.sections[k];
+      if (s && (s.ts || 0) > (ts[k] || 0)) {
+        acctApplySection(k, s);
+        if (k === "mybets") betsChanged = true;
+      }
+    });
+    _acctNote = "synced " + new Date().toLocaleTimeString([],
+                { hour: "numeric", minute: "2-digit" });
+    if (betsChanged && state.view === "mybets") renderMyBets();
+    else acctPaintNote();
+  } catch (e) {
+    _acctNote = "server offline — changes are saved here and will sync when "
+              + "the site is back up";
+    acctPaintNote();
+  }
+}
+
+/* Search history. Ethan asked for it by name, so it is stored — and it is
+   also the one section here that is a record of what somebody was
+   THINKING rather than what they did, so it says plainly that it is kept
+   and gives one button to wipe it. */
+function acctSearchLog(q) {
+  const term = String(q || "").trim();
+  if (term.length < 2) return;
+  let log = [];
+  try { log = JSON.parse(localStorage.getItem(ACCT_SEARCH_KEY) || "[]"); }
+  catch (e) { log = []; }
+  if (log.length && log[log.length - 1].q === term) return;   // still typing
+  log.push({ q: term, ts: Date.now() });
+  if (log.length > SEARCH_KEEP) log = log.slice(-SEARCH_KEEP);
+  try { localStorage.setItem(ACCT_SEARCH_KEY, JSON.stringify(log)); } catch (e) {}
+  acctTouch("search");
+}
+
+window.acctSearchClear = function () {
+  try { localStorage.removeItem(ACCT_SEARCH_KEY); } catch (e) {}
+  acctTouch("search");
+  _acctNote = "Search history cleared.";
+  acctSync();
+  if (state.view === "mybets") renderMyBets();
+  else if (state.view === "fantasy") renderFantasy();
+};
+
+function acctSignedInHTML(u) {
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-head">
+      <div><div class="player">Signed in — ${escapeHtml(u.email)}</div>
+        <div class="subtitle">Your bets, fantasy leagues and search history
+          follow this account to every device you sign in on.</div></div>
+      <div class="acct-btns">
+        <button class="btn" onclick="acctSyncNow()">Sync now</button>
+        <button class="btn ghost" onclick="acctSignOut()">Sign out</button>
+      </div>
+    </div>
+    <div class="acct-note">${escapeHtml(_acctNote)}</div>
+    <details class="acct-more">
+      <summary>Account settings</summary>
+      <div class="acct-row">
+        <input type="password" class="acct-old" placeholder="current password"
+          autocomplete="current-password">
+        <input type="password" class="acct-new" placeholder="new password"
+          autocomplete="new-password">
+        <button class="btn ghost" onclick="acctChangePassword(this)">Change password</button>
+      </div>
+      <p class="rank-help">Changing it signs out every other device — a
+        password change is usually an answer to “somebody else may have
+        this”, and leaving those sessions alive would answer it with
+        nothing.</p>
+      <div class="acct-row">
+        <button class="btn ghost" onclick="acctExport()">Download my data</button>
+        <button class="btn ghost" onclick="acctSearchClear()">Clear search history</button>
+        <button class="btn ghost" onclick="acctDelete(this)">Delete my account</button>
+      </div>
+      <p class="rank-help">Delete removes the account, every bet, league and
+        search we hold for it, and cannot be undone.</p>
+    </details>
+  </div>`;
+}
+
+function acctSignInHTML() {
+  const legacy = acctState();
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-head"><div>
+      <div class="player">Make an account</div>
+      <div class="subtitle">Email and a password. Your bets, fantasy
+        leagues and search history are stored with it, so they are there on
+        every device you sign in on.</div></div></div>
+    <div class="acct-row">
+      <input type="email" class="acct-email" placeholder="you@example.com"
+        autocomplete="email" maxlength="254" spellcheck="false">
+      <input type="password" class="acct-pw" placeholder="password"
+        autocomplete="current-password" maxlength="200">
+      <button class="btn" onclick="acctAuth(this, 'signup')">Create account</button>
+      <button class="btn ghost" onclick="acctAuth(this, 'login')">Sign in</button>
+    </div>
+    <div class="acct-note">${escapeHtml(_acctNote)}</div>
+    <p class="rank-help">Ten characters or more — length is what makes a
+      password hard to guess. We store a one-way scramble of it, never the
+      password itself, which is why nobody here can ever tell you what
+      yours is; a lost one gets replaced, not recovered.</p>
+    <p class="rank-help">We still never ask for your sportsbook or ESPN
+      password. Those belong to someone else’s service and could not be
+      revoked by us. This one is ours, and you can delete it whenever you
+      like.</p>
+    ${legacy ? `<p class="rank-help">${icon("warn")} This device is still
+      signed in to the older PIN profile <b>${escapeHtml(legacy.name)}</b>.
+      It keeps working and nothing has been moved — make an account and
+      its data syncs up on the next sync.</p>` : ""}
+  </div>`;
+}
+
+window.acctAuth = async function (btn, mode) {
+  const card = btn.closest(".card");
+  const note = card.querySelector(".acct-note");
+  const say = (t) => { if (note) note.textContent = t; };
+  const email = (card.querySelector(".acct-email").value || "").trim();
+  const password = card.querySelector(".acct-pw").value || "";
+  if (!email || !password) return say("Email and password, both.");
+  say(mode === "signup" ? "Creating your account…" : "Signing in…");
+  try {
+    const r = await fetch(`/api/account/${mode}`, {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const body = await r.json().catch(() => null);
+    if (!r.ok) return say((body && body.error) || `Failed (${r.status}).`);
+    _acctUser = { signed_in: true, email: body.email };
+    // The typed password is not kept anywhere. What we hold now is a
+    // session cookie this script cannot even read.
+    card.querySelector(".acct-pw").value = "";
+    _acctNote = mode === "signup" ? "Account created — this device is synced."
+                                  : "Signed in — pulling your data…";
+    await acctSync();
+    if (typeof renderGreeting === "function") renderGreeting();
+    if (state.view === "mybets") renderMyBets();
+    else if (state.view === "fantasy") renderFantasy();
+  } catch (e) {
+    say("The live server is not reachable — accounts need the site served "
+        + "by launch.py, not a static copy.");
+  }
+};
+
+window.acctChangePassword = async function (btn) {
+  const card = btn.closest(".card");
+  const note = card.querySelector(".acct-note");
+  const say = (t) => { if (note) note.textContent = t; };
+  const old = card.querySelector(".acct-old").value || "";
+  const nw = card.querySelector(".acct-new").value || "";
+  if (!old || !nw) return say("Both the current and the new password.");
+  try {
+    const r = await fetch("/api/account/password", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ old, new: nw }),
+    });
+    const body = await r.json().catch(() => null);
+    if (!r.ok) return say((body && body.error) || `Failed (${r.status}).`);
+    _acctUser = { signed_in: false };
+    _acctNote = "Password changed. Every device is signed out, including "
+              + "this one — sign in with the new one.";
+    if (state.view === "mybets") renderMyBets();
+    else if (state.view === "fantasy") renderFantasy();
+  } catch (e) { say("Server not reachable."); }
+};
+
+window.acctExport = async function () {
+  try {
+    const r = await fetch("/api/account/export", { credentials: "same-origin" });
+    if (!r.ok) return;
+    const blob = new Blob([JSON.stringify(await r.json(), null, 1)],
+                          { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "qellys-account.json";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch (e) {}
+};
+
+window.acctDelete = async function (btn) {
+  const card = btn.closest(".card");
+  const note = card.querySelector(".acct-note");
+  const pw = prompt("Deleting removes your account and everything in it, and "
+                    + "cannot be undone.\n\nType your password to confirm:");
+  if (!pw) return;
+  try {
+    const r = await fetch("/api/account/delete", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: pw }),
+    });
+    if (!r.ok) { if (note) note.textContent = "Wrong password."; return; }
+    _acctUser = { signed_in: false };
+    _acctNote = "Account deleted. Anything on this device is still here.";
+    if (state.view === "mybets") renderMyBets();
+    else if (state.view === "fantasy") renderFantasy();
+  } catch (e) {}
+};
+
 /* One card, mounted on both My Bets and Fantasy. Handlers find their
    inputs through the card element itself, so the two mounts never fight
    over ids. */
 function acctCardHTML() {
+  // The email/password account is the front door now. `_acctUser` is the
+  // SERVER's answer, fetched at boot; until it lands we draw the sign-in
+  // form, which is the honest default — claiming "signed in" before the
+  // server has confirmed it is how a stale card ends up offering Sync now
+  // on an expired session.
+  if (_acctUser && _acctUser.signed_in) return acctSignedInHTML(_acctUser);
+  if (!acctState()) return acctSignInHTML();
+  // A legacy PIN profile is still signed in on this device: show its card
+  // AND the new one, so nothing disappears and the upgrade is visible.
+  return acctLegacyCardHTML() + acctSignInHTML();
+}
+
+function acctLegacyCardHTML() {
   const a = acctState();
   if (a) {
     return `<div class="card" style="margin-bottom:16px">
@@ -9706,7 +9990,19 @@ window.acctGo = async function (btn, creating) {
 
 window.acctSyncNow = function () { _acctNote = "syncing…"; acctPaintNote(); acctSync(); };
 
-window.acctSignOut = function () {
+window.acctSignOut = async function () {
+  // Ends the SERVER's session too. Forgetting the cookie locally while
+  // leaving the session alive on the server is not signing out — it is
+  // the same session, still valid, waiting for whoever has the cookie.
+  if (_acctUser && _acctUser.signed_in) {
+    try {
+      await fetch("/api/account/logout", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: "{}",
+      });
+    } catch (e) {}
+    _acctUser = { signed_in: false };
+  }
   try { localStorage.removeItem(ACCT_KEY); } catch (e) {}
   if (typeof renderGreeting === "function") renderGreeting();
   _acctNote = "Signed out — everything stays on this device; sign back in anytime.";
@@ -9717,7 +10013,17 @@ window.acctSignOut = function () {
 /* Boot: adopt anything newer from the server shortly after first paint,
    then keep a slow heartbeat while the tab is visible, so a bet logged
    on the phone shows up on the laptop without a reload. */
-setTimeout(() => acctSync(), 1500);
+setTimeout(async () => {
+  // Ask the server who we are BEFORE the first sync, or a signed-in
+  // browser's opening sync goes down the legacy path (or nowhere) and
+  // the card paints "make an account" over an account that exists.
+  await acctWho(true);
+  if (_acctUser && _acctUser.signed_in) {
+    if (state.view === "mybets") renderMyBets();
+    else if (state.view === "fantasy") renderFantasy();
+  }
+  acctSync();
+}, 1500);
 setInterval(() => { if (!document.hidden) acctSync(); }, 60000);
 
 /* ============================================================
@@ -12874,8 +13180,14 @@ function bind() {
     state.showAll = e.target.checked;
     renderGameBets(); renderRecommended(); groupRecommended();
   });
+  let _searchT;
   document.getElementById("player-search").addEventListener("input", (e) => {
     state.search = e.target.value; renderPlayers();
+    // Recorded on a PAUSE, not per keystroke — otherwise "mahomes" logs
+    // seven rows, six of which are prefixes nobody searched for.
+    clearTimeout(_searchT);
+    const q = e.target.value;
+    _searchT = setTimeout(() => acctSearchLog(q), 900);
   });
   const rosterSearch = document.getElementById("roster-search");
   if (rosterSearch) rosterSearch.addEventListener("input", (e) => {

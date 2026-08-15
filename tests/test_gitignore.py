@@ -44,6 +44,12 @@ MUST_IGNORE = (
     # and it is worse to leak than an API key: it is scoped to ONE
     # person's fantasy account and reads it until it is revoked.
     "data/yahoo_token.json",
+    # Every user's email and password verifier, 2026-08-15. Covered by
+    # `*.db`, named here anyway: this is the file whose leak would be a
+    # breach of other people's data rather than only Ethan's, and a rule
+    # that matters that much should be pinned by name.
+    "data/accounts.db",
+    "data/accounts.db-wal",
     "secrets.local",
     "secrets.local.old",
     "web/data/recommendations.json",

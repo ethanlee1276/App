@@ -4,14 +4,20 @@ Ethan, 2026-08-15: *"Find out how to find sync more then just sleeper
 fantasy league."*
 
 Here is the real answer, platform by platform, with the one thing that
-decides each: **can it be read without a credential.**
+decides each: **can it be read without a THIRD-PARTY credential.**
 
-That question is not squeamishness. The standing rule on this project is
-that the site never takes a login — it exists because a sportsbook
-password in a JSON file on a LAN-served laptop is a bad trade. A fantasy
-platform's session cookie is the same class of object: it grants full
-account access, it does not expire quickly, and it cannot be scoped down.
-So platforms are sorted below by whether they need one.
+**Updated 2026-08-15.** This site now has its own accounts — email and
+password, `engine/accounts.py`. An older version of this page said the
+site "never takes a login", and that is no longer true and should not be
+read as a promise.
+
+What has not changed is the rule that actually mattered, which was always
+narrower than that sentence: **we do not ask you for a password to
+somebody else's service.** A Qellys password and a DraftKings password
+are different objects. We can scope, rotate and delete ours; we can do
+none of those things to yours, a fantasy platform's session cookie grants
+full account access, does not expire quickly, and cannot be scoped down.
+So platforms are sorted below by whether they need one of *those*.
 
 ---
 

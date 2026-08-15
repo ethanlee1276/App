@@ -55,6 +55,15 @@ data/backups/
 data/*.pre-rescale-*
 data/*.bak
 data/*.backup
+# …and SQLite's write-ahead log and shared-memory files. `*.db` does NOT
+# match `accounts.db-wal`, and the WAL holds writes that have not been
+# checkpointed yet — for the accounts database that means email addresses
+# and password verifiers sitting in a file git was perfectly willing to
+# track. Exactly the `.pre-rescale-` hole, found the same way: by a test
+# that names the real files rather than trusting the pattern.
+*.db-wal
+*.db-shm
+*.db-journal
 # Runtime state written next to the databases — a spend counter and a
 # failure log, both machine-local and both meaningless in anyone else's
 # clone. Same reasoning as the UFC dossiers below.

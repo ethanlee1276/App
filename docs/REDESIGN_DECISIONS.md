@@ -265,10 +265,26 @@ mobile as well."** This supersedes Night Form's aesthetic decisions
 wholesale. It is the owner's call, made looking at both.
 
 **Excluded by Ethan, and by what this site is:** the balance chip and
-the bet slip. This site never holds money — no "Place Bet", no deposits,
-no balance, no "To Win". `tests/test_newlook.py` pins the ban. The
-slip-shaped needs are served honestly: My Bets (your own log, synced by
-Qellys accounts) and Bankroll (your unit sizing).
+the bet slip. There is no "Place Bet", no deposit, no wagering balance
+and no "To Win". `tests/test_newlook.py` pins that. The slip-shaped needs
+are served honestly: My Bets (your own log, synced to your Qellys
+account) and Bankroll (your unit sizing).
+
+**Corrected 2026-08-15.** This section used to say "this site never holds
+money", full stop, and that sentence was doing two jobs. Ethan: *"we will
+be accepting money for people to use the website once it is complete."*
+So, precisely:
+
+* **The site will charge for access.** A subscription is planned. That is
+  ordinary software business and nothing on this page argues against it.
+* **The site still takes no WAGERS.** No balance to deposit into, no bet
+  placed here, no payout owed by us. That is what the excluded chip and
+  slip were about, and it is the part with legal weight rather than
+  design weight — accepting a wager is a licensed activity in most US
+  states, and charging rent for software is not.
+
+The two got written down as one rule, which is how a business decision
+ended up looking like it had been settled by a design review.
 
 **What the pivot changed** (each with its receipt in the tests named):
 - Violet-cast neutral ramp + violet accent; the warm one-hue rule became
@@ -325,8 +341,9 @@ SPREAD|TOTAL|ML grid (no side juice is invented — cells without a real
 number show a dash); the Props page leads with one tile per market
 actually priced tonight, tap to filter; game-card art carries the
 sheet's temp·wind chip when a real reading exists. Excluded on the
-standing no-money rule: the bet slip, Place Bet, deposits, balances,
-plus Rewards and Settings by Ethan's own word. The analytics pass also
+standing no-WAGERS rule: the bet slip, Place Bet, deposits, balances,
+plus Rewards and Settings by Ethan's own word. (That rule is about taking
+bets, not about taking payment — see the correction above.) The analytics pass also
 caught and fixed a crasher: the ALL window's Infinity days reached
 toISOString and the resulting throw blanked the entire Record page.
 
