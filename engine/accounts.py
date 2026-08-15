@@ -67,7 +67,15 @@ from pathlib import Path
 #: and this is pinned by name in tests/test_gitignore.py as well — it
 #: holds every user's email and verifier, which is the single worst file
 #: in this repo to leak.
-DB_PATH = Path("data") / "accounts.db"
+#:
+#: ANCHORED TO THE REPO, not to the working directory. This was
+#: `Path("data") / "accounts.db"` until 2026-08-15, which meant starting
+#: the server from any other directory silently created a second, empty
+#: accounts database: every user gone, new signups landing in a file that
+#: is not on the backup list and that nobody would think to look for.
+#: Found by doing it by accident from a scratch directory. ledger.py and
+#: db.py both anchor this way; this was the one that did not.
+DB_PATH = Path(__file__).resolve().parents[1] / "data" / "accounts.db"
 
 #: scrypt work factors. 128 * N * r bytes per guess = 16MB here.
 SCRYPT_N = 1 << 14
@@ -449,9 +457,27 @@ def save_sections(conn, user_id: int, sections: dict) -> None:
 
 def delete_user(conn, user_id: int) -> None:
     """Everything, in one transaction. If we are going to hold people's
-    data we have to be able to actually give it back up."""
+    data we have to be able to actually give it back up.
+
+    Every table is named here rather than left to `ON DELETE CASCADE`.
+    The cascade is real and it works — but only on a connection that ran
+    `PRAGMA foreign_keys=ON`, which is per-connection and off by default
+    in SQLite. `connect()` sets it, so today the two agree. The day some
+    script opens this file without it, the difference between the two
+    approaches is a row in `subscriptions` outliving the account it
+    belonged to: a Stripe customer_id is a pointer to a real person's
+    name and card at Stripe, and the privacy page promises it is gone.
+    A promise that depends on a pragma being set is not a promise.
+
+    `subscriptions` is created by engine.billing, which may never have run
+    on this database, so its absence is normal rather than an error.
+    """
     conn.execute("DELETE FROM user_data WHERE user_id=?", (int(user_id),))
     conn.execute("DELETE FROM sessions WHERE user_id=?", (int(user_id),))
+    have = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    if "subscriptions" in have:
+        conn.execute("DELETE FROM subscriptions WHERE user_id=?", (int(user_id),))
     conn.execute("DELETE FROM users WHERE id=?", (int(user_id),))
     conn.commit()
 

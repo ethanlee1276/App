@@ -55,13 +55,32 @@ sleep 2
 # --- 6. prove it is actually up ---------------------------------------
 # A restart that returns 0 and a service that serves pages are different
 # facts. Ask it a question and require an answer.
-say "checking"
-for i in 1 2 3 4 5; do
+#
+# THE WINDOW IS WIDE ON PURPOSE. The unit runs launch.py, which does a
+# full `refresh_all()` — every sport, every board — BEFORE it binds the
+# port. A cold start is therefore tens of seconds, not instant. This
+# check used to give up after five tries two seconds apart: about twelve
+# seconds, which a healthy deploy loses every single time. It would have
+# printed "IT RESTARTED BUT IS NOT ANSWERING" and recommended rolling
+# back a deploy that was in the middle of working correctly — the worst
+# kind of false alarm, because acting on it undoes a good release.
+#
+# So: three minutes, and the loop tells the difference between "still
+# building" and "dead". A process that has exited is a failure now; one
+# that is still running has not finished starting.
+say "checking (a cold start builds every board first — up to 3 min)"
+for i in $(seq 1 60); do
   if curl -fsS -m 5 http://127.0.0.1:8000/api/account/me >/dev/null 2>&1; then
-    echo "up, answering, now on $(git rev-parse --short HEAD)"
+    echo "up, answering after ~$((i * 3))s, now on $(git rev-parse --short HEAD)"
     exit 0
   fi
-  sleep 2
+  if ! systemctl is-active --quiet "$SERVICE"; then
+    echo
+    echo "THE SERVICE EXITED — it is not slow, it is down."
+    break
+  fi
+  if [ $((i % 10)) -eq 0 ]; then echo "  still starting… $((i * 3))s"; fi
+  sleep 3
 done
 
 echo

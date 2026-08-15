@@ -2385,8 +2385,63 @@ def preflight() -> None:
     else:
         print(f"{warn} Backups: none yet — the first weekly backup runs with "
               f"daily maintenance")
+    _check_backup_covers_accounts(backups, ok, warn)
 
     print("\n  When everything above is ✅ (or intentionally skipped), run:  python3 launch.py")
+
+
+def _check_backup_covers_accounts(backups: list, ok: str, warn: str) -> None:
+    """Does the newest backup actually contain the accounts database?
+
+    Every other file in `data/` costs us time if it burns. accounts.db
+    costs other people their records, and it is the one file that cannot
+    be rebuilt from any feed. It was left out of `BACKUP_FILES` for a day
+    after accounts shipped, purely because the list predated the file —
+    so this check exists to catch the NEXT time something irreplaceable
+    is added and the backup list is not, rather than to guard one name.
+
+    It also catches archives written before the fix: those zips are
+    complete for their date and stay useful, but they do not hold a single
+    account, and a restore drill from one would come back empty.
+    """
+    import sqlite3
+    import zipfile
+    acc = ROOT / "data" / "accounts.db"
+    if not acc.is_file():
+        return                       # No accounts yet, nothing to protect.
+    # Read-only, so a health check can never write to the live account
+    # store — and `with sqlite3.connect(...)` is a transaction, not a
+    # close, so the handle is closed by hand. The path goes through
+    # as_uri() because a hand-built "file:{path}" is not escaped: a "#"
+    # or "?" anywhere in the checkout path truncates the URI, and SQLite
+    # then opens a DIFFERENT, empty database and reports zero accounts
+    # rather than failing. Measured — `/tmp/od#d/accounts.db` answers
+    # "no such table: users" raw and "1 account" through as_uri().
+    try:
+        conn = sqlite3.connect(f"{acc.as_uri()}?mode=ro", uri=True)
+        try:
+            users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        finally:
+            conn.close()
+    except Exception:                                        # noqa: BLE001
+        users = -1
+    who = f"{users} account(s)" if users >= 0 else "unreadable"
+    if not backups:
+        print(f"{warn} Accounts backup: {who} stored and no backup exists yet")
+        return
+    try:
+        covered = "data/accounts.db" in zipfile.ZipFile(backups[-1]).namelist()
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"{warn} Accounts backup: newest archive unreadable ({exc})")
+        return
+    if covered:
+        print(f"{ok} Accounts backup: {who}, included in {backups[-1].name}")
+    else:
+        print(f"{warn} Accounts backup: {who} stored but NOT in "
+              f"{backups[-1].name} — it predates the fix. The next weekly "
+              f"backup includes them; force one now with: python3 -c "
+              f"\"from engine import maintenance as m; m._maybe_backup({{}}, "
+              f"__import__('datetime').date.today(), print)\"")
 
 
 def why_ufc(argv: list | None = None) -> None:
@@ -6222,6 +6277,27 @@ def main() -> None:
             interval = int(argv[i + 1]); del argv[i:i + 2]
         except (ValueError, IndexError):
             print("--refresh needs a number of seconds (0 to disable)."); return
+    # `--bind 127.0.0.1` for a public deployment, same argument as the one
+    # in server.py: behind a reverse proxy that terminates TLS, binding
+    # every interface leaves the plain-HTTP port reachable from outside
+    # too, and a proxy anyone can walk around protects nothing.
+    #
+    # THE REASON THIS FLAG EXISTS HERE AND NOT ONLY THERE: the production
+    # unit used to run `server.py`, which serves the site but rebuilds
+    # nothing — `web/data/*.json` would have frozen at whatever was on
+    # disk the day it was deployed, and a public "live" board showing last
+    # month's slate is worse than one that is honestly down. This file is
+    # the thing with the refresh loop in it, and it already serves the
+    # identical handler (`from server import Handler`), so production runs
+    # this and gets both. It could not, until it could bind to loopback.
+    bind = "0.0.0.0"
+    if "--bind" in argv:
+        i = argv.index("--bind")
+        if len(argv) > i + 1 and not argv[i + 1].startswith("-"):
+            bind = argv[i + 1]
+            del argv[i:i + 2]
+        else:
+            print("--bind needs an address, e.g. --bind 127.0.0.1"); return
     ports = [a for a in argv if not a.startswith("--")]
     port = int(ports[0]) if ports else 8000
 
@@ -6241,7 +6317,7 @@ def main() -> None:
     refresh_all()
 
     try:
-        server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+        server = ThreadingHTTPServer((bind, port), Handler)
     except OSError as exc:
         # "Address already in use" is not a crash, it is the single most
         # ordinary thing that can happen: the site is already running in
@@ -6314,18 +6390,24 @@ def main() -> None:
             pass
 
     print(f"\nQellys Book running (LIVE data) → http://localhost:{port}")
-    lan = _lan_ip()
+    if bind != "0.0.0.0":
+        print(f"  Bound to {bind} only — reachable through a proxy, not "
+              f"directly. The refresh loop below still runs.")
+    # Printed only when they would actually work. Bound to loopback these
+    # addresses resolve fine and simply refuse the connection, and an
+    # address the site prints itself is the last one you suspect.
+    lan = _lan_ip() if bind == "0.0.0.0" else None
     if lan:
         print(f"  On your phone (same Wi-Fi):     → http://{lan}:{port}")
         print("  (If the phone can't connect, macOS may be asking to allow "
               "incoming connections for Python — click Allow.)")
-    ts = _tailscale_ip()
+    ts = _tailscale_ip() if bind == "0.0.0.0" else None
     if ts:
         print(f"  On your phone ANYWHERE (Tailscale): → http://{ts}:{port}")
         print("  (Type the http:// part — Safari silently upgrades to https "
               "and fails. Real https:// URL: `tailscale serve --bg "
               f"{port}`, see docs/PHONE.md.)")
-    else:
+    elif bind == "0.0.0.0":
         print("  Away from home? Free setup with Tailscale — see docs/PHONE.md")
     print("Press Ctrl+C to stop.")
     try:

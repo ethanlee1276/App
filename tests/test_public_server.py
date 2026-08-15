@@ -187,7 +187,61 @@ def test_the_caddyfile_forwards_the_headers_the_guards_depend_on():
     # Bound to loopback, or the proxy in front is optional for an attacker.
     unit = _read("deploy", "qellys.service")
     assert "--bind 127.0.0.1" in unit
-    assert "--live" in unit, "it would run the whole pipeline per request"
+
+
+def test_the_production_unit_runs_the_process_that_refreshes_the_data():
+    """A public site has to keep being true, not just keep answering.
+
+    The unit ran `server.py`, which serves the built JSON and rebuilds
+    none of it — nothing in production would have called `refresh_all`,
+    the nightly ingest or the auto-settle, so `web/data/*.json` would have
+    frozen at whatever the deploy wrote. The board would have kept saying
+    "live" over a slate that was weeks old, which is worse than being
+    down: down is obvious.
+
+    launch.py is where the loop lives, and it serves the same handler
+    (`from server import Handler`), so this costs nothing but the flag it
+    needed to bind to loopback.
+    """
+    unit = _read("deploy", "qellys.service")
+    exec_line = [l for l in unit.splitlines() if l.startswith("ExecStart=")]
+    assert len(exec_line) == 1, exec_line
+    assert exec_line[0].endswith("launch.py --bind 127.0.0.1 8000"), exec_line[0]
+
+    # And the flag it needs is real, applied to the site's own bind —
+    # not just accepted and ignored.
+    launch = _read("launch.py")
+    i = launch.index('if "--bind" in argv:')
+    block = launch[i:i + 400]
+    assert "bind = argv[i + 1]" in block
+    assert "ThreadingHTTPServer((bind, port), Handler)" in launch
+    assert 'ThreadingHTTPServer(("0.0.0.0"' not in launch, \
+        "the site still hard-codes every interface somewhere"
+
+
+def test_the_deploy_check_waits_longer_than_a_cold_start_takes():
+    """The smoke check has to outlast the build that precedes the bind.
+
+    launch.py runs a full `refresh_all()` — every board, every sport —
+    BEFORE it binds the port, so a cold start is tens of seconds. The
+    check was five tries two seconds apart: about twelve, which a healthy
+    deploy loses every time. It would have declared success a failure and
+    recommended rolling back a release that was working, which is the
+    expensive direction to be wrong in.
+
+    Pinned as a budget rather than as literal numbers, so the loop can be
+    retuned without a test that only knows how to say "you changed it".
+    """
+    sh = _read("deploy", "deploy.sh")
+    i = sh.index("prove it is actually up")
+    block = sh[i:]
+    tries = int(re.search(r"seq 1 (\d+)", block).group(1))
+    gap = int(re.search(r"sleep (\d+)\n", block).group(1))
+    assert tries * gap >= 120, f"only {tries * gap}s to answer a cold start"
+
+    # A process that has EXITED is down, not slow — waiting the full
+    # window on a corpse turns a clear failure into a slow one.
+    assert "is-active" in block
 
 
 # --- rate limiting -----------------------------------------------------------

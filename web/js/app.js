@@ -10009,7 +10009,18 @@ window.acctDelete = async function (btn) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: pw }),
     });
-    if (!r.ok) { if (note) note.textContent = "Wrong password."; return; }
+    // Every failure used to read "Wrong password.", which was a guess
+    // dressed as a diagnosis — a subscribed account is refused for a
+    // completely different reason and the person needs to be told which.
+    if (!r.ok) {
+      let msg = "Wrong password.";
+      try {
+        const j = await r.json();
+        if (j && j.error) msg = j.error;
+      } catch (e) {}
+      if (note) note.textContent = msg;
+      return;
+    }
     _acctUser = { signed_in: false };
     _acctNote = "Account deleted. Anything on this device is still here.";
     if (state.view === "mybets") renderMyBets();

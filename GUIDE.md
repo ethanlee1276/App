@@ -125,8 +125,12 @@ While `launch.py` is running, with no input from you:
   update the Record page, harvest closing odds when affordable
 - Polymarket: records the trade tape every cycle (it can't be rebuilt if
   missed — this is why the launcher should run daily)
-- weekly: an automatic **backup** of both databases, the line-history
-  file, and your UFC dossiers → `data/backups/` (newest 6 kept)
+- weekly: an automatic **backup** of the three databases (history, the
+  bet journal, and accounts), the line-history file, your saved profiles
+  and your UFC dossiers → `data/backups/` (newest 6 kept). `--check`
+  opens the newest archive and says whether accounts are actually inside
+  it — because "we meant to back that up" and "it is in the zip" are
+  different claims, and only the second one restores.
 
 **"Why are my picks still open?"** Tonight's picks stay open until the
 games actually end — that's correct, not a bug. `python3 launch.py
@@ -473,6 +477,78 @@ the two-minute review it prints at the end:
 
 ---
 
+## Accounts and subscriptions (new — for going public)
+
+None of this changes how *you* use the site. It's the machinery other
+people need before the site can live on a real server, and it's built but
+not switched on.
+
+**Where it is.** The account card sits on two pages: **My Bets**, and
+**Fantasy → Around the league**. It's the same card in both places, so
+signing in on one signs you in on the other. The billing card appears
+underneath it once you're signed in.
+
+**What an account is.** Email and password. It stores four things per
+person: their My Bets log, their fantasy leagues, their bankroll
+settings, and their search history. That's the whole list — no name, no
+address, no card number (see below).
+
+**Passwords are stored as scrypt verifiers, not passwords.** A verifier
+is a one-way scramble: it can confirm the password you typed is right,
+but nobody — including you, including me, including anyone who steals the
+database file — can read the original back out of it. It's the standard
+way anyone competent stores a password, and it is why the docs that used
+to say "we will never store passwords" were wrong twice over: we do store
+*something*, and what we store isn't the password.
+
+**Anything that carries a password is refused over an unencrypted
+connection.** That's sign-up, sign-in, password change and delete alike.
+A password typed into a plain `http://` page on open wi-fi has already
+crossed the network in the clear before it reaches us, and no amount of
+scrambling on our end helps with that. Three cases:
+
+- **`http://localhost` on your own Mac** — allowed. Nothing crosses a
+  network at all.
+- **Tailscale** (`http://100.x.x.x`) — allowed. Tailscale is WireGuard;
+  the packets are already encrypted device to device, so the missing
+  padlock describes the last inch, not the wire. That carve-out exists
+  because the site refused *your* tailnet address and was wrong to.
+- **Any other machine with no certificate** — refused, and the message
+  names the fix.
+
+So today, on your Mac and your phone over Tailscale, everything works.
+Once there's a real certificate in front of the site (Phase 2 —
+`deploy/Caddyfile` does this automatically), all of it works from
+anywhere, and this stops being a limitation at all.
+
+**Subscriptions run through Stripe.** Card numbers never touch our
+server — Stripe hosts the payment page, we only get told "this person
+paid." Nothing on the site is locked behind payment yet. That is
+deliberate: the code is ready so it can be turned on the day the answers
+in `docs/LAUNCH.md` come back, not before.
+
+**Three things must be answered before any of it goes live** (they're
+yours, not mine — full detail in `docs/LAUNCH.md`):
+
+1. Stripe, in writing, on whether a paid sports-betting *tool* is a
+   restricted business for them.
+2. Commercial-use terms for the data feeds. About 25 of them; a few
+   (ESPN, the NBA CDN) are undocumented endpoints with no licence at all.
+3. A Michigan lawyer on the regulatory side. You're in a legal state and
+   the site takes no wagers, which is the easy version of this question —
+   but *affiliate links to sportsbooks* is the change most likely to drag
+   licensing into it, which is why there are none.
+
+Deeper reading, if you want it: `docs/ACCOUNTS.md` (how sign-in works),
+`docs/BILLING.md` (how Stripe is wired), `docs/LAUNCH.md` (the phased
+plan), `deploy/README.md` (the server itself).
+
+**`web/terms.html` and `web/privacy.html` are drafts and say so.** They
+carry a banner at the top and orange markers everywhere a lawyer has to
+fill something in. Don't take the banner off yourself.
+
+---
+
 ## Money & API facts
 
 - **One API key total**: `ODDS_API_KEY` in `secrets.local` (The Odds
@@ -482,7 +558,13 @@ the two-minute review it prints at the end:
 - The odds budget is paced automatically (credits reset monthly). If the
   board says prices are cached, that's the pacer saving credits, not an
   error. Don't buy extra credits.
-- Nothing here places bets. It recommends, journals, and grades.
+- **Money coming in** is subscriptions only, via Stripe, and is switched
+  off until Phase 0 clears. No affiliate deals, no sportsbook referral
+  cuts.
+- Nothing here places bets. It recommends, journals, and grades. Charging
+  people to use a tool is not the same as taking their wagers, and the
+  site is built so it stays that way — no bet slip, no deposits, no
+  balance, enforced by a test that fails if one appears.
 
 ## When something looks wrong
 

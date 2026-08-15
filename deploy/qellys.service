@@ -21,14 +21,26 @@ User=qellys
 Group=qellys
 WorkingDirectory=/srv/qellys
 
+# WHY launch.py AND NOT server.py. This ran `server.py` first, which
+# serves the site perfectly and rebuilds nothing: `web/data/*.json` would
+# have frozen at whatever the deploy wrote, and a public board still
+# labelled "live" showing a month-old slate is worse than one that is
+# honestly down. launch.py is the process with the refresh loop in it —
+# ~60s page rebuilds, the faster UFC and meme clocks, the nightly ingest
+# and the auto-settle — and it serves the identical handler, because it
+# does `from server import Handler`. Same site, plus the thing that keeps
+# it true. server.py stays the way to run the site by hand.
+#
 # --bind 127.0.0.1 is the important half. Caddy is the only thing that
 # should be able to reach this port; bound to 0.0.0.0 the plain-HTTP port
 # is reachable from outside too and the TLS in front becomes optional
-# for an attacker.
-# --live serves the JSON the build wrote, instead of running the whole
-# pipeline on every request — which is both far faster and not
-# trivially DoS-able.
-ExecStart=/usr/bin/python3 /srv/qellys/server.py --live --bind 127.0.0.1 8000
+# for an attacker. (launch.py only grew this flag for this unit — before
+# that it always bound every interface, which is fine on a laptop and
+# exactly wrong on a public box.)
+#
+# The launcher always serves built JSON rather than running the pipeline
+# per request, so the `--live` that server.py needs is implied here.
+ExecStart=/usr/bin/python3 /srv/qellys/launch.py --bind 127.0.0.1 8000
 
 Restart=always
 RestartSec=3

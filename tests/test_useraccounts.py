@@ -315,6 +315,77 @@ def test_deleting_an_account_removes_everything():
     assert conn.execute("SELECT COUNT(*) FROM user_data").fetchone()[0] == 0
 
 
+def test_the_database_path_does_not_follow_the_working_directory():
+    """Where the accounts live must not depend on where you stood.
+
+    `DB_PATH` was `Path("data") / "accounts.db"` — relative. Start the
+    server from anywhere but the repo root and SQLite happily creates a
+    second, empty accounts database: every user apparently gone, new
+    signups landing in a file that is on no backup list and that nobody
+    would think to look for. Found by doing exactly that from a scratch
+    directory while testing something else. ledger.py and db.py both
+    anchor to the repo; this was the one that did not.
+    """
+    from pathlib import Path
+    assert A.DB_PATH.is_absolute()
+    assert A.DB_PATH == Path(ROOT) / "data" / "accounts.db"
+
+    # And prove it, rather than trusting the constant: resolve it from a
+    # directory that is not the repo.
+    cwd = os.getcwd()
+    try:
+        os.chdir(tempfile.mkdtemp())
+        assert str(A.DB_PATH).startswith(ROOT)
+        assert not os.path.exists(os.path.join(os.getcwd(), "data"))
+    finally:
+        os.chdir(cwd)
+
+
+def test_deleting_an_account_takes_the_stripe_link_with_it():
+    """"Delete everything" has to include the billing row.
+
+    `subscriptions.user_id` carries ON DELETE CASCADE, so with
+    `PRAGMA foreign_keys=ON` — which `connect()` sets — this already
+    worked. The pragma is per-connection and off by default, though, and
+    the row holds a Stripe customer_id: a pointer to a real person's name
+    and card, sitting in our database after they asked to be forgotten.
+    So the delete names the table instead of trusting the pragma, and this
+    proves it by deleting through a connection that never set it.
+    """
+    import sqlite3
+    from pathlib import Path
+    from engine import billing as B
+    path = Path(tempfile.mkdtemp()) / "acc.db"
+    conn = A.connect(path)
+    B.init(conn)
+    _, who = A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
+    conn.execute("INSERT INTO subscriptions (user_id, customer_id, "
+                 "subscription_id, status, period_end, updated_at) "
+                 "VALUES (?,?,?,?,?,?)",
+                 (who["id"], "cus_live", "sub_live", "active", 4e9, 1.0))
+    conn.commit()
+    conn.close()
+
+    raw = sqlite3.connect(str(path))          # deliberately no pragma
+    assert raw.execute("PRAGMA foreign_keys").fetchone()[0] == 0
+    A.delete_user(raw, who["id"])
+    assert raw.execute("SELECT COUNT(*) FROM subscriptions").fetchone()[0] == 0
+    assert raw.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
+
+
+def test_deleting_works_on_a_database_billing_never_touched():
+    """Most installs never run Stripe, so `subscriptions` does not exist.
+    Naming a missing table in a DELETE is a hard error, which would break
+    deletion for everyone to protect a table nobody has."""
+    conn, _ = _db()
+    _, who = A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
+    tables = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    assert "subscriptions" not in tables
+    A.delete_user(conn, who["id"])
+    assert conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
+
+
 def test_an_export_carries_no_secret():
     """An export is a file people mail around. It must not carry the two
     things that would let somebody else be them."""
@@ -666,6 +737,69 @@ def test_the_privacy_policy_matches_what_is_actually_stored():
     for control in ("Download everything", "Delete everything",
                     "Clear search history"):
         assert control in doc, control
+
+
+def test_a_subscribed_account_is_asked_to_cancel_before_it_can_be_deleted():
+    """Deletion is the one action that can cost somebody money afterwards.
+
+    `delete_user` clears our `subscriptions` row; Stripe never hears about
+    it. The card keeps being charged on schedule and the row that said
+    whose card it was is gone — a charge the person cannot place and a
+    payment we cannot refund to an account. So the server refuses with 409
+    while the subscription is live, and says why.
+
+    Refused states are the entitled ones, `past_due` and `trialing`
+    included: both still have something live at Stripe. Nobody is trapped
+    — cancelling is a button on the same card, and it flips the status
+    through the webhook.
+    """
+    src = SERVER[SERVER.index("def _live_subscription("):]
+    src = src[:src.index("\n    # --- billing")]
+    assert "entitled" in src
+    block = SERVER[SERVER.index('if path == "delete"'):]
+    block = block[:block.index("A.delete_user(")]
+    assert "409" in block and "_live_subscription" in block
+    # It must not be able to block deletion by throwing: a bug in code
+    # that is switched off would otherwise hold somebody's data hostage.
+    assert "except Exception" in src and 'return ""' in src
+
+
+def test_the_delete_button_stops_claiming_every_failure_is_a_bad_password():
+    """The client turned any non-200 from /api/account/delete into "Wrong
+    password." — a guess dressed as a diagnosis. A subscribed account is
+    refused for an entirely different reason and the person has to be told
+    which one, or they retype a correct password until they give up."""
+    body = APP[APP.index("window.acctDelete ="):]
+    body = body[:body.index("\n};")]
+    # Comments out: this function explains the old behaviour in prose, and
+    # a grep that matches its own explanation proves nothing.
+    code = "\n".join(l for l in body.splitlines()
+                     if not l.strip().startswith(("//", "*", "/*")))
+    assert "j.error" in code, "the server's message is not surfaced"
+    assert code.count('"Wrong password."') == 1, "still hardcoding the reason"
+    # The fallback has to sit BEFORE the server's message wins, not after.
+    assert code.index('"Wrong password."') < code.index("j.error")
+
+
+def test_the_privacy_policy_admits_that_backups_outlive_deletion():
+    """"Delete everything" is true of the live site and not of the archives.
+
+    The weekly backup now includes accounts.db — it has to, or one failed
+    disk erases the records of every user who did NOT ask to be deleted.
+    The cost is that a deleted account survives in up to BACKUP_KEEP
+    weekly archives, and a policy that says "gone" while six copies sit in
+    data/backups/ is the same kind of false claim Ethan told us to go
+    find and fix.
+
+    The number is pinned to the constant, so raising the retention makes
+    this fail rather than making the policy quietly wrong.
+    """
+    from engine import maintenance
+    doc = _read("web", "privacy.html")
+    assert "backup" in doc.lower()
+    weeks = maintenance.BACKUP_KEEP * maintenance.BACKUP_EVERY_DAYS / 7
+    assert weeks == 6, "retention changed — the privacy page says six weeks"
+    assert "six weeks" in doc.lower()
 
 
 def test_the_terms_say_the_thing_that_makes_this_lawful_to_run():

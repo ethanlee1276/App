@@ -757,6 +757,23 @@ Keep both in there, dead one included — the ring skips it.
 
 ## 8. Accounts — your info follows you now (2026-08-10)
 
+> **SUPERSEDED 2026-08-15.** The name-and-PIN profile below still works and
+> is still what `data/profiles/` holds, but it is no longer the front
+> door. There is now a real **email and password** account
+> (`data/accounts.db`, scrypt verifiers, hashed sessions) that stores four
+> things instead of three — My Bets, fantasy leagues, bankroll **and
+> search history** — and it is what a public site will use. See
+> `GUIDE.md` → "Accounts and subscriptions" and `docs/ACCOUNTS.md`.
+> Nothing you already synced is lost; both stores are read, and both are
+> now in the weekly backup.
+>
+> **One thing to look at when you're next at the laptop:** run
+> `python3 launch.py --check` and read the new *Accounts backup* line. If
+> it warns, your newest backup zip predates the fix that put
+> `accounts.db` in it — the line prints the one command that forces a
+> fresh one, or you can just let the next weekly backup handle it.
+
+
 My Bets, the Sleeper league link and your bankroll used to live only in
 each browser's localStorage — which is why the phone and the laptop each
 made you type them in again. There's now a **Make an account** card on

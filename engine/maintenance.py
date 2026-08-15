@@ -68,8 +68,21 @@ BACKUP_KEEP = 6
 # ingested truth and the bet journal) and the append-only files that can
 # NEVER be rebuilt if lost (the line-move snapshots; the UFC dossiers you
 # typed by hand). Secrets are deliberately excluded.
-BACKUP_FILES = ("data/history.db", "data/ledger.db",
+#
+# accounts.db was added 2026-08-15 and is the most irreplaceable of the
+# lot, because it is the only one that holds data belonging to somebody
+# other than us: every account, every user's synced bet log and fantasy
+# leagues, and (since billing) the customer_id that ties a paying person
+# to their subscription. Losing history.db costs a re-ingest; losing this
+# costs other people their records and leaves us charging cards we can no
+# longer match to accounts. It was omitted at first only because the file
+# did not exist when this list was written.
+BACKUP_FILES = ("data/history.db", "data/ledger.db", "data/accounts.db",
                 "data/cache/line_history.jsonl", "data/ufc_dossiers.json")
+#: Directories backed up whole, newest-state, non-recursively. The
+#: pre-account profiles are one JSON file per device name, so there is no
+#: fixed filename to list.
+BACKUP_GLOBS = ("data/profiles/*.json",)
 
 
 def _maybe_backup(state: dict, today: _dt.date, log,
@@ -109,6 +122,11 @@ def _maybe_backup(state: dict, today: _dt.date, log,
             else:
                 zf.write(src, arcname=rel)
             wrote += 1
+        for pattern in BACKUP_GLOBS:
+            head, _, tail = pattern.rpartition("/")
+            for src in sorted((root / head).glob(tail)):
+                zf.write(src, arcname=f"{head}/{src.name}")
+                wrote += 1
     # Prune: keep the newest BACKUP_KEEP.
     zips = sorted(backup_dir.glob("backup_*.zip"))
     for old in zips[:-BACKUP_KEEP]:

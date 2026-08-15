@@ -1040,12 +1040,65 @@ class Handler(BaseHTTPRequestHandler):
                 code, _ = A.authenticate(conn, who["email"],
                                          body.get("password"))
                 if code != 200:
-                    return self._send(403, b'{"error":"wrong password"}', ".json")
+                    # Shown to the person verbatim now that the client
+                    # stopped inventing its own text for every failure.
+                    return self._send(403, b'{"error":"Wrong password."}',
+                                      ".json")
+                # A live subscription is the one thing deletion cannot
+                # clean up: Stripe is the system of record for the money,
+                # and dropping our row leaves a card being charged every
+                # month with nothing on this side to match it to. So the
+                # account has to be unsubscribed first — and the way out
+                # is one button away on the same card.
+                stuck = self._live_subscription(conn, who["id"])
+                if stuck:
+                    return self._send(409, json.dumps({"error": stuck}).encode(),
+                                      ".json")
                 A.delete_user(conn, who["id"])
                 return self._send(200, b'{"deleted":true}', ".json",
                                   headers=self._session_cookie("", clear=True))
         finally:
             conn.close()
+
+    def _live_subscription(self, conn, user_id: int) -> str:
+        """Message to refuse deletion with, or "" to let it through.
+
+        Deletion is the one account action that can cost somebody money
+        after they have stopped using the site. `delete_user` clears our
+        `subscriptions` row, but Stripe never hears about it: the card
+        keeps being charged on schedule, and the row that said whose card
+        it was is gone. The person then has a charge they cannot place and
+        we have a payment we cannot refund to an account.
+
+        So a paying account is asked to cancel first, which is one button
+        away on the same card and happens on Stripe's own portal. Nobody
+        is trapped: cancelling flips the status through the webhook, and
+        `past_due` and `trialing` are refused too because both still have
+        a live subscription behind them.
+
+        Returns a string rather than a bool because the whole point is
+        telling the person *why* — the old client turned every non-200
+        from this endpoint into "Wrong password.", which was the least
+        useful sentence available.
+        """
+        try:
+            from engine import billing as BI
+            have = {r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+            if "subscriptions" not in have:
+                return ""              # billing never ran on this install
+            st = BI.status_for(conn, user_id)
+        except Exception:                                    # noqa: BLE001
+            # A billing lookup that breaks must not block someone from
+            # deleting their account. Erring the other way would mean a
+            # bug in code that is switched off holds their data hostage.
+            return ""
+        if not st.get("entitled"):
+            return ""
+        return ("This account still has a subscription. Cancel it first "
+                "under Manage billing — otherwise your card keeps being "
+                "charged and we lose the record of whose card it is. "
+                "Once it is cancelled, delete works normally.")
 
     # --- billing: Stripe holds the card, we hold a status ------------------
     def _billing_get(self, path: str):

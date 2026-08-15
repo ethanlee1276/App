@@ -179,6 +179,8 @@ engine/
   ingest.py       ingestion pipeline: sources -> history DB
   ledger.py       bet-tracking ledger + bankroll (self-evaluation loop)
   linemoves.py    line-movement history + steam detection
+  accounts.py     email/password accounts, scrypt verifiers, sessions
+  billing.py      Stripe webhook verification + entitlement state
   ml/
     features.py   shared feature extraction (train + inference)
     model.py      pure-Python ridge regression + serialized MultiplierModel
@@ -199,8 +201,14 @@ web/                  3-tab dashboard (vanilla HTML/CSS/JS, no build step)
 generate.py           CLI → run the model on the sample slate
 nfl_build.py          CLI → build a real nflverse slate and run the model
 server.py             stdlib web server + live /api/recommendations
+deploy/               Caddy + systemd units, deploy and backup scripts
 tests/                offline unit tests (engine math + nflverse mapping)
 ```
+
+This is the NFL core, which is what the rest of this README documents. The
+other sports, the fantasy tools, the meme-coin tracker and the learning
+ladder bring `engine/` to 187 modules in total — `python3 launch.py --check`
+reports which of them are actually wired up and answering at any moment.
 
 ---
 
@@ -634,10 +642,48 @@ python3 ledger.py demo                            # runnable end-to-end demo
 - **On the website**: the Recommended tab has a **Bankroll** control — anyone
   enters their bankroll and unit %, and every pick shows its exact dollar stake
   (`💰 Stake $7.50 · 0.75u`) with total exposure in dollars. Saved in the browser
-  (`localStorage`) and shareable via `?bankroll=1000&unit=1`. No account needed.
+  (`localStorage`) and shareable via `?bankroll=1000&unit=1`. No account needed —
+  signing in additionally syncs it across devices (see **Accounts** below).
 - **Reporting**: record (W-L-P), win rate, ROI, net units/dollars, closing-line
   value, and breakdowns by grade and market — so over a season you see exactly
   where the model is strong or weak.
+
+## Accounts & subscriptions
+
+Optional, and off by default — the site is fully usable signed out, with
+everything kept in the browser. Signing in moves four things server-side so
+they follow you between devices: your My Bets log, your fantasy leagues, your
+bankroll settings, and your search history.
+
+- **Email and password**, ours alone. Passwords are stored as scrypt
+  verifiers (`scrypt$N$r$p$salt$hash`, N=16384), never as passwords. An
+  unknown email burns an identical verifier so sign-in timing can't be used
+  to enumerate who has an account. Session tokens are hashed at rest.
+- **We never ask for a third-party credential.** No DraftKings or FanDuel
+  password, no ESPN `espn_s2`/`SWID` cookie. Yahoo sync uses OAuth2 for
+  exactly this reason: a token we hold can be scoped and revoked, someone
+  else's password cannot.
+- **Every password-carrying request is refused over cleartext HTTP** —
+  sign-up, sign-in, password change and delete alike. scrypt protects a
+  password at rest; it does nothing for one that already crossed open wi-fi
+  in the clear. Loopback is exempt (nothing crosses a network) and so is
+  Tailscale, which is WireGuard — `http://` over a tailnet is encrypted
+  device to device, so the missing padlock describes the last inch rather
+  than the wire. Both ends of the connection are checked, because
+  `100.64.0.0/10` is also carrier-grade NAT space and a client address in
+  that range proves nothing on its own.
+- **Billing is Stripe Checkout**, so card numbers never reach this server.
+  Webhooks are verified by HMAC over the raw body before parsing, with a
+  5-minute replay window. Nothing is gated behind payment yet — the wiring
+  exists so it can be switched on when the questions in `docs/LAUNCH.md`
+  are answered.
+- **The site still takes no wagers.** There is no bet slip, no deposit, no
+  balance — charging for access to a tool is not the same as booking action,
+  and a test fails if any of those appear.
+
+Details: [`docs/ACCOUNTS.md`](docs/ACCOUNTS.md),
+[`docs/BILLING.md`](docs/BILLING.md), [`docs/LAUNCH.md`](docs/LAUNCH.md),
+[`deploy/README.md`](deploy/README.md).
 
 ## Continuous integration
 

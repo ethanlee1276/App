@@ -118,6 +118,40 @@ Cancelling happens on **Stripe's portal**, reached from Manage billing. A
 company that builds its own cancel flow is deciding how hard it is to
 leave, and this one is not going to be that.
 
+**Deleting the account takes the `subscriptions` row with it**, including
+the `customer_id`. `accounts.delete_user` names the table explicitly
+rather than relying on `ON DELETE CASCADE`, because the cascade only
+fires on a connection that set `PRAGMA foreign_keys=ON` — see
+`docs/ACCOUNTS.md`. Note what deletion does **not** do: it does not
+cancel anything at Stripe. Stripe is the system of record for the money,
+and a row disappearing here would otherwise leave a live subscription
+billing a card every month with nothing on our side to match it to.
+
+So **`/api/account/delete` answers 409 while `status_for` reports an
+entitled state**, with a message naming the fix: cancel under Manage
+billing first, which is a button on the same card. `past_due` and
+`trialing` are refused too — both still have something live at Stripe.
+Nobody is trapped: cancelling flips the status through the webhook and
+delete then works normally. A billing lookup that *throws* lets the
+delete through, deliberately — a bug in code that is switched off must
+not hold somebody's data hostage.
+
+Two consequences worth knowing:
+
+* The client used to render every non-200 from that endpoint as "Wrong
+  password.", so this refusal would have been invisible and infuriating.
+  It now shows the server's message; `Wrong password.` is only the
+  fallback when the response carries none.
+* This makes the user do our work. The right version calls Stripe's
+  cancel endpoint from the delete path and then deletes.
+
+> **Open, and deliberately left open:** cancelling at Stripe from our
+> side. It needs a live Stripe account to test against — the API is
+> unreachable from this container — and guessing at it would produce a
+> payment path verified by nothing. Tracked as task #131, blocked on
+> #128. The 409 above is the honest interim: it never silently orphans a
+> subscription, it just asks the person to press one more button.
+
 ---
 
 ## What the signature check is doing

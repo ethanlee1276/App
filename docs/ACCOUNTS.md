@@ -110,12 +110,35 @@ kept, and it has its own Clear button.
   as JSON. Deliberately excludes the verifier and session tokens: an
   export is a file people mail around, and it should not carry the two
   secrets that would let somebody else be them.
-* **Delete my account** — removes the account, every section, and every
-  session, in one transaction. Requires the password again, because it
-  cannot be undone.
+* **Delete my account** — removes the account, every section, every
+  session **and the billing row**, in one transaction. Requires the
+  password again, because it cannot be undone.
 * **Change password** — signs out every other device. A password change
   is usually an answer to "somebody else may have this", and leaving
   those sessions alive answers it with nothing.
+
+Two details on deletion that are easy to get wrong:
+
+**Every table is named in the DELETE**, even though `subscriptions`,
+`sessions` and `user_data` all carry `ON DELETE CASCADE`. The cascade
+works — but only on a connection that ran `PRAGMA foreign_keys=ON`, which
+is per-connection and **off by default in SQLite**. `connect()` sets it,
+so today the two agree; the day a maintenance script opens the file
+without it, the difference is a `subscriptions` row outliving its account,
+and that row holds a Stripe `customer_id` — a pointer to a real person's
+name and card sitting in our database after they asked to be forgotten.
+A promise that depends on a pragma being set is not a promise.
+
+**Backups outlive deletion, and the privacy page says so.** `accounts.db`
+is in the weekly backup (it has to be — one failed disk otherwise erases
+the records of every user who did *not* ask to be deleted), and six weekly
+archives are kept, so a deleted account can persist in an offline zip for
+about six weeks. Those archives are never read to serve the site and age
+out on their own. The honest phrasing, which is what `web/privacy.html`
+uses: *from the site, yes; from the last few backups, not yet.* A test
+pins the six-week figure to `BACKUP_KEEP × BACKUP_EVERY_DAYS`, so
+changing the retention fails the suite instead of silently making the
+published policy false.
 
 ---
 

@@ -265,7 +265,13 @@ def test_an_already_running_site_is_explained_not_traced():
     # long because it explains what to do, which is the point.
     # The LIVE server, not the health-check sweep's — there are two binds
     # and only one of them is the site.
-    i = src.index('ThreadingHTTPServer(("0.0.0.0"')
+    #
+    # The anchor used to be the literal `("0.0.0.0"`, and stopped matching
+    # the day launch.py grew a `--bind` flag so production could sit on
+    # loopback behind a TLS proxy. `(bind, port), Handler` is the better
+    # anchor anyway: `Handler` is what makes this the site rather than the
+    # sweep, and it does not move when the address becomes configurable.
+    i = src.index("ThreadingHTTPServer((bind, port), Handler)")
     block = src[src.rindex("try:", 0, i):src.index("server.live_mode", i)]
     assert "except OSError" in block
     assert "48" in block and "98" in block, "only one platform's errno"

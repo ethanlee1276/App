@@ -122,6 +122,110 @@ def test_weekly_backup_zips_and_prunes(monkeypatch):
     assert len(list(backups.glob("backup_*.zip"))) == maintenance.BACKUP_KEEP
 
 
+def test_weekly_backup_covers_other_peoples_data(_mp=None):
+    """accounts.db and the pre-account profiles are in the weekly zip.
+
+    They were not, for the whole first day accounts existed: BACKUP_FILES
+    was written before the file did, and nothing re-read it. Everything
+    else on that list costs us a re-ingest if it burns. This one costs
+    other people their accounts, their synced bet logs and the customer_id
+    that says who is paying us — none of which we can reconstruct from any
+    source we hold. It is the only entry on the list that is not ours.
+    """
+    import sqlite3
+    import zipfile
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "data" / "profiles").mkdir(parents=True)
+    acc = sqlite3.connect(str(tmp / "data" / "accounts.db"))
+    acc.execute("CREATE TABLE users (id, email)")
+    acc.execute("INSERT INTO users VALUES (1, 'ethan@example.com')")
+    acc.commit(); acc.close()
+    (tmp / "data" / "profiles" / "ethans-mac.json").write_text('{"mybets": []}')
+
+    backups = tmp / "data" / "backups"
+    maintenance._maybe_backup({}, dt.date(2026, 8, 15), lambda _m: None,
+                              root=tmp, backup_dir=backups)
+    names = zipfile.ZipFile(next(backups.glob("backup_*.zip"))).namelist()
+    assert "data/accounts.db" in names
+    assert "data/profiles/ethans-mac.json" in names
+
+    # And it went through the sqlite backup API like the others, so a
+    # backup taken mid-write is a readable database rather than a torn file.
+    raw = zipfile.ZipFile(next(backups.glob("backup_*.zip"))).read("data/accounts.db")
+    probe = tmp / "probe.db"; probe.write_bytes(raw)
+    assert sqlite3.connect(str(probe)).execute(
+        "SELECT email FROM users").fetchone()[0] == "ethan@example.com"
+
+
+def test_weekly_backup_survives_a_missing_profiles_directory(_mp=None):
+    """Nobody has synced a profile yet: glob a directory that isn't there."""
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "data").mkdir(parents=True)
+    backups = tmp / "data" / "backups"
+    maintenance._maybe_backup({}, dt.date(2026, 8, 15), lambda _m: None,
+                              root=tmp, backup_dir=backups)
+    assert len(list(backups.glob("backup_*.zip"))) == 1
+
+
+def test_check_says_when_the_newest_backup_has_no_accounts(_mp=None):
+    """--check reads the archive, not the list of files we meant to zip.
+
+    The bug this guards was invisible from inside the code: BACKUP_FILES
+    looked complete, the log said "3 file(s)", and the zip was missing the
+    one that mattered. So the check opens the newest archive and looks.
+    Four states, because a health check that only handles the happy path
+    is the kind that goes quiet exactly when it is needed.
+    """
+    import io
+    import contextlib
+    import sqlite3
+    import zipfile
+    import launch
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "data" / "backups").mkdir(parents=True)
+
+    def run(backups):
+        buf = io.StringIO()
+        was, launch.ROOT = launch.ROOT, tmp
+        try:
+            with contextlib.redirect_stdout(buf):
+                launch._check_backup_covers_accounts(backups, "OK", "WARN")
+        finally:
+            launch.ROOT = was
+        return buf.getvalue()
+
+    # No accounts database at all: silent. Nobody has signed up, there is
+    # nothing to lose, and a warning here would be noise on every run.
+    old = tmp / "data" / "backups" / "backup_2026-08-01.zip"
+    with zipfile.ZipFile(old, "w") as z:
+        z.writestr("data/ledger.db", b"x")
+    assert run([old]) == ""
+
+    c = sqlite3.connect(str(tmp / "data" / "accounts.db"))
+    c.execute("CREATE TABLE users (id, email)")
+    c.execute("INSERT INTO users VALUES (1, 'a@b.c')")
+    c.commit(); c.close()
+
+    # Accounts, but the newest archive predates the fix — the state every
+    # existing install was in the moment accounts shipped.
+    out = run([old])
+    assert "WARN" in out and "1 account(s)" in out and "backup_2026-08-01" in out
+
+    # Accounts and no archive at all.
+    assert "WARN" in run([])
+
+    new = tmp / "data" / "backups" / "backup_2026-08-15.zip"
+    with zipfile.ZipFile(new, "w") as z:
+        z.writestr("data/accounts.db", b"x")
+    assert "OK" in run([old, new])
+
+    # A truncated or half-written zip reports itself rather than throwing
+    # and taking the rest of --check down with it.
+    junk = tmp / "data" / "backups" / "backup_2026-08-16.zip"
+    junk.write_bytes(b"not a zip")
+    assert "WARN" in run([junk])
+
+
 # --- Intraday auto-settle ---------------------------------------------------
 def _ledger_with(open_days, settled=3):
     """An in-memory journal holding one open pick per given slate date."""

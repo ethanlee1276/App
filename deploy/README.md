@@ -7,6 +7,7 @@ this**, because its answers can change what gets deployed.
 |---|---|
 | `Caddyfile` | the public front door: TLS, static files, proxy to the app |
 | `qellys.service` | systemd unit — runs the app as an unprivileged user |
+| | (it runs `launch.py`, not `server.py` — see **What keeps the data fresh** below) |
 | `deploy.sh` | pull → **test** → restart → verify, with a rollback printed |
 | `backup.sh` | the two irreplaceable databases, plus a restore drill |
 
@@ -50,6 +51,31 @@ cd /srv/qellys && ./deploy/deploy.sh
 It backs up first, pulls, **runs the full suite and refuses to restart if
 anything is red**, then checks the site actually answers before calling it
 done. If it does not come up it prints the rollback command.
+
+## What keeps the data fresh
+
+The unit runs **`launch.py`**, not `server.py`. Both serve the identical
+site — launch.py does `from server import Handler` — but only launch.py
+carries the loop that keeps the site *true*: ~60s page rebuilds, the
+faster UFC and meme-coin clocks, the first-of-day ingest, and the
+15-minute auto-settle that grades finished games.
+
+This was wrong in the first draft of these files, and it is worth naming
+because the failure is quiet. Running `server.py` alone, the site comes
+up, answers every request, passes the smoke check in `deploy.sh` and
+looks entirely healthy — while `web/data/*.json` stays frozen at whatever
+the deploy wrote. A public board still labelled "live" over a slate that
+is three weeks old is worse than one that is honestly down, because down
+is visible and stale is not.
+
+If you ever do want the serve-only process (a read-only mirror, say):
+
+```bash
+python3 server.py --live --bind 127.0.0.1 8000
+```
+
+…but then something else has to run the pipeline, or the mirror is a
+museum.
 
 ## Three things that are easy to get wrong
 

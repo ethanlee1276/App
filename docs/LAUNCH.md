@@ -216,7 +216,7 @@ One small VPS is genuinely enough — this is a low-traffic, read-heavy
 site. Hetzner or DigitalOcean, ~$6–12/month, Ubuntu LTS.
 
 ```
-   internet ──► Caddy (:443)  ──► server.py (:8000, localhost only)
+   internet ──► Caddy (:443)  ──► launch.py (:8000, localhost only)
                   │  TLS, automatic via Let's Encrypt
                   │  static files, gzip, rate limits, security headers
                   └─ /api/* proxied; everything else served from disk
@@ -227,11 +227,31 @@ own with no cron and no certbot. **systemd** to keep the app running and
 restart it on failure. The app binds `127.0.0.1` so it is unreachable
 except through the proxy.
 
-**The build stays separate from the serve.** The pipeline already writes
-`web/data/*.json`; a timer runs the build, and the public site serves
-those files. That removes the expensive-endpoint problem entirely and
-means a failed build leaves the last good board in place instead of a
-broken page.
+**The build stays separate from the serve.** The pipeline writes
+`web/data/*.json` and the site serves those files, never running the
+pipeline on a request. That removes the expensive-endpoint problem
+entirely, and means a failed build leaves the last good board in place
+instead of a broken page.
+
+**What actually runs the build, corrected 2026-08-15.** This section used
+to say "a timer runs the build", and the systemd unit ran `server.py` —
+which serves the built JSON and rebuilds none of it. Together those were
+a plan and a deployment that did not match: no timer was ever written, so
+in production nothing would have called the pipeline at all. The site
+would have come up, answered every request, passed the deploy smoke
+check, and served a frozen board indefinitely.
+
+The unit now runs **`launch.py`**, which is where the refresh loop already
+lives — ~60s page rebuilds, the faster UFC and meme clocks, the
+first-of-day ingest, the 15-minute auto-settle — and which serves the
+identical handler (`from server import Handler`). One process instead of
+two, no timer to drift out of sync with the unit, and the same code path
+that has been running on the laptop for months.
+
+The tradeoff, stated: a crash in the refresh loop takes the serving
+process with it. `Restart=always` brings it back, and the alternative —
+a separate builder — is the thing to move to if that ever proves noisy.
+It is not worth the second moving part until it does.
 
 ### 2.3 Before the first stranger
 
