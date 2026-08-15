@@ -4662,6 +4662,8 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .pre-scan-side { display: inline-flex; align-items: center; gap: 6px;
   font-size: var(--fs-sm); }
 .pre-scan-n { color: var(--text-mute); font-size: var(--fs-xs); }
+/* Who we expect to see, set apart from the club's record beside it. */
+.pre-scan-qb { color: var(--text-dim); font-size: var(--fs-xs); }
 .pre-scan-note { margin-left: auto; color: var(--text-mute);
   font-size: var(--fs-xs); font-style: italic; }
 /* The MARKET's number, and styled to read as one: tabular figures, muted,

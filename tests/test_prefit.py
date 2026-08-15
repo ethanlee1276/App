@@ -447,17 +447,57 @@ def test_a_noisy_but_real_effect_is_not_called_absent():
     assert "does not predict" not in text
 
 
-def test_an_effect_too_small_to_matter_is_still_called_that():
-    """The guard must not turn every negative into "come back later". A
-    pair that failed the EFFECT bar has been measured and is too small."""
+def test_a_pair_that_failed_both_bars_gets_the_plain_negative():
+    """The guard must not turn every negative into "come back later" — a
+    pair that missed the effect AND the significance bar found nothing,
+    and the flat sentence is the honest one for it."""
     rep = {"n": 200, "seasons": [2022], "verdict": "no",
            "mechanism": {"pairs": {"att_gap~margin": {"p": 0.001}}},
            "forecast": {"pairs": {"exp_gap~margin": {
-               "signal_points": 0.05, "p": 0.0001, "n": 105,
-               "limited_by": ["effect"]}}}}
+               "signal_points": 0.05, "p": 0.62, "n": 105,
+               "limited_by": ["effect", "significance"]}}}}
     text = pf.explain(rep)
     assert "does not predict" in text
     assert "NOT a demonstration" not in text
+    assert "SETTLED" not in text
+
+
+def test_a_real_effect_too_small_to_bet_is_reported_as_settled():
+    """THE THIRD KIND OF NO, and the one the real 2026 run produced. When
+    a pair CLEARS the p bar and its out-of-sample model still cannot beat
+    the league mean, nothing failed to be found — the thing was found and
+    shown to be too small. That closes the question rather than deferring
+    it, and printing the generic "does not predict" line for it understates
+    what was established."""
+    rep = {"n": 251, "seasons": [2021, 2022, 2023, 2024, 2025, 2026],
+           "verdict": "no",
+           "mechanism": {"pairs": {"att_gap~margin": {
+               "p": 0.0005, "swing": 1.7, "sd_y": 14.1}}},
+           "forecast": {"pairs": {"exp_gap~margin": {
+               "signal_points": -0.86, "p": 0.0085, "n": 154,
+               "limited_by": ["effect"]}}}}
+    text = pf.explain(rep)
+    assert "SETTLED rather than open" in text
+    assert "real and too small" in text
+    assert "More Augusts will not change that" in text
+    # And it must NOT offer the come-back-later line.
+    assert "NOT a demonstration there is none" not in text
+
+
+def test_the_effect_is_reported_in_the_units_of_the_thing_bet_on():
+    """A correlation settles no argument a bettor has. "One SD of the
+    predictor moves the answer 1.7 points, against results that scatter
+    14" does, and both halves are needed — a swing means nothing without
+    the scatter it competes with."""
+    m = pf.mechanism(pf.sample(REAL))["pairs"]["att_sum~total"]
+    assert m["swing"] > 0 and m["sd_y"] > 0
+    xs = [r["att_sum"] for r in pf.sample(REAL)]
+    assert abs(m["swing"] - abs(m["slope"]) * pf.stdev(xs)) < 1e-2
+
+
+def test_a_flat_predictor_has_no_swing_to_report():
+    m = pf.mechanism(pf.sample(FLAT))["pairs"]["att_sum~total"]
+    assert m["swing"] is None
 
 
 def test_the_probe_prints_what_it_would_take():

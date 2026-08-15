@@ -3391,10 +3391,16 @@ def show_prescan(season: int | None = None) -> None:
                 continue
             played, seen = (s.get("played_of") or [0, 0])
             when = s.get("att_when_played")
-            shape = (f"played {played} of {seen}"
+            # THE COUNTS BELONG TO THE TEAM, THE NAME TO THIS SEASON. Each
+            # past August is measured against ITS OWN starter, so "played 2
+            # of 5" is Cleveland's record across five staffs — printing it
+            # immediately after "Shedeur Sanders" said a 2025 rookie had
+            # five past outings. The line now names the club for the
+            # history and brackets the man we expect to see this year.
+            shape = (f"starter played {played} of {seen}"
                      + (f", {when:.0f} att when he did" if when else ""))
-            print(f"     {s['team']:<4} {s['verdict']:<7} "
-                  f"QB {s['qb'] or '?':<20} {shape}")
+            print(f"     {s['team']:<4} {s['verdict']:<7} {shape:<44} "
+                  f"(2026: {s['qb'] or '?'})")
         print()
     print("  A tendency is a HABIT, not a team sheet. No free feed announces "
           "who is sitting;\n  this is what the same staff has done before.\n")

@@ -2009,15 +2009,21 @@ function starterScanHTML(g) {
     // THE COUNTS, NOT THE MEAN. A staff that sat its man three Augusts and
     // threw twelve in the fourth has a mean of three, which describes none
     // of the four outings. "played 1 of 4" does.
+    // AND THE COUNTS ARE THE CLUB'S, NOT THIS MAN'S. Each past August is
+    // measured against its own starter, so "2 of 5" is Cleveland across
+    // five staffs — printed straight after "Shedeur Sanders" it credited a
+    // 2025 rookie with five past outings. The team owns the history; the
+    // quarterback named is who we expect to see this year.
     const of = s.played_of || [];
     const shape = of.length === 2 && of[1]
-      ? `played ${of[0]} of ${of[1]}${
+      ? `starter played ${of[0]} of ${of[1]}${
           s.att_when_played ? `, ${Number(s.att_when_played).toFixed(0)} att when he did` : ""}`
       : "";
     return `<span class="pre-scan-side">
       <b>${escapeHtml(s.team)}</b>
       <span class="chip ${tone[s.verdict] || ""}">${escapeHtml(s.verdict)}</span>
-      ${shape ? `<span class="pre-scan-n">${escapeHtml(shape)}</span>` : ""}</span>`;
+      ${shape ? `<span class="pre-scan-n">${escapeHtml(shape)}</span>` : ""}
+      ${s.qb ? `<span class="pre-scan-qb">${escapeHtml(s.qb)}</span>` : ""}</span>`;
   }).filter(Boolean).join("");
   if (!cells) return "";
   return `<div class="pre-scan">${cells}

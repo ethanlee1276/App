@@ -127,10 +127,14 @@ python3 launch.py --prescan     # who is likely to play their starters
 python3 launch.py --prefit      # does that actually move the scoreboard
 ```
 
-`--prescan` is descriptive: each side's starting quarterback and how many
-attempts the same staff has taken in past Augusts, with "rested / limited
-/ extended" cut from the league's own distribution rather than a number
-somebody picked.
+`--prescan` is descriptive: how often the club's starter has played in
+this slot in past Augusts, how many attempts he took when he did, and who
+is expected to start this year. "plays / mixed / rests" are cut from the
+league's own spread of rest rates rather than a number somebody picked.
+
+Read the counts as the CLUB's record, not the named man's — each past
+August is measured against its own starter, so Cleveland's "2 of 5" spans
+five staffs and is not a claim about Shedeur Sanders.
 
 `--prefit` is the measurement underneath it, and it is the one with a
 verdict. The bar is written into `engine/nfl/prefit.py` ABOVE the answer —

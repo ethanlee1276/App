@@ -218,6 +218,15 @@ def permutation_p(xs, ys, resamples: int = RESAMPLES,
     return (hits + 1) / (resamples + 1)
 
 
+def stdev(xs) -> float | None:
+    """Population standard deviation, or None below two points."""
+    v = [float(x) for x in xs]
+    if len(v) < 2:
+        return None
+    m = sum(v) / len(v)
+    return math.sqrt(sum((x - m) ** 2 for x in v) / len(v))
+
+
 def rmse(errors) -> float | None:
     e = [float(x) for x in errors]
     return math.sqrt(sum(x * x for x in e) / len(e)) if e else None
@@ -264,6 +273,16 @@ def mechanism(rows: list[dict]) -> dict:
             "p": permutation_p(xs, ys) if len(xs) >= MIN_ROWS else None,
             # WHETHER THE PREDICTOR MOVED AT ALL. See `verdict`.
             "distinct_x": len(set(xs)),
+            # HOW BIG THE EFFECT IS IN THE UNITS OF THE THING BET ON, which
+            # is the number that settles an argument a correlation cannot.
+            # `swing` is what one standard deviation of the predictor does
+            # to the answer; `sd_y` is how far the outcomes scatter anyway.
+            # A swing of 1.7 against a scatter of 14 is a real relationship
+            # that cannot pay for a -110 ticket, and only these two numbers
+            # side by side say so.
+            "swing": (None if not fit or stdev(xs) is None
+                      else round(abs(fit[0]) * stdev(xs), 3)),
+            "sd_y": (None if stdev(ys) is None else round(stdev(ys), 3)),
         }
     return out
 
@@ -495,6 +514,40 @@ def explain(report: dict) -> str:
                 f"effect this size, NOT a demonstration there is none"
                 + (f" — it would take about {need:,} scored games, and an "
                    f"August supplies roughly 49." if need else "."))
+        # THE THIRD KIND, AND THE MOST CONCLUSIVE OF THEM. A pair whose
+        # correlation CLEARS the p bar and whose out-of-sample model still
+        # cannot beat the mean has not failed to find anything — it has
+        # found the thing and shown it is too small to bet. That closes the
+        # question rather than deferring it, and the two numbers that say
+        # so are the swing and the scatter, not the p-value.
+        settled = None
+        for name, pair in (report.get("forecast", {}).get("pairs", {})
+                           or {}).items():
+            if (pair.get("limited_by") == ["effect"]
+                    and pair.get("p") is not None and pair["p"] <= MAX_P):
+                settled = (name, pair)
+                break
+        if settled:
+            name, pair = settled
+            mech = None
+            for m in (report.get("mechanism", {}).get("pairs", {})
+                      or {}).values():
+                if m.get("swing") and m.get("sd_y"):
+                    if mech is None or m["swing"] > mech["swing"]:
+                        mech = m
+            size = ""
+            if mech:
+                size = (f" In hindsight one standard deviation of the "
+                        f"predictor moves the answer {mech['swing']:.1f} "
+                        f"point(s), against results that scatter "
+                        f"{mech['sd_y']:.0f}.")
+            return head + (
+                f"And this one is SETTLED rather than open: {name} clears "
+                f"the significance bar (p={pair['p']:.3f}) and its "
+                f"out-of-sample model still cannot beat the league mean "
+                f"({pair['signal_points']:+} point(s)). The relationship is "
+                f"real and too small to be worth anything.{size} More "
+                f"Augusts will not change that.")
         return head + ("Starter usage does not predict the preseason result "
                        "by a margin worth acting on. The board keeps showing "
                        "the scan and the market's number as information.")
