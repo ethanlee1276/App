@@ -200,7 +200,17 @@ def test_the_icons_are_defined_in_this_repo_and_not_imported():
         assert bad not in HTML.lower(), f"{bad} reached the page"
     # An icon font would arrive the same way a webfont does, and this page
     # is supposed to render with the network unplugged.
-    shell = _strip_html_comments(HTML).lower().replace("http://www.w3.org", "")
+    # What this guards is a FETCH: a webfont, an icon CDN, a script. Two
+    # kinds of absolute URL are not fetches by the page and never were —
+    # <meta> values (og:url, twitter:*) and rel="canonical", which exist
+    # to NAME the page's address and are read by scrapers, not loaded.
+    # They arrived when the site got a real domain, and a guard that
+    # cannot tell them from a CDN script tag would have been "fixed" by
+    # deleting the canonical URL, which is the wrong direction entirely.
+    shell = _strip_html_comments(HTML)
+    shell = re.sub(r"<meta\b[^>]*>", " ", shell, flags=re.I)
+    shell = re.sub(r'<link\b[^>]*rel=["\']?canonical["\']?[^>]*>', " ", shell, flags=re.I)
+    shell = shell.lower().replace("http://www.w3.org", "")
     for host in ("http://", "https://", "//cdn.", "//unpkg", "//fonts.g"):
         assert host not in shell, f"{host} is being fetched by the page shell"
 

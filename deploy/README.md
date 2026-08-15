@@ -31,10 +31,9 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now qellys
 systemctl status qellys
 
-# 4. the front door — edit the domain first
+# 4. the front door — the domain is already qellysbook.com in the file
 sudo apt install caddy
 sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
-sudo $EDITOR /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 
 # 5. backups, nightly, and prove a restore works

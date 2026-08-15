@@ -6,14 +6,20 @@
 # was watching.
 #
 #   sudo apt install caddy
-#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile     # edit the name first
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
 #   sudo systemctl reload caddy
 #
 # The app must be started with `--bind 127.0.0.1` (see qellys.service).
 # Binding all interfaces would leave the plain-HTTP port reachable from
 # outside as well, and a proxy you can walk around protects nothing.
 
-qellys.example.com {
+# BOTH NAMES, and the bare one is the canonical site. Caddy issues a
+# certificate for each. The www redirect is at the bottom of this file:
+# serving the same content on two hostnames splits sessions (a cookie set
+# on one is not sent to the other, so signing in at www and then visiting
+# the bare name looks like being signed out) and gives search engines two
+# copies of everything.
+qellysbook.com {
 	encode gzip zstd
 
 	# --- the API: proxied to the app ---------------------------------
@@ -93,9 +99,17 @@ qellys.example.com {
 	}
 }
 
+# One canonical hostname. Anyone who types www gets moved to the bare
+# name before anything is served, so a session cookie only ever exists on
+# one origin. 308 rather than 302: it is permanent and it preserves the
+# method, so a POST that arrives at www is not silently turned into a GET.
+www.qellysbook.com {
+	redir https://qellysbook.com{uri} permanent
+}
+
 # Staging: same box, separate database, separate app process. This is
 # what makes it safe to keep shipping once real people have accounts.
-# stage.qellys.example.com {
+# stage.qellysbook.com {
 # 	encode gzip zstd
 # 	handle /api/* {
 # 		reverse_proxy 127.0.0.1:8001

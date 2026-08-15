@@ -494,6 +494,33 @@ def test_the_undocumented_feed_risk_is_called_out():
     assert "ESPN" in PLAN
 
 
+def test_one_canonical_hostname_and_www_redirects_to_it():
+    """Two hostnames serving the same site is a session bug, not a
+    cosmetic one: a cookie set on www is not sent to the bare name, so
+    signing in at one and then visiting the other looks like being
+    silently signed out. It also hands search engines two copies of every
+    page. Caddy issues certificates for both and then serves only one.
+
+    308 rather than 302 — permanent, and it preserves the method, so a
+    POST that lands on www is not quietly turned into a GET. `redir …
+    permanent` is Caddy's spelling of 308.
+    """
+    caddy = _read("deploy", "Caddyfile")
+    assert "\nqellysbook.com {" in caddy, "the canonical host is not served"
+    assert "www.qellysbook.com {" in caddy, "www is not claimed at all"
+    i = caddy.index("www.qellysbook.com {")
+    block = caddy[i:i + 200]
+    assert "redir" in block and "permanent" in block, \
+        "www serves content instead of redirecting — sessions will split"
+    assert "https://qellysbook.com" in block
+
+    # The page must agree with the proxy about which name is canonical.
+    html = _read("web", "index.html")
+    assert 'rel="canonical" href="https://qellysbook.com/"' in html
+    assert 'property="og:url" content="https://qellysbook.com/"' in html
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -44,15 +44,22 @@
        from the site. It carries no live numbers on purpose — see the note
        in that file.
 
-       The URLs here are RELATIVE, and that is deliberate rather than
-       unfinished. The site is not hosted anywhere yet; it is served by
-       `python3 launch.py` from a local directory, so there is no origin
-       to write. A guessed or placeholder domain would resolve to nothing
-       and be worse than no tag at all. Every major scraper resolves a
-       relative og:image against the page it found it on, so these start
-       working the moment the site has an address, whatever that address
-       turns out to be. If X ever refuses the card, the fix is to stamp an
-       absolute origin at deploy — not to invent one now. -->
+       The image URL stays RELATIVE and the canonical/og:url are
+       ABSOLUTE, which is not an inconsistency. A relative og:image is
+       resolved by every major scraper against the page it was found on,
+       so it keeps working from localhost, from a tailnet address and
+       from production without three copies of the tag. A canonical URL
+       cannot work that way: its entire job is to name the one address
+       this page should be known by, and a relative one names nothing.
+
+       The origin below was a placeholder-shaped hole until 2026-08-15,
+       when Ethan chose qellysbook.com. It is written here rather than
+       guessed, and `www` is redirected to the bare name in
+       deploy/Caddyfile so only one of the two ever serves content —
+       two hostnames would split session cookies and duplicate every
+       page for search engines. -->
+  <link rel="canonical" href="https://qellysbook.com/" />
+  <meta property="og:url" content="https://qellysbook.com/" />
   <meta name="description" content="A multi-sport betting model that shows its work. Every pick is journaled at the real book price it was found at and graded in public — including the losing ones. MLB, NFL, college football, NBA, WNBA, UFC and prediction markets." />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Qellys Book" />
