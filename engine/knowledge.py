@@ -147,8 +147,26 @@ PREFIXES: tuple[tuple[str, str], ...] = (
 #: prefix list cannot enumerate — every stadium, every pitcher — without
 #: reaching for a general-purpose keyword guess.
 PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
-    (re.compile(r"\bpark (?:suppresses|elevates|plays|boosts)\b", re.I),
-     "historical"),
+    # ANY venue, not only the ones NAMED "… Park". This required the
+    # literal word "park" before the verb, so "Oracle Park boosts home
+    # runs" matched and "Dodger Stadium boosts home runs" did not — and
+    # most ballparks are a Stadium, a Field or a Centre. Ethan's board:
+    # 37 unregistered openings, the majority of them this one shape.
+    #
+    # Anchored on the VERB PHRASE instead, which is what the generators
+    # actually share. Enumerated from engine/mlb/parks.py and
+    # engine/mlb/homeruns.py rather than imagined — those five are every
+    # phrase either module can produce:
+    #     "{name} boosts|suppresses home runs (…% vs average)"
+    #     "{name} plays hitter-friendly|pitcher-friendly (…% runs)"
+    #     "{name} plays big for home runs (…% HR factor)"
+    #     "{name} suppresses home runs (…% HR factor)"
+    #     "{name} elevates strikeouts (…)"
+    # A park factor is a multi-season measured constant, so (b).
+    (re.compile(r"\b(?:boosts|suppresses|elevates) (?:home runs|strikeouts|runs)\b",
+                re.I), "historical"),
+    (re.compile(r"\bplays (?:hitter-friendly|pitcher-friendly|big for home runs)\b",
+                re.I), "historical"),
     (re.compile(r"\ballows \.\d+ slg to (?:righties|lefties)\b", re.I),
      "historical"),
     (re.compile(r"\bstrikes out \d+% of the time\b", re.I), "measured"),

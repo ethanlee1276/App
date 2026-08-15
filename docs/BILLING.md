@@ -9,6 +9,74 @@ want it live.
 
 ---
 
+## The processor is Paddle, not Stripe
+
+**Stripe said no**, on the category rather than on anything we do
+(Ethan, 2026-08-15: *"no we cant use stripe so we gotta find a different
+alternative"*). Paddle is the replacement, and the reasoning is worth
+keeping because the alternatives look superficially reasonable:
+
+* **PaymentCloud / PayKings — rejected.** They are high-risk merchant
+  account brokers. They advertise to gambling-adjacent businesses because
+  they charge for it: 4–6% plus a rolling reserve and a multi-year
+  contract, for what is factually a software subscription. We would be
+  buying gambling-merchant pricing for a SaaS product.
+* **Adyen / Nuvei — right destination, wrong stage.** Both genuinely
+  handle regulated verticals and both underwrite you properly. Both also
+  want enterprise volume and a trading history we do not have. Nuvei is
+  the fallback if Paddle declines.
+* **Worldpay** — will probably take us, but it is a traditional acquirer:
+  contracts, PCI paperwork, and a developer experience a decade behind.
+
+**Paddle is a merchant of record.** They are the legal seller; they take
+the payment, own the risk assessment, handle sales tax and VAT, and pay us
+out. Two things follow. The category question is theirs and already
+answered, so we are not re-litigating "sports betting" with every
+processor. And digital-goods sales tax across fifty states never becomes
+our problem. The price is roughly 5% + 50¢ against Stripe's 2.9% + 30¢ —
+about two points for someone else to own risk and tax.
+
+**How to describe the product when applying**, because the wording is what
+gets screened: *subscription access to sports analytics software; no
+wagering, no funds held, no payouts*. `docs/ACCOUNTS.md` and the Record
+page are the supporting evidence, and both are accurate.
+
+### What survived the switch, and what did not
+
+The split was deliberate. `engine/billing.py` holds everything about what
+a payment **means** — which statuses grant access, the paid-through date,
+the replay guard, the schema, `status_for`. `engine/paddle.py` holds only
+the processor half, and its `read_event` returns the identical dict, so
+the storage layer cannot tell which processor produced it. A test asserts
+those two shapes stay equal, because a silent divergence there loses a
+field and nobody notices until a subscription goes missing.
+
+The Stripe functions are still in `billing.py`. They are not wired to
+anything and are kept in case Paddle also declines — deleting them would
+throw away the working half of a day.
+
+### ⚠️ Two things that are NOT done
+
+**The signature scheme is unverified.** `paddle.verify_signature` was
+written from memory: the dev container's egress blocks
+`developer.paddle.com` and `api.paddle.com`, so it could not be checked
+against their documentation or a real payload. The tests prove the
+construction is self-consistent and has the properties a verifier needs —
+accepts a correctly signed body, rejects a changed byte, a changed
+timestamp, a stale one, and never compares digests with `==`. They do
+**not** prove it is Paddle's construction. **First thing after the account
+exists:** send a test webhook from the dashboard, confirm it is accepted,
+then change one byte and confirm it is refused. A verifier that is wrong
+in the accepting direction is indistinguishable from a working one.
+
+**Paddle's checkout needs a CSP change.** Their overlay runs Paddle.js
+loaded from `cdn.paddle.com`, and our `script-src` is `'self'`. So the
+checkout will silently not appear until that host is allowed — exactly
+the failure the Rocket Radar charts had. Add it when the integration
+lands, with the same rule as `frame-src`: name the host, never `https:`.
+
+---
+
 ## The one rule the design comes from
 
 **Card numbers never touch this server.** Customers type them on a

@@ -30,6 +30,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -312,9 +313,27 @@ def test_nothing_is_gated_yet_and_that_is_written_down():
     assert "Nothing is charging anyone yet" in doc
     assert "No feature checks entitlement" in doc
     # Entitlement is computed and reported, and read by nothing else.
+    #
+    # CODE, NOT PROSE. This grepped whole files, so engine/paddle.py
+    # failed it the day it was added — for explaining in a docstring why
+    # `entitled()` refuses an unknown status. That is the same mistake as
+    # a password check that fires on its own comment about passwords: the
+    # guard should describe behaviour, and a guard that a comment can trip
+    # gets "fixed" by deleting the comment.
+    #
+    # Docstrings and # comments are stripped first, so the billing
+    # PROVIDER modules are still checked properly rather than exempted —
+    # paddle.py passes because it genuinely never calls entitled(), not
+    # because it is on a list.
+    def _code(name):
+        src = _read("engine", name)
+        src = re.sub(r'"""(?:.|\n)*?"""', "", src)
+        src = re.sub(r"'''(?:.|\n)*?'''", "", src)
+        return re.sub(r"(?m)#.*$", "", src)
+
     hits = [f for f in os.listdir(os.path.join(ROOT, "engine"))
             if f.endswith(".py") and f not in ("billing.py",)
-            and "entitled" in _read("engine", f)]
+            and "entitled" in _code(f)]
     assert not hits, f"something started gating on entitlement: {hits}"
 
 

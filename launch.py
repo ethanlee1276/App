@@ -1867,7 +1867,19 @@ for (const [name, hash, sel] of VIEWS) {
   const errs = [];
   p.on('pageerror', e => errs.push('crash: ' + e.message));
   p.on('console', m => { const t = m.text();
-    if (m.type() === 'error' && !/404|Failed to load resource/.test(t)) errs.push('console: ' + t.slice(0,110)); });
+    if (m.type() !== 'error') return;
+    if (/404|Failed to load resource/.test(t)) return;
+    // OUR page's errors, not our EMBEDS'. Playwright reports console
+    // messages from every frame, and the Rocket Radar chart is a
+    // DexScreener iframe that runs their code on their origin. Their
+    // analytics beacon fails CORS against their own API, and that landed
+    // here as "Rocket Radar ❌" — a permanent red for a third party's
+    // telemetry, on a page that was in fact working. A red that cannot
+    // be fixed is one people learn to ignore, which costs the real ones.
+    const loc = m.location() || {};
+    const from = String(loc.url || '');
+    if (from && !from.includes(`127.0.0.1:${PORT}`) && !from.startsWith('http://localhost')) return;
+    errs.push('console: ' + t.slice(0,110)); });
   let txt = '';
   try {
     await p.goto(`http://127.0.0.1:${PORT}/${hash}`, { waitUntil: 'domcontentloaded', timeout: 15000 });

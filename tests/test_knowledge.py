@@ -158,6 +158,31 @@ def test_the_four_the_live_board_caught_are_classified_from_their_source():
 
 
 
+def test_a_park_factor_is_labelled_whatever_the_venue_is_called():
+    """The pattern matched the word "park", not the shape of the phrase.
+
+    So "Oracle Park boosts home runs" was labelled and "Dodger Stadium
+    boosts home runs" was not — and most venues are a Stadium, a Field or
+    a Centre. On Ethan's live board that one mistake was the bulk of 37
+    unregistered openings.
+
+    The five phrases below are every one engine/mlb/parks.py and
+    engine/mlb/homeruns.py can emit, read off the f-strings rather than
+    imagined. A park factor is a multi-season measured constant, so (b).
+    """
+    for venue in ("Dodger Stadium", "Rogers Centre", "Progressive Field",
+                  "Coors Field", "Oracle Park", "T-Mobile Park"):
+        for phrase in ("boosts home runs (+5% vs average)",
+                       "suppresses home runs (-5% vs average)",
+                       "plays hitter-friendly (+7% runs)",
+                       "plays pitcher-friendly (-4% runs)",
+                       "plays big for home runs (+12% HR factor)",
+                       "elevates strikeouts (+4%)"):
+            reason = f"{venue} {phrase}"
+            assert kn.tier_of(reason) == "historical", reason
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

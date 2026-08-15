@@ -408,6 +408,36 @@ def test_every_page_with_a_nav_entry_is_in_the_browser_sweep():
         assert f'("{page}"' in block, f"{page} is not swept"
 
 
+def test_the_sweep_judges_our_page_not_the_charts_we_embed():
+    """A red nobody can fix is one people learn to ignore.
+
+    Playwright reports console messages from EVERY frame, and Rocket
+    Radar embeds a DexScreener chart that runs their code on their
+    origin. Their analytics beacon fails CORS against their own API, and
+    that arrived as "Rocket Radar ❌" on a page that was working — a
+    permanent failure we have no way to fix, sitting next to the real
+    ones and teaching you to skim past both.
+
+    Filtered by the message's ORIGIN, and only for console messages.
+    `pageerror` is never filtered: a thrown exception is ours by
+    definition, and that is the channel the team-form crash came down.
+
+    Verified by running the real _SWEEP_JS against a page with a
+    deliberate console.error AND a deliberate throw, both from our own
+    origin — both still reported. Silencing a check is worse than the
+    noise it removes, so that direction is the one to test.
+    """
+    src = _read("launch.py")
+    js = src[src.index("_SWEEP_JS = r\"\"\""):src.index("\ndef _browser_sweep")]
+    assert "m.location()" in js, "console errors are not attributed to a frame"
+    assert "127.0.0.1:${PORT}" in js, "the origin test does not name our own"
+    # pageerror must stay unconditional.
+    pe = js[js.index("p.on('pageerror'"):]
+    pe = pe[:pe.index("\n")]
+    assert "location" not in pe and "includes" not in pe, \
+        "a thrown exception is being filtered by origin — it is always ours"
+
+
 def test_the_server_does_not_announce_its_python_version():
     """The default `BaseHTTP/0.6 Python/3.11.15` hands an attacker the
     exact stack and patch level to look up CVEs against, for nothing in

@@ -24,7 +24,24 @@ use, is how you spend three weeks on something that then has to be rebuilt.
 
 Each is days, not weeks, and mostly free. Each can change what gets built.
 
-### 0.1 Will Stripe actually process this?
+### 0.1 Will Stripe actually process this? — ✅ ANSWERED 2026-08-15: NO
+
+**Stripe declined**, on the category rather than on anything the site
+does. That was the point of asking first: the answer arrived before a
+launch depended on it, which is the cheap version of finding out.
+
+**The replacement is Paddle**, a merchant of record — they are the legal
+seller, they own the risk assessment, and they handle sales tax. The full
+reasoning, including why the high-risk brokers (PaymentCloud, PayKings)
+were rejected and why Nuvei is the fallback, is in `docs/BILLING.md`.
+
+`engine/paddle.py` is written and tested. Two things remain and both are
+flagged there: the signature scheme could not be verified against a real
+payload from this container, and Paddle's overlay checkout needs
+`cdn.paddle.com` allowed in the CSP.
+
+The original question is kept below, because the reasoning is what makes
+the next processor question quick rather than new.
 
 **The risk:** Stripe's restricted-business list covers gambling and
 gambling-adjacent services. A paid sports-betting-picks subscription may
