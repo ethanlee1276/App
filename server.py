@@ -373,6 +373,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/account/"):
             return self._account_get(
                 parsed.path[len("/api/account/"):].strip("/"))
+        if parsed.path.startswith("/api/billing/"):
+            return self._billing_get(
+                parsed.path[len("/api/billing/"):].strip("/"))
         if parsed.path.startswith("/api/sleeper/"):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
         if parsed.path.startswith("/api/profile/"):
@@ -386,6 +389,22 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/yahoo/"):
             return self._yahoo_post(
                 parsed.path[len("/api/yahoo/"):].strip("/"))
+        if parsed.path.startswith("/api/billing/"):
+            # RAW BYTES, and parsed nowhere before the signature is checked.
+            # Stripe signs the body it sent; JSON that has been parsed and
+            # re-serialized is different bytes — key order, spacing, unicode
+            # escapes — so a re-serialized body fails to verify even when it
+            # is perfectly honest.
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length > MAX_PROFILE_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"body too large"}', ".json")
+            raw = self.rfile.read(length) if length > 0 else b""
+            return self._billing_post(
+                parsed.path[len("/api/billing/"):].strip("/"), raw)
         if parsed.path.startswith("/api/account/"):
             try:
                 length = int(self.headers.get("Content-Length") or 0)
@@ -834,6 +853,123 @@ class Handler(BaseHTTPRequestHandler):
                 A.delete_user(conn, who["id"])
                 return self._send(200, b'{"deleted":true}', ".json",
                                   headers=self._session_cookie("", clear=True))
+        finally:
+            conn.close()
+
+    # --- billing: Stripe holds the card, we hold a status ------------------
+    def _billing_get(self, path: str):
+        from engine import billing as BI
+        A = _acct()
+        if path != "status":
+            return self._send(404, b'{"error":"unknown billing endpoint"}',
+                              ".json")
+        conn = A.connect()
+        try:
+            BI.init(conn)
+            who = self._account(conn)
+            out = {"configured": BI.configured(), "signed_in": bool(who)}
+            if BI.configured():
+                try:
+                    out["live"] = BI.live_mode(BI.keys()[0])
+                except BI.BillingUnavailable:
+                    out["live"] = False
+            if who:
+                out.update(BI.status_for(conn, who["id"]))
+            return self._send(200, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _billing_post(self, path: str, raw: bytes):
+        from engine import billing as BI
+        A = _acct()
+        if path == "webhook":
+            return self._billing_webhook(raw)
+        if path not in ("checkout", "portal"):
+            return self._send(404, b'{"error":"unknown billing endpoint"}',
+                              ".json")
+        conn = A.connect()
+        try:
+            BI.init(conn)
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            base = self._site_base()
+            try:
+                if path == "checkout":
+                    url = BI.start_checkout(
+                        who["id"], who["email"],
+                        f"{base}/?paid=1#mybets", f"{base}/#mybets")
+                else:
+                    cust = BI.status_for(conn, who["id"]).get("customer_id")
+                    if not cust:
+                        return self._send(400, json.dumps(
+                            {"error": "No subscription to manage yet."}
+                        ).encode(), ".json")
+                    url = BI.open_portal(cust, f"{base}/#mybets")
+            except BI.BillingUnavailable as exc:
+                return self._send(502, json.dumps({"error": str(exc)}).encode(),
+                                  ".json")
+            return self._send(200, json.dumps({"url": url}).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _site_base(self) -> str:
+        """The address this browser reached us on, for Stripe's return trip.
+
+        Read from the request rather than configured, because this site
+        answers on localhost, a LAN address and a tailscale name, and a
+        hardcoded one would send two of those three somewhere they cannot
+        get back from.
+        """
+        host = (self.headers.get("X-Forwarded-Host")
+                or self.headers.get("Host") or "127.0.0.1:8000")
+        scheme = "https" if self._is_https() else "http"
+        return f"{scheme}://{host}"
+
+    def _billing_webhook(self, raw: bytes):
+        """Stripe telling us somebody paid. THE ONLY THING THAT GRANTS
+        ACCESS, and a public URL, so it lives or dies on the signature.
+
+        Refuses outright when no webhook secret is configured. An
+        unsigned-but-accepted webhook endpoint is a free-subscription
+        button for anybody who finds the path, and "we will add the
+        secret later" is how it ships that way.
+        """
+        from engine import billing as BI
+        A = _acct()
+        try:
+            _sk, whsec, _price = BI.keys()
+        except BI.BillingUnavailable:
+            return self._send(503, b'{"error":"billing not configured"}',
+                              ".json")
+        if not whsec:
+            return self._send(503, json.dumps(
+                {"error": "No STRIPE_WEBHOOK_SECRET set, so this endpoint "
+                          "cannot tell a real Stripe event from a forged "
+                          "one. Refusing rather than trusting it."}).encode(),
+                ".json")
+        sig = self.headers.get("Stripe-Signature") or ""
+        if not BI.verify_signature(raw, sig, whsec):
+            return self._send(400, b'{"error":"bad signature"}', ".json")
+        try:
+            payload = json.loads(raw or b"{}")
+            assert isinstance(payload, dict)
+        except Exception:                                    # noqa: BLE001
+            return self._send(400, b'{"error":"not JSON"}', ".json")
+        conn = A.connect()
+        try:
+            BI.init(conn)
+            # A retry is not a second grant.
+            if BI.already_handled(conn, payload.get("id")):
+                return self._send(200, b'{"received":true,"duplicate":true}',
+                                  ".json")
+            event = BI.read_event(payload)
+            applied = BI.apply_event(conn, event) if event else False
+            # 200 EVEN WHEN WE DID NOTHING. Stripe retries anything that is
+            # not 2xx, so an event we do not act on must still be
+            # acknowledged or it comes back forever.
+            return self._send(200, json.dumps(
+                {"received": True, "applied": bool(applied)}).encode(), ".json")
         finally:
             conn.close()
 

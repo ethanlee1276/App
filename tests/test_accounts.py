@@ -200,8 +200,15 @@ def test_sync_talks_only_to_our_own_endpoints():
     import re
     targets = re.findall(r'fetch\(\s*[`"]([^`"]+)[`"]', block)
     assert targets, "the account block stopped talking to the server at all"
+    # `/api/billing/` joined the list when subscriptions landed. Still
+    # ours, and still the point: no third party is contacted from the
+    # block that holds the personal data. Note what this does NOT allow —
+    # api.stripe.com. The card is typed on Stripe's page, reached by a
+    # redirect the SERVER asks for, so the browser never talks to Stripe
+    # from inside this block either.
+    ours = ("/api/profile/", "/api/account/", "/api/billing/")
     for t in targets:
-        assert t.startswith("/api/profile/") or t.startswith("/api/account/"), t
+        assert t.startswith(ours), t
 
 
 def test_every_synced_surface_touches_the_account():

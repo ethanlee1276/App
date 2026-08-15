@@ -9758,6 +9758,7 @@ function acctSignedInHTML(u) {
       </div>
     </div>
     <div class="acct-note">${escapeHtml(_acctNote)}</div>
+    <div id="billing-slot"></div>
     <details class="acct-more">
       <summary>Account settings</summary>
       <div class="acct-row">
@@ -9864,6 +9865,76 @@ window.acctAuth = async function (btn, mode) {
   }
 };
 
+/* ---------------- Subscription -----------------------------------------
+
+   Ethan, 2026-08-15: "we will be accepting money for people to use the
+   website once it is complete."
+
+   NOTHING IS GATED YET, and that is deliberate rather than unfinished.
+   The plumbing is here and the status is real, but no feature checks
+   entitlement — the site is free today, and switching a paywall on
+   before Ethan has said what is behind it would lock him out of his own
+   board on the strength of an inference. This card reports the truth and
+   sells a subscription; the day something becomes paid is a decision, not
+   a deployment.
+
+   AND THE CARD NEVER TOUCHES A CARD. Subscribe hands off to a Stripe
+   page; Manage billing hands off to Stripe's portal, which is also where
+   cancelling happens. A company that builds its own cancel flow is
+   deciding how hard it is to leave, and this one is not going to be
+   that. */
+async function renderBilling() {
+  const slot = document.getElementById("billing-slot");
+  if (!slot) return;
+  let s;
+  try {
+    const r = await fetch("/api/billing/status", { credentials: "same-origin" });
+    s = await r.json();
+  } catch (e) { slot.innerHTML = ""; return; }
+  if (!s || !s.signed_in) { slot.innerHTML = ""; return; }
+  if (!s.configured) {
+    // Say nothing to a user; this is a note for whoever runs the server.
+    slot.innerHTML = `<p class="rank-help">Subscriptions are not switched on
+      yet — see <b>docs/BILLING.md</b>.</p>`;
+    return;
+  }
+  slot.innerHTML = `
+    <div class="acct-row">
+      <span class="bill-state${s.entitled ? " on" : ""}">${
+        escapeHtml(s.note || "")}</span>
+      ${s.entitled || s.customer_id
+        ? `<button class="btn ghost" onclick="billPortal(this)">Manage billing</button>`
+        : `<button class="btn" onclick="billSubscribe(this)">Subscribe</button>`}
+      ${s.live === false ? `<span class="chip warn">Stripe test mode —
+        no real money moves</span>` : ""}
+    </div>`;
+}
+
+async function _billGo(btn, path) {
+  const was = btn.textContent;
+  btn.textContent = "Opening Stripe…";
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/api/billing/${path}`, {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    const d = await r.json();
+    if (!r.ok || !d.url) throw new Error((d && d.error) || `Failed (${r.status}).`);
+    // Stripe's own page, in this tab: it is a payment flow and a popup
+    // blocker eating it would look like a broken button.
+    location.href = d.url;
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = was;
+    const note = btn.closest(".card").querySelector(".acct-note");
+    if (note) note.textContent = String((e && e.message) || e);
+  }
+}
+
+window.billSubscribe = (btn) => _billGo(btn, "checkout");
+window.billPortal = (btn) => _billGo(btn, "portal");
+
 window.acctChangePassword = async function (btn) {
   const card = btn.closest(".card");
   const note = card.querySelector(".acct-note");
@@ -9930,7 +10001,14 @@ function acctCardHTML() {
   // form, which is the honest default — claiming "signed in" before the
   // server has confirmed it is how a stale card ends up offering Sync now
   // on an expired session.
-  if (_acctUser && _acctUser.signed_in) return acctSignedInHTML(_acctUser);
+  if (_acctUser && _acctUser.signed_in) {
+    // Filled a tick later, once whoever asked for this string has actually
+    // put it in the DOM. Hooked here rather than at each caller because
+    // this card is mounted on both My Bets and Fantasy, and a second call
+    // site is a second place to forget.
+    setTimeout(renderBilling, 0);
+    return acctSignedInHTML(_acctUser);
+  }
   if (!acctState()) return acctSignInHTML();
   // A legacy PIN profile is still signed in on this device: show its card
   // AND the new one, so nothing disappears and the upgrade is visible.
