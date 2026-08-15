@@ -3837,12 +3837,6 @@ function gameBetAttrs(b) {
     ? ` data-prop="${escapeAttr(gameBetId(b))}" tabindex="0" role="link"` : "";
 }
 
-/* One call for either kind, so a list holding both does not have to know
-   which it is holding. */
-function betAttrs(r) {
-  return (r && r.player) ? propAttrs(r) : gameBetAttrs(r);
-}
-
 function allProps() {
   const d = state.data || {};
   return [...(d.recommendations || []), ...(d.long_shots || []),
@@ -4240,10 +4234,6 @@ function renderGamePage() {
   const cond = nba ? "Indoor hardwood"
     : w.dome ? "Indoor"
     : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
-  const f = g.factors || {};
-  const factorChip = (k, label, hint) => f[k] == null ? "" :
-    `<span class="chip ${f[k] > 1.02 ? "up" : f[k] < 0.98 ? "down" : ""}" title="${escapeHtml(hint)}">
-       ${label} ${f[k].toFixed(2)}×</span>`;
   const score = (side) => (live.home_score != null && (isLive || isFinal))
     ? `<b class="score">${side === "home" ? live.home_score : live.away_score}</b>` : "";
 

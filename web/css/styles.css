@@ -377,7 +377,7 @@ h1, h2, h3 { margin: 0; font-family: var(--font-display); font-weight: 400; }
    single stranded word, which is why it is safe to apply broadly where
    `balance` would not be. Both degrade to normal wrapping where unsupported,
    which is the whole reason they are worth shipping now rather than later. */
-h1, h2, h3, .tile .k, .standfirst, .dek { text-wrap: balance; }
+h1, h2, h3, .tile .k { text-wrap: balance; }
 p, .note, .tile-sub, .caveat, .reading { text-wrap: pretty; }
 
 /* SVG text does not inherit the page's face the way HTML does, so every
@@ -387,8 +387,8 @@ p, .note, .tile-sub, .caveat, .reading { text-wrap: pretty; }
    product that does not quite match itself. Numbers in those diagrams take
    the mono, same as numbers everywhere else. */
 svg text { font-family: var(--font-sans); }
-svg text.num, svg .svg-num { font-family: var(--font-mono);
-                             font-feature-settings: "tnum" 1, "zero" 1; }
+svg text.num { font-family: var(--font-mono);
+               font-feature-settings: "tnum" 1, "zero" 1; }
 
 /* The serif is a DISPLAY face — it is drawn for size and goes muddy
    small, so it is never used below ~17px. Section headings keep the
@@ -1306,8 +1306,6 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 /* direction-aware tab transitions */
 .view.active.from-right, .view.active.from-left { animation: none; }
 
-/* refresh glyph spins while the model reloads */
-.rfx { display: inline-block; }
 /* Loading feedback moved to the brand when the Refresh button retired:
    a tap on the logo visibly pulses while the new numbers land. */
 #brand-home.loading .logo { animation: pulseLogo .9s ease-in-out infinite; }
@@ -1483,13 +1481,13 @@ body { font-size: var(--fs-lg); }
    spacing on a fixed-pitch face fights the one property it has. */
 .tile .v, .metric .v, .stat-v, .ml-odds, .conf-num, .trow .val,
 .form-tile .v, .rec-chart .rc-net, .lf-region-n,
-.brk-score, .std-num, .rec-scope-n,
+.brk-score, .rec-scope-n,
 /* Found by sweeping every view for text that is mostly digits and still in
    the sans. A half-converted board reads as an accident; the price, the
    score, the P&L and the win-loss record are the same KIND of thing as the
    KPI above them and have to be set like it. */
 .book, .score, .rb-net, .rb-wl, .rl-pnl, .rl-odds, .rl-date,
-td.num, .dl-num, .std-n, .pm-avatar, .clv-num, .odds,
+td.num, .dl-num, .std-n, .pm-avatar, .odds,
 .rb-clv, .dl-rank, .ros-n {
   font-family: var(--font-mono);
   font-weight: 500;
@@ -1513,7 +1511,7 @@ td.num, .dl-num, .std-n, .pm-avatar, .clv-num, .odds,
 
 /* A wallet address is a string you compare character by character — the one
    place a monospace is not a style choice but a functional requirement. */
-.pm-wallet, .trader-addr, code,
+.pm-wallet, code,
 /* Polymarket renders a trader handle as a bare link and the wallet
    under it as .subtitle, so both are addressed by where they sit. */
 .wallet { font-family: var(--font-mono); }
@@ -2016,15 +2014,6 @@ select.calc-in { width: auto; font-weight: 600; }
    ====================================================================== */
 .game-card[data-gid] { cursor: pointer; }
 .game-card[data-gid]:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-.game-cta {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 9px 14px; border-top: var(--hairline) solid var(--border-soft);
-  color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600;
-  transition: color var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
-}
-.game-card:hover .game-cta { color: var(--brand-2); background: var(--fill-subtle); }
-.gc-arrow { transition: transform var(--dur-base) var(--ease-out); }
-.game-card:hover .gc-arrow { transform: translateX(3px); }
 
 .gp-back { margin-bottom: 14px; }
 .gp-hero {
@@ -2115,22 +2104,9 @@ select.calc-in { width: auto; font-weight: 600; }
 .dl-num.strong { font-weight: 700; font-size: var(--fs-md); color: var(--text); }
 .dl-num.pos { color: var(--good); } .dl-num.neg { color: var(--bad); }
 
-.nba-miss { grid-template-columns: minmax(0, 1fr) 92px 78px; }
-.pm-market { grid-template-columns: 26px minmax(0, 1fr) 56px 118px 92px; }
-/* Market questions: one ellipsed line where there's room to read it. */
-.pm-q { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-band { grid-template-columns: minmax(0, 1fr) 64px 150px 96px; }
 .pm-wallet { grid-template-columns: minmax(0, 1fr) 64px 130px 62px; }
 @media (max-width: 700px) {
-  .nba-miss { grid-template-columns: minmax(0, 1fr) 70px; }
-  .nba-miss .dl-num.final { display: none; }
-  .pm-market { grid-template-columns: 22px minmax(0, 1fr) 52px; }
-  .pm-market .dl-num.vol, .pm-market .dl-num.end { display: none; }
-  /* On a phone a one-line ellipsis eats the question itself ("Will the
-     Fed cut rates a…"). The question IS the content — wrap it to two
-     lines instead of truncating it into uselessness. */
-  .pm-q { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical; }
   .pm-band, .pm-wallet { grid-template-columns: minmax(0, 1fr) 56px 90px; }
   .pm-band .dl-num.implied, .pm-wallet .dl-num.implied { display: none; }
 }
@@ -3339,8 +3315,6 @@ select.calc-in { width: auto; font-weight: 600; }
 .mb-act.win:hover { border-color: var(--good); color: var(--good); }
 .mb-act.loss:hover { border-color: var(--bad); color: var(--bad); }
 .mb-act.del:hover { border-color: var(--bad); color: var(--bad); }
-.mb-table td:nth-child(3) { max-width: 240px; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap; }
 .mb-import { margin-bottom: 18px; }
 .mb-import summary { cursor: pointer; font-weight: 700;
   color: var(--text-dim); }
@@ -3700,15 +3674,15 @@ html, body { overflow-x: clip; }
 
 .nav { display: flex; align-items: center; gap: 4px; margin: 0 auto; min-width: 0; }
 .nav-indicator { display: none; }
-.nav-btn, .topnav-tool {
+.nav-btn {
   border: 0; background: transparent; cursor: pointer; color: var(--text-mute);
   font: inherit; font-size: var(--fs-sm); font-weight: 700;
   letter-spacing: .1em; text-transform: uppercase;
   padding: 9px 13px; border-radius: var(--radius-sm); white-space: nowrap;
   transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
-.nav-btn:hover, .topnav-tool:hover { color: var(--text); background: var(--panel-2); }
-.nav .nav-btn.active, .nav .topnav-tool.active {
+.nav-btn:hover { color: var(--text); background: var(--panel-2); }
+.nav .nav-btn.active {
   color: var(--text); background: var(--panel-2); box-shadow: inset 0 -2px 0 var(--brand); }
 .live-count { display: inline-grid; place-items: center; min-width: 17px; height: 17px;
   margin-left: 6px; padding: 0 4px; border-radius: 999px; background: var(--bad);
@@ -3834,14 +3808,6 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   letter-spacing: .04em; }
 .rail-more:hover { color: var(--text); }
 .rail-quiet { margin: 10px 0 0; color: var(--text-mute); font-size: var(--fs-sm); }
-.rail-game { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px;
-  padding: 9px 0; border-bottom: var(--hairline) solid var(--border-soft);
-  font-size: var(--fs-sm); align-items: center; }
-.rail-game:last-of-type { border-bottom: 0; }
-.rail-game span { display: flex; align-items: center; gap: 7px; color: var(--text-dim); }
-.rail-game b { font-family: var(--font-mono); }
-.rail-game em { grid-column: 1 / -1; font-style: normal; color: var(--text-mute);
-  font-size: var(--fs-2xs); }
 
 /* ---------------- Home: stadium strip dressing ---------------- */
 .hero-games .game-card { border: var(--hairline) solid var(--border); border-radius: var(--radius-lg);
@@ -3889,8 +3855,6 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .tp-odds { font-family: var(--font-mono); font-size: var(--fs-lg); color: var(--text); }
 .tp-book { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700;
   letter-spacing: .08em; text-transform: uppercase; }
-.tp-edge { margin-left: auto; color: var(--good); font-size: var(--fs-xs);
-  font-weight: 700; font-family: var(--font-mono); }
 
 /* ---------------- Home: performance panels ---------------- */
 #home-perf { margin: 8px 0 26px; }
@@ -4088,7 +4052,6 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   letter-spacing: .02em; padding: 7px 11px; border-radius: var(--radius-sm);
   transition: filter var(--dur-fast) var(--ease-out); }
 .tp-add:hover { filter: brightness(1.12); }
-.tp-edge { display: none; }
 .perf-window { border: var(--hairline) solid var(--border);
   border-radius: var(--radius-sm); padding: 4px 9px; }
 .rail-list li::before { background: var(--good); }
