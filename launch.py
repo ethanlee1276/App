@@ -3371,9 +3371,13 @@ def show_prescan(season: int | None = None) -> None:
             print("  Fix: python3 ingest.py nflpre --seasons "
                   f"{season - 5}-{season}\n")
     else:
-        print(f"  Bands from {cuts['n']} past starting-QB outings: "
-              f"rested <= {cuts['lo']:.0f} attempts, "
-              f"extended >= {cuts['hi']:.0f}.\n")
+        print(f"  From {cuts['n']} past starting-QB outings across "
+              f"{cuts['n_team_seasons']} team-seasons: the league sits its "
+              f"starter\n  {cuts['league_rest_rate']:.0%} of the time. "
+              f"\"plays\" is a rest rate at or under "
+              f"{cuts['rest_lo']:.0%}, \"rests\" at or over "
+              f"{cuts['rest_hi']:.0%};\n  when he does play, the median "
+              f"outing is {cuts['play_cut']:.0f} attempts.\n")
     if not out["games"]:
         print("  No unplayed preseason fixtures.\n")
         return
@@ -3385,10 +3389,12 @@ def show_prescan(season: int | None = None) -> None:
             s = g["sides"].get(side)
             if not s:
                 continue
-            att = "—" if s["expect_att"] is None else f"{s['expect_att']:.1f}"
-            print(f"     {s['team']:<4} {s['verdict']:<9} "
-                  f"QB {s['qb'] or '?':<20} expect {att} att "
-                  f"({s['games_seen']} past outing(s))")
+            played, seen = (s.get("played_of") or [0, 0])
+            when = s.get("att_when_played")
+            shape = (f"played {played} of {seen}"
+                     + (f", {when:.0f} att when he did" if when else ""))
+            print(f"     {s['team']:<4} {s['verdict']:<7} "
+                  f"QB {s['qb'] or '?':<20} {shape}")
         print()
     print("  A tendency is a HABIT, not a team sheet. No free feed announces "
           "who is sitting;\n  this is what the same staff has done before.\n")

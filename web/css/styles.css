@@ -4651,7 +4651,12 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .slate-jump:hover { text-decoration: underline; }
 
 /* Preseason starter scan — what each side has historically done. */
-.pre-scan { display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+/* OWN ROW, for the same reason `.pre-line` takes one: `.pre-game` is a
+   six-column grid and this landed in the 1fr cell, which was fine while
+   the text read "21 att" and overlapped the kickoff time once it read
+   "played 4 of 4, 21 att when he did". */
+.pre-scan { grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
   margin-top: 6px; padding-top: 6px;
   border-top: var(--hairline) solid var(--border); }
 .pre-scan-side { display: inline-flex; align-items: center; gap: 6px;

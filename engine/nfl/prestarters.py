@@ -100,15 +100,53 @@ def _pre_rows(conn, season: int, team: str, week=None):
         return []                       # table absent = nothing ingested yet
 
 
+def _has_regular(conn, team: str, season: int) -> bool:
+    """Has this team played a regular season we hold logs for?"""
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM player_game_logs WHERE sport='nfl' AND season=? "
+            "AND team=? AND market='pass_att' LIMIT 1",
+            (int(season), team)).fetchone()
+    except Exception:                                         # noqa: BLE001
+        return False
+    return row is not None
+
+
+def role_season_for(conn, team: str, season: int) -> int:
+    """Which regular season names THIS preseason's starters.
+
+    THE SEASON'S OWN, whenever it has been played — and that is a fix, not
+    a preference. The first cut used ``season - 1`` throughout, on the
+    reasoning that in August the season ahead has no snaps yet. True for
+    the FIXTURE being previewed, and wrong for every historical outing in
+    the tendency behind it.
+
+    What it did: a team that changed quarterbacks had last year's man
+    named as its starter, and he was no longer on the roster. He threw no
+    passes because he was somewhere else, and `usage` recorded a zero —
+    which reads identically to a coach resting his starter. Cleveland's
+    2026 habit was computed from four Augusts whose "starter" was a
+    different player each time, none of them Shedeur Sanders.
+
+    For a season already played, the man who led that season's attempts IS
+    that preseason's starter, and it is knowable. That is hindsight, and
+    hindsight is correct here: a tendency is a record of what happened.
+    The forward-looking fixture still falls back to ``season - 1``, which
+    is genuinely all August can know.
+    """
+    return int(season) if _has_regular(conn, team, season) else int(season) - 1
+
+
 def usage(conn, team: str, season: int, week: int,
           role_season: int | None = None) -> dict | None:
     """What one team actually did in one preseason game.
 
     ``{qb, qb_att, seen, roster, share, played}`` or None when the game
-    has not been ingested. ``role_season`` defaults to the season before
-    ``season`` — the one that says who the starters are.
+    has not been ingested. ``role_season`` defaults to whichever regular
+    season names this preseason's starters — see `role_season_for`.
     """
-    role_season = int(role_season if role_season is not None else season - 1)
+    role_season = int(role_season if role_season is not None
+                      else role_season_for(conn, team, season))
     rows = _pre_rows(conn, season, team, week)
     if not rows:
         return None
@@ -132,16 +170,27 @@ def usage(conn, team: str, season: int, week: int,
 
 
 def bands(conn, seasons=None) -> dict:
-    """League-wide cuts for "rested / limited / extended", from the data.
+    """League-wide cuts for how much a staff plays its starters.
 
-    Terciles of every starting quarterback's preseason attempt count
-    across the seasons on hand. Returned as ``{"lo", "hi", "n"}``: below
-    ``lo`` is a rest, above ``hi`` is a dress rehearsal, between is a
-    series or two.
+    NOT TERCILES OF THE ATTEMPT COUNT, and the reason is the shape of the
+    data rather than a preference. A rest is EXACTLY ZERO — not a small
+    number — and about seven outings in ten are rests, so both terciles of
+    the raw column land on 0. Measured on the real table: 392 outings, 270
+    of them zero, lo = hi = 0. That made "limited" unreachable and turned
+    any attempt at all into a dress rehearsal — Josh Allen at 0.8 expected
+    attempts came out "extended".
 
-    ``None`` when there is not enough ingested preseason to cut anything,
-    which is the honest answer — a verdict from four games is a guess
-    wearing a percentile.
+    So zero is its own category, because it is a FACT rather than a
+    percentile: he did not throw a pass. The league's distribution is then
+    cut on the two things that vary:
+
+      * ``rest_lo`` / ``rest_hi`` — terciles of each team-season's REST
+        RATE, which is what "will they play their starters" actually asks;
+      * ``play_cut`` — the median attempt count among outings he DID
+        play, which is what separates a series from a dress rehearsal
+        once he is on the field at all.
+
+    ``{}`` when there is not enough ingested preseason to cut anything.
     """
     try:
         rows = conn.execute(
@@ -153,10 +202,12 @@ def bands(conn, seasons=None) -> dict:
     except Exception:                                         # noqa: BLE001
         return {}
     atts = []
+    by_team: dict = {}
     for r in rows:
         u = usage(conn, r["team"], r["season"], r["week"])
         if u and u["qb"]:
             atts.append(u["qb_att"])
+            by_team.setdefault((r["team"], r["season"]), []).append(u["qb_att"])
     if len(atts) < 30:
         return {}
     # A COLUMN THAT NEVER MOVES HAS NO TERCILES, and this guard is here
@@ -168,22 +219,53 @@ def bands(conn, seasons=None) -> dict:
     # thirty-two teams resting their starters and cited a 200-outing sample
     # for it. Nothing raised and nothing looked empty.
     #
-    # Fewer than three distinct values cannot make three bands, so the
-    # honest answer is no bands, which renders as "unknown" per side.
-    if len(set(atts)) < 3:
+    rates = sorted(sum(1 for a in v if a <= 0) / len(v)
+                   for v in by_team.values() if v)
+    played = sorted(a for a in atts if a > 0)
+    # NO OUTING HE ACTUALLY PLAYED means the column is empty rather than
+    # the league unanimous — this is the guard that catches the all-zeros
+    # table the missing `pass_att` market produced, and it catches it more
+    # precisely than counting distinct values did. (That earlier guard is
+    # gone: it also rejected a perfectly real league in which every staff
+    # happens to throw the same number of times when it plays.)
+    if len(rates) < 12 or len(played) < 12:
         return {}
-    atts.sort()
-    return {"lo": atts[len(atts) // 3], "hi": atts[2 * len(atts) // 3],
-            "n": len(atts)}
+    cuts = {
+        "rest_lo": round(rates[len(rates) // 3], 3),
+        "rest_hi": round(rates[2 * len(rates) // 3], 3),
+        "play_cut": played[len(played) // 2],
+        "n": len(atts), "n_team_seasons": len(rates), "n_played": len(played),
+        "league_rest_rate": round(sum(1 for a in atts if a <= 0) / len(atts), 3),
+    }
+    # A CUT THAT EQUALS ITS NEIGHBOUR IS NOT A CUT. This is the guard that
+    # the raw-tercile version needed and did not have: if the two rest
+    # cuts coincide the middle band is unreachable and every team is
+    # forced into one of the two extremes, which is exactly how a scan
+    # ends up calling 0.8 attempts a dress rehearsal.
+    if cuts["rest_lo"] >= cuts["rest_hi"]:
+        return {}
+    return cuts
 
 
-def verdict(qb_att: float | None, cuts: dict) -> str:
-    """"rested" / "limited" / "extended" / "unknown"."""
-    if qb_att is None or not cuts:
+def verdict(rest_rate: float | None, cuts: dict) -> str:
+    """"plays" / "mixed" / "rests" / "unknown", from a team's REST RATE.
+
+    The question Ethan asked was "which teams will be playing starters and
+    which ones wont", and a rest rate answers it directly: how often has
+    this staff sat its man in this slot before. The previous version
+    answered a different question — how many attempts on average — which
+    on a bimodal habit (sat three Augusts, threw twelve in the fourth) is
+    a mean of three that describes none of the four.
+
+    Cuts come from the league's own spread of rest rates, so they move
+    when the league's habits move and nothing here is a number somebody
+    picked.
+    """
+    if rest_rate is None or not cuts:
         return "unknown"
-    if qb_att <= cuts.get("lo", 0):
-        return "rested"
-    return "extended" if qb_att >= cuts.get("hi", 1e9) else "limited"
+    if rest_rate <= cuts.get("rest_lo", -1):
+        return "plays"
+    return "rests" if rest_rate >= cuts.get("rest_hi", 2) else "mixed"
 
 
 def tendency(conn, team: str, seasons, week: int | None = None) -> dict:
@@ -198,7 +280,8 @@ def tendency(conn, team: str, seasons, week: int | None = None) -> dict:
     a new head coach inherits his predecessor's history here. The staff
     is not in any table we hold, so the alternative is no signal at all.
     """
-    out: dict = {"n": 0, "mean_att": None, "by_week": {}}
+    out: dict = {"n": 0, "mean_att": None, "by_week": {},
+                 "n_played": 0, "rest_rate": None, "mean_when_played": None}
     tot: list = []
     per: dict = {}
     for season in seasons or []:
@@ -217,6 +300,14 @@ def tendency(conn, team: str, seasons, week: int | None = None) -> dict:
         out["n"] = len(tot)
         out["mean_att"] = round(sum(tot) / len(tot), 1)
         out["by_week"] = {w: round(sum(v) / len(v), 1) for w, v in sorted(per.items())}
+        # THE TWO NUMBERS A BIMODAL HABIT NEEDS. "Sat 3 of 4, threw 12 when
+        # he played" is what happened; the mean of 3.0 those four outings
+        # produce describes none of them.
+        played = [a for a in tot if a > 0]
+        out["n_played"] = len(played)
+        out["rest_rate"] = round(1.0 - len(played) / len(tot), 3)
+        out["mean_when_played"] = (round(sum(played) / len(played), 1)
+                                   if played else None)
     return out
 
 
@@ -252,8 +343,15 @@ def scan(conn, games: list[dict], season: int, seasons=None) -> list[dict]:
                 att = t.get("mean_att")
             row["sides"][side] = {
                 "team": team, "qb": starting_qb(conn, team, season - 1),
-                "expect_att": att, "verdict": verdict(att, cuts),
+                "expect_att": att,
+                "verdict": verdict(t.get("rest_rate"), cuts),
                 "games_seen": t.get("n", 0),
+                # WHAT THE HABIT ACTUALLY LOOKS LIKE. "Sat 3 of 4, threw 12
+                # when he played" survives a bimodal history; the mean of
+                # 3.0 those outings produce describes none of them.
+                "rest_rate": t.get("rest_rate"),
+                "played_of": [t.get("n_played", 0), t.get("n", 0)],
+                "att_when_played": t.get("mean_when_played"),
             }
         out.append(row)
     return {"games": out, "bands": cuts, "seasons": seasons}

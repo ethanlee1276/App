@@ -2002,17 +2002,22 @@ function starterScanHTML(g) {
   const row = (scan.games || []).find(
     (x) => x.home === g.home && x.away === g.away && x.date === g.date);
   if (!row) return "";
-  const tone = { rested: "down", limited: "warn", extended: "up" };
+  const tone = { rests: "down", mixed: "warn", plays: "up" };
   const cells = ["away", "home"].map((side) => {
     const s = row.sides[side];
     if (!s || s.verdict === "unknown") return "";
+    // THE COUNTS, NOT THE MEAN. A staff that sat its man three Augusts and
+    // threw twelve in the fourth has a mean of three, which describes none
+    // of the four outings. "played 1 of 4" does.
+    const of = s.played_of || [];
+    const shape = of.length === 2 && of[1]
+      ? `played ${of[0]} of ${of[1]}${
+          s.att_when_played ? `, ${Number(s.att_when_played).toFixed(0)} att when he did` : ""}`
+      : "";
     return `<span class="pre-scan-side">
       <b>${escapeHtml(s.team)}</b>
       <span class="chip ${tone[s.verdict] || ""}">${escapeHtml(s.verdict)}</span>
-      ${s.expect_att != null
-        ? `<span class="pre-scan-n">${Number(s.expect_att).toFixed(0)} att
-             over ${s.games_seen} past outing${s.games_seen === 1 ? "" : "s"}</span>`
-        : ""}</span>`;
+      ${shape ? `<span class="pre-scan-n">${escapeHtml(shape)}</span>` : ""}</span>`;
   }).filter(Boolean).join("");
   if (!cells) return "";
   return `<div class="pre-scan">${cells}
