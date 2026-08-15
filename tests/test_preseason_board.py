@@ -252,6 +252,82 @@ def test_the_cli_can_write_it_too():
     assert "def write_board(" in src and '"--out"' in src
 
 
+# --- the pointer, which was a dead button ------------------------------------
+#
+# Ethan, 2026-08-15: "The pre season board button doesn't do anything and
+# isnt displaying anything."
+#
+# He was right twice over, and it was one fault. `subtabbedDOM` re-parents
+# Recommended into panels and hides all but the active one with
+# display:none; `REC_ROOMS` files `preseason-board` under Watchlists while
+# the page opens on Tonight's board. So the block rendered its HTML into a
+# panel with no box — measured at 3,542 characters and 0 pixels — and the
+# "Preseason is what is being played now →" link was a native anchor to a
+# target the browser could not scroll to. Clicking moved the address bar
+# and nothing else.
+#
+# The general rule this pins: ANY in-page anchor on a sub-tabbed page has
+# to open the room before it scrolls, or it is a dead button.
+def test_the_preseason_block_really_does_live_inside_a_sub_tab():
+    """The precondition. If it ever moves to the first room this stops
+    being necessary — and these tests should be read again, not deleted,
+    because the reveal is what makes EVERY such link work."""
+    js = _read("web", "js", "app.js")
+    i = js.index("const REC_ROOMS = [")
+    rooms = js[i:js.index("\n];", i)]
+    assert '"preseason-board"' in rooms
+    first_room = rooms[:rooms.index('["gamebets"')]
+    assert "preseason-board" not in first_room, \
+        "it is in the default room now; the anchor no longer needs revealing"
+
+
+def test_the_jump_opens_the_room_before_it_scrolls():
+    js = _read("web", "js", "app.js")
+    assert "function revealAnchor(" in js
+    i = js.index("function revealAnchor(")
+    body = js[i:js.index("\nfunction ", i + 1)]
+    # It must go through the real tab button, not flip `hidden` blind: the
+    # handler also moves the bar highlight, aria-selected, the roving
+    # tabindex and the hint. Setting hidden alone shows one room while the
+    # bar claims another, which is a worse bug than the one being fixed.
+    assert "btn.click()" in body
+    assert ".subgroup" in body and "subnav-btn" in body
+
+
+def test_the_pointer_click_is_bound_to_the_reveal():
+    js = _read("web", "js", "app.js")
+    i = js.index("function renderSlateHorizon(")
+    body = js[i:js.index("\nfunction ", i + 1)]
+    assert "a.slate-jump" in body
+    assert "revealAnchor(" in body and "scrollIntoView" in body
+    assert "preventDefault" in body
+
+
+def test_a_pasted_or_reloaded_anchor_works_too():
+    """The hash sticks in the URL after a click, so a refresh or a shared
+    link hits the router rather than the click handler. Without this the
+    same link is dead again by another route."""
+    js = _read("web", "js", "app.js")
+    i = js.index('window.addEventListener("hashchange"')
+    body = js[i:i + 2200]
+    reveal = body.index("revealAnchor(")
+    bail = body.index("if (!VIEW_ORDER.includes(h) || !document.getElementById(")
+    assert reveal < bail, \
+        "the VIEW_ORDER bail-out runs first, so in-page anchors never reach the reveal"
+
+
+def test_the_jumped_to_block_clears_the_sticky_masthead():
+    """`block: "start"` puts the element at y=0, and the topbar is sticky
+    at 64px (measured in Chromium at 1280 and 390), so the heading landed
+    behind it — which reads as the link having gone somewhere wrong."""
+    css = _read("web", "css", "styles.css")
+    i = css.index("#preseason-board")
+    rule = css[i:i + 90]
+    assert "scroll-margin-top" in rule
+    px = int(rule.split("scroll-margin-top:")[1].split("px")[0].strip())
+    assert px >= 64, f"{px}px does not clear the 64px masthead"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

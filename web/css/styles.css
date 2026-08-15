@@ -4673,6 +4673,18 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   font-size: var(--fs-xs); color: var(--text-mute); }
 .ff-dim { opacity: .5; }
 
+/* --- In-page anchor targets ---------------------------------------------
+   The masthead is position:sticky at 64px (measured, both 1280 and 390),
+   so a block jumped to with block:"start" lands with its heading BEHIND
+   it — which reads as the link having gone somewhere wrong, on a link
+   whose whole job is getting you somewhere. Both the browser's native
+   hash jump and scrollIntoView honour scroll-margin-top.
+
+   Add an id here when a new in-page link appears; `revealAnchor` in
+   app.js is what makes such a link work at all when its target sits in a
+   sub-tab. */
+#preseason-board { scroll-margin-top: 76px; }
+
 /* --- League desk: the lineup and the trades ------------------------------ */
 .ld-total { font-size: var(--fs-xl); font-weight: 800;
   font-variant-numeric: tabular-nums; }

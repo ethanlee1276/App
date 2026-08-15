@@ -2566,6 +2566,22 @@ function renderSlateHorizon() {
     <p class="slate-horizon">${icon("clock", 14)}
       This board is <b>${escapeHtml(formatGameDate(first))}</b> — ${days}
       days out. Nothing on it is tonight.${pointer}</p>`;
+
+  /* The pointer is a link to a block that lives in ANOTHER SUB-TAB, so the
+     browser's own jump is not enough — see `revealAnchor`. Open the room
+     first, then scroll. Bound here rather than delegated because this
+     host's innerHTML is rewritten on every render, which drops listeners;
+     the anchor itself survives `groupRecommended` either way, since that
+     moves nodes with appendChild rather than rebuilding them. */
+  host.querySelectorAll("a.slate-jump").forEach((a) =>
+    a.addEventListener("click", (e) => {
+      const id = (a.getAttribute("href") || "").slice(1);
+      const el = revealAnchor(id);
+      if (!el) return;              // nothing to show: let the browser try
+      e.preventDefault();
+      history.replaceState(history.state, "", `#${id}`);
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }));
 }
 
 function renderGames() {
@@ -6233,6 +6249,37 @@ function syncNavHint(view) {
   const btn = document.querySelector(`.nav-btn[data-view="${view}"]`)
     || document.querySelector(".nav-btn.active");
   el.textContent = (btn && btn.dataset.hint) || "";
+}
+
+/* Reveal an element a sub-tab may be hiding, and hand it back.
+
+   IN-PAGE ANCHORS STOPPED WORKING THE DAY SUB-TABS LANDED, and nothing
+   said so. `subtabbedDOM` re-parents this view into panels and hides every
+   panel but the active one with `display:none`; a native `href="#id"` jump
+   into one of those finds a target with no box, scrolls nowhere, and looks
+   for all the world like a dead button. That is exactly what the
+   "Preseason is what is being played now →" pointer had become: it moved
+   the address bar and nothing else, on the one page whose whole job is
+   saying where the football is.
+
+   The room is opened by CLICKING ITS REAL TAB rather than flipping
+   `hidden` here. `bindSubtabs`'s handler also updates the bar highlight,
+   aria-selected, the roving tabindex, the hint line and the remembered
+   room — set `hidden` directly and the page shows one room while the bar
+   claims another, which is a worse bug than the one being fixed. */
+function revealAnchor(id) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const panel = el.closest(".subgroup");
+  if (panel && panel.hidden) {
+    const host = panel.parentElement;
+    const room = panel.dataset.subgroup || "";
+    const btn = host && [...host.querySelectorAll(".subnav-btn")]
+      .find((b) => b.dataset.subtab === room);
+    if (btn) btn.click();
+    else panel.hidden = false;      // no bar (single room): just show it
+  }
+  return el;
 }
 
 function bindSubtabs(host) {
@@ -12746,6 +12793,16 @@ function bind() {
       exitStandaloneMode();
       switchView("recommended");
       if (typeof syncParlayMode === "function") syncParlayMode();
+      return;
+    }
+    // An IN-PAGE ANCHOR, not a view: `#preseason-board` and anything like
+    // it. The target may sit inside a sub-tab panel that is display:none,
+    // where the browser's own jump lands nowhere — so open the room, then
+    // scroll. Without this the address bar moved and the page did not,
+    // which is the same lie this handler was written to stop.
+    if (!VIEW_ORDER.includes(h) && document.getElementById(h)) {
+      const el = revealAnchor(h);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     if (!VIEW_ORDER.includes(h) || !document.getElementById(`view-${h}`)) return;
