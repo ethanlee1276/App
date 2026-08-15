@@ -990,8 +990,13 @@ class Handler(BaseHTTPRequestHandler):
         conn = A.connect()
         try:
             if path in ("signup", "login"):
-                fn = A.create_user if path == "signup" else A.authenticate
-                code, out = fn(conn, body.get("email"), body.get("password"))
+                if path == "signup":
+                    code, out = A.create_user(
+                        conn, body.get("email"), body.get("password"),
+                        confirmed=bool(body.get("confirmed")))
+                else:
+                    code, out = A.authenticate(
+                        conn, body.get("email"), body.get("password"))
                 if code != 200:
                     return self._send(code, json.dumps(out).encode(), ".json")
                 token = A.start_session(conn, out["id"])

@@ -65,7 +65,7 @@ def _db():
     conn = A.connect(os.path.join(d, "acc.db"))
     B.init(conn)
     _code, who = A.create_user(conn, "ethan@example.com",
-                               "correct-horse-battery")
+                               "correct-horse-battery", confirmed=True)
     return conn, who["id"]
 
 

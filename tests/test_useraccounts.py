@@ -65,7 +65,7 @@ def test_the_password_is_not_in_the_database_in_any_readable_form():
     function of it; anything else means a copy of this file is a copy of
     everybody's password, including the one they also used on their bank."""
     conn, path = _db()
-    A.create_user(conn, "ethan@example.com", GOOD)
+    A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     conn.commit()
     raw = open(path, "rb").read()
     assert GOOD.encode() not in raw
@@ -121,7 +121,7 @@ def test_an_unknown_email_and_a_wrong_password_say_the_same_thing():
     address is registered here — which is worth money to whoever is
     building a list of people who bet."""
     conn, _ = _db()
-    A.create_user(conn, "ethan@example.com", GOOD)
+    A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     a = A.authenticate(conn, "ethan@example.com", "wrong-password-here")
     b = A.authenticate(conn, "ghost@example.com", "wrong-password-here")
     assert a[0] == b[0] == 403
@@ -134,7 +134,7 @@ def test_an_unknown_email_costs_the_same_time_as_a_known_one():
     the same oracle by another channel. Measured, not asserted by reading
     the code."""
     conn, _ = _db()
-    A.create_user(conn, "ethan@example.com", GOOD)
+    A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
 
     def timed(email):
         best = 9e9
@@ -152,7 +152,7 @@ def test_an_unknown_email_costs_the_same_time_as_a_known_one():
 
 def test_repeated_wrong_passwords_get_throttled():
     conn, _ = _db()
-    A.create_user(conn, "ethan@example.com", GOOD)
+    A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     A._fails.clear()
     codes = [A.authenticate(conn, "ethan@example.com", "nope-nope-nope")[0]
              for _ in range(A.MAX_FAILS + 1)]
@@ -165,7 +165,7 @@ def test_a_correct_password_clears_the_throttle():
     """Otherwise a stranger can lock a real user out of their own account
     by guessing wrong at them eight times."""
     conn, _ = _db()
-    A.create_user(conn, "ethan@example.com", GOOD)
+    A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     A._fails.clear()
     for _ in range(A.MAX_FAILS - 1):
         A.authenticate(conn, "ethan@example.com", "nope-nope-nope")
@@ -180,7 +180,7 @@ def test_the_session_token_is_hashed_at_rest():
     for anyone who reads the database — same argument as the password, and
     it is a session rather than a guess, so it is worse."""
     conn, path = _db()
-    _, who = A.create_user(conn, "ethan@example.com", GOOD)
+    _, who = A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     token = A.start_session(conn, who["id"])
     conn.commit()
     assert token.encode() not in open(path, "rb").read()
@@ -189,7 +189,7 @@ def test_the_session_token_is_hashed_at_rest():
 
 def test_a_token_nobody_issued_is_not_a_session():
     conn, _ = _db()
-    _, who = A.create_user(conn, "ethan@example.com", GOOD)
+    _, who = A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     A.start_session(conn, who["id"])
     assert A.session_user(conn, "made-up") is None
     assert A.session_user(conn, "") is None
@@ -198,7 +198,7 @@ def test_a_token_nobody_issued_is_not_a_session():
 
 def test_an_expired_session_stops_working():
     conn, _ = _db()
-    _, who = A.create_user(conn, "ethan@example.com", GOOD)
+    _, who = A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     token = A.start_session(conn, who["id"])
     conn.execute("UPDATE sessions SET expires_at=?", (time.time() - 1,))
     conn.commit()
@@ -209,7 +209,7 @@ def test_signing_out_ends_it_on_the_server():
     """Forgetting a cookie locally is not signing out — the session is
     still valid for whoever else has it."""
     conn, _ = _db()
-    _, who = A.create_user(conn, "ethan@example.com", GOOD)
+    _, who = A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     token = A.start_session(conn, who["id"])
     A.end_session(conn, token)
     assert A.session_user(conn, token) is None
@@ -219,7 +219,7 @@ def test_changing_the_password_signs_out_every_device():
     """A password change is usually an answer to "somebody else may have
     this". Leaving their session alive answers it with nothing."""
     conn, _ = _db()
-    _, who = A.create_user(conn, "ethan@example.com", GOOD)
+    _, who = A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     theirs = A.start_session(conn, who["id"])
     assert A.change_password(conn, who["id"], GOOD, "a-brand-new-passphrase")[0] == 200
     assert A.session_user(conn, theirs) is None
@@ -229,15 +229,15 @@ def test_changing_the_password_signs_out_every_device():
 
 def test_the_old_password_is_required_to_change_it():
     conn, _ = _db()
-    _, who = A.create_user(conn, "ethan@example.com", GOOD)
+    _, who = A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     assert A.change_password(conn, who["id"], "not-it-at-all", "x" * 12)[0] == 403
 
 
 # --- the two strings we accept -----------------------------------------------
 def test_email_case_does_not_create_a_second_account():
     conn, _ = _db()
-    assert A.create_user(conn, "Ethan@Example.COM", GOOD)[0] == 200
-    assert A.create_user(conn, "ethan@example.com", GOOD)[0] == 409
+    assert A.create_user(conn, "Ethan@Example.COM", GOOD, confirmed=True)[0] == 200
+    assert A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)[0] == 409
     assert A.authenticate(conn, "  ETHAN@example.com ", GOOD)[0] == 200
 
 
@@ -246,9 +246,9 @@ def test_dots_and_plus_tags_are_left_alone():
     "helpfully" strips them decides two different people are one account,
     which is a worse failure than a duplicate signup."""
     conn, _ = _db()
-    assert A.create_user(conn, "a.b@example.com", GOOD)[0] == 200
-    assert A.create_user(conn, "ab@example.com", GOOD)[0] == 200
-    assert A.create_user(conn, "a.b+tag@example.com", GOOD)[0] == 200
+    assert A.create_user(conn, "a.b@example.com", GOOD, confirmed=True)[0] == 200
+    assert A.create_user(conn, "ab@example.com", GOOD, confirmed=True)[0] == 200
+    assert A.create_user(conn, "a.b+tag@example.com", GOOD, confirmed=True)[0] == 200
 
 
 def test_an_address_that_is_not_one_is_refused():
@@ -272,13 +272,13 @@ def test_a_giant_password_cannot_be_used_as_a_cpu_bomb():
     """scrypt on a 10MB string is free denial of service, one request."""
     assert A.MAX_PASSWORD <= 1000
     conn, _ = _db()
-    assert A.create_user(conn, "e@example.com", "x" * 10_000)[0] == 400
+    assert A.create_user(conn, "e@example.com", "x" * 10_000, confirmed=True)[0] == 400
 
 
 # --- the data an account holds -----------------------------------------------
 def test_the_four_sections_round_trip():
     conn, _ = _db()
-    _, who = A.create_user(conn, "ethan@example.com", GOOD)
+    _, who = A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     A.save_sections(conn, who["id"], {
         "mybets": {"ts": 3, "data": {"rows": [], "deleted": []}},
         "fantasy": {"ts": 4, "data": {"user": "ethan"}},
@@ -294,7 +294,7 @@ def test_a_section_we_do_not_know_is_dropped_not_stored():
     """The section list is the schema. Letting a client invent names makes
     this table a free key-value store for anything anyone POSTs."""
     conn, _ = _db()
-    _, who = A.create_user(conn, "ethan@example.com", GOOD)
+    _, who = A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     A.save_sections(conn, who["id"], {"whatever": {"ts": 1, "data": "x"}})
     assert A.get_sections(conn, who["id"]) == {}
 
@@ -306,7 +306,7 @@ def test_search_history_is_a_section_because_ethan_asked_for_it():
 
 def test_deleting_an_account_removes_everything():
     conn, _ = _db()
-    _, who = A.create_user(conn, "ethan@example.com", GOOD)
+    _, who = A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     A.start_session(conn, who["id"])
     A.save_sections(conn, who["id"], {"search": {"ts": 1, "data": ["x"]}})
     A.delete_user(conn, who["id"])
@@ -319,7 +319,7 @@ def test_an_export_carries_no_secret():
     """An export is a file people mail around. It must not carry the two
     things that would let somebody else be them."""
     conn, _ = _db()
-    _, who = A.create_user(conn, "ethan@example.com", GOOD)
+    _, who = A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
     A.start_session(conn, who["id"])
     blob = json.dumps(A.export_user(conn, who["id"]))
     assert "verifier" not in blob and "scrypt$" not in blob
@@ -579,6 +579,100 @@ def test_the_tls_gap_is_written_down_rather_than_left_to_be_discovered():
     place for that is the doc rather than a surprise."""
     d = _read("docs", "ACCOUNTS.md")
     assert "cleartext" in d and "tailscale serve" in d.lower()
+
+
+
+# --- the age and terms acknowledgment ----------------------------------------
+def test_signup_requires_the_age_and_terms_confirmation():
+    """Recorded SERVER-SIDE with a timestamp, not trusted to a
+    localStorage flag. A flag in the browser proves nothing later, and
+    "did this person agree" is exactly the question that gets asked when
+    it matters."""
+    conn, _ = _db()
+    code, out = A.create_user(conn, "new@example.com", GOOD)
+    assert code == 400 and "21 or older" in out["error"]
+    code, who = A.create_user(conn, "new@example.com", GOOD, confirmed=True)
+    assert code == 200
+    row = conn.execute("SELECT age_confirmed, terms_accepted_at FROM users "
+                       "WHERE id=?", (who["id"],)).fetchone()
+    assert row["age_confirmed"] == 1
+    assert row["terms_accepted_at"] and row["terms_accepted_at"] > 0
+
+
+def test_the_migration_adds_columns_to_a_database_that_predates_them():
+    """THE FIRST REAL MIGRATION, and the pattern matters more than these
+    two columns. `CREATE TABLE IF NOT EXISTS` covers a new TABLE and does
+    nothing for a new COLUMN — so a deployed accounts.db would keep its
+    old shape while the code expected the new one, and the failure lands
+    on a live account rather than in a test."""
+    import sqlite3, tempfile, os
+    p = os.path.join(tempfile.mkdtemp(), "old.db")
+    c = sqlite3.connect(p)
+    c.executescript(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL "
+        "UNIQUE, verifier TEXT NOT NULL, created_at REAL NOT NULL, "
+        "last_seen REAL);")
+    c.execute("INSERT INTO users (email, verifier, created_at) "
+              "VALUES ('old@x.com','scrypt$x',1)")
+    c.commit(); c.close()
+    conn = A.connect(p)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(users)")}
+    assert {"age_confirmed", "terms_accepted_at"} <= cols
+    # …and the row that was already there is untouched.
+    assert conn.execute("SELECT email FROM users").fetchone()[0] == "old@x.com"
+
+
+def test_the_migration_is_additive_only():
+    """Once other people's data is in here, a destructive migration needs
+    a written plan and a fresh backup — not a line in this function."""
+    src = _read("engine", "accounts.py")
+    body = src[src.index("def _migrate("):]
+    body = body[:body.index("\n\n\n")]
+    for destructive in ("DROP ", "DELETE FROM", "TRUNCATE", "ALTER TABLE users RENAME"):
+        assert destructive not in body.upper().replace("DROPPING", ""), destructive
+    assert "ADD COLUMN" in body
+
+
+def test_the_sign_in_form_does_not_re_ask_returning_users():
+    """Asking somebody to re-tick an acknowledgment every time they sign
+    in trains them to tick it without reading, which is the opposite of
+    what an acknowledgment is for."""
+    i = APP.index("window.acctAuth")
+    body = APP[i:APP.index("\nwindow.acctChangePassword", i)]
+    assert 'mode === "signup" && !confirmed' in body
+
+
+def test_the_documents_exist_and_say_they_are_drafts():
+    """Written from what the code does, which is the half an engineer can
+    get right. Publishing them as finished legal text is not the same
+    thing, and the banner says so."""
+    for page in ("terms.html", "privacy.html"):
+        doc = _read("web", page)
+        assert "DRAFT" in doc and "not yet reviewed by a lawyer" in doc
+        assert "legal-todo" in doc, "nothing is flagged as still needing input"
+
+
+def test_the_privacy_policy_matches_what_is_actually_stored():
+    """Most privacy policies are wrong because nobody asks the engineers.
+    Every section this app stores has to appear, and the two things it
+    deliberately does NOT hold have to be stated."""
+    doc = _read("web", "privacy.html")
+    for section in ("bet log", "fantasy", "bankroll", "search"):
+        assert section in doc.lower(), section
+    assert "one-way scramble" in doc or "scrypt" in doc
+    assert "sportsbook password" in doc.lower()
+    assert "Card numbers" in doc
+    # And the controls it promises are ones that exist.
+    for control in ("Download everything", "Delete everything",
+                    "Clear search history"):
+        assert control in doc, control
+
+
+def test_the_terms_say_the_thing_that_makes_this_lawful_to_run():
+    doc = _read("web", "terms.html")
+    assert "We do not take bets" in doc
+    assert "1-800-GAMBLER" in doc
+    assert "21" in doc
 
 
 if __name__ == "__main__":

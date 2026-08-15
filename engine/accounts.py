@@ -243,22 +243,54 @@ def _init(conn: sqlite3.Connection) -> None:
         PRIMARY KEY (user_id, section)
       );
     """)
+    _migrate(conn)
     conn.commit()
 
 
+def _migrate(conn) -> None:
+    """Additive column migrations, safe to run on every start.
+
+    THE FIRST ONE OF THESE, and the pattern matters more than the columns.
+    `CREATE TABLE IF NOT EXISTS` covers a new table and does nothing at all
+    for a new COLUMN on a table that already exists — so an existing
+    accounts.db would keep its old shape while the code expected the new
+    one, and the failure lands on a live account rather than in a test.
+
+    Additive only, by rule. Once other people's data is in here, a
+    destructive migration needs a written plan and a fresh backup, not a
+    line in this function.
+    """
+    have = {r[1] for r in conn.execute("PRAGMA table_info(users)")}
+    for col, decl in (("age_confirmed", "INTEGER NOT NULL DEFAULT 0"),
+                      ("terms_accepted_at", "REAL")):
+        if col not in have:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {col} {decl}")
+
+
 # --- accounts ----------------------------------------------------------------
-def create_user(conn, email, password) -> tuple[int, dict]:
-    """``(status, body)``. 409 when the address is already registered."""
+def create_user(conn, email, password, confirmed=False) -> tuple[int, dict]:
+    """``(status, body)``. 409 when the address is already registered.
+
+    `confirmed` is the age-and-terms acknowledgment, and it is REQUIRED.
+    Recorded server-side with a timestamp rather than trusted to a
+    localStorage flag: a flag in the browser proves nothing later, and
+    "did this person agree" is exactly the question you get asked when it
+    matters.
+    """
     e = normalize_email(email)
     if not email_ok(e):
         return 400, {"error": "That does not look like an email address."}
     why = password_problem(password)
     if why:
         return 400, {"error": why}
+    if not confirmed:
+        return 400, {"error": "Please confirm you are 21 or older and accept "
+                              "the Terms and Privacy Policy."}
     try:
         cur = conn.execute(
-            "INSERT INTO users (email, verifier, created_at) VALUES (?,?,?)",
-            (e, hash_password(password), time.time()))
+            "INSERT INTO users (email, verifier, created_at, age_confirmed, "
+            "terms_accepted_at) VALUES (?,?,?,1,?)",
+            (e, hash_password(password), time.time(), time.time()))
         conn.commit()
     except sqlite3.IntegrityError:
         # Deliberately explicit. Hiding it protects an address that the

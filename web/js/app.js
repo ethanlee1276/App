@@ -9817,6 +9817,13 @@ function acctSignInHTML() {
       <button class="btn" onclick="acctAuth(this, 'signup')">Create account</button>
       <button class="btn ghost" onclick="acctAuth(this, 'login')">Sign in</button>
     </div>
+    <label class="acct-confirm">
+      <input type="checkbox" class="acct-age">
+      <span>I am 21 or older, and I accept the
+        <a href="terms.html" target="_blank" rel="noopener">Terms</a> and
+        <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.
+        This site publishes model estimates and takes no bets.</span>
+    </label>
     <div class="acct-note">${escapeHtml(_acctNote)}</div>
     <p class="rank-help">Ten characters or more — length is what makes a
       password hard to guess. We store a one-way scramble of it, never the
@@ -9840,12 +9847,19 @@ window.acctAuth = async function (btn, mode) {
   const email = (card.querySelector(".acct-email").value || "").trim();
   const password = card.querySelector(".acct-pw").value || "";
   if (!email || !password) return say("Email and password, both.");
+  // Only on SIGN-UP. Asking an existing user to re-tick it every time
+  // they sign in would train them to tick it without reading, which is
+  // the opposite of what an acknowledgment is for.
+  const ageBox = card.querySelector(".acct-age");
+  const confirmed = !!(ageBox && ageBox.checked);
+  if (mode === "signup" && !confirmed)
+    return say("Please confirm you are 21 or older and accept the Terms.");
   say(mode === "signup" ? "Creating your account…" : "Signing in…");
   try {
     const r = await fetch(`/api/account/${mode}`, {
       method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, confirmed }),
     });
     const body = await r.json().catch(() => null);
     if (!r.ok) return say((body && body.error) || `Failed (${r.status}).`);
