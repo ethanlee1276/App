@@ -1846,7 +1846,19 @@ async function renderTeamForm() {
       <span style="min-width:34px;text-align:right;color:${r.streak > 0 ? "var(--good)" : "var(--bad)"}">
         ${r.streak > 0 ? `W${r.streak}` : r.streak < 0 ? `L${-r.streak}` : "—"}</span>
     </div>`;
-  const col = (title, icon, rows, tone) => `
+  // THE PARAMETER IS `mark`, and it has to be. The emoji sweep (#50,
+  // 2026-08-02) replaced the heading's emoji with `${mark}` and left the
+  // parameter called `icon`, so this threw "mark is not defined" every
+  // time a board actually had team form to show. It is inside an async
+  // function, so the throw became an unhandled rejection rather than a
+  // visible error: the page finished rendering and simply lost this
+  // block. Thirteen days, every MLB-data view, nobody could see it —
+  // until a headless sweep read the console.
+  //
+  // `mark` rather than `icon` for the second reason too: `icon` is a
+  // global function here, and a parameter of that name shadows it inside
+  // this closure.
+  const col = (title, mark, rows, tone) => `
     <div class="trend-col">
       <h3>${mark} ${title}</h3>
       ${rows.length ? rows.map((r) => row(r, tone)).join("")

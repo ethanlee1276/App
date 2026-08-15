@@ -119,6 +119,48 @@ def test_form_sampler_journals_hot_side_at_real_prices():
     lconn.close()
 
 
+def test_the_team_form_heading_uses_a_name_that_exists():
+    """The block was silently missing from every MLB view for 13 days.
+
+    The emoji sweep (#50, 2026-08-02) replaced the heading's emoji with
+    `${mark}` and left the helper's parameter called `icon`. So the
+    template referenced a name that did not exist in that scope, and the
+    whole of `renderTeamForm` threw "mark is not defined".
+
+    THREE THINGS HID IT, and they are the reason this test is worth its
+    lines:
+
+      * it throws inside an `async` function, so it surfaced as an
+        unhandled rejection, not a visible error — the page finished
+        rendering and just lost this section;
+      * `renderTeamForm` returns early when `team_form` is absent, so any
+        board without form data never reaches the bug. The dev container
+        has no team form, which is exactly why a 42-view headless sweep
+        there came back clean while Ethan's machine crashed on 22 of 28;
+      * `let mark` DOES exist further down app.js, inside an unrelated
+        function, so grepping the file for the name finds it and proves
+        nothing.
+
+    Checked by parsing the helper rather than grepping: every `${name}`
+    in its template must be one of its own parameters.
+    """
+    import re
+    app = open(os.path.join(os.path.dirname(__file__), "..",
+                            "web", "js", "app.js"), encoding="utf-8").read()
+    i = app.index("async function renderTeamForm(")
+    body = app[i:app.index("\n}\n", i)]
+    m = re.search(r"const col = \(([^)]*)\) =>\s*`(.*?)`;", body, re.S)
+    assert m, "the team-form column helper is gone or reshaped"
+    params = {p.strip() for p in m.group(1).split(",") if p.strip()}
+    refs = set(re.findall(r"\$\{\s*([A-Za-z_$][\w$]*)\s*\}", m.group(2)))
+    missing = refs - params
+    assert not missing, (
+        f"the heading references {sorted(missing)}, which is not a "
+        f"parameter of col{sorted(params)} — this is the 'mark is not "
+        f"defined' crash again")
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
