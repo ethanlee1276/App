@@ -27,6 +27,23 @@ from engine import gate                                      # noqa: E402
 ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+def _env(**kw):
+    """Set env vars and give back a restore callable."""
+    was = {k: os.environ.get(k) for k in kw}
+    for k, v in kw.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+    def restore():
+        for k, v in was.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    return restore
+
+
 def _board() -> dict:
     """A mixed board: free schedule and paid picks in one object, which is
     the shape that ruled out gating whole files."""
@@ -111,6 +128,10 @@ def test_redact_does_not_mutate_the_board_it_was_given():
 def test_publish_writes_the_full_board_outside_the_web_root():
     """The load-bearing fact. If the full copy is anywhere under web/,
     Caddy serves it and everything else here is decoration."""
+    # WITH THE PAYWALL ON — the flag was added after this test and the
+    # behaviour it describes is the switched-on one. Off, the public file
+    # is deliberately the full board; that case has its own test below.
+    restore = _env(QB_PAYWALL="1")
     with tempfile.TemporaryDirectory() as tmp:
         pub = Path(tmp) / "web" / "data" / "recommendations.json"
         was = gate.FULL_DIR
@@ -125,6 +146,7 @@ def test_publish_writes_the_full_board_outside_the_web_root():
             assert len(json.loads(Path(full).read_text())["recommendations"]) == 3
         finally:
             gate.FULL_DIR = was
+            restore()
 
 
 def test_no_built_board_directory_is_reachable_from_the_web_root():
@@ -178,6 +200,132 @@ def test_every_board_the_site_actually_builds_has_been_classified():
              "wnba.json", "cfb.json", "ufc.json"}
     surprise = [n for n in unclassified if n not in mixed]
     assert not surprise, f"unclassified boards: {surprise}"
+
+
+# --- the switch, and why it is off ------------------------------------------
+
+def test_the_paywall_is_off_unless_somebody_turns_it_on():
+    """Wired live in one step, this would have gone dark the moment it
+    deployed — for everybody including Ethan, because there is no Paddle
+    account yet and so no account that CAN be entitled. Off by default is
+    what let it be built while the site is live and free."""
+    restore = _env(QB_PAYWALL=None)
+    try:
+        assert not gate.enabled()
+    finally:
+        restore()
+
+
+def test_with_the_paywall_off_the_public_file_is_unchanged():
+    """The safety property of the flag: nothing about the live site moves
+    until the day it is switched on."""
+    restore = _env(QB_PAYWALL=None)
+    with tempfile.TemporaryDirectory() as tmp:
+        was = gate.FULL_DIR
+        gate.FULL_DIR = Path(tmp) / "built"
+        try:
+            pub = Path(tmp) / "web" / "data" / "recommendations.json"
+            public, full = gate.publish(_board(), pub, "recommendations.json")
+            on_disk = json.loads(Path(public).read_text())
+            assert len(on_disk["recommendations"]) == 3, \
+                "the public board was redacted with the paywall off"
+            # …and the subscriber copy is written anyway, so switching the
+            # flag on needs no rebuild.
+            assert len(json.loads(Path(full).read_text())["recommendations"]) == 3
+        finally:
+            gate.FULL_DIR = was
+            restore()
+
+
+def test_with_the_paywall_on_the_public_file_loses_the_picks():
+    restore = _env(QB_PAYWALL="1")
+    with tempfile.TemporaryDirectory() as tmp:
+        was = gate.FULL_DIR
+        gate.FULL_DIR = Path(tmp) / "built"
+        try:
+            pub = Path(tmp) / "web" / "data" / "recommendations.json"
+            public, full = gate.publish(_board(), pub, "recommendations.json")
+            assert json.loads(Path(public).read_text())["recommendations"] == []
+            assert len(json.loads(Path(full).read_text())["recommendations"]) == 3
+        finally:
+            gate.FULL_DIR = was
+            restore()
+
+
+def test_a_comp_list_exists_so_the_owner_is_not_locked_out():
+    """Without it the only route to an entitled account is a completed
+    Paddle checkout — which means Ethan cannot see his own board, cannot
+    comp a tester, and cannot honour a refund without going through the
+    processor and waiting. Read from the environment, never the database,
+    so nothing reachable from the web can grant it."""
+    restore = _env(QB_COMP_EMAILS=" Ethan@Example.com , tester@x.io ")
+    try:
+        assert gate.comped("ethan@example.com"), "case-folding is required"
+        assert gate.comped("  TESTER@X.IO  ")
+        assert not gate.comped("stranger@x.io")
+        assert not gate.comped("") and not gate.comped(None)
+    finally:
+        restore()
+    # An unset list grants nothing at all.
+    restore = _env(QB_COMP_EMAILS=None)
+    try:
+        assert not gate.comped("ethan@example.com")
+    finally:
+        restore()
+
+
+def test_an_empty_comp_list_does_not_entitle_everyone():
+    """`"".split(",")` is `[""]`, and a membership test against a set
+    holding the empty string would match an empty email. The filter that
+    prevents it is one `if e.strip()`."""
+    restore = _env(QB_COMP_EMAILS=",, ,")
+    try:
+        assert not gate.comped("anybody@example.com")
+        assert not gate.comped(" ")
+    finally:
+        restore()
+
+
+# --- the server half --------------------------------------------------------
+
+def _server() -> str:
+    return open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
+
+
+def test_the_board_endpoint_checks_entitlement_before_it_reads():
+    src = _server()
+    assert '/api/board/' in src, "nothing routes to the subscriber boards"
+    body = src[src.index("def _api_board"):][:1800]
+    assert "self._entitled(" in body
+    assert "gate.full_board(" in body
+
+
+def test_the_flag_is_checked_before_the_account_is():
+    """Ordering, not style. A site running without a processor must behave
+    exactly as it did before any of this was written — refusing everyone
+    because nobody has subscribed yet is the failure this avoids."""
+    src = _server()
+    body = src[src.index("def _entitled"):][:1400]
+    i, j = body.index("gate.enabled()"), body.index("if not who")
+    assert i < j, "the account is consulted before the switch"
+
+
+def test_a_signed_in_visitor_without_a_subscription_gets_402_not_403():
+    """"Pay and this works" and "you may never have this" are different
+    answers, and the page renders a different thing for each."""
+    src = _server()
+    body = src[src.index("def _api_board"):][:1800]
+    assert "402" in body and "401" in body
+
+
+def test_a_broken_billing_lookup_does_not_become_a_free_read():
+    """The failure everybody notices is a paying customer refused. The
+    failure nobody notices is the product given away."""
+    src = _server()
+    body = src[src.index("def _entitled"):][:1400]
+    tail = body[body.index("except Exception"):][:400]
+    assert "return False" in tail, "an exception falls through to entitled"
+
 
 
 if __name__ == "__main__":

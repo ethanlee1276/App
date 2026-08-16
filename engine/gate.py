@@ -55,6 +55,7 @@ sold on, and a proof nobody can read persuades nobody.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -101,6 +102,44 @@ FREE_FILES = (
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
     "standings_nfl.json", "standings_wnba.json",
 )
+
+
+#: The switch. OFF by default, and that default is the whole reason this
+#: can be built while the site is live and free.
+#:
+#: Wired in one step, the paywall would go dark the moment it deployed —
+#: for everybody, Ethan included, because there is no Paddle account yet
+#: and therefore no account that CAN be entitled. A flag means the code
+#: ships, is tested, sits inert, and is switched on later on a chosen day
+#: with the processor live. Off, `publish()` writes the full board to both
+#: paths and nothing about the site changes.
+ENV_ENABLED = "QB_PAYWALL"
+
+#: Accounts that are entitled without paying. Comma-separated emails.
+#:
+#: NOT A BACK DOOR — the alternative to it is worse. Without this the only
+#: route to an entitled account is a completed Paddle checkout, which
+#: means Ethan cannot see his own board, cannot comp a tester, and cannot
+#: honour a refund without issuing one through the processor and waiting.
+#: It reads from the environment rather than the database so that it
+#: cannot be granted by anything reachable from the web.
+ENV_COMP = "QB_COMP_EMAILS"
+
+
+def enabled() -> bool:
+    return os.environ.get(ENV_ENABLED, "").strip().lower() in ("1", "true", "yes")
+
+
+def comped(email: str) -> bool:
+    """True for an address on the comp list. Case- and space-insensitive,
+    because the list is typed by hand into a file and `Ethan@…` and
+    `ethan@…` are the same mailbox."""
+    who = str(email or "").strip().lower()
+    if not who:
+        return False
+    listed = {e.strip().lower()
+              for e in os.environ.get(ENV_COMP, "").split(",") if e.strip()}
+    return who in listed
 
 
 def is_free(name: str) -> bool:
@@ -178,8 +217,13 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     with open(full, "w") as fh:
         json.dump(payload, fh, indent=2)
     public.parent.mkdir(parents=True, exist_ok=True)
+    # Paywall off: the public copy IS the full board, exactly as it was
+    # before any of this existed. The full copy is still written, so
+    # switching the flag on needs no rebuild — the subscriber path is
+    # already populated and correct.
+    out = redact(payload, label) if enabled() else payload
     with open(public, "w") as fh:
-        json.dump(redact(payload, label), fh, indent=2)
+        json.dump(out, fh, indent=2)
     return (str(public), str(full))
 
 

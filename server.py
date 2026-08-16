@@ -500,6 +500,8 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/account/"):
             return self._account_get(
                 parsed.path[len("/api/account/"):].strip("/"))
+        if parsed.path.startswith("/api/board/"):
+            return self._api_board(parsed.path[len("/api/board/"):].strip("/"))
         if parsed.path.startswith("/api/billing/"):
             return self._billing_get(
                 parsed.path[len("/api/billing/"):].strip("/"))
@@ -1125,6 +1127,62 @@ class Handler(BaseHTTPRequestHandler):
                 "Once it is cancelled, delete works normally.")
 
     # --- billing: Paddle holds the card, we hold a status ------------------
+    def _entitled(self, conn, who) -> bool:
+        """May this caller read a full board?
+
+        THE PAYWALL BEING OFF MEANS EVERYBODY, and that ordering matters:
+        the flag is checked before the account is, so a site running
+        without a processor behaves exactly as it did before any of this
+        was written rather than refusing everyone.
+        """
+        from engine import billing as BI
+        from engine import gate
+        from engine import paddle as PAY
+        if not gate.enabled():
+            return True
+        if not who:
+            return False
+        if gate.comped(who.get("email")):
+            return True
+        try:
+            BI.init(conn)
+            st = BI.status_for(conn, who["id"], describe_with=PAY.describe)
+        except Exception:                                    # noqa: BLE001
+            # A billing lookup that breaks must not become a lockout. The
+            # failure everybody notices is a paying customer refused; the
+            # failure nobody notices is one free read.
+            return False
+        return bool(st.get("entitled"))
+
+    def _api_board(self, name: str):
+        """The subscriber's copy of a board, read from outside the web root.
+
+        This endpoint exists because `web/data/*.json` is served off disk by
+        Caddy and therefore holds the REDACTED board. Everything paid comes
+        through here, where there is a session to check.
+
+        402 rather than 403 for a signed-in account without a
+        subscription: the distinction is "pay and this works" versus "you
+        may never have this", and the page renders a different thing for
+        each.
+        """
+        from engine import gate
+        A = _acct()
+        payload = gate.full_board(name)
+        if payload is None:
+            return self._send(404, b'{"error":"no such board"}', ".json")
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not self._entitled(conn, who):
+                body = {"error": "This board needs a subscription.",
+                        "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402,
+                                  json.dumps(body).encode(), ".json")
+        finally:
+            conn.close()
+        return self._send(200, json.dumps(payload).encode(), ".json")
+
     def _billing_get(self, path: str):
         from engine import billing as BI
         from engine import paddle as PAY
