@@ -4899,3 +4899,36 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    they are support, not the point, and at full body size they outweighed
    the form they sit under. */
 .acct-screen .rank-help { font-size: var(--fs-xs); }
+
+/* The login panel, following the render's layout: a mark, a welcome, the
+   two fields, one primary action, and the sign-up route underneath rather
+   than beside. Two equally weighted buttons make a returning customer
+   read both before pressing either. */
+.acct-brand { display: grid; place-items: center; margin: 4px 0 2px; }
+.acct-brand svg { width: 42px; height: 42px; color: var(--gold, var(--brand)); }
+.acct-welcome { justify-content: center; text-align: center; }
+.acct-welcome .player { font-family: var(--font-display);
+  font-size: var(--fs-lg); letter-spacing: .01em; }
+.acct-welcome .subtitle { max-width: var(--measure-tight);
+  margin-inline: auto; }
+
+/* The eye. Sits inside the field's box rather than beside it, so the
+   input keeps the full measure and the control cannot be mistaken for a
+   second action. */
+.acct-pw-wrap { position: relative; display: flex; width: 100%; }
+.acct-pw-wrap input { width: 100%; padding-right: 42px; }
+.acct-eye { position: absolute; right: 4px; top: 50%; translate: 0 -50%;
+  display: grid; place-items: center; width: 34px; height: 34px;
+  border: 0; background: none; cursor: pointer; color: var(--text-mute);
+  border-radius: var(--radius-sm); }
+.acct-eye svg { width: 18px; height: 18px; }
+.acct-eye:hover { color: var(--text-mute); background: var(--fill-subtle); }
+.acct-eye.on { color: var(--brand); }
+
+/* "Don't have an account? Sign up" — the secondary route, below a rule,
+   so the primary action is unambiguous. */
+.acct-alt { display: flex; align-items: center; justify-content: center;
+  gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px;
+  border-top: var(--hairline); color: var(--text-mute);
+  font-size: var(--fs-sm); }
+.acct-screen .acct-alt .btn { width: auto; }

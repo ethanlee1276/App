@@ -9806,6 +9806,25 @@ function acctSignedInHTML(u) {
   </div>`;
 }
 
+/* The eye on the password field, from the render's login panel.
+
+   IT IS NOT DECORATION ON A PHONE. A long password typed blind on a
+   touch keyboard is the commonest reason somebody fails to sign in twice
+   and gives up, and this site asks for ten characters or more. Toggling
+   the input type is the whole mechanism; the value never leaves the
+   field, so nothing is logged and nothing is sent anywhere. */
+window.acctTogglePw = function (btn) {
+  const wrap = btn.closest(".acct-pw-wrap");
+  const input = wrap && wrap.querySelector("input");
+  if (!input) return;
+  const showing = input.type === "text";
+  input.type = showing ? "password" : "text";
+  btn.setAttribute("aria-pressed", String(!showing));
+  btn.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+  btn.classList.toggle("on", !showing);
+  input.focus();
+};
+
 function acctSignInHTML() {
   const legacy = acctState();
   // THE WARNING COMES BEFORE THE FORM, not after the password is typed.
@@ -9814,11 +9833,17 @@ function acctSignInHTML() {
   // a phone it is already in the keyboard's suggestion history.
   const insecure = _acctUser && _acctUser.insecure;
   return `<div class="card" style="margin-bottom:16px">
-    <div class="card-head"><div>
-      <div class="player">Email and password</div>
-      <div class="subtitle">Email and a password. Your bets, fantasy
-        leagues and search history are stored with it, so they are there on
-        every device you sign in on.</div></div></div>
+    <div class="acct-brand" aria-hidden="true">
+      <svg viewBox="0 0 40 40" fill="none" stroke="currentColor"
+        stroke-width="2.5"><ellipse cx="20" cy="20" rx="17" ry="12"/>
+        <circle cx="20" cy="20" r="3.5" fill="currentColor" stroke="none"/>
+      </svg>
+    </div>
+    <div class="card-head acct-welcome"><div>
+      <div class="player">Welcome back</div>
+      <div class="subtitle">Your bets, fantasy leagues and search history
+        are stored with your account, so they are there on every device you
+        sign in on.</div></div></div>
     ${insecure ? `<div class="warning">${icon("warn")} <b>${
       _acctUser.allowed ? "This connection is not private."
                         : "Not over this connection."}</b>
@@ -9835,10 +9860,22 @@ function acctSignInHTML() {
     <div class="acct-row">
       <input type="email" class="acct-email" placeholder="you@example.com"
         autocomplete="email" maxlength="254" spellcheck="false">
-      <input type="password" class="acct-pw" placeholder="password"
-        autocomplete="current-password" maxlength="200">
-      <button class="btn" onclick="acctAuth(this, 'login')">Sign in</button>
-      <button class="btn ghost" onclick="acctAuth(this, 'signup')">Create account</button>
+      <div class="acct-pw-wrap">
+        <input type="password" class="acct-pw" placeholder="password"
+          autocomplete="current-password" maxlength="200">
+        <button type="button" class="acct-eye" aria-label="Show password"
+          aria-pressed="false" onclick="acctTogglePw(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" aria-hidden="true"><path d="M2 12s3.6-6 10-6
+            10 6 10 6-3.6 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+      <button class="btn" onclick="acctAuth(this, 'login')">Log in</button>
+    </div>
+    <div class="acct-alt">
+      <span>Don’t have an account?</span>
+      <button class="btn ghost" onclick="acctAuth(this, 'signup')">Sign up</button>
     </div>
     <label class="acct-confirm">
       <input type="checkbox" class="acct-age">

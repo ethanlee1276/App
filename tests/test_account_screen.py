@@ -125,6 +125,72 @@ def test_the_screen_still_promises_only_things_that_are_true():
     assert block.count("sportsbook or ESPN password") == 0
 
 
+# --- the login panel, following Ethan's render ------------------------------
+
+def test_the_password_field_can_be_revealed():
+    """From the render's login panel, and not decoration on a phone: a
+    long password typed blind on a touch keyboard is the commonest reason
+    somebody fails twice and gives up, and this site asks for ten
+    characters or more."""
+    assert "acctTogglePw" in APP
+    assert 'class="acct-eye"' in APP and ".acct-eye" in CSS
+    fn = APP[APP.index("window.acctTogglePw"):][:900]
+    # Type toggling is the whole mechanism — the value must never be read,
+    # copied or sent anywhere.
+    assert 'input.type = showing ? "password" : "text"' in fn
+    for leak in ("fetch(", "value", "localStorage", "console."):
+        assert leak not in fn, f"the reveal handler touches {leak}"
+    # Screen readers need the state, not just the picture.
+    assert "aria-pressed" in fn and "aria-label" in fn
+
+
+def test_the_eye_sits_inside_the_field_not_beside_it():
+    """Beside it, the control reads as a second action next to a button
+    that submits the form."""
+    assert ".acct-pw-wrap" in CSS
+    block = CSS[CSS.index(".acct-pw-wrap"):][:400]
+    assert "relative" in block
+    eye = CSS[CSS.index(".acct-eye {"):][:300]
+    assert "absolute" in eye
+
+
+def test_sign_up_is_a_route_rather_than_a_rival_button():
+    """Two equally weighted buttons make a returning customer read both
+    before pressing either. The render puts sign-up below a rule."""
+    assert "Don’t have an account?" in APP
+    assert ".acct-alt" in CSS
+    alt = CSS[CSS.index(".acct-alt {"):][:400]
+    assert "border-top" in alt
+
+
+def test_no_control_on_this_screen_is_a_promise_we_cannot_keep():
+    """The render also shows "Remember me" and "Forgot password?". Neither
+    is here, deliberately: sessions already persist, so the checkbox would
+    do nothing, and there IS no password reset — this site stores a
+    one-way scramble and says so on the same screen, meaning a lost
+    password is replaced rather than recovered. A link labelled "Forgot
+    password?" that leads nowhere is worse than its absence, because it
+    is read as a promise at the exact moment somebody is locked out."""
+    i = APP.index("function acctSignInHTML")
+    form = APP[i:i + 4000]
+    assert "Forgot password" not in form, \
+        "a reset link appeared with no reset flow behind it"
+    assert "Remember me" not in form, \
+        "a checkbox that changes nothing appeared"
+
+
+def test_the_site_still_refuses_to_look_like_it_holds_money():
+    """Ethan's first two renders show a balance chip, a bet slip, "Place
+    Bet" and "To Win" — the four things he excluded when the look shipped,
+    and the four that would make this read as a book that takes wagers.
+    It takes none. Pinned again here because the renders keep arriving
+    with them drawn in."""
+    for phrase in ("Place Bet", "Bet Slip", "BET SLIP", "To Win $",
+                   "BALANCE", "Add to Slip"):
+        assert phrase not in APP, f"the wagering surface crept in: {phrase}"
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
