@@ -32,6 +32,16 @@ def _read(*parts):
         return fh.read()
 
 
+def _shell_blocks(md):
+    """The fenced code in a markdown file — the parts that are commands.
+
+    Prose has to stay free to name a command as the WRONG one to run. A
+    guard that searches the whole file cannot tell the instruction from
+    the warning about it, and fires on the paragraph explaining itself.
+    """
+    return re.findall(r"^```(?:bash|sh)?\n(.*?)^```", md, re.M | re.S)
+
+
 SERVER = _read("server.py")
 APP = _read("web", "js", "app.js")
 PLAN = _read("docs", "LAUNCH.md")
@@ -596,10 +606,31 @@ def test_every_log_directory_the_caddyfile_writes_to_is_created_first():
     for path in paths:
         d = path.rsplit("/", 1)[0]
         assert f"mkdir -p {d}" in readme, f"{d} is never created"
-        assert f"chown caddy:caddy {d}" in readme, \
-            f"{d} is created but the caddy user cannot write to it"
+        # -R, because anything that ran as root already left a root-owned
+        # LOG FILE in there, and appending to that fails with the same
+        # error after a chown that looked like it had worked.
+        assert f"chown -R caddy:caddy {d}" in readme, \
+            f"{d} is chowned shallowly — a root-owned log file survives it"
         # And before the reload that needs it, not after.
         assert readme.index(f"mkdir -p {d}") < readme.index("systemctl reload caddy")
+
+
+def test_validate_is_not_run_as_root():
+    """`caddy validate` provisions the config, it does not merely parse
+    it — and provisioning a log block OPENS the log file. Run under sudo
+    that creates it owned by root, which is precisely the permission
+    failure the mkdir/chown step exists to prevent: the check causes the
+    fault it is too blind to report. As the caddy user it both tests the
+    right identity and leaves the right owner behind."""
+    readme = _read("deploy", "README.md")
+    assert "sudo -u caddy caddy validate" in readme
+    # COMMANDS ONLY. Searching the whole file found the string inside the
+    # paragraph explaining this very fix — the third time a guard in this
+    # repo has matched its own prose. The prose has to be free to name
+    # the wrong command; only the fenced blocks are instructions.
+    for block in _shell_blocks(readme):
+        assert not re.search(r"^\s*sudo caddy validate", block, re.M), \
+            "validate under sudo creates a root-owned log file"
 
 
 def test_the_forwarded_header_overrides_survive_caddys_own_warning():

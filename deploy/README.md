@@ -173,14 +173,25 @@ sudo apt update && sudo apt install -y caddy
 #    either. Skip this and the reload fails with "open
 #    /var/log/caddy/qellys.log: permission denied" — which sounds like a
 #    Caddy problem and is a mkdir.
+#
+#    -R, NOT THE BARE DIRECTORY. If anything has already run as root the
+#    log FILE exists and belongs to root, and opening an existing
+#    root-owned file for append fails exactly the same way — same error,
+#    after a chown that looked like it worked.
 sudo mkdir -p /var/log/caddy
-sudo chown caddy:caddy /var/log/caddy
+sudo chown -R caddy:caddy /var/log/caddy
 sudo chmod 750 /var/log/caddy
 
 #    Installing it starts it on a default "Caddy works!" page. Replacing
 #    that file is the whole configuration step.
 sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
-sudo caddy validate --config /etc/caddy/Caddyfile   # syntax, before it is live
+
+#    AS THE CADDY USER, not root. `validate` does not merely parse: it
+#    provisions the config, which OPENS the log file — so running it
+#    under sudo creates that file owned by root and causes the very
+#    permission error the step above exists to prevent. Run as the user
+#    that will actually run it and the check tests the right identity.
+sudo -u caddy caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 journalctl -u caddy -n 30 --no-pager                # watch the certificate arrive
 
@@ -193,11 +204,17 @@ sudo -u qellys ./deploy/backup.sh --check
 
 **`caddy validate` says "Valid configuration" and the reload can still
 fail.** Validate checks that the file parses and adapts — it does not
-check that the running service can reach what the file points at, and it
-runs as **root** while the service runs as **caddy**. The log directory
-above is exactly that gap: root opens the file happily, the service
-cannot, and only one of them is the truth. Validate is still worth
-running; it just catches syntax, not permissions.
+check that the running service can reach what the file points at.
+
+Worse, under `sudo` it **creates the problem it cannot see**. Validate
+provisions the config rather than merely reading it, and provisioning a
+log block opens the log file — so `sudo caddy validate` leaves
+`/var/log/caddy/qellys.log` owned by root, and the service, running as
+`caddy`, then cannot append to it. That is why the step above says
+`chown -R`: chowning only the directory leaves the root-owned file
+inside it and the reload fails with the identical error, after a fix
+that appeared to work. Run validate as the caddy user and neither
+happens.
 
 A failed reload is not an outage. Caddy loads the new config and only
 swaps if it comes up cleanly, so the previous config keeps serving —
