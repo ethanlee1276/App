@@ -19,11 +19,14 @@ game logs are the next adapter phase.
 from __future__ import annotations
 
 import json
+import os
+import threading
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from ...sources.fetch import CACHE_DIR, USER_AGENT, DataUnavailable
+from ...sources.fetch import CACHE_DIR, USER_AGENT, DataUnavailable, _status_of
 from ..models import MLBGame, MLBWeather, Pitcher
 
 STATS_BASE = "https://statsapi.mlb.com/api/v1"
@@ -185,6 +188,154 @@ def _read_cached_json(path):
         return None
 
 
+def _write_cache(path: Path, body: str) -> None:
+    """Write beside, then replace — so a reader never sees half a file.
+
+    The house pattern (`server.py:_save_profile`, `memecoins.py`), with one
+    difference that matters here. Those two hold a lock and can share one
+    fixed `.tmp`; this one cannot. `statslogs.build_live_slate` now puts
+    several requests in flight at once, and `launch.py` runs `mlb_build.py`
+    and `live_build.py` as subprocesses beside an in-process ingest thread,
+    all writing this one directory. So there are N writers racing the SAME
+    `cache_name`, and a fixed temp name would only move the race down a
+    level and tear the temp file instead. The name carries the writer's
+    identity — process and thread — and `os.replace` within a directory is
+    atomic, so every reader gets the whole old file or the whole new one.
+
+    WHAT A TORN FILE ACTUALLY COSTS, since it is worth being accurate about:
+    `_read_cached_json` already turns an unparseable cache into a MISS, so
+    the damage is a re-fetch rather than a wrong number. That still makes it
+    worth fixing — a re-fetch is request amplification aimed straight at the
+    rate limit the pool size below exists to respect.
+    """
+    tmp = path.with_name(f"{path.name}.{os.getpid()}."
+                         f"{threading.get_ident():x}.tmp")
+    try:
+        tmp.write_text(body)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)          # no-op after a good replace
+
+
+#: How many requests this process keeps in flight during the warm passes.
+#:
+#: THE CAP IS THE RATE LIMIT. statsapi.mlb.com is free and keyless and
+#: publishes no quota, which is not the same as not having one — three
+#: hundred simultaneous requests off one droplet is how a season ends with
+#: the server's IP blocked. Eight is picked to fit the budget with room to
+#: spare rather than to go as fast as the wire allows: a cold build asks for
+#: ~750 responses at a measured ~0.6s each, which is ~57s at eight in
+#: flight, against the 180s ceiling `launch.py:_run_build` kills a build at.
+#:
+#: `QB_MLB_WORKERS` moves it, clamped to 1..16. Setting it to 1 restores the
+#: strictly sequential behaviour this replaced, which is the first thing to
+#: try if MLB ever does start refusing us.
+FETCH_WORKERS = 8
+
+#: Statuses that mean "stop asking US", as opposed to "not that resource".
+#: `solrpc.py` learned this one the expensive way: a burst that gets 429ed
+#: writes no cache, so the next tick fires the identical burst, forever.
+#:
+#: 403 is in the set and 404 is not, and the difference is the whole point.
+#: A 404 is about ONE player — standing the wave down on it would drop
+#: everyone else on the slate. A 403 is about the CLIENT: this repo's own
+#: documented 403 (`sources/fetch.py`, the ESPN User-Agent) was a rule about
+#: who was asking, not about what was asked for, and so is a sandbox proxy
+#: refusing statsapi outright. Neither gets better on the next request.
+BACKOFF_STATUS = {403, 429, 503}
+
+
+def _workers() -> int:
+    try:
+        n = int(os.environ.get("QB_MLB_WORKERS") or FETCH_WORKERS)
+    except ValueError:
+        n = FETCH_WORKERS
+    return max(1, min(16, n))
+
+
+def fetch_many(fetch, args, workers: int | None = None) -> list:
+    """``[fetch(*a) for a in args]`` — same list, a few at a time.
+
+    Used to WARM the cache ahead of code that then runs unchanged. Every
+    entry in ``args`` is an argument tuple and must be hashable; repeats are
+    collapsed, which is not just a saving but a correctness point: the whole
+    reason a cold build makes 300 game-log requests instead of 870 is that
+    `_get_json` dedupes on the cache file, and three threads missing the
+    same file at the same instant would undo that.
+
+    A call that fails yields ``None`` in its slot and nothing else. That is
+    deliberate and it is what makes this safe to add: the sequential code
+    behind a warm pass still makes the same call, still handles
+    `DataUnavailable` its own way, and a warm pass that fails outright
+    leaves the build exactly as correct — and as slow — as it was before.
+
+    The one failure it does not shrug off is the host refusing us. On the
+    first such status the remaining requests in the wave are dropped: they
+    cannot succeed, and every one of them digs the hole deeper.
+
+    TWO LIMITS WORTH KNOWING, neither of which can make a board wrong:
+
+    * The dedup is on the ARGUMENT TUPLE, not on the cache file. Every
+      caller here is one-request-per-argument except `projected_lineup`,
+      whose second request is keyed on a gamePk the FIRST one returned — so
+      two teams whose last game was against each other miss that one
+      boxscore together. Measured on a slate with no cards posted: 14
+      duplicated requests out of 649, and none sequentially. That is the
+      price of pooling a two-deep chain whole, it buys about 30 requests'
+      worth of parallelism on the same path, and atomic writes make the
+      collision safe rather than corrupting. Keyed on the file instead, it
+      would need a lock in `_get_json` — on every fetch in the module, to
+      save 2%.
+    * The cap is per WAVE and per PROCESS. `launch.py` can have
+      `mlb_build.py`, `live_build.py` and an in-process ingest all warming
+      at once, so the real ceiling against statsapi is a small multiple of
+      this. Eight is chosen low enough for that to still be polite.
+    """
+    order: dict = {}
+    unique: list = []
+    for a in args:
+        if a not in order:
+            order[a] = len(unique)
+            unique.append(a)
+    if not unique:
+        return []
+
+    out: list = [None] * len(unique)
+    stop = threading.Event()
+
+    def one(job) -> None:
+        i, a = job
+        if stop.is_set():
+            return
+        try:
+            out[i] = fetch(*a)
+        except DataUnavailable as exc:
+            if getattr(exc, "status", None) in BACKOFF_STATUS:
+                stop.set()                   # fuel off
+        except Exception:                    # noqa: BLE001 — warming only
+            pass
+
+    n = _workers() if workers is None else max(1, min(16, int(workers)))
+    jobs = list(enumerate(unique))
+    if n > 1 and len(jobs) > 1:
+        try:
+            with ThreadPoolExecutor(max_workers=min(n, len(jobs))) as pool:
+                list(pool.map(one, jobs))
+        except Exception:                # noqa: BLE001
+            # `one` swallows what the FETCH raises; this catches what the
+            # POOL raises — "can't start new thread" on a loaded box, most
+            # of all. A warm-up is not allowed to be the thing that fails a
+            # build, so falling back to the caller's own pace is the whole
+            # remedy: the sequential pass behind this one is unchanged and
+            # would have made these calls anyway.
+            for job in jobs:
+                one(job)
+    else:
+        for job in jobs:
+            one(job)
+    return [out[order[a]] for a in args]
+
+
 def _get_json(url: str, cache_name: str, ttl: int = 900, timeout: int = 30) -> dict:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path = CACHE_DIR / cache_name
@@ -197,7 +348,7 @@ def _get_json(url: str, cache_name: str, ttl: int = 900, timeout: int = 30) -> d
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8")
         data = json.loads(body)              # parse BEFORE caching
-        path.write_text(body)                # never cache an unparseable body
+        _write_cache(path, body)             # never cache an unparseable body
         return data
     except Exception as exc:
         stale = _read_cached_json(path) if path.exists() else None
@@ -207,7 +358,12 @@ def _get_json(url: str, cache_name: str, ttl: int = 900, timeout: int = 30) -> d
             f"Could not fetch {url}: {exc}. This host may be blocked by the "
             f"environment's egress policy — run where statsapi.mlb.com / "
             f"api.open-meteo.com are reachable, or place a cached response at "
-            f"{path}."
+            f"{path}.",
+            # Carry the HTTP status the way the nflverse loaders already do.
+            # `fetch_many` below reads it to tell "the host is asking us to
+            # slow down" apart from "that game has no boxscore" — opposite
+            # situations that were previously the same opaque exception.
+            status=_status_of(exc),
         ) from exc
 
 

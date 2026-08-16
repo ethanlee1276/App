@@ -685,6 +685,24 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
     config = config or RuleConfig()
     il_map = il_map or {}
 
+    # Every pitcher's recent starts, fetched together instead of five at a
+    # time from inside the loop below. `build_mlb_projection` reaches
+    # `velocity.delta_for` on the very first pitcher prop, and that plus
+    # `projected_tto` and `opener_flag` walk the same starts behind
+    # per-pitcher memos — so the memos already stop the REPEATS, and this
+    # stops the first pass through them being ~150 serial requests. Warming
+    # only: every one of those three still calls its own function and still
+    # returns None on its own terms.
+    try:
+        from .velocity import warm_starts
+        import datetime as _dt0
+        warm_starts([p.person_id for p in slate.props
+                     if p.market in PITCHER_MARKETS
+                     and getattr(p, "person_id", 0)],
+                    _dt0.date.today().year)
+    except Exception:                                       # noqa: BLE001
+        pass                      # a warm pass never decides whether we price
+
     il_on_slate: set = set()
     results = []
     # Two phases, because coherence is a property of a PLAYER, not a prop:

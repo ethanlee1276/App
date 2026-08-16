@@ -26,7 +26,7 @@ from ..models import (
 )
 from .mlbstats import (
     STATS_BASE, _get_json, TEAM_ID_ABBR, VENUE_PARK, PARK_COORDS, park_weather,
-    headshot_url,
+    headshot_url, fetch_many,
 )
 
 # Which stat group + per-game stat field feeds each market.
@@ -210,6 +210,17 @@ def projected_lineup(team_id: int, date: str) -> list[LineupEntry]:
 
 
 # --- orchestrator -----------------------------------------------------------
+def _park_of(sched_game: dict) -> str:
+    """Our park key for one schedule entry, or "generic".
+
+    Pulled out of pass 1 so the warm pass below can ask which parks tonight
+    needs weather for without re-deriving it differently and warming the
+    wrong ones.
+    """
+    venue = ((sched_game.get("venue") or {}).get("name") or "").lower()
+    return next((k for frag, k in VENUE_PARK.items() if frag in venue), "generic")
+
+
 def _round_half(x: float) -> float:
     return round(x * 2) / 2.0
 
@@ -233,12 +244,50 @@ def build_live_slate(date: str, season: int | None = None,
     ``limit`` caps each player's game log at the most recent N games — right
     for a live slate (recent form), wrong for ingestion: pass ``None`` to keep
     the full season so a backtest can replay every game.
+
+    THE WARM PASSES ARE WHY THIS RETURNS IN UNDER A MINUTE. Measured on the
+    production droplet 2026-08-16, this took 7m39s of wall clock against
+    effectively zero CPU — it was not computing, it was waiting, one request
+    at a time, roughly 600 of them. They are independent of one another, so
+    the two ``fetch_many`` waves below ask for them a few at a time and the
+    passes that follow read the answers off disk.
+
+    NOTHING BELOW THEM CHANGED, and that is the point. `_get_json` already
+    dedupes on the cache file, so a warmed request is a disk read when the
+    real pass asks for it again. A warm pass that fails leaves this function
+    exactly as correct as it was — and exactly as slow. No projection, no
+    price and no prop ordering depends on one.
     """
     season = season or int(date[:4])
     sched = _get_json(
         f"{STATS_BASE}/schedule?sportId=1&date={date}"
         f"&hydrate=probablePitcher,venue",
         f"mlb_schedule_{date}.json", ttl=600)
+
+    # Warm pass A: what the schedule alone already knows how to ask for —
+    # one boxscore per game and one forecast per park. Pass 1 below reads
+    # both back off disk.
+    #
+    # THE PROBABLE STARTERS ARE NOT HERE even though their ids are in this
+    # payload, and the reason is a doubleheader: props are built for exactly
+    # one leg of a pair, so warming both legs' starters costs two game-log
+    # requests for a game that is never priced. Which leg wins is not known
+    # until the bookkeeping below has run, so the pitchers wait for pass B.
+    #
+    # `or {}` throughout rather than `.get(k, {})`: this runs before anything
+    # else reads the payload, and a warm-up is the last thing that should be
+    # first to trip over a null field.
+    pks: list = []
+    parks: list = []
+    for day in (sched.get("dates") or []):
+        for g in (day.get("games") or []):
+            if g.get("gamePk"):
+                pks.append(g["gamePk"])
+            park = _park_of(g)
+            if park in PARK_COORDS:
+                parks.append(park)
+    fetch_many(fetch_boxscore, [(pk,) for pk in pks])
+    fetch_many(park_weather, [(p,) for p in parks])
 
     games: list[MLBGame] = []
     props: list[MLBProp] = []
@@ -255,8 +304,7 @@ def build_live_slate(date: str, season: int | None = None,
             away = teams.get("away", {}).get("team", {})
             home_ab = TEAM_ID_ABBR.get(home.get("id"), home.get("abbreviation", ""))
             away_ab = TEAM_ID_ABBR.get(away.get("id"), away.get("abbreviation", ""))
-            venue = (g.get("venue", {}).get("name") or "").lower()
-            park = next((k for frag, k in VENUE_PARK.items() if frag in venue), "generic")
+            park = _park_of(g)
 
             pitchers = {}
             for side, ab in (("home", home_ab), ("away", away_ab)):
@@ -266,7 +314,18 @@ def build_live_slate(date: str, season: int | None = None,
                         name=pp.get("fullName", "TBD"),
                         throws=pp.get("pitchHand", {}).get("code", "R"))
 
-            weather = park_weather(park) if park in PARK_COORDS else None
+            # GUARDED, like the boxscore three lines down and like the same
+            # call in `mlbstats.build_games` — this one alone was bare, so a
+            # single Open-Meteo hiccup raised out of the whole build and
+            # `mlb_build.py` exited 2 with no board at all. Fifteen forecasts
+            # now leave together, which makes one of them failing likelier
+            # rather than rarer.
+            weather = None
+            if park in PARK_COORDS:
+                try:
+                    weather = park_weather(park)
+                except DataUnavailable:
+                    weather = None
             box = {}
             try:
                 box = fetch_boxscore(game_pk) if game_pk else {}
@@ -326,6 +385,57 @@ def build_live_slate(date: str, season: int | None = None,
     for pair, legs in by_pair.items():
         pg = next((x for x in legs if not finals.get(id(x))), legs[0])
         prop_games.add(id(pg))
+
+    # Warm pass B: the hitters, and the big one — roughly 270 of them on a
+    # full slate, one `people` call and one game log each, which is most of
+    # what a cold build asks for. Their ids are not in the schedule: they
+    # come out of a boxscore, or out of `projected_lineup` when a card has
+    # not posted yet, so this is the first moment the list can exist.
+    cards: list = []                     # every batting order we will price
+    project: list = []                   # the sides that need a guess instead
+    arms: list = []                      # the starters we will actually price
+    for g, game, box, teams, home, away in raw:
+        if id(game) not in prop_games:
+            continue
+        for side in ("home", "away"):
+            entries = parse_lineup(box, side)
+            tid = (home if side == "home" else away).get("id")
+            if entries:
+                cards.append(entries)
+            elif tid:
+                project.append((tid, date))
+            pp = (teams.get(side) or {}).get("probablePitcher")
+            if include_pitchers and pp and pp.get("id"):
+                arms.append((pp["id"], "pitching", season))
+    # `projected_lineup` is the one chain in this build that cannot be
+    # flattened — its boxscore request needs the gamePk that its schedule
+    # request returns. So it goes into the pool whole: concurrent across
+    # teams, sequential within one, which is the shape the dependency has.
+    #
+    # ITS ANSWER IS THROWN AWAY, deliberately. Pass 2 below calls
+    # `projected_lineup` itself, exactly as it always did, and by then both
+    # of its requests are on disk — two cache reads. Keeping the real call
+    # where it was is what keeps this a warm pass: if this whole block
+    # vanished, pass 2 would still project the same lineups off the same
+    # feed. Consuming the pooled answer here instead would have made the
+    # block load-bearing, and `fetch_many` turns a fault into None — which
+    # would have quietly deleted a team's hitters rather than slowing them.
+    cards.extend(e for e in fetch_many(projected_lineup, project) if e)
+
+    # `if m in MARKET_GROUP` because an unregistered market must fail where
+    # it always failed — in `_add_prop`, with the prop it belongs to — and
+    # not here, taking the whole board down before a line is priced.
+    groups = sorted({MARKET_GROUP[m] for m in hitter_markets
+                     if m in MARKET_GROUP})
+    people: list = []
+    hit_logs: list = []
+    for entries in cards:
+        for entry in entries:
+            people.append((entry.person_id,))
+            for group in groups:
+                hit_logs.append((entry.person_id, group, season))
+    fetch_many(fetch_person, people)
+    fetch_many(fetch_game_log, hit_logs + arms)
 
     # Pass 2: props — only from each pair's prop game.
     for g, game, box, teams, home, away in raw:

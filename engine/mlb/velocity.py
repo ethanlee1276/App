@@ -253,6 +253,43 @@ def velocity_history(person_id: int, season: int, limit: int = 5,
     return out
 
 
+#: The same 5 as `velocity_history`'s default and `TTO_STARTS` below — a
+#: literal rather than either name because this sits above one of them and
+#: warming the shorter window would leave the longer one fetching serially.
+WARM_STARTS = 5
+
+
+def warm_starts(person_ids, season: int, limit: int = WARM_STARTS) -> None:
+    """Pull every recent start's playByPlay for these pitchers at once.
+
+    THE MEMOS BELOW MAKE THE SECOND ASK FREE; THIS MAKES THE FIRST ONE
+    CONCURRENT. `delta_for`, `projected_tto` and `openers.opener_flag` each
+    walk a starter's last five starts, and each start is one playByPlay
+    fetch of about 640 KB (`sources/pbp.py`). Pulled lazily inside the
+    pricing loop that is ~150 sequential requests on a fifteen-game board —
+    a fifth of everything a cold build asks for, and by far the largest
+    payloads of the lot, which is why they are worth a wave of their own.
+
+    Warming only, like the passes in `sources/statslogs.py`: nothing here
+    returns anything, every consumer still calls its own function, and a
+    start that will not load is skipped here exactly as it is skipped
+    there.
+    """
+    from .sources.mlbstats import fetch_many
+    from .sources.pbp import fetch_playbyplay
+    ids = sorted({int(p) for p in person_ids if p})
+    if not ids:
+        return
+    # Which of his games were STARTS is itself a game-log read. That file is
+    # already on disk from the slate build, but this goes through the pool
+    # anyway so the paths that arrive here without one are not left serial.
+    found = fetch_many(lambda pid: recent_start_pks(pid, season, limit),
+                       [(i,) for i in ids])
+    fetch_many(fetch_playbyplay,
+               [(s["game_pk"],) for starts in found if starts
+                for s in starts if s.get("game_pk")])
+
+
 #: One slate asks about the same starter once per market — strikeouts and
 #: outs at least, sometimes more. Each miss is five cached playByPlay
 #: fetches, so without a memo a fifteen-game board multiplies that by
