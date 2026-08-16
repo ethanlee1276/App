@@ -9915,8 +9915,8 @@ window.acctAuth = async function (btn, mode) {
    sells a subscription; the day something becomes paid is a decision, not
    a deployment.
 
-   AND THE CARD NEVER TOUCHES A CARD. Subscribe hands off to a Stripe
-   page; Manage billing hands off to Stripe's portal, which is also where
+   AND THE CARD NEVER TOUCHES A CARD. Subscribe hands off to a Paddle
+   page; Manage billing hands off to Paddle's portal, which is also where
    cancelling happens. A company that builds its own cancel flow is
    deciding how hard it is to leave, and this one is not going to be
    that. */
@@ -9942,14 +9942,14 @@ async function renderBilling() {
       ${s.entitled || s.customer_id
         ? `<button class="btn ghost" onclick="billPortal(this)">Manage billing</button>`
         : `<button class="btn" onclick="billSubscribe(this)">Subscribe</button>`}
-      ${s.live === false ? `<span class="chip warn">Stripe test mode —
+      ${s.live === false ? `<span class="chip warn">Paddle sandbox —
         no real money moves</span>` : ""}
     </div>`;
 }
 
 async function _billGo(btn, path) {
   const was = btn.textContent;
-  btn.textContent = "Opening Stripe…";
+  btn.textContent = "Opening Paddle…";
   btn.disabled = true;
   try {
     const r = await fetch(`/api/billing/${path}`, {
@@ -9958,7 +9958,7 @@ async function _billGo(btn, path) {
     });
     const d = await r.json();
     if (!r.ok || !d.url) throw new Error((d && d.error) || `Failed (${r.status}).`);
-    // Stripe's own page, in this tab: it is a payment flow and a popup
+    // Paddle's own page, in this tab: it is a payment flow and a popup
     // blocker eating it would look like a broken button.
     location.href = d.url;
   } catch (e) {

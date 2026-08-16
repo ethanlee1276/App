@@ -60,6 +60,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+#: Shared with the Stripe module so a caller can catch ONE exception type
+#: without knowing which processor is behind the endpoint. Imported at
+#: module level rather than inside the functions that raise it: a name
+#: resolved lazily is a NameError that waits until the first failed
+#: payment to appear, which is the worst possible moment to discover it.
+from engine.billing import BillingUnavailable        # noqa: E402
+
 #: Live and sandbox. Sandbox is a separate account with separate keys, and
 #: the whole point of it is that a mistake there costs nothing.
 API = "https://api.paddle.com"
@@ -278,3 +285,135 @@ def describe(status: str, period_end: float | None = None) -> str:
         return ("Paused — billing is suspended and access is off until you "
                 "resume it. Nothing has been cancelled.")
     return _describe(status, period_end)
+
+
+# --- request shapes (pure, so they can be tested without the network) --------
+#
+# ⚠️  THE TWO REQUEST SHAPES BELOW ARE WRITTEN FROM MEMORY, like
+# verify_signature above, and for the same reason: api.paddle.com is
+# blocked from this container. They are less dangerous than the signature
+# — a wrong shape fails loudly with an HTTP 400 the first time anyone
+# presses Subscribe, rather than silently accepting forgeries — but they
+# are still unverified, and docs/BILLING.md lists them as such.
+#
+# THE HOSTED-CHECKOUT FLOW, NOT PADDLE.JS. Paddle's documented default is
+# an overlay opened by their script from cdn.paddle.com. This takes the
+# other route — create a transaction server-side, send the customer to
+# the URL it returns — because it keeps the architecture already here
+# (the endpoint answers `{"url": …}` and the browser follows it), and
+# because the overlay would mean loading third-party script into the page
+# and widening `script-src` to admit it. Card numbers stay off this
+# server either way; this way the CSP does not have to move.
+
+def checkout_request(api_key: str, price_id: str, user_id: int,
+                     return_url: str) -> tuple[str, dict, bytes]:
+    """``(url, headers, body)`` for a transaction with a checkout URL.
+
+    `custom_data.user_id` IS THE LINK BACK TO AN ACCOUNT — Paddle's
+    equivalent of Stripe's `client_reference_id`, and `_user_id()` above
+    is the other half of it. Without it a completed payment arrives
+    carrying a Paddle customer id we have never seen and no way to say
+    whose it is, which is the one failure that cannot be repaired from
+    our side afterwards.
+
+    No email is sent. Paddle collects it on their own page, which means
+    one less field of somebody's data passing through this server for no
+    reason — and the account link does not depend on it.
+    """
+    body = json.dumps({
+        "items": [{"price_id": price_id, "quantity": 1}],
+        "custom_data": {"user_id": str(int(user_id))},
+        "checkout": {"url": return_url},
+    }).encode()
+    return f"{api_base()}/transactions", {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }, body
+
+
+def portal_request(api_key: str, customer_id: str) -> tuple[str, dict, bytes]:
+    """Paddle's own page for changing a card or cancelling.
+
+    Cancelling is THEIRS to do, on Paddle's page. A company that builds
+    its own cancel flow is deciding how hard it is to leave, and this one
+    is not going to be that.
+    """
+    return (f"{api_base()}/customers/{customer_id}/portal-sessions", {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }, b"{}")
+
+
+def checkout_url(payload: dict) -> str:
+    """Dig the customer-facing URL out of a transaction response.
+
+    Separate from the request so the parsing is testable without the
+    network, and defensive because the failure it guards against is
+    silent: a response we cannot read must raise, never return "" and
+    send somebody to a blank page believing they have paid.
+    """
+    url = (((payload or {}).get("data") or {}).get("checkout") or {}).get("url")
+    if not url:
+        raise BillingUnavailable(
+            "Paddle created the transaction but returned no checkout URL.")
+    return str(url)
+
+
+def portal_url(payload: dict) -> str:
+    """The overview page from a portal-session response."""
+    urls = (((payload or {}).get("data") or {}).get("urls") or {})
+    url = (urls.get("general") or {}).get("overview")
+    if not url:
+        raise BillingUnavailable(
+            "Paddle returned no portal URL for that customer.")
+    return str(url)
+
+
+def _post(url: str, headers: dict, body: bytes, timeout: int = 20) -> dict:
+    """NOTHING FROM `headers` EVER REACHES AN EXCEPTION. The API key lives
+    there, and a key in a traceback is a key in a log file."""
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(url, data=body, headers=dict(headers),
+                                 method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            said = json.loads(exc.read().decode("utf-8", "replace"))
+            detail = str((said.get("error") or {}).get("detail") or "")
+        except Exception:                                # noqa: BLE001
+            detail = ""
+        raise BillingUnavailable(
+            f"Paddle refused the request (HTTP {exc.code})."
+            f"{' ' + detail if detail else ''}") from exc
+    except Exception as exc:                             # noqa: BLE001
+        raise BillingUnavailable(f"Could not reach Paddle: {exc}") from exc
+
+
+def start_checkout(user_id: int, email: str, return_url: str) -> str:
+    """The Paddle-hosted URL to send the customer to.
+
+    `email` is accepted and deliberately unused, so this keeps the same
+    signature shape as billing.start_checkout and the caller does not
+    have to know which processor is behind it.
+    """
+    api_key, _secret, price = keys()
+    if not (api_key and price):
+        raise BillingUnavailable("Paddle is not configured on this server.")
+    url, headers, body = checkout_request(api_key, price, user_id, return_url)
+    return checkout_url(_post(url, headers, body))
+
+
+def open_portal(customer_id: str, return_url: str) -> str:
+    """Where somebody changes a card or cancels. `return_url` is accepted
+    for signature parity; Paddle's portal has its own way back."""
+    api_key, _secret, _price = keys()
+    if not api_key:
+        raise BillingUnavailable("Paddle is not configured on this server.")
+    if not customer_id:
+        raise BillingUnavailable("No Paddle customer for that account yet.")
+    url, headers, body = portal_request(api_key, customer_id)
+    return portal_url(_post(url, headers, body))

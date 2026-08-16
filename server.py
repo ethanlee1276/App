@@ -106,7 +106,7 @@ SESSION_COOKIE = "qb_session"
 #:
 #: `connect-src 'self'` is a REAL restriction here rather than decoration:
 #: the page makes no browser-side request to any external host — Sleeper,
-#: ESPN, Yahoo and Stripe are all reached by the SERVER — so an injected
+#: ESPN, Yahoo and Paddle are all reached by the SERVER — so an injected
 #: script has nowhere to send what it steals.
 #:
 #: `script-src` still needs `'unsafe-inline'`, and that is honest rather
@@ -513,7 +513,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        # The Stripe webhook is EXEMPT: it is already authenticated by
+        # The Paddle webhook is EXEMPT: it is already authenticated by
         # signature, and a retry burst during an incident is exactly when
         # we least want to start dropping payment events on the floor.
         if not parsed.path.startswith("/api/billing/webhook"):
@@ -527,7 +527,7 @@ class Handler(BaseHTTPRequestHandler):
                 parsed.path[len("/api/yahoo/"):].strip("/"))
         if parsed.path.startswith("/api/billing/"):
             # RAW BYTES, and parsed nowhere before the signature is checked.
-            # Stripe signs the body it sent; JSON that has been parsed and
+            # Paddle signs the body it sent; JSON that has been parsed and
             # re-serialized is different bytes — key order, spacing, unicode
             # escapes — so a re-serialized body fails to verify even when it
             # is perfectly honest.
@@ -1069,7 +1069,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(403, b'{"error":"Wrong password."}',
                                       ".json")
                 # A live subscription is the one thing deletion cannot
-                # clean up: Stripe is the system of record for the money,
+                # clean up: Paddle is the system of record for the money,
                 # and dropping our row leaves a card being charged every
                 # month with nothing on this side to match it to. So the
                 # account has to be unsubscribed first — and the way out
@@ -1089,13 +1089,13 @@ class Handler(BaseHTTPRequestHandler):
 
         Deletion is the one account action that can cost somebody money
         after they have stopped using the site. `delete_user` clears our
-        `subscriptions` row, but Stripe never hears about it: the card
+        `subscriptions` row, but Paddle never hears about it: the card
         keeps being charged on schedule, and the row that said whose card
         it was is gone. The person then has a charge they cannot place and
         we have a payment we cannot refund to an account.
 
         So a paying account is asked to cancel first, which is one button
-        away on the same card and happens on Stripe's own portal. Nobody
+        away on the same card and happens on Paddle's own portal. Nobody
         is trapped: cancelling flips the status through the webhook, and
         `past_due` and `trialing` are refused too because both still have
         a live subscription behind them.
@@ -1124,9 +1124,10 @@ class Handler(BaseHTTPRequestHandler):
                 "charged and we lose the record of whose card it is. "
                 "Once it is cancelled, delete works normally.")
 
-    # --- billing: Stripe holds the card, we hold a status ------------------
+    # --- billing: Paddle holds the card, we hold a status ------------------
     def _billing_get(self, path: str):
         from engine import billing as BI
+        from engine import paddle as PAY
         A = _acct()
         if path != "status":
             return self._send(404, b'{"error":"unknown billing endpoint"}',
@@ -1135,20 +1136,23 @@ class Handler(BaseHTTPRequestHandler):
         try:
             BI.init(conn)
             who = self._account(conn)
-            out = {"configured": BI.configured(), "signed_in": bool(who)}
-            if BI.configured():
-                try:
-                    out["live"] = BI.live_mode(BI.keys()[0])
-                except BI.BillingUnavailable:
-                    out["live"] = False
+            out = {"configured": PAY.configured(), "signed_in": bool(who)}
+            if PAY.configured():
+                # Paddle's sandbox is a SEPARATE account with separate
+                # keys, so "are we live" is a question about which base
+                # URL the requests go to — not, as with Stripe, a prefix
+                # on the key.
+                out["live"] = not PAY.sandbox()
             if who:
-                out.update(BI.status_for(conn, who["id"]))
+                out.update(BI.status_for(conn, who["id"],
+                                         describe_with=PAY.describe))
             return self._send(200, json.dumps(out).encode(), ".json")
         finally:
             conn.close()
 
     def _billing_post(self, path: str, raw: bytes):
         from engine import billing as BI
+        from engine import paddle as PAY
         A = _acct()
         if path == "webhook":
             return self._billing_webhook(raw)
@@ -1164,17 +1168,19 @@ class Handler(BaseHTTPRequestHandler):
             base = self._site_base()
             try:
                 if path == "checkout":
-                    url = BI.start_checkout(
-                        who["id"], who["email"],
-                        f"{base}/?paid=1#mybets", f"{base}/#mybets")
+                    url = PAY.start_checkout(
+                        who["id"], who["email"], f"{base}/?paid=1#mybets")
                 else:
                     cust = BI.status_for(conn, who["id"]).get("customer_id")
                     if not cust:
                         return self._send(400, json.dumps(
                             {"error": "No subscription to manage yet."}
                         ).encode(), ".json")
-                    url = BI.open_portal(cust, f"{base}/#mybets")
+                    url = PAY.open_portal(cust, f"{base}/#mybets")
             except BI.BillingUnavailable as exc:
+                # paddle re-exports this class deliberately, so one except
+                # covers both halves and the caller never has to know
+                # which processor is behind the endpoint.
                 return self._send(502, json.dumps({"error": str(exc)}).encode(),
                                   ".json")
             return self._send(200, json.dumps({"url": url}).encode(), ".json")
@@ -1182,7 +1188,7 @@ class Handler(BaseHTTPRequestHandler):
             conn.close()
 
     def _site_base(self) -> str:
-        """The address this browser reached us on, for Stripe's return trip.
+        """The address this browser reached us on, for Paddle's return trip.
 
         Read from the request rather than configured, because this site
         answers on localhost, a LAN address and a tailscale name, and a
@@ -1195,29 +1201,34 @@ class Handler(BaseHTTPRequestHandler):
         return f"{scheme}://{host}"
 
     def _billing_webhook(self, raw: bytes):
-        """Stripe telling us somebody paid. THE ONLY THING THAT GRANTS
+        """Paddle telling us somebody paid. THE ONLY THING THAT GRANTS
         ACCESS, and a public URL, so it lives or dies on the signature.
 
-        Refuses outright when no webhook secret is configured. An
+        Refuses outright when no notification secret is configured. An
         unsigned-but-accepted webhook endpoint is a free-subscription
         button for anybody who finds the path, and "we will add the
         secret later" is how it ships that way.
+
+        THE RAW BODY, NEVER A RE-SERIALISED ONE. The signature is over
+        bytes; parsing and re-encoding JSON changes key order and spacing
+        and makes an honest payload fail to verify.
         """
         from engine import billing as BI
+        from engine import paddle as PAY
         A = _acct()
         try:
-            _sk, whsec, _price = BI.keys()
+            _api_key, whsec, _price = PAY.keys()
         except BI.BillingUnavailable:
             return self._send(503, b'{"error":"billing not configured"}',
                               ".json")
         if not whsec:
             return self._send(503, json.dumps(
-                {"error": "No STRIPE_WEBHOOK_SECRET set, so this endpoint "
-                          "cannot tell a real Stripe event from a forged "
+                {"error": f"No {PAY.ENV_WEBHOOK_SECRET} set, so this endpoint "
+                          "cannot tell a real Paddle event from a forged "
                           "one. Refusing rather than trusting it."}).encode(),
                 ".json")
-        sig = self.headers.get("Stripe-Signature") or ""
-        if not BI.verify_signature(raw, sig, whsec):
+        sig = self.headers.get("Paddle-Signature") or ""
+        if not PAY.verify_signature(raw, sig, whsec):
             return self._send(400, b'{"error":"bad signature"}', ".json")
         try:
             payload = json.loads(raw or b"{}")
@@ -1228,12 +1239,20 @@ class Handler(BaseHTTPRequestHandler):
         try:
             BI.init(conn)
             # A retry is not a second grant.
-            if BI.already_handled(conn, payload.get("id")):
+            #
+            # `event_id`, NOT `id`. Paddle names it differently from
+            # Stripe, and the failure is silent in the worst direction:
+            # already_handled() treats an empty id as "not seen before"
+            # and returns False every time, so the replay guard would
+            # have been switched off while still looking present. A
+            # retried subscription.created is then a second grant.
+            if BI.already_handled(conn, payload.get("event_id")
+                                  or payload.get("id")):
                 return self._send(200, b'{"received":true,"duplicate":true}',
                                   ".json")
-            event = BI.read_event(payload)
+            event = PAY.read_event(payload)
             applied = BI.apply_event(conn, event) if event else False
-            # 200 EVEN WHEN WE DID NOTHING. Stripe retries anything that is
+            # 200 EVEN WHEN WE DID NOTHING. Paddle retries anything that is
             # not 2xx, so an event we do not act on must still be
             # acknowledged or it comes back forever.
             return self._send(200, json.dumps(

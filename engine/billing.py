@@ -451,15 +451,25 @@ def apply_event(conn, event: dict) -> bool:
     return True
 
 
-def status_for(conn, user_id: int) -> dict:
-    """What the page shows. Never a promise the database cannot back."""
+def status_for(conn, user_id: int, describe_with=None) -> dict:
+    """What the page shows. Never a promise the database cannot back.
+
+    `describe_with` is how the PROCESSOR gets to write its own sentence
+    for a status this module has no wording for. Paddle's `paused` is the
+    live example: the storage layer stores it correctly and `entitled()`
+    refuses it correctly, but the default sentence here has never heard
+    of it and would fall through to "No subscription." — telling somebody
+    who deliberately paused that they have nothing, which is both wrong
+    and the kind of wrong that generates a support email.
+    """
+    say = describe_with or describe
     row = conn.execute(
         "SELECT customer_id, subscription_id, status, period_end "
         "FROM subscriptions WHERE user_id=?", (int(user_id),)).fetchone()
     if row is None:
         return {"status": "none", "entitled": False,
-                "note": describe("none"), "customer_id": None}
+                "note": say("none"), "customer_id": None}
     st, end = row["status"], row["period_end"]
     return {"status": st, "period_end": end,
-            "entitled": entitled(st, end), "note": describe(st, end),
+            "entitled": entitled(st, end), "note": say(st, end),
             "customer_id": row["customer_id"]}

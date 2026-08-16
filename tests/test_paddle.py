@@ -302,6 +302,208 @@ def test_the_secrets_template_names_the_variables_the_code_reads():
 
 
 
+# --- checkout and portal: the two calls that must go out ---------------------
+#
+# Same rule as the signature above: what is proved here is the SHAPE of
+# the request and the parsing of the reply, not that Paddle agrees with
+# either. A wrong shape at least fails loudly the first time somebody
+# presses Subscribe; the tests that matter most are the ones about
+# failing loudly rather than quietly.
+
+def test_the_checkout_body_carries_the_account_id_paddle_will_hand_back():
+    """custom_data.user_id is the whole link between a payment and an
+    account. Lose it and a completed payment arrives with a customer id
+    we have never seen and no way to attribute it — the one failure that
+    cannot be repaired from our side."""
+    url, headers, body = paddle.checkout_request(
+        "sk_test", "pri_abc", 4242, "https://qellysbook.com/#mybets")
+    sent = json.loads(body.decode())
+    assert sent["custom_data"]["user_id"] == "4242"
+    assert sent["items"] == [{"price_id": "pri_abc", "quantity": 1}]
+    assert sent["checkout"]["url"] == "https://qellysbook.com/#mybets"
+    assert url.endswith("/transactions")
+    assert headers["Authorization"] == "Bearer sk_test"
+    # _user_id() is the other half of the link; the two must agree on the
+    # field name, and a test that only checked one would not notice.
+    assert paddle._user_id({"custom_data": sent["custom_data"]}) == 4242
+
+
+def test_the_checkout_body_contains_no_card_field_and_no_email():
+    """Card numbers never reach this server — that is the architecture,
+    not a nicety, and it is what keeps this repo out of PCI scope. The
+    email is Paddle's to collect too: one less piece of somebody's data
+    passing through here for no reason."""
+    _u, _h, body = paddle.checkout_request("k", "pri_1", 1, "https://x/")
+    sent = json.loads(body.decode())
+    flat = json.dumps(sent).lower()
+    for word in ("card", "number", "cvc", "cvv", "expiry", "email"):
+        assert word not in flat, f"the checkout request mentions {word}"
+
+
+def test_sandbox_sends_the_requests_somewhere_that_cannot_charge_anyone():
+    """A sandbox flag that changes the status text but not the URL is
+    worse than none: it reads as safe while moving real money."""
+    was = os.environ.get(paddle.ENV_SANDBOX)
+    try:
+        os.environ[paddle.ENV_SANDBOX] = "1"
+        assert paddle.sandbox() and paddle.api_base() == paddle.SANDBOX_API
+        assert paddle.checkout_request("k", "p", 1, "u")[0].startswith(
+            paddle.SANDBOX_API)
+        assert paddle.portal_request("k", "ctm_1")[0].startswith(
+            paddle.SANDBOX_API)
+        os.environ[paddle.ENV_SANDBOX] = ""
+        assert not paddle.sandbox()
+        assert paddle.checkout_request("k", "p", 1, "u")[0].startswith(
+            paddle.API + "/")
+    finally:
+        if was is None:
+            os.environ.pop(paddle.ENV_SANDBOX, None)
+        else:
+            os.environ[paddle.ENV_SANDBOX] = was
+
+
+def test_an_unreadable_reply_raises_instead_of_returning_an_empty_url():
+    """The silent version of this bug sends a paying customer to a blank
+    page believing they have subscribed."""
+    for bad in ({}, {"data": {}}, {"data": {"checkout": {}}},
+                {"data": {"checkout": {"url": ""}}}):
+        try:
+            paddle.checkout_url(bad)
+            raise AssertionError(f"returned a URL for {bad!r}")
+        except billing.BillingUnavailable:
+            pass
+    assert paddle.checkout_url(
+        {"data": {"checkout": {"url": "https://pay.paddle.io/x"}}}) \
+        == "https://pay.paddle.io/x"
+    for bad in ({}, {"data": {"urls": {}}},
+                {"data": {"urls": {"general": {}}}}):
+        try:
+            paddle.portal_url(bad)
+            raise AssertionError(f"returned a URL for {bad!r}")
+        except billing.BillingUnavailable:
+            pass
+
+
+def test_every_failure_path_raises_the_one_class_the_server_catches():
+    """server.py catches BillingUnavailable and answers 502. Any OTHER
+    exception is an unhandled 500 at the exact moment somebody is trying
+    to pay. Found by running it: the first draft of these functions
+    referenced the name without importing it, so every one of these paths
+    raised NameError instead."""
+    assert paddle.BillingUnavailable is billing.BillingUnavailable
+    was = {k: os.environ.get(k) for k in
+           (paddle.ENV_API_KEY, paddle.ENV_PRICE_ID)}
+    try:
+        os.environ[paddle.ENV_API_KEY] = ""
+        os.environ[paddle.ENV_PRICE_ID] = ""
+        for call in (lambda: paddle.start_checkout(1, "a@b", "https://x/"),
+                     lambda: paddle.open_portal("ctm_1", "https://x/")):
+            try:
+                call()
+                raise AssertionError("unconfigured call did not raise")
+            except billing.BillingUnavailable:
+                pass
+    finally:
+        for k, v in was.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def test_the_portal_is_paddles_page_and_we_do_not_build_a_cancel_flow():
+    """A company that builds its own cancel flow is deciding how hard it
+    is to leave. Cancelling happens on Paddle's page."""
+    url, _h, body = paddle.portal_request("k", "ctm_77")
+    assert "ctm_77" in url and url.endswith("/portal-sessions")
+    assert body == b"{}", "the portal request sends account data it need not"
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "engine", "paddle.py"), encoding="utf-8").read()
+    assert "def cancel" not in src, "a homegrown cancel flow appeared"
+
+
+
+# --- the server is actually wired to Paddle ---------------------------------
+#
+# The module can be perfect and unreachable. These read server.py, because
+# the failure mode of a half-finished processor swap is a site that looks
+# subscribed-capable and silently uses the dead one.
+
+def _server() -> str:
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return open(os.path.join(root, "server.py"), encoding="utf-8").read()
+
+
+def test_the_webhook_reads_paddles_header_not_stripes():
+    """A verifier pointed at a header that never arrives sees "" every
+    time, fails every signature, and rejects every real event — which at
+    least fails loudly. The same mistake in the other direction is what
+    the tolerance checks above are for."""
+    s = _server()
+    assert 'self.headers.get("Paddle-Signature")' in s
+    assert "Stripe-Signature" not in s, "still reading Stripe's header"
+
+
+def test_the_replay_guard_reads_the_field_paddle_actually_sends():
+    """Paddle names the event id `event_id`; Stripe names it `id`. Asking
+    for the wrong one yields None, already_handled() treats a falsy id as
+    "never seen", and the guard returns False for every event — switched
+    off while still looking present. A retried subscription.created is
+    then a second grant. Found by reading Paddle's payload shape against
+    code that had been copied from the Stripe path."""
+    s = _server()
+    i = s.index("def _billing_webhook")
+    body = s[i:i + 3000]
+    assert 'payload.get("event_id")' in body, \
+        "the replay guard reads Stripe's field name and never fires"
+    assert "already_handled" in body
+
+
+def test_the_server_calls_paddle_for_money_and_billing_only_for_storage():
+    """The split the two modules were built around. Storage (init,
+    apply_event, status_for, already_handled) is provider-neutral and
+    stays in billing; anything that talks to a processor or verifies its
+    signature must come from paddle, or the swap is cosmetic."""
+    s = _server()
+    for call in ("PAY.start_checkout(", "PAY.open_portal(",
+                 "PAY.verify_signature(", "PAY.read_event(",
+                 "PAY.configured()"):
+        assert call in s, f"server.py never calls {call}"
+    for dead in ("BI.start_checkout(", "BI.open_portal(",
+                 "BI.verify_signature(", "BI.read_event(",
+                 "BI.live_mode("):
+        assert dead not in s, f"server.py still uses the Stripe path {dead}"
+    # …and the storage half is still the shared one.
+    for kept in ("BI.init(", "BI.apply_event(", "BI.status_for(",
+                 "BI.already_handled("):
+        assert kept in s, f"storage call {kept} disappeared in the swap"
+
+
+def test_the_status_card_uses_paddles_wording_for_paddles_statuses():
+    """`paused` is Paddle-only. billing.describe has never heard of it and
+    falls through to "No subscription." — telling somebody who chose to
+    pause that they have nothing. status_for takes the processor's
+    describe for exactly this."""
+    s = _server()
+    assert "describe_with=PAY.describe" in s, \
+        "the account card would call a paused subscription 'none'"
+    assert "paused" in paddle.describe("paused").lower()
+    assert "No subscription" not in paddle.describe("paused")
+
+
+def test_no_stripe_environment_variable_is_still_being_read():
+    """A leftover STRIPE_* lookup is a config the deploy notes no longer
+    mention, so it reads as unset for ever and takes a code path nobody
+    tests."""
+    s = _server()
+    assert "STRIPE_" not in s, "server.py still reads a Stripe env var"
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tmpl = open(os.path.join(root, "secrets.local.example"),
+                encoding="utf-8").read()
+    assert "STRIPE_" not in tmpl, "the secrets template still offers Stripe"
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
