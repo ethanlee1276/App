@@ -328,6 +328,54 @@ def test_a_broken_billing_lookup_does_not_become_a_free_read():
 
 
 
+# --- the builds actually go through it --------------------------------------
+
+#: Every script that writes a board carrying picks. A gated module nothing
+#: calls is the most reassuring kind of dead code.
+GATED_BUILDS = ("nfl_build.py", "mlb_build.py", "nba_build.py",
+                "cfb_build.py", "ufc_build.py", "futures_build.py",
+                "generate.py", "generate_mlb.py", "pm_build.py")
+
+
+def test_every_build_that_writes_picks_publishes_through_the_gate():
+    """The wiring is the whole feature. redact() can be perfect while a
+    build writes the full board straight to web/data/ beside it, and the
+    symptom is nothing at all — the site looks right and the picks are
+    public."""
+    for name in GATED_BUILDS:
+        src = (ROOT / name).read_text(encoding="utf-8")
+        assert "gate.publish(" in src, f"{name} never calls gate.publish"
+
+
+def test_no_gated_build_still_writes_its_board_the_old_way():
+    """A leftover direct write is a second door. Checked as code rather
+    than as text so the comments explaining this may quote it."""
+    import re as _re
+    for name in GATED_BUILDS:
+        src = (ROOT / name).read_text(encoding="utf-8")
+        code = "\n".join(ln for ln in src.splitlines()
+                          if not ln.lstrip().startswith("#"))
+        # The two idioms this repo used before the gate existed.
+        for pattern in (r"out_path\.write_text\(json\.dumps\(result",
+                        r"\bp\.write_text\(json\.dumps\(out\b",
+                        r"json\.dump\(result, fh"):
+            assert not _re.search(pattern, code), \
+                f"{name} still writes its board directly ({pattern})"
+
+
+def test_the_polymarket_board_is_gated_under_both_of_its_names():
+    """pm_build's default --out is predmarkets.json; the file on disk is
+    kalshi.json. Same board, two names, and only one was listed. Its picks
+    live in `rows`, which no PAID_KEY matches — so the unlisted name would
+    have published whole. Key-stripping only protects boards whose keys
+    were anticipated; the named list is the net under that."""
+    for name in ("kalshi.json", "predmarkets.json"):
+        assert gate.is_wholly_paid(name), f"{name} is not gated"
+        red = gate.redact({"generated_at": "x", "rows": [1, 2, 3]}, name)
+        assert "rows" not in red, f"{name} still carries its picks"
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

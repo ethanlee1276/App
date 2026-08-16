@@ -116,8 +116,12 @@ def test_both_builds_stamp_before_they_write():
     for f in ("mlb_build.py", "nfl_build.py"):
         src = open(os.path.join(ROOT, f), encoding="utf-8").read()
         assert "_tier_stamp(result)" in src, f
+        # The write is gate.publish() since 2026-08-16 — it puts the full
+        # board outside the web root and the redacted one on the public
+        # path. The rule this test is about did not change: a tier
+        # computed after the board is written reaches nobody.
         assert src.index("_tier_stamp(result)") < src.index(
-            "json.dump(result, fh, indent=2)"), f
+            "gate.publish(result, args.out)"), f
 
 
 def test_the_four_the_live_board_caught_are_classified_from_their_source():

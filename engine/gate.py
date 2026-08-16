@@ -87,6 +87,13 @@ PAID_KEYS = (
 PAID_FILES = (
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
     "futures_nfl.json", "backtest.json", "kalshi.json",
+    # predmarkets.json is the SAME BOARD as kalshi.json under pm_build's
+    # default --out, and it was nearly missed. Its picks live in `rows`,
+    # which no entry in PAID_KEYS matches, so a board named this way would
+    # have been published whole — the silent direction of the failure.
+    # Named files are the safety net for exactly this: key-stripping only
+    # protects boards whose keys were anticipated.
+    "predmarkets.json",
 )
 
 #: …and the ones that must NEVER be touched, named rather than inferred.

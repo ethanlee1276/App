@@ -29,6 +29,7 @@ sys.path.insert(0, str(ROOT))
 
 from engine import db as hist_db                        # noqa: E402
 from engine import futuresdata as FD                    # noqa: E402
+from engine import gate
 
 SPORTS = ("nfl", "mlb", "cfb", "nba")
 
@@ -105,7 +106,7 @@ def main(argv: list[str]) -> None:
             print(f"  ✗ {sport.upper()}: {exc}")
             continue
         path = OUT / f"futures_{sport}.json"
-        path.write_text(json.dumps(data, indent=2))
+        gate.publish(data, path)
         n = len(data.get("teams") or [])
         priced = data.get("priced", 0)
         note = data.get("note") or ""

@@ -15,6 +15,7 @@ from pathlib import Path
 
 from engine.pipeline import run_slate
 from engine.rules import RuleConfig
+from engine import gate
 
 ROOT = Path(__file__).parent
 DEFAULT_SLATE = ROOT / "data" / "sample_slate.json"
@@ -35,7 +36,7 @@ def main() -> None:
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(result, indent=2))
+    gate.publish(result, out_path)
 
     c = result["counts"]
     print(f"Analyzed {c['props_analyzed']} props → {c['recommended']} recommended")

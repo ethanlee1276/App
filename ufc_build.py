@@ -19,6 +19,7 @@ from pathlib import Path
 
 from engine.secrets import load_local_secrets
 from engine.ufc.model import run_card
+from engine import gate
 
 DOSSIERS = Path("data/ufc_dossiers.json")
 
@@ -266,7 +267,7 @@ def main() -> None:
 
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(out, indent=2))
+    gate.publish(out, p)
 
     # Learning engine: journal the card's picks at their real prices and
     # settle any open ones whose fights have since happened (ESPN MMA

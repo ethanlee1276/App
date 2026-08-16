@@ -21,6 +21,7 @@ from engine.db import connect
 from engine.hoops import for_league
 from engine.sources.fetch import DataUnavailable
 from engine.nba.pipeline import run_nba_slate
+from engine import gate
 
 
 # The markets the slate prices. PRA rides along because it is the WNBA
@@ -730,7 +731,7 @@ def main() -> None:
 
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(out, indent=2))
+    gate.publish(out, p)
     if picks_result:
         c = picks_result["counts"]
         print(f"NBA {args.date}: {c['props_analyzed']} props → "

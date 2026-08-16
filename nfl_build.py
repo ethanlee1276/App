@@ -376,9 +376,8 @@ def main() -> None:
         # the finished strings and prices nothing.
         from engine.knowledge import stamp as _tier_stamp
         _tier_stamp(result)
-        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-        with open(args.out, "w") as fh:
-            json.dump(result, fh, indent=2)
+        from engine import gate
+        gate.publish(result, args.out)
         print(f"\nWrote {args.out}")
 
     # Learning engine: journal real-priced picks; settle any whose results

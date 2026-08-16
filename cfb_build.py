@@ -40,6 +40,7 @@ from engine.db import connect, upsert_games
 from engine.odds import expected_value
 from engine.sources import cfbdata
 from engine.sources.fetch import DataUnavailable
+from engine import gate
 
 # How far back each build re-reads results. A season fills the table one
 # rolling window at a time; --backfill does a whole span in one go.
@@ -582,7 +583,7 @@ def _write(out: dict, path: str) -> None:
     attach(out, "cfb")
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(out, indent=2))
+    gate.publish(out, p)
 
 
 if __name__ == "__main__":

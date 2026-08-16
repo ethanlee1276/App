@@ -20,6 +20,7 @@ from pathlib import Path
 from engine import predmarket as pm
 from engine.db import connect
 from engine.sources.fetch import DataUnavailable
+from engine import gate
 
 #: Where each sport's built slate lives — the games and moneyline
 #: probabilities the Kalshi board compares against. Read from disk rather
@@ -173,7 +174,7 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
     stored = conn.execute(
         "SELECT COUNT(*) FROM kalshi_snapshots").fetchone()[0]
     out["tape"] = {"stored_total": stored}
-    out_path.write_text(json.dumps(out, indent=2))
+    gate.publish(out, out_path)
     print(f"Kalshi: {out['n_markets']} sports market(s), "
           f"{out['n_matched']} matched to tonight, "
           f"{out['n_modeled']} with a model number, "
@@ -286,9 +287,7 @@ def main() -> None:
         "tape": {"stored_total": total_trades, "new_this_pull": new_trades,
                  "wallets_seen": len(history)},
     }
-    p = Path(args.out)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(out, indent=2))
+    gate.publish(out, Path(args.out))
     print(f"Polymarket: {len(markets)} markets, {new_trades} new trade(s) "
           f"recorded ({total_trades:,} on tape, {len(history):,} wallets), "
           f"{len(feed)} flow flag(s) ≥ ${pm.FEED_FLOOR_USD:,}; "
