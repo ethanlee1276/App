@@ -683,6 +683,38 @@ def test_the_checklist_points_at_the_fix_rather_than_only_the_fault():
     assert os.access(seed, os.X_OK), "seed.sh is not executable"
 
 
+def test_a_seed_that_dies_still_brings_the_app_back():
+    """`set -euo pipefail` plus a stop/start pair is a trap.
+
+    Anything failing in between — a dropped rsync, a Ctrl-C, a terminal
+    window closed while it was still going — exits with the service
+    STOPPED. And it does not look like an outage: Caddy keeps serving the
+    static files off disk, so the site stays up and simply stops being
+    true. That is the same silence as the stale board, the unfitted model
+    and the skipped sweep, arriving by a fourth route.
+
+    Happened for real on 2026-08-16: a terminal was closed mid-seed and
+    the droplet served a frozen board for twelve minutes.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sh = open(os.path.join(root, "deploy", "seed.sh"), encoding="utf-8").read()
+    assert "trap _restart_guard EXIT INT TERM HUP" in sh, \
+        "no trap — a failed seed leaves the app stopped"
+    # HUP is the one that matters for a closed terminal, and the one most
+    # likely to be dropped from that list as noise.
+    trap_line = [ln for ln in sh.splitlines() if ln.startswith("trap ")][0]
+    for sig in ("EXIT", "INT", "TERM", "HUP"):
+        assert sig in trap_line, f"the trap does not catch {sig}"
+    # The guard must be armed AFTER the stop and disarmed AFTER the start,
+    # or it either misses the window or fires on a healthy run.
+    stop = sh.index("systemctl stop qellys")
+    armed = sh.index("QB_APP_STOPPED=1")
+    disarmed = sh.index("QB_APP_STOPPED=0        #")
+    assert stop < armed < disarmed, "the guard's window is wrong"
+    # …and the disarm must come after the start, not before it.
+    assert sh.index("systemctl start qellys", stop) < disarmed
+
+
 def test_the_routine_seed_cannot_erase_the_live_journal():
     """The footgun in the first version of this script.
 
@@ -718,7 +750,12 @@ def test_seeding_a_box_stops_the_app_before_it_overwrites_the_database():
     """rsync onto a live SQLite file is a torn copy, and the file in
     question is the public record."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    sh = open(os.path.join(root, "deploy", "seed.sh"), encoding="utf-8").read()
+    # _code_only, for the fifth time this session: the comment explaining
+    # the restart guard says "a dropped rsync", and a bare index() found
+    # THAT — before the stop — and reported that the script copies over a
+    # running app. Prose has to stay free to name the thing it is about.
+    sh = _code_only(open(os.path.join(root, "deploy", "seed.sh"),
+                         encoding="utf-8").read())
     stop = sh.index("systemctl stop qellys")
     assert stop < sh.index("rsync"), "it copies over a running app"
     assert "systemctl start qellys" in sh, "it never starts the app again"

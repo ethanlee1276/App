@@ -82,8 +82,34 @@ read -r -p "    type SEED to continue: " reply
 [[ "$reply" == "SEED" ]] || { echo "aborted"; exit 1; }
 fi
 
+# THE APP MUST COME BACK UP EVEN IF THIS SCRIPT DIES.
+#
+# `set -euo pipefail` plus a stop/start pair is a trap: anything that fails
+# in between — a dropped rsync, a closed laptop lid, a Ctrl-C, a terminal
+# window shut while it was still going — exits the script with the service
+# STOPPED. And it does not look like an outage from outside, because Caddy
+# keeps serving the static files off disk. The site stays up and simply
+# stops being true, which is the failure mode this whole deployment has
+# been fighting all week.
+#
+# Happened for real, 2026-08-16: a terminal was closed mid-seed and the
+# droplet served a frozen board for twelve minutes before anyone noticed.
+_restart_guard() {
+  local code=$?
+  if [[ "${QB_APP_STOPPED:-0}" == "1" ]]; then
+    echo ""
+    echo "==> seed did not finish (exit $code) — restarting the app anyway"
+    ssh "$REMOTE" "systemctl start qellys" \
+      && echo "    app restarted. Nothing was seeded; run this again when ready." \
+      || echo "    COULD NOT RESTART. Run: ssh $REMOTE 'systemctl start qellys'"
+  fi
+  exit "$code"
+}
+trap _restart_guard EXIT INT TERM HUP
+
 echo "==> stopping the app so nothing writes mid-copy"
 ssh "$REMOTE" "systemctl stop qellys"
+QB_APP_STOPPED=1
 
 echo "==> sending"
 # --partial so a dropped connection on the 65MB history.db resumes rather
@@ -100,6 +126,7 @@ fi
 
 echo "==> ownership: the app user writes these, and root cannot hand over what it does not own"
 ssh "$REMOTE" "chown -R qellys:qellys /srv/qellys/data && systemctl start qellys"
+QB_APP_STOPPED=0        # started cleanly; the guard has nothing left to do
 
 echo "==> confirming the box agrees"
 ssh "$REMOTE" "cd /srv/qellys && sudo -u qellys python3 launch.py --check 2>/dev/null | sed -n '/The learned model/,/^$/p'"
