@@ -273,6 +273,35 @@ def test_the_notification_secret_is_not_the_api_key():
     assert "API_KEY" not in vs
 
 
+def test_the_secrets_template_names_the_variables_the_code_reads():
+    """A template that names the wrong variables is worse than none.
+
+    It described Stripe for a day after the processor changed, so anyone
+    following it on a fresh server would have filled in four keys the code
+    never reads and then wondered why billing stayed switched off — with
+    nothing failing, because unset billing is a supported state.
+
+    Derived from the module's own ENV_ constants rather than typed twice.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "secrets.local.example"), encoding="utf-8") as fh:
+        tmpl = fh.read()
+    for var in (paddle.ENV_API_KEY, paddle.ENV_WEBHOOK_SECRET,
+                paddle.ENV_PRICE_ID, paddle.ENV_SANDBOX):
+        assert f"\n{var}=" in tmpl, f"{var} is not in secrets.local.example"
+    assert "STRIPE_SECRET_KEY=" not in tmpl, \
+        "the template still asks for Stripe keys nothing reads"
+    # The VALUE must stay empty — the template is tracked in git, and
+    # "every value here is blank" is the rule that stops a real key being
+    # committed by someone who edited the template instead of their copy.
+    # So the sandbox instruction lives in the prose above it instead.
+    assert f"\n{paddle.ENV_SANDBOX}=\n" in tmpl, "the flag carries a value"
+    i = tmpl.index(f"\n{paddle.ENV_SANDBOX}=")
+    assert "SANDBOX=1" in tmpl[max(0, i - 700):i], \
+        "nothing tells the reader to switch sandbox on first"
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

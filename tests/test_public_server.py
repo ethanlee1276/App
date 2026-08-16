@@ -521,6 +521,42 @@ def test_one_canonical_hostname_and_www_redirects_to_it():
 
 
 
+def test_the_crash_loop_limits_are_in_the_section_systemd_reads():
+    """A misplaced systemd key is ignored with a log line, not an error.
+
+    `StartLimitBurst` and `StartLimitIntervalSec` belong to [Unit].  They
+    sat in [Service], where systemd logs "Unknown key name … ignoring"
+    once at load and carries on — so the file read as protected and was
+    not.  Found on the first real deploy, in the journal, at the exact
+    moment it mattered: the droplet's OOM killer took the process during
+    its first cold build, and with the limit ignored `Restart=always`
+    would have looped for ever instead of stopping at a visible failure.
+    """
+    unit = _read("deploy", "qellys.service")
+    # Section headers only — anchored to line starts. Searching for the
+    # bare text found "[Service]" inside the comment that explains this
+    # very fix, which sits ABOVE the real header, so the [Unit] block came
+    # out too short and the assertion failed on a correct file.
+    u = re.search(r"^\[Unit\]$", unit, re.M).start()
+    svc = re.search(r"^\[Service\]$", unit, re.M).start()
+    assert u < svc
+    unit_block, svc_block = unit[u:svc], unit[svc:]
+    for key in ("StartLimitBurst", "StartLimitIntervalSec"):
+        assert key in unit_block, f"{key} is not in [Unit] — systemd ignores it"
+        assert key not in svc_block, f"{key} is in [Service], where it does nothing"
+
+
+def test_the_service_names_itself_as_the_memory_victim():
+    """Without a limit the kernel chooses what to kill when the box runs
+    out, and it may not choose us. Naming ourselves means the app dies,
+    systemd restarts it, and the journal says which unit — rather than
+    something unrelated dying and the cause being a mystery."""
+    unit = _read("deploy", "qellys.service")
+    assert "MemoryMax=" in unit
+    assert "MemoryAccounting=true" in unit
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

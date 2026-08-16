@@ -15,6 +15,21 @@ Description=Qellys Book
 After=network-online.target
 Wants=network-online.target
 
+# THESE TWO LIVE IN [Unit], NOT [Service], and they were in the wrong
+# section until 2026-08-16. systemd does not fail on a misplaced key — it
+# logs "Unknown key name 'StartLimitIntervalSec' in section 'Service',
+# ignoring" once at load and carries on, so the protection reads as
+# present in the file and is absent in reality.
+#
+# It mattered the first time the service was under stress: the droplet's
+# OOM killer took the process during its first cold build, and with the
+# limit ignored `Restart=always` would have gone round for ever, burning
+# CPU and filling the journal instead of stopping and showing a failed
+# unit. Give up after 5 restarts in 60s, so a genuine crash is VISIBLE in
+# `systemctl status` rather than hidden behind an infinite retry.
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
 [Service]
 Type=simple
 User=qellys
@@ -44,11 +59,19 @@ ExecStart=/usr/bin/python3 /srv/qellys/launch.py --bind 127.0.0.1 8000
 
 Restart=always
 RestartSec=3
-# Give up only if it is crash-looping, so a genuine bug is visible in
-# the status rather than hidden by an infinite restart.
-StartLimitBurst=5
-StartLimitIntervalSec=60
 
+# A 1GB droplet cannot cold-build every board without help: measured on
+# 2026-08-16, the first start on a fresh clone was killed by the OOM
+# killer after seven minutes of CPU. The fix is a swapfile (deploy/README
+# says how) — this is the seatbelt for when that is not enough.
+#
+# Without a limit the kernel picks the victim when memory runs out, and
+# it may well pick something else on the box. Naming ourselves means the
+# app is what dies, systemd restarts it, and the journal says which unit
+# rather than leaving a mystery reboot. 900M on a 1GB box leaves the
+# system its own room; raise it with the droplet.
+MemoryMax=900M
+MemoryAccounting=true
 # Secrets come from a file root owns and this user can only read.
 # Never put them on the ExecStart line: /proc makes command lines
 # readable by every account on the box.

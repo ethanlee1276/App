@@ -134,18 +134,32 @@ sudo cp secrets.local.example /etc/qellys/env
 sudo chmod 600 /etc/qellys/env
 sudo $EDITOR /etc/qellys/env          # real keys go in here
 
-# 3. the app
+# 3. SWAP FIRST, or the first start is killed before it finishes.
+#    Measured on a 1GB droplet, 2026-08-16: the cold build ran for seven
+#    minutes of CPU and was then taken by the OOM killer, having never
+#    reached the point where it binds the port. `launch.py` builds every
+#    board for every sport before it serves anything, and that peak is
+#    well above 1GB even though the steady state afterwards is small.
+#    2G of swap is cheaper than a bigger droplet and enough.
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab   # survives a reboot
+free -h                                            # expect: Swap 2.0Gi
+
+# 4. the app
 sudo cp deploy/qellys.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now qellys
 systemctl status qellys
 
-# 4. the front door — the domain is already qellysbook.com in the file
+# 5. the front door — the domain is already qellysbook.com in the file
 sudo apt install caddy
 sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 
-# 5. backups, nightly, and prove a restore works
+# 6. backups, nightly, and prove a restore works
 echo '0 4 * * * /srv/qellys/deploy/backup.sh' | sudo -u qellys crontab -
 sudo -u qellys ./deploy/backup.sh --check
 ```
