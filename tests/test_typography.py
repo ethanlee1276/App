@@ -15,6 +15,22 @@ import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# NODE IS REQUIRED BY ONE ASSERTION HERE and is not a runtime dependency of
+# the site. It shells out to `node -e` to run the real regex against real
+# strings, which is the point — but the production droplet has no Node, and
+# there it did not even fail cleanly: it raised FileNotFoundError from
+# subprocess, so deploy.sh reported a stack trace rather than a reason.
+# The SKIP convention is what the repo already uses for exactly this (see
+# test_venue_ingest.py and Pillow): run_tests.py prints the reason and
+# names the file on the summary line, so coverage that stops happening
+# stays visible. `apt install -y nodejs` on any box you want it to run on.
+import shutil as _shutil                                     # noqa: E402
+if not _shutil.which("node"):
+    print("SKIP node is not installed; one assertion here executes the "
+          "sign regex rather than reading it. `apt install -y nodejs`")
+    print("\n0 tests passed.")
+    raise SystemExit(0)
+
 
 def _read(*parts):
     with open(os.path.join(ROOT, *parts), encoding="utf-8") as fh:

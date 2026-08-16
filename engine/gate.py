@@ -104,12 +104,48 @@ PAID_FILES = (
 FREE_FILES = (
     "record.json", "injuries.json", "fantasy.json", "memecoins.json",
     "ufc_live.json",
+    # Schedule and scores for the five weeks of preseason. Free
+    # because it is structurally priceless — board_payload()
+    # refuses to put a number on a starter who plays a series and
+    # a half, and keeping the fixture list free is what stops that
+    # refusal reading as a paywall.
+    "nfl_preseason.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
     "standings_nfl.json", "standings_wnba.json",
 )
 
+
+#: EVERY board the pipelines can produce, whether or not this machine has
+#: built one. The classification test used to read `web/data/*.json` — so it
+#: only ever checked the boards the DEV container happened to have, and
+#: passed while the live server carried two it had never seen
+#: (nfl_preseason.json and predmarkets.json). Found by deploy.sh on the
+#: droplet: the second time this session a check was only as good as the
+#: data underneath it.
+#:
+#: Listed by hand on purpose. Adding a board to a pipeline and not to this
+#: tuple should be a failing test, not a silent default.
+KNOWN_BOARDS = (
+    "recommendations.json", "mlb_recommendations.json", "nba.json",
+    "wnba.json", "cfb.json", "ufc.json",
+    "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
+    "futures_nfl.json", "backtest.json", "kalshi.json", "predmarkets.json",
+    "record.json", "injuries.json", "fantasy.json", "memecoins.json",
+    "ufc_live.json", "nfl_preseason.json",
+    "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
+    "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
+    "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
+    "standings_nfl.json", "standings_wnba.json",
+)
+
+#: Boards that are neither wholly free nor wholly paid: a free schedule and
+#: paid picks in one object, handled by stripping keys rather than by name.
+MIXED_FILES = (
+    "recommendations.json", "mlb_recommendations.json", "nba.json",
+    "wnba.json", "cfb.json", "ufc.json",
+)
 
 #: The switch. OFF by default, and that default is the whole reason this
 #: can be built while the site is live and free.

@@ -44,6 +44,24 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# NODE IS REQUIRED HERE AND IS NOT A RUNTIME DEPENDENCY OF THE SITE.
+# These assertions RUN the renderer rather than read it, which is the whole
+# reason they exist — but the production droplet has no Node, and hard-
+# failing there meant deploy.sh refused every deploy over a dev tool the
+# server does not need. The SKIP convention is the answer the repo already
+# had (see test_venue_ingest.py): run_tests.py prints the reason and names
+# the file on the summary line, so coverage that stops happening is
+# visible rather than silent. Install Node on any machine you want these
+# to run on — the render sweep in launch.py --check wants it too.
+import shutil as _shutil                                     # noqa: E402
+if not _shutil.which("node"):
+    print("SKIP node is not installed; the assertions here execute the "
+          "renderer rather than read it. `apt install -y nodejs`")
+    print("\n0 tests passed.")
+    raise SystemExit(0)
+
+
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 from engine.models import LiveStatus, live_to_dict

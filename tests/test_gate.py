@@ -183,23 +183,41 @@ def test_the_paid_and_free_lists_do_not_overlap():
     assert not (set(gate.PAID_FILES) & set(gate.FREE_FILES))
 
 
-def test_every_board_the_site_actually_builds_has_been_classified():
-    """The list is only as good as its coverage. A new board added to the
-    pipeline and forgotten here is gated by default — safe, but it should
-    be a deliberate entry rather than an accident, and this is where that
-    gets noticed."""
+def test_every_board_the_site_can_build_has_been_classified():
+    """Read from the registry, NOT from web/data/*.json.
+
+    The glob version passed here and failed on the droplet: this container
+    had never built nfl_preseason.json or predmarkets.json, so the check
+    silently covered 28 boards instead of 30. A test whose coverage
+    depends on which files a machine happens to have is a test that is
+    strongest where it is least needed. Second time this session — the
+    other was a 42-view sweep that passed because the dev board had no
+    team_form to crash on.
+    """
+    classified = (set(gate.FREE_FILES) | set(gate.PAID_FILES)
+                  | set(gate.MIXED_FILES))
+    missing = sorted(set(gate.KNOWN_BOARDS) - classified)
+    assert not missing, f"unclassified boards: {missing}"
+    stray = sorted(classified - set(gate.KNOWN_BOARDS))
+    assert not stray, f"classified but not in KNOWN_BOARDS: {stray}"
+
+
+def test_a_board_this_machine_has_built_is_one_the_registry_knows():
+    """The other direction: a file on disk that the registry has never
+    heard of is a pipeline that grew a board without telling the gate."""
     built = sorted(p.name for p in (ROOT / "web" / "data").glob("*.json"))
-    if not built:                      # a fresh checkout has none
-        return
-    known = set(gate.FREE_FILES) | set(gate.PAID_FILES)
-    unclassified = [n for n in built if n not in known]
-    # These are the mixed sport boards — free schedule, paid picks — and
-    # they are handled by key rather than by name, so they belong to
-    # neither list. Named here so a genuinely NEW file still shows up.
-    mixed = {"recommendations.json", "mlb_recommendations.json", "nba.json",
-             "wnba.json", "cfb.json", "ufc.json"}
-    surprise = [n for n in unclassified if n not in mixed]
-    assert not surprise, f"unclassified boards: {surprise}"
+    unknown = [n for n in built if n not in gate.KNOWN_BOARDS]
+    assert not unknown, f"built but unregistered: {unknown}"
+
+
+def test_the_preseason_fixture_list_is_free():
+    """board_payload() calls itself "Facts only — no price", and refuses to
+    put a number on a starter who plays a series and a half. Charging for
+    a board that is structurally priceless would make that refusal read as
+    a paywall."""
+    assert gate.is_free("nfl_preseason.json")
+    board = {"weeks": [{"week": 1, "games": [{"home": "DET"}]}], "total": 49}
+    assert gate.redact(board, "nfl_preseason.json") == board
 
 
 # --- the switch, and why it is off ------------------------------------------
