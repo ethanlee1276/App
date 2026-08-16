@@ -556,6 +556,41 @@ def test_the_service_names_itself_as_the_memory_victim():
     assert "MemoryAccounting=true" in unit
 
 
+def test_the_deploy_notes_add_caddys_repository_before_installing_it():
+    """`apt install caddy` alone fails on Ubuntu.
+
+    Caddy is not in Ubuntu's archive, so the bare command answers "Unable
+    to locate package caddy" — which reads like a typo and sends you
+    looking for one. The install page's four lines (keyring, key, source
+    list, update) have to come first, and the step is only correct if
+    they come BEFORE the install in the file someone reads top to bottom.
+    """
+    readme = _read("deploy", "README.md")
+    key = readme.index("caddy-stable-archive-keyring.gpg")
+    src = readme.index("/etc/apt/sources.list.d/caddy-stable.list")
+    install = readme.index("apt install -y caddy")
+    assert key < install and src < install, \
+        "the repository is added after the install that needs it"
+    # And no earlier line may tell you to install it the way that fails.
+    assert "apt install caddy\n" not in readme, \
+        "a bare `apt install caddy` is still in the instructions"
+
+
+def test_swap_is_set_up_before_the_app_is_started():
+    """Order is the whole content of this step.
+
+    The first real deploy ran the cold build on a 1GB droplet with no
+    swap: seven minutes of CPU, then the OOM killer, having never reached
+    the bind. Swap after `systemctl enable --now` documents the fix in
+    the wrong place — by then the failure has already happened and reads
+    as the app being broken.
+    """
+    readme = _read("deploy", "README.md")
+    swapon = readme.index("swapon /swapfile")
+    start = readme.index("systemctl enable --now qellys")
+    assert swapon < start, "swap is documented after the start it protects"
+    assert "/etc/fstab" in readme, "swap would not survive a reboot"
+
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

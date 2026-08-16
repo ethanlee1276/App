@@ -155,14 +155,52 @@ sudo systemctl enable --now qellys
 systemctl status qellys
 
 # 5. the front door — the domain is already qellysbook.com in the file
-sudo apt install caddy
+#
+#    CADDY IS NOT IN UBUNTU'S REPOSITORIES. Plain `apt install caddy`
+#    answers "Unable to locate package caddy", which reads like a typo
+#    and is not one. Add Caddy's own repository first; these four lines
+#    are from their install page and the key is what makes apt trust it.
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+  | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+  | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update && sudo apt install -y caddy
+
+#    Installing it starts it on a default "Caddy works!" page. Replacing
+#    that file is the whole configuration step.
 sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile   # syntax, before it is live
 sudo systemctl reload caddy
+journalctl -u caddy -n 30 --no-pager                # watch the certificate arrive
 
 # 6. backups, nightly, and prove a restore works
 echo '0 4 * * * /srv/qellys/deploy/backup.sh' | sudo -u qellys crontab -
 sudo -u qellys ./deploy/backup.sh --check
 ```
+
+### The certificate, and the three ways it fails
+
+Reloading Caddy makes it go and ask Let's Encrypt for a certificate, and
+that is the one step in this list that depends on the outside world
+agreeing with you. The journal says `certificate obtained successfully`
+when it works. When it does not, it is almost always one of these:
+
+* **The name does not point here.** Let's Encrypt resolves
+  `qellysbook.com` itself and connects back to whatever it finds. Check
+  from somewhere that is not this box: `dig +short qellysbook.com`. If
+  Cloudflare's proxy is on (orange cloud), what answers is Cloudflare, not
+  you, and the challenge cannot reach this machine at all.
+* **Port 80 is shut.** The challenge arrives on plain HTTP even though
+  everything afterwards is HTTPS. `ufw status` must list 80 as well as
+  443 — closing 80 "because the site is HTTPS" breaks renewal too, three
+  months later, which is a much worse time to find out.
+* **Both names must resolve.** The Caddyfile serves `qellysbook.com` and
+  redirects `www.qellysbook.com`, and Caddy gets a certificate for each.
+  A missing `www` record fails that half and the log names it.
+
+Failed attempts are rate-limited (five per hostname per hour), so fix the
+cause before reloading again rather than retrying into the limit.
 
 ## Every deploy after that
 
