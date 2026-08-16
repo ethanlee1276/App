@@ -298,6 +298,42 @@ when it works. When it does not, it is almost always one of these:
 Failed attempts are rate-limited (five per hostname per hour), so fix the
 cause before reloading again rather than retrying into the limit.
 
+## Seeding a new box — git does not carry the model
+
+**A fresh clone has the code and nothing else, and it does not look
+broken.** Every database and every fitted model is gitignored, correctly:
+they are large and derived. But that means a new server starts with
+
+* **no `history.db`** — backtests, comps, team ratings and player logs all
+  read empty, and none of the fitters below can be refitted without it;
+* **no `data/models/*`** — player memory, the recency dial, probability
+  calibration and the blind-spot miner all return their neutral defaults;
+* **a fresh `ledger.db`** — so the Record, which is the evidence the
+  subscription is sold on, shows none of the history.
+
+The picks still appear. They are simply the uncorrected ones, and the
+Record is simply empty. That is why this has its own heading: the failure
+is invisible from the outside, and it went unnoticed for a day after the
+first live deploy until the missing player memory was spotted on the page.
+
+```bash
+# ON THE MAC, where the real data lives
+python3 launch.py --settle all      # grade anything still open first
+./deploy/seed.sh root@143.198.169.53
+```
+
+It stops the app, rsyncs `ledger.db`, `history.db`, `data/models/` and the
+UFC dossiers, fixes ownership, starts it again, and prints the server's
+own learned-model check so you can see it took.
+
+**It overwrites the server's `ledger.db`.** That file has been journaling
+since the box came up, so settle locally first and check
+`/var/backups/qellys` on the server before answering the prompt.
+
+`python3 launch.py --check` reports this on any machine, under **The
+learned model** — each fitter, and what running without it actually
+means.
+
 ## Every deploy after that
 
 ```bash

@@ -643,6 +643,61 @@ def test_the_sweep_still_covers_every_page_a_visitor_can_reach():
 
 
 
+# --- the blank-brain check --------------------------------------------------
+
+def test_the_checklist_reports_whether_the_model_has_learned_anything():
+    """The failure this catches is silent and total.
+
+    data/models/ is gitignored — correctly, they are derived — and
+    history.db is too, at 65MB. So a fresh clone, which is exactly what a
+    new server is, starts with no fitted models and nothing to refit them
+    from. Every correction returns its neutral default and the site looks
+    completely normal: the picks still appear, they are simply the
+    uncorrected ones.
+
+    Found after the first live deploy, when Ethan noticed player memory
+    was nowhere on the site. It was not missing from the code. It was
+    missing from the box.
+    """
+    src = _launch()
+    assert "def _learned_model(" in src
+    assert "_learned_model(ok, warn, bad)" in src, "defined but never called"
+    # Each entry must say what running WITHOUT it costs. A list of absent
+    # filenames is not a diagnosis.
+    block = src[src.index("LEARNED_STORES = ("):]
+    block = block[:block.index("\n)")]
+    for store in ("playerfit", "formfit", "calibration", "losspatterns"):
+        assert store in block, f"{store} is not on the checklist"
+    assert block.count('"') >= 18, "entries are missing their consequences"
+
+
+def test_the_checklist_points_at_the_fix_rather_than_only_the_fault():
+    """A warning with no next step is one people learn to scroll past."""
+    src = _launch()
+    fn = src[src.index("def _learned_model("):]
+    fn = fn[:fn.index("\ndef ")]
+    assert "deploy/README.md" in fn or "Seeding" in fn
+    seed = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "deploy", "seed.sh")
+    assert os.path.exists(seed), "the fix it points at does not exist"
+    assert os.access(seed, os.X_OK), "seed.sh is not executable"
+
+
+def test_seeding_a_box_stops_the_app_before_it_overwrites_the_database():
+    """rsync onto a live SQLite file is a torn copy, and the file in
+    question is the public record."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sh = open(os.path.join(root, "deploy", "seed.sh"), encoding="utf-8").read()
+    stop = sh.index("systemctl stop qellys")
+    assert stop < sh.index("rsync"), "it copies over a running app"
+    assert "systemctl start qellys" in sh, "it never starts the app again"
+    # And it must not do any of this without being asked twice.
+    assert "read -r -p" in sh, "no confirmation before replacing the journal"
+    assert "chown -R qellys:qellys" in sh, \
+        "the app cannot write files root has just delivered"
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

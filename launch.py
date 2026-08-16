@@ -1913,6 +1913,63 @@ await b.close();
 """
 
 
+#: Every fitted store the engine reads, and what running WITHOUT it means.
+#: Not a list of files — a list of behaviours that quietly stop happening.
+LEARNED_STORES = (
+    ("data/models/playerfit.json", "player memory",
+     "every per-player correction is 1.0, and the reason never prints"),
+    ("data/models/formfit.json", "recency dial",
+     "the blend weighs time by its default rather than by what settled"),
+    ("data/models/calibration.json", "probability calibration",
+     "raw model probabilities go out uncorrected"),
+    ("data/models/losspatterns.json", "blind-spot miner",
+     "no pick is gated on a pattern the journal has already lost to"),
+    ("data/models/hypotheses.json", "the hypothesis lab",
+     "nothing proposed, nothing disposed"),
+    ("data/models/postmortems.json", "measured loss causes",
+     "the nightly prose has no evidence layer"),
+    ("data/models/watch.json", "the watch list", "nothing is being watched"),
+)
+
+
+def _learned_model(ok: str, warn: str, bad: str) -> None:
+    """Is this machine running a model that has learned anything?
+
+    THE FAILURE THIS EXISTS FOR IS SILENT AND TOTAL. `data/models/` is
+    gitignored — correctly, they are derived — and `data/history.db` is
+    too, at 65MB. So a fresh clone, which is exactly what a new server is,
+    starts with no fitted models and nothing to refit them from. Every
+    correction returns its neutral default, every backtest is empty, and
+    the site looks completely normal while doing it: the picks still
+    appear, they are simply the uncorrected ones.
+
+    Found on 2026-08-16, after the first deploy, when Ethan noticed player
+    memory was nowhere on the live site. It was not missing from the code.
+    It was missing from the box.
+    """
+    print("\n  The learned model (fitted here, not shipped in git):")
+    missing = []
+    for path, name, consequence in LEARNED_STORES:
+        p = ROOT / path
+        if p.exists() and p.stat().st_size > 2:
+            print(f"{ok} {name}: fitted ({p.stat().st_size:,}B)")
+        else:
+            missing.append(name)
+            print(f"{warn} {name}: NOT FITTED — {consequence}")
+    hist = ROOT / "data" / "history.db"
+    if not hist.exists():
+        print(f"{bad} history.db is absent — backtests, comps, team ratings "
+              f"and player logs all read empty, and nothing above can be "
+              f"refitted without it")
+    elif hist.stat().st_size < 5_000_000:
+        print(f"{warn} history.db is only {hist.stat().st_size // 1024:,}KB — "
+              f"that is a fraction of a full ingest")
+    if missing:
+        print(f"    {len(missing)} of {len(LEARNED_STORES)} learners are "
+              f"unfitted. On a NEW SERVER this is expected and is not")
+        print("    self-healing: see deploy/README.md, 'Seeding a new box'.")
+
+
 def _browser_sweep(ok: str, warn: str, bad: str) -> None:
     """Render every page in a headless browser and report JS errors.
 
@@ -2206,6 +2263,8 @@ def preflight() -> None:
         print(f"{warn} Knowledge tiers: not checked ({exc})")
 
     _browser_sweep(ok, warn, bad)
+
+    _learned_model(ok, warn, bad)
 
     # Database inventory — the raw truth every model reads.
     print("\n  Databases:")
