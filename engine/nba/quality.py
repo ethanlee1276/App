@@ -38,7 +38,7 @@ from ..hoops import NBA, LeagueTuning
 # How volatile a role can be before it is a coin flip rather than a role.
 DEFAULT_MAX_CV = 0.35
 # Minutes below which "stable" means nothing — a deep bench player who
-# reliably plays 6 minutes is not a bettable role, he is a rounding error.
+# reliably plays 12 minutes is not a bettable role, he is a rounding error.
 STABILITY_MIN_MINUTES = 12.0
 
 

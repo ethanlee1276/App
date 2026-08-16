@@ -16,9 +16,11 @@ or two IS an opener in every sense the projection cares about, whatever
 his roster designation says. The same cached game log `velocity.py`
 already reads carries `inningsPitched` per start, so this costs nothing.
 
-EVIDENCE ONLY. The flag lands as a card warning on pitcher-market props
-and nothing gates on it: refusing to price opener games is a pricing
-change, and `docs/THE_INFORMATION_TEST.md` is why that waits for a human.
+GATE, as of 2026-08-10 (Ethan-approved, see `pipeline.py`). The flag
+lands as a card warning on pitcher-market props and both sides of the
+prop are refused: an outs line priced for a one-inning arm is a category
+error, not a small edge, so it is treated the same as `block_live_games`
+and `MAX_CREDIBLE_EDGE` — a correctness gate, not a pricing opinion.
 """
 
 from __future__ import annotations
