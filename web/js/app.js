@@ -14167,6 +14167,19 @@ const LIVE_FEEDS = {
   nfl: "data/recommendations.json", mlb: "data/mlb_recommendations.json",
   nba: "data/nba.json", wnba: "data/wnba.json", cfb: "data/cfb.json",
 };
+
+/* SCORES DO NOT COME FROM THE MODEL BOARD ANY MORE — measured 2026-08-16.
+   data/mlb_recommendations.json is 8MB and takes SEVEN MINUTES THIRTY-NINE
+   SECONDS to build, because it prices 923 props. Live scores were read out
+   of it, so a score that changes every pitch waited on the entire model and
+   the site showed games 8-15 minutes behind. During a game in progress that
+   reads as "the scores are broken", and nothing was broken: it was wired to
+   the wrong file.
+
+   live_build.py writes this one from a single cached schedule call. The
+   BETS still come from the slow board, which is right — a price minutes old
+   is defensible, a score minutes old is not. */
+const LIVE_FAST = { mlb: "data/live_mlb.json" };
 let _liveAll = { at: 0, games: [] };
 let _liveChip = "all";
 
@@ -14178,7 +14191,21 @@ async function fetchAllLive() {
       const r = await fetch(url, { cache: "no-store" });
       if (!r.ok) return;
       const d = await r.json();
-      (d.games || []).forEach((g) => {
+      // The fast scoreboard when this sport has one, the board otherwise.
+      // FALLING BACK IS THE POINT: a missing or unbuilt live file must
+      // leave the page exactly as it was rather than emptying it, because
+      // the fast loop can be a minute behind a fresh deploy.
+      let games = d.games || [];
+      if (LIVE_FAST[sport]) {
+        try {
+          const rf = await fetch(LIVE_FAST[sport], { cache: "no-store" });
+          if (rf.ok) {
+            const df = await rf.json();
+            if (Array.isArray(df.games) && df.games.length) games = df.games;
+          }
+        } catch (e) {}
+      }
+      games.forEach((g) => {
         if ((g.live || {}).state === "live") out.push({ sport, g,
           bets: (d.game_bets || []).filter((b) => b.home === g.home && b.away === g.away) });
       });

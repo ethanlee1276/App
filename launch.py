@@ -1796,6 +1796,35 @@ def _live_memes_refresher() -> None:
         time.sleep(MEMES_LIVE_S)
 
 
+def _live_mlb_refresher() -> None:
+    """Poll the MLB scoreboard fast while a game is on, slowly otherwise.
+
+    Modelled on the UFC refresher below and added for the same reason,
+    measured on the live droplet 2026-08-16: the scores were being read out
+    of the model board, which takes SEVEN MINUTES THIRTY-NINE SECONDS to
+    build because it prices 923 props. A score that changes every pitch
+    cannot wait on that. `live_build.py` is one cached schedule call.
+
+    The wait is chosen from what came back rather than from a clock, so a
+    quiet afternoon costs one request a minute and a full slate gets the
+    fast cadence — the same shape as the fight poller.
+    """
+    import json as _json
+    while True:
+        wait = LIVE_IDLE_S
+        try:
+            ok, _tail = _run_build(["live_build.py"])
+            if ok:
+                blob = _json.loads((ROOT / "web" / "data" /
+                                    "live_mlb.json").read_text())
+                if any((g.get("live") or {}).get("state") == "live"
+                       for g in blob.get("games", [])):
+                    wait = LIVE_FAST_S
+        except Exception:      # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(wait)
+
+
 def _live_ufc_refresher() -> None:
     """Poll the live fight feed fast while a bout is on, slowly otherwise."""
     import json as _json
@@ -6489,6 +6518,7 @@ def main() -> None:
         print(f"Auto-refresh every {interval}s (scores free; odds budgeted).")
         # Its own clock: a fight moves in seconds, and this feed is free.
         threading.Thread(target=_live_ufc_refresher, daemon=True).start()
+        threading.Thread(target=_live_mlb_refresher, daemon=True).start()
         print(f"  UFC live fights: every {LIVE_FAST_S}s while a bout is on, "
               f"{LIVE_IDLE_S}s otherwise.")
         # And the meme board's clock — coins move in and out in minutes.
