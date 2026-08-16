@@ -576,6 +576,52 @@ def test_the_deploy_notes_add_caddys_repository_before_installing_it():
         "a bare `apt install caddy` is still in the instructions"
 
 
+def test_every_log_directory_the_caddyfile_writes_to_is_created_first():
+    """Caddy cannot make its own log directory.
+
+    The Caddyfile names `/var/log/caddy/qellys.log`. The package does not
+    create that directory and the service runs as the unprivileged
+    `caddy` user, so the reload dies with "permission denied" on the log
+    file — which reads as a Caddy fault and is a mkdir. `caddy validate`
+    does not catch it: it checks that the file parses, and it runs as
+    root, where opening that path succeeds.
+
+    Derived from the Caddyfile rather than hardcoded, so moving the log
+    somewhere else fails here instead of on the box.
+    """
+    caddy = _read("deploy", "Caddyfile")
+    readme = _read("deploy", "README.md")
+    paths = re.findall(r"^\s*output file (\S+)", caddy, re.M)
+    assert paths, "the Caddyfile logs nowhere — did the log block move?"
+    for path in paths:
+        d = path.rsplit("/", 1)[0]
+        assert f"mkdir -p {d}" in readme, f"{d} is never created"
+        assert f"chown caddy:caddy {d}" in readme, \
+            f"{d} is created but the caddy user cannot write to it"
+        # And before the reload that needs it, not after.
+        assert readme.index(f"mkdir -p {d}") < readme.index("systemctl reload caddy")
+
+
+def test_the_forwarded_header_overrides_survive_caddys_own_warning():
+    """Caddy calls these unnecessary on every reload. They are not.
+
+    `header_up X-Forwarded-For {remote_host}` REPLACES the header;
+    Caddy's default appends to it, leaving whatever the client claimed in
+    front of the real peer. Deleting these because the log says to would
+    be a silent security regression, so the reason is pinned in both the
+    file and the notes.
+    """
+    caddy = _read("deploy", "Caddyfile")
+    assert "header_up X-Forwarded-For {remote_host}" in caddy, \
+        "the override is gone — the app now trusts a client-supplied list"
+    assert "Unnecessary header_up" in caddy, \
+        "nothing in the file explains why Caddy's warning is wrong here"
+    # And _client_ip must still be reading the end of the list.
+    i = SERVER.index("def _client_ip(")
+    body = SERVER[i:SERVER.index("\n    def ", i + 1)]
+    assert "[-1]" in body, "_client_ip no longer takes the last entry"
+
+
 def test_swap_is_set_up_before_the_app_is_started():
     """Order is the whole content of this step.
 

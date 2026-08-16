@@ -29,6 +29,17 @@ qellysbook.com {
 	# what stops strangers creating profiles and posting passwords over
 	# cleartext. Caddy sets these by default; they are written out here
 	# so nobody "tidies them away" later.
+	#
+	# "Unnecessary header_up …" — Caddy logs that warning for all three on
+	# every reload. Leave them. It is quoted here so that grepping the
+	# warning lands on the reason rather than on nothing.
+	# The warning is about forwarding, and the point here is REPLACING:
+	# `{remote_host}` overwrites the header, so the list the app reads has
+	# exactly one entry — the peer Caddy actually saw. The default appends
+	# instead, leaving whatever the client claimed in front of it.
+	# `_client_ip()` reads the last entry and is safe either way; with the
+	# overwrite it is also safe under first-entry parsing, which is the
+	# refactor most likely to happen by accident.
 	handle /api/* {
 		reverse_proxy 127.0.0.1:8000 {
 			header_up X-Forwarded-Proto {scheme}

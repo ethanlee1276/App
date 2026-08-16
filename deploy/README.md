@@ -167,6 +167,16 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
   | sudo tee /etc/apt/sources.list.d/caddy-stable.list
 sudo apt update && sudo apt install -y caddy
 
+#    THE LOG DIRECTORY FIRST. The Caddyfile writes an access log to
+#    /var/log/caddy; the package does not create that directory, and
+#    Caddy runs as the unprivileged `caddy` user, so it cannot create it
+#    either. Skip this and the reload fails with "open
+#    /var/log/caddy/qellys.log: permission denied" — which sounds like a
+#    Caddy problem and is a mkdir.
+sudo mkdir -p /var/log/caddy
+sudo chown caddy:caddy /var/log/caddy
+sudo chmod 750 /var/log/caddy
+
 #    Installing it starts it on a default "Caddy works!" page. Replacing
 #    that file is the whole configuration step.
 sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
@@ -178,6 +188,33 @@ journalctl -u caddy -n 30 --no-pager                # watch the certificate arri
 echo '0 4 * * * /srv/qellys/deploy/backup.sh' | sudo -u qellys crontab -
 sudo -u qellys ./deploy/backup.sh --check
 ```
+
+### Two things the Caddy reload will tell you, and one of them is fine
+
+**`caddy validate` says "Valid configuration" and the reload can still
+fail.** Validate checks that the file parses and adapts — it does not
+check that the running service can reach what the file points at, and it
+runs as **root** while the service runs as **caddy**. The log directory
+above is exactly that gap: root opens the file happily, the service
+cannot, and only one of them is the truth. Validate is still worth
+running; it just catches syntax, not permissions.
+
+A failed reload is not an outage. Caddy loads the new config and only
+swaps if it comes up cleanly, so the previous config keeps serving —
+which is why the box stays on the default "Caddy works!" page rather
+than going dark while you fix it.
+
+**Three "Unnecessary header_up" warnings are expected. Do not act on
+them.** Caddy points out that `reverse_proxy` forwards
+`X-Forwarded-For`/`-Proto`/`-Host` by default. Writing them out is
+deliberate for a reason the warning cannot see: `header_up
+X-Forwarded-For {remote_host}` **replaces** the header instead of
+appending to it, so the list the app reads has exactly one entry — the
+peer Caddy actually saw. The default appends, which leaves whatever the
+client claimed sitting in front of it. `_client_ip()` reads the last
+entry and is safe either way, but with the override it is safe under
+first-entry parsing too, and that is the refactor most likely to happen
+by accident.
 
 ### The certificate, and the three ways it fails
 
