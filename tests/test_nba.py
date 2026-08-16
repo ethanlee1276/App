@@ -5,6 +5,43 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# THE FITTED MODELS MUST NOT DECIDE WHETHER THIS FILE PASSES.
+#
+# engine/nba/pipeline.py reads playerfit and calibrate at request time. Both
+# read data/models/*.json, which is gitignored — so on every machine that
+# had never fitted anything these returned their neutral defaults, and the
+# assertions below were written against that. The moment a real
+# calibration.json existed the temperature moved the probabilities and two
+# tests failed, on the production droplet, during a deploy.
+#
+# Found 2026-08-16, minutes after seeding the live box with real fitted
+# models for the first time. Third instance of the same shape in one day: a
+# check that only passed because the machine had no data.
+#
+# A unit test about the GATE's doctrine must not depend on which machine it
+# runs on. Pointing both stores at a path that does not exist restores the
+# neutral model everywhere — dev container, laptop and server alike.
+import tempfile as _tempfile                                  # noqa: E402
+from pathlib import Path as _Path                             # noqa: E402
+from engine import calibrate as _cal                          # noqa: E402
+from engine import losspatterns as _lp                        # noqa: E402
+from engine import playerfit as _pf                           # noqa: E402
+
+# ALL THREE the hoops pipeline reads, not just the one that looks guilty:
+# playerfit (line 75), calibrate (85, 111) and losspatterns.veto (112). The
+# blind-spot miner is the likeliest culprit — 19,889 bytes of real patterns
+# on the live box against 153 here, and vetoing picks is precisely what
+# `no_qualifying` measures — but isolating one and leaving two is how this
+# recurs with a different name next month.
+_void = _Path(_tempfile.gettempdir()) / "qb-no-such-fit.json"
+_cal.DEFAULT_PATH = _void
+_cal._cache = {}          # already-loaded fits would survive the repoint
+_pf.DEFAULT_PATH = _void
+_pf._cache = {}
+_lp.DEFAULT_PATH = _void
+_lp._cache = {}
+
+
 from engine.nba.minutes import (
     base_minutes, blowout_mult, blowout_prob, project_minutes, minutes_grade,
 )
