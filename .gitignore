@@ -47,6 +47,11 @@ data/history.db
 *.db
 data/ledger.db
 data/backups/
+# The FULL boards — every pick, before redaction. These are the product,
+# and they live outside web/ precisely so no web server can reach them;
+# committing them would publish to GitHub what the paywall withholds from
+# the site. `*.db` and the named files above do not cover a .json here.
+data/built/
 # backup.sh's default destination is ./backups — a sibling of data/, not a
 # child of it, so the line above never covered it. The files inside are
 # `.db.gz`, which `*.db` does not match either: gzipped copies of the

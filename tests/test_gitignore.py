@@ -60,6 +60,12 @@ MUST_IGNORE = (
     # untracked in the checkout, one `git add -A` from being published.
     "backups/accounts-20260816T040000Z.db.gz",
     "backups/ledger-20260816T040000Z.db.gz",
+    # The unredacted boards, 2026-08-16. engine/gate.py writes them
+    # outside web/ so that no web server can serve them; committing them
+    # would publish to GitHub exactly what the paywall withholds from the
+    # site, which is the same leak by a slower route.
+    "data/built/recommendations.json",
+    "data/built/nba.json",
 )
 
 #: …and paths that must stay tracked. An ignore rule wide enough to cover
