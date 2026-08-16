@@ -298,6 +298,32 @@ when it works. When it does not, it is almost always one of these:
 Failed attempts are rate-limited (five per hostname per hour), so fix the
 cause before reloading again rather than retrying into the limit.
 
+## The nightly, on the server
+
+`tools/install-nightly.sh` is **macOS only** — it writes a launchd job,
+because a laptop that is shut at 6am skips a cron and skipped ingest is
+the failure it exists to prevent. None of that applies to a box that never
+sleeps, so the server gets a plain cron line and nothing else.
+
+Without it the site still serves and still settles — `launch.py` runs the
+15-minute auto-settle and the first-of-day ingest in-process — but the
+model stops LEARNING: no refit of the recency dial or the player memory,
+no postmortems, no new calibration. The board keeps working and quietly
+stops improving, which is the same shape of silence as the blank brain
+below.
+
+```bash
+( sudo -u qellys crontab -l 2>/dev/null; \
+  echo '30 9 * * * cd /srv/qellys && /usr/bin/python3 launch.py --nightly >> /var/backups/qellys/nightly.log 2>&1' \
+) | sudo -u qellys crontab -
+sudo -u qellys crontab -l
+```
+
+09:30 UTC is roughly 05:30 Eastern — after the last West Coast game has
+finished and graded, before anybody is looking at the board. It logs
+beside the backups because that directory is already the app user's; cron
+mail goes nowhere on a box with no mail server.
+
 ## Seeding a new box — git does not carry the model
 
 **A fresh clone has the code and nothing else, and it does not look
