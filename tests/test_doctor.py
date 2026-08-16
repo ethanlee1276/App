@@ -683,6 +683,37 @@ def test_the_checklist_points_at_the_fix_rather_than_only_the_fault():
     assert os.access(seed, os.X_OK), "seed.sh is not executable"
 
 
+def test_the_routine_seed_cannot_erase_the_live_journal():
+    """The footgun in the first version of this script.
+
+    The full seed sends ledger.db, which is right exactly once — when a
+    new box has journaled nothing. After that the SERVER owns the record:
+    it is the machine running launch.py against live slates, so every
+    pick the public Record shows was written there. Re-running the full
+    seed a month later would erase all of it, and that is the one loss no
+    backup schedule makes painless, because it is a deliberate overwrite
+    rather than a fault.
+
+    --models-only is what a refit actually needs: the fitters require the
+    65MB history.db so they run on the Mac, and only their output has to
+    travel.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sh = open(os.path.join(root, "deploy", "seed.sh"), encoding="utf-8").read()
+    assert "--models-only" in sh
+    # The ledger must be sent ONLY inside the full-mode branch.
+    guarded = sh[sh.index('if [[ "$MODE" == "full" ]]'):]
+    guarded = guarded[:guarded.index("\nfi\n")]
+    assert "data/ledger.db" in guarded, \
+        "the ledger is sent outside the full-mode guard"
+    assert sh.count("data/ledger.db") == guarded.count("data/ledger.db") + \
+        sh[:sh.index('if [[ "$MODE" == "full" ]]')].count("data/ledger.db"), \
+        "a second unguarded ledger send exists"
+    # …and models-only must not be gated behind the typed confirmation,
+    # or the safe path is the annoying one and nobody uses it.
+    assert 'if [[ "$MODE" == "models" ]]; then' in sh
+
+
 def test_seeding_a_box_stops_the_app_before_it_overwrites_the_database():
     """rsync onto a live SQLite file is a torn copy, and the file in
     question is the public record."""

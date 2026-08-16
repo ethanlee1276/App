@@ -23,9 +23,31 @@
 # for a day with a blank brain.
 set -euo pipefail
 
-REMOTE="${1:-}"
+# ONE-TIME vs ROUTINE, and the difference matters more than it reads.
+#
+# The FULL seed sends ledger.db. That is correct exactly once: when a new
+# box has never journaled anything and the Mac holds the entire record.
+# After that the SERVER owns the journal — it is the thing running
+# launch.py against live slates, so it is the only machine whose ledger is
+# the truth. Sending the Mac's again would erase every pick the live site
+# has recorded since, which is the one loss no backup schedule makes
+# painless because it is a deliberate overwrite, not a fault.
+#
+# So the routine form is --models-only: refits happen on the Mac, because
+# they need the 65MB history.db, and only the fitted output travels.
+MODE="full"
+REMOTE=""
+for arg in "$@"; do
+  case "$arg" in
+    --models-only) MODE="models" ;;
+    -*) echo "unknown option: $arg" >&2; exit 2 ;;
+    *)  REMOTE="$arg" ;;
+  esac
+done
 if [[ -z "$REMOTE" ]]; then
-  echo "usage: ./deploy/seed.sh user@host" >&2
+  echo "usage: ./deploy/seed.sh [--models-only] user@host" >&2
+  echo "  (no flag)      first seed of a new box: ledger, history, models" >&2
+  echo "  --models-only  every time after that: fitted models only" >&2
   exit 2
 fi
 cd "$(dirname "$0")/.."
@@ -34,11 +56,19 @@ cd "$(dirname "$0")/.."
 # record, it cannot be rebuilt from anywhere, and the server has already
 # started writing its own. Sending it means overwriting that.
 echo "==> what will be sent"
-for f in data/ledger.db data/history.db data/ufc_dossiers.json; do
-  [[ -f "$f" ]] && printf "    %-28s %s\n" "$f" "$(du -h "$f" | cut -f1)"
-done
-[[ -d data/models ]] && printf "    %-28s %s\n" "data/models/" "$(du -sh data/models | cut -f1)"
+if [[ "$MODE" == "models" ]]; then
+  printf "    %-28s %s\n" "data/models/" "$(du -sh data/models | cut -f1)"
+  echo "    (models only — the server's ledger.db and history.db are untouched)"
+else
+  for f in data/ledger.db data/history.db data/ufc_dossiers.json; do
+    [[ -f "$f" ]] && printf "    %-28s %s\n" "$f" "$(du -h "$f" | cut -f1)"
+  done
+  [[ -d data/models ]] && printf "    %-28s %s\n" "data/models/" "$(du -sh data/models | cut -f1)"
+fi
 
+if [[ "$MODE" == "models" ]]; then
+  echo "==> models only: no confirmation needed, nothing irreplaceable moves"
+else
 cat <<'WARN'
 
     THE SERVER'S OWN ledger.db WILL BE REPLACED. It has been journaling
@@ -50,6 +80,7 @@ cat <<'WARN'
 WARN
 read -r -p "    type SEED to continue: " reply
 [[ "$reply" == "SEED" ]] || { echo "aborted"; exit 1; }
+fi
 
 echo "==> stopping the app so nothing writes mid-copy"
 ssh "$REMOTE" "systemctl stop qellys"
@@ -57,10 +88,14 @@ ssh "$REMOTE" "systemctl stop qellys"
 echo "==> sending"
 # --partial so a dropped connection on the 65MB history.db resumes rather
 # than starting over on a phone tether.
-rsync -avz --partial --progress \
-  data/ledger.db data/history.db \
-  "$REMOTE:/srv/qellys/data/"
-[[ -f data/ufc_dossiers.json ]] && rsync -az data/ufc_dossiers.json "$REMOTE:/srv/qellys/data/"
+if [[ "$MODE" == "full" ]]; then
+  # --partial so a dropped connection on the 65MB history.db resumes
+  # rather than starting over on a phone tether.
+  rsync -avz --partial --progress \
+    data/ledger.db data/history.db \
+    "$REMOTE:/srv/qellys/data/"
+  [[ -f data/ufc_dossiers.json ]] && rsync -az data/ufc_dossiers.json "$REMOTE:/srv/qellys/data/"
+fi
 [[ -d data/models ]] && rsync -avz data/models/ "$REMOTE:/srv/qellys/data/models/"
 
 echo "==> ownership: the app user writes these, and root cannot hand over what it does not own"

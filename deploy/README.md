@@ -367,7 +367,33 @@ It stops the app, rsyncs `ledger.db`, `history.db`, `data/models/` and the
 UFC dossiers, fixes ownership, starts it again, and prints the server's
 own learned-model check so you can see it took.
 
-**It overwrites the server's `ledger.db`.** That file has been journaling
+### After the first seed, the server owns the journal
+
+**Run the full seed exactly once per box.** From then on the droplet is
+the machine running `launch.py` against live slates, so its `ledger.db`
+IS the record — every pick the public Record page shows was journaled
+there. Sending the Mac's copy again would erase everything the live site
+recorded since, and that is the one loss no backup schedule makes
+painless, because it is a deliberate overwrite rather than a fault.
+
+So the routine form sends the fitted models and nothing else:
+
+```bash
+# ON THE MAC, after a refit — the fitters need the 65MB history.db, so
+# they run here and only their output travels.
+python3 formfit.py   --from-db data/history.db
+python3 playerfit.py --from-db data/history.db
+python3 calibrate.py --from-db data/history.db
+./deploy/seed.sh --models-only root@143.198.169.53
+```
+
+It needs no confirmation, because nothing irreplaceable moves.
+
+**And this is NOT how code reaches the server.** Code goes the other way:
+`./deploy/deploy.sh` on the droplet pulls, runs the suite, and refuses to
+restart if anything is red. Two different jobs, two different machines.
+
+**The full seed overwrites the server's `ledger.db`.** That file has been journaling
 since the box came up, so settle locally first and check
 `/var/backups/qellys` on the server before answering the prompt.
 
