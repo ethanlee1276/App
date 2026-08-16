@@ -11,6 +11,56 @@ this**, because its answers can change what gets deployed.
 | `deploy.sh` | pull → **test** → restart → verify, with a rollback printed |
 | `backup.sh` | the two irreplaceable databases, plus a restore drill |
 
+## Before the box exists: the key and the DNS
+
+**An SSH key, on the Mac.** DigitalOcean asks for one at droplet creation,
+and a droplet made with a key never has password login enabled at all —
+which matters more than it sounds, because a public IP starts getting
+password-guessing attempts within minutes of existing.
+
+```bash
+ls ~/.ssh/id_ed25519.pub          # already have one? use it, do not make another
+ssh-keygen -t ed25519             # only if that came back "No such file"
+```
+
+If `ssh-keygen` says **"already exists. Overwrite (y/n)?"** the answer is
+**n**. Overwriting is irreversible and breaks every other thing that key
+opens — GitHub, any server you have ever logged into. If you need a
+separate key rather than the existing one, give it its own name
+(`ssh-keygen -t ed25519 -f ~/.ssh/qellys`) and connect with
+`ssh -i ~/.ssh/qellys`.
+
+Then paste the **public** half into DigitalOcean:
+
+```bash
+cat ~/.ssh/id_ed25519.pub         # one line, starts "ssh-ed25519 AAAA…"
+ssh-add --apple-use-keychain ~/.ssh/id_ed25519   # macOS: type the passphrase once, ever
+```
+
+The file to share always ends in `.pub`. Its pair — same name, no
+extension — is the private key: never paste it, never mail it, never
+commit it. Anything beginning `-----BEGIN OPENSSH PRIVATE KEY-----` is
+the wrong one, and the recovery is to generate a new pair, not to
+apologise for it.
+
+**Two DNS records**, at Cloudflare, once the droplet has an IP:
+
+| Type | Name | Value | Proxy |
+|---|---|---|---|
+| A | `@` | the droplet's IPv4 | DNS only (grey) |
+| A | `www` | the droplet's IPv4 | DNS only (grey) |
+
+**Grey cloud, not orange, at least to begin with.** Cloudflare's proxy
+terminates TLS itself, which means Caddy cannot complete its own
+certificate challenge, and the app stops seeing real client IPs — and
+those IPs are what the rate limiter and the local-only guards are built
+on. Turn the proxy on later if you want it, deliberately, and re-check
+both of those.
+
+`www` gets a record even though it never serves anything: the Caddyfile
+redirects it to the bare name, and a redirect still needs the name to
+resolve.
+
 ## First time on a fresh box
 
 ```bash
