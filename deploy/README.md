@@ -344,7 +344,22 @@ first live deploy until the missing player memory was spotted on the page.
 
 ```bash
 # ON THE MAC, where the real data lives
+python3 ingest.py status            # what history you actually have
+
+# INGESTING IS NOT FITTING. The ingest gives the model DATA; the fitters
+# are what turn it into corrections. Seeding after an ingest but before a
+# fit ships a full history.db beside an empty data/models/, which is the
+# blank brain again with more disk used.
 python3 launch.py --settle all      # grade anything still open first
+python3 formfit.py   --from-db data/history.db
+python3 playerfit.py --from-db data/history.db
+python3 calibrate.py --from-db data/history.db
+
+# THE ORDER IS THE ONE playerfit.py STATES, and it is not alphabetical:
+# each fitter shapes the model the next one measures, and calibration
+# comes last because it corrects the model that will actually run.
+
+python3 launch.py --check           # "The learned model" should now be green
 ./deploy/seed.sh root@143.198.169.53
 ```
 
