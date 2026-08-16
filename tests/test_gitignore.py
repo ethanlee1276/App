@@ -53,6 +53,13 @@ MUST_IGNORE = (
     "secrets.local",
     "secrets.local.old",
     "web/data/recommendations.json",
+    # backup.sh's own output, 2026-08-16. Its default destination is
+    # ./backups — a SIBLING of data/, so `data/backups/` never covered
+    # it — and it writes `.db.gz`, which `*.db` does not match either.
+    # Gzipped copies of the accounts and ledger databases, sitting
+    # untracked in the checkout, one `git add -A` from being published.
+    "backups/accounts-20260816T040000Z.db.gz",
+    "backups/ledger-20260816T040000Z.db.gz",
 )
 
 #: …and paths that must stay tracked. An ignore rule wide enough to cover

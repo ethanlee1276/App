@@ -47,6 +47,13 @@ data/history.db
 *.db
 data/ledger.db
 data/backups/
+# backup.sh's default destination is ./backups — a sibling of data/, not a
+# child of it, so the line above never covered it. The files inside are
+# `.db.gz`, which `*.db` does not match either: gzipped copies of the
+# accounts and ledger databases, untracked, one `git add -A` from being
+# published. On the server these live in /var/backups/qellys instead; this
+# is for the laptop, where the script is run from the checkout.
+backups/
 # …and the backups a migration leaves BESIDE the database. `*.db` does not
 # cover them: rescale.py writes `ledger.db.pre-rescale-<date>`, which ends
 # in a date, so it showed up as a perfectly ordinary untracked file. One

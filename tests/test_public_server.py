@@ -653,6 +653,43 @@ def test_the_forwarded_header_overrides_survive_caddys_own_warning():
     assert "[-1]" in body, "_client_ip no longer takes the last entry"
 
 
+def test_the_nightly_backup_writes_somewhere_the_app_user_can_write():
+    """backup.sh defaults to ./backups, and on the server that is inside
+    /srv/qellys — which the app user deliberately does not own (step 1,
+    so a bug that writes a path cannot rewrite the code being executed).
+    The nightly job would die at `mkdir`, as an unprivileged user, at
+    4am, with the output going nowhere. Every failure mode of this step
+    is silent, which is why it is pinned rather than trusted.
+    """
+    readme = _read("deploy", "README.md")
+    sh = _read("deploy", "backup.sh")
+    assert 'DEST="${QB_BACKUP_DIR:-$ROOT/backups}"' in sh, \
+        "backup.sh no longer takes an override — the deploy step needs one"
+    cron = [ln for b in _shell_blocks(readme) for ln in b.splitlines()
+            if "backup.sh" in ln and "* * *" in ln]
+    assert cron, "no nightly cron line for backup.sh"
+    for ln in cron:
+        assert "QB_BACKUP_DIR=" in ln, \
+            "the cron line does not redirect the backup out of the checkout"
+        assert "/srv/qellys/backups" not in ln, "still writing inside the repo"
+        # Cron gets almost no environment; an export in the deploy shell
+        # does not survive into it, so the variable must be on the line.
+        assert ">>" in ln and "2>&1" in ln, \
+            "cron mails the output instead, and this box has no mail server"
+
+
+def test_a_backup_is_taken_before_the_restore_drill_checks_for_one():
+    """--check restores the NEWEST backup and verifies it. Run first, it
+    correctly reports "MISSING: no backup of accounts" — which reads as a
+    broken script on the one night you are paying attention."""
+    readme = _read("deploy", "README.md")
+    body = "\n".join(_shell_blocks(readme))
+    plain = re.search(r"^.*backup\.sh$", body, re.M)
+    assert plain, "the drill is documented but a first backup is never taken"
+    check = body.index("backup.sh --check")
+    assert plain.start() < check, "--check runs before anything is backed up"
+
+
 def test_swap_is_set_up_before_the_app_is_started():
     """Order is the whole content of this step.
 

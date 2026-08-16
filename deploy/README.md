@@ -196,9 +196,51 @@ sudo systemctl reload caddy
 journalctl -u caddy -n 30 --no-pager                # watch the certificate arrive
 
 # 6. backups, nightly, and prove a restore works
-echo '0 4 * * * /srv/qellys/deploy/backup.sh' | sudo -u qellys crontab -
-sudo -u qellys ./deploy/backup.sh --check
+#
+#    NOT INSIDE THE CHECKOUT. backup.sh defaults to ./backups, which on
+#    this box is /srv/qellys/backups — and the app user deliberately does
+#    not own /srv/qellys (see step 1). The nightly job would fail at
+#    `mkdir`, as the app user, at 4am, with nobody reading the output.
+#    Give it a directory it owns, outside the repo, where `git clean`
+#    also cannot reach it.
+sudo mkdir -p /var/backups/qellys
+sudo chown qellys:qellys /var/backups/qellys
+sudo chmod 750 /var/backups/qellys
+
+#    TAKE ONE BEFORE CHECKING ONE. --check restores the newest backup and
+#    verifies it; against an empty directory it correctly reports
+#    "MISSING: no backup of accounts", which reads like a broken script
+#    and is an empty shelf.
+sudo -u qellys env QB_BACKUP_DIR=/var/backups/qellys /srv/qellys/deploy/backup.sh
+sudo -u qellys env QB_BACKUP_DIR=/var/backups/qellys /srv/qellys/deploy/backup.sh --check
+
+#    Then nightly. The variable has to be IN the cron line — cron runs
+#    with almost no environment and nothing exported in this shell
+#    survives into it. The redirect matters too: without it cron mails
+#    the output, and a box with no mail server drops that on the floor,
+#    so a job failing every night looks exactly like a job working.
+#    `crontab -l | …` appends rather than replacing whatever is there.
+( sudo -u qellys crontab -l 2>/dev/null; \
+  echo '0 4 * * * QB_BACKUP_DIR=/var/backups/qellys /srv/qellys/deploy/backup.sh >> /var/backups/qellys/backup.log 2>&1' \
+) | sudo -u qellys crontab -
+sudo -u qellys crontab -l          # read it back
 ```
+
+### Offsite is the half this does not do
+
+Everything above puts the backups on the same disk as the databases.
+That survives a mistake — a bad migration, a wrong `DELETE` — and it does
+not survive losing the droplet, which is the case you are actually
+insuring against.
+
+The cheapest real fix is **DigitalOcean's own droplet backups**, enabled
+in their control panel: weekly images of the whole box, about 20% of the
+droplet price, no code and no credential to leak. Turn it on.
+
+`backup.sh` also takes `QB_BACKUP_REMOTE` and rsyncs there when set, for
+a second copy somewhere you control. Do not point it at the Mac: a
+laptop that is asleep when the job runs is a backup that silently stops
+without ever failing.
 
 ### Two things the Caddy reload will tell you, and one of them is fine
 
@@ -343,7 +385,7 @@ explicitly so it does not get "tidied away".
 
 ```bash
 sudo systemctl stop qellys
-gunzip -c backups/accounts-<stamp>.db.gz > data/accounts.db
+gunzip -c /var/backups/qellys/accounts-<stamp>.db.gz > data/accounts.db
 sudo systemctl start qellys
 ```
 
