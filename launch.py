@@ -1867,7 +1867,21 @@ _SWEEP_JS = r"""
 import { chromium } from 'playwright';
 const VIEWS = %s;
 const PORT = process.argv[2];
-const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+// FINDING THE BROWSER IS PART OF THE CHECK. Playwright's default
+// resolution wants a headless-shell build under its own versioned
+// directory; a machine that has Chromium installed somewhere else — this
+// project's own container puts it at /opt/pw-browsers/chromium — fails
+// with "Executable doesn't exist at …chromium_headless_shell-1234/…",
+// which reads as a Playwright installation problem and is a path lookup.
+// Each candidate is tried in turn and the LAST failure is re-thrown, so
+// the message names the path actually attempted.
+let b = null, lastErr = null;
+for (const path of [process.env.CHROMIUM_PATH, '/opt/pw-browsers/chromium', undefined]) {
+  if (path === null) continue;
+  try { b = await chromium.launch({ executablePath: path || undefined }); break; }
+  catch (e) { lastErr = e; }
+}
+if (!b) throw lastErr;
 for (const [name, hash, sel] of VIEWS) {
   const p = await b.newPage({ viewport: { width: 1280, height: 1000 } });
   const errs = [];
@@ -1963,8 +1977,21 @@ def _browser_sweep(ok: str, warn: str, bad: str) -> None:
             else:
                 print(f"{ok} {r['name']}: rendered ({r['chars']:,} chars)")
         if not seen:
-            print(f"{warn} sweep produced no output: "
-                  f"{(proc.stderr or '').strip().splitlines()[-1:] or ''}")
+            # THE LAST LINE IS THE LEAST USEFUL ONE. A node crash dump ends
+            # with its own version banner, so `splitlines()[-1:]` reported
+            # "Node.js v22.22.2" and threw away the message above it — the
+            # sweep silently skipped for weeks looking like a Node problem.
+            # A health check that hides why it failed is worse than one
+            # that fails loudly, because it trains you to skip past it.
+            noise = ("at ", "^", "node:internal", "Node.js v", "triggerUncaught")
+            lines = [ln.strip() for ln in (proc.stderr or "").splitlines()
+                     if ln.strip() and not ln.strip().startswith(noise)]
+            said = lines[0] if lines else "(no output on stderr either)"
+            print(f"{warn} sweep produced no output — {said[:160]}")
+            if "Executable doesn't exist" in said or "playwright install" in said:
+                print("    The browser is not where Playwright looked. Either")
+                print("      npx playwright install chromium")
+                print("    or point CHROMIUM_PATH at an existing one.")
     except Exception as exc:  # noqa: BLE001 — a check must never crash
         print(f"{warn} Page render sweep failed: {exc}")
     finally:

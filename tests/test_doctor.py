@@ -577,6 +577,72 @@ def test_the_daily_chores_are_not_reachable_only_through_the_server():
         f"only {callers} references — the nightly path must call it too")
 
 
+# --- the render sweep, and the checklist's duty to say why it failed --------
+
+def _launch() -> str:
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return open(os.path.join(root, "launch.py"), encoding="utf-8").read()
+
+
+def _code_only(src: str) -> str:
+    """Source with whole-line `#` comments dropped.
+
+    FOURTH TIME. A guard that greps the file it guards keeps matching the
+    comment that explains the very fix — the systemd [Service] header, the
+    icons http:// rule, `sudo caddy validate`, and now this. Prose has to
+    stay free to quote the wrong thing as the wrong thing; only code is
+    the instruction. tests/test_public_server.py does the same job for
+    markdown with _shell_blocks().
+    """
+    return "\n".join(ln for ln in src.splitlines()
+                      if not ln.lstrip().startswith("#"))
+
+
+def test_the_sweep_reports_the_line_that_says_what_broke():
+    """It reported the LAST line of node's stderr, and a node crash dump
+    ends with its own version banner — so a real failure printed
+    "sweep produced no output: ['Node.js v22.22.2']" and threw away the
+    message above it. The sweep silently skipped for weeks looking like a
+    Node problem, while the actual cause was a browser path.
+
+    A health check that hides why it failed is worse than one that fails
+    loudly: it teaches you to scroll past the warning."""
+    src = _launch()
+    assert "splitlines()[-1:]" not in _code_only(src), \
+        "the sweep is back to reporting node's version banner"
+    i = src.index("sweep produced no output")
+    block = src[max(0, i - 900):i + 300]
+    assert "noise" in block and "startswith" in block, \
+        "nothing filters the stack frames out of the reported line"
+
+
+def test_the_sweep_looks_for_a_browser_in_more_than_one_place():
+    """Playwright resolves a versioned headless-shell path. A machine with
+    Chromium installed elsewhere — this project's own container keeps it
+    at /opt/pw-browsers/chromium — fails with "Executable doesn't exist",
+    which reads as a broken Playwright install and is a path lookup."""
+    src = _launch()
+    js = src[src.index("_SWEEP_JS"):]
+    assert "CHROMIUM_PATH" in js
+    assert "/opt/pw-browsers/chromium" in js, "only one location is tried"
+    assert "throw lastErr" in js, \
+        "a failure to launch would be swallowed rather than reported"
+
+
+def test_the_sweep_still_covers_every_page_a_visitor_can_reach():
+    """The list is the coverage. Weather and Alerts were both absent once
+    and both crashed on load; the account screen is now the page every
+    locked board will point at."""
+    src = _launch()
+    sweep = src[src.index("SWEEP_VIEWS = ["):]
+    sweep = sweep[:sweep.index("]\n")]
+    for required in ("#recommended", "#record", "#mybets", "#account",
+                     "#weather", "#alerts", "#lab", "terms.html",
+                     "privacy.html"):
+        assert required in sweep, f"the sweep no longer opens {required}"
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
