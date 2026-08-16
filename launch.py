@@ -1833,6 +1833,12 @@ SWEEP_VIEWS = [
     ("Rocket Radar", "?sport=mlb#memes", "#memes-body"),
     ("Injuries (MLB)", "?sport=mlb#injuries", "#injuries-body"),
     ("My Bets", "?sport=mlb#mybets", "#mybets-body"),
+    # ADDED 2026-08-16 with the screen itself. A view absent from this
+    # list is a view nobody renders until a user does, and the account
+    # screen is now the destination every locked board points at — the
+    # one page where a silent crash costs a subscription rather than a
+    # glance.
+    ("Account", "?sport=mlb#account", "#account-body"),
     ("Bankroll", "?sport=mlb#bankroll", "#view-bankroll"),
     ("Why Us", "?sport=mlb#why", "#why-body"),
     # ADDED 2026-08-15, AND THIS IS WHY. Weather and Alerts were missing

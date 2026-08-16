@@ -4809,3 +4809,93 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   font-size: var(--fs-xs); opacity: .8; }
 .pre-line-n { color: var(--text); }
 .pre-line-books { margin-left: auto; }
+
+/* ---------------- The account screen -------------------------------------
+   Ethan, 2026-08-16: "it needs to look professional."
+
+   A NARROW MEASURE IS THE POINT HERE, and it is the opposite of the rule
+   everywhere else on this site. Every other page is a data table that
+   wants width; a sign-in screen has exactly one thing to do, and stretched
+   to the width of the board its two fields float in a field of nothing —
+   which is precisely what "not professional" looked like. `--measure-tight`
+   is the token already used for reading columns, so this borrows the
+   site's own answer rather than inventing a number. */
+.acct-screen { max-width: var(--measure-tight); margin: 0 auto; }
+.acct-screen-head { display: flex; align-items: center; gap: 14px;
+  margin: 4px 0 18px; }
+.acct-screen-head h2 { margin: 0; font-family: var(--font-display);
+  font-size: var(--fs-xl); line-height: var(--lh-tight); letter-spacing: -.01em; }
+.acct-screen-sub { margin: 4px 0 0; color: var(--text-mute);
+  font-size: var(--fs-sm); line-height: var(--lh-body); }
+
+/* The initials disc, shared by the screen head and the sync strip. Same
+   shape as the topbar chip so the three read as one identity rather than
+   three unrelated badges. */
+.acct-avatar { display: inline-grid; place-items: center;
+  width: 44px; height: 44px; flex: 0 0 auto; border-radius: 50%;
+  background: var(--grad-brand, var(--brand)); color: var(--brand-ink, #fff);
+  font-weight: 800; letter-spacing: .02em; font-size: var(--fs-md); }
+.acct-avatar.sm { width: 26px; height: 26px; font-size: var(--fs-xs); }
+
+/* The three promises under the form. Not decoration: the objection a
+   signed-out visitor actually has is "what are you going to do with my
+   details", and answering it beside the button is worth more than
+   answering it in a policy page nobody opens. */
+.acct-assure { list-style: none; margin: 18px 0 0; padding: 0;
+  border-top: var(--hairline); padding-top: 14px; }
+.acct-assure li { position: relative; padding-left: 22px; margin: 7px 0;
+  color: var(--text-mute); font-size: var(--fs-sm); line-height: var(--lh-body); }
+/* MASKED SVG, NOT A TYPED CHARACTER. This repo draws its status marks —
+   a literal ✓ inherits whatever glyph the reader's font happens to have,
+   which is a different weight and baseline on every platform, and on some
+   is an emoji. `--ic-check` is the same mark the reasons list uses, so
+   these read as one vocabulary. Caught by tests/test_icons.py, which is
+   the rule written down. */
+.acct-assure li::before { content: ""; position: absolute; left: 0; top: .35em;
+  width: 13px; height: 13px; background-color: var(--good);
+  -webkit-mask: var(--ic-check) no-repeat center / contain;
+  mask: var(--ic-check) no-repeat center / contain; }
+
+/* The strip that replaced the full sign-in card on My Bets and Fantasy. */
+.acct-strip { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px; margin-bottom: 16px;
+  border: var(--hairline); border-radius: var(--radius);
+  background: var(--fill-subtle); color: var(--text-body);
+  font-size: var(--fs-sm); }
+.acct-strip .btn { margin-left: auto; }
+.acct-strip-out { border-color: var(--border); }
+
+/* The topbar chip when signed OUT: a labelled pill rather than a lone
+   glyph. The glyph alone reads as "settings", and what sits behind it is
+   the only way anyone can pay for anything. */
+.nav-acct-out { width: auto; gap: 6px; padding: 0 12px 0 9px;
+  border-radius: 999px; background: var(--fill-subtle);
+  border: var(--hairline); font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: .01em; white-space: nowrap; }
+.nav-acct-out svg { width: 16px; height: 16px; }
+.nav-acct-out:hover { background: var(--fill-hover); }
+
+/* Phones: the label is the first thing to go when the masthead is tight,
+   but the target stays the same size — a shrinking hit area on the one
+   control a new visitor needs is the wrong economy. */
+@media (max-width: 560px) {
+  .nav-acct-out { padding: 0; width: 34px; border-radius: 50%; }
+  .nav-acct-out span { position: absolute; width: 1px; height: 1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .acct-avatar { width: 38px; height: 38px; }
+}
+
+/* The form, at a sign-in measure. `.acct-row` is a wrapping flex row built
+   for a card the width of the board; at 30rem it wrapped into a ragged
+   three-row arrangement — email full width, then password sharing a line
+   with a button, then a button alone. Stacked, it reads as one sequence
+   with one obvious action at the end, which is what a sign-in screen is. */
+.acct-screen .acct-row { flex-direction: column; align-items: stretch; gap: 10px; }
+.acct-screen .acct-row input { flex: 1 1 auto; width: 100%; }
+.acct-screen .acct-row .btn { width: 100%; justify-content: center; }
+.acct-screen .card { padding: 20px; }
+.acct-screen .acct-confirm { margin-top: 14px; }
+/* The two explanatory paragraphs stay — they answer real questions — but
+   they are support, not the point, and at full body size they outweighed
+   the form they sit under. */
+.acct-screen .rank-help { font-size: var(--fs-xs); }

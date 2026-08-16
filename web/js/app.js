@@ -8497,7 +8497,7 @@ function renderMyBets() {
       you can change or delete it whenever you like, and it is what carries this log to your
       other devices.
     </div>
-    ${acctCardHTML()}
+    ${acctStripHTML()}
     ${form}
     <details class="card mb-import">
       <summary>Bulk import — a CSV from your sportsbook, or a Juice Reel export</summary>
@@ -9413,7 +9413,7 @@ async function renderFantasy() {
      rankBoardHTML(d.ranks)],
     ["league", "Around the league",
      "camp, the waiver wire, the offseason and the draft kit",
-     acctCardHTML() + `<div id="sleeper-zone"></div>`
+     acctStripHTML() + `<div id="sleeper-zone"></div>`
      + `<div id="league-desk"></div>`
      + `<div id="yahoo-zone"></div><div id="yahoo-desk"></div>`
      + campHTML(d.camp)
@@ -9815,7 +9815,7 @@ function acctSignInHTML() {
   const insecure = _acctUser && _acctUser.insecure;
   return `<div class="card" style="margin-bottom:16px">
     <div class="card-head"><div>
-      <div class="player">Make an account</div>
+      <div class="player">Email and password</div>
       <div class="subtitle">Email and a password. Your bets, fantasy
         leagues and search history are stored with it, so they are there on
         every device you sign in on.</div></div></div>
@@ -9837,8 +9837,8 @@ function acctSignInHTML() {
         autocomplete="email" maxlength="254" spellcheck="false">
       <input type="password" class="acct-pw" placeholder="password"
         autocomplete="current-password" maxlength="200">
-      <button class="btn" onclick="acctAuth(this, 'signup')">Create account</button>
-      <button class="btn ghost" onclick="acctAuth(this, 'login')">Sign in</button>
+      <button class="btn" onclick="acctAuth(this, 'login')">Sign in</button>
+      <button class="btn ghost" onclick="acctAuth(this, 'signup')">Create account</button>
     </div>
     <label class="acct-confirm">
       <input type="checkbox" class="acct-age">
@@ -10043,6 +10043,94 @@ window.acctDelete = async function (btn) {
 /* One card, mounted on both My Bets and Fantasy. Handlers find their
    inputs through the card element itself, so the two mounts never fight
    over ids. */
+/* ---------------- The account screen -------------------------------------
+
+   Ethan, 2026-08-16: "the login page is hidden and should be on the main
+   screen with maybe an account icon in the top right … it needs to look
+   professional."
+
+   It WAS hidden, and the diagnosis is worth keeping because the shape
+   recurs: the sign-in form existed, worked, and was well tested — it was
+   simply mounted three cards down inside My Bets, reachable only by
+   pressing an unlabelled person glyph. Nothing was broken. It just had no
+   address of its own, and a thing with no address cannot be linked to,
+   cannot be bookmarked, and cannot be the destination of "you need an
+   account for that".
+
+   That last one is why this is the piece the paywall waits on: every
+   locked board is about to need somewhere to send people.
+
+   ONE COLUMN, NOT A CARD IN A STACK. A sign-in screen is the one page
+   where a narrow measure is right — there is a single thing to do, and
+   the width of a data table would leave the form stranded in a field of
+   nothing. */
+function acctScreenHTML() {
+  const u = _acctUser;
+  if (u && u.signed_in) {
+    setTimeout(renderBilling, 0);
+    return `<div class="acct-screen acct-screen-in">
+      <div class="acct-screen-head">
+        <span class="acct-avatar">${escapeHtml(
+          (u.email || "?").trim().slice(0, 2).toUpperCase())}</span>
+        <div>
+          <h2>Your account</h2>
+          <p class="acct-screen-sub">${escapeHtml(u.email)}</p>
+        </div>
+      </div>
+      ${acctSignedInHTML(u)}
+    </div>`;
+  }
+  // Signed out. A legacy PIN profile, if this device still has one, goes
+  // BELOW the sign-in rather than above it: it is the old thing being
+  // replaced, and putting it first would make the upgrade look optional.
+  const legacy = acctState() ? acctLegacyCardHTML() : "";
+  return `<div class="acct-screen">
+    <div class="acct-screen-head">
+      <div>
+        <h2>Sign in to Qellys Book</h2>
+        <p class="acct-screen-sub">One account carries your bet log, your
+          fantasy leagues and your subscription to every device you use.</p>
+      </div>
+    </div>
+    ${acctSignInHTML()}
+    <ul class="acct-assure">
+      <li>The site takes no bets and never holds your money.</li>
+      <li>Card details go to Paddle, never to this server.</li>
+      <li>Delete the account whenever you like, from this page.</li>
+    </ul>
+    ${legacy}
+  </div>`;
+}
+
+/* Re-rendered whenever the server's answer changes — a screen still
+   showing the sign-in form after a successful sign-in is the commonest
+   way a page like this feels broken. */
+function renderAccount() {
+  const body = document.getElementById("account-body");
+  if (!body) return;
+  body.innerHTML = acctScreenHTML();
+}
+
+/* The compact strip that replaces the full card on My Bets and Fantasy.
+   Those pages need to say whether the log is syncing; they do not need to
+   be a second place to sign in, and two forms for one thing is how a
+   password gets typed into the wrong one. */
+function acctStripHTML() {
+  const u = _acctUser;
+  if (u && u.signed_in) {
+    return `<div class="acct-strip">
+      <span class="acct-avatar sm">${escapeHtml(
+        (u.email || "?").trim().slice(0, 2).toUpperCase())}</span>
+      <span>Syncing to <b>${escapeHtml(u.email)}</b></span>
+      <button class="btn ghost" onclick="switchView('account', true)">Account</button>
+    </div>`;
+  }
+  return `<div class="acct-strip acct-strip-out">
+    <span>Not signed in — this stays in this browser only.</span>
+    <button class="btn" onclick="switchView('account', true)">Sign in</button>
+  </div>`;
+}
+
 function acctCardHTML() {
   // The email/password account is the front door now. `_acctUser` is the
   // SERVER's answer, fetched at boot; until it lands we draw the sign-in
@@ -12929,7 +13017,7 @@ function watchSectionSubs() {
    one that felt like a step back. Nothing else was affected — the view
    still switched correctly, which is why it survived: the bug is only
    visible as a 200ms animation going the wrong way. */
-const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "mybets", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
+const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
 
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -12972,6 +13060,10 @@ function switchView(name, push = false) {
   if (name === "fantasy") renderFantasy();
   if (name === "memes") renderMemes();
   if (name === "mybets") renderMyBets();
+  // Awaited, unlike its neighbours: this screen's entire content depends
+  // on the server's answer to "who is this", and drawing before it lands
+  // shows the sign-in form to somebody who is already signed in.
+  if (name === "account") acctWho().then(renderAccount);
   if (name === "bankroll") renderBankrollExtras();
   if (name === "weather") renderWeather();
   if (name === "alerts") renderAlerts();
@@ -14221,8 +14313,32 @@ async function renderLiveBoard() {
       `<span class="nav-acct-init">${escapeHtml(a.name.slice(0, 2).toUpperCase())}</span>`;
     acctBtn.addEventListener("click", () => {
       if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
-      switchView("mybets", true);
+      switchView("account", true);
     });
+    // WORDS WHEN SIGNED OUT. The glyph alone reads as "settings", and the
+    // thing behind it is the only way to pay for anything. Resolved after
+    // the server answers rather than from the local profile, because the
+    // local one can say "signed in" for an account the server has since
+    // deleted — and offering "Sign in" to somebody already signed in is a
+    // smaller error than the reverse.
+    (async () => {
+      try {
+        const u = await acctWho();
+        if (u && u.signed_in) {
+          const initials = (u.email || "?").trim().slice(0, 2).toUpperCase();
+          acctBtn.innerHTML =
+            `<span class="nav-acct-init">${escapeHtml(initials)}</span>`;
+          acctBtn.title = `Signed in as ${u.email}`;
+        } else {
+          acctBtn.classList.add("nav-acct-out");
+          acctBtn.innerHTML =
+            `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/>
+               <path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span>Sign in</span>`;
+          acctBtn.title = "Sign in or create an account";
+        }
+      } catch (e) { /* the glyph on its own is the honest fallback */ }
+    })();
   }
   // Anchor items (Top Picks, Stadiums): go Home, then scroll to the block.
   document.querySelectorAll(".sb-anchor").forEach((b) =>

@@ -130,9 +130,14 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
       </button>
       <!-- The render's avatar chip, minus the balance chip beside it (the
-           site never holds money). Initials when signed in, a plain person
-           mark when not; either way it lands on My Bets, where the
-           account card lives. -->
+           site never holds money). Initials when signed in; when signed
+           OUT it says "Sign in" in words.
+           A bare person glyph is not a call to action — it reads as
+           "settings" or as decoration, and the one thing a signed-out
+           visitor most needs to find was behind it. The label is added by
+           app.js rather than sitting here, because the markup is served
+           to signed-in and signed-out alike and only the browser knows
+           which one is reading it. -->
       <button class="meta-ico nav-acct" id="nav-acct" title="Your account" aria-label="Your account">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
       </button>
@@ -573,6 +578,16 @@
     </section>
 
     <!-- My Bets — the user's OWN sportsbook bets, tracked locally -->
+    <!-- Account — its own screen, not a card stacked inside My Bets.
+         Ethan, 2026-08-16: "the login page is hidden and should be on the
+         main screen … it needs to look professional." It was reachable
+         only by pressing an unlabelled person glyph that dropped you into
+         a bet log, three cards down. Signing in is the first thing a
+         paying customer does and it had no address of its own. -->
+    <section class="view" id="view-account">
+      <div id="account-body"></div>
+    </section>
+
     <section class="view" id="view-mybets">
       <div class="section-title">My Bets
         <span class="sub">— the bets YOU placed at the sportsbooks, logged by hand and kept
