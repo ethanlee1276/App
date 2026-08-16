@@ -52,6 +52,22 @@ if [[ -z "$REMOTE" ]]; then
 fi
 cd "$(dirname "$0")/.."
 
+# RUN THIS FROM THE MACHINE THAT HAS THE DATA, NOT THE ONE RECEIVING IT.
+#
+# Both prompts scroll past in the same window and the two hosts are easy to
+# confuse — it has already sent `ufw`, `journalctl` and `cd ~/App` to the
+# wrong box this week. Run here, on the server, it would ssh to itself,
+# fail on publickey, and print a permissions error that reads like a
+# broken deploy key rather than "wrong machine".
+#
+# /srv/qellys only exists on the server, so its presence is the tell.
+if [[ -d /srv/qellys && "$(pwd -P)" == "/srv/qellys" ]]; then
+  echo "This is the SERVER — seed.sh runs from the Mac, which is where the" >&2
+  echo "data lives. Type 'exit' to get back, then:" >&2
+  echo "    cd ~/App && ./deploy/seed.sh ${MODE:+--models-only }$REMOTE" >&2
+  exit 2
+fi
+
 # ledger.db is FIRST and it is the one that matters most: it is the public
 # record, it cannot be rebuilt from anywhere, and the server has already
 # started writing its own. Sending it means overwriting that.

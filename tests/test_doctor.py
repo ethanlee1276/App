@@ -683,6 +683,22 @@ def test_the_checklist_points_at_the_fix_rather_than_only_the_fault():
     assert os.access(seed, os.X_OK), "seed.sh is not executable"
 
 
+def test_seed_refuses_to_run_on_the_machine_it_would_seed():
+    """Both prompts scroll past in one window and the hosts are easy to
+    confuse — `ufw`, `journalctl` and `cd ~/App` have all gone to the
+    wrong box this week. Run on the server, seed.sh would ssh to itself,
+    fail on publickey, and print a permissions error that reads like a
+    broken deploy key rather than "wrong machine"."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sh = _code_only(open(os.path.join(root, "deploy", "seed.sh"),
+                         encoding="utf-8").read())
+    assert "/srv/qellys" in sh, "nothing detects the server"
+    guard = sh[sh.index('if [[ -d /srv/qellys'):][:400]
+    assert "exit 2" in guard, "it warns but carries on"
+    # And the check must come BEFORE anything is stopped or copied.
+    assert sh.index("/srv/qellys && ") < sh.index("systemctl stop qellys")
+
+
 def test_a_seed_that_dies_still_brings_the_app_back():
     """`set -euo pipefail` plus a stop/start pair is a trap.
 
