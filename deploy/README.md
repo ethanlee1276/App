@@ -63,10 +63,69 @@ resolve.
 
 ## First time on a fresh box
 
+### A deploy key first — the repo is private
+
+`git clone` of a private repo needs credentials on the server, and the
+right kind is a **deploy key**: an SSH key that GitHub accepts for this
+one repository, read-only. Not your personal key, which opens every repo
+you can reach, and not a personal access token, which is a bearer secret
+that ends up sitting in `.git/config`.
+
 ```bash
-# 1. a user that is not root, and a home for the app
+# ON THE SERVER, as root
+ssh-keygen -t ed25519 -f /root/.ssh/qellys_deploy -N "" -C "qellys droplet"
+cat /root/.ssh/qellys_deploy.pub
+```
+
+Paste that line into GitHub → the repo → **Settings → Deploy keys → Add
+deploy key**. Title it `qellys droplet`. **Leave "Allow write access"
+UNCHECKED** — the server only ever needs to read. A read-only key that
+leaks costs you a copy of the source; a writable one lets whoever has it
+push code that this box then runs as a service.
+
+Then tell git to use it, for that host only:
+
+```bash
+cat >> /root/.ssh/config <<'EOF'
+Host github-qellys
+  HostName github.com
+  User git
+  IdentityFile /root/.ssh/qellys_deploy
+  IdentitiesOnly yes
+EOF
+chmod 600 /root/.ssh/config
+```
+
+`IdentitiesOnly yes` matters: without it ssh offers every key it can find
+and GitHub rejects the connection after too many wrong ones, which reads
+as "permission denied" rather than "you sent five keys".
+
+```bash
+# 0. prove the key works before it is load-bearing
+ssh -T git@github-qellys      # expect: "Hi ethanlee1276/App! You've successfully authenticated"
+```
+
+That greeting says authentication worked. It also says *"but GitHub does
+not provide shell access"* — which is not an error and is what success
+looks like here.
+
+```bash
+# 1. the code, then the user that runs it
+#    CLONE FIRST: adduser creates /srv/qellys, and git refuses to clone
+#    into a directory that already has anything in it. Done this way
+#    round, adduser finds the directory, says so, and carries on.
+git clone github-qellys:ethanlee1276/App.git /srv/qellys
 sudo adduser --system --group --home /srv/qellys qellys
-sudo -u qellys git clone <repo> /srv/qellys
+
+#    THE APP USER DOES NOT OWN ITS OWN CODE. Only the two directories it
+#    writes to. A service that can rewrite the files it executes turns
+#    any bug that writes a path into remote code execution, and the
+#    systemd unit's ReadWritePaths already says these are the only two.
+#    It also keeps `git pull` clean: deploy.sh runs as root, and git
+#    refuses to operate on a repo owned by someone else ("dubious
+#    ownership") — which reads like a permissions bug and is not one.
+sudo mkdir -p /srv/qellys/data /srv/qellys/web/data
+sudo chown -R qellys:qellys /srv/qellys/data /srv/qellys/web/data
 cd /srv/qellys
 
 # 2. secrets, readable only by root and the app
