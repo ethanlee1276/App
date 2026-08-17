@@ -46,12 +46,16 @@ function updateUnitNote() {
 }
 
 const SPORT_META = {
-  nfl: { logo: "🏈", tagline: "AI-powered NFL player-prop model",
+  // The NFL and MLB taglines carry the model names — they moved here
+  // from the sidebar's Models group when it dissolved (2026-08-17): its
+  // three rows were the league chips wearing the model names, and this
+  // line is where the identity actually belongs.
+  nfl: { logo: "🏈", tagline: "The NFL Book — the pro-bettor prop model",
          gamesTitle: "This week’s stadiums",
          gamesSub: "real stadium shapes, roof state, live wind and the passing "
                    + "conditions each one is playing to right now",
          api: "/api/recommendations", fallback: "data/recommendations.json" },
-  mlb: { logo: "⚾", tagline: "AI-powered MLB player-prop model",
+  mlb: { logo: "⚾", tagline: "Scalpy 2.0 — the MLB prop model",
          gamesTitle: "Tonight’s ballparks",
          gamesSub: "real park shapes, roof state, live wind and the home-run "
                    + "factor each one is playing to right now",
@@ -14447,6 +14451,34 @@ async function renderLiveBoard() {
       };
       setTimeout(open, 120);
     }));
+  // Collapsible groups — the drawer had grown to 37 rows and two full
+  // screens of scrolling (measured 1672px against a 788px phone
+  // viewport, 2026-08-17). The reference pages fold behind a Library
+  // heading; the daily surfaces ship open. The DEFAULT lives in the
+  // markup (aria-expanded + [hidden]) so it holds before this runs, and
+  // a person's choice outlives the default via localStorage.
+  const FOLD_KEY = "qb_sb_folds";
+  const folds = (() => {
+    try { return JSON.parse(localStorage.getItem(FOLD_KEY)) || {}; }
+    catch (e) { return {}; }
+  })();
+  document.querySelectorAll(".sb-fold").forEach((head) => {
+    const grp = head.nextElementSibling;
+    if (!grp || !grp.classList.contains("sb-group")) return;
+    const paint = (open) => {
+      head.setAttribute("aria-expanded", String(open));
+      grp.hidden = !open;
+    };
+    const saved = folds[head.dataset.fold];
+    if (saved === "open" || saved === "shut") paint(saved === "open");
+    // else: the markup default already painted itself
+    head.addEventListener("click", () => {
+      const open = grp.hidden;
+      paint(open);
+      folds[head.dataset.fold] = open ? "open" : "shut";
+      try { localStorage.setItem(FOLD_KEY, JSON.stringify(folds)); } catch (e) {}
+    });
+  });
   syncRail();
 })();
 

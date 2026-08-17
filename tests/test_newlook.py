@@ -86,6 +86,80 @@ def test_every_destination_survived_the_redesign():
     assert 'id="pz-toggle"' in sb, "the Parlay Mode switch fell out"
 
 
+def test_the_drawer_has_one_door_per_page():
+    """Ethan, 2026-08-17: "theres so much on the site and its hard and
+    confusing to navigate." Measured before the declutter: 37 rows and
+    1672px of drawer against a 788px phone viewport — and FOUR of those
+    rows opened the same Dashboard (its own row, a Top Picks anchor, and
+    the Game Lines and Watchlist sub-tab links). Rows that are doors to
+    the same page teach a reader that the menu cannot be trusted to mean
+    anything.
+
+    The other half of this contract is the test above: everything that
+    left the drawer is still IN the drawer once, or one visible tap away
+    on the Dashboard's own sub-tab bar. This test pins ONCE."""
+    sb = HTML[HTML.index('id="sidebar"'):HTML.index("</aside>")]
+    views = re.findall(r'data-view="([a-z]+)"', sb)
+    assert len(views) == len(set(views)), (
+        f"a page has two drawer rows again: "
+        f"{sorted(v for v in views if views.count(v) > 1)}")
+    sports = re.findall(r'data-sport="([a-z]+)"', sb)
+    assert len(sports) == len(set(sports)), (
+        f"a sport has two drawer rows again: "
+        f"{sorted(s for s in sports if sports.count(s) > 1)}")
+    # Anchor rows duplicate a section of a page the drawer already lists.
+    assert "sb-anchor" not in sb, \
+        "an anchor row is back — it is a second door to the Dashboard"
+    # One sub-tab row is earned: Game Lines, the market bettors scan a
+    # menu for. Watchlist's row was cut — its tab is visible on the
+    # Dashboard itself.
+    assert sb.count("sb-subtab") == 1, \
+        "a second sub-tab row — the Dashboard's own tab bar is its door"
+    # The Models group's three rows were the MLB/NFL/UFC chips wearing
+    # the model names…
+    assert "sb-model" not in sb, "the Models group is back"
+    # …and the names must survive its dissolution: they live in the
+    # league taglines now (and the chips' title tooltips).
+    assert "Scalpy 2.0" in APP, "the MLB model's name vanished with its menu row"
+    assert "The NFL Book" in APP, "the NFL model's name vanished with its menu row"
+
+
+def test_the_library_folds_and_remembers():
+    """Six reference pages (injuries, weather, trending, rosters,
+    players, rankings) fold behind one Library heading, SHUT by default —
+    they are visited weekly, not nightly. The daily groups ship open.
+
+    Three parts, each load-bearing:
+      * the default lives in the MARKUP (aria-expanded + [hidden]) so it
+        holds before app.js runs, with no flash of the long menu;
+      * `.sb-group[hidden] { display: none; }` exists in the stylesheet,
+        because .sb-group's display:flex otherwise beats the UA's
+        [hidden] rule and the fold only pretends;
+      * the person's choice outlives the default via localStorage."""
+    sb = HTML[HTML.index('id="sidebar"'):HTML.index("</aside>")]
+    assert sb.count('class="sb-label sb-fold"') == 3, \
+        "the foldable heads changed — Betting, Library, My Book"
+    lib = sb[sb.index('data-fold="library"'):]
+    assert 'aria-expanded="false"' in lib[:220], "Library no longer ships shut"
+    assert '<div class="sb-group" data-group="library" hidden>' in sb, \
+        "Library's group lost its markup-default [hidden]"
+    for fold in ('data-fold="research"', 'data-fold="tools"'):
+        seg = sb[sb.index(fold):]
+        assert 'aria-expanded="true"' in seg[:220], \
+            f"{fold} must ship open — it is a daily surface"
+    assert ".sb-group[hidden] { display: none; }" in CSS, \
+        "a folded group only pretends to fold without this rule"
+    assert "qb_sb_folds" in APP, "the fold choice is no longer remembered"
+    # Folding must never orphan a page: every library row is still a
+    # .nav-btn the router binds, so search, hash routes and the fold all
+    # reach the same six views.
+    libgrp = sb[sb.index('data-group="library"'):]
+    libgrp = libgrp[:libgrp.index("</div>")]
+    for view in ("injuries", "weather", "trending", "rosters", "players",
+                 "standings"):
+        assert f'data-view="{view}"' in libgrp, f"{view} left the Library"
+
+
 def test_the_rail_belongs_to_home_only():
     """The render puts insights and live-now beside the dashboard. On
     every other page the content gets the room back."""

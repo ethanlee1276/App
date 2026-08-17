@@ -112,7 +112,7 @@
       </span>
       <div class="brand-words">
         <h1>Qellys <span>Book</span></h1>
-        <div class="tagline" id="tagline">AI-powered NFL player-prop model</div>
+        <div class="tagline" id="tagline">The NFL Book — the pro-bettor prop model</div>
       </div>
     </a>
     <!-- The old top-nav row retired 2026-08-11 (Ethan: "repeating tabs
@@ -168,12 +168,16 @@
     <div class="sb-sec" id="sport-switch">
       <div class="sb-label" data-head="sport">Leagues</div>
       <div class="sb-group sb-chips" data-group="leagues">
-        <button class="sport-btn active" data-sport="nfl" data-kind="league" title="NFL">NFL</button>
-        <button class="sport-btn" data-sport="cfb" data-kind="league" title="College football">CFB</button>
-        <button class="sport-btn" data-sport="mlb" data-kind="league" title="MLB">MLB</button>
-        <button class="sport-btn" data-sport="nba" data-kind="league" title="NBA">NBA</button>
-        <button class="sport-btn" data-sport="wnba" data-kind="league" title="WNBA">WNBA</button>
-        <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC">UFC</button>
+        <!-- The titles carry each league's model name — the old Models
+             group's three rows were these same chips wearing different
+             names, so the names moved here when the group dissolved
+             (2026-08-17, the navigation declutter). -->
+        <button class="sport-btn active" data-sport="nfl" data-kind="league" title="NFL — The NFL Book, the pro-bettor spec">NFL</button>
+        <button class="sport-btn" data-sport="cfb" data-kind="league" title="College football — attention is the axis">CFB</button>
+        <button class="sport-btn" data-sport="mlb" data-kind="league" title="MLB — Scalpy 2.0, the model behind the board">MLB</button>
+        <button class="sport-btn" data-sport="nba" data-kind="league" title="NBA — the Scalpy probability engine">NBA</button>
+        <button class="sport-btn" data-sport="wnba" data-kind="league" title="WNBA — the Scalpy engine, on probation">WNBA</button>
+        <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC — Scalpy MMA, the fight model">UFC</button>
       </div>
 
       <!-- Ethan, 2026-08-12: "the Polly market page and fantasy page and
@@ -205,11 +209,25 @@
           Live Now <span class="sb-badge" id="sb-live-badge" hidden></span></button>
       </div>
 
-      <div class="sb-label" data-head="research">Research</div>
+      <!-- The declutter, 2026-08-17. Ethan: "theres so much on the site
+           and its hard and confusing to navigate." Measured before: 37
+           rows, 1672px of drawer on a 788px phone. Three cuts, nothing
+           lost:
+             * Top Picks (an anchor to the Dashboard's first section) and
+               Watchlist (a Dashboard sub-tab) left the drawer — both are
+               one visible tap on the Dashboard itself. Game Lines keeps
+               its row: it is the one sub-tab bettors scan a menu for.
+             * The Models group's three rows were the MLB/NFL/UFC chips
+               wearing model names — the names moved into the league
+               chips' titles and the header taglines.
+             * Research (11 flat rows) split into Betting and a foldable
+               Library; the daily surfaces ship open, reference ships
+               folded, and the choice is remembered (qb_sb_folds). -->
+      <button class="sb-label sb-fold" data-head="research" data-fold="research"
+              type="button" aria-expanded="true">Betting
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
       <div class="sb-group" data-group="research">
-        <button class="nav-btn sb-item sb-anchor" data-anchor="top-picks" data-hint="tonight’s best grades">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l2.7 5.6 6.3.9-4.5 4.3 1 6.2-5.5-3-5.5 3 1-6.2L3 9.5l6.3-.9z"/></svg>
-          Top Picks</button>
         <button class="nav-btn sb-item" data-view="edge" data-hint="every +EV price">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
           Player Props</button>
@@ -225,12 +243,25 @@
         <button class="nav-btn sb-item" data-view="futures" data-hint="the whole season, simulated">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 21h8M12 17v4M5 4h14v3a7 7 0 0 1-14 0z"/><path d="M5 6H3a3 3 0 0 0 3 4M19 6h2a3 3 0 0 1-3 4"/></svg>
           Futures</button>
+      </div>
+
+      <button class="sb-label sb-fold" data-head="library" data-fold="library"
+              type="button" aria-expanded="false">Library
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <!-- Ships [hidden] so the fold holds before app.js runs — the CSS
+           .sb-group[hidden] rule is what makes it stick (display:flex on
+           .sb-group would beat the UA's [hidden] otherwise). -->
+      <div class="sb-group" data-group="library" hidden>
         <button class="nav-btn sb-item" data-view="injuries" data-hint="who’s out, league-wide">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 4h6v5h5v6h-5v5H9v-5H4V9h5z"/></svg>
           Injuries &amp; News</button>
         <button class="nav-btn sb-item" data-view="weather" data-hint="tonight’s conditions, park by park">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17a5 5 0 1 1 1-9.9A6 6 0 1 1 18 17z"/><path d="M8 21h.1M12 21h.1M16 21h.1"/></svg>
           Weather</button>
+        <button class="nav-btn sb-item" data-view="trending" data-hint="form movers">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+          Trending</button>
         <button class="nav-btn sb-item" data-view="rosters" data-hint="every team’s roster">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="8" r="3.4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="9" r="2.6"/><path d="M15.8 14.6a5.5 5.5 0 0 1 5.7 5.4"/></svg>
           Rosters</button>
@@ -242,30 +273,14 @@
           Rankings</button>
       </div>
 
-      <div class="sb-label" data-head="models">Models</div>
-      <div class="sb-group" data-group="models">
-        <!-- Each entry is the real model behind a league's board — the
-             names come from the specs in docs/, not marketing. Clicking
-             one opens that league. -->
-        <button class="sport-btn sb-item sb-model" data-sport="mlb" data-kind="league" title="The Scalpy 2.0 MLB spec — docs/MLB_MODEL.md">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12h4l2.5-7 3.5 14 2.5-7H22"/></svg>
-          <span class="sb-model-words"><b>Scalpy 2.0</b><span>the MLB model</span></span></button>
-        <button class="sport-btn sb-item sb-model" data-sport="nfl" data-kind="league" title="The pro-bettor NFL spec — docs/NFL_MODEL.md">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12c3-5 6-7 9-7s6 2 9 7c-3 5-6 7-9 7s-6-2-9-7z"/><circle cx="12" cy="12" r="2.5"/></svg>
-          <span class="sb-model-words"><b>The NFL Book</b><span>the pro-bettor spec</span></span></button>
-        <button class="sport-btn sb-item sb-model" data-sport="ufc" data-kind="league" title="The Scalpy MMA doctrine — style beats talent">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 4h10v7a5 5 0 0 1-10 0z"/><path d="M9 20h6M12 16v4"/></svg>
-          <span class="sb-model-words"><b>Scalpy MMA</b><span>the fight model</span></span></button>
-      </div>
-
-      <div class="sb-label" data-head="tools">My Tools</div>
+      <button class="sb-label sb-fold" data-head="tools" data-fold="tools"
+              type="button" aria-expanded="true">My Book
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
       <div class="sb-group" data-group="tools">
         <button class="sport-btn sb-item" data-sport="mybets" data-kind="tool" title="Your own sportsbook P&amp;L — synced with your account">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M4 9h16M8 13h5"/></svg>
           My Bets</button>
-        <button class="nav-btn sb-item sb-subtab" data-subtab="watch" data-hint="rest, incentives, form, injuries">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 4l2 4.2 4.6.6-3.4 3.2.9 4.6L12 14.4l-4.1 2.2.9-4.6L5.4 8.8 10 8.2z"/></svg>
-          Watchlist</button>
         <button class="nav-btn sb-item" data-view="alerts" data-hint="line moves, injuries, the desk">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
           Alerts</button>
@@ -279,9 +294,6 @@
         <button class="nav-btn sb-item" data-view="bankroll" data-hint="size your units">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5c0-1 1-1.8 2.5-1.8s2.5.7 2.5 1.7c0 2.6-5 1.6-5 4.2 0 1 1 1.7 2.5 1.7s2.5-.7 2.5-1.7"/></svg>
           Bankroll</button>
-        <button class="nav-btn sb-item" data-view="trending" data-hint="form movers">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
-          Trending</button>
       </div>
     </div>
 
