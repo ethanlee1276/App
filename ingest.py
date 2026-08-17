@@ -405,7 +405,6 @@ def main() -> None:
                               f"· NOT JSON · starts {row.get('head')!r}")
                     print()
                 return
-            pass
         # ESPN for BOTH leagues. The NBA CDN only ever serves the CURRENT
         # season's schedule, so it cannot answer a question about 2021 —
         # which is exactly why this database had one season of basketball

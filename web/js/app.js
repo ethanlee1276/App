@@ -3607,7 +3607,7 @@ function watchlistHTML(watch, mlb) {
   if (!watch || !watch.length) return "";
   const rows = watch.map((r, i) => {
     const ev = (r.ev_per_unit * 100).toFixed(0);
-    const evColor = r.ev_per_unit > 0 ? "var(--good, #3ddc84)" : "var(--text-mute, #889)";
+    const evColor = r.ev_per_unit > 0 ? "var(--good)" : "var(--text-mute)";
     const spark = (r.recent_values || []).length > 2
       ? gamelogBars(r.recent_values, { line: 0.5, stroke: teamPrimary(r.team), w: 64, h: 22 })
       : "";
@@ -4700,7 +4700,7 @@ function recCurveChart(curve, opts = {}) {
   const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * (h - padT - padB);
   const path = curve.map((p, i) => `${x(i).toFixed(1)},${y(p.cum_u).toFixed(1)}`).join(" L");
   const last = curve[curve.length - 1];
-  const color = last.cum_u >= 0 ? "var(--good,#3ddc84)" : "var(--bad,#ff6b7a)";
+  const color = last.cum_u >= 0 ? "var(--good)" : "var(--bad)";
   const dots = curve.map((p, i) => {
     // day_u is derivable from the running total, so a payload without it
     // gets the derived number instead of a TypeError. This mattered: a
@@ -7285,7 +7285,7 @@ function edgeRowHTML(r, i) {
     <span style="min-width:64px;text-align:right">${r.odds > 0 ? "+" : ""}${r.odds}</span>
     <span style="min-width:120px;text-align:right;opacity:.8">
       ${(r.model * 100).toFixed(0)}% vs ${(r.implied * 100).toFixed(0)}%</span>
-    <span style="min-width:70px;text-align:right;color:var(--good,#3ddc84)">
+    <span style="min-width:70px;text-align:right;color:var(--good)">
       +${evPct}% EV</span>
     <span style="min-width:86px;text-align:right;opacity:.75">${r.rec ? `${icon('check')} ` : ""}${escapeHtml(r.grade || "")}</span>
   </div>`;
@@ -7453,16 +7453,16 @@ function renderScanner() {
         const so = stake * a.stake_over_pct, su = stake * (1 - a.stake_over_pct);
         const ret = stake * a.profit_pct;
         const suspect = a.suspect
-          ? `<span style="display:block;color:var(--warn,#e8b33e);font-size:.85em">${icon('warn')} 5%+ edge — likely a stale line or void risk; verify at both books</span>` : "";
+          ? `<span style="display:block;color:var(--warn);font-size:.85em">${icon('warn')} 5%+ edge — likely a stale line or void risk; verify at both books</span>` : "";
         return scanPairRow(a,
-          `<span style="color:var(--good,#3ddc84);font-weight:700">+${(a.profit_pct * 100).toFixed(2)}% · $${ret.toFixed(2)} locked</span>
+          `<span style="color:var(--good);font-weight:700">+${(a.profit_pct * 100).toFixed(2)}% · $${ret.toFixed(2)} locked</span>
            <span style="display:block;opacity:.7;font-size:.85em">$${so.toFixed(0)} Over / $${su.toFixed(0)} Under</span>${suspect}`);
       },
       "No arbitrage pairs right now. Real arbs across legal US books appear a few times a week and last minutes — this scanner checks every refresh.")
     + scanSection("Middles", "Over at a low line + Under at a higher one: land between them and BOTH win; miss and you only pay the vig. Ranked by EV from the sport’s real outcome distribution — never by window width",
       middles, (m) => {
         const evLine = m.ev_per_unit != null
-          ? `<span style="font-weight:700;color:${m.ev_per_unit >= 0 ? "var(--good,#3ddc84)" : "var(--text-mute,#889)"}">${m.ev_per_unit >= 0 ? "+" : ""}${(m.ev_per_unit * 100).toFixed(1)}% EV</span>
+          ? `<span style="font-weight:700;color:${m.ev_per_unit >= 0 ? "var(--good)" : "var(--text-mute)"}">${m.ev_per_unit >= 0 ? "+" : ""}${(m.ev_per_unit * 100).toFixed(1)}% EV</span>
              <span style="display:block;opacity:.7;font-size:.85em">hits ${(m.middle_prob * 100).toFixed(0)}% of the time · both win +${(m.both_win_return * 100).toFixed(0)}% · worst ${(m.worst_case * 100).toFixed(0)}%</span>`
           : `<span style="font-weight:700">${m.gap} gap</span>
              <span style="display:block;opacity:.7;font-size:.85em">both win +${(m.both_win_return * 100).toFixed(0)}% · worst ${(m.worst_case * 100).toFixed(0)}%</span>`;
@@ -7481,16 +7481,16 @@ function renderScanner() {
             <span style="flex:1"><strong>${escapeHtml(b.pick_label || "")}</strong>
               <span style="display:block;opacity:.6;font-size:.85em">${escapeHtml(b.matchup || "")} · priced off the sharp book’s fair value</span></span>
             <span style="min-width:64px;text-align:right">${american(b.odds)}</span>
-            <span style="min-width:80px;text-align:right;color:var(--good,#3ddc84)">+${((b.ev_per_unit || 0) * 100).toFixed(1)}% EV</span>
+            <span style="min-width:80px;text-align:right;color:var(--good)">+${((b.ev_per_unit || 0) * 100).toFixed(1)}% EV</span>
           </div>`).join("")}
         ${steam.map(({ r, m }) => {
           // Every alert answers: is this still bettable, or already missed?
           const age = m.moved_ago_min;
           const cls = (age != null && age > 180)
-            ? ["Stale", "var(--text-mute,#889)", "old move — informational only"]
+            ? ["Stale", "var(--text-mute)", "old move — informational only"]
             : ((r.ev_per_unit || 0) > 0
-               ? ["Live", "var(--good,#3ddc84)", "value still available near the sharp number"]
-               : ["Chase", "var(--warn,#e8b33e)", "line already moved past it — do not follow"]);
+               ? ["Live", "var(--good)", "value still available near the sharp number"]
+               : ["Chase", "var(--warn)", "line already moved past it — do not follow"]);
           return `<div class="drow" style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
             <span>${iconMark("hot")}</span>
             <span style="flex:1"><strong>${escapeHtml(r.player)} ${escapeHtml(r.market_label || "")}</strong>

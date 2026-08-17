@@ -136,6 +136,81 @@ def test_the_resolver_would_notice_a_token_that_went_missing():
     assert len(refs) > 40, f"only {len(refs)} var() reads found — walk broke?"
 
 
+def _root_tokens(css: str) -> set[str]:
+    """Tokens defined in a bare, top-level `:root {` — the ones every element
+    inherits unconditionally, in either theme.
+
+    Deliberately NOT `:root[data-theme="light"]` and nothing inside an
+    `@media`: a token defined only under a condition is genuinely absent
+    when the condition is false, so a fallback for it can still paint. The
+    depth check is what enforces that — `:root` nested in a media block
+    opens at brace depth 1, not 0."""
+    body = _blank_comments(css)
+    tokens = set()
+    for m in re.finditer(r":root\s*\{", body):
+        head = body[:m.start()]
+        if head.count("{") != head.count("}"):
+            continue                      # nested — conditional, so skip
+        depth, i = 1, m.end()
+        while i < len(body) and depth:
+            depth += (body[i] == "{") - (body[i] == "}")
+            i += 1
+        tokens |= set(re.findall(r"(--[a-zA-Z0-9_-]+)\s*:", body[m.end():i]))
+    return tokens
+
+
+def _live_fallbacks(css: str, *readers: str):
+    """`var(--tok, x)` reads whose token the stylesheet always defines."""
+    root = _root_tokens(css)
+    dead = []
+    for label, text in [("web/css/styles.css", css), *readers]:
+        body = _blank_comments(text)
+        for m in re.finditer(r"var\(\s*(--[a-zA-Z0-9_-]+)\s*,", body):
+            if m.group(1) in root:
+                dead.append(f"{label}:{body[:m.start()].count(chr(10)) + 1} "
+                            f"{m.group(1)}")
+    return dead
+
+
+def test_a_fallback_is_only_written_where_the_token_can_be_absent():
+    """The sibling check above catches `var(--typo, #3ddc84)` — a fallback
+    standing in for a token nobody defines. This is the other half: a
+    fallback for a token `:root` ALWAYS defines can never paint, so it is
+    not a safety net, it is a second palette nobody maintains. Sixteen of
+    them had drifted — `var(--good,#3ddc84)` next to a `--good` that is
+    #42C268 — so the dead value and the live one had stopped agreeing, and
+    the file read as though the mint were a real option.
+
+    They also defeat the very check above: with a fallback written, renaming
+    a token renders the stale hex and looks fine. Without one it renders
+    nothing and you see it immediately.
+
+    Legal, and the reason this is not a blanket ban: `--grade-color` is set
+    per card (`.card.gamebet`, and inline by JS), so `.card::before` reading
+    it with a fallback is a real branch — an ungraded card has no value to
+    inherit."""
+    dead = _live_fallbacks(CSS, ("web/js/app.js", APP), ("web/js/visuals.js", VIS))
+    assert not dead, ("var() fallback for a token :root always defines — the "
+                      f"fallback is unreachable: {dead}")
+
+
+def test_that_check_can_tell_an_always_there_token_from_a_per_element_one():
+    """A scanner nobody tests is a green light with the bulb out. Both
+    directions: it flags an unconditional token and stays quiet about a
+    scoped or theme-only one."""
+    sheet = (':root { --always: #111; }\n'
+             ':root[data-theme="light"] { --themed: #eee; }\n'
+             '@media (min-width: 40em) { :root { --wide: 1px; } }\n'
+             '.card { --scoped: red; }\n')
+    assert _root_tokens(sheet) == {"--always"}
+    assert _live_fallbacks(sheet + "a { color: var(--always, #222); }")
+    for token in ("--themed", "--wide", "--scoped"):
+        assert not _live_fallbacks(sheet + f"a {{ color: var({token}, #222); }}"), \
+            f"{token} is not defined unconditionally; its fallback can paint"
+    # And the real stylesheet's own scoped token stays legal.
+    assert "--grade-color" not in _root_tokens(CSS)
+
+
 # --- 2. One face, one weight, one ramp --------------------------------------
 def test_svg_labels_use_the_pages_own_face():
     """SVG <text> does not inherit the page face the way HTML does. 294
