@@ -3759,6 +3759,10 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    and a folded group only pretends to fold. */
 .sb-group[hidden] { display: none; }
 
+/* The drawer's scrim exists only while the drawer is open (≤900px);
+   the phone media block paints and places it. */
+#scrim { display: none; }
+
 .sb-item { display: flex; align-items: center; gap: 11px; width: 100%;
   border: 0; background: transparent; cursor: pointer; text-align: left;
   color: var(--text-dim); font: inherit; font-size: var(--fs-md); font-weight: 600;
@@ -3977,8 +3981,23 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
     transform: translateX(-102%); transition: transform var(--dur-base) var(--ease-spring);
     border-right: var(--hairline) solid var(--border); box-shadow: none; }
   body.menu-open .sidebar { transform: translateX(0); box-shadow: var(--glow-soft); }
+  /* Both, because the ROOT is the scroller: overflow on body alone
+     still let the page scroll under the open drawer (measured — a
+     programmatic scroll completed with the body rule in place). The
+     touchmove guard in app.js covers engines without :has(). */
   body.menu-open { overflow: hidden; }
-  body.menu-open::after { content: ""; position: fixed; inset: var(--topbar-h) 0 0 0;
+  html:has(body.menu-open) { overflow: hidden; }
+  /* FIXED while open, because the scroll lock above un-sticks
+     position:sticky — the bar de-stuck to the DOCUMENT top and opened
+     the menu headless from anywhere mid-page (measured: rect.top -600
+     at scroll 600). The old code masked this by yanking the page to 0
+     before freezing, which lost the reader's place instead. The body
+     padding puts the bar's flow height back so nothing jumps, and
+     transform:none beats the tuck's inline retraction. */
+  body.menu-open .topbar { position: fixed; top: 0; left: 0; right: 0;
+    transform: none !important; }
+  body.menu-open { padding-top: var(--topbar-h); }
+  body.menu-open #scrim { display: block; position: fixed; inset: var(--topbar-h) 0 0 0;
     background: rgba(3, 3, 8, .55); backdrop-filter: blur(2px); z-index: 45; }
 }
 
@@ -4171,7 +4190,14 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
     color: #fff; font-size: var(--fs-2xs); font-weight: 800; }
   .tb-badge[hidden] { display: none; }
   body { padding-bottom: 84px; }        /* room for the bar */
-  body.menu-open .sidebar { z-index: 60; }
+  /* The open drawer stays UNDER the tab bar (56 over 50) — the bar's
+     five buttons are the drawer's visible exits, and every one of them
+     closes it. The old `z-index: 60` here did the opposite: it raised
+     the drawer over the bar, so Home/Tonight/Live/Results vanished and
+     the half-covered Menu corner became the only way out — Ethan's
+     08-17 recording, "makes you feel stuck in the page". The drawer's
+     content clears the bar with padding instead. */
+  .sidebar { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 
   /* RE-ORDERED 2026-08-11 (Ethan: "top bets, the stadiums, then roi")
      — the order lives in the DOM now, one order on every screen, so

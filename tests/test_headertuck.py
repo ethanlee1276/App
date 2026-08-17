@@ -93,9 +93,11 @@ def test_an_open_menu_is_never_hidden():
     # because it must beat the inline transform…
     css = _read("web", "css", "styles.css")
     assert re.search(r"body\.menu-open \.topbar \{[^}]*transform:\s*none\s*!important", css)
-    # …and the toggle resets it before opening.
+    # …and the toggle resets it before opening. (The one-liner grew a
+    # block on 2026-08-17 — the drawer's scrollTop reset rides in the
+    # same branch — so this pins the call, not the old formatting.)
     app = _read("web", "js", "app.js")
-    assert "if (open) showHeader();" in app
+    assert re.search(r"if \(open\) \{\s*showHeader\(\);", app)
     assert "menu-open" in _tuck_fn(), "the scroll handler must not fight the menu"
 
 

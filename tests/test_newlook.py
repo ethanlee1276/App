@@ -160,6 +160,54 @@ def test_the_library_folds_and_remembers():
         assert f'data-view="{view}"' in libgrp, f"{view} left the Library"
 
 
+def test_the_drawer_has_more_than_one_exit():
+    """Ethan's 08-17 screen recording: "the only way to exit the menu is
+    by clicking the menu button itself and thats confusing and makes you
+    feel stuck in the page." Three causes, each pinned here:
+
+      * the scrim (body::after) is paint with no element to listen on,
+        and nothing else listened either — so a document-level handler
+        now closes the drawer on any tap outside it;
+      * `z-index: 60` raised the open drawer OVER the tab bar, hiding
+        Home/Tonight/Live/Results — the five obvious exits — behind it;
+        the drawer now stays under the bar and clears it with padding;
+      * opening the menu yanked the page to the top (a leftover from the
+        in-flow dropdown era), so closing it dumped you somewhere you
+        never scrolled. Open must not move the page — and the DRAWER
+        must open at its own top, because it keeps its scroll while
+        hidden and reopening mid-list reads as broken.
+
+    The iOS touchmove guard is part of the same recording: iOS ignores
+    body{overflow:hidden} for touch, so the board wobbled under the open
+    drawer. passive: false is load-bearing — a passive listener's
+    preventDefault is silently ignored."""
+    fn = APP[APP.index("function initMobileMenu("):]
+    fn = fn[:fn.index("\nfunction ")]
+    assert 'closest("#sidebar, .tabbar, .topbar")' in fn, \
+        "the outside-tap exit is gone"
+    assert '"touchmove"' in fn and "passive: false" in fn, \
+        "the iOS background-scroll guard is gone"
+    assert "scrollTop = 0" in fn, "the drawer no longer opens at its top"
+    assert "window.scrollTo" not in fn, \
+        "opening the menu moves the page again"
+    assert "body.menu-open .sidebar { z-index" not in CSS, \
+        "the drawer covers the tab bar again — the five exits vanish"
+    i = CSS.index(".sidebar { padding-bottom: calc(96px")
+    assert "@media (max-width: 760px)" in CSS[CSS.rindex("@media", 0, i):i], \
+        "the drawer's tab-bar clearance left the phone block"
+    # The scrim is a REAL element, not body::after paint. The pseudo did
+    # not own its hit-testing: a tap on it fell through, the browser
+    # focused whatever sat under the finger and scrolled it into view
+    # before any click could be cancelled (measured, #futures: 600 -> 0).
+    assert 'id="scrim"' in HTML, "the scrim element is gone"
+    assert "body.menu-open #scrim { display: block;" in CSS
+    assert "menu-open::after" not in CSS, \
+        "the scrim is paint again — taps will fall through to the page"
+    # Both scroll locks, because the ROOT is the scroller: overflow on
+    # body alone still let the page move under the open drawer.
+    assert "html:has(body.menu-open) { overflow: hidden; }" in CSS
+
+
 def test_the_rail_belongs_to_home_only():
     """The render puts insights and live-now beside the dashboard. On
     every other page the content gets the room back."""

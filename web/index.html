@@ -336,6 +336,15 @@
     </div>
   </aside>
 
+  <!-- The drawer's scrim — a REAL element, deliberately. It was
+       body::after paint, and taps on it fell THROUGH to the dimmed page:
+       the browser focused whatever sat under the finger and scrolled it
+       into view before any click could be cancelled (measured: a scrim
+       tap on #futures yanked the page from 600 to 0). A real node owns
+       its hit-testing, so the tap closes the drawer and touches nothing
+       else. Shown only under body.menu-open, ≤900px. -->
+  <div id="scrim" aria-hidden="true"></div>
+
   <main>
     <!-- Recommended -->
     <section class="view active" id="view-recommended">

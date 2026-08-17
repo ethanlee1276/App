@@ -13223,24 +13223,53 @@ function initMobileMenu() {
   const btn = document.getElementById("menu-toggle");
   if (!btn) return;
   btn.addEventListener("click", () => {
-    // Anchor FIRST, then freeze: the .menu-open class locks body scroll,
-    // so scrolling after it lands leaves the page pinned wherever it
-    // happened to be. Left scrollable, the board underneath kept moving
-    // while the menu was up — and because a different sport's board is a
-    // different LENGTH, switching sports re-anchored the scroll and
-    // dragged the menu with it.
-    if (!document.body.classList.contains("menu-open")) {
-      // "instant", not "auto": auto defers to the stylesheet, which sets
-      // scroll-behavior: smooth — so the page GLIDED to the top under the
-      // opening menu, which is itself visible movement.
-      window.scrollTo({ top: 0, behavior: "instant" });
-    }
+    // The drawer is position:fixed, so the page does NOT need anchoring
+    // to the top before it opens. The scrollTo(0) that used to sit here
+    // was a leftover from the in-flow dropdown era, and by the 08-17
+    // recording it had become a bug of its own: open the menu from
+    // mid-page, close it, and you are at the TOP of a page you never
+    // scrolled — "stuck" in the wrong place. Open must not move the page.
     const open = document.body.classList.toggle("menu-open");
-    // The menu lives inside the header, so a retracted header must come
-    // back before it opens — otherwise the panel opens off-screen.
-    if (open) showHeader();
+    // A retracted auto-hide header must come back before the drawer
+    // opens — the drawer hangs below the bar.
+    if (open) {
+      showHeader();
+      // Always open at the map's start (Leagues, Dashboard) — the
+      // drawer keeps its scroll while hidden, and reopening mid-list
+      // read as broken ("where did the leagues go?").
+      const sb = document.getElementById("sidebar");
+      if (sb) sb.scrollTop = 0;
+    }
     btn.setAttribute("aria-expanded", String(open));
   });
+  // The scrim is body::after — paint with no element to listen on, so
+  // the exit lives at the document: while the drawer is open, a tap
+  // anywhere outside it (and outside the bars, which manage themselves)
+  // closes it. This was the exit the 08-17 recording reached for —
+  // tapping the dimmed page did nothing, and the Menu corner was the
+  // only way out.
+  // Capture phase, and the event is swallowed: the scrim does not
+  // reliably intercept hit-testing (it is a pseudo-element), so without
+  // this the same tap that closes the drawer ALSO activates whatever
+  // sits under the dimmed page — measured: a scrim tap on #futures
+  // yanked the page from 600 to 0 through an element it hit underneath.
+  document.addEventListener("click", (e) => {
+    if (!document.body.classList.contains("menu-open")) return;
+    if (e.target.closest && e.target.closest("#sidebar, .tabbar, .topbar")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeMobileMenu();
+    syncMenuLabel();
+  }, true);
+  // iOS ignores body{overflow:hidden} for touch scrolling, so the board
+  // kept sliding under the open drawer — the "super buggy" wobble in
+  // the same recording. Swallow moves that start outside the drawer;
+  // the drawer scrolls itself (overscroll-behavior: contain).
+  document.addEventListener("touchmove", (e) => {
+    if (!document.body.classList.contains("menu-open")) return;
+    if (e.target.closest && e.target.closest("#sidebar")) return;
+    e.preventDefault();
+  }, { passive: false });
   // Choosing a SPORT is step one of two: NFL/MLB/NBA each have their own
   // page list, so the panel stays open for the second tap (and the Page
   // section updates live — NBA drops Long Shots, for instance). Standalone
