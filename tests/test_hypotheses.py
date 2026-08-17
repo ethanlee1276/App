@@ -302,6 +302,32 @@ def test_a_registered_and_a_proposed_hypothesis_are_tested_together():
     assert origins == {None, "analysis"}, origins
 
 
+def test_a_rewrite_within_one_mtime_tick_is_not_served_stale():
+    """The race the production deploy gate caught, made deterministic.
+
+    load() keys its cache on (path, mtime); Linux stamps mtimes at the
+    kernel tick, a few milliseconds wide. register() saves, loads and
+    saves again in microseconds — so on a machine that loses the race,
+    the second load serves the PRE-MERGE store from cache and the
+    hypothesis just registered silently vanishes. The droplet lost;
+    every dev machine had happened to win, which is why this file was
+    green everywhere except production. os.utime freezes the tick so the
+    race is lost on purpose, on every machine, forever.
+    """
+    path = tempfile.mktemp(suffix=".json")
+    hyp.save({"hypotheses": [dict(_hyp({"side": "UNDER"}, market="hits"),
+                                  first_proposed="2026-08-01")]}, path)
+    t = os.stat(path).st_mtime
+    hyp.load(path)                       # primes the cache at (path, t)
+    hyp.save({"hypotheses": [
+        dict(_hyp({"side": "UNDER"}, market="hits")),
+        dict(_hyp({"side": "OVER"}, market="outs")),
+    ]}, path)
+    os.utime(path, (t, t))               # rewrite lands in the same tick
+    assert len(hyp.load(path).get("hypotheses") or []) == 2, \
+        "load served the pre-rewrite store from its mtime cache"
+
+
 def test_the_page_and_cli_disclose_provenance():
     cli = open(os.path.join(ROOT, "hypotheses.py"), encoding="utf-8").read()
     assert '"analysis"' in cli and "·analysis" in cli

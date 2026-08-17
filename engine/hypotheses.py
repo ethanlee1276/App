@@ -514,9 +514,26 @@ def load(path=None) -> dict:
 
 
 def save(store: dict, path=None) -> Path:
+    """Write the store, and WRITE THROUGH THE CACHE while doing it.
+
+    load() keys its cache on (path, mtime), and Linux stamps mtimes at
+    the kernel tick — a few milliseconds. register() does save → load →
+    save in microseconds, so both writes can land inside one tick, load()
+    serves the pre-merge store from cache, and the hypothesis that was
+    just registered silently vanishes. Found by the deploy gate on the
+    production droplet, where the race lost: the store ended one
+    hypothesis short and test_hypotheses failed on a machine where every
+    prior run had passed. A cache that a writer does not update is a race
+    against the clock's granularity, and the fix is to stop racing.
+    """
     p = Path(path if path is not None else DEFAULT_PATH)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(store, indent=1))
+    _cache.clear()
+    try:
+        _cache[(str(p), p.stat().st_mtime)] = store
+    except OSError:
+        pass
     return p
 
 
