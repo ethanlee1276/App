@@ -342,12 +342,40 @@ def simulate_lineup(rates: list[BatterRates], legs: list[tuple],
     cums = base
     idx_of = {b.name: i for i, b in enumerate(order)}
 
+    # EVERYTHING CONSTANT ABOUT A LEG IS COMPUTED ONCE, HERE. What used to
+    # be in the trial loop was `_key(line)` — an f-string — twice per live
+    # leg and four more times per live PAIR, which on a real board is 107
+    # million string formats and 46 million `_pair_key` calls for numbers
+    # that never change. The loop now counts into flat lists indexed by leg,
+    # and the dict shapes are assembled from those counts at the end.
+    #
+    # The leg ids are assigned in the SAME order the trial loop discovers
+    # them (`want` in insertion order, each list in order), so `live` comes
+    # out ascending and every pair is (smaller, larger) without sorting.
     want: dict[int, list[tuple]] = {}
+    leg_of: list[tuple] = []             # leg id -> (name, market, line)
     for name, market, line in legs:
         i = idx_of.get(name)
         if i is None:
             continue
         want.setdefault(i, []).append((market, float(line)))
+    # Market codes, so the loop compares ints instead of building a dict of
+    # three entries per hitter per trial. Anything the sim does not tally
+    # scores 0, which is what `got.get(market, 0)` did.
+    _CODE = {HITS: 0, TOTAL_BASES: 1, HOME_RUNS: 2}
+    plan: list[tuple] = []               # (batter idx, code, line, leg id)
+    for i, wants in want.items():
+        for market, line in wants:
+            plan.append((i, _CODE.get(market, -1), line, len(leg_of)))
+            leg_of.append((order[i].name, market, line))
+    n_legs = len(leg_of)
+    leg_key = [_key(line) for _name, _m, line in leg_of]
+    pair_key_of = [[None] * n_legs for _ in range(n_legs)]
+    for x in range(n_legs):
+        for y in range(x + 1, n_legs):
+            pair_key_of[x][y] = _pair_key(leg_of[x], leg_of[y])
+    over_counts = [0] * n_legs
+    pair_counts = [[0] * n_legs for _ in range(n_legs)]
 
     sim = GameSim(trials=trials, names=[b.name for b in order])
     hit_counts = [0] * n
@@ -361,6 +389,22 @@ def simulate_lineup(rates: list[BatterRates], legs: list[tuple],
     both: dict = {}
 
     lo_env, hi_env = ENV_CLAMP
+    # Locals, not globals/attributes, for the two loops below — they run
+    # ~130 million times on a full board, and an attribute lookup per pass
+    # is the kind of cost that only shows up at that count.
+    #
+    # `reaching` carries each hitter's five non-out rates plus their sum,
+    # summed in exactly the order the old expression used. That matters more
+    # than it looks: `g_i` divides `reach` back by `g` rather than using the
+    # sum directly, and `(s * g) / g` is not always `s` to the last bit. The
+    # sum is hoisted; the arithmetic around it is left alone, so the draws
+    # and the tables stay identical.
+    rand = rng.random
+    gauss = rng.gauss
+    is_hit, bases = _IS_HIT, _BASES
+    reaching = [(b.bb, b.single, b.double, b.triple, b.hr,
+                 b.bb + b.single + b.double + b.triple + b.hr) for b in order]
+    innings_range = range(innings)
     for _ in range(trials):
         if env_sd > 0:
             # One draw for the whole lineup: tonight's starter, tonight's
@@ -369,33 +413,43 @@ def simulate_lineup(rates: list[BatterRates], legs: list[tuple],
             # distribution, and because the draw is centred on 1.0 the
             # per-game means it produces stay put — checked by `reconcile`,
             # which runs with the shock on.
-            g = min(hi_env, max(lo_env, rng.gauss(1.0, env_sd)))
+            g = min(hi_env, max(lo_env, gauss(1.0, env_sd)))
             cums = []
-            for b in order:
-                reach = (b.bb + b.single + b.double + b.triple + b.hr) * g
+            for bb, s1, s2, s3, s4, s in reaching:
+                reach = s * g
                 if reach >= 1.0:
                     g_i = (1.0 - 1e-9) / (reach / g)
                 else:
                     g_i = g
-                acc, c = 0.0, []
-                p_out = 1.0 - (b.bb + b.single + b.double + b.triple + b.hr) * g_i
-                for p in (p_out, b.bb * g_i, b.single * g_i, b.double * g_i,
-                          b.triple * g_i, b.hr * g_i):
-                    acc += p
-                    c.append(acc)
-                cums.append(c)
+                # Unrolled, and a tuple rather than a list: this rebuilds
+                # every hitter's table on every trial, so the six appends
+                # and the throwaway tuple of products were ~100 allocations
+                # a trial for six numbers. The additions happen in the same
+                # order they did, which is what keeps the thresholds — and
+                # therefore the draws they are compared against — identical.
+                c0 = 1.0 - s * g_i
+                c1 = c0 + bb * g_i
+                c2 = c1 + s1 * g_i
+                c3 = c2 + s2 * g_i
+                c4 = c3 + s3 * g_i
+                cums.append((c0, c1, c2, c3, c4, c4 + s4 * g_i))
         g_h = [0] * n
         g_tb = [0] * n
         g_hr = [0] * n
         g_pa = [0] * n
         spot = 0
-        for _inning in range(innings):
+        for _inning in innings_range:
             outs = 0
             while outs < 3:
-                i = spot % n
+                # The order wraps by hand rather than by `spot % n`. It is
+                # the same index either way; a modulo per plate appearance
+                # is simply ~130 million of them on a full board.
+                i = spot
                 spot += 1
+                if spot == n:
+                    spot = 0
                 g_pa[i] += 1
-                r = rng.random()
+                r = rand()
                 c = cums[i]
                 # Linear scan over six buckets beats bisect at this size and
                 # keeps the hot loop free of a function call.
@@ -405,8 +459,8 @@ def simulate_lineup(rates: list[BatterRates], legs: list[tuple],
                 if k == 0:
                     outs += 1
                     continue
-                g_h[i] += _IS_HIT[k]
-                g_tb[i] += _BASES[k]
+                g_h[i] += is_hit[k]
+                g_tb[i] += bases[k]
                 if k == 5:
                     g_hr[i] += 1
         for i in range(n):
@@ -418,20 +472,42 @@ def simulate_lineup(rates: list[BatterRates], legs: list[tuple],
             tb_sq[i] += g_tb[i] * g_tb[i]
             hr_sq[i] += g_hr[i] * g_hr[i]
 
-        # Which of tonight's actual legs cleared, this trial.
+        # Which of tonight's actual legs cleared, this trial. Counted by leg
+        # id into flat lists; the names, the ".1f" keys and the canonical
+        # pair keys are all attached once, after the loop.
         live = []
-        for i, wants in want.items():
-            got = {HITS: g_h[i], TOTAL_BASES: g_tb[i], HOME_RUNS: g_hr[i]}
-            for market, line in wants:
-                if got.get(market, 0) > line:
-                    live.append((order[i].name, market, line))
-                    d = over[order[i].name].setdefault(market, {})
-                    d[_key(line)] = d.get(_key(line), 0) + 1
+        for i, code, line, leg in plan:
+            if (g_h[i] if code == 0 else
+                    g_tb[i] if code == 1 else
+                    g_hr[i] if code == 2 else 0) > line:
+                live.append(leg)
+                over_counts[leg] += 1
         for x in range(len(live)):
+            lx = live[x]
+            row = pair_counts[lx]
             for y in range(x + 1, len(live)):
-                k2 = _pair_key(live[x], live[y])
-                both[k2] = both.get(k2, 0) + 1
+                row[live[y]] += 1
 
+    # Fold the flat counts back into the shapes callers read. Accumulated
+    # with `+=` rather than assigned, because two legs can canonicalise onto
+    # one slot — the same board asking for the same (player, market, line)
+    # twice — and the loop this replaced added them together.
+    for leg in range(n_legs):
+        c = over_counts[leg]
+        if not c:
+            continue
+        name, market, _line = leg_of[leg]
+        d = over[name].setdefault(market, {})
+        k = leg_key[leg]
+        d[k] = d.get(k, 0) + c
+    for x in range(n_legs):
+        row = pair_counts[x]
+        keys = pair_key_of[x]
+        for y in range(x + 1, n_legs):
+            c = row[y]
+            if c:
+                k2 = keys[y]
+                both[k2] = both.get(k2, 0) + c
     sim.over = over
     sim.both = both
     for i, b in enumerate(order):

@@ -8,49 +8,7 @@ reads this file and picks up the top item.
 
 ---
 
-## 1. The MLB board is now CPU-bound, and the margin is thin
-
-The 7m39s props build is fixed (see Done, below) — but only the waiting
-half of it was ever network. Reproducing the whole build against a fake
-wire at the droplet's own measured latency:
-
-```
-                        BEFORE            AFTER
-build_live_slate        277.0s            35.7s     601 requests, both
-run_mlb_slate           180.9s           123.6s     150 requests, both
-                        ------            -----
-TOTAL                   457.9s           159.3s
-```
-
-The BEFORE number is 457.9s against the 459.5s actually measured on the
-droplet, so the model is trustworthy. What it shows is that **115 of those
-159 remaining seconds are CPU** — and no amount of concurrency touches
-them.
-
-**So correct the record: "user 0m0.007s" in the original write-up was a bad
-measurement.** It is what sent that investigation looking only at the
-network, and it is why the note said pooling the game logs alone would take
-the build under a minute. It would not have. Under a minute is not
-available at all while the sim costs two minutes.
-
-**Why it still matters that this is tight.** `launch.py:51` runs every
-build with `timeout=180` and `launch.py:52` swallows the `TimeoutExpired`.
-At 458s the build was being KILLED every cycle — which is the real reason
-the board sat 8–15 minutes behind, rather than slowness alone. At 159s it
-completes, but with ~20s of margin, on a 2-core droplet that is also
-serving the live site. A slate bigger than 15 games eats that margin.
-
-**Where the time goes.** Profiled: it is all
-`engine/mlb/gamesim.simulate_lineup` (210 calls) under
-`simjoint.build`, and `gamesim.calibrate` is about half of it. The two
-hottest lines are `gamesim._key` (107M calls) and `gamesim._pair_key`
-(46M calls) — pure-Python helpers called from inside the Monte Carlo
-loop, which is exactly the shape that precomputing or memoising fixes.
-Start there before touching the sim's statistics.
-
----
-
-## 2. Before charging anyone (not code — Ethan's calls)
+## 1. Before charging anyone (not code — Ethan's calls)
 
 * A Paddle account, and a real test webhook sent through it. The signature
   verifier in `engine/paddle.py` was written from memory with the API
@@ -69,7 +27,7 @@ out of his own board.
 
 ---
 
-## 3. Smaller, known, not urgent
+## 2. Smaller, known, not urgent
 
 * Player photos are missing for MLB / NFL / NBA — faces are captured
   during ingest, so a re-read picks them up. Cosmetic; cards show initials.
@@ -111,13 +69,48 @@ out of his own board.
 
 ## Done
 
-**MLB props were 8–15 minutes stale** — the waiting half fixed 2026-08-17.
-A cold build made 751 HTTP requests one at a time; they are independent, so
-`build_live_slate` and the pitcher play-by-play pass now warm their caches
-through a capped thread pool and every sequential pass behind them reads
-from disk unchanged. 277.0s → 35.7s on the slate build, 457.9s → 159.3s
-overall, with a byte-identical board (same 870 props, same order, same
-digest) and the same 601 requests — no amplification.
+**MLB props were 8–15 minutes stale** — fixed 2026-08-17, in two halves.
+Reproducing the whole build against a fake wire at the droplet's own
+measured latency, which is how each half was checked:
+
+```
+                     BEFORE     pooled     + sim
+build_live_slate     277.0s      35.7s      35.7s
+run_mlb_slate        180.9s     123.6s      53.5s
+                     ------     ------     ------
+TOTAL                457.9s     159.3s     100.1s
+```
+
+The BEFORE column is 457.9s against the 459.5s actually measured on the
+droplet, so the model is trustworthy. Both halves keep the board
+byte-identical — same 870 props in the same order, same 601 requests.
+
+**Correct the record on one thing: `user 0m0.007s` in the original
+write-up was a bad measurement.** It sent that investigation looking only
+at the network and led it to predict that pooling the game logs alone
+would take the build under a minute. In fact 113 of the 458 seconds were
+CPU, which no pool touches — the waiting half and the computing half both
+had to be dealt with.
+
+*The waiting half.* A cold build made 751 HTTP requests one at a time;
+they are independent, so `build_live_slate` and the pitcher play-by-play
+pass now warm their caches through a capped thread pool, and every
+sequential pass behind them reads from disk unchanged.
+
+*The computing half.* All of it was `gamesim.simulate_lineup` — 210 runs
+per board, six of them per lineup just to fit the rates. The trial loop was
+recomputing constants: `_key(line)` is an f-string over a number that never
+changes, called 107M times, and `_pair_key` 46M more. Those and the
+canonical pair keys are computed once now, the loop counts into flat lists
+indexed by leg, and the per-trial rate-table rebuild is unrolled. 2.2x, and
+the sim is seeded so it had to be — and is — bit-identical.
+
+**The real ceiling is `launch.py:51`**, which runs every build with
+`timeout=180` and swallows the `TimeoutExpired`. At 458s the build was
+being KILLED every cycle and the board only republished when a later run
+happened to get through; that explains "8–15 minutes stale" far better
+than slowness alone. At 100s there is now real margin on a 2-core droplet
+that is also serving the site.
 
 Three things a future edit here needs to know:
 
@@ -137,6 +130,13 @@ Three things a future edit here needs to know:
   is two legs in that payload and only one gets priced, so it bought two
   game-log requests for a game nobody looks at. The starters are warmed
   after the doubleheader bookkeeping instead, and a test counts it.
+* **The sim's numbers are pinned by a golden digest**
+  (`tests/test_gamesim_exact.py`). It was taken from the sim BEFORE the
+  loop was reworked and the rework reproduced it exactly, which is the only
+  reason that change was safe to make. Speed work on a seeded sampler is
+  not allowed to move a number, and the digest is how you show it did not.
+  Note that a Python release changing `random.gauss` would fail it too —
+  that is intended, because it would move every published price.
 * **`QB_MLB_WORKERS=1`** restores the old strictly-sequential behaviour —
   the first thing to try if MLB ever starts refusing us. It is clamped to
   1..16.
