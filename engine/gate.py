@@ -110,6 +110,16 @@ FREE_FILES = (
     # a half, and keeping the fixture list free is what stops that
     # refusal reading as a paywall.
     "nfl_preseason.json",
+    # The fast MLB scoreboard (live_build.py). Free for the same reason it
+    # is fast: it is scores and game state only, no prices — a public fact
+    # the gate has no reason to redact, and the one file that must NEVER
+    # wait on entitlement checks or the model. Registered here AFTER the
+    # first deploy failed on it: the builder shipped without this line, the
+    # dev container never runs the fast loop so the suite stayed green, and
+    # the droplet — where the loop had already written the file — refused
+    # the deploy. A registry is only as good as the discipline of adding to
+    # it in the same commit as the thing it registers.
+    "live_mlb.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
@@ -133,7 +143,7 @@ KNOWN_BOARDS = (
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
     "futures_nfl.json", "backtest.json", "kalshi.json", "predmarkets.json",
     "record.json", "injuries.json", "fantasy.json", "memecoins.json",
-    "ufc_live.json", "nfl_preseason.json",
+    "ufc_live.json", "nfl_preseason.json", "live_mlb.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
