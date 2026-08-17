@@ -26,7 +26,10 @@
  * a stale bundle cannot outlive a deploy.
  */
 
-const VERSION = "qb-v1";
+// v2: the 2026-08-17 navigation redesign — bumped late, which is its own
+// lesson: two shell deploys shipped on v1 and the offline fallback held
+// pre-redesign copies the whole time.
+const VERSION = "qb-v2";
 
 /* The shell only: enough to boot the app and render its own "no data
  * yet" states. Deliberately NOT the boards. */

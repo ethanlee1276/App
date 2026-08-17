@@ -447,6 +447,32 @@ def test_the_service_worker_is_not_cached_by_the_proxy():
     assert "no-cache" in caddy[i:i + 200]
 
 
+def test_the_shell_is_never_heuristically_cached():
+    """index.html, app.js and styles.css carried NO Cache-Control, which
+    hands the decision to browser heuristics — and iOS used them. After
+    the 2026-08-17 navigation deploy, Ethan's phone kept its old app.js
+    (heuristically "fresh") under the freshly-fetched index.html: the
+    Library group ships folded in the markup and only the new JS can
+    unfold it, so the button was dead and six pages were unreachable —
+    "the library button doesnt work so we lost all of that information".
+
+    no-cache = store but REVALIDATE: one conditional request, a 304 when
+    nothing changed, a deploy live on the next open. The document is
+    matched at / and /index.html — the app routes with the hash
+    fragment, which never reaches the server, so / IS the document for
+    every view."""
+    caddy = _read("deploy", "Caddyfile")
+    i = caddy.index("@shell")
+    matcher = caddy[i:caddy.index("\n", i)]
+    for path in ("/ ", "/index.html", "/js/*", "/css/*"):
+        assert path in matcher + " ", f"{path.strip()} left the shell matcher"
+    assert "no-cache" in caddy[i:i + 260], "the shell lost its revalidation rule"
+    # And the worker version moved with the shell — its own header says
+    # "Bump VERSION on any shell change", which two deploys skipped.
+    assert 'const VERSION = "qb-v1"' not in _read("web", "sw.js"), \
+        "the redesign shipped without a service-worker version bump"
+
+
 def test_the_manifest_goes_out_as_a_manifest():
     """Caddy's MIME table does not know .webmanifest. Served as
     text/plain the install prompt never appears — no error, no console

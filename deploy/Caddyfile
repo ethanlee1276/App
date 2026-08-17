@@ -90,6 +90,21 @@ qellysbook.com {
 	@sw path /sw.js
 	header @sw Cache-Control "no-cache"
 
+	# THE SHELL REVALIDATES, ALWAYS. index.html, app.js and styles.css
+	# carried no Cache-Control at all, which hands the decision to
+	# browser heuristics — and iOS used them: after the 2026-08-17 nav
+	# deploy, a phone kept its old app.js (heuristically "fresh") under
+	# the freshly-fetched index.html. The Library group ships folded in
+	# the markup and only the new JS can unfold it, so the button was
+	# dead and six pages unreachable. `no-cache` means store but
+	# REVALIDATE: one conditional request, a 304 when nothing changed,
+	# and a deploy is live on the next open instead of whenever a
+	# heuristic expires. The document is matched at / and /index.html —
+	# the app routes with the hash fragment, which never reaches the
+	# server, so / IS the document for every view.
+	@shell path / /index.html /js/* /css/*
+	header @shell Cache-Control "no-cache"
+
 	# Caddy's built-in MIME table does not know .webmanifest, so without
 	# this it goes out as text/plain and the install prompt silently never
 	# appears — no error, no console message, just no prompt.
