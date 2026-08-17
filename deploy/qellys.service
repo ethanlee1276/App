@@ -68,9 +68,17 @@ RestartSec=3
 # Without a limit the kernel picks the victim when memory runs out, and
 # it may well pick something else on the box. Naming ourselves means the
 # app is what dies, systemd restarts it, and the journal says which unit
-# rather than leaving a mystery reboot. 900M on a 1GB box leaves the
-# system its own room; raise it with the droplet.
-MemoryMax=900M
+# rather than leaving a mystery reboot. The value must fit the BOX:
+# 900M was right for the original 1GB droplet and was left behind when
+# the droplet was resized to 2GB — and a cap can hurt without ever
+# killing anything. Measured 2026-08-17: the cgroup sat at 826M of 900M
+# mid-build, so the kernel reclaimed instead of killing — every page the
+# MLB build touched went straight to swap, the build thrashed at a crawl
+# for three hours without finishing OR logging, and the board froze at
+# its last successful write. No OOM line, no traceback, no signal:
+# silence is what a limit that only throttles looks like. 1600M on a 2GB
+# box leaves the system and Caddy their room; raise it with the droplet.
+MemoryMax=1600M
 MemoryAccounting=true
 # Secrets come from a file root owns and this user can only read.
 # Never put them on the ExecStart line: /proc makes command lines
