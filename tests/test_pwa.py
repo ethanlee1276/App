@@ -173,6 +173,34 @@ def test_registration_is_a_separate_file_and_cannot_break_the_page():
     assert "register-sw.js" in HTML
 
 
+def test_no_topbar_padding_shorthand_drops_the_notch_inset():
+    """The installed-app regression of 2026-08-17, pinned at its class.
+
+    The base .topbar rule pads its top by env(safe-area-inset-top) so the
+    controls clear the Dynamic Island. A phone-breakpoint override then
+    said `padding: 0 12px` — a shorthand, so the top slot silently went
+    back to zero on exactly the devices the inset exists for: controls in
+    the island, a dead band below them, and nothing wrong anywhere a
+    developer usually looks. Every .topbar rule that sets the padding
+    shorthand must carry the inset in its top slot.
+    """
+    import re
+    css = _read("web", "css", "styles.css")
+    blocks = re.findall(r"\.topbar\s*\{([^}]*)\}", css)
+    assert blocks, "no .topbar rules found — did the bar get renamed?"
+    saw_inset = False
+    for body in blocks:
+        m = re.search(r"padding\s*:\s*([^;]+);", body)
+        if not m:
+            continue
+        first = m.group(1).strip().split()[0]
+        assert "env(safe-area-inset-top" in first, (
+            "a .topbar padding shorthand zeroes the notch inset: "
+            f"padding: {m.group(1).strip()!r}")
+        saw_inset = True
+    assert saw_inset, "no .topbar rule pads for the notch at all"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
