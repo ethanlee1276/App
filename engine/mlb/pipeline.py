@@ -20,6 +20,7 @@ from ..gamebets import (
 )
 from .data_loader import load_mlb_slate, MLBSlate
 from .models import MARKET_LABELS, PITCHER_MARKETS
+from .. import statlogs
 from .parks import get_park
 from .projection import build_mlb_projection
 from .betting import evaluate_mlb_prop
@@ -863,6 +864,10 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         "config": {"min_confidence": config.min_confidence, "min_edge": config.min_edge},
         "games": [_game_to_dict(g, results) for g in slate.games],
         "recommendations": results,
+        # Every ingested market for tonight's players, not just the one
+        # each prop priced — the Players page's market chips
+        # (engine/statlogs.py; empty on machines without the history DB).
+        "player_stats": statlogs.for_board(results, "mlb"),
         "game_bets": game_bets,
         "correlation": corr,
         "long_shots": ls_picks,

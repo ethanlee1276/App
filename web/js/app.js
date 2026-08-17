@@ -4477,9 +4477,18 @@ async function renderPlayers() {
   const q = state.search.trim().toLowerCase();
   let recs = state.data.recommendations;
   if (q) recs = recs.filter((r) => r.player.toLowerCase().includes(q));
-  // one profile per player (first market listed)
-  const seen = new Set();
-  const players = recs.filter((r) => (seen.has(r.player) ? false : seen.add(r.player)));
+  // One CARD per player, every market kept. The old dedupe ("first
+  // market listed") threw the rest of a player's rows away — Ethan,
+  // 2026-08-17: "when i search an nfl player it will only display yard
+  // props … i also wanna be able to maybe see reception props with the
+  // chart". The card's chips carry tonight's other priced markets AND
+  // the build's player_stats history (engine/statlogs.py).
+  _profRows = new Map();
+  recs.forEach((r) => {
+    if (!_profRows.has(r.player)) _profRows.set(r.player, []);
+    _profRows.get(r.player).push(r);
+  });
+  const players = [..._profRows.keys()];
   const host = document.getElementById("players");
   if (!players.length) {
     /* A profile is a prop card, so this pool is tonight's board — and a
@@ -4529,7 +4538,33 @@ async function renderPlayers() {
     + shown.map(profileHTML).join("");
   fillMeters(host);
   revealChildren(host);
+  // Market chips: swap ONE card in place, keep the rest of the page
+  // still. Delegated and bound once — innerHTML above rebuilds children,
+  // not the host, so a per-card listener would leak one copy per render.
+  if (!host._profBound) {
+    host._profBound = true;
+    host.addEventListener("click", (e) => {
+      const chip = e.target.closest(".prof-tab");
+      if (!chip) return;
+      _profTab[chip.dataset.player] = chip.dataset.mkt;
+      const card = chip.closest(".profile");
+      if (!card) return;
+      const tmp = document.createElement("div");
+      tmp.innerHTML = profileHTML(chip.dataset.player);
+      const fresh = tmp.firstElementChild;
+      if (!fresh) return;
+      fresh.classList.add("reveal", "in");   // already on screen — no re-entrance
+      card.replaceWith(fresh);
+      fillMeters(fresh.parentElement || fresh);
+    });
+  }
 }
+
+//: The chosen market per player. Outlives renders on purpose: flipping
+//: to Receptions and refreshing the search should not snap you back.
+const _profTab = {};
+//: Tonight's rec rows per player, rebuilt by every renderPlayers pass.
+let _profRows = new Map();
 
 //: How many profiles an unsearched Players page draws.
 //:
@@ -4570,7 +4605,48 @@ function openRoster(team) {
   }
 }
 
-function profileHTML(r) {
+/* One card, many markets. The chips list every market we can say
+   anything about: tonight's PRICED rows first (chip shows the line),
+   then history-only markets from the build's player_stats — receptions,
+   targets, hits, homers — which chart the player's games without
+   pretending there is a bet (no line, no pick block, and the card says
+   so). Ethan, 2026-08-17: "i should be able to see how they did with
+   multipul props." */
+function profileHTML(player) {
+  const rows = _profRows.get(player) || [];
+  const stats = ((state.data || {}).player_stats || {})[player] || {};
+  const priced = new Map(rows.map((r) => [r.market_label, r]));
+  const tabs = [...priced.keys(),
+                ...Object.keys(stats).filter((k) => !priced.has(k))];
+  if (!tabs.length) return "";
+  let mkt = _profTab[player];
+  if (!tabs.includes(mkt)) mkt = tabs[0];
+  const chips = tabs.length > 1 ? `<div class="prof-tabs" role="tablist"
+      aria-label="Markets for ${escapeAttr(player)}">
+      ${tabs.map((t) => `<button type="button" role="tab"
+          class="prof-tab ${t === mkt ? "active" : ""}"
+          aria-selected="${t === mkt}"
+          data-player="${escapeAttr(player)}" data-mkt="${escapeAttr(t)}">
+          ${escapeHtml(t)}${priced.has(t)
+            ? ` <b>${priced.get(t).line}</b>` : ""}</button>`).join("")}
+    </div>` : "";
+  return priced.has(mkt)
+    ? pricedProfileHTML(priced.get(mkt), chips)
+    : historyProfileHTML(rows[0], mkt, stats[mkt] || [], chips);
+}
+
+//: Shared head: who this is, on the market's accent.
+function _profileHead(r, right) {
+  return `<div class="profile-head">
+        ${playerAvatar(r.player, r.team, { size: 60, headshot: r.headshot })}
+        <div class="meta"><div class="nm">${escapeHtml(r.player)}</div>
+          <div class="sub">${teamMark(r.team, 16)} ${[teamName(r.team), r.position, "vs " + teamName(r.opponent)]
+            .filter((x) => x && x !== "vs ").map(escapeHtml).join(" · ")}</div></div>
+        ${right}
+      </div>`;
+}
+
+function pricedProfileHTML(r, chips) {
   const f = r.form || {};
   const tiles = [["L1", f.last1], ["L3", f.last3], ["L5", f.last5], ["L10", f.last10], ["Season", f.season]]
     .map(([k, v]) => `<div class="form-tile"><div class="k">${k}</div><div class="v">${v == null ? "—" : v}</div></div>`).join("");
@@ -4588,13 +4664,8 @@ function profileHTML(r) {
   const grad = `linear-gradient(135deg, ${teamPrimary(r.team)}, transparent)`;
   return `
     <article class="profile" style="--profile-grad:${grad}">
-      <div class="profile-head">
-        ${playerAvatar(r.player, r.team, { size: 60, headshot: r.headshot })}
-        <div class="meta"><div class="nm">${escapeHtml(r.player)}</div>
-          <div class="sub">${teamMark(r.team, 16)} ${[teamName(r.team), r.position, "vs " + teamName(r.opponent)]
-            .filter((x) => x && x !== "vs ").map(escapeHtml).join(" · ")}</div></div>
-        <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>
-      </div>
+      ${_profileHead(r, `<span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>`)}
+      ${chips}
       <div class="form-tiles">${tiles}</div>
       <div class="profile-spark">${sparkline(vals, {
         line: r.line, stroke: teamPrimary(r.team), h: 72,
@@ -4612,6 +4683,35 @@ function profileHTML(r) {
             · edge ${signedPct(r.edge)}</small></div>
         <div style="min-width:120px">${confMeter(r)}</div>
       </div>
+    </article>`;
+}
+
+/* A market nobody priced tonight: the history IS the content. Chart and
+   log only — averages without a line to read them against would invite
+   the reader to invent one. */
+function historyProfileHTML(r0, label, logs, chips) {
+  const vals = logs.map((l) => l.value);
+  const nfl = logs.length && logs[0].week != null && !logs[0].date;
+  const when = (l) => (nfl ? `Wk ${l.week}`
+    : (l.date ? formatGameDate(l.date) : `G ${l.week}`));
+  const rows = logs.map((l) => `<tr><td>${escapeHtml(when(l))}</td>
+      <td>${l.home ? "vs" : "@"} ${escapeHtml(l.opponent)}</td>
+      <td class="num">${l.value}</td></tr>`).join("");
+  const grad = `linear-gradient(135deg, ${teamPrimary(r0.team)}, transparent)`;
+  return `
+    <article class="profile" style="--profile-grad:${grad}">
+      ${_profileHead(r0, "")}
+      ${chips}
+      <div class="profile-spark">${sparkline(vals, {
+        stroke: teamPrimary(r0.team), h: 72,
+        labels: logs.map((l) => `${when(l)} ${l.home ? "vs" : "@"} ${l.opponent}`),
+      })}</div>
+      <table class="log-table">
+        <tr><th>${nfl ? "Week" : "Game"}</th><th>Opponent</th><th style="text-align:right">${escapeHtml(label)}</th></tr>
+        ${rows}
+      </table>
+      <div class="profile-pick"><div class="lbl">${escapeHtml(label)}
+        <small>no line on tonight’s board — his last ${logs.length} games, for the read</small></div></div>
     </article>`;
 }
 
@@ -4770,6 +4870,68 @@ function recCurveChart(curve, opts = {}) {
    graded bets says so instead of showing zeros. */
 let _recRange = "all";
 window._recSetRange = (k) => { _recRange = k; renderRecord(); };
+
+/* Splits — ONE table with a switcher, not four stacked (2026-08-17,
+   Ethan: "its very cluttered"). With a real journal the market table
+   alone runs 14+ rows, and four tables of headers made the page read
+   like a spreadsheet dump. Every split survives; one shows at a time. */
+let _recSplit = "market";
+window._recSetSplit = (k) => { _recSplit = k; renderRecord(); };
+
+//: Raw market ids are engine vocabulary; the reader gets words. Only
+//: known ids transform — grades, sides and book names pass through.
+const MARKET_WORDS = {
+  total_bases: "Total Bases", hits: "Hits", home_runs: "Home Runs",
+  strikeouts: "Strikeouts", outs: "Outs Recorded",
+  pass_yds: "Passing Yards", rush_yds: "Rushing Yards",
+  rec_yds: "Receiving Yards", receptions: "Receptions",
+  anytime_td: "Anytime TD", moneyline: "Moneyline", spread: "Spread",
+  total: "Game Total", team_total: "Team Total", points: "Points",
+  rebounds: "Rebounds", assists: "Assists", pra: "Pts+Reb+Ast",
+};
+
+function recSplitsSection(o) {
+  const SPLITS = [["market", "Market", o.by_market],
+                  ["side", "Side", o.by_side],
+                  ["grade", "Grade", o.by_grade],
+                  ["book", "Book", o.by_book]];
+  const avail = SPLITS.filter(([, , t]) => t && Object.keys(t).length);
+  if (!avail.length) return "";
+  const cur = avail.find(([k]) => k === _recSplit) || avail[0];
+  const pretty = cur[0] === "market"
+    ? Object.fromEntries(Object.entries(cur[2]).map(([k, v]) =>
+        [MARKET_WORDS[k] || k, v]))
+    : cur[2];
+  const chips = avail.length > 1 ? `<span class="ra-ranges">${avail.map(([k, label]) =>
+    `<button class="ra-range ${k === cur[0] ? "active" : ""}"
+       onclick="_recSetSplit('${k}')">${label}</button>`).join("")}</span>` : "";
+  return `
+    <div class="section-title">Splits
+      <span class="sub">— where the units actually came from. The bar is win rate;
+      the number that matters is net.</span>
+      ${chips}</div>
+    <div class="rec-buckets rec-buckets-one">
+      ${recBucketTable(`By ${cur[1].toLowerCase()}`, pretty)}
+    </div>`;
+}
+
+/* Recent picks — first dozen, then a real count on the button. Thirty
+   rows of agate by default buried everything after it. */
+let _recAllPicks = false;
+window._recShowPicks = () => { _recAllPicks = true; renderRecord(); };
+
+function recRecentSection(recent) {
+  const shown = _recAllPicks ? recent : recent.slice(0, 12);
+  const more = recent.length - shown.length;
+  return `
+    <div class="section-title">Recent settled picks
+      <span class="sub">— newest first, at the price we actually got</span></div>
+    <div class="card rec-list">
+      ${shown.map(recSettledRow).join("") || `<p class="loading" style="padding:12px">Nothing settled yet.</p>`}
+      ${more > 0 ? `<button class="rec-more" onclick="_recShowPicks()">
+        Show all ${recent.length} settled picks</button>` : ""}
+    </div>`;
+}
 function recAnalytics(curve, o) {
   if (!curve || curve.length < 2) return recCurveChart(curve);
   const spanDays = (new Date(curve[curve.length - 1].date)
@@ -4804,36 +4966,35 @@ function recAnalytics(curve, o) {
   const nBets = rows.reduce((a, p) => a + (p.n || 0), 0);
   const roi = staked ? net / staked : null;
   const wr = wins != null && (wins + losses) > 0 ? wins / (wins + losses) : null;
-  const stat = (k, v, tone) => `<div class="ra-stat"><span class="k">${k}</span>
-    <b class="v ${tone || ""}">${v}</b></div>`;
+  // DECLUTTERED 2026-08-17 (Ethan: "its very cluttered and nees to be
+  // easiler to read"). This block used to repeat the scoreboard three
+  // times: a 3-tile column beside the curve (net/win rate/ROI — all in
+  // the hero tiles above), a graded/won/lost tile row (the RECORD tile,
+  // again), and a 4-tile all-time row. Every number survives — the
+  // range-scoped ones on one line under the curve, the all-time ones on
+  // one ledger line — but each now appears ONCE.
+  const line = (parts) => parts.filter(Boolean).join(" · ");
+  const range = line([
+    wins != null && `<b>${wins}-${losses}${nBets > wins + losses ? `-${nBets - wins - losses}` : ""}</b> in this window`,
+    wr != null && `win rate <b>${(wr * 100).toFixed(1)}%</b>`,
+    roi != null && `ROI <b class="${toneOf(roi)}">${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}%</b>`,
+    `net <b class="${toneOf(net)}">${net >= 0 ? "+" : ""}${net.toFixed(2)}u</b>`,
+  ]);
+  const alltime = o.avg_price == null && o.best_streak == null ? "" : line([
+    `<b>${(o.units_staked || 0).toFixed(1)}u</b> staked all-time`,
+    `<b>${(o.returned_units || 0).toFixed(1)}u</b> returned (stake back + winnings)`,
+    o.avg_price != null && `avg price <b>${(o.avg_price > 0 ? "+" : "") + o.avg_price}</b>`,
+    o.best_streak != null && `best win streak <b>${o.best_streak}</b>`,
+  ]);
   return `
     <div class="section-title">Running P&amp;L
       <span class="sub">— every settled pick, by slate date</span>
       ${raChips(avail, rk)}</div>
     <div class="ra-main">
       ${recCurveChart(sliced, { head: false })}
-      <div class="ra-stats">
-        ${stat("Net P&L", `${net >= 0 ? "+" : ""}${net.toFixed(2)}u`, toneOf(net))}
-        ${stat("Win rate", wr == null ? "—" : (wr * 100).toFixed(1) + "%")}
-        ${stat("ROI", roi == null ? "—" : `${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}%`, toneOf(roi || 0))}
-      </div>
     </div>
-    <div class="ra-tiles">
-      <div class="tile"><div class="k">Bets graded</div><div class="v">${nBets}</div></div>
-      <div class="tile"><div class="k">Won</div><div class="v" style="color:var(--good)">${wins == null ? "—" : wins}</div></div>
-      <div class="tile"><div class="k">Lost</div><div class="v" style="color:var(--bad)">${losses == null ? "—" : losses}</div></div>
-    </div>
-    ${o.avg_price == null && o.best_streak == null ? "" : `
-    <div class="ra-tiles ra-alltime">
-      <div class="tile"><div class="k">Total staked</div><div class="v">${(o.units_staked || 0).toFixed(1)}u</div>
-        <div class="tile-sub">all-time</div></div>
-      <div class="tile"><div class="k">Total returned</div><div class="v">${(o.returned_units || 0).toFixed(1)}u</div>
-        <div class="tile-sub">stake back + winnings, all-time</div></div>
-      <div class="tile"><div class="k">Avg price</div><div class="v">${o.avg_price == null ? "—" : (o.avg_price > 0 ? "+" : "") + o.avg_price}</div>
-        <div class="tile-sub">mean implied probability, as American odds</div></div>
-      <div class="tile"><div class="k">Best win streak</div><div class="v">${o.best_streak ?? "—"}</div>
-        <div class="tile-sub">consecutive wins, slate order</div></div>
-    </div>`}`;
+    <p class="ra-line">${range}</p>
+    ${alltime ? `<p class="ra-line ra-dim">${alltime}</p>` : ""}`;
 }
 function raChips(avail, rk) {
   if (avail.length < 2) return "";
@@ -6908,20 +7069,8 @@ async function renderRecord() {
     ${unstaked}
     ${small}
     ${recAnalytics(src.curve, o)}
-    <div class="section-title">Splits
-      <span class="sub">— where the units actually came from. The bar is win rate;
-      the number that matters is net.</span></div>
-    <div class="rec-buckets">
-      ${recBucketTable("By market", o.by_market)}
-      ${recBucketTable("By side", o.by_side)}
-      ${recBucketTable("By grade", o.by_grade)}
-      ${recBucketTable("By book", o.by_book)}
-    </div>
-    <div class="section-title">Recent settled picks
-      <span class="sub">— newest first, at the price we actually got</span></div>
-    <div class="card rec-list">
-      ${(src.recent || []).map(recSettledRow).join("") || `<p class="loading" style="padding:12px">Nothing settled yet.</p>`}
-    </div>
+    ${recSplitsSection(o)}
+    ${recRecentSection(src.recent || [])}
   `;
   host.innerHTML = scopeBar
     + _recordRooms(d, src, pmv, scope, scoped, receipts)
@@ -7262,23 +7411,41 @@ function edgeBoardRows() {
       // which makes it the slowest list on the site to scan even though it
       // is the one with the most rows.
       mark: betMark(r, 30),
+      // Ethan, 2026-08-17: "the 'player prop' page should have the charts
+      // along with the player props." The history was already on every
+      // row — it just never got drawn here.
+      vals: (r.logs || []).map((l) => l.value),
+      line: r.line, team: r.team,
     }));
   const games = (state.data.game_bets || [])
     .filter((b) => b.grade !== "Pass" && (b.ev_per_unit || 0) > 0.005)
-    .map((b) => ({
-      label: b.pick_label, sub: `${b.matchup} · ${b.market_label}`,
-      odds: b.odds, model: b.win_prob, implied: b.fair_prob,
-      market: "Game lines",
-      ev: b.ev_per_unit, grade: b.grade, rec: passesGameBet(b),
-      open: gameBetAttrs(b),
-      mark: (b.bet_type === "total" ? leagueMark(state.sport, 30)
-             : teamMark(b.team || b.home, 30)),
-    }));
+    .map((b) => {
+      const s = gameBetSeries(b);   // one call — it reads team_recent twice
+      return {
+        label: b.pick_label, sub: `${b.matchup} · ${b.market_label}`,
+        odds: b.odds, model: b.win_prob, implied: b.fair_prob,
+        market: "Game lines",
+        ev: b.ev_per_unit, grade: b.grade, rec: passesGameBet(b),
+        open: gameBetAttrs(b),
+        mark: (b.bet_type === "total" ? leagueMark(state.sport, 30)
+               : teamMark(b.team || b.home, 30)),
+        vals: s ? s.values : [], line: s ? s.line : undefined,
+        team: b.team || b.home,
+      };
+    });
   return [...props, ...games].sort((a, b) => b.ev - a.ev);
 }
 
 function edgeRowHTML(r, i) {
   const evPct = (r.ev * 100).toFixed(1);
+  // Ethan, 2026-08-17: "the 'player prop' page should have the charts
+  // along with the player props." Same bars the prop page draws large,
+  // against the same line, from the row's own log.
+  const spark = (r.vals || []).length >= 3
+    ? `<span class="edge-spark" title="Last ${Math.min(r.vals.length, 10)} games against the line">${
+        gamelogBars(r.vals, { line: r.line, w: 92, h: 34,
+                              stroke: teamPrimary(r.team) })}</span>`
+    : `<span class="edge-spark"></span>`;
   return `<div class="ls-row drow ${r.open ? "openable" : ""}"${r.open || ""}
        style="display:flex;align-items:center;gap:14px;
        padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
@@ -7286,6 +7453,7 @@ function edgeRowHTML(r, i) {
     <span class="pick-id" style="flex-shrink:0">${r.mark || ""}</span>
     <span style="flex:1"><strong>${escapeHtml(r.label)}</strong>
       <span style="display:block;opacity:.6;font-size:.85em">${escapeHtml(r.sub)}</span></span>
+    ${spark}
     <span style="min-width:64px;text-align:right">${r.odds > 0 ? "+" : ""}${r.odds}</span>
     <span style="min-width:120px;text-align:right;opacity:.8">
       ${(r.model * 100).toFixed(0)}% vs ${(r.implied * 100).toFixed(0)}%</span>

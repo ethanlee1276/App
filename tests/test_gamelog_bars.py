@@ -51,9 +51,13 @@ def test_every_player_prop_chart_is_bars_now():
     # points is a real claim — the price existed at every instant between
     # two pulls, unlike a player's hit total between two games, which has
     # no value on the days he did not play. The live track joined this
-    # list on 2026-08-14 and belongs in it for exactly that reason; a
-    # fourth line chart over a per-GAME quantity would not.
-    assert APP.count("sparkline(") == 3
+    # list on 2026-08-14 and belongs in it for exactly that reason.
+    # The FOURTH call (2026-08-17) is the profile's history-market chart
+    # — the multi-prop chips' no-line view. It sits in the same card slot
+    # as the profile trend and charts the same quantity, so it wears the
+    # same chart: two chart styles alternating in one slot as you flip
+    # chips would read as a data change, not a style choice.
+    assert APP.count("sparkline(") == 4
     assert APP.count("sparkline(t.values") == 1     # the live line track
 
 

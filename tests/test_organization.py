@@ -160,8 +160,12 @@ def test_searching_still_reaches_every_player():
     problem it fixes."""
     js = _js()
     i = js.index("async function renderPlayers(")
-    body = js[i:i + 900]
-    assert body.index("recs = recs.filter") < body.index("const seen")
+    body = js[i:i + 1200]
+    # The dedupe ("const seen") became per-player GROUPING on 2026-08-17
+    # — every market kept, one card per player — but the order contract
+    # is the same: the search filter runs over the FULL list before any
+    # grouping or display cap touches it.
+    assert body.index("recs = recs.filter") < body.index("_profRows = new Map()")
 
 
 def test_the_browse_cap_is_smaller_where_the_grid_is_one_column():

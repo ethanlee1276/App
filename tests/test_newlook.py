@@ -208,6 +208,59 @@ def test_the_drawer_has_more_than_one_exit():
     assert "html:has(body.menu-open) { overflow: hidden; }" in CSS
 
 
+def test_props_players_and_record_carry_their_charts_and_chips():
+    """Three asks in one message, 2026-08-17.
+
+    "the 'player prop' page should have the charts along with the player
+    props" — every edge row with 3+ logged games draws gamelogBars
+    against ITS line, in a fixed-width slot so the number columns stay
+    aligned, wrapping to its own row on phones instead of crushing the
+    label.
+
+    "you should be able to look through mulitpul props for that player"
+    — the Players page keeps EVERY market: rec rows grouped per player
+    (the old dedupe threw all but the first away), chips for tonight's
+    priced markets plus the build's player_stats history, and a
+    history-only market renders chart + log with NO invented line.
+
+    "organize the record page. its very cluttered" — the scoreboard
+    renders ONCE (the tile stacks that repeated it are gone), splits are
+    one switchable table instead of four stacked, market ids come out as
+    words, and the settled list opens at a dozen rows with a real count
+    on the expander."""
+    # Edge rows: chart present, from the row's own log, against its line.
+    fn = APP[APP.index("function edgeRowHTML("):]
+    fn = fn[:fn.index("\n}")]
+    assert "edge-spark" in fn and "gamelogBars(r.vals" in fn
+    assert "line: r.line" in fn
+    src = APP[APP.index("function edgeBoardRows("):]
+    src = src[:src.index("\nfunction edgeRowHTML")]
+    assert "vals: (r.logs || []).map((l) => l.value)" in src
+    # Phone: the chart wraps, it does not vanish — Ethan asked for the
+    # charts, and display:none at 700px would be quietly taking them back.
+    i = CSS.index(".edge-spark { flex: 0 0 92px")
+    phone = CSS[CSS.index("@media (max-width: 700px)", i):]
+    phone = phone[:phone.index("}", phone.index("edge-spark"))]
+    assert "display: none" not in phone
+    # Players: grouped rows, chips, and the honest history card.
+    assert "_profRows.get(player)" in APP
+    assert 'class="prof-tab' in APP and "data-mkt" in APP
+    hist = APP[APP.index("function historyProfileHTML("):]
+    hist = hist[:hist.index("\n}")]
+    assert "no line on tonight" in hist
+    assert "line:" not in hist.split("sparkline")[1].split("})")[0], \
+        "the history chart invented a threshold"
+    # Record: one scoreboard, switchable splits with words, capped list.
+    ra = APP[APP.index("function recAnalytics("):]
+    ra = ra[:ra.index("\nfunction recEraSection")]
+    assert "ra-tiles" not in ra, "the tile stacks that repeated the scoreboard are back"
+    assert "_recSetSplit" in APP and "MARKET_WORDS" in APP
+    assert '["market", "Market", o.by_market]' in APP
+    rr = APP[APP.index("function recRecentSection("):]
+    rr = rr[:rr.index("\n}")]
+    assert "slice(0, 12)" in rr and "Show all" in rr
+
+
 def test_the_rail_belongs_to_home_only():
     """The render puts insights and live-now beside the dashboard. On
     every other page the content gets the room back."""
@@ -375,7 +428,11 @@ def test_the_render_sheet_pass_shipped_its_honest_subset():
     # average price is a mean of implied probabilities re-expressed in
     # American odds — never a mean of the American ints themselves.
     assert "gp-lines" in APP and "gp-note-list" in APP
-    assert "ra-alltime" in APP and "implied_breakeven(b[\"odds\"])" in LEDGER
+    # The all-time stats moved from a tile row to one ledger line in the
+    # 2026-08-17 declutter — the CONTRACT (staked/returned/avg price/
+    # streak all shipped, honestly labelled) is what this pins, not the
+    # container they render in.
+    assert "staked all-time" in APP and "implied_breakeven(b[\"odds\"])" in LEDGER
     assert "best_streak" in LEDGER and "returned_units" in LEDGER
     fn = APP[APP.index("function renderBankrollExtras("):]
     fn = fn[:fn.index("\n}")]

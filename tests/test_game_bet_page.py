@@ -66,8 +66,10 @@ def test_the_board_and_the_edge_list_open_them_too():
     half-finished state as before, one screen over."""
     i = APP.index("function gameBetCard(")
     assert "gameBetAttrs(r)" in APP[i:i + 3000]
+    # The window grew with the function: the 2026-08-17 chart pass added
+    # the per-row values (and their comment) ahead of the games map.
     j = APP.index("function edgeBoardRows(")
-    assert "gameBetAttrs(b)" in APP[j:j + 1600]
+    assert "gameBetAttrs(b)" in APP[j:j + 2600]
 
 
 def test_the_id_survives_a_rebuild():
@@ -216,8 +218,10 @@ def test_the_edge_board_carries_a_mark_per_row():
     list with the most rows the slowest on the site to scan."""
     i = APP.index("function edgeRowHTML(")
     assert 'class="pick-id"' in APP[i:i + 900]
+    # Window widened 2026-08-17: the chart pass added per-row values
+    # (and their comment) to both maps, pushing the games map deeper in.
     j = APP.index("function edgeBoardRows(")
-    block = APP[j:j + 1800]
+    block = APP[j:j + 2800]
     assert "betMark(r, 30)" in block, "player rows must use the face chain"
     assert "teamMark(b.team" in block, "a game line wears its team's logo"
 

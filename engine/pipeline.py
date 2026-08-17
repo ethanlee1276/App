@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .data_loader import load_slate, Slate
 from .models import MARKET_LABELS, live_to_dict, PASS_YDS, REC_YDS, RECEPTIONS
+from . import statlogs
 from .projection import build_projection
 from .betting import evaluate_prop
 from .rules import apply_rules, RuleConfig, game_has_started
@@ -510,6 +511,10 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         },
         "games": [_game_to_dict(g, results) for g in slate.games],
         "recommendations": results,
+        # Every ingested market for tonight's players, not just the one
+        # each prop priced — the Players page's market chips
+        # (engine/statlogs.py; empty on machines without the history DB).
+        "player_stats": statlogs.for_board(results, "nfl"),
         "game_bets": game_bets,
         "long_shots": ls,
         "market_scan": _market_scan(results, ls),

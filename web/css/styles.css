@@ -922,6 +922,31 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .profile-head .sub { color: var(--text-dim); font-size: var(--fs-md); margin-top: 2px; }
 .profile-head .grade { align-self: flex-start; }
 
+/* Market chips on a player card (2026-08-17, Ethan: "i should be able
+   to see how they did with multipul props"). Priced markets carry their
+   line in <b>; history-only chips are just the stat's name. */
+.prof-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 18px 12px; }
+.prof-tab { border: var(--hairline) solid var(--border); background: transparent;
+  color: var(--text-dim); font: inherit; font-size: var(--fs-xs); font-weight: 700;
+  padding: 5px 10px; border-radius: 999px; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.prof-tab b { font-weight: 800; color: var(--text); }
+.prof-tab:hover { background: var(--panel-2); color: var(--text); }
+.prof-tab.active { background: var(--grad-chip); color: var(--text);
+  border-color: var(--brand); }
+.prof-tab.active b { color: var(--brand-2); }
+
+/* The Player Props page's inline bars (2026-08-17: "the 'player prop'
+   page should have the charts along with the player props"). A fixed
+   slot so the number columns stay aligned whether or not a row has
+   enough history to draw. On phones the row wraps and the chart takes
+   the full second line instead of crushing the label. */
+.edge-spark { flex: 0 0 92px; line-height: 0; }
+@media (max-width: 700px) {
+  .ls-row.drow { flex-wrap: wrap; }
+  .edge-spark { order: 9; }
+}
+
 /* minmax(0, 1fr), not 1fr: a bare 1fr is minmax(AUTO, 1fr), so a track
    whose label is wider than its fifth of the row grows instead of sharing,
    and five uneven tracks pushed the last tile out of the card at 320px.
@@ -4370,17 +4395,9 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   border: var(--hairline) solid var(--border); border-radius: var(--radius-sm);
   padding: 3px 9px; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
 .ra-range.active { background: var(--brand); border-color: var(--brand); color: #fff; }
-.ra-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-  margin: 0 0 10px; }
-.ra-stat { background: var(--panel); border: var(--hairline) solid var(--border);
-  border-radius: var(--radius); padding: 10px 14px; }
-.ra-stat .k { display: block; color: var(--text-mute); font-size: var(--fs-xs);
-  text-transform: uppercase; letter-spacing: .07em; }
-.ra-stat .v { font-size: var(--fs-xl); }
-.ra-stat .v.good { color: var(--good); }
-.ra-stat .v.bad { color: var(--bad); }
-.ra-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-  margin: 10px 0 18px; }
+/* (.ra-stats/.ra-tiles retired 2026-08-17 with the record declutter —
+   their numbers repeated the scoreboard and now live on the .ra-line
+   ledger rows.) */
 
 /* Live board — the SPREAD | TOTAL | ML grid, one row per team. */
 .lb-table { display: grid; grid-template-columns: 1fr auto auto auto;
@@ -4440,7 +4457,6 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .perf-day b { font-size: var(--fs-3xl); font-weight: 800; letter-spacing: -.5px; }
 
 @media (max-width: 640px) {
-  .ra-stats, .ra-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
   .mbc-list { grid-template-columns: 1fr; }
 }
 
@@ -4474,6 +4490,19 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 /* Analytics on desktop — chart left, the three stats as a right rail. */
 .ra-main { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
 .ra-main .rec-chart { margin-bottom: 0; }
+/* The 2026-08-17 declutter: the tile stacks that repeated the scoreboard
+   became two ledger lines — every number once, in a sentence. */
+.ra-line { margin: 2px 0 0; color: var(--text-dim); font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums; }
+.ra-line b { color: var(--text); font-weight: 700; }
+.ra-line b.pos { color: var(--good); }
+.ra-line b.neg { color: var(--bad); }
+.ra-line.ra-dim { color: var(--text-mute); margin-bottom: 14px; }
+.rec-buckets-one { grid-template-columns: 1fr; }
+.rec-more { display: block; width: 100%; padding: 11px 16px; border: 0;
+  background: transparent; color: var(--brand-2); font: inherit;
+  font-size: var(--fs-sm); font-weight: 700; cursor: pointer; text-align: center; }
+.rec-more:hover { background: var(--panel-2); }
 @media (min-width: 1000px) {
   .ra-main { grid-template-columns: 1fr 235px; align-items: stretch; }
   .ra-main .ra-stats { grid-template-columns: 1fr; margin: 0; align-content: start; }
