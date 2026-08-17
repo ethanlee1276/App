@@ -44,15 +44,35 @@ ROOT = Path(__file__).parent
 load_local_secrets()  # pull ODDS_API_KEY from secrets.local into the environment
 
 
-def _run_build(args: list[str]) -> tuple[bool, str]:
-    """Run a build script as a subprocess. Returns (ok, last_output_line)."""
+def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
+    """Run a build script as a subprocess. Returns (ok, last_output_line).
+
+    THE TIMEOUT IS A GUILLOTINE AND IT MUST SAY SO WHEN IT FALLS. On
+    2026-08-17 the production MLB board froze for three hours: every loop
+    build exceeded the 180s cap on a busy two-core box, was killed here,
+    and reported nothing anywhere — refresh_mlb's quiet background cycles
+    print only on success. The board's one daily write was the cold-start
+    build, which runs down a different path with no timeout. A kill that
+    leaves no line in the journal turns a config number into a day-long
+    investigation, so failures now print unconditionally: one line, into
+    stdout, which systemd forwards to the journal.
+
+    180s stays the DEFAULT because most callers are small fast builds —
+    the live scoreboards run every few seconds and must never be blocked
+    behind a hung sibling for ten minutes. The big model boards pass
+    their own ceiling.
+    """
     try:
         proc = subprocess.run([sys.executable, *args], cwd=str(ROOT),
-                              capture_output=True, text=True, timeout=180)
+                              capture_output=True, text=True, timeout=timeout)
     except Exception as exc:  # noqa: BLE001 — never let a refresh crash the server
+        print(f"  build failed: {' '.join(args[:2])} — {str(exc)[:140]}")
         return False, str(exc)
     out = (proc.stdout + proc.stderr).strip().splitlines()
     tail = out[-1] if out else ""
+    if proc.returncode != 0:
+        print(f"  build failed: {' '.join(args[:2])} — exit "
+              f"{proc.returncode}: {tail[:140]}")
     return proc.returncode == 0, tail
 
 
@@ -213,7 +233,13 @@ def refresh_mlb(quiet: bool = False) -> bool:
         # with proxy lines, silently wiping real prices off the site for all
         # but the minute after each paid pull.
         args.append("--cached-odds")
-    ok, tail = _run_build(args)
+    # 600s, not the default 180. The MLB board is the one build that has
+    # never reliably fit under three minutes on the production box: 923
+    # props, and since the sim memoisation it is CPU-bound on two busy
+    # cores. At 180s the loop killed EVERY warm build for three hours and
+    # the board froze at its cold-start write. Ten minutes is twice the
+    # worst measured build — a guillotine for a hang, not for honest work.
+    ok, tail = _run_build(args, timeout=600)
     _finish_paid_pull(spend, before_seen, ok, tail, "MLB", sport="mlb")
     if not quiet:
         print(f"  MLB  {date}: {'refreshed' if ok else 'unavailable — kept existing data'}"

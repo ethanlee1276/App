@@ -159,6 +159,30 @@ def test_the_launcher_actually_runs_it():
     assert "LIVE_FAST_S" in fn and "LIVE_IDLE_S" in fn
 
 
+def test_the_mlb_build_is_not_guillotined_at_the_default_timeout():
+    """The frozen-board bug of 2026-08-17, pinned at its cause.
+
+    _run_build kills any build at its timeout, and 180s is right for the
+    fast loops — but the MLB board has never reliably fit under three
+    minutes on the production box, so at the default EVERY warm build was
+    killed and the board froze at its one untimed cold-start write. The
+    big build passes its own ceiling; the kill prints a line, because
+    three hours of silent kills is what turned a config number into a
+    day-long investigation.
+    """
+    launch = _read("launch.py")
+    fn = launch[launch.index("def refresh_mlb("):]
+    fn = fn[:fn.index("\ndef ")]
+    assert "_run_build(args, timeout=600)" in fn, \
+        "the MLB build is back on the 180s guillotine"
+    runner = launch[launch.index("def _run_build("):]
+    runner = runner[:runner.index("\ndef ")]
+    assert 'timeout: int = 180' in runner, \
+        "the DEFAULT moved — the fast loops must stay on a short leash"
+    assert runner.count("build failed:") >= 2, \
+        "a killed build no longer says so in the journal"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
