@@ -112,6 +112,23 @@ happened to get through; that explains "8–15 minutes stale" far better
 than slowness alone. At 100s there is now real margin on a 2-core droplet
 that is also serving the site.
 
+**CLOSED ON THE LIVE BOX, 2026-08-17 21:03 UTC**, after two more finds
+the fake-wire model could not see:
+
+* the service still carried `MemoryMax=900M` from the 1GB droplet on the
+  resized 2GB box — a cgroup riding its ceiling is not killed, it is
+  reclaimed into swap, and the measured 826M/900M throttle is part of why
+  even 100s-shaped builds were blowing through 180s in production;
+* the guillotine itself: refresh_mlb now passes `timeout=600`, the
+  default 180 stays for the fast loops, and `_run_build` prints EVERY
+  kill and failure into the journal — the three silent hours were more
+  expensive than the wrong number.
+
+Verified by the check that had failed all day: consecutive board writes
+at 20:55:40 and 21:03:24 — an ~8-minute publish cycle under live-site
+load, down from frozen. If anyone wants that smaller, the lever is the
+sim or more cores, not the fetch layer.
+
 Three things a future edit here needs to know:
 
 * **The warm passes are removable by construction, and must stay that way.**
