@@ -7519,12 +7519,22 @@ function renderEdgeBoard() {
 /* ============================================================
    Market Scanner — arbitrage / middles / low holds / sharp money
    ============================================================ */
+/* The face/logo the other boards lead with (Ethan, 2026-08-17: "the
+   line shopping page doesnt show any headshots"). Guarded, because a
+   payload built before the scanner rows carried player/team should
+   render the row it always rendered, not a broken avatar. */
+function scanMark(t) {
+  return (t.player || t.team)
+    ? `<span class="pick-id" style="flex-shrink:0">${betMark(t, 26)}</span>` : "";
+}
+
 function scanPairRow(p, extra) {
   const leg = (side, l) =>
     `<span style="display:block"><strong>${side} ${l.line}</strong>
        <span style="opacity:.65">@ ${escapeHtml(l.book)} ${american(l.odds)}</span></span>`;
   return `<div class="drow" style="display:flex;align-items:center;gap:14px;padding:11px 16px;
       border-bottom:1px solid rgba(255,255,255,.05)">
+    ${scanMark(p)}
     <span style="flex:1"><strong>${escapeHtml(p.bet)}</strong></span>
     <span style="min-width:170px">${leg("Over", p.over)}${leg("Under", p.under)}</span>
     <span style="min-width:150px;text-align:right">${extra}</span>
@@ -7583,6 +7593,7 @@ function renderScanner() {
 
   const staleRow = (t) => `<div class="drow" style="display:flex;align-items:center;gap:14px;
       padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
+    ${scanMark(t)}
     <span style="flex:1"><strong>${escapeHtml(t.bet)}</strong>
       <span style="display:block;opacity:.65;font-size:.85em">
         ${escapeHtml(t.book)} ${american(t.odds)} · the other
@@ -7611,6 +7622,7 @@ function renderScanner() {
       (state.data.market_scan && state.data.market_scan.longshots) || [],
       (t) => `<div class="drow" style="display:flex;align-items:center;gap:14px;padding:11px 16px;
           border-bottom:1px solid rgba(255,255,255,.05)">
+        ${scanMark(t)}
         <span style="flex:1"><strong>${escapeHtml(t.bet)}</strong>
           <span style="display:block;opacity:.65;font-size:.85em">
             ${escapeHtml(t.book)} ${american(t.odds)} · implied ${(t.implied * 100).toFixed(1)}%
@@ -13997,7 +14009,18 @@ async function renderHomePerf() {
       _perfCache = await r.json();
     }
   } catch (e) { host.innerHTML = ""; return; }
-  const all = _perfCache.overall || {};
+  // SPORT-SCOPED (Ethan, 2026-08-17): "when you on a specific sport …
+  // it should only show the performance for that specific sport." The
+  // ledger has exported per-sport curves all along (record_by_sport);
+  // this panel just never read them. When the sport in view has nothing
+  // settled yet, it falls back to the whole book AND SAYS SO — an empty
+  // panel reads as a broken one, an unlabelled global number on a
+  // sport's own page is the bug being fixed.
+  const tracked = (_perfCache.tracked_sports || []).includes(state.sport);
+  const section = tracked ? (_perfCache.by_sport || {})[state.sport] : null;
+  const scopedToSport = !!(section && (section.overall || {}).settled);
+  const sportName = tracked ? String(state.sport || "").toUpperCase() : "";
+  const all = scopedToSport ? section.overall : (_perfCache.overall || {});
   if (!all.settled) { host.innerHTML = ""; return; }
   // Range chips on the overview chart (Ethan's desktop render,
   // 2026-08-11). They used to window the CHART ONLY, with the tiles
@@ -14017,7 +14040,7 @@ async function renderHomePerf() {
   // per-day wins, losses, stake, dollars and each day's own break-even,
   // so a range block is arithmetic on real rows rather than a scaled
   // guess at them.
-  const full = _perfCache.curve || [];
+  const full = (scopedToSport ? section.curve : _perfCache.curve) || [];
   const spanDays = full.length > 1
     ? (new Date(full[full.length - 1].date) - new Date(full[0].date)) / 864e5 : 0;
   const PR = [["1w", 7], ["1m", 30], ["3m", 91], ["all", Infinity]];
@@ -14063,13 +14086,15 @@ async function renderHomePerf() {
   // What the numbers cover, in words, on every range including all-time.
   // The chip says which button is lit; this says what was counted, which
   // is the thing that was ambiguous.
+  const betWord = scopedToSport ? `${sportName} bet(s)` : "bet(s)";
   const scopeLine = partial
     ? `<span class="perf-window">showing the whole book — rebuild the
        record for per-week figures</span>`
     : `<span class="perf-window">${!isFinite(days)
-        ? `all ${all.settled} settled bet(s)`
-        : `${o.settled} settled bet(s) over ${curve.length} graded day(s)`
-      }</span>`;
+        ? `all ${all.settled} settled ${betWord}`
+        : `${o.settled} settled ${betWord} over ${curve.length} graded day(s)`
+      }${sportName && !scopedToSport
+        ? ` — no ${sportName} picks settled yet, whole book shown` : ""}</span>`;
   const pcol = (v) => v > 0 ? "var(--good)" : v < 0 ? "var(--bad)" : "var(--text-mute)";
   const u = (v, sign) => (sign && v > 0 ? "+" : "") + Number(v).toFixed(2) + "u";
   // Sparkline: cumulative units over the last 30 graded days.
@@ -14112,9 +14137,14 @@ async function renderHomePerf() {
   host.innerHTML = `
     <div class="perf-grid">
       <div class="card perf-card">
-        <div class="perf-head"><span class="rail-title">Your performance</span>
+        <div class="perf-head"><span class="rail-title">Your ${scopedToSport
+            ? sportName + " " : ""}performance</span>
           ${perfChips || `<span class="perf-window">${curve.length > 1
-            ? "last " + curve.length + " graded days" : "the whole book"}</span>`}</div>
+            ? "last " + curve.length + " graded days"
+            : scopedToSport ? `all ${all.settled} settled ${sportName} bet(s)`
+            : "the whole book"}${
+            sportName && !scopedToSport
+              ? ` — no ${sportName} picks settled yet` : ""}</span>`}</div>
         ${perfChips ? scopeLine : ""}
         ${(() => {
           // The render's "TODAY'S PROFIT/LOSS" headline — the most recent

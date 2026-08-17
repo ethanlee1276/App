@@ -125,6 +125,13 @@ def scan_recommendations(recs: list[dict]) -> dict:
                         continue
                     base = {
                         "bet": label,
+                        # Who the bet is about, so the page can draw the
+                        # face/logo the other boards lead with (Ethan,
+                        # 2026-08-17: "the line shopping page doesnt show
+                        # any headshots").
+                        "player": r.get("player", ""),
+                        "team": r.get("team", ""),
+                        "market": r.get("market", ""),
                         "over": {"line": lo, "odds": oo, "book": ob},
                         "under": {"line": lu, "odds": uo, "book": ub},
                     }
@@ -154,6 +161,9 @@ def scan_recommendations(recs: list[dict]) -> dict:
                         continue
                     entry = {
                         "bet": label,
+                        "player": r.get("player", ""),
+                        "team": r.get("team", ""),
+                        "market": r.get("market", ""),
                         "over": {"line": lo, "odds": oo, "book": ob},
                         "under": {"line": lu, "odds": uo, "book": ub},
                         "gap": round(lu - lo, 1),
@@ -234,6 +244,7 @@ def stale_quotes(recs: list[dict], gap: float = STALE_GAP_PT,
                         # Machine keys ride along so the flag can be
                         # JOURNALED and settled, not just displayed.
                         "player": r.get("player", ""),
+                        "team": r.get("team", ""),
                         "market": r.get("market", ""),
                         "date": r.get("game_date", ""),
                         "live": bool(r.get("live")),
@@ -323,6 +334,9 @@ def longshot_warnings(recs: list[dict]) -> list[dict]:
             "bet": f"{r.get('player', '')} {r.get('side', 'OVER')} "
                    f"{r.get('line', '')} "
                    f"{r.get('market_label', r.get('market', ''))}",
+            "player": r.get("player", ""),
+            "team": r.get("team", ""),
+            "market": r.get("market", ""),
             "book": r.get("book", ""), "odds": int(odds),
             "implied": round(p, 4), "band": label,
             "measured_roi": roi,

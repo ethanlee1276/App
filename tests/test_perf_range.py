@@ -128,7 +128,14 @@ def test_every_tile_reads_the_windowed_block():
     """`o` used to be the all-time block. It is now the window's, and the
     all-time one is kept under its own name so the two cannot be confused
     at a glance while editing."""
-    assert "const all = _perfCache.overall || {};" in FN
+    # `all` grew a scope on 2026-08-17 (Ethan: the panel "should only
+    # show the performance for that specific sport") — the stored block
+    # now comes from the sport's own section when it has settled picks,
+    # and the whole-book one otherwise. The contract this test owns is
+    # unchanged: tiles read the WINDOW'S block, all-time reads a STORED
+    # block, and the two keep separate names.
+    assert "const all = scopedToSport ? section.overall" \
+           " : (_perfCache.overall || {});" in FN
     assert "const windowStats = (rows) =>" in FN
     for field in ("net_units", "win_rate", "roi", "wins", "losses",
                   "settled", "breakeven", "net_dollars"):
@@ -153,8 +160,10 @@ def test_the_donut_follows_the_window_too():
 
 def test_the_panel_says_what_it_counted():
     """The chip says which button is lit; this says what was actually
-    summed, which is the part that was ambiguous."""
-    assert "settled bet(s) over" in FN and "graded day(s)" in FN
+    summed, which is the part that was ambiguous. `betWord` joined on
+    2026-08-17 — the sport-scoped panel counts "MLB bet(s)", the
+    whole-book one plain "bet(s)" — and the sentence shape is the same."""
+    assert "settled ${betWord} over" in FN and "graded day(s)" in FN
     assert "const scopeLine" in FN
 
 

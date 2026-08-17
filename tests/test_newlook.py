@@ -261,6 +261,44 @@ def test_props_players_and_record_carry_their_charts_and_chips():
     assert "slice(0, 12)" in rr and "Show all" in rr
 
 
+def test_the_performance_panel_answers_for_the_sport_in_view():
+    """Ethan, 2026-08-17: "when you on a specific sport, when it shows
+    the 'my performance' it should only show the performance for that
+    specific sport." The ledger exported per-sport curves all along —
+    the panel just read the global block on every page. Now it reads
+    by_sport[state.sport] when that sport has settled picks, TITLES
+    itself with the sport, and when the sport has nothing settled it
+    falls back to the whole book AND SAYS SO — an unlabelled global
+    number on a sport's own page was the bug.
+
+    Scoping is gated on tracked_sports so a standalone page can never
+    ask for "your MEMES performance"."""
+    fn = APP[APP.index("async function renderHomePerf("):]
+    fn = fn[:fn.index("\nfunction ")]
+    assert "by_sport" in fn and "tracked_sports" in fn
+    assert "scopedToSport ? section.curve : _perfCache.curve" in fn, \
+        "the curve must come from the same scope as the tiles"
+    assert "no ${sportName} picks settled yet" in fn, \
+        "the whole-book fallback lost its label"
+
+
+def test_line_shopping_rows_wear_a_face():
+    """Ethan, 2026-08-17: "the line shopping page doesnt show any
+    headshots." Same contract the Edge Board got on 08-13: every list
+    leads with who the bet is about. The scan rows now carry player/team
+    from the engine, and the guard in scanMark keeps a pre-upgrade
+    payload rendering its old rows instead of broken avatars."""
+    assert "function scanMark(" in APP
+    assert "(t.player || t.team)" in APP, "the legacy-payload guard is gone"
+    assert APP.count("${scanMark(") >= 3, \
+        "pairs, stale and plus-money rows each lead with the mark"
+    scan = open(os.path.join(ROOT, "engine", "marketscan.py"),
+                encoding="utf-8").read()
+    assert scan.count('"player": r.get("player", "")') >= 3, \
+        "a scanner section stopped shipping who the bet is about"
+    assert scan.count('"team": r.get("team", "")') >= 4
+
+
 def test_the_rail_belongs_to_home_only():
     """The render puts insights and live-now beside the dashboard. On
     every other page the content gets the room back."""
