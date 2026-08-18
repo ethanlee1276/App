@@ -95,6 +95,12 @@ PREFIXES: tuple[tuple[str, str], ...] = (
     # Statcast season leaderboards: retrieved for this slate and current
     # to the season, so (a) rather than (b) — they move every week.
     ("elite barrel rate", "measured"),
+    # The same leaderboard read from the other end — homeruns.py and
+    # statcast.py both open with it when the contact quality argues
+    # AGAINST the bet. Caught by Ethan's preflight on 2026-08-18: the
+    # percentage rides in the opening ("Low barrel rate 3%"), so the one
+    # prefix covers every variant the doctor listed.
+    ("low barrel rate", "measured"),
     ("hard-hit rate", "measured"),
     # Three the doctor caught on Ethan's live board, 2026-08-15 (75.7%
     # coverage). Each classified by reading what writes it, per the rule

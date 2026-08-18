@@ -161,6 +161,20 @@ def test_the_four_the_live_board_caught_are_classified_from_their_source():
         assert got == want, f"{reason[:40]!r} -> {got}, expected {want}"
 
 
+def test_the_low_end_of_the_barrel_leaderboard_is_labelled_too():
+    """Ethan's preflight, 2026-08-18: 98.7% of 8,344 labelled, and every
+    listed miss was one shape — the barrel leaderboard read from the
+    OTHER end. "Elite barrel rate" was registered on 2026-08-10; the same
+    Statcast source arguing against a bet was not, and the percentage
+    riding in the opening made each value look like a distinct miss.
+    Both emitters, both classified from their source (homeruns.py and
+    statcast.py, the same season leaderboard as the elite line — moves
+    weekly, so measured)."""
+    for reason in ("Low barrel rate 3% — soft contact",
+                   "Low barrel rate 3.4% — power profile is thin"):
+        assert kn.tier_of(reason) == "measured", reason
+
+
 
 def test_a_park_factor_is_labelled_whatever_the_venue_is_called():
     """The pattern matched the word "park", not the shape of the phrase.
