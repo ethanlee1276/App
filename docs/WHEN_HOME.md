@@ -67,6 +67,21 @@ block — the adjacency split is the line I most want to see.
 - **Venue art (#120)** — `docs/VENUE_PROMPTS.md` when you feel like
   making pictures; fifteen colour renders wanted.
 
+### T6. Appended later the same day — two features, same T1 deploy
+
+Both land with the T1 command (deploy.sh restarts the service, which
+the search needs — server.py grew two endpoints):
+
+* **League-wide player search.** The Players page now looks up ANY
+  player in the sport — everyone in the ingested game logs, not just
+  tonight's board — and draws the same multi-market profile card a
+  priced star gets. Try someone obscure after deploying; the roster
+  stub-card fallback only appears if the API is unreachable.
+* **Mock draft simulator.** Fantasy → Mock draft: snake order, pick
+  your league size and slot, CPUs draft best-value-with-noise off the
+  kit's own board, and the finish is your starters' projected PPG
+  against the room — arithmetic, not a letter grade.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 
