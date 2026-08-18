@@ -11,7 +11,7 @@ browser you can look at.
 
 ## TODAY'S ROUND — 2026-08-18 (added while you were at work)
 
-Twenty-three commits today, GitHub tick green, 4,667 tests across 271
+Twenty-five commits today, GitHub tick green, 4,670 tests across 271
 files (sanity check after T1’s pull: `git log --oneline -1` should name
 the commit that refreshed this very note). In the order to run them:
 
@@ -175,6 +175,42 @@ is missing or slow, the drawn team-color avatar stays underneath — no
 blank circles. Nothing for you to run beyond T1 + T3: T3’s face
 ingests are still what fills MLB/NBA photos, and the NFL faces come
 from the roster file the build already reads.
+
+### T13. The Cade Mays report — why injuries went stale, both fixes shipped
+
+Cade Mays broke a wrist bone in Lions camp on August 9 (out 8–10
+weeks) and nine days later the site still showed him “Active.” Two
+separate holes, both real, both closed:
+
+1. **The refresh loop could die silently.** The background refresher —
+   the thread that keeps EVERY board current on the droplet — had no
+   guard around its cycle. One exception anywhere in a cycle killed it
+   for good, and the server keeps serving stale files afterwards, so
+   nothing looks broken. (The UFC/MLB/memes live threads always had
+   the guard; the main loop never got it.) One bad cycle now logs one
+   line and the next cycle runs.
+
+2. **ESPN never retires “Active” rows.** A cleared-to-play notice from
+   months ago sits in their feed forever, and August has no filing
+   duty that would produce a newer row to beat it — so the page wore
+   an old “he’s fine” over a broken wrist. Return notices now age out
+   after 14 days (undated ones are dropped outright); real
+   designations — Out, IR, Questionable — never age out, because they
+   ARE current status.
+
+Before you deploy, 10 seconds on the droplet to confirm which hole bit:
+
+```
+ls -l /srv/qellys/web/data/injuries.json
+```
+
+If that file’s timestamp is minutes old, the loop was alive and ESPN
+was the laggard. If it’s days old, the loop was dead — worth knowing,
+but nothing more to do either way: the T1 deploy restarts the service
+into the guarded loop and the next injuries pull applies the cut.
+Injuries refresh from ESPN’s feed at most every 30 minutes, for every
+league that publishes one (NFL, MLB, NBA, WNBA, CFB; UFC has no feed
+anywhere, which the page says rather than hiding the tab).
 
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
