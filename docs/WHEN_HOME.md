@@ -92,6 +92,16 @@ NBA show initials until the T3 ingests run. After T3 + the T1 deploy,
 if any spot still shows initials where a photo should be, tell me the
 page — that would be a real gap, not the data.
 
+### T8. The About page now sells the whole product
+
+Rides the same T1 deploy (web-only, but T1 covers it). It opens with
+the pitch and then tours everything by name — six leagues and their
+models, the betting toolkit, the fantasy suite with the mock draft and
+league sync, Polymarket intel, Rocket Radar, My Bets — then "Why here,
+and not five other subscriptions." The honesty, legal and
+responsible-play sections are untouched underneath. Read it on the
+phone and tell me if the pitch lands.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

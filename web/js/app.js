@@ -13302,19 +13302,138 @@ function renderAbout() {
 
   host.innerHTML = `
     <div class="about-lede">
-      <p><strong>Qellys Book is an analytics tool, not a sportsbook and not a
-      tipster.</strong> You cannot place a bet here and no money changes hands
-      on this site. What it does is take the same public information the
-      sportsbooks use — every game, every player’s recent form, injuries,
-      weather, venues, and the live prices at ten different books — pull it
-      into one place, and estimate its own probability for each outcome.</p>
+      <p><strong>Qellys Book is one book for everything a sharp bettor keeps
+      open in ten tabs.</strong> Six leagues priced nightly by named models.
+      A full fantasy football suite with its own draft room. Prediction-market
+      intelligence. A live meme-coin radar. And underneath all of it, the one
+      thing almost nobody else will show you: <strong>every pick this site has
+      ever made, graded in public at the price it was published — losses
+      included.</strong></p>
 
-      <p>Then it does the only thing that actually matters: it compares that
-      probability to the price. When our number and the book’s number
-      disagree by enough to survive our own margin for error, the board
-      shows it. When they don’t, the board says <em>"no qualifying plays"</em>
-      and shows you nothing. That happens often, and it is the system
-      working rather than failing.</p>
+      <p>It is an analytics tool, not a sportsbook and not a tipster. You
+      cannot place a bet here and no money changes hands on this site. The
+      model estimates its own probability for each outcome and compares it to
+      the live prices at ten books. When our number and the book’s number
+      disagree by enough to survive our own margin for error, the board shows
+      it — with the reasons on the card. When they don’t, the board says
+      <em>"no qualifying plays"</em> and shows you nothing. That happens
+      often, and it is the system working rather than failing.</p>
+    </div>
+
+    <div class="section-title">Six leagues, each with its own model
+      <span class="sub">— not one formula wearing six logos</span></div>
+    <div class="cards wide">
+      ${card("NFL — The NFL Book", `<p>The pro-bettor spec: player props with
+        usage bridges and coaching-reset detection, game lines off
+        opponent-adjusted team ratings, anytime-TD long shots, and a Week 1
+        board that prices from day one instead of going dark until October.</p>`)}
+      ${card("MLB — Scalpy 2.0", `<p>Hitter and pitcher props from
+        plate-appearance-level data: park factors, umpires, platoon splits,
+        bullpen fatigue, Statcast contact quality. Home-run long shots, live
+        win-probability charts, and a per-game simulator that deals every
+        plate appearance.</p>`)}
+      ${card("NBA + WNBA — Scalpy hoops", `<p>Points, rebounds, assists and
+        threes through a minutes engine with on/off inheritance — who absorbs
+        the shots when the star sits — plus the same public grading as every
+        other league.</p>`)}
+      ${card("College football", `<p>A market-attention model: it knows which
+        games the sharps price hard and which Tuesday slates nobody is
+        watching, and it refuses to grade a play whose quarterback nobody has
+        confirmed.</p>`)}
+      ${card("UFC — Scalpy MMA", `<p>Fighter dossiers with measured records,
+        method and round markets, and a card that passes on most fights with
+        the reason stated — because most fights deserve a pass.</p>`)}
+      ${card("Futures, every league", `<p>Season-long boards priced the same
+        honest way, with the hold named so you can see what the book is
+        charging you to park money for six months.</p>`)}
+    </div>
+
+    <div class="section-title">The betting toolkit
+      <span class="sub">— what you open every night</span></div>
+    <div class="cards wide">
+      ${card("A board with reasons, not emojis", `<p>Every recommended pick
+        carries its grade, its stake, and the named factors behind it — with
+        each reason labelled by evidence tier: measured tonight, stable
+        history, or the model’s own inference. Negative factors get a red
+        mark on the card, not a hidden footnote.</p>`)}
+      ${card("Player props with the picture", `<p>Every prop card charts the
+        player’s actual last ten games against tonight’s line — and the
+        search reaches <strong>every player in the league</strong>, not just
+        tonight’s board, with faces, multi-market profiles and full game
+        logs.</p>`)}
+      ${card("Line shopping across ten books", `<p>The same bet is not the
+        same price everywhere. The board names the book quoting the best
+        number on every pick, and the scanner hunts stale lines, arbitrage
+        pairs, middles and low-hold markets across the whole slate.</p>`)}
+      ${card("A parlay screen, not a parlay builder", `<p>Legs must earn the
+        board as singles first. Then the correlation engine — measured on
+        tens of thousands of real games, refined by a per-lineup simulator —
+        prices the joint honestly and publishes <strong>the price the book
+        must beat</strong> for the ticket to be worth anything.</p>`)}
+      ${card("Live, while it plays", `<p>Every game in progress across the
+        leagues on one board: score, situation, the posted lines, and a live
+        win-probability chart drawn from de-vigged in-play prices. Your open
+        bets track themselves as the games run.</p>`)}
+      ${card("Long shots, priced honestly", `<p>Home runs and anytime
+        touchdowns with real probabilities attached — tracked in their own
+        record bucket so a +900 flier never inflates the headline
+        win rate.</p>`)}
+    </div>
+
+    <div class="section-title">The fantasy football suite
+      <span class="sub">— the same engine, pointed at your league</span></div>
+    <div class="cards wide">
+      ${card("A draft room", `<p>Rankings from every source we can read
+        without a password, side by side, with the disagreements flagged — a
+        draft kit with tiers, sleepers and a value board — and a
+        <strong>mock draft simulator</strong>: snake order against
+        value-hungry CPU rooms, judged on projected points, not vibes.</p>`)}
+      ${card("Your actual league, synced", `<p>Connect Sleeper, Yahoo or ESPN
+        and the desk reads your real roster: a lineup optimiser, a trade
+        generator, waiver-wire trends and camp-battle watch — no passwords
+        ever taken for sites that need one.</p>`)}
+      ${card("The numbers under the names", `<p>Usage movers (whose role is
+        growing before the points arrive), buy-low and sell-high flags from
+        expected points, and game scripts built from what the betting market
+        expects each game to look like.</p>`)}
+    </div>
+
+    <div class="section-title">Beyond the sportsbook
+      <span class="sub">— two more markets, same discipline</span></div>
+    <div class="cards wide">
+      ${card("Prediction-market intel", `<p>Polymarket, watched like a tape:
+        whale activity, flagged accounts, leaderboards, and market moves
+        worth knowing about — the crowd’s real money, read continuously.</p>`)}
+      ${card("Rocket Radar — the meme-coin screen", `<p>A live terminal for
+        the fastest market there is: momentum measured on our own tape,
+        holder concentration from the chain itself, rug-check safety flags
+        and embedded live charts. The same honesty rules apply — measured
+        numbers or a dash, never a guess.</p>`)}
+      ${card("Your own book", `<p>My Bets logs the wagers you actually place
+        at your sportsbook — typed in or bulk-imported — grades them, and
+        keeps your bankroll curve. Make a free account and it follows you
+        from phone to laptop. The whole site installs to your home screen
+        like an app.</p>`)}
+    </div>
+
+    <div class="section-title">Why here, and not five other subscriptions
+      <span class="sub">— the comparison, plainly</span></div>
+    <div class="cards wide">
+      ${card("One book instead of a stack of tools", `<p>A picks service, a
+        props-charting tool, a line-shopping app, a fantasy optimiser and a
+        crypto screener — the market sells those separately. Here they are
+        one product sharing one data spine, so the injury report that moves
+        a prop also moves the fantasy board and the live chart.</p>`)}
+      ${card("The record is the product", `<p>Picks services show you a hot
+        streak; ours shows you the journal — every pick at its published
+        price, wins, losses, closing-line value, and a calibration curve that
+        says whether our "60%" actually meant 60%. The
+        <strong>Why&nbsp;us</strong> page opens the math itself, with
+        calculators to check our work by hand.</p>`)}
+      ${card("Built to say no", `<p>A tout must sell picks every night. This
+        site caps its slates, passes with reasons, and prints "no qualifying
+        plays" when the numbers do not clear — which is exactly the night a
+        subscription tout invents a lock.</p>`)}
     </div>
 
     <div class="section-title">Everything in one place
