@@ -11,7 +11,7 @@ browser you can look at.
 
 ## TODAY'S ROUND — 2026-08-18 (added while you were at work)
 
-Thirty-five commits today, GitHub tick green, 4,704 tests across 275
+Thirty-six commits today, GitHub tick green, 4,706 tests across 275
 files (sanity check after T1’s pull: `git log --oneline -1` should name
 the commit that refreshed this very note). In the order to run them:
 
@@ -342,6 +342,15 @@ collecting what it will need. Re-run the verdict yourself:
 ```
 python3 drivesimrecon.py --seasons 2021 2022 2023 2024 2025
 ```
+
+**And the replays are on the site.** Every NFL game page with a posted
+line now carries “The replay” — this matchup run 4,000 times: win
+share, one-score share, blowout share, a six-bucket margin histogram,
+and the cover/over/both line with its lift vs independent legs. The
+panel disclaims itself in its own words: anchored to the posted line,
+not a pick, prices nothing until the reconciliation says so. Rides the
+same T1 deploy; the droplet’s next NFL build stamps it on the Week 1
+slate automatically.
 
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*

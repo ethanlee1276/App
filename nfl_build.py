@@ -396,17 +396,18 @@ def main() -> None:
                 print(f"  Live line: charting {_tracked} game(s)")
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  live line tracking unavailable: {_exc}")
-        # The drive sim's forward journal — its claims for tonight's
-        # priced games, written down BEFORE kickoff so the Weeks 1-4
-        # reconciliation can grade them against finals. Records only;
-        # drivesim.ENABLED stays False and nothing here prices.
+        # The drive sim rides every priced game: one pass stamps the
+        # page's diagnostics panel (g["sim"] — shares and shape, never a
+        # pick) and journals the same claims pre-kickoff for the
+        # Weeks 1-4 reconciliation. drivesim.ENABLED stays False and
+        # nothing here prices.
         try:
             from engine import drivesim
-            _sim_recs = drivesim.journal_records(result.get("games"), "nfl")
+            _sim_recs = drivesim.attach(result.get("games"), "nfl")
             drivesim.journal(_sim_recs)
             if _sim_recs:
-                print(f"  Drive sim: journaled {len(_sim_recs)} game(s) "
-                      f"for the reconciliation.")
+                print(f"  Drive sim: {len(_sim_recs)} game(s) replayed — "
+                      f"page panels stamped, journal appended.")
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  drive-sim journal skipped: {_exc}")
         from engine import gate

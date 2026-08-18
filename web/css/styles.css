@@ -5305,3 +5305,23 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   font-size: var(--fs-xs); color: var(--text-mute); }
 .ffp-rangelbl b { color: var(--text); font-size: var(--fs-md); }
 .ffp-rangelbl .mid { text-align: center; } .ffp-rangelbl .end { text-align: right; }
+
+/* ---- The replay panel: the drive sim's per-game diagnostics -------- */
+.gp-sim { display: block; margin-bottom: 18px; }
+.gp-sim-tiles { display: flex; gap: 18px; flex-wrap: wrap;
+  margin: 10px 0 14px; color: var(--text-mute); font-size: var(--fs-sm); }
+.gp-sim-tiles b { color: var(--text); font-size: var(--fs-lg);
+  margin-right: 4px; font-variant-numeric: tabular-nums; }
+.gp-sim-hist { display: flex; align-items: flex-end; gap: 8px;
+  padding: 4px 0 0; }
+.gp-sim-col { flex: 1; display: flex; flex-direction: column;
+  align-items: center; gap: 4px; min-width: 0; }
+.gp-sim-bar { width: 70%; max-width: 44px; border-radius: 3px 3px 0 0;
+  background: var(--brand); opacity: .8; }
+.gp-sim-lbl { font-size: var(--fs-xs); color: var(--text-mute);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%; }
+.gp-sim-joint { margin: 12px 0 0; font-size: var(--fs-sm);
+  color: var(--text-dim); }
+.gp-sim-note { margin: 8px 0 0; font-size: var(--fs-xs);
+  color: var(--text-mute); }

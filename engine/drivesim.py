@@ -246,6 +246,66 @@ def simulate(sport: str, spread: float, total: float,
     return card
 
 
+def summary(card: SimCard) -> dict:
+    """The compact, page-servable read of one card: headline shares and
+    a six-bucket margin histogram. Shares, never picks — the page that
+    renders this says so out loud."""
+    cov = card.p_cover()
+    ovr = card.p_over()
+    j = card.joint()
+    n = card.trials
+    buckets = ((15, None), (8, 14), (1, 7), (-7, -1), (-14, -8), (None, -15))
+    hist = []
+    for lo, hi in buckets:
+        c = sum(1 for m in card.margins
+                if (lo is None or m >= lo) and (hi is None or m <= hi))
+        hist.append(round(c / n, 4))
+    return {
+        "trials": n,
+        "p_home_win": round(card.p_home_win, 3),
+        "cover": round(cov["cover"], 3), "cover_push": round(cov["push"], 3),
+        "over": round(ovr["over"], 3), "over_push": round(ovr["push"], 3),
+        "cover_and_over": round(j["cover_and_over"], 3),
+        "joint_lift": round(j["lift"], 3),
+        "margin_sd": round(card.margin_sd, 1),
+        "blowout": round(sum(1 for m in card.margins if abs(m) >= 14) / n, 3),
+        "one_score": round(sum(1 for m in card.margins if abs(m) <= 8) / n, 3),
+        "margin_hist": hist,
+    }
+
+
+def attach(games: list[dict], sport: str, trials: int = 4000) -> list[dict]:
+    """One pass, two products: stamps each priced game with its sim
+    summary (``g["sim"]``, for the game page's diagnostics panel) and
+    returns the journal records for the reconciliation. Unpriced games
+    are left untouched — no line, no replay."""
+    records = []
+    for g in games or []:
+        spread, total = g.get("spread"), g.get("total")
+        if spread is None or total is None:
+            continue
+        try:
+            card = simulate(sport, float(spread), float(total),
+                            trials=trials)
+        except (KeyError, ValueError):
+            continue
+        g["sim"] = summary(card)
+        j = card.joint()
+        records.append({
+            "sport": sport, "date": g.get("date") or "",
+            "home": g.get("home") or "", "away": g.get("away") or "",
+            "spread": float(spread), "total": float(total),
+            "trials": trials,
+            "p_home_win": round(card.p_home_win, 4),
+            "p_home_cover": round(card.p_cover()["cover"], 4),
+            "p_over": round(card.p_over()["over"], 4),
+            "p_cover_and_over": round(j["cover_and_over"], 4),
+            "joint_lift": round(j["lift"], 4),
+            "margin_sd": round(card.margin_sd, 2),
+        })
+    return records
+
+
 def journal_records(games: list[dict], sport: str,
                     trials: int = 4000) -> list[dict]:
     """The sim's claims for tonight's priced games, one record each, for

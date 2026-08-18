@@ -100,11 +100,41 @@ def test_the_seat_is_not_taken_until_the_reconciliation_says_so():
     assert drivesim.ENABLED is False, \
         "nothing prices off the sim before the Weeks 1-4 verdict"
     src = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
-    i = src.index("drivesim.journal_records")
+    i = src.index("drivesim.attach")
     block = src[i - 700:i + 400]
     assert "drivesim.journal(" in block
     assert "ENABLED stays False" in block, \
         "the wiring must say out loud that it records and never prices"
+
+
+def test_attach_stamps_the_page_and_returns_the_journal():
+    games = [
+        {"date": "2026-09-13", "home": "KC", "away": "DEN",
+         "spread": -3.0, "total": 42.5},
+        {"date": "2026-09-13", "home": "SEA", "away": "NE"},   # no line
+    ]
+    recs = drivesim.attach(games, "nfl", trials=800)
+    assert len(recs) == 1
+    assert "sim" not in games[1], "no line, no replay"
+    s = games[0]["sim"]
+    assert len(s["margin_hist"]) == 6
+    # Overtime resolves every tie, so the six buckets ARE the space.
+    assert abs(sum(s["margin_hist"]) - 1.0) < 0.01
+    assert 0.0 < s["p_home_win"] < 1.0
+    assert 0.0 < s["blowout"] < 1.0 and 0.0 < s["one_score"] < 1.0
+
+
+def test_the_replay_panel_is_shares_not_picks():
+    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    i = app.index("The replay")
+    block = app[i - 400:i + 2600]
+    assert "not a pick" in block, "the panel must disclaim itself"
+    assert "prices nothing until the public" in block
+    assert "gp-sim-bar" in block, "the histogram draws bars, not a line"
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    assert ".gp-sim {" in css and ".gp-sim-hist {" in css
 
 
 def test_journal_records_skip_unpriced_games_and_never_die():

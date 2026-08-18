@@ -4381,6 +4381,40 @@ function renderGamePage() {
         <span class="gp-panel-sub">— this game’s own data, not narratives</span></div>
       <ul class="gp-note-list">${notes.map((n) =>
         `<li>${escapeHtml(n)}</li>`).join("")}</ul></div>` : "";
+  // The replay panel — the drive sim's diagnostics for THIS game, shares
+  // and shape only. It prices nothing (engine/drivesim.ENABLED stays
+  // False until the public reconciliation says otherwise), and the card
+  // says so in its own words.
+  const sim = g.sim;
+  const simCard = sim ? (() => {
+    const share = (v) => `${Math.round(100 * (v || 0))}%`;
+    const histLabels = [`${g.home} 15+`, `${g.home} 8–14`, `${g.home} 1–7`,
+                        `${g.away} 1–7`, `${g.away} 8–14`, `${g.away} 15+`];
+    const maxH = Math.max(...(sim.margin_hist || [0.001]), 0.001);
+    return `
+    <div class="card gp-sim"><div class="gp-panel-title">The replay
+        <span class="gp-panel-sub">— this matchup run ${(sim.trials || 0).toLocaleString()}
+        times, drive by drive</span></div>
+      <div class="gp-sim-tiles">
+        <span><b>${share(sim.p_home_win)}</b> ${escapeHtml(g.home)} wins</span>
+        <span><b>${share(sim.one_score)}</b> one-score game</span>
+        <span><b>${share(sim.blowout)}</b> decided by 14+</span>
+      </div>
+      <div class="gp-sim-hist">${(sim.margin_hist || []).map((v, i) => `
+        <div class="gp-sim-col" title="${escapeAttr(histLabels[i])} — ${(100 * v).toFixed(1)}% of replays">
+          <span class="gp-sim-bar" style="height:${Math.max(3, 56 * v / maxH).toFixed(0)}px"></span>
+          <span class="gp-sim-lbl">${escapeHtml(histLabels[i])}</span>
+        </div>`).join("")}</div>
+      <p class="gp-sim-joint">${escapeHtml(g.home)} covers ${share(sim.cover)} ·
+        over ${share(sim.over)} · both ${share(sim.cover_and_over)}
+        (${(sim.joint_lift || 0) >= 0 ? "+" : "−"}${Math.abs(100 * (sim.joint_lift || 0)).toFixed(1)}pt
+        vs independent legs)</p>
+      <p class="gp-sim-note">Anchored to the posted line — the replays reproduce the
+        market’s expected points and add the shape of the game around them. This
+        panel is not a pick, and the sim prices nothing until the public
+        reconciliation says it should.</p>
+    </div>`;
+  })() : "";
   host.innerHTML = `
     <button class="btn ghost gp-back" id="gp-back">← Back to the board</button>
     <div class="gp-hero">
@@ -4411,6 +4445,7 @@ function renderGamePage() {
     </div>
 
     ${linesCard || notesCard ? `<div class="gp-row">${linesCard}${notesCard}</div>` : ""}
+    ${simCard}
 
     <div class="stats gp-stats">
       <div class="tile"><div class="k">Props analyzed</div><div class="v">${props.length}</div>
