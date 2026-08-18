@@ -9603,7 +9603,7 @@ async function renderFantasy() {
   };
   const usageRow = (u) => `
     <div class="ff-row">
-      <span class="ff-who">${playerAvatar(u.player, u.team, { map: nflMap(), headshot: u.headshot })}
+      <span class="ff-who" data-dossier="${escapeAttr(u.player)}">${playerAvatar(u.player, u.team, { map: nflMap(), headshot: u.headshot })}
         <span class="ff-name"><strong>${escapeHtml(u.player)}</strong>
           <span class="ff-pos">${escapeHtml(u.position)} · ${nflName(u.team)}${
             u.moved_from ? ` <b style="color:var(--warn)">← traded from ${nflName(u.moved_from)}</b>` : ""}${
@@ -9637,7 +9637,7 @@ async function renderFantasy() {
     const buy = kind === "buy";
     return `<article class="card" style="--grade-color:${buy ? "var(--good)" : "var(--warn)"}">
       <div class="card-head">
-        <div class="card-id">${playerAvatar(r.player, r.team, { map: nflMap(), headshot: r.headshot })}
+        <div class="card-id" data-dossier="${escapeAttr(r.player)}">${playerAvatar(r.player, r.team, { map: nflMap(), headshot: r.headshot })}
           <div><div class="player">${escapeHtml(r.player)}</div>
             <div class="subtitle">${escapeHtml(r.position)} · ${nflName(r.team)}${
               r.moved_from ? ` <b style="color:var(--warn)">← traded from ${nflName(r.moved_from)}</b>` : ""}${
@@ -9752,6 +9752,7 @@ async function renderFantasy() {
       volume-based, so a player can legitimately sustain a positive gap; only gaps beyond
       ~${bs.band || 1.5} PPG are flagged. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
   _mockKit = d.draft_kit || {};
+  _ffData = d;
   host.innerHTML = _ffLead + subtabbedHTML("fantasy", [
     ["usage", "Usage", "who is getting the ball, and whose share is moving",
      _ffUsage],
@@ -9805,7 +9806,7 @@ function campHTML(camp) {
   if (!camp) return "";
   const slot = (r, o) => `${escapeHtml(r.position)}${o}`;
   const row = (r, tone) => `
-    <div class="os-row"><span class="os-team mk-idrow">${playerAvatar(r.player, r.team, { size: 24, map: nflMap(), headshot: r.headshot })}${escapeHtml(r.player)}
+    <div class="os-row"><span class="os-team mk-idrow" data-dossier="${escapeAttr(r.player)}">${playerAvatar(r.player, r.team, { size: 24, map: nflMap(), headshot: r.headshot })}${escapeHtml(r.player)}
         <span class="dk-pt">${nflName(r.team)}${r.rookie ? " · rookie" : ""}</span></span>
       <span class="os-before">${slot(r, r.from_order)}</span>
       <span class="os-arrow">→</span>
@@ -10674,7 +10675,7 @@ function waiverPulseHTML(t) {
       <div style="font-weight:800;margin-bottom:8px">${title}</div>
       ${rows.slice(0, 8).map((r) => `
         <div class="dl-row">
-          <span class="dl-main">${playerAvatar(r.player, r.team, { size: 26, map: nflMap(), headshot: r.headshot })}
+          <span class="dl-main" data-dossier="${escapeAttr(r.player)}">${playerAvatar(r.player, r.team, { size: 26, map: nflMap(), headshot: r.headshot })}
             <span><strong>${escapeHtml(r.player)}</strong>
               <span class="dl-sub">${escapeHtml(r.position || "")} · ${escapeHtml(nflName(r.team))}</span></span></span>
           <span class="dl-num strong" style="color:${tone}"
@@ -11790,7 +11791,7 @@ function renderRankBoard() {
     fight.innerHTML = !dis.length ? "" : `
       <div class="rank-fight-head">Where they disagree most</div>
       <div class="rank-fight-rows">${dis.map((r) => `
-        <div class="rank-fight-row">
+        <div class="rank-fight-row" data-dossier="${escapeAttr(r.player)}">
           ${playerAvatar(r.player, r.team || "", { size: 22, map: nflMap(), headshot: r.headshot })}<b>${escapeHtml(r.player)}</b>
           <span class="chip up">${escapeHtml(ffSrcLabel(r.high_source))} ${
             r.ranks[r.high_source]}</span>
@@ -11806,7 +11807,7 @@ function renderRankBoard() {
         `<th>${escapeHtml(l)}</th>`).join("")}
       <th>Consensus</th><th>Spread</th></tr></thead><tbody>
       ${rows.slice(0, 200).map((r) => `<tr>
-        <td class="rank-name">${playerAvatar(r.player, r.team || "", { size: 20, map: nflMap(), headshot: r.headshot })}${escapeHtml(r.player)}</td>
+        <td class="rank-name" data-dossier="${escapeAttr(r.player)}">${playerAvatar(r.player, r.team || "", { size: 20, map: nflMap(), headshot: r.headshot })}${escapeHtml(r.player)}</td>
         ${FF_RANK_SOURCES.map(([k]) => cell(r.ranks[k])).join("")}
         <td>${r.consensus == null ? "—" : r.consensus}</td>
         ${cell(r.spread)}</tr>`).join("")}
@@ -11850,7 +11851,7 @@ function draftKitHTML(kit) {
     : r.roster_flag
       ? ` · <span class="dk-moved">${escapeHtml(r.roster_flag)}</span>` : "";
   const boardRow = (r, i) => `
-    <div class="dl-row dk-row" data-ffp="${escapeHtml(ffNorm(r.player))}">
+    <div class="dl-row dk-row" data-ffp="${escapeHtml(ffNorm(r.player))}" data-dossier="${escapeAttr(r.player)}">
       <span class="dl-rank">${i + 1}</span>
       <span class="dl-main"><strong>${escapeHtml(r.player)}</strong>
         <span class="dl-sub">${escapeHtml(r.position)}${r.pos_rank} · ${nflName(r.team)}
@@ -11874,7 +11875,7 @@ function draftKitHTML(kit) {
       const brk = r.tier !== lastTier
         ? `<div class="dk-tierlabel" style="color:${tierColor(r.tier)}">Tier ${r.tier}</div>` : "";
       lastTier = r.tier;
-      return `${brk}<div class="dk-posrow" data-ffp="${escapeHtml(ffNorm(r.player))}">
+      return `${brk}<div class="dk-posrow" data-ffp="${escapeHtml(ffNorm(r.player))}" data-dossier="${escapeAttr(r.player)}">
         <span class="dk-pr">${r.pos_rank}</span>
         <span class="dk-pn">${escapeHtml(r.player)}
           <span class="dk-pt">${nflName(r.team)}</span></span>
@@ -11889,7 +11890,7 @@ function draftKitHTML(kit) {
   };
 
   const sleepers = (kit.sleepers || []).map((r) => `
-    <div class="dl-row dk-slrow" data-ffp="${escapeHtml(ffNorm(r.player))}">
+    <div class="dl-row dk-slrow" data-ffp="${escapeHtml(ffNorm(r.player))}" data-dossier="${escapeAttr(r.player)}">
       <span class="dl-main"><strong>${escapeHtml(r.player)}</strong>
         <span class="dl-sub">${escapeHtml(r.position)} · ${nflName(r.team)}</span></span>
       <span class="dl-num">${r.ppg} actual</span>
@@ -11931,6 +11932,186 @@ function draftKitHTML(kit) {
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:10px">
       ${(kit.notes || []).map(escapeHtml).join(" ")}</p>`;
 }
+
+/* ---------------- The fantasy player dossier ----------------
+   Ethan, 2026-08-18: "we should be able too click on players and it will
+   show us useful fantasy information for that player." Every surface on
+   this page already KNOWS something about him — the kit knows his value,
+   usage knows his role, the rankings know where the sources argue, camp
+   knows whether he just won a job — but each surface only tells its own
+   slice. Tap any name and the dossier assembles all of it, plus his real
+   weekly volume charts off the game-log API.
+
+   One overlay, one document-level delegation on [data-dossier] (the
+   kit's existing data-ffp attribute belongs to the Sleeper cross-off
+   and keeps its meaning). Sections render only when the surface behind
+   them has the row — an empty panel would be a guess wearing a
+   heading. */
+let _ffData = null;               // the fantasy payload, captured at render
+
+function _ffDossierInfo(name) {
+  const d = _ffData || {};
+  const kit = d.draft_kit || {};
+  const eq = (r) => r && r.player === name;
+  const inRows = (rows) => (rows || []).find(eq);
+  const info = {
+    name,
+    kit: inRows(kit.board) || inRows(kit.sleepers)
+      || Object.values(kit.tiers || {}).map(inRows).find(Boolean),
+    usage: inRows(d.usage),
+    buy: inRows((d.buy_sell || {}).buy_low),
+    sell: inRows((d.buy_sell || {}).sell_high),
+    rank: inRows((d.ranks || {}).rows),
+    camp: inRows(((d.camp || {}).risers || []).concat(
+      (d.camp || {}).fallers || [], (d.camp || {}).new_starters || [])),
+    move: ((d.offseason || {}).moves || []).find((m) => m.player === name),
+  };
+  const first = info.kit || info.usage || info.buy || info.sell
+    || info.rank || info.camp || {};
+  info.team = first.team || (info.move || {}).to || "";
+  info.position = first.position || "";
+  info.headshot = first.headshot || "";
+  return info;
+}
+
+function ffDossierHTML(info) {
+  const sect = (title, body) =>
+    `<div class="ffd-sect"><div class="ffd-h">${title}</div>${body}</div>`;
+  const stat = (k, v) => v == null || v === "" ? ""
+    : `<span class="ffd-stat"><span class="k">${k}</span><b>${v}</b></span>`;
+  const parts = [];
+  const k = info.kit;
+  if (k && k.proj != null) {
+    parts.push(sect("Draft value", `<div class="ffd-stats">
+      ${stat("Proj PPG", k.proj)}${stat("Last season", k.ppg)}
+      ${stat("xFP", k.xppg)}${stat("VORP", k.vorp != null ? "+" + k.vorp : null)}
+      ${stat("Tier", k.tier)}${stat("Pos rank", k.position && k.pos_rank
+        ? k.position + k.pos_rank : null)}
+    </div>`));
+  }
+  const u = info.usage;
+  if (u) {
+    parts.push(sect(`Usage — team ${escapeHtml(u.metric || "volume")}`,
+      `<div class="ffd-stats">
+      ${stat("Season", pct(u.season))}${stat("Last 4 wks", pct(u.l4))}
+      ${stat("Last week", pct(u.last))}
+      ${stat(u.rz_label || "RZ/g", u.rz_pg)}${stat("PPR/g", u.fp_pg)}
+    </div><p class="ffd-note">${u.delta == null || Math.abs(u.delta) < 0.03
+      ? "Role steady vs the last four weeks"
+      : `${u.delta > 0 ? "\u25b2 +" : "\u25bc \u2212"}${Math.abs(u.delta * 100).toFixed(0)}pt vs his 4-week share`}
+      — the delta is the money: a riser at 42% beats a flat 60%.</p>`));
+  }
+  const bs = info.buy || info.sell;
+  if (bs) {
+    parts.push(sect(info.buy ? "Buy low" : "Sell high", `<div class="ffd-stats">
+      ${stat("Actual PPG", bs.actual_ppg)}${stat("Expected", bs.expected_ppg)}
+      ${stat("Gap", (bs.gap > 0 ? "+" : "") + bs.gap)}
+    </div><p class="ffd-note">${info.buy
+      ? "Expected points say the production is coming — his chances are worth more than he has scored from them so far."
+      : "Producing above what the opportunity supports — regression risk."}</p>`));
+  }
+  const r = info.rank;
+  if (r && r.consensus != null) {
+    const srcs = Object.entries(r.ranks || {})
+      .filter(([, v]) => v != null)
+      .map(([s, v]) => stat(ffSrcLabel(s), v)).join("");
+    parts.push(sect("Where the rankings put him", `<div class="ffd-stats">
+      ${stat("Consensus", r.consensus)}${stat("Spread", r.spread)}${srcs}
+    </div>`));
+  }
+  if (info.camp) {
+    const c = info.camp;
+    parts.push(sect("Camp", `<p class="ffd-note">${escapeHtml(c.position || "")}
+      depth chart: ${escapeHtml(String(c.from_order ?? "—"))} →
+      ${escapeHtml(String(c.to_order ?? "—"))}${c.rookie ? " · rookie" : ""}</p>`));
+  }
+  if (info.move) {
+    parts.push(sect("New team", `<p class="ffd-note">${escapeHtml(info.move.from || "?")}
+      → ${escapeHtml(info.move.to || "?")} — last season\u2019s volume came in a
+      different offense.</p>`));
+  }
+  if (!parts.length) {
+    parts.push(`<p class="ffd-note">No fantasy read on him this season —
+      the boards are built from last season\u2019s volume and this camp.</p>`);
+  }
+  return `
+    <div class="ffd-head">
+      ${playerAvatar(info.name, info.team, { size: 52, map: nflMap(),
+                                             headshot: info.headshot })}
+      <div class="ffd-who"><b>${escapeHtml(info.name)}</b>
+        <span class="ffd-sub">${info.team ? teamMark(info.team, 16, nflMap(), "nfl") : ""}
+          ${escapeHtml([nflName(info.team) || info.team, info.position]
+            .filter(Boolean).join(" · "))}</span></div>
+      <button class="btn ghost ffd-close" aria-label="Close">✕</button>
+    </div>
+    ${parts.join("")}
+    <div class="ffd-sect" id="ffd-charts"><div class="ffd-h">Weekly volume</div>
+      <p class="ffd-note">Loading his game log\u2026</p></div>`;
+}
+
+async function _ffDossierCharts(name, position) {
+  const zone = document.getElementById("ffd-charts");
+  if (!zone) return;
+  const stats = await leagueLogs(name);   // sport-scoped; fantasy is NFL
+  if (!document.getElementById("ffd-charts")) return;   // closed meanwhile
+  const want = position === "QB"
+    ? ["Passing Yards", "Carries"]
+    : position === "RB" ? ["Carries", "Targets"]
+    : ["Targets", "Receiving Yards"];
+  const have = want.filter((w) => (stats[w] || []).length)
+    .concat(Object.keys(stats).filter((s) => !want.includes(s)))
+    .filter((s, i, a) => a.indexOf(s) === i).slice(0, 2);
+  if (!have.length) {
+    zone.innerHTML = `<div class="ffd-h">Weekly volume</div>
+      <p class="ffd-note">No game logs on this machine — the droplet and
+      the laptop fill these in.</p>`;
+    return;
+  }
+  zone.innerHTML = `<div class="ffd-h">Weekly volume — last ${
+      (stats[have[0]] || []).length} games</div>`
+    + have.map((label) => {
+      const logs = stats[label] || [];
+      return `<div class="ffd-chart"><span class="ffd-chart-l">${escapeHtml(label)}</span>
+        ${gamelogBars(logs.map((g) => g.value), {
+          w: 320, h: 56, stroke: "var(--brand)",
+          labels: logs.map((g) => `Wk ${g.week} ${g.home ? "vs" : "@"} ${g.opponent}`),
+        })}</div>`;
+    }).join("");
+}
+
+function openFfDossier(name) {
+  let ov = document.getElementById("ffd-overlay");
+  if (!ov) {
+    ov = document.createElement("div");
+    ov.id = "ffd-overlay";
+    document.body.appendChild(ov);
+    ov.addEventListener("click", (e) => {
+      if (e.target === ov || e.target.closest(".ffd-close")) closeFfDossier();
+    });
+  }
+  const info = _ffDossierInfo(name);
+  ov.innerHTML = `<div class="ffd-card" role="dialog"
+    aria-label="Fantasy dossier: ${escapeAttr(name)}">${ffDossierHTML(info)}</div>`;
+  ov.classList.add("open");
+  document.body.classList.add("ffd-open");
+  _ffDossierCharts(name, info.position);
+}
+
+function closeFfDossier() {
+  const ov = document.getElementById("ffd-overlay");
+  if (ov) ov.classList.remove("open");
+  document.body.classList.remove("ffd-open");
+}
+
+// Bound ONCE at load — the fantasy page re-renders constantly and a
+// per-render binding would stack listeners.
+document.addEventListener("click", (e) => {
+  const t = e.target.closest && e.target.closest("[data-dossier]");
+  if (t) openFfDossier(t.dataset.dossier);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeFfDossier();
+});
 
 /* ---------------- Mock draft simulator ----------------
    Ethan, 2026-08-18: "Add a mock draft simulator." A snake draft against
@@ -12092,7 +12273,7 @@ function mockDraftHTML() {
   const face = (p, size) => playerAvatar(p.player, p.team,
     { size, map: nflMap(), headshot: p.headshot });
   const idBlock = (p, meta) => `
-    <span class="mk-id"><b>${escapeHtml(p.player)}</b>
+    <span class="mk-id" data-dossier="${escapeAttr(p.player)}"><b>${escapeHtml(p.player)}</b>
       <span class="mk-meta">${teamMark(p.team, 14, nflMap(), "nfl")}
         ${escapeHtml(p.team)} · ${escapeHtml(p.position)}${meta}</span></span>`;
 

@@ -102,6 +102,16 @@ and not five other subscriptions." The honesty, legal and
 responsible-play sections are untouched underneath. Read it on the
 phone and tell me if the pitch lands.
 
+### T9. Tap any fantasy player for his dossier
+
+Same T1 deploy. Every player name on the fantasy page — usage rows,
+trade cards, the whole draft kit, the rankings table, camp, the waiver
+pulse, and the mock draft — now opens a bottom-sheet dossier: draft
+value (proj/xFP/VORP/tier), usage shares with the trend, buy/sell
+gaps, where the ranking sources argue, camp movement, new-team flags,
+and his real weekly volume charted from the game logs. Sections only
+appear where a board actually knows something.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

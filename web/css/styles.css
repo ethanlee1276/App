@@ -2306,6 +2306,48 @@ select.calc-in { width: auto; font-weight: 600; }
   letter-spacing: .06em; color: var(--text-mute); margin-bottom: 6px; }
 .mk-take { padding: 4px 10px; flex: none; margin-left: auto; }
 
+/* The fantasy player dossier — a bottom sheet on phones, centred on
+   desktop. One overlay reused for every open; sections only render when
+   the surface behind them has the row. */
+[data-dossier] { cursor: pointer; }
+#ffd-overlay { position: fixed; inset: 0; z-index: 70; display: none;
+  background: rgba(0, 0, 0, .55); align-items: flex-end;
+  justify-content: center; }
+#ffd-overlay.open { display: flex; }
+body.ffd-open { overflow: hidden; }
+.ffd-card { background: var(--panel-2);
+  border: var(--hairline) solid var(--border);
+  width: 100%; max-width: 560px; max-height: 82vh; overflow-y: auto;
+  padding: 16px 18px calc(18px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 761px) {
+  #ffd-overlay { align-items: center; }
+  .ffd-card { max-height: 76vh; }
+}
+.ffd-head { display: flex; align-items: center; gap: 12px;
+  padding-bottom: 12px; margin-bottom: 4px;
+  border-bottom: var(--hairline) solid var(--border); }
+.ffd-who { flex: 1 1 auto; min-width: 0; display: flex;
+  flex-direction: column; gap: 2px; }
+.ffd-who > b { font-size: var(--fs-lg); }
+.ffd-sub { color: var(--text-mute); font-size: var(--fs-sm);
+  display: inline-flex; align-items: center; gap: 5px; }
+.ffd-close { flex: none; padding: 4px 10px; }
+.ffd-sect { padding: 12px 0; }
+.ffd-sect + .ffd-sect { border-top: var(--hairline) solid var(--border); }
+.ffd-h { font-size: var(--fs-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-mute); margin-bottom: 8px; }
+.ffd-stats { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.ffd-stat { display: inline-flex; flex-direction: column; gap: 1px;
+  font-size: var(--fs-sm); }
+.ffd-stat .k { color: var(--text-mute); font-size: var(--fs-xs); }
+.ffd-note { color: var(--text-body); font-size: var(--fs-sm);
+  margin: 8px 0 0; }
+.ffd-chart { margin-top: 10px; }
+.ffd-chart svg { width: 100%; height: auto; }
+.ffd-chart-l { display: block; color: var(--text-mute);
+  font-size: var(--fs-xs); margin-bottom: 4px; }
+
 /* Offseason panel */
 .os-card { padding: 14px 16px; gap: 8px; }
 .os-body { display: grid; gap: 4px; }
