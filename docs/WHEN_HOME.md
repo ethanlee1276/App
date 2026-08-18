@@ -11,7 +11,7 @@ browser you can look at.
 
 ## TODAY'S ROUND — 2026-08-18 (added while you were at work)
 
-Twenty-one commits today, GitHub tick green, 4,662 tests across 270
+Twenty-three commits today, GitHub tick green, 4,667 tests across 271
 files (sanity check after T1’s pull: `git log --oneline -1` should name
 the commit that refreshed this very note). In the order to run them:
 
@@ -155,6 +155,26 @@ find "$TMPDIR" -maxdepth 1 -name "tmp*" -mmin +60 -exec rm -rf {} +
 The first line just counts, so you can see the size of it before
 deleting. If the count is small, skip the delete — it only matters
 where the suite ran often.
+
+### T12. Headshots in the new fantasy pieces — rides the T1 deploy
+
+You asked from work: “Make sure you have the headshots in the new
+fantasy shit.” The sweep found the draft kit was the real gap — its
+overall board, position tiers, and sleeper rows had carried each
+player’s headshot URL since the stamping pass and were rendering plain
+text anyway. All three now draw the face. The dossier also stopped
+trusting the first board that matched a name (often the one WITHOUT
+the face) and now takes the headshot from whichever board has it, and
+your Sleeper roster list falls back the same way for bench players
+with no usage row.
+
+Verified here against a fresh build: 146 of 150 board rows, 10 of 10
+sleepers, and 60 of 60 usage rows carry real photo URLs (the misses
+are name variants the roster file spells differently). Where a photo
+is missing or slow, the drawn team-color avatar stays underneath — no
+blank circles. Nothing for you to run beyond T1 + T3: T3’s face
+ingests are still what fills MLB/NBA photos, and the NFL faces come
+from the roster file the build already reads.
 
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
