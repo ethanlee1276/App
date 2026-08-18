@@ -110,7 +110,12 @@ def test_it_reuses_the_sparkline_rather_than_growing_a_second_chart():
     """Chart isolation: one line chart in the codebase, one bar chart. A
     second implementation of either is two things to keep correct."""
     b = _block()
-    assert "sparkline(t.values" in b
+    # `vals` since 2026-08-18: the track can orient to the BET'S team on
+    # an open-bet row (a road bet reads its chance as 100 − p), so the
+    # call site draws the possibly-flipped copy. Same series, one chart.
+    assert "sparkline(vals" in b
+    assert "t.values.map((v) => +(100 - v)" in b, \
+        "the away orientation lost its arithmetic"
     assert "<svg" not in b, "the track is hand-rolling its own chart"
 
 
@@ -141,6 +146,48 @@ def test_it_says_whose_number_this_is():
     b = _block()
     assert "market" in b.lower()
     assert "not ours" in b
+
+
+def test_the_fast_scoreboard_merges_instead_of_replacing():
+    """Ethan, 2026-08-18: "the live probablility chart definitly doesnt
+    show or work." It didn't — and the chart itself was fine. The fast
+    scoreboard file (live_mlb.json, the 30-second loop) REPLACED the
+    board's game objects wholesale in fetchAllLive, and the fast file
+    carries only scores — so line_track AND the odds grid vanished from
+    every live card the day the fast loop shipped. The merge keeps fast
+    fields where both speak (they are fresher) and board-only fields
+    alive."""
+    i = APP.index("async function fetchAllLive(")
+    fn = APP[i:i + 3000]
+    assert "byKey" in fn and "...bg, ...fg" in fn
+    assert "games = df.games;" not in fn, "wholesale replacement is back"
+
+
+def test_every_league_build_attaches_the_track():
+    """"we should be showing that for ALL live games" — the wiring that
+    was MLB-only now rides every league build with a name map for the
+    odds feed. CFB stays out until its runtime-built map is threaded
+    through (134 schools, no hand-written table)."""
+    for fname in ("mlb_build.py", "nfl_build.py", "nba_build.py"):
+        src = open(os.path.join(ROOT, fname), encoding="utf-8").read()
+        assert "livelines" in src and ".attach(" in src, fname
+        assert "pull_and_record(" in src, fname
+
+
+def test_open_bet_rows_wear_the_track_for_team_markets():
+    """"also for our live bets iff possible" — it is possible exactly
+    where the tracked market IS the bet's market family: a moneyline,
+    spread or team-total row gets the game's win-probability chart
+    oriented to ITS team (a road bet reads 100 − p). Props do NOT get
+    it: the game line under a strikeouts bet reads as the prop's own
+    odds, which it is not."""
+    i = APP.index("const betTrack = (r)")
+    fn = APP[i:i + 700]
+    assert "TEAM_MKTS.has(r.market)" in fn
+    assert 'r.phase !== "live"' in fn, "a finished game must not chart"
+    assert "lineTrackHTML(g, team ? { team } : {})" in fn
+    j = APP.index("const TEAM_MKTS = new Set")
+    assert '"moneyline", "spread", "team_total", "total"' in APP[j:j + 120]
 
 
 def test_a_flat_line_is_not_coloured_as_a_move():

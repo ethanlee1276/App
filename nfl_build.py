@@ -376,6 +376,26 @@ def main() -> None:
         # the finished strings and prices nothing.
         from engine.knowledge import stamp as _tier_stamp
         _tier_stamp(result)
+        # The live win-probability track, same wiring mlb_build carries
+        # (2026-08-18, Ethan: "we should be showing that for ALL live
+        # games"). One credit a pull for the whole slate, paid only while
+        # a game is actually live; attaching from the on-disk history is
+        # free and runs every build.
+        try:
+            from engine import livelines as _ll
+            _live_games = [g for g in result["games"]
+                           if (g.get("live") or {}).get("state") == "live"]
+            if _live_games and real_odds:
+                _n, _note = _ll.pull_and_record("nfl", oddsapi.TEAM_ABBR)
+                if _n:
+                    print(f"  Live line: {_note}")
+            _midnight = _dt.datetime.now().replace(
+                hour=0, minute=0, second=0, microsecond=0).timestamp()
+            _tracked = _ll.attach(result["games"], "nfl", since=_midnight)
+            if _tracked:
+                print(f"  Live line: charting {_tracked} game(s)")
+        except Exception as _exc:                             # noqa: BLE001
+            print(f"  ⚠️  live line tracking unavailable: {_exc}")
         from engine import gate
         gate.publish(result, args.out)
         print(f"\nWrote {args.out}")

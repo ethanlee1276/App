@@ -128,8 +128,10 @@ def test_an_unreachable_feed_is_an_empty_board_not_a_crash():
 def test_the_page_reads_scores_from_the_fast_file():
     app = _read("web", "js", "app.js")
     assert 'LIVE_FAST = { mlb: "data/live_mlb.json" }' in app
+    # Window widened 2026-08-18: the merge-not-replace fix (and its
+    # comment) grew the function past the old 1800 chars.
     i = app.index("async function fetchAllLive")
-    body = app[i:i + 1800]
+    body = app[i:i + 3400]
     assert "LIVE_FAST[sport]" in body, "the fast file is declared but unused"
     # The BETS still come from the slow board: a price minutes old is
     # defensible, a score minutes old is not.
@@ -141,7 +143,7 @@ def test_a_missing_fast_file_leaves_the_page_as_it_was():
     the board is what stops that minute being an empty Live Now page."""
     app = _read("web", "js", "app.js")
     i = app.index("async function fetchAllLive")
-    body = app[i:i + 1800]
+    body = app[i:i + 3400]
     assert "let games = d.games || []" in body, "no fallback source"
     assert "df.games.length" in body, "an empty fast file would blank the page"
 

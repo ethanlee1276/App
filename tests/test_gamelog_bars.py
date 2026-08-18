@@ -56,7 +56,7 @@ def test_every_player_prop_chart_is_bars_now():
     # Trending minis all draw bars now. Lines over per-game quantities
     # were also the charts iOS long-press kept trying to select.
     assert APP.count("sparkline(") == 1
-    assert APP.count("sparkline(t.values") == 1     # the live line track
+    assert APP.count("sparkline(vals") == 1     # the live line track
 
 
 PA = VIS[VIS.index("function propAnalysis"):VIS.index("/* ---------------- Game-log bars")]

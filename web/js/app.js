@@ -1648,6 +1648,25 @@ function renderLivePicks() {
     }
     return `<span style="color:var(--text-mute)">in play</span>`;
   };
+  /* The live win-probability chart on the bet's own row (2026-08-18,
+     Ethan: "we should be showing that for ALL live games and also for
+     our live bets"). TEAM markets only — for a moneyline, spread or
+     team total, the game's tracked win probability IS the bet's market
+     family, oriented to the bet's team. A prop's chance is a different
+     quantity, and drawing the game line under a strikeouts bet would
+     invite reading it as the prop's odds. The track lives on the BOARD
+     game (the fast scoreboard has no odds), so the join runs against
+     state.data.games by matchup. */
+  const TEAM_MKTS = new Set(["moneyline", "spread", "team_total", "total"]);
+  const betTrack = (r) => {
+    if (r.phase !== "live" || !TEAM_MKTS.has(r.market) || !r.game) return "";
+    const g = (state.data.games || []).find((x) =>
+      x.home === r.game.home && x.away === r.game.away);
+    if (!g || !g.line_track) return "";
+    const team = r.market === "total" ? null : r.player;
+    return `<div style="margin-top:6px">${
+      lineTrackHTML(g, team ? { team } : {})}</div>`;
+  };
   const gameLine = (g) => {
     if (!g || !g.home) return "";
     const score = (g.home_score != null)
@@ -1802,6 +1821,7 @@ function renderLivePicks() {
             ${progressBar(r)}
             ${winProb(r)}
             ${marketLine(r)}
+            ${betTrack(r)}
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
         </div>`).join("")}
@@ -14460,7 +14480,22 @@ async function fetchAllLive() {
           const rf = await fetch(LIVE_FAST[sport], { cache: "no-store" });
           if (rf.ok) {
             const df = await rf.json();
-            if (Array.isArray(df.games) && df.games.length) games = df.games;
+            if (Array.isArray(df.games) && df.games.length) {
+              // MERGE, never replace. The fast file knows the score and
+              // the clock; the BOARD knows the odds grid and the live
+              // win-probability track. Wholesale replacement silently
+              // unplugged both the moment the fast loop shipped —
+              // Ethan, 2026-08-18: "the live probablility chart
+              // definitly doesnt show or work." Fast fields win where
+              // both speak (they are fresher); board-only fields
+              // survive.
+              const byKey = new Map(games.map((g) => [`${g.away}@${g.home}`, g]));
+              games = df.games.map((fg) => {
+                const bg = byKey.get(`${fg.away}@${fg.home}`);
+                return bg ? { ...bg, ...fg,
+                              live: { ...(bg.live || {}), ...(fg.live || {}) } } : fg;
+              });
+            }
           }
         } catch (e) {}
       }
@@ -14535,21 +14570,30 @@ function liveCardHTML({ sport, g, bets }) {
 
    The dashed rule sits at 50% — the point where the market stops calling
    this team the favourite, which is the one crossing worth marking. */
-function lineTrackHTML(g) {
+function lineTrackHTML(g, opts = {}) {
   const t = g && g.line_track;
   if (!t || !(t.values || []).length) return "";
-  const move = t.now - t.opened;
+  // Oriented to a TEAM when a bet row asks (2026-08-18, Ethan: "also
+  // for our live bets"): the stored series is the HOME win probability,
+  // and a bet on the road team reads its own chance as 100 − p. Same
+  // data, the bettor's side of it.
+  const flip = opts.team && opts.team === t.away;
+  const vals = flip ? t.values.map((v) => +(100 - v).toFixed(1)) : t.values;
+  const opened = flip ? 100 - t.opened : t.opened;
+  const nowV = flip ? 100 - t.now : t.now;
+  const who = opts.team && (flip || opts.team === t.home) ? opts.team : t.home;
+  const move = nowV - opened;
   // A move of nothing is not a story; only a real swing gets a colour.
   const cls = Math.abs(move) < 1 ? "flat" : (move > 0 ? "up" : "down");
   const pct = (v) => `${Number(v).toFixed(0)}%`;
   return `
     <div class="lb-track">
       <div class="lb-track-head">
-        <span>${escapeHtml(t.home)} win probability, live market</span>
-        <span class="lb-move ${cls}">${pct(t.opened)} → ${pct(t.now)}</span>
+        <span>${escapeHtml(teamName(who))} win probability, live market</span>
+        <span class="lb-move ${cls}">${pct(opened)} → ${pct(nowV)}</span>
       </div>
-      ${sparkline(t.values, { w: 268, h: 52, line: 50, labels: t.labels,
-                              stroke: "var(--brand)", minSpan: 20, unit: "%" })}
+      ${sparkline(vals, { w: 268, h: 52, line: 50, labels: t.labels,
+                          stroke: "var(--brand)", minSpan: 20, unit: "%" })}
       <p class="lb-track-foot">${t.points} price${t.points === 1 ? "" : "s"}
         pulled since first pitch · de‑vigged across the books quoting both
         sides · the market’s number, not ours</p>

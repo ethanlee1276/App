@@ -729,6 +729,29 @@ def main() -> None:
     from engine.parlays import attach
     attach(out, args.league)
 
+    # The live win-probability track (2026-08-18, Ethan: "we should be
+    # showing that for ALL live games") — same wiring as mlb_build and
+    # nfl_build: the pull costs one credit for the whole slate and only
+    # happens while a game is live; attaching from disk is free.
+    try:
+        from engine import livelines as _ll
+        from engine.sources.oddsapi import NBA_TEAM_ABBR, WNBA_TEAM_ABBR
+        _names = WNBA_TEAM_ABBR if args.league == "wnba" else NBA_TEAM_ABBR
+        _live_games = [g for g in out.get("games") or []
+                       if (g.get("live") or {}).get("state") == "live"]
+        if _live_games and args.odds:
+            _n, _note = _ll.pull_and_record(args.league, _names)
+            if _n:
+                print(f"  Live line: {_note}")
+        _midnight = datetime.datetime.now().replace(
+            hour=0, minute=0, second=0, microsecond=0).timestamp()
+        _tracked = _ll.attach(out.get("games") or [], args.league,
+                              since=_midnight)
+        if _tracked:
+            print(f"  Live line: charting {_tracked} game(s)")
+    except Exception as _exc:                                 # noqa: BLE001
+        print(f"  ⚠️  live line tracking unavailable: {_exc}")
+
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p)
