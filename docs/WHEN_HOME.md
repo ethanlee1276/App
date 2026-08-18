@@ -11,7 +11,7 @@ browser you can look at.
 
 ## TODAY'S ROUND — 2026-08-18 (added while you were at work)
 
-Thirty-three commits today, GitHub tick green, 4,688 tests across 273
+Thirty-four commits today, GitHub tick green, 4,698 tests across 274
 files (sanity check after T1’s pull: `git log --oneline -1` should name
 the commit that refreshed this very note). In the order to run them:
 
@@ -296,6 +296,32 @@ from the one place a range honestly exists, his own 2025 weeks
 (worst / median / best). The render’s salaries, ownership and boom
 rates have no honest source here, so they stay off — same rule as
 the player-page render.
+
+### T17. The game sim reaches the clock sports — NFL first, nothing priced
+
+You asked whether we re-run games thousands of times, and said to
+start it for the other sports. Done tonight, MLB-pattern all the way:
+`engine/drivesim.py` replays a game 20,000 times, drive by drive
+(NFL/CFB) or possession by possession (NBA/WNBA), anchored to the
+market’s implied points so it reproduces the line and adds the SHAPE —
+margin distribution, cover-and-over correlation, blowout odds, push
+mass. The first sanity check came out beautiful: nobody told the model
+the NFL margin’s standard deviation, and drives that score 0/3/7 at
+league rates land it at 13.7 — the empirical number is 13-14.
+
+Same discipline as the MLB sim: `ENABLED = False`, nothing prices off
+it. The NFL build now journals the sim’s pre-kickoff claims per game
+(`data/drivesim_log.jsonl`) so Weeks 1-4 can grade it against finals —
+if the joints beat the correlation priors by the paired log-loss bar,
+it earns the parlay seat; if not, it stays a diagnostics tool. Play
+with it yourself:
+
+```
+python3 -m engine.drivesim --sport nfl --spread -3.5 --total 47
+```
+
+And your T4 is now doubly worth running — it is the same verdict for
+the MLB sim that Weeks 1-4 will be for this one.
 
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
