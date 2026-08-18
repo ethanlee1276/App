@@ -102,7 +102,13 @@ def test_verdict_orders_the_rollback_when_the_prior_wins():
 # --- the history arm ---------------------------------------------------------
 def _seed_db(path, dates=14, teams=("AAA", "BBB")):
     """A tiny but real-shaped MLB log store: two lineups, shared per-game
-    environment so teammate outcomes genuinely co-move."""
+    environment so teammate outcomes genuinely co-move.
+
+    game_id is PER-PLAYER — "{player}-{date}" — because that is what the
+    real ingest writes (engine/ingest.py). The first fixture used a shared
+    per-game id, the tests passed, and the first real run then failed on
+    every one of 8,619 groups: the replay had grouped lineups by game_id
+    and found one hitter in each. The fixture must stay ingest-shaped."""
     import random
     random.seed(5)
     conn = sqlite3.connect(path)
@@ -114,10 +120,10 @@ def _seed_db(path, dates=14, teams=("AAA", "BBB")):
     for team, opp in ((teams[0], teams[1]), (teams[1], teams[0])):
         for d in range(1, dates + 1):
             date = f"2026-06-{d:02d}"
-            gid = f"{teams[1]}@{teams[0]}-{d}"
             env = random.gauss(1.0, 0.3)
             for i in range(1, 10):
                 name = f"{team} Bat {i}"
+                gid = f"{name}-{date}"
                 pa = max(3, round(random.gauss(4.6 - i * 0.09, 0.4)))
                 p = min(.5, max(.05, 0.26 * env))
                 hits = sum(1 for _ in range(pa) if random.random() < p)
@@ -150,6 +156,29 @@ def test_the_history_arm_replays_scores_and_gates():
         for k in ("ind", "prior", "sim"):
             assert 0.0 < r[k] < -math.log(simrecon.EPS) + 1
         assert all(r["adjacent"] in (True, False) for r in t.rows)
+
+
+def test_lineups_assemble_despite_per_player_game_ids():
+    """THE 8,619-GROUPS-ZERO-SCORED REGRESSION. The ingest's game_id is
+    per-player, so the lineup key must be (period, team, leg) — grouping
+    by game_id strands every hitter alone and the six-hitter gate fails
+    the whole window. A doubleheader's -G2 rows stay their own lineup."""
+    with tempfile.TemporaryDirectory() as td:
+        conn = _seed_db(os.path.join(td, "h.db"), dates=2)
+        # A second-leg stat line for one date, ingest-shaped suffix.
+        for i in range(1, 10):
+            name = f"AAA Bat {i}"
+            conn.execute(
+                "INSERT INTO player_game_logs VALUES ('mlb', 2026,"
+                " '2026-06-02', ?, ?, 'AAA', 'BBB', '', 1, 'hits', 1.0)",
+                (f"{name}-2026-06-02-G2", name))
+        conn.commit()
+        groups = simrecon._mlb_rows(conn, days=2)
+    assert ("2026-06-02", "AAA", 1) in groups
+    assert ("2026-06-02", "AAA", 2) in groups, "the -G2 leg is its own card"
+    for key, players in groups.items():
+        assert len(players) == 9, \
+            f"{key}: a lineup must hold the whole card, not one hitter"
 
 
 def test_replay_projections_see_only_prior_games():
@@ -196,12 +225,13 @@ def test_a_doubleheader_leg_grades_against_its_own_half():
             " period TEXT, game_id TEXT, player TEXT, team TEXT,"
             " opponent TEXT, position TEXT, home INT, market TEXT,"
             " value REAL)")
-        for gid, v in (("B@A", 0.0), ("B@A-G2", 2.0)):
+        for suffix, v in (("", 0.0), ("-G2", 2.0)):
             for player in ("P One", "P Two"):
                 conn.execute(
                     "INSERT INTO player_game_logs VALUES "
                     "('mlb', 2026, '2026-06-01', ?, ?, 'A', 'B', '', 1,"
-                    " 'hits', ?)", (gid, player, v))
+                    " 'hits', ?)",
+                    (f"{player}-2026-06-01{suffix}", player, v))
         row = {"date": "2026-06-01", "team": "A", "game_number": 2,
                "a": ["P One", "hits", 0.5], "b": ["P Two", "hits", 0.5],
                "p1": .5, "p2": .5, "sim_joint": .3}

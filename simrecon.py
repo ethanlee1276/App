@@ -60,6 +60,7 @@ import argparse
 import json
 import math
 import os
+import re
 import sqlite3
 import sys
 from collections import defaultdict
@@ -151,12 +152,24 @@ class Tally:
 
 
 # --- the history arm ---------------------------------------------------------
+#: Doubleheader leg suffix on a log row's game_id ("...-G2" = second game).
+_LEG_RE = re.compile(r"-G(\d+)$")
+
+
 def _mlb_rows(conn, days: int) -> dict:
-    """(period, game_id, team) -> {player: {market: value}} for the window.
+    """(period, team, leg) -> {player: {market: value}} for the window.
 
     The window is the most recent ``days`` DISTINCT slate dates with MLB
     logs, not calendar days — an All-Star break must not silently shrink
-    the sample."""
+    the sample.
+
+    The key deliberately does NOT include game_id: the ingest writes MLB
+    log rows with a PER-PLAYER game_id ("{player}-{date}", plus "-G2" for
+    a doubleheader's second leg — engine/ingest.py). Grouping on it hands
+    every "lineup" exactly one hitter, and the six-hitter gate then fails
+    on all of them — the first run against real data replayed 8,619 such
+    groups and scored zero. A team's slate date IS its lineup card; the
+    leg parsed off the suffix keeps a doubleheader's halves apart."""
     dates = [r[0] for r in conn.execute(
         "SELECT DISTINCT period FROM player_game_logs WHERE sport='mlb' "
         "ORDER BY period DESC LIMIT ?", (days,))]
@@ -169,7 +182,9 @@ def _mlb_rows(conn, days: int) -> dict:
          f"AND market IN ({','.join('?' * len(marks))})")
     for period, gid, team, player, market, value in conn.execute(
             q, (min(dates), *marks)):
-        out[(period, gid, team)].setdefault(player, {})[market] = float(value)
+        m = _LEG_RE.search(gid or "")
+        leg = int(m.group(1)) if m else 1
+        out[(period, team, leg)].setdefault(player, {})[market] = float(value)
     return out
 
 
@@ -227,7 +242,7 @@ def run_history(conn, days: int, trials: int, fit_trials: int,
              "gate_failed": 0, "too_few_hitters": 0, "hr_pairs": 0}
     tally, hr_tally = Tally(), Tally()
 
-    for (period, gid, team), players in sorted(team_games.items()):
+    for (period, team, leg), players in sorted(team_games.items()):
         # As-of projections for every hitter who actually appeared.
         means, spots_rank = {}, []
         for name, night in players.items():

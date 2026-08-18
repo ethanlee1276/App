@@ -352,6 +352,45 @@ not a pick, prices nothing until the reconciliation says so. Rides the
 same T1 deploy; the droplet’s next NFL build stamps it on the Week 1
 slate automatically.
 
+### T18. Two from your paste-backs: the simrecon fix + the faces backfill
+
+**The 8,619 mystery is solved, and it was mine.** Your paste proved
+`pa` fully populated (309,621 rows, 2021–2026), which killed my first
+theory — so the code was the suspect, and it confessed. Every MLB log
+row carries a **per-player** game_id (`"Aaron Judge-2026-08-15"`, the
+ingest has always written them that way), but simrecon assembled
+lineups by grouping on game_id — so every “lineup” it built held
+exactly one hitter, and the six-hitter gate failed all 8,619 of them.
+The tests never caught it because the fixture seeded shared per-game
+ids, a shape the real ingest never writes; the fixture is now
+ingest-shaped and there’s a regression test named after the failure.
+Lineups now group by (date, team, doubleheader leg). On the laptop:
+
+```
+cd ~/App && git pull
+python3 simrecon.py
+```
+
+Expect the history arm to actually score lineups this time (~900
+team-games over the default 30-day window, not 8,619 player-rows).
+Paste the whole printout — that’s the #60 verdict evidence.
+
+**The faces backfill is built — one command, as promised.** Ingest
+skips already-stored days, which is why re-running it could never fill
+the missing photos (your WNBA 171/183 didn’t move). This fills from
+ids already in hand instead: NFL takes the 2,816 roster headshot URLs
+nflverse ships (and lands them in `player_assets`, which the fantasy
+player profile reads and nothing had ever written NFL rows to), MLB
+constructs from active-roster person_ids with the same pattern the
+prop board uses, NBA/WNBA fill only their faceless rows from the
+stored espn_id. Taken URLs are never overwritten; re-running is safe.
+
+```
+python3 facesfill.py
+```
+
+Then `python3 launch.py --check` — the Player faces lines should jump.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 
