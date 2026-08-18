@@ -12794,7 +12794,7 @@ async function dkAdvice(draftId) {
           a.window_fitted ? "" : " (prior — too few picks to fit yet)"}</span>
       </div>
       ${take ? `<div class="dk-take">
-        <b>${escapeHtml(take.player)}</b>
+        <b>${escapeHtml(take.player)}</b>${injTag("nfl", take.player)}
         <span class="chip">${escapeHtml(take.position)}</span>
         <span class="chip ${tone[take.verdict] || ""}">${
           take.verdict === "gone" ? "won’t last" :
@@ -12820,10 +12820,10 @@ function dkBestAvailable(taken) {
   for (const r of avail) if (!byPos[r.position]) byPos[r.position] = r;
   host.innerHTML = `
     <div class="dk-bestrow"><span class="dk-bl">Best available</span>
-      ${top.map((r) => `<span class="chip up">${escapeHtml(r.player)} · +${r.vorp}</span>`).join("")}</div>
+      ${top.map((r) => `<span class="chip up">${escapeHtml(r.player)} · +${r.vorp}${injTag("nfl", r.player)}</span>`).join("")}</div>
     <div class="dk-bestrow"><span class="dk-bl">By position</span>
       ${["QB", "RB", "WR", "TE"].map((p) => byPos[p]
-        ? `<span class="chip">${p}: ${escapeHtml(byPos[p].player)} (+${byPos[p].vorp})</span>` : "")
+        ? `<span class="chip">${p}: ${escapeHtml(byPos[p].player)} (+${byPos[p].vorp})${injTag("nfl", byPos[p].player)}</span>` : "")
         .join("")}</div>`;
 }
 

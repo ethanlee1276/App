@@ -78,6 +78,17 @@ def test_the_cpu_reads_the_injury_report():
     assert "_mockHealth(p.player)" in APP[j:j + 500]
 
 
+def test_the_draft_day_panels_tag_too():
+    """The live-sync Best available chips and the advice's "take" are the
+    two places a draft-day decision actually gets made."""
+    i = APP.index("function dkBestAvailable(")
+    body = APP[i:APP.index("\n}", i)]
+    assert body.count('injTag("nfl"') == 2, \
+        "both the overall chips and the by-position chips must tag"
+    j = APP.index("async function dkAdvice(")
+    assert 'injTag("nfl", take.player)' in APP[j:APP.index("\n}", j)]
+
+
 def test_the_pages_load_the_board_before_painting():
     i = APP.index("async function renderFantasy(")
     assert "loadInjuryBoard()" in APP[i:i + 700], \

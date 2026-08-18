@@ -11,9 +11,9 @@ browser you can look at.
 
 ## TODAY'S ROUND — 2026-08-18 (added while you were at work)
 
-Twenty-nine commits today, GitHub tick green, 4,678 tests across 272
-files (sanity check after T1’s pull: `git log --oneline -1` should name
-the commit that refreshed this very note). In the order to run them:
+Thirty commits today, GitHub tick green, 4,679 tests across 272 files
+(sanity check after T1’s pull: `git log --oneline -1` should name the
+commit that refreshed this very note). In the order to run them:
 
 ### T1. Deploy — DROPLET, not laptop (engine files changed, ~1 min)
 
@@ -236,6 +236,13 @@ with no logged games (linemen, rookies) shows his status. And the
 player’s draft weight collapses to a quarter (a multiplier, not a ban
 — late-round stashes are a real strategy, and you can still draft
 anyone the tag warns about).
+
+Third round: the **live draft sync’s own panels** — the “Best
+available” chips and the pick-by-pick advice’s take — tag as well,
+which matters most on draft night. The whole draft-day path got a dry
+run against a stubbed Sleeper draft: connect, three picks crossed off
+the kit, best-available with tags, advice panel with survival odds —
+zero page errors.
 
 **The refresh loop now proves it’s alive.** T13 guarded the loop
 against dying; this makes any future death visible in seconds instead
