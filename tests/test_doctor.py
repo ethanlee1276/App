@@ -229,6 +229,20 @@ def test_the_launcher_runs_the_check_itself_once_a_day():
     assert "_run_doctor()" in fn
 
 
+def test_one_bad_cycle_does_not_kill_the_refresher():
+    """This thread is the production site's only pulse, and the server
+    keeps serving after it dies — so the death is invisible and every
+    board just quietly stops moving until the next deploy. Found
+    2026-08-18: a nine-day-old "Active" on a man with a broken wrist.
+    `_auto_updater` has carried the same guard all along."""
+    src = _launch()
+    fn = src[src.index("def _background_refresher("):]
+    fn = fn[:fn.index("\n\n\n")]
+    assert "except Exception" in fn, "one raise ends every refresh for good"
+    assert fn.index("try:") < fn.index("refresh_all(quiet=True)"), \
+        "the cycle's work must run INSIDE the guard"
+
+
 def test_the_daily_check_is_silent_when_nothing_is_wrong():
     """A line that says "all clear" every morning trains you to stop
     reading the line."""

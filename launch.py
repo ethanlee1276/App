@@ -1770,16 +1770,28 @@ def _auto_updater() -> None:
 
 
 def _background_refresher(interval: int) -> None:
-    """Keep the served data fresh while the server runs (quiet after startup)."""
+    """Keep the served data fresh while the server runs (quiet after startup).
+
+    THE GUARD IS THE FEATURE. This thread is the production site's only
+    pulse — builds run as subprocesses, but the settle, the maintenance
+    pass and the journal steps run in-process, and one exception out of
+    any of them used to kill the loop for good. The server keeps serving,
+    so the death is invisible: every board just quietly stops moving
+    until the next deploy restarts the unit (found 2026-08-18 when the
+    injuries page wore a nine-day-old "Active" on a man with a broken
+    wrist). `_auto_updater` above has carried the same guard all along."""
     while True:
         time.sleep(interval)
-        # Catches the date rolling over while the server runs overnight.
-        _run_maintenance()
-        # Closes out tonight's games as they end, rather than tomorrow.
-        _run_autosettle()
-        # Once a day, and only when something is wrong.
-        _run_doctor()
-        refresh_all(quiet=True)
+        try:
+            # Catches the date rolling over while the server runs overnight.
+            _run_maintenance()
+            # Closes out tonight's games as they end, rather than tomorrow.
+            _run_autosettle()
+            # Once a day, and only when something is wrong.
+            _run_doctor()
+            refresh_all(quiet=True)
+        except Exception as exc:                   # noqa: BLE001
+            print(f"  ⚠️  refresh cycle error: {exc} — retrying in {interval}s.")
 
 
 # A fight moves in seconds, so the live card cannot ride the 60-second

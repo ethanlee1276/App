@@ -183,26 +183,48 @@ def test_availability_tone_is_keyword_not_exact_match():
 # injury; it accumulates every filing a player has ever had; and a declining
 # feed is answered from cache with no error, so old rows wear a fresh stamp.
 
+def _iso(days_ago: float) -> str:
+    """A feed-style stamp N days back from now. The fixture dates are
+    RELATIVE on purpose: the build ages return notices out, so a fixture
+    with absolute dates is a test that starts failing by calendar."""
+    import datetime as dtm
+    t = dtm.datetime.now(dtm.timezone.utc) - dtm.timedelta(days=days_ago)
+    return t.strftime("%Y-%m-%dT%H:%MZ")
+
+
 RETURNED_THEN_HURT = {
     "injuries": [
         {"displayName": "Detroit Lions", "injuries": [
             # Oldest first, deliberately: the feed's order is not chronology.
-            {"status": "Out", "date": "2026-08-01T12:00Z",
+            {"status": "Out", "date": _iso(17),
              "athlete": {"displayName": "Two Filings",
                          "position": {"abbreviation": "WR"}},
              "details": {"type": "Hamstring"}},
-            {"status": "Active", "date": "2026-08-06T12:00Z",
+            {"status": "Active", "date": _iso(12),
              "athlete": {"displayName": "Two Filings",
                          "position": {"abbreviation": "WR"}},
              "details": {}},
             # ...then hurt again, which is the row that must win.
-            {"status": "Injured Reserve", "date": "2026-08-11T12:00Z",
+            {"status": "Injured Reserve", "date": _iso(7),
              "athlete": {"displayName": "Two Filings",
                          "position": {"abbreviation": "WR"}},
              "details": {"type": "Knee"}},
-            {"status": "Active", "date": "2026-08-10T12:00Z",
+            {"status": "Active", "date": _iso(8),
              "athlete": {"displayName": "Fully Cleared",
                          "position": {"abbreviation": "RB"}},
+             "details": {}},
+            # The Cade Mays shape: cleared long ago, nothing filed since —
+            # August carries no filing duty, so no newer row ever arrives
+            # to beat this one. The BUILD must age it out.
+            {"status": "Active", "date": _iso(40),
+             "athlete": {"displayName": "Old News",
+                         "position": {"abbreviation": "C"}},
+             "details": {}},
+            # And a return notice with no date at all can never age out,
+            # so it must not survive either.
+            {"status": "Active",
+             "athlete": {"displayName": "No Date",
+                         "position": {"abbreviation": "G"}},
              "details": {}},
         ]},
     ],
@@ -228,11 +250,52 @@ def test_only_the_newest_filing_per_player_survives():
     hurt again. All three filings rendered means one player reads as three,
     and the stale "Active" can sit above the live "Injured Reserve"."""
     rows = inj.current_rows(inj.parse_injuries(RETURNED_THEN_HURT))
-    assert len(rows) == 2, "one row per player"
+    assert len(rows) == 4, "one row per player"
     by_name = {r["player"]: r for r in rows}
     assert by_name["Two Filings"]["status"] == "Injured Reserve"
     assert by_name["Two Filings"]["injury"] == "Knee"
     assert by_name["Fully Cleared"]["status"] == "Active"
+
+
+def test_a_return_notice_ages_out_a_designation_does_not():
+    """Cade Mays broke a wrist bone in camp on 2026-08-09 and the page
+    still said "Active" nine days later — off a return notice ESPN never
+    retires, with no newer filing to beat it because August carries no
+    reporting duty. A cleared-to-play row is news for RETURN_NOTE_DAYS
+    and a standing claim of health afterwards; a designation stays for
+    as long as the league lists it, however old."""
+    now = 1_800_000_000.0
+    day = 86400.0
+    stamp = lambda days: inj.dt.datetime.fromtimestamp(  # noqa: E731
+        now - days * day, inj.dt.timezone.utc).isoformat()
+    fresh_ret = {"status": "Active", "injury": None, "date": stamp(3)}
+    stale_ret = {"status": "Active", "injury": None, "date": stamp(40)}
+    undated = {"status": "Active", "injury": None, "date": None}
+    old_desig = {"status": "Out", "injury": "Knee", "date": stamp(200)}
+    kept = inj.drop_stale_returns([fresh_ret, stale_ret, undated, old_desig],
+                                  now=now)
+    assert fresh_ret in kept, "a recent return IS team news"
+    assert stale_ret not in kept, "a month-old Active is a health claim"
+    assert undated not in kept, "no date means it can never age out"
+    assert old_desig in kept, "designations never age out — they ARE status"
+
+
+def test_the_build_applies_the_return_cut():
+    """End to end through the builder: Old News (40 days) and No Date
+    must not reach the file the page serves; the fresh return and the
+    live designation must."""
+    import injuries_build
+
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td) / "injuries.json"
+        with mock.patch.object(injuries_build, "fetch_injuries",
+                               lambda league: RETURNED_THEN_HURT), \
+             mock.patch.object(injuries_build, "cache_age_s",
+                               lambda league: 60.0):
+            injuries_build.main(["--out", str(out)])
+        d = json.loads(out.read_text())
+    names = {r["player"] for r in d["sports"]["nfl"]}
+    assert names == {"Two Filings", "Fully Cleared"}
 
 
 def test_the_build_dedupes_and_reports_how_old_the_rows_are():

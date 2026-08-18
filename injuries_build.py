@@ -19,7 +19,8 @@ import sys
 from pathlib import Path
 
 from engine.sources.espninjuries import INJURY_TTL, LEAGUES, cache_age_s, \
-    current_rows, fetch_injuries, is_return, parse_injuries
+    current_rows, drop_stale_returns, fetch_injuries, is_return, \
+    parse_injuries
 from engine.sources.fetch import DataUnavailable
 
 
@@ -47,8 +48,9 @@ def main(argv=None) -> int:
             rows = parse_injuries(fetch_injuries(league))
             # One row per player — his CURRENT status. ESPN accumulates
             # every filing, and showing them all lets an old return notice
-            # sit next to a live designation.
-            sports[league] = current_rows(rows)
+            # sit next to a live designation. Then the age cut: a stale
+            # "Active" is a standing claim of health nobody re-verifies.
+            sports[league] = drop_stale_returns(current_rows(rows))
         except DataUnavailable as exc:
             notes.append(f"{league}: {exc}")
             continue

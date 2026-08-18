@@ -26,6 +26,7 @@ page's tab hides for that sport rather than rendering an empty promise.
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 import time
 
@@ -86,6 +87,46 @@ _ACTIVE = re.compile(r"^\s*active\s*$", re.I)
 def is_return(row: dict) -> bool:
     """True for a cleared-to-play notice rather than a designation."""
     return bool(_ACTIVE.match(row.get("status") or "")) and not row.get("injury")
+
+
+#: How long a cleared-to-play notice stays news. A DESIGNATION is a
+#: current status the league keeps re-filing, so it stays as long as the
+#: feed lists it. A RETURN notice is one moment — "he practiced" — and
+#: ESPN never retires the row, so left alone it becomes a standing claim
+#: of health that nobody is re-verifying. Cade Mays broke a wrist bone in
+#: camp on 2026-08-09; nine days later the page still said "Active" off a
+#: return notice, because August carries no filing duty that would have
+#: produced a newer row to beat it.
+RETURN_NOTE_DAYS = 14
+
+
+def drop_stale_returns(rows: list[dict], now: float | None = None) -> list[dict]:
+    """Keep every designation; keep return notices only while they are
+    recent enough to still be news. An UNDATED return notice is dropped
+    outright — with no date it can never age out, which is exactly the
+    standing-claim trap this cut exists to close."""
+    cutoff = (now if now is not None else time.time()) \
+        - RETURN_NOTE_DAYS * 86400
+    kept = []
+    for r in rows:
+        if not is_return(r):
+            kept.append(r)
+            continue
+        stamp = _parse_iso_ts(r.get("date"))
+        if stamp is not None and stamp >= cutoff:
+            kept.append(r)
+    return kept
+
+
+def _parse_iso_ts(stamp) -> float | None:
+    """ESPN's ISO stamp → epoch seconds, or None for anything unparseable."""
+    if not stamp:
+        return None
+    try:
+        return dt.datetime.fromisoformat(
+            str(stamp).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
 
 
 def current_rows(rows: list[dict]) -> list[dict]:
