@@ -4561,7 +4561,7 @@ async function renderPlayers() {
             <span class="sub">— nothing priced on tonight’s board for
             “${escapeHtml(state.search)}”, so these are the logged games</span></div>
           <div class="player-grid">${drawn.map((m) => profileHTML(m.player)).join("")}</div>
-          ${rest.length ? `<div class="section-title minor" style="margin-top:16px">Also matching</div>` : ""}
+          ${rest.length ? `<div class="section-title minor">Also matching</div>` : ""}
           ${rest.map((m) => `
             <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
               ${playerAvatar(m.player, m.team, { size: 40, headshot: m.headshot })}
