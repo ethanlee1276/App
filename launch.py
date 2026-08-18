@@ -1792,6 +1792,26 @@ def _background_refresher(interval: int) -> None:
             refresh_all(quiet=True)
         except Exception as exc:                   # noqa: BLE001
             print(f"  ⚠️  refresh cycle error: {exc} — retrying in {interval}s.")
+        # Proof of life, written whether the cycle succeeded or not: the
+        # heartbeat answers "is the LOOP alive", which file mtimes cannot —
+        # a failing build and a dead thread both leave boards old, and only
+        # one of them fixes itself.
+        _write_heartbeat(interval)
+
+
+def _write_heartbeat(interval: int) -> None:
+    """web/data/heartbeat.json — one small fact per cycle, never fatal."""
+    try:
+        p = ROOT / "web" / "data" / "heartbeat.json"
+        tmp = p.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps({
+            "at_epoch": round(time.time()),
+            "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "interval_s": interval,
+        }))
+        os.replace(tmp, p)
+    except OSError:
+        pass
 
 
 # A fight moves in seconds, so the live card cannot ride the 60-second
@@ -2202,6 +2222,30 @@ def preflight() -> None:
     # Per-product data freshness — what each page is actually serving.
     print("\n  Product data (web/data/*.json — age since last build):")
     import time as _time
+    # The loop's own pulse first, because it separates the two ways data
+    # goes old: a failing BUILD leaves one board stale while the beat
+    # stays fresh; a dead LOOP silences everything and only a restart
+    # fixes it. File mtimes alone cannot tell those apart.
+    hb_path = ROOT / "web" / "data" / "heartbeat.json"
+    if hb_path.is_file():
+        try:
+            hb = json.loads(hb_path.read_text())
+            hb_age = _time.time() - float(hb.get("at_epoch") or 0)
+            hb_int = int(hb.get("interval_s") or 60)
+            if hb_age > max(10 * hb_int, 600):
+                print(f"{bad} Refresh loop: last heartbeat "
+                      f"{hb_age / 60:.0f} min ago — the loop is NOT "
+                      f"running. Restart the launcher (or the qellys "
+                      f"service); nothing on the site updates until then.")
+            else:
+                print(f"{ok} Refresh loop: alive — last beat "
+                      f"{hb_age:.0f}s ago, every {hb_int}s.")
+        except Exception:  # noqa: BLE001
+            print(f"{warn} Refresh loop: heartbeat.json unreadable — "
+                  f"treat the ages below as the only signal.")
+    else:
+        print(f"{warn} Refresh loop: no heartbeat yet — it appears after "
+              f"the first cycle on a build that writes one.")
     products = [
         ("MLB board", "web/data/mlb_recommendations.json"),
         ("NFL board", "web/data/recommendations.json"),

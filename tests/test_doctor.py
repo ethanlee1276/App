@@ -243,6 +243,21 @@ def test_one_bad_cycle_does_not_kill_the_refresher():
         "the cycle's work must run INSIDE the guard"
 
 
+def test_the_loop_leaves_a_heartbeat_and_the_check_reads_it():
+    """File mtimes cannot separate a failing BUILD (one stale board, the
+    rest moving) from a dead LOOP (everything stale, only a restart
+    helps). The loop writes its own pulse each cycle — after the guard,
+    so a bad cycle still beats — and --check reads it first."""
+    src = _launch()
+    fn = src[src.index("def _background_refresher("):]
+    fn = fn[:fn.index("\n\n\n")]
+    assert "_write_heartbeat(interval)" in fn
+    assert fn.index("except Exception") < fn.index("_write_heartbeat(interval)")
+    i = src.index("Product data (web/data/*.json")
+    assert '"heartbeat.json"' in src[i:i + 2200], \
+        "--check must read the pulse beside the per-file ages"
+
+
 def test_the_daily_check_is_silent_when_nothing_is_wrong():
     """A line that says "all clear" every morning trains you to stop
     reading the line."""

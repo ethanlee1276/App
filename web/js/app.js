@@ -4507,6 +4507,9 @@ function trendRow(r, i, col) {
    ============================================================ */
 async function renderPlayers() {
   const q = state.search.trim().toLowerCase();
+  // Cached after the first call; every profile header tags a current
+  // designation from it, whatever the sport.
+  await loadInjuryBoard();
   let recs = state.data.recommendations;
   if (q) recs = recs.filter((r) => r.player.toLowerCase().includes(q));
   // One CARD per player, every market kept. The old dedupe ("first
@@ -4566,7 +4569,7 @@ async function renderPlayers() {
             <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
               ${playerAvatar(m.player, m.team, { size: 40, headshot: m.headshot })}
               <div style="flex:1;min-width:0">
-                <strong>${escapeHtml(m.player)}</strong>
+                <strong>${escapeHtml(m.player)}</strong>${injTag(state.sport || "nfl", m.player)}
                 <div style="font-size:.85em;color:var(--text-mute)">
                   ${teamMark(m.team, 14)} ${escapeHtml(teamName(m.team))}
                   · ${escapeHtml(m.position || "—")}
@@ -4772,7 +4775,7 @@ function profileHTML(player) {
 function _profileHead(r, right) {
   return `<div class="profile-head">
         ${playerAvatar(r.player, r.team, { size: 60, headshot: r.headshot })}
-        <div class="meta"><div class="nm">${escapeHtml(r.player)}</div>
+        <div class="meta"><div class="nm">${escapeHtml(r.player)}${injTag(state.sport || "nfl", r.player)}</div>
           <div class="sub">${teamMark(r.team, 16)} ${[teamName(r.team), r.position, "vs " + teamName(r.opponent)]
             .filter((x) => x && x !== "vs ").map(escapeHtml).join(" · ")}</div></div>
         ${right}
@@ -9567,7 +9570,10 @@ async function renderFantasy() {
   if (!host) return;
   let d = null;
   try {
-    const res = await fetch("data/fantasy.json?t=" + Date.now());
+    // The injury board rides along so every roster surface can tag a
+    // designation — missing is fine, the tags just come back empty.
+    const [res] = await Promise.all([
+      fetch("data/fantasy.json?t=" + Date.now()), loadInjuryBoard()]);
     if (res.ok) d = await res.json();
   } catch (e) {}
   if (!d || !d.season) {
@@ -11078,6 +11084,64 @@ function injWhen(ts) {
    crushed every column and pushed Status half off the screen behind an
    overflow scroll. A row is now two lines with nothing to crush: who and
    what on the left, the verdict on the right. Same facts, zero columns. */
+/* ---- The injury layer, shared beyond the injuries page ----------------
+   One cached fetch of the league-wide board, and one lookup any surface
+   can tag a player with. Born from the Cade Mays report: the draft kit
+   was happily ranking a man who broke his wrist the week before, and
+   nothing outside the injuries tab would have said so. */
+let _injBoard = null;
+let _injBoardAt = 0;
+async function loadInjuryBoard() {
+  if (_injBoard && Date.now() - _injBoardAt < 5 * 60e3) return _injBoard;
+  try {
+    const res = await fetch("data/injuries.json?t=" + Date.now());
+    if (res.ok) { _injBoard = await res.json(); _injBoardAt = Date.now(); }
+  } catch (e) {}
+  return _injBoard;
+}
+
+/* The tag is agate type, so the status has to fit in a breath. Longest
+   keys first — "60-day il" must not stop at "il". */
+const INJ_SHORT = [
+  ["injured reserve", "IR"], ["60-day", "60-IL"], ["15-day", "15-IL"],
+  ["10-day", "10-IL"], ["7-day", "7-IL"], ["day-to-day", "DTD"],
+  ["questionable", "Q"], ["doubtful", "D"], ["suspension", "SUSP"],
+  ["out", "OUT"],
+];
+function injShort(status) {
+  const s = (status || "").toLowerCase();
+  for (const [k, v] of INJ_SHORT) if (s.includes(k)) return v;
+  return status || "";
+}
+
+function injFind(sport, player) {
+  const rows = (((_injBoard || {}).sports) || {})[sport] || [];
+  const want = ffNorm(player || "");
+  return rows.find((r) => !isReturnRow(r)
+    && ffNorm(r.player || "") === want) || null;
+}
+
+/* A compact colored designation beside a name, or nothing. The detail
+   rides the title so the row stays agate. */
+function injTag(sport, player) {
+  const r = injFind(sport, player);
+  if (!r) return "";
+  const detail = [r.injury, r.return_date ? `return ${r.return_date}` : ""]
+    .filter(Boolean).join(" · ");
+  return ` <span class="inj-tag" style="color:${injTone(r.status)}"
+    title="${escapeAttr([r.status, detail].filter(Boolean).join(" — "))}"
+    >${escapeHtml(injShort(r.status))}</span>`;
+}
+
+/* The dossier and full profile get the whole sentence, not the tag. */
+function injLineHTML(r) {
+  if (!r) return "";
+  const bits = [r.injury, r.return_date ? `return ${r.return_date}` : ""]
+    .filter(Boolean).join(", ");
+  return `<div class="ffd-injline" style="color:${injTone(r.status)}">
+    ${escapeHtml(r.status)}${bits ? ` — ${escapeHtml(bits)}` : ""}</div>`;
+}
+
 function injRow(r, withTeam) {
   const face = r.face && /^https:\/\//.test(r.face)
     ? `<img class="inj-face" src="${escapeHtml(r.face)}" alt="" loading="lazy"
@@ -11854,7 +11918,7 @@ function draftKitHTML(kit) {
     <div class="dl-row dk-row" data-ffp="${escapeHtml(ffNorm(r.player))}" data-dossier="${escapeAttr(r.player)}">
       <span class="dl-rank">${i + 1}</span>
       <span class="dl-main dl-id">${playerAvatar(r.player, r.team, { size: 26, map: nflMap(), headshot: r.headshot })}
-        <span><strong>${escapeHtml(r.player)}</strong>
+        <span><strong>${escapeHtml(r.player)}</strong>${injTag("nfl", r.player)}
           <span class="dl-sub">${escapeHtml(r.position)}${r.pos_rank} · ${nflName(r.team)}
             · ${r.games} gm${r.small_sample ? ` ${icon('warn')} small sample` : ""}${moveNote(r)}</span></span></span>
       <span class="dk-tier" style="color:${tierColor(r.tier)}">T${r.tier}</span>
@@ -11879,7 +11943,7 @@ function draftKitHTML(kit) {
       return `${brk}<div class="dk-posrow" data-ffp="${escapeHtml(ffNorm(r.player))}" data-dossier="${escapeAttr(r.player)}">
         <span class="dk-pr">${r.pos_rank}</span>
         ${playerAvatar(r.player, r.team, { size: 18, map: nflMap(), headshot: r.headshot })}
-        <span class="dk-pn">${escapeHtml(r.player)}
+        <span class="dk-pn">${escapeHtml(r.player)}${injTag("nfl", r.player)}
           <span class="dk-pt">${nflName(r.team)}</span></span>
         <span class="dk-pp">${r.proj}</span>
       </div>`;
@@ -11894,7 +11958,7 @@ function draftKitHTML(kit) {
   const sleepers = (kit.sleepers || []).map((r) => `
     <div class="dl-row dk-slrow" data-ffp="${escapeHtml(ffNorm(r.player))}" data-dossier="${escapeAttr(r.player)}">
       <span class="dl-main dl-id">${playerAvatar(r.player, r.team, { size: 26, map: nflMap(), headshot: r.headshot })}
-        <span><strong>${escapeHtml(r.player)}</strong>
+        <span><strong>${escapeHtml(r.player)}</strong>${injTag("nfl", r.player)}
           <span class="dl-sub">${escapeHtml(r.position)} · ${nflName(r.team)}</span></span></span>
       <span class="dl-num">${r.ppg} actual</span>
       <span class="dl-num strong pos">${r.xppg} expected</span>
@@ -11978,6 +12042,7 @@ function _ffDossierInfo(name) {
   // different ingests, so the first row to match his NAME is often not
   // the one carrying his headshot.
   info.headshot = (sources.find((s) => s.headshot) || {}).headshot || "";
+  info.inj = injFind("nfl", name);
   return info;
 }
 
@@ -12048,7 +12113,7 @@ function ffDossierHTML(info) {
       <div class="ffd-who"><b>${escapeHtml(info.name)}</b>
         <span class="ffd-sub">${info.team ? teamMark(info.team, 16, nflMap(), "nfl") : ""}
           ${escapeHtml([nflName(info.team) || info.team, info.position]
-            .filter(Boolean).join(" · "))}</span></div>
+            .filter(Boolean).join(" · "))}</span>${injLineHTML(info.inj)}</div>
       <button class="btn ghost ffd-close" aria-label="Close">${icon("cross", 14)}</button>
     </div>
     ${parts.join("")}
@@ -12247,7 +12312,7 @@ function ffProfileHTML(p, info, bio) {
         <span class="ffd-sub">${teamMark(p.team, 16, nflMap(), "nfl")}
           ${escapeHtml([nflName(p.team) || p.team, p.position,
                         bio && bio.number != null ? "#" + bio.number : ""]
-            .filter(Boolean).join(" \u00b7 "))}</span>
+            .filter(Boolean).join(" \u00b7 "))}</span>${injLineHTML(injFind("nfl", p.player))}
         <span class="ffp-bios">
           ${chip("Age", bio && bio.age)}${chip("Exp", bio && bio.years_exp != null
             ? (bio.years_exp === 0 ? "Rookie" : bio.years_exp + " yr") : null)}
@@ -12488,7 +12553,7 @@ function mockDraftHTML() {
   const face = (p, size) => playerAvatar(p.player, p.team,
     { size, map: nflMap(), headshot: p.headshot });
   const idBlock = (p, meta) => `
-    <span class="mk-id" data-dossier="${escapeAttr(p.player)}"><b>${escapeHtml(p.player)}</b>
+    <span class="mk-id" data-dossier="${escapeAttr(p.player)}"><b>${escapeHtml(p.player)}</b>${injTag("nfl", p.player)}
       <span class="mk-meta">${teamMark(p.team, 14, nflMap(), "nfl")}
         ${escapeHtml(p.team)} · ${escapeHtml(p.position)}${meta}</span></span>`;
 

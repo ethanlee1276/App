@@ -3562,6 +3562,15 @@ body.ffd-open { overflow: hidden; }
 .inj-team-n { color: var(--text-mute); font-weight: 600;
   font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .inj-list { padding: 2px 0; }
+/* The compact designation beside a name, wherever a roster surface tags
+   one — agate weight so it reads as a label, not a shout. */
+.inj-tag {
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: .05em;
+  margin-left: 6px; vertical-align: 1px;
+}
+/* The dossier's full-sentence version under the player's identity. */
+.ffd-injline { font-size: var(--fs-sm); font-weight: 600; margin-top: 3px; }
+
 .inj-line { display: flex; align-items: center; gap: 10px; padding: 8px 14px; }
 .inj-line + .inj-line { border-top: var(--hairline) solid var(--border); }
 .inj-line-main { flex: 1 1 auto; min-width: 0; display: flex;
