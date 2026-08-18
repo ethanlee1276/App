@@ -58,6 +58,8 @@ def _fixture():
                          opponent="DTHIN", position="QB", home=1,
                          market="fp_ppr", value=10.0))
     _db.upsert_player_logs(conn, rows)
+    conn.execute("INSERT INTO player_assets (sport, player, headshot) "
+                 "VALUES ('nfl', 'QB Hero', 'https://x.test/hero.png')")
     conn.execute("INSERT INTO games (sport, season, period, game_id, home, "
                  "away, home_score, away_score, spread, total) VALUES "
                  "('nfl', 2025, '001', 'X', 'T1', 'D1', 27, 20, 0, 44)")
@@ -70,6 +72,10 @@ def test_the_profile_reads_identity_from_the_latest_log():
     p = ffprofile.profile("QB Hero", db_path=_fixture())
     assert p["team"] == "T1" and p["position"] == "QB"
     assert p["season"] == 2025 and p["games"] == 6
+    # The stored face rides the payload; a player without one gets "",
+    # never a missing key — the client feeds it straight to the avatar.
+    assert p["headshot"] == "https://x.test/hero.png"
+    assert ffprofile.profile("QB Peer 2", db_path=_fixture())["headshot"] == ""
 
 
 def test_season_tiles_rank_among_position_peers():

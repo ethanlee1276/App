@@ -2149,6 +2149,10 @@ select.calc-in { width: auto; font-weight: 600; }
 .dl-row:last-child { border-bottom: none; }
 .dl-rank { color: var(--text-mute); font-size: var(--fs-sm); text-align: right; font-variant-numeric: tabular-nums; }
 .dl-main { min-width: 0; }
+/* A dl-main that leads with a face: the avatar keeps its lane and the
+   name/sub column wraps beside it instead of underneath it. */
+.dl-id { display: flex; align-items: center; gap: 10px; }
+.dl-id > span { min-width: 0; }
 .dl-main > strong { font-size: var(--fs-md); }
 .dl-sub { display: block; color: var(--text-mute); font-size: var(--fs-xs); margin-top: 2px; }
 .dl-num { text-align: right; font-variant-numeric: tabular-nums; font-size: var(--fs-sm); color: var(--text-dim); }
@@ -2249,8 +2253,8 @@ select.calc-in { width: auto; font-weight: 600; }
 }
 .dk-tierlabel:first-child { border-top: none; margin-top: 0; }
 .dk-posrow {
-  display: grid; grid-template-columns: 22px minmax(0, 1fr) 44px;
-  gap: 8px; align-items: baseline; padding: 3px 16px; font-size: var(--fs-md);
+  display: grid; grid-template-columns: 22px 18px minmax(0, 1fr) 44px;
+  gap: 8px; align-items: center; padding: 3px 16px; font-size: var(--fs-md);
 }
 .dk-pr { color: var(--text-mute); font-size: var(--fs-xs); text-align: right; }
 .dk-pn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }

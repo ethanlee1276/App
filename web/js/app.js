@@ -11853,9 +11853,10 @@ function draftKitHTML(kit) {
   const boardRow = (r, i) => `
     <div class="dl-row dk-row" data-ffp="${escapeHtml(ffNorm(r.player))}" data-dossier="${escapeAttr(r.player)}">
       <span class="dl-rank">${i + 1}</span>
-      <span class="dl-main"><strong>${escapeHtml(r.player)}</strong>
-        <span class="dl-sub">${escapeHtml(r.position)}${r.pos_rank} · ${nflName(r.team)}
-          · ${r.games} gm${r.small_sample ? ` ${icon('warn')} small sample` : ""}${moveNote(r)}</span></span>
+      <span class="dl-main dl-id">${playerAvatar(r.player, r.team, { size: 26, map: nflMap(), headshot: r.headshot })}
+        <span><strong>${escapeHtml(r.player)}</strong>
+          <span class="dl-sub">${escapeHtml(r.position)}${r.pos_rank} · ${nflName(r.team)}
+            · ${r.games} gm${r.small_sample ? ` ${icon('warn')} small sample` : ""}${moveNote(r)}</span></span></span>
       <span class="dk-tier" style="color:${tierColor(r.tier)}">T${r.tier}</span>
       <span class="dl-num" title="projected PPR points per game">${r.proj}</span>
       <span class="dl-num strong pos" title="points per game over the best freely-available ${escapeHtml(r.position)}">+${r.vorp}</span>
@@ -11877,6 +11878,7 @@ function draftKitHTML(kit) {
       lastTier = r.tier;
       return `${brk}<div class="dk-posrow" data-ffp="${escapeHtml(ffNorm(r.player))}" data-dossier="${escapeAttr(r.player)}">
         <span class="dk-pr">${r.pos_rank}</span>
+        ${playerAvatar(r.player, r.team, { size: 18, map: nflMap(), headshot: r.headshot })}
         <span class="dk-pn">${escapeHtml(r.player)}
           <span class="dk-pt">${nflName(r.team)}</span></span>
         <span class="dk-pp">${r.proj}</span>
@@ -11891,8 +11893,9 @@ function draftKitHTML(kit) {
 
   const sleepers = (kit.sleepers || []).map((r) => `
     <div class="dl-row dk-slrow" data-ffp="${escapeHtml(ffNorm(r.player))}" data-dossier="${escapeAttr(r.player)}">
-      <span class="dl-main"><strong>${escapeHtml(r.player)}</strong>
-        <span class="dl-sub">${escapeHtml(r.position)} · ${nflName(r.team)}</span></span>
+      <span class="dl-main dl-id">${playerAvatar(r.player, r.team, { size: 26, map: nflMap(), headshot: r.headshot })}
+        <span><strong>${escapeHtml(r.player)}</strong>
+          <span class="dl-sub">${escapeHtml(r.position)} · ${nflName(r.team)}</span></span></span>
       <span class="dl-num">${r.ppg} actual</span>
       <span class="dl-num strong pos">${r.xppg} expected</span>
     </div>`).join("");
@@ -11966,11 +11969,15 @@ function _ffDossierInfo(name) {
       (d.camp || {}).fallers || [], (d.camp || {}).new_starters || [])),
     move: ((d.offseason || {}).moves || []).find((m) => m.player === name),
   };
-  const first = info.kit || info.usage || info.buy || info.sell
-    || info.rank || info.camp || {};
+  const sources = [info.kit, info.usage, info.buy, info.sell,
+                   info.rank, info.camp].filter(Boolean);
+  const first = sources[0] || {};
   info.team = first.team || (info.move || {}).to || "";
   info.position = first.position || "";
-  info.headshot = first.headshot || "";
+  // Any board that knows his face will do — the boards are stamped by
+  // different ingests, so the first row to match his NAME is often not
+  // the one carrying his headshot.
+  info.headshot = (sources.find((s) => s.headshot) || {}).headshot || "";
   return info;
 }
 
@@ -12927,7 +12934,7 @@ function renderSleeperPanel(d, ctx) {
   const rowHTML = (r) => `
     <div class="drow" style="display:flex;align-items:center;gap:12px;padding:8px 16px;
         border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="flex:0 0 auto">${playerAvatar(r.name, r.team, { map: nflMap(), headshot: (r.u || {}).headshot })}</span>
+      <span style="flex:0 0 auto">${playerAvatar(r.name, r.team, { map: nflMap(), headshot: (r.u || {}).headshot || _ffDossierInfo(r.name).headshot })}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
         <strong>${escapeHtml(r.name)}</strong>
         <span style="color:var(--text-mute)"> ${escapeHtml(r.pos)} · ${escapeHtml(r.team || "FA")}${r.starter ? " · starter" : ""}</span>
