@@ -555,6 +555,29 @@ calibration chart, and team-shape radars. Venue art (#120) stays
 parked like you said — you like the current stadiums; more when you
 want to generate them.
 
+### T24. ECharts rungs two and three — the reliability plot and the gap chart
+
+Continuing down the list (“ok keep going”):
+
+* **Record → Calibration** now draws the reliability diagram with the
+  engine: each probability bucket is a dot sized by how many bets sit
+  in it — green when it’s within its own noise band, amber when it
+  isn’t — with confidence whiskers and the dashed “perfect” diagonal.
+  Hover any dot for “said X%, hit Y% — N bets.” The hand-drawn SVG
+  ships underneath as the fallback, same as every other upgrade.
+* **Prediction Market → Board** replaces the tiny MODEL vs MARKET
+  overhead with a gap chart: one row per priced market, a hollow dot
+  at the exchange’s price, a filled dot at our model’s number, and the
+  bar between them colored green (market underprices YES) or red —
+  sorted by gap size, tooltips with the exact numbers.
+
+Two mechanical finds along the way, both fixed: charts mounted into a
+hidden sub-tab room drew at zero width (they now wait and mount when
+the tab opens), and two concurrent mounts could blank each other’s
+canvas (guarded). Also a real bug the suite caught before CI did: the
+resize hook referenced `window` at top level, which broke the bare-
+Node test harness — guarded now, suite green.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

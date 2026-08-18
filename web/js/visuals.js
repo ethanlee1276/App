@@ -1798,9 +1798,13 @@ function loadECharts() {
 }
 
 const _echartsLive = [];
-window.addEventListener("resize", () => {
-  for (const c of _echartsLive) { try { c.resize(); } catch (e) {} }
-});
+// Guarded: the test harness executes this file in bare Node with a
+// stubbed document and NO window (see the scroll listener below).
+if (typeof window !== "undefined" && window.addEventListener) {
+  window.addEventListener("resize", () => {
+    for (const c of _echartsLive) { try { c.resize(); } catch (e) {} }
+  });
+}
 
 async function mountEChartsPanels(root) {
   const host = root || document;
@@ -1814,8 +1818,14 @@ async function mountEChartsPanels(root) {
   const tok = (n) => (css.getPropertyValue(n) || "").trim();
   const font = tok("--font-sans") || "sans-serif";
   for (const el of nodes) {
+    // Re-check under the await: a second concurrent mount (render call +
+    // the delegated tab-click retry) captured its node list before this
+    // one marked anything, and its innerHTML wipe would blank the chart
+    // the first call just drew.
+    if (el.dataset.echarted || ec.getInstanceByDom(el)) continue;
     let cfg;
     const kind = el.hasAttribute("data-echart-gauge") ? "gauge" : "hist";
+    if (!el.clientWidth) continue;     // hidden room — retried on tab switch
     try {
       cfg = JSON.parse(el.getAttribute(`data-echart-${kind}`));
     } catch (e) { continue; }
@@ -1888,3 +1898,162 @@ async function mountEChartsPanels(root) {
     }
   }
 }
+
+/* Rungs two and three of the ECharts descent (Ethan: "keep going"):
+   the Record page's reliability diagram and the Prediction Market's
+   MODEL vs MARKET overhead. Same contract as every showpiece mount —
+   the hand-drawn SVG ships in the wrapper and stays when the engine
+   is missing; colors come from the live tokens. */
+async function mountEChartsAnalytics(root) {
+  const host = root || document;
+  const nodes = [...host.querySelectorAll(
+    "[data-echart-reliability],[data-echart-dumbbell]")]
+    .filter((el) => !el.dataset.echarted);
+  if (!nodes.length) return;
+  const ec = await loadECharts();
+  if (!ec) return;
+  const css = getComputedStyle(document.documentElement);
+  const tok = (n) => (css.getPropertyValue(n) || "").trim();
+  const font = tok("--font-sans") || "sans-serif";
+  const axis = {
+    axisLine: { lineStyle: { color: tok("--border") } },
+    axisLabel: { color: tok("--text-mute"), fontSize: 10, fontFamily: font },
+    splitLine: { lineStyle: { color: tok("--border-soft") } },
+  };
+  const tip = {
+    backgroundColor: tok("--panel-3"), borderColor: tok("--border"),
+    textStyle: { color: tok("--text"), fontSize: 11, fontFamily: font },
+  };
+  for (const el of nodes) {
+    // Same double-mount guard as mountEChartsPanels — see its comment.
+    if (el.dataset.echarted || ec.getInstanceByDom(el)) continue;
+    const kind = el.hasAttribute("data-echart-reliability")
+      ? "reliability" : "dumbbell";
+    if (!el.clientWidth) continue;     // hidden room — retried on tab switch
+    let cfg;
+    try { cfg = JSON.parse(el.getAttribute(`data-echart-${kind}`)); }
+    catch (e) { continue; }
+    el.dataset.echarted = "1";
+    if (kind === "reliability") {
+      const pts = (cfg.buckets || []).filter((b) => b.n > 0);
+      if (pts.length < 2) { delete el.dataset.echarted; continue; }
+      el.innerHTML = "";
+      const maxN = Math.max(...pts.map((b) => b.n));
+      const color = (b) => b.n < 20 ? tok("--text-mute")
+        : b.in_band ? tok("--good") : tok("--warn");
+      const chart = ec.init(el);
+      chart.setOption({
+        animationDuration: 600,
+        grid: { left: 34, right: 16, top: 18, bottom: 30 },
+        xAxis: { ...axis, min: 0, max: 100, name: "model said",
+          nameLocation: "middle", nameGap: 20,
+          nameTextStyle: { color: tok("--text-mute"), fontSize: 10 } },
+        yAxis: { ...axis, min: 0, max: 100 },
+        tooltip: { ...tip, trigger: "item",
+          formatter: (p) => p.data.tt || "" },
+        series: [
+          { // The confidence whiskers, drawn as thin custom bars.
+            type: "custom", z: 1,
+            renderItem: (params, api) => {
+              const xv = api.value(0);
+              const lo = api.coord([xv, api.value(2)]);
+              const hi = api.coord([xv, api.value(3)]);
+              return { type: "line", shape: {
+                  x1: lo[0], y1: lo[1], x2: hi[0], y2: hi[1] },
+                style: { stroke: api.value(4), lineWidth: 1.5,
+                         opacity: 0.55 } };
+            },
+            data: pts.map((b) => [100 * b.predicted, 100 * b.actual,
+              100 * Math.max(0, b.actual - b.ci),
+              100 * Math.min(1, b.actual + b.ci), color(b)]),
+          },
+          { type: "scatter", z: 2,
+            symbolSize: (d) => 7 + 15 * Math.sqrt((d[2] || 1) / maxN),
+            itemStyle: { opacity: 0.8 },
+            data: pts.map((b) => ({
+              value: [100 * b.predicted, 100 * b.actual, b.n],
+              itemStyle: { color: color(b) },
+              tt: `Said ${(100 * b.predicted).toFixed(0)}%, hit `
+                + `${(100 * b.actual).toFixed(0)}% — ${b.n} bets`,
+            })),
+            markLine: { silent: true, symbol: "none",
+              label: { show: true, formatter: "perfect", position: "end",
+                color: tok("--text-faint"), fontSize: 9 },
+              lineStyle: { type: "dashed", color: tok("--text-faint") },
+              data: [[{ coord: [0, 0] }, { coord: [100, 100] }]] },
+          },
+        ],
+      });
+      _echartsLive.push(chart);
+    } else {
+      const rows = (cfg.rows || []).slice(0, 12);
+      if (rows.length < 2) { delete el.dataset.echarted; continue; }
+      el.innerHTML = "";
+      el.style.height = `${rows.length * 34 + 52}px`;
+      el.style.width = "100%";
+      const chart = ec.init(el);
+      const tt = (r) => `${r.label}<br>market ${(100 * r.market).toFixed(0)}¢ `
+        + `· model ${(100 * r.model).toFixed(0)}% · gap `
+        + `${((r.model - r.market) * 100 >= 0 ? "+" : "")}`
+        + `${((r.model - r.market) * 100).toFixed(0)}pt`;
+      chart.setOption({
+        animationDuration: 600,
+        grid: { left: 8, right: 44, top: 6, bottom: 24, containLabel: true },
+        xAxis: { ...axis, min: 0, max: 100, position: "bottom",
+          axisLabel: { ...axis.axisLabel, formatter: "{value}¢" } },
+        yAxis: { ...axis, type: "category", inverse: true,
+          data: rows.map((r) => r.label.length > 30
+            ? r.label.slice(0, 29) + "…" : r.label),
+          axisTick: { show: false },
+          splitLine: { show: false },
+          axisLabel: { ...axis.axisLabel, fontSize: 10 } },
+        tooltip: { ...tip, trigger: "item",
+          formatter: (p) => p.data.tt || "" },
+        series: [
+          { // Invisible base up to whichever number is smaller…
+            type: "bar", stack: "gap", barWidth: 4,
+            itemStyle: { color: "rgba(0,0,0,0)" },
+            emphasis: { disabled: true }, tooltip: { show: false },
+            data: rows.map((r) => 100 * Math.min(r.market, r.model)),
+          },
+          { // …then the GAP itself, colored by which side is rich.
+            type: "bar", stack: "gap", barWidth: 4,
+            data: rows.map((r) => ({
+              value: Math.abs(100 * (r.model - r.market)),
+              itemStyle: { color: r.model > r.market
+                ? tok("--good") : tok("--bad"), opacity: 0.65,
+                borderRadius: 2 },
+              tt: tt(r),
+            })),
+          },
+          { type: "scatter", symbolSize: 9, z: 3,
+            itemStyle: { color: tok("--panel-2"),
+              borderColor: tok("--text-mute"), borderWidth: 2 },
+            data: rows.map((r, i) => ({ value: [100 * r.market, i],
+              tt: tt(r) })) },
+          { type: "scatter", symbolSize: 9, z: 4,
+            data: rows.map((r, i) => ({
+              value: [100 * r.model, i],
+              itemStyle: { color: r.model > r.market
+                ? tok("--good") : tok("--bad") },
+              tt: tt(r),
+            })) },
+        ],
+      });
+      _echartsLive.push(chart);
+    }
+  }
+}
+
+
+/* Subtab rooms are display:none until opened, and a chart mounted into a
+   zero-width box stays invisible — so hidden wrappers are SKIPPED above
+   and re-tried the moment any subtab (or view) is tapped. Delegated on
+   the document once; the mounts are no-ops when nothing is waiting. */
+document.addEventListener("click", (e) => {
+  if (!e.target.closest) return;
+  if (!e.target.closest("[data-subtab], .nav-btn, .sport-btn, .tb-item")) return;
+  setTimeout(() => {
+    try { mountEChartsPanels(); mountEChartsAnalytics(); } catch (err) {}
+  }, 60);
+});

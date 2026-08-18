@@ -6230,7 +6230,15 @@ function recCalibrationSection(cal, era) {
   if (!cal || !cal.n || !(cal.buckets || []).length) return "";
   const rows = calBucketRows(cal.buckets);
   const brier = calScoreBlock(cal);
-  const diagram = reliabilityDiagram(cal.buckets);
+  // The hand-drawn diagram ships as the fallback; mountEChartsAnalytics
+  // upgrades the wrapper to the interactive version (see visuals.js).
+  const relWrap = (bks, svg) => !svg ? "" : `<div class="gloss-chart"
+    style="min-height:240px" data-echart-reliability="${escapeAttr(JSON.stringify({
+      buckets: (bks || []).filter((b) => b.n > 0).map((b) => ({
+        predicted: b.predicted, actual: b.actual, n: b.n,
+        ci: b.ci, in_band: b.in_band })),
+    }))}">${svg}</div>`;
+  const diagram = relWrap(cal.buckets, reliabilityDiagram(cal.buckets));
   const diagramBlock = !diagram ? "" : `
     <div style="padding:14px 14px 4px;border-top:1px solid rgba(255,255,255,.06)">
       ${diagram}
@@ -6259,7 +6267,7 @@ function recCalibrationSection(cal, era) {
       ${escapeHtml((era || {}).since || "")} re-tune (n=${eraN}).</span></div>
     <div class="card" style="padding:0">${calBucketRows(era.buckets)}
       <div style="padding:14px 14px 4px;border-top:1px solid rgba(255,255,255,.06)">
-        ${reliabilityDiagram(era.buckets)}</div>${calScoreBlock(era)}</div>` : "";
+        ${relWrap(era.buckets, reliabilityDiagram(era.buckets))}</div>${calScoreBlock(era)}</div>` : "";
   return `<div class="section-title">Calibration — did "60%" mean 60%?
       <span class="sub">— every settled pick, bucketed by the model’s claimed probability.</span></div>
     <div class="card" style="padding:0">${rows}${diagramBlock}${brier}${eraNote}</div>
@@ -7332,6 +7340,7 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      "whether this account survives being right",
      (scoped ? "" : recHealthSection(d.account_health))],
   ]);
+  if (typeof mountEChartsAnalytics === "function") mountEChartsAnalytics(host);
 }
 
 /* One settled row. Extracted so the paper book renders through the SAME
@@ -8208,7 +8217,13 @@ function predBoardHTML(kx, d) {
       carry our number and the gap; Polymarket rows show the venue’s price and link
       out. A dash means we do not price that market, not that the edge is zero.</span></div>
     ${modeled.length
-      ? `<div class="kx-overhead">${marketRule(modeled, { title: "MODEL vs MARKET" })}</div>` : ""}
+      ? `<div class="kx-overhead"><div class="gloss-chart"
+           data-echart-dumbbell="${escapeAttr(JSON.stringify({
+             rows: modeled.slice()
+               .sort((a, b) => Math.abs(b.edge_pts || 0) - Math.abs(a.edge_pts || 0))
+               .slice(0, 12).map((r) => ({
+                 label: r.title || "", market: r.prob, model: r.model_p })),
+           }))}">${marketRule(modeled, { title: "MODEL vs MARKET" })}</div></div>` : ""}
     <div class="stats">
       ${tile("Markets tracked", all.length, "both venues, live now")}
       ${tile("Priced by our model", modeled.length, "Kalshi two-sided books")}
@@ -8246,6 +8261,7 @@ async function renderIntel() {
       the board is below; if both stay empty, the machine may not be able to reach the
       venues.</div></div>`
       + predBoardHTML(kx, d);
+    if (typeof mountEChartsAnalytics === "function") mountEChartsAnalytics(host);
     return;
   }
   setStandaloneSource("Kalshi + Polymarket public feeds", "Prediction Market · live venue data");
@@ -8370,6 +8386,7 @@ async function renderIntel() {
   // Every other subtabbed page binds its rooms after writing them; without
   // this the tabs render and do nothing.
   bindSubtabs(host);
+  if (typeof mountEChartsAnalytics === "function") mountEChartsAnalytics(host);
 }
 
 /* ============================================================
