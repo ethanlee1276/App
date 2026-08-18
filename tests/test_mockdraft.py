@@ -87,6 +87,26 @@ def test_an_unfinished_draft_survives_a_data_refresh():
         "the room must re-emit the LIVE draft, not a fresh setup panel"
 
 
+def test_every_face_the_kit_stores_reaches_the_room():
+    """Ethan, 2026-08-18: "Make sure all spots have head shots." The kit
+    page and this room both hand the avatar r.headshot — but the field
+    only exists because fantasy_build stamps the kit's rows with the
+    faces map. Pinned at both ends so neither half can quietly drop it."""
+    i = APP.index("const face = (p, size)")
+    assert "headshot: p.headshot" in APP[i:i + 200]
+    fb = open(os.path.join(ROOT, "fantasy_build.py"), encoding="utf-8").read()
+    j = fb.index("_face_rows = [")
+    block = fb[j:j + 600]
+    for rows in ('kit.get("board")', 'kit.get("sleepers")',
+                 'kit.get("tiers")'):
+        assert rows in block, f"the stamp loop lost {rows}"
+    # Camp and the rankings table are stamped after assembly.
+    k = fb.index('"ranks": fantasy_ranks.build')
+    tail = fb[k:k + 900]
+    for rows in ('"risers"', '"fallers"', '"new_starters"', '"rows"'):
+        assert rows in tail, f"the late stamp lost {rows}"
+
+
 def test_the_room_is_styled():
     for sel in (".mk-log-row {", ".mk-advice {", ".mk-sel {"):
         assert sel in CSS, f"{sel} is unstyled"

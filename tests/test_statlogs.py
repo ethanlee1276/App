@@ -134,6 +134,22 @@ def test_search_finds_any_logged_player_by_substring():
     assert [h["player"] for h in hits] == ["Test Back"]
     assert hits[0]["team"] == "GB" and hits[0]["position"] == "RB"
     assert hits[0]["games"] == 12
+    assert hits[0]["headshot"] == "", \
+        "no stored face must read as empty, never crash"
+
+
+def test_search_carries_the_stored_face():
+    """Ethan, 2026-08-18: "Make sure all spots have head shots." The
+    ingest stores faces in player_assets, in the same DB the search
+    reads — a result without the photo is the gap he keeps noticing."""
+    path = _fixture()
+    conn = _db.connect(path)
+    conn.execute("INSERT INTO player_assets (sport, player, espn_id, "
+                 "headshot, seen) VALUES ('nfl', 'Test Back', '1', "
+                 "'https://cdn/face.png', '2026-08-18')")
+    conn.commit(); conn.close()
+    hits = statlogs.search("nfl", "test back", db_path=path)
+    assert hits[0]["headshot"] == "https://cdn/face.png"
 
 
 def test_search_ranks_the_current_player_over_the_stale_namesake():

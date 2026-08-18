@@ -122,9 +122,22 @@ def search(sport: str, q: str, limit: int = 12, db_path=None) -> list[dict]:
                 "WHERE sport=? AND player=? "
                 "ORDER BY season DESC, period DESC LIMIT 1",
                 (sport, r["player"])).fetchone()
+            # The face rides along when the ingest has stored one —
+            # player_assets is in the same DB, and a search result
+            # without the photo is the page Ethan keeps noticing.
+            face = ""
+            try:
+                a = conn.execute(
+                    "SELECT headshot FROM player_assets "
+                    "WHERE sport=? AND player=?",
+                    (sport, r["player"])).fetchone()
+                face = (a["headshot"] if a else "") or ""
+            except Exception:                                # noqa: BLE001
+                face = ""                # a DB predating the assets table
             out.append({"player": r["player"], "games": int(r["games"]),
                         "team": (t["team"] if t else "") or "",
-                        "position": (t["position"] if t else "") or ""})
+                        "position": (t["position"] if t else "") or "",
+                        "headshot": face})
         return out
     finally:
         conn.close()

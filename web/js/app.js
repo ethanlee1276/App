@@ -4548,7 +4548,8 @@ async function renderPlayers() {
           // plus the injected stats. No market_label, so it can never
           // masquerade as a priced market.
           _profRows.set(m.player, [{ player: m.player, team: m.team,
-                                     position: m.position, opponent: "" }]);
+                                     position: m.position, opponent: "",
+                                     headshot: m.headshot }]);
         }));
         if (state.search.trim().toLowerCase() !== q) return;
         const drawn = full.filter((m) =>
@@ -4563,7 +4564,7 @@ async function renderPlayers() {
           ${rest.length ? `<div class="section-title minor" style="margin-top:16px">Also matching</div>` : ""}
           ${rest.map((m) => `
             <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
-              ${playerAvatar(m.player, m.team, { size: 40 })}
+              ${playerAvatar(m.player, m.team, { size: 40, headshot: m.headshot })}
               <div style="flex:1;min-width:0">
                 <strong>${escapeHtml(m.player)}</strong>
                 <div style="font-size:.85em;color:var(--text-mute)">
@@ -4593,7 +4594,7 @@ async function renderPlayers() {
           On the roster${misses.length > 1 ? "s" : ""}:</div>
         ${misses.map((m) => `
           <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
-            ${playerAvatar(m.player, m.team, { size: 40 })}
+            ${playerAvatar(m.player, m.team, { size: 40, headshot: m.headshot })}
             <div style="flex:1;min-width:0">
               <strong>${escapeHtml(m.player)}</strong>
               <div style="font-size:.85em;color:var(--text-mute)">
@@ -9804,7 +9805,7 @@ function campHTML(camp) {
   if (!camp) return "";
   const slot = (r, o) => `${escapeHtml(r.position)}${o}`;
   const row = (r, tone) => `
-    <div class="os-row"><span class="os-team">${escapeHtml(r.player)}
+    <div class="os-row"><span class="os-team mk-idrow">${playerAvatar(r.player, r.team, { size: 24, map: nflMap(), headshot: r.headshot })}${escapeHtml(r.player)}
         <span class="dk-pt">${nflName(r.team)}${r.rookie ? " · rookie" : ""}</span></span>
       <span class="os-before">${slot(r, r.from_order)}</span>
       <span class="os-arrow">→</span>
@@ -11790,7 +11791,7 @@ function renderRankBoard() {
       <div class="rank-fight-head">Where they disagree most</div>
       <div class="rank-fight-rows">${dis.map((r) => `
         <div class="rank-fight-row">
-          <b>${escapeHtml(r.player)}</b>
+          ${playerAvatar(r.player, r.team || "", { size: 22, map: nflMap(), headshot: r.headshot })}<b>${escapeHtml(r.player)}</b>
           <span class="chip up">${escapeHtml(ffSrcLabel(r.high_source))} ${
             r.ranks[r.high_source]}</span>
           <span class="chip down">${escapeHtml(ffSrcLabel(r.low_source))} ${
@@ -11805,7 +11806,7 @@ function renderRankBoard() {
         `<th>${escapeHtml(l)}</th>`).join("")}
       <th>Consensus</th><th>Spread</th></tr></thead><tbody>
       ${rows.slice(0, 200).map((r) => `<tr>
-        <td class="rank-name">${escapeHtml(r.player)}</td>
+        <td class="rank-name">${playerAvatar(r.player, r.team || "", { size: 20, map: nflMap(), headshot: r.headshot })}${escapeHtml(r.player)}</td>
         ${FF_RANK_SOURCES.map(([k]) => cell(r.ranks[k])).join("")}
         <td>${r.consensus == null ? "—" : r.consensus}</td>
         ${cell(r.spread)}</tr>`).join("")}
@@ -12089,7 +12090,7 @@ function mockDraftHTML() {
   const round = Math.floor(m.pick / m.teams) + 1;
   const yourTurn = m.pick < total && _mockPicker(m.pick, m.teams) === m.you;
   const face = (p, size) => playerAvatar(p.player, p.team,
-                                         { size, map: nflMap() });
+    { size, map: nflMap(), headshot: p.headshot });
   const idBlock = (p, meta) => `
     <span class="mk-id"><b>${escapeHtml(p.player)}</b>
       <span class="mk-meta">${teamMark(p.team, 14, nflMap(), "nfl")}

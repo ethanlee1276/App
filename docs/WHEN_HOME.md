@@ -82,6 +82,16 @@ the search needs — server.py grew two endpoints):
   kit's own board, and the finish is your starters' projected PPG
   against the room — arithmetic, not a letter grade.
 
+### T7. Headshots everywhere — code done, T3 is the other half
+
+Every surface that names a player now passes the stored face through:
+the draft kit and mock draft, the rankings table, camp risers/fallers,
+the league-wide search results, and the searched-up profiles. But your
+own preflight says the photos are only STORED for WNBA — MLB, NFL and
+NBA show initials until the T3 ingests run. After T3 + the T1 deploy,
+if any spot still shows initials where a photo should be, tell me the
+page — that would be a real gap, not the data.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

@@ -143,10 +143,21 @@ def main() -> None:
             faces = nflverse.headshot_map(season)
         except Exception:
             faces = {}
-        for rows in (usage, buy_sell.get("buy_low") or [],
-                     buy_sell.get("sell_high") or [],
-                     (trending or {}).get("adds") or [],
-                     (trending or {}).get("drops") or []):
+        # EVERY row a fantasy surface draws a person from, one loop —
+        # Ethan, 2026-08-18: "there is a lot of places I'm noticing we
+        # are not showing the headshot." The draft kit's board, tiers
+        # and sleepers were the big miss: the kit page and the mock
+        # draft both pass r.headshot to the avatar, but the field never
+        # existed on kit rows, so every one fell back to the drawn chip
+        # even on a machine with the photos stored.
+        _face_rows = [usage, buy_sell.get("buy_low") or [],
+                      buy_sell.get("sell_high") or [],
+                      (trending or {}).get("adds") or [],
+                      (trending or {}).get("drops") or [],
+                      kit.get("board") or [],
+                      kit.get("sleepers") or []]
+        _face_rows += list((kit.get("tiers") or {}).values())
+        for rows in _face_rows:
             for r in rows:
                 r["headshot"] = faces.get(r.get("player") or "", "")
         # Trades must show on EVERY board, not just the draft kit — usage
@@ -206,6 +217,14 @@ def main() -> None:
             # filled in the browser because they only exist there.
             "ranks": fantasy_ranks.build(kit, blob or {}),
         }
+        # Camp and the rankings table are assembled after the stamp loop
+        # above, and their rows carry people too — same map, same rule.
+        for rows in ((camp or {}).get("risers") or [],
+                     (camp or {}).get("fallers") or [],
+                     (camp or {}).get("new_starters") or [],
+                     (out.get("ranks") or {}).get("rows") or []):
+            for r in rows:
+                r.setdefault("headshot", faces.get(r.get("player") or "", ""))
     conn.close()
 
     p = Path(args.out)
