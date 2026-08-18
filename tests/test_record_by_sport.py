@@ -186,7 +186,9 @@ def test_whole_journal_panels_do_not_repeat_under_a_sport():
 
 def test_polymarket_has_its_own_scope_and_is_not_a_betting_pnl():
     js = _read("web", "js", "app.js")
-    assert 'btn("intel", "Polymarket"' in js
+    # Renamed 2026-08-18 — Ethan: "change the name of the polly market
+    # page to 'prediction market'". Scope id stays "intel".
+    assert 'btn("intel", "Prediction Market"' in js
     fn = js[js.index("async function renderRecord()"):]
     assert 'scope === "intel"' in fn
     # It must not fall through to the betting KPIs, which would all read

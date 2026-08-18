@@ -6435,7 +6435,7 @@ function recordScopeHTML(d, scope) {
     scope === key ? " active" : ""}" data-scope="${escapeHtml(key)}">${
     escapeHtml(label)}${n != null ? ` <span class="rec-scope-n">${n}</span>` : ""}</button>`;
   const parts = [btn("all", "All bets", (d.overall || {}).settled)];
-  parts.push(btn("intel", "Polymarket", null));
+  parts.push(btn("intel", "Prediction Market", null));
   for (const sp of tracked) {
     const r = (d.by_sport || {})[sp] || {};
     const settled = (r.overall || {}).settled || 0;
@@ -7950,7 +7950,7 @@ const STANDALONE_MODES = ["intel", "fantasy", "memes", "ufc", "why", "about",
 // page. Before this, opening Polymarket from the MLB tab left a baseball
 // description in the corner of a page that has nothing to do with baseball.
 const STANDALONE_BRAND = {
-  intel: { tagline: "Polymarket informed-flow intelligence" },
+  intel: { tagline: "Prediction Market — venue prices and informed flow" },
   fantasy: { tagline: "Fantasy football — usage, scripts, draft kit" },
   memes: { tagline: "Rocket Radar — meme-coin flow, danger drawn loudest" },
   ufc: { tagline: "Scalpy MMA — dossier-gated fight model" },
@@ -8060,7 +8060,10 @@ function deskSectionHTML(k) {
   const sports = (k.rows || []).filter((r) => r.rec);
   const wx = (k.weather || []).filter((r) => r.rec);
   const paper = ((k.desk || {}).paper) || {};
-  const side = (s) => `<span class="chip ${s === "YES" ? "up" : "down"}">${s}</span>`;
+  // A row with no recorded side renders nothing — a chip that can read
+  // "undefined" is the widget printing its own missing field.
+  const side = (s) => s
+    ? `<span class="chip ${s === "YES" ? "up" : "down"}">${escapeHtml(s)}</span>` : "";
   const row = (r, why) => `<div class="kx-row">
       <span class="kx-sport chip">${escapeHtml((r.sport || r.city || "").toUpperCase())}</span>
       <span class="kx-title">${escapeHtml(r.title)} ${side(r.rec_side)}
@@ -8146,6 +8149,23 @@ function pmBoardRowHTML(r) {
     ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener"
           style="color:inherit">${escapeHtml(r.title)}</a>`
     : escapeHtml(r.title);
+  // The row's numbers, drawn as lengths — Ethan, 2026-08-18: "the site
+  // feels and looks very flat". A column of 62¢ / 58% / +4 makes the
+  // reader do the subtraction; a filled track with a tick shows the gap
+  // at a glance, and where the tick sits relative to the fill IS the
+  // edge column's sign. Venue-priced only (no price, no meter), and the
+  // tick only where our model actually prices the claim — the meter
+  // must not invent the symmetry the dash columns refuse to fake.
+  const pct = r.price == null ? null
+    : Math.max(0, Math.min(100, r.price * 100));
+  const mdl = r.model == null ? null
+    : Math.max(0, Math.min(100, r.model * 100));
+  const meter = pct == null ? "" : `<span class="kx-meter" aria-hidden="true">
+      <span class="kx-meter-fill" style="width:${pct.toFixed(1)}%"></span>
+      ${mdl == null ? "" : `<span class="kx-meter-model ${
+        r.edge > 0 ? "up" : r.edge < 0 ? "down" : ""
+      }" style="left:${mdl.toFixed(1)}%"></span>`}
+    </span>`;
   return `<div class="kx-row">
     <span class="kx-sport chip kx-venue">${r.venue}</span>
     <span class="kx-title" title="${escapeAttr(r.title)}">${title}
@@ -8156,6 +8176,7 @@ function pmBoardRowHTML(r) {
       r.model == null ? "—" : (r.model * 100).toFixed(0) + "%"}</span>
     <span class="kx-num kx-e">${edge}</span>
     <span class="kx-vol" title="24h volume">$${Number(r.vol || 0).toLocaleString()}</span>
+    ${meter}
   </div>`;
 }
 
@@ -8216,7 +8237,7 @@ async function renderIntel() {
       + predBoardHTML(kx, d);
     return;
   }
-  setStandaloneSource("Kalshi + Polymarket public feeds", "Prediction markets · live venue data");
+  setStandaloneSource("Kalshi + Polymarket public feeds", "Prediction Market · live venue data");
   const tape = d.tape || {};
   const proven = pmSignalProven(d.validation);
   const cents = (p) => p == null ? "—" : `${(p * 100).toFixed(0)}¢`;

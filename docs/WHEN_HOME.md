@@ -473,6 +473,35 @@ arguments. The `--check` line that still said “every 15 min” now says
 5, and its stuck-bets section no longer threatens to void desk tickets
 it has no business grading.
 
+### T21. The page is “Prediction Market” now, and the board grew meters
+
+Your rename, everywhere it shows: the chip reads **PREDICT**, the
+masthead and page title read **Prediction Market**, the Record bucket
+button, the mode tagline and the `--check` labels all follow. (The
+words “Kalshi” and “Polymarket” survive where they name the actual
+venue — that part is factual, not branding.)
+
+And the first strike against “the site feels and looks very flat”:
+every row on the prediction board now carries a **price meter** — a
+track from 0–100¢, the venue’s YES price drawn as a filled length, and
+a colored tick where OUR model prices the same claim. Tick right of
+the fill in green = the market underprices YES; left in red = it
+overprices. The gap you used to compute by reading three numbers is
+now visible at a glance, on every row, phone and desktop. Rows we
+don’t price show no tick — the meter never fakes the symmetry the dash
+columns refuse to. Also fixed while in there: a desk row with no
+recorded side used to print a literal “undefined” chip.
+
+Worth saying about “more visuals” generally: the flat look is the
+design language from your own render (no shadows, square corners, one
+amber accent), so the way this site gets richer is MORE DATA GRAPHICS
+— meters like these, the score rings on Flow, the sparklines, the
+stadium overheads — not decoration. If you want a different overall
+look, do what you did for Fantasy: send me a render to copy and I’ll
+match it. And the single biggest visual upgrade on the table is still
+**T-item #120, the venue art kit** — that one is waiting on images
+from you, and the site already knows how to wear them.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

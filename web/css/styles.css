@@ -3360,7 +3360,8 @@ body.ffd-open { overflow: hidden; }
   /* The title gets its own line; the numbers share a second. Volume drops —
      on a phone the edge is the story and the row was six columns of 60px. */
   .kx-row { grid-template-columns: 52px 1fr 1fr 1fr;
-    grid-template-areas: "sport title title title" ".  k m e"; row-gap: 4px; }
+    grid-template-areas: "sport title title title" ".  k m e"
+      ". meter meter meter"; row-gap: 4px; }
   .kx-sport { grid-area: sport; }
   .kx-title { grid-area: title; white-space: normal; }
   /* Named, never positional: every cell here is a <span>, and
@@ -3371,7 +3372,26 @@ body.ffd-open { overflow: hidden; }
   .kx-m { grid-area: m; text-align: left; }
   .kx-e { grid-area: e; text-align: left; }
   .kx-vol { display: none; }
+  .kx-meter { grid-area: meter; }
 }
+
+/* The row's price drawn as a length ("the site feels and looks very
+   flat", 2026-08-18). Track = 0..100¢; the fill is the venue's YES
+   price; the tick is OUR model's probability where we price the claim.
+   Tick above the fill's end = the market underprices YES (the edge
+   column's green), below = its red; no model, no tick — the meter never
+   fakes the symmetry the dash columns refuse to. Fill stays neutral on
+   purpose: the venue's price is the landscape, not the signal, and
+   amber stays reserved for live-or-material (§1). Heights, not borders,
+   so the hairline rule has nothing to say about it. */
+.kx-meter { position: relative; display: block; height: 3px;
+  background: var(--fill-subtle); grid-column: 2 / -1; margin-top: 1px; }
+.kx-meter-fill { position: absolute; top: 0; bottom: 0; left: 0;
+  background: var(--text-mute); opacity: .55; }
+.kx-meter-model { position: absolute; top: -3px; bottom: -3px; width: 2px;
+  margin-left: -1px; background: var(--text-dim); }
+.kx-meter-model.up { background: var(--good); }
+.kx-meter-model.down { background: var(--bad); }
 
 /* --- The Lab -------------------------------------------------------------
    The backtest page. Its one visual job is keeping the reader from

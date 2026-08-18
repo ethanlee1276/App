@@ -184,9 +184,13 @@ def test_the_page_shows_both_venues_and_names_their_roles():
                 encoding="utf-8").read()
     app = open(os.path.join(ROOT, "web", "js", "app.js"),
                encoding="utf-8").read()
-    # The sidebar item became the POLY chip in the top Markets row
-    # (Ethan, 2026-08-12: "the Polly market page ... up here").
-    assert 'data-sport="intel"' in html and ">POLY</button>" in html
+    # The sidebar item became a chip in the top Markets row (Ethan,
+    # 2026-08-12: "the Polly market page ... up here"), renamed
+    # 2026-08-18: "change the name of the polly market page to
+    # 'prediction market'" — the page reads two venues, so the chip
+    # stopped wearing one venue's name.
+    assert 'data-sport="intel"' in html and ">PREDICT</button>" in html
+    assert "Prediction Market" in html
     flat = " ".join(html.split())
     assert "Kalshi" in flat and "Polymarket" in flat
     # One board out of two venues (Ethan, 2026-08-12: "combine the

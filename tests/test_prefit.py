@@ -359,7 +359,9 @@ def test_the_verdict_reaches_disk_on_every_branch_that_reached_one():
     src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
     i = src.index("def show_prefit(")
     body = src[i:src.index("\ndef ", i + 1)]
-    assert body.index("out.write_text(") < body.index('rep.get("dead")')
+    # The write is atomic since 2026-08-18 (tmp + replace — the page
+    # polls this file), so the pin is the replace landing on `out`.
+    assert body.index("os.replace(_ptmp, out)") < body.index('rep.get("dead")')
 
 
 def test_the_card_separates_the_two_negatives_too():
