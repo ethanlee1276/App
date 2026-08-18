@@ -166,7 +166,9 @@ def test_an_empty_board_is_explained_not_apologised_for():
     data's empty board."""
     js = _js()
     i = js.index("async function renderPlayers(")
-    body = js[i:i + 4000]
+    # 4000 → 9000 on 2026-08-18: the league-wide search branch landed
+    # ahead of the empty-board copy and pushed it past the old window.
+    body = js[i:i + 9000]
     # Pinned by the apology's CODE form (curly quote + the interpolation
     # start), not its words — the first draft of this test matched the
     # words inside the fix's own comment, the same trap this suite has
@@ -176,6 +178,28 @@ def test_an_empty_board_is_explained_not_apologised_for():
         "the empty-board branch must be tried before the search apology"
     j = body.index("if (!q) {")
     assert "state.sport" in body[j:j + 700], "the empty state lost its sport name"
+
+
+def test_the_search_reaches_the_league_not_just_the_board():
+    """Ethan, 2026-08-18: "The search page for players isn't working
+    still. You should be able too look up any player in the league too
+    that specific sport." When the board has nothing, the answers come in
+    order: the league API first (full profile cards fed by the history
+    DB), the roster directory second (the offline fallback), the apology
+    last. A stale keystroke's response must be dropped, and the head-only
+    row a searched player rides in on must never register as a priced
+    market — an unpriced chip would draw the pick block."""
+    js = _js()
+    i = js.index("async function renderPlayers(")
+    body = js[i:i + 9000]
+    assert body.index("leagueSearch(q)") < body.index("rosterMatches(q)")
+    assert body.count("!== q) return") >= 2, "the stale-keystroke guard"
+    j = js.index("function profileHTML(")
+    assert "rows.filter((r) => r.market_label)" in js[j:j + 700]
+    k = js.index("async function leagueSearch(")
+    assert "_leagueCache" in js[k:k + 700]
+    assert "/api/players/search?sport=" in js
+    assert "/api/players/logs?sport=" in js
 
 
 def test_searching_still_reaches_every_player():

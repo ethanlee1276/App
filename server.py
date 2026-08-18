@@ -492,6 +492,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._api(parse_qs(parsed.query), sport="cfb")
         if parsed.path in ("/api/draftadvice", "/api/draftadvice/"):
             return self._draft_advice(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/search", "/api/players/search/"):
+            return self._players_search(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/logs", "/api/players/logs/"):
+            return self._players_logs(parse_qs(parsed.query))
         if parsed.path in ("/api/leaguedesk", "/api/leaguedesk/"):
             return self._league_desk(parse_qs(parsed.query))
         if parsed.path.startswith("/api/yahoo/"):
@@ -1153,6 +1157,42 @@ class Handler(BaseHTTPRequestHandler):
             # failure nobody notices is one free read.
             return False
         return bool(st.get("entitled"))
+
+    def _players_search(self, q):
+        """League-wide player search, straight off the ingested game logs.
+
+        Ethan, 2026-08-18: "You should be able too look up any player in
+        the league too that specific sport." The static board only knows
+        tonight's priced players; the history DB knows everyone who has
+        appeared in an ingested game. UNGATED on purpose: game logs are
+        FACTS, on the same free footing as rosters and injuries
+        (engine/statlogs.py's header carries the argument) — the paid
+        thing is picks, and none ride here.
+        """
+        from engine import statlogs
+        sport = (q.get("sport") or [""])[0].lower()
+        term = (q.get("q") or [""])[0][:40]
+        if sport not in statlogs.SPORT_MARKETS:
+            return self._send(400, b'{"error":"no log-backed search for '
+                                   b'this sport"}', ".json")
+        hits = statlogs.search(sport, term)
+        return self._send(200, json.dumps({"players": hits}).encode(),
+                          ".json")
+
+    def _players_logs(self, q):
+        """One player's multi-market logs — the searched-up profile's food.
+
+        Same shape the board's ``player_stats`` section ships, so the page
+        draws a bench bat with the exact card a priced star gets."""
+        from engine import statlogs
+        sport = (q.get("sport") or [""])[0].lower()
+        player = (q.get("player") or [""])[0][:60]
+        if sport not in statlogs.SPORT_MARKETS:
+            return self._send(400, b'{"error":"no log-backed search for '
+                                   b'this sport"}', ".json")
+        stats = statlogs.for_player(sport, player)
+        return self._send(200, json.dumps(
+            {"player": player, "stats": stats}).encode(), ".json")
 
     def _api_board(self, name: str):
         """The subscriber's copy of a board, read from outside the web root.

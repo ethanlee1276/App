@@ -50,6 +50,13 @@ SPORT_MARKETS = {
     "mlb": (("total_bases", "Total Bases"), ("hits", "Hits"),
             ("home_runs", "Home Runs"), ("strikeouts", "Strikeouts"),
             ("outs", "Outs Recorded")),
+    # Hoops joined for the league-wide search (2026-08-18). Labels match
+    # engine/nba/pipeline.MARKET_LABELS for the same dedupe-by-label
+    # reason the anytime_td comment gives.
+    "nba": (("pts", "Points"), ("reb", "Rebounds"), ("ast", "Assists"),
+            ("fg3m", "3-Pointers Made")),
+    "wnba": (("pts", "Points"), ("reb", "Rebounds"), ("ast", "Assists"),
+             ("fg3m", "3-Pointers Made")),
 }
 
 N_GAMES = 10       # what a profile chart can legibly hold
@@ -75,6 +82,69 @@ def for_board(recommendations, sport: str, db_path=None) -> dict:
     conn = _db.connect(path)
     try:
         return _query(conn, sport, markets, players)
+    finally:
+        conn.close()
+
+
+def search(sport: str, q: str, limit: int = 12, db_path=None) -> list[dict]:
+    """Every player in the league whose name contains ``q``, newest first.
+
+    Ethan, 2026-08-18: "You should be able too look up any player in the
+    league too that specific sport." The board only knows tonight's
+    priced players; THIS knows everyone who has ever appeared in an
+    ingested game for the sport — which is the league, as a bettor means
+    it. Ranked by most recent appearance, then games played, so a current
+    starter outranks a 2021 namesake.
+
+    Same honest degradation as ``for_board``: no DB, empty list.
+    """
+    q = (q or "").strip()
+    if not q or sport not in SPORT_MARKETS:
+        return []
+    path = str(db_path or _db.DEFAULT_DB)
+    if not os.path.exists(path):
+        return []
+    conn = _db.connect(path)
+    try:
+        rows = conn.execute(
+            "SELECT player, COUNT(DISTINCT game_id) AS games, "
+            "MAX(season || '-' || period) AS last "
+            "FROM player_game_logs WHERE sport=? AND player LIKE ? "
+            "GROUP BY player ORDER BY last DESC, games DESC LIMIT ?",
+            (sport, f"%{q}%", int(limit))).fetchall()
+        out = []
+        for r in rows:
+            # The team he was LAST seen with — the GROUP BY above would
+            # hand back an arbitrary row's team, and a deadline trade is
+            # exactly when someone gets looked up.
+            t = conn.execute(
+                "SELECT team, position FROM player_game_logs "
+                "WHERE sport=? AND player=? "
+                "ORDER BY season DESC, period DESC LIMIT 1",
+                (sport, r["player"])).fetchone()
+            out.append({"player": r["player"], "games": int(r["games"]),
+                        "team": (t["team"] if t else "") or "",
+                        "position": (t["position"] if t else "") or ""})
+        return out
+    finally:
+        conn.close()
+
+
+def for_player(sport: str, player: str, db_path=None) -> dict:
+    """One player's multi-market logs, whether or not he is on a board.
+
+    The same shape ``for_board`` attaches — {market_label: [games…]} —
+    so the Players page renders a searched-up bench bat with the exact
+    card a priced star gets."""
+    markets = SPORT_MARKETS.get(sport)
+    if not markets or not player:
+        return {}
+    path = str(db_path or _db.DEFAULT_DB)
+    if not os.path.exists(path):
+        return {}
+    conn = _db.connect(path)
+    try:
+        return _query(conn, sport, markets, [player]).get(player, {})
     finally:
         conn.close()
 

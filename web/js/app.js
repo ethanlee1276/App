@@ -4523,11 +4523,67 @@ async function renderPlayers() {
   const players = [..._profRows.keys()];
   const host = document.getElementById("players");
   if (!players.length) {
-    /* A profile is a prop card, so this pool is tonight's board — and a
-       reliever who just got traded has no prop tonight. Searching him used
-       to return a bare "no players match", which read as "we've never
-       heard of him". Fall back to the roster directory: say who he is,
-       where he plays, and why there is no card. */
+    /* THE LEAGUE, NOT THE BOARD. Ethan, 2026-08-18: "The search page for
+       players isn't working still. You should be able too look up any
+       player in the league too that specific sport." The board only
+       knows tonight's priced players; /api/players/search reads the
+       history DB — everyone who has ever appeared in an ingested game —
+       and /api/players/logs returns the same multi-market shape the
+       board's player_stats ships, so a searched-up bench bat gets the
+       exact profile card a priced star gets. The roster directory stays
+       as the offline fallback: a static host has no /api. */
+    if (q) {
+      const hits = await leagueSearch(q);
+      if (state.search.trim().toLowerCase() !== q) return;  // stale keystroke
+      if (hits.length) {
+        const full = hits.slice(0, 4);
+        await Promise.all(full.map(async (m) => {
+          const store = (state.data.player_stats =
+            state.data.player_stats || {});
+          if (!store[m.player]) {
+            const st = await leagueLogs(m.player);
+            if (st && Object.keys(st).length) store[m.player] = st;
+          }
+          // A head-only row: profileHTML draws the history card from it
+          // plus the injected stats. No market_label, so it can never
+          // masquerade as a priced market.
+          _profRows.set(m.player, [{ player: m.player, team: m.team,
+                                     position: m.position, opponent: "" }]);
+        }));
+        if (state.search.trim().toLowerCase() !== q) return;
+        const drawn = full.filter((m) =>
+          ((state.data.player_stats || {})[m.player]));
+        const rest = hits.filter((m) => !drawn.some((d) => d.player === m.player));
+        host.innerHTML = `
+          <div class="empty" style="margin-bottom:12px">Nothing priced on
+            tonight’s board for “${escapeHtml(state.search)}” — from the
+            ${escapeHtml(String(state.sport || "").toUpperCase())} game logs:</div>
+          <div class="player-grid">${drawn.map((m) => profileHTML(m.player)).join("")}</div>
+          ${rest.length ? `<div class="empty" style="margin:12px 0 8px">Also matching:</div>` : ""}
+          ${rest.map((m) => `
+            <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
+              ${playerAvatar(m.player, m.team, { size: 40 })}
+              <div style="flex:1;min-width:0">
+                <strong>${escapeHtml(m.player)}</strong>
+                <div style="font-size:.85em;color:var(--text-mute)">
+                  ${teamMark(m.team, 14)} ${escapeHtml(teamName(m.team))}
+                  · ${escapeHtml(m.position || "—")}
+                  · ${m.games} game(s) logged</div>
+              </div>
+              <button class="btn" data-lookup="${escapeAttr(m.player)}">Profile</button>
+            </div>`).join("")}`;
+        host.querySelectorAll("[data-lookup]").forEach((b) =>
+          b.addEventListener("click", () => {
+            const inp = document.getElementById("player-search");
+            state.search = b.dataset.lookup;
+            if (inp) inp.value = b.dataset.lookup;
+            renderPlayers();
+          }));
+        return;
+      }
+    }
+    /* The roster directory — the offline fallback, and the only answer
+       for a player who has never appeared in a logged game. */
     const misses = q ? await rosterMatches(q) : [];
     if (misses.length) {
       host.innerHTML = `
@@ -4628,6 +4684,32 @@ function playerBrowseCap() {
     && window.matchMedia("(max-width: 760px)").matches) ? 4 : 12;
 }
 
+/* The league-wide search pair. Cached per (sport, query) because the
+   input handler re-renders on every keystroke and the answer for "jud"
+   does not change between letters typed and deleted. A failed fetch
+   caches [] for the session — the roster fallback takes over, and a
+   static host is not retried on every key. */
+const _leagueCache = new Map();
+async function leagueSearch(q) {
+  const key = `${state.sport}|${q}`;
+  if (_leagueCache.has(key)) return _leagueCache.get(key);
+  let hits = [];
+  try {
+    const r = await fetch(`/api/players/search?sport=${encodeURIComponent(state.sport)}&q=${encodeURIComponent(q)}`);
+    if (r.ok) hits = (await r.json()).players || [];
+  } catch (e) {}
+  _leagueCache.set(key, hits);
+  return hits;
+}
+
+async function leagueLogs(player) {
+  try {
+    const r = await fetch(`/api/players/logs?sport=${encodeURIComponent(state.sport)}&player=${encodeURIComponent(player)}`);
+    if (r.ok) return (await r.json()).stats || {};
+  } catch (e) {}
+  return {};
+}
+
 async function rosterMatches(q) {
   const d = await loadRosters(state.sport);
   const out = [];
@@ -4660,7 +4742,11 @@ function openRoster(team) {
 function profileHTML(player) {
   const rows = _profRows.get(player) || [];
   const stats = ((state.data || {}).player_stats || {})[player] || {};
-  const priced = new Map(rows.map((r) => [r.market_label, r]));
+  // A searched-up league player rides in on a HEAD-ONLY row (no
+  // market_label) — it feeds _profileHead and must never register as a
+  // priced market, or an unpriced chip draws the pick block.
+  const priced = new Map(rows.filter((r) => r.market_label)
+    .map((r) => [r.market_label, r]));
   const tabs = [...priced.keys(),
                 ...Object.keys(stats).filter((k) => !priced.has(k))];
   if (!tabs.length) return "";

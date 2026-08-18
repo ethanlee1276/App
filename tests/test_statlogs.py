@@ -123,6 +123,83 @@ def test_both_pipelines_attach_the_section():
     assert '"player_stats": statlogs.for_board(results, "mlb")' in src
 
 
+# --- the league-wide search (2026-08-18) -------------------------------------
+# Ethan: "The search page for players isn't working still. You should be
+# able too look up any player in the league too that specific sport." The
+# board knows tonight's priced players; these two functions know everyone
+# who has ever appeared in an ingested game.
+def test_search_finds_any_logged_player_by_substring():
+    path = _fixture()
+    hits = statlogs.search("nfl", "test ba", db_path=path)
+    assert [h["player"] for h in hits] == ["Test Back"]
+    assert hits[0]["team"] == "GB" and hits[0]["position"] == "RB"
+    assert hits[0]["games"] == 12
+
+
+def test_search_ranks_the_current_player_over_the_stale_namesake():
+    """Two men named alike, one active this season, one gone since 2025 —
+    a deadline pickup is exactly when someone gets looked up, so the
+    recent man must lead."""
+    path = _fixture()
+    conn = _db.connect(path)
+    _db.upsert_player_logs(conn, [dict(
+        sport="nfl", season=2024, period="010", game_id=f"OLD{i}",
+        player="Test Backman", team="NYJ", opponent="NE", position="RB",
+        home=1, market="rush_yds", value=30) for i in range(20)])
+    conn.commit(); conn.close()
+    hits = statlogs.search("nfl", "test back", db_path=path)
+    assert hits[0]["player"] == "Test Back", \
+        "20 stale games outranked 12 current ones"
+
+
+def test_search_is_scoped_to_the_sport_asked_about():
+    path = _fixture()
+    assert statlogs.search("mlb", "test ba", db_path=path) == []
+
+
+def test_search_degrades_to_empty_without_a_db():
+    assert statlogs.search("nfl", "anyone", db_path="/no/such/file.db") == []
+    assert statlogs.for_player("nfl", "Anyone",
+                               db_path="/no/such/file.db") == {}
+
+
+def test_for_player_ships_the_boards_own_shape():
+    """The page draws a searched-up player with the same card a priced
+    star gets, so the shape must be for_board's exactly: label-keyed,
+    newest first, thin samples dropped."""
+    path = _fixture()
+    st = statlogs.for_player("nfl", "Test Back", db_path=path)
+    assert set(st) == {"Rushing Yards", "Receptions"}
+    board = statlogs.for_board([{"player": "Test Back"}], "nfl",
+                               db_path=path)
+    assert st == board["Test Back"]
+    assert statlogs.for_player("nfl", "Thin Sample", db_path=path) == {}
+
+
+def test_hoops_is_in_the_market_table_with_the_pipelines_labels():
+    """NBA/WNBA joined for the search. Labels must match
+    engine/nba/pipeline.MARKET_LABELS — the page dedupes chips BY LABEL,
+    the same argument the anytime_td comment already carries."""
+    from engine.nba.pipeline import MARKET_LABELS as NBA_LABELS
+    for sport in ("nba", "wnba"):
+        for mid, label in statlogs.SPORT_MARKETS[sport]:
+            assert NBA_LABELS.get(mid) == label, (sport, mid)
+
+
+def test_the_server_serves_both_and_gates_neither():
+    """Game logs are FACTS on the free footing of rosters and injuries —
+    the module header carries the argument. The two routes must exist and
+    must not pass through the subscription check the boards use."""
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "server.py"), encoding="utf-8").read()
+    assert '"/api/players/search"' in src and '"/api/players/logs"' in src
+    for fn in ("_players_search", "_players_logs"):
+        i = src.index(f"def {fn}(")
+        body = src[i:src.index("\n    def ", i + 10)]
+        assert "statlogs" in body
+        assert "_entitled" not in body, f"{fn} grew a paywall"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
