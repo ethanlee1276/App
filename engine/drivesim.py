@@ -151,6 +151,34 @@ class SimCard:
         return {"over": o / self.trials, "push": p / self.trials,
                 "under": (self.trials - o - p) / self.trials}
 
+    def joint_cells(self, spread_line: float | None = None,
+                    total_line: float | None = None) -> dict:
+        """All four cover×over cells over the same runs, pushes dropped
+        from both legs — what a reconciliation needs to score the sim's
+        joint against a real game's outcome. Keys are (covered, went_over);
+        "n" is the effective run count. `indep` is the same four cells
+        rebuilt from the marginals alone, so the two models differ ONLY
+        in correlation and a paired score isolates exactly that."""
+        sl = self.spread if spread_line is None else spread_line
+        tl = self.total if total_line is None else total_line
+        counts = {(True, True): 0, (True, False): 0,
+                  (False, True): 0, (False, False): 0}
+        n = 0
+        for m, t in zip(self.margins, self.totals):
+            if m + sl == 0 or t == tl:
+                continue
+            n += 1
+            counts[(m + sl > 0, t > tl)] += 1
+        if not n:
+            return {"cells": {}, "indep": {}, "n": 0}
+        cells = {k: v / n for k, v in counts.items()}
+        pc = cells[(True, True)] + cells[(True, False)]
+        po = cells[(True, True)] + cells[(False, True)]
+        indep = {(True, True): pc * po, (True, False): pc * (1 - po),
+                 (False, True): (1 - pc) * po,
+                 (False, False): (1 - pc) * (1 - po)}
+        return {"cells": cells, "indep": indep, "n": n}
+
     def joint(self, spread_line: float | None = None,
               total_line: float | None = None) -> dict:
         """The 2×2 the parlay math needs: cover × over, counted over the

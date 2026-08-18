@@ -11,7 +11,7 @@ browser you can look at.
 
 ## TODAY'S ROUND — 2026-08-18 (added while you were at work)
 
-Thirty-four commits today, GitHub tick green, 4,698 tests across 274
+Thirty-five commits today, GitHub tick green, 4,704 tests across 275
 files (sanity check after T1’s pull: `git log --oneline -1` should name
 the commit that refreshed this very note). In the order to run them:
 
@@ -322,6 +322,26 @@ python3 -m engine.drivesim --sport nfl --spread -3.5 --total 47
 
 And your T4 is now doubly worth running — it is the same verdict for
 the MLB sim that Weeks 1-4 will be for this one.
+
+**Then the reconciliation ran the same night it was built.**
+`drivesimrecon.py` graded the sim against five finished seasons —
+1,378 gradable finals with closing lines. The good: win-probability
+calibration is genuinely strong (the 60–80% bucket wins 70%, the
+80–100% bucket wins 93%), and the margin shape is close (real sd
+14.2, sim 13.2; 23% of finals land exactly on 3 or 7). The honest:
+**NO EDGE on the joint** — the sim’s cover-and-over correlation does
+not beat plain independence at the closing line (+0.0007 ± 0.0012
+paired log-loss), so independence keeps that seat, exactly as the
+two-standard-error bar demands. That is the system working: game-level
+spread and total at the close are nearly independent, and the sim’s
+real payoff is the PLAYER layer — QB yards riding the over, stacks,
+game-script conditioning — where correlations are large. That is the
+September build, and the forward journal (`--forward`) is already
+collecting what it will need. Re-run the verdict yourself:
+
+```
+python3 drivesimrecon.py --seasons 2021 2022 2023 2024 2025
+```
 
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
