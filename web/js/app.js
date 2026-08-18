@@ -4465,7 +4465,7 @@ function trendRow(r, i, col) {
       <div class="trank">${i + 1}</div>
       <div class="who"><div class="nm">${escapeHtml(r.player)}</div>
         <div class="mk">${escapeHtml(r.team)} · ${escapeHtml(r.market_label)}${col.tag ? ` · ${col.tag(r)}` : ""}</div></div>
-      <div class="mini">${sparkline(vals, { w: 78, h: 30, stroke: col.stroke })}</div>
+      <div class="mini">${gamelogBars(vals, { w: 78, h: 30, stroke: col.stroke })}</div>
       ${col.metric(r)}
     </div>`;
 }
@@ -4667,8 +4667,8 @@ function pricedProfileHTML(r, chips) {
       ${_profileHead(r, `<span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>`)}
       ${chips}
       <div class="form-tiles">${tiles}</div>
-      <div class="profile-spark">${sparkline(vals, {
-        line: r.line, stroke: teamPrimary(r.team), h: 72,
+      <div class="profile-spark">${gamelogBars(vals, {
+        line: r.line, stroke: teamPrimary(r.team), w: 320, h: 72,
         labels: (r.logs || []).map((l) =>
           `${mlb ? (l.date ? formatGameDate(l.date) : "G " + l.week) : "Wk " + l.week} ${l.home ? "vs" : "@"} ${l.opponent}`),
       })}</div>
@@ -4702,8 +4702,8 @@ function historyProfileHTML(r0, label, logs, chips) {
     <article class="profile" style="--profile-grad:${grad}">
       ${_profileHead(r0, "")}
       ${chips}
-      <div class="profile-spark">${sparkline(vals, {
-        stroke: teamPrimary(r0.team), h: 72,
+      <div class="profile-spark">${gamelogBars(vals, {
+        stroke: teamPrimary(r0.team), w: 320, h: 72,
         labels: logs.map((l) => `${when(l)} ${l.home ? "vs" : "@"} ${l.opponent}`),
       })}</div>
       <table class="log-table">

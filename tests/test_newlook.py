@@ -248,7 +248,7 @@ def test_props_players_and_record_carry_their_charts_and_chips():
     hist = APP[APP.index("function historyProfileHTML("):]
     hist = hist[:hist.index("\n}")]
     assert "no line on tonight" in hist
-    assert "line:" not in hist.split("sparkline")[1].split("})")[0], \
+    assert "line:" not in hist.split("gamelogBars")[1].split("})")[0], \
         "the history chart invented a threshold"
     # Record: one scoreboard, switchable splits with words, capped list.
     ra = APP[APP.index("function recAnalytics("):]

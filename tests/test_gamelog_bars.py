@@ -46,18 +46,16 @@ def test_every_player_prop_chart_is_bars_now():
     # which is the only shape that can carry a run line.
     assert APP.count("gameBetChart(r)") == 1
     assert APP.count("gamelogBars(r.recent_values") == 1
-    # The profile trend, the meme price chart and the live line track stay
-    # LINES: those ARE continuous quantities, where the segment between two
-    # points is a real claim — the price existed at every instant between
-    # two pulls, unlike a player's hit total between two games, which has
-    # no value on the days he did not play. The live track joined this
-    # list on 2026-08-14 and belongs in it for exactly that reason.
-    # The FOURTH call (2026-08-17) is the profile's history-market chart
-    # — the multi-prop chips' no-line view. It sits in the same card slot
-    # as the profile trend and charts the same quantity, so it wears the
-    # same chart: two chart styles alternating in one slot as you flip
-    # chips would read as a data change, not a style choice.
-    assert APP.count("sparkline(") == 4
+    # ONE line chart survives: the live win-probability track. That IS a
+    # continuous quantity — the price existed at every instant between
+    # two pulls — so the segment between two points is a real claim. A
+    # player's per-game stat is not: it has no value on the days he did
+    # not play, and on 2026-08-17 Ethan closed the loophole this comment
+    # used to defend ("all charts for player props should be the bar
+    # graphs") — the profile trend, the history-market chips and the
+    # Trending minis all draw bars now. Lines over per-game quantities
+    # were also the charts iOS long-press kept trying to select.
+    assert APP.count("sparkline(") == 1
     assert APP.count("sparkline(t.values") == 1     # the live line track
 
 
