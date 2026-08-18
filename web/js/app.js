@@ -12042,7 +12042,7 @@ function ffDossierHTML(info) {
         <span class="ffd-sub">${info.team ? teamMark(info.team, 16, nflMap(), "nfl") : ""}
           ${escapeHtml([nflName(info.team) || info.team, info.position]
             .filter(Boolean).join(" · "))}</span></div>
-      <button class="btn ghost ffd-close" aria-label="Close">✕</button>
+      <button class="btn ghost ffd-close" aria-label="Close">${icon("cross", 14)}</button>
     </div>
     ${parts.join("")}
     <div class="ffd-sect" id="ffd-charts"><div class="ffd-h">Weekly volume</div>
@@ -12247,7 +12247,7 @@ function ffProfileHTML(p, info, bio) {
           ${chip("Games", p.games)}${chip("Season", p.season)}
         </span>
       </div>
-      <button class="btn ghost ffd-close" aria-label="Close">\u2715</button>
+      <button class="btn ghost ffd-close" aria-label="Close">${icon("cross", 14)}</button>
     </div>
     <div class="ffp-top">
       <div class="ffp-stats card"><div class="ffd-h">${p.season} season</div>
