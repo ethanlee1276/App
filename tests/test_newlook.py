@@ -299,6 +299,46 @@ def test_line_shopping_rows_wear_a_face():
     assert scan.count('"team": r.get("team", "")') >= 4
 
 
+def test_line_charts_scrub_under_a_finger():
+    """Ethan, 2026-08-18: "you can glide your finger across it an it
+    will show the data for wherever your finger is gliding, we should
+    have that for any line chart we have on the site."
+
+    One shared engine in visuals.js; a chart opts in with data-scrub on
+    its svg. ALL FIVE remaining line charts carry it — the Record curve,
+    the dashboard performance spark, the My Bets P&L curve, the coin
+    tape spark (with per-point x fractions: snapshots are not evenly
+    spaced), and the live win-probability track via sparkline itself.
+
+    The liveability contract is pinned hardest: pan-y touch-action and
+    passive listeners mean a horizontal glide reads the chart while a
+    vertical drag still scrolls the page — a chart that traps scrolling
+    would get the feature turned off within a day."""
+    vis = open(os.path.join(ROOT, "web", "js", "visuals.js"),
+               encoding="utf-8").read()
+    i = vis.index("finger scrubbing on line charts")
+    engine = vis[i:]
+    assert 'closest("svg[data-scrub]")' in engine
+    # The CALL form, not the word — the engine's own comment says
+    # "never preventDefault" and a prose match would fail on the rule
+    # being stated (the guard-matches-own-prose class, again).
+    assert ".preventDefault()" not in engine, \
+        "the scrubber must never eat the page's scroll"
+    assert engine.count("passive: true") >= 4
+    assert '"x":[optional' in engine or "d.x" in engine  # uneven spacing
+    assert "svg[data-scrub] { touch-action: pan-y; }" in CSS
+    assert ".scrub-rail" in CSS
+    # The five charts: four in app.js, the track via sparkline's own emit.
+    assert APP.count('data-scrub="${') == 4, \
+        "a line chart lost (or grew without) its scrub data"
+    assert 'data-scrub="${scrub}"' in vis, "sparkline stopped embedding scrub data"
+    # The rec curve's per-dot hover circles retired with this — two
+    # tooltips fighting over one chart is worse than either.
+    fn = APP[APP.index("function recCurveChart("):]
+    fn = fn[:fn.index("\n  const head")]
+    assert "data-tip" not in fn
+
+
 def test_the_rail_belongs_to_home_only():
     """The render puts insights and live-now beside the dashboard. On
     every other page the content gets the room back."""

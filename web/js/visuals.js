@@ -1551,8 +1551,14 @@ function sparkline(values, opts = {}) {
   const endDot = mini
     ? `<circle cx="${x(li)}" cy="${y(data[li])}" r="2.4" fill="${lastC}"/>` : "";
 
+  // Finger scrubbing (the shared engine below): the same words the hover
+  // dots carry, snapped to wherever the finger is.
+  const scrub = escapeAttr(JSON.stringify({
+    padL: pad, padR: pad,
+    l: labs || [], v: data.map((v) => String(v) + (opts.unit || "")),
+  }));
   return `
-  <svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+  <svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" data-scrub="${scrub}">
     <defs>
       <linearGradient id="${uid}a" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="${stroke}" stop-opacity="${mini ? 0.16 : 0.28}"/>
@@ -1622,4 +1628,97 @@ function escapeAttr(s) {
     const t = e.target && e.target.closest ? e.target.closest("[data-tip]") : null;
     if (t) tipEl.style.display = "none";
   });
+})();
+
+
+/* ---------------- finger scrubbing on line charts ----------------
+   Ethan, 2026-08-18: "you can glide your finger across it an it will
+   show the data for wherever your finger is gliding, we should have
+   that for any line chart we have on the site."
+
+   Any line chart opts in by carrying, on its <svg>:
+
+       data-scrub='{"padL":46,"padR":14,"l":[labels],"v":[values],
+                    "x":[optional 0..1 fractions for uneven spacing]}'
+
+   One crosshair rail and one label serve every chart: the pointer's x
+   maps through the svg's viewBox to the nearest point, the rail marks
+   the snapped position, the label shows that point's own words. Works
+   for a mouse for free — pointer events cover both.
+
+   Touch keeps the page scrollable: `touch-action: pan-y` on these svgs
+   means a horizontal glide reads the chart while a vertical drag still
+   scrolls, which is why none of these handlers ever preventDefault. */
+(function () {
+  let tip = null, rail = null;
+  function ensure() {
+    if (tip) return;
+    tip = document.createElement("div");
+    tip.className = "graph-tip scrub-tip";
+    tip.style.display = "none";
+    rail = document.createElement("div");
+    rail.className = "scrub-rail";
+    rail.style.display = "none";
+    document.body.append(tip, rail);
+  }
+  function hide() {
+    if (tip) { tip.style.display = "none"; rail.style.display = "none"; }
+  }
+  function show(svg, clientX) {
+    ensure();
+    let d = svg._scrub;
+    if (!d) {
+      try { d = svg._scrub = JSON.parse(svg.dataset.scrub); }
+      catch (e) { return; }
+    }
+    const n = (d.v || []).length;
+    const rect = svg.getBoundingClientRect();
+    if (!n || rect.width < 10) return;
+    const vw = Number((svg.getAttribute("viewBox") || "").split(/\s+/)[2])
+      || rect.width;
+    const padL = d.padL || 0, padR = d.padR || 0;
+    const span = Math.max(1, vw - padL - padR);
+    const frac = Math.min(1, Math.max(0,
+      ((clientX - rect.left) * (vw / rect.width) - padL) / span));
+    // Uneven series (the coin tape is one point per refresh) carry their
+    // own x fractions; evenly spaced charts derive them.
+    let i = 0;
+    if (d.x && d.x.length === n) {
+      let best = Infinity;
+      for (let k = 0; k < n; k++) {
+        const dist = Math.abs(d.x[k] - frac);
+        if (dist < best) { best = dist; i = k; }
+      }
+    } else {
+      i = Math.round(frac * (n - 1));
+    }
+    const fx = d.x && d.x.length === n ? d.x[i] : (n > 1 ? i / (n - 1) : 0);
+    const snapX = rect.left + (padL + fx * span) * (rect.width / vw);
+    tip.innerHTML = (d.l && d.l[i] != null
+      ? `<span class="st-l">${escapeHtml(String(d.l[i]))}</span>` : "")
+      + escapeHtml(String(d.v[i]));
+    tip.style.display = "block";
+    const tw = tip.offsetWidth || 90, th = tip.offsetHeight || 34;
+    tip.style.left = Math.min(window.innerWidth - tw - 6,
+      Math.max(6, snapX - tw / 2)) + "px";
+    tip.style.top = Math.max(6, rect.top - th - 10) + "px";
+    rail.style.display = "block";
+    rail.style.left = (snapX - 0.5) + "px";
+    rail.style.top = rect.top + "px";
+    rail.style.height = rect.height + "px";
+  }
+  const over = (e) => {
+    const svg = e.target && e.target.closest
+      ? e.target.closest("svg[data-scrub]") : null;
+    if (svg) show(svg, e.clientX);
+    else hide();
+  };
+  document.addEventListener("pointerdown", over, { passive: true });
+  document.addEventListener("pointermove", over, { passive: true });
+  ["pointerup", "pointercancel"].forEach((k) =>
+    document.addEventListener(k, hide, { passive: true }));
+  // On document with capture, not on window: scroll does not bubble, but
+  // capture sees every scroller (the page AND the drawer), and the
+  // headless test harness stubs document, not window.
+  document.addEventListener("scroll", hide, { passive: true, capture: true });
 })();

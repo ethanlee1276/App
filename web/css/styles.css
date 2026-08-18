@@ -970,6 +970,17 @@ svg { -webkit-user-select: none; user-select: none; }
 .rec-chart, .ra-main, .perf-card, .profile-spark, .mini, .edge-spark,
 .lb-track {
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* Finger scrubbing on line charts (2026-08-18, Ethan: "glide your
+   finger across it an it will show the data"). pan-y is the contract
+   that makes it liveable on a phone: a horizontal glide reads the
+   chart, a vertical drag still scrolls the page. */
+svg[data-scrub] { touch-action: pan-y; }
+.scrub-rail { position: fixed; width: 1px; z-index: 999; pointer-events: none;
+  background: var(--brand-2); opacity: .65; }
+.scrub-tip { pointer-events: none; z-index: 1000; }
+.scrub-tip .st-l { display: block; color: var(--text-mute);
+  font-size: var(--fs-2xs); font-weight: 600; }
 .profile-pick { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 18px; border-top: var(--hairline) solid var(--border-soft); background: var(--fill-subtle); }
 .profile-pick .lbl { font-size: var(--fs-md); font-weight: 700; }
 .profile-pick .lbl small { color: var(--text-mute); font-weight: 500; display: block; }

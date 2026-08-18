@@ -4805,19 +4805,28 @@ function recCurveChart(curve, opts = {}) {
   const path = curve.map((p, i) => `${x(i).toFixed(1)},${y(p.cum_u).toFixed(1)}`).join(" L");
   const last = curve[curve.length - 1];
   const color = last.cum_u >= 0 ? "var(--good)" : "var(--bad)";
-  const dots = curve.map((p, i) => {
-    // day_u is derivable from the running total, so a payload without it
-    // gets the derived number instead of a TypeError. This mattered: a
-    // fixture missing the field crashed recCurveChart, and because the
-    // whole page is one template literal, the exception blanked EVERY
-    // section of the Record page — one optional field, zero pages.
-    const dayU = p.day_u != null ? p.day_u
-      : p.cum_u - (i ? curve[i - 1].cum_u : 0);
-    const tip = `${p.date} · day ${dayU >= 0 ? "+" : ""}${dayU.toFixed(2)}u (${p.n} bet${p.n === 1 ? "" : "s"}) · running ${p.cum_u >= 0 ? "+" : ""}${p.cum_u.toFixed(2)}u`;
-    return `<circle cx="${x(i).toFixed(1)}" cy="${y(p.cum_u).toFixed(1)}" r="${i === curve.length - 1 ? 3.4 : 2.4}" fill="${color}"/>
-      <circle cx="${x(i).toFixed(1)}" cy="${y(p.cum_u).toFixed(1)}" r="10" fill="transparent"
-        style="pointer-events:all;cursor:pointer" data-tip="${escapeHtml(tip)}"/>`;
-  }).join("");
+  // day_u is derivable from the running total, so a payload without it
+  // gets the derived number instead of a TypeError. This mattered: a
+  // fixture missing the field crashed recCurveChart, and because the
+  // whole page is one template literal, the exception blanked EVERY
+  // section of the Record page — one optional field, zero pages.
+  const dayOf = (p, i) => (p.day_u != null ? p.day_u
+    : p.cum_u - (i ? curve[i - 1].cum_u : 0));
+  const dots = curve.map((p, i) =>
+    `<circle cx="${x(i).toFixed(1)}" cy="${y(p.cum_u).toFixed(1)}" r="${i === curve.length - 1 ? 3.4 : 2.4}" fill="${color}"/>`)
+    .join("");
+  // Scrubbing replaced the per-dot hover circles (2026-08-18, Ethan:
+  // "glide your finger across it an it will show the data") — one
+  // finger or cursor position, one label, no 10px targets to hunt for.
+  const scrub = escapeAttr(JSON.stringify({
+    padL, padR,
+    l: curve.map((p) => `${p.date} · ${p.n} bet${p.n === 1 ? "" : "s"}`),
+    v: curve.map((p, i) => {
+      const dayU = dayOf(p, i);
+      return `running ${p.cum_u >= 0 ? "+" : ""}${p.cum_u.toFixed(2)}u · day ${
+        dayU >= 0 ? "+" : ""}${dayU.toFixed(2)}u`;
+    }),
+  }));
   const yLabel = (v) => `<text x="${padL - 8}" y="${y(v) + 3.5}" text-anchor="end" font-size="10"
       fill="currentColor" opacity="0.45">${v >= 0 ? "+" : ""}${v.toFixed(1)}u</text>`;
   const grid = (v) => `<line x1="${padL}" y1="${y(v)}" x2="${w - padR}" y2="${y(v)}"
@@ -4840,7 +4849,7 @@ function recCurveChart(curve, opts = {}) {
           · ${curve.length} slate${curve.length === 1 ? "" : "s"}</div>
       </div>
       <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block" role="img"
-           aria-label="Cumulative units won or lost over time">
+           aria-label="Cumulative units won or lost over time" data-scrub="${scrub}">
         <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="${color}" stop-opacity="0.32"/>
           <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
@@ -4857,8 +4866,9 @@ function recCurveChart(curve, opts = {}) {
               stroke-linejoin="round" stroke-linecap="round"/>
         ${dots}
       </svg>
-      <div class="rc-foot">Hover a dot for that day’s bets. Flat units — every pick
-        weighted by its stake, no bankroll compounding.</div>
+      <div class="rc-foot">Slide a finger (or the cursor) along the chart for each
+        day’s bets. Flat units — every pick weighted by its stake, no bankroll
+        compounding.</div>
     </div>`;
 }
 
@@ -8874,7 +8884,11 @@ function renderBankrollExtras() {
         <div class="gp-panel-title">Your logged P&amp;L over time
           <span class="gp-panel-sub">— every settled bet in your My Bets log</span></div>
         <div class="bk-curve-net" style="color:${tone}">${mbMoney(ys[ys.length - 1], true)}</div>
-        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:auto;display:block" aria-hidden="true">
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:auto;display:block" aria-hidden="true"
+          data-scrub="${escapeAttr(JSON.stringify({
+            l: settled.map((b) => `${b.date || ""} · ${b.player || b.bet || ""}`.trim()),
+            v: ys.map((y) => mbMoney(y, true)),
+          }))}">
           <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="${hex}" stop-opacity="0.26"/>
             <stop offset="100%" stop-color="${hex}" stop-opacity="0"/>
@@ -8972,8 +8986,18 @@ function mcSpark(series, w = 300, h = 44) {
   const sy = (v) => y1 === y0 ? h / 2 : h - 3 - ((v - y0) / (y1 - y0)) * (h - 6);
   const d = pts.map((p) => `${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join(" ");
   const up = ys[ys.length - 1] >= ys[0];
+  // Snapshots land one per refresh, not on a grid — the scrub data
+  // carries each point's own x fraction so the finger snaps to real
+  // points instead of an even spacing that doesn't exist.
+  const fmtP = (v) => "$" + (v >= 1 ? v.toFixed(2)
+    : v >= 0.01 ? v.toFixed(4) : Number(v).toPrecision(3));
+  const scrub = escapeAttr(JSON.stringify({
+    x: pts.map((p) => x1 === x0 ? 0 : (p[0] - x0) / (x1 - x0)),
+    l: pts.map((p) => new Date(p[0]).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
+    v: pts.map((p) => fmtP(p[1])),
+  }));
   return `<svg class="mc-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"
-    role="img" aria-label="price over our snapshot tape"><polyline points="${d}"
+    role="img" aria-label="price over our snapshot tape" data-scrub="${scrub}"><polyline points="${d}"
     fill="none" stroke="var(--${up ? "good" : "bad"})" stroke-width="1.5"/></svg>`;
 }
 
@@ -14113,7 +14137,11 @@ async function renderHomePerf() {
     // The render's chart is a filled area with a live end-point — the
     // fill fades to nothing so it reads as light under the line, not a
     // second data series.
-    spark = `<svg class="perf-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+    const scrub = escapeAttr(JSON.stringify({
+      l: curve.map((c) => c.date),
+      v: curve.map((c) => `${c.cum_u >= 0 ? "+" : ""}${Number(c.cum_u).toFixed(2)}u`),
+    }));
+    spark = `<svg class="perf-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true" data-scrub="${scrub}">
       <defs><linearGradient id="perffill" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="${up ? "#42C268" : "#DF5953"}" stop-opacity="0.28"/>
         <stop offset="100%" stop-color="${up ? "#42C268" : "#DF5953"}" stop-opacity="0"/>
@@ -14521,7 +14549,7 @@ function lineTrackHTML(g) {
         <span class="lb-move ${cls}">${pct(t.opened)} → ${pct(t.now)}</span>
       </div>
       ${sparkline(t.values, { w: 268, h: 52, line: 50, labels: t.labels,
-                              stroke: "var(--brand)", minSpan: 20 })}
+                              stroke: "var(--brand)", minSpan: 20, unit: "%" })}
       <p class="lb-track-foot">${t.points} price${t.points === 1 ? "" : "s"}
         pulled since first pitch · de‑vigged across the books quoting both
         sides · the market’s number, not ours</p>
