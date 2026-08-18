@@ -12,18 +12,34 @@ from __future__ import annotations
 import glob
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
 def main() -> int:
+    # Every fixture's tempfile.mkdtemp() outlives its test — a full run
+    # leaves thousands of orphan directories, and repeated runs filled a
+    # machine's /tmp to ENOSPC. Sandbox the children's TMPDIR for the run
+    # and sweep it once at the end, whatever the verdict.
+    sandbox = tempfile.mkdtemp(prefix="qellys-tests-")
+    env = dict(os.environ, TMPDIR=sandbox, TEMP=sandbox, TMP=sandbox)
+    try:
+        return _run(env)
+    finally:
+        shutil.rmtree(sandbox, ignore_errors=True)
+
+
+def _run(env) -> int:
     files = sorted(glob.glob(os.path.join(ROOT, "tests", "test_*.py")))
     failed, skipped, total = [], [], 0
     for f in files:
         name = os.path.basename(f)
-        r = subprocess.run([sys.executable, f], capture_output=True, text=True, cwd=ROOT)
+        r = subprocess.run([sys.executable, f], capture_output=True, text=True,
+                           cwd=ROOT, env=env)
         m = re.search(r"(\d+) tests passed", r.stdout)
         n = int(m.group(1)) if m else 0
         # A file may bow out when the machine can't give it what it needs
