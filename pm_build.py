@@ -98,7 +98,12 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
         if out_path.exists():
             print(f"⚠️  Kalshi unreachable — keeping last board.\n   {exc}")
             return
-        out_path.write_text(json.dumps({
+        # Atomic like every polled write; `import os` is local because
+        # this is the module's only direct file write — everything else
+        # goes through gate.publish.
+        import os as _os
+        _tmp = out_path.with_suffix(".json.tmp")
+        _tmp.write_text(json.dumps({
             "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "venue": "kalshi", "rows": [], "n_markets": 0, "n_matched": 0,
             "n_modeled": 0, "n_rec": 0, "sports_seen": [], "weather": [],
@@ -107,6 +112,7 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
             # never a recommendation, and the WHY is the fixable part.
             "note": f"Kalshi feed unreachable from this machine — {exc}"},
             indent=2))
+        _os.replace(_tmp, out_path)
         return
     conn = connect()
     kx.store_snapshot(conn, markets)

@@ -17,7 +17,17 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import os
 from pathlib import Path
+
+
+def _write_json(path: Path, doc: dict, indent: int = 2) -> None:
+    """Atomic replace — the Fantasy tab polls these files while the
+    refresher rebuilds them; a poll must see old or new, never half."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(doc, indent=indent))
+    os.replace(tmp, path)
 
 from engine import fantasy, fantasy_draft, fantasy_ranks, offseason, preseason
 from engine.db import connect
@@ -39,14 +49,14 @@ def _write_rosters(path: Path, blob: dict | None) -> None:
     """
     from engine import rosters as _r
     if not blob:
-        path.write_text(json.dumps({
+        _write_json(path, {
             "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "teams": {}, "team_count": 0, "player_count": 0,
             "feed": "unavailable",
             "note": "The roster feed was unreachable on this build, so this "
                     "is not an empty league — it is no data. Try "
                     "`python3 launch.py --refresh-rosters`.",
-        }, indent=2))
+        })
         print("Rosters: feed unavailable — wrote an empty payload that says so.")
         return
     today = datetime.date.today().isoformat()
@@ -92,7 +102,7 @@ def _write_rosters(path: Path, blob: dict | None) -> None:
     out["transactions"] = _r.transactions(store)
     out["generated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
     out["feed"] = "live"
-    path.write_text(json.dumps(out, indent=2))
+    _write_json(path, out)
     tx = out["transactions"]["moves"]
     print(f"Rosters: {out['team_count']} teams, {out['player_count']:,} players"
           + (f" · {len(tx)} team change(s) in the tracked window: "
@@ -243,8 +253,7 @@ def main() -> None:
     conn.close()
 
     p = Path(args.out)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(out, indent=2))
+    _write_json(p, out)
 
     # Active rosters ride along: the players blob is already in memory and
     # already paid for, so this is a second reading of it rather than a

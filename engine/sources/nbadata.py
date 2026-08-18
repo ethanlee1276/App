@@ -20,6 +20,14 @@ from .fetch import fetch_json, DataUnavailable
 CDN = "https://cdn.nba.com/static/json"
 NBA_MARKETS = ("min", "pts", "reb", "ast", "fg3m")
 
+#: The league's own headshot for a boxscore personId. CONSTRUCTED, not
+#: taken — the CDN boxscore carries the id and no photo URL, the same
+#: shape as MLB's Stats API, and this is the path nba.com's own pages
+#: request. A wrong guess degrades to the initials chip the card draws
+#: today (the <img> removes itself on error), and `assets.py --probe`
+#: carries this pattern so a real network can confirm it.
+HEADSHOT = "https://cdn.nba.com/headshots/nba/latest/260x190/{pid}.png"
+
 
 def fetch_schedule(ttl: int = 21600) -> dict:
     return fetch_json(f"{CDN}/staticData/scheduleLeagueV2.json",
@@ -91,6 +99,12 @@ def parse_boxscore(box: dict) -> list[dict]:
                 "opponent": opp.get("teamTricode", ""),
                 "home": side == "homeTeam",
                 "starter": str(p.get("starter", "0")) == "1",
+                # Identity, which this parser used to throw away — the
+                # exact omission that left NBA the only league with an
+                # empty player_assets on 2026-08-18: WNBA's ESPN box
+                # scores hand over a photo href, this CDN hands over the
+                # id the photo is filed under, and nothing kept it.
+                "person_id": str(p.get("personId") or ""),
                 "min": parse_minutes(st.get("minutes", "")),
                 "pts": float(st.get("points", 0) or 0),
                 "reb": float(st.get("reboundsTotal", 0) or 0),
@@ -129,7 +143,7 @@ def ingest_nba_date(conn, date: str) -> dict:
     except DataUnavailable as exc:
         result["skipped"].append(f"nba schedule: {exc}")
         return result
-    grows, prows = [], []
+    grows, prows, arows = [], [], []
     for g in games:
         grows.append({
             "sport": "nba", "season": int(date[:4]), "period": date,
@@ -141,12 +155,23 @@ def ingest_nba_date(conn, date: str) -> dict:
         })
         if g["status"] == 3 and g["game_id"]:
             try:
-                prows += log_rows(parse_boxscore(fetch_boxscore(g["game_id"])),
-                                  date, g["game_id"])
+                players = parse_boxscore(fetch_boxscore(g["game_id"]))
+                prows += log_rows(players, date, g["game_id"])
+                # Faces ride the same fetch: one row per player who has an
+                # id, constructed via HEADSHOT (see its comment for how a
+                # wrong pattern degrades). Same capture point the WNBA
+                # ingest has used since #89 — NBA just never had one.
+                arows += [{"sport": "nba", "player": p["player"],
+                           "espn_id": p["person_id"],
+                           "headshot": HEADSHOT.format(pid=p["person_id"]),
+                           "seen": date}
+                          for p in players
+                          if p["player"] and p.get("person_id")]
             except DataUnavailable as exc:
                 result["skipped"].append(f"nba box {g['game_id']}: {exc}")
     result["games"] = db.upsert_games(conn, grows)
     result["player_logs"] = db.upsert_player_logs(conn, prows)
+    result["assets"] = db.upsert_player_assets(conn, arows)
     if result["games"] or result["player_logs"]:
         db.log_ingest(conn, "nba", "slate", date,
                       result["games"] + result["player_logs"])

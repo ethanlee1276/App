@@ -80,6 +80,17 @@ RestartSec=3
 # box leaves the system and Caddy their room; raise it with the droplet.
 MemoryMax=1600M
 MemoryAccounting=true
+# THE CLOCK THE SLATES LIVE ON. Every "today" in the pipeline is the
+# machine's local date, and a stock droplet runs UTC — so from 8pm
+# Eastern onward its evening rebuilds label TONIGHT'S slate with
+# tomorrow's date. The settle path grew a whole neighbour-day fallback
+# to grade around exactly that drift ("thirty home-run bets dated 07-27
+# whose players are all logged on 07-26"); this line removes the drift
+# at the source instead of catching it downstream. After editing:
+#   sudo cp deploy/qellys.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl restart qellys
+Environment=TZ=America/New_York
+
 # Secrets come from a file root owns and this user can only read.
 # Never put them on the ExecStart line: /proc makes command lines
 # readable by every account on the box.

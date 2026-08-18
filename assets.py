@@ -189,6 +189,9 @@ def probe_other_headshots(only: str | None) -> None:
          "https://a.espncdn.com/i/headshots/mlb/players/full/33192.png"),
         ("nba", "ESPN, by ESPN athlete id",
          "https://a.espncdn.com/i/headshots/nba/players/full/1966.png"),
+        ("nba", "SHIPPED · league CDN by boxscore personId (what the NBA "
+                "ingest now stores in player_assets)",
+         "https://cdn.nba.com/headshots/nba/latest/260x190/2544.png"),
         ("wnba", "ESPN, by ESPN athlete id",
          "https://a.espncdn.com/i/headshots/wnba/players/full/2529205.png"),
     ]

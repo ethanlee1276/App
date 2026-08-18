@@ -2122,12 +2122,34 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     # is FULLY final and ingested (anything less is "not settled yet"), and
     # only when the player has no stat row of any kind that day. Voids
     # carry zero P&L and are excluded from every record aggregate.
+    #
+    # ONLY FOR BETS WHOSE "player" IS A PLAYER. Two categories put
+    # something else in that column and grade somewhere else entirely:
+    # predmarket rows carry an exchange TICKER (graded by
+    # resolve_predmarket against the exchange's own settlements) and ufc
+    # rows carry a fighter no player_game_logs row will ever name (graded
+    # by settle_ufc, where a draw/NC is the only legitimate void). Both
+    # ride the underlying sport's slate date, so on any fully-final day
+    # this sweep saw "no stat row" and voided REAL open positions — found
+    # 2026-08-18 when the doctor promised to void 104 live desk tickets
+    # as scratched lineup players.
+    NEVER_NOSHOW = ("predmarket", "ufc")
     day_state: dict = {}
     day_players: dict = {}
     voided = 0
+    # Heal what the unguarded sweep already broke: a voided desk ticket
+    # is always wrong (nothing legitimately voids predmarket rows today),
+    # so reopen them for the exchange grader. Idempotent, no rows = free.
+    cur = conn.execute("UPDATE bets SET status='open' "
+                       "WHERE category='predmarket' AND status='void'")
+    if cur.rowcount:
+        print(f"  reopened {cur.rowcount} desk ticket(s) a no-show sweep "
+              f"had wrongly voided — the exchange grades those")
     for b in conn.execute(q, args).fetchall():
         # Team-level markets never void via the no-show rule — teams play.
         if b["market"] in GAME_MARKETS or not b["date"]:
+            continue
+        if b["category"] in NEVER_NOSHOW:
             continue
         key = (b["sport"], b["date"])
         where, wargs = _hist_where(b)
@@ -4155,4 +4177,11 @@ def export_json(conn, path) -> None:
     }
     p = _Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(_json.dumps(out, indent=2))
+    # Atomic: the Record page polls this file while every settle pass
+    # rewrites it — an in-place write hands a poll that lands mid-write
+    # a truncated JSON (the same race gate.publish and the profiles
+    # already guard against).
+    import os as _os
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    tmp.write_text(_json.dumps(out, indent=2))
+    _os.replace(tmp, p)

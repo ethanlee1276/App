@@ -828,8 +828,11 @@ def _run_futures(quiet: bool = False) -> None:
                     data = futures_build.build(sport, conn, live_odds=False)
                 except Exception:                   # noqa: BLE001
                     continue
-                (futures_build.OUT / f"futures_{sport}.json").write_text(
-                    json.dumps(data, indent=2))
+                # Atomic — the Futures page polls while this loop writes.
+                _fp = futures_build.OUT / f"futures_{sport}.json"
+                _ftmp = _fp.with_suffix(".json.tmp")
+                _ftmp.write_text(json.dumps(data, indent=2))
+                os.replace(_ftmp, _fp)
         finally:
             conn.close()
         stamp.parent.mkdir(parents=True, exist_ok=True)
@@ -2502,10 +2505,28 @@ def preflight() -> None:
                       f"catches up on launch) or run: "
                       f"python3 launch.py --settle {day['date']}")
             else:
-                print(f"{warn}   {day['date']}: {parts} — all {tot} game(s) are "
-                      f"final but these players never appeared (projected "
-                      f"lineup that sat, late scratch). The next settle pass "
-                      f"VOIDS them — the book voids these bets too.")
+                # Desk tickets and UFC picks ride the slate's date but are
+                # not players: the exchange and the card grade those, and
+                # the no-show sweep is barred from touching them — telling
+                # someone they were about to void was this check repeating
+                # the settler's own bug out loud.
+                desk = {c: n for c, n in day["counts"].items()
+                        if c in ("predmarket", "ufc")}
+                players = {c: n for c, n in day["counts"].items()
+                           if c not in ("predmarket", "ufc")}
+                if players:
+                    pp = ", ".join(f"{n} {c}" for c, n in sorted(players.items()))
+                    print(f"{warn}   {day['date']}: {pp} — all {tot} game(s) "
+                          f"are final but these players never appeared "
+                          f"(projected lineup that sat, late scratch). The "
+                          f"next settle pass VOIDS them — the book voids "
+                          f"these bets too.")
+                if desk:
+                    dp = ", ".join(f"{n} {c}" for c, n in sorted(desk.items()))
+                    print(f"{ok}   {day['date']}: {dp} — graded by the "
+                          f"exchange/card when those markets resolve, not by "
+                          f"the game slate; open is the honest state until "
+                          f"then.")
         if hconn is not None:
             hconn.close()
         lconn.close()
@@ -2521,7 +2542,7 @@ def preflight() -> None:
         if ts:
             mins = (_dt.datetime.now().timestamp() - float(ts)) / 60
             print(f"{ok} Auto-settle: last ran {mins:.0f} min ago "
-                  f"(every 15 min while the launcher is up)")
+                  f"(every 5 min while the launcher is up)")
         else:
             print(f"{warn} Auto-settle: hasn't run yet — it starts the next "
                   f"time you run `python3 launch.py`")
@@ -2591,9 +2612,12 @@ def preflight() -> None:
                 print(f"{ok} {_sp.upper()}: {_has} of {_tot} players have a "
                       f"photo")
             else:
+                # --refresh matters: without it the backfill skips every
+                # already-stored day (that skip is what makes it resumable)
+                # and captures not one face.
                 print(f"{warn} {_sp.upper()}: no photos stored — cards show "
                       f"initials. Re-read the season: python3 ingest.py "
-                      f"{_sp}" + (" --seasons 2025-2026"
+                      f"{_sp}" + (" --seasons 2025-2026 --refresh"
                                   if _sp in ("nba", "wnba") else ""))
     except Exception as exc:                                 # noqa: BLE001
         print(f"{warn} Player faces: not checked ({exc})")
@@ -3754,7 +3778,9 @@ def show_prefit(seasons: str = "") -> None:
     out = ROOT / "web" / "data" / "nfl_prefit.json"
     if rep["n"]:
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(_json.dumps(rep, indent=1), encoding="utf-8")
+        _ptmp = out.with_suffix(".json.tmp")
+        _ptmp.write_text(_json.dumps(rep, indent=1), encoding="utf-8")
+        os.replace(_ptmp, out)
     print(f"  Joined games: {rep['n']}")
     if not rep["n"]:
         print("\n  Nothing joined. Either the preseason box scores or the "
@@ -5629,7 +5655,7 @@ def why_open() -> None:
 
       * READY bets still open  → the settle PASS is not running. The
         auto-settle only fires while `python3 launch.py` is up (on start,
-        then every 15 min) or when the nightly job runs. If neither is
+        then every 5 min) or when the nightly job runs. If neither is
         happening, `python3 launch.py --settle all` closes them now.
       * NO-RESULTS bets         → the results ingest has not reached that
         date. A feeds/reachability issue; `--check` probes the hosts.

@@ -37,6 +37,25 @@ from engine.mlb.models import (MLBProp, MLBGame, MLBGameLog,  # noqa: E402
 from engine.mlb.data_loader import MLBSlate                  # noqa: E402
 from engine.parlays import relate, joint_two, MEASURED       # noqa: E402
 
+import contextlib
+
+
+@contextlib.contextmanager
+def _sim_seated():
+    """Run a test with the sim's seat restored.
+
+    The 2026-08-18 reconciliation benched simjoint (WORSE THAN THE PRIOR,
+    19 SE on 40,181 pairs) and ENABLED ships False — test_simrecon pins
+    that. The pricing mechanism must still WORK, because a winning appeal
+    reseats it with one flag flip; these tests exercise that mechanism."""
+    was = simjoint.ENABLED
+    simjoint.ENABLED = True
+    try:
+        yield
+    finally:
+        simjoint.ENABLED = was
+
+
 #: Nine hitters with real-shaped logs, the smallest slate a joint can come
 #: out of. Values chosen so every projected trio is valid baseball.
 LOGS = {HITS: [1, 0, 2, 1, 0, 1, 2, 0, 1, 1],
@@ -176,7 +195,8 @@ def test_a_simulated_pair_replaces_the_prior_and_says_so():
     a, b = _legs(["Hitter 1", "Hitter 2"])
     j = simjoint.build(_slate(), [a, b], trials=8000)
     assert j["rho"], j["lineups"]
-    with_sim = relate("mlb", a, b, None, j)
+    with _sim_seated():
+        with_sim = relate("mlb", a, b, None, j)
     assert with_sim.measured is True
     assert "tonight's own lineup" in with_sim.mechanism, with_sim.mechanism
     assert with_sim.rho == list(j["rho"].values())[0]
@@ -189,16 +209,21 @@ def test_a_wild_disagreement_with_the_prior_is_refused():
     key = simjoint.pair_key((a["player"], a["market"], a["line"]),
                             (b["player"], b["market"], b["line"]))
     prior = MEASURED["lineup_stack"][0]
-    assert simjoint.rho_for({"rho": {key: prior + 0.9}}, a, b, prior) is None
-    assert simjoint.rho_for({"rho": {key: prior - 0.9}}, a, b, prior) is None
-    ok = simjoint.rho_for({"rho": {key: prior + 0.05}}, a, b, prior)
+    with _sim_seated():
+        assert simjoint.rho_for({"rho": {key: prior + 0.9}}, a, b,
+                                prior) is None
+        assert simjoint.rho_for({"rho": {key: prior - 0.9}}, a, b,
+                                prior) is None
+        ok = simjoint.rho_for({"rho": {key: prior + 0.05}}, a, b, prior)
     assert ok and abs(ok[0] - (prior + 0.05)) < 1e-9
 
 
 def test_the_lookup_does_not_care_which_leg_came_first():
     a, b = _legs(["Hitter 1", "Hitter 2"])
     j = simjoint.build(_slate(), [a, b], trials=6000)
-    assert relate("mlb", a, b, None, j).rho == relate("mlb", b, a, None, j).rho
+    with _sim_seated():
+        assert (relate("mlb", a, b, None, j).rho
+                == relate("mlb", b, a, None, j).rho)
 
 
 def test_the_mlb_pipeline_asks_for_them_and_cannot_be_killed_by_them():

@@ -990,6 +990,40 @@ def test_no_show_on_a_fully_final_day_is_voided():
     assert ledger.open_by_day(conn, "2026-07-27") == []
 
 
+def test_desk_tickets_and_ufc_never_void_as_no_shows():
+    """THE 104-VOIDED-TICKETS REGRESSION, 2026-08-18. Predmarket rows
+    carry an exchange TICKER in the player column and ride the underlying
+    sport's slate date; UFC rows carry a fighter no player_game_logs row
+    will ever name. On any fully-final day the no-show sweep read both as
+    scratched lineup players and voided REAL open positions that the
+    exchange (resolve_predmarket) and the card (settle_ufc) grade. And a
+    ticket the unguarded sweep already voided is reopened — nothing
+    legitimately voids a desk ticket today."""
+    from engine import db as hist_db
+    conn, hconn = _conn(), hist_db.connect(":memory:")
+    _hist_day(hconn, "2026-07-26", n_games=2, n_final=2, players=["Played Guy"])
+    for player, cat, status in (
+            ("KXMLBGAME-26JUL26NYY-YES", "predmarket", "open"),
+            ("KXMLBGAME-26JUL25BOS-NO", "predmarket", "void"),  # prior damage
+            ("Some Fighter", "ufc", "open")):
+        conn.execute(
+            "INSERT INTO bets (sport, date, player, market, side, line, odds, "
+            "stake_units, stake_dollars, status, category) VALUES ('mlb', "
+            "'2026-07-26', ?, 'kalshi_ml', 'YES', 41.0, -110, 0.1, 0.0, "
+            "?, ?)", (player, status, cat))
+    conn.commit()
+
+    ledger.settle_from_history(conn, hconn)
+    rows = {r["player"]: r["status"]
+            for r in conn.execute("SELECT player, status FROM bets")}
+    assert rows["KXMLBGAME-26JUL26NYY-YES"] == "open", \
+        "the exchange grades desk tickets — the slate must not void them"
+    assert rows["KXMLBGAME-26JUL25BOS-NO"] == "open", \
+        "a ticket the old sweep voided comes back for the exchange grader"
+    assert rows["Some Fighter"] == "open", \
+        "only settle_ufc may void a fight (draw/NC), never the slate"
+
+
 def test_no_show_stays_open_until_the_whole_slate_is_final():
     """One game still in progress = the player might yet appear in the
     ingest (results land per game). Nothing voids early."""

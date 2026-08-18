@@ -279,17 +279,26 @@ def test_an_unwritable_journal_never_touches_the_board():
 
 def test_the_switch_kills_pricing_and_nothing_else():
     """ENABLED = False starves rho_for; build() must not read the flag at
-    all, so the journal keeps gathering the evidence for an appeal."""
+    all, so the journal keeps gathering the evidence for an appeal.
+
+    SHIPPED OFF since 2026-08-18: the first real reconciliation read
+    WORSE THAN THE PRIOR by nineteen standard errors on 40,181 pairs, and
+    the rollback the module header promised is the rollback that ran.
+    Turning it back on requires an IMPROVEMENT printout, not a mood."""
+    assert simjoint.ENABLED is False, \
+        "the 2026-08-18 verdict benched the sim; bring a new printout"
     a = {"player": "X", "market": "hits", "line": 0.5}
     b = {"player": "Y", "market": "hits", "line": 0.5}
     key = simjoint.pair_key(("X", "hits", 0.5), ("Y", "hits", 0.5))
     joints = {"rho": {key: 0.2}}
-    assert simjoint.rho_for(joints, a, b, 0.186) is not None
-    simjoint.ENABLED = False
+    assert simjoint.rho_for(joints, a, b, 0.186) is None, \
+        "benched means every pair keeps the measured prior"
+    simjoint.ENABLED = True
     try:
-        assert simjoint.rho_for(joints, a, b, 0.186) is None
+        assert simjoint.rho_for(joints, a, b, 0.186) is not None, \
+            "an appeal that wins must be able to reseat the sim"
     finally:
-        simjoint.ENABLED = True
+        simjoint.ENABLED = False
     src = open(os.path.join(ROOT, "engine", "mlb", "simjoint.py"),
                encoding="utf-8").read()
     i = src.index("def build(")

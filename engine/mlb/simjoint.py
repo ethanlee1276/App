@@ -59,7 +59,19 @@ from .models import HITS, HOME_RUNS, TOTAL_BASES
 #: keeps the 27,613-game measured prior, exactly as before task #60.
 #: Nothing else may read this flag, and nothing may gate on it upstream —
 #: one switch, one meaning.
-ENABLED = True
+#:
+#: THE VERDICT CAME IN, 2026-08-18, and this is the rollback it ordered.
+#: Ethan's laptop replayed the last 30 slate dates of real history —
+#: 567 lineups, 40,181 verdict pairs at H 1.5 / TB 1.5 — and the sim
+#: priced them WORSE than the measured prior by +0.00226 ± 0.00012
+#: log-loss: nineteen standard errors, in both the adjacent and distant
+#: slices, with home runs leaning the same way (+0.00049 ± 0.00034).
+#: The measured prior beat independence on the same pairs (0.2917 vs
+#: 0.2960), so the seat itself is real — the sim just doesn't earn it.
+#: The 1,603 journaled live pairs keep accruing; if a future run of
+#: `python3 simrecon.py` on true lineup cards reads IMPROVEMENT, that
+#: printout is what turns this back on. Not before.
+ENABLED = False
 
 #: Every pair this module solves on a live slate is journaled here, so the
 #: reconciliation can grade REAL lineup cards instead of only replayed

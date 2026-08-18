@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import os
 from pathlib import Path
 
 from engine.mlb.sources.live import (STATS_BASE, TEAM_ID_ABBR,  # noqa: E402
@@ -126,7 +127,11 @@ def main() -> None:
     payload = build(date)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(payload, indent=1))
+    # Atomic replace — this runs on the launcher's fast clock while the
+    # Live tab polls the same file; see memes_build for the lesson.
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload, indent=1))
+    os.replace(tmp, out)
     live = sum(1 for g in payload["games"] if g["live"]["state"] == "live")
     print(f"live scores: {len(payload['games'])} game(s), {live} in progress "
           f"→ {out}")

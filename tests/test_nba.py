@@ -259,17 +259,53 @@ def test_nba_cdn_boxscore_parser():
     from engine.sources.nbadata import parse_boxscore, log_rows
     box = {"game": {
         "homeTeam": {"teamTricode": "BOS", "players": [
-            {"name": "Jay Star", "starter": "1", "statistics": {
-                "minutes": "PT36M00.00S", "points": 30, "reboundsTotal": 8,
-                "assists": 5, "threePointersMade": 4}}]},
+            {"name": "Jay Star", "starter": "1", "personId": 1629029,
+             "statistics": {
+                 "minutes": "PT36M00.00S", "points": 30, "reboundsTotal": 8,
+                 "assists": 5, "threePointersMade": 4}}]},
         "awayTeam": {"teamTricode": "NYK", "players": []}}}
     rows = parse_boxscore(box)
     assert rows[0]["min"] == 36.0 and rows[0]["starter"] is True
+    # Identity is kept, not thrown away — the id the face is filed under.
+    assert rows[0]["person_id"] == "1629029"
     logs = log_rows(rows, "2026-01-15", "0022500001")
     by_market = {r["market"]: r for r in logs}
     assert by_market["min"]["value"] == 36.0
     assert by_market["pts"]["position"] == "S"        # starter flag rides along
     assert by_market["fg3m"]["value"] == 4.0
+
+
+def test_nba_ingest_stores_faces_beside_the_logs(monkeypatch=None):
+    """The empty-player_assets regression: WNBA captured faces during
+    ingest since #89 while NBA — a different feed, no photo href — never
+    wrote a single assets row, and the 2026-08-18 backfill had nothing to
+    fill from. The CDN carries the personId; the ingest now keeps it and
+    the constructed league headshot beside every log row."""
+    from unittest import mock
+    from engine import db
+    from engine.sources import nbadata
+
+    sched = {"leagueSchedule": {"gameDates": [{"games": [
+        {"gameId": "0022500001", "gameDateEst": "2026-01-15T00:00:00Z",
+         "gameStatus": 3, "gameDateTimeUTC": "2026-01-16T00:30:00Z",
+         "homeTeam": {"teamTricode": "BOS", "score": 112},
+         "awayTeam": {"teamTricode": "NYK", "score": 104}}]}]}}
+    box = {"game": {
+        "homeTeam": {"teamTricode": "BOS", "players": [
+            {"name": "Jay Star", "starter": "1", "personId": 1629029,
+             "statistics": {"minutes": "PT36M00.00S", "points": 30}},
+            {"name": "No Id Guy", "starter": "0",
+             "statistics": {"minutes": "PT03M00.00S"}}]},
+        "awayTeam": {"teamTricode": "NYK", "players": []}}}
+    conn = db.connect(":memory:")
+    with mock.patch.object(nbadata, "fetch_schedule", return_value=sched), \
+         mock.patch.object(nbadata, "fetch_boxscore", return_value=box):
+        res = nbadata.ingest_nba_date(conn, "2026-01-15")
+    assert res["assets"] == 1, "one player carries an id, one does not"
+    row = conn.execute("SELECT espn_id, headshot FROM player_assets "
+                       "WHERE sport='nba' AND player='Jay Star'").fetchone()
+    assert row["espn_id"] == "1629029"
+    assert row["headshot"] == nbadata.HEADSHOT.format(pid="1629029")
 
 
 def test_shared_schema_maps_scalpy_without_changing_it():

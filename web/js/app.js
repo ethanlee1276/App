@@ -9028,7 +9028,7 @@ function renderMyBets() {
           <span class="sub">— realized results only; the one-line reads wait for
           ${MB_READ_MIN} decided bets in a group before claiming anything.</span></div>
         ${takes.length ? `<div class="card mb-takes"><ul>
-          ${takes.map((t) => `<li>${t}</li>`).join("")}</ul></div>` : ""}
+          ${takes.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul></div>` : ""}
         ${spark}
         ${groupTable(mbGroup(bets, (b) => b.sport || null))}
         ${groupTable(mbGroup(bets, (b) => mbBand(b.odds)), MB_BAND_ORDER)}`;

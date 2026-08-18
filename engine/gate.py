@@ -267,16 +267,26 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     label = name or public.name
     FULL_DIR.mkdir(parents=True, exist_ok=True)
     full = FULL_DIR / label
-    with open(full, "w") as fh:
-        json.dump(payload, fh, indent=2)
-    public.parent.mkdir(parents=True, exist_ok=True)
-    # Paywall off: the public copy IS the full board, exactly as it was
-    # before any of this existed. The full copy is still written, so
-    # switching the flag on needs no rebuild — the subscriber path is
-    # already populated and correct.
-    out = redact(payload, label) if enabled() else payload
-    with open(public, "w") as fh:
-        json.dump(out, fh, indent=2)
+    # Atomic on both copies (tmp + replace, same directory so the rename
+    # cannot cross filesystems). The public file is what every phone polls
+    # on a 15-30s clock while the refresher rewrites it every cycle — an
+    # in-place write hands a poll that lands mid-write a truncated board,
+    # which renders as a JSON error until the next cycle. The same lesson
+    # the meme board's 20s loop and _save_profile already carry; the slow
+    # loop was the one writer left telling itself it was too slow to race.
+    for path, doc in ((full, payload),
+                      (public, None)):
+        if path is public:
+            public.parent.mkdir(parents=True, exist_ok=True)
+            # Paywall off: the public copy IS the full board, exactly as
+            # it was before any of this existed. The full copy is still
+            # written, so switching the flag on needs no rebuild — the
+            # subscriber path is already populated and correct.
+            doc = redact(payload, label) if enabled() else payload
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        with open(tmp, "w") as fh:
+            json.dump(doc, fh, indent=2)
+        os.replace(tmp, path)
     return (str(public), str(full))
 
 

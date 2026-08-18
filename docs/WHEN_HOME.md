@@ -424,6 +424,55 @@ they settle when the Polymarket build runs, which happens every cycle
 while the launcher is up — they sat open because nothing was running,
 not because settling is manual.
 
+### T20. The verdict acted on, and the bug sweep you asked for
+
+**The sim is benched, per its own rule.** Your simrecon printout read
+WORSE THAN THE PRIOR by nineteen standard errors on 40,181 pairs, and
+the module’s pre-declared rollback ran: `simjoint.ENABLED = False`.
+Every parlay pair keeps the 27,613-game measured prior (which beat
+independence on your own printout — the seat is real, the sim just
+didn’t earn it). The live journal keeps accruing; a future IMPROVEMENT
+printout is what turns it back on.
+
+**The sweep found five real bugs; all fixed:**
+
+1. **Your 104 “about to void” predmarket bets were a settler bug, not
+   scratched players.** Desk tickets carry an exchange ticker in the
+   player column and ride the slate’s date, so the no-show sweep read
+   every one as a lineup scratch once the day went final. The sweep now
+   skips predmarket and UFC rows (each has its own grader), and any
+   ticket it already voided is reopened automatically on the next
+   settle pass — no command needed.
+2. **Polled JSON files were written in place.** Every board write now
+   lands atomically (write-then-rename): gate.publish (all boards),
+   record.json, live scores (the 15-second loop!), fantasy, futures,
+   rosters, the Kalshi fallback. A phone poll landing mid-write used to
+   get half a file and render an error until the next cycle.
+3. **The droplet lives on UTC, so its evening “today” is tomorrow.**
+   That drift is why the settler needed a neighbour-day fallback. The
+   service unit now pins `TZ=America/New_York` — one-time on the
+   droplet after your next deploy:
+   `sudo cp deploy/qellys.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart qellys`
+4. **One HTML injection sink** — the My Bets insight lines rendered
+   your sport labels unescaped (a pasted import could carry markup).
+   Escaped now; everything else on that page already was.
+5. **NBA faces were structurally impossible** — the NBA ingest never
+   captured identity (WNBA’s feed hands over a photo URL; NBA’s CDN
+   hands over a personId and nothing kept it). The ingest now stores
+   the id and the league headshot beside every log row, and the
+   `--check` hint gained the `--refresh` flag without which a re-read
+   skips every stored day. If you want the 306k-row history’s faces
+   now rather than when the season starts:
+   `python3 ingest.py nba --seasons 2025-2026 --refresh` (re-fetches
+   box scores — takes a while, entirely optional).
+
+Also verified clean: every Python file compiles, every JS file parses,
+static file serving can’t escape the web root, profile names are
+strictly validated, the escape helper is correct, no mutable default
+arguments. The `--check` line that still said “every 15 min” now says
+5, and its stuck-bets section no longer threatens to void desk tickets
+it has no business grading.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 
