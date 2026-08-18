@@ -11,8 +11,9 @@ browser you can look at.
 
 ## TODAY'S ROUND — 2026-08-18 (added while you were at work)
 
-Seven commits, tip `9285c84`, GitHub tick green, 4,627 tests. In the
-order to run them:
+Twenty-one commits today, GitHub tick green, 4,662 tests across 270
+files (sanity check after T1’s pull: `git log --oneline -1` should name
+the commit that refreshed this very note). In the order to run them:
 
 ### T1. Deploy — DROPLET, not laptop (engine files changed, ~1 min)
 
@@ -126,6 +127,34 @@ derived only from real flags. Rides the T1 deploy (server.py grew the
 /api/players/fantasy endpoint). Tiles thin out only where the DB lacks
 the 08-15 component markets — your laptop has them; the droplet gets
 them on its next NFL ingest.
+
+### T11. One-time /tmp sweep — droplet AND laptop, ~30 seconds each
+
+Found while closing out the day: every test-suite run used to leave
+~1,600 temp directories behind in /tmp (each fixture makes one and
+nobody deleted them). This cloud machine had 236,908 of them — 28GB —
+which is what kept driving the suite into “no space left on device.”
+The runner now sandboxes and sweeps them itself, so this is a one-time
+cleanup of the old debris, not a chore that comes back.
+
+Droplet (deploys used to run the suite):
+
+```
+find /tmp -maxdepth 1 -name "tmp????????" -mmin +60 | wc -l
+find /tmp -maxdepth 1 -name "tmp????????" -mmin +60 -exec rm -rf {} +
+```
+
+Laptop (same two commands — macOS keeps its per-user temp elsewhere,
+so also count the Python one):
+
+```
+find "$TMPDIR" -maxdepth 1 -name "tmp*" -mmin +60 | wc -l
+find "$TMPDIR" -maxdepth 1 -name "tmp*" -mmin +60 -exec rm -rf {} +
+```
+
+The first line just counts, so you can see the size of it before
+deleting. If the count is small, skip the delete — it only matters
+where the suite ran often.
 
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
