@@ -2271,23 +2271,40 @@ select.calc-in { width: auto; font-weight: 600; }
 .dk-moved { color: var(--warn); font-weight: 700; }
 
 /* Mock draft. Row-list panels share the injuries board's two-line
-   discipline: flexible middle, nothing to crush at 393px. */
+   discipline: identity on the left (face, name, quiet meta), the one
+   action right-aligned, a flexible middle so nothing crushes at 393px.
+   `.card` is a flex COLUMN with a 14px gap, which is right for content
+   cards and wrong for these — a list wants hairlines, not air, and the
+   advice card wants its sentence to FLOW (the first cut let the flex
+   column stack every bolded name on its own line). Hence display:block
+   on both. */
 .mk-sel { font: inherit; font-size: var(--fs-md); padding: 6px 8px;
   background: var(--bg-2); color: var(--text);
   border: var(--hairline) solid var(--border); display: block;
   margin-top: 4px; }
-.mk-panel { padding: 2px 0; }
+.mk-setup { display: flex; gap: 14px; flex-wrap: wrap; align-items: end;
+  font-size: var(--fs-sm); }
+.mk-panel { display: block; padding: 2px 0; }
 .mk-log-row { display: flex; align-items: center; gap: 10px;
-  padding: 7px 14px; font-size: var(--fs-sm); min-width: 0; }
-.mk-log-row > b { overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; }
+  padding: 8px 14px; font-size: var(--fs-sm); min-width: 0; }
 .mk-log-row + .mk-log-row { border-top: var(--hairline) solid var(--border); }
 .mk-log-row.you { background: var(--fill-subtle); }
+.mk-id { flex: 1 1 auto; min-width: 0; display: flex;
+  flex-direction: column; gap: 1px; }
+.mk-id > b { overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.mk-meta { color: var(--text-mute); font-size: var(--fs-xs);
+  display: inline-flex; align-items: center; gap: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mk-pickno { color: var(--text-mute); font-variant-numeric: tabular-nums;
-  min-width: 3em; }
-.mk-advice { padding: 12px 16px; border-left: 3px solid var(--brand-2);
-  font-size: var(--fs-sm); }
-.mk-take { padding: 4px 10px; flex: none; }
+  min-width: 3em; flex: none; }
+.mk-room { flex: none; min-width: 4.2em; }
+.mk-slotchip { min-width: 3.4em; text-align: center; flex: none; }
+.mk-advice { display: block; padding: 12px 16px;
+  border-left: 3px solid var(--brand-2); font-size: var(--fs-sm); }
+.mk-advice-head { font-size: var(--fs-xs); text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text-mute); margin-bottom: 6px; }
+.mk-take { padding: 4px 10px; flex: none; margin-left: auto; }
 
 /* Offseason panel */
 .os-card { padding: 14px 16px; gap: 8px; }

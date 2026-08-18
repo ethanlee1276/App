@@ -45,6 +45,7 @@ const code = [
   grab("const MOCK_FLEX", ";"),
   grab("function _mockPicker(", "\n}"),
   grab("function _mockNeed(", "\n}"),
+  grab("function _mockLineup(", "\n}"),
   grab("function _mockStartersPPG(", "\n}"),
 ].join("\n");
 eval(code);

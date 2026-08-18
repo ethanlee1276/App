@@ -4555,11 +4555,12 @@ async function renderPlayers() {
           ((state.data.player_stats || {})[m.player]));
         const rest = hits.filter((m) => !drawn.some((d) => d.player === m.player));
         host.innerHTML = `
-          <div class="empty" style="margin-bottom:12px">Nothing priced on
-            tonight’s board for “${escapeHtml(state.search)}” — from the
-            ${escapeHtml(String(state.sport || "").toUpperCase())} game logs:</div>
+          <div class="section-title minor">From the
+            ${escapeHtml(String(state.sport || "").toUpperCase())} game logs
+            <span class="sub">— nothing priced on tonight’s board for
+            “${escapeHtml(state.search)}”, so these are the logged games</span></div>
           <div class="player-grid">${drawn.map((m) => profileHTML(m.player)).join("")}</div>
-          ${rest.length ? `<div class="empty" style="margin:12px 0 8px">Also matching:</div>` : ""}
+          ${rest.length ? `<div class="section-title minor" style="margin-top:16px">Also matching</div>` : ""}
           ${rest.map((m) => `
             <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
               ${playerAvatar(m.player, m.team, { size: 40 })}
@@ -12006,23 +12007,33 @@ function _mockAdvance() {
   _mockRender();
 }
 
-//: The best legal starting lineup's projected PPG — the judged number.
-function _mockStartersPPG(roster) {
+//: The best legal starting lineup, slot by slot — the judged eleven.
+//: Kept as ONE function so the final screen's starters list and the
+//: PPG it is scored on can never disagree.
+function _mockLineup(roster) {
   const by = { QB: [], RB: [], WR: [], TE: [] };
   roster.forEach((p) => (by[p.position] || []).push(p));
   Object.values(by).forEach((l) => l.sort((a, b) => (b.proj || 0) - (a.proj || 0)));
-  let sum = 0;
-  const flexPool = [];
+  const starters = [];
   for (const [pos, want] of Object.entries(MOCK_SLOTS)) {
     if (pos === "FLEX") continue;
-    const taken = by[pos].splice(0, want);
-    sum += taken.reduce((s, p) => s + (p.proj || 0), 0);
+    for (let i = 0; i < want; i++) {
+      starters.push([want > 1 ? pos + (i + 1) : pos, by[pos].shift() || null]);
+    }
   }
-  [...by.RB, ...by.WR, ...by.TE].forEach((p) => flexPool.push(p));
-  flexPool.sort((a, b) => (b.proj || 0) - (a.proj || 0));
-  sum += flexPool.slice(0, MOCK_SLOTS.FLEX)
-    .reduce((s, p) => s + (p.proj || 0), 0);
-  return sum;
+  const flexPool = [...by.RB, ...by.WR, ...by.TE]
+    .sort((a, b) => (b.proj || 0) - (a.proj || 0));
+  for (let i = 0; i < MOCK_SLOTS.FLEX; i++) {
+    starters.push(["FLEX" + (i + 1), flexPool.shift() || null]);
+  }
+  const chosen = new Set(starters.map(([, p]) => p).filter(Boolean));
+  const bench = roster.filter((p) => !chosen.has(p));
+  return { starters, bench,
+           ppg: starters.reduce((s, [, p]) => s + (p ? p.proj || 0 : 0), 0) };
+}
+
+function _mockStartersPPG(roster) {
+  return _mockLineup(roster).ppg;
 }
 
 function _mockAdvice() {
@@ -12032,12 +12043,12 @@ function _mockAdvice() {
   const thin = ["RB", "WR", "TE", "QB"].find((pos) =>
     count(pos) < (MOCK_SLOTS[pos] || 1));
   const bestThin = thin && _mock.pool.find((p) => p.position === thin);
-  let line = `Best value on the board: <b>${escapeHtml(best.player)}</b> `
-    + `(${escapeHtml(best.position)}, VORP +${(best.vorp || 0).toFixed(1)}, `
-    + `Tier ${best.tier || "—"}).`;
+  let line = `Best value on the board: <b>${escapeHtml(best.player)}</b>
+    (${escapeHtml(best.position)}, VORP +${(best.vorp || 0).toFixed(1)},
+    Tier ${best.tier || "—"}).`;
   if (bestThin && bestThin !== best) {
-    line += ` Your thinnest spot is ${thin} — best left there: `
-      + `<b>${escapeHtml(bestThin.player)}</b> (+${(bestThin.vorp || 0).toFixed(1)}).`;
+    line += ` Your thinnest spot is ${thin} — best left there:
+      <b>${escapeHtml(bestThin.player)}</b> (+${(bestThin.vorp || 0).toFixed(1)}).`;
   }
   return line;
 }
@@ -12045,16 +12056,16 @@ function _mockAdvice() {
 function mockDraftHTML() {
   const kit = _mockKit || {};
   if (!(kit.board || []).length) {
-    return `<div class="empty">The mock draft drafts from the kit’s own
-      board, and this build has none yet — it fills with the season’s
+    return `<div class="empty">The mock draft drafts from the kit\u2019s own
+      board, and this build has none yet — it fills with the season\u2019s
       first projections.</div>`;
   }
   if (!_mock) {
     return `<div class="section-title">Mock draft
         <span class="sub">— snake order against value-hungry CPU rooms,
-        drafted from the kit’s own 150-player board</span></div>
-      <div class="card" style="padding:16px">
-        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:end">
+        drafted from the kit\u2019s own 150-player board</span></div>
+      <div class="card" style="padding:16px 18px">
+        <div class="mk-setup">
           <label>League size
             <select id="mk-teams" class="mk-sel">
               ${[8, 10, 12].map((n) => `<option ${n === 12 ? "selected" : ""}>${n}</option>`).join("")}
@@ -12065,11 +12076,11 @@ function mockDraftHTML() {
             </select></label>
           <button class="btn primary" id="mk-start">Start the draft</button>
         </div>
-        <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:10px 0 0">
+        <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0">
           CPU rooms pick the best value available with a little human noise —
           they reach, but rarely far, and nobody drafts two quarterbacks in
           the first eight rounds. Your finished roster is judged on its
-          starters’ projected PPG against the room, not on a letter grade
+          starters\u2019 projected PPG against the room, not on a letter grade
           nobody fitted.</p>
       </div>`;
   }
@@ -12077,54 +12088,70 @@ function mockDraftHTML() {
   const total = m.teams * m.rounds;
   const round = Math.floor(m.pick / m.teams) + 1;
   const yourTurn = m.pick < total && _mockPicker(m.pick, m.teams) === m.you;
-  const recent = m.log.slice(-m.teams).reverse().map((e) => `
-    <div class="mk-log-row${e.team === m.you ? " you" : ""}">
-      <span class="mk-pickno">${Math.floor(e.pick / m.teams) + 1}.${String(e.pick % m.teams + 1).padStart(2, "0")}</span>
-      <span>${e.team === m.you ? "You" : "Room " + (e.team + 1)}</span>
-      <b>${escapeHtml(e.player.player)}</b>
-      <span class="chip">${escapeHtml(e.player.position)}</span></div>`).join("");
-  const roster = m.rosters[m.you].map((p) => `
-    <div class="mk-log-row"><span class="chip">${escapeHtml(p.position)}</span>
-      <b>${escapeHtml(p.player)}</b>
-      <span style="color:var(--text-mute)">${escapeHtml(p.team)} · proj ${p.proj}</span></div>`).join("");
+  const face = (p, size) => playerAvatar(p.player, p.team,
+                                         { size, map: nflMap() });
+  const idBlock = (p, meta) => `
+    <span class="mk-id"><b>${escapeHtml(p.player)}</b>
+      <span class="mk-meta">${teamMark(p.team, 14, nflMap(), "nfl")}
+        ${escapeHtml(p.team)} · ${escapeHtml(p.position)}${meta}</span></span>`;
+
   if (m.pick >= total) {
     const scores = m.rosters.map((r, i) => ({ i, ppg: _mockStartersPPG(r) }))
       .sort((a, b) => b.ppg - a.ppg);
     const place = scores.findIndex((s) => s.i === m.you) + 1;
     const yours = scores.find((s) => s.i === m.you);
+    const lineup = _mockLineup(m.rosters[m.you]);
+    const starterRow = ([slot, p]) => `
+      <div class="mk-log-row">
+        <span class="chip mk-slotchip">${escapeHtml(slot)}</span>
+        ${p ? face(p, 28) + idBlock(p, ` · proj ${p.proj}`)
+            : `<span class="mk-meta">— nobody drafted for this slot</span>`}
+      </div>`;
     return `<div class="section-title">Draft complete</div>
       <div class="stats">
         <div class="tile"><div class="k">Your starters</div>
           <div class="v">${yours.ppg.toFixed(1)}</div>
-          <div style="color:var(--text-mute);font-size:var(--fs-sm)">projected PPG</div></div>
+          <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">projected PPG</div></div>
         <div class="tile"><div class="k">Finish</div>
           <div class="v">${place} of ${m.teams}</div>
-          <div style="color:var(--text-mute);font-size:var(--fs-sm)">by projected starters</div></div>
+          <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">by projected starters</div></div>
       </div>
-      <div class="section-title minor">Your roster</div>
-      <div class="card mk-panel">${roster}</div>
+      <div class="section-title minor">Your starting lineup</div>
+      <div class="card mk-panel">${lineup.starters.map(starterRow).join("")}</div>
+      ${lineup.bench.length ? `<div class="section-title minor">Bench</div>
+      <div class="card mk-panel">${lineup.bench.map((p) => `
+        <div class="mk-log-row">${face(p, 28)}${idBlock(p, ` · proj ${p.proj}`)}</div>`).join("")}</div>` : ""}
       <button class="btn" id="mk-again" style="margin-top:12px">Draft again</button>`;
   }
+
   const avail = m.pool.slice(0, 12).map((p) => `
     <div class="mk-log-row">
+      ${face(p, 32)}
+      ${idBlock(p, ` · VORP +${(p.vorp || 0).toFixed(1)} · Tier ${p.tier || "—"}`)}
       <button class="btn mk-take" data-mkp="${escapeAttr(p.player)}"
-        ${yourTurn ? "" : "disabled"}>Draft</button>
-      <b>${escapeHtml(p.player)}</b>
-      <span class="chip">${escapeHtml(p.position)}</span>
-      <span style="color:var(--text-mute)">${escapeHtml(p.team)} ·
-        VORP +${(p.vorp || 0).toFixed(1)} · T${p.tier || "—"}</span></div>`).join("");
+        ${yourTurn ? "" : "disabled"}>Draft</button></div>`).join("");
+  const recent = m.log.slice(-m.teams).reverse().map((e) => `
+    <div class="mk-log-row${e.team === m.you ? " you" : ""}">
+      <span class="mk-pickno">${Math.floor(e.pick / m.teams) + 1}.${String(e.pick % m.teams + 1).padStart(2, "0")}</span>
+      <span class="mk-room">${e.team === m.you ? "You" : "Room " + (e.team + 1)}</span>
+      ${idBlock(e.player, "")}
+      <span class="chip">${escapeHtml(e.player.position)}</span></div>`).join("");
+  const roster = m.rosters[m.you].map((p) => `
+    <div class="mk-log-row">${face(p, 28)}${idBlock(p, ` · proj ${p.proj}`)}
+      <span class="chip">${escapeHtml(p.position)}</span></div>`).join("");
   return `<div class="section-title">Round ${round} of ${m.rounds}
-      <span class="sub">— pick ${m.pick + 1} of ${total}${yourTurn
-        ? " · YOUR PICK" : ""}</span></div>
-    ${yourTurn ? `<div class="card mk-advice">${_mockAdvice()}</div>` : ""}
+      <span class="sub">— pick ${m.pick + 1} of ${total}</span></div>
+    ${yourTurn ? `<div class="card mk-advice">
+      <div class="mk-advice-head">Your pick — round ${round}</div>
+      <div>${_mockAdvice()}</div></div>` : ""}
     <div class="section-title minor">Best available</div>
     <div class="card mk-panel">${avail}</div>
     <div class="section-title minor">Last round of picks</div>
     <div class="card mk-panel">${recent || `<div class="mk-log-row">
-      <span style="color:var(--text-mute)">Nobody has picked yet.</span></div>`}</div>
+      <span class="mk-meta">Nobody has picked yet.</span></div>`}</div>
     <div class="section-title minor">Your roster</div>
     <div class="card mk-panel">${roster || `<div class="mk-log-row">
-      <span style="color:var(--text-mute)">Empty until your first pick.</span></div>`}</div>
+      <span class="mk-meta">Empty until your first pick.</span></div>`}</div>
     <button class="btn" id="mk-reset" style="margin-top:12px">Abandon this draft</button>`;
 }
 
@@ -12137,6 +12164,17 @@ function _mockBind(host) {
   const room = host.querySelector("#mock-room");
   if (!room) return;
   // Delegated, because the room's innerHTML is replaced on every pick.
+  room.addEventListener("change", (e) => {
+    if (e.target.id !== "mk-teams") return;
+    // The slot picker follows the league size — an 8-team league has no
+    // pick eleven, and silently clamping a stale choice would start the
+    // reader from a seat they never chose.
+    const teams = parseInt(e.target.value, 10);
+    const slot = document.getElementById("mk-slot");
+    const keep = Math.min(teams, parseInt(slot.value, 10) || 1);
+    slot.innerHTML = Array.from({ length: teams }, (_, i) =>
+      `<option ${i + 1 === keep ? "selected" : ""}>${i + 1}</option>`).join("");
+  });
   room.addEventListener("click", (e) => {
     const t = e.target;
     if (t.id === "mk-start") {
