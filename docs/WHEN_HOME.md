@@ -9,6 +9,69 @@ browser you can look at.
 
 ---
 
+## TODAY'S ROUND — 2026-08-18 (added while you were at work)
+
+Seven commits, tip `9285c84`, GitHub tick green, 4,627 tests. In the
+order to run them:
+
+### T1. Deploy — DROPLET, not laptop (engine files changed, ~1 min)
+
+```
+cd /srv/qellys && ./deploy/deploy.sh --no-tests
+```
+
+Then close and reopen the app once on the phone. What lands: the
+knowledge-tier fix (your preflight's 16 unregistered "Low barrel rate"
+openings), the NBA Players empty-state fix (the 20-character page), CFB
+on the Live tab with the win-probability chart (it was invisible there —
+wrong payload shape, found while wiring the chart; Week 0 is Saturday),
+and the sim-joint evidence journal, which starts recording on the next
+MLB build.
+
+### T2. Settle the stuck days — laptop, ~1 min
+
+```
+python3 launch.py --settle all
+```
+
+Your own preflight flagged it: 7 finished days still holding open
+predmarket picks (projected lineups that sat). The pass VOIDS them, same
+as the book would.
+
+### T3. Player faces — laptop, one season re-read per league
+
+```
+python3 ingest.py mlb
+python3 ingest.py nfl
+python3 ingest.py nba --seasons 2025-2026
+```
+
+Photos are captured DURING ingest, so the cards show initials until
+these run. WNBA already has its 171 faces — these three bring MLB, NFL
+and NBA level with it.
+
+### T4. The game-sim verdict — laptop, ~10 min, read-only
+
+```
+python3 simrecon.py
+```
+
+Full write-up in §6 below ("the game-sim verdict"). Paste me the verdict
+block — the adjacency split is the line I most want to see.
+
+### T5. Still carrying from before, unchanged
+
+- **Which key is `5dc51e48` (#76)** — ten seconds, §7 below. Open
+  `secrets.local`, see which line it is on; only the live key needs
+  regenerating, at your leisure.
+- **Venue art (#120)** — `docs/VENUE_PROMPTS.md` when you feel like
+  making pictures; fifteen colour renders wanted.
+
+*(More gets appended here as the day goes on — you said to keep the
+list running, so this section is the list.)*
+
+---
+
 ## WHAT IS ACTUALLY LEFT
 
 ### 0. Pull — 14 commits from 2026-08-13
