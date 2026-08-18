@@ -392,6 +392,91 @@ def test_the_inventory_walks_the_rooms_before_it_harvests():
     assert "counts: r.counts" in inv
 
 
+# --- the 2026-08-18 batch: the bar that moved, and two smooshed pages --------
+def test_the_tab_bar_cannot_be_dragged_on_a_phone():
+    """Ethan, 2026-08-18, screen recording of the fantasy page: "look how
+    you can move that bar, fix that so that cant happen." The phone
+    override made the row a horizontal scroller, and a scrollable row is
+    a DRAGGABLE row — it parked wherever the finger left it, half a tab
+    clipped at the screen edge and whole rooms hidden with no hint they
+    exist. The row wraps now, so no .subnav rule may bring the scroller
+    back. Checked on every .subnav rule, not just the one that had it."""
+    css = _read("web", "css", "styles.css")
+    starts = [m.start() for m in re.finditer(r"\.subnav\s*\{", css)]
+    assert starts, "the subnav styles are gone entirely"
+    for i in starts:
+        rule = css[i:css.index("}", i)]
+        assert "overflow-x" not in rule and "nowrap" not in rule, \
+            "a .subnav rule is a horizontal scroller again"
+    i = css.index(".subnav {")
+    assert "flex-wrap: wrap" in css[i:css.index("}", i)]
+    # The scrollbar-hider only ever existed to dress the scroller.
+    assert ".subnav::-webkit-scrollbar" not in css
+
+
+def test_the_buy_low_card_speaks_english():
+    """The xFP buy-low card shipped with a sentence whose subject was a
+    typo — Ethan circled it: "where it says 'he say the production is
+    coming' makes no sense so fix that." The card's job is to be read by
+    someone deciding a trade; it gets one plain sentence, parallel to the
+    volume branch beside it."""
+    js = _js()
+    assert "his say the production" not in js
+    assert "his chances are worth more than he has scored from them so far" in js
+
+
+def test_game_script_cards_wear_the_clubs_marks_and_one_grid():
+    """Ethan, 2026-08-18: "organize this game script page better and also
+    include team logos next to the team names, i think that makse it look
+    more professional." The card used to name each team in words up to
+    six times across three stacked prose lines; now the matchup header
+    carries both clubs' marks and every per-team number sits in one
+    two-row grid — read across for a team, down for a stat."""
+    js = _js()
+    # The card template nests its own `.join("")` (the coach-change
+    # warnings), so the block runs to the next statement, not to a join.
+    i = js.index("const scriptCards =")
+    block = js[i:js.index("const bsCount", i)]
+    assert 'teamMark(s.away, 22, nflMap(), "nfl")' in block
+    assert 'teamMark(s.home, 22, nflMap(), "nfl")' in block
+    assert 'class="gs-grid"' in block
+    # The grid's rows go through one builder, so the away and home lines
+    # cannot drift apart in format; it wears the mark at row scale too.
+    j = js.index("const gsRow =")
+    assert 'teamMark(t, 18, nflMap(), "nfl")' in js[j:i]
+    # The stat columns each explain themselves where a finger can ask.
+    for col in (">Implied<", ">PROE<", ">EPA/play<", ">Pace<"):
+        assert col in block, f"the {col} column lost its header"
+    css = _read("web", "css", "styles.css")
+    for sel in (".gs-match {", ".gs-grid {", ".gs-tm {"):
+        assert sel in css, f"{sel} is unstyled"
+
+
+def test_injury_rows_are_lines_not_columns():
+    """Ethan, 2026-08-18, phone screenshot of the injuries page: "organize
+    this page better as well. it seems so smooshed." It was a six-column
+    table — Team, Player, Status, Injury, Filed, Return — which at 393px
+    crushed every column and scrolled Status half off the screen. A row
+    is now two lines with nothing to crush: identity and detail stack on
+    the left, the verdict right-aligns."""
+    js = _js()
+    i = js.index("function injRow(")
+    fn = js[i:js.index("\n}\n", i)]
+    assert "<tr" not in fn and "<td" not in fn, "the table row is back"
+    assert 'class="inj-line"' in fn
+    assert "injTone(r.status)" in fn, "the status lost its availability colour"
+    j = js.index("async function renderInjuries(")
+    body = js[j:js.index("\n}\n", j)]
+    assert "<table" not in body
+    assert body.count('class="card inj-list"') == 2, \
+        "fresh-this-week and by-team should share the one row layout"
+    # The column headers died with the columns.
+    assert "INJ_HEAD" not in js
+    css = _read("web", "css", "styles.css")
+    for sel in (".inj-line {", ".inj-line-sub {", ".inj-line-right {"):
+        assert sel in css, f"{sel} is unstyled"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

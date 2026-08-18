@@ -9548,41 +9548,51 @@ async function renderFantasy() {
       </div>
       <div style="margin-top:8px;color:var(--text-body);font-size:var(--fs-sm)">
         ${r.basis === "xfp"
-          ? (buy ? "Expected points value every opportunity by WHERE it happened — his say the production is coming."
+          ? (buy ? "Expected points say the production is coming — his chances are worth more than he has scored from them so far."
                  : "Scoring above what his situations support — beyond the ~" + (bs.band || 1.5) + " PPG a good player sustains.")
           : (buy ? "Usage says the production is coming — the volume is already there."
                  : "Producing above what the opportunity supports — beyond the ~" + (bs.band || 1.5) + " PPG a good player sustains.")}</div>
     </article>`;
   };
 
+  /* Rebuilt 2026-08-18 — Ethan, screenshot in hand: "organize this game
+     script page better and also include team logos next to the team
+     names, i think that makse it look more professional." The card used
+     to spend THREE stacked prose lines on PROE, EPA and pace, each line
+     naming both teams again in words — six team names per card and no
+     way to compare down a column. Now the matchup header wears the
+     clubs' marks and every per-team number sits in one two-row grid:
+     read across for a team, down for a stat. Confidence rides the
+     subtitle instead of dangling as its own footer line. */
+  const gsRow = (t, implied, proe, epa, pace) => `
+        <span class="gs-tm">${teamMark(t, 18, nflMap(), "nfl")}<b>${escapeHtml(t)}</b></span>
+        <span class="num">${implied != null ? implied : "—"}</span>
+        <span class="num">${proe != null ? `${proe >= 0 ? "+" : ""}${(proe * 100).toFixed(1)}%` : "—"}</span>
+        <span class="num">${epa != null ? `${epa >= 0 ? "+" : ""}${epa.toFixed(2)}` : "—"}</span>
+        <span class="num">${pace != null ? pace.toFixed(1) + "s" : "—"}</span>`;
   const scriptCards = (d.scripts || []).slice(0, 16).map((s) => `
     <article class="card">
       <div class="card-head">
-        <div><div class="player">${escapeHtml(s.away)} @ ${escapeHtml(s.home)}</div>
-          <div class="subtitle">Week ${parseInt(s.week, 10) || escapeHtml(s.week)} · total ${s.total} · ${escapeHtml(s.favorite)} −${Math.abs(s.spread)}</div></div>
+        <div><div class="gs-match">${teamMark(s.away, 22, nflMap(), "nfl")}<b>${escapeHtml(s.away)}</b>
+            <span class="gs-at">@</span>
+            ${teamMark(s.home, 22, nflMap(), "nfl")}<b>${escapeHtml(s.home)}</b></div>
+          <div class="subtitle">Week ${parseInt(s.week, 10) || escapeHtml(s.week)} · total ${s.total} ·
+            ${escapeHtml(s.favorite)} −${Math.abs(s.spread)} · ${escapeHtml(s.confidence)} confidence</div></div>
         <span class="chip">${escapeHtml(s.archetype)}</span>
       </div>
       ${[s.home, s.away].filter((t) => coachChanged[t]).map((t) =>
         `<div class="warning" style="margin-top:8px">${iconMark("clock")}${escapeHtml(t)} has a new head coach
            (${escapeHtml(coachChanged[t])}) — last season’s tendencies (PROE included) may not carry</div>`).join("")}
-      <div class="metrics">
-        <div class="metric"><div class="k">${escapeHtml(s.home)} implied</div><div class="v">${s.home_implied}</div></div>
-        <div class="metric"><div class="k">${escapeHtml(s.away)} implied</div><div class="v">${s.away_implied}</div></div>
+      <div class="gs-grid">
+        <span></span>
+        <span class="gs-h" title="Points the total and spread imply for this club">Implied</span>
+        <span class="gs-h" title="Pass rate over expectation — intent vs situation, the stable half of game script">PROE</span>
+        <span class="gs-h" title="EPA/play: offensive efficiency measured from every snap (league avg ≈ 0)">EPA/play</span>
+        <span class="gs-h" title="Seconds per snap with the game in the balance — lower is faster">Pace</span>
+        ${gsRow(s.away, s.away_implied, s.away_proe, s.away_epa, s.away_pace)}
+        ${gsRow(s.home, s.home_implied, s.home_proe, s.home_epa, s.home_pace)}
       </div>
       <div style="margin-top:8px;color:var(--text-body);font-size:var(--fs-sm)">${escapeHtml(s.read)}</div>
-      ${s.home_proe != null || s.away_proe != null
-        ? `<div style="margin-top:6px;color:var(--text-dim);font-size:var(--fs-sm)" title="Pass rate over expectation — intent vs situation, the stable half of game script">
-            PROE: ${escapeHtml(s.home)} ${s.home_proe != null ? `${s.home_proe >= 0 ? "+" : ""}${(s.home_proe * 100).toFixed(1)}%` : "—"}
-            · ${escapeHtml(s.away)} ${s.away_proe != null ? `${s.away_proe >= 0 ? "+" : ""}${(s.away_proe * 100).toFixed(1)}%` : "—"}</div>` : ""}
-      ${s.home_epa != null || s.away_epa != null
-        ? `<div style="margin-top:4px;color:var(--text-dim);font-size:var(--fs-sm)"
-               title="EPA/play: offensive efficiency measured from every snap (league avg ≈ 0). Pace: seconds per snap with the game in the balance — lower is faster.">
-            EPA/play: ${escapeHtml(s.home)} ${s.home_epa != null ? `${s.home_epa >= 0 ? "+" : ""}${s.home_epa.toFixed(2)}` : "—"}
-            · ${escapeHtml(s.away)} ${s.away_epa != null ? `${s.away_epa >= 0 ? "+" : ""}${s.away_epa.toFixed(2)}` : "—"}${
-            s.home_pace != null || s.away_pace != null
-              ? ` &nbsp;·&nbsp; pace ${s.home_pace != null ? s.home_pace.toFixed(1) : "—"}s / ${
-                  s.away_pace != null ? s.away_pace.toFixed(1) : "—"}s` : ""}</div>` : ""}
-      <div style="margin-top:6px;color:var(--text-mute);font-size:var(--fs-sm)">Script confidence: ${escapeHtml(s.confidence)}</div>
     </article>`).join("");
 
   const bsCount = (bs.buy_low || []).length + (bs.sell_high || []).length;
@@ -10951,26 +10961,34 @@ function injWhen(ts) {
   return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+/* Rebuilt 2026-08-18 from a six-column agate table. Ethan, screenshot of
+   his phone: "organize this page better as well. it seems so smooshed" —
+   and it was: Team + Player + Status + Injury + Filed + Return at 393px
+   crushed every column and pushed Status half off the screen behind an
+   overflow scroll. A row is now two lines with nothing to crush: who and
+   what on the left, the verdict on the right. Same facts, zero columns. */
 function injRow(r, withTeam) {
   const face = r.face && /^https:\/\//.test(r.face)
     ? `<img class="inj-face" src="${escapeHtml(r.face)}" alt="" loading="lazy"
          onerror="this.style.display='none'">` : "";
-  return `<tr${r.comment ? ` title="${escapeHtml(r.comment)}"` : ""}>
-    ${withTeam ? `<td class="inj-team-cell">${escapeHtml(r.team)}</td>` : ""}
-    <td><span class="inj-id">${face}<b>${escapeHtml(r.player)}</b>${
-      r.pos ? ` <span class="inj-pos">${escapeHtml(r.pos)}</span>` : ""}</span></td>
-    <td><b style="color:${injTone(r.status)}">${escapeHtml(r.status)}</b></td>
-    <td>${escapeHtml(r.injury || "—")}${r.side ? ` <span class="inj-pos">${escapeHtml(r.side)}</span>` : ""}</td>
-    <td class="num" title="${escapeHtml(r.date || "")}">${injWhen(r.ts)}</td>
-    <td class="num">${escapeHtml(r.return_date || "—")}</td>
-  </tr>`;
+  const what = [
+    withTeam ? escapeHtml(r.team) : "",
+    escapeHtml(r.injury || "undisclosed") + (r.side ? ` (${escapeHtml(r.side)})` : ""),
+    `<span title="${escapeHtml(r.date || "")}">filed ${injWhen(r.ts)}</span>`,
+  ].filter(Boolean).join(" · ");
+  return `<div class="inj-line"${r.comment ? ` title="${escapeHtml(r.comment)}"` : ""}>
+    ${face}
+    <span class="inj-line-main">
+      <span><b>${escapeHtml(r.player)}</b>${
+        r.pos ? ` <span class="inj-pos">${escapeHtml(r.pos)}</span>` : ""}</span>
+      <span class="inj-line-sub">${what}</span>
+    </span>
+    <span class="inj-line-right">
+      <b style="color:${injTone(r.status)}">${escapeHtml(r.status)}</b>
+      ${r.return_date ? `<span class="inj-line-ret">return ${escapeHtml(r.return_date)}</span>` : ""}
+    </span>
+  </div>`;
 }
-
-const INJ_HEAD = (withTeam) => `<thead><tr>
-  ${withTeam ? "<th>Team</th>" : ""}<th>Player</th><th>Status</th>
-  <th>Injury</th><th title="When the designation was filed">Filed</th>
-  <th title="Projected return, where the team named one">Return</th>
-</tr></thead>`;
 
 async function renderInjuries() {
   const host = document.getElementById("injuries-body");
@@ -11043,18 +11061,14 @@ async function renderInjuries() {
       <div class="section-title">Fresh this week
         <span class="sub">— designations filed in the last seven days, newest first.
         Hover a row for the team’s own wording.</span></div>
-      <div class="card" style="padding:0;overflow-x:auto">
-        <table class="agate inj-table">${INJ_HEAD(true)}
-        <tbody>${fresh.map((r) => injRow(r, true)).join("")}</tbody></table></div>` : ""}
+      <div class="card inj-list">${fresh.map((r) => injRow(r, true)).join("")}</div>` : ""}
     <div class="section-title">By team
       <span class="sub">— most banged-up first. Every current designation the league
       lists, not just this week’s.</span></div>
     ${teams.map((t) => `
       <div class="inj-team-head">${escapeHtml(t)}
         <span class="inj-team-n">${byTeam[t].length}</span></div>
-      <div class="card" style="padding:0;overflow-x:auto">
-        <table class="agate inj-table">${INJ_HEAD(false)}
-        <tbody>${byTeam[t].map((r) => injRow(r, false)).join("")}</tbody></table></div>`).join("")}
+      <div class="card inj-list">${byTeam[t].map((r) => injRow(r, false)).join("")}</div>`).join("")}
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
       Statuses are the league’s own filings via ESPN’s public feed, refreshed with the
       site on a 30-minute cache, one row per player — his newest filing. The NFL’s
