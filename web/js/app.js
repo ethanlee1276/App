@@ -4548,8 +4548,8 @@ async function renderPlayers() {
     if (!q) {
       /* Not a failed search — the BOARD is empty (an offseason league,
          or a slate not yet priced). Ethan's render sweep, 2026-08-18:
-         NBA Players drew 20 characters, which were `No players match
-         ""` — a search apology on a page nobody had searched. Say the
+         NBA Players drew 20 characters — the failed-search apology with
+         an empty quote in it, on a page nobody had searched. Say the
          true thing instead: profiles are prop cards, and this league
          has none priced tonight. */
       host.innerHTML = `<div class="empty">No priced props on the

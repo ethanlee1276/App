@@ -167,7 +167,12 @@ def test_an_empty_board_is_explained_not_apologised_for():
     js = _js()
     i = js.index("async function renderPlayers(")
     body = js[i:i + 4000]
-    assert body.index("No priced props on the") < body.index("No players match"), \
+    # Pinned by the apology's CODE form (curly quote + the interpolation
+    # start), not its words — the first draft of this test matched the
+    # words inside the fix's own comment, the same trap this suite has
+    # now sprung four times.
+    apology = "No players match “${"
+    assert body.index("No priced props on the") < body.index(apology), \
         "the empty-board branch must be tried before the search apology"
     j = body.index("if (!q) {")
     assert "state.sport" in body[j:j + 700], "the empty state lost its sport name"
