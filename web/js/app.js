@@ -8391,6 +8391,108 @@ function mbByBook(bets) {
   return books;
 }
 
+/* ---- The insights layer: what your own book says about you. --------
+   Realized results only, grouped where the sample is real. This is the
+   half of a bet tracker that actually changes behavior — the list
+   remembers, the groups accuse. */
+
+/* American odds cluster into four habits. +100 is a coin flip priced
+   even, so it opens the dogs. */
+const MB_BAND_ORDER = ["Heavy favorites", "Favorites", "Small dogs",
+                       "Longshots"];
+function mbBand(odds) {
+  const o = Number(odds);
+  if (!o || isNaN(o)) return null;
+  if (o <= -200) return "Heavy favorites";
+  if (o < 0) return "Favorites";
+  if (o < 200) return "Small dogs";
+  return "Longshots";
+}
+
+/* Settled-only rollup by any labeller. Pushes ride in staked/profit
+   (they cost nothing, they decide nothing) but not in the record. */
+function mbGroup(bets, keyFn) {
+  const out = {};
+  for (const b of bets) {
+    if (!["win", "loss", "push"].includes(b.result)) continue;
+    const k = keyFn(b);
+    if (!k) continue;
+    const s = out[k] || (out[k] = { n: 0, wins: 0, losses: 0,
+                                    staked: 0, profit: 0 });
+    s.n += 1;
+    if (b.result === "win") s.wins += 1;
+    else if (b.result === "loss") s.losses += 1;
+    s.staked += Number(b.stake) || 0;
+    s.profit += mbProfit(b);
+  }
+  return out;
+}
+
+/* Cumulative P&L in date order — the bankroll curve. */
+function mbCurve(bets) {
+  const settled = bets.filter((b) =>
+    ["win", "loss", "push"].includes(b.result))
+    .slice().sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  let run = 0;
+  return settled.map((b) => ({ date: b.date || "",
+                               pnl: (run += mbProfit(b)) }));
+}
+
+/* One-line reads, each gated on a real sample so the page never
+   accuses a habit off six bets. At most three — a wall of verdicts
+   reads like a horoscope. */
+const MB_READ_MIN = 10;
+function mbTakeaways(bets) {
+  const takes = [];
+  const dec = (s) => s.wins + s.losses;
+  const bands = mbGroup(bets, (b) => mbBand(b.odds));
+  let leak = null;
+  for (const k of Object.keys(bands)) {
+    const s = bands[k];
+    if (dec(s) < MB_READ_MIN || s.staked <= 0) continue;
+    const roi = s.profit / s.staked;
+    if (roi < -0.10 && (!leak || roi < leak.roi)) leak = { k, s, roi };
+  }
+  if (leak) takes.push(`${leak.k} are the leak: `
+    + `${mbMoney(leak.s.profit, true)} on ${mbMoney(leak.s.staked)} staked `
+    + `(−${Math.abs(100 * leak.roi).toFixed(0)}% ROI).`);
+  const sports = mbGroup(bets, (b) => b.sport || null);
+  let carry = null;
+  for (const k of Object.keys(sports)) {
+    const s = sports[k];
+    if (dec(s) < MB_READ_MIN || s.staked <= 0) continue;
+    const roi = s.profit / s.staked;
+    if (roi > 0.05 && (!carry || roi > carry.roi)) carry = { k, s, roi };
+  }
+  if (carry) takes.push(`${carry.k} is carrying you: `
+    + `${mbMoney(carry.s.profit, true)} at +${(100 * carry.roi).toFixed(0)}% ROI.`);
+  // Flat-stake break-even at YOUR average odds vs the rate you hit.
+  const decided = bets.filter((b) => b.result === "win" || b.result === "loss");
+  const priced = decided.filter((b) => mbDecimal(b.odds) != null);
+  if (priced.length >= 2 * MB_READ_MIN) {
+    const be = priced.reduce((s, b) => s + 1 / mbDecimal(b.odds), 0)
+      / priced.length;
+    const hit = decided.filter((b) => b.result === "win").length
+      / decided.length;
+    if (hit < be - 0.03) takes.push(`At your average odds you need `
+      + `${(100 * be).toFixed(0)}% winners to break even — you’re hitting `
+      + `${(100 * hit).toFixed(0)}%.`);
+    else if (hit > be + 0.03) takes.push(`You’re beating your break-even: `
+      + `${(100 * hit).toFixed(0)}% winners where `
+      + `${(100 * be).toFixed(0)}% pays the freight.`);
+  }
+  const wins = decided.filter((b) => b.result === "win");
+  const losses = decided.filter((b) => b.result === "loss");
+  if (wins.length >= MB_READ_MIN && losses.length >= MB_READ_MIN) {
+    const avg = (a) => a.reduce((s, b) => s + (Number(b.stake) || 0), 0)
+      / a.length;
+    const wAvg = avg(wins), lAvg = avg(losses);
+    if (lAvg > wAvg * 1.25) takes.push(`You bet bigger on your losers — `
+      + `${mbMoney(lAvg)} average on losses vs ${mbMoney(wAvg)} on wins.`);
+  }
+  return takes.slice(0, 3);
+}
+
 /* Mutations. Global because the page rebuilds its own innerHTML, so a
    captured closure would go stale on the first re-render. */
 window.mbAdd = function () {
@@ -8858,6 +8960,44 @@ function renderMyBets() {
              st.winPct == null ? "no decisions yet" : (100 * st.winPct).toFixed(0) + "% win")}
       ${tile("At risk", mbMoney(st.atRisk), `${st.pending} pending`)}
     </div>
+    ${(() => {
+      if (st.settled < 3) return "";
+      const takes = mbTakeaways(bets);
+      const curve = mbCurve(bets);
+      const groupTable = (g, order) => {
+        const keys = (order || Object.keys(g).sort((a, b) =>
+          g[b].profit - g[a].profit)).filter((k) => g[k] && g[k].n);
+        if (keys.length < 2) return "";
+        return `<div class="card" style="padding:0;overflow-x:auto;margin-bottom:14px">
+          <table class="agate"><thead><tr><th></th><th>Bets</th><th>Record</th>
+            <th>Staked</th><th>Profit</th><th>ROI</th></tr></thead><tbody>
+          ${keys.map((k) => { const s = g[k]; return `<tr>
+            <td>${escapeHtml(k)}</td><td class="num">${s.n}</td>
+            <td class="num">${s.wins}–${s.losses}</td>
+            <td class="num">${mbMoney(s.staked)}</td>
+            <td class="num" style="color:${pcolor(s.profit)};font-weight:700">${mbMoney(s.profit, true)}</td>
+            <td class="num">${s.staked > 0 ? (100 * s.profit / s.staked).toFixed(1) + "%" : "—"}</td>
+          </tr>`; }).join("")}</tbody></table></div>`;
+      };
+      const last = curve.length ? curve[curve.length - 1].pnl : 0;
+      const spark = curve.length >= 2 ? `<div class="card" style="margin-bottom:14px">
+        <div class="ffd-h">Bankroll curve</div>
+        ${sparkline(curve.map((p) => p.pnl).reverse(),
+          { w: 360, h: 84, line: 0,
+            stroke: last >= 0 ? "var(--good)" : "var(--bad)" })}
+        <p class="ffd-note" style="margin:4px 0 0">Cumulative P&L over your
+          ${curve.length} settled bets, oldest to newest — the flat line is
+          break-even.</p></div>` : "";
+      return `
+        <div class="section-title">What your book says about you
+          <span class="sub">— realized results only; the one-line reads wait for
+          ${MB_READ_MIN} decided bets in a group before claiming anything.</span></div>
+        ${takes.length ? `<div class="card mb-takes"><ul>
+          ${takes.map((t) => `<li>${t}</li>`).join("")}</ul></div>` : ""}
+        ${spark}
+        ${groupTable(mbGroup(bets, (b) => b.sport || null))}
+        ${groupTable(mbGroup(bets, (b) => mbBand(b.odds)), MB_BAND_ORDER)}`;
+    })()}
     ${bets.length ? `
     <div class="section-title">By book
       <span class="sub">— your realized P&L at each sportsbook, best first.</span></div>

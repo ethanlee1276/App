@@ -55,8 +55,14 @@ def test_every_player_prop_chart_is_bars_now():
     # graphs") — the profile trend, the history-market chips and the
     # Trending minis all draw bars now. Lines over per-game quantities
     # were also the charts iOS long-press kept trying to select.
-    assert APP.count("sparkline(") == 1
+    # 2026-08-18: the count went 1 → 2 and that is the carve-out working,
+    # not the ban eroding. The My Bets bankroll curve is cumulative P&L —
+    # a POSITION that exists at every instant between settles, the same
+    # kind of claim the win-probability track makes. The ban is about
+    # per-game stats, which have no value on the days nothing happened.
+    assert APP.count("sparkline(") == 2
     assert APP.count("sparkline(vals") == 1     # the live line track
+    assert APP.count("sparkline(curve.map(") == 1   # My Bets bankroll curve
 
 
 PA = VIS[VIS.index("function propAnalysis"):VIS.index("/* ---------------- Game-log bars")]

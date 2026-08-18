@@ -221,6 +221,70 @@ def test_the_page_is_wired_like_every_other_standalone():
     assert '"mybets"' in modes[:modes.index("]")]
 
 
+def test_the_insights_math_runs_under_node():
+    """The SHIPPED grouping, banding, curve and takeaway functions, on
+    known answers — including the gates: no verdict off a thin sample,
+    pushes ride the money but never the record, and the leak line only
+    fires on a real hole."""
+    node = shutil.which("node")
+    if not node:
+        return
+    fns = (_slice("function mbDecimal(", "function mbProfit(")
+           + _slice("function mbProfit(", "\nfunction mbStats(")
+           + _slice("function mbMoney(", "\nfunction ")
+           + _slice("/* ---- The insights layer", "/* Mutations."))
+    check = fns + """
+const F = (msg) => { console.error(msg); process.exit(1); };
+// Bands: +100 opens the dogs; garbage is null, never a bucket.
+if (mbBand(-200) !== "Heavy favorites") F("band -200");
+if (mbBand(-110) !== "Favorites") F("band -110");
+if (mbBand(100) !== "Small dogs") F("band +100");
+if (mbBand(250) !== "Longshots") F("band +250");
+if (mbBand("abc") !== null) F("band garbage");
+// Grouping: settled only; a push moves money, not the record.
+const g = mbGroup([
+  { result: "win", stake: 100, odds: 100, sport: "NFL" },
+  { result: "loss", stake: 50, odds: -110, sport: "NFL" },
+  { result: "push", stake: 25, odds: -110, sport: "NFL" },
+  { result: "pending", stake: 999, odds: -110, sport: "NFL" },
+], (b) => b.sport);
+if (g.NFL.n !== 3 || g.NFL.wins !== 1 || g.NFL.losses !== 1) F("group record");
+if (g.NFL.staked !== 175 || g.NFL.profit !== 50) F("group money");
+// The curve accumulates in DATE order whatever order the list is in.
+const c = mbCurve([
+  { result: "loss", stake: 30, odds: -110, date: "2026-08-02" },
+  { result: "win", stake: 100, odds: 100, date: "2026-08-01" },
+]);
+if (c.length !== 2 || c[0].pnl !== 100 || c[1].pnl !== 70) F("curve");
+// Nine losing longshots: silence. Twelve: the leak line, with numbers.
+const shot = (r) => ({ result: r, stake: 10, odds: 300, sport: "MLB" });
+const nine = Array.from({ length: 9 }, () => shot("loss"));
+if (mbTakeaways(nine).length !== 0) F("thin sample must stay silent");
+const twelve = Array.from({ length: 12 }, () => shot("loss"));
+const takes = mbTakeaways(twelve);
+if (!takes.some((t) => t.includes("Longshots are the leak"))) F("leak line");
+console.log("ok");
+"""
+    with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False) as f:
+        f.write(check)
+        path = f.name
+    try:
+        out = subprocess.run([node, path], capture_output=True, text=True)
+        assert out.returncode == 0, out.stderr or out.stdout
+    finally:
+        os.unlink(path)
+
+
+def test_the_insights_render_and_wait_for_a_sample():
+    i = APP.index("function renderMyBets(")
+    body = APP[i:APP.index("\nfunction ", i + 10)]
+    assert "What your book says about you" in body
+    assert "if (st.settled < 3)" in body, \
+        "an insights block over two bets is a horoscope"
+    assert "sparkline(curve.map(" in body, "the bankroll curve must draw"
+    assert "MB_BAND_ORDER" in body, "bands render in habit order, not ROI order"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -3508,6 +3508,11 @@ body.ffd-open { overflow: hidden; }
   color: var(--text-dim); margin-bottom: 16px; }
 .mb-safety b { color: var(--text); }
 .mb-form { margin-bottom: 18px; }
+/* The one-line reads: verdict weight, list rhythm. */
+.mb-takes { display: block; margin-bottom: 14px; }
+.mb-takes ul { margin: 0; padding-left: 20px; }
+.mb-takes li { font-size: var(--fs-md); font-weight: 600; }
+.mb-takes li + li { margin-top: 8px; }
 .mb-form-row { display: flex; flex-wrap: wrap; gap: 10px 14px;
   align-items: flex-end; margin-bottom: 10px; }
 .mb-form-row label { display: flex; flex-direction: column; gap: 4px;

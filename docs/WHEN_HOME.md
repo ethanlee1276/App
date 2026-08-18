@@ -11,9 +11,9 @@ browser you can look at.
 
 ## TODAY'S ROUND — 2026-08-18 (added while you were at work)
 
-Thirty commits today, GitHub tick green, 4,679 tests across 272 files
-(sanity check after T1’s pull: `git log --oneline -1` should name the
-commit that refreshed this very note). In the order to run them:
+Thirty-one commits today, GitHub tick green, 4,681 tests across 272
+files (sanity check after T1’s pull: `git log --oneline -1` should name
+the commit that refreshed this very note). In the order to run them:
 
 ### T1. Deploy — DROPLET, not laptop (engine files changed, ~1 min)
 
@@ -251,6 +251,20 @@ whether the cycle succeeded or not — and `python3 launch.py --check`
 reads it first, before the per-file ages: a fresh beat with one old
 board means a failing build; a dead beat means the loop is down and
 says so in those words. File timestamps alone can’t tell those apart.
+
+### T15. My Bets grew its insights — “What your book says about you”
+
+Same T1 deploy. The bet log was a list with totals; now it reads your
+habits back to you, Juice Reel-style, all from the bets you already
+logged: a bankroll curve (cumulative P&L with a break-even line),
+P&L tables by sport and by odds band (heavy favorites / favorites /
+small dogs / longshots), and at most three one-line verdicts — “Longshots
+are the leak: −$120 on $120 staked,” “NFL is carrying you,” “At your
+average odds you need 42% winners to break even — you’re hitting 36%,”
+“You bet bigger on your losers.” Every read is gated on ten decided
+bets in the group, so nothing accuses a habit off a thin sample; under
+three settled bets the whole section stays hidden. Realized results
+only — pending money never colors a verdict.
 
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
