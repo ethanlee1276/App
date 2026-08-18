@@ -46,8 +46,28 @@ be paying the same toll twice.
 
 from __future__ import annotations
 
+import json
+import os
+
 from . import gamesim as G
 from .models import HITS, HOME_RUNS, TOTAL_BASES
+
+#: The outcome switch. `simrecon.py` (repo root) grades every joint this
+#: module has ever priced against what actually happened, with its bar
+#: declared above its answer — and if that verdict ever reads WORSE THAN
+#: THE PRIOR, flipping this to False is the whole rollback: every pair
+#: keeps the 27,613-game measured prior, exactly as before task #60.
+#: Nothing else may read this flag, and nothing may gate on it upstream —
+#: one switch, one meaning.
+ENABLED = True
+
+#: Every pair this module solves on a live slate is journaled here, so the
+#: reconciliation can grade REAL lineup cards instead of only replayed
+#: ones (the DB stores no historical batting orders — simrecon.py names
+#: that blur; this file is the unblurred sample). Append-only JSONL, last
+#: write per (date, pair) wins at read time: lines move, and the record
+#: that matters is the last one priced before first pitch.
+LOG_PATH = os.path.join("data", "simrecon_log.jsonl")
 
 #: The markets the sim actually deals. Everything else — strikeouts, outs,
 #: any game line — keeps the prior, because the sim has no opinion about it.
@@ -223,6 +243,7 @@ def build(slate, legs: list[dict], trials: int = TRIALS) -> dict:
             continue
 
         found = 0
+        records = []
         for i in range(len(sim_legs)):
             for j in range(i + 1, len(sim_legs)):
                 a, b = sim_legs[i], sim_legs[j]
@@ -234,9 +255,33 @@ def build(slate, legs: list[dict], trials: int = TRIALS) -> dict:
                 if rho is None:
                     continue
                 out["rho"][pair_key(a, b)] = rho
+                records.append({"date": getattr(game, "date", "")
+                                or getattr(slate, "date", "") or "",
+                                "team": team, "game_number": gn,
+                                "a": list(a), "b": list(b),
+                                "p1": round(p1, 5), "p2": round(p2, 5),
+                                "sim_joint": round(both, 5),
+                                "solved_rho": rho})
                 found += 1
+        _journal(records)
         out["lineups"][team] = f"{found} pair(s) simulated"
     return out
+
+
+def _journal(records: list[dict]) -> None:
+    """Append tonight's solved pairs for `simrecon.py` to grade later.
+
+    Never fatal, never chatty: the journal is evidence-gathering riding on
+    a build whose job is the board. A box where data/ is missing or
+    read-only prices exactly as it would have without this line."""
+    if not records:
+        return
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as fh:
+            for r in records:
+                fh.write(json.dumps(r) + "\n")
+    except OSError:
+        pass
 
 
 def rho_for(joints: dict | None, a: dict, b: dict,
@@ -248,6 +293,11 @@ def rho_for(joints: dict | None, a: dict, b: dict,
     is one night's model, so a large disagreement is a finding to chase
     rather than a number to bet.
     """
+    if not ENABLED:
+        # The outcome verdict (simrecon.py) said the prior prices better.
+        # The journal upstream keeps recording either way — evidence for a
+        # later appeal — but nothing simulated reaches a ticket.
+        return None
     if not joints or not joints.get("rho"):
         return None
     try:

@@ -656,6 +656,23 @@ python3 assets.py --probe --sport nba  # confirms the face resize
 None of these write anything. Three of them are supposed to decline to answer
 right now, and knowing which three is the point of running them.
 
+**New 2026-08-18 — the game-sim verdict (task #60), ~10 minutes:**
+
+```
+python3 simrecon.py
+```
+
+Read-only. The Parlay Zone has been pricing two-bats-one-lineup pairs off
+the game sim's own dealt innings instead of the flat +0.186 prior — that
+shipped on structural gates, but no OUTCOME had ever graded it. This
+replays the last 30 slates from your DB (plus whatever the live journal
+has recorded) and prints one of three verdicts, with the bar written in
+the file's header before any answer: IMPROVEMENT, KEEPS ITS SEAT, or
+WORSE THAN THE PRIOR — and the last one names the exact one-line
+rollback (`engine/mlb/simjoint.ENABLED = False`). Paste me the verdict
+block either way; the adjacency split (back-to-back bats vs distant
+ones) is the line I most want to see.
+
 **Two more, new since this list was written — first live contact for the
 two pages built while you were out:**
 

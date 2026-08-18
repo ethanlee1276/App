@@ -47,6 +47,9 @@ data/history.db
 *.db
 data/ledger.db
 data/backups/
+# The sim-joint evidence journal (simjoint.build appends, simrecon.py
+# grades) — per-box measurement data, like the databases above it.
+data/simrecon_log.jsonl
 # The FULL boards — every pick, before redaction. These are the product,
 # and they live outside web/ precisely so no web server can reach them;
 # committing them would publish to GitHub what the paywall withholds from
