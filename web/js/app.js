@@ -4545,6 +4545,19 @@ async function renderPlayers() {
           </div>`).join("")}`;
       return;
     }
+    if (!q) {
+      /* Not a failed search — the BOARD is empty (an offseason league,
+         or a slate not yet priced). Ethan's render sweep, 2026-08-18:
+         NBA Players drew 20 characters, which were `No players match
+         ""` — a search apology on a page nobody had searched. Say the
+         true thing instead: profiles are prop cards, and this league
+         has none priced tonight. */
+      host.innerHTML = `<div class="empty">No priced props on the
+        ${escapeHtml(String(state.sport || "").toUpperCase())} board tonight,
+        so there are no player profiles to draw — they are built from the
+        board's prop cards. The page fills as soon as a slate prices.</div>`;
+      return;
+    }
     host.innerHTML = `<div class="empty">No players match “${escapeHtml(state.search)}”.</div>`;
     return;
   }

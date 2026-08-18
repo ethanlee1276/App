@@ -154,6 +154,25 @@ def test_an_unsearched_player_page_does_not_draw_every_profile():
     assert "players.slice(0, cap)" in body
 
 
+def test_an_empty_board_is_explained_not_apologised_for():
+    """Ethan's render sweep, 2026-08-18: "NBA Players: rendered almost
+    nothing (20 chars)". The twenty characters were a failed-search
+    apology — with an empty quote in it — on a page nobody had searched;
+    the board was simply empty, because the league is between seasons.
+    The two states get different sentences now: an unsearched empty board
+    names the sport and says where profiles come from, and the search
+    apology is reserved for an actual search. Verified in Chromium: the
+    NBA page draws 169 characters of explanation against the sample
+    data's empty board."""
+    js = _js()
+    i = js.index("async function renderPlayers(")
+    body = js[i:i + 4000]
+    assert body.index("No priced props on the") < body.index("No players match"), \
+        "the empty-board branch must be tried before the search apology"
+    j = body.index("if (!q) {")
+    assert "state.sport" in body[j:j + 700], "the empty state lost its sport name"
+
+
 def test_searching_still_reaches_every_player():
     """The cap is on DISPLAY only. A cap applied before the filter would
     make anyone outside the first dozen unfindable, which is worse than the
