@@ -846,7 +846,7 @@ def _run_autosettle() -> None:
 
     The daily chores only reach yesterday and only fire once per calendar
     day, so before this every night's board stayed "open" until the next
-    morning. This throttles itself to every 15 minutes and is a no-op when
+    morning. This throttles itself to every 5 minutes and is a no-op when
     nothing recent is open, so it is cheap to call on every cycle."""
     try:
         from engine.maintenance import settle_open

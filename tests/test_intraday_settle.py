@@ -100,7 +100,10 @@ def test_the_wnba_ingester_asks_for_the_wnba():
 
 # --- the surrounding contract, unchanged ------------------------------------
 def test_it_throttles_so_it_is_cheap_to_call_every_cycle():
-    assert M.SETTLE_EVERY_S == 900
+    # Five minutes since 2026-08-18 — Ethan's asked-for cadence ("every 5
+    # mins scan if props have been won or lost"), affordable because the
+    # pass is a no-op query when nothing recent is open.
+    assert M.SETTLE_EVERY_S == 300
     conn_state = os.path.join(tempfile.mkdtemp(), "s.json")
     with open(conn_state, "w") as fh:
         json.dump({"last_settle_ts": 1_000_000.0}, fh)

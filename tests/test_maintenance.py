@@ -26,6 +26,9 @@ def _stub_chores(monkeypatch, calls):
     monkeypatch.setattr(ledger, "settle_from_history", fake_settle)
     monkeypatch.setattr(ledger, "connect", lambda path=None: None)
     monkeypatch.setattr(db, "connect", lambda path=None: None)
+    # The WNBA day-ingest hits the network; these tests are about the
+    # scheduling, not the feed.
+    monkeypatch.setattr(maintenance, "_wnba_day", None)
 
 
 def test_runs_once_per_day_and_catches_up(monkeypatch):
@@ -46,12 +49,72 @@ def test_runs_once_per_day_and_catches_up(monkeypatch):
                                       state_path=state, today=today) is False
         assert len([c for c in calls if c[0] == "ingest"]) == 1
 
-        # Next day: runs again, re-ingesting from the last maintained day
-        # (its games may have finished after that run) — not the whole week.
+        # Next day: runs again. With no database to consult (db.connect is
+        # stubbed to None here) the start falls back to the full week —
+        # idempotent, so re-covering costs nothing. The DB-derived resume
+        # point has its own test below.
         assert maintenance.run_if_due(harvest=False, log=logs.append,
                                       state_path=state,
                                       today=today + dt.timedelta(days=1)) is True
-        assert calls[-2] == ("ingest", "2026-07-24", "2026-07-25")
+        assert calls[-2] == ("ingest", "2026-07-19", "2026-07-25")
+
+
+def test_catch_up_resumes_from_the_databases_own_last_final(monkeypatch):
+    """THE EIGHT-DAY-GAP REGRESSION. Ethan's laptop was closed 8/11–8/18
+    and the fixed one-week window dropped the first missing day, which
+    ended in a hand-typed --from/--to backfill. The window is now derived
+    from the DB's last stored final, so any gap heals itself — and a
+    machine that was off for a season is capped, not ground to dust."""
+    calls, logs = [], []
+    from engine import db, ingest, ledger
+
+    def fake_ingest(conn, start, end, with_logs=True, progress=None):
+        calls.append(("ingest", start, end))
+        return {"games": 3, "player_logs": 50, "skipped": []}
+
+    with tempfile.TemporaryDirectory() as td:
+        hconn = db.connect(Path(td) / "h.db")
+        db.upsert_games(hconn, [{
+            "sport": "mlb", "season": 2026, "period": "2026-07-16",
+            "game_id": "BOS@NYY", "home": "NYY", "away": "BOS",
+            "home_score": 5, "away_score": 2, "spread": 0.0, "total": None,
+            "roof": "open", "surface": "grass", "temp": None, "wind": None,
+            "extra": None,
+        }])
+        monkeypatch.setattr(ingest, "ingest_mlb_results", fake_ingest)
+        monkeypatch.setattr(ledger, "settle_from_history",
+                            lambda c, h, sport=None: 0)
+        monkeypatch.setattr(ledger, "connect", lambda path=None: None)
+        monkeypatch.setattr(db, "connect", lambda path=None: hconn)
+        monkeypatch.setattr(maintenance, "_wnba_day", None)
+        today = dt.date(2026, 7, 25)          # nine days past the last final
+        assert maintenance.run_if_due(harvest=False, log=logs.append,
+                                      state_path=Path(td) / "m.json",
+                                      today=today) is True
+    # 2026-07-16 itself is re-read (late games), then the gap through
+    # yesterday — one day MORE than the old week window could reach.
+    assert calls[0] == ("ingest", "2026-07-16", "2026-07-24")
+
+
+def test_a_season_long_gap_is_capped_not_ground_through(monkeypatch):
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE games (sport TEXT, period TEXT, "
+                 "home_score INT)")
+    conn.execute("INSERT INTO games VALUES ('mlb', '2026-04-01', 4)")
+    yesterday = dt.date(2026, 7, 24)
+    start = maintenance._catch_up_start(conn, "mlb", yesterday)
+    assert (yesterday - start).days == maintenance.MAX_CATCH_UP_DAYS - 1
+    # And a sport the DB has never seen falls back to the one-week floor.
+    start = maintenance._catch_up_start(conn, "nba", yesterday)
+    assert (yesterday - start).days == maintenance.CATCH_UP_DAYS - 1
+
+
+def test_the_settle_clock_is_five_minutes(monkeypatch):
+    """Ethan, 2026-08-18: "it should be automatic like every 5 mins scan
+    if props have been won or lost". The pass is a throttled no-op when
+    nothing recent is open, so the clock is the promise."""
+    assert maintenance.SETTLE_EVERY_S == 300
 
 
 def test_failed_ingest_retries_next_cycle(monkeypatch):
@@ -66,6 +129,7 @@ def test_failed_ingest_retries_next_cycle(monkeypatch):
     monkeypatch.setattr(ledger, "settle_from_history", lambda c, h, sport=None: 0)
     monkeypatch.setattr(ledger, "connect", lambda path=None: None)
     monkeypatch.setattr(db, "connect", lambda path=None: None)
+    monkeypatch.setattr(maintenance, "_wnba_day", None)
 
     with tempfile.TemporaryDirectory() as td:
         state = Path(td) / "m.json"

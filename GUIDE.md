@@ -370,9 +370,9 @@ rather than being resolved behind your back.
 
 **About `--settle`:** this used to be a nightly chore, because the journal
 only graded itself on the first cycle of the *next* day. It doesn't work
-that way any more — the launcher settles finished games every ~15 minutes
+that way any more — the launcher settles finished games every ~5 minutes
 and again the moment you start it, so picks close out on their own within
-about a quarter hour of the last out.
+minutes of the last out.
 
 `--settle` is still there for when the launcher *wasn't* running — a
 laptop that slept, a night it was closed, a west-coast game that ended

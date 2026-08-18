@@ -391,6 +391,39 @@ python3 facesfill.py
 
 Then `python3 launch.py --check` — the Player faces lines should jump.
 
+### T19. “Why do I keep having to do ingests” — you don’t, any more
+
+You asked why ingests and settles keep landing on you. The honest
+answer: the automation already existed — the droplet runs the full
+loop 24/7 (its service runs `launch.py`, which ingests, settles and
+rebuilds on its own), and the laptop self-heals every time `launch.py`
+starts — but two constants kept betraying you, and both are fixed:
+
+* **The catch-up window was a fixed 7 days.** Your lid was closed
+  8/11–8/18 — eight days — so the first missing day silently fell off
+  the edge, and that is the entire reason you typed a `--from/--to`
+  backfill this week. The window is now **derived from the database’s
+  own last stored final, per sport**: however long the machine was
+  closed, the next pass resumes exactly where the data ends (capped at
+  45 days so a machine off for a whole off-season doesn’t grind).
+* **The settle clock was 15 minutes; it is now 5** — your words
+  (“every 5 mins scan if props have been won or lost”). It scans open
+  props, pulls the free results feeds for any day with an open bet,
+  grades what finished, and is a no-op when nothing recent is open.
+* **WNBA got the daily-results block it never had.** Until now a WNBA
+  day was only ingested when an open bet pointed at it, which is where
+  the quiet gaps in its history came from.
+
+What this means in practice: **you never run `ingest.py` or
+`--settle` by hand again.** The droplet does everything on its own,
+forever. On the laptop, either leave `python3 launch.py` running (it
+does everything on its clocks) or just open it whenever you sit down —
+startup runs the chores immediately and the gap-aware catch-up heals
+whatever it missed. The 184 open predmarket rows are the same story:
+they settle when the Polymarket build runs, which happens every cycle
+while the launcher is up — they sat open because nothing was running,
+not because settling is manual.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

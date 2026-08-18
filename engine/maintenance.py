@@ -11,9 +11,10 @@ The journal/backtest data pipeline needs three chores done every day:
 Doing them by hand every day is exactly the kind of manual dependency a
 learning engine shouldn't have, so ``launch.py`` calls :func:`run_if_due` in
 its background cycle: the first cycle of each calendar day runs the chores
-(catching up as far as ``CATCH_UP_DAYS`` if the site wasn't opened for a
-while), every other cycle is a no-op. Ingestion is idempotent, so overlap
-with manual runs is harmless.
+(catching up from each sport's own last stored final — however long the
+machine was closed — capped at ``MAX_CATCH_UP_DAYS``), every other cycle
+is a no-op. Ingestion is idempotent, so overlap with manual runs is
+harmless.
 
 Those chores reach *yesterday*, which is right for ingest and closing odds
 but wrong for the journal: it meant tonight's picks stayed "open" until
@@ -35,8 +36,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STATE_PATH = ROOT / "data" / "cache" / "maintenance.json"
 
-# How far back a catch-up reaches when the site hasn't been opened in days.
+# How far back a catch-up reaches when the DATABASE cannot say where it
+# left off (fresh install, no finals stored). When it can, the window is
+# derived, not fixed — see _catch_up_start.
 CATCH_UP_DAYS = 7
+# The derived window's ceiling. Ethan's laptop was closed for eight days in
+# August 2026 and the fixed one-week window silently dropped the first of
+# them — the exact failure a "catch-up" exists to prevent. Deriving the
+# start from the DB heals any gap; the cap keeps a machine that was off for
+# a whole off-season from grinding through months of slates on first boot.
+MAX_CATCH_UP_DAYS = 45
 # Never auto-harvest below this measured remaining quota — daily closes are a
 # nice-to-have; live odds for today's picks always come first.
 HARVEST_MIN_REMAINING = 3000
@@ -176,7 +185,11 @@ def _maybe_harvest(day: _dt.date, log) -> None:
 #
 # MLB's results API is free and keyless, so the only cost is politeness;
 # the throttle exists for that reason, not for a budget.
-SETTLE_EVERY_S = 900             # 15 minutes between intraday passes
+# Ethan, 2026-08-18: "it should be automatic like every 5 mins scan if
+# props have been won or lost". Five minutes it is — the pass is a no-op
+# query when nothing recent is open, and the results it pulls are the free
+# league feeds, so the shorter clock costs nothing.
+SETTLE_EVERY_S = 300             # 5 minutes between intraday passes
 # How far back an intraday pass will reach for still-open picks. The daily
 # chores handle anything older (and reach CATCH_UP_DAYS), so this only has
 # to cover "tonight, and last night if the launcher was closed".
@@ -499,6 +512,36 @@ def settle_open(log=print, state_path: Path | None = None,
     return settled
 
 
+def _last_result_day(hconn, sport: str) -> _dt.date | None:
+    """The newest day this sport has a stored FINAL for, or None.
+
+    The database is the only honest witness to what has been ingested —
+    the state file's `last_done` says the chores RAN, not that they
+    covered every day, and trusting it is how an eight-day lid-closed
+    stretch ended in a hand-typed `--from/--to` backfill."""
+    try:
+        r = hconn.execute(
+            "SELECT MAX(period) FROM games WHERE sport=? "
+            "AND home_score IS NOT NULL", (sport,)).fetchone()
+        return _dt.date.fromisoformat(str(r[0])) if r and r[0] else None
+    except Exception:                                         # noqa: BLE001
+        return None
+
+
+def _catch_up_start(hconn, sport: str, yesterday: _dt.date) -> _dt.date:
+    """Where this sport's results ingest resumes: GAP-AWARE, not fixed.
+
+    From the sport's own last stored final (that day is re-read — its late
+    games may have finished after the run that stored the early ones), so
+    any stretch of downtime heals itself on the next pass, however long it
+    was. The old one-week window remains only as the fallback when the DB
+    cannot answer, and MAX_CATCH_UP_DAYS caps the reach either way."""
+    floor = yesterday - _dt.timedelta(days=CATCH_UP_DAYS - 1)
+    cap = yesterday - _dt.timedelta(days=MAX_CATCH_UP_DAYS - 1)
+    last = _last_result_day(hconn, sport) if hconn is not None else None
+    return max(last or floor, cap)
+
+
 def run_if_due(force: bool = False, harvest: bool = True, log=print,
                state_path: Path | None = None, today: _dt.date | None = None) -> bool:
     """Run the daily chores if they haven't run yet today.
@@ -514,15 +557,12 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
         return False
 
     yesterday = today - _dt.timedelta(days=1)
-    start = yesterday - _dt.timedelta(days=CATCH_UP_DAYS - 1)
-    if state.get("last_done"):
-        try:
-            # Re-ingest from the last maintained day (idempotent) — its games
-            # may have finished after that run.
-            start = max(start, _dt.date.fromisoformat(state["last_done"])
-                        - _dt.timedelta(days=1))
-        except ValueError:
-            pass
+    try:
+        from . import db as _cdb
+        _hconn = _cdb.connect()
+    except Exception:                                         # noqa: BLE001
+        _hconn = None
+    start = _catch_up_start(_hconn, "mlb", yesterday)
     log(f"Daily maintenance: results {start} → {yesterday}, journal settle"
         + (", closing odds" if harvest else "") + "…")
 
@@ -574,15 +614,17 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
         log(f"  ⚠️  nfl schedule refresh failed: {exc}")
 
     # NBA results — final boxscores from the free CDN, one date at a time
-    # over the same catch-up window. This is what settles NBA picks and the
-    # NBA stale-line flags. Skipped July–September: no games exist.
-    if (today.month >= 10 or today.month <= 6) and start <= yesterday:
+    # over its OWN derived window (an NBA gap and an MLB gap are different
+    # sizes). This is what settles NBA picks and the NBA stale-line flags.
+    # Skipped July–September: no games exist.
+    nstart = _catch_up_start(_hconn, "nba", yesterday)
+    if (today.month >= 10 or today.month <= 6) and nstart <= yesterday:
         try:
             from . import db as _ndb
             from .sources.nbadata import ingest_nba_date
             nconn = _ndb.connect()
             tot_g = tot_l = 0
-            d = start
+            d = nstart
             while d <= yesterday:
                 res = ingest_nba_date(nconn, d.isoformat())
                 tot_g += res["games"]
@@ -597,6 +639,32 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                 log(f"  nba results: {tot_g} game(s), {tot_l:,} log rows")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  nba results ingest failed: {exc}")
+
+    # WNBA results — the block that never existed. Until 2026-08-18 a WNBA
+    # day was ingested only when an open bet pointed at it (settle_open's
+    # ingest_for_open_bets), so quiet stretches left holes in the history
+    # that later surfaced as missing faces and thin projections. Same
+    # shape as the NBA block, in the WNBA's own season window (May–Oct).
+    if 5 <= today.month <= 10 and _wnba_day is not None:
+        wstart = _catch_up_start(_hconn, "wnba", yesterday)
+        if wstart <= yesterday:
+            try:
+                from . import db as _wdb
+                wconn = _wdb.connect()
+                tot_g = tot_l = 0
+                d = wstart
+                while d <= yesterday:
+                    res = _wnba_day(wconn, d.isoformat())
+                    tot_g += res["games"]
+                    tot_l += res["player_logs"]
+                    if any("scoreboard" in s for s in res.get("skipped", [])):
+                        log(f"  ⚠️  {res['skipped'][0]}")
+                        break
+                    d += _dt.timedelta(days=1)
+                if tot_g or tot_l:
+                    log(f"  wnba results: {tot_g} game(s), {tot_l:,} log rows")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  wnba results ingest failed: {exc}")
 
     # NFL weekly results — the layer that settles NFL props and TDs. The
     # nflverse weekly-stats file updates within a day of games, so a daily
