@@ -4278,6 +4278,14 @@ function renderGamePage() {
   const mlb = state.sport === "mlb";
   const nba = state.sport === "nba" || state.sport === "wnba";
   const w = g.weather || {};
+  // Park factors. This line was DROPPED in the 08-11 desktop-sheet
+  // rewrite while two Key-insights lines kept reading f.hr — and
+  // because both sit behind `mlb &&`, the short-circuit hid the
+  // ReferenceError from every NFL page while EVERY MLB game page
+  // crashed blank for a week (Ethan, 2026-08-18: "it just takes you
+  // to a blank screen"). A guard that only trips on one sport is why
+  // the render sweep and the NFL-fixture tests stayed green.
+  const f = g.factors || {};
   const live = g.live || {};
   const isLive = live.state === "live";
   const isFinal = live.state === "final";

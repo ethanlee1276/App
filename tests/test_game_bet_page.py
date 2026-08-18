@@ -72,6 +72,22 @@ def test_the_board_and_the_edge_list_open_them_too():
     assert "gameBetAttrs(b)" in APP[j:j + 2600]
 
 
+def test_the_game_page_defines_its_park_factors():
+    """`const f = g.factors` was dropped in the 08-11 desktop-sheet
+    rewrite while two Key-insights lines kept reading f.hr — and both
+    sit behind `mlb &&`, so the short-circuit hid the ReferenceError
+    from every NFL page and every NFL fixture while EVERY MLB game page
+    crashed blank for a week (Ethan, 2026-08-18: "when you click on a
+    live game, it just takes you to a blank screen"). A guard that only
+    trips on one sport is exactly how a crash dodges a render sweep, so
+    the definition is pinned ABOVE the first read."""
+    i = APP.index("function renderGamePage(")
+    # The CODE read, not the word — the definition's own comment says
+    # "f.hr" a few lines above it (guard-matches-own-prose, again).
+    assert APP.index("const f = g.factors || {};", i) \
+        < APP.index("f.hr >= 1.05", i)
+
+
 def test_the_id_survives_a_rebuild():
     """Keyed on the matchup, market, side and line — never an index into
     a list, which would point at a different pick the moment the board
