@@ -128,6 +128,39 @@ console.log("ok");
         os.unlink(path)
 
 
+def test_the_render_pass_landed_honest():
+    """Ethan's Zenos calendar render, followed with only real numbers:
+    month navigation, a play-quality legend whose "elite" cut is computed
+    from the season itself, the day-summary strip, checklist cards, and
+    a weekly-range strip on the profile sourced from the player's own
+    games. What the render shows that we have no honest source for —
+    salaries, ownership, boom rates — is omitted, same rule as the
+    player-page render."""
+    i = APP.index("function ffCalendarHTML(")
+    body = APP[i:APP.index("function ffCalDayHTML(", i)]
+    for hook in ('data-calnav="-1"', 'data-calnav="1"', 'data-calnav="first"'):
+        assert hook in body, f"month nav lost {hook}"
+    assert "ffcal-legend" in body and "ELITE SLATE" in body
+    j = APP.index("function _ffCalQual(")
+    qual = APP[j:APP.index("function ffCalendarHTML(", j)]
+    assert "vals[Math.floor(vals.length * 0.75)]" in qual, \
+        "the elite cut is the season's own top quarter, never a magic number"
+    k = APP.index("function ffCalDayHTML(")
+    day = APP[k:APP.index("\ndocument.addEventListener", k)]
+    assert "ffcal-checks" in day and 'icon("check", 12)' in day, \
+        "the why is a checklist of facts, not a paragraph of vibes"
+    m = APP.index("function ffProfileHTML(")
+    prof = APP[m:APP.index("\nfunction ", m + 10)]
+    assert "Worst week" in prof and "weekly.length >= 4" in prof, \
+        "the range is his own weeks, and it waits for a real sample"
+    for sel in (".ffcal-nav {", ".ffcal-mark {", ".ffp-range {"):
+        assert sel in CSS, f"{sel} is unstyled"
+    # And what we cannot source stays out.
+    for banned in ("Ownership", "Boom %", "Salary"):
+        assert banned not in day and banned not in body, \
+            f"{banned} has no honest source here"
+
+
 def test_the_page_is_wired_and_the_why_is_printed():
     i = APP.index('subtabbedHTML("fantasy"')
     assert '["days", "Calendar"' in APP[i:i + 2400]

@@ -11,7 +11,7 @@ browser you can look at.
 
 ## TODAY'S ROUND — 2026-08-18 (added while you were at work)
 
-Thirty-two commits today, GitHub tick green, 4,687 tests across 273
+Thirty-three commits today, GitHub tick green, 4,688 tests across 273
 files (sanity check after T1’s pull: `git log --oneline -1` should name
 the commit that refreshed this very note). In the order to run them:
 
@@ -283,6 +283,19 @@ out that day are excluded by name, never silently. Every card taps
 through to the full player profile. The build now ships the league
 schedule (dates per game) alongside the game scripts — that lands on
 the droplet with the same deploy, no extra step.
+
+Second pass, following your Zenos calendar render with only real
+numbers: month navigation (‹ › and a First-slate jump), a
+play-quality legend where “Elite slate” is the season’s own top
+quarter of game days by projected points (computed, never
+hand-picked), green-ringed elite days, a selected-day summary strip
+(“13 games · top five average 21.4 · ELITE SLATE”), the why rebuilt
+as the render’s checklist of facts, FPPG beside each name, and the
+render’s floor/median/ceiling range on the full profile — sourced
+from the one place a range honestly exists, his own 2025 weeks
+(worst / median / best). The render’s salaries, ownership and boom
+rates have no honest source here, so they stay off — same rule as
+the player-page render.
 
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*

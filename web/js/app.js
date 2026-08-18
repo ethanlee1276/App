@@ -12378,6 +12378,26 @@ function ffProfileHTML(p, info, bio) {
       ${tierDots ? `<div class="ffp-proj-r">Tier ${k.tier} ${tierDots}</div>` : ""}
     </div>` : "";
   const weekly = p.weekly || [];
+  // The render's floor/median/ceiling strip, sourced from the one place
+  // a range honestly exists: his OWN weeks. Worst, median and best of
+  // the season's games — measured, not modeled.
+  let range = "";
+  if (weekly.length >= 4) {
+    const fps = weekly.map((w) => Number(w.fp) || 0).sort((a, b) => a - b);
+    const med = fps.length % 2 ? fps[(fps.length - 1) / 2]
+      : (fps[fps.length / 2 - 1] + fps[fps.length / 2]) / 2;
+    const lo = fps[0], hi = fps[fps.length - 1];
+    const at = (v) => hi > lo ? (100 * (v - lo) / (hi - lo)) : 50;
+    range = `
+    <div class="card ffp-panel"><div class="ffd-h">Weekly range — ${p.season} (PPR)</div>
+      <div class="ffp-range"><span class="ffp-range-med"
+        style="left:${at(med).toFixed(1)}%"></span></div>
+      <div class="ffp-rangelbl">
+        <span>Worst week<br><b>${lo.toFixed(1)}</b></span>
+        <span class="mid">Median<br><b>${med.toFixed(1)}</b></span>
+        <span class="end">Best week<br><b>${hi.toFixed(1)}</b></span>
+      </div></div>`;
+  }
   const fpChart = weekly.length >= 3 ? `
     <div class="card ffp-panel"><div class="ffd-h">Fantasy points — last ${weekly.length} games (PPR)</div>
       ${gamelogBars(weekly.map((w) => w.fp), {
@@ -12470,7 +12490,7 @@ function ffProfileHTML(p, info, bio) {
       ${proj}
     </div>
     <div class="ffp-grid">
-      ${fpChart}${match}${util}${log}${upcoming}
+      ${fpChart}${range}${match}${util}${log}${upcoming}
     </div>
     ${takes.length ? `<div class="card ffp-panel"><div class="ffd-h">Key takeaways</div>
       ${takes.map((t) => `<p class="ffp-take">${icon("check", 14)} ${t}</p>`).join("")}
@@ -12607,11 +12627,36 @@ function _ffDayBoard(d, date) {
 const FFCAL_DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const FFCAL_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const FFCAL_MON_FULL = ["January", "February", "March", "April", "May",
+                        "June", "July", "August", "September", "October",
+                        "November", "December"];
+let _ffCalMonth = null;   // "YYYY-MM" being shown
 
 function _ffCalSay(date) {
   const [y, m, dd] = date.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, dd));
   return `${FFCAL_DOW[dt.getUTCDay()]} ${FFCAL_MON[m - 1]} ${dd}`;
+}
+
+/* Per-date slate quality, from the same score every card prints.
+   "Elite" is the top quarter of game days BY that number — the cut is
+   computed from the season itself, never hand-picked. */
+function _ffCalQual(d) {
+  const days = _ffDayEnv(d);
+  const out = {};
+  for (const date of Object.keys(days)) {
+    const { rows } = _ffDayBoard(d, date);
+    const top = rows.slice(0, 5);
+    out[date] = { games: days[date].length / 2, best: top[0] || null,
+                  top5: top.length
+                    ? top.reduce((s, x) => s + x.score, 0) / top.length : 0 };
+  }
+  const vals = Object.values(out).map((q) => q.top5).sort((a, b) => a - b);
+  const cut = vals.length ? vals[Math.floor(vals.length * 0.75)] : Infinity;
+  for (const q of Object.values(out)) {
+    q.tier = q.top5 >= cut ? "elite" : q.games >= 4 ? "slate" : "light";
+  }
+  return out;
 }
 
 function ffCalendarHTML(d) {
@@ -12624,38 +12669,64 @@ function ffCalendarHTML(d) {
         build reads — it fills on the next build once the schedule cache exists.</div></div>`;
   }
   if (!_ffCalSel || !days[_ffCalSel]) _ffCalSel = dates[0];
-  // The grid starts the Sunday on/before the first game and runs five
-  // weeks — in September that IS the month view, and in August it skips
-  // straight to where the games are instead of showing empty weeks.
-  const [y0, m0, d0] = dates[0].split("-").map(Number);
-  const first = new Date(Date.UTC(y0, m0 - 1, d0));
+  if (!_ffCalMonth) _ffCalMonth = _ffCalSel.slice(0, 7);
+  const qual = _ffCalQual(d);
+  const [yy, mm] = _ffCalMonth.split("-").map(Number);
+  // Weeks covering the shown month: the Sunday on/before the 1st,
+  // through the Saturday after the last day. Neighbour-month days stay
+  // visible but dimmed, the way every calendar reads.
+  const first = new Date(Date.UTC(yy, mm - 1, 1));
   first.setUTCDate(first.getUTCDate() - first.getUTCDay());
+  const lastDay = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+  const weeks = Math.ceil((new Date(Date.UTC(yy, mm - 1, 1)).getUTCDay()
+                           + lastDay) / 7);
   const cells = [];
-  for (let i = 0; i < 35; i++) {
+  for (let i = 0; i < weeks * 7; i++) {
     const dt = new Date(first);
     dt.setUTCDate(first.getUTCDate() + i);
     const iso = dt.toISOString().slice(0, 10);
-    const has = days[iso];
-    let best = null;
-    if (has) best = _ffDayBoard(d, iso).rows[0] || null;
-    cells.push(`<div class="ffcal-cell${has ? "" : " ffcal-empty"}${
-        iso === _ffCalSel ? " sel" : ""}"${has ? ` data-calday="${iso}" role="button" tabindex="0"` : ""}>
-      <span class="ffcal-num">${dt.getUTCDate() === 1 || i === 0
-        ? `${FFCAL_MON[dt.getUTCMonth()]} ` : ""}${dt.getUTCDate()}</span>
-      ${has ? `<span class="ffcal-n">${has.length / 2} game${has.length > 2 ? "s" : ""}</span>` : ""}
-      ${best ? `<span class="ffcal-best">${playerAvatar(best.r.player, best.r.team,
-          { size: 18, map: nflMap(), headshot: best.r.headshot })}
-        <b>${escapeHtml((best.r.player || "").split(" ").slice(-1)[0])}</b>
-        <span class="ffcal-pts">${best.score.toFixed(1)}</span></span>` : ""}
+    const inMonth = dt.getUTCMonth() === mm - 1;
+    const q = days[iso] ? qual[iso] : null;
+    cells.push(`<div class="ffcal-cell${q ? "" : " ffcal-empty"}${
+        inMonth ? "" : " ffcal-other"}${iso === _ffCalSel ? " sel" : ""}${
+        q && q.tier === "elite" ? " ffcal-elite" : ""}"${
+        q ? ` data-calday="${iso}" role="button" tabindex="0"` : ""}>
+      <span class="ffcal-num">${dt.getUTCDate()}</span>
+      ${q ? `<span class="ffcal-mark ${q.tier}"></span>` : ""}
+      ${q && q.best ? `<span class="ffcal-best">${playerAvatar(q.best.r.player,
+          q.best.r.team, { size: 18, map: nflMap(), headshot: q.best.r.headshot })}
+        <b>${escapeHtml((q.best.r.player || "").split(" ").slice(-1)[0])}</b>
+        <span class="ffcal-pts">${q.best.score.toFixed(1)}</span></span>` : ""}
     </div>`);
   }
+  const sel = qual[_ffCalSel] || {};
+  const outN = _ffDayBoard(d, _ffCalSel).out.length;
   return `
     <div class="section-title">The start calendar
       <span class="sub">— each game day wears its best play: the board’s projection
       scaled by that day’s game environment. Tap a day for the top five and the
       arithmetic behind each.</span></div>
+    <div class="ffcal-legend">
+      <span><span class="ffcal-mark elite"></span> Elite slate — a top-quarter
+        day by projected points</span>
+      <span><span class="ffcal-mark slate"></span> Game day</span>
+      <span><span class="ffcal-mark light"></span> Light slate</span>
+    </div>
+    <div class="ffcal-nav">
+      <button class="btn ghost" type="button" data-calnav="-1" aria-label="Previous month">‹</button>
+      <b class="ffcal-month">${FFCAL_MON_FULL[mm - 1]} ${yy}</b>
+      <button class="btn ghost" type="button" data-calnav="1" aria-label="Next month">›</button>
+      <button class="btn ghost ffcal-today" type="button" data-calnav="first">First slate</button>
+    </div>
     <div class="ffcal-head">${FFCAL_DOW.map((w) => `<span>${w}</span>`).join("")}</div>
     <div class="ffcal-grid" id="ffcal-grid">${cells.join("")}</div>
+    <div class="card ffcal-summary">
+      <b>${_ffCalSay(_ffCalSel)}</b>
+      ${sel.tier === "elite" ? `<span class="chip up">ELITE SLATE</span>` : ""}
+      <span class="ffcal-sumsub">${sel.games || 0} game${sel.games === 1 ? "" : "s"}
+        · top five average ${(sel.top5 || 0).toFixed(1)} projected${outN
+          ? ` · ${outN} ruled out and excluded` : ""}</span>
+    </div>
     <div id="ffcal-day">${ffCalDayHTML(d, _ffCalSel)}</div>`;
 }
 
@@ -12671,28 +12742,38 @@ function ffCalDayHTML(d, date) {
     const vs = e.home ? "vs" : "at";
     const spreadSay = e.spread == null ? ""
       : `, ${e.spread < 0 === e.home ? "favored" : "underdog"} by ${Math.abs(e.spread)}`;
-    return `<article class="card ffcal-card" data-dossier="${escapeAttr(r.player)}">
+    // The render's "Why He's a Top Play" checklist — every line a fact
+    // the payload defends, never a vibe.
+    const why = [];
+    why.push(`Baseline <b>${r.proj} PPG</b> — Tier ${r.tier} on the board,
+      +${r.vorp} over a replacement ${escapeHtml(r.position)}.`);
+    why.push(e.implied != null
+      ? `Environment <b>×${mult.toFixed(2)}</b>: ${e.implied} implied points
+         ${vs} ${nflName(e.opp)}${spreadSay}, game total ${e.total},
+         against a league-average ${avg ? avg.toFixed(1) : "—"}.`
+      : `No line posted for this game yet, so the baseline stands alone.`);
+    if (e.read) why.push(`<b>${escapeHtml(e.archetype || "")}.</b>
+      ${escapeHtml(e.read)}`);
+    if (u) why.push(`Usage: ${pct(u.season)} of his team’s
+      ${escapeHtml(u.metric || "volume")} this season${u.l4 != null
+        ? `, ${pct(u.l4)} over the last four weeks` : ""} —
+      the volume behind the baseline is ${u.delta != null && u.delta > 0.02
+        ? "growing" : u.delta != null && u.delta < -0.02 ? "shrinking" : "steady"}.`);
+    if (inj) why.push(`<span style="color:${injTone(inj.status)}">Carries a
+      designation: ${escapeHtml(inj.status)}${inj.injury
+        ? ` — ${escapeHtml(inj.injury)}` : ""}.</span>`);
+    return `<article class="card ffcal-card${i === 0 ? " top" : ""}"
+        data-dossier="${escapeAttr(r.player)}">
       <div class="ffcal-cardhead">
         <span class="ffcal-rank">${i + 1}</span>
         ${playerAvatar(r.player, r.team, { size: 40, map: nflMap(), headshot: r.headshot })}
         <span class="ffcal-who"><b>${escapeHtml(r.player)}</b>${inj ? injTag("nfl", r.player) : ""}
           <span class="ffcal-sub">${escapeHtml(r.position)}${r.pos_rank} · ${nflName(r.team)}
-            ${vs} ${nflName(e.opp)}</span></span>
+            ${vs} ${nflName(e.opp)}${r.ppg != null ? ` · ${r.ppg} FPPG last season` : ""}</span></span>
         <span class="ffcal-proj">${score.toFixed(1)}<span class="ffcal-projk">proj pts</span></span>
       </div>
-      <p class="ffcal-why">Baseline <b>${r.proj} PPG</b> (Tier ${r.tier} on the board,
-        +${r.vorp} over a replacement ${escapeHtml(r.position)}) ×
-        <b>${mult.toFixed(2)}</b> environment — ${e.implied != null
-          ? `${e.implied} implied points ${vs} ${nflName(e.opp)}${spreadSay},
-             game total ${e.total}, against a league-average ${avg ? avg.toFixed(1) : "—"}`
-          : "no line posted for this game yet, so the baseline stands alone"}.</p>
-      ${e.read ? `<p class="ffcal-script"><b>${escapeHtml(e.archetype || "")}.</b>
-        ${escapeHtml(e.read)}</p>` : ""}
-      ${u ? `<p class="ffcal-usage">Usage says ${pct(u.season)} of his team’s
-        ${escapeHtml(u.metric || "volume")} this season${u.l4 != null
-          ? `, ${pct(u.l4)} over the last four weeks` : ""} —
-        the volume behind the baseline is ${u.delta != null && u.delta > 0.02
-          ? "growing" : u.delta != null && u.delta < -0.02 ? "shrinking" : "steady"}.</p>` : ""}
+      <ul class="ffcal-checks">${why.map((w) =>
+        `<li>${icon("check", 12)} <span>${w}</span></li>`).join("")}</ul>
     </article>`;
   };
   return `
@@ -12708,14 +12789,27 @@ function ffCalDayHTML(d, date) {
    re-renders on every day tap, so per-cell listeners would die with the
    innerHTML. */
 document.addEventListener("click", (e) => {
-  const cell = e.target && e.target.closest("[data-calday]");
-  if (!cell || !_ffData) return;
-  _ffCalSel = cell.dataset.calday;
-  const grid = document.getElementById("ffcal-grid");
-  if (grid) grid.querySelectorAll(".ffcal-cell").forEach((c) =>
-    c.classList.toggle("sel", c.dataset.calday === _ffCalSel));
-  const panel = document.getElementById("ffcal-day");
-  if (panel) panel.innerHTML = ffCalDayHTML(_ffData, _ffCalSel);
+  if (!_ffData) return;
+  const nav = e.target && e.target.closest("[data-calnav]");
+  const cell = !nav && e.target && e.target.closest("[data-calday]");
+  if (!nav && !cell) return;
+  if (nav) {
+    if (nav.dataset.calnav === "first") {
+      _ffCalMonth = null;             // recomputed from the first slate
+      _ffCalSel = null;
+    } else {
+      const [y, m] = (_ffCalMonth || "").split("-").map(Number);
+      if (!y) return;
+      const dt = new Date(Date.UTC(y, m - 1 + Number(nav.dataset.calnav), 1));
+      _ffCalMonth = dt.toISOString().slice(0, 7);
+    }
+  } else {
+    _ffCalSel = cell.dataset.calday;
+  }
+  // Whole-tab re-render: the grid marks, the summary strip and the day
+  // panel all move together, and the join is cheap.
+  const zone = document.querySelector('[data-subgroup="days"]');
+  if (zone) zone.innerHTML = ffCalendarHTML(_ffData);
 });
 
 /* ---------------- Mock draft simulator ----------------

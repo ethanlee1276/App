@@ -262,6 +262,9 @@
   --text-body: #A8A090;
   --topbar-bg: rgba(10,9,7,.92);
   --skeleton: linear-gradient(100deg, var(--panel-2) 30%, var(--panel-3) 50%, var(--panel-2) 70%);
+  /* Worst-to-best track for range strips. Built from the semantic
+     tones, which flip per theme on their own — one definition serves. */
+  --grad-range: linear-gradient(90deg, var(--bad), var(--warn), var(--good));
 
   --font-sans: "Archivo Narrow", "Arial Narrow", -apple-system,
                BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -5267,3 +5270,38 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   .ffcal-cell { min-height: 54px; }
   .ffcal-best b { display: none; }   /* face + points still identify him */
 }
+
+/* Calendar render pass: legend, month nav, day markers, summary,
+   the checklist cards, and the profile's weekly-range strip. */
+.ffcal-legend { display: flex; flex-wrap: wrap; gap: 6px 16px;
+  color: var(--text-mute); font-size: var(--fs-xs); margin-bottom: 10px; }
+.ffcal-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.ffcal-mark { width: 7px; height: 7px; border-radius: 50%; flex: none;
+  display: inline-block; }
+.ffcal-mark.elite { background: var(--good); }
+.ffcal-mark.slate { background: var(--brand); }
+.ffcal-mark.light { background: var(--text-mute); }
+.ffcal-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.ffcal-nav .btn { padding: 4px 12px; }
+.ffcal-month { font-size: var(--fs-lg); min-width: 9em; text-align: center; }
+.ffcal-today { margin-left: auto; }
+.ffcal-other { opacity: .35; }
+.ffcal-cell.ffcal-elite { border-color: color-mix(in oklab, var(--good) 45%, var(--border-soft)); }
+.ffcal-summary { display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap; margin-bottom: 14px; }
+.ffcal-sumsub { color: var(--text-mute); font-size: var(--fs-sm); }
+.ffcal-checks { list-style: none; margin: 10px 0 0; padding: 0; }
+.ffcal-checks li { display: flex; gap: 8px; align-items: baseline;
+  font-size: var(--fs-sm); color: var(--text-dim); }
+.ffcal-checks li + li { margin-top: 6px; }
+.ffcal-checks .ic { color: var(--good); flex: none; transform: translateY(1px); }
+.ffcal-card.top { border-color: color-mix(in oklab, var(--good) 40%, var(--border)); }
+.ffp-range { position: relative; height: 6px; border-radius: 3px;
+  background: var(--grad-range);
+  margin: 12px 2px 6px; opacity: .85; }
+.ffp-range-med { position: absolute; top: -4px; width: 3px; height: 14px;
+  border-radius: 2px; background: var(--text); transform: translateX(-50%); }
+.ffp-rangelbl { display: flex; justify-content: space-between;
+  font-size: var(--fs-xs); color: var(--text-mute); }
+.ffp-rangelbl b { color: var(--text); font-size: var(--fs-md); }
+.ffp-rangelbl .mid { text-align: center; } .ffp-rangelbl .end { text-align: right; }
