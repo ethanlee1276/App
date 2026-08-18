@@ -9749,6 +9749,7 @@ async function renderFantasy() {
       fit from this season’s own data (league value per target and per carry by position) —
       volume-based, so a player can legitimately sustain a positive gap; only gaps beyond
       ~${bs.band || 1.5} PPG are flagged. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
+  _mockKit = d.draft_kit || {};
   host.innerHTML = _ffLead + subtabbedHTML("fantasy", [
     ["usage", "Usage", "who is getting the ball, and whose share is moving",
      _ffUsage],
@@ -9760,6 +9761,9 @@ async function renderFantasy() {
     ["ranks", "Rankings",
      "every source we can read without a password, and where they argue",
      rankBoardHTML(d.ranks)],
+    ["mock", "Mock draft",
+     "a snake draft against the room — same board the kit publishes",
+     `<div id="mock-room">${mockDraftHTML()}</div>`],
     ["league", "Around the league",
      "camp, the waiver wire, the offseason and the draft kit",
      acctStripHTML() + `<div id="sleeper-zone"></div>`
@@ -9769,6 +9773,7 @@ async function renderFantasy() {
      + waiverPulseHTML(d.trending) + offseasonHTML(off) + draftKit],
   ]) + _ffFoot;
   bindSubtabs(host);
+  _mockBind(host);
   const more = document.getElementById("usage-more");
   if (more) more.addEventListener("click", () => {
     const rest = document.getElementById("usage-rest");
@@ -11923,6 +11928,229 @@ function draftKitHTML(kit) {
       <div class="card" style="padding:0">${sleepers}</div>` : ""}
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:10px">
       ${(kit.notes || []).map(escapeHtml).join(" ")}</p>`;
+}
+
+/* ---------------- Mock draft simulator ----------------
+   Ethan, 2026-08-18: "Add a mock draft simulator." A snake draft against
+   value-hungry CPU rooms, drafted FROM THE KIT'S OWN BOARD — the same
+   150 players, projections and VORP the draft kit already publishes, so
+   the sim and the kit can never disagree about who is good.
+
+   The CPU model is deliberately simple and stated: each pick samples
+   from the best available by VORP, weighted toward the top with noise
+   (rooms reach, but rarely far), scaled by a positional-need multiplier
+   (a room holding a QB does not draft a second one in round 3). No
+   hidden ratings, no personality knobs pretending to be information.
+
+   The end-of-draft read is arithmetic, not a letter grade: your best
+   starting lineup's projected PPG, ranked against the CPU rooms' own.
+   A grade would imply a model of drafting skill nobody fitted. */
+let _mock = null;                 // an in-progress draft survives re-renders
+let _mockKit = null;              // the fantasy payload's draft kit, captured at render
+
+//: Starting lineup a roster is judged on (bench fills the rest).
+const MOCK_SLOTS = { QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2 };
+const MOCK_FLEX = new Set(["RB", "WR", "TE"]);
+
+function _mockPicker(pickIdx, teams) {
+  const round = Math.floor(pickIdx / teams);
+  const i = pickIdx % teams;
+  return round % 2 === 0 ? i : teams - 1 - i;          // the snake
+}
+
+function _mockStart(teams, slot) {
+  const kit = _mockKit || {};
+  const pool = (kit.board || []).slice()
+    .sort((a, b) => (b.vorp || 0) - (a.vorp || 0));
+  _mock = { teams, you: slot - 1, pool, pick: 0,
+            rounds: Math.min(14, Math.floor(pool.length / teams)),
+            rosters: Array.from({ length: teams }, () => []), log: [] };
+  _mockAdvance();
+}
+
+function _mockNeed(roster, pos, round) {
+  const n = roster.filter((p) => p.position === pos).length;
+  // Onesie positions: a second QB/TE before the bench rounds is a
+  // wasted pick, and even a CPU should know it.
+  if ((pos === "QB" || pos === "TE") && n >= 1 && round < 9) return 0.1;
+  if (pos === "RB" || pos === "WR") return n >= 5 ? 0.3 : 1.0;
+  return n >= 2 ? 0.2 : 1.0;
+}
+
+function _mockCpuPick(ti) {
+  const round = Math.floor(_mock.pick / _mock.teams);
+  const roster = _mock.rosters[ti];
+  const cands = _mock.pool.slice(0, 8).map((p, i) => ({
+    p, w: Math.exp(-i / 2.5) * _mockNeed(roster, p.position, round)
+          * (0.6 + Math.random() * 0.8) }));
+  const total = cands.reduce((s, c) => s + c.w, 0) || 1;
+  let roll = Math.random() * total;
+  let choice = cands[0].p;
+  for (const c of cands) { roll -= c.w; if (roll <= 0) { choice = c.p; break; } }
+  _mockTake(ti, choice);
+}
+
+function _mockTake(ti, player) {
+  _mock.pool = _mock.pool.filter((p) => p !== player);
+  _mock.rosters[ti].push(player);
+  _mock.log.push({ pick: _mock.pick, team: ti, player });
+  _mock.pick += 1;
+}
+
+function _mockAdvance() {
+  const total = _mock.teams * _mock.rounds;
+  while (_mock.pick < total
+         && _mockPicker(_mock.pick, _mock.teams) !== _mock.you) {
+    _mockCpuPick(_mockPicker(_mock.pick, _mock.teams));
+  }
+  _mockRender();
+}
+
+//: The best legal starting lineup's projected PPG — the judged number.
+function _mockStartersPPG(roster) {
+  const by = { QB: [], RB: [], WR: [], TE: [] };
+  roster.forEach((p) => (by[p.position] || []).push(p));
+  Object.values(by).forEach((l) => l.sort((a, b) => (b.proj || 0) - (a.proj || 0)));
+  let sum = 0;
+  const flexPool = [];
+  for (const [pos, want] of Object.entries(MOCK_SLOTS)) {
+    if (pos === "FLEX") continue;
+    const taken = by[pos].splice(0, want);
+    sum += taken.reduce((s, p) => s + (p.proj || 0), 0);
+  }
+  [...by.RB, ...by.WR, ...by.TE].forEach((p) => flexPool.push(p));
+  flexPool.sort((a, b) => (b.proj || 0) - (a.proj || 0));
+  sum += flexPool.slice(0, MOCK_SLOTS.FLEX)
+    .reduce((s, p) => s + (p.proj || 0), 0);
+  return sum;
+}
+
+function _mockAdvice() {
+  const roster = _mock.rosters[_mock.you];
+  const best = _mock.pool[0];
+  const count = (pos) => roster.filter((p) => p.position === pos).length;
+  const thin = ["RB", "WR", "TE", "QB"].find((pos) =>
+    count(pos) < (MOCK_SLOTS[pos] || 1));
+  const bestThin = thin && _mock.pool.find((p) => p.position === thin);
+  let line = `Best value on the board: <b>${escapeHtml(best.player)}</b> `
+    + `(${escapeHtml(best.position)}, VORP +${(best.vorp || 0).toFixed(1)}, `
+    + `Tier ${best.tier || "—"}).`;
+  if (bestThin && bestThin !== best) {
+    line += ` Your thinnest spot is ${thin} — best left there: `
+      + `<b>${escapeHtml(bestThin.player)}</b> (+${(bestThin.vorp || 0).toFixed(1)}).`;
+  }
+  return line;
+}
+
+function mockDraftHTML() {
+  const kit = _mockKit || {};
+  if (!(kit.board || []).length) {
+    return `<div class="empty">The mock draft drafts from the kit’s own
+      board, and this build has none yet — it fills with the season’s
+      first projections.</div>`;
+  }
+  if (!_mock) {
+    return `<div class="section-title">Mock draft
+        <span class="sub">— snake order against value-hungry CPU rooms,
+        drafted from the kit’s own 150-player board</span></div>
+      <div class="card" style="padding:16px">
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:end">
+          <label>League size
+            <select id="mk-teams" class="mk-sel">
+              ${[8, 10, 12].map((n) => `<option ${n === 12 ? "selected" : ""}>${n}</option>`).join("")}
+            </select></label>
+          <label>Your pick
+            <select id="mk-slot" class="mk-sel">
+              ${Array.from({ length: 12 }, (_, i) => `<option>${i + 1}</option>`).join("")}
+            </select></label>
+          <button class="btn primary" id="mk-start">Start the draft</button>
+        </div>
+        <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:10px 0 0">
+          CPU rooms pick the best value available with a little human noise —
+          they reach, but rarely far, and nobody drafts two quarterbacks in
+          the first eight rounds. Your finished roster is judged on its
+          starters’ projected PPG against the room, not on a letter grade
+          nobody fitted.</p>
+      </div>`;
+  }
+  const m = _mock;
+  const total = m.teams * m.rounds;
+  const round = Math.floor(m.pick / m.teams) + 1;
+  const yourTurn = m.pick < total && _mockPicker(m.pick, m.teams) === m.you;
+  const recent = m.log.slice(-m.teams).reverse().map((e) => `
+    <div class="mk-log-row${e.team === m.you ? " you" : ""}">
+      <span class="mk-pickno">${Math.floor(e.pick / m.teams) + 1}.${String(e.pick % m.teams + 1).padStart(2, "0")}</span>
+      <span>${e.team === m.you ? "You" : "Room " + (e.team + 1)}</span>
+      <b>${escapeHtml(e.player.player)}</b>
+      <span class="chip">${escapeHtml(e.player.position)}</span></div>`).join("");
+  const roster = m.rosters[m.you].map((p) => `
+    <div class="mk-log-row"><span class="chip">${escapeHtml(p.position)}</span>
+      <b>${escapeHtml(p.player)}</b>
+      <span style="color:var(--text-mute)">${escapeHtml(p.team)} · proj ${p.proj}</span></div>`).join("");
+  if (m.pick >= total) {
+    const scores = m.rosters.map((r, i) => ({ i, ppg: _mockStartersPPG(r) }))
+      .sort((a, b) => b.ppg - a.ppg);
+    const place = scores.findIndex((s) => s.i === m.you) + 1;
+    const yours = scores.find((s) => s.i === m.you);
+    return `<div class="section-title">Draft complete</div>
+      <div class="stats">
+        <div class="tile"><div class="k">Your starters</div>
+          <div class="v">${yours.ppg.toFixed(1)}</div>
+          <div style="color:var(--text-mute);font-size:var(--fs-sm)">projected PPG</div></div>
+        <div class="tile"><div class="k">Finish</div>
+          <div class="v">${place} of ${m.teams}</div>
+          <div style="color:var(--text-mute);font-size:var(--fs-sm)">by projected starters</div></div>
+      </div>
+      <div class="section-title minor">Your roster</div>
+      <div class="card mk-panel">${roster}</div>
+      <button class="btn" id="mk-again" style="margin-top:12px">Draft again</button>`;
+  }
+  const avail = m.pool.slice(0, 12).map((p) => `
+    <div class="mk-log-row">
+      <button class="btn mk-take" data-mkp="${escapeAttr(p.player)}"
+        ${yourTurn ? "" : "disabled"}>Draft</button>
+      <b>${escapeHtml(p.player)}</b>
+      <span class="chip">${escapeHtml(p.position)}</span>
+      <span style="color:var(--text-mute)">${escapeHtml(p.team)} ·
+        VORP +${(p.vorp || 0).toFixed(1)} · T${p.tier || "—"}</span></div>`).join("");
+  return `<div class="section-title">Round ${round} of ${m.rounds}
+      <span class="sub">— pick ${m.pick + 1} of ${total}${yourTurn
+        ? " · YOUR PICK" : ""}</span></div>
+    ${yourTurn ? `<div class="card mk-advice">${_mockAdvice()}</div>` : ""}
+    <div class="section-title minor">Best available</div>
+    <div class="card mk-panel">${avail}</div>
+    <div class="section-title minor">Last round of picks</div>
+    <div class="card mk-panel">${recent || `<div class="mk-log-row">
+      <span style="color:var(--text-mute)">Nobody has picked yet.</span></div>`}</div>
+    <div class="section-title minor">Your roster</div>
+    <div class="card mk-panel">${roster || `<div class="mk-log-row">
+      <span style="color:var(--text-mute)">Empty until your first pick.</span></div>`}</div>
+    <button class="btn" id="mk-reset" style="margin-top:12px">Abandon this draft</button>`;
+}
+
+function _mockRender() {
+  const room = document.getElementById("mock-room");
+  if (room) room.innerHTML = mockDraftHTML();
+}
+
+function _mockBind(host) {
+  const room = host.querySelector("#mock-room");
+  if (!room) return;
+  // Delegated, because the room's innerHTML is replaced on every pick.
+  room.addEventListener("click", (e) => {
+    const t = e.target;
+    if (t.id === "mk-start") {
+      const teams = parseInt(document.getElementById("mk-teams").value, 10);
+      const slot = Math.min(teams,
+        parseInt(document.getElementById("mk-slot").value, 10));
+      _mockStart(teams, slot);
+    } else if (t.id === "mk-reset" || t.id === "mk-again") {
+      _mock = null; _mockRender();
+    } else if (t.dataset && t.dataset.mkp) {
+      const p = _mock.pool.find((x) => x.player === t.dataset.mkp);
+      if (p) { _mockTake(_mock.you, p); _mockAdvance(); }
+    }
+  });
 }
 
 /* Live draft sync. One poll loop, keyed off the fantasy view being open —

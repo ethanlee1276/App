@@ -2270,6 +2270,25 @@ select.calc-in { width: auto; font-weight: 600; }
 }
 .dk-moved { color: var(--warn); font-weight: 700; }
 
+/* Mock draft. Row-list panels share the injuries board's two-line
+   discipline: flexible middle, nothing to crush at 393px. */
+.mk-sel { font: inherit; font-size: var(--fs-md); padding: 6px 8px;
+  background: var(--bg-2); color: var(--text);
+  border: var(--hairline) solid var(--border); display: block;
+  margin-top: 4px; }
+.mk-panel { padding: 2px 0; }
+.mk-log-row { display: flex; align-items: center; gap: 10px;
+  padding: 7px 14px; font-size: var(--fs-sm); min-width: 0; }
+.mk-log-row > b { overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.mk-log-row + .mk-log-row { border-top: var(--hairline) solid var(--border); }
+.mk-log-row.you { background: var(--fill-subtle); }
+.mk-pickno { color: var(--text-mute); font-variant-numeric: tabular-nums;
+  min-width: 3em; }
+.mk-advice { padding: 12px 16px; border-left: 3px solid var(--brand-2);
+  font-size: var(--fs-sm); }
+.mk-take { padding: 4px 10px; flex: none; }
+
 /* Offseason panel */
 .os-card { padding: 14px 16px; gap: 8px; }
 .os-body { display: grid; gap: 4px; }
