@@ -4,10 +4,24 @@
 #   ./deploy/deploy.sh              # deploy the current branch
 #   ./deploy/deploy.sh --no-tests   # only when the suite is already green
 #
-# THE TEST SUITE IS THE RELEASE GATE. It is ~4,400 tests and about twelve
-# minutes, and it refuses the deploy if anything is red. That is the whole
-# point: once other people have accounts, "I'm fairly sure that was fine"
-# stops being an acceptable standard, and the suite already exists.
+# THE TEST SUITE IS THE RELEASE GATE, and it does not have to run HERE.
+# GitHub Actions runs the whole suite on every push (.github/workflows/
+# tests.yml, three Python versions) — so the normal deploy is:
+#
+#   1. the branch shows a green tick on GitHub (Actions tab), then
+#   2. ./deploy/deploy.sh --no-tests          (~a minute)
+#
+# --no-tests skips ONLY the suite: the database backup, the pull, the
+# restart and the prove-it-answers check all still run, and the rollback
+# one-liner is printed if anything is off. Running the suite on this box
+# takes about an hour (measured 2026-08-18 — 4,600 tests on two vCPUs),
+# which made every engine deploy cost Ethan an evening; the tick costs
+# nothing. Run the full form only when deploying something that never
+# went through GitHub, which should be never.
+#
+# It refuses the deploy if anything is red. That is the whole point:
+# once other people have accounts, "I'm fairly sure that was fine" stops
+# being an acceptable standard, and the suite already exists.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
