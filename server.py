@@ -496,6 +496,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._players_search(parse_qs(parsed.query))
         if parsed.path in ("/api/players/logs", "/api/players/logs/"):
             return self._players_logs(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/fantasy", "/api/players/fantasy/"):
+            return self._players_fantasy(parse_qs(parsed.query))
         if parsed.path in ("/api/leaguedesk", "/api/leaguedesk/"):
             return self._league_desk(parse_qs(parsed.query))
         if parsed.path.startswith("/api/yahoo/"):
@@ -1193,6 +1195,17 @@ class Handler(BaseHTTPRequestHandler):
         stats = statlogs.for_player(sport, player)
         return self._send(200, json.dumps(
             {"player": player, "stats": stats}).encode(), ".json")
+
+    def _players_fantasy(self, q):
+        """The full fantasy dossier — engine/ffprofile.py's page, served.
+
+        NFL-only and ungated for the same reason the log endpoints are:
+        season stats, snap shares and schedules are FACTS. The picks
+        stay the paid thing."""
+        from engine import ffprofile
+        player = (q.get("player") or [""])[0][:60]
+        return self._send(200, json.dumps(
+            ffprofile.profile(player)).encode(), ".json")
 
     def _api_board(self, name: str):
         """The subscriber's copy of a board, read from outside the web root.

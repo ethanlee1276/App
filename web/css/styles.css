@@ -2348,6 +2348,71 @@ body.ffd-open { overflow: hidden; }
 .ffd-chart-l { display: block; color: var(--text-mute);
   font-size: var(--fs-xs); margin-bottom: 4px; }
 
+/* The FULL profile page (Ethan's render, 2026-08-18) — the compact card
+   upgrades to this when the profile API answers. */
+.ffd-card.ffd-full { max-width: 980px; max-height: 92vh; }
+.ffp-name { font-size: calc(var(--fs-lg) * 1.35); }
+.ffp-bios { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; }
+.ffp-bio { display: inline-flex; flex-direction: column; gap: 1px;
+  font-size: var(--fs-sm); }
+.ffp-bio .k { color: var(--text-mute); font-size: var(--fs-2xs);
+  text-transform: uppercase; letter-spacing: .05em; }
+.ffp-top { display: grid; grid-template-columns: 1fr; gap: 12px;
+  margin: 12px 0; }
+@media (min-width: 761px) {
+  .ffp-top { grid-template-columns: 2fr 1fr; }
+}
+.ffp-stats, .ffp-proj, .ffp-panel { padding: 14px 16px; display: block; }
+.ffp-tiles { display: grid; grid-template-columns: repeat(auto-fill,
+  minmax(96px, 1fr)); gap: 12px; }
+.ffp-tile { display: flex; flex-direction: column; gap: 1px; }
+.ffp-tile > b { font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
+.ffp-tile .k { color: var(--text-mute); font-size: var(--fs-xs); }
+.ffp-rank { color: var(--brand-2); font-size: var(--fs-2xs);
+  font-weight: 700; }
+.ffp-proj-n { display: block; font-size: calc(var(--fs-lg) * 1.7);
+  color: var(--good); font-variant-numeric: tabular-nums; }
+.ffp-proj .k { color: var(--text-mute); font-size: var(--fs-xs); }
+.ffp-proj-r { margin-top: 8px; font-size: var(--fs-sm);
+  color: var(--text-body); display: flex; align-items: center; gap: 6px; }
+.ffp-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  background: var(--border); }
+.ffp-dot.on { background: var(--brand); }
+.ffp-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 761px) {
+  .ffp-grid { grid-template-columns: 1fr 1fr; }
+}
+.ffp-grid .ffp-panel { margin: 0; }
+.ffp-panel svg { max-width: 100%; height: auto; }
+.ffp-mrow { display: flex; align-items: center; gap: 10px;
+  padding: 6px 0; font-size: var(--fs-sm); }
+.ffp-mopp { min-width: 4.6em; font-weight: 700; }
+.ffp-mbar { flex: 1 1 auto; height: 6px; background: var(--fill-subtle);
+  overflow: hidden; }
+.ffp-mbar i { display: block; height: 100%; background: var(--good); }
+.ffp-mnum { min-width: 2.8em; text-align: right;
+  font-variant-numeric: tabular-nums; }
+.ffp-mnum.mute { color: var(--text-mute); }
+.ffp-mfp { color: var(--text-mute); min-width: 5.4em; text-align: right;
+  font-size: var(--fs-xs); }
+.ffp-util { display: flex; align-items: center; gap: 18px; }
+.ffp-ring { width: 92px; height: 92px; flex: none; }
+.ffp-util-rows { flex: 1 1 auto; min-width: 0; }
+.ffp-urow { display: flex; justify-content: space-between; gap: 10px;
+  padding: 5px 0; font-size: var(--fs-sm);
+  border-bottom: var(--hairline) solid var(--border); }
+.ffp-urow:last-child { border-bottom: none; }
+.ffp-log td.hit { color: var(--good); font-weight: 700; }
+.ffp-log td.miss { color: var(--bad); font-weight: 700; }
+.ffp-up { display: flex; align-items: center; gap: 10px;
+  font-size: var(--fs-lg); }
+.ffp-upteam { display: inline-flex; align-items: center; gap: 7px; }
+.ffp-upnums { display: flex; flex-wrap: wrap; gap: 6px 20px;
+  margin-top: 10px; }
+.ffp-take { display: flex; align-items: flex-start; gap: 8px;
+  margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-body); }
+.ffp-take svg { flex: none; margin-top: 2px; color: var(--good); }
+
 /* Offseason panel */
 .os-card { padding: 14px 16px; gap: 8px; }
 .os-body { display: grid; gap: 4px; }

@@ -12079,6 +12079,196 @@ async function _ffDossierCharts(name, position) {
     }).join("");
 }
 
+function ordinal(n) {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+async function ffFetchProfile(name) {
+  try {
+    const r = await fetch(`/api/players/fantasy?player=${encodeURIComponent(name)}`);
+    if (r.ok) {
+      const p = await r.json();
+      if (p && p.player) return p;
+    }
+  } catch (e) {}
+  return null;
+}
+
+//: Snap-share ring — the render's donut, in house strokes.
+function ffRing(pctVal, label) {
+  const r = 34, c = 2 * Math.PI * r;
+  const on = Math.max(0, Math.min(100, pctVal)) / 100 * c;
+  return `<svg class="ffp-ring" viewBox="0 0 84 84" aria-hidden="true">
+    <circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--border)" stroke-width="7"/>
+    <circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--brand)" stroke-width="7"
+      stroke-dasharray="${on.toFixed(1)} ${c.toFixed(1)}"
+      stroke-linecap="butt" transform="rotate(-90 42 42)"/>
+    <text x="42" y="40" text-anchor="middle" font-size="17" font-weight="800"
+      fill="var(--text)">${Math.round(pctVal)}%</text>
+    <text x="42" y="54" text-anchor="middle" font-size="7.5"
+      fill="var(--text-mute)">${escapeHtml(label)}</text>
+  </svg>`;
+}
+
+function _ffTakeaways(p, info) {
+  const out = [];
+  const k = info.kit;
+  if (k && k.vorp != null) {
+    out.push(`Tier ${k.tier} on the value board — ${k.position}${k.pos_rank}, `
+      + `VORP +${k.vorp} over a replacement ${k.position}.`);
+  }
+  const u = info.usage;
+  if (u && u.delta != null && Math.abs(u.delta) >= 0.03) {
+    out.push(u.delta > 0
+      ? `Role growing: +${(u.delta * 100).toFixed(0)}pt of team ${u.metric || "volume"} vs his 4-week average.`
+      : `Role shrinking: \u2212${Math.abs(u.delta * 100).toFixed(0)}pt of team ${u.metric || "volume"} vs his 4-week average.`);
+  }
+  if (info.buy) out.push("Buy low — expected points say the production is coming.");
+  if (info.sell) out.push("Sell high — producing above what the opportunity supports.");
+  if (info.camp) out.push(`Camp mover: depth chart ${info.camp.from_order ?? "—"} \u2192 ${info.camp.to_order ?? "—"}.`);
+  if (info.move) out.push(`New team (${info.move.from} \u2192 ${info.move.to}) — last season\u2019s volume came in a different offense.`);
+  const nx = ((p.schedule || {}).next || [])[0];
+  if (nx && nx.def_rank) {
+    const of = (p.schedule || {}).def_rank_of;
+    const soft = nx.def_rank > of * 0.67;
+    out.push(`Opens ${nx.home ? "vs" : "@"} ${nx.opponent}, the No. ${nx.def_rank} `
+      + `defense by fantasy points allowed to ${p.position}s `
+      + `(${nx.allowed_pg}/g${soft ? " — a soft matchup" : ""}).`);
+  }
+  return out.slice(0, 4);
+}
+
+function ffProfileHTML(p, info, bio) {
+  const marks = (t) => teamMark(t, 26, nflMap(), "nfl");
+  const chip = (k, v) => v == null || v === "" ? ""
+    : `<span class="ffp-bio"><span class="k">${k}</span><b>${v}</b></span>`;
+  const tiles = (p.season_stats || []).map((t) => `
+    <div class="ffp-tile"><b>${t.market === "fp_ppr" && t.per_game != null
+        ? t.per_game : t.total}</b>
+      <span class="k">${escapeHtml(t.market === "fp_ppr" ? "PPR pts/g" : t.label)}</span>
+      ${t.rank ? `<span class="ffp-rank">${ordinal(t.rank)} of ${t.of}</span>` : ""}
+    </div>`).join("");
+  const k = info.kit || {};
+  const tierDots = k.tier
+    ? Array.from({ length: 5 }, (_, i) =>
+        `<span class="ffp-dot${i < Math.max(1, 6 - k.tier) ? " on" : ""}"></span>`).join("")
+    : "";
+  const proj = k.proj != null ? `
+    <div class="ffp-proj card">
+      <div class="ffd-h">Board projection</div>
+      <b class="ffp-proj-n">${k.proj}</b>
+      <span class="k">projected PPG, from last season\u2019s volume</span>
+      ${k.pos_rank ? `<div class="ffp-proj-r">${escapeHtml(k.position)} rank <b>${k.pos_rank}</b></div>` : ""}
+      ${tierDots ? `<div class="ffp-proj-r">Tier ${k.tier} ${tierDots}</div>` : ""}
+    </div>` : "";
+  const weekly = p.weekly || [];
+  const fpChart = weekly.length >= 3 ? `
+    <div class="card ffp-panel"><div class="ffd-h">Fantasy points — last ${weekly.length} games (PPR)</div>
+      ${gamelogBars(weekly.map((w) => w.fp), {
+        w: 320, h: 64, stroke: "var(--brand)",
+        labels: weekly.map((w) => `Wk ${w.week} ${w.home ? "vs" : "@"} ${w.opponent}`),
+      })}</div>` : "";
+  const sc = p.schedule || {};
+  const of = sc.def_rank_of || 32;
+  const match = (sc.next || []).length ? `
+    <div class="card ffp-panel"><div class="ffd-h">Matchup strength — next ${sc.next.length}</div>
+      ${sc.next.map((n) => `
+        <div class="ffp-mrow">
+          <span class="ffp-mopp">${n.home ? "vs" : "@"} ${escapeHtml(n.opponent)}</span>
+          ${n.def_rank ? `<span class="ffp-mbar"><i style="width:${
+            Math.round(100 * n.def_rank / of)}%"></i></span>
+          <span class="ffp-mnum">${ordinal(n.def_rank)}</span>
+          <span class="ffp-mfp">${n.allowed_pg} FP/g</span>`
+          : `<span class="ffp-mnum mute">no read yet</span>`}
+        </div>`).join("")}
+      <p class="ffd-note">Defenses ranked 1\u2013${of} by fantasy points per game
+        allowed to ${escapeHtml(p.position)}s in ${sc.def_rank_season} —
+        higher rank, softer matchup.</p></div>` : "";
+  const u = p.utilization || {};
+  const util = `
+    <div class="card ffp-panel"><div class="ffd-h">Utilization</div>
+      <div class="ffp-util">
+        ${u.snap_pct != null ? ffRing(u.snap_pct, "SNAP SHARE") : ""}
+        <div class="ffp-util-rows">
+          ${(u.rows || []).map(([kk, v]) => `<div class="ffp-urow">
+            <span>${escapeHtml(kk)}</span><b>${v}</b></div>`).join("")}
+          ${u.fp_pg != null ? `<div class="ffp-urow"><span>PPR points / game</span><b>${u.fp_pg}</b></div>` : ""}
+          ${u.xfp_pg != null ? `<div class="ffp-urow"><span>Expected FP / game</span><b>${u.xfp_pg}</b></div>` : ""}
+        </div>
+      </div></div>`;
+  const gl = p.gamelog || {};
+  const colLabel = (m) => (Object.fromEntries(
+    (POSITION_STATS_LABELS[p.position] || [])) || {})[m] || m;
+  const log = (gl.rows || []).length ? `
+    <div class="card ffp-panel" style="padding:0;overflow-x:auto">
+      <table class="agate ffp-log"><thead><tr><th>Wk</th><th>Opp</th><th>Result</th>
+        ${(gl.columns || []).map((c) => `<th>${escapeHtml(colLabel(c))}</th>`).join("")}
+        <th>FPTS</th></tr></thead><tbody>
+      ${gl.rows.map((r) => `<tr><td>${r.week}</td>
+        <td>${r.home ? "vs" : "@"} ${escapeHtml(r.opponent)}</td>
+        <td class="${(r.result || "").startsWith("W") ? "hit" : (r.result || "").startsWith("L") ? "miss" : ""}">${escapeHtml(r.result || "—")}</td>
+        ${(r.cols || []).map((v) => `<td class="num">${v != null ? v : "—"}</td>`).join("")}
+        <td class="num"><b>${r.fp != null ? r.fp : "—"}</b></td></tr>`).join("")}
+      </tbody></table></div>` : "";
+  const up = sc.upcoming;
+  const implied = up && up.spread != null && up.total != null
+    ? (up.total / 2 + (up.we_are_home === (up.spread < 0) ? Math.abs(up.spread) : -Math.abs(up.spread)) / 2).toFixed(1)
+    : null;
+  const upcoming = up ? `
+    <div class="card ffp-panel"><div class="ffd-h">Upcoming game</div>
+      <div class="ffp-up">
+        <span class="ffp-upteam">${marks(up.away_team)} <b>${escapeHtml(up.away_team)}</b></span>
+        <span class="gs-at">@</span>
+        <span class="ffp-upteam">${marks(up.home_team)} <b>${escapeHtml(up.home_team)}</b></span>
+      </div>
+      <p class="ffd-note">${escapeHtml(up.date)}${up.kickoff ? ` · ${escapeHtml(up.kickoff)} ET` : ""}</p>
+      ${up.spread != null || up.total != null ? `<div class="ffp-upnums">
+        ${up.spread != null ? `<span class="ffp-bio"><span class="k">Spread</span>
+          <b>${up.home_team === p.team ? (up.spread > 0 ? "+" : "") + up.spread
+              : (up.spread < 0 ? "+" : "\u2212") + Math.abs(up.spread)} ${escapeHtml(p.team)}</b></span>` : ""}
+        ${up.total != null ? `<span class="ffp-bio"><span class="k">Total</span><b>${up.total}</b></span>` : ""}
+        ${implied ? `<span class="ffp-bio"><span class="k">Implied ${escapeHtml(p.team)}</span><b>${implied}</b></span>` : ""}
+      </div>` : ""}</div>` : "";
+  const takes = _ffTakeaways(p, info);
+  return `
+    <div class="ffd-head ffp-head">
+      ${playerAvatar(p.player, p.team, { size: 76, map: nflMap(),
+                                         headshot: p.headshot || info.headshot })}
+      <div class="ffd-who">
+        <b class="ffp-name">${escapeHtml(p.player)}</b>
+        <span class="ffd-sub">${teamMark(p.team, 16, nflMap(), "nfl")}
+          ${escapeHtml([nflName(p.team) || p.team, p.position,
+                        bio && bio.number != null ? "#" + bio.number : ""]
+            .filter(Boolean).join(" \u00b7 "))}</span>
+        <span class="ffp-bios">
+          ${chip("Age", bio && bio.age)}${chip("Exp", bio && bio.years_exp != null
+            ? (bio.years_exp === 0 ? "Rookie" : bio.years_exp + " yr") : null)}
+          ${chip("Games", p.games)}${chip("Season", p.season)}
+        </span>
+      </div>
+      <button class="btn ghost ffd-close" aria-label="Close">\u2715</button>
+    </div>
+    <div class="ffp-top">
+      <div class="ffp-stats card"><div class="ffd-h">${p.season} season</div>
+        <div class="ffp-tiles">${tiles}</div></div>
+      ${proj}
+    </div>
+    <div class="ffp-grid">
+      ${fpChart}${match}${util}${log}${upcoming}
+    </div>
+    ${takes.length ? `<div class="card ffp-panel"><div class="ffd-h">Key takeaways</div>
+      ${takes.map((t) => `<p class="ffp-take">${icon("check", 14)} ${t}</p>`).join("")}
+    </div>` : ""}`;
+}
+
+const POSITION_STATS_LABELS = {
+  QB: [["pass_yds", "Pass yds"], ["pass_td", "Pass TD"], ["pass_int", "INT"]],
+  RB: [["carries", "Car"], ["rush_yds", "Rush yds"], ["rush_td", "Rush TD"]],
+  WR: [["targets", "Tgt"], ["receptions", "Rec"], ["rec_yds", "Rec yds"]],
+  TE: [["targets", "Tgt"], ["receptions", "Rec"], ["rec_yds", "Rec yds"]],
+};
+
 function openFfDossier(name) {
   let ov = document.getElementById("ffd-overlay");
   if (!ov) {
@@ -12095,6 +12285,24 @@ function openFfDossier(name) {
   ov.classList.add("open");
   document.body.classList.add("ffd-open");
   _ffDossierCharts(name, info.position);
+  // The full page, when the profile API answers (Ethan's render,
+  // 2026-08-18). The compact card above is already on screen, so a
+  // static host or a cold API costs nothing but the upgrade.
+  ffFetchProfile(name).then(async (p) => {
+    if (!p) return;
+    const card = ov.querySelector(".ffd-card");
+    if (!card || !ov.classList.contains("open")) return;
+    let bio = null;
+    try {
+      const ros = await loadRosters("nfl");
+      for (const t of Object.values(ros.teams || {})) {
+        bio = (t.players || []).find((x) => x.player === name) || bio;
+      }
+    } catch (e) {}
+    if (!ov.classList.contains("open")) return;
+    card.classList.add("ffd-full");
+    card.innerHTML = ffProfileHTML(p, info, bio);
+  });
 }
 
 function closeFfDossier() {

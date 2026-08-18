@@ -112,6 +112,21 @@ gaps, where the ranking sources argue, camp movement, new-team flags,
 and his real weekly volume charted from the game logs. Sections only
 appear where a board actually knows something.
 
+### T10. The fantasy dossier became the full player page
+
+You sent the render; it is followed. Tap any player on the fantasy
+page and, when the server answers, the compact card upgrades to the
+full page: season stat tiles with position ranks ("2nd of 71"), the
+board projection with tier dots, fantasy points by week (real fp_ppr),
+matchup strength for the next four games (defenses ranked by fantasy
+points they allowed to his position in our own logs), the snap-share
+ring and per-game volume, an eight-week game log with each game's real
+final, the upcoming game with spread/total/implied, and key takeaways
+derived only from real flags. Rides the T1 deploy (server.py grew the
+/api/players/fantasy endpoint). Tiles thin out only where the DB lacks
+the 08-15 component markets — your laptop has them; the droplet gets
+them on its next NFL ingest.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 
