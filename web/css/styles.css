@@ -5218,3 +5218,52 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   border-top: var(--hairline); color: var(--text-mute);
   font-size: var(--fs-sm); }
 .acct-screen .acct-alt .btn { width: auto; }
+
+/* ---- The fantasy start calendar ---------------------------------- */
+.ffcal-head {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+  margin-bottom: 4px; color: var(--text-mute); font-size: var(--fs-xs);
+  text-align: center; letter-spacing: .04em;
+}
+.ffcal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+  margin-bottom: 18px;
+}
+.ffcal-cell {
+  min-height: 62px; padding: 4px; border-radius: var(--radius);
+  background: var(--panel-2); border: var(--hairline) solid var(--border-soft);
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.ffcal-cell[data-calday] { cursor: pointer; }
+.ffcal-cell[data-calday]:hover { border-color: var(--border); }
+.ffcal-cell.sel { border-color: var(--brand); background: var(--panel-3); }
+.ffcal-empty { opacity: .38; }
+.ffcal-num { font-size: var(--fs-xs); color: var(--text-mute);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ffcal-n { font-size: var(--fs-xs); color: var(--text-dim); }
+.ffcal-best { display: flex; align-items: center; gap: 3px; min-width: 0;
+  font-size: var(--fs-xs); margin-top: auto; }
+.ffcal-best b { overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; min-width: 0; }
+.ffcal-pts { color: var(--good); font-weight: 700;
+  font-variant-numeric: tabular-nums; margin-left: auto; }
+.ffcal-card { display: block; margin-bottom: 12px; cursor: pointer; }
+.ffcal-cardhead { display: flex; align-items: center; gap: 12px; }
+.ffcal-rank { color: var(--text-mute); font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums; min-width: 1.2em; text-align: right; }
+.ffcal-who { min-width: 0; flex: 1; }
+.ffcal-who b { display: block; }
+.ffcal-sub { display: block; color: var(--text-mute); font-size: var(--fs-xs); }
+.ffcal-proj { text-align: right; font-weight: 800; font-size: var(--fs-xl);
+  color: var(--good); font-variant-numeric: tabular-nums; }
+.ffcal-projk { display: block; font-size: var(--fs-xs);
+  color: var(--text-mute); font-weight: 400; }
+.ffcal-why { margin: 10px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }
+.ffcal-script { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }
+.ffcal-usage { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }
+.ffcal-outnote { color: var(--text-mute); font-size: var(--fs-sm);
+  margin-top: 10px; }
+@media (max-width: 700px) {
+  .ffcal-cell { min-height: 54px; }
+  .ffcal-best b { display: none; }   /* face + points still identify him */
+}

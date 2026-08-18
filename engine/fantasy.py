@@ -303,3 +303,26 @@ def game_scripts(conn) -> list[dict]:
             "confidence": conf, "archetype": name, "read": desc,
         })
     return out
+
+
+def upcoming_schedule(sched: list[dict], season: int) -> list[dict]:
+    """Every unplayed game with its calendar date, for the day-by-day
+    board. Pure over the schedule rows so tests can feed fixtures.
+
+    August belongs to two seasons at once: the stats season is last
+    year's while the schedule file already carries next year's slate —
+    the same straddle _schedule() in ffprofile resolves, resolved the
+    same way: the first season that still has unplayed games wins."""
+    for cand in (season, season + 1):
+        rows = [r for r in sched if r.get("season") == str(cand)
+                and not (r.get("home_score") or "").strip()
+                and (r.get("gameday") or "").strip()]
+        if rows:
+            return sorted(({"week": int(r.get("week") or 0),
+                            "date": r.get("gameday", ""),
+                            "time": r.get("gametime", ""),
+                            "home": r.get("home_team", ""),
+                            "away": r.get("away_team", "")}
+                           for r in rows),
+                          key=lambda g: (g["date"], g["time"]))
+    return []

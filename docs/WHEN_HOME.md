@@ -11,7 +11,7 @@ browser you can look at.
 
 ## TODAY'S ROUND — 2026-08-18 (added while you were at work)
 
-Thirty-one commits today, GitHub tick green, 4,681 tests across 272
+Thirty-two commits today, GitHub tick green, 4,687 tests across 273
 files (sanity check after T1’s pull: `git log --oneline -1` should name
 the commit that refreshed this very note). In the order to run them:
 
@@ -265,6 +265,24 @@ average odds you need 42% winners to break even — you’re hitting 36%,”
 bets in the group, so nothing accuses a habit off a thin sample; under
 three settled bets the whole section stays hidden. Realized results
 only — pending money never colors a verdict.
+
+### T16. The start calendar — fantasy’s new Calendar sub-tab
+
+You asked from work: a calendar showing the best play for each day,
+tap a day for the top five with in-depth why. Built and riding the T1
+deploy. The grid starts at the first game week (right now that is the
+Sep 9 opener) and each game day wears its best play — face, name,
+projected points. Tap a day and the five best plays appear as cards,
+each showing its whole arithmetic instead of an oracle number:
+baseline projection from the draft kit (tier, VORP), times that day’s
+game environment (the team’s implied points from the game script over
+the league average, with the spread and total printed), plus the
+script’s own read (“Everyone eats — high total, close spread”), the
+usage trend behind the baseline, and his injury tag. Players ruled
+out that day are excluded by name, never silently. Every card taps
+through to the full player profile. The build now ships the league
+schedule (dates per game) alongside the game scripts — that lands on
+the droplet with the same deploy, no extra step.
 
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*

@@ -101,6 +101,16 @@ def _write_rosters(path: Path, blob: dict | None) -> None:
              f" · no team changes across {out['transactions']['days']} tracked day(s)"))
 
 
+def _upcoming_schedule(season: int) -> list[dict]:
+    """The cached nflverse schedule → engine.fantasy.upcoming_schedule.
+    An unreachable schedule file is an empty list, never a dead build."""
+    try:
+        from engine.sources import nflverse
+        return fantasy.upcoming_schedule(nflverse.load_schedules(), season)
+    except Exception:                                        # noqa: BLE001
+        return []
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="web/data/fantasy.json")
@@ -205,6 +215,11 @@ def main() -> None:
             "rates": fantasy.league_rates(conn, season),
             "buy_sell": buy_sell,
             "scripts": fantasy.game_scripts(conn),
+            # Calendar dates for every unplayed game — the scripts carry
+            # the market's read per matchup, the schedule says WHEN, and
+            # the day-by-day board joins the two in the browser. Never
+            # fatal: no schedule cache means no calendar, not no page.
+            "schedule": _upcoming_schedule(season),
             "draft_kit": kit,
             "offseason": off,
             "trending": trending,

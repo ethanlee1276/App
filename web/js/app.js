@@ -9910,6 +9910,9 @@ async function renderFantasy() {
     ["ranks", "Rankings",
      "every source we can read without a password, and where they argue",
      rankBoardHTML(d.ranks)],
+    ["days", "Calendar",
+     "the best play for every game day — tap a day for the top five and why",
+     ffCalendarHTML(d)],
     ["mock", "Mock draft",
      "a snake draft against the room — same board the kit publishes",
      `<div id="mock-room">${mockDraftHTML()}</div>`],
@@ -12531,6 +12534,188 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeFfDossier();
+});
+
+/* ---------------- The fantasy calendar ----------------
+   Ethan, 2026-08-18: "a calendar layout page displaying the best
+   possible player to play in fantasy for that day … click on that
+   specific day and we will show a list of the 5 best fantasy players
+   … and in-depth analysis on why."
+
+   Everything here is a JOIN of numbers the payload already defends:
+   the kit's projection is the baseline, the game script's implied
+   team points are the environment, and the day's score is simply
+   baseline × (implied ÷ league-average implied) — shown as that
+   arithmetic, never as an oracle. A man ruled out or on IR cannot be
+   the best play on any day, so the out-tier is excluded by name. */
+let _ffCalSel = null;
+
+function _ffImpliedAvg(d) {
+  const vals = [];
+  (d.scripts || []).forEach((s) => {
+    if (s.home_implied != null) vals.push(s.home_implied);
+    if (s.away_implied != null) vals.push(s.away_implied);
+  });
+  return vals.length
+    ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+}
+
+/* date → one entry per TEAM playing that day, wearing its script. */
+function _ffDayEnv(d) {
+  const byKey = {};
+  (d.scripts || []).forEach((s) => { byKey[`${s.home}|${s.away}`] = s; });
+  const days = {};
+  (d.schedule || []).forEach((g) => {
+    const s = byKey[`${g.home}|${g.away}`] || null;
+    const push = (team, opp, home) => {
+      (days[g.date] = days[g.date] || []).push({
+        team, opp, home, week: g.week, time: g.time,
+        implied: s ? (home ? s.home_implied : s.away_implied) : null,
+        total: s ? s.total : null, spread: s ? s.spread : null,
+        archetype: s ? s.archetype : null, read: s ? s.read : null });
+    };
+    push(g.home, g.away, true);
+    push(g.away, g.home, false);
+  });
+  return days;
+}
+
+/* The day's board: every kit player whose team plays that date, scored
+   and sorted. Ruled-out players are RETURNED separately so the panel
+   can say who was excluded instead of silently thinning. */
+function _ffDayBoard(d, date) {
+  const env = _ffDayEnv(d)[date] || [];
+  const byTeam = {};
+  env.forEach((e) => { byTeam[e.team] = e; });
+  const avg = _ffImpliedAvg(d);
+  const rows = [], out = [];
+  for (const r of ((d.draft_kit || {}).board || [])) {
+    const e = byTeam[r.team];
+    if (!e) continue;
+    const inj = injFind("nfl", r.player);
+    if (inj && injTone(inj.status) === "var(--bad)") {
+      out.push({ r, inj });
+      continue;
+    }
+    const mult = e.implied != null && avg ? e.implied / avg : 1;
+    rows.push({ r, e, inj, mult, score: (Number(r.proj) || 0) * mult });
+  }
+  rows.sort((a, b) => b.score - a.score);
+  return { rows, out };
+}
+
+const FFCAL_DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const FFCAL_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function _ffCalSay(date) {
+  const [y, m, dd] = date.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, dd));
+  return `${FFCAL_DOW[dt.getUTCDay()]} ${FFCAL_MON[m - 1]} ${dd}`;
+}
+
+function ffCalendarHTML(d) {
+  const days = _ffDayEnv(d);
+  const dates = Object.keys(days).sort();
+  if (!dates.length) {
+    return `<div class="empty-slate"><div class="es-icon">${icon("calendar", 30)}</div>
+      <div class="es-title">No schedule on this machine yet</div>
+      <div class="es-sub">The calendar builds from the league schedule the fantasy
+        build reads — it fills on the next build once the schedule cache exists.</div></div>`;
+  }
+  if (!_ffCalSel || !days[_ffCalSel]) _ffCalSel = dates[0];
+  // The grid starts the Sunday on/before the first game and runs five
+  // weeks — in September that IS the month view, and in August it skips
+  // straight to where the games are instead of showing empty weeks.
+  const [y0, m0, d0] = dates[0].split("-").map(Number);
+  const first = new Date(Date.UTC(y0, m0 - 1, d0));
+  first.setUTCDate(first.getUTCDate() - first.getUTCDay());
+  const cells = [];
+  for (let i = 0; i < 35; i++) {
+    const dt = new Date(first);
+    dt.setUTCDate(first.getUTCDate() + i);
+    const iso = dt.toISOString().slice(0, 10);
+    const has = days[iso];
+    let best = null;
+    if (has) best = _ffDayBoard(d, iso).rows[0] || null;
+    cells.push(`<div class="ffcal-cell${has ? "" : " ffcal-empty"}${
+        iso === _ffCalSel ? " sel" : ""}"${has ? ` data-calday="${iso}" role="button" tabindex="0"` : ""}>
+      <span class="ffcal-num">${dt.getUTCDate() === 1 || i === 0
+        ? `${FFCAL_MON[dt.getUTCMonth()]} ` : ""}${dt.getUTCDate()}</span>
+      ${has ? `<span class="ffcal-n">${has.length / 2} game${has.length > 2 ? "s" : ""}</span>` : ""}
+      ${best ? `<span class="ffcal-best">${playerAvatar(best.r.player, best.r.team,
+          { size: 18, map: nflMap(), headshot: best.r.headshot })}
+        <b>${escapeHtml((best.r.player || "").split(" ").slice(-1)[0])}</b>
+        <span class="ffcal-pts">${best.score.toFixed(1)}</span></span>` : ""}
+    </div>`);
+  }
+  return `
+    <div class="section-title">The start calendar
+      <span class="sub">— each game day wears its best play: the board’s projection
+      scaled by that day’s game environment. Tap a day for the top five and the
+      arithmetic behind each.</span></div>
+    <div class="ffcal-head">${FFCAL_DOW.map((w) => `<span>${w}</span>`).join("")}</div>
+    <div class="ffcal-grid" id="ffcal-grid">${cells.join("")}</div>
+    <div id="ffcal-day">${ffCalDayHTML(d, _ffCalSel)}</div>`;
+}
+
+function ffCalDayHTML(d, date) {
+  const { rows, out } = _ffDayBoard(d, date);
+  if (!rows.length) return "";
+  const avg = _ffImpliedAvg(d);
+  const usage = {};
+  (d.usage || []).forEach((u) => { usage[u.player] = u; });
+  const card = (x, i) => {
+    const { r, e, inj, mult, score } = x;
+    const u = usage[r.player];
+    const vs = e.home ? "vs" : "at";
+    const spreadSay = e.spread == null ? ""
+      : `, ${e.spread < 0 === e.home ? "favored" : "underdog"} by ${Math.abs(e.spread)}`;
+    return `<article class="card ffcal-card" data-dossier="${escapeAttr(r.player)}">
+      <div class="ffcal-cardhead">
+        <span class="ffcal-rank">${i + 1}</span>
+        ${playerAvatar(r.player, r.team, { size: 40, map: nflMap(), headshot: r.headshot })}
+        <span class="ffcal-who"><b>${escapeHtml(r.player)}</b>${inj ? injTag("nfl", r.player) : ""}
+          <span class="ffcal-sub">${escapeHtml(r.position)}${r.pos_rank} · ${nflName(r.team)}
+            ${vs} ${nflName(e.opp)}</span></span>
+        <span class="ffcal-proj">${score.toFixed(1)}<span class="ffcal-projk">proj pts</span></span>
+      </div>
+      <p class="ffcal-why">Baseline <b>${r.proj} PPG</b> (Tier ${r.tier} on the board,
+        +${r.vorp} over a replacement ${escapeHtml(r.position)}) ×
+        <b>${mult.toFixed(2)}</b> environment — ${e.implied != null
+          ? `${e.implied} implied points ${vs} ${nflName(e.opp)}${spreadSay},
+             game total ${e.total}, against a league-average ${avg ? avg.toFixed(1) : "—"}`
+          : "no line posted for this game yet, so the baseline stands alone"}.</p>
+      ${e.read ? `<p class="ffcal-script"><b>${escapeHtml(e.archetype || "")}.</b>
+        ${escapeHtml(e.read)}</p>` : ""}
+      ${u ? `<p class="ffcal-usage">Usage says ${pct(u.season)} of his team’s
+        ${escapeHtml(u.metric || "volume")} this season${u.l4 != null
+          ? `, ${pct(u.l4)} over the last four weeks` : ""} —
+        the volume behind the baseline is ${u.delta != null && u.delta > 0.02
+          ? "growing" : u.delta != null && u.delta < -0.02 ? "shrinking" : "steady"}.</p>` : ""}
+    </article>`;
+  };
+  return `
+    <div class="section-title minor">${_ffCalSay(date)} — the five best plays
+      <span class="sub">— tap any card for the full profile.</span></div>
+    ${rows.slice(0, 5).map(card).join("")}
+    ${out.length ? `<p class="ffcal-outnote">Ruled out that day and excluded:
+      ${out.slice(0, 6).map((x) => `${escapeHtml(x.r.player)}
+        (${escapeHtml(injShort(x.inj.status))})`).join(", ")}.</p>` : ""}`;
+}
+
+/* One delegated binding, document-level like the dossier's: the panel
+   re-renders on every day tap, so per-cell listeners would die with the
+   innerHTML. */
+document.addEventListener("click", (e) => {
+  const cell = e.target && e.target.closest("[data-calday]");
+  if (!cell || !_ffData) return;
+  _ffCalSel = cell.dataset.calday;
+  const grid = document.getElementById("ffcal-grid");
+  if (grid) grid.querySelectorAll(".ffcal-cell").forEach((c) =>
+    c.classList.toggle("sel", c.dataset.calday === _ffCalSel));
+  const panel = document.getElementById("ffcal-day");
+  if (panel) panel.innerHTML = ffCalDayHTML(_ffData, _ffCalSel);
 });
 
 /* ---------------- Mock draft simulator ----------------
