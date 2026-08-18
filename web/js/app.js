@@ -4400,11 +4400,19 @@ function renderGamePage() {
         <span><b>${share(sim.one_score)}</b> one-score game</span>
         <span><b>${share(sim.blowout)}</b> decided by 14+</span>
       </div>
-      <div class="gp-sim-hist">${(sim.margin_hist || []).map((v, i) => `
+      <div class="gp-sim-viz">
+        <div class="gp-sim-gauge" data-echart-gauge="${escapeAttr(JSON.stringify({
+          value: sim.p_home_win || 0,
+          title: `${g.home} win share`,
+        }))}"></div>
+        <div class="gp-sim-hist" data-echart-hist="${escapeAttr(JSON.stringify({
+          values: sim.margin_hist || [], labels: histLabels,
+        }))}">${(sim.margin_hist || []).map((v, i) => `
         <div class="gp-sim-col" title="${escapeAttr(histLabels[i])} — ${(100 * v).toFixed(1)}% of replays">
           <span class="gp-sim-bar" style="height:${Math.max(3, 56 * v / maxH).toFixed(0)}px"></span>
           <span class="gp-sim-lbl">${escapeHtml(histLabels[i])}</span>
         </div>`).join("")}</div>
+      </div>
       <p class="gp-sim-joint">${escapeHtml(g.home)} covers ${share(sim.cover)} ·
         over ${share(sim.over)} · both ${share(sim.cover_and_over)}
         (${(sim.joint_lift || 0) >= 0 ? "+" : "−"}${Math.abs(100 * (sim.joint_lift || 0)).toFixed(1)}pt
@@ -4495,6 +4503,9 @@ function renderGamePage() {
   });
   fillMeters(host);
   host.querySelectorAll(".cards").forEach(revealChildren);
+  // The replay panel's gauge + histogram upgrade in place when the
+  // vendored ECharts loads; the div bars above stay as the fallback.
+  if (typeof mountEChartsPanels === "function") mountEChartsPanels(host);
 }
 
 /* ============================================================

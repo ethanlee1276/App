@@ -1773,3 +1773,118 @@ function mountGlossCharts(root) {
     el._gloss = chart;
   });
 }
+
+/* ---- ECharts panels — the showpiece layer (vendored, lazy) --------------
+   Ethan, 2026-08-18: "start on the Echarts and work down." The engine is
+   a megabyte, so unlike ApexCharts it is NOT in the boot path: the first
+   panel that needs it injects /vendor/echarts.min.js once and every
+   later mount reuses it. Same contract as the gloss charts — the
+   hand-drawn markup stays as the fallback, the library only upgrades it
+   in place, and every color is read live from the theme tokens. */
+let _echartsLoading = null;
+function loadECharts() {
+  if (window.echarts) return Promise.resolve(window.echarts);
+  if (_echartsLoading) return _echartsLoading;
+  _echartsLoading = new Promise((resolve) => {
+    const s = document.createElement("script");
+    s.src = "vendor/echarts.min.js";
+    // A missing vendor file resolves null and the fallbacks simply stay —
+    // the library is an enhancement, never a dependency.
+    s.onload = () => resolve(window.echarts || null);
+    s.onerror = () => resolve(null);
+    document.head.appendChild(s);
+  });
+  return _echartsLoading;
+}
+
+const _echartsLive = [];
+window.addEventListener("resize", () => {
+  for (const c of _echartsLive) { try { c.resize(); } catch (e) {} }
+});
+
+async function mountEChartsPanels(root) {
+  const host = root || document;
+  const nodes = [...host.querySelectorAll(
+    "[data-echart-gauge],[data-echart-hist]")]
+    .filter((el) => !el.dataset.echarted);
+  if (!nodes.length) return;
+  const ec = await loadECharts();
+  if (!ec) return;
+  const css = getComputedStyle(document.documentElement);
+  const tok = (n) => (css.getPropertyValue(n) || "").trim();
+  const font = tok("--font-sans") || "sans-serif";
+  for (const el of nodes) {
+    let cfg;
+    const kind = el.hasAttribute("data-echart-gauge") ? "gauge" : "hist";
+    try {
+      cfg = JSON.parse(el.getAttribute(`data-echart-${kind}`));
+    } catch (e) { continue; }
+    el.dataset.echarted = "1";
+    el.innerHTML = "";
+    const chart = ec.init(el, null, { renderer: "canvas" });
+    if (kind === "gauge") {
+      // Home win probability as a half-gauge: the arc runs the away
+      // color into the home color, the progress needle-lessly fills to
+      // the sim's share, the number sits in the middle.
+      const v = Math.round(100 * (cfg.value || 0));
+      chart.setOption({
+        animationDuration: 700,
+        series: [{
+          type: "gauge", startAngle: 200, endAngle: -20,
+          min: 0, max: 100, center: ["50%", "62%"], radius: "98%",
+          pointer: { show: false },
+          progress: { show: true, roundCap: true, width: 12,
+            itemStyle: { color: new ec.graphic.LinearGradient(0, 0, 1, 0, [
+              { offset: 0, color: tok("--brand-2") },
+              { offset: 1, color: tok("--brand") }]) } },
+          axisLine: { roundCap: true,
+            lineStyle: { width: 12, color: [[1, tok("--panel-3")]] } },
+          axisTick: { show: false }, splitLine: { show: false },
+          axisLabel: { show: false },
+          anchor: { show: false },
+          title: { show: true, offsetCenter: [0, "34%"],
+            color: tok("--text-mute"), fontSize: 11, fontFamily: font },
+          detail: { valueAnimation: true, offsetCenter: [0, "-8%"],
+            formatter: (x) => `${Math.round(x)}%`,
+            color: tok("--text"), fontSize: 30, fontWeight: 800,
+            fontFamily: font },
+          data: [{ value: v, name: cfg.title || "" }],
+        }],
+      });
+    } else {
+      const labels = cfg.labels || [];
+      const vals = (cfg.values || []).map((x) => +(100 * x).toFixed(1));
+      const half = Math.ceil(vals.length / 2);
+      const barColor = (i) => {
+        const base = i < half ? tok("--brand") : tok("--text-mute");
+        return new ec.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: base },
+          { offset: 1, color: base + "33" }]);
+      };
+      chart.setOption({
+        animationDuration: 650,
+        grid: { left: 4, right: 4, top: 8, bottom: 22, containLabel: false },
+        xAxis: { type: "category", data: labels,
+          axisTick: { show: false }, axisLine: { show: false },
+          axisLabel: { color: tok("--text-mute"), fontSize: 9,
+            fontFamily: font, interval: 0 } },
+        yAxis: { show: false },
+        tooltip: { trigger: "axis",
+          backgroundColor: tok("--panel-3"), borderColor: tok("--border"),
+          textStyle: { color: tok("--text"), fontSize: 11, fontFamily: font },
+          valueFormatter: (x) => `${x}% of replays` },
+        series: [{
+          type: "bar", data: vals.map((v, i) => ({
+            value: v, itemStyle: { color: barColor(i),
+              borderRadius: [3, 3, 0, 0] } })),
+          barCategoryGap: "28%",
+        }],
+      });
+    }
+    _echartsLive.push(chart);
+    if (_echartsLive.length > 24) {
+      const old = _echartsLive.shift();
+      try { old.dispose(); } catch (e) {}
+    }
+  }
+}

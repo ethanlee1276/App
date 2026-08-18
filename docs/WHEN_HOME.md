@@ -532,6 +532,29 @@ on your next deploy. If you want even more: ECharts (fancier 3D-ish
 charts), Lottie (animated illustrations — needs artwork), and the
 venue art kit (#120) are the next rungs, in that order of effort.
 
+### T23. ECharts, rung one: the replay panel is a showpiece now
+
+Per “start on the Echarts and work down” — **ECharts 5.6** is vendored
+(`web/vendor/echarts.min.js`, served from your own box). It’s a full
+megabyte, so unlike ApexCharts it is NOT loaded at boot: the first
+panel that needs it injects it once, and everything else on the site
+pays nothing.
+
+First panel upgraded: **“The replay” on every priced NFL game page.**
+The drive sim’s numbers now render as a violet half-gauge (home win
+share, animated count-up) beside a gradient histogram of the six
+margin buckets — home side in brand violet, away in neutral, tooltips
+on hover. The old div bars ship in the same markup as the fallback, so
+a machine that never loads the engine sees exactly the panel it always
+saw. Six new tests pin the whole contract (vendored not CDN’d, lazy
+not boot-path, fallbacks standing, theme tokens not library defaults).
+
+Next rungs down the list when you say go: the Prediction Market
+“MODEL vs MARKET” overhead as a dumbbell chart, the Record page
+calibration chart, and team-shape radars. Venue art (#120) stays
+parked like you said — you like the current stadiums; more when you
+want to generate them.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

@@ -5348,6 +5348,19 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   margin: 10px 0 14px; color: var(--text-mute); font-size: var(--fs-sm); }
 .gp-sim-tiles b { color: var(--text); font-size: var(--fs-lg);
   margin-right: 4px; font-variant-numeric: tabular-nums; }
+/* The viz row: the ECharts gauge beside the histogram on a desk, stacked
+   on a phone. The gauge div is EMPTY until the lazy engine mounts it —
+   height 0 in the fallback state, so a machine without the vendor file
+   sees exactly the panel it always saw. */
+.gp-sim-viz { display: grid; grid-template-columns: 200px minmax(0, 1fr);
+  gap: 14px; align-items: end; }
+.gp-sim-gauge:not([data-echarted]) { display: none; }
+.gp-sim-gauge { height: 150px; min-width: 0; }
+.gp-sim-hist[data-echarted] { display: block; height: 170px; padding: 0; }
+@media (max-width: 700px) {
+  .gp-sim-viz { grid-template-columns: 1fr; }
+  .gp-sim-gauge { height: 130px; }
+}
 .gp-sim-hist { display: flex; align-items: flex-end; gap: 8px;
   padding: 4px 0 0; }
 .gp-sim-col { flex: 1; display: flex; flex-direction: column;
