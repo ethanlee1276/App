@@ -11,7 +11,7 @@ browser you can look at.
 
 ## TODAY'S ROUND — 2026-08-18 (added while you were at work)
 
-Twenty-seven commits today, GitHub tick green, 4,677 tests across 272
+Twenty-nine commits today, GitHub tick green, 4,678 tests across 272
 files (sanity check after T1’s pull: `git log --oneline -1` should name
 the commit that refreshed this very note). In the order to run them:
 
@@ -226,6 +226,16 @@ NFL) show a compact colored designation — “Q”, “OUT”, “IR”, “DTD
 with the injury and return date on hover, and the dossier spells the
 whole sentence: “Questionable — Calf.” Cleared-to-play notices never
 tag; that would re-create the exact confusion T13 just fixed.
+
+Second round on the same theme: your **Sleeper “My roster” rows** tag
+too, with a one-line “Carrying a designation: …” callout above the
+list naming exactly who — the first thing a manager checks. The
+**roster-directory search fallback** tags as well, so even a player
+with no logged games (linemen, rookies) shows his status. And the
+**mock draft’s CPU now reads the injury report**: an OUT/IR-tier
+player’s draft weight collapses to a quarter (a multiplier, not a ban
+— late-round stashes are a real strategy, and you can still draft
+anyone the tag warns about).
 
 **The refresh loop now proves it’s alive.** T13 guarded the loop
 against dying; this makes any future death visible in seconds instead

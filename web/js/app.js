@@ -4599,7 +4599,7 @@ async function renderPlayers() {
           <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
             ${playerAvatar(m.player, m.team, { size: 40, headshot: m.headshot })}
             <div style="flex:1;min-width:0">
-              <strong>${escapeHtml(m.player)}</strong>
+              <strong>${escapeHtml(m.player)}</strong>${injTag(state.sport || "nfl", m.player)}
               <div style="font-size:.85em;color:var(--text-mute)">
                 ${teamMark(m.team, 14)} ${escapeHtml(teamName(m.team))}
                 · ${escapeHtml(m.position || "—")}
@@ -12440,11 +12440,23 @@ function _mockNeed(roster, pos, round) {
   return n >= 2 ? 0.2 : 1.0;
 }
 
+/* A CPU manager reads the injury report. A man ruled out or on IR is
+   not worth a premium pick to a season-long roster; a Questionable in
+   August is Tuesday noise. A multiplier, not a ban — the late-round
+   stash of a hurt star is a real strategy, and the human can always
+   draft anyone the tags warned about. */
+function _mockHealth(name) {
+  const r = injFind("nfl", name);
+  if (!r) return 1;
+  return injTone(r.status) === "var(--bad)" ? 0.25 : 0.85;
+}
+
 function _mockCpuPick(ti) {
   const round = Math.floor(_mock.pick / _mock.teams);
   const roster = _mock.rosters[ti];
   const cands = _mock.pool.slice(0, 8).map((p, i) => ({
     p, w: Math.exp(-i / 2.5) * _mockNeed(roster, p.position, round)
+          * _mockHealth(p.player)
           * (0.6 + Math.random() * 0.8) }));
   const total = cands.reduce((s, c) => s + c.w, 0) || 1;
   let roll = Math.random() * total;
@@ -13001,7 +13013,7 @@ function renderSleeperPanel(d, ctx) {
         border-bottom:1px solid rgba(255,255,255,.05)">
       <span style="flex:0 0 auto">${playerAvatar(r.name, r.team, { map: nflMap(), headshot: (r.u || {}).headshot || _ffDossierInfo(r.name).headshot })}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-        <strong>${escapeHtml(r.name)}</strong>
+        <strong>${escapeHtml(r.name)}</strong>${injTag("nfl", r.name)}
         <span style="color:var(--text-mute)"> ${escapeHtml(r.pos)} · ${escapeHtml(r.team || "FA")}${r.starter ? " · starter" : ""}</span>
         ${r.flag ? `<span class="chip ${r.flag === "BUY LOW" ? "up" : "down"}" style="margin-left:6px">${r.flag}</span>` : ""}</span>
       ${r.u ? `<span style="min-width:150px;text-align:right;color:var(--text-dim)"
@@ -13029,6 +13041,17 @@ function renderSleeperPanel(d, ctx) {
     </div>
     <div class="section-title">My roster
       <span class="sub">— usage trend (season → 4wk → last) and trade flags for YOUR players</span></div>
+    ${(() => {
+      // The one line a manager checks first. Names, not a count — a
+      // count sends him hunting through his own list.
+      const hurt = myRows.map((r) => ({ r, inj: injFind("nfl", r.name) }))
+        .filter((x) => x.inj);
+      return hurt.length ? `<p class="rank-help" style="margin-top:0">
+        ${icon("warn")} Carrying a designation:
+        ${hurt.map((x) => `<b>${escapeHtml(x.r.name)}</b>
+          <span style="color:${injTone(x.inj.status)}">${escapeHtml(injShort(x.inj.status))}</span>`).join(", ")}
+        — details on the Injuries page.</p>` : "";
+    })()}
     <div style="margin:0 -18px">${myRows.map(rowHTML).join("") ||
       `<p class="loading" style="padding:12px 16px">Couldn’t match a roster you own in this league.</p>`}</div>
     <div class="section-title">Waiver watch

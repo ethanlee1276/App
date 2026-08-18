@@ -55,12 +55,27 @@ def test_every_roster_surface_carries_the_tag():
     # The mock draft's shared identity block tags every row at once.
     i = APP.index("const idBlock = (p, meta)")
     assert 'injTag("nfl", p.player)' in APP[i:i + 300]
-    # Search profiles and the Also-matching rows are sport-aware.
-    assert APP.count('injTag(state.sport || "nfl"') >= 2
+    # Search profiles, the Also-matching rows and the roster-directory
+    # fallback are sport-aware.
+    assert APP.count('injTag(state.sport || "nfl"') >= 3
+    # The Sleeper "My roster" rows tag, and the card leads with NAMES —
+    # a count would send the manager hunting through his own list.
+    assert 'injTag("nfl", r.name)' in APP
+    assert "Carrying a designation:" in APP
     # The dossier carries the whole sentence, compact card and full page.
     assert "info.inj = injFind(" in APP
     assert "${injLineHTML(info.inj)}" in APP
     assert 'injLineHTML(injFind("nfl", p.player))' in APP
+
+
+def test_the_cpu_reads_the_injury_report():
+    """A multiplier, not a ban: OUT/IR-tier weight collapses, a warn-tier
+    tag barely registers, and the human can still draft anyone."""
+    i = APP.index("function _mockHealth(")
+    body = APP[i:APP.index("\n}", i)]
+    assert "injFind(" in body and "0.25" in body
+    j = APP.index("function _mockCpuPick(")
+    assert "_mockHealth(p.player)" in APP[j:j + 500]
 
 
 def test_the_pages_load_the_board_before_painting():
