@@ -165,13 +165,45 @@ def test_the_fast_scoreboard_merges_instead_of_replacing():
 
 def test_every_league_build_attaches_the_track():
     """"we should be showing that for ALL live games" — the wiring that
-    was MLB-only now rides every league build with a name map for the
-    odds feed. CFB stays out until its runtime-built map is threaded
-    through (134 schools, no hand-written table)."""
-    for fname in ("mlb_build.py", "nfl_build.py", "nba_build.py"):
+    was MLB-only rides every league build with a name map for the odds
+    feed. CFB joined last (2026-08-18): its 134-school map cannot be a
+    hand-written table, so the feed's names resolve through the same
+    runtime lookup the odds attach already trusts."""
+    for fname in ("mlb_build.py", "nfl_build.py", "nba_build.py",
+                  "cfb_build.py"):
         src = open(os.path.join(ROOT, fname), encoding="utf-8").read()
         assert "livelines" in src and ".attach(" in src, fname
         assert "pull_and_record(" in src, fname
+
+
+def test_cfb_resolves_feed_names_at_runtime_and_pays_only_when_live():
+    """The CFB specifics. The adapter must resolve through cfbdata's
+    lookup (a checked-in school table is the thing this build refuses to
+    have), the paid pull sits behind BOTH the odds flag and a live game,
+    and the free attach is outside that gate — the same budget discipline
+    the MLB pins above defend."""
+    src = open(os.path.join(ROOT, "cfb_build.py"), encoding="utf-8").read()
+    i = src.index("class _FeedNames")
+    assert "cfbdata.resolve_team(name" in src[i:i + 400]
+    j = src.index("_ll.pull_and_record", i)
+    gate = src[src.rindex("if ", i, j):j]
+    assert "_live_games" in gate and "args.odds" in gate
+    k = src.index("_ll.attach(", j)
+    assert "args.odds" not in src[j + 30:k], \
+        "the free attach got folded under the paid gate"
+
+
+def test_cfb_games_speak_the_live_dict_every_other_league_speaks():
+    """The Live tab keeps a game when live.state == "live" and reads the
+    score off that dict. CFB carried only a top-level state, so a
+    Saturday in progress never appeared there at all — the parser had
+    the score and the clock the whole time."""
+    src = open(os.path.join(ROOT, "cfb_build.py"), encoding="utf-8").read()
+    i = src.index('out["games"] = [')
+    block = src[i:i + 1600]
+    assert '"live": {"state": g.get("state", "scheduled")' in block
+    for key in ('"home_score"', '"away_score"', '"period"'):
+        assert key in block, f"the live dict lost {key}"
 
 
 def test_open_bet_rows_wear_the_track_for_team_markets():

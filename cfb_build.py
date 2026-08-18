@@ -471,7 +471,17 @@ def main() -> None:
                      "attention_tier": attention_tier(g),
                      "qb_confirmed": g.get("qb_confirmed", False),
                      "venue": g.get("venue", ""), "indoor": g.get("indoor", False),
-                     "state": g.get("state", "scheduled")}
+                     "state": g.get("state", "scheduled"),
+                     # The shape every other league's payload speaks. The
+                     # Live tab keeps a game with live.state == "live" and
+                     # reads its score off the same dict — CFB carried only
+                     # the top-level state, so a Saturday in progress never
+                     # appeared there at all. The scoreboard parser had the
+                     # score and the clock the whole time.
+                     "live": {"state": g.get("state", "scheduled"),
+                              "home_score": g.get("home_score"),
+                              "away_score": g.get("away_score"),
+                              "period": g.get("detail", "")}}
                     for g in games]
     out["ratings"] = {"fitted": fit.fitted, "games": fit.games,
                       "margin_sd": fit.margin_sd, "total_sd": fit.total_sd,
@@ -502,6 +512,41 @@ def main() -> None:
         lines = priced.get(g["game_id"]) or {}
         gd["spread"] = (lines.get("spread") or [None])[0]
         gd["total"] = (lines.get("total") or [None])[0]
+
+    # Live win-probability track — the wiring every other league carries
+    # ("we should be showing that for ALL live games"). CFB waited on one
+    # thing: the other builds hand `pull_and_record` a hand-written
+    # {feed name -> abbr} table, and 134 schools is exactly the list that
+    # goes stale in a checked-in file. So the feed's names resolve through
+    # the same runtime lookup the odds attach already trusts. The pull is
+    # behind the paid-odds flag AND a live game (the budget discipline
+    # test_live_line_chart pins for MLB); the attach is unconditional —
+    # the history is on disk and drawing it is free.
+    try:
+        from engine import livelines as _ll
+
+        class _FeedNames:
+            """dict-shaped adapter: livelines calls .get(feed_name)."""
+
+            def __init__(self, lk):
+                self._lk = lk
+
+            def get(self, name, default=None):
+                return cfbdata.resolve_team(name or "", self._lk) or default
+
+        _live_games = [gd for gd in out["games"]
+                       if (gd.get("live") or {}).get("state") == "live"]
+        if _live_games and args.odds:
+            _n, _note = _ll.pull_and_record("cfb", _FeedNames(lookup))
+            if _n:
+                print(f"  Live line: {_note}")
+        _midnight = datetime.datetime.now().replace(
+            hour=0, minute=0, second=0, microsecond=0).timestamp()
+        _tracked = _ll.attach(out["games"], "cfb", since=_midnight)
+        if _tracked:
+            print(f"  Live line: charting {_tracked} game(s)")
+    except Exception as _exc:                                 # noqa: BLE001
+        print(f"  ⚠️  live line tracking unavailable: {_exc}")
 
     plays = build_plays(games, priced, ratings, fit, prev, nxt)
     by_id = {g["game_id"]: g for g in games}
