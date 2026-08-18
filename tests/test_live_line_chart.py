@@ -193,6 +193,18 @@ def test_cfb_resolves_feed_names_at_runtime_and_pays_only_when_live():
         "the free attach got folded under the paid gate"
 
 
+def test_cfb_marks_survive_the_cross_sport_live_tab():
+    """The Live tab draws every league at once, but CFB's team table
+    rides in its own payload — viewed from the MLB page there is no CFB
+    payload in state.data, and every school falls back to a drawn chip.
+    The live fetch keeps the last table it saw, and the resolver prefers
+    it."""
+    i = APP.index("function teamsForSport(")
+    assert "_cfbTeams ||" in APP[i:i + 500]
+    j = APP.index("async function fetchAllLive(")
+    assert '_cfbTeams = d.teams' in APP[j:j + 800]
+
+
 def test_cfb_games_speak_the_live_dict_every_other_league_speaks():
     """The Live tab keeps a game when live.state == "live" and reads the
     score off that dict. CFB carried only a top-level state, so a

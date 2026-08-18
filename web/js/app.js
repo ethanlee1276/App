@@ -119,12 +119,16 @@ const HIDDEN_VIEWS = {
 
 /* College football's 134 identities ride in the payload rather than a
    checked-in file, so they aren't known until the slate lands — hence the
-   refresh on every load as well as on every sport switch. */
+   refresh on every load as well as on every sport switch. The Live tab
+   is cross-sport, though: a CFB card drawn while the reader is on the
+   MLB page has no CFB payload in state.data, so the last table any
+   fetch delivered is kept here and preferred. */
+let _cfbTeams = null;
 function teamsForSport(sport) {
   if (sport === "mlb") return typeof MLB_TEAMS !== "undefined" ? MLB_TEAMS : {};
   if (sport === "nba") return typeof NBA_TEAMS !== "undefined" ? NBA_TEAMS : {};
   if (sport === "wnba") return typeof WNBA_TEAMS !== "undefined" ? WNBA_TEAMS : {};
-  if (sport === "cfb") return (state.data && state.data.teams) || {};
+  if (sport === "cfb") return _cfbTeams || (state.data && state.data.teams) || {};
   return typeof TEAMS !== "undefined" ? TEAMS : {};
 }
 
@@ -14505,6 +14509,7 @@ async function fetchAllLive() {
       const r = await fetch(url, { cache: "no-store" });
       if (!r.ok) return;
       const d = await r.json();
+      if (sport === "cfb" && d.teams) _cfbTeams = d.teams;
       // The fast scoreboard when this sport has one, the board otherwise.
       // FALLING BACK IS THE POINT: a missing or unbuilt live file must
       // leave the page exactly as it was rather than emptying it, because
