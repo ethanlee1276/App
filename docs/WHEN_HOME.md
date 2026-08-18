@@ -11,7 +11,7 @@ browser you can look at.
 
 ## TODAY'S ROUND — 2026-08-18 (added while you were at work)
 
-Twenty-five commits today, GitHub tick green, 4,670 tests across 271
+Twenty-seven commits today, GitHub tick green, 4,677 tests across 272
 files (sanity check after T1’s pull: `git log --oneline -1` should name
 the commit that refreshed this very note). In the order to run them:
 
@@ -211,6 +211,29 @@ into the guarded loop and the next injuries pull applies the cut.
 Injuries refresh from ESPN’s feed at most every 30 minutes, for every
 league that publishes one (NFL, MLB, NBA, WNBA, CFB; UFC has no feed
 anywhere, which the page says rather than hiding the tab).
+
+### T14. Injury tags on every roster surface + a pulse for the refresh loop
+
+You asked what else could get done — two follow-ons from the Cade Mays
+report, both riding the same T1 deploy:
+
+**Injury tags everywhere a player’s name is a decision.** The injuries
+page was already right; the gap was everywhere else — the draft kit
+ranked a man with a broken wrist and said nothing. Now the kit’s
+board, tiers, and sleepers, every mock-draft row, the dossier card,
+the full player page, and the search profiles (every sport, not just
+NFL) show a compact colored designation — “Q”, “OUT”, “IR”, “DTD” —
+with the injury and return date on hover, and the dossier spells the
+whole sentence: “Questionable — Calf.” Cleared-to-play notices never
+tag; that would re-create the exact confusion T13 just fixed.
+
+**The refresh loop now proves it’s alive.** T13 guarded the loop
+against dying; this makes any future death visible in seconds instead
+of days. The loop writes `web/data/heartbeat.json` every cycle —
+whether the cycle succeeded or not — and `python3 launch.py --check`
+reads it first, before the per-file ages: a fresh beat with one old
+board means a failing build; a dead beat means the loop is down and
+says so in those words. File timestamps alone can’t tell those apart.
 
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
