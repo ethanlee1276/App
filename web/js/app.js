@@ -4559,7 +4559,7 @@ async function renderPlayers() {
       host.innerHTML = `<div class="empty">No priced props on the
         ${escapeHtml(String(state.sport || "").toUpperCase())} board tonight,
         so there are no player profiles to draw — they are built from the
-        board's prop cards. The page fills as soon as a slate prices.</div>`;
+        board’s prop cards. The page fills as soon as a slate prices.</div>`;
       return;
     }
     host.innerHTML = `<div class="empty">No players match “${escapeHtml(state.search)}”.</div>`;
