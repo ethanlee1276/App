@@ -564,7 +564,7 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
 .controls {
   display: flex; flex-wrap: wrap; gap: 28px; align-items: center;
   padding: 16px 22px; margin-bottom: 20px;
-  background: var(--panel); border: var(--hairline) solid var(--border-soft); border-radius: 0;
+  background: var(--panel); border: var(--hairline) solid var(--border-soft); border-radius: var(--radius);
 }
 .control { display: flex; flex-direction: column; gap: 7px; min-width: 210px; }
 .control label { font-size: var(--fs-sm); color: var(--text-dim); display: flex; justify-content: space-between; }
@@ -594,11 +594,13 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .game-card {
   flex: 0 0 272px; scroll-snap-align: start; overflow: hidden;
   background: var(--panel-2);
-  border: var(--hairline) solid var(--border-soft); border-radius: 0; box-shadow: none;
+  /* Rejoined the violet system 2026-08-18 with .card — see its comment. */
+  border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius); box-shadow: var(--glow-soft);
   transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-base) var(--ease-out);
 }
 .game-card { transform-style: preserve-3d; transition: border-color var(--dur-base) var(--ease-out); }
-.game-card:hover { border-color: var(--brand-2); box-shadow: none; }
+.game-card:hover { border-color: var(--brand-2); box-shadow: var(--glow); }
 .stadium-wrap { line-height: 0; background: #070b16; }
 .stadium-wrap .stadium { width: 100%; height: auto; display: block; }
 .game-info { padding: 11px 15px 3px; }
@@ -633,17 +635,24 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .loading { color: var(--text-dim); grid-column: 1 / -1; text-align: center; padding: 60px; }
 .card {
   position: relative; overflow: hidden;
-  /* Flat, not a vertical wash. The gradient was doing nothing a person
-     could name — it made every panel look faintly lit from above, which
-     across forty panels is the "generated" texture rather than a
-     decision. A hairline and a flat field is what a printed table has. */
-  background: var(--panel-2);
-  border: var(--hairline) solid var(--border-soft); border-radius: 0;
-  padding: 18px; box-shadow: none;
+  /* RE-DECIDED 2026-08-18. The flat card was a deliberate call ("a
+     hairline and a flat field is what a printed table has") and Ethan
+     overruled it in his own words: "the website feels so flat and very
+     AI looking … all the colors and graphics and shit are so flat."
+     The owner picked the sportsbook look over the broadsheet look, so
+     cards rejoin the violet system the rest of the render already
+     wears: token radius, the token wash, the token shadow — light as a
+     SYSTEM, never a hand-mixed value (test_design_tells enforces). */
+  background-color: var(--panel-2);
+  background-image: var(--grad-card);
+  border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 18px; box-shadow: var(--glow-soft);
   display: flex; flex-direction: column; gap: 14px;
-  transition: border-color var(--dur-base) var(--ease-out);
+  transition: border-color var(--dur-base) var(--ease-out),
+              transform var(--dur-base) var(--ease-out);
 }
-.card:hover { border-color: var(--border); box-shadow: none; }
+.card:hover { border-color: var(--border); transform: translateY(-1px); }
 .card.faded { opacity: .6; }
 .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--grade-color, var(--text-faint)); }
 
@@ -708,7 +717,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
  * same as its answer everywhere: rule it off, set it left, let the words
  * carry it, and draw the mark at the size of the text it sits beside. */
 .empty-slate { text-align: left; padding: 26px 0 30px; margin: 6px 0 4px;
-  border-top: var(--hairline) solid var(--border); background: none; border-radius: 0;
+  border-top: var(--hairline) solid var(--border); background: none; border-radius: var(--radius-sm);
   grid-column: 1 / -1; }
 .empty-slate .es-icon { color: var(--text-faint); line-height: 1;
   display: block; margin-bottom: 12px; }
@@ -718,7 +727,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .empty-slate .es-sub { color: var(--text-dim); font-size: var(--fs-sm);
   margin-top: 7px; max-width: var(--measure); margin-inline: 0; line-height: var(--lh-body); }
 .empty-slate code { background: var(--fill-subtle); padding: 2px 6px;
-  border-radius: 0; }
+  border-radius: var(--radius-sm); }
 /* A drawn mark on a text baseline. */
 .ico-mark { display: inline-flex; vertical-align: -2px; margin-right: 6px;
   color: currentColor; }
@@ -728,7 +737,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .gb-group-label { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-weight: 800;
   text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); margin-bottom: 10px; }
 .gb-group-label span { background: var(--panel-3); color: var(--text-dim);
-  border-radius: 0; padding: 1px 8px; font-size: var(--fs-xs); }
+  border-radius: var(--radius-sm); padding: 1px 8px; font-size: var(--fs-xs); }
 
 /* A grade is a verdict on QUALITY, so it takes the result ramp, not the
    accent. Ten amber grade badges on one board was the single biggest
@@ -742,7 +751,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    else in this design is a solid slab of colour. */
 .grade { font-family: var(--font-sans); font-size: var(--fs-2xs);
   font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
-  padding: 3px 9px; border-radius: 0; white-space: nowrap;
+  padding: 3px 9px; border-radius: var(--radius-sm); white-space: nowrap;
   background: none; border: var(--hairline) solid var(--text-mute); color: var(--text-dim); }
 .grade.strong { border-color: var(--good); color: var(--good); }
 .grade.play { border-color: var(--text); color: var(--text); }
@@ -750,7 +759,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .grade.pass { border-color: var(--border); color: var(--text-mute); }
 
 .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.metric { background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft); border-radius: 0; padding: 9px 11px; }
+.metric { background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-sm); padding: 9px 11px; }
 .metric .k { font-size: var(--fs-2xs); color: var(--text-mute); text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
 .metric .v { font-size: var(--fs-xl); font-weight: 800; margin-top: 3px; }
 .metric .v.pos { color: var(--good); } .metric .v.neg { color: var(--bad); }
@@ -819,7 +828,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 /* inline-block, not inline: a bordered INLINE box that wraps is drawn as
    two broken half-pills, one per line — which is exactly what the usage
    trend chips did once the column got narrow on a phone. */
-.chip { display: inline-block; font-size: var(--fs-xs); padding: 4px 10px; border-radius: 0; border: var(--hairline) solid var(--border); color: var(--text-dim); font-weight: 600; }
+.chip { display: inline-block; font-size: var(--fs-xs); padding: 4px 10px; border-radius: var(--radius-sm); border: var(--hairline) solid var(--border); color: var(--text-dim); font-weight: 600; }
 .chip.up { color: var(--good); border-color: rgba(47, 213, 140, .4); }
 .chip.down { color: var(--bad); border-color: rgba(251, 90, 106, .4); }
 /* A stake is a number the model produced, not a condition at the venue.
@@ -869,7 +878,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    at four to a page it stops being read at all. */
 .warning { background: none; border: 0; border-left: 2px solid var(--bad);
   color: var(--text-body); font-size: var(--fs-sm); padding: 7px 0 7px 13px;
-  border-radius: 0; }
+  border-radius: var(--radius-sm); }
 
 /* ---------------- Sparkline ---------------- */
 .spark { display: block; width: 100%; height: auto; }
@@ -881,7 +890,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 /* min-width: 0 — grid items default to min-width:auto, which lets a wide
    row inside push the column past its track and the whole page into
    horizontal scroll on phones (the classic grid blowout). */
-.trend-col { background: var(--panel-2); border: var(--hairline) solid var(--border-soft); border-radius: 0; padding: 16px; min-width: 0; }
+.trend-col { background: var(--panel-2); border: var(--hairline) solid var(--border-soft); border-radius: var(--radius); padding: 16px; min-width: 0; }
 /* 14px is under the serif's floor (see the display-face note near the top),
    and a measurement across every view found this was the only heading that
    broke it. It is a column LABEL, not a headline, so it takes the sans. */
@@ -902,7 +911,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .search-wrap { position: relative; margin-bottom: 22px; max-width: 520px; }
 .search-wrap input {
   width: 100%; padding: 14px 16px 14px 44px; font-size: var(--fs-lg); font-family: inherit;
-  background: var(--panel); border: var(--hairline) solid var(--border); border-radius: 0; color: var(--text);
+  background: var(--panel); border: var(--hairline) solid var(--border); border-radius: var(--radius-sm); color: var(--text);
   outline: none; transition: border-color var(--dur-base) var(--ease-out);
 }
 .search-wrap input:focus { border-color: var(--brand-2); box-shadow: none; }
@@ -961,7 +970,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    wraps inside its tile. */
 .form-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 0 18px 14px; }
 .form-tile .k, .form-tile .v { overflow-wrap: break-word; }
-.form-tile { background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft); border-radius: 0; padding: 8px 6px; text-align: center; }
+.form-tile { background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-sm); padding: 8px 6px; text-align: center; }
 .form-tile .k { font-size: var(--fs-2xs); color: var(--text-mute); text-transform: uppercase; letter-spacing: .4px; }
 .form-tile .v { font-size: var(--fs-xl); font-weight: 800; margin-top: 2px; }
 
@@ -1247,7 +1256,7 @@ svg[data-scrub] { touch-action: pan-y; }
 
 /* theme toggle button */
 .theme-toggle {
-  width: 40px; height: 40px; border-radius: 0; cursor: pointer;
+  width: 40px; height: 40px; border-radius: var(--radius-sm); cursor: pointer;
   background: var(--panel); border: var(--hairline) solid var(--border); color: var(--text-dim);
   display: grid; place-items: center; font-size: var(--fs-xl); font-family: inherit;
   transition: color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out), transform var(--dur-fast) var(--ease-out);
@@ -1256,7 +1265,7 @@ svg[data-scrub] { touch-action: pan-y; }
 
 /* ---------------- Loading skeletons ---------------- */
 .skeleton-card {
-  height: 300px; border-radius: 0; border: var(--hairline) solid var(--border-soft);
+  height: 300px; border-radius: var(--radius); border: var(--hairline) solid var(--border-soft);
   background: var(--skeleton); background-size: 220% 100%;
   animation: shimmer 1.3s ease-in-out infinite;
 }
@@ -1391,7 +1400,7 @@ svg[data-scrub] { touch-action: pan-y; }
   font-family: var(--font-sans);
   font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .18em;
   text-transform: uppercase;
-  padding: 3px 8px; border-radius: 0; color: var(--text-dim);
+  padding: 3px 8px; border-radius: var(--radius-sm); color: var(--text-dim);
   background: var(--bg); border: var(--hairline) solid var(--border);
 }
 .status-badge.live { background: var(--bg); border-color: var(--warn);
@@ -1428,7 +1437,7 @@ svg[data-scrub] { touch-action: pan-y; }
 .live-ribbon {
   display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
   font-size: var(--fs-xs); font-weight: 800; letter-spacing: .4px; color: #fff;
-  padding: 4px 10px; border-radius: 0;
+  padding: 4px 10px; border-radius: var(--radius-sm);
   background: var(--bg); border-color: var(--warn); color: var(--warn);
   box-shadow: none;
 }
@@ -1461,7 +1470,7 @@ svg[data-scrub] { touch-action: pan-y; }
 .live-refresh {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: var(--fs-sm); font-weight: 700; color: var(--text-dim);
-  padding: 5px 10px; border-radius: 0;
+  padding: 5px 10px; border-radius: var(--radius-sm);
   background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft);
 }
 .live-refresh .live-dot { background: var(--good); box-shadow: none; }
@@ -1475,7 +1484,7 @@ svg[data-scrub] { touch-action: pan-y; }
 
 .data-source {
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: var(--fs-sm); font-weight: 700; padding: 5px 10px; border-radius: 0;
+  font-size: var(--fs-sm); font-weight: 700; padding: 5px 10px; border-radius: var(--radius-sm);
   border: var(--hairline) solid transparent; cursor: default;
 }
 .data-source .src-dot { width: 7px; height: 7px; border-radius: 50%; }
@@ -1488,7 +1497,7 @@ svg[data-scrub] { touch-action: pan-y; }
 .control.bankroll { min-width: 230px; }
 .bankroll-inputs {
   display: flex; align-items: center; gap: 6px;
-  background: var(--panel-3); border: var(--hairline) solid var(--border); border-radius: 0;
+  background: var(--panel-3); border: var(--hairline) solid var(--border); border-radius: var(--radius-sm);
   padding: 6px 10px;
 }
 .bankroll-inputs .pfx, .bankroll-inputs .sfx { color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600; }
@@ -1507,7 +1516,7 @@ svg[data-scrub] { touch-action: pan-y; }
 /* Long Shots */
 .ls-note { color: var(--text-dim); font-size: var(--fs-md); margin-bottom: 14px; }
 .card.longshot .ls-primary {
-  margin-top: 10px; padding: 9px 11px; border-radius: 0;
+  margin-top: 10px; padding: 9px 11px; border-radius: var(--radius-sm);
   background: var(--panel-2); border: var(--hairline) solid var(--border);
   font-size: var(--fs-sm); font-weight: 600; color: var(--text);
 }
@@ -1605,13 +1614,20 @@ td.num, .dl-num, .std-n, .pm-avatar, .odds,
    stripped only the LEFT side, and the ROI tile ended up in a
    three-sided box whose bottom edge sat 2px under its own sub-line —
    inside `overflow: hidden`, so the text read as cut off. */
+/* This late group used to RE-flatten every card the earlier rules had
+   just styled (background back to bare panel, shadow back to none) — it
+   was the flattening pass of 2026-08-13, and it is why the first attempt
+   at un-flattening changed nothing on screen. Re-decided 2026-08-18 with
+   .card (Ethan: "so flat and AI slop"): the late group now AGREES with
+   the system instead of overruling it. */
 .card, .game-card, .stat, .topplay {
-  background: var(--panel);
+  background-color: var(--panel-2);
+  background-image: var(--grad-card);
   border: var(--hairline) solid var(--border-soft);
-  box-shadow: none;
-  border-radius: 0;
+  box-shadow: var(--glow-soft);
+  border-radius: var(--radius);
 }
-.card:hover, .game-card:hover { box-shadow: none; border-color: var(--border); }
+.card:hover, .game-card:hover { box-shadow: var(--glow-soft); border-color: var(--border); }
 
 /* Section titles read as kickers, not headlines. */
 /* Density contrast, deliberately. An audit of the rendered pages found the
@@ -1664,7 +1680,7 @@ input[type="range"]::-webkit-slider-thumb { box-shadow: none; }
 .graph-tip {
   position: fixed; z-index: 1000; pointer-events: none;
   background: var(--panel-3); color: var(--text);
-  border: var(--hairline) solid var(--border); border-radius: 0;
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-sm);
   padding: 5px 9px; font-size: var(--fs-sm); font-weight: 600;
   font-variant-numeric: tabular-nums; white-space: nowrap;
   box-shadow: none;
@@ -1690,7 +1706,7 @@ input[type="range"]::-webkit-slider-thumb { box-shadow: none; }
 
 /* --- Why Us: open math-layer calculators --- */
 .calc-in {
-  background: var(--panel-3); border: var(--hairline) solid var(--border); border-radius: 0;
+  background: var(--panel-3); border: var(--hairline) solid var(--border); border-radius: var(--radius-sm);
   color: var(--text); font-family: inherit; font-size: var(--fs-lg); font-weight: 700;
   padding: 6px 10px; width: 92px; outline: none;
 }
@@ -1754,7 +1770,7 @@ select.calc-in { width: auto; font-weight: 600; }
    button somebody switched off. */
 .why-toggle {
   background: none; border: 0; padding: 0 0 0 2px;
-  color: var(--brand-2); border-radius: 0;
+  color: var(--brand-2); border-radius: var(--radius-sm);
   font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: .1em; text-transform: lowercase; cursor: pointer;
   line-height: var(--lh-snug); opacity: 1;
@@ -1850,7 +1866,7 @@ select.calc-in { width: auto; font-weight: 600; }
 .rec-disclose > summary {
   cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px;
   color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600;
-  border: var(--hairline) solid var(--border-soft); border-radius: 0; padding: 5px 12px;
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-sm); padding: 5px 12px;
 }
 .rec-disclose > summary::-webkit-details-marker { display: none; }
 .rec-disclose > summary::before { content: "?"; opacity: .75; font-weight: 800; }
@@ -1883,7 +1899,7 @@ select.calc-in { width: auto; font-weight: 600; }
 @media (max-width: 700px) { .rec-buckets { grid-template-columns: 1fr; } }
 .rec-bucket {
   min-width: 0; background: var(--panel-2);
-  border: var(--hairline) solid var(--border-soft); border-radius: 0; overflow: hidden;
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius); overflow: hidden;
 }
 .rb-head {
   font-size: var(--fs-xs); font-weight: 700; letter-spacing: .7px; text-transform: uppercase;
@@ -2074,14 +2090,14 @@ select.calc-in { width: auto; font-weight: 600; }
   display: grid; grid-template-columns: minmax(220px, 380px) minmax(0, 1fr);
   gap: 22px; align-items: center; margin-bottom: 20px;
   background: var(--panel-2);
-  border: var(--hairline) solid var(--border-soft); border-radius: 0;
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius);
   padding: 18px; overflow: hidden;
 }
 /* The stadium art is drawn for a card slot; given a half-page column it
    grows to ~370px and pushes the hero taller than the content beside it.
    Capped, so the header stays a header. */
 .gp-art {
-  position: relative; min-width: 0; border-radius: 0; overflow: hidden;
+  position: relative; min-width: 0; border-radius: var(--radius); overflow: hidden;
   max-height: 260px; display: flex; align-items: center; justify-content: center;
 }
 .gp-art svg { width: 100%; height: auto; max-height: 260px; display: block; }
@@ -2698,12 +2714,12 @@ body.ffd-open { overflow: hidden; }
 .ros-team {
   display: flex; align-items: center; gap: 10px; width: 100%;
   padding: 10px 12px; background: var(--panel-2); color: var(--text);
-  border: var(--hairline) solid var(--border); border-radius: 0;
+  border: var(--hairline) solid var(--border); border-radius: var(--radius);
   font: inherit; font-size: var(--fs-md); font-weight: 700; cursor: pointer;
   text-align: left;
 }
 .ros-team:hover { border-color: var(--brand-2); }
-.ros-team.open { border-radius: 0;
+.ros-team.open { border-radius: var(--radius);
   border-color: var(--brand-2); }
 /* The team's real logo, not a coloured square with the abbreviation in
    it. Ethan, 2026-08-13: "we are not showing player headshots or logos on
@@ -2947,7 +2963,7 @@ body.ffd-open { overflow: hidden; }
 .std-rank { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
   font-variant-numeric: tabular-nums; text-align: right; }
 .std-mark {
-  width: 26px; height: 26px; border-radius: 0;
+  width: 26px; height: 26px; border-radius: var(--radius-sm);
   display: grid; place-items: center; font-size: var(--fs-2xs); font-weight: 800;
   color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
 }
@@ -2978,7 +2994,7 @@ body.ffd-open { overflow: hidden; }
   padding-bottom: 2px;
 }
 .brk-match {
-  border: var(--hairline) solid var(--border); border-radius: 0;
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-sm);
   background: var(--panel-2); overflow: hidden;
 }
 .brk-side {
@@ -3151,7 +3167,7 @@ body.ffd-open { overflow: hidden; }
    two rows of tabs on this page stop being two different components. */
 .rec-scope {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 0; margin-right: 18px; border-radius: 0; cursor: pointer;
+  padding: 7px 0; margin-right: 18px; border-radius: var(--radius); cursor: pointer;
   background: none; border: 0; border-bottom: 2px solid transparent;
   color: var(--text-mute); font-family: var(--font-sans);
   font-size: var(--fs-sm); font-weight: 700;
@@ -3697,7 +3713,7 @@ body.ffd-open { overflow: hidden; }
   font-size: var(--fs-xs); }
 .pre-team {
   display: grid; place-items: center; padding: 3px 0;
-  border: var(--hairline) solid; border-radius: 0;
+  border: var(--hairline) solid; border-radius: var(--radius);
   font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em;
   color: var(--text-dim);
 }
@@ -4935,7 +4951,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    because it is a condition that is live, not a link to a page. */
 .slate-horizon { display: flex; align-items: baseline; gap: 7px;
   margin: 0 0 12px; padding: 8px 12px; border-left: 3px solid var(--warn);
-  background: var(--panel-3); border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--panel-3); border-radius: var(--radius) var(--radius) var(--radius) 0;
   color: var(--text-body); font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .slate-horizon b { color: var(--text); }
 .slate-jump { color: var(--brand); font-weight: 700; text-decoration: none;
@@ -5345,3 +5361,17 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   color: var(--text-dim); }
 .gp-sim-note { margin: 8px 0 0; font-size: var(--fs-xs);
   color: var(--text-mute); }
+
+/* --- Gloss charts (ApexCharts, vendored) ---------------------------------
+   The wrapper the mount function upgrades in place; before the upgrade it
+   just shows the fallback SVG it wraps. Tooltips come from the library
+   but wear our tokens, not its default blue-on-white. */
+.gloss-chart { display: block; width: 100%; }
+.gloss-chart .apexcharts-tooltip.apexcharts-theme-dark {
+  background: var(--panel-3); border: var(--hairline) solid var(--border);
+  color: var(--text); box-shadow: var(--glow-soft);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans); font-size: var(--fs-xs);
+}
+.gloss-chart .apexcharts-tooltip-title { display: none; }
+.gloss-chart .apexcharts-xaxistooltip { display: none; }

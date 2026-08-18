@@ -502,6 +502,36 @@ match it. And the single biggest visual upgrade on the table is still
 **T-item #120, the venue art kit** — that one is waiting on images
 from you, and the site already knows how to wear them.
 
+### T22. The gloss pass — a real chart engine, and the flat cards un-flattened
+
+Your “plugins or softwares” question has a real answer and it shipped:
+**ApexCharts**, a professional chart library, is now VENDORED into the
+site (`web/vendor/` — served from your own box, no CDN, works offline
+on the LAN). The three money charts — Your Performance on the
+dashboard, the My Bets bankroll curve, and the Bankroll page curve —
+are now smooth animated gradient-area charts with a crosshair tooltip
+you can scrub (touch or mouse). The old hand-drawn SVGs stay in the
+markup as the fallback, so nothing breaks if the file ever goes
+missing.
+
+And the bigger reveal from digging into why it felt flat: the violet
+render system ALWAYS had rounded corners, card washes and glow tokens
+— but a later “flattening pass” (2026-08-13) had hard-pinned cards
+back to square, shadowless, wash-less. That pass is now reversed on
+your word: cards, tiles, tables, badges and inputs wear the token
+radius, the violet wash and the soft shadow everywhere, with a hover
+lift. ~36 surfaces re-rounded, all through the same three radius
+tokens the tests enforce, so it cannot drift back into fourteen
+hand-picked corner values.
+
+Also fixed: THREE desk widgets could print a literal “undefined” chip
+on a row with no recorded side.
+
+Nothing to run — `git pull` on the laptop, and the droplet picks it up
+on your next deploy. If you want even more: ECharts (fancier 3D-ish
+charts), Lottie (animated illustrations — needs artwork), and the
+venue art kit (#120) are the next rungs, in that order of effort.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

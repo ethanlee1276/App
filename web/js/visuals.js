@@ -1722,3 +1722,54 @@ function escapeAttr(s) {
   // headless test harness stubs document, not window.
   document.addEventListener("scroll", hide, { passive: true, capture: true });
 })();
+
+/* ---- Gloss charts — ApexCharts, vendored (web/vendor) -------------------
+   Ethan, 2026-08-18: "no shiny good graphics like a real put together
+   website and app would offer." The hand-drawn SVGs stay in the markup
+   as the no-dependency fallback; when the vendored library is present,
+   any element carrying data-gloss-curve is upgraded in place to an
+   animated, crosshair-scrubbing gradient area chart. One mount function,
+   one visual grammar, colors read from the live theme tokens so the
+   charts recolor with the theme like everything else. */
+function mountGlossCharts(root) {
+  if (!window.ApexCharts) return;                 // vendored file absent
+  ((root || document).querySelectorAll("[data-gloss-curve]")).forEach((el) => {
+    if (el.dataset.glossed) return;
+    let cfg;
+    try { cfg = JSON.parse(el.getAttribute("data-gloss-curve")); }
+    catch (e) { return; }
+    const vals = (cfg.values || []).map(Number).filter((v) => isFinite(v));
+    if (vals.length < 2) return;
+    const labels = cfg.labels || vals.map((_, i) => String(i + 1));
+    const css = getComputedStyle(document.documentElement);
+    const tok = (n) => (css.getPropertyValue(n) || "").trim();
+    const tone = cfg.tone === "down" ? tok("--bad")
+      : cfg.tone === "up" ? tok("--good") : tok("--brand");
+    const fmt = cfg.money
+      ? (v) => `${v < 0 ? "\u2212" : ""}$${Math.abs(v).toFixed(2)}`
+      : (v) => `${cfg.signed && v > 0 ? "+" : ""}${Number(v).toFixed(2)}${cfg.unit || ""}`;
+    el.dataset.glossed = "1";
+    el.innerHTML = "";
+    const chart = new ApexCharts(el, {
+      chart: {
+        type: "area", height: cfg.h || 170, width: "100%",
+        sparkline: { enabled: true }, parentHeightOffset: 0,
+        animations: { enabled: true, speed: 650,
+                      dynamicAnimation: { enabled: false } },
+      },
+      series: [{ name: cfg.name || "", data: vals }],
+      colors: [tone],
+      stroke: { curve: "smooth", width: 2.5, lineCap: "round" },
+      fill: { type: "gradient", gradient: {
+        shadeIntensity: 0, opacityFrom: 0.34, opacityTo: 0, stops: [0, 100] } },
+      markers: { size: 0, strokeWidth: 0, hover: { size: 5 } },
+      tooltip: {
+        theme: "dark",
+        x: { formatter: (i) => String(labels[i - 1] ?? "") },
+        y: { formatter: fmt, title: { formatter: () => "" } },
+      },
+    });
+    chart.render();
+    el._gloss = chart;
+  });
+}

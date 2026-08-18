@@ -29,7 +29,7 @@
 // v2: the 2026-08-17 navigation redesign — bumped late, which is its own
 // lesson: two shell deploys shipped on v1 and the offline fallback held
 // pre-redesign copies the whole time.
-const VERSION = "qb-v2";
+const VERSION = "qb-v3";
 
 /* The shell only: enough to boot the app and render its own "no data
  * yet" states. Deliberately NOT the boards. */
@@ -40,6 +40,7 @@ const SHELL = [
   "/js/app.js",
   "/js/teams.js",
   "/js/visuals.js",
+  "/vendor/apexcharts.min.js",
   "/favicon.svg",
   "/icon-192.png",
   "/manifest.webmanifest",

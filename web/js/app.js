@@ -9038,9 +9038,12 @@ function renderMyBets() {
       const last = curve.length ? curve[curve.length - 1].pnl : 0;
       const spark = curve.length >= 2 ? `<div class="card" style="margin-bottom:14px">
         <div class="ffd-h">Bankroll curve</div>
-        ${sparkline(curve.map((p) => p.pnl).reverse(),
+        <div class="gloss-chart" data-gloss-curve="${escapeAttr(JSON.stringify({
+          values: curve.map((p) => p.pnl), labels: curve.map((p) => p.date),
+          tone: last >= 0 ? "up" : "down", money: true, h: 110,
+        }))}">${sparkline(curve.map((p) => p.pnl).reverse(),
           { w: 360, h: 84, line: 0,
-            stroke: last >= 0 ? "var(--good)" : "var(--bad)" })}
+            stroke: last >= 0 ? "var(--good)" : "var(--bad)" })}</div>
         <p class="ffd-note" style="margin:4px 0 0">Cumulative P&L over your
           ${curve.length} settled bets, oldest to newest — the flat line is
           break-even.</p></div>` : "";
@@ -9079,6 +9082,7 @@ function renderMyBets() {
       This is a manual log for the bets YOU place — not the model’s picks (those are on the
       Record page) and not gambling advice. Data lives only in this browser; clearing your
       browser data erases it, so Export now and then if you want a backup.</p>`;
+  if (typeof mountGlossCharts === "function") mountGlossCharts(host);
 }
 
 /* Weather — the Zeno sidebar's page (Ethan, 2026-08-12), built from
@@ -9116,7 +9120,7 @@ function renderWeather() {
       <div class="kx-row">
         <span class="kx-sport chip">${escapeHtml(r.city || "")}</span>
         <span class="kx-title">${escapeHtml(r.subtitle || r.title)} · ${escapeHtml(r.date)}
-          ${r.rec ? `<span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${r.rec_side}</span>` : ""}</span>
+          ${r.rec && r.rec_side ? `<span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${escapeHtml(r.rec_side)}</span>` : ""}</span>
         <span class="kx-num">NWS ${r.forecast_f}&deg;</span>
         <span class="kx-num">${(r.prob * 100).toFixed(0)}&cent;</span>
         <span class="kx-num kx-e"><span style="color:var(--${r.edge_pts > 0 ? "good" : "bad"})">${r.edge_pts > 0 ? "+" : ""}${r.edge_pts}</span></span>
@@ -9174,7 +9178,7 @@ function renderAlerts() {
         <a href="#intel">The full board &#8594;</a></span></div>
       <div class="card kx-table" style="padding:0">${recs.slice(0, 6).map((r) => `
         <div class="kx-row"><span class="kx-title">${escapeHtml(r.title)}</span>
-          <span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${r.rec_side}</span>
+          ${r.rec_side ? `<span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${escapeHtml(r.rec_side)}</span>` : ""}
           <span class="kx-num">${(r.prob * 100).toFixed(0)}&cent;</span></div>`).join("")}</div>`);
   }
   host.innerHTML = sections.join("") || `<div class="empty-slate">
@@ -9216,7 +9220,11 @@ function renderBankrollExtras() {
         <div class="gp-panel-title">Your logged P&amp;L over time
           <span class="gp-panel-sub">— every settled bet in your My Bets log</span></div>
         <div class="bk-curve-net" style="color:${tone}">${mbMoney(ys[ys.length - 1], true)}</div>
-        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:auto;display:block" aria-hidden="true"
+        <div class="gloss-chart" data-gloss-curve="${escapeAttr(JSON.stringify({
+          values: ys,
+          labels: settled.map((b) => `${b.date || ""} · ${b.desc || ""}`.trim()),
+          tone: up ? "up" : "down", money: true, h: 120,
+        }))}"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:auto;display:block" aria-hidden="true"
           data-scrub="${escapeAttr(JSON.stringify({
             l: settled.map((b) => `${b.date || ""} · ${b.player || b.bet || ""}`.trim()),
             v: ys.map((y) => mbMoney(y, true)),
@@ -9228,7 +9236,7 @@ function renderBankrollExtras() {
           <path d="M0,${H} L${xy.map(([x, y]) => `${x},${y}`).join(" L")} L${W},${H} Z" fill="url(#${gid})"/>
           <polyline points="${xy.map(([x, y]) => `${x},${y}`).join(" ")}" fill="none"
             stroke="${tone}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
-        </svg>
+        </svg></div>
         <div class="bk-curve-span"><span>${escapeHtml(settled[0].date)}</span>
           <span>${escapeHtml(settled[settled.length - 1].date)}</span></div>
       </div>`;
@@ -9248,6 +9256,7 @@ function renderBankrollExtras() {
         : "Set a number to measure your bankroll against. Stored in this browser."}</p>
     </div>
     ${curveHTML}`;
+  if (typeof mountGlossCharts === "function") mountGlossCharts(host);
   const inp = document.getElementById("bk-goal-in");
   if (inp) inp.addEventListener("change", () => {
     localStorage.setItem("qb_bk_goal", inp.value || "0");
@@ -15631,7 +15640,14 @@ async function renderHomePerf() {
       l: curve.map((c) => c.date),
       v: curve.map((c) => `${c.cum_u >= 0 ? "+" : ""}${Number(c.cum_u).toFixed(2)}u`),
     }));
-    spark = `<svg class="perf-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true" data-scrub="${scrub}">
+    // The SVG stays as the fallback; mountGlossCharts upgrades the
+    // wrapper in place to the animated, tooltip-scrubbing version when
+    // the vendored library is present (see visuals.js).
+    spark = `<div class="gloss-chart" style="min-height:${H}px"
+      data-gloss-curve="${escapeAttr(JSON.stringify({
+        values: ys, labels: curve.map((c) => c.date),
+        tone: up ? "up" : "down", unit: "u", signed: true, h: H,
+      }))}"><svg class="perf-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true" data-scrub="${scrub}">
       <defs><linearGradient id="perffill" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="${up ? "#42C268" : "#DF5953"}" stop-opacity="0.28"/>
         <stop offset="100%" stop-color="${up ? "#42C268" : "#DF5953"}" stop-opacity="0"/>
@@ -15642,7 +15658,7 @@ async function renderHomePerf() {
         stroke-linejoin="round" stroke-linecap="round"/>
       <circle cx="${ex}" cy="${ey}" r="4" fill="${tone}"/>
       <circle cx="${ex}" cy="${ey}" r="7.5" fill="${tone}" opacity="0.25"/>
-    </svg>`;
+    </svg></div>`;
   }
   const n = o.settled, w = o.wins || 0, l = o.losses || 0, p = o.pushes || 0;
   const seg = (count, color, off) => {
@@ -15705,6 +15721,7 @@ async function renderHomePerf() {
         <a class="perf-link" href="#record">Full record &#8594;</a>
       </div>
     </div>`;
+  if (typeof mountGlossCharts === "function") mountGlossCharts(host);
 }
 
 /* The right rail: KEY INSIGHTS (real reasons off tonight's best picks —
@@ -15816,7 +15833,7 @@ async function renderRailDesk() {
       <span class="chip rail-paper" title="Flat 0.1u paper stakes until the bucket proves itself — see the intel page">PAPER</span></div>
     ${recs.map((r) => `<div class="rail-rec">
       <span class="rail-rec-t">${escapeHtml(r.title)}</span>
-      <span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${r.rec_side}</span>
+      ${r.rec_side ? `<span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${escapeHtml(r.rec_side)}</span>` : ""}
       <em>${r.forecast_f != null
         ? `NWS ${r.forecast_f}&deg; vs ${(r.prob * 100).toFixed(0)}&cent;`
         : `model ${(r.model_p * 100).toFixed(0)}% vs ${(r.prob * 100).toFixed(0)}&cent;`}</em>
