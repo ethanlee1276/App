@@ -4446,9 +4446,9 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   border: var(--hairline) solid var(--border); border-radius: var(--radius-sm);
   padding: 3px 9px; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
 .ra-range.active { background: var(--brand); border-color: var(--brand); color: #fff; }
-/* (.ra-stats/.ra-tiles retired 2026-08-17 with the record declutter —
-   their numbers repeated the scoreboard and now live on the .ra-line
-   ledger rows.) */
+/* (.ra-stats/.ra-tiles/.ra-alltime retired 2026-08-17 with the record
+   declutter — their numbers repeated the scoreboard and now live on the
+   .ra-line ledger rows.) */
 
 /* Live board — the SPREAD | TOTAL | ML grid, one row per team. */
 .lb-table { display: grid; grid-template-columns: 1fr auto auto auto;
@@ -4556,10 +4556,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .rec-more:hover { background: var(--panel-2); }
 @media (min-width: 1000px) {
   .ra-main { grid-template-columns: 1fr 235px; align-items: stretch; }
-  .ra-main .ra-stats { grid-template-columns: 1fr; margin: 0; align-content: start; }
 }
-.ra-alltime { grid-template-columns: repeat(4, 1fr); }
-@media (max-width: 640px) { .ra-alltime { grid-template-columns: repeat(2, 1fr); } }
 
 /* Props tiles grow into the render's desktop grid. */
 @media (min-width: 900px) {
