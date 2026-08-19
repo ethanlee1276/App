@@ -175,6 +175,26 @@ def test_a_stale_record_file_costs_the_feature_not_the_truth():
     assert "rebuild the" in FN
 
 
+def test_the_dashboard_deltas_are_doors_and_measurements():
+    """Render 3's extras (2026-08-19): a Quick Tools row of doors to
+    rooms that already exist, a Recent Results tail read off the curve
+    itself, and a per-sport donut fed by the ledger's own per-sport
+    export. None of the three may invent a number."""
+    for href in ("#fantasy", "#scanner", "#mybets", "#bankroll"):
+        assert f'href="{href}"' in FN, f"quick tools lost {href}"
+    # Recent results are curve ROWS, and only when the rows carry the
+    # per-day record — a stale file drops the block instead of guessing.
+    assert "const tail = full.slice(-5).reverse();" in FN
+    assert "tail.every((r) => r.w != null)" in FN
+    # The donut counts the ledger's stored per-sport blocks, never a
+    # recount, and needs at least two sports to be a comparison.
+    assert "(_perfCache.tracked_sports || [])" in FN
+    assert "sportRows.length >= 2" in FN
+    i = FN.index("const sportRows")
+    seg = FN[i:i + 400]
+    assert "overall" in seg and "x.o.settled" in seg
+
+
 def test_the_break_even_line_disappears_rather_than_printing_zero():
     """`(100 * (o.breakeven || 0))` would print "break-even 0.0%" on a
     window with no priced bets — a claim that a bet needs nothing to

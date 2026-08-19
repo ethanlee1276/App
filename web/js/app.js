@@ -15934,7 +15934,68 @@ async function renderHomePerf() {
       stroke-dashoffset="${(-off / n * C).toFixed(1)}" />`;
   };
   const pct = (x) => n ? (100 * x / n).toFixed(1) + "%" : "—";
+  // Render 3's Quick Tools row — doors to rooms that already exist, not
+  // new features wearing buttons.
+  const tools = `
+    <div class="qt-row">
+      <a class="qt-chip" href="#fantasy">${icon("trophy", 17)}<span class="qt-t">
+        <b>Fantasy room</b><span class="k">draft kit · calendar · mock draft</span></span></a>
+      <a class="qt-chip" href="#scanner">${icon("search", 17)}<span class="qt-t">
+        <b>Props scanner</b><span class="k">filter every priced prop</span></span></a>
+      <a class="qt-chip" href="#mybets">${icon("book", 17)}<span class="qt-t">
+        <b>Bet tracker</b><span class="k">log your own tickets</span></span></a>
+      <a class="qt-chip" href="#bankroll">${icon("chart", 17)}<span class="qt-t">
+        <b>Bankroll</b><span class="k">stakes and limits</span></span></a>
+    </div>`;
+  // Render 3's Recent Results: the last graded slates, each with its own
+  // record and units — the curve's tail, not a recomputation.
+  const tail = full.slice(-5).reverse();
+  const recent = tail.length && tail.every((r) => r.w != null) ? `
+    <div class="perf-recent"><div class="perf-recent-h">Recent results</div>
+      ${tail.map((r) => `<div class="perf-rrow"><span>${escapeHtml(r.date)}</span>
+        <span class="rr-rec">${r.w}&#8211;${r.l}</span>
+        <b style="color:${pcol(r.day_u)}">${u(r.day_u, true)}</b></div>`).join("")}
+    </div>` : "";
+  // Render 3's Sports Breakdown donut: settled bets per sport, from the
+  // same per-sport ledger export the scoped panel reads. Always the
+  // WHOLE book — the card says so in its own name, and where the desk's
+  // volume sits is worth seeing from inside any one sport.
+  let sportsCard = "";
+  const sportRows = (_perfCache.tracked_sports || [])
+    .map((s) => ({ s, o: ((_perfCache.by_sport || {})[s] || {}).overall || {} }))
+    .filter((x) => x.o.settled).sort((a, b) => b.o.settled - a.o.settled);
+  if (sportRows.length >= 2) {
+    const tot = sportRows.reduce((t, x) => t + x.o.settled, 0);
+    const cols = ["var(--brand)", "var(--good)", "var(--warn)", "var(--bad)",
+                  "var(--brand-2)", "var(--text-dim)"];
+    const C = 2 * Math.PI * 40;
+    let off = 0;
+    const segs = sportRows.map((x, i) => {
+      const svg = `<circle r="40" cx="50" cy="50" fill="none"
+        stroke="${cols[i % cols.length]}" stroke-width="12"
+        stroke-dasharray="${(x.o.settled / tot * C).toFixed(1)} ${C.toFixed(1)}"
+        stroke-dashoffset="${(-off / tot * C).toFixed(1)}"/>`;
+      off += x.o.settled;
+      return svg;
+    }).join("");
+    sportsCard = `
+      <div class="card perf-card perf-sports-card">
+        <div class="perf-head"><span class="rail-title">Sports breakdown</span></div>
+        <div class="perf-donut-row">
+          <svg class="perf-donut" viewBox="0 0 100 100" aria-hidden="true">${segs}
+            <text x="50" y="47" text-anchor="middle" class="donut-n">${tot}</text>
+            <text x="50" y="62" text-anchor="middle" class="donut-k">bets</text>
+          </svg>
+          <div class="perf-legend">${sportRows.map((x, i) => `
+            <div><i style="background:${cols[i % cols.length]}"></i>
+              ${escapeHtml(String(x.s).toUpperCase())} <b>${x.o.settled}</b>
+              <span style="color:${pcol(x.o.net_units)}">${u(x.o.net_units || 0, true)}</span></div>`).join("")}
+          </div>
+        </div>
+      </div>`;
+  }
   host.innerHTML = `
+    ${tools}
     <div class="perf-grid">
       <div class="card perf-card">
         <div class="perf-head"><span class="rail-title">Your ${scopedToSport
@@ -15984,8 +16045,10 @@ async function renderHomePerf() {
             <div><i style="background:var(--text-mute)"></i>Pushes <b>${p}</b> <span>(${pct(p)})</span></div>
           </div>
         </div>
+        ${recent}
         <a class="perf-link" href="#record">Full record &#8594;</a>
       </div>
+      ${sportsCard}
     </div>`;
   if (typeof mountGlossCharts === "function") mountGlossCharts(host);
 }

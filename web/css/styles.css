@@ -4214,6 +4214,38 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   font-size: var(--fs-xs); font-weight: 700; text-decoration: none; }
 .perf-link:hover { color: var(--text); }
 
+/* Render 3 deltas: the Quick Tools row, the Recent Results tail, and
+   the per-sport breakdown donut. */
+.qt-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px; margin-bottom: 12px; }
+.qt-chip { display: flex; align-items: center; gap: 10px; padding: 11px 13px;
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-sm);
+  background-color: var(--panel); background-image: var(--grad-card);
+  color: var(--text); text-decoration: none; min-width: 0; }
+.qt-chip:hover { border-color: var(--brand); }
+.qt-chip .ic { color: var(--brand); flex: none; }
+.qt-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.qt-t b { font-size: var(--fs-sm); }
+.qt-t .k { color: var(--text-mute); font-size: var(--fs-2xs);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.perf-recent { margin-top: 12px; padding-top: 10px;
+  border-top: var(--hairline) solid var(--border-soft); }
+.perf-recent-h { color: var(--text-mute); font-size: var(--fs-2xs);
+  font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  margin-bottom: 6px; }
+.perf-rrow { display: flex; align-items: baseline; gap: 10px;
+  font-size: var(--fs-sm); padding: 2px 0; }
+.perf-rrow > span:first-child { color: var(--text-mute); }
+.perf-rrow .rr-rec { margin-left: auto; color: var(--text-dim);
+  font-variant-numeric: tabular-nums; }
+.perf-rrow b { min-width: 4.5em; text-align: right;
+  font-variant-numeric: tabular-nums; }
+@media (min-width: 1280px) {
+  /* Stacks under the W/L donut in the right column; below this width
+     the grid is one column and auto-placement is already right. */
+  .perf-sports-card { grid-column: 2; }
+}
+
 /* ---------------- Bankroll view ---------------- */
 .bk-card { max-width: 620px; padding: 18px; border-radius: var(--radius);
   background-image: var(--grad-card); }
@@ -4289,6 +4321,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
      shorthand on .topbar must carry the inset in its top slot, and
      tests/test_pwa.py now fails the next one that does not. */
   .topbar { gap: 10px; padding: env(safe-area-inset-top) 12px 0; }
+  .qt-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .nav { display: none; }           /* the drawer carries every destination */
   .tagline { display: none; }
   .brand-words h1 { font-size: var(--fs-md); letter-spacing: .26em; }

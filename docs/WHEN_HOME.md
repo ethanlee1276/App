@@ -648,6 +648,21 @@ four PPR weeks as bars, never a modeled curve. The bio chips fill on
 the droplet after the next fantasy build (rosters ride along with it);
 if they stay empty, run `python3 launch.py --refresh-rosters` once.
 
+### T29. Render screen four: the dashboard's three missing pieces
+
+The home dashboard picks up what render 3 had and we didn't. A **Quick
+Tools** row across the top — four doors to rooms that already exist
+(Fantasy room, Props scanner, Bet tracker, Bankroll), no new features
+wearing buttons. A **Recent Results** list inside the win/loss card:
+the last five graded slates with each day's record and units, read
+straight off the curve the panel already draws. And a **Sports
+Breakdown** donut beside it, sliced by settled bets per sport from the
+ledger's own per-sport export, with each sport's net units in the
+legend — always the whole book, so it stays useful while you are
+inside one sport's tab. It appears once two sports have settled picks;
+right now only MLB has, so on your live site the donut waits until NFL
+starts grading in September.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

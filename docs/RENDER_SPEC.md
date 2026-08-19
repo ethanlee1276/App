@@ -37,7 +37,7 @@ cannot persist them); this file is the durable description.
 | 10/PM detail — Prediction Markets, table + detail panel | **SHIPPED 2026-08-18** |
 | 6/7 — Fantasy Calendar three-column | **SHIPPED 2026-08-19** |
 | 8/9 — Player Profile (fantasy) | **SHIPPED 2026-08-19** (built 08-18; close pass added HT/WT/College + trend) |
-| 3 — Dashboard | partial (top picks, stadiums, perf panel exist; quick-tools row + sports-breakdown donut pending) |
+| 3 — Dashboard | **SHIPPED 2026-08-19** (quick tools, sports donut, recent results added to the existing panels) |
 | 12 — Bet Tracker | mostly exists (My Bets); render adds summary strip |
 | 13 — Account & Settings | exists; render adds stats card |
 | 14 — Alerts Center | page exists; render adds per-alert toggles list |
@@ -110,12 +110,16 @@ Metrics ranked list (only metrics we measure — xFP/red-zone from pbp);
 Game Log table; Upcoming Game card (logos, kickoff, venue, spread /
 total / implied); Key Takeaways checklist footer (sourced one-liners).
 
-### Dashboard deltas (render 3)
-Greeting row exists. Add: Quick Tools chip row (Fantasy Optimizer =
-lineup builder, Props Scanner = scanner, Bet Tracker = My Bets);
-Sports Breakdown donut beside the perf panel (pick counts per sport —
-sourced from the board); Recent Results mini-list (last graded days
-with +/- units — record.json curve tail).
+### Dashboard deltas (render 3) — SHIPPED
+As-built: Quick Tools row above the performance grid (`qt-row`, four
+doors: Fantasy room, Props scanner, Bet tracker, Bankroll — all
+existing rooms, no new features); Sports Breakdown donut as a third
+perf card, fed by record.json's `by_sport` blocks (whole book always,
+labelled, needs >= 2 sports with settled bets); Recent Results list in
+the W/L card, the curve's own last five graded days with each day's
+record and units (hidden when the stored curve predates per-day
+records). The render's "Fantasy Optimizer" maps to the fantasy room —
+we do not build DFS lineups.
 
 ### Small screens
 * **Pricing (21):** three plan cards (Free / Premium / Elite), center
