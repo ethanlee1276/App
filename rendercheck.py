@@ -244,11 +244,23 @@ for (const s of PLAN) {
       // Settled = the layout is up, or the screen has said it has nothing
       // to draw. Either answer is a real answer; only "neither, yet" is
       // worth waiting on.
+      //
+      // SCOPED TO THIS SCREEN, exactly like the measurement below. The
+      // first version waited on a page-wide `document.querySelector` for
+      // the empty marks, which resolved the moment ANY view in the shell
+      // had an empty state — including one belonging to a different
+      // screen still in the DOM. Under suite load that fired before this
+      // screen had drawn, and the scoped measure then found neither a
+      // layout nor an empty state and called it "layout gone". A waiter
+      // that asks a wider question than the check it guards does not
+      // guard it.
       try {
-        await p.waitForFunction(([present, empties]) =>
-          !!document.querySelector(present)
-          || empties.some((e) => document.querySelector(e)),
-          [s.present, EMPTY], { timeout: 8000 });
+        await p.waitForFunction(([proof, present, empties]) => {
+          const root = document.querySelector(proof);
+          if (!root) return false;
+          return !!document.querySelector(present)
+            || empties.some((e) => root.querySelector(e));
+        }, [s.proof, s.present, EMPTY], { timeout: 10000 });
       } catch (e) {
         // Neither arrived inside the window. That is NOT drift: a slow
         // machine and a deleted layout look identical from here, and
