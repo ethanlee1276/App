@@ -5861,6 +5861,5 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 /* The venue's own market art, where the venue publishes one. Square with
    the same footprint as the team-logo pair beside it, so a mixed board
    does not jog left and right as the thumbnail kind changes row to row. */
-.kx-thumb-img { border-radius: 5px; object-fit: cover; display: block;
-  background: var(--panel-3); }
-.pm-d-venue .kx-thumb-img { border-radius: 6px; }
+.kx-thumb-img { border-radius: var(--radius-sm); object-fit: cover;
+  display: block; background: var(--panel-3); }

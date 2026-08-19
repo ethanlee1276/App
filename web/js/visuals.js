@@ -1905,8 +1905,8 @@ async function mountEChartsPanels(root) {
         // print over the line they belong to.
         grid: { left: 4, right: 104, top: 14, bottom: 20, containLabel: true },
         tooltip: { trigger: "axis", confine: true,
-          backgroundColor: tok("--panel-2") || "#181826",
-          borderColor: tok("--hairline-c") || "#2a2a3a",
+          backgroundColor: tok("--panel-2"),
+          borderColor: tok("--hairline-c"),
           textStyle: { color: tok("--text"), fontFamily: font, fontSize: 11 },
           valueFormatter: (v) => `${v}%` },
         // PINNED TO THE DATA. Left to itself the time axis rounds outward
@@ -1923,8 +1923,8 @@ async function mountEChartsPanels(root) {
           splitLine: { lineStyle: { color: tok("--panel-3") } },
           axisLabel: { color: tok("--text-mute"), fontFamily: font,
             fontSize: 10, formatter: "{value}%" } },
-        series: [line(yesName, yes, tok("--good") || "#3fb950"),
-                 line(noName, no, tok("--bad") || "#f85149")],
+        series: [line(yesName, yes, tok("--good")),
+                 line(noName, no, tok("--bad"))],
       });
       _echartsLive.push(chart);
       continue;

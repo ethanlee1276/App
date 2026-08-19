@@ -267,7 +267,16 @@ def test_the_ticks_reach_every_surface_whose_numbers_move():
     """A helper wired to one board is half a feature. The three surfaces
     that actually change under a reader are the prediction-market prices,
     the desk's recommended rows, and live scores."""
-    assert APP.count("mountLiveTicks(host)") >= 3, \
+    # Counts BOTH shapes the mount is called in. renderIntel stopped
+    # calling it by name on 2026-08-19 and started running it through a
+    # loop with its two siblings, each in its own try — because chained
+    # bare, the first to throw silently cancelled the rest and the price
+    # chart never upgraded. The invariant is "every surface that can
+    # change numbers mounts the ticks", and counting one literal spelling
+    # measured the spelling instead.
+    direct = APP.count("mountLiveTicks(host)")
+    looped = APP.count("mountLiveTicks]") + APP.count("mountLiveTicks,")
+    assert direct + looped >= 3, \
         "a render path that can change numbers is not calling the mount"
     for key in ('data-tick="y:', 'data-tick="n:', 'data-tick="d:', 'data-tick="ls:'):
         assert key in APP, f"no cell opts in with {key}"
