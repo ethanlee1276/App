@@ -3141,11 +3141,18 @@ function renderRecommended() {
          model has not run, because nflverse publishes weekly player stats
          only after a season's first games. "Loosen the sliders" is advice
          that cannot work when there is nothing to filter, and "nothing
-         clears the bar" claims a verdict nothing reached. */
-      msg = `Nothing is priced yet. The games and lines above are real, but
-        this season has no weekly player stats until its first games have
-        been played — so no prop has been built, and the sliders have
-        nothing to filter. The board fills itself once the season starts.`;
+         clears the bar" claims a verdict nothing reached.
+
+         Scoped to PROPS on 2026-08-19, when the same build began pricing
+         the game markets (Ethan: "yes I want the 2nd -9th priced"). The
+         old first sentence — "Nothing is priced yet" — was written when
+         nothing was, and reading it above a board of priced spreads and
+         totals would be worse than saying nothing. */
+      msg = `No player props yet. The games, lines and game bets above are
+        real, but this season has no weekly player stats until its first
+        games have been played — so no prop has been built, and the sliders
+        have nothing to filter. Props appear on their own once the season
+        starts.`;
     } else {
       msg = `No props clear the current thresholds. Loosen the sliders or
         enable “show non-recommended”.`;
@@ -7802,8 +7809,20 @@ function renderEdgeBoard() {
      yourself into a bad night. The checked count is the number that means
      something, so lead with it. */
   const plays = rows.filter((r) => r.rec).length;   // same flag the check uses
+  /* "against a real book number" is a claim about where the PRICE came
+     from, and on a schedule-only build it is not true. That build prices
+     the game markets off team ratings against the schedule's own spread
+     and total — real market LINES — at the standard −110, because no odds
+     pull ran. Same board, different provenance, and the line that
+     describes it has to say which. */
+  const schedOnly = String((state.data || {}).generated_from || "")
+    === "schedule-only";
+  const basis = schedOnly
+    ? `market(s) priced off team ratings against the schedule’s own lines at
+       the standard −110 — no book prices were pulled for this slate`
+    : "market(s) priced against a real book number";
   note.innerHTML = `<b>${plays}</b> clear your current sliders · ${rows.length}
-    market(s) priced against a real book number. One side of every two-way
+    ${basis}. One side of every two-way
     market always prices positive — the two sides' edges sum to zero by
     construction — so the length of this list is not a signal. Checked = a tracked
     bet; everything else is a watchlist.`;

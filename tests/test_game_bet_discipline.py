@@ -112,9 +112,17 @@ def test_one_side_of_every_two_way_market_always_prices_positive():
 def test_the_board_leads_with_the_count_that_means_something():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(root, "web", "js", "app.js"), encoding="utf-8").read()
-    i = js.index("market(s) priced against a real book number")
-    block = js[i - 700:i + 400]
+    # Anchored on the count itself, not on the sentence beside it. The
+    # provenance clause gained a second variant on 2026-08-19 (a
+    # schedule-only build prices off the schedule's own lines, not a book),
+    # which pushed the two apart and broke a fixed-width window around the
+    # copy — a test failing on where a comment sits, not on what the code
+    # does.
+    i = js.index("const plays = rows.filter(")
+    block = js[i:i + 1600]
     assert "sum to zero" in block, "nothing explains why a full board is normal"
+    assert "priced against a real book number" in block, \
+        "the board stopped saying where its prices came from"
     # It must count the SAME flag the ✅ renders from. My first version read
     # r.recommended, which edge rows do not carry, so the headline reported
     # zero plays on a board showing several — a new wrong number replacing

@@ -452,16 +452,22 @@ def refresh_nfl(quiet: bool = False) -> bool:
         # exactly the week the season arrives. The games and their lines
         # are available that entire time.
         #
-        # The fallback publishes the slate ONLY: no picks, no journalling
-        # (see the note in nfl_build.py). A board that shows tonight's
-        # games and says it has no opinion yet beats an empty one, and
-        # beats a fabricated one by more.
+        # The fallback publishes the slate AND its game markets — totals,
+        # team totals and spreads, priced off team ratings against the
+        # schedule's own lines (Ethan, 2026-08-19: "yes I want the 2nd
+        # -9th priced"). The player layer stays absent because it does not
+        # exist yet, and the page says which is which.
+        #
+        # --cached-odds costs nothing: it reads the LAST PAID pull off
+        # disk. It is the only way a moneyline can price here, that being
+        # the one game market that needs a book price rather than a rating.
         ok2, tail2 = _run_build(["nfl_build.py", str(season), str(week),
-                                 "--games-only", "--out", out])
+                                 "--games-only", "--cached-odds",
+                                 "--out", out])
         if ok2:
             if not quiet:
-                print(f"  NFL  {season} wk {week}: schedule only — no weekly "
-                      f"player stats yet, so nothing is priced")
+                print(f"  NFL  {season} wk {week}: game lines only — no "
+                      f"weekly player stats yet, so no props are priced")
             return True
         tail = tail or tail2
     if not quiet:

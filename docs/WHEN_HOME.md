@@ -1028,13 +1028,34 @@ falls back to it when the full build fails. Verified end to end: 16
 games, real lines, weather and stadium context, published through the
 same gate as every other build.
 
-**What it deliberately does not do:** no picks, no game bets, no
-journalling. A fallback that priced and journalled could double-journal
-the same slate when the full build later succeeds, and the record is the
-one thing here that must never be double-counted. The board shows
-tonight's games and says plainly that nothing is priced yet. That is a
-better answer than an empty page, and a much better one than an invented
-opinion.
+**What it deliberately did not do — and now does.** The first version
+published the slate and nothing else: no picks, no game bets, no
+journalling. The reasoning was that a fallback which priced and
+journalled could double-journal the same slate when the full build later
+succeeds, and the record is the one thing here that must never be
+double-counted. I flagged it as your call.
+
+You made it: *"yes I want the 2nd -9th priced"*. So it prices now, and
+the objection turned out to be already answered rather than traded away.
+The ledger's `bets` table is `UNIQUE (sport, date, player, market,
+category)` and every insert is an `INSERT OR IGNORE`, and this payload
+stamps the same `<season>-W<week>` date key `build_slate()` does — so
+when the full build re-offers the same rows on the 10th, SQLite ignores
+them. Verified by running it twice: 11 rows logged, then 0. There is a
+test that journals the same slate twice and asserts the record does not
+grow.
+
+What it prices: **totals, team totals and spreads**, off team ratings
+against the schedule's own lines — 64 markets on Week 1, 11 of them
+recommended, the ratings pooled from 2025+2026 because this season is
+still thin. What it does not price: **moneylines**, which are the one
+game market that needs a book price rather than a line to price against.
+The launcher's fallback now passes `--cached-odds`, so a moneyline
+appears if the last paid pull has one on disk and is simply absent
+otherwise. That costs nothing — it reads the cache, never the API.
+
+The player layer stays empty, because nothing built it. That is the
+whole reason this path runs.
 
 **Then I rendered it**, which turned out to matter. A board with games
 and zero picks had never been drawn before, and the copy was wrong in a
@@ -1048,10 +1069,23 @@ correctly read *"This board is Wed, Sep 9 — 21 days out. Nothing on it
 is tonight"*, and all 16 games drew with lines, weather and stadiums.
 It was one sentence that lied. It now reads:
 
-> Nothing is priced yet. The games and lines above are real, but this
-> season has no weekly player stats until its first games have been
-> played — so no prop has been built, and the sliders have nothing to
-> filter.
+> No player props yet. The games, lines and game bets above are real,
+> but this season has no weekly player stats until its first games have
+> been played — so no prop has been built, and the sliders have nothing
+> to filter. Props appear on their own once the season starts.
+
+(That sentence was rewritten once more when the fallback started
+pricing. It used to open *"Nothing is priced yet"*, which was true when
+nothing was, and would have been a plain lie printed above a board of
+priced spreads and totals.)
+
+One more sentence went the same way. The Edge Board's headline read *"N
+market(s) priced against a real book number"* — true of every build that
+had one, and false of this one, which prices at the standard −110
+because no odds pull ran. On a schedule-only build it now reads *"priced
+off team ratings against the schedule's own lines at the standard −110 —
+no book prices were pulled for this slate."* Same board, different
+provenance, and the line describing it has to say which.
 
 The census branch above it had already learned this exact lesson once,
 on the WNBA — 430 props built and 384 never priced, under a "loosen the

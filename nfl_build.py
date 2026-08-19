@@ -39,6 +39,94 @@ def show_games(season: int, week: int) -> list:
     return games
 
 
+def price_games_only(games, season: int, week: int, config: RuleConfig,
+                     cached_odds: bool = False) -> dict:
+    """Price the GAME markets on a slate whose player layer does not exist yet.
+
+    Ethan, 2026-08-19: "yes I want the 2nd -9th priced". The window he
+    means is Sep 2 → ~Sep 9, between the day `_current_nfl_week()` first
+    calls Week 1 current and the day nflverse publishes the season's first
+    weekly player stats. The full build exits 2 in that window, so the
+    fallback is the only thing writing the board — and it published a bare
+    schedule.
+
+    It does not have to. Only the PLAYER layer is missing. Totals, team
+    totals and spreads price off team ratings against the schedule's own
+    lines, and the ratings come from games already played and ingested
+    (last season pooled in while this one is thin — see
+    engine.teamrates.ratings_for_season). Moneylines are the one game
+    market that needs a book price, so they appear only when a cached odds
+    pull has one; without it the market is absent rather than guessed.
+
+    Returns a report dict; the pricing lands on ``games`` in place.
+    """
+    # Two failure fields, not one. A ratings failure means nothing can be
+    # priced; a cached-odds failure means only the moneyline is missing,
+    # and the first version reported the second as the first — printing
+    # "Game markets not priced" one line above "64 game bet(s)".
+    rep = {"rated": 0, "seasons": [], "moneylines": 0, "bets": [],
+           "error": None, "odds_error": None}
+    try:
+        from engine.db import connect
+        from engine.teamrates import ratings_for_season, attach_ratings
+        conn = connect()
+        try:
+            ratings, seasons_used = ratings_for_season(conn, "nfl", season)
+        finally:
+            conn.close()
+        rep["rated"] = attach_ratings(games, ratings)
+        rep["seasons"] = seasons_used
+    except Exception as exc:                                   # noqa: BLE001
+        rep["error"] = str(exc)
+        return rep
+
+    # Zero API spend: the LAST paid pull's prices, if one is on disk. This
+    # is the only way a moneyline can be priced here, and it is also where
+    # real spread/total prices come from instead of the -110 default.
+    if cached_odds and rep["rated"]:
+        try:
+            from engine.data_loader import Slate
+            shell = Slate(date=f"{season}-W{week:02d}", teams={},
+                          games=games, props=[])
+            res = oddsapi.apply_odds_to_slate(shell, only_active=False,
+                                              cache_only=True)
+            rep["moneylines"] = res.moneylines
+        except Exception as exc:                               # noqa: BLE001
+            rep["odds_error"] = str(exc)
+
+    if rep["rated"]:
+        from engine.pipeline import _game_bets
+        rep["bets"] = _game_bets(games, config)
+    return rep
+
+def _journal_game_bets(payload: dict) -> None:
+    """Journal the fallback's recommended game bets, then settle and export.
+
+    The same call the full build makes. `log_recommendations` walks
+    `recommendations` (empty here — there are no props) and then
+    `game_bets`, so one call covers it.
+
+    Double-journalling was the objection to pricing here at all, and it is
+    answered by the schema rather than by restraint: bets is UNIQUE on
+    (sport, date, player, market, category) with INSERT OR IGNORE, and this
+    payload's date is the same "<season>-W<week>" key build_slate() stamps.
+    When the full build runs later in the week it re-offers these same
+    rows and the database ignores them.
+    """
+    try:
+        from engine import ledger
+        from engine.db import connect as hist_connect
+        payload = dict(payload, sport="nfl")
+        lconn = ledger.connect()
+        logged = ledger.log_recommendations(lconn, payload)
+        settled = ledger.settle_from_history(lconn, hist_connect(), sport="nfl")
+        ledger.export_json(lconn, "web/data/record.json")
+        if logged or settled:
+            print(f"Journal: {logged} new game bet(s) logged, {settled} "
+                  f"settled — see the Record tab.")
+    except Exception as exc:                                   # noqa: BLE001
+        print(f"⚠️  Bet journal skipped: {exc}")
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build an nflverse slate and run the model.")
     ap.add_argument("season", type=int)
@@ -72,7 +160,8 @@ def main() -> None:
 
     games = show_games(args.season, args.week)
     if args.games_only:
-        # A SCHEDULE IS WORTH PUBLISHING ON ITS OWN.
+        # A SCHEDULE IS WORTH PUBLISHING, AND ITS GAME MARKETS ARE WORTH
+        # PRICING.
         #
         # Found by the Phase 3 dress rehearsal, 2026-08-19: the full build
         # exits 2 when nflverse has no weekly player stats yet, which is
@@ -84,33 +173,82 @@ def main() -> None:
         # season is arriving. The games and their lines are available that
         # whole time; only the PLAYER layer is missing.
         #
-        # So --games-only now writes when it is given somewhere to write.
-        # What it publishes is the slate and nothing else: no
-        # recommendations, no game bets, no journalling. That restraint is
-        # deliberate rather than lazy — a fallback that priced and
-        # journalled picks could double-journal the same slate when the
-        # full build later succeeds, and the record is the one thing here
-        # that must never be double-counted. The board shows tonight's
-        # games; it does not invent an opinion about them.
+        # The first version of this fallback published the slate and
+        # nothing else, on the reasoning that pricing here could
+        # double-journal the same slate when the full build later
+        # succeeded. That caution was worth raising and turned out to be
+        # unnecessary: the ledger's bets table is UNIQUE on
+        # (sport, date, player, market, category) and every insert is an
+        # INSERT OR IGNORE, and the fallback's date is the same
+        # "<season>-W<week>" key build_slate() stamps — so the second
+        # write of a row is a no-op at the schema level, not a duplicate.
+        #
+        # Ethan, 2026-08-19, deciding it: "yes I want the 2nd -9th priced".
+        # So the game markets price here, off team ratings against the
+        # schedule's own lines. The player layer still does not, because
+        # it does not exist yet, and the page says which is which.
         if args.out:
             import datetime as _dt
             from engine import gate
             from engine.pipeline import _game_to_dict
+            config = RuleConfig(min_confidence=args.min_confidence,
+                                min_edge=args.min_edge)
+            rep = price_games_only(games, args.season, args.week, config,
+                                   cached_odds=args.cached_odds)
+            bets = rep["bets"]
+            n_rec = sum(1 for b in bets if b.get("recommended"))
+            if rep["error"]:
+                print(f"\n⚠️  Game markets not priced — {rep['error']}")
+            elif not rep["rated"]:
+                print("\nGame markets not priced: no SCORED games for this "
+                      "season or the one before it, so there are no team "
+                      "ratings to price against.")
+            else:
+                span = "%d" % rep["seasons"][0] if len(rep["seasons"]) == 1 \
+                    else "%d-%d" % (rep["seasons"][0], rep["seasons"][-1])
+                print(f"\nGame markets: {len(bets)} priced off {rep['rated']} "
+                      f"game(s) of ratings ({span}), {n_rec} recommended.")
+                if rep["moneylines"]:
+                    print(f"  Moneylines priced on {rep['moneylines']} game(s) "
+                          f"from the last cached odds pull.")
+                elif rep["odds_error"]:
+                    print(f"  No moneylines — the cached odds pull is "
+                          f"unreadable: {rep['odds_error']}")
+                else:
+                    print("  No moneylines — that market needs a book price "
+                          "and no cached pull has one.")
             payload = {
                 "date": f"{args.season}-W{args.week:02d}",
                 "built_at": _dt.datetime.now().isoformat(timespec="seconds"),
                 "generated_from": "schedule-only",
                 "games": [_game_to_dict(g) for g in games],
-                "recommendations": [], "game_bets": [], "long_shots": [],
+                "recommendations": [], "long_shots": [],
                 "market_scan": [], "parlays": [],
-                "note": ("Schedule, lines and weather only — nflverse has "
-                         "not published weekly player stats for this season "
-                         "yet, so nothing is priced. Props and picks appear "
-                         "once the first games have been played."),
+                "game_bets": bets,
+                # Two notes, because two things can be true and the page
+                # must not claim the wrong one. With ratings in hand the
+                # game markets ARE priced and only the player layer is
+                # missing; without them nothing is priced at all, and
+                # saying otherwise on an empty board is exactly the kind
+                # of small lie the render spec exists to stop.
+                "note": (
+                    "Game lines are priced — totals, team totals and "
+                    "spreads, off team ratings. Player props are not: "
+                    "nflverse publishes weekly player stats only after a "
+                    "season's first games have been played, so no prop has "
+                    "been built yet. They appear on their own once the "
+                    "season starts."
+                    if bets else
+                    "Schedule, lines and weather only — nflverse has not "
+                    "published weekly player stats for this season yet, and "
+                    "there are no scored games to rate the teams from, so "
+                    "nothing is priced. Props and picks appear once the "
+                    "first games have been played."),
             }
             gate.publish(payload, args.out)
-            print(f"\nWrote {args.out} — {len(games)} game(s), schedule only "
-                  f"(no player stats yet, so nothing is priced).")
+            print(f"\nWrote {args.out} — {len(games)} game(s), "
+                  f"{len(bets)} game bet(s), no player props yet.")
+            _journal_game_bets(payload)
         return
 
     carry_report: dict = {}
