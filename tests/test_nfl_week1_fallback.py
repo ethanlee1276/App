@@ -166,6 +166,73 @@ def test_journalling_the_same_slate_twice_files_it_once():
     assert conn.execute("SELECT COUNT(*) FROM bets").fetchone()[0] == 2
 
 
+def test_a_week_one_game_bet_settles_against_a_real_played_game():
+    """The end of the sequence, and the half that had never been run.
+
+    The fallback journals game bets under the "<season>-W<week>" key from
+    Sep 2. Two weeks later those games are played and `settle_from_history`
+    has to find them — and NFL is the one sport whose bet date is NOT the
+    period the results are filed under. `_hist_where` maps 2025-W05 to
+    `season=2025 AND period='005'`, and nothing exercised that mapping for
+    a GAME market: every game-bet settle test was MLB, where the date IS
+    the period.
+
+    Run against a real completed game rather than a fixture, because the
+    thing being tested is whether our key finds nflverse's row.
+
+    The spread's sign convention is the part worth watching. A spread bet
+    covers when the team's margin beats the number, so the row stores
+    line = -spread and side = OVER and the standard grader applies
+    unchanged. Get that backwards and every favourite grades as its own
+    opposite — silently, with a plausible-looking record.
+    """
+    import sqlite3
+    from engine import ledger
+
+    hist_path = os.path.join(ROOT, "data", "history.db")
+    if not os.path.exists(hist_path):
+        print("      (skipped: no history.db on this machine)")
+        return
+    h = sqlite3.connect(f"file:{hist_path}?mode=ro", uri=True)
+    h.row_factory = sqlite3.Row
+    g = h.execute("SELECT * FROM games WHERE sport='nfl' AND home_score IS NOT NULL "
+                  "AND season=2025 AND period='005' LIMIT 1").fetchone()
+    if not g:
+        print("      (skipped: 2025 week 5 not ingested here)")
+        return
+    margin = g["home_score"] - g["away_score"]
+    points = g["home_score"] + g["away_score"]
+
+    conn = ledger.connect(":memory:")
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    matchup = f'{g["away"]} @ {g["home"]}'
+    payload = {"sport": "nfl", "date": "2025-W05", "game_bets": [
+        {"bet_type": "spread", "team": g["home"], "line": -3.5,
+         "matchup": matchup, "win_prob": .55, "edge": .05, "confidence": 6.8,
+         "grade": "Play", "stake_units": 1.0, "recommended": True,
+         "book": "schedule", "odds": -110},
+        {"bet_type": "total", "matchup": matchup, "side": "OVER", "line": 40.5,
+         "win_prob": .54, "edge": .04, "confidence": 6.5, "grade": "Play",
+         "stake_units": 1.0, "recommended": True, "book": "schedule",
+         "odds": -110},
+    ]}
+    assert ledger.log_recommendations(conn, payload) == 2
+    assert ledger.settle_from_history(conn, h, sport="nfl") == 2, \
+        "a Week-1 game bet never found its game — the week key stopped mapping"
+
+    rows = {r["market"]: r for r in conn.execute("SELECT * FROM bets")}
+    spread, total = rows["spread"], rows["total"]
+    assert spread["status"] == ("won" if margin > 3.5 else
+                                "push" if margin == 3.5 else "lost"), \
+        f"spread graded {spread['status']} on a margin of {margin}"
+    assert spread["actual"] == margin, "the spread graded off something else"
+    assert total["status"] == ("won" if points > 40.5 else
+                              "push" if points == 40.5 else "lost")
+    assert total["actual"] == points
+    # And the provenance survives the round trip, so CLV work can exclude it.
+    assert spread["book"] == "schedule"
+
+
 def test_show_games_hands_back_what_it_drew():
     """It used to return None, so nothing downstream could publish it."""
     tree = ast.parse(BUILD)
