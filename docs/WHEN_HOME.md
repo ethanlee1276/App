@@ -1036,6 +1036,28 @@ tonight's games and says plainly that nothing is priced yet. That is a
 better answer than an empty page, and a much better one than an invented
 opinion.
 
+**Then I rendered it**, which turned out to matter. A board with games
+and zero picks had never been drawn before, and the copy was wrong in a
+specific way: it said *"No props clear the current thresholds. Loosen
+the sliders."* That is a verdict — it claims the model looked at the
+slate and turned everything down. The model had not run at all, and
+loosening a slider cannot conjure a prop that was never built.
+
+The board was mostly right already, to be fair to it: the header banner
+correctly read *"This board is Wed, Sep 9 — 21 days out. Nothing on it
+is tonight"*, and all 16 games drew with lines, weather and stadiums.
+It was one sentence that lied. It now reads:
+
+> Nothing is priced yet. The games and lines above are real, but this
+> season has no weekly player stats until its first games have been
+> played — so no prop has been built, and the sliders have nothing to
+> filter.
+
+The census branch above it had already learned this exact lesson once,
+on the WNBA — 430 props built and 384 never priced, under a "loosen the
+sliders" message that could not work. This is the same lesson one step
+earlier in the season.
+
 Still to confirm during the live rehearsal (§3d, needs a real slate):
 the NFL journal writing `move_delta`/`move_steam`, and `nflguard.py`
 reading TOO EARLY until Week 1 settles.

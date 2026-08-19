@@ -3073,7 +3073,7 @@ function renderTonight() {
   if (!n && !shots.length) {
     host.innerHTML = `<div class="section-title">Tonight’s bets</div>
       <div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
-      <h3>Nothing clears the bar right now</h3>
+      <h3>${noMarketHeading()}</h3>
       <p>${noMarketExplainer()}</p></div>`;
     return;
   }
@@ -3134,6 +3134,18 @@ function renderRecommended() {
         <b>${escapeHtml(why)}</b> (${n})${built ? ` out of ${built} built from
         player history` : ""}. Sliders filter what arrives, so they cannot
         help here — the full breakdown is below.`;
+    } else if (String((state.data || {}).generated_from || "")
+               === "schedule-only") {
+      /* Same lesson as the census branch above, one step earlier in the
+         season. On a schedule-only build no prop was ever BUILT — the
+         model has not run, because nflverse publishes weekly player stats
+         only after a season's first games. "Loosen the sliders" is advice
+         that cannot work when there is nothing to filter, and "nothing
+         clears the bar" claims a verdict nothing reached. */
+      msg = `Nothing is priced yet. The games and lines above are real, but
+        this season has no weekly player stats until its first games have
+        been played — so no prop has been built, and the sliders have
+        nothing to filter. The board fills itself once the season starts.`;
     } else {
       msg = `No props clear the current thresholds. Loosen the sliders or
         enable “show non-recommended”.`;
@@ -7646,7 +7658,28 @@ function recDisclosure(label, html) {
 /* ============================================================
    Odds status — say exactly why no real prices are attached
    ============================================================ */
+/* The HEADING that goes above noMarketExplainer(). "Nothing clears the
+   bar" is a verdict — it says the model looked at tonight and turned
+   everything down. On a schedule-only build the model never ran at all,
+   and claiming a judgement nothing made is the kind of small lie this
+   whole codebase is built to avoid. */
+function noMarketHeading() {
+  return String(state.data.generated_from || "") === "schedule-only"
+    ? "Not priced yet" : "Nothing clears the bar right now";
+}
+
 function noMarketExplainer() {
+  // FIRST, because it is the one case where every sentence below would be
+  // false. A schedule-only payload (nfl_build.py --games-only) publishes
+  // the slate when nflverse has no weekly player stats — the normal state
+  // before a season's Week 1. The games and lines on this page are real;
+  // nothing has been priced against them, and no odds feed is at fault.
+  if (String(state.data.generated_from || "") === "schedule-only") {
+    return escapeHtml(state.data.note
+      || `The games and lines below are real. Nothing is priced yet —
+          weekly player stats for this season are not published until the
+          first games have been played.`);
+  }
   const os = state.data.odds_status;
   if (os && os.error)
     return `Odds feed problem on the last pull (${os.at || ""}): ${os.error} —
@@ -7752,7 +7785,7 @@ function renderEdgeBoard() {
   if (!rows.length) {
     note.innerHTML = "";
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
-      <h3>No positively-priced bets right now</h3>
+      <h3>${noMarketHeading()}</h3>
       <p>${noMarketExplainer()}</p>
       <p style="opacity:.7">The Edge Board lists every bet whose real price
       beats the model’s probability — including small edges and long odds that

@@ -89,6 +89,39 @@ def test_the_launcher_falls_back_rather_than_keeping_an_empty_board():
     # A successful fallback is a success, not a silent failure.
     assert "return True" in body
 
+def test_the_board_does_not_claim_a_verdict_it_never_reached():
+    """Rendering the schedule-only payload for real (Playwright, phone
+    size) showed the last gap: the board said "No props clear the current
+    thresholds. Loosen the sliders" — advice that cannot work when nothing
+    was ever built, and a claim that the model looked and declined when it
+    never ran at all.
+
+    The census branch above it already learned this lesson once, on the
+    WNBA. This is the same lesson one step earlier in the season."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    # The heading stops asserting a verdict.
+    i = app.index("function noMarketHeading()")
+    head = app[i:app.index("\n}", i)]
+    assert '"schedule-only"' in head and "Not priced yet" in head
+
+    # The explainer answers the schedule-only case FIRST, before any
+    # sentence about odds feeds — none of which are true here.
+    j = app.index("function noMarketExplainer()")
+    body = app[j:app.index("\n}", j)]
+    assert body.index("schedule-only") < body.index("odds_status"), \
+        "an odds-feed excuse must not pre-empt the real reason"
+
+    # And the slider prompt is not offered when there is nothing to filter.
+    k = app.index("No props clear the current thresholds")
+    seg = app[max(0, k - 1200):k]
+    # The condition wraps across lines in the source, so match on the
+    # parts rather than one brittle contiguous string.
+    assert "generated_from" in seg and '"schedule-only"' in seg, \
+        "schedule-only still falls through to \"loosen the sliders\""
+    assert "no prop has been built" in seg, \
+        "the copy must name the real cause"
+
+
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
