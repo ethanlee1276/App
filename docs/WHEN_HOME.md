@@ -759,9 +759,38 @@ verified that half directly: with a stubbed feed carrying
 shows "Out". So the machinery works; the news simply is not in the
 pipe yet.
 
-Run the command tomorrow and paste me the output — if Sleeper *is*
-carrying a designation and we are still drawing Active, that is a real
-bug and the probe will show it in one screen.
+**ANSWERED, same night.** You ran it and the output settles it: Sleeper
+*is* carrying the designation — `injury_status = Out`, body part Wrist
+— and our builder derives `unavailable=True`, rendering him **Out**.
+ESPN's row is Rapoport's 2026-08-10 report ("will miss a significant
+portion of the season with a fractured wrist") filed with status
+Active, which our merge correctly refuses to read as a clearance.
+
+So the engine is right and my preseason-coverage theory was wrong. The
+site showing Active means it is serving a **stale built file** —
+`web/data/rosters_nfl.json` predates the designation. That is a
+different repair from a code bug, and it was invisible from the feed
+side, so the probe now also opens the file the page actually serves,
+prints its age and what it says about the player, and names the two
+cases apart: engine-wrong versus build-stale.
+
+**Do this on the droplet:**
+
+```
+cd /srv/qellys && python3 launch.py --injuries "Cade Mays"
+```
+
+If it reports THE FILE DISAGREES WITH THE FEED, rebuild:
+
+```
+python3 fantasy_build.py
+```
+
+If the rebuild fixes the file but the live site still shows Active,
+then the droplet's refresh loop is stuck rather than the data — that is
+worth telling me, because the loop is supposed to do this on its own
+every cycle and a stuck one silently freezes every board, not just this
+roster.
 
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*

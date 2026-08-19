@@ -3973,6 +3973,59 @@ def show_player_injury(name: str) -> None:
                 if r.get(k):
                     print(f"              {label:<15} {r[k]}")
 
+    # --- THE FILE THE WEBSITE ACTUALLY READS. Everything above is the
+    # live feed and what the builder WOULD derive from it; the page draws
+    # rosters_nfl.json, a built artifact. When those two disagree the
+    # engine is fine and the build is stale, which is a different repair
+    # entirely — and it is invisible from the feed side alone.
+    import json as _json
+    built = ROOT / "web/data/rosters_nfl.json"
+    file_disagrees = False
+    print()
+    if not built.exists():
+        print("  BUILT     web/data/rosters_nfl.json does not exist here — "
+              "run python3 fantasy_build.py")
+    else:
+        age_s = time.time() - built.stat().st_mtime
+        age = (f"{age_s / 60:.0f} min" if age_s < 5400
+               else f"{age_s / 3600:.1f}h" if age_s < 172800
+               else f"{age_s / 86400:.1f}d")
+        try:
+            page = _json.loads(built.read_text())
+        except ValueError:
+            page = {}
+        if (page.get("feed") or "") == "unavailable":
+            print(f"  BUILT     written {age} ago, and it says the roster feed "
+                  "was UNREACHABLE on that build —")
+            print("            the page has no roster to show, not a healthy one.")
+        else:
+            row = None
+            for team in (page.get("teams") or {}).values():
+                for r in (team.get("players") or []):
+                    if normalize_name(r.get("player") or "") == want:
+                        row = r
+                        break
+            print(f"  BUILT     rosters_nfl.json, written {age} ago")
+            if row is None:
+                print(f"            {name} is not in it at all.")
+            else:
+                print(f"            shows status = {row.get('status') or '—'}"
+                      f"   unavailable={bool(row.get('unavailable'))}")
+                live_out = any(
+                    (_r._player_row(p) or {}).get("unavailable") for _f, p in hits)
+                if live_out and not row.get("unavailable"):
+                    file_disagrees = True
+                    print("\n            ⚠️  THE FILE DISAGREES WITH THE FEED. The"
+                          "\n            engine reads him as out (above) and the built"
+                          "\n            file still says otherwise, so the page is"
+                          "\n            serving a stale build — rebuild it:"
+                          "\n"
+                          "\n                python3 fantasy_build.py"
+                          "\n"
+                          "\n            If that fixes it here but the live site still"
+                          "\n            shows Active, the DROPLET's loop is what is"
+                          "\n            stuck, not this repair.")
+
     # --- The verdict. SILENCE AND DEAFNESS ARE DIFFERENT ANSWERS: a feed
     # that did not answer tells us nothing about the player, and saying
     # "no designation" on the back of a failed request would be the most
@@ -3999,9 +4052,15 @@ def show_player_injury(name: str) -> None:
               "\n            these feeds when the club transacts (IR / PUP) or"
               "\n            files a Week-1 report — at which point this flips"
               "\n            on the next refresh with no action from you.")
+    elif file_disagrees:
+        print("\n  VERDICT   The ENGINE is right and the BUILD is stale. A"
+              "\n            designation exists, the builder reads it correctly,"
+              "\n            and the file the page serves predates it. Rebuild"
+              "\n            (above) — there is nothing to fix in the code.")
     else:
-        print("\n  VERDICT   A designation exists above; the roster page shows"
-              "\n            the more pessimistic of the two feeds.")
+        print("\n  VERDICT   A designation exists above, the built file agrees,"
+              "\n            and the page shows the more pessimistic of the two"
+              "\n            feeds. Nothing to repair.")
 
 
 def show_stakes() -> None:

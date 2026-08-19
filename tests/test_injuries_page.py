@@ -180,6 +180,25 @@ def test_the_per_player_probe_reads_both_sleeper_fields():
     assert "show_player_injury(" in route and "show_injuries()" in route
 
 
+def test_the_probe_checks_the_built_file_not_only_the_feed():
+    """Ethan's 2026-08-19 run proved the engine right — Sleeper carried
+    `injury_status: Out` and the builder derived unavailable=True — while
+    the site still showed Active. That gap is a STALE BUILD, and it is
+    invisible from the feed side, so the probe reads the artifact the
+    page actually serves and names the two cases differently."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("def show_player_injury")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert "rosters_nfl.json" in body, "the probe never opens the built file"
+    assert "file_disagrees" in body
+    assert "THE FILE DISAGREES WITH THE FEED" in body
+    assert "fantasy_build.py" in body, "a diagnosis without the repair"
+    # A stale build and a healthy one must not print the same verdict.
+    assert "the BUILD is stale" in body and "Nothing to repair." in body
+    # An unreachable-feed build payload is not an empty league.
+    assert '(page.get("feed") or "") == "unavailable"' in body
+
+
 def test_a_silent_feed_is_never_reported_as_a_healthy_player():
     """The one sentence this probe must never print on a failed request.
     A feed that did not answer tells us nothing about the player, and
