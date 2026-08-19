@@ -95,6 +95,9 @@ WIDTHS = (1280, 390)
 # Each screen: (name, [nav clicks], present-selector, [checks], widths)
 #
 #   name     what RENDER_SPEC.md calls it
+#   url      the page to load. Defaults to index.html; the 404 and
+#            maintenance screens are standalone pages with no shell and no
+#            way in from the app, so they name their own.
 #   clicks   selectors to click in order to reach it from a cold load
 #   proof    an element that exists on this screen whether or not it has
 #            data — the container, not the content. Its absence means the
@@ -200,6 +203,57 @@ SCREENS = [
       ("condition-rows", "every row carries the CONDITION that fired it",
        ".al-c", "each", ".al-row", (1280, 390))],
      ),
+    # 8/9 in the pack. The compact dossier card opens statically; the
+    # FULL profile is an upgrade that arrives when /api/players/fantasy
+    # answers, so every claim about it is gated on `.ffd-full`. Against a
+    # plain file server those read "not in force" rather than broken —
+    # which is the truth: this screen needs the app server, not just the
+    # web directory.
+    ("Player Profile",
+     ['[data-sport="fantasy"]', ".dl-row, .dk-row, [onclick*='openFfDossier']"],
+     "#ffd-overlay",
+     ".ffd-card",
+     [("opens", "the dossier opens over the page",
+       "#ffd-overlay.open", "n", 1, (1280, 390)),
+      # Selectors read off the rendered profile, not guessed from a grep:
+      # the hero is `.ffp-head` and the tiles are `.ffp-tile` inside
+      # `.ffp-tiles`, each carrying its own `.ffp-rank`.
+      ("hero", "photo left; name + pos · team · number",
+       ".ffp-head", "n", 1, (1280,), ".ffd-full"),
+      ("season-tiles", "season-stats card, each tile with a league rank",
+       ".ffp-tile", "each", ".ffp-rank", (1280,), ".ffd-full"),
+      ("projection", "the projection tile with its confidence dots",
+       ".ffp-proj", "n", 1, (1280,), ".ffd-full"),
+      ("overview-grid", "one scrolling overview grid, not a tab strip",
+       ".ffp-grid", "n", 1, (1280,), ".ffd-full")],
+     ),
+    # 23 in the pack. A standalone page: it skips `.shell` deliberately —
+    # there is no sidebar to reserve room for — so the check is that it
+    # STAYS standalone as well as that it draws.
+    ("404",
+     [], "body", ".stub",
+     [("no-shell", "it skips the shell — no sidebar to reserve",
+       ".shell", "n", 0, (1280, 390)),
+      ("wordmark", "the brand mark links home",
+       ".stub-brand", "n", 1, (1280, 390)),
+      ("quick-links", "quick links back into the board",
+       ".stub-links a", "n", 4, (1280,)),
+      ("one-cta", "one brand CTA, not a wall of choices",
+       ".stub-cta", "n", 1, (1280, 390))],
+     "404.html"),
+    # 24 in the pack. It quotes no ETA — it says what is true and when to
+    # go look at the machine — so it has a note the 404 does not.
+    ("Maintenance",
+     [], "body", ".stub",
+     [("no-shell", "it skips the shell too",
+       ".shell", "n", 0, (1280, 390)),
+      ("wordmark", "the brand mark links home",
+       ".stub-brand", "n", 1, (1280, 390)),
+      ("one-cta", "one CTA back to the board",
+       ".stub-cta", "n", 1, (1280, 390)),
+      ("the-note", "the honest note: nothing settled is touched",
+       ".stub-note", "n", 1, (1280, 390))],
+     "maintenance.html"),
     # Reached through the account nav item rather than a sport chip — it
     # is not a board. The first cut clicked the My Bets chip, landed on a
     # different screen, found ITS empty state and filed a tidy "no data"
@@ -261,7 +315,11 @@ for (const s of PLAN) {
   const p = await b.newPage({ viewport: { width: WIDTH, height: 1200 } });
   p.on('pageerror', e => out.errs.push(e.message.slice(0, 140)));
   try {
-    await p.goto(`http://127.0.0.1:${PORT}/index.html`, { waitUntil: 'networkidle' });
+    // `domcontentloaded`, NOT `networkidle`. The real app handler serves
+    // live endpoints the board polls on a timer, so the network never goes
+    // idle and goto times out at 30s on a page that rendered fine in two.
+    // The settle-wait below is what actually decides when to measure.
+    await p.goto(`http://127.0.0.1:${PORT}/${s.url}`, { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(1200);
     for (const c of s.clicks) {
       const hit = await p.evaluate((sel) => {
@@ -384,12 +442,14 @@ def _slug(name: str) -> str:
 def _plan(width: int) -> list[dict]:
     """The screens that have anything to say at this width."""
     out = []
-    for name, clicks, proof, present, checks in SCREENS:
+    for row in SCREENS:
+        name, clicks, proof, present, checks = row[:5]
+        url = row[5] if len(row) > 5 else "index.html"
         keep = [c for c in checks if width in c[5]]
         if not keep:
             continue
         out.append({"name": name, "slug": _slug(name), "clicks": clicks,
-                    "proof": proof, "present": present,
+                    "url": url, "proof": proof, "present": present,
                     "checks": [[c[0], c[1], c[2], c[3], c[4],
                                 c[6] if len(c) > 6 else ""] for c in keep]})
     return out
@@ -402,14 +462,33 @@ def _serve() -> tuple[ThreadingHTTPServer, int]:
     runs at once, or one left half-finished, must not fail on "address
     already in use".
     """
-    class Handler(SimpleHTTPRequestHandler):
-        def __init__(self, *a, **kw):
-            super().__init__(*a, directory=str(WEB), **kw)
+    # THE REAL HANDLER, not a file server. Several render-spec screens are
+    # not static: the Player Profile is an upgrade that arrives when
+    # /api/players/fantasy answers, so against `python3 -m http.server`
+    # every claim about it reads "not in force" forever — a check that can
+    # never run is not a check. `launch.py --check`'s sweep already reuses
+    # this handler for the same reason; production runs the identical one.
+    #
+    # It degrades rather than fails: if server.py cannot be imported (a
+    # missing optional dependency, a half-installed checkout) the plain
+    # file server still measures every static screen, and the API-gated
+    # claims go back to reading "not in force" — which is then true.
+    try:
+        from server import Handler as _AppHandler
 
-        def log_message(self, *a, **kw):
-            pass
+        class Handler(_AppHandler):
+            def log_message(self, *a, **kw):
+                pass
+    except Exception:                                          # noqa: BLE001
+        class Handler(SimpleHTTPRequestHandler):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, directory=str(WEB), **kw)
+
+            def log_message(self, *a, **kw):
+                pass
 
     srv = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    srv.live_mode = True
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv, srv.server_address[1]
 
@@ -456,8 +535,7 @@ def run(width: int, port: int, shots: str = "") -> list[dict]:
 
 def verdicts(rows: list[dict]) -> dict:
     """Fold the raw measurements into the three verdicts, per check."""
-    spec = {name: {c[0]: c for c in checks}
-            for name, _, _, _, checks in SCREENS}
+    spec = {row[0]: {c[0]: c for c in row[4]} for row in SCREENS}
     out = {"measured": 0, "nodata": 0, "off": 0, "slow": 0,
            "crashed": False, "drift": [], "lines": []}
     for r in rows:
