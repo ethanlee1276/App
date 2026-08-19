@@ -3892,6 +3892,118 @@ def show_injuries() -> None:
               "fetch failures the host is unreachable from here.")
 
 
+def show_player_injury(name: str) -> None:
+    """What each feed says about ONE player, side by side.
+
+        python3 launch.py --injuries "Cade Mays"
+
+    Ethan has now reported the same player twice — "Cade mays is injured
+    on lions and he's showing active" (2026-08-13, and again 2026-08-19).
+    The first time cost a debugging session to learn that Sleeper answers
+    "is he hurt" in two fields. This prints both feeds' RAW answer and the
+    verdict the roster page draws from them, so the next one costs a
+    command.
+
+    The distinction that matters and is invisible on the page: a club's
+    injury report and a beat writer's report are different objects. Until
+    the club files a designation or makes a roster move, neither feed
+    carries the news, and the site is not stale — it is repeating the
+    last thing anybody official said. That answer is printed plainly
+    rather than left to be inferred from an empty result.
+    """
+    from engine import rosters as _r
+    from engine.offseason import load_sleeper_players, _canon_team
+    from engine.sources import espninjuries as _ei
+    from engine.sources.oddsapi import normalize_name
+
+    want = normalize_name(name or "")
+    if not want:
+        print("  Give a player name: python3 launch.py --injuries \"Cade Mays\"")
+        return
+    print(f"\n  Asking both feeds about: {name}\n")
+
+    # --- Sleeper: the roster, and the two fields that answer differently.
+    hits = []
+    heard = {"sleeper": False, "espn": False}
+    blob = load_sleeper_players()
+    if blob is None:
+        print("  SLEEPER   feed unreachable, and no cached copy on this "
+              "machine — nothing here is the site's opinion.")
+    else:
+        heard["sleeper"] = True
+        for p in blob.values():
+            if not isinstance(p, dict):
+                continue
+            full = (p.get("full_name")
+                    or f"{p.get('first_name', '')} {p.get('last_name', '')}").strip()
+            if normalize_name(full) == want:
+                hits.append((full, p))
+        if not hits:
+            print(f"  SLEEPER   no player named {name!r} in the players feed.")
+        for full, p in hits:
+            row = _r._player_row(p) or {}
+            print(f"  SLEEPER   {full} — {_canon_team(p.get('team')) or 'free agent'}"
+                  f" {p.get('position') or ''}")
+            print(f"              roster slot     status = {p.get('status') or '—'}")
+            print(f"              weekly filing   injury_status = "
+                  f"{p.get('injury_status') or '—'}")
+            print(f"              body part       {p.get('injury_body_part') or '—'}")
+            print(f"              our row says    unavailable="
+                  f"{bool(row.get('unavailable'))}  questionable="
+                  f"{bool(row.get('questionable'))}  shown as "
+                  f"{row.get('status') or 'Active'!r}")
+
+    # --- ESPN: the injury report, which is often first and always thinner.
+    try:
+        rows = _ei.current_rows(_ei.parse_injuries(_ei.fetch_injuries("nfl")))
+    except Exception as exc:                                   # noqa: BLE001
+        rows = []
+        print(f"\n  ESPN      feed unreachable ({exc}).")
+    else:
+        heard["espn"] = True
+        mine = [r for r in rows if normalize_name(r.get("player") or "") == want]
+        if not mine:
+            print(f"\n  ESPN      {len(rows)} filings league-wide, none of them "
+                  f"{name}.")
+        for r in mine:
+            print(f"\n  ESPN      {r.get('player')} — {r.get('team')}")
+            for k, label in (("status", "status"), ("injury", "injury"),
+                             ("side", "side"), ("return_date", "returns"),
+                             ("date", "filed"), ("comment", "comment")):
+                if r.get(k):
+                    print(f"              {label:<15} {r[k]}")
+
+    # --- The verdict. SILENCE AND DEAFNESS ARE DIFFERENT ANSWERS: a feed
+    # that did not answer tells us nothing about the player, and saying
+    # "no designation" on the back of a failed request would be the most
+    # confident wrong sentence this probe could print.
+    designated = any((p.get("injury_status") or "").strip()
+                     or _r._is_unavailable(p.get("status") or "")
+                     for _f, p in hits)
+    espn_has = [r for r in rows
+                if normalize_name(r.get("player") or "") == want]
+    if not (heard["sleeper"] and heard["espn"]):
+        missing = [k.upper() for k, ok in heard.items() if not ok]
+        print(f"\n  VERDICT   Cannot answer — {' and '.join(missing)} did not"
+              "\n            respond, and a feed that did not answer is not a"
+              "\n            feed saying he is healthy. Re-run this where the"
+              "\n            feeds are reachable (the droplet).")
+    elif not designated and not espn_has:
+        print("\n  VERDICT   Neither feed carries a designation for him, so the"
+              "\n            page says Active because that is the last thing"
+              "\n            anyone official said — not because it is stale."
+              "\n"
+              "\n            Clubs do not file weekly injury reports until the"
+              "\n            regular season, and ESPN's board is thin in August"
+              "\n            outside skill positions. A reported injury reaches"
+              "\n            these feeds when the club transacts (IR / PUP) or"
+              "\n            files a Week-1 report — at which point this flips"
+              "\n            on the next refresh with no action from you.")
+    else:
+        print("\n  VERDICT   A designation exists above; the roster page shows"
+              "\n            the more pessimistic of the two feeds.")
+
+
 def show_stakes() -> None:
     """What tonight's board would be staked under each policy.
 
@@ -6190,7 +6302,14 @@ def main() -> None:
                      rest[1] if len(rest) > 1 else None)
         return
     if "--injuries" in argv:
-        show_injuries()
+        # A name after the flag asks about ONE player across both feeds;
+        # bare --injuries stays the league-wide board probe.
+        rest = [a for a in argv[argv.index("--injuries") + 1:]
+                if not a.startswith("-")]
+        if rest:
+            show_player_injury(" ".join(rest))
+        else:
+            show_injuries()
         return
     if "--venues" in argv:
         show_venues()

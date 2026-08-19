@@ -727,6 +727,42 @@ That closes the render pack: every screen in the four images is now
 either shipped or written down in docs/RENDER_SPEC.md with the reason
 it did not cross.
 
+### T33. Cade Mays, again — and the one-command answer for next time
+
+You reported the same thing on 2026-08-13 and again tonight: he is out
+for weeks with a wrist and the Lions roster still says Active. Last
+time that WAS a bug in our code (we read only one of Sleeper's two
+injury fields), and it was fixed. This time I could not reach either
+feed from the cloud container to check, so instead of guessing I built
+the probe that answers it:
+
+```
+python3 launch.py --injuries "Cade Mays"
+```
+
+It prints what **Sleeper** says (both fields — `status`, the roster
+slot, and `injury_status`, the weekly filing), what **ESPN** says (the
+filing, if any), and the verdict our roster page draws from the two. If
+a feed doesn't respond it says *that*, rather than reporting silence as
+a healthy player — which would be the most confident wrong sentence it
+could print.
+
+**What I expect it to say, and why.** In August, a beat-writer injury
+report and a club injury report are different objects. Clubs don't file
+weekly designations until the regular season, and ESPN's board is thin
+outside skill positions, so an offensive lineman hurt in camp reaches
+neither feed until Detroit actually transacts — IR, PUP, or the Week-1
+report. At that moment Sleeper's `status` flips and our roster marks
+him unavailable on the next refresh, with nothing for you to do. I
+verified that half directly: with a stubbed feed carrying
+`status: "Injured Reserve"`, the row comes back `unavailable=True` and
+shows "Out". So the machinery works; the news simply is not in the
+pipe yet.
+
+Run the command tomorrow and paste me the output — if Sleeper *is*
+carrying a designation and we are still drawing Active, that is a real
+bug and the probe will show it in one screen.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

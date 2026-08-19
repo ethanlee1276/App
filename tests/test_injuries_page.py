@@ -163,6 +163,39 @@ def test_the_injuries_probe_is_reachable():
     assert "injuries_build" in body
 
 
+def test_the_per_player_probe_reads_both_sleeper_fields():
+    """`--injuries "Cade Mays"` — Ethan reported the same player twice
+    (2026-08-13 and 2026-08-19). The probe exists so the third time costs
+    a command instead of a debugging session, and it must read the two
+    Sleeper fields that answer "is he hurt" differently: `status` is the
+    roster slot, `injury_status` the weekly filing."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("def show_player_injury")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert 'p.get("status")' in body and 'p.get("injury_status")' in body
+    assert "espninjuries" in body, "the second feed must be asked too"
+    # And the flag routes a name to it while staying the board probe bare.
+    j = src.index('if "--injuries" in argv:')
+    route = src[j:j + 400]
+    assert "show_player_injury(" in route and "show_injuries()" in route
+
+
+def test_a_silent_feed_is_never_reported_as_a_healthy_player():
+    """The one sentence this probe must never print on a failed request.
+    A feed that did not answer tells us nothing about the player, and
+    "neither feed carries a designation" on the back of a 403 would be
+    the most confident wrong thing here."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("def show_player_injury")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert 'heard = {"sleeper": False, "espn": False}' in body
+    assert 'if not (heard["sleeper"] and heard["espn"]):' in body, \
+        "the unreachable case must be its own verdict"
+    # The reachable-and-empty verdict must sit BEHIND that check.
+    assert body.index('if not (heard["sleeper"]') \
+        < body.index("Neither feed carries a designation")
+
+
 def test_availability_tone_is_keyword_not_exact_match():
     """ESPN's wordings drift ("Out", "Injured Reserve", "60-Day IL").
     The tone map must key on availability words so a new phrasing lands
