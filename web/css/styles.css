@@ -3661,7 +3661,17 @@ body.ffd-open { overflow: hidden; }
    ------------------------------------------------------------------
    Reuses .stats/.agate/.card/.btn; the only new furniture is the entry
    form, the safety banner, and the small per-row action buttons. */
-.mb-safety { border-left: 3px solid var(--good); font-size: var(--fs-sm);
+/* A PARAGRAPH IN A CARD HAS TO BE A BLOCK. `.card` is
+   `display: flex; flex-direction: column; gap: 14px`, which is right for
+   a card of stacked children and wrong for one that IS a paragraph:
+   flex blockifies its item children, so the two inline <b>s here became
+   block items and one sentence rendered as five stacked lines —
+   "So you log bets here yourself. A" / "Qellys" / "account is a
+   different thing…". Found 2026-08-19 by reading rendercheck's own
+   screenshot of this page. Blockifying restores inline flow and keeps
+   the card's frame, gradient and rule. */
+.mb-safety { display: block;
+  border-left: 3px solid var(--good); font-size: var(--fs-sm);
   color: var(--text-dim); margin-bottom: 16px; }
 .mb-safety b { color: var(--text); }
 .mb-form { margin-bottom: 18px; }
