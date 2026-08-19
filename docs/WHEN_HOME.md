@@ -594,6 +594,32 @@ table, so nothing depends on the chart engine. Five new tests defend
 the axes-point-up rule, rank-not-z-score scaling, and the
 too-small-sample refusal.
 
+### T26. The render pack lands: Prediction Markets is the first copied screen
+
+Your Zenos renders are now the layout spec. The rules we settled — the
+durable copy lives in **docs/RENDER_SPEC.md**, since a cloud session
+cannot keep the images: layouts and graphics copy pixel-for-pixel;
+colors and the name stay OURS (their blue maps to our violet); numbers
+we cannot source (DFS salaries, ownership %) are omitted, not
+invented; and the one block that never crosses is the **order ticket**
+— their "Trade Yes 62¢" panel places wagers, and this site takes none,
+so that spot holds a venue link-out and the line "This panel is a
+read, not an order ticket."
+
+First screen shipped: **Prediction Market**, rebuilt to the render's
+board-plus-detail shape. Category chips (Top opportunities / All
+markets / one per sport), four stat tiles (markets tracked, priced by
+our model, average gap, 24h volume), and a two-column layout: the
+market table on the left (venue chip · title · YES¢ green · NO¢ red ·
+model % · edge · volume · VIEW), a sticky detail panel on the right —
+big YES/NO cents, QELLYS EDGE, a Market summary, and **The desk's
+gate** as a pass/fail checklist printing the real bars from the
+engine (6-pt edge, two-sided book, $250 volume floor, 6¢ spread cap).
+Their "ZenOS Analysis" bullets were marketing; ours are the gate. On
+the phone the detail stacks above the table. Next screens in the
+descent, per RENDER_SPEC.md: Fantasy Calendar's three-column layout,
+then the Player Profile page.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

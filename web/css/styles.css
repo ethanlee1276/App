@@ -5396,3 +5396,64 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .gp-shape-radar { min-height: 250px; }
 .gp-shape-radar[data-echarted] { height: 280px; }
 .gp-shape-tbl { max-width: 360px; }
+
+/* --- The render-copy prediction board (Zenos renders, 2026-08-18) --------
+   Table left, detail panel right, exactly the render's structure — our
+   tokens. The panel is sticky on a desk and stacks under the tabs on a
+   phone. The NO column joins the grid (render shows both sides priced),
+   and the View button is the row's one action. */
+.pm-cats { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+.pm-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 16px; align-items: start; }
+.pm-detail { position: sticky; top: 76px; padding: 16px; gap: 12px; }
+.pm-table .kx-row {
+  grid-template-columns: 52px minmax(0, 1fr) 44px 44px 48px 64px 76px 56px; }
+.pm-table .kx-row.sel { border-left: 3px solid var(--brand);
+  background-color: var(--fill-subtle); }
+.pm-view { padding: 5px 10px; font-size: var(--fs-2xs); }
+.kx-num.kx-n { text-align: right; font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm); }
+.pm-d-empty { text-align: center; color: var(--text-mute);
+  padding: 26px 10px; font-size: var(--fs-sm); }
+.pm-d-title { margin: 6px 0 2px; font-size: var(--fs-lg); line-height: 1.3; }
+.pm-d-title a { color: inherit; }
+.pm-d-sub { color: var(--text-mute); font-size: var(--fs-xs); }
+.pm-d-prices { display: flex; gap: 16px; align-items: baseline; }
+.pm-d-price b { font-size: var(--fs-3xl); font-weight: 800;
+  font-variant-numeric: tabular-nums; }
+.pm-d-price.yes b { color: var(--good); }
+.pm-d-price.no b { color: var(--bad); }
+.pm-d-price span, .pm-d-edge span { display: block; color: var(--text-mute);
+  font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .05em; }
+.pm-d-edge { margin-left: auto; font-weight: 800; font-size: var(--fs-xl);
+  text-align: right; font-variant-numeric: tabular-nums; }
+.pm-d-model { margin: 0; color: var(--text-body); font-size: var(--fs-sm); }
+.pm-d-card { border-top: var(--hairline) solid var(--border-soft);
+  padding-top: 12px; }
+.pm-d-rows div { display: flex; justify-content: space-between; gap: 10px;
+  padding: 4px 0; font-size: var(--fs-sm); }
+.pm-d-rows span { color: var(--text-mute); }
+.pm-d-checks { list-style: none; margin: 8px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 7px; font-size: var(--fs-sm); }
+.pm-d-checks li { display: flex; gap: 8px; align-items: baseline;
+  color: var(--text-body); }
+.pm-d-checks li.ok .ico-mark { color: var(--good); }
+.pm-d-checks li.no .ico-mark { color: var(--text-mute); }
+.pm-d-verdict { margin: 10px 0 0; font-size: var(--fs-sm);
+  color: var(--text-mute); }
+.pm-d-verdict.good { color: var(--good); font-weight: 700; }
+.pm-d-out { text-align: center; }
+.pm-d-note { margin: 0; color: var(--text-mute); font-size: var(--fs-xs); }
+@media (max-width: 1100px) {
+  .pm-layout { grid-template-columns: 1fr; }
+  /* Selected detail reads first on a phone — the tap that opened it
+     should land on it, not below the fold of a 40-row table. */
+  .pm-detail { position: static; order: -1; }
+}
+@media (max-width: 760px) {
+  .pm-table .kx-row { grid-template-columns: 52px 1fr 1fr 1fr 56px;
+    grid-template-areas: "sport title title title view"
+      ". k n e view" ". meter meter meter meter"; }
+  .pm-table .kx-n { grid-area: n; text-align: left; }
+  .pm-view { grid-area: view; align-self: center; }
+}

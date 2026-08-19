@@ -8176,6 +8176,9 @@ function pmVenueRows(kx, d) {
       sub: [(r.sport || "").toUpperCase(), r.matchup].filter(Boolean).join(" · "),
       price: r.prob, model: r.model_p, edge: r.edge_pts,
       vol: r.volume_24h, basis: r.price_basis, url: "",
+      key: `k:${r.ticker || r.title}`, sport: (r.sport || "").toUpperCase(),
+      rec: !!r.rec, rec_side: r.rec_side || "", matchup: r.matchup || "",
+      spread_cents: r.spread_cents, ends: "",
     });
   }
   for (const m of ((d || {}).markets || [])) {
@@ -8185,12 +8188,96 @@ function pmVenueRows(kx, d) {
       price: m.yes, model: null, edge: null,
       vol: m.vol24, basis: "", url: m.slug
         ? `https://polymarket.com/market/${m.slug}` : "",
+      key: `p:${m.slug || m.question}`, sport: "", rec: false, rec_side: "",
+      matchup: "", spread_cents: null, ends: m.end_date || "",
     });
   }
   // Volume is the one measure both venues report the same way, so it is
   // the only honest way to rank a mixed table.
   rows.sort((a, b) => (Number(b.vol) || 0) - (Number(a.vol) || 0));
   return rows;
+}
+
+/* --- The render-copy board (Ethan's Zenos renders, 2026-08-18) ----------
+   "i really love the graphics and layouts of these renders so i wanna
+   follow that pixel for pixel." The layout is the render's: category
+   tabs, four stat tiles, the market table on the left, and a detail
+   panel on the right that opens when a row's View is tapped. Our tokens,
+   our name — and NO trade box: the render's "Trade Yes 62¢" block is
+   the one element that must never cross, because this site takes no
+   wagers (test-pinned). The detail panel's analysis card is BETTER than
+   the render's marketing bullets: it prints the desk's actual gate
+   conditions, pass or fail, with the measured numbers. */
+let _pmSelKey = null;
+let _pmCatSel = "top";
+window._pmPick = (k) => { _pmSelKey = k; renderIntel(); };
+window._pmCatSet = (c) => { _pmCatSel = c; renderIntel(); };
+
+/* The desk's own gate, mirrored from engine/sources/kalshi.py so the
+   checklist prints the real bars, not vibes. */
+const PM_GATE = { edge: 6.0, vol: 250.0, spread: 6.0 };
+
+function pmDetailHTML(r) {
+  if (!r) return `<div class="pm-d-empty">${icon("signal", 26)}
+    <p>Tap <b>View</b> on any market to open its full read here.</p></div>`;
+  const yes = r.price == null ? null : Math.round(r.price * 100);
+  const no = yes == null ? null : 100 - yes;
+  const modeled = r.model != null;
+  const check = (ok, text) => `<li class="${ok ? "ok" : "no"}">${
+    icon(ok ? "check" : "cross", 12)} ${text}</li>`;
+  const gates = r.venue !== "KALSHI" ? "" : `
+    <div class="pm-d-card"><div class="gp-panel-title">The desk’s gate
+        <span class="gp-panel-sub">— the real bars, pass or fail</span></div>
+      <ul class="pm-d-checks">
+        ${check(modeled && Math.abs(r.edge || 0) >= PM_GATE.edge,
+          modeled ? `Edge ${r.edge > 0 ? "+" : ""}${r.edge} pts against the ${PM_GATE.edge}-pt bar`
+                  : "No model number — we do not price this claim")}
+        ${check(r.basis === "book" || r.basis === "mid",
+          r.basis === "book" || r.basis === "mid"
+            ? "Two-sided book — the mid is a real probability"
+            : "One-sided book — price is the last trade, not a mid")}
+        ${check(Number(r.vol) >= PM_GATE.vol,
+          `24h volume $${Number(r.vol || 0).toLocaleString()} against the $${PM_GATE.vol} floor`)}
+        ${r.spread_cents == null ? "" : check(r.spread_cents <= PM_GATE.spread,
+          `Spread ${r.spread_cents}¢ against the ${PM_GATE.spread}¢ cap`)}
+      </ul>
+      ${r.rec ? `<p class="pm-d-verdict good">${icon("check", 12)} Clears every
+        gate — journaled as a paper recommendation (${escapeHtml(r.rec_side)}).</p>`
+      : `<p class="pm-d-verdict">Does not clear the gate — shown as a price,
+        not a pick.</p>`}
+    </div>`;
+  const summary = `
+    <div class="pm-d-card"><div class="gp-panel-title">Market summary</div>
+      <div class="pm-d-rows">
+        <div><span>Venue</span><b>${r.venue === "POLY" ? "Polymarket" : "Kalshi"}</b></div>
+        <div><span>Type</span><b>Binary</b></div>
+        ${r.ends ? `<div><span>Resolves</span><b>${escapeHtml(r.ends)}</b></div>` : ""}
+        ${r.matchup ? `<div><span>Matched game</span><b>${escapeHtml(r.matchup)}</b></div>` : ""}
+        <div><span>24h volume</span><b>$${Number(r.vol || 0).toLocaleString()}</b></div>
+        ${r.basis ? `<div><span>Price basis</span><b>${escapeHtml(r.basis)}</b></div>` : ""}
+      </div></div>`;
+  return `
+    <div class="pm-d-head">
+      <span class="chip kx-venue">${r.venue}</span>
+      <h3 class="pm-d-title">${r.url
+        ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.title)}</a>`
+        : escapeHtml(r.title)}</h3>
+      ${r.sub ? `<div class="pm-d-sub">${escapeHtml(r.sub)}</div>` : ""}
+    </div>
+    <div class="pm-d-prices">
+      <div class="pm-d-price yes"><b>${yes == null ? "—" : yes + "¢"}</b><span>Yes</span></div>
+      <div class="pm-d-price no"><b>${no == null ? "—" : no + "¢"}</b><span>No</span></div>
+      ${modeled ? `<div class="pm-d-edge" style="color:var(--${(r.edge || 0) >= 0 ? "good" : "bad"})">
+        ${(r.edge || 0) >= 0 ? "+" : ""}${r.edge} pts<span>Qellys edge</span></div>` : ""}
+    </div>
+    ${modeled ? `<p class="pm-d-model">Our model prices the same claim at
+      <b>${Math.round(r.model * 100)}%</b>.</p>` : ""}
+    ${summary}
+    ${gates}
+    ${r.url ? `<a class="btn pm-d-out" href="${escapeAttr(r.url)}" target="_blank"
+      rel="noopener">View on Polymarket ↗</a>` : ""}
+    <p class="pm-d-note">Prices are the venues’ own. This panel is a read,
+      not an order ticket — Qellys takes no wagers.</p>`;
 }
 
 const PM_BOARD_SHOWN = 40;
@@ -8205,13 +8292,7 @@ function pmBoardRowHTML(r) {
     ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener"
           style="color:inherit">${escapeHtml(r.title)}</a>`
     : escapeHtml(r.title);
-  // The row's numbers, drawn as lengths — Ethan, 2026-08-18: "the site
-  // feels and looks very flat". A column of 62¢ / 58% / +4 makes the
-  // reader do the subtraction; a filled track with a tick shows the gap
-  // at a glance, and where the tick sits relative to the fill IS the
-  // edge column's sign. Venue-priced only (no price, no meter), and the
-  // tick only where our model actually prices the claim — the meter
-  // must not invent the symmetry the dash columns refuse to fake.
+  // The row's numbers, drawn as lengths — see the meter comment history.
   const pct = r.price == null ? null
     : Math.max(0, Math.min(100, r.price * 100));
   const mdl = r.model == null ? null
@@ -8222,57 +8303,87 @@ function pmBoardRowHTML(r) {
         r.edge > 0 ? "up" : r.edge < 0 ? "down" : ""
       }" style="left:${mdl.toFixed(1)}%"></span>`}
     </span>`;
-  return `<div class="kx-row">
+  const no = r.price == null ? null : Math.round((1 - r.price) * 100);
+  return `<div class="kx-row${_pmSelKey === r.key ? " sel" : ""}">
     <span class="kx-sport chip kx-venue">${r.venue}</span>
     <span class="kx-title" title="${escapeAttr(r.title)}">${title}
       ${r.sub ? `<span class="kx-match">· ${escapeHtml(r.sub)}</span>` : ""}${basis}</span>
-    <span class="kx-num kx-k" title="The venue’s own price for YES">${
+    <span class="kx-num kx-k" title="The venue’s own price for YES" style="color:var(--good)">${
       r.price == null ? "—" : (r.price * 100).toFixed(0) + "¢"}</span>
+    <span class="kx-num kx-n" title="The venue’s implied price for NO" style="color:var(--bad)">${
+      no == null ? "—" : no + "¢"}</span>
     <span class="kx-num kx-m" title="Our model’s probability for the same claim">${
       r.model == null ? "—" : (r.model * 100).toFixed(0) + "%"}</span>
     <span class="kx-num kx-e">${edge}</span>
     <span class="kx-vol" title="24h volume">$${Number(r.vol || 0).toLocaleString()}</span>
+    <button class="btn pm-view" onclick="window._pmPick('${escapeAttr(r.key)}')">View</button>
     ${meter}
   </div>`;
 }
 
 function predBoardHTML(kx, d) {
   const all = pmVenueRows(kx, d);
-  const shown = all.slice(0, PM_BOARD_SHOWN);
   const k = kx || {};
   const modeled = ((k.rows) || []).filter((r) => r.model_p != null);
   const nRec = ((k.rows) || []).filter((r) => r.rec).length
     + ((k.weather) || []).filter((r) => r.rec).length;
   const tile = (label, v, sub) => `<div class="tile"><div class="k">${label}</div>
     <div class="v">${v}</div>${sub ? `<div class="tile-sub">${sub}</div>` : ""}</div>`;
+
+  // Category tabs, the render's top strip. "Top opportunities" sorts the
+  // PRICED markets by the size of the gap; everything else is the plain
+  // volume table, filtered to one sport where one is picked.
+  const cats = [["top", "Top opportunities"], ["all", "All markets"]];
+  for (const s of [...new Set(all.map((r) => r.sport).filter(Boolean))].sort()) {
+    cats.push([`s:${s}`, s]);
+  }
+  if (!cats.some(([c]) => c === _pmCatSel)) _pmCatSel = "top";
+  const tabs = `<div class="pm-cats">${cats.map(([c, label]) =>
+    `<button class="mbc-chip${_pmCatSel === c ? " active" : ""}"
+       onclick="window._pmCatSet('${c}')">${escapeHtml(label)}</button>`).join("")}</div>`;
+
+  let rows = all;
+  if (_pmCatSel === "top") {
+    rows = all.slice().sort((a, b) =>
+      (b.edge == null ? -1 : Math.abs(b.edge)) - (a.edge == null ? -1 : Math.abs(a.edge)));
+  } else if (_pmCatSel.startsWith("s:")) {
+    rows = all.filter((r) => r.sport === _pmCatSel.slice(2));
+  }
+  const shown = rows.slice(0, PM_BOARD_SHOWN);
+  const sel = all.find((r) => r.key === _pmSelKey) || null;
+
+  const avgEdge = modeled.length
+    ? modeled.reduce((s, r) => s + Math.abs(r.edge_pts || 0), 0) / modeled.length
+    : null;
+  const totVol = all.reduce((s, r) => s + (Number(r.vol) || 0), 0);
+
   return `
     ${deskSectionHTML(kx)}
     <div class="section-title">The board
-      <span class="sub">— every live market from both venues in one table, ranked by
-      24h volume. Kalshi runs a two-sided book we can price against, so those rows
-      carry our number and the gap; Polymarket rows show the venue’s price and link
-      out. A dash means we do not price that market, not that the edge is zero.</span></div>
-    ${modeled.length
-      ? `<div class="kx-overhead"><div class="gloss-chart"
-           data-echart-dumbbell="${escapeAttr(JSON.stringify({
-             rows: modeled.slice()
-               .sort((a, b) => Math.abs(b.edge_pts || 0) - Math.abs(a.edge_pts || 0))
-               .slice(0, 12).map((r) => ({
-                 label: r.title || "", market: r.prob, model: r.model_p })),
-           }))}">${marketRule(modeled, { title: "MODEL vs MARKET" })}</div></div>` : ""}
+      <span class="sub">— every live market from both venues. Kalshi runs a
+      two-sided book we can price against, so those rows carry our number and
+      the gap; Polymarket rows show the venue’s price and link out. A dash
+      means we do not price that market, not that the edge is zero.</span></div>
+    ${tabs}
     <div class="stats">
       ${tile("Markets tracked", all.length, "both venues, live now")}
       ${tile("Priced by our model", modeled.length, "Kalshi two-sided books")}
-      ${tile("Clearing the gate", nRec, "the desk’s recommendations")}
-      ${tile("Matched to tonight", k.n_matched || 0, "a game on our slate")}
+      ${tile("Average gap", avgEdge == null ? "—" : avgEdge.toFixed(1) + " pts",
+             "model vs market, priced rows")}
+      ${tile("24h volume", "$" + Math.round(totVol).toLocaleString(),
+             `the desk recommends ${nRec}`)}
     </div>
-    <div class="card kx-table" style="padding:0">${
-      shown.map(pmBoardRowHTML).join("") || `
-      <p class="loading" style="padding:12px">${escapeHtml(k.note
-        || "No open markets on the last pull — the board fills as the venues list events.")}</p>`}</div>
-    ${all.length > shown.length
+    <div class="pm-layout">
+      <div class="card kx-table pm-table" style="padding:0">${
+        shown.map(pmBoardRowHTML).join("") || `
+        <p class="loading" style="padding:12px">${escapeHtml(k.note
+          || "No open markets on the last pull — the board fills as the venues list events.")}</p>`}
+      </div>
+      <aside class="card pm-detail">${pmDetailHTML(sel)}</aside>
+    </div>
+    ${rows.length > shown.length
       ? `<p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:8px">
-         Showing the ${shown.length} biggest by volume of ${all.length} live markets.</p>` : ""}`;
+         Showing ${shown.length} of ${rows.length} in this view.</p>` : ""}`;
 }
 
 async function renderIntel() {
