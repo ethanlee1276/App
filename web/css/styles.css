@@ -4660,6 +4660,22 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .mbc-chip.active { background: var(--brand); border-color: var(--brand);
   color: #fff; }
 .mbc-sport { margin-left: auto; }
+/* Cards / Table switch (render 12's dense log). Same rows either way —
+   the table is the desktop density, the cards are the phone's. */
+.mbc-views { display: flex; gap: 4px; margin-left: auto; }
+.mbc-sport + .mbc-views { margin-left: 0; }
+.mbc-view { background: var(--panel-2); color: var(--text-mute);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius);
+  padding: 6px 12px; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
+.mbc-view.active { background: var(--brand); border-color: var(--brand);
+  color: #fff; }
+.mb-table-wrap { padding: 0; overflow-x: auto; margin-bottom: 18px; }
+.mb-table { width: 100%; }
+.mb-table .mbt-pick { min-width: 0; }
+.mb-table .mbt-book { display: block; color: var(--text-mute);
+  font-size: var(--fs-2xs); }
+.mb-table .mbt-act { white-space: nowrap; text-align: right; }
+.mb-table .mb-act { padding: 3px 8px; }
 .mbc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr));
   gap: 10px; margin-bottom: 18px; }
 .mbc { background: var(--panel); border: var(--hairline) solid var(--border);
@@ -5181,6 +5197,40 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 
 .bill-state { font-size: var(--fs-sm); color: var(--text-dim); }
 .bill-state.on { color: var(--good); font-weight: 600; }
+
+/* Plan cards (render 21). Two, not three — there is one real plan, and
+   inventing tiers to fill a layout is the same sin as inventing a
+   number. The raised card is the paid one, as in the render. */
+.plan-grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr;
+  align-items: start; margin-bottom: 12px; }
+.plan { position: relative; padding: 18px 18px 20px; }
+.plan.raised { border-color: color-mix(in oklab, var(--brand) 50%, var(--border)); }
+/* Status marker, so it takes the border-left idiom the bet cards use —
+   the inset box-shadow form is reserved for brand SELECTION. */
+.plan.current { border-left: 3px solid var(--good); }
+.plan-band { position: absolute; top: 0; right: 0;
+  padding: 3px 10px; background: var(--brand); color: #fff;
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; }
+.plan-name { color: var(--text-mute); font-size: var(--fs-2xs);
+  font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.plan-price { font-family: var(--font-display); font-size: var(--fs-2xl);
+  font-weight: 800; margin: 4px 0 12px; }
+.plan-price span { display: block; font-family: var(--font-sans);
+  font-size: var(--fs-2xs); font-weight: 400; color: var(--text-mute);
+  letter-spacing: 0; text-transform: none; }
+.plan-list { list-style: none; margin: 0; padding: 0; }
+.plan-list li { display: flex; gap: 8px; align-items: baseline;
+  font-size: var(--fs-sm); color: var(--text-dim); padding: 3px 0; }
+.plan-list li.yes .ic { color: var(--good); flex: none; }
+.plan-list li.no { color: var(--text-mute); }
+.plan-list li.no .ic { color: var(--text-mute); flex: none; }
+.plan-btn { width: 100%; margin-top: 14px; }
+.plan-cur { margin-top: 14px; text-align: center; color: var(--good);
+  font-size: var(--fs-xs); font-weight: 700; }
+@media (max-width: 700px) {
+  .plan-grid { grid-template-columns: 1fr; }
+}
 
 /* --- In-page anchor targets ---------------------------------------------
    The masthead is position:sticky at 64px (measured, both 1280 and 390),

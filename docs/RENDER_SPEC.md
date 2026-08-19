@@ -38,10 +38,10 @@ cannot persist them); this file is the durable description.
 | 6/7 — Fantasy Calendar three-column | **SHIPPED 2026-08-19** |
 | 8/9 — Player Profile (fantasy) | **SHIPPED 2026-08-19** (built 08-18; close pass added HT/WT/College + trend) |
 | 3 — Dashboard | **SHIPPED 2026-08-19** (quick tools, sports donut, recent results added to the existing panels) |
-| 12 — Bet Tracker | mostly exists (My Bets); render adds summary strip |
+| 12 — Bet Tracker | **SHIPPED 2026-08-19** (Cards/Table view switch over the same rows) |
 | 13 — Account & Settings | exists; render adds stats card |
 | 14 — Alerts Center | **SHIPPED 2026-08-19** (filter chips + condition rows; the render's toggles never cross) |
-| 21 — Pricing | billing exists (Paddle); render’s 3-plan cards pending |
+| 21 — Pricing | **SHIPPED 2026-08-19** — two cards, not three; no invented price |
 | 1/2 — Login / Sign up | **SHIPPED 2026-08-19** (wordmark + tagline hero over the card) |
 | 23/24 — 404 / Maintenance | **SHIPPED 2026-08-19** (web/404.html, web/maintenance.html) |
 | 20/22 — Mobile app promo | not applicable yet (no store apps) |
@@ -122,9 +122,16 @@ records). The render's "Fantasy Optimizer" maps to the fantasy room —
 we do not build DFS lineups.
 
 ### Small screens
-* **Pricing (21):** three plan cards (Free / Premium / Elite), center
-  card raised + "Most Popular" band, feature checklists, CTA per card.
-  Wire to the real Paddle plans only — never invent prices.
+* **Pricing (21): SHIPPED** as `billPlansHTML()` in the account screen
+  (one place for money, rather than a standalone page). **Two** cards,
+  not three: there is one real plan (a single Paddle price), and
+  inventing Premium/Elite to fill a layout is the same sin as inventing
+  a number. The only price printed is Free's `$0`, which is true; the
+  paid card says Paddle shows the price at checkout, because that is
+  the only place it is true. The feature split is read off
+  engine/gate.py (FREE_FILES vs PAID_FILES), not off a marketing page.
+  The render's raised centre card becomes the raised paid card, and its
+  "Most Popular" band becomes "The whole board".
 * **404 (23) / Maintenance (24): SHIPPED.** `web/404.html` and
   `web/maintenance.html` — giant brand-ramp numeral / clock mark, one
   honest sentence, brand CTA, quick links. They skip `.shell` (no
@@ -146,6 +153,9 @@ we do not build DFS lineups.
   "Create New Alert" never cross: this page is a digest of three feeds
   we already hold, not a subscription service, and a switch that turns
   nothing on is a lie you can click (pinned in test_stub_pages).
-* **Bet Tracker (12):** summary strip (bets, win rate, profit, ROI) —
-  exists in My Bets tiles; add the render's table variant with
-  date/pick/type/odds/stake/result columns (mb table exists; restyle).
+* **Bet Tracker (12): SHIPPED.** The summary strip already existed as
+  the My Bets tiles. The render's dense table now ships as a
+  Cards/Table view switch (`_mbView`) over the same filtered rows —
+  date, pick+book, type, odds, stake, result, status, actions. "Type"
+  comes from the ticket's own shape (a parlay has legs joined by
+  " + "); no market label is invented for a hand-typed row.

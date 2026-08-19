@@ -87,6 +87,47 @@ def test_the_alerts_page_reports_feeds_and_sells_no_subscription():
         assert sel in CSS, f"{sel} is unstyled"
 
 
+def test_the_plan_cards_invent_no_tier_and_no_price():
+    """Render 21 shows three priced tiers. There is ONE real plan — a
+    single Paddle price the server does not know the amount of — so the
+    page ships two cards, quotes no number it cannot source, and splits
+    the features the way engine/gate.py actually splits the files."""
+    i = APP.index("function billPlansHTML(")
+    body = APP[i:APP.index("\nasync function renderBilling(", i)]
+    assert body.count('class="card plan') == 2, "a third tier was invented"
+    # The one number on the page is the free one, which is true.
+    assert "$0" in body
+    prices = re.findall(r"\$\d[\d.,]*", body)
+    assert prices == ["$0"], f"invented a price: {prices}"
+    for word in ("Premium", "Elite", "/mo", "per month"):
+        assert word not in body, f"invented a tier or a term: {word}"
+    assert "Paddle" in body and "billSubscribe(this)" in body, \
+        "the paid card must go to the real checkout"
+    # And the free half is the gate's own free half.
+    for free in ("Record page", "injury report", "fantasy room"):
+        assert free.lower() in body.lower(), f"free list lost {free}"
+    for sel in (".plan-grid {", ".plan-price {", ".plan-band {"):
+        assert sel in CSS, f"{sel} is unstyled"
+
+
+def test_the_bet_log_table_is_a_view_of_the_same_rows():
+    """Render 12's dense table. It must be a VIEW switch over the bets
+    already stored, not a second store — and it may not print a market
+    label the log does not carry."""
+    i = APP.index("const tableRow = (b) =>")
+    body = APP[i:APP.index("const betTable", i)]
+    for col in ("b.date", "b.desc", "b.odds", "b.stake", "mbProfit(b)"):
+        assert col in body, f"table lost {col}"
+    assert "mbToWin(b)" in body, "a pending row shows what it stands to return"
+    assert "legs ? `${legs.length}-leg parlay`" in body, \
+        "type comes from the ticket's own shape, never an invented market"
+    j = APP.index("const vw = window._mbView")
+    assert "_mbView='table'" in APP and "_mbView='cards'" in APP
+    assert 'vw === "table" ? betTable(shown)' in APP, \
+        "both views must render the same filtered rows"
+    assert ".mb-table-wrap {" in CSS and ".mbc-view {" in CSS
+
+
 def test_the_alert_rows_still_come_from_the_three_real_feeds():
     """The restyle must not have quietly invented a fourth source."""
     i = APP.index("function renderAlerts(")

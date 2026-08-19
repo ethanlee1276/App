@@ -9113,12 +9113,22 @@ function renderMyBets() {
     && (!spF || b.sport === spF));
   const chip = (val, label) => `<button class="mbc-chip ${stF === val ? "active" : ""}"
       onclick="window._mbStatus='${val}';renderMyBets()">${label}</button>`;
+  // Render 12 ships the log as a dense TABLE; the cards came from the
+  // phone render. Both are the same rows, so this is a view switch
+  // rather than a second store — table on a laptop, cards on a phone.
+  const vw = window._mbView === "table" ? "table" : "cards";
   const filterBar = bets.length ? `
     <div class="mbc-filters">
       <div class="mbc-chips">${chip("all", "All")}${chip("open", "Open")}${chip("win", "Won")}${chip("loss", "Lost")}${chip("push", "Push")}</div>
       ${sportsSeen.length > 1 ? `<select class="mbc-sport" onchange="window._mbSport=this.value;renderMyBets()">
         <option value="">All Sports</option>${sportsSeen.map((s) =>
           `<option${s === spF ? " selected" : ""}>${escapeHtml(s)}</option>`).join("")}</select>` : ""}
+      <div class="mbc-views">
+        <button class="mbc-view${vw === "cards" ? " active" : ""}" type="button"
+          onclick="window._mbView='cards';renderMyBets()">Cards</button>
+        <button class="mbc-view${vw === "table" ? " active" : ""}" type="button"
+          onclick="window._mbView='table';renderMyBets()">Table</button>
+      </div>
     </div>` : "";
   // What a pending bet stands to return — plain American-odds arithmetic
   // on the user's own stake and price, never a projection.
@@ -9135,7 +9145,8 @@ function renderMyBets() {
     const outcome = b.result === "pending"
       ? `To win <b>${mbMoney(mbToWin(b))}</b>`
       : `<b style="color:${pcolor(mbProfit(b))}">${mbMoney(mbProfit(b), true)}</b>`;
-    return `<article class="mbc ${b.result === "pending" ? "open" : escapeHtml(b.result)}">
+    return `<article class="mbc ${b.result === "pending" ? "open" : escapeHtml(b.result)}"
+        data-mbid="${escapeAttr(b.id || "")}">
       <div class="mbc-head">
         <span class="mbc-title">${legs ? `${legs.length}-leg parlay` : escapeHtml(b.desc || "")}</span>
         <b class="mbc-odds">${b.odds > 0 ? "+" : ""}${escapeHtml(String(b.odds ?? ""))}</b>
@@ -9150,6 +9161,37 @@ function renderMyBets() {
             onclick="mbDelete('${b.id}')">${icon("cross", 12)}</button></span></div>
     </article>`;
   };
+  // The same bets as the render's table: date, pick, type, odds, stake,
+  // result. "Type" is the shape of the ticket we can actually tell from
+  // the row — a parlay has legs joined by " + " — never an invented
+  // market label.
+  const tableRow = (b) => {
+    const [label, color] = resultTag[b.result] || resultTag.pending;
+    const legs = (b.desc || "").includes(" + ") ? (b.desc || "").split(" + ") : null;
+    const type = legs ? `${legs.length}-leg parlay` : (b.sport || "Single");
+    return `<tr data-mbid="${escapeAttr(b.id || "")}">
+      <td>${escapeHtml(b.date || "")}</td>
+      <td class="mbt-pick">${escapeHtml(b.desc || "")}
+        <span class="mbt-book">${escapeHtml(b.book || "")}</span></td>
+      <td>${escapeHtml(type)}</td>
+      <td class="num">${b.odds > 0 ? "+" : ""}${escapeHtml(String(b.odds ?? ""))}</td>
+      <td class="num">${mbMoney(b.stake)}</td>
+      <td class="num" style="color:${b.result === "pending" ? "var(--text-mute)" : pcolor(mbProfit(b))}">
+        ${b.result === "pending" ? mbMoney(mbToWin(b)) + " to win" : mbMoney(mbProfit(b), true)}</td>
+      <td><b style="color:${color}">${label}</b></td>
+      <td class="mbt-act">${b.result === "pending"
+        ? `<button class="mb-act win" onclick="mbResult('${b.id}','win')">W</button>
+           <button class="mb-act loss" onclick="mbResult('${b.id}','loss')">L</button>
+           <button class="mb-act push" onclick="mbResult('${b.id}','push')">P</button>`
+        : `<button class="mb-act undo" onclick="mbResult('${b.id}','pending')">Reopen</button>`}
+        <button class="mb-act del" title="Delete this bet" aria-label="Delete"
+          onclick="mbDelete('${b.id}')">${icon("cross", 12)}</button></td>
+    </tr>`;
+  };
+  const betTable = (rows) => `<div class="card mb-table-wrap">
+    <table class="agate mb-table"><thead><tr><th>Date</th><th>Pick</th><th>Type</th>
+      <th>Odds</th><th>Stake</th><th>Result</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows.map(tableRow).join("")}</tbody></table></div>`;
 
   host.innerHTML = `
     <div class="card mb-safety">
@@ -9247,8 +9289,10 @@ function renderMyBets() {
           accept="application/json" style="display:none" onchange="mbImport(this)"></label>
       </span></div>
     ${filterBar}
-    <div class="mbc-list">${shown.map(card).join("")
-      || `<p class="rail-quiet" style="margin:4px 0 18px">Nothing matches this filter.</p>`}</div>`
+    ${!shown.length
+      ? `<p class="rail-quiet" style="margin:4px 0 18px">Nothing matches this filter.</p>`
+      : vw === "table" ? betTable(shown)
+      : `<div class="mbc-list">${shown.map(card).join("")}</div>`}`
     : `<div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
         <div class="es-title">No bets logged yet</div>
         <div class="es-sub">Add the first bet you placed at a book above. It stays on this
@@ -10730,6 +10774,56 @@ window.acctAuth = async function (btn, mode) {
    cancelling happens. A company that builds its own cancel flow is
    deciding how hard it is to leave, and this one is not going to be
    that. */
+/* Render 21's plan cards, in the only honest form this site can print.
+   Their page shows three tiers with prices on them. There is ONE real
+   plan (a single Paddle price) and the server does not know its amount
+   — the number lives at Paddle, which is the only place it is true —
+   so: two cards, no invented tiers, no invented prices, and the split
+   between them is read straight off the gate (engine/gate.py's
+   FREE_FILES vs PAID_FILES), not off a marketing page. */
+function billPlansHTML(s) {
+  const line = (ok, t) => `<li class="${ok ? "yes" : "no"}">${
+    icon(ok ? "check" : "dash", 13)} <span>${t}</span></li>`;
+  const entitled = !!(s && s.entitled);
+  return `
+    <div class="section-title">What an account costs
+      <span class="sub">— the free half is free forever; the price of the
+      other half is shown by Paddle before you agree to anything.</span></div>
+    <div class="plan-grid">
+      <div class="card plan${entitled ? "" : " current"}">
+        <div class="plan-name">Free</div>
+        <div class="plan-price">$0<span>always</span></div>
+        <ul class="plan-list">
+          ${line(true, "The Record page — every graded pick, win or lose")}
+          ${line(true, "Scores, schedules, standings and rosters")}
+          ${line(true, "The injury report for every league")}
+          ${line(true, "The fantasy room: draft kit, calendar, mock draft")}
+          ${line(true, "Your own bet log and bankroll tools")}
+          ${line(false, "Tonight’s priced picks and edges")}
+        </ul>
+        ${entitled ? "" : `<div class="plan-cta plan-cur">Your plan now</div>`}
+      </div>
+      <div class="card plan raised${entitled ? " current" : ""}">
+        <div class="plan-band">The whole board</div>
+        <div class="plan-name">Member</div>
+        <div class="plan-price">Paddle<span>shows the price at checkout</span></div>
+        <ul class="plan-list">
+          ${line(true, "Everything in Free")}
+          ${line(true, "Every priced pick, with its edge and the reasons")}
+          ${line(true, "Prop, game-line and long-shot boards, all leagues")}
+          ${line(true, "The prediction-market desk and its gate")}
+          ${line(true, "Cancel from this page whenever you like")}
+        </ul>
+        ${entitled
+          ? `<div class="plan-cta plan-cur">Your plan now</div>`
+          : `<button class="btn plan-btn" onclick="billSubscribe(this)">See the price</button>`}
+      </div>
+    </div>
+    <p class="rank-help">No card number ever reaches this server — checkout
+      and cancellation both happen on Paddle’s own pages. The site still
+      takes no bets and holds no money.</p>`;
+}
+
 async function renderBilling() {
   const slot = document.getElementById("billing-slot");
   if (!slot) return;
@@ -10754,7 +10848,8 @@ async function renderBilling() {
         : `<button class="btn" onclick="billSubscribe(this)">Subscribe</button>`}
       ${s.live === false ? `<span class="chip warn">Paddle sandbox —
         no real money moves</span>` : ""}
-    </div>`;
+    </div>
+    ${billPlansHTML(s)}`;
 }
 
 async function _billGo(btn, path) {

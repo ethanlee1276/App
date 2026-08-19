@@ -700,6 +700,33 @@ measure guards exist to catch. Both now go through tokens
 `--fs-stub` rather than a raw clamp. Nothing visible changed; the
 system stayed a system.
 
+### T32. The last two render screens: pricing, and the bet-log table
+
+**Pricing (render 21).** Their page has three tiers with prices on
+them. We have one real plan — a single Paddle price whose amount lives
+at Paddle, not on our server — so the account page now carries **two**
+cards instead: Free (`$0`, which is true) and Member (Paddle shows the
+price at checkout, because that is the only place it is true). What
+each side gets is read straight off `engine/gate.py` — the same list
+that decides which files the paywall actually holds back — rather than
+off a marketing page. Their raised centre card became the raised paid
+card; their "Most Popular" band became "The whole board". Inventing a
+Premium and an Elite to fill a layout would be the same sin as
+inventing a number, so neither exists.
+
+**Bet Tracker (render 12).** My Bets already had the summary strip;
+what it lacked was the render's dense table. There is now a
+**Cards / Table** switch next to the filters — same bets, same
+filters, two densities: cards on a phone, a table with date · pick ·
+type · odds · stake · result · status on a laptop, with the settle
+buttons on every row either way. "Type" is read off the ticket you
+typed (a parlay has legs joined by " + "); it never invents a market
+label for a hand-entered bet.
+
+That closes the render pack: every screen in the four images is now
+either shipped or written down in docs/RENDER_SPEC.md with the reason
+it did not cross.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 
