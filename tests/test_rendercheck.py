@@ -13,8 +13,7 @@ browser. This file defends the instrument, in two halves:
     and a claim cannot be quietly deleted by deleting its selector. This
     runs everywhere, including CI.
   * **the half that does** — the harness end to end against the real
-    pages, skipped with a reason when Node or Playwright is absent, the
-    same way `launch.py --check`'s sweep skips.
+    pages. Opt-in; see below.
 
 THE FOUR VERDICTS ARE THE DESIGN and each is pinned below, because three
 of them are the difference between a tool that gets run and one that gets
@@ -24,6 +23,21 @@ ignored:
     broke        DRIFT — someone should look
     no data      this board has nothing to draw, so nothing is claimed
     not in force the feature is off (pricing needs billing switched on)
+
+BROWSER HALVES ARE OPT-IN. Set `QB_BROWSER_TESTS=1` to run them.
+
+They are skipped by default and the reason is a measured one: three
+Chromium-driving tests inside a 284-file suite crashed the browser
+("Page crashed" mid-navigation) on a container already busy running
+everything else. A flaky test is worse than no test — the first false
+alarm is what teaches you to skip the real one — and these particular
+assertions have a better home anyway:
+
+    QB_BROWSER_TESTS=1 python3 tests/test_rendercheck.py
+    python3 launch.py --renders
+
+The halves that need no browser still run on every commit, and they are
+the ones that catch the drift class this exists for.
 
 Run directly: `python3 tests/test_rendercheck.py`
 """
@@ -216,6 +230,10 @@ def test_the_harness_runs_against_the_real_pages():
     """Skipped with a reason rather than failing when Node or Playwright
     is absent — the same contract `launch.py --check`'s sweep uses. A test
     that fails on a machine without a browser is a test people delete."""
+    if os.environ.get("QB_BROWSER_TESTS") != "1":
+        print("      (skipped: set QB_BROWSER_TESTS=1, or run "
+              "`python3 launch.py --renders`)")
+        return
     if not rc._have_node():
         print("      (skipped: no Node/Playwright — install to enable)")
         return

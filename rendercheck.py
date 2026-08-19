@@ -205,11 +205,18 @@ const EMPTY = JSON.parse(process.argv[6]);
 // own versioned directory; this project's container puts Chromium
 // somewhere else entirely. Each candidate is tried and the LAST failure
 // is re-thrown, so the message names the path actually attempted.
+// CONTAINER FLAGS, not superstition. Without --disable-dev-shm-usage
+// Chromium puts its shared buffers in /dev/shm and dies with "Page
+// crashed" on the first navigation when that fill; --no-sandbox is
+// required where the process cannot create user namespaces, which is
+// most containers. Both were paid for here: the run that produced this
+// comment crashed on page one, twice in a row.
+const ARGS = ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'];
 let b = null, lastErr = null;
 for (const path of [process.env.CHROMIUM_PATH, '/opt/pw-browsers/chromium',
                     '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', undefined]) {
   if (path === null) continue;
-  try { b = await chromium.launch({ executablePath: path || undefined }); break; }
+  try { b = await chromium.launch({ executablePath: path || undefined, args: ARGS }); break; }
   catch (e) { lastErr = e; }
 }
 if (!b) throw lastErr;
@@ -303,7 +310,18 @@ for (const s of PLAN) {
       }
     }
   } catch (e) {
-    out.errs.push(String(e).slice(0, 140));
+    const msg = String(e);
+    out.errs.push(msg.slice(0, 140));
+    // A DEAD BROWSER IS NOT SITE DRIFT. Once Chromium crashes every
+    // remaining screen fails identically with "browser has been closed",
+    // and a report of twelve regressions from one infrastructure fault is
+    // a report nobody can act on. Say what happened once and stop.
+    if (/Page crashed|browser has been closed|Target page/.test(msg)) {
+      out.crashed = true;
+      console.log(JSON.stringify(out));
+      try { await p.close(); } catch (e2) {}
+      break;
+    }
   }
   console.log(JSON.stringify(out));
   await p.close();
@@ -397,9 +415,17 @@ def verdicts(rows: list[dict]) -> dict:
     spec = {name: {c[0]: c for c in checks}
             for name, _, _, _, checks in SCREENS}
     out = {"measured": 0, "nodata": 0, "off": 0, "slow": 0,
-           "drift": [], "lines": []}
+           "crashed": False, "drift": [], "lines": []}
     for r in rows:
         head = f"{r['name']} @ {r['width']}"
+        if r.get("crashed"):
+            # Infrastructure, not the site. Reported once, loudly, and
+            # never as a claim about a layout.
+            out["crashed"] = True
+            out["lines"].append(
+                ("crash", head, f"the BROWSER died here — {r['errs'][0]}. "
+                                f"Nothing after this was measured."))
+            continue
         if r.get("errs"):
             out["drift"].append(f"{head}: page error")
             out["lines"].append(("drift", head,
@@ -555,7 +581,7 @@ def main(argv=None) -> int:
 
     v = verdicts(all_rows)
     mark = {"ok": "  ✅", "drift": "  ❌", "nodata": "  · ", "off": "  · ",
-            "slow": "  ⏳", "nav": "  ❌"}
+            "slow": "  ⏳", "nav": "  ❌", "crash": "  💥"}
     last = None
     for kind, head, say in v["lines"]:
         if head != last:
@@ -572,6 +598,17 @@ def main(argv=None) -> int:
     if v["nodata"]:
         print("  A skipped screen is not a pass. Run this on the droplet, "
               "where the boards are fed.")
+    if v["crashed"]:
+        print("\n  THE BROWSER CRASHED — this run says nothing about the "
+              "site.")
+        print("  Check DISK first (`df -h /`): a full filesystem is what "
+              "caused this the")
+        print("  one time it happened here — Chromium cannot write its "
+              "profile and dies")
+        print("  on the first navigation. Then memory, then /dev/shm. "
+              "Re-run before")
+        print("  reading anything into it.")
+        return 1
     if v["drift"]:
         print(f"\n  DRIFT: {len(v['drift'])} — "
               + ", ".join(v["drift"][:6])

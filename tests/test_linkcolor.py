@@ -27,6 +27,21 @@ the next one.
 
 Measured: **28 → 0**, over five pages and ten in-app views.
 
+BROWSER HALVES ARE OPT-IN. Set `QB_BROWSER_TESTS=1` to run them.
+
+They are skipped by default and the reason is a measured one: three
+Chromium-driving tests inside a 284-file suite crashed the browser
+("Page crashed" mid-navigation) on a container already busy running
+everything else. A flaky test is worse than no test — the first false
+alarm is what teaches you to skip the real one — and these particular
+assertions have a better home anyway:
+
+    QB_BROWSER_TESTS=1 python3 tests/test_linkcolor.py
+    python3 launch.py --renders
+
+The halves that need no browser still run on every commit, and they are
+the ones that catch the drift class this exists for.
+
 Run directly: `python3 tests/test_linkcolor.py`
 """
 
@@ -126,6 +141,10 @@ def test_no_rendered_link_is_the_browser_default():
     Skipped with a reason rather than failed when Node or Playwright is
     absent — the contract `launch.py --check`'s sweep already uses. A test
     that fails on a machine without a browser is a test people delete."""
+    if os.environ.get("QB_BROWSER_TESTS") != "1":
+        print("      (skipped: set QB_BROWSER_TESTS=1, or run "
+              "`python3 launch.py --renders`)")
+        return
     if not _have_node():
         print("      (skipped: no Node/Playwright — install to enable)")
         return

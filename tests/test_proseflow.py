@@ -28,6 +28,21 @@ Two matches are deliberate row layouts and stay:
 Both are `flex-direction: row`, where blockified items sit side by side
 and read as one line. The defect only exists in a COLUMN.
 
+BROWSER HALVES ARE OPT-IN. Set `QB_BROWSER_TESTS=1` to run them.
+
+They are skipped by default and the reason is a measured one: three
+Chromium-driving tests inside a 284-file suite crashed the browser
+("Page crashed" mid-navigation) on a container already busy running
+everything else. A flaky test is worse than no test — the first false
+alarm is what teaches you to skip the real one — and these particular
+assertions have a better home anyway:
+
+    QB_BROWSER_TESTS=1 python3 tests/test_proseflow.py
+    python3 launch.py --renders
+
+The halves that need no browser still run on every commit, and they are
+the ones that catch the drift class this exists for.
+
 Run directly: `python3 tests/test_proseflow.py`
 """
 
@@ -136,6 +151,10 @@ def _have_node() -> bool:
 def test_no_new_paragraph_is_being_shredded_by_a_flex_column():
     """Skipped with a reason when there is no browser, like every other
     rendered check here. Sixteen views plus the board."""
+    if os.environ.get("QB_BROWSER_TESTS") != "1":
+        print("      (skipped: set QB_BROWSER_TESTS=1, or run "
+              "`python3 launch.py --renders`)")
+        return
     if not _have_node():
         print("      (skipped: no Node/Playwright — install to enable)")
         return
