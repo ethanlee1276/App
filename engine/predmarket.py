@@ -169,9 +169,21 @@ def parse_markets(raw: list[dict]) -> list[dict]:
         slug = m.get("slug") or ""
         if not slug or yes is None:
             continue
+        # THE VENUE'S OWN ART. Gamma ships `image` (the market card) and
+        # `icon` (the small round one) and we were dropping both. Ethan,
+        # 2026-08-19: "We should be following the thumbnails they use on
+        # Polly and Kalshi." Polymarket rows can carry theirs; Kalshi
+        # publishes no market art at all, which is why our sports rows
+        # fall back to the two teams' logos instead.
+        #
+        # Kept as the URL the venue gave us — never rehosted, never
+        # rewritten. A market's picture is the venue's, and an image proxy
+        # is a thing to run and a thing to be wrong.
+        art = str(m.get("icon") or m.get("image") or "")
         out.append({"slug": slug, "question": m.get("question") or slug,
                     "yes": round(yes, 4), "vol24": round(vol24, 2),
                     "liquidity": round(liq, 2),
+                    "image": art if art.startswith("https://") else "",
                     "end_date": (m.get("endDate") or "")[:10]})
     return out
 

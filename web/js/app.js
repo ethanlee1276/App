@@ -8239,24 +8239,54 @@ function venueMark(venue, size = 22) {
       Math.round(size * 0.5)}px">${escapeHtml(v.slice(0, 1) || "?")}</span>`;
 }
 
+/* The desk row's wrapper. The ART is pmThumb's — this was a second copy
+   of the same ladder until the board grew one too, and two copies of a
+   picture-choosing rule drift the moment one venue gains a field. What
+   differs here is only the caption: the desk labels by sport or city,
+   the board labels by venue. */
 function deskThumb(r) {
   const label = escapeHtml((r.sport || r.city || "").toUpperCase());
-  const cap = (art) => `<span class="kx-thumb">${art}
+  return `<span class="kx-thumb">${pmThumb(r, 19)}
     <span class="kx-thumb-l">${label}</span></span>`;
+}
+
+/* THE SAME THUMBNAIL EVERYWHERE A MARKET IS LISTED.
+   Ethan, 2026-08-19: "We should be following the thumbnails they use on
+   Polly and Kalshi and everything." The desk's rows already drew team
+   logos; the board below drew a bare venue letter for all forty, so the
+   two halves of the same page identified markets in two different ways.
+
+   The ladder, best available first:
+     1. a matched game  -> both teams' logos, the pair reading as a fixture
+     2. Polymarket art  -> the venue's own market icon, its URL untouched
+     3. a weather row   -> the sun mark
+     4. anything else   -> the venue badge it always had
+
+   Rung 2 is a remote image and the only one that can fail in flight, so
+   it carries an onerror that swaps in the venue badge rather than leaving
+   a broken-image glyph in a row of clean ones. */
+function pmThumb(r, size = 19) {
+  const sport = String(r.sport || "").toLowerCase();
   const mu = String(r.matchup || "");
   const pair = mu.includes("@") ? mu.split("@")
     : mu.includes(" vs ") ? mu.split(" vs ") : null;
-  if (pair && r.sport) {
-    const map = teamsForSport(String(r.sport).toLowerCase());
-    const [away, home] = pair.map((s) => s.trim());
-    return cap(`<span class="kx-thumb-pair">
-      ${teamMark(away, 19, map, String(r.sport).toLowerCase())}
-      ${teamMark(home, 19, map, String(r.sport).toLowerCase())}</span>`);
+  if (pair && sport) {
+    const map = teamsForSport(sport);
+    const [away, home] = pair.map((x) => x.trim());
+    return `<span class="kx-thumb-pair">${teamMark(away, size, map, sport)}
+      ${teamMark(home, size, map, sport)}</span>`;
+  }
+  if (r.image) {
+    return `<img class="kx-thumb-img" src="${escapeAttr(r.image)}" alt=""
+      loading="lazy" width="${size + 5}" height="${size + 5}"
+      onerror="this.replaceWith(document.createRange().createContextualFragment(
+        this.getAttribute('data-fb')))"
+      data-fb="${escapeAttr(venueMark(r.venue, size + 2))}">`;
   }
   if (r.city || r.forecast_f != null) {
-    return cap(`<span class="kx-thumb-ic wx">${icon("sun", 17)}</span>`);
+    return `<span class="kx-thumb-ic wx">${icon("sun", size - 2)}</span>`;
   }
-  return cap(`<span class="kx-thumb-ic">${icon("gem", 16)}</span>`);
+  return venueMark(r.venue, size + 2);
 }
 
 function deskSectionHTML(k) {
@@ -8356,7 +8386,7 @@ function pmVenueRows(kx, d) {
         ? `https://polymarket.com/market/${m.slug}` : "",
       key: `p:${m.slug || m.question}`, sport: "", rec: false, rec_side: "",
       matchup: "", spread_cents: null, ends: m.end_date || "",
-      tape: m.tape || null, yes_side: "",
+      tape: m.tape || null, yes_side: "", image: m.image || "",
     });
   }
   // Volume is the one measure both venues report the same way, so it is
@@ -8514,7 +8544,7 @@ function pmDetailHTML(r) {
       </div></div>`;
   return `
     <div class="pm-d-head">
-      <span class="pm-d-venue">${venueMark(r.venue, 24)}
+      <span class="pm-d-venue">${pmThumb(r, 26)}
         <span>${escapeHtml(String(r.venue || ""))}</span></span>
       <h3 class="pm-d-title">${r.url
         ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.title)}</a>`
@@ -8576,7 +8606,7 @@ function pmBoardRowHTML(r) {
     role="button" tabindex="0"
     onclick="if(!event.target.closest('a,button'))window._pmPick('${escapeAttr(r.key)}')"
     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window._pmPick('${escapeAttr(r.key)}')}">
-    <span class="kx-thumb">${venueMark(r.venue, 21)}
+    <span class="kx-thumb">${pmThumb(r, 19)}
       <span class="kx-thumb-l">${escapeHtml(String(r.venue || ""))}</span></span>
     <span class="kx-title" title="${escapeAttr(r.title)}">${title}
       ${r.sub ? `<span class="kx-match">· ${escapeHtml(r.sub)}</span>` : ""}${basis}</span>
