@@ -223,11 +223,34 @@ def apply_prior(ratings: dict, prior: dict[str, float],
         net = blend_rating(r.net, p, r.games, ret)
         blended[team] = _replace(r, net=net)
         report["teams"] += 1
-    # Teams with a prior but no games yet exist in week 1 and are the whole
-    # reason the prior is here.
+    # TEAMS WITH A PRIOR BUT NO GAMES YET ARE THE WHOLE REASON THE PRIOR
+    # IS HERE — and until 2026-08-19 this loop counted them and threw them
+    # away. `blended` is keyed off the RESULTS ratings, so on the opening
+    # Saturday, when no team has played and `ratings` is empty, every
+    # team's prior was computed, reported, and dropped: zero ratings
+    # attached, and a board that priced nothing on the one weekend the
+    # prior exists to cover.
+    #
+    # Found by dress-rehearsing the opener ten days out, the same way the
+    # NFL Week-1 gap was found. The bug is invisible in November because
+    # by then every team has results and this loop matches nothing.
+    #
+    # ONLY THE NET RATING COMES FROM THE PRIOR. Offense and defense stay
+    # at league average, for the reason the docstring above gives: a
+    # recruiting composite says a roster is good, not that it scores 34 a
+    # game. `games=0` is the honest count and is what every downstream
+    # weight reads to know how little is behind this number.
+    from ..teamrates import TeamRating
+
     for team, p in prior.items():
-        if team not in blended:
-            report["prior_only"] += 1
+        if team in blended:
+            continue
+        report["prior_only"] += 1
+        shift = portal_shift((portal or {}).get(team))
+        if shift:
+            report["portal_teams"] += 1
+        blended[team] = TeamRating(net=round(p + shift, 3), off=0.0,
+                                   def_=0.0, games=0)
     return blended, report
 
 
