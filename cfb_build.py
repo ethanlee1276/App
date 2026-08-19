@@ -423,9 +423,33 @@ def main() -> None:
         games = cfbdata.parse_scoreboard(cfbdata.fetch_scoreboard(args.date),
                                          confs)
     except DataUnavailable as exc:
+        # KEEP THE LAST GOOD BOARD. This used to publish `out` — an empty
+        # payload carrying the error as its note — which meant one 403 or
+        # one timeout from ESPN replaced a full Saturday board with a
+        # blank page, and left it blank until a later cycle happened to
+        # succeed. A stale board is worse than a fresh one and far better
+        # than no board; the masthead's stale bar already tells a reader
+        # how old what they are looking at is.
+        #
+        # It is also the pattern the rest of the codebase already uses —
+        # pm_build's "keeping last board" on the same exception — so CFB
+        # was the outlier, not the precedent.
+        #
+        # Nothing is written at all in that case, deliberately: rewriting
+        # the file would refresh `generated_at` and hide the very
+        # staleness the reader needs to see, and republishing a public
+        # copy through the gate would overwrite the unredacted full board
+        # with the redacted one.
+        if _has_board(args.out):
+            print(f"CFB {args.date}: schedule unreachable — {exc}\n"
+                  f"  Keeping the last board rather than publishing an "
+                  f"empty one.")
+            return
         out.update(status="unreachable", note=str(exc))
         _write(out, args.out)
-        print(f"CFB {args.date}: schedule unreachable — {exc}")
+        print(f"CFB {args.date}: schedule unreachable — {exc}\n"
+              f"  No previous board to keep, so an empty one was published "
+              f"with the reason on it.")
         return
 
     # Results keep the ratings honest; the surrounding boards give the
@@ -614,6 +638,20 @@ def main() -> None:
         print("  No qualifying plays at current numbers — the expected output "
               "on most Saturdays, not a failure.")
 
+
+def _has_board(path: str) -> bool:
+    """Is there already a published board here with games on it?
+
+    "The file exists" is not the question — a previous run that also
+    failed leaves a zero-game payload behind, and keeping THAT is keeping
+    nothing. Games are the test because they are what the page draws
+    before any pricing happens.
+    """
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return bool((json.load(fh) or {}).get("games"))
+    except (OSError, ValueError):
+        return False
 
 def _write(out: dict, path: str) -> None:
     # §14: screen the board for parlays last, over the plays that already

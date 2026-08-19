@@ -619,8 +619,17 @@ def refresh_cfb(quiet: bool = False) -> bool:
         args.append("--cached-odds")
     ok, tail = _run_build(args)
     _finish_paid_pull(spend, before_seen, ok, tail, "CFB", sport="cfb")
+    # An unreachable schedule now KEEPS the last board rather than
+    # publishing an empty one (see cfb_build.py), which exits 0 — a
+    # success by the only signal a subprocess has. Reporting that as
+    # "refreshed" would be the log telling you a board is current when it
+    # is the one from an hour ago, so the build's own last line decides
+    # the word.
+    kept = ok and "Keeping the last board" in tail
     if not quiet:
-        print(f"  CFB  {_slate_date()}: {'refreshed' if ok else 'unavailable'}"
+        word = "kept last board (schedule unreachable)" if kept else \
+            ("refreshed" if ok else "unavailable")
+        print(f"  CFB  {_slate_date()}: {word}"
               + (f"  ({tail})" if not ok and tail else ""))
     return ok
 
