@@ -10042,6 +10042,134 @@ function mcName(c) {
   return linked + mcNewTag(c);
 }
 
+/* ============================================================
+   Rocket Radar's record — did the calls actually go up?
+   ============================================================ */
+/* Ethan, 2026-08-19: "track which meme coins we recommend and if they
+   actually gain value or lose value after we recommend them … make it
+   real and accurate."
+
+   Three things this page refuses to do, each of which is how a memecoin
+   track record normally lies:
+
+   THE HEADLINE IS THE MEDIAN. A mean return over memecoins is a number
+   about the single luckiest row — one 50x drags an average of fifty
+   losers into positive territory. Median, hit rate and the worst case
+   get equal billing, and the mean is not shown at all.
+
+   THE PEAK IS NOT THE RESULT. A coin that went 5x and round-tripped and
+   a coin that never moved both close at 0%, and a board that quotes
+   "peaked +400%" without the close is quoting the first one as a win.
+   Both numbers sit on the same row, always.
+
+   THE DEAD ONES STAY. Coins leave the feed because liquidity died, and
+   dropping them would delete exactly the losses that matter. They are
+   counted, labelled, and never folded into the median as an invented
+   -100%. */
+/* "3h ago" beats a timestamp on a board whose calls resolve in minutes —
+   the reader's question is how long this has had to work, not what the
+   clock said. Days appear once hours stop being readable. */
+function memeWhen(d) {
+  const s = Math.max(0, (Date.now() - d.getTime()) / 1000);
+  if (s < 90) return "just now";
+  if (s < 5400) return `${Math.round(s / 60)}m ago`;
+  if (s < 172800) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
+
+function memePct(v, digits = 0) {
+  if (v == null || !isFinite(v)) return `<span style="opacity:.45">—</span>`;
+  const c = v > 0 ? "good" : v < 0 ? "bad" : "text-mute";
+  return `<span style="color:var(--${c});font-weight:700">${
+    v > 0 ? "+" : ""}${(v * 100).toFixed(digits)}%</span>`;
+}
+
+function memeRecordRow(r) {
+  const when = r.ts ? new Date(r.ts * 1000) : null;
+  const marks = r.marks || {};
+  return `<div class="mr-row${r.gone ? " gone" : ""}">
+    <span class="mr-when">${when ? memeWhen(when) : "—"}</span>
+    <span class="mr-sym">${escapeHtml(r.symbol || r.mint.slice(0, 4))}
+      ${r.channel === "exit" ? `<span class="chip down">EXIT</span>`
+        : `<span class="chip up">#${r.rank}</span>`}</span>
+    <span class="mr-n">${memePct(marks["1h"])}</span>
+    <span class="mr-n">${memePct(marks["24h"])}</span>
+    <span class="mr-n">${memePct(r.peak)}</span>
+    <span class="mr-n">${memePct(r.last)}</span>
+    <span class="mr-tag">${r.gone
+      ? `<span class="chip warn" title="The coin stopped appearing in the feed — for a memecoin that usually means the pool is dead">gone</span>`
+      : ""}</span>
+  </div>`;
+}
+
+function memeChannelHTML(name, label, ch, horizons) {
+  if (!ch || !ch.calls) {
+    return `<div class="card"><div class="section-title">${escapeHtml(label)}</div>
+      <p class="loading">No calls filed yet. The record starts the first
+      time this channel puts a coin on the board.</p></div>`;
+  }
+  const p = ch.path || {};
+  const rows = horizons.map((h) => {
+    const m = (ch.marks || {})[h] || {};
+    if (!m.n) {
+      return `<tr><td>${h}</td><td colspan="5" style="color:var(--text-mute)">
+        no call is ${h} old yet</td></tr>`;
+    }
+    return `<tr><td>${h}</td><td>${m.n}</td><td>${memePct(m.median)}</td>
+      <td>${(m.hit_rate * 100).toFixed(0)}%</td>
+      <td>${memePct(m.best)}</td><td>${memePct(m.worst)}</td></tr>`;
+  }).join("");
+  return `<div class="card">
+    <div class="section-title">${escapeHtml(label)}
+      <span class="sub">— ${ch.calls} call(s) filed. Median, not mean: one
+      50x would drag an average of fifty losers into the green.</span></div>
+    <div class="tbl-wrap"><table class="agate mr-tbl">
+      <thead><tr><th>After</th><th>Calls</th><th>Median</th><th>Up</th>
+        <th>Best</th><th>Worst</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <p class="mr-path">Over the ${p.n} call(s) at least an hour old — the
+      same set the table above measures — the median peaked
+      ${memePct(p.median_peak)}, bottomed ${memePct(p.median_trough)} and
+      sits at ${memePct(p.median_last)}${p.gone ? ` · <b>${p.gone}</b> of
+      them left the feed entirely` : ""}${p.never_marked ? `, and
+      ${p.never_marked} vanished before we could mark them once — counted
+      here, never folded into the median as an invented −100%` : ""}.</p>
+  </div>`;
+}
+
+function memeRecordHTML(rec) {
+  if (!rec || !rec.calls_total) {
+    return `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
+      <h3>The record starts with the next build</h3>
+      <p>Every coin this page puts on the rocket list or flags for exit is
+      filed at the price shown, then re-checked on every refresh — 1 hour,
+      6 hours, 24 hours and a week later. Nothing here is back-filled and
+      nothing is ever removed, including the coins that go to zero.</p></div>`;
+  }
+  const hz = rec.horizons || ["1h", "6h", "24h", "7d"];
+  const recent = (rec.recent || []).slice(0, 30);
+  return `${memeChannelHTML("rocket", "Rockets — what we called up",
+      (rec.channels || {}).rocket, hz)}
+    ${memeChannelHTML("exit", "Danger — what we called broken",
+      (rec.channels || {}).exit, hz)}
+    <div class="card">
+      <div class="section-title">Every recent call
+        <span class="sub">— the receipts, newest first. A call is one coin
+        on one channel on one day, so a coin sitting on the board for six
+        hours counts once.</span></div>
+      <div class="mr-head">
+        <span>When</span><span>Coin</span><span>1h</span><span>24h</span>
+        <span>Peak</span><span>Now</span><span></span></div>
+      ${recent.map(memeRecordRow).join("")
+        || `<p class="loading">No calls yet.</p>`}
+    </div>
+    <p class="mr-note">This is a record of what the radar said, not advice
+    and not a return you could have earned: it assumes nothing about entry,
+    exit, slippage or the size you could actually fill. Most memecoins go
+    to zero. The point of publishing this is that you can see when ours
+    did.</p>`;
+}
+
 async function renderMemes() {
   const host = document.getElementById("memes-body");
   if (!host) return;
@@ -10049,6 +10177,13 @@ async function renderMemes() {
   try {
     const res = await fetch("data/memecoins.json?t=" + Date.now());
     if (res.ok) d = await res.json();
+  } catch (e) {}
+  // The record is its own file and its own failure: a board with no
+  // record still draws, and a record with no board is still readable.
+  let rec = null;
+  try {
+    const res = await fetch("data/memerecord.json?t=" + Date.now());
+    if (res.ok) rec = await res.json();
   } catch (e) {}
 
   /* One line closed, the full block a tap away. The first cut of this
@@ -10296,6 +10431,9 @@ async function renderMemes() {
      "exit signals — get-out warnings, including on gated coins", dangerRoom],
     ["board", "Screener",
      "every tracked coin, every column, momentum-sorted", boardRoom],
+    ["record", "Record",
+     "what happened to the coins we called — every one of them",
+     memeRecordHTML(rec)],
   ]) + `
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
       Top-10 holder share comes from Solana’s public RPC and EXCLUDES the largest account,

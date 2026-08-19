@@ -263,14 +263,33 @@ def test_no_classic_ta_anywhere():
 
 
 def test_nothing_journals_and_nothing_touches_the_sports_model():
-    """A radar screen, not a betting product: no bet rows, no ledger
-    writes, no edge — meme coins never enter the journal this site
-    grades itself on."""
+    """A radar screen, not a betting product: meme coins never enter the
+    journal this site grades itself on.
+
+    RE-PINNED 2026-08-19. Rocket Radar grew a record of its own — did the
+    coins we called go up? — and it lives in `engine/memeledger.py` with
+    its own database, its own tables and no bets in it. The old check
+    banned the substring "ledger" in memes_build.py, which the new
+    import trips while the actual invariant is untouched.
+
+    So the rule is now stated the way it is meant: the SPORTS ledger, the
+    `bets` table, staking and the graded record stay out of the meme
+    path. A separate record of separate claims in a separate file is the
+    opposite of the thing this guards against — it is the same discipline
+    applied twice."""
     for f in ("engine/memecoins.py", "engine/sources/dexes.py",
-              "memes_build.py"):
+              "memes_build.py", "engine/memeledger.py"):
         src = open(os.path.join(ROOT, f), encoding="utf-8").read()
-        assert "ledger" not in src, f
-        assert "log_recommendations" not in src, f
+        for banned in ("engine.ledger", "from engine import ledger",
+                       "log_recommendations", "stake_units", "INTO bets",
+                       "settle_from_history", "bankroll"):
+            assert banned not in src, f"{banned} in {f}"
+
+    # And the two records keep separate databases, so nothing a memecoin
+    # does can ever move a number on the Record page.
+    from engine import memeledger, ledger as sports
+    assert str(memeledger.DEFAULT_DB) != str(sports.DEFAULT_DB)
+    assert "meme" in str(memeledger.DEFAULT_DB)
 
 
 def test_holder_parser_excludes_the_pool_reading_and_reports_both():

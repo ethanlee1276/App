@@ -46,6 +46,11 @@ data/yahoo_token.json
 data/history.db
 *.db
 data/ledger.db
+# Rocket Radar's own record — the calls, their marks and their
+# paths. Same reasoning as the bet ledger: it is the machine's
+# memory of what it said, not source, and it only means anything
+# on the box that made the calls.
+data/memeledger.db
 data/backups/
 # The sim-joint evidence journal (simjoint.build appends, simrecon.py
 # grades) — per-box measurement data, like the databases above it.

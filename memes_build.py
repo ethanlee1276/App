@@ -251,6 +251,30 @@ def _build(args) -> int:
               f"{len(board['rocket'])} on the rocket list, "
               f"{len(board['exits'])} flashing exit — "
               f"{n_snap} snapshot(s) taped.")
+
+        # THE RECORD. Ethan, 2026-08-19: "track which meme coins we
+        # recommend and if they actually gain value or lose value after we
+        # recommend them." Both channels are filed at the price on this
+        # build, every open call is re-marked against the same prices, and
+        # nothing is ever deleted — including the coins that vanish, which
+        # is most of the truth about this asset class.
+        #
+        # Its own failure domain, like every other layer here: a broken
+        # ledger costs the record, never the board.
+        try:
+            from engine import memeledger
+            mconn = memeledger.connect()
+            try:
+                new_calls = memeledger.log_calls(mconn, board)
+                marks = memeledger.mark(mconn, board)
+                memeledger.export_json(mconn, "web/data/memerecord.json")
+            finally:
+                mconn.close()
+            print(f"  Record: {new_calls} new call(s), "
+                  f"{marks['marked']} re-marked, {marks['stamped']} horizon(s) "
+                  f"stamped, {marks['gone']} coin(s) gone from the feed.")
+        except Exception as exc:                               # noqa: BLE001
+            print(f"  ⚠️  Record skipped — {exc}")
     else:
         board.update({"coins": [], "rocket": [], "exits": [],
                       "gated": 0, "n": 0})

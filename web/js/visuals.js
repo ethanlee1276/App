@@ -1906,7 +1906,7 @@ async function mountEChartsPanels(root) {
         grid: { left: 4, right: 104, top: 14, bottom: 20, containLabel: true },
         tooltip: { trigger: "axis", confine: true,
           backgroundColor: tok("--panel-2"),
-          borderColor: tok("--hairline-c"),
+          borderColor: tok("--border-soft"),
           textStyle: { color: tok("--text"), fontFamily: font, fontSize: 11 },
           valueFormatter: (v) => `${v}%` },
         // PINNED TO THE DATA. Left to itself the time axis rounds outward

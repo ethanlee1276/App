@@ -5804,7 +5804,19 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    slow. Warn amber, which §1 reserves for live-or-material: a page full
    of fossils is exactly that. Not dismissible, because dismissing it
    would not make the numbers younger. */
-#stalebar { display: flex; align-items: flex-start; gap: 10px;
+/* IT SPANS THE GRID. The stale bar is a direct child of `.shell`, which
+   is a two-column grid (three with the rail), and a grid item with no
+   placement takes a cell — column one, the sidebar's — shoving the
+   sidebar into main's track and main down to a 240px stub on the next
+   row. Measured at 1280: sidebar 1039px, main 240px.
+   
+   The failure only appeared when the bar was SHOWING, which is to say
+   exactly when the site had something important to tell the reader, and
+   never on a fresh board. That is why it survived: the layout tests and
+   every screenshot of a healthy page look perfect. 1 / -1 covers both the
+   two-column and the has-rail three-column shapes. */
+#stalebar { grid-column: 1 / -1;
+  display: flex; align-items: flex-start; gap: 10px;
   margin: 0 26px 14px; padding: 12px 14px; border-radius: var(--radius-sm);
   border: var(--hairline) solid color-mix(in oklab, var(--warn) 55%, var(--border));
   background: color-mix(in oklab, var(--warn) 12%, var(--panel));
@@ -5863,3 +5875,36 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    does not jog left and right as the thumbnail kind changes row to row. */
 .kx-thumb-img { border-radius: var(--radius-sm); object-fit: cover;
   display: block; background: var(--panel-3); }
+
+/* ── Rocket Radar's record ─────────────────────────────────────────────
+   The receipts table. Seven columns on a desktop, and on a phone the
+   peak/now pair drops below the row rather than shrinking to four
+   illegible characters each — the two numbers whose disagreement is the
+   whole point of the page. */
+.mr-head, .mr-row { display: grid; gap: 8px; align-items: center;
+  grid-template-columns: 74px minmax(0, 1fr) 62px 62px 62px 62px 54px;
+  padding: 7px 12px; }
+.mr-head { color: var(--text-mute); font-size: var(--fs-2xs);
+  letter-spacing: .08em; text-transform: uppercase; }
+.mr-head > *:nth-child(n+3) { text-align: right; }
+.mr-row { border-top: var(--hairline) solid var(--border-soft);
+  font-size: var(--fs-sm); }
+.mr-row > .mr-n { text-align: right; font-variant-numeric: tabular-nums; }
+.mr-row.gone { opacity: .62; }
+.mr-when { color: var(--text-mute); font-size: var(--fs-2xs); }
+.mr-sym { font-weight: 700; display: flex; align-items: center; gap: 6px;
+  min-width: 0; }
+.mr-tag { text-align: right; }
+.mr-path { color: var(--text-dim); font-size: var(--fs-sm);
+  line-height: var(--lh-body); margin: 10px 0 0; }
+.mr-note { color: var(--text-mute); font-size: var(--fs-2xs);
+  line-height: var(--lh-body); margin: 12px 0 0; }
+.mr-tbl td, .mr-tbl th { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 700px) {
+  .mr-head { display: none; }
+  .mr-row { grid-template-columns: minmax(0, 1fr) 60px 60px;
+    row-gap: 2px; }
+  .mr-when { grid-column: 1 / -1; }
+  .mr-tag { grid-column: 1 / -1; text-align: left; }
+}
