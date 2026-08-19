@@ -82,7 +82,12 @@ sleep 2
 # So: three minutes, and the loop tells the difference between "still
 # building" and "dead". A process that has exited is a failure now; one
 # that is still running has not finished starting.
-say "checking (a cold start builds every board first — up to 3 min)"
+# The socket now opens BEFORE the boards are built (see launch.py), so a
+# healthy site answers in about a second. A minute of patience here is
+# generous rather than hopeful — and if it is still silent after that,
+# something is genuinely wrong, which is a different sentence from the
+# one this check used to print at people.
+say "checking (the site binds first now, so this should answer in seconds)"
 for i in $(seq 1 60); do
   if curl -fsS -m 5 http://127.0.0.1:8000/api/account/me >/dev/null 2>&1; then
     echo "up, answering after ~$((i * 3))s, now on $(git rev-parse --short HEAD)"
@@ -93,12 +98,18 @@ for i in $(seq 1 60); do
     echo "THE SERVICE EXITED — it is not slow, it is down."
     break
   fi
-  if [ $((i % 10)) -eq 0 ]; then echo "  still starting… $((i * 3))s"; fi
+  if [ $((i % 5)) -eq 0 ]; then echo "  still starting… $((i * 3))s"; fi
   sleep 3
+  [ "$i" -ge 20 ] && break        # 60s: answering takes ~1s when healthy
 done
 
 echo
 echo "IT RESTARTED BUT IS NOT ANSWERING."
-echo "  journalctl -u $SERVICE -n 50"
+echo
+echo "  The socket opens before the boards are built, so this is NOT the"
+echo "  slow-cold-start case any more — a healthy site answers in about a"
+echo "  second. Read the journal before rolling anything back:"
+echo
+echo "  journalctl -u $SERVICE -n 50 --no-pager"
 echo "  roll back:  git checkout $PREV && ./deploy/deploy.sh --no-tests"
 exit 1

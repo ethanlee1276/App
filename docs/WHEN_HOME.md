@@ -865,6 +865,45 @@ motion. What I deliberately did NOT add: scroll reveals (already tried,
 already removed), Lottie (250KB and it needs artwork you do not have),
 and parallax.
 
+### T36. Deploys no longer take the site down
+
+You watched this happen: "IT RESTARTED BUT IS NOT ANSWERING." Nothing
+was broken. `launch.py` built every board BEFORE it opened its socket,
+so every restart took qellysbook.com off the air for the length of a
+full rebuild — 5 to 15 minutes on a 1 vCPU droplet — and the deploy
+script's own three-minute check could not tell "still building" from
+"dead". A healthy deploy printed a failure and pointed you at a
+rollback. Your journal proved it was fine the whole time: one process,
+one child running `nfl_build.py`, 585 MB against a 1.5 GB cap, no OOM,
+no crash loop.
+
+**Now the socket opens first.** The site is up in under a second
+serving the boards already on disk, and the fresh ones replace them
+file by file as each build lands. Measured on a stand-in build: the
+site answered in **0.68s** while the build was still running.
+
+That is safe because every build already writes through a temp file and
+renames, so a reader gets the old file or the new one, never half of
+one. What it costs, plainly: for the first few minutes after a restart
+the slate can be as old as the last successful build — strictly better
+than serving nothing, and the freshness chip already says how old it is.
+
+Two things came with it. A **build lock**, because the startup build can
+now still be running when the periodic refresher's first tick lands, and
+two builds writing the same files would interleave into a slate that
+never existed; the refresher skips that tick rather than queueing. And
+the **deploy check** now waits 60s instead of 180s, says the site binds
+first, and tells you to read the journal *before* rolling back.
+
+**Nothing extra for you to run** — the next `./deploy/deploy.sh
+--no-tests` picks it up, and that deploy should report "up" in seconds
+rather than timing out.
+
+Related, and already fixed earlier: the refresh loop had been dying on
+an unguarded exception, which is what left a nine-day-old "Active" on
+Cade Mays. It carries a guard now, and your droplet confirmed the
+roster reads **Out**.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

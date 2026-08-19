@@ -1772,6 +1772,18 @@ def _auto_updater() -> None:
             print(f"  ⚠️  auto-update error: {exc}")
 
 
+#: ONE BUILD AT A TIME. The startup build now runs in the background, so
+#: on a slow box it can still be going when the periodic refresher's first
+#: tick lands — two `refresh_all()` runs writing the same files at once.
+#: The writes are atomic individually, but a slate half from one run and
+#: half from another is a board that never existed. This lock is what
+#: makes "the newest complete build wins" true.
+_BUILD_LOCK = threading.Lock()
+#: True until the first full build finishes. The site serves throughout.
+_WARMING = True
+_BOOT_AT = time.time()
+
+
 def _background_refresher(interval: int) -> None:
     """Keep the served data fresh while the server runs (quiet after startup).
 
@@ -1792,7 +1804,15 @@ def _background_refresher(interval: int) -> None:
             _run_autosettle()
             # Once a day, and only when something is wrong.
             _run_doctor()
-            refresh_all(quiet=True)
+            # Skips rather than queues when the startup build is still
+            # going: this loop runs on a timer, so the next tick is a
+            # better moment than piling up behind a build that is already
+            # writing the very files this one would write.
+            if _BUILD_LOCK.acquire(blocking=False):
+                try:
+                    refresh_all(quiet=True)
+                finally:
+                    _BUILD_LOCK.release()
         except Exception as exc:                   # noqa: BLE001
             print(f"  ⚠️  refresh cycle error: {exc} — retrying in {interval}s.")
         # Proof of life, written whether the cycle succeeded or not: the
@@ -6742,7 +6762,9 @@ def main() -> None:
         pass                    # a banner must never be why the site fails
     if not _with_odds():
         print("  (no ODDS_API_KEY set — using model/proxy lines; live scores still update)")
-    refresh_all()
+    # NOTE: the boards are NOT built here. Binding comes first and the
+    # build runs in `_startup_chores` below — see the comment there for
+    # why, and for what that costs.
 
     try:
         server = ThreadingHTTPServer((bind, port), Handler)
@@ -6764,15 +6786,51 @@ def main() -> None:
         return
     server.live_mode = True
 
-    # Daily chores run in the background so the site is up immediately; the
-    # first cycle of each day ingests yesterday's results (catching up to a
-    # week if the site wasn't opened), settles the pick journal, and harvests
-    # yesterday's closing odds when the budget clearly allows.
+    # THE BOARDS ARE BUILT HERE, AFTER THE SOCKET IS OPEN.
+    #
+    # Ethan, 2026-08-19, watching a deploy: "IT RESTARTED BUT IS NOT
+    # ANSWERING." It was answering nothing because it had not bound yet —
+    # `refresh_all()` used to run BEFORE the bind, so every restart took
+    # the site down for the length of a full rebuild. On a 1 vCPU droplet
+    # that is 5-15 minutes of hard 502, and the deploy script's own
+    # three-minute health check could not tell "still building" from
+    # "dead", so a healthy deploy reported failure and invited a rollback.
+    #
+    # Binding first inverts that: the site is up in under a second serving
+    # THE BOARDS ALREADY ON DISK, and the fresh ones replace them file by
+    # file as each build finishes. That is safe because every build writes
+    # through a temp file and renames (engine/gate.py, live_build,
+    # fantasy_build) — a reader gets the old file or the new one, never a
+    # half-written one.
+    #
+    # What it costs, stated plainly: for the first minutes after a restart
+    # the site serves data as old as the last successful build. That is
+    # strictly better than serving nothing, which is what it did before,
+    # and the freshness chip in the header already tells the reader how
+    # old the slate is.
+    #
+    # The ORDER below is load-bearing and was load-bearing before: the
+    # settle runs after the build because it grades against what the build
+    # just wrote.
     #
     # The startup settle ignores the 15-minute throttle on purpose: opening
     # the site is an explicit "catch me up", and the most common way to
     # arrive here is the morning after a slate, wanting last night graded.
     def _startup_chores() -> None:
+        global _WARMING
+        try:
+            with _BUILD_LOCK:
+                refresh_all()
+        except Exception as exc:                          # noqa: BLE001
+            # A failed build must not cost the settle, the maintenance
+            # pass, or the running site. The boards simply stay as they
+            # were, which is the same posture every build extra takes.
+            print(f"  ⚠️  startup build failed: {exc} — serving the boards "
+                  f"already on disk.")
+        finally:
+            _WARMING = False
+            print(f"  Boards built — the site is fully current "
+                  f"({time.time() - _BOOT_AT:.0f}s after start).")
         _run_maintenance()
         try:
             from engine.maintenance import settle_open
@@ -6819,6 +6877,10 @@ def main() -> None:
             pass
 
     print(f"\nQellys Book running (LIVE data) → http://localhost:{port}")
+    if _WARMING:
+        print("  Serving the boards already on disk while tonight's rebuild "
+              "runs behind it —\n  the freshness chip in the header says how "
+              "old the slate is until it lands.")
     if bind != "0.0.0.0":
         print(f"  Bound to {bind} only — reachable through a proxy, not "
               f"directly. The refresh loop below still runs.")
