@@ -1057,6 +1057,22 @@ otherwise. That costs nothing — it reads the cache, never the API.
 The player layer stays empty, because nothing built it. That is the
 whole reason this path runs.
 
+One label went on the ledger row itself. Without a cached pull these
+price at the standard −110 against the schedule's own number, and the
+ledger stores `r.get("book", "best")` — so an unstamped row would enter
+your record claiming a shopped book price it never had. They now file as
+`book = "schedule"`, which CLV work can exclude; it could not un-mix
+them afterwards.
+
+That matters most in a case this path was not built for. **Week 1 is
+safe by the calendar**: nflverse publishes weekly stats only after the
+games are played, so the full build never re-prices a Week 1 slate
+before kickoff and there is no second row to collide with. A
+**transient** mid-season failure is different — the fallback's row lands
+first, and INSERT OR IGNORE means the later real-priced row is the one
+dropped. The stamp is what makes that visible in the record rather than
+silent. Worth knowing about; not worth a mechanism until it happens.
+
 **Then I rendered it**, which turned out to matter. A board with games
 and zero picks had never been drawn before, and the copy was wrong in a
 specific way: it said *"No props clear the current thresholds. Loosen
@@ -1110,6 +1126,38 @@ needing a real slate. Both were testable today:
 So Phase 3 is done to the edge of what data allows. What genuinely
 cannot happen until the season: watching a real Week 1 slate price,
 journal and settle end to end.
+
+### T41. One 403 from ESPN was going to blank a Saturday
+
+Rehearsing the CFB opener found a second one, in a build I was not
+looking at. `cfb_build.py` answered an unreachable schedule by
+publishing an EMPTY board with the error as its note — and
+`gate.publish` writes whatever it is handed. So one 403 or one timeout
+replaced a full board with a blank page, and left it blank until a later
+cycle happened to succeed. On a Saturday with sixty games and a flaky
+feed, that is the whole product gone for an hour.
+
+CFB was the outlier rather than the precedent: the Polymarket build
+already answers the same exception with "keeping last board".
+
+It now keeps it, by writing **nothing at all**. Rewriting the file would
+refresh `generated_at` and hide the very staleness the masthead's stale
+bar exists to show, and republishing the public copy through the gate
+would overwrite the unredacted full board with the redacted one.
+
+"The file exists" is not the test — a previous failed run leaves a
+zero-game payload behind, and keeping that would pin the blank page in
+place permanently, the build refusing to overwrite its own failure. The
+predicate is games. With genuinely nothing to keep, the empty board
+still ships with the reason on it.
+
+Verified both ways against a real fetch failure (the container's proxy
+blocks ESPN, which turned out to be a free test rig): with no prior
+board, an empty one is published and says why; with a board present, the
+file comes back byte-identical.
+
+The launcher no longer calls that "refreshed" — keeping a board exits 0,
+and a log line saying a stale board is current is how an outage hides.
 
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*

@@ -97,6 +97,24 @@ def price_games_only(games, season: int, week: int, config: RuleConfig,
     if rep["rated"]:
         from engine.pipeline import _game_bets
         rep["bets"] = _game_bets(games, config)
+        # STAMP THE PROVENANCE ON THE ROW, not just on the page. Without a
+        # cached pull these price at the standard −110 against the
+        # schedule's own spread and total, and the ledger stores
+        # r.get("book", "best") — so an unstamped row would enter the
+        # record claiming a shopped book price it never had. CLV work can
+        # exclude "schedule" rows; it cannot un-mix them later.
+        #
+        # It matters most in the case this path was NOT built for. Week 1
+        # is safe by the calendar: nflverse publishes weekly stats only
+        # after the games are played, so the full build never re-prices a
+        # Week 1 slate before kickoff and there is no second row to
+        # collide with. A TRANSIENT mid-season failure is different — the
+        # fallback's row lands first, and INSERT OR IGNORE means the
+        # later real-priced row is the one dropped. The stamp is what
+        # makes that visible in the record rather than silent.
+        if not rep["moneylines"]:
+            for b in rep["bets"]:
+                b.setdefault("book", "schedule")
     return rep
 
 def _journal_game_bets(payload: dict) -> None:

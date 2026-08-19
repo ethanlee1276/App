@@ -79,6 +79,23 @@ def test_the_fallback_prices_the_game_markets_and_only_those():
         assert empty in block, f"the fallback invented {empty}"
 
 
+def test_a_schedule_price_enters_the_record_labelled_as_one():
+    """The ledger stores `r.get("book", "best")`, so a game bet with no
+    book key journals as "best" — a claim that the price was shopped.
+    Without a cached odds pull these are the standard −110 against the
+    schedule's own line, which is a different thing, and the record has to
+    be able to tell them apart afterwards. It cannot un-mix them later."""
+    tree = ast.parse(BUILD)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "price_games_only")
+    src = ast.get_source_segment(BUILD, fn)
+    assert 'b.setdefault("book", "schedule")' in src, \
+        "an unpriced-by-a-book row would enter the record claiming one"
+    # Only when no book price was attached — a cached pull's real prices
+    # must keep their own provenance.
+    assert 'if not rep["moneylines"]:' in src
+
+
 def test_the_priced_fallback_cannot_double_journal_the_slate():
     """The objection, answered structurally rather than by restraint.
 
