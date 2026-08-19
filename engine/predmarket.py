@@ -323,6 +323,24 @@ def store_snapshot(conn, markets: list[dict], now: float | None = None) -> int:
     return n
 
 
+def price_series(conn, slug: str, hours: int = 24,
+                 now: float | None = None) -> list[dict]:
+    """OUR recorded price tape for one Polymarket market, oldest first.
+
+    Same contract as the Kalshi side: observed 10-minute buckets only, no
+    interpolation, no backfill. `yes` is the venue's YES price as a
+    probability; the NO side is its complement and is not stored twice.
+    """
+    ensure_tables(conn)
+    since = (now if now is not None else time.time()) - hours * 3600
+    rows = conn.execute(
+        "SELECT ts, yes, vol24, liquidity FROM pm_snaps "
+        "WHERE venue='polymarket' AND slug=? AND ts>=? ORDER BY ts",
+        (slug, since)).fetchall()
+    return [{"ts": int(r[0]), "prob": r[1], "vol": r[2], "liq": r[3]}
+            for r in rows]
+
+
 def recent_tape(conn, hours: int = 24, now: float | None = None) -> list[dict]:
     """The last N hours of OUR recorded tape — what the flow feed scores.
 

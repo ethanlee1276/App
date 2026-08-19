@@ -1809,7 +1809,8 @@ if (typeof window !== "undefined" && window.addEventListener) {
 async function mountEChartsPanels(root) {
   const host = root || document;
   const nodes = [...host.querySelectorAll(
-    "[data-echart-gauge],[data-echart-hist],[data-echart-radar]")]
+    "[data-echart-gauge],[data-echart-hist],[data-echart-radar],"
+    + "[data-echart-tape]")]
     .filter((el) => !el.dataset.echarted);
   if (!nodes.length) return;
   const ec = await loadECharts();
@@ -1825,7 +1826,8 @@ async function mountEChartsPanels(root) {
     if (el.dataset.echarted || ec.getInstanceByDom(el)) continue;
     let cfg;
     const kind = el.hasAttribute("data-echart-gauge") ? "gauge"
-      : el.hasAttribute("data-echart-radar") ? "radar" : "hist";
+      : el.hasAttribute("data-echart-radar") ? "radar"
+      : el.hasAttribute("data-echart-tape") ? "tape" : "hist";
     if (!el.clientWidth) continue;     // hidden room — retried on tab switch
     try {
       cfg = JSON.parse(el.getAttribute(`data-echart-${kind}`));
@@ -1866,6 +1868,66 @@ async function mountEChartsPanels(root) {
           data: [{ value: v, name: cfg.title || "" }],
         }],
       });
+    } else if (kind === "tape") {
+      /* THE PRICE TAPE — Ethan, 2026-08-19, with a Polymarket screenshot:
+         "add where we can click on the trade it's recommending and it
+         will pull up a chart of the live odds just how Kalshi or
+         Polymarket does it."
+
+         Two lines, because a binary market has two sides and the render
+         shows both: the YES side and its complement, each labelled at the
+         right edge with its current number, the way both venues do it.
+
+         EVERY POINT IS ONE WE OBSERVED. The series is our own 10-minute
+         snapshot tape — no interpolation across gaps, no backfill before
+         the day we started recording, because an order book cannot be
+         reconstructed and a smooth line through hours we never saw is a
+         picture of a market that did not exist. `connectNulls` stays
+         FALSE for the same reason: a break in the line is the honest
+         drawing of a break in the record. */
+      const pts = (cfg.points || []).filter((p) => Array.isArray(p) && p.length > 1);
+      if (pts.length < 2) { el.dataset.echarted = ""; continue; }
+      const yes = pts.map((p) => [p[0] * 1000, +(p[1] * 100).toFixed(1)]);
+      const no = pts.map((p) => [p[0] * 1000, +((1 - p[1]) * 100).toFixed(1)]);
+      const yesName = cfg.yes_label || "Yes";
+      const noName = cfg.no_label || "No";
+      const line = (name, data, color) => ({
+        name, type: "line", data, showSymbol: false, connectNulls: false,
+        smooth: false, lineStyle: { width: 2, color },
+        emphasis: { focus: "series" },
+        endLabel: { show: true, color, fontFamily: font, fontSize: 11,
+          fontWeight: 700, distance: 6,
+          formatter: (o) => `${name} ${Math.round(o.value[1])}%` },
+      });
+      chart.setOption({
+        animationDuration: 500,
+        // The right gutter holds the end labels; too little and they
+        // print over the line they belong to.
+        grid: { left: 4, right: 104, top: 14, bottom: 20, containLabel: true },
+        tooltip: { trigger: "axis", confine: true,
+          backgroundColor: tok("--panel-2") || "#181826",
+          borderColor: tok("--hairline-c") || "#2a2a3a",
+          textStyle: { color: tok("--text"), fontFamily: font, fontSize: 11 },
+          valueFormatter: (v) => `${v}%` },
+        // PINNED TO THE DATA. Left to itself the time axis rounds outward
+        // to tidy hour boundaries, which leaves the line ending halfway
+        // across an empty plot and reads as "the market stopped moving".
+        // The axis is exactly as wide as what we recorded.
+        xAxis: { type: "time", boundaryGap: false,
+          min: yes[0][0], max: yes[yes.length - 1][0],
+          axisLine: { lineStyle: { color: tok("--panel-3") } },
+          axisTick: { show: false },
+          axisLabel: { color: tok("--text-mute"), fontFamily: font,
+            fontSize: 10, hideOverlap: true } },
+        yAxis: { type: "value", min: 0, max: 100,
+          splitLine: { lineStyle: { color: tok("--panel-3") } },
+          axisLabel: { color: tok("--text-mute"), fontFamily: font,
+            fontSize: 10, formatter: "{value}%" } },
+        series: [line(yesName, yes, tok("--good") || "#3fb950"),
+                 line(noName, no, tok("--bad") || "#f85149")],
+      });
+      _echartsLive.push(chart);
+      continue;
     } else if (kind === "radar") {
       // The two-team shape. Every axis is a league percentile (0-100),
       // so the polygons share one honest scale; home wears the brand,

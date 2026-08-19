@@ -71,6 +71,46 @@ def _tonights_games_and_probs(data_dir: Path):
     return games_by_sport, model_probs
 
 
+#: How much of our own tape a board row carries. A day is what the
+#: renders show and roughly what a reader can read; every point is a
+#: 10-minute bucket, so this is at most ~144 numbers per row.
+TAPE_HOURS = 24
+
+
+def _attach_tape(conn, rows, series_fn, key: str,
+                 now: float | None = None) -> int:
+    """Hang OUR recorded price history on each board row.
+
+    Ethan, 2026-08-19, with a Polymarket screenshot: clicking a market
+    should show the odds moving, the way both venues do it. Both venues'
+    snapshots have been written on every refresh since their adapters
+    shipped — this is the first thing that reads them back.
+
+    Embedded in the payload rather than served from an endpoint, because
+    the whole site is "the build writes JSON, the page reads it" and a
+    chart that needs a live API is a chart that is blank whenever the API
+    is not there.
+
+    A row with fewer than two observed buckets gets NO series at all. One
+    point is not a line, and a chart drawn through a single dot invites
+    exactly the reading — "it has been flat" — that the data cannot
+    support.
+    """
+    n = 0
+    for r in rows:
+        ident = r.get(key)
+        if not ident:
+            continue
+        try:
+            pts = series_fn(conn, ident, hours=TAPE_HOURS, now=now)
+        except Exception:                                      # noqa: BLE001
+            continue
+        if len(pts) < 2:
+            continue
+        r["tape"] = [[p["ts"], round(p["prob"], 4)] for p in pts]
+        n += 1
+    return n
+
 def build_kalshi(out_path: Path, data_dir: Path) -> None:
     """The second venue, in its own failure domain.
 
@@ -119,6 +159,7 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
     games_by_sport, model_probs = _tonights_games_and_probs(data_dir)
     out = kx.board(markets, games_by_sport, model_probs)
     out["sources"] = {"page": len(page_markets), "series": series_report}
+    _attach_tape(conn, out.get("rows") or [], kx.price_series, "ticker")
 
     # THE WEATHER DESK — NWS forecast priced against the daily-high
     # brackets. Its own failure domain: a dead forecast API costs the
@@ -281,6 +322,10 @@ def main() -> None:
     # Display board: live prices only — a settled market pinned at 0/100¢
     # (finished esports series etc.) is clutter, not information.
     display_markets = [m for m in markets if 0.02 <= m["yes"] <= 0.98]
+    # Same tape the Kalshi board carries, off pm_snaps rather than
+    # kalshi_snapshots. Only the rows that ship get one — attaching a day
+    # of history to markets the board drops is work nobody reads.
+    _attach_tape(conn, display_markets[:50], pm.price_series, "slug")
 
     out = {
         "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),

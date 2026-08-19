@@ -8268,7 +8268,18 @@ function deskSectionHTML(k) {
   // "undefined" is the widget printing its own missing field.
   const side = (s) => s
     ? `<span class="chip ${s === "YES" ? "up" : "down"}">${escapeHtml(s)}</span>` : "";
-  const row = (r, why) => `<div class="kx-row">
+  // THE RECOMMENDATION IS THE THING YOU CLICK. Ethan, 2026-08-19: "add
+  // where we can click on the trade it's recommending and it will pull up
+  // a chart of the live odds". These rows ARE the recommendations, and
+  // they were the one row shape on this page with no way in — the board
+  // below has a View button, the desk had nothing.
+  //
+  // Weather rows carry no ticker and never reach the board table, so they
+  // stay inert rather than opening a panel that has nothing to show.
+  const row = (r, why) => `<div class="kx-row${r.ticker ? " openable" : ""}"${
+      r.ticker ? ` role="button" tabindex="0"
+      onclick="if(!event.target.closest('a,button'))window._pmPick('k:${escapeAttr(r.ticker)}')"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window._pmPick('k:${escapeAttr(r.ticker)}')}"` : ""}>
       ${deskThumb(r)}
       <span class="kx-title">${escapeHtml(r.title)} ${side(r.rec_side)}
         <span class="kx-match">· ${why}</span></span>
@@ -8329,6 +8340,11 @@ function pmVenueRows(kx, d) {
       key: `k:${r.ticker || r.title}`, sport: (r.sport || "").toUpperCase(),
       rec: !!r.rec, rec_side: r.rec_side || "", matchup: r.matchup || "",
       spread_cents: r.spread_cents, ends: "",
+      // OUR recorded price history, carried through to the detail panel.
+      // Dropping it here is why the first cut drew no chart: the board
+      // row is a projection of the payload row, and anything the
+      // projection forgets does not exist downstream.
+      tape: r.tape || null, yes_side: r.yes_side || "",
     });
   }
   for (const m of ((d || {}).markets || [])) {
@@ -8340,6 +8356,7 @@ function pmVenueRows(kx, d) {
         ? `https://polymarket.com/market/${m.slug}` : "",
       key: `p:${m.slug || m.question}`, sport: "", rec: false, rec_side: "",
       matchup: "", spread_cents: null, ends: m.end_date || "",
+      tape: m.tape || null, yes_side: "",
     });
   }
   // Volume is the one measure both venues report the same way, so it is
@@ -8366,6 +8383,95 @@ window._pmCatSet = (c) => { _pmCatSel = c; renderIntel(); };
 /* The desk's own gate, mirrored from engine/sources/kalshi.py so the
    checklist prints the real bars, not vibes. */
 const PM_GATE = { edge: 6.0, vol: 250.0, spread: 6.0 };
+
+/* ============================================================
+   The price tape — how this market has moved while we watched
+   ============================================================ */
+/* Ethan, 2026-08-19, with a Polymarket screenshot: "add where we can
+   click on the trade it's recommending and it will pull up a chart of the
+   live odds just how Kalshi or Polymarket does it."
+
+   The data is OUR OWN 10-minute snapshot tape, which both venues'
+   adapters have been writing on every refresh since they shipped and
+   nothing read back until now. That has one consequence worth stating
+   on the page rather than hiding: the line starts when WE started
+   recording, not when the market opened. Polymarket can draw the market's
+   whole life because it is the market. We can draw what we saw.
+
+   So the caption says how long the window is, and a market we have only
+   just met gets no chart at all — one point is not a line, and two points
+   an hour apart is a claim about an hour, which the caption makes plain.
+
+   The SVG below is not a placeholder. ECharts is a megabyte loaded
+   lazily, and on a slow phone or a blocked CDN this is what a reader
+   gets — so it draws the same two real series, to scale, and reads as a
+   chart on its own. mountEChartsPanels upgrades it in place when the
+   library arrives. */
+function pmTapeSVG(pts, w, h) {
+  const xs = pts.map((p) => p[0]);
+  const t0 = Math.min(...xs), t1 = Math.max(...xs);
+  const span = (t1 - t0) || 1;
+  const x = (t) => ((t - t0) / span) * (w - 2) + 1;
+  const y = (v) => h - 2 - v * (h - 4);          // v is 0..1
+  const path = (f) => pts.map((p, i) =>
+    `${i ? "L" : "M"}${x(p[0]).toFixed(1)},${y(f(p[1])).toFixed(1)}`).join("");
+  return `<svg class="pm-tape-svg" viewBox="0 0 ${w} ${h}"
+      preserveAspectRatio="none" aria-hidden="true">
+    <path d="${path((v) => v)}" fill="none" stroke="var(--good)" stroke-width="2"/>
+    <path d="${path((v) => 1 - v)}" fill="none" stroke="var(--bad)" stroke-width="2"/>
+  </svg>`;
+}
+
+function pmTapeWindow(pts) {
+  const hrs = (pts[pts.length - 1][0] - pts[0][0]) / 3600;
+  if (hrs >= 1.5) return `${Math.round(hrs)} hours`;
+  const mins = Math.round(hrs * 60);
+  return `${mins} minutes`;
+}
+
+function pmTapeHTML(r) {
+  const pts = (r.tape || []).filter((p) => Array.isArray(p) && p.length > 1);
+  if (pts.length < 2) {
+    return `<p class="pm-tape-none">No price history yet — we have not
+      watched this market long enough to draw one. It fills in as the
+      refreshes accumulate.</p>`;
+  }
+  const yesName = r.yes_label || (r.yes_side === "away" ? (r.away || "Yes")
+    : r.yes_side === "home" ? (r.home || "Yes") : "Yes");
+  const noName = r.no_label || (r.yes_side === "away" ? (r.home || "No")
+    : r.yes_side === "home" ? (r.away || "No") : "No");
+  // THE LINE ENDS WHERE THE PANEL SAYS IT IS. A snapshot bucket can be
+  // ten minutes old, so the tape's last point and the price printed in
+  // 48px above it can differ — and a chart labelled "Yes 55%" under a
+  // header reading 83¢ makes the panel argue with itself. The live price
+  // IS an observation, taken at build time, so it joins the series as its
+  // newest point rather than being drawn as a separate claim.
+  // Placed at NOW, not one second after the last bucket. A live price
+  // pinned a second past a bucket draws as a vertical spike at the right
+  // edge — the shape of an instant crash rather than of ten minutes
+  // passing. Where it actually belongs is the clock.
+  const nowS = Math.floor(Date.now() / 1000);
+  const plotted = (r.price == null || nowS <= pts[pts.length - 1][0])
+    ? pts.slice() : pts.concat([[nowS, r.price]]);
+  const cfg = { points: plotted, yes_label: yesName, no_label: noName };
+  // No separate legend. Both venues label the lines at the right-hand end
+  // and so does the chart — a legend above it would be the same two
+  // numbers twice, and the SVG fallback carries the colours in the same
+  // order.
+  return `<div class="pm-tape">
+    <div class="pm-tape-head">
+      <span class="pm-tape-t">Price history</span>
+      <span class="pm-tape-win">last ${pmTapeWindow(pts)}</span>
+    </div>
+    <div class="pm-tape-plot" data-echart-tape="${escapeAttr(JSON.stringify(cfg))}">
+      ${pmTapeSVG(plotted, 300, 96)}
+    </div>
+    <p class="pm-tape-cap">${pts.length} price${pts.length === 1 ? "" : "s"}
+      we recorded, ending at the ${escapeHtml(yesName)} price above. This is
+      our own tape — it starts when we started watching, not when the
+      market opened.</p>
+  </div>`;
+}
 
 function pmDetailHTML(r) {
   if (!r) return `<div class="pm-d-empty">${icon("signal", 26)}
@@ -8421,6 +8527,7 @@ function pmDetailHTML(r) {
       ${modeled ? `<div class="pm-d-edge" style="color:var(--${(r.edge || 0) >= 0 ? "good" : "bad"})">
         ${(r.edge || 0) >= 0 ? "+" : ""}${r.edge} pts<span>Qellys edge</span></div>` : ""}
     </div>
+    ${pmTapeHTML(r)}
     ${modeled ? `<p class="pm-d-model">Our model prices the same claim at
       <b>${Math.round(r.model * 100)}%</b>.</p>` : ""}
     ${summary}
@@ -8455,7 +8562,20 @@ function pmBoardRowHTML(r) {
       }" style="left:${mdl.toFixed(1)}%"></span>`}
     </span>`;
   const no = r.price == null ? null : Math.round((1 - r.price) * 100);
-  return `<div class="kx-row${_pmSelKey === r.key ? " sel" : ""}">
+  // THE WHOLE ROW IS THE DOOR. Ethan, 2026-08-19: "add where we can click
+  // on the trade it's recommending and it will pull up a chart" — a
+  // 44px-wide View button at the far right is not that, especially on a
+  // phone. The button stays because it names the action for anyone who
+  // needs a target with a label, and the row carries the same call.
+  //
+  // The title's link-out (Polymarket rows) sits inside, so the handler
+  // ignores clicks that landed on an anchor or on the button itself —
+  // otherwise opening the venue in a new tab would also swap the panel
+  // underneath.
+  return `<div class="kx-row openable${_pmSelKey === r.key ? " sel" : ""}"
+    role="button" tabindex="0"
+    onclick="if(!event.target.closest('a,button'))window._pmPick('${escapeAttr(r.key)}')"
+    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window._pmPick('${escapeAttr(r.key)}')}">
     <span class="kx-thumb">${venueMark(r.venue, 21)}
       <span class="kx-thumb-l">${escapeHtml(String(r.venue || ""))}</span></span>
     <span class="kx-title" title="${escapeAttr(r.title)}">${title}
@@ -8699,8 +8819,20 @@ async function renderIntel() {
   // Every other subtabbed page binds its rooms after writing them; without
   // this the tabs render and do nothing.
   bindSubtabs(host);
-  if (typeof mountEChartsAnalytics === "function") mountEChartsAnalytics(host);
-  if (typeof mountLiveTicks === "function") mountLiveTicks(host);
+  // EACH MOUNT IN ITS OWN TRY. These are three independent enhancements
+  // over markup that already stands on its own, and chaining them bare
+  // means the first one to throw silently cancels the rest — which is
+  // exactly what happened when the price tape was added: the chart never
+  // upgraded, no error surfaced, and the SVG fallback made it look like
+  // a rendering choice rather than a dead line of code.
+  for (const mount of [mountEChartsPanels, mountEChartsAnalytics,
+                       mountLiveTicks]) {
+    if (typeof mount !== "function") continue;
+    try {
+      const r = mount(host);
+      if (r && typeof r.catch === "function") r.catch(() => {});
+    } catch (e) { /* an enhancement never breaks the page it decorates */ }
+  }
 }
 
 /* ============================================================

@@ -5841,3 +5841,19 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .footer a:hover,
 .legal-back a:hover,
 .acct-confirm a:hover { color: var(--brand); }
+
+/* ── The price tape on the Prediction Markets detail panel ─────────────
+   Ethan, 2026-08-19, with a Polymarket screenshot. Two real series over
+   our own recorded buckets; the SVG is the fallback and ECharts upgrades
+   the same box in place, so both need the identical footprint or the
+   panel jumps when the library lands. */
+.pm-tape { margin: 12px 0 4px; }
+.pm-tape-head { display: flex; align-items: baseline;
+  justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.pm-tape-t { font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--text-mute); }
+.pm-tape-win { font-size: var(--fs-2xs); color: var(--text-mute); }
+.pm-tape-plot { height: 132px; width: 100%; }
+.pm-tape-svg { width: 100%; height: 100%; display: block; }
+.pm-tape-cap, .pm-tape-none { color: var(--text-mute);
+  font-size: var(--fs-2xs); line-height: var(--lh-snug); margin: 6px 0 0; }

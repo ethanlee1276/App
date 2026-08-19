@@ -235,6 +235,32 @@ def ensure_tables(conn) -> None:
     conn.executescript(SCHEMA)
 
 
+def price_series(conn, ticker: str, hours: int = 24,
+                 now: float | None = None) -> list[dict]:
+    """OUR recorded price tape for one market, oldest first.
+
+    The snapshots have been written on every refresh since the Kalshi
+    adapter shipped; nothing read them back until the board grew a chart.
+    Each point is a 10-minute bucket that was actually observed — there is
+    no interpolation and no backfill, because an order book cannot be
+    backfilled and a smooth line through gaps we never saw would be a
+    picture of a market that did not exist.
+
+    A gap in the middle is therefore real information: the machine was
+    down, or the market was not on the board that cycle. The caller draws
+    the points it is given.
+    """
+    import time as _time
+    ensure_tables(conn)
+    since = (now if now is not None else _time.time()) - hours * 3600
+    rows = conn.execute(
+        "SELECT bucket_ts, prob, spread_cents, volume_24h, open_interest "
+        "FROM kalshi_snapshots WHERE ticker=? AND bucket_ts>=? "
+        "ORDER BY bucket_ts", (ticker, since)).fetchall()
+    return [{"ts": int(r[0]), "prob": r[1], "spread_cents": r[2],
+             "vol": r[3], "oi": r[4]} for r in rows]
+
+
 def store_snapshot(conn, rows: list[dict], now: float | None = None) -> int:
     """Append one 10-minute bucket of prices. Order books cannot be
     backfilled — every pricing idea needs stored tape to validate against,
