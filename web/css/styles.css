@@ -3450,14 +3450,6 @@ body.ffd-open { overflow: hidden; }
   padding: 8px 14px; border-bottom: var(--hairline) solid var(--border-soft);
 }
 .kx-row:last-child { border-bottom: 0; }
-/* The venue column: which exchange the row is priced on, now that both
-   share one table. Deliberately NOT colour-coded — amber is the one
-   accent and it means "live or material" (§1), which a venue name is
-   not. The word does the work; the model and edge columns already say
-   the thing that actually differs between the two feeds. */
-.kx-venue { display: inline-flex; align-items: center; justify-content: center;
-  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .04em;
-  padding: 4px 6px; }
 .kx-title { min-width: 0; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; font-size: var(--fs-sm); }
 .kx-match { color: var(--text-mute); }
@@ -3492,7 +3484,9 @@ body.ffd-open { overflow: hidden; }
 .kx-thumb { display: flex; flex-direction: column; align-items: center;
   gap: 3px; min-width: 0; }
 /* Wraps rather than truncates: "PHILADELPHIA" clipped to "PHILAD…" is
-   the label failing at the one job it has. */
+   the label failing at the one job it has. Deliberately NOT colour-coded
+   — amber is the one accent and it means "live or material" (§1), which
+   the name of an exchange is not. */
 .kx-thumb-l { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .02em;
   color: var(--text-mute); text-transform: uppercase; text-align: center;
   line-height: var(--lh-tight); max-width: 100%;
@@ -3560,20 +3554,15 @@ body.ffd-open { overflow: hidden; }
 
 /* The Overhead, where it sits outside a venue card.
    ------------------------------------------------------------------
-   Same drawing, same 240x150, on the two surfaces that are not the
-   Recommended scroller: a UFC pick card and the Kalshi board's header.
-   Both get the art's own hairline frame rather than the card's, so the
-   Overhead reads as a plate set into the page — the same relationship
-   the venue cards already have. */
-.ufc-overhead, .kx-overhead {
+   Same drawing, same 240x150, on the one surface that is not the
+   Recommended scroller: a UFC pick card. It gets the art's own hairline
+   frame rather than the card's, so the Overhead reads as a plate set
+   into the page — the same relationship the venue cards already have. */
+.ufc-overhead {
   margin-top: 10px; border: var(--hairline) solid var(--border-soft);
   background: var(--bg-2); line-height: 0;
 }
-.ufc-overhead svg, .kx-overhead svg { width: 100%; height: auto; display: block; }
-/* On the board it is a header, so it gets the width of one tile rather
-   than the whole table — a 900px-wide probability rule is a chart, and
-   this is a mark. */
-.kx-overhead { max-width: 280px; margin-bottom: 10px; }
+.ufc-overhead svg { width: 100%; height: auto; display: block; }
 
 /* Rocket Radar (meme coins).
    ------------------------------------------------------------------
@@ -5593,9 +5582,6 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   color: var(--good); font-variant-numeric: tabular-nums; }
 .ffcal-projk { display: block; font-size: var(--fs-xs);
   color: var(--text-mute); font-weight: 400; }
-.ffcal-why { margin: 10px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }
-.ffcal-script { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }
-.ffcal-usage { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }
 .ffcal-outnote { color: var(--text-mute); font-size: var(--fs-sm);
   margin-top: 10px; }
 @media (max-width: 700px) {
