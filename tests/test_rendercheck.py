@@ -185,6 +185,59 @@ def test_a_screen_that_never_mounted_invalidates_its_own_verdicts():
         "a screen that never mounted was excused as an empty board"
 
 
+def test_a_repeating_element_is_checked_per_row_not_by_a_number():
+    """Ethan's first run on a FED board, 2026-08-19, found two checks I had
+    written against an empty one — and they were the only two that failed.
+
+    `.al-c` is the condition on an alert row. Pinned as `n == 1` it passed
+    on a board with no alerts and failed on a real one with six: the check
+    was measuring today's data, not the design. The claim is that EVERY
+    row carries its condition, and `each` says that.
+
+    Same lesson as the four-tiles check on the same run. A number authored
+    where the page is empty is a number about emptiness."""
+    v = rc.verdicts([_row(name="Alerts Center",
+                          got={"condition-rows": "|each-ok"})])
+    assert not v["drift"], "a row-per-row claim failed while holding"
+    assert any("one per row" in s for _, _, s in v["lines"])
+
+
+def test_each_still_fails_when_a_row_is_missing_its_condition():
+    """The half that matters: a check that cannot fail is not a check."""
+    v = rc.verdicts([_row(name="Alerts Center",
+                          got={"condition-rows": "4 of 6"})])
+    assert v["drift"], "two rows lost their condition and nothing noticed"
+    assert any("4 of 6" in s for _, _, s in v["lines"])
+
+
+def test_the_board_tiles_claim_names_the_boards_own_strip():
+    """`.stats` is shared, and the Prediction Markets page grows three of
+    them once it has data — board, flow, proof. The first version counted
+    `#intel-body .stats > *`, which is 4 on a machine with one populated
+    tab and 12 on a fed one. Measured both in a browser: the old selector
+    reads 12 with the other two strips present, the new one reads 4."""
+    pm = next(c for name, _, _, _, checks in rc.SCREENS if name == "Prediction Markets"
+              for c in checks if c[0] == "four-tiles")
+    assert pm[2] == ".pm-tiles > *", \
+        "the tiles claim is counting every stats strip on the page again"
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    assert 'class="stats pm-tiles"' in app, "the board's strip lost its name"
+    assert app.count("pm-tiles") >= 2
+
+
+def test_nothing_to_repeat_over_is_not_a_broken_repeat():
+    """The hole `each` opened while closing another one.
+
+    A quiet Alerts page draws its filter chips and zero rows — the page's
+    own copy says "a quiet page means a quiet slate, not a broken one".
+    Comparing 0 conditions against 0 rows would have failed it. That is
+    the same cry-wolf failure the no-data verdict exists to prevent,
+    arriving through a new door."""
+    v = rc.verdicts([_row(name="Alerts Center", got={"condition-rows": "|none"})])
+    assert not v["drift"], "a quiet night was reported as a regression"
+    assert v["nodata"] == 1
+
+
 def test_a_gated_feature_reads_as_off_rather_than_broken():
     """Pricing cards need subscriptions switched on. Reporting a business
     decision as a design regression trains you to ignore the report."""

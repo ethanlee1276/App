@@ -8512,6 +8512,16 @@ function predBoardHTML(kx, d) {
     : null;
   const totVol = all.reduce((s, r) => s + (Number(r.vol) || 0), 0);
 
+  // `pm-tiles` names the board's own tile strip. `.stats` is the shared
+  // tile row and this page grows three of them once it has data — the
+  // board's, the flow tab's and the proof tab's. A render check written
+  // on a machine where only one had data counted four tiles and pinned
+  // four; on a fed board it counted twelve and reported drift that was
+  // not there. The claim is about the BOARD's tiles, so it names them.
+  //
+  // Written as a JS comment rather than the HTML one it started as: an
+  // HTML comment inside this template ships to every reader as a DOM
+  // node, and test_typography caught its straight apostrophes doing it.
   return `
     ${deskSectionHTML(kx)}
     <div class="section-title">The board
@@ -8520,7 +8530,7 @@ function predBoardHTML(kx, d) {
       the gap; Polymarket rows show the venue’s price and link out. A dash
       means we do not price that market, not that the edge is zero.</span></div>
     ${tabs}
-    <div class="stats">
+    <div class="stats pm-tiles">
       ${tile("Markets tracked", all.length, "both venues, live now")}
       ${tile("Priced by our model", modeled.length, "Kalshi two-sided books")}
       ${tile("Average gap", avgEdge == null ? "—" : avgEdge.toFixed(1) + " pts",

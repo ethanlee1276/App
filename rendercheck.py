@@ -40,6 +40,25 @@ container — can skip most of the pack. **Coverage is part of the result**:
 the number that means something is how many screens were actually
 MEASURED, and the honest place to run this is the droplet.
 
+WRITING A CHECK ON AN EMPTY BOARD WRITES A CHECK ABOUT EMPTINESS. Both
+of the first two false alarms this tool produced were mine, and both had
+the same cause: the machine I authored them on had no data, so the number
+I saw was the number I pinned.
+
+    four stat tiles       counted 4 where one tab had data,
+                          12 on a fed board with three
+    one condition row     counted 1 where there were no alerts,
+                          6 on a board with six
+
+Neither was drift. Both were a check measuring today's data instead of
+the design. The defences, in order of how much they help:
+
+  * name the thing the claim is about (`.pm-tiles`, not every `.stats`
+    on the page) rather than reaching for it positionally;
+  * for anything that REPEATS, use `each` — the count is a fact about
+    tonight, the one-per-row relationship is the design;
+  * and read a `n == 1` on a repeating element as a smell, not a check.
+
 WHAT IT DOES NOT DO. It does not diff pixels against the render images.
 Those live in the chat of 2026-08-18; a cloud session cannot persist them,
 which is why `RENDER_SPEC.md` exists as prose in the first place. `--shots`
@@ -103,6 +122,10 @@ WIDTHS = (1280, 390)
 #   cols  number of grid tracks on the first match
 #   pos   computed `position` of the first match
 #   above the first match of `selector` sits above the first match of `want`
+#   each  count(selector) == count(`want` selector), and both non-zero —
+#         for a claim about a REPEATING element ("every row carries the
+#         condition that fired it"). A fixed number cannot express that:
+#         the count is however many rows there are today.
 SCREENS = [
     ("Prediction Markets",
      ['[data-sport="intel"]'],
@@ -118,8 +141,13 @@ SCREENS = [
       # board has one. Four is the render's count and they draw with
       # zeros on an empty feed, so this is a layout claim rather than a
       # data one — it holds on a machine that cannot reach Kalshi.
+      # SCOPED TO THE BOARD'S OWN STRIP. `.stats` is shared, and this
+      # page has three of them once it has data — board, flow, proof. The
+      # first version counted `#intel-body .stats > *` and pinned 4,
+      # because the machine it was written on had data for exactly one of
+      # the three. Ethan's first fed run counted 12 and called it drift.
       ("four-tiles", "four stat tiles: tracked, priced, average gap, volume",
-       "#intel-body .stats > *", "n", 4, (1280, 390)),
+       ".pm-tiles > *", "n", 4, (1280, 390)),
       ("phone-stack", "phone: detail stacks ABOVE the table",
        ".pm-detail", "above", ".pm-layout > :first-child", (390,))],
      ),
@@ -164,8 +192,13 @@ SCREENS = [
      ".al-cats",
      [("filter-chips", "filter chips with counts over the rows",
        ".al-cats", "n", 1, (1280, 390)),
-      ("condition-rows", "each row carries the CONDITION that fired it",
-       ".al-c", "n", 1, (1280,), ".al-row")],
+      # `each`, not a number. The claim is that EVERY row carries its
+      # condition, and how many rows exist is a fact about today's feeds.
+      # Pinned as 1 it passed on an empty board and failed on a real one
+      # with six alerts — the check measuring the data instead of the
+      # design.
+      ("condition-rows", "every row carries the CONDITION that fired it",
+       ".al-c", "each", ".al-row", (1280, 390))],
      ),
     # Reached through the account nav item rather than a sport chip — it
     # is not a board. The first cut clicked the My Bets chip, landed on a
@@ -294,6 +327,17 @@ for (const s of PLAN) {
             const t = getComputedStyle(e).gridTemplateColumns;
             r.got[id] = t === "none" ? 0 : t.split(" ").length;
           } else if (op === "pos") r.got[id] = getComputedStyle(e).position;
+          else if (op === "each") {
+            // NOTHING TO REPEAT IS NOT A BROKEN REPEAT. The Alerts page
+            // says so itself — "a quiet page means a quiet slate, not a
+            // broken one" — and a check that called a quiet night a
+            // regression is the exact cry-wolf failure the no-data
+            // verdict exists to prevent. Zero rows is zero rows.
+            const n = els.length, m = document.querySelectorAll(want).length;
+            r.got[id] = m === 0 ? "|none"
+                      : n === m ? "|each-ok"
+                      : `${n} of ${m}`;
+          }
           else if (op === "above") {
             const o = document.querySelector(want);
             r.got[id] = o ? (e.getBoundingClientRect().top
@@ -477,7 +521,18 @@ def verdicts(rows: list[dict]) -> dict:
                     ("off", head, f"{say} — not in force yet "
                                   f"({c[6]} is not on the page)"))
                 continue
-            ok = (got == want) if op != "above" else (got is True)
+            if op == "each" and got == "|none":
+                out["nodata"] += 1
+                out["lines"].append(
+                    ("nodata", head, f"{say} — nothing on this board to "
+                                     f"repeat over ({want} is empty)"))
+                continue
+            if op == "each":
+                ok = got == "|each-ok"
+                got = "one per row" if ok else got
+                want = "one per row"
+            else:
+                ok = (got == want) if op != "above" else (got is True)
             out["lines"].append(
                 ("ok" if ok else "drift", head,
                  f"{say} — {sel} {op}={got}" + ("" if ok else f", want {want}")))
