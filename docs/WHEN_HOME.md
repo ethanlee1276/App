@@ -1058,9 +1058,24 @@ on the WNBA — 430 props built and 384 never priced, under a "loosen the
 sliders" message that could not work. This is the same lesson one step
 earlier in the season.
 
-Still to confirm during the live rehearsal (§3d, needs a real slate):
-the NFL journal writing `move_delta`/`move_steam`, and `nflguard.py`
-reading TOO EARLY until Week 1 settles.
+**§3d did not need September either.** Both items were listed as
+needing a real slate. Both were testable today:
+
+* **`nflguard.py` reads TOO EARLY.** Ran it: *"0 settled nfl
+  recommendations, 0 look(s) — TOO EARLY … This is the intended state
+  before Week 1 and says nothing about the model."* Correct, and it
+  says so itself.
+* **The NFL journal carries the movement fields.** The note said the
+  capture went in on the shared ledger path "so it should, but it has
+  never run on an NFL slate". A synthetic NFL result through
+  `log_recommendations` exercises the same insert the real one will:
+  `move_delta -0.8`, `move_steam 1`, `move_first_sharp pinnacle` all
+  land intact. Pinned as a test so a refactor cannot quietly drop those
+  columns on the one sport that has not exercised them yet.
+
+So Phase 3 is done to the edge of what data allows. What genuinely
+cannot happen until the season: watching a real Week 1 slate price,
+journal and settle end to end.
 
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*

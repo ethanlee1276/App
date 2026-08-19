@@ -708,6 +708,46 @@ def test_ufc_records_only_on_a_live_pull():
     i = src.index("record_fight_snapshots")
     assert "if args.odds:" in src[:i][-2500:] or "if args.odds:" in src[i-2500:i]
 
+def test_the_nfl_path_carries_the_movement_fields_too():
+    """docs/WHEN_HOME.md §3d listed this as needing a live NFL slate: the
+    movement capture went in on the SHARED ledger path, "so it should
+    [work], but it has never run on an NFL slate."
+
+    It does not need September. A synthetic NFL result exercises the same
+    insert the real one will, and pins it so a refactor cannot quietly
+    drop the columns on the sport that has not exercised them yet."""
+    import os
+    import tempfile
+    from engine import ledger
+
+    fd, db = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    os.remove(db)
+    try:
+        conn = ledger.connect(db)
+        result = {"sport": "nfl", "date": "2026-09-09", "recommendations": [{
+            "player": "Test Receiver", "market": "Receiving Yards",
+            "side": "OVER", "line": 62.5, "book": "dk", "odds": -110,
+            "projection": 71.0, "hit_prob": 0.58, "edge": 0.06,
+            "confidence": 7.2, "grade": "A", "stake_units": 1.0,
+            "recommended": True,
+            "move_delta": -0.8, "move_steam": 1, "move_first_sharp": "pinnacle",
+        }]}
+        assert ledger.log_recommendations(conn, result) == 1
+        row = conn.execute("SELECT sport, move_delta, move_steam, "
+                           "move_first_sharp FROM bets").fetchone()
+        assert row["sport"] == "nfl"
+        assert row["move_delta"] == -0.8, "the signed movement was dropped"
+        # Stored through a REAL column, so compare numerically rather than
+        # by identity — 1 arrives back as 1.0 and that is not a defect.
+        assert float(row["move_steam"]) == 1.0, "the steam flag was dropped"
+        assert row["move_first_sharp"] == "pinnacle"
+        conn.close()
+    finally:
+        if os.path.exists(db):
+            os.remove(db)
+
+
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
