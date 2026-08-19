@@ -273,3 +273,40 @@ the bottom rather than acting on it.
   of the change did nothing. **A before/after number cannot tell you that a
   rule applied.** When a CSS change lands in a file this long, check where
   it sits relative to what it is overriding.
+
+
+- [ ] **The masthead tagline is capped at 21 characters by a rule that says
+  34.** `.tagline` is `max-width: 34ch` with `letter-spacing: .22em` and
+  `text-transform: uppercase`. `ch` is the width of a "0" with NO tracking,
+  so the spacing makes every rendered character wider than the unit the cap
+  is counted in: measured at 1280px the element wants **292px and is given
+  155px**, showing "THE NFL BOOK — THE P…" out of "The NFL Book — the
+  pro-bettor prop model". Just over half.
+
+  The intent and the effect disagree, which is what makes this a defect
+  rather than a taste call — but the repair is a number somebody has to
+  choose, so it is here rather than done. The masthead has free space at
+  1280 and above; the cap exists to stop the brand block crowding the nav
+  at smaller widths, and below 900px `.tagline` is display:none anyway.
+  Options: raise the cap, express it in `em`, or drop the ellipsis and let
+  the second line wrap. Measure the header height at every width in
+  `test_headerwrap.py` before and after — that file exists because this
+  block has broken twice.
+
+  *Found 2026-08-19 while reading rendercheck's screenshots; not acted on,
+  per the "never redesign something not on this list" rule.*
+
+- [ ] **The sidebar guillotines its last line instead of fading it.** The
+  rail is `overflow-y: auto`, so nothing is lost — but at 1280×1100 its
+  content is **1201px in a 1036px box**, and what a reader sees is the
+  running-ROI note sliced through the middle of "book price and graded in
+  public" with no visible scrollbar (overlay scrollbars on most platforms).
+  It reads as broken rather than as "there is more below". Present on every
+  view, at every height under about 1250px.
+
+  A bottom `mask-image` fade on the scroll container is the usual answer and
+  costs nothing, but it is a look nobody has approved and it is not in the
+  render pack — hence here. Whatever is chosen, check it against the phone
+  drawer too, which uses the same element.
+
+  *Found 2026-08-19, same pass. Measured, not acted on.*

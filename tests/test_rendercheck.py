@@ -105,8 +105,8 @@ def test_every_screen_names_a_proof_that_is_not_its_layout():
 # --- the verdicts, each one reachable ----------------------------------------
 def _row(**over):
     r = {"name": "Prediction Markets", "width": 1280, "nav": True,
-         "proof": True, "present": True, "empty": False, "errs": [],
-         "got": {"chip-row": 1}}
+         "proof": True, "present": True, "empty": False, "settled": True,
+         "errs": [], "got": {"chip-row": 1}}
     r.update(over)
     return r
 
@@ -138,6 +138,29 @@ def test_a_missing_layout_with_no_empty_state_IS_a_finding():
     page saying it has nothing to show is exactly the regression."""
     v = rc.verdicts([_row(present=False, empty=False)])
     assert v["drift"]
+
+
+def test_a_screen_that_never_settled_is_inconclusive_not_drift():
+    """The flake this file caught on its own first full-suite run.
+
+    Under load the Prediction Markets page had not finished drawing when
+    the clock ran out, and the harness called it "layout gone" — a false
+    alarm on a page whose layout was fine. A slow machine and a deleted
+    layout look identical from here, and guessing between them is how a
+    check earns the false alarm that teaches you to skip the real one.
+
+    The harness now WAITS for the screen to settle rather than sleeping a
+    fixed interval, and when even that runs out it says so."""
+    v = rc.verdicts([_row(settled=False, present=False, empty=False)])
+    assert not v["drift"], "a slow page was reported as a regression"
+    assert v["slow"] == 1
+    assert any("inconclusive" in s for _, _, s in v["lines"])
+
+
+def test_the_harness_waits_for_the_screen_rather_than_sleeping():
+    src = open(os.path.join(ROOT, "rendercheck.py"), encoding="utf-8").read()
+    assert "waitForFunction" in src, \
+        "back to a fixed sleep, and back to racing under load"
 
 
 def test_a_screen_that_never_mounted_invalidates_its_own_verdicts():

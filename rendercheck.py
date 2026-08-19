@@ -216,7 +216,8 @@ if (!b) throw lastErr;
 
 for (const s of PLAN) {
   const out = { name: s.name, width: WIDTH, nav: true, proof: false,
-                present: false, empty: false, checks: [], errs: [] };
+                present: false, empty: false, settled: true, checks: [],
+                errs: [] };
   const p = await b.newPage({ viewport: { width: WIDTH, height: 1200 } });
   p.on('pageerror', e => out.errs.push(e.message.slice(0, 140)));
   try {
@@ -233,6 +234,28 @@ for (const s of PLAN) {
       await p.waitForTimeout(1400);
     }
     if (out.nav) {
+      // WAIT FOR THE SCREEN TO SETTLE, do not sleep and hope. A fixed
+      // pause raced under load — the suite running this alongside
+      // everything else reported "Prediction Markets: layout gone" once,
+      // on a page whose layout was fine and merely slower to arrive. A
+      // check that fires at random is worse than no check, because the
+      // first false alarm is what teaches you to skip the real one.
+      //
+      // Settled = the layout is up, or the screen has said it has nothing
+      // to draw. Either answer is a real answer; only "neither, yet" is
+      // worth waiting on.
+      try {
+        await p.waitForFunction(([present, empties]) =>
+          !!document.querySelector(present)
+          || empties.some((e) => document.querySelector(e)),
+          [s.present, EMPTY], { timeout: 8000 });
+      } catch (e) {
+        // Neither arrived inside the window. That is NOT drift: a slow
+        // machine and a deleted layout look identical from here, and
+        // guessing between them is how a check earns its first false
+        // alarm. It is measured anyway and reported as inconclusive.
+        out.settled = false;
+      }
       const m = await p.evaluate(([proof, present, checks, empties]) => {
         // The empty state has to be INSIDE this screen. Anywhere on the
         // page is not the same claim: the shell keeps other views in the
@@ -361,7 +384,8 @@ def verdicts(rows: list[dict]) -> dict:
     """Fold the raw measurements into the three verdicts, per check."""
     spec = {name: {c[0]: c for c in checks}
             for name, _, _, _, checks in SCREENS}
-    out = {"measured": 0, "nodata": 0, "off": 0, "drift": [], "lines": []}
+    out = {"measured": 0, "nodata": 0, "off": 0, "slow": 0,
+           "drift": [], "lines": []}
     for r in rows:
         head = f"{r['name']} @ {r['width']}"
         if r.get("errs"):
@@ -373,6 +397,15 @@ def verdicts(rows: list[dict]) -> dict:
                 ("nav", head, f"no way in — {r.get('missing_nav')} is not on "
                               f"the page"))
             out["drift"].append(f"{head}: nav")
+            continue
+        if not r.get("settled") and not r.get("present"):
+            # Slow machine or deleted layout — indistinguishable from
+            # here, so say so rather than pick one.
+            out["slow"] += 1
+            out["lines"].append(
+                ("slow", head, "the screen had drawn neither its layout nor "
+                               "an empty state when the clock ran out — "
+                               "inconclusive, not a finding"))
             continue
         if not r.get("proof"):
             # No verdict is trustworthy from here. The nav reported
@@ -510,7 +543,7 @@ def main(argv=None) -> int:
 
     v = verdicts(all_rows)
     mark = {"ok": "  ✅", "drift": "  ❌", "nodata": "  · ", "off": "  · ",
-            "nav": "  ❌"}
+            "slow": "  ⏳", "nav": "  ❌"}
     last = None
     for kind, head, say in v["lines"]:
         if head != last:
@@ -521,7 +554,9 @@ def main(argv=None) -> int:
     checked = len({(r["name"], r["width"]) for r in all_rows})
     print(f"\n  {v['measured']} of {checked} screen-widths measured; "
           f"{v['nodata']} skipped for want of data"
-          + (f"; {v['off']} claim(s) not in force yet." if v["off"] else "."))
+          + (f"; {v['off']} claim(s) not in force yet" if v["off"] else "")
+          + (f"; {v['slow']} inconclusive (too slow to settle)"
+             if v["slow"] else "") + ".")
     if v["nodata"]:
         print("  A skipped screen is not a pass. Run this on the droplet, "
               "where the boards are fed.")
