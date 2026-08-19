@@ -5803,3 +5803,31 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 #stalebar .ic { color: var(--warn); flex: none; margin-top: 2px; }
 #stalebar b { color: var(--warn); }
 @media (max-width: 760px) { #stalebar { margin: 0 12px 12px; } }
+
+/* ── Links the design system never claimed ─────────────────────────────
+   Found 2026-08-19 by looking at rendercheck's own screenshots: 28 links
+   across the site rendered in `rgb(0, 0, 238)` — the BROWSER DEFAULT
+   blue. Not a wrong brand colour; no colour at all. The stylesheet has no
+   base `a` rule, so anything a component did not style itself fell
+   through to the user agent, and what fell through was the legal footer
+   (on every view), both legal pages' back link, and the 404 and
+   maintenance pages' wordmark and quick links.
+
+   RENDER_SPEC's first translation rule is "Colors and name: OURS — the
+   renders' blue accent maps to --brand". A raw user-agent blue is that
+   rule failing in the most literal way available.
+
+   NOT fixed with a base `a { color }`. Several links are deliberately
+   text-coloured — the masthead wordmark, the Quick Tools doors — because
+   they are cards and rows rather than links, and they inherit rather than
+   set. A base rule would repaint all of them violet. So this names the
+   four places the default was actually reaching, and
+   tests/test_linkcolor.py sweeps for a fifth. */
+.footer a,
+.legal-back a,
+.acct-confirm a,
+.stub-brand,
+.stub-links a { color: var(--brand-2); }
+.footer a:hover,
+.legal-back a:hover,
+.acct-confirm a:hover { color: var(--brand); }
