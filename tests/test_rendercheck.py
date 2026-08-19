@@ -66,7 +66,8 @@ def _selectors():
     for in a stylesheet.
     """
     out = set()
-    for name, clicks, proof, present, checks in rc.SCREENS:
+    for row in rc.SCREENS:
+        name, clicks, proof, present, checks = row[:5]
         parts = [proof, present] + [c[2] for c in checks]
         parts += [c[6] for c in checks if len(c) > 6 and c[6]]
         parts += [c[4] for c in checks if c[3] == "above"]
@@ -94,16 +95,21 @@ def test_every_screen_can_be_reached_by_something_on_the_page():
     `proof` field: the first cut of the Account screen clicked the My Bets
     chip, landed elsewhere, found THAT screen's empty state and filed a
     tidy "no data" for a page it had never opened."""
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
-    for name, clicks, _, _, _ in rc.SCREENS:
+    for row in rc.SCREENS:
+        name, clicks = row[0], row[1]
         for c in clicks:
-            # Subtab buttons are built by subtabbedHTML at runtime, so they
-            # are in the script rather than the shell.
-            hay = html if c.startswith(("[data-sport", "[data-view", "#")) \
-                else SOURCES
-            tok = re.findall(r'"([^"]+)"|#([\w-]+)', c)
-            flat = [t for pair in tok for t in pair if t]
-            assert any(t in hay or t in SOURCES for t in flat), \
+            # A nav step may be a compound selector — the Player Profile is
+            # reached by whichever of several row shapes the page drew. Any
+            # ONE of its named parts existing is enough; requiring all of
+            # them would fail on exactly the alternatives it offers.
+            #
+            # Everything is matched against the shell AND the script,
+            # because subtab buttons and dossier rows are built at runtime
+            # by app.js rather than sitting in index.html.
+            names = re.findall(r'"([^"]+)"|[#.]([A-Za-z][\w-]*)', c)
+            flat = [t for pair in names for t in pair if t]
+            assert flat, f"{name}: {c} names nothing to look for"
+            assert any(t in SOURCES for t in flat), \
                 f"{name}: nothing on the page matches {c}"
 
 
@@ -111,7 +117,8 @@ def test_every_screen_names_a_proof_that_is_not_its_layout():
     """`proof` has to survive an empty board — that is its whole job. If
     someone sets it equal to the layout selector the "no data" verdict
     becomes unreachable and every empty board reads as drift."""
-    for name, _, proof, present, _ in rc.SCREENS:
+    for row in rc.SCREENS:
+        name, proof, present = row[0], row[2], row[3]
         assert proof and proof != present, \
             f"{name}: proof must be the container, not the content"
 
