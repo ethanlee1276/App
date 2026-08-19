@@ -4412,8 +4412,17 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 
   /* The drawer: the SAME sidebar, slid in from the left under the bar.
      Nothing is a second copy of anything — one rail, two positions. */
+  /* `will-change` is not a performance hint here, it is the belt on the
+     paint order. The 2026-08-19 failure was the scrim escaping into its
+     own compositor layer (via backdrop-filter) and painting over a drawer
+     that was genuinely on screen — z-index 50 over 45 decides nothing
+     once one side leaves the comparison. The blur is gone, but iOS
+     promotes position:fixed layers on its own schedule, so the drawer is
+     now promoted too: two composited layers ARE ordered by z-index, and
+     the drawer wins that on every engine. Source order (scrim first,
+     drawer second, both direct children of body) is the third guard. */
   .sidebar { position: fixed; top: var(--topbar-h); left: 0; bottom: 0; z-index: 50;
-    width: min(84vw, 330px); height: auto;
+    width: min(84vw, 330px); height: auto; will-change: transform;
     transform: translateX(-102%); transition: transform var(--dur-base) var(--ease-spring);
     border-right: var(--hairline) solid var(--border); box-shadow: none; }
   body.menu-open .sidebar { transform: translateX(0); box-shadow: var(--glow-soft); }

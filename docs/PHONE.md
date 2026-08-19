@@ -92,6 +92,19 @@ terminal prints the encrypted bytes as noise. Two fixes, either works:
   keeps refreshing every 60 seconds all day, and the board is rebuilt
   every cycle with the last real prices. A board that says "Updated 30s
   ago" at noon is genuinely current.
+- **If the app looks like an old version, it is not (any more).** Adding
+  the site to your home screen installs it as an app with its own
+  storage, and that storage used to be able to outlive a deploy: the
+  worker keeps a copy of the shell to show when the network drops, and
+  the copy was only replaced when someone remembered to change a version
+  string by hand. Twice, nobody did — most visibly on 2026-08-19, when a
+  fix for the phone menu shipped and the installed app could still be
+  running the stylesheet from before it. The version is now a hash of
+  the files themselves, stamped on the way out of the server, so any
+  deploy that changes the app changes the name of its cache and the old
+  one is deleted on the next launch. Nothing to remember and nothing to
+  clear. If you ever want to force it anyway: close the app fully (swipe
+  it away from the app switcher) and reopen it.
 - **The Tailscale address is stable** — it doesn't change day to day,
   so the home-screen icon keeps working.
 - **Battery:** the Tailscale app on the phone idles at roughly nothing;

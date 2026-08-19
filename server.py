@@ -432,6 +432,70 @@ CONTENT_TYPES = {
 _TLS_HINTED = False
 
 
+#: The service worker's cache name, stamped with what it actually caches.
+#:
+#: THE RULE THE FILE STATES ABOUT ITSELF WAS BROKEN TWICE. sw.js says
+#: "bump VERSION on any shell change" and records that v1 shipped two
+#: shell deploys late. It then sat on "qb-v3" through 2,149 more lines of
+#: index.html, styles.css, app.js and visuals.js — including the
+#: 2026-08-19 phone-drawer fix. The worker is network-first, so a healthy
+#: phone still gets fresh files; but the cache is the fallback for EVERY
+#: request the network loses, and one lost styles.css on cellular hands
+#: back a pre-fix stylesheet inside an installed PWA with no address bar
+#: to reveal it. A rule that depends on remembering is not a rule, so the
+#: version is now derived rather than typed: the hash covers exactly the
+#: files SHELL lists, read from sw.js so the two can never drift. Change
+#: any of them and the name changes; `activate` deletes every other cache
+#: on the next launch, and no pre-fix bundle can outlive a deploy.
+_SW_CACHE: dict = {}
+_SW_LOCK = threading.Lock()
+
+
+def _sw_shell(body: str, web: Path = WEB) -> list[Path]:
+    """The files sw.js precaches, as paths on disk.
+
+    Read out of sw.js rather than listed here, so the hash can only ever
+    cover what the worker actually caches. A second copy of the list is a
+    second thing to forget, which is the failure this replaces.
+    """
+    m = re.search(r"const SHELL = \[(.*?)\];", body, re.S)
+    if not m:
+        return []
+    out = []
+    for url in re.findall(r'"([^"]+)"', m.group(1)):
+        rel = "index.html" if url == "/" else url.lstrip("/")
+        f = (web / rel).resolve()
+        if f.is_relative_to(web.resolve()) and f.is_file():
+            out.append(f)
+    return out
+
+
+def sw_body(web: Path = WEB) -> bytes:
+    """sw.js with VERSION replaced by a hash of the shell it caches.
+
+    Recomputed only when a shell file's size or mtime moves, so the
+    common case is a dict lookup rather than re-reading the bundle on
+    every page load.
+    """
+    src = web / "sw.js"
+    body = src.read_text()
+    files = [src] + _sw_shell(body, web)
+    stamp = tuple((str(f), f.stat().st_mtime_ns, f.stat().st_size) for f in files)
+    with _SW_LOCK:
+        hit = _SW_CACHE.get(stamp)
+        if hit is not None:
+            return hit
+        h = hashlib.sha256()
+        for f in files:
+            h.update(f.read_bytes())
+        out = re.sub(r'const VERSION = "[^"]*";',
+                     'const VERSION = "qb-%s";' % h.hexdigest()[:12],
+                     body, count=1).encode()
+        _SW_CACHE.clear()                      # one entry: the current shell
+        _SW_CACHE[stamp] = out
+    return out
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # quieter logging
         sys.stderr.write("  %s\n" % (fmt % args))
@@ -1610,6 +1674,20 @@ class Handler(BaseHTTPRequestHandler):
         # logs a 404 that means nothing.
         if path == "/favicon.ico":
             path = "/favicon.svg"
+        # The worker names its own cache after the bundle it holds. If
+        # the stamp cannot be computed — a shell file removed mid-read, a
+        # permissions problem — the raw file is served instead, because a
+        # /sw.js that 500s leaves the OLD worker installed and in charge,
+        # which is the failure this exists to prevent.
+        if path == "/sw.js" and (WEB / "sw.js").is_file():
+            try:
+                body = sw_body()
+            except OSError:
+                body = None
+            if body is not None:
+                self._send(200, body, ".js",
+                           mtime=(WEB / "sw.js").stat().st_mtime)
+                return
         target = (WEB / path.lstrip("/")).resolve()
         # Prevent path traversal outside the web root. is_relative_to (not a
         # string prefix) so a sibling like web2/ could never slip through.

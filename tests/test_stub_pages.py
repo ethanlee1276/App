@@ -59,8 +59,15 @@ def test_the_maintenance_page_promises_no_clock():
 
 
 def test_the_404_page_is_served_for_pages_and_not_for_assets():
+    # THE WHOLE FUNCTION, not a character count. This read `i + 1400`
+    # and broke the day `_static` grew a branch above the 404 fallback
+    # (the service worker's version stamp, 2026-08-19) — the claims were
+    # all still true, the window had simply stopped reaching them. A test
+    # that fails when unrelated code moves is a test people learn to
+    # ignore.
     i = SERVER.index("def _static(")
-    body = SERVER[i:i + 1400]
+    j = SERVER.index("\n    def ", i + 10)
+    body = SERVER[i:j]
     assert '"404.html"' in body
     assert 'target.suffix in ("", ".html", ".htm")' in body, \
         "an asset miss must keep the bare body, not a page of HTML"

@@ -1,0 +1,348 @@
+"""The phone menu opened, then vanished under its own scrim.
+
+Ethan filmed it on 2026-08-19 (12:28:56Z). Frame by frame, at 20fps, the
+recording says something more specific than "the menu is broken":
+
+    t+0.40s   the drawer is fully open and correct, page at full brightness
+    t+0.55s   the drawer is GONE and the page is dimmed
+
+The drawer arrived. Then the dim arrived, about nine frames later, and
+took the drawer with it. That gap is the tell: the scrim carried
+`backdrop-filter: blur(2px)`, a blurred layer gets promoted to the
+compositor, and a promoted layer can paint over a transformed sibling
+that outranks it on z-index. So the drawer was genuinely on screen and
+genuinely painted over — which is why it reproduced on no desktop engine
+and why, on paper, the ordering was already right.
+
+The blur is gone (that is `test_the_scrim_carries_no_backdrop_filter`).
+But removing one property is a fix aimed at one mechanism, and iOS
+promotes `position: fixed` layers on its own schedule for reasons of its
+own. So the drawer is now promoted too: two composited layers ARE ordered
+by z-index, and 50 beats 45 on every engine. Source order is the third
+guard — last painted wins among equals.
+
+THE ONLY INSTRUMENT THAT COULD HAVE CAUGHT THIS IS A PICTURE. Every DOM
+fact was correct while the bug was happening: the class was on, the
+transform was `translateX(0)`, the rect was at left 0, hit-testing
+reached the drawer. `test_the_drawer_actually_paints_where_it_says_it_is`
+therefore screenshots the drawer's own rectangle, decodes it in the page,
+and asks what colour is actually there. The drawer's panel is
+`rgb(10, 10, 19)`; the page behind a 62%-black scrim is darker than the
+page, which is darker still. A scrim cannot brighten the page into the
+drawer's colour, so the modal pixel tells the two apart.
+
+BROWSER HALVES ARE OPT-IN (`QB_BROWSER_TESTS=1`), for the reason
+test_proseflow.py records: Chromium-driving tests inside the full suite
+crashed the browser on a busy container, and a flaky test is worse than
+no test.
+
+    QB_BROWSER_TESTS=1 python3 tests/test_phone_drawer.py
+
+Run directly: `python3 tests/test_phone_drawer.py`
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import threading
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+HTML = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+
+#: The drawer's rule lives in the ≤900px block; `.sidebar` also has a
+#: desktop rule, so the phone one is found by the property that only it
+#: sets. Anchoring on the text rather than on a line number because the
+#: stylesheet moves under this constantly.
+def _rule(opener: str) -> str:
+    """The declaration block a selector opens. A renamed selector fails
+    HERE, by name, rather than as a ValueError from `index` at import
+    time with nothing to say about which rule moved."""
+    assert opener in CSS, (
+        f"the rule this test is about is gone: {opener!r}. It was renamed or "
+        "restructured — re-anchor the test rather than deleting it.")
+    block = CSS[CSS.index(opener):]
+    return block[:block.index("}")]
+
+
+_DRAWER = _rule(".sidebar { position: fixed; top: var(--topbar-h)")
+_SCRIM = _rule("body.menu-open #scrim {")
+
+
+def _z(block: str) -> int:
+    m = re.search(r"z-index:\s*(\d+)", block)
+    assert m, "no z-index in:\n" + block
+    return int(m.group(1))
+
+
+def test_the_scrim_carries_no_backdrop_filter():
+    """The mechanism itself. A blurred scrim is a promoted scrim, and a
+    promoted scrim outranks the drawer on the compositor no matter what
+    z-index says."""
+    assert "backdrop-filter" not in _SCRIM, \
+        "the scrim is a promoted layer again — it will paint over the drawer"
+
+
+def test_the_drawer_outranks_the_scrim():
+    """On paper this was always true, and on paper is not where the bug
+    lived. It still has to stay true: it is the ordering the promotion
+    below makes binding."""
+    assert _z(_DRAWER) > _z(_SCRIM), \
+        f"drawer z-index {_z(_DRAWER)} is not above scrim {_z(_SCRIM)}"
+
+
+def test_the_drawer_is_promoted_to_its_own_layer():
+    """Two composited layers are ordered by z-index. One composited layer
+    and one ordinary one are ordered by whatever the compositor decides —
+    which is the whole finding."""
+    assert "will-change: transform" in _DRAWER, \
+        "the phone drawer is no longer promoted; z-index stops being binding"
+
+
+def test_the_scrim_is_painted_before_the_drawer():
+    """Belt to that brace: among equals, last painted wins. `#scrim` must
+    come first in the document and `#sidebar` after it."""
+    assert HTML.index('id="scrim"') < HTML.index('id="sidebar"'), \
+        "the scrim now comes after the drawer in the DOM"
+
+
+def test_the_tab_bar_is_the_phone_s_only_way_in():
+    """At ≤760px the header hamburger is `display: none !important` and
+    the tab bar's Menu is what opens the drawer — by clicking the hidden
+    button. If that proxy ever goes, the phone has no menu at all, and
+    nothing else here would notice."""
+    rule = ".menu-toggle { display: none !important; }"
+    assert rule in CSS, \
+        "the header hamburger is back on phones — two ways in, one of them tiny"
+    # And it has to be inside a phone query, not applied everywhere: the
+    # hamburger is the tablet and desktop-narrow way in.
+    head = CSS[:CSS.index(rule)]
+    guard = head[head.rindex("@media"):].split("{")[0]
+    assert "max-width" in guard and int("".join(
+        c for c in guard.split("max-width")[1].split("px")[0] if c.isdigit())) <= 900, \
+        f"the hamburger is hidden outside a phone query: {guard.strip()}"
+    assert 'getElementById("tb-menu")' in APP and 'getElementById("menu-toggle")' in APP, \
+        "the tab bar no longer proxies to the toggle: the phone menu is unreachable"
+
+
+# --------------------------------------------------------------------------
+# The browser half: what is actually painted where the drawer says it is.
+# --------------------------------------------------------------------------
+
+_PROBE = r"""
+import { chromium } from 'playwright';
+const PORT = process.argv[2];
+// Container flags, for the reason rendercheck.py records: without
+// --disable-dev-shm-usage Chromium dies with "Page crashed" on the first
+// navigation once /dev/shm fills.
+const ARGS = ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'];
+let b = null, lastErr = null;
+for (const path of [process.env.CHROMIUM_PATH, '/opt/pw-browsers/chromium',
+                    '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', undefined]) {
+  if (path === null) continue;
+  try { b = await chromium.launch({ executablePath: path || undefined, args: ARGS }); break; }
+  catch (e) { lastErr = e; }
+}
+if (!b) throw lastErr;
+const p = await b.newPage({ viewport: { width: 390, height: 844 },
+                            hasTouch: true, isMobile: true });
+const errs = [];
+p.on('pageerror', e => errs.push(e.message.slice(0, 140)));
+await p.goto(`http://127.0.0.1:${PORT}/index.html`, { waitUntil: 'domcontentloaded' });
+await p.waitForTimeout(2500);
+
+// WHAT COLOUR IS ACTUALLY THERE. Screenshot the rectangle, hand it back
+// to the page as a data: URL (which does not taint a canvas), and tally
+// the pixels. The modal colour is the panel's own background when the
+// drawer painted, and a darkened page when something painted over it.
+async function faceOf(rect) {
+  const buf = await p.screenshot({ clip: rect });
+  return await p.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = 'data:image/png;base64,' + b64;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    const g = c.getContext('2d');
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    const tally = new Map();
+    for (let i = 0; i < d.length; i += 4) {
+      const k = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
+      tally.set(k, (tally.get(k) || 0) + 1);
+    }
+    let best = 0, bestK = 0;
+    for (const [k, n] of tally) if (n > best) { best = n; bestK = k; }
+    return { modal: [bestK >> 16, (bestK >> 8) & 255, bestK & 255],
+             share: best / (d.length / 4) };
+  }, buf.toString('base64'));
+}
+
+const out = { errs };
+// SIBLINGS, AND NOTHING BETWEEN THEM AND THE ROOT THAT ISOLATES. A
+// z-index only compares two elements inside the SAME stacking context;
+// give their shared parent a transform or an opacity and the drawer's 50
+// stops being a promise about the scrim's 45. Both live in `.shell`,
+// which is a plain grid container and creates no context — but that is a
+// fact about today's stylesheet, so it is measured rather than assumed.
+out.ordering = await p.evaluate(() => {
+  const isolates = (el) => {
+    const cs = getComputedStyle(el);
+    if (cs.position !== 'static' && cs.zIndex !== 'auto') return 'z-index';
+    if (parseFloat(cs.opacity) < 1) return 'opacity';
+    for (const k of ['transform', 'filter', 'backdropFilter', 'perspective',
+                     'mask', 'clipPath'])
+      if (cs[k] && cs[k] !== 'none') return k;
+    if (cs.mixBlendMode !== 'normal') return 'mix-blend-mode';
+    if (cs.isolation === 'isolate') return 'isolation';
+    if (/paint|layout|strict|content/.test(cs.contain || '')) return 'contain';
+    if (/transform|opacity|filter/.test(cs.willChange || '')) return 'will-change';
+    if (cs.position === 'fixed' || cs.position === 'sticky') return 'position';
+    return '';
+  };
+  const a = document.getElementById('scrim'), b = document.getElementById('sidebar');
+  const walls = [];
+  for (let el = a.parentElement; el && el !== document.documentElement;
+       el = el.parentElement) {
+    const why = isolates(el);
+    if (why) walls.push((el.id || el.className || el.tagName) + ': ' + why);
+  }
+  return { siblings: a.parentElement === b.parentElement,
+           parent: (a.parentElement.id || a.parentElement.className || ''),
+           order: a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? 'scrim-first' : 'drawer-first',
+           walls };
+});
+
+await p.locator('#tb-menu').tap();
+await p.waitForTimeout(900);                   // past the slide
+
+const r = await p.locator('#sidebar').boundingBox();
+out.rect = r;
+out.open = await p.evaluate(() => {
+  const sb = document.getElementById('sidebar');
+  return { cls: document.body.classList.contains('menu-open'),
+           bg: getComputedStyle(sb).backgroundColor,
+           scrim: getComputedStyle(document.getElementById('scrim')).display,
+           aria: document.getElementById('menu-toggle').getAttribute('aria-expanded') };
+});
+// Inset, so the panel's own border and the page beyond it are excluded.
+out.face = await faceOf({ x: r.x + 6, y: r.y + 24,
+                          width: Math.max(40, r.width - 14),
+                          height: Math.min(460, r.height - 48) });
+// The browser's own hit-test, which is the finger's question: can a nav
+// row in there actually be tapped, or does something intercept it?
+try {
+  await p.locator('#sidebar .sport-btn').first().click({ trial: true, timeout: 4000 });
+  out.reachable = true;
+} catch (e) { out.reachable = String(e).slice(0, 160); }
+
+await p.locator('#tb-menu').tap();
+await p.waitForTimeout(900);
+out.closed = await p.evaluate(() => ({
+  cls: document.body.classList.contains('menu-open'),
+  scrim: getComputedStyle(document.getElementById('scrim')).display,
+  left: Math.round(document.getElementById('sidebar').getBoundingClientRect().right),
+  aria: document.getElementById('menu-toggle').getAttribute('aria-expanded') }));
+console.log(JSON.stringify(out));
+await b.close();
+"""
+
+
+def _have_node() -> bool:
+    try:
+        r = subprocess.run(
+            ["node", "-e", "import('playwright').then(()=>0,()=>process.exit(1))"],
+            capture_output=True, cwd=ROOT, timeout=30)
+        return r.returncode == 0
+    except (FileNotFoundError, OSError, subprocess.SubprocessError):
+        return False
+
+
+def _run_probe():
+    """Serve the real handler and drive one phone-sized page."""
+    import rendercheck
+    srv, port = rendercheck._serve()
+    script = None
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False,
+                                         dir=ROOT) as fh:
+            fh.write(_PROBE)
+            script = fh.name
+        proc = subprocess.run(["node", script, str(port)], cwd=ROOT,
+                              capture_output=True, text=True, timeout=180)
+    finally:
+        if script:
+            os.unlink(script)
+        srv.shutdown()
+    assert proc.returncode == 0, proc.stderr[-1500:]
+    return json.loads(proc.stdout.strip().splitlines()[-1])
+
+
+def test_the_drawer_actually_paints_where_it_says_it_is():
+    """The assertion the DOM could not make. Every DOM fact was correct
+    while Ethan's recording was failing — class on, transform at zero,
+    rect at left 0 — and the drawer was still invisible."""
+    if os.environ.get("QB_BROWSER_TESTS") != "1":
+        print("      (skipped: set QB_BROWSER_TESTS=1)")
+        return
+    if not _have_node():
+        print("      (skipped: no Node/Playwright — install to enable)")
+        return
+    out = _run_probe()
+
+    o = out["ordering"]
+    assert o["siblings"], \
+        "the scrim and the drawer are no longer siblings — z-index stops comparing them"
+    assert o["order"] == "scrim-first", \
+        "the drawer now comes BEFORE the scrim; among equals the scrim would win"
+    assert not o["walls"], (
+        "something between the drawer and the root builds a stacking context, "
+        f"so its z-index no longer outranks the scrim's: {o['walls']}")
+    assert out["open"]["cls"], "tapping the tab bar's Menu did not open the drawer"
+    assert out["open"]["scrim"] == "block", "no scrim while open"
+    assert out["open"]["aria"] == "true", "aria-expanded did not follow the drawer"
+    assert round(out["rect"]["x"]) == 0, \
+        f"the drawer is not at the left edge: x={out['rect']['x']}"
+
+    want = [int(n) for n in re.findall(r"\d+", out["open"]["bg"])[:3]]
+    got = out["face"]["modal"]
+    assert got == want, (
+        "THE DRAWER IS OPEN AND SOMETHING ELSE IS PAINTED OVER IT.\n"
+        f"  the panel's background is rgb{tuple(want)}\n"
+        f"  the pixels in its own rectangle are mostly rgb{tuple(got)}\n"
+        "  This is Ethan's 2026-08-19 recording. Check that nothing new "
+        "promotes the scrim (backdrop-filter, filter, opacity, transform) "
+        "and that the drawer still carries will-change: transform.")
+    assert out["face"]["share"] > 0.25, \
+        (f"only {out['face']['share']:.0%} of the drawer's rectangle is its own "
+         "background — it is mostly covered by something")
+
+    assert out["reachable"] is True, \
+        f"a nav row inside the open drawer cannot be tapped: {out['reachable']}"
+
+    assert not out["closed"]["cls"], "a second tap on Menu did not close the drawer"
+    assert out["closed"]["scrim"] == "none", \
+        "THE SCRIM OUTLIVED THE DRAWER — this is the stuck-blurred-screen half"
+    assert out["closed"]["left"] <= 0, \
+        f"the drawer did not slide back off screen: right edge {out['closed']['left']}"
+    assert not out["errs"], f"page errors: {out['errs']}"
+
+
+if __name__ == "__main__":
+    fails = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"  ok  {name}")
+            except AssertionError as exc:
+                fails += 1
+                print(f"  FAIL {name}: {exc}")
+    print("all good" if not fails else f"{fails} failed")
+    sys.exit(1 if fails else 0)

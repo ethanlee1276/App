@@ -21,15 +21,27 @@
  *                    an offline launch shows the app and its own honest
  *                    empty states rather than the browser's dinosaur.
  *
- * The cache is therefore a courtesy, never a source of truth. Bump
- * VERSION on any shell change; `activate` deletes every older cache, so
- * a stale bundle cannot outlive a deploy.
+ * The cache is therefore a courtesy, never a source of truth, and its
+ * name must change whenever the shell does — `activate` deletes every
+ * other cache, so a stale bundle cannot outlive a deploy.
  */
 
-// v2: the 2026-08-17 navigation redesign — bumped late, which is its own
-// lesson: two shell deploys shipped on v1 and the offline fallback held
-// pre-redesign copies the whole time.
-const VERSION = "qb-v3";
+// THE VERSION IS NO LONGER TYPED. It used to be, with a comment telling
+// whoever came next to bump it; that instruction was missed on v1 (two
+// shell deploys served pre-redesign copies) and missed again on v3,
+// which sat here through 2,149 lines of index.html, styles.css, app.js
+// and visuals.js — including the 2026-08-19 fix for the phone drawer
+// that would not open. Network-first means a healthy phone still gets
+// fresh files; the cache only answers when a request fails, which on
+// cellular it does, and one stale styles.css inside an installed PWA
+// looks exactly like a bug that was never fixed.
+//
+// So server.py rewrites this line on the way out, with a hash of the
+// SHELL list below. Change any cached file and the name changes by
+// itself. The literal here is the value when the file is served by
+// something else — a bare file server, a local checkout — and is kept
+// ahead of the last typed one so that path is never a downgrade.
+const VERSION = "qb-v4";
 
 /* The shell only: enough to boot the app and render its own "no data
  * yet" states. Deliberately NOT the boards. */
