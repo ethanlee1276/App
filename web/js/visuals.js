@@ -2095,3 +2095,81 @@ document.addEventListener("click", (e) => {
     try { mountEChartsPanels(); mountEChartsAnalytics(); } catch (err) {}
   }, 60);
 });
+
+
+/* ---------------- Live ticks: the numbers say when they moved ---------
+   Ethan, 2026-08-19, asking for more animation. This is the half of that
+   request with information in it.
+
+   The board reloads on a timer, so until now a price could move four
+   cents while you were looking straight at it and nothing on the page
+   said so. The change was real and the render was silent.
+
+   Any cell can opt in by carrying `data-tick` (a key that survives the
+   re-render — the ticker, not the row index) and `data-tick-v` (the raw
+   number). After a render, `mountLiveTicks` compares each cell against
+   what it said last time and, where it moved, counts the digits from the
+   old value to the new one and tints the cell in the direction it went.
+
+   THE FIRST SIGHT OF A CELL IS NOT A CHANGE. A key we have never seen is
+   recorded silently — otherwise every cell on the page would flare on
+   first paint, which is an entrance animation wearing a data costume,
+   and §3.4 has already thrown those out once.
+
+   The count is cosmetic, so it is skipped entirely under reduced motion
+   (the cell just shows its new value) and it never touches layout: the
+   text is written into a fixed-width tabular cell, and the tint is a
+   background that fades. */
+const _tickSeen = new Map();
+const TICK_MS = 420;          // the count itself
+const _tickTimers = new Map();
+
+function _tickParts(text) {
+  // "34¢" -> ["", "34", "¢"];  "+7 pts" -> ["+", "7", " pts"]
+  const m = String(text).match(/^(.*?)(-?[\d,]*\.?\d+)(.*)$/s);
+  return m ? [m[1], m[2], m[3]] : null;
+}
+
+function mountLiveTicks(root) {
+  const scope = root && root.querySelectorAll ? root : document;
+  let cells;
+  try { cells = scope.querySelectorAll("[data-tick]"); } catch (e) { return; }
+  const quiet = typeof window !== "undefined" && window.matchMedia
+    && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  for (const el of cells) {
+    const key = el.getAttribute("data-tick");
+    const now = parseFloat(el.getAttribute("data-tick-v"));
+    if (!key || !isFinite(now)) continue;
+    const was = _tickSeen.get(key);
+    _tickSeen.set(key, now);
+    if (was === undefined || was === now) continue;
+    const up = now > was;
+    el.classList.remove("tick-up", "tick-down");
+    // Reading offsetWidth restarts the fade when a cell moves twice in a
+    // row; without it the second change re-adds a class that is already
+    // there and no animation replays.
+    void el.offsetWidth;
+    el.classList.add(up ? "tick-up" : "tick-down");
+    clearTimeout(_tickTimers.get(key));
+    _tickTimers.set(key, setTimeout(() => {
+      el.classList.remove("tick-up", "tick-down");
+    }, 1500));
+    if (quiet) continue;
+    const parts = _tickParts(el.textContent);
+    if (!parts) continue;
+    const [pre, shown, post] = parts;
+    const dp = (shown.split(".")[1] || "").length;
+    const t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+    const step = (t) => {
+      const k = Math.min(1, ((t || Date.now()) - t0) / TICK_MS);
+      // ease-out: fast off the mark, settles onto the number.
+      const v = was + (now - was) * (1 - Math.pow(1 - k, 3));
+      el.textContent = pre + v.toFixed(dp) + post;
+      if (k < 1) requestAnimationFrame(step);
+      else el.textContent = pre + now.toFixed(dp) + post;
+    };
+    requestAnimationFrame(step);
+  }
+}
+
+if (typeof window !== "undefined") window.mountLiveTicks = mountLiveTicks;

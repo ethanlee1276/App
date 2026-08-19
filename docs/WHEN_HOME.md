@@ -815,6 +815,43 @@ came from, not borrowing a brand. The city or sport keeps its label
 under the mark, and the column widened to 68px so "PHILADELPHIA" fits
 on one line instead of breaking mid-word.
 
+### T35. Motion, three ways — and why not more than three
+
+You asked whether we could add more animation. Worth knowing first:
+this site already threw a lot of animation OUT. Every card used to fade
+up on a stagger, and the note left behind says why — "a page of forty
+cards spent most of a second assembling itself." Two tests still
+enforce the result: nothing may animate a layout property (width, left
+— the browser re-runs layout every frame), and no UI transition may
+outlast 300ms. So the useful question wasn't "more motion", it was
+"which motion carries information".
+
+**1. Prices that move now say so.** This is the one with real value.
+The board reloads on a timer, so until tonight a price could move four
+cents while you were looking straight at it and the page said nothing.
+Now a changed cell counts from the old number to the new one over
+~400ms and the cell tints green or red in the direction it went, fading
+over 1.4s. The rule that keeps it honest: **a cell seen for the first
+time never flashes** — otherwise the whole board would flare on load,
+which is an entrance animation wearing a data costume.
+
+**2. Tab changes cross-fade.** Using the browser's own View Transitions
+API: no library, no bytes, no keyframes we maintain. The browser
+snapshots the old page, runs the swap, snapshots the new one and
+blends them on the compositor. It is scoped to `<main>`, so the
+masthead and sidebar stay put while the content changes — which is what
+makes it read like an app instead of a page reload. Where the browser
+has no such API it falls straight through to the old instant swap.
+
+**3. Things move under your thumb.** A 90ms scale-down on press for
+buttons, chips, filters and cards. Transform only, so it is compositor
+work.
+
+All three are dropped for a reader whose device asks for reduced
+motion. What I deliberately did NOT add: scroll reveals (already tried,
+already removed), Lottie (250KB and it needs artwork you do not have),
+and parallax.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

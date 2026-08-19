@@ -8362,9 +8362,12 @@ function pmBoardRowHTML(r) {
       <span class="kx-thumb-l">${escapeHtml(String(r.venue || ""))}</span></span>
     <span class="kx-title" title="${escapeAttr(r.title)}">${title}
       ${r.sub ? `<span class="kx-match">· ${escapeHtml(r.sub)}</span>` : ""}${basis}</span>
-    <span class="kx-num kx-k" title="The venue’s own price for YES" style="color:var(--good)">${
+    <span class="kx-num kx-k" title="The venue’s own price for YES" style="color:var(--good)"${
+      r.price == null ? "" : ` data-tick="y:${escapeAttr(r.key)}" data-tick-v="${
+        (r.price * 100).toFixed(0)}"`}>${
       r.price == null ? "—" : (r.price * 100).toFixed(0) + "¢"}</span>
-    <span class="kx-num kx-n" title="The venue’s implied price for NO" style="color:var(--bad)">${
+    <span class="kx-num kx-n" title="The venue’s implied price for NO" style="color:var(--bad)"${
+      no == null ? "" : ` data-tick="n:${escapeAttr(r.key)}" data-tick-v="${no}"`}>${
       no == null ? "—" : no + "¢"}</span>
     <span class="kx-num kx-m" title="Our model’s probability for the same claim">${
       r.model == null ? "—" : (r.model * 100).toFixed(0) + "%"}</span>
@@ -8463,6 +8466,7 @@ async function renderIntel() {
       venues.</div></div>`
       + predBoardHTML(kx, d);
     if (typeof mountEChartsAnalytics === "function") mountEChartsAnalytics(host);
+    if (typeof mountLiveTicks === "function") mountLiveTicks(host);
     return;
   }
   setStandaloneSource("Kalshi + Polymarket public feeds", "Prediction Market · live venue data");
@@ -8588,6 +8592,7 @@ async function renderIntel() {
   // this the tabs render and do nothing.
   bindSubtabs(host);
   if (typeof mountEChartsAnalytics === "function") mountEChartsAnalytics(host);
+  if (typeof mountLiveTicks === "function") mountLiveTicks(host);
 }
 
 /* ============================================================
@@ -15214,8 +15219,34 @@ function watchSectionSubs() {
    visible as a 200ms animation going the wrong way. */
 const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
 
+/* Tab changes go through the browser's own View Transitions API (Ethan,
+   2026-08-19: "add more animations"). Worth knowing what this is NOT: no
+   library, no bytes, no keyframes we maintain. The browser snapshots the
+   old page, runs our swap, snapshots the new one, and cross-fades the
+   two on the compositor — the same machinery a native app uses, and it
+   cannot jank the main thread because our JavaScript is not doing it.
+
+   It replaces the from-left/from-right slide that the motion pass killed
+   (`animation: none`, §3.4): the intent was right and the implementation
+   was a layout animation on every card. This is the version that costs
+   nothing.
+
+   Skipped when the reader asked for less motion, when the browser has no
+   such API (it falls straight through to the plain swap), and in quiet
+   mode — which exists for the same reason. */
 function switchView(name, push = false) {
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
+  const go = () => _switchViewNow(name, push, dir);
+  if (typeof document.startViewTransition === "function" && !state.quiet
+      && !(window.matchMedia
+           && matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+    document.startViewTransition(go);
+    return;
+  }
+  go();
+}
+
+function _switchViewNow(name, push, dir) {
   if (typeof syncRail === "function") setTimeout(syncRail, 0);
   if (name === "live" && typeof renderLiveBoard === "function")
     setTimeout(renderLiveBoard, 0);

@@ -178,6 +178,71 @@ def test_the_alert_rows_still_come_from_the_three_real_feeds():
     assert "d.injury_watch" in body
     assert "_railDeskCache" in body
 
+VIS = _read("web", "js", "visuals.js")
+
+
+def test_a_number_that_moved_says_so_and_a_first_sight_does_not():
+    """Ethan, 2026-08-19: "add more animations." This is the half with
+    information in it — the board reloads on a timer, so a price could
+    move four cents while you watched and the render said nothing.
+
+    The rule that keeps it from becoming decoration: a key seen for the
+    FIRST time is recorded silently. Without that every cell flares on
+    first paint, which is an entrance animation wearing a data costume —
+    and §3.4 threw those out once already."""
+    i = VIS.index("function mountLiveTicks(")
+    body = VIS[i:VIS.index("\nif (typeof window", i)]
+    assert "_tickSeen" in body
+    assert "if (was === undefined || was === now) continue;" in body, \
+        "a first sighting, or an unchanged number, must not animate"
+    # The count is cosmetic; the flash is the message. Reduced motion
+    # keeps the message and drops the count.
+    assert "if (quiet) continue;" in body
+    assert "prefers-reduced-motion" in VIS
+    for sel in (".tick-up {", ".tick-down {", "@keyframes tickUp"):
+        assert sel in CSS, f"{sel} is unstyled"
+    # Tinting the digits would fight the green/red the cell already uses
+    # to mean YES and NO, so the flash is a background.
+    ku = CSS[CSS.index("@keyframes tickUp"):CSS.index("@keyframes tickDown")]
+    assert "background:" in ku and "color:" not in ku
+
+
+def test_view_transitions_are_native_scoped_and_optional():
+    """The browser's own page cross-fade: no library, no bytes. Scoped to
+    <main> so the masthead and sidebar are not captured, and declined
+    outright when the reader asked for less motion."""
+    i = APP.index("function switchView(")
+    body = APP[i:APP.index("function _switchViewNow(", i)]
+    assert "document.startViewTransition" in body
+    assert "prefers-reduced-motion" in body, "motion preference is ignored"
+    assert "state.quiet" in body
+    # Falls through to the plain swap where the API is absent.
+    assert 'typeof document.startViewTransition === "function"' in body
+    assert "main { view-transition-name: page; }" in CSS
+    # Compositor properties only, and inside the 300ms UI ceiling.
+    seg = CSS[CSS.index("::view-transition-old(page)"):
+              CSS.index("@keyframes vtEnter") + 200]
+    assert "170ms" in seg
+    for prop in ("width", "height", "left", "top"):
+        assert f"{prop}:" not in seg, f"view transition animates {prop}"
+
+
+def test_press_feedback_is_transform_only_and_short():
+    """What separates a web page from an app on a phone is that something
+    moves under your thumb. It has to be transform (compositor) and it has
+    to be quick, or it reads as lag rather than as the surface giving."""
+    i = CSS.index("/* ---- Press feedback")
+    seg = CSS[i:i + 1200]
+    assert "transform: scale(" in seg
+    assert "transition: transform 90ms" in seg
+    for prop in ("width:", "height:", "margin:", "padding:"):
+        assert prop not in seg, f"press feedback animates {prop}"
+    # And it is dropped for a reader who asked for less motion.
+    rm = CSS[CSS.index("@media (prefers-reduced-motion: reduce) {",
+                       CSS.index("main { view-transition-name: page; }")):]
+    assert ".plan-btn:active { transform: none; }" in rm[:900]
+
+
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

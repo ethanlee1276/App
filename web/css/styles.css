@@ -1338,7 +1338,71 @@ svg[data-scrub] { touch-action: pan-y; }
 }
 @keyframes sheen { 0%, 70% { transform: translateX(-120%); } 85%, 100% { transform: translateX(120%); } }
 
+/* ---- View transitions: the browser's own page cross-fade -------------
+   Named on MAIN only, so the masthead and the sidebar are NOT captured —
+   they stay put while the content changes, which is what makes it read
+   as an app rather than a page reload. Opacity and transform only, so
+   every frame is compositor work; 170ms, inside the 300ms ceiling §3.4
+   puts on UI motion.
+
+   `view-transition-name` must be unique in the document — one <main> is
+   the whole point, and putting it on a repeated element would silently
+   disable the transition instead of erroring. */
+/* ---- Live ticks: a number that moved says so ------------------------
+   Background only — the cell's own colour (green YES / red NO) is left
+   alone, because recolouring the digits would collide with the meaning
+   the colour already carries. The tint decays over 1.4s, slower than UI
+   motion on purpose: this is a notice you might catch out of the corner
+   of your eye, not a control responding to you. Nothing here animates a
+   layout property, so a whole board ticking at once is still one
+   compositor pass. */
+.tick-up, .tick-down { border-radius: var(--radius-sm); }
+.tick-up { animation: tickUp 1.4s var(--ease-out) 1; }
+.tick-down { animation: tickDown 1.4s var(--ease-out) 1; }
+@keyframes tickUp {
+  0%   { background: color-mix(in oklab, var(--good) 34%, transparent); }
+  100% { background: color-mix(in oklab, var(--good) 0%, transparent); }
+}
+@keyframes tickDown {
+  0%   { background: color-mix(in oklab, var(--bad) 34%, transparent); }
+  100% { background: color-mix(in oklab, var(--bad) 0%, transparent); }
+}
+
+/* ---- Press feedback -------------------------------------------------
+   The thing that separates a web page from an app on a phone: something
+   moves under your thumb. transform only, and 90ms — fast enough that it
+   reads as the surface giving, not as an animation you waited through.
+   `:active` covers touch and mouse alike. */
+.btn:active, .chip[role="button"]:active, .sport-btn:active, .nav-btn:active,
+.mbc-chip:active, .mbc-view:active, .al-cat:active, .rec-scope:active,
+.pm-cat:active, .pm-view:active, .qt-chip:active, .tb-item:active,
+.ffcal-card:active, .plan-btn:active {
+  transform: scale(.972);
+}
+.btn, .sport-btn, .nav-btn, .mbc-chip, .mbc-view, .al-cat, .rec-scope,
+.pm-cat, .pm-view, .qt-chip, .tb-item, .ffcal-card, .plan-btn {
+  transition: transform 90ms var(--ease-out), background 120ms var(--ease-out),
+              border-color 120ms var(--ease-out), color 120ms var(--ease-out);
+}
+
+main { view-transition-name: page; }
+::view-transition-old(page), ::view-transition-new(page) {
+  animation-duration: 170ms; animation-timing-function: var(--ease-out);
+}
+::view-transition-old(page) { animation-name: vtLeave; }
+::view-transition-new(page) { animation-name: vtEnter; }
+@keyframes vtLeave { to { opacity: 0; transform: translateY(-5px); } }
+@keyframes vtEnter { from { opacity: 0; transform: translateY(7px); } }
+
 @media (prefers-reduced-motion: reduce) {
+  /* Belt and braces: switchView already declines to start one, and this
+     kills it for any transition started by something else. */
+  main { view-transition-name: none; }
+  .tick-up, .tick-down { animation: none; }
+  .btn:active, .sport-btn:active, .nav-btn:active, .mbc-chip:active,
+  .mbc-view:active, .al-cat:active, .rec-scope:active, .pm-cat:active,
+  .pm-view:active, .qt-chip:active, .tb-item:active, .ffcal-card:active,
+  .plan-btn:active { transform: none; }
   .reveal { opacity: 1; transform: none; }
   .reveal.in { transition: none; }
   .tilt { transition: none; }
