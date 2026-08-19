@@ -42,7 +42,7 @@ cannot persist them); this file is the durable description.
 | 13 — Account & Settings | exists; render adds stats card |
 | 14 — Alerts Center | **SHIPPED 2026-08-19** (filter chips + condition rows; the render's toggles never cross) |
 | 21 — Pricing | billing exists (Paddle); render’s 3-plan cards pending |
-| 1/2 — Login / Sign up | exists (accounts); render styling pending |
+| 1/2 — Login / Sign up | **SHIPPED 2026-08-19** (wordmark + tagline hero over the card) |
 | 23/24 — 404 / Maintenance | **SHIPPED 2026-08-19** (web/404.html, web/maintenance.html) |
 | 20/22 — Mobile app promo | not applicable yet (no store apps) |
 
@@ -133,9 +133,13 @@ we do not build DFS lineups.
   stays a console error instead of becoming a blank screen. The
   maintenance page quotes no ETA — it says what is true (nothing
   settled is touched) and when to go look at the machine.
-* **Login/Sign up (1/2):** centered card on dark stadium wash,
-  wordmark + "DATA. EDGE. PROFITS."-style tagline (write our own
-  honest one), fields, brand CTA, switch link.
+* **Login/Sign up (1/2): SHIPPED.** `.acct-hero` — mark, wordmark, and
+  our own tagline **"Priced by a model. Graded in public."** (theirs
+  was "DATA. EDGE. PROFITS."; a promise of profit is the one thing this
+  site will not print) over the existing sign-in card. The old
+  duplicate `<h2>` folded into the hero's sub-line so the screen names
+  itself once. Card, fields, log-in/sign-up order and the honesty copy
+  underneath are unchanged.
 * **Alerts (14): SHIPPED.** Filter chips with counts (All / Line moves
   / Injuries / The desk) over rows carrying an icon chip, the alert,
   and the CONDITION that fired it. The render's per-row toggle and

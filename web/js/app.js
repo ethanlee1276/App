@@ -10894,13 +10894,22 @@ function acctScreenHTML() {
   // BELOW the sign-in rather than above it: it is the old thing being
   // replaced, and putting it first would make the upgrade look optional.
   const legacy = acctState() ? acctLegacyCardHTML() : "";
+  // Render 1/2's sign-in screen: the wordmark over the card, on a wash.
+  // Their tagline was "DATA. EDGE. PROFITS." — a promise of profit is
+  // the one thing this site will not print, so ours says what the page
+  // actually does.
   return `<div class="acct-screen">
-    <div class="acct-screen-head">
-      <div>
-        <h2>Sign in to Qellys Book</h2>
-        <p class="acct-screen-sub">One account carries your bet log, your
-          fantasy leagues and your subscription to every device you use.</p>
-      </div>
+    <div class="acct-hero">
+      <span class="acct-hero-mark" aria-hidden="true">
+        <svg class="qmark" viewBox="0 0 48 48" fill="none" focusable="false">
+          <ellipse cx="24" cy="24" rx="17" ry="11.5" />
+        </svg>
+      </span>
+      <span class="acct-hero-words">Qellys <span>Book</span></span>
+      <span class="acct-hero-tag">Priced by a model. Graded in public.</span>
+      <p class="acct-screen-sub acct-hero-sub">Sign in to Qellys Book —
+        one account carries your bet log, your fantasy leagues and your
+        subscription to every device you use.</p>
     </div>
     ${acctSignInHTML()}
     <ul class="acct-assure">

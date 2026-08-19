@@ -683,6 +683,23 @@ render's per-row toggle and its "Create New Alert" button — this page
 reports feeds we already hold rather than subscribing you to anything,
 and a switch that turns nothing on is a lie you can click.
 
+### T31. The sign-in screen, and two regressions the suite caught
+
+The sign-in page picks up render 1/2: the mark and the **QELLYS BOOK**
+wordmark over the card, with a tagline. Theirs read "DATA. EDGE.
+PROFITS."; ours reads **"Priced by a model. Graded in public."** — a
+promise of profit is the one thing this site will not print. The
+duplicate heading underneath folded into that block, so the screen
+names itself once instead of three times.
+
+Also fixed here, found by the full suite rather than by eye: the
+calendar work had written a raw `30px` font size and two bare
+line-heights straight into the stylesheet, which the type-ramp and
+measure guards exist to catch. Both now go through tokens
+(`--fs-3xl`, `--lh-tight`), and the 404 numeral got its own named
+`--fs-stub` rather than a raw clamp. Nothing visible changed; the
+system stayed a system.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 
