@@ -852,9 +852,13 @@ masthead and sidebar stay put while the content changes — which is what
 makes it read like an app instead of a page reload. Where the browser
 has no such API it falls straight through to the old instant swap.
 
-**3. Things move under your thumb.** A 90ms scale-down on press for
+**3. Things move under your thumb.** A quick scale-down on press for
 buttons, chips, filters and cards. Transform only, so it is compositor
-work.
+work, and it rides the site's existing duration ladder rather than a
+number I picked — which the suite caught me doing: there are exactly
+three motion tiers (120/180/280ms) and `tests/test_motion.py` fails any
+raw millisecond value in a transition. Both this and the tab cross-fade
+now use the tokens.
 
 All three are dropped for a reader whose device asks for reduced
 motion. What I deliberately did NOT add: scroll reveals (already tried,

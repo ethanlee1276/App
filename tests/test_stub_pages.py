@@ -222,7 +222,7 @@ def test_view_transitions_are_native_scoped_and_optional():
     # Compositor properties only, and inside the 300ms UI ceiling.
     seg = CSS[CSS.index("::view-transition-old(page)"):
               CSS.index("@keyframes vtEnter") + 200]
-    assert "170ms" in seg
+    assert "var(--dur-base)" in seg
     for prop in ("width", "height", "left", "top"):
         assert f"{prop}:" not in seg, f"view transition animates {prop}"
 
@@ -234,7 +234,8 @@ def test_press_feedback_is_transform_only_and_short():
     i = CSS.index("/* ---- Press feedback")
     seg = CSS[i:i + 1200]
     assert "transform: scale(" in seg
-    assert "transition: transform 90ms" in seg
+    assert "transition: transform var(--dur-fast)" in seg, \
+        "press feedback must ride the duration ladder, not a raw ms"
     for prop in ("width:", "height:", "margin:", "padding:"):
         assert prop not in seg, f"press feedback animates {prop}"
     # And it is dropped for a reader who asked for less motion.

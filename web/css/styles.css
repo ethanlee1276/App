@@ -1342,8 +1342,9 @@ svg[data-scrub] { touch-action: pan-y; }
    Named on MAIN only, so the masthead and the sidebar are NOT captured —
    they stay put while the content changes, which is what makes it read
    as an app rather than a page reload. Opacity and transform only, so
-   every frame is compositor work; 170ms, inside the 300ms ceiling §3.4
-   puts on UI motion.
+   every frame is compositor work, on the base tier of the duration
+   ladder — §3.4 puts a 300ms ceiling on UI motion and the ladder is
+   how that ceiling is kept (tests/test_motion.py).
 
    `view-transition-name` must be unique in the document — one <main> is
    the whole point, and putting it on a repeated element would silently
@@ -1378,9 +1379,13 @@ svg[data-scrub] { touch-action: pan-y; }
 
 /* ---- Press feedback -------------------------------------------------
    The thing that separates a web page from an app on a phone: something
-   moves under your thumb. transform only, and 90ms — fast enough that it
-   reads as the surface giving, not as an animation you waited through.
-   `:active` covers touch and mouse alike. */
+   moves under your thumb. transform only, and the FAST tier — quick
+   enough that it reads as the surface giving, not as an animation you
+   waited through. `:active` covers touch and mouse alike.
+
+   Durations and easings go through the tokens rather than raw numbers:
+   the ramp is three tiers on purpose, and a bare `90ms` here is exactly
+   how a fourth one gets in (tests/test_motion.py). */
 .btn:active, .chip[role="button"]:active, .sport-btn:active, .nav-btn:active,
 .mbc-chip:active, .mbc-view:active, .al-cat:active, .rec-scope:active,
 .pm-cat:active, .pm-view:active, .qt-chip:active, .tb-item:active,
@@ -1389,13 +1394,16 @@ svg[data-scrub] { touch-action: pan-y; }
 }
 .btn, .sport-btn, .nav-btn, .mbc-chip, .mbc-view, .al-cat, .rec-scope,
 .pm-cat, .pm-view, .qt-chip, .tb-item, .ffcal-card, .plan-btn {
-  transition: transform 90ms var(--ease-out), background 120ms var(--ease-out),
-              border-color 120ms var(--ease-out), color 120ms var(--ease-out);
+  transition: transform var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out);
 }
 
 main { view-transition-name: page; }
 ::view-transition-old(page), ::view-transition-new(page) {
-  animation-duration: 170ms; animation-timing-function: var(--ease-out);
+  animation-duration: var(--dur-base);
+  animation-timing-function: var(--ease-out);
 }
 ::view-transition-old(page) { animation-name: vtLeave; }
 ::view-transition-new(page) { animation-name: vtEnter; }
