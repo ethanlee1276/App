@@ -24,11 +24,11 @@ from engine.pipeline import run_slate
 from engine.rules import RuleConfig
 
 
-def show_games(season: int, week: int) -> None:
+def show_games(season: int, week: int) -> list:
     games = build_games(season, week)
     if not games:
         print(f"No games found for {season} week {week}.")
-        return
+        return []
     print(f"\n{len(games)} games — {season} week {week}\n")
     for g in games:
         w = g.weather
@@ -36,6 +36,7 @@ def show_games(season: int, week: int) -> None:
         fav = g.home if g.spread < 0 else g.away
         print(f"  {g.away:>3} @ {g.home:<3}  spread {g.spread:+.1f} (fav {fav})  "
               f"total {g.total:.1f}  · {cond}")
+    return games
 
 
 def main() -> None:
@@ -69,8 +70,47 @@ def main() -> None:
                          "have a board at all (see engine/carry.py)")
     args = ap.parse_args()
 
-    show_games(args.season, args.week)
+    games = show_games(args.season, args.week)
     if args.games_only:
+        # A SCHEDULE IS WORTH PUBLISHING ON ITS OWN.
+        #
+        # Found by the Phase 3 dress rehearsal, 2026-08-19: the full build
+        # exits 2 when nflverse has no weekly player stats yet, which is
+        # the normal state of the world until Week 1 has been PLAYED. The
+        # launcher runs one build and keeps the old data when it fails, so
+        # from Sep 2 (when _current_nfl_week() first calls Week 1 current)
+        # until roughly Sep 9, every nightly NFL refresh would fail and
+        # the board would carry nothing — through exactly the week the
+        # season is arriving. The games and their lines are available that
+        # whole time; only the PLAYER layer is missing.
+        #
+        # So --games-only now writes when it is given somewhere to write.
+        # What it publishes is the slate and nothing else: no
+        # recommendations, no game bets, no journalling. That restraint is
+        # deliberate rather than lazy — a fallback that priced and
+        # journalled picks could double-journal the same slate when the
+        # full build later succeeds, and the record is the one thing here
+        # that must never be double-counted. The board shows tonight's
+        # games; it does not invent an opinion about them.
+        if args.out:
+            import datetime as _dt
+            from engine import gate
+            from engine.pipeline import _game_to_dict
+            payload = {
+                "date": f"{args.season}-W{args.week:02d}",
+                "built_at": _dt.datetime.now().isoformat(timespec="seconds"),
+                "generated_from": "schedule-only",
+                "games": [_game_to_dict(g) for g in games],
+                "recommendations": [], "game_bets": [], "long_shots": [],
+                "market_scan": [], "parlays": [],
+                "note": ("Schedule, lines and weather only — nflverse has "
+                         "not published weekly player stats for this season "
+                         "yet, so nothing is priced. Props and picks appear "
+                         "once the first games have been played."),
+            }
+            gate.publish(payload, args.out)
+            print(f"\nWrote {args.out} — {len(games)} game(s), schedule only "
+                  f"(no player stats yet, so nothing is priced).")
         return
 
     carry_report: dict = {}

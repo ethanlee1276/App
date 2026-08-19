@@ -440,6 +440,30 @@ def refresh_nfl(quiet: bool = False) -> bool:
         args.append("--cached-odds")   # keep last paid prices; never overwrite with proxies
     ok, tail = _run_build(args)
     _finish_paid_pull(spend, before_seen, ok, tail, "NFL", sport="nfl")
+    if not ok:
+        # THE SCHEDULE IS STILL WORTH HAVING.
+        #
+        # Found by the Phase 3 rehearsal, 2026-08-19: the full build exits
+        # 2 when nflverse has no weekly player stats, which is the normal
+        # state of the world until a season's Week 1 has been PLAYED. With
+        # one build and no fallback, every nightly refresh from Sep 2 (the
+        # first day _current_nfl_week() calls Week 1 current) to roughly
+        # Sep 9 would fail and the board would carry nothing — through
+        # exactly the week the season arrives. The games and their lines
+        # are available that entire time.
+        #
+        # The fallback publishes the slate ONLY: no picks, no journalling
+        # (see the note in nfl_build.py). A board that shows tonight's
+        # games and says it has no opinion yet beats an empty one, and
+        # beats a fabricated one by more.
+        ok2, tail2 = _run_build(["nfl_build.py", str(season), str(week),
+                                 "--games-only", "--out", out])
+        if ok2:
+            if not quiet:
+                print(f"  NFL  {season} wk {week}: schedule only — no weekly "
+                      f"player stats yet, so nothing is priced")
+            return True
+        tail = tail or tail2
     if not quiet:
         print(f"  NFL  {season} wk {week}: {'refreshed' if ok else 'unavailable — kept existing data'}"
               + (f"  ({tail})" if not ok and tail else ""))

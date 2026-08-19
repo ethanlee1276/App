@@ -993,6 +993,53 @@ losing the droplet. Give me a destination (a box you own, or an
 S3/B2 bucket) and it is a one-line change; I did not pick one for you
 because that is your call, not mine.
 
+### T40. NFL Phase 3 — the rehearsal found a real one
+
+Ran the dress rehearsal (#41). The prep note was right that it does not
+need preseason data: 2026 Week 1 is already in the cached feed with real
+lines, so it runs today.
+
+`python3 nfl_build.py 2026 1 --games-only` — **all 16 games**, real
+spreads, totals, roofs. Clean.
+
+Then the full build, which had never been run:
+
+```
+python3 nfl_build.py 2026 1 --injuries --depth --out /tmp/wk1.json
+```
+
+It printed all 16 games with their lines, then **exited 2 and wrote
+nothing.** nflverse has no weekly player stats for a season whose games
+have not been played — which is the normal state of the world before
+every Week 1, not a fault. (The misleading "egress policy" message the
+old note warned about is already fixed; it now says plainly that the
+404 is expected.)
+
+**The bug is what happens next.** `refresh_nfl` runs ONE build and keeps
+the old data when it fails. `_current_nfl_week()` starts calling Week 1
+current on **Sep 2**; nflverse publishes weekly stats only after games
+are played, around **Sep 9**. So for that week — the one where the
+season actually arrives — every nightly NFL refresh would have failed
+and the board would have carried nothing, while the games and their
+lines were sitting right there the whole time.
+
+Fixed: `--games-only` now WRITES when given `--out`, and the launcher
+falls back to it when the full build fails. Verified end to end: 16
+games, real lines, weather and stadium context, published through the
+same gate as every other build.
+
+**What it deliberately does not do:** no picks, no game bets, no
+journalling. A fallback that priced and journalled could double-journal
+the same slate when the full build later succeeds, and the record is the
+one thing here that must never be double-counted. The board shows
+tonight's games and says plainly that nothing is priced yet. That is a
+better answer than an empty page, and a much better one than an invented
+opinion.
+
+Still to confirm during the live rehearsal (§3d, needs a real slate):
+the NFL journal writing `move_delta`/`move_steam`, and `nflguard.py`
+reading TOO EARLY until Week 1 settles.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 
