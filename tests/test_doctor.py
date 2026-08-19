@@ -810,6 +810,26 @@ def test_seeding_a_box_stops_the_app_before_it_overwrites_the_database():
         "the app cannot write files root has just delivered"
 
 
+def test_the_backup_line_reports_an_AGE_not_just_a_filename():
+    """It used to print a green tick and a filename, so a nine-week-old
+    archive and this morning's read identically unless you date-parsed
+    the name in your head.
+
+    The weekly backup runs INSIDE the refresh loop, and that loop dying
+    silently has actually happened here (nine days, 2026-08-10). When it
+    dies the backups stop with it — which is the moment this line most
+    needs to be loud, and was quietest."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index('backups = sorted((ROOT / "data" / "backups")')
+    seg = src[i:i + 1800]
+    assert "BACKUP_EVERY_DAYS" in seg, "the cadence must come from the source"
+    assert "days old" in seg and "DAYS old" in seg, "no age is printed"
+    # Three outcomes, and the worst one names the actual cause.
+    assert "2 * _every" in seg, "no hard failure band"
+    assert "refresh loop is not running" in seg
+    assert "systemctl status qellys" in seg, "a diagnosis with no next step"
+
+
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

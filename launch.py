@@ -2649,7 +2649,32 @@ def preflight() -> None:
              else "not created — copy data/ufc_dossiers.sample.json (no dossier, no bet)"))
     backups = sorted((ROOT / "data" / "backups").glob("backup_*.zip"))
     if backups:
-        print(f"{ok} Backups: {len(backups)} kept, newest {backups[-1].name}")
+        # AGE, NOT JUST A NAME. This line used to print the filename and a
+        # green tick, so a nine-week-old archive and this morning's looked
+        # identical unless you date-parsed the name in your head. The
+        # weekly backup runs INSIDE the refresh loop, and that loop dying
+        # silently is a thing that has actually happened here (nine days,
+        # 2026-08-10) — when it dies the backups stop with it, which is
+        # the moment this line most needs to be loud.
+        from engine.maintenance import BACKUP_EVERY_DAYS as _every
+        newest = backups[-1]
+        try:
+            made = _dt.date.fromisoformat(newest.stem.replace("backup_", ""))
+            age = (_dt.date.today() - made).days
+        except ValueError:
+            age = None
+        if age is None:
+            print(f"{ok} Backups: {len(backups)} kept, newest {newest.name}")
+        elif age > 2 * _every:
+            print(f"{bad} Backups: newest is {age} DAYS old ({newest.name}) — "
+                  f"they run weekly with maintenance, so this old means the "
+                  f"refresh loop is not running. Check: systemctl status qellys")
+        elif age > _every:
+            print(f"{warn} Backups: newest is {age} days old ({newest.name}) — "
+                  f"one weekly cycle has been missed")
+        else:
+            print(f"{ok} Backups: {len(backups)} kept, newest {age} day(s) old "
+                  f"({newest.name})")
     else:
         print(f"{warn} Backups: none yet — the first weekly backup runs with "
               f"daily maintenance")

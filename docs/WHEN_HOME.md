@@ -968,6 +968,31 @@ doctor runs inside the refresh cycle, so a dead loop cannot report
 itself. That is precisely why nine days went by. The page is always
 holding the timestamp, so it can always tell.
 
+### T39. `--check` now tells you how OLD your backups are
+
+Same shape as T38, one layer down. The backup line printed a green tick
+and a filename — "Backups: 3 kept, newest backup_2026-06-01.zip" — so a
+nine-week-old archive and this morning's looked identical unless you
+parsed the date in your head.
+
+That matters more than it sounds, because the weekly backup runs
+*inside the refresh loop*. When that loop dies, your backups stop with
+it, silently, exactly when you would most want to know. Now:
+
+* under a week — ✅ with the age
+* over one cycle — ⚠️ "newest is 11 days old — one weekly cycle has been
+  missed"
+* over two — ❌ "newest is 79 DAYS old … this old means the refresh loop
+  is not running. Check: systemctl status qellys"
+
+**Still on you, and still the real gap: `QB_BACKUP_REMOTE` is unset.**
+The mechanism already exists — `deploy/backup.sh` rsyncs there whenever
+it is set, so there was nothing for me to build. Both databases just
+live on the droplet's own disk today, which survives everything except
+losing the droplet. Give me a destination (a box you own, or an
+S3/B2 bucket) and it is a one-line change; I did not pick one for you
+because that is your call, not mine.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 
