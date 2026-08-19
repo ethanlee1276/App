@@ -35,7 +35,7 @@ cannot persist them); this file is the durable description.
 | Screen | Status |
 | --- | --- |
 | 10/PM detail — Prediction Markets, table + detail panel | **SHIPPED 2026-08-18** |
-| 6/7 — Fantasy Calendar three-column | next |
+| 6/7 — Fantasy Calendar three-column | **SHIPPED 2026-08-19** |
 | 8/9 — Player Profile (fantasy) | next |
 | 3 — Dashboard | partial (top picks, stadiums, perf panel exist; quick-tools row + sports-breakdown donut pending) |
 | 12 — Bet Tracker | mostly exists (My Bets); render adds summary strip |
@@ -62,7 +62,14 @@ two-sided book, $250 volume floor, 6¢ spread cap — mirrored in
 `PM_GATE`, keep in sync with engine/sources/kalshi.py), verdict line,
 link-out button, no-wagers note. Phone: detail stacks above the table.
 
-### Fantasy Calendar (render 6/7 + full render)
+### Fantasy Calendar (render 6/7 + full render) — SHIPPED
+As-built notes: `.ffcal-layout` three-column grid (calendar+summary /
+ranked cards / sticky `ffcal-panel`); cards are compact pickers
+(`data-calpick`), the why-checklist moved into the panel; matchup
+tiles are the market's implied-points split (the honest version of the
+render's offense/defense tiles); per-sport chips became per-position
+chips (this calendar is NFL only). Phone: calendar → read panel →
+list. Kickoff venue and Watchlist omitted (no source / no feature).
 Three columns. **Left:** "Fantasy Calendar — the best fantasy plays
 for every day"; legend (Elite/Top/Good day); month grid card with
 dot/star day markers, Today button, month nav; below it a selected-day

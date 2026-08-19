@@ -620,6 +620,22 @@ the phone the detail stacks above the table. Next screens in the
 descent, per RENDER_SPEC.md: Fantasy Calendar's three-column layout,
 then the Player Profile page.
 
+### T27. Render screen two: the Fantasy Calendar goes three-column
+
+The start calendar now sits in your render's three-column shape: the
+month grid and day summary on the left, the day's five ranked plays as
+compact cards in the middle, and a sticky read panel on the right that
+loads whichever card you tap — face, the big green projected number
+with its arithmetic printed underneath (baseline × environment), the
+"why he's the play" checklist, a two-tile matchup card showing how the
+market splits the game total between the two teams, the board line,
+and a button into the full profile. The day summary gained the
+render's count chips, translated honestly: per-position counts (QB 15
+· RB 28 · WR 36 · TE 22) instead of per-sport, because this calendar
+is NFL only. On the phone it stacks calendar → read → list. Salary,
+ownership and boom% stay out — same no-invented-numbers rule as
+before.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

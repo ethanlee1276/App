@@ -141,6 +141,10 @@ def test_the_render_pass_landed_honest():
     for hook in ('data-calnav="-1"', 'data-calnav="1"', 'data-calnav="first"'):
         assert hook in body, f"month nav lost {hook}"
     assert "ffcal-legend" in body and "ELITE SLATE" in body
+    # The Zenos three-column layout: grid left, ranked plays middle, the
+    # selected player's read right — one panel, tap a card to load it.
+    assert "ffcal-layout" in body and "ffcal-panel" in body
+    assert "ffCalPanelHTML(" in body, "the layout must mount the read panel"
     j = APP.index("function _ffCalQual(")
     qual = APP[j:APP.index("function ffCalendarHTML(", j)]
     assert "vals[Math.floor(vals.length * 0.75)]" in qual, \
@@ -171,9 +175,13 @@ def test_the_page_is_wired_and_the_why_is_printed():
     assert "mult.toFixed(2)" in body, "the multiplier itself is printed"
     assert "Ruled out that day and excluded:" in body
     assert 'data-dossier="${escapeAttr(r.player)}"' in body, \
-        "every card is a door to the full profile"
+        "the panel keeps its door to the full profile"
+    assert 'data-calpick="${escapeAttr(r.player)}"' in body, \
+        "cards load the read panel, and the tap is delegated"
     assert 'closest("[data-calday]")' in APP, "day taps are delegated"
-    for sel in (".ffcal-grid {", ".ffcal-cell {", ".ffcal-card {"):
+    assert 'closest("[data-calpick]")' in APP, "card taps are delegated"
+    for sel in (".ffcal-grid {", ".ffcal-cell {", ".ffcal-card {",
+                ".ffcal-layout {", ".ffcal-panel {", ".ffcal-vs {"):
         assert sel in CSS, f"{sel} is unstyled"
 
 
