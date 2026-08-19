@@ -128,6 +128,48 @@ def test_the_bet_log_table_is_a_view_of_the_same_rows():
     assert ".mb-table-wrap {" in CSS and ".mbc-view {" in CSS
 
 
+def test_every_market_row_opens_with_a_mark_not_a_word():
+    """Ethan, 2026-08-19: "you never added the thumbnails for the Kalshi
+    and Polly market bets." Every other board opens a row with art; these
+    opened with a word in a box. What each kind may honestly wear is the
+    point — a sports row borrows the fixture's own team marks, a weather
+    row wears a sun because the market IS a daily-high bracket, and the
+    venue wears OUR monogram rather than a traced logo."""
+    i = APP.index("function deskThumb(")
+    body = APP[i:APP.index("\nfunction deskSectionHTML(", i)]
+    assert "teamMark(" in body and "teamsForSport(" in body, \
+        "a matched fixture must draw the same marks the rest of the site does"
+    assert 'icon("sun"' in body, "a temperature market has a temperature mark"
+    # The icon labels the CATEGORY; one that moved with the number would be
+    # the picture making a claim the model did not.
+    assert "forecast_f" not in body.split('icon("sun"')[1][:200], \
+        "the weather mark must not vary with the forecast"
+    # The venue monogram is ours, and it is used on both surfaces.
+    j = APP.index("function venueMark(")
+    vm = APP[j:APP.index("\nfunction deskThumb(", j)]
+    assert "vmark" in vm and "kalshi" in vm and "poly" in vm
+    assert APP.count("venueMark(") >= 3, "board and detail panel both wear it"
+    for sel in (".kx-thumb {", ".kx-thumb-ic {", ".vmark {", ".vmark.kalshi {"):
+        assert sel in CSS, f"{sel} is unstyled"
+    # The phone grid places cells by NAME; the thumbnail took the chip's
+    # slot in the markup and must take it in the layout too.
+    assert ".kx-sport, .kx-thumb { grid-area: sport; }" in CSS
+
+
+def test_the_record_scopes_wear_the_same_purple_as_every_other_filter():
+    """Ethan, 2026-08-19, ringing the row: "fix these buttons on the
+    record page to match all the other buttons which are all purple."
+    They were underlined tabs while every other filter row on the site
+    is a pill that fills with brand violet when active."""
+    i = CSS.index(".rec-scope {")
+    seg = CSS[i:i + 900]
+    assert "var(--grad-brand)" in seg, "the active scope is not brand-filled"
+    assert "border-bottom-color" not in seg, "the underline treatment survived"
+    # And it is the SAME fill the sidebar's sport chips use, not a new one.
+    j = CSS.index(".sb-chips .sport-btn.active")
+    assert "var(--grad-brand)" in CSS[j:j + 200]
+
+
 def test_the_alert_rows_still_come_from_the_three_real_feeds():
     """The restyle must not have quietly invented a fourth source."""
     i = APP.index("function renderAlerts(")

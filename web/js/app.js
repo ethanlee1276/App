@@ -8111,6 +8111,58 @@ function setStandaloneSource(label, dateLabel) {
    Politics carries no recommendations on purpose: there is no public
    number to price it against, and the flow detector below already
    covers it with graded flags. */
+/* The desk row's thumbnail (Ethan, 2026-08-19: "you never added the
+   thumbnails for the Kalshi and Polly market bets"). Every other board
+   on this site opens a row with a MARK — a helmet, a face, a venue
+   crest — and these rows opened with a word in a box.
+
+   What each kind of market can honestly wear:
+
+     sports    the two team marks off the matched game, exactly the art
+               the rest of the site draws for that fixture;
+     weather   a sun, because the market IS a daily-high temperature
+               bracket. It labels the CATEGORY, not the forecast — an
+               icon that changed with the number would be the picture
+               making a claim the model has not made;
+     anything else  the venue's monogram, which is at least true.
+
+   The city or sport keeps its label underneath: the mark is the fast
+   read and the word is the precise one, same as a helmet over an
+   abbreviation everywhere else. */
+/* The venue's mark. Deliberately a house monogram rather than a copy of
+   Kalshi's or Polymarket's logo: we are naming where a price came from,
+   not borrowing a brand, and a traced trademark is the one graphic on
+   this site nobody asked us to draw. One letter, one tint, same disc
+   everywhere a venue is named. */
+function venueMark(venue, size = 22) {
+  const v = String(venue || "").toUpperCase();
+  const known = v.startsWith("KALSHI") ? "kalshi"
+    : v.startsWith("POLY") ? "poly" : "";
+  return `<span class="vmark ${known}" aria-hidden="true"
+    style="width:${size}px;height:${size}px;font-size:${
+      Math.round(size * 0.5)}px">${escapeHtml(v.slice(0, 1) || "?")}</span>`;
+}
+
+function deskThumb(r) {
+  const label = escapeHtml((r.sport || r.city || "").toUpperCase());
+  const cap = (art) => `<span class="kx-thumb">${art}
+    <span class="kx-thumb-l">${label}</span></span>`;
+  const mu = String(r.matchup || "");
+  const pair = mu.includes("@") ? mu.split("@")
+    : mu.includes(" vs ") ? mu.split(" vs ") : null;
+  if (pair && r.sport) {
+    const map = teamsForSport(String(r.sport).toLowerCase());
+    const [away, home] = pair.map((s) => s.trim());
+    return cap(`<span class="kx-thumb-pair">
+      ${teamMark(away, 19, map, String(r.sport).toLowerCase())}
+      ${teamMark(home, 19, map, String(r.sport).toLowerCase())}</span>`);
+  }
+  if (r.city || r.forecast_f != null) {
+    return cap(`<span class="kx-thumb-ic wx">${icon("sun", 17)}</span>`);
+  }
+  return cap(`<span class="kx-thumb-ic">${icon("gem", 16)}</span>`);
+}
+
 function deskSectionHTML(k) {
   if (!k) return "";
   const sports = (k.rows || []).filter((r) => r.rec);
@@ -8121,7 +8173,7 @@ function deskSectionHTML(k) {
   const side = (s) => s
     ? `<span class="chip ${s === "YES" ? "up" : "down"}">${escapeHtml(s)}</span>` : "";
   const row = (r, why) => `<div class="kx-row">
-      <span class="kx-sport chip">${escapeHtml((r.sport || r.city || "").toUpperCase())}</span>
+      ${deskThumb(r)}
       <span class="kx-title">${escapeHtml(r.title)} ${side(r.rec_side)}
         <span class="kx-match">· ${why}</span></span>
       <span class="kx-num kx-k">${(r.prob * 100).toFixed(0)}¢</span>
@@ -8258,7 +8310,8 @@ function pmDetailHTML(r) {
       </div></div>`;
   return `
     <div class="pm-d-head">
-      <span class="chip kx-venue">${r.venue}</span>
+      <span class="pm-d-venue">${venueMark(r.venue, 24)}
+        <span>${escapeHtml(String(r.venue || ""))}</span></span>
       <h3 class="pm-d-title">${r.url
         ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.title)}</a>`
         : escapeHtml(r.title)}</h3>
@@ -8305,7 +8358,8 @@ function pmBoardRowHTML(r) {
     </span>`;
   const no = r.price == null ? null : Math.round((1 - r.price) * 100);
   return `<div class="kx-row${_pmSelKey === r.key ? " sel" : ""}">
-    <span class="kx-sport chip kx-venue">${r.venue}</span>
+    <span class="kx-thumb">${venueMark(r.venue, 21)}
+      <span class="kx-thumb-l">${escapeHtml(String(r.venue || ""))}</span></span>
     <span class="kx-title" title="${escapeAttr(r.title)}">${title}
       ${r.sub ? `<span class="kx-match">· ${escapeHtml(r.sub)}</span>` : ""}${basis}</span>
     <span class="kx-num kx-k" title="The venue’s own price for YES" style="color:var(--good)">${

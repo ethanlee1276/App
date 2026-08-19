@@ -3169,24 +3169,28 @@ body.ffd-open { overflow: hidden; }
   overflow-x: auto; scrollbar-width: none;
 }
 .rec-scopes::-webkit-scrollbar { display: none; }
-/* §8.9: pill-shaped filter chips with filled backgrounds are on the
-   anti-pattern list, and a filled amber slab for the active scope is the
-   loudest thing on a page whose subject is a P&L curve. Same treatment as
-   the nav — labels over a rule, active marked by a 2px underline — so the
-   two rows of tabs on this page stop being two different components. */
+/* Ethan, 2026-08-19, with a screenshot ringing this row: "fix these
+   buttons on the record page to match all the other buttons which are
+   all purple."
+   They used to be underlined tabs, on the reasoning that a filled slab
+   is loud on a page whose subject is a P&L curve. That reasoning was
+   about AMBER; the brand violet is now the site's one selection colour,
+   and every other filter row wears it — the sidebar's sport chips, My
+   Bets' status chips, the prediction board's categories, the alerts
+   filters. One page keeping its own vocabulary is the louder problem. */
 .rec-scope {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 0; margin-right: 18px; border-radius: var(--radius); cursor: pointer;
-  background: none; border: 0; border-bottom: 2px solid transparent;
+  padding: 7px 14px; border-radius: var(--radius-sm); cursor: pointer;
+  background: var(--panel); border: var(--hairline) solid var(--border);
   color: var(--text-mute); font-family: var(--font-sans);
-  font-size: var(--fs-sm); font-weight: 700;
-  letter-spacing: .14em; text-transform: uppercase;
+  font-size: var(--fs-xs); font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase;
   min-height: 34px;
 }
-.rec-scope:hover { color: var(--text); }
+.rec-scope:hover { color: var(--text); border-color: var(--brand-2); }
 .rec-scope.active {
-  background: none; border-bottom-color: var(--brand-2);
-  color: var(--text);
+  background: var(--grad-brand); border-color: transparent;
+  color: #fff; box-shadow: var(--glow);
 }
 /* The count is the honest part: a scope with nothing in it still appears,
    because hiding it would make "no bets yet" and "no such board" look
@@ -3362,7 +3366,7 @@ body.ffd-open { overflow: hidden; }
    tabular so a column of them reads as a column. */
 .kx-row {
   display: grid; align-items: center; gap: 10px;
-  grid-template-columns: 52px minmax(0, 1fr) 52px 52px 74px 84px;
+  grid-template-columns: 68px minmax(0, 1fr) 52px 52px 74px 84px;
   padding: 8px 14px; border-bottom: var(--hairline) solid var(--border-soft);
 }
 .kx-row:last-child { border-bottom: 0; }
@@ -3381,13 +3385,14 @@ body.ffd-open { overflow: hidden; }
   font-size: var(--fs-sm); }
 .kx-vol { text-align: right; color: var(--text-mute);
   font-variant-numeric: tabular-nums; font-size: var(--fs-xs); }
+
 @media (max-width: 760px) {
   /* The title gets its own line; the numbers share a second. Volume drops —
      on a phone the edge is the story and the row was six columns of 60px. */
-  .kx-row { grid-template-columns: 52px 1fr 1fr 1fr;
+  .kx-row { grid-template-columns: 68px 1fr 1fr 1fr;
     grid-template-areas: "sport title title title" ".  k m e"
       ". meter meter meter"; row-gap: 4px; }
-  .kx-sport { grid-area: sport; }
+  .kx-sport, .kx-thumb { grid-area: sport; }
   .kx-title { grid-area: title; white-space: normal; }
   /* Named, never positional: every cell here is a <span>, and
      :nth-of-type counts TAGS — the sport chip is span number one, so
@@ -3399,6 +3404,41 @@ body.ffd-open { overflow: hidden; }
   .kx-vol { display: none; }
   .kx-meter { grid-area: meter; }
 }
+
+/* Row thumbnails (Ethan, 2026-08-19: "you never added the thumbnails
+   for the Kalshi and Polly market bets"). The mark is the fast read,
+   the word underneath is the precise one — the same pairing a helmet
+   over an abbreviation makes on every other board. */
+.kx-thumb { display: flex; flex-direction: column; align-items: center;
+  gap: 3px; min-width: 0; }
+/* Wraps rather than truncates: "PHILADELPHIA" clipped to "PHILAD…" is
+   the label failing at the one job it has. */
+.kx-thumb-l { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .02em;
+  color: var(--text-mute); text-transform: uppercase; text-align: center;
+  line-height: var(--lh-tight); max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; }
+.kx-thumb-pair { display: inline-flex; align-items: center; }
+.kx-thumb-pair > :last-child { margin-left: -6px; }   /* overlapped, like a fixture */
+.kx-thumb-ic { display: grid; place-items: center; width: 26px; height: 26px;
+  border-radius: 50%; border: var(--hairline) solid var(--border-soft);
+  background: var(--panel-2); color: var(--text-mute); }
+.kx-thumb-ic.wx { color: var(--warn);
+  border-color: color-mix(in oklab, var(--warn) 35%, var(--border-soft));
+  background: color-mix(in oklab, var(--warn) 8%, var(--panel-2)); }
+/* Venue monogram — our own disc, never a traced logo. */
+.vmark { display: grid; place-items: center; border-radius: 50%; flex: none;
+  font-family: var(--font-display); font-weight: 800; line-height: 1;
+  color: var(--text); background: var(--panel-2);
+  border: var(--hairline) solid var(--border); }
+.vmark.kalshi { color: var(--brand);
+  border-color: color-mix(in oklab, var(--brand) 45%, var(--border));
+  background: color-mix(in oklab, var(--brand) 12%, var(--panel-2)); }
+.vmark.poly { color: var(--brand-2);
+  border-color: color-mix(in oklab, var(--brand-2) 45%, var(--border));
+  background: color-mix(in oklab, var(--brand-2) 12%, var(--panel-2)); }
+.pm-d-venue { display: inline-flex; align-items: center; gap: 7px;
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-mute); }
 
 /* The row's price drawn as a length ("the site feels and looks very
    flat", 2026-08-18). Track = 0..100¢; the fill is the venue's YES
@@ -5623,7 +5663,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   gap: 16px; align-items: start; }
 .pm-detail { position: sticky; top: 76px; padding: 16px; gap: 12px; }
 .pm-table .kx-row {
-  grid-template-columns: 52px minmax(0, 1fr) 44px 44px 48px 64px 76px 56px; }
+  grid-template-columns: 68px minmax(0, 1fr) 44px 44px 48px 64px 76px 56px; }
 .pm-table .kx-row.sel { border-left: 3px solid var(--brand);
   background-color: var(--fill-subtle); }
 .pm-view { padding: 5px 10px; font-size: var(--fs-2xs); }
@@ -5668,7 +5708,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   .pm-detail { position: static; order: -1; }
 }
 @media (max-width: 760px) {
-  .pm-table .kx-row { grid-template-columns: 52px 1fr 1fr 1fr 56px;
+  .pm-table .kx-row { grid-template-columns: 68px 1fr 1fr 1fr 56px;
     grid-template-areas: "sport title title title view"
       ". k n e view" ". meter meter meter meter"; }
   .pm-table .kx-n { grid-area: n; text-align: left; }

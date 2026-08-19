@@ -792,6 +792,29 @@ worth telling me, because the loop is supposed to do this on its own
 every cycle and a stuck one silently freezes every board, not just this
 roster.
 
+### T34. Two from your bedtime screenshots
+
+**The record page's filter row is purple now.** ALL BETS / PREDICTION
+MARKET / NFL / CFB / … were underlined tabs while every other filter
+row on the site — the sidebar's sports, My Bets' status chips, the
+prediction board's categories, the alerts filters — is a pill that
+fills with brand violet when it is active. They now use the exact same
+fill (`--grad-brand`), so the page stops speaking its own dialect.
+
+**The prediction-market rows have thumbnails.** They used to open with
+a word in a box while every other board on the site opens with art.
+Now: a **sports** row draws the fixture's own two team marks,
+overlapped the way a matchup reads; a **weather** row wears a sun,
+because the market IS a daily-high bracket — the mark labels the
+category and deliberately does NOT move with the forecast, since an
+icon that changed with the number would be the picture making a claim
+the model hasn't; and each venue wears a **monogram disc** (violet K
+for Kalshi, indigo P for Poly). That is our own mark on purpose rather
+than a traced Kalshi or Polymarket logo — we are naming where a price
+came from, not borrowing a brand. The city or sport keeps its label
+under the mark, and the column widened to 68px so "PHILADELPHIA" fits
+on one line instead of breaking mid-word.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 
