@@ -4423,6 +4423,41 @@ function renderGamePage() {
         reconciliation says it should.</p>
     </div>`;
   })() : "";
+  // Team shapes — the two-team radar (ECharts ladder, Ethan 2026-08-18).
+  // Five measured axes, league percentiles from the last rankable
+  // season's finals (engine/teamshape.py). The fallback INSIDE the
+  // wrapper is the same numbers as a table, so an engine-less machine
+  // still reads the comparison.
+  const _shapes = (state.data || {}).team_shapes || {};
+  const _sh = _shapes[g.home], _sa = _shapes[g.away];
+  const shapeCard = _sh && _sa ? (() => {
+    const season = state.data.team_shapes_season || "";
+    const axes = ["offense", "defense", "form", "home_edge", "steadiness"];
+    const names = { offense: "Offense", defense: "Defense", form: "Form",
+                    home_edge: "Home edge", steadiness: "Steadiness" };
+    const rows = axes.map((a) => `<tr><td>${names[a]}</td>
+      <td class="num">${Number(_sh.pct[a]).toFixed(0)}</td>
+      <td class="num">${Number(_sa.pct[a]).toFixed(0)}</td></tr>`).join("");
+    return `
+    <div class="card gp-shape"><div class="gp-panel-title">Team shapes
+        <span class="gp-panel-sub">— ${season} measured profile, league
+        percentiles (${_sh.games} and ${_sa.games} finals)</span></div>
+      <div class="gp-shape-radar" data-echart-radar="${escapeAttr(JSON.stringify({
+        axes: axes.map((a) => names[a]),
+        series: [
+          { name: g.home, values: axes.map((a) => Number(_sh.pct[a]) || 0) },
+          { name: g.away, values: axes.map((a) => Number(_sa.pct[a]) || 0) },
+        ],
+      }))}"><table class="agate gp-shape-tbl"><thead><tr><th></th>
+          <th>${escapeHtml(g.home)}</th><th>${escapeHtml(g.away)}</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <p class="gp-sim-note">Percentile against the whole league on last season’s
+        finals: offense is points scored, defense is points allowed (fewer ranks
+        higher), form is the last five margins, home edge is home-minus-road
+        margin, steadiness is low variance. Measured shape, not a projection —
+        and last season’s roster is not this season’s.</p>
+    </div>`;
+  })() : "";
   host.innerHTML = `
     <button class="btn ghost gp-back" id="gp-back">← Back to the board</button>
     <div class="gp-hero">
@@ -4454,6 +4489,7 @@ function renderGamePage() {
 
     ${linesCard || notesCard ? `<div class="gp-row">${linesCard}${notesCard}</div>` : ""}
     ${simCard}
+    ${shapeCard}
 
     <div class="stats gp-stats">
       <div class="tile"><div class="k">Props analyzed</div><div class="v">${props.length}</div>

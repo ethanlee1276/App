@@ -5388,3 +5388,11 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 }
 .gloss-chart .apexcharts-tooltip-title { display: none; }
 .gloss-chart .apexcharts-xaxistooltip { display: none; }
+
+/* Team shapes — the game page's two-team radar. The wrapper holds the
+   percentile table as the engine-less fallback; the mount clears it and
+   draws the polygons in the same box. */
+.gp-shape { margin-bottom: 18px; }
+.gp-shape-radar { min-height: 250px; }
+.gp-shape-radar[data-echarted] { height: 280px; }
+.gp-shape-tbl { max-width: 360px; }

@@ -578,6 +578,22 @@ canvas (guarded). Also a real bug the suite caught before CI did: the
 resize hook referenced `window` at top level, which broke the bare-
 Node test harness — guarded now, suite green.
 
+### T25. ECharts rung four — team-shape radars on the game page
+
+Every priced NFL game page now carries **Team shapes**: a two-team
+radar over five measured axes — Offense (points scored), Defense
+(points allowed, fewer ranks higher), Form (last five margins), Home
+edge (home-minus-road margin), and Steadiness (low variance). Each
+axis is a league PERCENTILE computed from real finals in
+`engine/teamshape.py` (verified on your 1,696 stored NFL games — all
+32 teams rank), so the two polygons share one honest scale. Home team
+wears the brand violet, away the neutral gray, and in August the label
+says plainly that it is LAST season’s measured profile, not a
+projection. The fallback inside the wrapper is the same numbers as a
+table, so nothing depends on the chart engine. Five new tests defend
+the axes-point-up rule, rank-not-z-score scaling, and the
+too-small-sample refusal.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

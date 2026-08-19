@@ -410,6 +410,22 @@ def main() -> None:
                       f"page panels stamped, journal appended.")
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  drive-sim journal skipped: {_exc}")
+        # Team shapes — the game page's two-team radar. Percentile ranks
+        # over the last RANKABLE season's finals (in August that is last
+        # season, and the panel's label says so). Never fatal: a fresh DB
+        # ships no shapes and the page keeps its fallback table.
+        try:
+            from engine import db as _sdb
+            from engine import teamshape as _ts
+            _sconn = _sdb.connect()
+            _season = _ts.latest_shaped_season(_sconn, "nfl", args.year)
+            if _season:
+                result["team_shapes"] = _ts.team_shapes(_sconn, "nfl", _season)
+                result["team_shapes_season"] = _season
+                print(f"  Team shapes: {len(result['team_shapes'])} team(s) "
+                      f"ranked on season {_season}.")
+        except Exception as _exc:                             # noqa: BLE001
+            print(f"  ⚠️  team shapes skipped: {_exc}")
         from engine import gate
         gate.publish(result, args.out)
         print(f"\nWrote {args.out}")

@@ -1809,7 +1809,7 @@ if (typeof window !== "undefined" && window.addEventListener) {
 async function mountEChartsPanels(root) {
   const host = root || document;
   const nodes = [...host.querySelectorAll(
-    "[data-echart-gauge],[data-echart-hist]")]
+    "[data-echart-gauge],[data-echart-hist],[data-echart-radar]")]
     .filter((el) => !el.dataset.echarted);
   if (!nodes.length) return;
   const ec = await loadECharts();
@@ -1824,11 +1824,16 @@ async function mountEChartsPanels(root) {
     // the first call just drew.
     if (el.dataset.echarted || ec.getInstanceByDom(el)) continue;
     let cfg;
-    const kind = el.hasAttribute("data-echart-gauge") ? "gauge" : "hist";
+    const kind = el.hasAttribute("data-echart-gauge") ? "gauge"
+      : el.hasAttribute("data-echart-radar") ? "radar" : "hist";
     if (!el.clientWidth) continue;     // hidden room — retried on tab switch
     try {
       cfg = JSON.parse(el.getAttribute(`data-echart-${kind}`));
     } catch (e) { continue; }
+    // Radar validity is checked BEFORE the wipe: a bad payload must
+    // leave the fallback table standing, not an empty box.
+    if (kind === "radar" && ((cfg.axes || []).length < 3
+        || (cfg.series || []).length < 2)) continue;
     el.dataset.echarted = "1";
     el.innerHTML = "";
     const chart = ec.init(el, null, { renderer: "canvas" });
@@ -1860,6 +1865,39 @@ async function mountEChartsPanels(root) {
             fontFamily: font },
           data: [{ value: v, name: cfg.title || "" }],
         }],
+      });
+    } else if (kind === "radar") {
+      // The two-team shape. Every axis is a league percentile (0-100),
+      // so the polygons share one honest scale; home wears the brand,
+      // away the neutral, both translucent so the overlap reads.
+      const axes = cfg.axes || [];
+      const series = (cfg.series || []).slice(0, 2);
+      chart.setOption({
+        animationDuration: 700,
+        legend: { bottom: 0, itemWidth: 10, itemHeight: 10,
+          textStyle: { color: tok("--text-mute"), fontSize: 10,
+                       fontFamily: font } },
+        tooltip: { trigger: "item",
+          backgroundColor: tok("--panel-3"), borderColor: tok("--border"),
+          textStyle: { color: tok("--text"), fontSize: 11,
+                       fontFamily: font } },
+        radar: {
+          indicator: axes.map((nm) => ({ name: nm, max: 100 })),
+          radius: "66%", center: ["50%", "46%"],
+          axisName: { color: tok("--text-mute"), fontSize: 10,
+                      fontFamily: font },
+          splitArea: { show: false },
+          splitLine: { lineStyle: { color: tok("--border-soft") } },
+          axisLine: { lineStyle: { color: tok("--border") } },
+        },
+        series: [{ type: "radar", symbolSize: 4,
+          data: series.map((s, i) => {
+            const c = i ? tok("--text-mute") : tok("--brand");
+            return { name: s.name, value: s.values,
+              lineStyle: { width: 2, color: c },
+              itemStyle: { color: c },
+              areaStyle: { color: c, opacity: 0.16 } };
+          }) }],
       });
     } else {
       const labels = cfg.labels || [];
