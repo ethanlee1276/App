@@ -938,6 +938,36 @@ phone. Open the menu a few times after you deploy and tell me. If it
 still happens, the next suspects are the tab bar's own blur and the
 `html:has()` scroll lock, and I will chase those instead.
 
+### T38. A dead pipeline can no longer hide behind a small number
+
+Following the Cade Mays post-mortem, because the interesting part was
+never the roster — it was that the refresh loop died on 2026-08-10 and
+NOTHING TOLD YOU for nine days. Two reasons it stayed invisible, both
+now closed.
+
+**The age stopped counting at hours.** Nine days rendered as "216h",
+and on the phone the freshness chip shows the age and nothing else — so
+a tiny amber "216h" was the entire warning. It says days once it is
+days, and on the phone it now reads "Stale 9d" rather than a bare
+number. A number is something you glance past; a word is something you
+read.
+
+**And nothing ever shouted.** When the loop dies the server keeps
+serving the last good build, so a broken site and a working one look
+identical. Past twelve hours the page now carries a bar above
+everything else: "These numbers are 9d old. The build that feeds this
+page has not run since then, so every board below is showing a finished
+slate as if it were tonight's. Nothing here is live."
+
+Twelve hours, not one, so a quiet night never cries wolf — a nightly
+build is legitimately hours old by morning, and nothing rebuilds by
+itself for half a day.
+
+The check lives on the PAGE rather than in the launcher on purpose: the
+doctor runs inside the refresh cycle, so a dead loop cannot report
+itself. That is precisely why nine days went by. The page is always
+holding the timestamp, so it can always tell.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

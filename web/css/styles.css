@@ -5788,3 +5788,18 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   .pm-table .kx-n { grid-area: n; text-align: left; }
   .pm-view { grid-area: view; align-self: center; }
 }
+
+/* The loud staleness bar — shown only when the build behind the page is
+   more than STALE_LOUD_MS old, i.e. the pipeline is dead rather than
+   slow. Warn amber, which §1 reserves for live-or-material: a page full
+   of fossils is exactly that. Not dismissible, because dismissing it
+   would not make the numbers younger. */
+#stalebar { display: flex; align-items: flex-start; gap: 10px;
+  margin: 0 26px 14px; padding: 12px 14px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid color-mix(in oklab, var(--warn) 55%, var(--border));
+  background: color-mix(in oklab, var(--warn) 12%, var(--panel));
+  color: var(--text); font-size: var(--fs-sm); line-height: var(--lh-body); }
+#stalebar[hidden] { display: none; }
+#stalebar .ic { color: var(--warn); flex: none; margin-top: 2px; }
+#stalebar b { color: var(--warn); }
+@media (max-width: 760px) { #stalebar { margin: 0 12px 12px; } }

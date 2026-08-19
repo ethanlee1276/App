@@ -556,6 +556,49 @@ def test_the_drawer_outranks_its_scrim_by_source_order_too():
     assert z_draw > z_scrim, f"drawer z{z_draw} must beat scrim z{z_scrim}"
 
 
+def test_a_dead_pipeline_cannot_hide_behind_a_small_number():
+    """The 2026-08-10 freeze ran nine days on a page that looked normal.
+    Two reasons it stayed invisible, both fixed here.
+
+    THE AGE STOPPED AT HOURS, so nine days rendered "216h" — and the
+    PHONE chip shows the age and nothing else, so that tiny amber number
+    was the entire warning. It says days once it is days, and carries the
+    word "Stale" on the phone.
+
+    AND NOTHING SHOUTED. The server keeps serving the last good build
+    when the refresh loop dies, so a broken site and a working one are
+    identical. The check cannot live in the loop — the doctor runs INSIDE
+    the refresh cycle, which is why nobody was told. It lives on the page,
+    which is always holding the timestamp."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    i = app.index("function updateAgo()")
+    body = app[i:app.index("\nfunction ", i + 10)]
+    assert "86400" in body, "the age still tops out below days"
+    assert '`Stale ${ago}`' in body, "the phone chip is still a bare number"
+    assert "renderStaleBar(" in body, "nothing drives the loud bar"
+
+    j = app.index("function renderStaleBar(")
+    bar = app[j:app.index("\nfunction ", j + 10)]
+    assert "STALE_LOUD_MS" in bar
+    assert "host.hidden" in bar, "the bar must vanish when the data is fine"
+    # It has to say the age, or it is an alarm without a fact in it.
+    assert "${escapeHtml(ago)}" in bar
+
+    # Loud threshold must be far above the ordinary chip threshold, or a
+    # quiet night cries wolf.
+    import re
+    loud = app[app.index("const STALE_LOUD_MS"):]
+    loud = re.search(r"=\s*(\d+)\s*\*\s*(\d+)\s*\*\s*(\d+)", loud)
+    hours = int(loud.group(1))
+    assert hours >= 6, f"{hours}h is too eager for a nightly build"
+
+    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    assert 'id="stalebar"' in html and "hidden" in html[html.index('id="stalebar"'):
+                                                        html.index('id="stalebar"') + 60]
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+    assert "#stalebar {" in css and "#stalebar[hidden]" in css
+
+
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

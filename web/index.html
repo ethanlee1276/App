@@ -171,6 +171,13 @@
        Shown only under body.menu-open, ≤900px. -->
   <div id="scrim" aria-hidden="true"></div>
 
+  <!-- The loud staleness bar. Empty and hidden until the data is older
+       than STALE_LOUD_MS; see renderStaleBar(). It sits ABOVE everything
+       the page says, because when it shows, everything the page says is
+       out of date. -->
+  <div id="stalebar" role="status" hidden></div>
+
+
   <!-- The rail: every destination, grouped, always one glance away.
        This replaces the old header switcher AND the hamburger dropdown —
        the render’s answer to "the menu looks horrible" is that a real

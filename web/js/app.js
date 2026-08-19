@@ -637,11 +637,44 @@ function manageAutoRefresh() {
 // no new build, something on the machine has stopped — asleep, crashed,
 // off the network — and the number on screen is history, not tonight.
 const STALE_AFTER_MS = 8 * 60 * 1000;
+//: Past this, the site is not slow — it is BROKEN, and quietly. The
+//: server keeps serving whatever is on disk when the refresh loop dies,
+//: so every board goes on presenting a dead slate as tonight's. That is
+//: exactly what happened between 2026-08-10 and 08-19: nine days of a
+//: wrong injury status on a page that looked completely normal.
+//:
+//: Twelve hours, not one, because a legitimately quiet night must not
+//: cry wolf — a nightly build is hours old by morning and that is fine.
+//: Nothing rebuilds on its own for half a day.
+const STALE_LOUD_MS = 12 * 60 * 60 * 1000;
 
 /* Pages with no data feed behind them. The freshness chip ages the SLATE,
    and on a pure reference page that is a lie of scope — "Stale — built
    10h ago" over a page of prose that has no build at all. */
 const REFERENCE_VIEWS = ["why", "about"];
+
+/* THE LOUD ONE. The chip is for "how fresh is this"; this is for "the
+   pipeline is dead and every number below is a fossil". It exists
+   because the failure it names is invisible by construction: the server
+   goes on serving the last good build, so a broken site and a working
+   one look identical.
+
+   Client-side on purpose. A check that lives in the loop cannot report
+   the loop being dead — the doctor runs INSIDE the refresh cycle, which
+   is why nine days went by unnoticed. The page can always tell, because
+   it is holding the timestamp. */
+function renderStaleBar(ageMs, ago) {
+  const host = document.getElementById("stalebar");
+  if (!host) return;
+  const bad = ageMs != null && ageMs > STALE_LOUD_MS;
+  host.hidden = !bad;
+  if (!bad) { host.innerHTML = ""; return; }
+  host.innerHTML = `${icon("warn", 15)}
+    <span><b>These numbers are ${escapeHtml(ago)} old.</b>
+    The build that feeds this page has not run since then, so every board
+    below is showing a finished slate as if it were tonight’s. Nothing
+    here is live.</span>`;
+}
 
 function updateAgo() {
   const el = document.getElementById("live-refresh");
@@ -659,7 +692,14 @@ function updateAgo() {
   const known = state.builtAt != null;
   const since = known ? state.builtAt : state.lastLoad;
   const s = Math.max(0, Math.round((Date.now() - since) / 1000));
-  const ago = s < 60 ? `${s}s` : s < 3600 ? `${Math.round(s / 60)}m` : `${Math.round(s / 3600)}h`;
+  // DAYS, once it is days. The formatter used to top out at hours, so
+  // the nine-day freeze of 2026-08-10 rendered as "216h" — a number
+  // nobody reads as "this is nine days old", least of all in the small
+  // phone chip, which shows the age and nothing else.
+  const ago = s < 60 ? `${s}s`
+    : s < 3600 ? `${Math.round(s / 60)}m`
+    : s < 172800 ? `${Math.round(s / 3600)}h`
+    : `${Math.round(s / 86400)}d`;
   const stale = known && (Date.now() - state.builtAt) > STALE_AFTER_MS;
   // Same wording either way so the chip's width barely moves; the live dot
   // is what says "and it's polling because games are running".
@@ -669,7 +709,11 @@ function updateAgo() {
   // everywhere, and the chip's colour already says updated-vs-stale.
   el.innerHTML = (state.livePolling && !stale ? `<span class="live-dot"></span>` : "")
     + `<span class="lr-full">${stale ? `Stale — built ${ago} ago` : `Updated ${ago} ago`}</span>`
-    + `<span class="lr-short">${ago}</span>`;
+    // The phone form carries the WORD once it is properly stale. A bare
+    // "216h" is a number; "Stale 9d" is a sentence, and the phone is
+    // where this was invisible.
+    + `<span class="lr-short">${stale ? `Stale ${ago}` : ago}</span>`;
+  renderStaleBar(known ? Date.now() - state.builtAt : null, ago);
   el.classList.toggle("idle", !state.livePolling && !stale);
   el.classList.toggle("stale", stale);
   el.title = stale
