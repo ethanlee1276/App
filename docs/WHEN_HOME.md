@@ -904,6 +904,40 @@ an unguarded exception, which is what left a nine-day-old "Active" on
 Cade Mays. It carries a guard now, and your droplet confirmed the
 roster reads **Out**.
 
+### T37. The phone menu that dimmed but never opened
+
+Your screen recording, three taps in six seconds: the page dims and
+blurs, no drawer arrives, tap again and it clears. I pulled the frames
+apart — the dim is definitely OUR scrim (the blur is visible on the
+text), the tab bar stays bright, and the whole content area darkens
+evenly rather than a panel sliding in. So `body.menu-open` was being
+set correctly and the drawer simply never showed.
+
+**It reproduces on no desktop engine.** I ran it at your exact viewport
+(440x956 at 3x) and the drawer opens fine, which is the useful clue
+rather than a dead end: on paper the ordering is already correct — the
+drawer is z-index 50, the scrim 45. What differs on the phone is how
+the two layers get composited. Both elements build their own stacking
+context, the drawer through its slide `transform` and the scrim through
+`backdrop-filter`, and a compositor that promotes the blurred layer out
+of that comparison paints it straight over a drawer that is genuinely
+there, at full opacity, invisible.
+
+Two changes kill the whole class rather than one symptom. The scrim's
+**blur is gone** — it was 2px of decoration and the only property that
+changed how the layer composites; the dim does the actual work and goes
+one shade deeper to carry the separation. And the scrim now sits
+**before** the drawer in the HTML, so "last painted wins" lands on the
+drawer even on an engine that ignores z-index entirely.
+
+**Honest status: I could not reproduce this on iOS from here** — there
+is no WebKit in this container and installing one would blow the disk.
+So this is a reasoned fix for the most likely cause, verified not to
+break the working case, rather than a fix I watched succeed on your
+phone. Open the menu a few times after you deploy and tell me. If it
+still happens, the next suspects are the tab bar's own blur and the
+`html:has()` scroll lock, and I will chase those instead.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

@@ -4423,8 +4423,16 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   body.menu-open .topbar { position: fixed; top: 0; left: 0; right: 0;
     transform: none !important; }
   body.menu-open { padding-top: var(--topbar-h); }
+  /* NO backdrop-filter. The blur was 2px of decoration and it is the
+     one property here that changes how the layer is composited: a
+     blurred layer gets promoted, and a promoted layer can paint over a
+     transformed sibling that outranks it on z-index — which is exactly
+     the drawer. Ethan's 2026-08-19 recording is that failure: the page
+     dimmed and blurred, and no drawer came. The DIM is the part doing
+     the work, so the dim stays and goes a shade deeper to carry the
+     separation the blur used to help with. */
   body.menu-open #scrim { display: block; position: fixed; inset: var(--topbar-h) 0 0 0;
-    background: rgba(3, 3, 8, .55); backdrop-filter: blur(2px); z-index: 45; }
+    background: rgba(3, 3, 8, .62); z-index: 45; }
 }
 
 @media (max-width: 760px) {

@@ -150,6 +150,27 @@
   </header>
 
   <div class="shell">
+  <!-- The drawer's scrim. TWO placement decisions, both paid for:
+
+       A REAL ELEMENT, not body::after. It was ::after paint, and taps
+       fell THROUGH to the dimmed page: the browser focused whatever sat
+       under the finger and scrolled it into view before any click could
+       be cancelled (measured: a scrim tap on #futures yanked the page
+       from 600 to 0). A real node owns its hit-testing.
+
+       AND IT SITS BEFORE THE DRAWER IN THE DOM. Ethan's 2026-08-19
+       recording: on iPhone the page dimmed and blurred but NO drawer
+       arrived — three taps, three times. It reproduces on no desktop
+       engine, because on paper the ordering is already correct (drawer
+       z-index 50 over scrim 45). Both elements build their own stacking
+       context — the drawer through `transform`, the scrim through
+       `backdrop-filter` — and a compositor that promotes the blurred
+       layer out of that comparison paints it over a drawer that is
+       genuinely there. Source order is the belt to that brace: last
+       painted wins among equals, so the drawer must come AFTER.
+       Shown only under body.menu-open, ≤900px. -->
+  <div id="scrim" aria-hidden="true"></div>
+
   <!-- The rail: every destination, grouped, always one glance away.
        This replaces the old header switcher AND the hamburger dropdown —
        the render’s answer to "the menu looks horrible" is that a real
@@ -338,15 +359,6 @@
       </div>
     </div>
   </aside>
-
-  <!-- The drawer's scrim — a REAL element, deliberately. It was
-       body::after paint, and taps on it fell THROUGH to the dimmed page:
-       the browser focused whatever sat under the finger and scrolled it
-       into view before any click could be cancelled (measured: a scrim
-       tap on #futures yanked the page from 600 to 0). A real node owns
-       its hit-testing, so the tap closes the drawer and touches nothing
-       else. Shown only under body.menu-open, ≤900px. -->
-  <div id="scrim" aria-hidden="true"></div>
 
   <main>
     <!-- Recommended -->

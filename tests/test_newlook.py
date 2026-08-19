@@ -519,6 +519,43 @@ def test_the_render_sheet_pass_shipped_its_honest_subset():
     # The insights panel renders data fields only; its title says so.
     assert "this game’s own data, not narratives" in APP
 
+def test_the_drawer_outranks_its_scrim_by_source_order_too():
+    """Ethan's 2026-08-19 recording: on iPhone the page dimmed and blurred
+    but no drawer arrived — three taps, three times. It reproduces on no
+    desktop engine, because on paper the ordering is already right (drawer
+    z-index 50 over scrim 45).
+
+    Both elements build their own stacking context — the drawer through
+    `transform`, the scrim through `backdrop-filter` — and a compositor
+    that promotes the blurred layer out of that comparison paints it over
+    a drawer that is genuinely there. Two things fix the whole class, and
+    both are pinned here: the blur is gone (it was 2px of decoration and
+    the only property changing how the layer composites), and the scrim
+    now comes BEFORE the drawer in source order, so last-painted-wins
+    lands on the drawer even where z-index is ignored.
+    """
+    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    i_scrim = html.index('<div id="scrim"')
+    i_draw = html.index('<aside class="sidebar"')
+    assert i_scrim < i_draw, \
+        "the scrim must precede the drawer, or a promoted blur layer hides it"
+
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    j = css.index("body.menu-open #scrim")
+    rule = css[j:css.index("}", j)]
+    assert "backdrop-filter" not in rule, \
+        "the scrim's blur is what promotes the layer over the drawer"
+    assert "background:" in rule, "the dim is the part that does the work"
+    # And the declared order still says the drawer wins, for engines that
+    # honour it.
+    import re
+    z_scrim = int(re.search(r"z-index:\s*(\d+)", rule).group(1))
+    k = css.index(".sidebar { position: fixed")
+    z_draw = int(re.search(r"z-index:\s*(\d+)", css[k:k + 240]).group(1))
+    assert z_draw > z_scrim, f"drawer z{z_draw} must beat scrim z{z_scrim}"
+
+
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
