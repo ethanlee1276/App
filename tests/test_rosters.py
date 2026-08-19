@@ -35,6 +35,22 @@ def _blob(*players):
     return {str(i): p for i, p in enumerate(players)}
 
 
+def test_the_bio_strip_survives_the_row_and_stays_readable():
+    """The profile hero's HT/WT/College chips (render 8/9). The feed
+    reports height in inches-as-a-string; the row ships it readable.
+    Missing bio is None — the page drops the chip, never invents one."""
+    p = _p("Big Fella", "SF")
+    p.update({"height": "74", "weight": "225", "college": "Alabama"})
+    out = rosters.build_rosters(_blob(p, _p("No Bio", "SF")))
+    rows = {r["player"]: r for r in out["teams"]["SF"]["players"]}
+    big = rows["Big Fella"]
+    assert big["height"] == "6'2\"" and big["weight"] == "225 lb"
+    assert big["college"] == "Alabama"
+    bare = rows["No Bio"]
+    assert bare["height"] is None and bare["weight"] is None \
+        and bare["college"] is None
+
+
 def test_a_free_agent_is_on_no_roster():
     out = rosters.build_rosters(_blob(_p("Signed Guy", "SF"),
                                       _p("Free Agent", None),

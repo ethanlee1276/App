@@ -12609,6 +12609,14 @@ function ffProfileHTML(p, info, bio) {
     ? Array.from({ length: 5 }, (_, i) =>
         `<span class="ffp-dot${i < Math.max(1, 6 - k.tier) ? " on" : ""}"></span>`).join("")
     : "";
+  // The render's little trend line in the projection tile \u2014 his own
+  // last four weeks, PPR, not a modeled curve.
+  const wk4 = (p.weekly || []).slice(-4);
+  const projTrend = wk4.length >= 2 ? `
+      <div class="ffp-proj-trend">${gamelogBars(wk4.map((w) => w.fp), {
+        w: 150, h: 30, stroke: "var(--brand)",
+        labels: wk4.map((w) => `Wk ${w.week}`),
+      })}<span class="k">last ${wk4.length} weeks (PPR)</span></div>` : "";
   const proj = k.proj != null ? `
     <div class="ffp-proj card">
       <div class="ffd-h">Board projection</div>
@@ -12616,6 +12624,7 @@ function ffProfileHTML(p, info, bio) {
       <span class="k">projected PPG, from last season\u2019s volume</span>
       ${k.pos_rank ? `<div class="ffp-proj-r">${escapeHtml(k.position)} rank <b>${k.pos_rank}</b></div>` : ""}
       ${tierDots ? `<div class="ffp-proj-r">Tier ${k.tier} ${tierDots}</div>` : ""}
+      ${projTrend}
     </div>` : "";
   const weekly = p.weekly || [];
   // The render's floor/median/ceiling strip, sourced from the one place
@@ -12717,8 +12726,10 @@ function ffProfileHTML(p, info, bio) {
                         bio && bio.number != null ? "#" + bio.number : ""]
             .filter(Boolean).join(" \u00b7 "))}</span>${injLineHTML(injFind("nfl", p.player))}
         <span class="ffp-bios">
+          ${chip("HT", bio && bio.height)}${chip("WT", bio && bio.weight)}
           ${chip("Age", bio && bio.age)}${chip("Exp", bio && bio.years_exp != null
             ? (bio.years_exp === 0 ? "Rookie" : bio.years_exp + " yr") : null)}
+          ${chip("College", bio && bio.college)}
           ${chip("Games", p.games)}${chip("Season", p.season)}
         </span>
       </div>

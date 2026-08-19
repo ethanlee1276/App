@@ -2401,6 +2401,9 @@ body.ffd-open { overflow: hidden; }
 .ffp-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block;
   background: var(--border); }
 .ffp-dot.on { background: var(--brand); }
+.ffp-proj-trend { margin-top: 10px; display: flex; flex-direction: column;
+  gap: 2px; }
+.ffp-proj-trend .k { color: var(--text-mute); font-size: var(--fs-2xs); }
 .ffp-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
 @media (min-width: 761px) {
   .ffp-grid { grid-template-columns: 1fr 1fr; }

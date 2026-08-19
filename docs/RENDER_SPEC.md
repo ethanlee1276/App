@@ -36,7 +36,7 @@ cannot persist them); this file is the durable description.
 | --- | --- |
 | 10/PM detail — Prediction Markets, table + detail panel | **SHIPPED 2026-08-18** |
 | 6/7 — Fantasy Calendar three-column | **SHIPPED 2026-08-19** |
-| 8/9 — Player Profile (fantasy) | next |
+| 8/9 — Player Profile (fantasy) | **SHIPPED 2026-08-19** (built 08-18; close pass added HT/WT/College + trend) |
 | 3 — Dashboard | partial (top picks, stadiums, perf panel exist; quick-tools row + sports-breakdown donut pending) |
 | 12 — Bet Tracker | mostly exists (My Bets); render adds summary strip |
 | 13 — Account & Settings | exists; render adds stats card |
@@ -86,7 +86,18 @@ rank — teamshape/def-rank data), Key stats row, Projected range strip
 (floor/median/ceiling — exists as ffp-range), Add to Watchlist.
 Omit: salary, ownership %, boom % (unsourceable — decided 2026-08-18).
 
-### Player Profile (render 8/9 + full render)
+### Player Profile (render 8/9 + full render) — SHIPPED
+As-built notes: most of this page shipped in the fantasy render pass
+of 2026-08-18 (ffp-* overlay: hero, season tiles with league ranks,
+projection tile with tier dots, FP chart, weekly range, matchup
+strength, utilization ring, game log, upcoming game, takeaways). The
+2026-08-19 close pass added the hero's HT/WT/College chips (kept from
+the roster feed in engine/rosters.py — missing bio drops the chip) and
+the projection tile's 4-week trend line (his own last four PPR weeks).
+The render's tab strip is deliberately one scrolling overview grid —
+every tab we can source is already a panel; empty tabs would be
+chrome. Advanced-metrics list stays limited to measured metrics (xFP,
+snap share) inside Utilization.
 Hero: photo left; name + pos · team · number; HT/WT · AGE · EXP ·
 COLLEGE strip; Add to Watchlist. Right of hero: season-stats card
 (6-8 stat tiles each with a league-rank sub) and a projection tile

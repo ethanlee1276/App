@@ -636,6 +636,18 @@ is NFL only. On the phone it stacks calendar → read → list. Salary,
 ownership and boom% stay out — same no-invented-numbers rule as
 before.
 
+### T28. Render screen three: the Player Profile close pass
+
+The player profile page already matched your render from the
+2026-08-18 fantasy pass; this closes the gaps. The hero now carries
+the render's HT / WT / College chips — kept from the roster feed we
+already fetch (engine/rosters.py ships height readable, 74 → 6'2"),
+and a player the feed has no body for simply drops the chip. The
+projection tile gains the render's little trend line: his own last
+four PPR weeks as bars, never a modeled curve. The bio chips fill on
+the droplet after the next fantasy build (rosters ride along with it);
+if they stay empty, run `python3 launch.py --refresh-rosters` once.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

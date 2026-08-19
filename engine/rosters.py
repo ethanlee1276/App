@@ -108,7 +108,22 @@ def _player_row(p: dict) -> dict | None:
         "years_exp": exp if isinstance(exp, int) else None,
         "number": p.get("number") if isinstance(p.get("number"), int) else None,
         "age": p.get("age") if isinstance(p.get("age"), int) else None,
+        # Bio strip for the profile hero (render 8/9). The feed reports
+        # height in inches-as-a-string; ship it readable. Missing stays
+        # None — the page drops the chip rather than inventing a body.
+        "height": _height_say(p.get("height")),
+        "weight": (f"{p['weight']} lb"
+                   if str(p.get("weight") or "").isdigit() else None),
+        "college": (p.get("college") or "").strip() or None,
     }
+
+
+def _height_say(v) -> str | None:
+    """Sleeper's height field, made readable: "74" -> 6'2"."""
+    s = str(v or "").strip()
+    if s.isdigit() and 60 <= int(s) <= 90:
+        return f"{int(s) // 12}'{int(s) % 12}\""
+    return s or None
 
 
 def _sort_key(r: dict) -> tuple:

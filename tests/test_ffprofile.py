@@ -125,6 +125,28 @@ def test_no_db_degrades_to_empty():
     assert ffprofile.profile("Anyone", db_path="/no/such.db") == {}
 
 
+def test_the_hero_and_projection_tile_carry_the_render_details():
+    """Render 8/9 close pass: the hero's bio strip carries HT/WT/College
+    when the roster knows them, and the projection tile carries the
+    little trend line — his own last four PPR weeks, not a model."""
+    app = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "web", "js", "app.js"),
+        encoding="utf-8").read()
+    i = app.index("function ffProfileHTML(")
+    body = app[i:app.index("\nfunction ", i + 10)]
+    for hook in ('chip("HT", bio && bio.height)',
+                 'chip("WT", bio && bio.weight)',
+                 'chip("College", bio && bio.college)'):
+        assert hook in body, f"hero bio strip lost {hook}"
+    assert "ffp-proj-trend" in body
+    assert "(p.weekly || []).slice(-4)" in body, \
+        "the trend is his own last four weeks, never a modeled curve"
+    css = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "web", "css", "styles.css"),
+        encoding="utf-8").read()
+    assert ".ffp-proj-trend {" in css
+
+
 def test_the_server_serves_it_ungated():
     src = open(os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "server.py"), encoding="utf-8").read()
