@@ -163,6 +163,7 @@ auto-settle last ran, so you can see the loop is alive.
 | Bets still open after the games ended | `python3 launch.py --settle all` |
 | Fold old 0.00-unit picks back into the record (once) | `python3 launch.py --resize-unstaked` |
 | Separate long shots from the main record (once) | `python3 launch.py --repair-journal` |
+| Does the site still look like the renders? | `python3 launch.py --renders` (add `--shots out/` for a contact sheet) |
 | Why is the board empty? | `python3 launch.py --why-empty` |
 | Why did the UFC card produce no picks? | `python3 launch.py --why-ufc` |
 | What does each WNBA feed endpoint actually return? | `python3 ingest.py wnba --probe` |

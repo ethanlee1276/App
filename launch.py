@@ -6476,6 +6476,14 @@ def main() -> None:
     if "--haircut" in argv:
         show_haircut("--refit" in argv)
         return
+    if "--renders" in argv:
+        # Does the site still LOOK like the render pack? RENDER_SPEC.md's
+        # structural claims, measured in a real browser at the widths the
+        # renders were drawn at. Lives in its own module because it needs
+        # Node, and a health check must not depend on one.
+        import rendercheck
+        i = argv.index("--renders")
+        sys.exit(rendercheck.main([a for a in argv[i + 1:]]))
     if "--shape" in argv:
         import shapecheck
         rest = argv[argv.index("--shape") + 1:]

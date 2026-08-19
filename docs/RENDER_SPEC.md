@@ -30,6 +30,42 @@ pixel for pixel."
 The images themselves live in the chat of 2026-08-18 (a cloud session
 cannot persist them); this file is the durable description.
 
+## Measuring it
+
+**Prose cannot fail.** This file says the Prediction Markets page is two
+columns with a sticky detail panel and the Fantasy Calendar is three.
+Nothing stopped a refactor from making either of them one column with the
+whole suite green, because no test knew.
+
+    python3 launch.py --renders                  # 1280 and 390
+    python3 launch.py --renders --shots out/     # + a contact sheet
+
+`rendercheck.py` turns the structural claims below into measurements taken
+in a real browser at the widths the renders were drawn at, and reports one
+of four things per claim:
+
+| verdict | means |
+| --- | --- |
+| holds | the claim is true right now |
+| **DRIFT** | it broke — someone should look |
+| no data | this board has nothing to draw, so nothing is claimed |
+| not in force | the feature is off (pricing needs billing switched on) |
+
+The last two are the reason it is worth running. A tool that called every
+empty board a regression would be deleted in a week, and half the pack
+cannot draw on a machine with no schedule cache. **Coverage is part of
+the result** — the run prints how many screen-widths it actually measured,
+and the honest place to run it is the droplet, where the boards are fed.
+
+It does NOT diff pixels: the render images are not in the repo, which is
+why this file exists as prose. `--shots` writes a contact sheet with an
+empty slot beside each screen, each slot naming the filename to save its
+render as; drop them in, run it again, and the pairs render side by side.
+
+`tests/test_rendercheck.py` pins the instrument — every selector the spec
+table names still exists in the source, and all four verdicts are
+reachable — and runs the harness end to end when a browser is available.
+
 ## Status
 
 | Screen | Status |
