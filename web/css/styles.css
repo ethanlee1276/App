@@ -265,6 +265,8 @@
   /* Worst-to-best track for range strips. Built from the semantic
      tones, which flip per theme on their own — one definition serves. */
   --grad-range: linear-gradient(90deg, var(--bad), var(--warn), var(--good));
+  /* The stub pages' big numeral, filled with the brand ramp. */
+  --grad-brand: linear-gradient(180deg, var(--brand-2), var(--brand));
 
   --font-sans: "Archivo Narrow", "Arial Narrow", -apple-system,
                BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -5102,6 +5104,74 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .legal-table th { width: 34%; color: var(--text); font-weight: 600; }
 .legal-table td { color: var(--text-dim); }
 .legal-back { margin-top: 36px; }
+
+/* Stub pages — 404 and maintenance (renders 23/24). One centred card on
+   the house ground: wordmark, the mark, one sentence that tells the
+   truth about what happened, and doors to pages that exist. */
+/* These pages carry no sidebar, so they skip .shell — its 240px rail
+   column would push the card off-centre with nothing in it. */
+.stub-main { display: block; max-width: none; }
+.stub { max-width: 560px; margin: 0 auto; padding: 12vh 20px 64px;
+  text-align: center; }
+.stub-brand { display: inline-flex; align-items: center; gap: 10px;
+  text-decoration: none; margin-bottom: 34px; }
+.stub-words { font-family: var(--font-display); font-size: var(--fs-lg);
+  font-weight: 700; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--text); }
+.stub-words span { color: var(--text-mute); font-weight: 600; }
+.stub-num { font-family: var(--font-display); font-size: clamp(78px, 19vw, 148px);
+  font-weight: 800; line-height: 1; letter-spacing: .04em;
+  background: var(--grad-brand);
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stub-mark { width: 74px; height: 74px; margin: 0 auto; color: var(--brand);
+  display: grid; place-items: center;
+  border: var(--hairline) solid color-mix(in oklab, var(--brand) 40%, var(--border-soft));
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--brand) 8%, var(--panel-2)); }
+.stub-mark svg { width: 40px; height: 40px; }
+.stub-title { font-size: var(--fs-2xl); margin: 18px 0 8px; }
+.stub-sub { color: var(--text-dim); font-size: var(--fs-sm);
+  line-height: var(--lh-body); margin: 0 auto; max-width: 44ch; }
+.stub-cta { display: inline-block; margin-top: 22px; padding: 10px 22px;
+  background: var(--brand); border-color: var(--brand); color: #fff;
+  font-weight: 700; text-decoration: none; }
+.stub-cta:hover { background: var(--brand-2); border-color: var(--brand-2); }
+.stub-links { display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 8px 22px; margin-top: 28px; padding-top: 20px;
+  border-top: var(--hairline) solid var(--border-soft); }
+.stub-links a { color: var(--brand-2); font-size: var(--fs-sm);
+  text-decoration: none; }
+.stub-links a:hover { color: var(--text); }
+.stub-note { margin-top: 26px; color: var(--text-mute); font-size: var(--fs-xs);
+  line-height: var(--lh-body); }
+
+/* Alerts list (render 14): filter chips, then rows that carry the
+   condition that fired them under the headline. No per-row toggle and
+   no "create alert" — this page reports feeds we already hold. */
+.al-cats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.al-cat { display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 13px; border-radius: 999px; cursor: pointer;
+  border: var(--hairline) solid var(--border); background: var(--panel-2);
+  color: var(--text-dim); font-size: var(--fs-xs); font-weight: 700; }
+.al-cat:hover { color: var(--text); border-color: var(--brand); }
+.al-cat.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.al-n { color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.al-cat.on .al-n { color: color-mix(in oklab, #fff 75%, transparent); }
+.al-list { padding: 0; }
+.al-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.al-row:last-child { border-bottom: 0; }
+.al-ic { width: 30px; height: 30px; flex: none; display: grid;
+  place-items: center; border-radius: 50%;
+  border: var(--hairline) solid var(--border-soft); background: var(--panel-2); }
+.al-ic.good { color: var(--good); }
+.al-ic.bad { color: var(--bad); }
+.al-ic.warn { color: var(--warn); }
+.al-ic.brand { color: var(--brand); }
+.al-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.al-t b { font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.al-c { color: var(--text-mute); font-size: var(--fs-xs); }
 
 .bill-state { font-size: var(--fs-sm); color: var(--text-dim); }
 .bill-state.on { color: var(--good); font-weight: 600; }

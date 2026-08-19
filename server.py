@@ -1614,7 +1614,17 @@ class Handler(BaseHTTPRequestHandler):
         # Prevent path traversal outside the web root. is_relative_to (not a
         # string prefix) so a sibling like web2/ could never slip through.
         if not target.is_relative_to(WEB.resolve()) or not target.is_file():
-            self._send(404, b"Not found", ".html")
+            # A mistyped page gets the real 404 page (render 23) when it
+            # is on disk; an asset miss (a stale precached .js, a missing
+            # image) keeps the bare body, because handing a browser a
+            # page of HTML where it asked for a script is how a blank
+            # screen replaces a clear console error.
+            page = WEB / "404.html"
+            wants_page = target.suffix in ("", ".html", ".htm")
+            if wants_page and page.is_file():
+                self._send(404, page.read_bytes(), ".html")
+            else:
+                self._send(404, b"Not found", ".html")
             return
         self._send(200, target.read_bytes(), target.suffix,
                    mtime=target.stat().st_mtime)

@@ -663,6 +663,26 @@ inside one sport's tab. It appears once two sports have settled picks;
 right now only MLB has, so on your live site the donut waits until NFL
 starts grading in September.
 
+### T30. The small screens: 404, maintenance, and the alerts list
+
+Three more off the render pack. **A real 404 page** (`web/404.html`) —
+the big violet numeral, one line that says what happened, a brand
+button back to the board and four quick links. The server serves it
+only for page-shaped misses; a missing script or image still gets the
+plain body, because handing a browser HTML where it asked for
+JavaScript turns a clear console error into a blank screen. **A
+maintenance page** (`web/maintenance.html`) you can point the proxy at
+during a rebuild — it deliberately quotes no ETA (a page that promises
+"back in 5 minutes" is the first thing that lies to a reader) and
+instead says the true thing: a rebuild touches no settled bet, no
+journal entry and no account. **The alerts page** picks up the
+render's list shape: filter chips with live counts (All / Line moves /
+Injuries / The desk) over rows that carry an icon chip, the alert, and
+the condition that fired it underneath. What did NOT cross is the
+render's per-row toggle and its "Create New Alert" button — this page
+reports feeds we already hold rather than subscribing you to anything,
+and a switch that turns nothing on is a lie you can click.
+
 *(More gets appended here as the day goes on — you said to keep the
 list running, so this section is the list.)*
 

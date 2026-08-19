@@ -40,10 +40,10 @@ cannot persist them); this file is the durable description.
 | 3 — Dashboard | **SHIPPED 2026-08-19** (quick tools, sports donut, recent results added to the existing panels) |
 | 12 — Bet Tracker | mostly exists (My Bets); render adds summary strip |
 | 13 — Account & Settings | exists; render adds stats card |
-| 14 — Alerts Center | page exists; render adds per-alert toggles list |
+| 14 — Alerts Center | **SHIPPED 2026-08-19** (filter chips + condition rows; the render's toggles never cross) |
 | 21 — Pricing | billing exists (Paddle); render’s 3-plan cards pending |
 | 1/2 — Login / Sign up | exists (accounts); render styling pending |
-| 23/24 — 404 / Maintenance | pending, small |
+| 23/24 — 404 / Maintenance | **SHIPPED 2026-08-19** (web/404.html, web/maintenance.html) |
 | 20/22 — Mobile app promo | not applicable yet (no store apps) |
 
 ## Screen specs
@@ -125,14 +125,23 @@ we do not build DFS lineups.
 * **Pricing (21):** three plan cards (Free / Premium / Elite), center
   card raised + "Most Popular" band, feature checklists, CTA per card.
   Wire to the real Paddle plans only — never invent prices.
-* **404 (23):** giant numeral, "Go Back Home" brand button, four quick
-  links. **Maintenance (24):** wrench mark, "We'll Be Right Back!",
-  Check Status button.
+* **404 (23) / Maintenance (24): SHIPPED.** `web/404.html` and
+  `web/maintenance.html` — giant brand-ramp numeral / clock mark, one
+  honest sentence, brand CTA, quick links. They skip `.shell` (no
+  sidebar to reserve). server.py serves 404.html for page-shaped
+  misses only; an asset miss keeps the bare body, so a missing script
+  stays a console error instead of becoming a blank screen. The
+  maintenance page quotes no ETA — it says what is true (nothing
+  settled is touched) and when to go look at the machine.
 * **Login/Sign up (1/2):** centered card on dark stadium wash,
   wordmark + "DATA. EDGE. PROFITS."-style tagline (write our own
   honest one), fields, brand CTA, switch link.
-* **Alerts (14):** list rows: icon chip, alert title + condition sub,
-  toggle right; filter chips; "Create New Alert" button.
+* **Alerts (14): SHIPPED.** Filter chips with counts (All / Line moves
+  / Injuries / The desk) over rows carrying an icon chip, the alert,
+  and the CONDITION that fired it. The render's per-row toggle and
+  "Create New Alert" never cross: this page is a digest of three feeds
+  we already hold, not a subscription service, and a switch that turns
+  nothing on is a lie you can click (pinned in test_stub_pages).
 * **Bet Tracker (12):** summary strip (bets, win rate, profit, ROI) —
   exists in My Bets tiles; add the render's table variant with
   date/pick/type/odds/stake/result columns (mb table exists; restyle).

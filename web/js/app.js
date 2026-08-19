@@ -9314,54 +9314,81 @@ function renderWeather() {
 /* Alerts — a DIGEST, deliberately: what changed on the data we already
    hold (line moves, the injury watch, the desk), rebuilt each refresh.
    Not a push service, and the page says so instead of pretending. */
+let _alFilter = "all";
+window._alSet = (k) => { _alFilter = k; renderAlerts(); };
+
 function renderAlerts() {
   const host = document.getElementById("alerts-body");
   if (!host) return;
   const d = state.data || {};
-  const sections = [];
+  // Render 14's list: an icon chip, the alert on one line, the CONDITION
+  // that fired it underneath. What never crosses is the render's per-row
+  // toggle and "Create New Alert" — this page is a digest of feeds we
+  // already hold, not a subscription service, and a switch that turns
+  // nothing on would be a lie you can click.
+  const alRow = (ic, tone, title, cond, right) => `
+    <div class="al-row">
+      <span class="al-ic ${tone}">${icon(ic, 15)}</span>
+      <span class="al-t"><b>${title}</b><span class="al-c">${cond}</span></span>
+      ${right || ""}
+    </div>`;
   const moved = (d.recommendations || []).filter((r) =>
     r.move_delta != null && (Math.abs(r.move_delta) >= 0.5 || r.move_steam));
-  if (moved.length) {
-    sections.push(`<div class="section-title">Line movement
-        <span class="sub">— tonight’s picks whose line has moved since open. Steam =
-        several books moved together, which is the market talking.</span></div>
-      <div class="card kx-table" style="padding:0">${moved.slice(0, 12).map((r) => `
-        <div class="kx-row">
-          <span class="kx-title"><b>${escapeHtml(r.player)}</b> ${escapeHtml(r.side || "")}
-            ${r.line} ${escapeHtml(r.market_label || r.market || "")}</span>
-          <span class="kx-num" style="color:var(--${r.move_delta > 0 ? "good" : "bad"})">
-            ${r.move_delta > 0 ? "+" : ""}${r.move_delta}</span>
-          ${r.move_steam ? `<span class="chip down">steam</span>` : ""}
-        </div>`).join("")}</div>`);
-  }
   const inj = (d.injury_watch || []).filter((i) => i && i.player);
-  if (inj.length) {
-    sections.push(`<div class="section-title">Injury watch
-        <span class="sub">— designations touching tonight’s board.
-        <a href="#injuries">Full report &#8594;</a></span></div>
-      <div class="card kx-table" style="padding:0">${inj.slice(0, 12).map((i) => `
-        <div class="kx-row"><span class="kx-title"><b>${escapeHtml(i.player)}</b>
-          ${i.team ? escapeHtml(i.team) : ""}</span>
-          <span class="chip down">${escapeHtml(i.status || "")}</span></div>`).join("")}</div>`);
-  }
   const k = _railDeskCache || {};
   const recs = [...(k.rows || []).filter((r) => r.rec),
                 ...(k.weather || []).filter((r) => r.rec)];
-  if (recs.length) {
+  const cats = [["all", "All alerts", moved.length + inj.length + recs.length],
+                ["moves", "Line moves", moved.length],
+                ["injuries", "Injuries", inj.length],
+                ["desk", "The desk", recs.length]];
+  if (!cats.some(([kk, , n]) => kk === _alFilter && n)) _alFilter = "all";
+  const chips = `<div class="al-cats">${cats.filter(([kk, , n]) => n || kk === "all")
+    .map(([kk, label, n]) => `<button class="al-cat${kk === _alFilter ? " on" : ""}"
+      type="button" onclick="_alSet('${kk}')">${escapeHtml(label)}
+      <span class="al-n">${n}</span></button>`).join("")}</div>`;
+  const show = (kk) => _alFilter === "all" || _alFilter === kk;
+  const sections = [];
+  if (moved.length && show("moves")) {
+    sections.push(`<div class="section-title">Line movement
+        <span class="sub">— tonight’s picks whose line has moved since open. Steam =
+        several books moved together, which is the market talking.</span></div>
+      <div class="card al-list">${moved.slice(0, 12).map((r) => alRow(
+        r.move_delta > 0 ? "rising" : "falling",
+        r.move_delta > 0 ? "good" : "bad",
+        `${escapeHtml(r.player)} ${escapeHtml(r.side || "")} ${r.line}`,
+        `${escapeHtml(r.market_label || r.market || "")} moved
+         ${r.move_delta > 0 ? "+" : ""}${r.move_delta} since open`,
+        `<span class="kx-num" style="color:var(--${r.move_delta > 0 ? "good" : "bad"})">
+           ${r.move_delta > 0 ? "+" : ""}${r.move_delta}</span>${r.move_steam
+          ? `<span class="chip down">steam</span>` : ""}`)).join("")}</div>`);
+  }
+  if (inj.length && show("injuries")) {
+    sections.push(`<div class="section-title">Injury watch
+        <span class="sub">— designations touching tonight’s board.
+        <a href="#injuries">Full report &#8594;</a></span></div>
+      <div class="card al-list">${inj.slice(0, 12).map((i) => alRow(
+        "warn", "warn", escapeHtml(i.player),
+        `${i.team ? escapeHtml(i.team) + " · " : ""}on tonight’s board with a designation`,
+        `<span class="chip down">${escapeHtml(i.status || "")}</span>`)).join("")}</div>`);
+  }
+  if (recs.length && show("desk")) {
     sections.push(`<div class="section-title">The desk
         <span class="sub">— paper recommendations live right now.
         <a href="#intel">The full board &#8594;</a></span></div>
-      <div class="card kx-table" style="padding:0">${recs.slice(0, 6).map((r) => `
-        <div class="kx-row"><span class="kx-title">${escapeHtml(r.title)}</span>
-          ${r.rec_side ? `<span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${escapeHtml(r.rec_side)}</span>` : ""}
-          <span class="kx-num">${(r.prob * 100).toFixed(0)}&cent;</span></div>`).join("")}</div>`);
+      <div class="card al-list">${recs.slice(0, 6).map((r) => alRow(
+        "gem", "brand", escapeHtml(r.title),
+        `cleared the desk’s gate at ${(r.prob * 100).toFixed(0)}¢`,
+        `${r.rec_side ? `<span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${escapeHtml(r.rec_side)}</span>` : ""}
+         <span class="kx-num">${(r.prob * 100).toFixed(0)}&cent;</span>`)).join("")}</div>`);
   }
-  host.innerHTML = sections.join("") || `<div class="empty-slate">
+  host.innerHTML = (moved.length + inj.length + recs.length ? chips : "")
+    + (sections.join("") || `<div class="empty-slate">
       <div class="es-icon">${icon("signal", 30)}</div>
       <div class="es-title">Nothing moving right now</div>
       <div class="es-sub">Alerts fill from three real feeds — line movement on tonight’s
       picks, the injury watch, and the prediction desk. A quiet page means a quiet
-      slate, not a broken one.</div></div>`;
+      slate, not a broken one.</div></div>`);
   renderRailDesk();
 }
 
