@@ -2143,8 +2143,24 @@ function mountLiveTicks(root) {
     const was = _tickSeen.get(key);
     _tickSeen.set(key, now);
     if (was === undefined || was === now) continue;
+    // DIRECTION IS NOT ALWAYS MEANING. A price rising is good or bad for
+    // the reader and green/red says which. A SCORE only ever rises, and
+    // tinting the opponent's score green would claim their run was good
+    // news for you. Those cells ask for `neutral` and get "this changed"
+    // in the brand colour, with no count — 3 to 4 has no in-between worth
+    // animating.
+    const mode = el.getAttribute("data-tick-mode") || "";
     const up = now > was;
-    el.classList.remove("tick-up", "tick-down");
+    el.classList.remove("tick-up", "tick-down", "tick-move");
+    if (mode === "neutral") {
+      void el.offsetWidth;
+      el.classList.add("tick-move");
+      clearTimeout(_tickTimers.get(key));
+      _tickTimers.set(key, setTimeout(() => {
+        el.classList.remove("tick-move");
+      }, 1500));
+      continue;
+    }
     // Reading offsetWidth restarts the fade when a cell moves twice in a
     // row; without it the second change re-adds a class that is already
     // there and no animation replays.

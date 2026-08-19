@@ -8176,7 +8176,9 @@ function deskSectionHTML(k) {
       ${deskThumb(r)}
       <span class="kx-title">${escapeHtml(r.title)} ${side(r.rec_side)}
         <span class="kx-match">· ${why}</span></span>
-      <span class="kx-num kx-k">${(r.prob * 100).toFixed(0)}¢</span>
+      <span class="kx-num kx-k" data-tick="d:${escapeAttr(
+        r.ticker || r.title || "")}" data-tick-v="${(r.prob * 100).toFixed(0)}">${
+        (r.prob * 100).toFixed(0)}¢</span>
       <span class="kx-num kx-m">${(r.model_p * 100).toFixed(0)}%</span>
       <span class="kx-num kx-e"><span style="color:var(--${r.edge_pts > 0 ? "good" : "bad"});font-weight:700">${r.edge_pts > 0 ? "+" : ""}${r.edge_pts} pts</span></span>
       <span class="kx-vol">$${Number(r.volume_24h || 0).toLocaleString()}</span>
@@ -16577,9 +16579,13 @@ function liveCardHTML({ sport, g, bets }) {
       <span class="lb-league">${sport.toUpperCase()}</span></div>
     <div class="lb-score">
       <span class="lb-team">${mark(g.away)}<em>${escapeHtml(g.away)}</em></span>
-      <b>${lv.away_score != null ? lv.away_score : "–"}</b>
+      <b${lv.away_score == null ? "" : ` data-tick="ls:${escapeAttr(gameId(g))}:a" data-tick-mode="neutral"
+        data-tick-v="${lv.away_score}"`}>${
+        lv.away_score != null ? lv.away_score : "–"}</b>
       <span class="lb-mid">${mlb && lv.bases ? miniDiamond(lv.bases) : ""}</span>
-      <b>${lv.home_score != null ? lv.home_score : "–"}</b>
+      <b${lv.home_score == null ? "" : ` data-tick="ls:${escapeAttr(gameId(g))}:h" data-tick-mode="neutral"
+        data-tick-v="${lv.home_score}"`}>${
+        lv.home_score != null ? lv.home_score : "–"}</b>
       <span class="lb-team">${mark(g.home)}<em>${escapeHtml(g.home)}</em></span>
     </div>
     ${linesGrid}
@@ -16670,6 +16676,7 @@ async function renderLiveBoard() {
     <div class="lb-grid">${shown.map(liveCardHTML).join("")}</div>`;
   host.querySelectorAll(".lb-chip").forEach((b) =>
     b.addEventListener("click", () => { _liveChip = b.dataset.chip; renderLiveBoard(); }));
+  if (typeof mountLiveTicks === "function") mountLiveTicks(host);
   host.querySelectorAll(".lb-card").forEach((el) =>
     el.addEventListener("click", () => {
       // Opening a game only works on its own sport's slate.

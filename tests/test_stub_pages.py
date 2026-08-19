@@ -243,6 +243,35 @@ def test_press_feedback_is_transform_only_and_short():
     assert ".plan-btn:active { transform: none; }" in rm[:900]
 
 
+def test_a_score_never_claims_the_run_was_good_for_you():
+    """Direction is not always meaning. A price rising is good or bad for
+    the reader and green/red says which; a SCORE only ever rises, so
+    tinting the opponent's run green would be the colour making a claim
+    nobody made. Those cells ask for `neutral` and get "this changed"."""
+    i = VIS.index("function mountLiveTicks(")
+    body = VIS[i:VIS.index("\nif (typeof window", i)]
+    assert 'data-tick-mode' in body and 'mode === "neutral"' in body
+    # No count either: 3 to 4 has no in-between worth animating.
+    neutral = body[body.index('if (mode === "neutral")'):]
+    assert "continue;" in neutral[:400]
+    assert ".tick-move {" in CSS and "@keyframes tickMove" in CSS
+    tm = CSS[CSS.index("@keyframes tickMove"):]
+    assert "var(--brand)" in tm[:220], "the neutral flash must not be good/bad"
+    # Live scores are the surface that needs it.
+    assert 'data-tick-mode="neutral"' in APP
+    assert 'data-tick="ls:' in APP, "live scores never opted in"
+
+
+def test_the_ticks_reach_every_surface_whose_numbers_move():
+    """A helper wired to one board is half a feature. The three surfaces
+    that actually change under a reader are the prediction-market prices,
+    the desk's recommended rows, and live scores."""
+    assert APP.count("mountLiveTicks(host)") >= 3, \
+        "a render path that can change numbers is not calling the mount"
+    for key in ('data-tick="y:', 'data-tick="n:', 'data-tick="d:', 'data-tick="ls:'):
+        assert key in APP, f"no cell opts in with {key}"
+
+
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

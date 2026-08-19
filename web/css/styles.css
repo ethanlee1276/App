@@ -1356,9 +1356,17 @@ svg[data-scrub] { touch-action: pan-y; }
    of your eye, not a control responding to you. Nothing here animates a
    layout property, so a whole board ticking at once is still one
    compositor pass. */
-.tick-up, .tick-down { border-radius: var(--radius-sm); }
+.tick-up, .tick-down, .tick-move { border-radius: var(--radius-sm); }
 .tick-up { animation: tickUp 1.4s var(--ease-out) 1; }
 .tick-down { animation: tickDown 1.4s var(--ease-out) 1; }
+/* "This changed", with no claim about whose way it went — see the
+   neutral branch in mountLiveTicks. A score only ever rises, so green
+   would say the opponent's run was good news for you. */
+.tick-move { animation: tickMove 1.4s var(--ease-out) 1; }
+@keyframes tickMove {
+  0%   { background: color-mix(in oklab, var(--brand) 38%, transparent); }
+  100% { background: color-mix(in oklab, var(--brand) 0%, transparent); }
+}
 @keyframes tickUp {
   0%   { background: color-mix(in oklab, var(--good) 34%, transparent); }
   100% { background: color-mix(in oklab, var(--good) 0%, transparent); }
@@ -1398,7 +1406,7 @@ main { view-transition-name: page; }
   /* Belt and braces: switchView already declines to start one, and this
      kills it for any transition started by something else. */
   main { view-transition-name: none; }
-  .tick-up, .tick-down { animation: none; }
+  .tick-up, .tick-down, .tick-move { animation: none; }
   .btn:active, .sport-btn:active, .nav-btn:active, .mbc-chip:active,
   .mbc-view:active, .al-cat:active, .rec-scope:active, .pm-cat:active,
   .pm-view:active, .qt-chip:active, .tb-item:active, .ffcal-card:active,

@@ -826,14 +826,23 @@ enforce the result: nothing may animate a layout property (width, left
 outlast 300ms. So the useful question wasn't "more motion", it was
 "which motion carries information".
 
-**1. Prices that move now say so.** This is the one with real value.
+**1. Numbers that move now say so.** This is the one with real value.
 The board reloads on a timer, so until tonight a price could move four
 cents while you were looking straight at it and the page said nothing.
 Now a changed cell counts from the old number to the new one over
-~400ms and the cell tints green or red in the direction it went, fading
-over 1.4s. The rule that keeps it honest: **a cell seen for the first
-time never flashes** — otherwise the whole board would flare on load,
-which is an entrance animation wearing a data costume.
+~400ms and tints in the direction it went, fading over 1.4s. It runs on
+all three surfaces whose numbers actually change under you: the
+**prediction-market** YES/NO prices, the **desk's** recommended rows,
+and **live scores**.
+
+Two rules keep it from becoming decoration. **A cell seen for the first
+time never flashes** — otherwise the whole board flares on load, which
+is an entrance animation wearing a data costume. And **direction is not
+always meaning**: a price rising is good or bad for you and green/red
+says which, but a score only ever rises, so tinting the opponent's run
+green would have the colour claiming their touchdown was good news for
+you. Scores get a neutral brand-violet "this changed" instead, with no
+count — 3 to 4 has no in-between worth animating.
 
 **2. Tab changes cross-fade.** Using the browser's own View Transitions
 API: no library, no bytes, no keyframes we maintain. The browser
