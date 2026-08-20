@@ -1,5 +1,44 @@
 # Deploying
 
+## The everyday deploy
+
+Ethan, 2026-08-20: "how do I deploy u gotta tell me these things every
+time." He was right, and this block is the answer — everything below it
+is how to BUILD the box, which is a different job you do once.
+
+```bash
+ssh <the droplet>
+cd /srv/qellys
+./deploy/deploy.sh --no-tests
+```
+
+Then close and reopen the app on the phone.
+
+That is the whole thing. `deploy.sh` backs up both databases, pulls the
+code itself (you do **not** run `git pull`), restarts the service and
+checks the site answers before it exits. The restart runs a full
+`refresh_all()`, so any change that needs the boards rebuilt gets that for
+free — there is no second command.
+
+**`--no-tests` is only honest when GitHub Actions is green on the branch.**
+It runs the whole suite on three Python versions on every push, which is
+why the box does not need to repeat it. Red tick, or you would rather not
+look: drop the flag and it runs the suite here (about an hour).
+
+**Check the last line.** It prints the short SHA it landed on. If that is
+the same SHA it printed at the START, the pull brought nothing — almost
+always because the checkout is on the wrong branch. `git rev-parse
+--abbrev-ref HEAD` will say which.
+
+**If `--ff-only` refuses**, the box has local commits or edits. Nothing
+was restarted and the old code is still serving, which is the safe
+outcome. Do not force it — that is a "tell Claude" moment.
+
+**Rolling back** is one line and `deploy.sh` prints it for you at the
+start, with the SHA filled in.
+
+---
+
 Four files. Read `docs/LAUNCH.md` first — **Phase 0 comes before any of
 this**, because its answers can change what gets deployed.
 

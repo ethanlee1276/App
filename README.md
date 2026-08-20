@@ -16,6 +16,11 @@ today on realistic sample data, with clean seams where live data sources plug in
 
 ![dashboard](docs/dashboard.png)
 
+**Deploying today's work:** `cd /srv/qellys && ./deploy/deploy.sh --no-tests`,
+then reopen the app. That is the whole routine — it pulls, restarts and
+rebuilds the boards itself. The reasons, the checks and what to do when it
+refuses are the first section of [`deploy/README.md`](deploy/README.md).
+
 ---
 
 ## Quick start
