@@ -321,6 +321,11 @@
      not type in a hierarchy, and it scales with the viewport. Named so
      it is still one definition rather than a number in a rule. */
   --fs-stub: clamp(78px, 19vw, 148px);
+  /* The pricing wall's numeral. A clamp in a token, exactly like
+     --fs-stub above: display type that has to shrink on a phone is still
+     one decision, and writing it inline would be the 24th size the ramp
+     exists to prevent. */
+  --fs-price: clamp(34px, 5vw, 46px);
   --radius: 0;
   --radius-sm: 0;
   --radius-lg: 0;
@@ -6589,4 +6594,115 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
     row-gap: 2px; }
   .mr-when { grid-column: 1 / -1; }
   .mr-tag { grid-column: 1 / -1; text-align: left; }
+}
+
+/* ====================== THE PRICING WALL ======================
+   Built to Ethan's render, 2026-08-20. What the render carried and this
+   does not — invented member counts, an invented satisfaction rate, an
+   invented star rating, and a "consistent profits" headline — is argued
+   in app.js beside the code, because that is where somebody would put
+   them back. The layout, the rhythm and the three-tier shape are his. */
+body.walled .topbar-nav, body.walled .sidebar, body.walled .tabbar,
+body.walled .nav-btn { display: none !important; }
+/* THE GRID COLUMN OUTLIVES THE ELEMENT. `.shell` is `240px minmax(0,1fr)`;
+   display:none takes the sidebar out of the flow but leaves the track, so
+   main landed in the 240px column and the whole shop rendered as a
+   narrow strip down the left. Measured at 1400px before the fix. */
+body.walled .shell { grid-template-columns: minmax(0, 1fr); }
+body.walled main { padding-left: 16px; padding-right: 16px; }
+
+.pw { max-width: 1180px; margin: 0 auto; padding: 8px 0 40px; }
+.pw-hero { text-align: center; padding: 26px 16px 30px; }
+.pw-h1 { font-size: clamp(34px, 6vw, 62px); font-weight: 900;
+  letter-spacing: -.01em; line-height: var(--lh-tight); margin: 0; }
+.pw-h1 em { font-style: normal; color: var(--brand-2); }
+.pw-sub { font-size: var(--fs-xl); font-weight: 700; margin: 12px 0 0; }
+.pw-lede { color: var(--text-mute); max-width: var(--measure-tight); margin: 10px auto 0;
+  line-height: var(--lh-snug); }
+.pw-sports { display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 8px; margin-top: 20px; }
+.pw-sport { padding: 6px 13px; border-radius: 999px; font-size: var(--fs-sm);
+  font-weight: 700; background: var(--panel-2);
+  border: var(--hairline) solid var(--border-soft); }
+
+.pw-h2 { text-align: center; font-size: clamp(22px, 3vw, 30px);
+  font-weight: 800; margin: 38px 0 4px; }
+.pw-h2 em { font-style: normal; color: var(--brand-2); }
+.pw-h2sub { text-align: center; color: var(--text-mute); margin: 0 auto 18px;
+  max-width: var(--measure-tight); }
+
+.pw-feats { display: grid; gap: 12px; margin-top: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.pw-feat { padding: 18px 16px; text-align: center; }
+.pw-feat-ic { color: var(--brand-2); margin-bottom: 8px; }
+.pw-feat h3 { margin: 0 0 6px; font-size: var(--fs-md); font-weight: 800; }
+.pw-feat p { margin: 0; color: var(--text-mute); font-size: var(--fs-sm);
+  line-height: var(--lh-snug); }
+
+/* 14px of top padding, because the "most popular" tag is positioned at
+   -11px and the grid was clipping it against the row edge. */
+.pw-plans { display: grid; gap: 14px; align-items: start; padding-top: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
+.pw-plan { position: relative; padding: 22px 20px; text-align: center; }
+.pw-plan.pop { border-color: color-mix(in oklab, var(--brand) 62%, var(--border));
+  background: color-mix(in oklab, var(--brand) 7%, var(--panel-2)); }
+.pw-tag { position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
+  padding: 3px 12px; border-radius: 999px; background: var(--brand-solid);
+  color: #fff; font-size: var(--fs-2xs); font-weight: 800;
+  letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.pw-plan-name { font-size: var(--fs-md); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--brand-2); }
+.pw-price { font-size: var(--fs-price); font-weight: 900; line-height: var(--lh-tight);
+  font-variant-numeric: tabular-nums; margin-top: 6px; }
+.pw-price .cur { font-size: var(--fs-2xl); vertical-align: super; font-weight: 800; }
+.pw-price i { font-style: normal; font-size: var(--fs-md); font-weight: 600;
+  color: var(--text-mute); }
+.pw-save { color: var(--good); font-weight: 700; font-size: var(--fs-sm);
+  min-height: 1.3em; }
+.pw-save.flat { visibility: hidden; }
+.pw-cadence { color: var(--text-mute); font-size: var(--fs-sm); margin-top: 2px; }
+.pw-list { list-style: none; margin: 16px 0; padding: 0; text-align: left; }
+.pw-list li { display: flex; gap: 8px; align-items: flex-start;
+  font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.pw-list li + li { margin-top: 7px; }
+.pw-list .ico-mark { color: var(--good); flex: none; transform: translateY(2px); }
+.pw-buy { width: 100%; padding: 12px; font-size: var(--fs-md); font-weight: 800; }
+.pw-fine { color: var(--text-mute); font-size: var(--fs-2xs); margin-top: 8px; }
+
+.pw-code { margin-top: 18px; padding: 16px 18px; }
+.pw-code .code-box { margin-top: 0; padding-top: 0; border-top: 0; }
+
+.pw-proof { margin-top: 22px; padding: 18px 20px; border-radius: var(--radius);
+  border: var(--hairline) solid color-mix(in oklab, var(--good) 28%, var(--border-soft));
+  background: color-mix(in oklab, var(--good) 6%, var(--panel-2)); }
+.pw-proof-head { display: flex; align-items: center; gap: 8px;
+  font-weight: 800; color: var(--good); margin-bottom: 10px; }
+.pw-proof p { margin: 12px 0 0; color: var(--text-mute);
+  font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.pw-stats { display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.pw-stat b { display: block; font-size: var(--fs-2xl); font-weight: 800;
+  font-variant-numeric: tabular-nums; line-height: var(--lh-tight); }
+.pw-stat b.pos { color: var(--good); } .pw-stat b.neg { color: var(--bad); }
+.pw-stat span { display: block; color: var(--text-mute); font-size: var(--fs-2xs); }
+
+.pw-faq { padding: 4px 18px; }
+.pw-q { border-bottom: var(--hairline) solid var(--border-soft); }
+.pw-q:last-child { border-bottom: 0; }
+.pw-q summary { padding: 14px 0; cursor: pointer; font-weight: 700;
+  list-style: none; }
+.pw-q summary::-webkit-details-marker { display: none; }
+.pw-q summary::after { content: "+"; float: right; color: var(--text-mute); }
+.pw-q[open] summary::after { content: "\2212"; }
+.pw-q p { margin: 0 0 14px; color: var(--text-mute); font-size: var(--fs-sm);
+  line-height: var(--lh-snug); }
+
+.pw-foot { margin-top: 26px; padding-top: 18px; text-align: center;
+  border-top: var(--hairline) solid var(--border-soft); }
+.pw-foot p { color: var(--text-mute); font-size: var(--fs-sm); margin: 0 0 8px; }
+.pw-legal { max-width: var(--measure); margin: 0 auto !important;
+  font-size: var(--fs-xs) !important; }
+
+@media (max-width: 560px) {
+  .pw-hero { padding: 16px 4px 22px; }
 }

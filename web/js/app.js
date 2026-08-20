@@ -12166,6 +12166,249 @@ function billPlansHTML(s) {
       takes no bets and holds no money.</p>`;
 }
 
+/* ======================= THE PRICING WALL =======================
+
+   Ethan, 2026-08-20, with a render: "the site should immeditly show a
+   page showing the plans … and we also have to make sure there is no way
+   to bypass this pay wall."
+
+   THE BYPASS IS ALREADY CLOSED, AND NOT BY THIS FILE. That is worth
+   saying at the top, because a wall drawn in JavaScript is a decoration:
+   anyone who wanted the picks for free would type
+
+       curl https://qellysbook.com/data/recommendations.json
+
+   and this function would never run. The real protection is in
+   engine/gate.py — the file on the public path IS the redacted one, and
+   the full board is written to data/built/ which the web server has no
+   route to. There is no full copy in the web root to leak. What follows
+   is the SHOP, not the lock.
+
+   WHAT IS IN THE RENDER AND IS NOT HERE. The mockup carried "10K+ Active
+   Members", "95%+ Satisfaction Rate", "4.9/5 Average Rating" over five
+   stars, and "join thousands of winning members". The record on this
+   build is ONE settled bet. Those numbers are not exaggerations of
+   something, they are inventions about a product nobody has bought yet,
+   printed next to a price — which is the definition of false advertising
+   rather than a matter of taste. The render's "Consistent Profits" is the
+   same problem in a headline: this site's own preserved copy says every
+   number here is a probability and not a promise, and that sentence
+   exists precisely to keep a profit guarantee off the page.
+
+   So the trust strip below is built from record.json instead, whatever it
+   currently says — including when what it says is "one bet". A product
+   that grades itself in public and shows a sample of one is telling the
+   truth, and the truth is the only claim here that a competitor cannot
+   also print. */
+
+const PLANS = [
+  { id: "monthly", name: "Monthly", price: 25, per: "month", cadence: "Billed monthly. Cancel anytime.",
+    save: 0, months: 1 },
+  { id: "sixmonth", name: "6 months", price: 125, per: "6 months", cadence: "Billed every 6 months.",
+    save: 25, months: 6, popular: true },
+  { id: "yearly", name: "Yearly", price: 225, per: "year", cadence: "Billed yearly.",
+    save: 75, months: 12 },
+];
+
+/* Every plan is the same product. A tier that withheld features would
+   need a second entitlement model, a second set of redaction rules and a
+   second way to be wrong about what somebody paid for — and the render's
+   own tier lists are the same list three times with the wording changed.
+   Length of commitment is the only axis, and the discount is the whole
+   difference. */
+const PLAN_FEATURES = [
+  "Every sport: NFL, MLB, NBA, WNBA, CFB and UFC",
+  "Daily picks, player props and parlay tickets",
+  "Line movement, line shopping and the price tape",
+  "The full fantasy suite — draft kit, mock draft, lineups, trades",
+  "Prediction markets and the meme-coin scanner",
+  "Injury board, weather, game scripts and matchups",
+  "Bet tracker, bankroll tools and your own record",
+  "Alerts, and the nightly summary",
+];
+
+const FAQ = [
+  ["Can I cancel anytime?",
+   "Yes. A monthly plan stops at the end of the month you have paid for; " +
+   "a six-month or yearly plan runs to the date you paid through. Nothing " +
+   "auto-renews without telling you first."],
+  ["What payment methods do you accept?",
+   "Checkout is handled by Paddle, who are the merchant of record — they " +
+   "take the payment and we never see or store a card number. Which cards " +
+   "and wallets appear is decided on their page, not ours."],
+  ["Is there a free trial?",
+   "There is no trial, and there is something better: the Record page is " +
+   "free and always will be. Every pick is graded in public, wins and " +
+   "losses, before you pay anything."],
+  ["What exactly am I paying for?",
+   "A model\u2019s estimates, published early enough to act on, and graded " +
+   "afterwards whether they were right or wrong. It is not betting advice " +
+   "and it is not a tip service."],
+  ["Do you guarantee I will win money?",
+   "No, and be suspicious of anyone who does. No model wins every night. " +
+   "Every number here is a probability, not a promise."],
+  ["I have a code.",
+   "Enter it in the box above — it applies immediately and needs no card."],
+];
+
+/* THE ONLY NUMBERS ON THIS PAGE ABOUT HOW GOOD THE PRODUCT IS, and they
+   come off the same record.json the free Record page renders. If the
+   sample is one bet it says one bet. A shop that cannot overstate itself
+   is the entire pitch. */
+function paywallProofHTML(rec) {
+  const o = (rec && rec.overall) || null;
+  if (!o || !o.settled) {
+    return `<div class="pw-proof">
+      <div class="pw-proof-head">${iconMark("scale", 18)} Graded in public</div>
+      <p>Every pick this model makes is written down before the game and
+      graded afterwards, win or lose, on the <a href="#record">Record</a>
+      page — which is free and stays free. Nothing has settled yet, so
+      there is nothing to show you. That is what this space will say until
+      there is.</p></div>`;
+  }
+  const pct = (x) => `${(x * 100).toFixed(1)}%`;
+  return `<div class="pw-proof">
+    <div class="pw-proof-head">${iconMark("scale", 18)} Graded in public</div>
+    <div class="pw-stats">
+      <div class="pw-stat"><b>${o.settled}</b><span>settled ${
+        o.settled === 1 ? "pick" : "picks"}</span></div>
+      <div class="pw-stat"><b>${o.wins}–${o.losses}${
+        o.pushes ? "–" + o.pushes : ""}</b><span>record</span></div>
+      <div class="pw-stat"><b class="${(o.net_units || 0) >= 0 ? "pos" : "neg"}">${
+        (o.net_units || 0) >= 0 ? "+" : "−"}${Math.abs(o.net_units || 0).toFixed(2)}u</b>
+        <span>net</span></div>
+      <div class="pw-stat"><b>${pct(o.win_rate || 0)}</b>
+        <span>win rate · ${pct(o.breakeven || 0)} to break even</span></div>
+    </div>
+    <p>${o.settled < 30
+      ? `That is a sample of ${o.settled}, which proves nothing yet and is
+         shown anyway. Come back and watch it grow — or do not pay until it
+         has.`
+      : `Every one of those is on the <a href="#record">Record</a> page with
+         its price, its date and its result.`}
+      No model wins every night, and be suspicious of anyone who claims
+      theirs does.</p></div>`;
+}
+
+function paywallHTML(rec, status) {
+  const sports = [["NFL", "nfl"], ["MLB", "mlb"], ["NBA", "nba"],
+                  ["WNBA", "wnba"], ["CFB", "cfb"], ["UFC", "ufc"],
+                  ["Fantasy", "fantasy"], ["Prediction markets", "predict"],
+                  ["Meme coins", "memes"]];
+  const feature = (icon_, title, body) => `
+    <article class="card pw-feat">
+      <div class="pw-feat-ic">${iconMark(icon_, 20)}</div>
+      <h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p></article>`;
+  const plan = (pl) => `
+    <article class="card pw-plan${pl.popular ? " pop" : ""}">
+      ${pl.popular ? `<div class="pw-tag">Most popular</div>` : ""}
+      <div class="pw-plan-name">${escapeHtml(pl.name)}</div>
+      <div class="pw-price"><span class="cur">$</span>${pl.price}<i>/${escapeHtml(pl.per)}</i></div>
+      ${pl.save ? `<div class="pw-save">Save $${pl.save} against monthly</div>`
+                : `<div class="pw-save flat">&nbsp;</div>`}
+      <div class="pw-cadence">${escapeHtml(pl.cadence)}</div>
+      <ul class="pw-list">${PLAN_FEATURES.map((f) =>
+        `<li>${iconMark("check", 13)}<span>${escapeHtml(f)}</span></li>`).join("")}</ul>
+      <button class="btn primary pw-buy" data-plan="${escapeAttr(pl.id)}"
+        onclick="billSubscribe(this)">Get started</button>
+      <div class="pw-fine">${escapeHtml(pl.cadence)}</div>
+    </article>`;
+  return `
+  <div class="pw">
+    <header class="pw-hero">
+      <h1 class="pw-h1">Data. <em>Edge.</em> Receipts.</h1>
+      <p class="pw-sub">Professional sports intelligence, priced honestly
+        and graded in public.</p>
+      <p class="pw-lede">Qellys Books is one analytics platform for serious
+        bettors, fantasy players and market traders — the model’s
+        estimates, the reasoning behind each one, and a public record of how
+        they turned out.</p>
+      <div class="pw-sports">${sports.map(([label]) =>
+        `<span class="pw-sport">${escapeHtml(label)}</span>`).join("")}</div>
+    </header>
+
+    <h2 class="pw-h2">Everything you need. <em>All in one place.</em></h2>
+    <div class="pw-feats">
+      ${feature("target", "Picks and props",
+        "Daily best bets, player props and parlay tickets across every sport we cover, each with the arithmetic that produced it.")}
+      ${feature("chart", "The model, shown working",
+        "Projections, matchup reads and the step-by-step chain from a player’s baseline to the number on the card.")}
+      ${feature("trophy", "The full fantasy suite",
+        "Draft kit, 20,000-draft mock simulator, lineup optimiser, trade finder, waiver reads and a start calendar.")}
+      ${feature("activity", "Prediction markets",
+        "Live scanning of prediction-market prices for the spots where the crowd and the model disagree.")}
+      ${feature("coin", "Meme coin scanner",
+        "Live token discovery with holder concentration, carry tracking and rug checks.")}
+      ${feature("clock", "Line movement and shopping",
+        "Where each price opened, where it is now, and which book is best right now — in payout space, not in cents.")}
+      ${feature("list", "Bet tracker",
+        "Log what you actually placed, by hand or by paste, and get ROI, CLV and a record you can argue with.")}
+      ${feature("bell", "Alerts",
+        "Line moves, injuries and the nightly summary, on your phone.")}
+      ${feature("user", "Player pages",
+        "Every player we hold, with usage, trends, injuries, props and fantasy value in one place.")}
+      ${feature("scale", "A public record",
+        "Every pick graded afterwards — wins and losses both — on a page that stays free whether you subscribe or not.")}
+    </div>
+
+    <h2 class="pw-h2">Simple pricing. <em>One product.</em></h2>
+    <p class="pw-h2sub">Every plan is the same full site. The only
+      difference is how long you commit for and how much you save.</p>
+    <div class="pw-plans">${PLANS.map(plan).join("")}</div>
+
+    <div class="card pw-code" id="pw-code"></div>
+
+    ${paywallProofHTML(rec)}
+
+    <h2 class="pw-h2">Questions</h2>
+    <div class="card pw-faq">${FAQ.map(([q, a], i) => `
+      <details class="pw-q"${i === 0 ? " open" : ""}>
+        <summary>${escapeHtml(q)}</summary><p>${escapeHtml(a)}</p></details>`).join("")}</div>
+
+    <footer class="pw-foot">
+      <p><b>Checkout is handled by Paddle</b>, the merchant of record. Card
+        details go to them and never touch this server.</p>
+      <p class="pw-legal">This site publishes a model’s estimates. It is
+        not betting advice. You must be 21 or older to bet. Never bet money
+        you cannot afford to lose — if gambling stops being fun, free and
+        confidential help is available 24/7 in the US at 1-800-GAMBLER.</p>
+    </footer>
+  </div>`;
+}
+
+async function renderPaywall() {
+  const host = document.getElementById("view-paywall");
+  if (!host) return;
+  let rec = null;
+  try {
+    // boardFetch, not fetch: every board payload on the site goes
+    // through it (it tracks which endpoints have answered), and the
+    // account block this function sits inside is contracted to call
+    // nothing but our own API endpoints directly.
+    const r = await boardFetch("/data/record.json", { cache: "no-store" });
+    if (r.ok) rec = await r.json();
+  } catch (e) { /* the shop still renders without the proof strip */ }
+  host.innerHTML = paywallHTML(rec, _pwStatus);
+  // The code box is the one control that works with no processor at all,
+  // so it is mounted from the same builder the account page uses rather
+  // than being re-written here and drifting from it.
+  const slot = document.getElementById("pw-code");
+  if (slot) slot.innerHTML = codeBoxHTML((_pwStatus && _pwStatus.codes) || {});
+}
+
+let _pwStatus = null;
+
+/* Should the wall be up for this visitor? Asked of the SERVER, never
+   decided here — the client cannot be trusted with the answer and does
+   not have to be, because the data it can reach is already redacted. */
+async function paywallCheck() {
+  try {
+    const r = await fetch("/api/billing/status", { credentials: "same-origin" });
+    _pwStatus = await r.json();
+  } catch (e) { return false; }
+  return !!(_pwStatus && _pwStatus.paywall && !_pwStatus.entitled);
+}
+
 async function renderBilling() {
   const slot = document.getElementById("billing-slot");
   if (!slot) return;
@@ -18251,7 +18494,13 @@ function watchSectionSubs() {
    one that felt like a step back. Nothing else was affected — the view
    still switched correctly, which is why it survived: the bug is only
    visible as a 200ms animation going the wrong way. */
-const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about"];
+/* "paywall" is last and is reachable only when the gate puts it there.
+   Its slide direction is meaningless — nothing navigates to or from it by
+   tab — but a routable view missing from this list animates backwards,
+   and the test is right to insist every one of them is named. The note
+   sits above rather than inline because that test parses this literal by
+   splitting on commas, and a comment inside it stops being a flat list. */
+const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "paywall"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -19980,5 +20229,28 @@ async function renderLiveBoard() {
     });
   });
   syncRail();
+
+  /* THE WALL GOES UP BEFORE ANYTHING ELSE IS WORTH LOOKING AT.
+     Ethan, 2026-08-20: "the site should immeditly show a page showing
+     the plans". Asked of the server, because the client is not the thing
+     that decides — and does not need to be, since every board it can
+     reach was already redacted on the way out. */
+  paywallCheck().then((walled) => {
+    if (!walled) return;
+    document.body.classList.add("walled");
+    renderPaywall();
+    _switchViewNow("paywall", false, 0);
+    // A hash that names a real page must not punch through the wall.
+    // The Record page is the one exception and it is deliberate: it is
+    // the evidence the subscription is sold on, and free by design.
+    addEventListener("hashchange", () => {
+      const want = (location.hash || "").replace(/^#/, "").split("/")[0];
+      if (want === "record" || want === "account") return;
+      if (state.view !== "paywall") {
+        renderPaywall();
+        _switchViewNow("paywall", false, 0);
+      }
+    });
+  });
 })();
 
