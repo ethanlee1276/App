@@ -1,5 +1,25 @@
 """Paddle as the payment processor, after Stripe refused the category.
 
+PADDLE SAID NO TOO — Ethan, 2026-08-20: "i just went on paddles website
+and they dont support websites like ours so we gotta keep looking." So
+this module is written, tested and currently pointed at a processor that
+will not have us. It is kept rather than deleted for two reasons: it is
+the worked example of what a provider half looks like against this
+codebase's seam, and whichever processor comes next needs the same four
+functions with different URLs in them.
+
+READ docs/PROCESSOR.md BEFORE PICKING THE NEXT ONE. The short version is
+that the screenshot Ethan sent of a competitor's checkout is a Stripe
+checkout — Stripe Link badge, Stripe payment-request buttons, Stripe
+Elements card field — which means a paid sports-betting tool IS running
+on the processor that declined us, and the classification is worth
+appealing before paying a high-risk acquirer four to six percent.
+
+Nothing below this line has changed. What it says about the SEAM is still
+right, and is the reason a third attempt costs one module rather than a
+rewrite.
+
+
 Ethan, 2026-08-15: *"no we cant use stripe so we gotta find a different
 alternative … if u think Paddle then lets do paddel."*
 

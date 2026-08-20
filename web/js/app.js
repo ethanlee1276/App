@@ -12310,7 +12310,7 @@ function paywallHTML(rec, status) {
       <ul class="pw-list">${PLAN_FEATURES.map((f) =>
         `<li>${iconMark("check", 13)}<span>${escapeHtml(f)}</span></li>`).join("")}</ul>
       <button class="btn primary pw-buy" data-plan="${escapeAttr(pl.id)}"
-        onclick="billSubscribe(this)">Get started</button>
+        onclick="coStart(this)">Get started</button>
       <div class="pw-fine">${escapeHtml(pl.cadence)}</div>
     </article>`;
   return `
@@ -12408,6 +12408,183 @@ async function paywallCheck() {
   } catch (e) { return false; }
   return !!(_pwStatus && _pwStatus.paywall && !_pwStatus.entitled);
 }
+
+/* ========================= CHECKOUT =========================
+   Built to the render Ethan sent (a competitor's checkout, 2026-08-20):
+   order summary on the left, what you are buying on the right, the
+   coupon applied and removable, the legal line at the bottom.
+
+   THE CARD FIELDS ARE NOT OURS AND MUST NEVER BE. In that render they
+   look like part of the page and they are not — the Link badge and the
+   card box are Stripe's iframe, running on Stripe's origin. That is the
+   only acceptable arrangement: a card number typed into a field this
+   repo serves would put us inside PCI scope, and this codebase's
+   standing rule is that card details never touch this server. So the
+   payment block below is a SLOT. Whoever the processor turns out to be
+   drops their element into it, and until then it says so plainly rather
+   than drawing a convincing box that does nothing.
+
+   A HUNDRED PERCENT OFF NEEDS NO PROCESSOR AT ALL, which is why this
+   page is worth having today. Apply a code that covers the whole term
+   and the total is zero; there is nothing to charge, and the grant is
+   written directly. That path is live now. */
+
+let _coPlan = null;      // the plan being bought
+let _coCode = null;      // {code, months} once a code is accepted
+
+function _coPlanById(id) {
+  return PLANS.find((p) => p.id === id) || PLANS[0];
+}
+
+/* Does the code cover the whole term? A twelve-month code against a
+   monthly plan does, and then some; a one-month code against a yearly
+   plan does not, and saying "free" there would be a lie the checkout
+   cannot honour. */
+function _coCovers(plan, code) {
+  return !!(code && code.months >= plan.months);
+}
+
+function checkoutHTML() {
+  const pl = _coPlan || PLANS[0];
+  const covered = _coCovers(pl, _coCode);
+  const total = covered ? 0 : pl.price;
+  return `
+  <div class="co">
+    <div class="co-grid">
+      <section class="card co-order">
+        <div class="co-line">
+          <div><b>${escapeHtml(pl.name)} plan</b>
+            <span class="co-sub">${escapeHtml(pl.cadence)}</span></div>
+          <div class="co-amt">$${pl.price}</div>
+        </div>
+        ${_coCode ? `<div class="co-coupon">
+          ${iconMark("tag", 13)}
+          <span>${escapeHtml(_coCode.code)} — ${_coCode.months} month${
+            _coCode.months === 1 ? "" : "s"}${covered ? "" : ", less than this term"}</span>
+          <button class="co-x" onclick="coDropCode()" aria-label="Remove code">×</button>
+        </div>` : ""}
+        <div class="co-line co-total">
+          <div><b>Total due today</b></div>
+          <div class="co-amt big">$${total}</div>
+        </div>
+
+        ${covered ? `
+          <div class="co-free">
+            ${iconMark("check", 15)}
+            <div><b>Nothing to pay.</b> Your code covers this whole term,
+              so there is no card to enter and nothing to cancel later.</div>
+          </div>
+          <button class="btn primary co-go" onclick="coApplyFree(this)">
+            Start with my code</button>
+        ` : `
+          <div class="co-pay" id="co-pay">
+            <div class="co-payhead">Payment</div>
+            <p class="co-note">Card payment is not switched on yet — we are
+              still settling which processor handles it. When it is, the card
+              form appears here and it belongs to them: card details are typed
+              on the processor’s own secure field and never reach this server.</p>
+            <p class="co-note">If you have a code, enter it below and it
+              applies straight away.</p>
+          </div>
+        `}
+
+        ${!_coCode ? `
+        <div class="co-codebox">
+          <label for="co-code">Have a code?</label>
+          <div class="acct-row">
+            <input class="acct-in code-in" id="co-code" type="text"
+                   autocomplete="off" spellcheck="false" placeholder="Enter your code">
+            <button class="btn" onclick="coTryCode(this)">Apply</button>
+          </div>
+          <p class="acct-note code-note" id="co-note"></p>
+        </div>` : ""}
+
+        <button class="btn ghost co-back" onclick="coBack()">← Back to plans</button>
+      </section>
+
+      <aside class="card co-what">
+        <div class="co-what-head">${escapeHtml(pl.name)}</div>
+        <p class="co-what-lede">Everything the site publishes, for as long
+          as your plan runs. Every plan is the same product.</p>
+        <ul class="pw-list">${PLAN_FEATURES.map((f) =>
+          `<li>${iconMark("check", 13)}<span>${escapeHtml(f)}</span></li>`).join("")}</ul>
+        <div class="co-what-foot">
+          ${iconMark("scale", 14)}
+          <span>Every pick is graded in public on the
+            <a href="#record">Record</a> page, which stays free whether you
+            subscribe or not.</span>
+        </div>
+      </aside>
+    </div>
+    <p class="pw-legal co-legal">This site publishes a model’s estimates.
+      It is not betting advice. Every number here is a probability, not a
+      promise. You must be 21 or older to bet. Never bet money you cannot
+      afford to lose — if gambling stops being fun, free and confidential
+      help is available 24/7 in the US at 1-800-GAMBLER.</p>
+  </div>`;
+}
+
+function renderCheckout() {
+  const host = document.getElementById("view-checkout");
+  if (host) host.innerHTML = checkoutHTML();
+}
+
+window.coBack = function () {
+  _coCode = null;
+  renderPaywall();
+  _switchViewNow("paywall", false, 0);
+};
+
+window.coDropCode = function () { _coCode = null; renderCheckout(); };
+
+window.coTryCode = async function (btn) {
+  const input = document.getElementById("co-code");
+  const note = document.getElementById("co-note");
+  const say = (t) => { if (note) note.textContent = t; };
+  const code = (input && input.value || "").trim();
+  if (!code) return say("Enter the code first.");
+  btn.disabled = true;
+  const was = btn.textContent;
+  btn.textContent = "Checking…";
+  try {
+    const r = await fetch("/api/billing/redeem", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    const d = await r.json().catch(() => null);
+    if (!d) return say("Server not reachable.");
+    if (!d.ok) return say(d.error || "That code is not valid.");
+    // REDEEMED ALREADY, not "pending checkout". The grant is written the
+    // moment the server accepts it, so the summary shows what is true
+    // rather than an intention.
+    _coCode = { code: d.code, months: d.months };
+    renderCheckout();
+  } catch (e) {
+    say("Server not reachable.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = was;
+  }
+};
+
+window.coApplyFree = async function (btn) {
+  btn.disabled = true;
+  btn.textContent = "Opening the site…";
+  // The entitlement is already written; this just re-reads it and drops
+  // the wall. A reload would do the same and lose the scroll position.
+  const walled = await paywallCheck();
+  if (walled) {
+    btn.disabled = false;
+    btn.textContent = "Start with my code";
+    const note = document.getElementById("co-note");
+    if (note) note.textContent = "That code did not open the site. Reload and try again.";
+    return;
+  }
+  document.body.classList.remove("walled");
+  location.hash = "#recommended";
+  location.reload();
+};
 
 async function renderBilling() {
   const slot = document.getElementById("billing-slot");
@@ -12521,6 +12698,14 @@ async function _billGo(btn, path) {
     if (note) note.textContent = String((e && e.message) || e);
   }
 }
+
+window.coStart = function (btn) {
+  _coPlan = _coPlanById(btn.dataset.plan);
+  _coCode = null;
+  renderCheckout();
+  _switchViewNow("checkout", false, 0);
+  window.scrollTo({ top: 0, behavior: "auto" });
+};
 
 window.billSubscribe = (btn) => _billGo(btn, "checkout");
 window.billPortal = (btn) => _billGo(btn, "portal");
@@ -18500,7 +18685,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "paywall"];
+const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -20246,6 +20431,7 @@ async function renderLiveBoard() {
     addEventListener("hashchange", () => {
       const want = (location.hash || "").replace(/^#/, "").split("/")[0];
       if (want === "record" || want === "account") return;
+      if (state.view === "checkout") return;   // mid-purchase; leave them be
       if (state.view !== "paywall") {
         renderPaywall();
         _switchViewNow("paywall", false, 0);

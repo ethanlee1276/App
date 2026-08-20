@@ -207,6 +207,84 @@ def test_the_record_stays_free_on_purpose():
         restore()
 
 
+# --- checkout ------------------------------------------------------------------
+# Ethan sent a competitor's checkout as the render, 2026-08-20. The layout
+# is his; the card fields are the part that must never be copied.
+
+
+def test_no_card_field_is_ever_served_by_us():
+    """THE RULE THIS PAGE EXISTS UNDER. In the render those fields look
+    like part of the page and are not — the Link badge and the card box
+    are the processor's iframe on the processor's origin. A card number
+    typed into a field this repo serves puts us inside PCI scope, and this
+    codebase's standing rule is that card details never touch this
+    server. So the payment block is a SLOT."""
+    app = _read("web", "js", "app.js")
+    fn = app[app.index("function checkoutHTML("):]
+    fn = fn[:fn.index("\nfunction renderCheckout(")]
+    low = fn.lower()
+    for bad in ("card number", "cardnumber", "cvc", "cvv", "expiry",
+                "exp-month", "autocomplete=\"cc-", "type=\"tel\""):
+        assert bad not in low, f"a card field appeared in our own markup: {bad!r}"
+    assert "never reach this server" in fn or "belongs to them" in fn, \
+        "nothing tells the reader whose field will go there"
+
+
+def test_a_code_covering_the_term_needs_no_processor_at_all():
+    """The reason this page is worth having before the processor question
+    is settled: a hundred percent off means there is nothing to charge.
+    Verified in a browser — yearly went $225 to $0 with USFARATHANE and
+    offered to open the site with no card."""
+    app = _read("web", "js", "app.js")
+    fn = app[app.index("function _coCovers("):]
+    fn = fn[:fn.index("\n}")]
+    assert "code.months >= plan.months" in fn, \
+        "coverage is not compared against the term being bought"
+    body = app[app.index("function checkoutHTML("):]
+    body = body[:body.index("\nfunction renderCheckout(")]
+    assert "Nothing to pay" in body and "coApplyFree" in body
+
+
+def test_a_short_code_against_a_long_term_does_not_read_as_free():
+    """A one-month code against a yearly plan does not cover it, and
+    saying "free" there would be a promise the checkout cannot honour."""
+    app = _read("web", "js", "app.js")
+    body = app[app.index("function checkoutHTML("):]
+    body = body[:body.index("\nfunction renderCheckout(")]
+    assert "less than this term" in body, \
+        "a partial code is presented as though it covered the whole plan"
+    assert "covered ? 0 : pl.price" in body, \
+        "the total does not depend on whether the code actually covers it"
+
+
+def test_the_buy_button_is_the_loudest_thing_on_the_page():
+    """`.btn primary` was invented — there is no such rule in the
+    stylesheet — so the buy button rendered as a thin outline while
+    .btn.ghost's panel fill made "back to plans" the loudest control on a
+    checkout. Measured in a browser; the hierarchy was exactly inverted."""
+    css = _read("web", "css", "styles.css")
+    i = css.index(".pw-buy, .co-go {")
+    rule = css[i:css.index("}", i)]
+    assert "var(--brand-solid)" in rule, "the buy button has no fill of its own"
+    j = css.index(".co-back {")
+    back = css[j:css.index("}", j)]
+    assert "background: none" in back, "the way out is still styled as a call to action"
+
+
+def test_the_wall_does_not_bounce_a_reader_out_of_checkout():
+    app = _read("web", "js", "app.js")
+    # THE WALL'S guard, not the app's. There are two hashchange listeners
+    # and the router's own comes first in the file, so anchoring on the
+    # string found the wrong one.
+    i = app.index("paywallCheck().then(")
+    guard = app[i:i + 1200]
+    assert "hashchange" in guard, "the wall no longer watches the hash at all"
+    assert 'state.view === "checkout"' in guard, \
+        "changing the hash mid-purchase throws them back to the plans"
+    assert '"record"' in guard, \
+        "the Record page is no longer exempt, and it is free by design"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
