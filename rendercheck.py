@@ -299,6 +299,9 @@ const EMPTY = JSON.parse(process.argv[6]);
 // most containers. Both were paid for here: the run that produced this
 // comment crashed on page one, twice in a row.
 const ARGS = ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'];
+// Long enough for the chart animations to finish before a screenshot —
+// see the comment at the screenshot call.
+const ANIM_SETTLE_MS = 900;
 let b = null, lastErr = null;
 for (const path of [process.env.CHROMIUM_PATH, '/opt/pw-browsers/chromium',
                     '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', undefined]) {
@@ -406,6 +409,18 @@ for (const s of PLAN) {
       }, [s.proof, s.present, s.checks, EMPTY]);
       Object.assign(out, m);
       if (SHOTS) {
+        // A CHART THAT IS STILL DRAWING IS NOT THE CHART. ECharts eases
+        // its lines in over `animationDuration: 500` (visuals.js), and a
+        // screenshot taken inside that window catches a line that stops
+        // halfway across an empty plot. That picture cost real time
+        // once: the price tape's data was verified correct while three
+        // screenshots of it disagreed, and the disagreement was the
+        // clock. Measured on the tape — 4 of 10 sampled points painted at
+        // 80ms, 6 at 250ms, all 10 by 500ms. The contact sheet exists to
+        // be compared against the renders by eye, so it waits.
+        // ANIM_SETTLE_MS is pinned above visuals.js's duration by
+        // tests/test_price_tape.py.
+        await p.waitForTimeout(ANIM_SETTLE_MS);
         const f = `${SHOTS}/${s.slug}-${WIDTH}.png`;
         await p.screenshot({ path: f, fullPage: true });
         out.shot = f;

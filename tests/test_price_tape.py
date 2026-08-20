@@ -25,8 +25,12 @@ watched. So:
 Run directly: `python3 tests/test_price_tape.py`
 """
 
+import json
 import os
+import re
+import subprocess
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -176,6 +180,170 @@ def test_the_mounts_cannot_cancel_each_other():
     fn = APP[i:APP.index("\n/* =====", i)]
     assert "for (const mount of" in fn and "try {" in fn, \
         "the intel mounts are chained again"
+
+
+def test_a_screenshot_waits_for_the_chart_to_finish_drawing():
+    """THE DATA WAS RIGHT AND THE PICTURE WAS WRONG, and the difference
+    was the clock. The tape's chart object held 111 points ending at the
+    live price with the axis pinned, while three screenshots of it showed
+    a line stopping short — because ECharts eases its lines in and the
+    shots were taken inside that window. Measured afterwards on a
+    synthetic 111-point tape: 4 of 10 sampled points carried a line pixel
+    at 80ms, 5 at 150ms, 6 at 250ms, all 10 by 500ms.
+
+    So `--shots` waits, and the wait has to stay ahead of the animation.
+    Raise `animationDuration` without raising the settle and the contact
+    sheet quietly goes back to photographing half-drawn charts — which
+    reads as a layout regression, which is the one thing that tool must
+    never invent."""
+    rc = open(os.path.join(ROOT, "rendercheck.py"), encoding="utf-8").read()
+    m = re.search(r"const ANIM_SETTLE_MS = (\d+);", rc)
+    assert m, "rendercheck no longer settles before a screenshot"
+    settle = int(m.group(1))
+    durations = [int(d) for d in re.findall(r"animationDuration:\s*(\d+)", VIS)]
+    assert durations, "no chart animation duration found to check against"
+    assert settle > max(durations), (
+        f"screenshots settle for {settle}ms but a chart animates for "
+        f"{max(durations)}ms — the contact sheet will catch it mid-draw")
+
+
+_LINE_PROBE = r"""
+import { chromium } from 'playwright';
+const PORT = process.argv[2];
+const ARGS = ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'];
+let b = null, lastErr = null;
+for (const path of [process.env.CHROMIUM_PATH, '/opt/pw-browsers/chromium',
+                    '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', undefined]) {
+  if (path === null) continue;
+  try { b = await chromium.launch({ executablePath: path || undefined, args: ARGS }); break; }
+  catch (e) { lastErr = e; }
+}
+if (!b) throw lastErr;
+const p = await b.newPage({ viewport: { width: 1280, height: 1000 } });
+const errs = [];
+p.on('pageerror', e => errs.push(e.message.slice(0, 140)));
+await p.goto(`http://127.0.0.1:${PORT}/index.html`, { waitUntil: 'domcontentloaded' });
+await p.waitForTimeout(2000);
+
+// A tape with a SHAPE WE CHOSE: 111 points ten minutes apart that ramp
+// from 20% to 80% and fall back to 35%. None of the site's own data is
+// involved — the question is only whether the chart draws what it was
+// handed.
+await p.evaluate(async () => {
+  const N = 111, STEP = 600;
+  const t0 = Math.floor(Date.now() / 1000) - (N - 1) * STEP;
+  const pts = [];
+  for (let i = 0; i < N; i++) {
+    const f = i / (N - 1);
+    const v = f < 0.6 ? 0.20 + (f / 0.6) * 0.60 : 0.80 - ((f - 0.6) / 0.4) * 0.45;
+    pts.push([t0 + i * STEP, +v.toFixed(4)]);
+  }
+  const host = document.createElement('div');
+  host.style.cssText = 'position:fixed;left:20px;top:20px;width:520px;height:260px;z-index:9';
+  const plot = document.createElement('div');
+  plot.style.cssText = 'width:100%;height:100%';
+  plot.setAttribute('data-echart-tape', JSON.stringify(
+    { points: pts, yes_label: 'Yes', no_label: 'No' }));
+  host.appendChild(plot);
+  document.body.appendChild(host);
+  await mountEChartsPanels(document.body);
+});
+await p.waitForTimeout(2500);              // well past animationDuration
+
+const out = await p.evaluate(() => {
+  const el = document.querySelector('[data-echart-tape]');
+  const chart = window.echarts && window.echarts.getInstanceByDom(el);
+  if (!chart) return { error: 'the tape never upgraded to a chart' };
+  const yes = chart.getOption().series[0].data;
+  const cv = el.querySelector('canvas');
+  const g = cv.getContext('2d');
+  const dpr = cv.width / cv.getBoundingClientRect().width;
+  // ASK THE CANVAS, NOT THE OPTION OBJECT. convertToPixel is ECharts'
+  // own data-to-screen map, so this reads the pixel where the library
+  // says the point belongs and checks a line was actually painted there.
+  const probes = [];
+  for (let k = 0; k < 10; k++) {
+    const i = Math.round(k * (yes.length - 1) / 9);
+    const [x, y] = chart.convertToPixel({ seriesIndex: 0 }, yes[i]);
+    let hit = null, best = 1e9;
+    for (let dy = -6; dy <= 6; dy++) {
+      const px = g.getImageData(Math.round(x * dpr), Math.round((y + dy) * dpr), 1, 1).data;
+      if (px[3] > 40 && px[0] + px[1] + px[2] > 90 && Math.abs(dy) < best) {
+        best = Math.abs(dy); hit = [px[0], px[1], px[2], dy];
+      }
+    }
+    probes.push({ i, value: yes[i][1], hit });
+  }
+  return { seriesLen: yes.length, first: yes[0][1], last: yes[yes.length - 1][1],
+           good: getComputedStyle(document.documentElement)
+                   .getPropertyValue('--good').trim(), probes };
+});
+console.log(JSON.stringify({ out, errs }));
+await b.close();
+"""
+
+
+def _have_node() -> bool:
+    try:
+        r = subprocess.run(
+            ["node", "-e", "import('playwright').then(()=>0,()=>process.exit(1))"],
+            capture_output=True, cwd=ROOT, timeout=30)
+        return r.returncode == 0
+    except (FileNotFoundError, OSError, subprocess.SubprocessError):
+        return False
+
+
+def test_the_line_is_drawn_where_the_data_says_it_is():
+    """The claim the option object cannot make. Everything about the
+    chart's configuration can be right while the drawing is wrong, and
+    the only way to tell them apart is to read the canvas.
+
+    Opt in with QB_BROWSER_TESTS=1 — same reason as the other browser
+    halves: Chromium inside the full suite crashed on a busy container,
+    and a flaky test teaches people to ignore a real one."""
+    if os.environ.get("QB_BROWSER_TESTS") != "1":
+        print("      (skipped: set QB_BROWSER_TESTS=1)")
+        return
+    if not _have_node():
+        print("      (skipped: no Node/Playwright — install to enable)")
+        return
+
+    sys.path.insert(0, ROOT)
+    import rendercheck
+    srv, port = rendercheck._serve()
+    script = None
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False,
+                                         dir=ROOT) as fh:
+            fh.write(_LINE_PROBE)
+            script = fh.name
+        proc = subprocess.run(["node", script, str(port)], cwd=ROOT,
+                              capture_output=True, text=True, timeout=180)
+    finally:
+        if script:
+            os.unlink(script)
+        srv.shutdown()
+    assert proc.returncode == 0, proc.stderr[-1500:]
+    res = json.loads(proc.stdout.strip().splitlines()[-1])
+    out = res["out"]
+    assert not out.get("error"), out["error"]
+    assert out["seriesLen"] == 111, f"the chart kept {out['seriesLen']} of 111 points"
+    assert abs(out["first"] - 20) < 0.6 and abs(out["last"] - 35) < 0.6, \
+        f"the series does not start and end where the data does: {out['first']} → {out['last']}"
+
+    want = tuple(int(out["good"].lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+    missed = [p for p in out["probes"] if not p["hit"]]
+    assert not missed, (
+        "the line is not painted where the data says it is, at "
+        + ", ".join(f"point {p['i']} ({p['value']}%)" for p in missed)
+        + ". If every point is missing, the chart drew nothing; if the "
+        "LAST ones are missing, the screenshot beat the animation.")
+    for p in out["probes"]:
+        r, g, bl, _dy = p["hit"]
+        assert abs(r - want[0]) < 26 and abs(g - want[1]) < 26 and abs(bl - want[2]) < 26, \
+            (f"point {p['i']} ({p['value']}%) is painted rgb({r},{g},{bl}), "
+             f"not the Yes colour rgb{want}")
+    assert not res["errs"], f"page errors: {res['errs']}"
 
 
 if __name__ == "__main__":
