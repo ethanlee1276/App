@@ -42,6 +42,9 @@ function grab(name, end) {
 }
 const code = [
   grab("const MOCK_SLOTS", ";"),
+  // The caps the need curve now enforces — a room that only ever
+  // SOFTENED finished with six quarterbacks.
+  grab("const MOCK_ROSTER_CAP", ";"),
   grab("const MOCK_FLEX", ";"),
   grab("function _mockPicker(", "\n}"),
   grab("function _mockNeedCounts(", "\n}"),
@@ -109,7 +112,14 @@ def test_the_snake_reverses_every_round_and_covers_every_room():
 def test_a_room_holding_a_quarterback_waits_on_the_second():
     r = _run()
     assert r["qb_early"] < 0.2, "a second QB in round 3 must be starved"
-    assert r["qb_late"] == 1.0, "the bench rounds relax the onesie rule"
+    # The bench rounds RELAX the onesie rule; they do not lift it. This
+    # asserted 1.0 until 2026-08-20, when 300 measured drafts showed what
+    # full late appetite does: rooms finished carrying 1.85 quarterbacks
+    # each, where a twelve-team league runs about 1.3. A second
+    # quarterback is a bench luxury in round ten as well as round three —
+    # just a likelier one.
+    assert r["qb_early"] < r["qb_late"] < 0.5, \
+        "a second QB must stay a luxury all draft, and ease late"
     assert r["rb_always"] == 1.0
 
 

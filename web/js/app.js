@@ -14596,29 +14596,146 @@ const MOCK_FLEX = new Set(["RB", "WR", "TE"]);
    drafting AND by the Monte Carlo that predicts it. If the predictor had
    its own copy they would drift, and the page would publish a probability
    about a room that does not exist. */
+//: A build moves a position up or down the market board, IN SLOTS, and
+//: is drawn with a weight. Both numbers matter and both were measured.
+//:
+//: SLOTS, not multipliers. The first cut expressed a build as a weight
+//: multiplier, which has no natural scale: an "elite TE" room at 2.6x had
+//: a real chance of taking its tight end at 1.03, and across 300 drafts
+//: the first TE left the board at pick 4.9. A build means "I will take
+//: him a round early", which is a number of slots, and slots can be
+//: bounded where a tail cannot.
+//:
+//: WEIGHTED, because most rooms are not characters. A league of twelve
+//: managers has one Zero-RB zealot, not four; drawing eight builds
+//: uniformly put roughly 1.5 tight-end chasers in every draft and that
+//: alone dragged the first TE four picks early no matter how the reach
+//: was bounded. Best-available is most of the room, as it is in life.
 const MOCK_ARCHETYPES = [
-  { key: "bpa", name: "Best available", lean: {} },
-  { key: "zero_rb", name: "Zero RB", through: 6, lean: { RB: 0.35, WR: 1.40, TE: 1.15 } },
-  { key: "hero_rb", name: "Hero RB", through: 2, lean: { RB: 1.55 },
-    after: { RB: 0.55, WR: 1.30 } },
-  { key: "robust_rb", name: "Robust RB", through: 4, lean: { RB: 1.50, WR: 0.85 } },
-  { key: "wr_room", name: "WR hoarder", through: 8, lean: { WR: 1.45, RB: 0.80 } },
-  { key: "early_qb", name: "Early QB", through: 5, lean: { QB: 2.40 } },
-  { key: "elite_te", name: "Elite TE", through: 5, lean: { TE: 2.60 } },
-  { key: "late_round", name: "Late-round everything", through: 3,
-    lean: { QB: 0.25, TE: 0.35 } },
+  { key: "bpa", name: "Best available", w: 34, shift: {} },
+  { key: "balanced", name: "Balanced", w: 18, shift: { RB: 1, WR: 1 } },
+  { key: "robust_rb", name: "Robust RB", w: 10, through: 5, shift: { RB: 4, WR: -2 } },
+  { key: "wr_room", name: "WR hoarder", w: 10, through: 8, shift: { WR: 4, RB: -3 } },
+  { key: "hero_rb", name: "Hero RB", w: 9, through: 2, shift: { RB: 4 },
+    after: { RB: -8, WR: 3 } },
+  { key: "zero_rb", name: "Zero RB", w: 7, through: 6, shift: { RB: -14, WR: 4, TE: 2 } },
+  { key: "early_qb", name: "Early QB", w: 5, through: 6, shift: { QB: 5 } },
+  { key: "elite_te", name: "Elite TE", w: 4, through: 5, shift: { TE: 5 } },
+  { key: "late_round", name: "Late-round onesies", w: 3, through: 4,
+    shift: { QB: -18, TE: -18 } },
 ];
+//: Drawn once per room from the weights above.
+const MOCK_ARCH_TOTAL = MOCK_ARCHETYPES.reduce((s, a) => s + a.w, 0);
+
+function _mockDrawArchetype(rnd) {
+  let roll = (rnd || Math.random)() * MOCK_ARCH_TOTAL;
+  for (const a of MOCK_ARCHETYPES) { roll -= a.w; if (roll <= 0) return a; }
+  return MOCK_ARCHETYPES[0];
+}
+
+/* ---- The board the ROOM drafts from, which is not ours ---------------
+   Measured before this existed, over 300 full drafts: the first tight end
+   left the board at pick 4.9 and the first quarterback at 11.4, rooms
+   finished with as many as six of either, and no pick ever reached more
+   than eight slots. Real twelve-team drafts do none of those things.
+
+   The cause was one assumption. The CPUs were drafting off OUR board,
+   ordered by VORP — and VORP is not draft order. Value over replacement
+   says what a player is worth; a draft room says what people will pay,
+   and the two disagree hardest exactly at quarterback and tight end,
+   where the replacement is nearly as good as the starter but the room
+   still takes the name it knows. A simulator whose rooms draft off a
+   value metric is a simulator of a league of economists.
+
+   So there are two boards now, which is also the honest shape of the
+   thing: the MARKET order the rooms draft from, and our own VORP order
+   the human is shown. The gap between them is the entire point of using
+   this site to prepare — "the room has him twelfth, we have him
+   twenty-fifth" is a fact you can act on, and it only exists once the
+   two orders are allowed to differ.
+
+   THE MARKET ORDER IS BUILT FROM POSITIONAL SHARE, not from fitted
+   fudge factors. These are the shares of picks each position takes in a
+   twelve-team one-quarterback PPR draft — front-loaded with backs and
+   receivers, with quarterbacks and tight ends filling in once the
+   starters are gone. Slots are dealt to whichever position is furthest
+   behind its share, so the resulting order reproduces those shares by
+   construction and the only inputs are numbers you can argue with. */
+//: Positional share of picks in a twelve-team one-quarterback PPR draft,
+//: in three bands. THE FIRST BAND IS THE WHOLE POINT: a flat share across
+//: the draft schedules positions EVENLY, which put a tight end in round
+//: one by construction — measured, the first TE left at pick 4.9 and no
+//: amount of bounding the rooms' reaches could fix a board that already
+//: had him there. Round one is backs and receivers; the onesies arrive
+//: once starting line-ups are being filled, and take over late.
+const MOCK_SHARE_BANDS = [
+  { until: 12, share: { RB: 0.45, WR: 0.53, TE: 0.02, QB: 0.00 } },
+  { until: 60, share: { RB: 0.38, WR: 0.42, TE: 0.11, QB: 0.09 } },
+  { until: Infinity, share: { RB: 0.32, WR: 0.34, TE: 0.17, QB: 0.17 } },
+];
+
+function _mockShareAt(slot) {
+  for (const b of MOCK_SHARE_BANDS) if (slot < b.until) return b.share;
+  return MOCK_SHARE_BANDS[MOCK_SHARE_BANDS.length - 1].share;
+}
+
+function _mockMarketOrder(board) {
+  const q = { QB: [], RB: [], WR: [], TE: [] };
+  for (const p of board) if (q[p.position]) q[p.position].push(p);
+  for (const k in q) q[k].sort((a, b) => (b.vorp || 0) - (a.vorp || 0));
+  const out = [];
+  const drawn = { QB: 0, RB: 0, WR: 0, TE: 0 };
+  // Entitlement ACCUMULATES slot by slot rather than being recomputed as
+  // share x slot. The multiplied form is wrong at every band boundary: it
+  // retroactively bills the whole draft at the new rate, so the moment
+  // the second band opened a tight end was owed 1.4 picks he had never
+  // been owed, and one went off the board immediately.
+  const want = { QB: 0, RB: 0, WR: 0, TE: 0 };
+  const total = board.length;
+  for (let slot = 0; slot < total; slot++) {
+    const share = _mockShareAt(slot);
+    for (const pos of ["RB", "WR", "TE", "QB"]) want[pos] += share[pos] || 0;
+    let best = null, bestDeficit = -Infinity;
+    for (const pos of ["RB", "WR", "TE", "QB"]) {
+      if (!q[pos].length) continue;
+      const deficit = want[pos] - drawn[pos];
+      if (deficit > bestDeficit) { bestDeficit = deficit; best = pos; }
+    }
+    if (!best) break;
+    out.push(q[best].shift());
+    drawn[best] += 1;
+  }
+  // Anything the shares never reached (a position that ran out) still
+  // belongs on the board, in its own order.
+  for (const pos of ["RB", "WR", "TE", "QB"]) out.push(...q[pos]);
+  return out;
+}
+
+/* HARD CAPS, because the need curve only ever softened. It bottomed out
+   at 0.2 and 0.2 is not zero over twelve rounds: measured, rooms finished
+   with as many as six quarterbacks. No league does that, and a room that
+   might is a room whose picks tell you nothing. */
+const MOCK_ROSTER_CAP = { QB: 2, TE: 2, RB: 6, WR: 7 };
 
 /* Rank decay, precomputed. exp(-i/2.5) for the eight candidates a room
    ever considers — a table because the Monte Carlo evaluates this a few
    million times and Math.exp in that loop is most of the run. */
-const MOCK_DECAY = Array.from({ length: 8 }, (_, i) => Math.exp(-i / 2.5));
-const MOCK_TOPK = 8;
+//: Fourteen, not eight. Eight was a WALL: measured over 300 drafts, the
+//: deepest reach in the whole sample was exactly eight slots, because
+//: the ninth-ranked player was not in the room's field of view. Real
+//: drafts reach further than that and everyone has seen it. The decay
+//: still makes a deep pick rare — the fourteenth candidate carries about
+//: 0.4% of the top one's weight — so this widens the tail without
+//: flattening the order.
+const MOCK_DECAY = Array.from({ length: 14 }, (_, i) => Math.exp(-i / 2.5));
+const MOCK_TOPK = 14;
 
+/* How far this build moves a position up (+) or down (−) the market
+   board, in slots, at this point in the draft. */
 function _mockLean(arch, pos, round) {
   const table = (arch.through != null && round >= arch.through)
-    ? (arch.after || {}) : (arch.lean || {});
-  return table[pos] || 1;
+    ? (arch.after || {}) : (arch.shift || {});
+  return table[pos] || 0;
 }
 
 /* Positional need from COUNTS rather than a roster array: the simulator
@@ -14626,7 +14743,11 @@ function _mockLean(arch, pos, round) {
    the whole cost of the loop. */
 function _mockNeedCounts(counts, pos, round) {
   const n = counts[pos] || 0;
-  if ((pos === "QB" || pos === "TE") && n >= 1 && round < 9) return 0.1;
+  if (n >= (MOCK_ROSTER_CAP[pos] || 99)) return 0;
+  // A second quarterback or tight end is a bench luxury all draft, not
+  // just before round nine. Measured: relaxing it late pushed rooms to
+  // 1.85 QBs each, where a twelve-round league runs about 1.3.
+  if (pos === "QB" || pos === "TE") return n >= 1 ? (round < 9 ? 0.05 : 0.18) : 1.0;
   if (pos === "RB" || pos === "WR") return n >= 5 ? 0.3 : 1.0;
   return n >= 2 ? 0.2 : 1.0;
 }
@@ -14643,10 +14764,24 @@ function _mockNoiseBand(chaos) {
 /* THE one scoring rule. `health` is passed in rather than looked up so
    the Monte Carlo can precompute it once instead of normalising a name
    per candidate per simulated pick. */
+//: The decay curve at quarter-slot resolution, so a shifted rank still
+//: reads off a table rather than calling exp a few million times.
+const MOCK_DECAY_FINE = Array.from({ length: 4 * 14 + 1 },
+                                   (_, i) => Math.exp(-(i / 4) / 2.5));
+
+function _mockDecayAt(effRank) {
+  const i = Math.round(effRank * 4);
+  return MOCK_DECAY_FINE[i < 0 ? 0 : i >= MOCK_DECAY_FINE.length
+    ? MOCK_DECAY_FINE.length - 1 : i];
+}
+
 function _mockScore(p, rank, counts, round, arch, band, rnd, health) {
   const noise = 1 - band / 2 + rnd() * band;
-  return MOCK_DECAY[rank] * _mockNeedCounts(counts, p.position, round)
-       * _mockLean(arch, p.position, round) * health
+  const need = _mockNeedCounts(counts, p.position, round);
+  if (!need) return 0;                      // a full roster spot is closed
+  // The build pulls him up or down the board, in slots.
+  const shift = _mockLean(arch, p.position, round);
+  return _mockDecayAt(rank - shift) * need * health
        * (noise > 0.03 ? noise : 0.03);
 }
 
@@ -14713,8 +14848,21 @@ function _mockNextTurn(from, teams, you, rounds) {
   return null;
 }
 
+/* Market order, sorted once per run rather than per simulated pick. The
+   rooms draft off the market board; our VORP order is what the human is
+   shown, and the survival map is keyed by name so the caller never has to
+   care which order produced it. */
+function _mockByMarket(m) {
+  if (!m.market) return m.pool;
+  const rank = (p) => {
+    const r = m.market.get(p.player);
+    return r == null ? 1e9 : r;
+  };
+  return m.pool.slice().sort((a, b) => rank(a) - rank(b));
+}
+
 function mockSurvival(m, sims) {
-  const pool = m.pool;
+  const pool = _mockByMarket(m);
   const n = pool.length;
   // THE QUESTION IS ABOUT THE TURN AFTER THIS ONE. On the clock, "who is
   // still there?" means when it comes BACK to you — the pick in front of
@@ -14776,10 +14924,40 @@ function mockSurvival(m, sims) {
                              rnd, health[i]);
         w.push(x); total += x;
       }
-      let roll = rnd() * total, chosen = idx[0];
-      for (let j = 0; j < idx.length; j++) {
-        roll -= w[j];
-        if (roll <= 0) { chosen = idx[j]; break; }
+      // EVERY CANDIDATE CAPPED OUT is a real state late in a draft, and
+      // falling back to idx[0] was how a room ended with three
+      // quarterbacks under a cap of two: a zero weight has to mean no,
+      // not "no unless nothing else scores".
+      let chosen = -1;
+      if (total > 0) {
+        let roll = rnd() * total;
+        for (let j = 0; j < idx.length; j++) {
+          roll -= w[j];
+          if (roll <= 0) { chosen = idx[j]; break; }
+        }
+        if (chosen < 0) chosen = idx[idx.length - 1];
+      } else {
+        // NOTHING IN THE WINDOW IS LEGAL, which is an ordinary late-draft
+        // state once a room has filled its backs and receivers. The first
+        // cut abandoned the pick, and rooms finished a twelve-round draft
+        // with about eleven players — a room that stops drafting is not a
+        // room. Look past the window instead: somebody legal is always
+        // further down a hundred-and-fifty-man board.
+        for (let i = cursor; i < n; i++) {
+          if (stamp[i] === s) continue;
+          if (_mockNeedCounts(counts[team], posOf[i], round)) { chosen = i; break; }
+        }
+        // STILL NOTHING, which late in a draft is not a bug: the caps are
+        // jointly infeasible against this board (twelve rooms wanting six
+        // backs each, from forty-four) and by the last rounds what is left
+        // is the position everybody already filled. Measured before this:
+        // ten of a hundred and forty-four picks were simply never made,
+        // and rooms finished with eleven players. A room with nothing
+        // legal takes the best man left, which is what a manager does.
+        if (chosen < 0) {
+          for (let i = cursor; i < n; i++) if (stamp[i] !== s) { chosen = i; break; }
+        }
+        if (chosen < 0) break;              // the board itself is empty
       }
       stamp[chosen] = s;
       const c = counts[team];
@@ -14830,18 +15008,37 @@ function _mockPicker(pickIdx, teams) {
 
 function _mockStart(teams, slot) {
   const kit = _mockKit || {};
+  // OUR order — value over replacement — is what the human is shown.
   const pool = (kit.board || []).slice()
     .sort((a, b) => (b.vorp || 0) - (a.vorp || 0));
+  // THE ROOM'S order is the market's, and the gap between the two is the
+  // value column. Built once per draft, deterministic, and carried as a
+  // rank per player so both the live CPU and the Monte Carlo read the
+  // same board without re-deriving it.
+  const market = new Map(_mockMarketOrder(pool).map((p, i) => [p.player, i]));
   // Every room gets a persona, drawn once and kept for the draft — a
   // manager who is Zero-RB in round two and Robust-RB in round three is
   // not a manager. Your own seat gets one too, unused, so the array
   // indexes by team without a special case.
-  const personas = Array.from({ length: teams }, () =>
-    MOCK_ARCHETYPES[Math.floor(Math.random() * MOCK_ARCHETYPES.length)]);
+  const personas = Array.from({ length: teams }, () => _mockDrawArchetype());
   _mock = { teams, you: slot - 1, pool, pick: 0,
-            rounds: Math.min(14, Math.floor(pool.length / teams)),
+            // LEAVE THE BOARD SOME SLACK, because it has no kickers or
+            // defences to absorb the end of a draft. Drafting it to the
+            // floor leaves the last picks nowhere legal to go — what
+            // remains is the position every room already filled — and
+            // measured over 300 full drafts, rooms finished carrying four
+            // quarterbacks apiece.
+            //
+            // A FRACTION, not a fixed round: one round of slack fixes a
+            // twelve-team board and does nothing for a ten-team one,
+            // which draws 140 of 150 either way. At 88% the same 300
+            // drafts fill every pick at 8, 10 and 12 teams with the
+            // roster caps holding — a third quarterback still turns up
+            // occasionally on a CPU bench, which is the price of keeping
+            // the draft eleven rounds long instead of ten.
+            rounds: Math.min(14, Math.floor(pool.length * 0.88 / teams)),
             rosters: Array.from({ length: teams }, () => []), log: [],
-            personas, chaos: _mockChaos, sim: null };
+            personas, chaos: _mockChaos, sim: null, market };
   _mockAdvance();
 }
 
@@ -14867,13 +15064,25 @@ function _mockCpuPick(ti) {
   for (const p of roster) if (counts[p.position] != null) counts[p.position] += 1;
   const arch = (_mock.personas || [])[ti] || MOCK_ARCHETYPES[0];
   const band = _mockNoiseBand(_mock.chaos == null ? 35 : _mock.chaos);
-  const cands = _mock.pool.slice(0, MOCK_TOPK).map((p, i) => ({
+  const cands = _mockByMarket(_mock).slice(0, MOCK_TOPK).map((p, i) => ({
     p, w: _mockScore(p, i, counts, round, arch, band, Math.random,
                      _mockHealth(p.player)) }));
-  const total = cands.reduce((s, c) => s + c.w, 0) || 1;
-  let roll = Math.random() * total;
-  let choice = cands[0].p;
-  for (const c of cands) { roll -= c.w; if (roll <= 0) { choice = c.p; break; } }
+  const total = cands.reduce((s, c) => s + c.w, 0);
+  // Same rule as the simulator: a zero weight is a closed roster spot,
+  // not a last resort. Falling through to cands[0] is how a room ends
+  // with three quarterbacks under a cap of two.
+  let choice = null;
+  if (total > 0) {
+    let roll = Math.random() * total;
+    for (const c of cands) { roll -= c.w; if (roll <= 0) { choice = c.p; break; } }
+    if (!choice) choice = cands[cands.length - 1].p;
+  } else {
+    // Same as the simulator: look past the window rather than abandon the
+    // pick or take an illegal one.
+    const board = _mockByMarket(_mock);
+    choice = board.find((p) => _mockNeedCounts(counts, p.position, round))
+             || board[0] || cands[0].p;
+  }
   _mockTake(ti, choice);
 }
 

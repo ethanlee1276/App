@@ -93,6 +93,91 @@ def test_the_rooms_are_people_not_one_algorithm_twelve_times():
     assert "personas" in start, "rooms no longer carry a build"
 
 
+def test_the_room_drafts_off_a_market_board_not_our_value_board():
+    """Ethan, 2026-08-20: "make sure there is nothing else we can add to
+    the draft simulator too make it more realistic and shit."
+
+    Measured over 300 full drafts, the answer was one assumption. The
+    CPUs were drafting off OUR board, ordered by VORP — and VORP is not
+    draft order. Value over replacement says what a player is worth; a
+    room says what people will pay, and the two disagree hardest exactly
+    at quarterback and tight end, where the replacement is nearly as good
+    but the room still takes the name it knows. The first tight end left
+    the board at pick 4.9 and the first quarterback at 11.4. Real
+    twelve-team drafts do neither.
+
+    Two boards now: the market order the rooms draft from, and our VORP
+    order the human is shown. The gap between them is the reason to
+    prepare here rather than anywhere else — "the room has him twelfth,
+    we have him twenty-fifth" only exists once the orders may differ.
+    """
+    assert "function _mockMarketOrder(" in APP
+    assert "MOCK_SHARE_BANDS" in APP, "the market order has no share model"
+    # Round one is backs and receivers. A flat share across the draft
+    # schedules positions EVENLY, which put a tight end in round one by
+    # construction — no amount of bounding the rooms could fix a board
+    # that already had him there.
+    i = APP.index("const MOCK_SHARE_BANDS = [")
+    bands = APP[i:APP.index("];", i)]
+    assert "until: 12" in bands, "the round-one band is gone"
+    first = bands[:bands.index("},")]
+    assert "TE: 0.02" in first and "QB: 0.00" in first, \
+        "round one is no longer backs and receivers"
+    # And both the room and its predictor must read that board.
+    live = APP[APP.index("function _mockCpuPick("):]
+    live = live[:live.index("\n}")]
+    sim = APP[APP.index("function mockSurvival("):]
+    sim = sim[:sim.index("\n}\n")]
+    assert "_mockByMarket(" in live and "_mockByMarket(" in sim, \
+        "somebody is still drafting off the value board"
+
+
+def test_a_room_cannot_hoard_a_position():
+    """The need curve only ever SOFTENED — it bottomed out at 0.2, and 0.2
+    is not zero over twelve rounds. Measured: rooms finished carrying six
+    quarterbacks and six tight ends. A room that might do that is a room
+    whose picks tell you nothing."""
+    i = APP.index("const MOCK_ROSTER_CAP = {")
+    caps = APP[i:APP.index("};", i)]
+    for pos in ("QB", "TE", "RB", "WR"):
+        assert pos in caps, f"no cap on {pos}"
+    j = APP.index("function _mockNeedCounts(")
+    need = APP[j:APP.index("\n}", j)]
+    assert "return 0;" in need, "the cap does not actually close the spot"
+    # A zero must MEAN no. Falling through to the top candidate when
+    # everything scores zero is how the cap was defeated in the first cut.
+    for fn in ("function _mockCpuPick(", "function mockSurvival("):
+        k = APP.index(fn)
+        body = APP[k:APP.index("\n}\n" if "Survival" in fn else "\n}", k)]
+        assert "total > 0" in body, \
+            f"{fn} still treats a zero weight as a last resort"
+
+
+def test_a_reach_is_not_capped_by_the_size_of_the_window():
+    """Measured over 300 drafts, the deepest reach in the entire sample was
+    exactly eight slots — because the ninth-ranked player was not in the
+    room's field of view. Eight was a wall, not a behaviour."""
+    i = APP.index("const MOCK_TOPK = ")
+    k = int(APP[i:APP.index(";", i)].split("=")[1].strip())
+    assert k >= 12, f"the consideration window is back down to {k}"
+
+
+def test_a_build_moves_a_player_in_slots_not_in_multipliers():
+    """A weight multiplier has no natural scale: at 2.6x an elite-TE room
+    had a real chance of taking its tight end at 1.03. A build means "I
+    will take him a round early", which is a number of slots — and slots
+    can be bounded where the tail of a multiplication cannot."""
+    i = APP.index("const MOCK_ARCHETYPES = [")
+    block = APP[i:APP.index("];", i)]
+    assert "shift:" in block and "lean:" not in block, \
+        "builds are expressed as multipliers again"
+    assert "w:" in block, "builds are drawn uniformly again"
+    # Most rooms are not characters. Drawing eight builds uniformly put
+    # roughly 1.5 tight-end chasers in every draft.
+    j = APP.index("function _mockDrawArchetype(")
+    assert "MOCK_ARCH_TOTAL" in APP[j:j + 300], "the draw ignores the weights"
+
+
 def test_the_simulation_reports_the_count_it_actually_ran():
     """A phone that cannot finish twenty thousand must not claim it.
     The loop is time-boxed and the page prints `sims`, which is the
