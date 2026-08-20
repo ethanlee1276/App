@@ -173,6 +173,39 @@ def test_registration_is_a_separate_file_and_cannot_break_the_page():
     assert "register-sw.js" in HTML
 
 
+def test_an_installed_app_goes_looking_for_a_new_shell():
+    """Ethan, 2026-08-20, on the drawer fixed on the 19th: "the menu glitch
+    on mobile is still happening."
+
+    Registering is not checking. A browser re-fetches sw.js on a
+    NAVIGATION, and a home-screen app barely navigates — it is resumed,
+    not opened — so a phone can hold a shell for days after the fix it is
+    missing shipped. sw.js's own header names what that looks like from
+    the outside: "one stale styles.css inside an installed PWA looks
+    exactly like a bug that was never fixed."
+
+    Hashing the worker's name decided WHAT a new shell is called. These
+    two lines decide WHEN the phone asks: an update check when the app
+    comes back to the foreground, throttled so app-switching costs
+    nothing, and a reload that waits for the background so nobody watches
+    a refresh happen under their thumb.
+    """
+    reg = _read("web", "js", "register-sw.js")
+    assert ".update()" in reg, \
+        "the app never asks whether a newer shell exists"
+    assert "visibilitychange" in reg, \
+        "nothing triggers the check on a phone, which does not navigate"
+    assert "controllerchange" in reg, \
+        "the page cannot tell when a newer shell has taken over"
+    # The reload is deferred, not immediate: a page that reloads under a
+    # reader mid-scroll has traded one defect for another.
+    i = reg.index("function refreshWhenHidden(")
+    body = reg[i:reg.index("\n  }", i)]
+    assert 'visibilityState !== "hidden"' in body, \
+        "the refresh no longer waits for the app to be backgrounded"
+    assert "reloading" in body, "nothing stops a reload loop"
+
+
 def test_no_topbar_padding_shorthand_drops_the_notch_inset():
     """The installed-app regression of 2026-08-17, pinned at its class.
 
