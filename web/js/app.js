@@ -14684,6 +14684,12 @@ document.addEventListener("click", (e) => {
    starting lineup's projected PPG, ranked against the CPU rooms' own.
    A grade would imply a model of drafting skill nobody fitted. */
 let _mock = null;                 // an in-progress draft survives re-renders
+let _mockSel = null;              // the player whose card is open
+/* POOL, not board. The draft board is empty at pick 1.01 by definition —
+   nobody has picked — so opening on it hands the reader a blank column
+   beside the one thing they came to do. The pool is what you choose
+   from; the board fills as the room drafts and is one click away. */
+let _mockTab = "pool";            // player pool | draft board | my roster
 let _mockKit = null;              // the fantasy payload's draft kit, captured at render
 
 //: Starting lineup a roster is judged on (bench fills the rest).
@@ -15305,7 +15311,11 @@ function _mockStart(teams, slot) {
   // Keepers whose room still exists in this league size — shrinking from
   // twelve teams to eight must not leave a keeper owned by room ten.
   const keepers = (_mockKeepers || []).filter((k) => k.team < teams);
-  _mock = { teams, you: slot - 1, pool, pick: 0,
+  // A FROZEN COPY OF THE FULL BOARD. `pool` is spliced as players go, so
+  // an index into it is a rank among WHAT IS LEFT — which would make a
+  // player's board rank improve every time somebody else was drafted, and
+  // make the edge against the market grow all draft for no reason.
+  _mock = { teams, you: slot - 1, pool, all: pool.slice(), pick: 0,
             // LEAVE THE BOARD SOME SLACK, because it has no kickers or
             // defences to absorb the end of a draft. Drafting it to the
             // floor leaves the last picks nowhere legal to go — what
@@ -15864,6 +15874,256 @@ function _mockGradeHTML(m) {
     </div>`;
 }
 
+/* ============================ THE DRAFT ROOM ============================
+   Ethan sent a render for this page on 2026-08-20 and asked for it to be
+   matched. Most of it is built below. Three things in it are not, and the
+   reasons are worth keeping next to the code that would otherwise grow
+   them back:
+
+   * A COUNTDOWN CLOCK ("00:47"). Our rooms are not people — a CPU pick is
+     computed in under a millisecond. A ticking clock would be an
+     animation pretending there is somebody on the other end, and the
+     first time a reader let it run out and nothing happened they would
+     know. The seat on the clock is real and is shown; the countdown is
+     not.
+   * "MATCHUP VS OPPONENT" — a panel of opposing-defence ranks. There is
+     no opponent in a draft. That panel belongs to a start/sit screen in
+     October, and filling it here would mean inventing a Week 1 defence
+     for a player nobody has drafted yet. Its slot is given to the
+     question a drafter actually has: will he still be there next turn.
+   * "CONFIDENCE 9.2/10 — LOCK". No. The site's own standing copy is that
+     every number here is a probability and not a promise, and "LOCK" is
+     the exact word that sentence exists to keep off the page. There is no
+     fitted confidence scale behind a fantasy projection, so a 9.2 would
+     be a decoration with a decimal point.
+
+   Everything else in the render is here and every number in it is
+   computed: the pick, the seat, the tier, the market's own slot for him,
+   our disagreement with it, and a floor and ceiling drawn from the SAME
+   lognormal the season simulator runs on. */
+
+//: Position tone, matching the render's chips. Own tokens rather than
+//: reusing the good/bad semantic pair — a running back is not "good" and
+//: a quarterback is not "a warning".
+const MOCK_POS_TONE = { QB: "qb", RB: "rb", WR: "wr", TE: "te" };
+
+function _mockPosChip(pos) {
+  return `<span class="mk-pos mk-pos-${MOCK_POS_TONE[pos] || "x"}">${
+    escapeHtml(pos || "—")}</span>`;
+}
+
+/* A pick number as a drafter says it: round dot slot, zero-padded. */
+function _mockPickNo(i, teams) {
+  return `${Math.floor(i / teams) + 1}.${String(i % teams + 1).padStart(2, "0")}`;
+}
+
+/* WHAT A SEASON OF HIM LOOKS LIKE, not just its average. Same lognormal
+   and the same per-position spread the season simulator uses — one rule,
+   two callers, so a floor shown on this card cannot describe a different
+   player from the one the season sim plays. Seeded off the name so the
+   card does not flicker a new floor on every re-render.
+
+   `weeks` is the fantasy regular season, so these are comparable with the
+   season panel's win totals rather than with a 17-game total. */
+const MOCK_SPREAD_SIMS = 1200;
+function _mockSpread(p, weeks = MOCK_SEASON_WEEKS) {
+  const proj = +p.proj || 0;
+  if (!(proj > 0)) return null;
+  const cv = MOCK_WEEK_CV[p.position] || 0.55;
+  let seed = 0;
+  for (const ch of String(p.player || "")) seed = (seed * 31 + ch.charCodeAt(0)) | 0;
+  const rnd = _mockRng(seed ^ 0x9e37);
+  const totals = [];
+  let goodWeeks = 0, allWeeks = 0;
+  for (let s = 0; s < MOCK_SPREAD_SIMS; s++) {
+    let t = 0;
+    for (let w = 0; w < weeks; w++) {
+      const pts = _mockWeekPoints(proj, cv, rnd);
+      t += pts;
+      allWeeks += 1;
+      // "Consistency" with a stated meaning: how often a week clears
+      // three-quarters of his own projection. A percentage with no
+      // definition is the kind of number this site does not print.
+      if (pts >= proj * 0.75) goodWeeks += 1;
+    }
+    totals.push(t);
+  }
+  totals.sort((a, b) => a - b);
+  const at = (q) => totals[Math.min(totals.length - 1,
+    Math.max(0, Math.round(q * (totals.length - 1))))];
+  return {
+    weeks,
+    season: proj * weeks,
+    floor: at(0.10),
+    ceiling: at(0.90),
+    consistency: allWeeks ? goodWeeks / allWeeks : 0,
+  };
+}
+
+/* OUR BOARD AGAINST THE ROOM'S. `_mockMarketOrder` is not a decoration
+   here — it is the order the CPU rooms actually draft in, so the gap
+   between it and our VORP order is a real disagreement rather than a
+   comparison with a number nobody uses. Positive means we rate him above
+   where this room will take him. */
+function _mockEdge(m, p) {
+  // m.market is a Map of player -> market slot, built once in _mockStart.
+  // It is NOT an array: reading it with findIndex returns -1 for
+  // everybody, which silently deletes this whole panel rather than
+  // failing, so the shape is asserted by using the Map's own accessor.
+  const mkt = m.market && typeof m.market.get === "function"
+    ? m.market.get(p.player) : undefined;
+  const mine = _mockOurRank(m, p);
+  if (mine == null || mkt == null) return null;
+  return { ours: mine, market: mkt, slots: mkt - mine };
+}
+
+/* Our own board position for a player — his index in the VORP order the
+   kit publishes, which is what m.pool is sorted by. Computed against the
+   FULL board rather than what is left, so the number does not improve
+   every time somebody else is drafted. */
+function _mockOurRank(m, p) {
+  const all = m.all || m.pool;
+  const i = all.findIndex((x) => x.player === p.player);
+  return i < 0 ? null : i;
+}
+
+/* The reasons, derived. Every line is a number off this player's own row
+   or off the simulation — nothing here is a sentence somebody wrote about
+   a player they liked. Lines whose input is missing are absent rather
+   than filled with a plausible default. */
+function _mockWhy(m, p, sim, spread) {
+  const out = [];
+  const fmt = _mockFmt();
+  if (p.vorp != null) {
+    out.push(`<b>+${(+p.vorp).toFixed(1)} over replacement</b> — the best
+      ${escapeHtml(p.position)} your league-mates can have for nothing scores
+      that much less, in ${escapeHtml(fmt.name)}.`);
+  }
+  if (p.tier != null) {
+    const left = m.pool.filter((x) => x.position === p.position
+      && x.tier === p.tier).length;
+    out.push(`<b>Tier ${p.tier}</b> at the position, with ${left} of that tier
+      still on the board — inside a tier the differences are noise, so the
+      cost is the last one before the step down.`);
+  }
+  const e = _mockEdge(m, p);
+  if (e && Math.abs(e.slots) >= 3) {
+    out.push(e.slots > 0
+      ? `<b>We rate him ${e.slots} slots above the room</b> — our board has
+         him ${e.ours + 1}, the rooms draft him around ${e.market + 1}.`
+      : `<b>The room rates him ${-e.slots} slots above us</b> — they draft him
+         around ${e.market + 1}, our board has him ${e.ours + 1}. Taking him
+         here is paying their price, not ours.`);
+  }
+  if (spread) {
+    out.push(`<b>${Math.round(spread.consistency * 100)}% of weeks</b> clear
+      three-quarters of his projection across ${MOCK_SPREAD_SIMS.toLocaleString()}
+      simulated seasons — ${escapeHtml(p.position)}s carry a
+      ${MOCK_WEEK_CV[p.position] || 0.55} weekly spread, which is an assumption
+      and the only one on this card.`);
+  }
+  if (sim) {
+    const sv = sim.survive.get(p.player);
+    if (sv != null) {
+      out.push(sv >= 0.75
+        ? `<b>${Math.round(sv * 100)}% to still be here next turn</b> across
+           ${sim.sims.toLocaleString()} simulated drafts — this pick can wait.`
+        : `<b>Only ${Math.round(sv * 100)}% to survive to your next turn</b>
+           across ${sim.sims.toLocaleString()} simulated drafts — a later round
+           probably cannot give him back.`);
+    }
+  }
+  if (p.source === "market") {
+    out.push(`<b>No last-season usage.</b> He sits at the market’s own draft
+      rank and carries the points our board shows there, so this row is the
+      room’s read rather than ours.`);
+  }
+  if (p.bye) out.push(`<b>Bye week ${p.bye}</b>, off the published schedule.`);
+  return out;
+}
+
+/* The card the render puts at the centre of the page. */
+function _mockPlayerCardHTML(m, p, sim) {
+  if (!p) return "";
+  const spread = _mockSpread(p);
+  const e = _mockEdge(m, p);
+  const inj = injFind("nfl", p.player);
+  const tierName = p.tier === 1 ? "Elite" : p.tier === 2 ? "Strong"
+    : p.tier === 3 ? "Solid" : "Depth";
+  const why = _mockWhy(m, p, sim, spread);
+  const sv = sim ? sim.survive.get(p.player) : null;
+  const metric = (k, v, sub) => `<div class="mk-metric"><span class="k">${k}</span>
+    <span class="v">${v}</span>${sub ? `<span class="s">${sub}</span>` : ""}</div>`;
+  return `
+  <div class="card mk-card">
+    <div class="mk-card-top">
+      ${playerAvatar(p.player, p.team, { size: 92, map: nflMap(), headshot: p.headshot })}
+      <div class="mk-card-id">
+        <h3>${escapeHtml(p.player)}</h3>
+        <div class="mk-card-sub">${escapeHtml(p.position)} · ${nflName(p.team)}
+          ${teamMark(p.team, 18, nflMap(), "nfl")}</div>
+        <div class="mk-badges">
+          <span class="mk-badge mk-pos-${MOCK_POS_TONE[p.position] || "x"}">${
+            escapeHtml(tierName)} ${escapeHtml(p.position)}</span>
+          ${p.source === "market" ? `<span class="mk-badge mk-badge-mut">market’s number</span>` : ""}
+          ${inj ? `<span class="mk-badge mk-badge-warn">${escapeHtml(inj.status)}</span>` : ""}
+        </div>
+        <div class="mk-card-nums">
+          ${metric("Room takes him", e ? _mockPickNo(e.market, m.teams) : "—",
+                   "at this league size")}
+          ${metric("Projection", spread
+            ? `${Math.round(spread.season)}` : `${(+p.proj || 0).toFixed(1)}`,
+            spread ? `points over ${spread.weeks} weeks` : "per game")}
+          ${metric("Tier", p.tier != null ? `Tier ${p.tier}` : "—",
+                   `${escapeHtml(p.position)}${p.pos_rank || ""} on our board`)}
+        </div>
+      </div>
+      ${e ? `<div class="mk-edge ${e.slots >= 0 ? "up" : "down"}">
+        <span class="k">QELLYS EDGE</span>
+        <span class="v">${e.slots >= 0 ? "+" : "−"}${Math.abs(e.slots)}</span>
+        <span class="s">slots ${e.slots >= 0 ? "above" : "below"} where this
+          room drafts him</span></div>` : ""}
+    </div>
+  </div>
+  <div class="mk-detail">
+    <div class="card mk-panel mk-outlook">
+      <div class="mk-h">Key numbers</div>
+      <div class="mk-kv"><span>Projected</span><b>${(+p.proj || 0).toFixed(1)} PPG</b></div>
+      ${spread ? `
+      <div class="mk-kv"><span>Floor · 10th pct</span><b>${Math.round(spread.floor)}</b></div>
+      <div class="mk-kv"><span>Ceiling · 90th pct</span><b>${Math.round(spread.ceiling)}</b></div>
+      <div class="mk-kv"><span>Weeks at 75%+</span><b>${Math.round(spread.consistency * 100)}%</b></div>` : ""}
+      <div class="mk-kv"><span>Over replacement</span><b>+${(+p.vorp || 0).toFixed(1)}</b></div>
+      ${p.rec_pg != null ? `<div class="mk-kv"><span>Receptions</span><b>${p.rec_pg}/gm</b></div>` : ""}
+      ${p.bye ? `<div class="mk-kv"><span>Bye</span><b>Week ${p.bye}</b></div>` : ""}
+      <p class="mk-fine">Floor and ceiling are the 10th and 90th percentile of
+        ${MOCK_SPREAD_SIMS.toLocaleString()} simulated seasons, drawn from the same
+        weekly spread the season panel runs on.</p>
+    </div>
+    <div class="card mk-panel mk-survive">
+      <div class="mk-h">Will he last?</div>
+      ${sv != null ? `
+        <div class="mk-svbig ${sv >= 0.75 ? "up" : sv >= 0.4 ? "warn" : "down"}">${
+          Math.round(sv * 100)}%</div>
+        <div class="mk-svsub">still on the board at your next turn, across
+          ${sim.sims.toLocaleString()} simulated drafts of the picks in between</div>
+        <div class="mk-svbar"><i style="width:${(sv * 100).toFixed(1)}%"></i></div>`
+      : `<p class="mk-fine">The survival model runs on your own picks. It has
+          nothing to say while another room is on the clock.</p>`}
+      <p class="mk-fine">The render this page was built from had an
+        opposing-defence panel here. There is no opponent in a draft, so this
+        answers the question a drafter actually has instead.</p>
+    </div>
+    <div class="card mk-panel mk-why">
+      <div class="mk-h">Why he is worth the pick</div>
+      <ul class="mk-whylist">${why.map((w) => `<li>${iconMark("check", 14)}<span>${w}</span></li>`).join("")}</ul>
+      ${inj ? `<div class="mk-injline" style="color:${injTone(inj.status)}">
+        ${escapeHtml(inj.status)}${inj.note ? ` — ${escapeHtml(inj.note)}` : ""}</div>`
+        : `<div class="mk-injline mk-injok">No designation on the injury report.</div>`}
+    </div>
+  </div>`;
+}
+
 function mockDraftHTML() {
   const kit = _mockKit || {};
   if (!(kit.board || []).length) {
@@ -15994,11 +16254,73 @@ function mockDraftHTML() {
   // thing you are choosing from.
   const onClock = yourTurn ? "You are on the clock"
     : `Room ${_mockPicker(m.pick, m.teams) + 1} is picking`;
-  return `<div class="mk-room-head">
-      <div class="mk-clock ${yourTurn ? "you" : ""}">
-        <span class="mk-round">Round ${round}<i>of ${m.rounds}</i></span>
-        <span class="mk-pickno-lg">${round}.${String(m.pick % m.teams + 1).padStart(2, "0")}</span>
-        <span class="mk-onclock">${escapeHtml(onClock)}</span>
+
+  /* THE SELECTED PLAYER. Defaults to the best available, so the card is
+     never empty and the page opens on the pick it would recommend.
+     Falls back the moment the selection is drafted by somebody else —
+     a card describing a man who is off the board is worse than no card. */
+  let selected = m.pool.find((x) => x.player === _mockSel) || m.pool[0];
+
+  /* EVERY PICK MADE, newest last, as a drafter reads a board. The render
+     showed a scrolling list of the round in progress; this is the same
+     list, and it keeps going. */
+  const boardList = m.log.length ? m.log.slice().reverse().map((e) => `
+    <div class="mk-brow${e.team === m.you ? " you" : ""}">
+      <span class="mk-bpick">${_mockPickNo(e.pick, m.teams)}</span>
+      <span class="mk-bteam" title="${escapeAttr(e.team === m.you ? "Your pick"
+        : ((m.personas || [])[e.team] || {}).name || "")}">${
+        e.team === m.you ? "You" : "Team " + (e.team + 1)}</span>
+      ${teamMark(e.player.team, 16, nflMap(), "nfl")}
+      <span class="mk-bname" data-mksel="${escapeAttr(e.player.player)}">${
+        escapeHtml(e.player.player)}</span>
+      ${_mockPosChip(e.player.position)}
+    </div>`).join("")
+    : `<div class="mk-brow"><span class="mk-meta">No picks yet — the board
+        fills as the room drafts.</span></div>`;
+
+  const poolList = m.pool.slice(0, 40).map((pl) => {
+    const sv = sim ? sim.survive.get(pl.player) : null;
+    return `<div class="mk-brow mk-poolrow${pl.player === selected.player ? " sel" : ""}"
+        data-mksel="${escapeAttr(pl.player)}">
+      ${playerAvatar(pl.player, pl.team, { size: 24, map: nflMap(), headshot: pl.headshot })}
+      <span class="mk-bname">${escapeHtml(pl.player)}${injTag("nfl", pl.player)}</span>
+      ${_mockPosChip(pl.position)}
+      <span class="mk-bvorp">+${(pl.vorp || 0).toFixed(1)}</span>
+      ${sv != null ? `<span class="mk-bsv ${sv >= 0.75 ? "up" : sv >= 0.4 ? "warn" : "down"}">${
+        Math.round(sv * 100)}%</span>` : ""}
+    </div>`;
+  }).join("");
+
+  const rosterList = m.rosters[m.you].length ? m.rosters[m.you].map((pl) => `
+    <div class="mk-brow" data-mksel="${escapeAttr(pl.player)}">
+      ${playerAvatar(pl.player, pl.team, { size: 24, map: nflMap(), headshot: pl.headshot })}
+      <span class="mk-bname">${escapeHtml(pl.player)}</span>
+      ${_mockPosChip(pl.position)}
+      <span class="mk-bvorp">${(pl.proj || 0).toFixed(1)}</span>
+    </div>`).join("")
+    : `<div class="mk-brow"><span class="mk-meta">Empty until your first pick.</span></div>`;
+
+  const tab = (key, label) => `<button class="mk-tab${
+    _mockTab === key ? " active" : ""}" data-mktab="${key}" type="button">${label}</button>`;
+  const panel = _mockTab === "pool" ? poolList
+    : _mockTab === "roster" ? rosterList : boardList;
+
+  return `
+    <div class="mk-hero">
+      <div class="mk-hero-id">
+        <div class="mk-hero-title">${iconMark("trophy", 26)} Mock draft</div>
+        <div class="mk-hero-sub">${m.teams} teams · ${escapeHtml(_mockFmt().name)}
+          · ${m.rounds} rounds · seat ${m.you + 1}</div>
+      </div>
+      <div class="mk-hero-stats">
+        <div class="mk-hs"><span class="k">Pick</span>
+          <span class="v">${_mockPickNo(m.pick, m.teams)}</span></div>
+        <div class="mk-hs"><span class="k">Round</span>
+          <span class="v">${round}<i>/${m.rounds}</i></span></div>
+        <div class="mk-hs"><span class="k">Overall</span>
+          <span class="v">${m.pick + 1}<i>/${total}</i></span></div>
+        <div class="mk-hs ${yourTurn ? "you" : ""}"><span class="k">On the clock</span>
+          <span class="v">${yourTurn ? "You" : "Team " + (_mockPicker(m.pick, m.teams) + 1)}</span></div>
       </div>
       <div class="mk-prog"><i style="width:${(m.pick / total * 100).toFixed(1)}%"></i></div>
     </div>
@@ -16006,25 +16328,24 @@ function mockDraftHTML() {
     ${yourTurn ? `<div class="card mk-advice">
       <div class="mk-advice-head">Your pick — round ${round}</div>
       <div>${_mockAdvice()}</div></div>` : ""}
-    ${yourTurn ? _mockWaitHTML(sim) : ""}
-    <div class="mk-cols">
-      <div class="mk-col">
-        <div class="section-title minor">Best available${sim
-          ? ` <span class="sub">— the percentage is how often each man was
-              still there at your next pick across ${sim.sims.toLocaleString()}
-              simulated drafts</span>` : ""}</div>
-        <div class="card mk-panel">${avail}</div>
+    <div class="mk-stage">
+      <div class="mk-left">
+        <div class="mk-tabs">${tab("pool", "Player pool")}${
+          tab("board", "Draft board")}${tab("roster", "My roster")}</div>
+        <div class="card mk-panel mk-list">${panel}</div>
       </div>
-      <div class="mk-col">
-        <div class="section-title minor">Your roster</div>
-        ${_mockByeHTML(m.rosters[m.you])}
-        <div class="card mk-panel">${roster || `<div class="mk-log-row">
-          <span class="mk-meta">Empty until your first pick.</span></div>`}</div>
-        <div class="section-title minor">Last round of picks</div>
-        <div class="card mk-panel">${recent || `<div class="mk-log-row">
-          <span class="mk-meta">Nobody has picked yet.</span></div>`}</div>
+      <div class="mk-right">
+        ${_mockPlayerCardHTML(m, selected, sim)}
+        <button class="btn primary mk-draftbtn" data-mkp="${escapeAttr(selected.player)}"
+          ${yourTurn ? "" : "disabled"}>${yourTurn
+            ? `Draft ${escapeHtml(selected.player)}`
+            : `${escapeHtml(onClock)} — you pick at ${
+                _mockPickNo(_mockNextTurn(m.pick, m.teams, m.you, m.rounds,
+                  _mockSkipSet(m)), m.teams)}`}</button>
       </div>
     </div>
+    ${yourTurn ? _mockWaitHTML(sim) : ""}
+    ${_mockByeHTML(m.rosters[m.you])}
     <button class="btn" id="mk-reset" style="margin-top:12px">Abandon this draft</button>`;
 }
 
@@ -16084,10 +16405,28 @@ function _mockBind(host) {
       if (fm && MOCK_FORMATS[fm.value]) _mockFormat = fm.value;
       _mockStart(teams, slot);
     } else if (t.id === "mk-reset" || t.id === "mk-again") {
-      _mock = null; _mockRender();
+      _mock = null; _mockSel = null; _mockTab = "board"; _mockRender();
     } else if (t.dataset && t.dataset.mkp) {
       const p = _mock.pool.find((x) => x.player === t.dataset.mkp);
-      if (p) { _mockTake(_mock.you, p); _mockAdvance(); }
+      // The selection must not survive the man it names. Drafting him
+      // takes him out of the pool, so the card falls back to the new best
+      // available rather than describing somebody nobody can pick.
+      if (p) { _mockSel = null; _mockTake(_mock.you, p); _mockAdvance(); }
+    } else {
+      // Selection and tabs are delegated off the closest carrier so a
+      // click anywhere in a row works, including on the avatar.
+      const tabEl = e.target.closest("[data-mktab]");
+      if (tabEl) { _mockTab = tabEl.dataset.mktab; _mockRender(); return; }
+      const selEl = e.target.closest("[data-mksel]");
+      if (selEl && _mock) {
+        const name = selEl.dataset.mksel;
+        // Only a player still ON THE BOARD can be inspected: the card
+        // prices a decision (his edge, whether he lasts) and neither
+        // question means anything about a player already drafted.
+        if (_mock.pool.some((x) => x.player === name)) {
+          _mockSel = name; _mockRender();
+        }
+      }
     }
   });
 }

@@ -452,6 +452,149 @@ def test_the_room_is_styled():
         assert sel in CSS, f"{sel} is unstyled"
 
 
+# --- the draft room, built to Ethan's render 2026-08-20 -----------------------
+# He sent a mock-draft mockup and asked for the page to match it. Most of it
+# is built. Three things in it are not, and these tests are why they stay
+# out — a render is a picture and cannot be argued with, so the argument
+# lives here.
+
+
+def test_there_is_no_countdown_clock():
+    """The render showed "00:47" ticking on a team. Our rooms are not
+    people: a CPU pick is computed in under a millisecond. A countdown
+    would be an animation pretending somebody is deciding on the other
+    end, and the first reader who let it run out and watched nothing
+    happen would know. The SEAT on the clock is real and is shown."""
+    room = APP[APP.index("function mockDraftHTML("):]
+    room = room[:room.index("\nfunction _mockRender(")]
+    for bad in ("setInterval", "00:", "countdown", "timeLeft", "secondsLeft"):
+        assert bad not in room, f"a clock crept into the draft room: {bad!r}"
+
+
+def test_there_is_no_opposing_defence_panel():
+    """The render had "Matchup vs Opponent" — defensive ranks, yards
+    allowed, a "+8% Fantasy Boost". There is no opponent in a draft.
+    Filling that panel would mean inventing a Week 1 defence for a player
+    nobody has drafted, and its slot goes to the question a drafter
+    actually has: will he still be there next turn."""
+    card = APP[APP.index("function _mockPlayerCardHTML("):]
+    card = card[:card.index("\nfunction mockDraftHTML(")]
+    assert "Will he last?" in card
+    for bad in ("Fantasy Boost", "Allowed (", "vs Opponent", "Matchup Rank"):
+        assert bad not in card, f"an in-season matchup panel appeared: {bad!r}"
+
+
+def test_no_confidence_score_and_no_lock():
+    """The render's footer read "QELLYS BOOKS CONFIDENCE: 9.2/10 — LOCK".
+    The site's own standing copy is that every number here is a
+    probability and not a promise, and "LOCK" is the exact word that
+    sentence exists to keep off the page. There is no fitted confidence
+    scale behind a fantasy projection, so a 9.2 would be a decoration
+    with a decimal point in it."""
+    import re
+    room = APP[APP.index("/* ============================ THE DRAFT ROOM"):]
+    room = room[:room.index("\nfunction _mockRender(")]
+    # STRIP THE COMMENTS PROPERLY rather than guessing at line prefixes.
+    # Two earlier drafts of this test failed on its own explanation: once
+    # on the word "clock" (which contains "lock"), and once on a
+    # continuation line inside the block comment that names the banned
+    # phrase in order to refuse it. The refusal has to be allowed to say
+    # what it is refusing.
+    code = re.sub(r"/\*.*?\*/", " ", room, flags=re.S)
+    code = re.sub(r"(?m)^\s*//.*$", " ", code)
+    word = re.compile(r"\block\b", re.I)
+    for line in code.splitlines():
+        assert not word.search(line), \
+            f"certainty language in output: {line.strip()[:70]}"
+    # And no fitted-looking confidence number, which is the other half.
+    assert not re.search(r"\b9\.2\b", code)
+    assert "/10" not in code, "a ten-point score has no fit behind it"
+
+
+def test_the_card_and_the_season_sim_share_one_variance():
+    """A floor printed on the card and a win total printed by the season
+    panel must come from the same assumption, or the page is describing
+    two different players. `_mockSpread` reads MOCK_WEEK_CV and calls
+    `_mockWeekPoints` — the season simulator's own draw."""
+    fn = APP[APP.index("function _mockSpread("):]
+    fn = fn[:fn.index("\n}")]
+    assert "MOCK_WEEK_CV" in fn and "_mockWeekPoints(" in fn, \
+        "the card grew its own variance model"
+    assert "MOCK_SEASON_WEEKS" in APP[APP.index("function _mockSpread(") - 400:
+                                      APP.index("function _mockSpread(") + 900], \
+        "the horizon is not the season panel's, so the two cannot be compared"
+
+
+def test_the_edge_reads_the_market_map_not_an_array():
+    """`m.market` is a Map of player -> slot, built once in _mockStart.
+    Reading it with findIndex returns -1 for everybody, which does not
+    throw — it silently deletes the whole edge panel. The failure mode is
+    an absent feature, so the shape is asserted here."""
+    import re
+    fn = APP[APP.index("function _mockEdge("):]
+    fn = fn[:fn.index("\n}")]
+    assert ".get(" in fn, "the market Map is being read as an array"
+    # Comments stripped: _mockEdge's own comment NAMES findIndex in order
+    # to warn the next reader off it, and an un-stripped check fails on
+    # the warning rather than on the mistake. Third time this file has hit
+    # that shape today, which is why both checks now strip first.
+    code = re.sub(r"(?m)^\s*//.*$", " ", fn)
+    assert "findIndex" not in code, "our rank is read off an array again"
+
+
+def test_a_board_rank_does_not_improve_as_others_are_drafted():
+    """`pool` is spliced as players go, so an index into it is a rank
+    among WHAT IS LEFT. Ranking against that would make a player climb our
+    board every time somebody else was taken, and make his edge over the
+    market grow all draft for no reason. A frozen copy is kept."""
+    assert "all: pool.slice()" in APP, "the full board is no longer frozen"
+    fn = APP[APP.index("function _mockOurRank("):]
+    fn = fn[:fn.index("\n}")]
+    assert "m.all" in fn, "our rank is measured against the shrinking pool"
+
+
+def test_the_open_card_can_never_describe_a_drafted_player():
+    """The card prices a DECISION — his edge, whether he lasts — and
+    neither question means anything about somebody already gone. The
+    selection is cleared when you draft, and a click only lands if he is
+    still in the pool."""
+    bind = APP[APP.index("const selEl = e.target.closest"):]
+    bind = bind[:bind.index("\n  });")]
+    assert "_mock.pool.some(" in bind, "any name can be selected, drafted or not"
+    take = APP[APP.index("} else if (t.dataset && t.dataset.mkp) {"):]
+    take = take[:take.index("} else {")]
+    assert "_mockSel = null" in take, \
+        "the selection survives the pick, so the card describes a taken player"
+
+
+def test_every_position_has_its_own_tone():
+    """The render colour-codes the chips. Own tokens rather than the
+    good/bad semantic pair — a running back is not "good" and a
+    quarterback is not "a warning", and borrowing those would make every
+    board on the site read as a verdict."""
+    for pos in ("qb", "rb", "wr", "te"):
+        assert f".mk-pos-{pos}" in CSS, f"no tone for {pos.upper()}"
+    assert "MOCK_POS_TONE" in APP
+
+
+def test_the_room_opens_on_the_thing_you_choose_from():
+    """The draft board is empty at pick 1.01 by definition — nobody has
+    picked — so opening on it hands the reader a blank column beside the
+    one thing they came to do."""
+    assert 'let _mockTab = "pool"' in APP, \
+        "the room opens on a tab that is empty at the first pick"
+
+
+def test_the_new_room_is_styled():
+    for sel in (".mk-hero", ".mk-hero-stats", ".mk-stage", ".mk-card",
+                ".mk-edge", ".mk-detail", ".mk-tabs", ".mk-poolrow",
+                ".mk-svbar", ".mk-whylist"):
+        assert sel in CSS, f"{sel} is unstyled"
+    # The hero's gradient goes through a token like every other gradient
+    # in the file; one written inline is freelancing outside the system.
+    assert "--grad-mkhero" in CSS
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
