@@ -523,6 +523,61 @@ def test_the_render_sheet_pass_shipped_its_honest_subset():
     # The insights panel renders data fields only; its title says so.
     assert "this game’s own data, not narratives" in APP
 
+def test_a_drawer_that_does_not_arrive_is_measured_and_then_forced():
+    """Ethan, three times, most recently with the fix deployed: "the menu
+    glitch on mobile is still happening... it happens the most when I'm on
+    Prediction market or ufc then I go to click menu."
+
+    Two named causes for this exact signature have already been fixed — a
+    blurred scrim promoting itself over the panel, and the drawer sitting
+    above the tab bar — and it survives both. It reproduces on no engine
+    available here: four gestures across four standalone pages at 390x844
+    with touch all open a drawer that is on screen, hit-tested and above
+    its scrim, with no ancestor creating a containing block.
+
+    So the code stops guessing. One frame after the class lands the drawer
+    is measured, and if it is not on screen it is put there with inline
+    styles, which outrank any stylesheet that won.
+
+    THE MEASUREMENT IS PINNED AS HARD AS THE RESCUE. A rescue alone would
+    end this the way the last two attempts ended — bug alive, evidence
+    gone — so the failing state is recorded BEFORE it is repaired, or the
+    record would describe the repair.
+    """
+    i = APP.index("function verifyDrawer(")
+    body = APP[i:APP.index("\n}", i)]
+    assert "requestAnimationFrame" in body, "the check runs before layout settles"
+    assert "drawerArrived(sb)" in body
+    assert "rescueDrawer(sb)" in body
+    # A drawer mid-slide is not a failed drawer: it starts at -102%.
+    assert "setTimeout" in body, \
+        "the check no longer gives the open transition time to finish"
+
+    j = APP.index("function rescueDrawer(")
+    fn = APP[j:APP.index("\n}", j)]
+    assert fn.index("getBoundingClientRect") < fn.index("MENU_FORCE"), \
+        "the failure is recorded after it is repaired — the record is of the fix"
+    assert "blockers" in fn, "nothing captures what captured the drawer"
+    assert '"important"' in fn, \
+        "the rescue no longer outranks the stylesheet that beat it"
+    assert "MENU_RESCUE_KEY" in fn, "the diagnosis is not kept anywhere"
+
+
+def test_a_forced_drawer_is_released_by_every_way_out():
+    """Inline !important is a loaded gun: a drawer forced open once and
+    never released stays pinned open for the rest of the session. BOTH
+    close paths have to disarm it — the toggle closes without going
+    through closeMobileMenu()."""
+    assert "function releaseDrawer(" in APP
+    i = APP.index("function closeMobileMenu(")
+    assert "releaseDrawer(" in APP[i:APP.index("\n}", i)], \
+        "closeMobileMenu leaves the forced styles on"
+    j = APP.index("function initMobileMenu(")
+    toggle = APP[j:j + 1800]
+    assert "releaseDrawer(" in toggle, \
+        "the Menu button closes without releasing — the drawer stays pinned"
+
+
 def test_the_drawer_outranks_its_scrim_by_source_order_too():
     """Ethan's 2026-08-19 recording: on iPhone the page dimmed and blurred
     but no drawer arrived — three taps, three times. It reproduces on no

@@ -16552,6 +16552,8 @@ function goHome() {
 
 function closeMobileMenu() {
   document.body.classList.remove("menu-open");
+  // A drawer that had to be forced open must not stay forced.
+  releaseDrawer(document.getElementById("sidebar"));
   const btn = document.getElementById("menu-toggle");
   if (btn) btn.setAttribute("aria-expanded", "false");
 }
@@ -16568,6 +16570,126 @@ function syncMenuLabel() {
   el.textContent = inStandalone || !tab
     ? (sport || "Menu")
     : `${sport} · ${tab.textContent.trim()}`;
+}
+
+/* ---- The drawer that does not arrive -----------------------------------
+   Ethan, three times now, most recently 2026-08-20 with the deploy live:
+   "the menu glitch on mobile is still happening... it happens the most
+   when I'm on Prediction market or ufc then I go to click menu."
+
+   The class lands — the page dims, which is `body.menu-open #scrim` — and
+   the drawer does not arrive. Two named causes have already been fixed
+   for this exact signature (the blurred scrim promoting itself over the
+   panel, and the drawer sitting above the tab bar), and it survives both.
+   It reproduces on no engine available here: four gestures across four
+   standalone pages at 390x844, with touch, all open a drawer that is on
+   screen, hit-tested and above its scrim, with no ancestor creating a
+   containing block. Whatever is left is a phone.
+
+   So this stops trying to out-guess it. One frame after the class lands
+   the drawer is MEASURED, and if it is not on screen it is put there with
+   inline styles that outrank any stylesheet. The user gets a menu; the
+   next tap does not need me.
+
+   THE MEASUREMENT IS THE POINT, not just the rescue. A rescue that
+   quietly papers over the cause would end this the way the last two
+   attempts ended — with the bug alive and the evidence gone. So every
+   rescue records what it found (rect, the computed properties that
+   decide placement, and every ancestor that could have captured a
+   position:fixed) and keeps it in localStorage. If this fires, the cause
+   is readable afterwards instead of being re-derived from a description.
+
+   It costs one rAF and one getBoundingClientRect per menu opening, and
+   does nothing at all when the drawer works — which is everywhere I can
+   test. */
+
+const MENU_RESCUE_KEY = "qb_menu_rescue";
+
+/* Every property between the drawer and the root that can turn
+   `position: fixed` into "fixed inside this element instead of the
+   viewport". The drawer lives inside .shell, not directly under body, so
+   any one of these on any ancestor moves it somewhere the scrim — a
+   direct child of body — is unaffected by. That asymmetry is the one
+   mechanism that produces this exact symptom by construction. */
+function drawerBlockers(el) {
+  const out = [];
+  for (let p = el.parentElement; p && p !== document.documentElement; p = p.parentElement) {
+    const c = getComputedStyle(p);
+    const why = [];
+    if (c.transform && c.transform !== "none") why.push("transform");
+    if (c.filter && c.filter !== "none") why.push("filter");
+    if (c.backdropFilter && c.backdropFilter !== "none") why.push("backdrop-filter");
+    if (c.perspective && c.perspective !== "none") why.push("perspective");
+    if (c.contain && !["none", "style"].includes(c.contain)) why.push("contain:" + c.contain);
+    if (c.willChange && c.willChange !== "auto") why.push("will-change:" + c.willChange);
+    if (why.length) out.push((p.id || p.className || p.tagName) + " → " + why.join(" "));
+  }
+  return out;
+}
+
+function drawerArrived(sb) {
+  const r = sb.getBoundingClientRect();
+  return r.width > 40 && r.height > 40 && r.right > 8 && r.left < innerWidth
+      && r.bottom > 0 && r.top < innerHeight;
+}
+
+/* Inline and !important, because the point is to beat whatever won. */
+const MENU_FORCE = [
+  ["position", "fixed"], ["top", "var(--topbar-h)"], ["left", "0"],
+  ["bottom", "0"], ["z-index", "60"], ["transform", "translateX(0)"],
+  ["visibility", "visible"], ["opacity", "1"],
+];
+
+function rescueDrawer(sb) {
+  // Recorded BEFORE the fix, or the record describes the repair.
+  const r = sb.getBoundingClientRect();
+  const c = getComputedStyle(sb);
+  const note = {
+    at: new Date().toISOString(),
+    view: (typeof state === "object" && state) ? state.view : "?",
+    sport: (typeof state === "object" && state) ? state.sport : "?",
+    vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio,
+    rect: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)],
+    position: c.position, transform: c.transform, display: c.display,
+    visibility: c.visibility, opacity: c.opacity, zIndex: c.zIndex,
+    topbarH: getComputedStyle(document.documentElement)
+      .getPropertyValue("--topbar-h").trim(),
+    blockers: drawerBlockers(sb),
+    ua: navigator.userAgent.slice(0, 160),
+  };
+  for (const [k, v] of MENU_FORCE) sb.style.setProperty(k, v, "important");
+  try {
+    const log = JSON.parse(localStorage.getItem(MENU_RESCUE_KEY) || "[]");
+    log.unshift(note);
+    localStorage.setItem(MENU_RESCUE_KEY, JSON.stringify(log.slice(0, 10)));
+  } catch (e) {}
+  // Visible in a console without digging, and machine-readable.
+  window.__qbMenuRescue = note;
+  return note;
+}
+
+/* Undo the rescue on close, so a drawer forced open once does not stay
+   pinned open by its own inline styles. */
+function releaseDrawer(sb) {
+  if (!sb) return;
+  for (const [k] of MENU_FORCE) sb.style.removeProperty(k);
+}
+
+/* One frame after the class lands: did it actually arrive? */
+function verifyDrawer() {
+  requestAnimationFrame(() => {
+    const sb = document.getElementById("sidebar");
+    if (!sb || !document.body.classList.contains("menu-open")) return;
+    // A drawer mid-transition is not a failed drawer. It starts at
+    // -102% and slides in, so the first frame is legitimately off screen
+    // — measure again once the transition has had its time.
+    if (drawerArrived(sb)) return;
+    setTimeout(() => {
+      if (!document.body.classList.contains("menu-open")) return;
+      if (drawerArrived(sb)) return;
+      rescueDrawer(sb);
+    }, 420);
+  });
 }
 
 function initMobileMenu() {
@@ -16590,6 +16712,13 @@ function initMobileMenu() {
       // read as broken ("where did the leagues go?").
       const sb = document.getElementById("sidebar");
       if (sb) sb.scrollTop = 0;
+      // Trust the stylesheet, then check it. See verifyDrawer().
+      verifyDrawer();
+    } else {
+      // This path closes WITHOUT closeMobileMenu(), so it has to release
+      // the rescue itself — otherwise a drawer forced open once stays
+      // pinned open by its own inline styles for the rest of the session.
+      releaseDrawer(document.getElementById("sidebar"));
     }
     btn.setAttribute("aria-expanded", String(open));
   });
