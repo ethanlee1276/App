@@ -5291,6 +5291,96 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 }
 
 
+/* --- How this number was built (Ethan, 2026-08-20) ---------------------
+   The model's own arithmetic as a ledger: base, each named factor, the
+   running total, the projection. The bar is centred on ×1.00 the way the
+   park-factor bar is centred on league average — right of the tick raised
+   the number, left cut it — because direction is a fact and reads faster
+   than a sign does.
+
+   Flat steps are not drawn as rows. They are counted in one muted line
+   instead, so "the model looked at the weather and the weather changed
+   nothing" survives without six blank rows burying the two factors that
+   did the work. */
+.ch-card, .ck-card, .cp-card { padding: 0; }
+.ch-base, .ch-row, .ch-end {
+  display: grid; align-items: center; gap: 10px;
+  grid-template-columns: 132px minmax(60px, 1fr) 52px 62px 66px;
+  padding: 9px 12px; border-bottom: var(--hairline) solid var(--border-soft);
+}
+/* The bookends are two columns and a full-width note: name, number, and
+   the sentence underneath. Same shape as a step row with the bar and the
+   multiplier taken out, so the running total stays in one visual column
+   from the base to the projection. */
+.ch-base, .ch-end { grid-template-columns: minmax(0, 1fr) 66px; }
+.ch-end { border-bottom: none; }
+.ch-k { font-size: var(--fs-sm); font-weight: 700; }
+.ch-base .ch-k, .ch-end .ch-k { letter-spacing: .04em; }
+.ch-bar { position: relative; display: block; height: 7px;
+  background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft); }
+.ch-bar > i { position: absolute; top: 0; bottom: 0; opacity: .85; }
+.ch-bar > i.up { background: var(--good); }
+.ch-bar > i.down { background: var(--warn); }
+.ch-bar > b { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px;
+  background: var(--text); opacity: .35; }
+.ch-m, .ch-d, .ch-run { text-align: right; font-variant-numeric: tabular-nums; }
+.ch-m { font-size: var(--fs-xs); color: var(--text-mute); font-weight: 700; }
+.ch-d { font-size: var(--fs-xs); font-weight: 800; }
+.ch-d.pos { color: var(--good); } .ch-d.neg { color: var(--warn); }
+.ch-run { font-size: var(--fs-md); font-weight: 800; }
+/* The engine's own sentence for the step, on its own line under the row —
+   it is detail, and putting it in a column would either truncate it or
+   set the row height by the longest reason on the page. */
+.ch-why { grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--text-mute);
+  line-height: var(--lh-body); }
+.ch-quiet { font-style: italic; }
+.ch-still, .ch-foot, .ck-foot, .cp-foot {
+  padding: 10px 12px; margin: 0; font-size: var(--fs-xs);
+  color: var(--text-mute); line-height: var(--lh-body);
+  border-top: var(--hairline) solid var(--border-soft); }
+.ch-still { border-top: 0; }
+.ch-broke { padding: 12px; margin: 0; font-size: var(--fs-sm);
+  color: var(--text-body); line-height: var(--lh-body); }
+
+/* Every rule, passed or failed — the passes are the point. */
+.ck-row { display: grid; align-items: center; gap: 10px;
+  grid-template-columns: 18px minmax(0, 1fr) 88px 128px;
+  padding: 8px 12px; border-bottom: var(--hairline) solid var(--border-soft); }
+.ck-mark { display: flex; }
+.ck-row.ok .ck-mark { color: var(--good); }
+.ck-row.no .ck-mark { color: var(--bad); }
+.ck-k { font-size: var(--fs-sm); font-weight: 700; }
+.ck-v { text-align: right; font-size: var(--fs-sm); font-weight: 800;
+  font-variant-numeric: tabular-nums; }
+.ck-lim { text-align: right; font-size: var(--fs-xs); color: var(--text-mute);
+  font-variant-numeric: tabular-nums; }
+
+/* Similar spots: one bar for what happened, one tick for what we claim. */
+.cp-bar { position: relative; height: 12px; margin: 12px 12px 0;
+  background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft); }
+.cp-bar > i { position: absolute; left: 0; top: 0; bottom: 0;
+  background: var(--brand); opacity: .8; }
+.cp-bar > b { position: absolute; top: -3px; bottom: -3px; width: 2px;
+  background: var(--text); }
+.cp-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 8px 12px 0;
+  font-size: var(--fs-sm); color: var(--text-body); }
+.cp-tick { color: var(--text-mute); }
+
+@media (max-width: 720px) {
+  /* The multiplier column is the one that gives: the delta and the running
+     total are what a reader is following, and ×1.14 is restated by the bar
+     it sits beside. */
+  .ch-base, .ch-row, .ch-end { grid-template-columns: 96px minmax(40px, 1fr) 56px 60px; }
+  .ch-base, .ch-end { grid-template-columns: minmax(0, 1fr) 60px; }
+  .ch-m { display: none; }
+  /* The threshold does not get hidden here — "needs +2.0% or better" is
+     the half of the row that makes the other half mean something. It drops
+     under the row instead, the way a step's reason does. */
+  .ck-row { grid-template-columns: 18px minmax(0, 1fr) 78px; }
+  .ck-lim { grid-column: 2 / -1; text-align: left; }
+}
+
+
 /* --- Preregistered tests (Ethan, 2026-08-13) ---------------------------
    Deliberately not styled like a result. A test still collecting gets a
    progress bar and a count and NO percentage, because a running total

@@ -11,7 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .models import Prop, Game, Team
-from .form import compute_form, FormResult
+from . import chain
+from .form import compute_form, FormResult, WINDOW_WEIGHTS
 from .weather import evaluate_weather, WeatherEffect
 from .injuries import evaluate_injuries, InjuryEffect
 from .matchup import evaluate_matchup, MatchupEffect
@@ -45,6 +46,10 @@ class Projection:
     weather: WeatherEffect
     injury: InjuryEffect
     reasons: list[str] = field(default_factory=list)
+    #: The arithmetic that produced `mean`, kept rather than discarded —
+    #: base × a series of named multipliers. See engine/chain.py for why
+    #: this is a checkable structure and not another sentence.
+    chain: dict = field(default_factory=dict)
 
 
 def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
@@ -114,6 +119,7 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     # (backtests, other sports, un-ingested players) leaves the baseline
     # exactly form.mean.
     mean_base = form.mean
+    usage_why = ""
     if usage and usage.get("opp_per_game") and usage.get("eff"):
         est = float(usage["opp_per_game"]) * float(usage["eff"])
         if est > 0:
@@ -125,10 +131,11 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                     "carries": ("carries/gm", "per carry"),
                     "pass_att": ("att/gm", "per attempt"),
                 }.get(usage.get("opp_market"), ("touches/gm", "per touch"))
-                reasons.append(
-                    f"Usage bridge: {float(usage['opp_per_game']):.1f} {per} "
+                usage_why = (
+                    f"{float(usage['opp_per_game']):.1f} {per} "
                     f"× {float(usage['eff']):.2f} {unit} — measured role says "
                     f"{est:.1f}, weighted {1.0 - w:.0%} against form")
+                reasons.append(f"Usage bridge: {usage_why}")
 
     if model is not None and model.has(prop.market):
         # Learned magnitude replaces the hand-tuned matchup/weather multipliers
@@ -139,10 +146,26 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
         from .ml.features import extract_features, vectorize
         feat = vectorize(extract_features(prop, game, opponent_team.defense))
         learned = model.predict_multiplier(feat, prop.market)
-        total_mult = clamp(learned * injury.multiplier, 0.70, 1.40)
+        raw_mult = learned * injury.multiplier
+        total_mult = clamp(raw_mult, 0.70, 1.40)
+        mult_steps = [
+            chain.step("learned", learned,
+                       "Magnitude learned from settled results, which "
+                       "replaces the hand-tuned matchup and weather dials."),
+            chain.step("injury", injury.multiplier,
+                       "; ".join(injury.reasons)),
+            chain.cap_step(raw_mult, total_mult, 0.70, 1.40),
+        ]
         reasons.append(f"Learned model adjustment ×{learned:.2f} (trained on historical data)")
     else:
         total_mult = rule_mult
+        raw_mult = matchup.multiplier * weather_mult * injury.multiplier
+        mult_steps = [
+            chain.step("matchup", matchup.multiplier, "; ".join(matchup.reasons)),
+            chain.step("weather", weather_mult, "; ".join(weather.reasons)),
+            chain.step("injury", injury.multiplier, "; ".join(injury.reasons)),
+            chain.cap_step(raw_mult, total_mult, 0.85, 1.18),
+        ]
 
     # Recency shade: a sustained hot/cold streak pulls the projection toward
     # recent form (bounded in form.py), so the model stops leaning on stale
@@ -182,6 +205,34 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
             f"(projection shaded {form.trend_mult - 1:+.0%})"
         )
 
+    # THE CHAIN, in the order the code multiplied it. The usage bridge is
+    # recorded as a step rather than folded into the base so the reader can
+    # see the form mean the player's own games earned before the measured
+    # role pulled on it.
+    steps = []
+    if form.mean > 0:
+        base_val, base_src = form.mean, "form"
+        if abs(mean_base / form.mean - 1.0) > 1e-9:
+            steps.append(chain.step("usage", mean_base / form.mean, usage_why))
+    else:
+        # A form mean of zero cannot be multiplied INTO anything, so the
+        # blended number becomes the base and says so. Rare, but a chain
+        # that silently starts from zero would claim the model projected
+        # nothing and then arrive somewhere else.
+        base_val = mean_base
+        base_src = "usage" if mean_base != form.mean else "form"
+    steps += mult_steps
+    steps += [
+        chain.step("trend", form.trend_mult,
+                   f"Last 3 games {form.trend_delta:+.1f} against prior form."
+                   if form.trend != "flat" else
+                   "Recent games sit where the longer sample does."),
+        chain.step("context", ctx_mult, "; ".join(ctx_reasons)),
+        chain.step("player", player_mult,
+                   "The record's own correction for players this blend "
+                   "persistently misreads." if abs(player_mult - 1.0) >= 0.005
+                   else "Nothing in the record says this blend misreads him."),
+    ]
     return Projection(
         mean=mean,
         std=adj_std,
@@ -190,4 +241,8 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
         weather=weather,
         injury=injury,
         reasons=reasons,
+        chain=chain.build(base_val, base_src, steps, mean,
+                          weights=dict(form_weights or WINDOW_WEIGHTS),
+                          sample_games=form.sample_games,
+                          shrunk_to=form.shrunk_to),
     )

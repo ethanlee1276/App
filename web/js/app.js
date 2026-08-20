@@ -4398,6 +4398,222 @@ function renderGameBetPage(b) {
   if (typeof fillMeters === "function") fillMeters(host);
 }
 
+/* ---- How this number was built ---------------------------------------
+   Ethan, 2026-08-20: "A public 'how this model thinks' page for one pick —
+   projection, form blend, which rungs adjusted it, gate conditions, comps."
+
+   All four already existed and none of them were on screen. Every
+   projection this site has ever published is one number times a short
+   series of named multipliers; engine/projection.py computed them, used
+   them and dropped them, so the card could state 78.4 receiving yards and
+   could not show where 78.4 came from. The gate ledger had the same
+   shape — a rule wrote a warning when it FAILED and left no trace when it
+   passed, which meant the site could never say what a pick had cleared.
+   And the historical comps have been attached to every recommendation
+   since they shipped and rendered on exactly no page.
+
+   THE LEDGER IS CHECKED BEFORE IT IS DRAWN. `chainCloses` multiplies the
+   chain back out; if it does not reach the projection that shipped, the
+   section says so instead of drawing a derivation the model did not
+   perform. A waterfall that stops short of its own answer is worse than
+   no waterfall, because it looks like arithmetic.
+
+   THE DIRECTION IS DERIVED, NEVER WRITTEN. "raised it 3%" is computed
+   from the multiplier at render time, so a step's caption cannot drift
+   away from the step's number the way a stored sentence can. The engine's
+   own `why` text rides underneath as detail, not as the claim. */
+
+const CHAIN_FLAT = 0.005;
+
+function chainProduct(c) {
+  let out = Number(((c || {}).base || {}).value);
+  for (const s of (c || {}).steps || []) out *= Number(s.mult);
+  return out;
+}
+
+function chainCloses(c, tol) {
+  const want = Number((c || {}).mean);
+  const got = chainProduct(c);
+  if (!isFinite(want) || !isFinite(got)) return false;
+  if (want === 0) return Math.abs(got) < 1e-6;
+  return Math.abs(got / want - 1) <= (tol == null ? 0.01 : tol);
+}
+
+/* The step's effect in the units the reader is already looking at. A
+   multiplier is the honest quantity but "×1.03" is not what anyone wants
+   to know about a receiving-yards line; "+3.1 yards" is. */
+function chainStepRow(st, running, max, decimals) {
+  const m = Number(st.mult);
+  const after = running * m;
+  const delta = after - running;
+  const flat = Math.abs(m - 1) < CHAIN_FLAT;
+  const frac = max > 0 ? Math.min(1, Math.abs(m - 1) / max) : 0;
+  const dir = flat ? "left it alone"
+    : `${m > 1 ? "raised" : "cut"} it ${Math.abs((m - 1) * 100).toFixed(1)}%`;
+  return `<div class="ch-row${flat ? " ch-flat" : ""}">
+    <span class="ch-k">${escapeHtml(st.label || st.key)}</span>
+    <span class="ch-bar"><i class="${m >= 1 ? "up" : "down"}" style="${
+      m >= 1 ? `left:50%;width:${frac * 50}%` : `left:${50 - frac * 50}%;width:${frac * 50}%`
+    }"></i><b></b></span>
+    <span class="ch-m">×${m.toFixed(2)}</span>
+    <span class="ch-d ${flat ? "" : (delta >= 0 ? "pos" : "neg")}">${
+      flat ? "—" : `${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(decimals)}`}</span>
+    <span class="ch-run">${after.toFixed(decimals)}</span>
+    ${st.why ? `<span class="ch-why">${escapeHtml(st.why)}</span>`
+      : `<span class="ch-why ch-quiet">${escapeHtml(dir)}.</span>`}
+  </div>`;
+}
+
+function chainHTML(r) {
+  const c = r.chain;
+  if (!c || !c.base || !(c.steps || []).length) return "";
+  const line = Number(r.line);
+  // Counting props live in tenths and hundredths; yardage does not.
+  const decimals = Math.abs(Number(c.mean)) < 5 ? 2 : 1;
+  if (!chainCloses(c)) {
+    // Refuse to draw it. A chain that does not reach the number beside it
+    // is a picture of arithmetic rather than the arithmetic.
+    return `<div class="section-title minor">How this number was built</div>
+      <div class="card"><p class="ch-broke">The recorded steps for this pick
+      do not multiply back to the projection it shipped with, so the
+      breakdown is withheld rather than shown wrong. The projection and
+      everything above it are unaffected — this is the derivation display
+      declining to guess.</p></div>`;
+  }
+  const steps = c.steps || [];
+  const max = Math.max(...steps.map((s) => Math.abs(Number(s.mult) - 1)), 0.0001);
+  const moved = steps.filter((s) => Math.abs(Number(s.mult) - 1) >= CHAIN_FLAT);
+  const still = steps.filter((s) => Math.abs(Number(s.mult) - 1) < CHAIN_FLAT);
+  let running = Number(c.base.value);
+  const rows = [];
+  for (const s of steps) {
+    if (Math.abs(Number(s.mult) - 1) >= CHAIN_FLAT) {
+      rows.push(chainStepRow(s, running, max, decimals));
+    }
+    running *= Number(s.mult);
+  }
+  const w = c.base.weights || {};
+  const blend = Object.keys(w).length
+    ? Object.entries(w).filter(([, v]) => Number(v) > 0)
+        .map(([k, v]) => `${CHAIN_WINDOWS[k] || k} ${Math.round(Number(v) * 100)}%`)
+        .join(" · ")
+    : "";
+  const gap = isFinite(line) ? Number(c.mean) - line : null;
+  return `
+    <div class="section-title minor">How this number was built
+      <span class="sub">— the model’s own arithmetic, in the order it ran.
+      Every factor it weighed is here, including the ones that changed
+      nothing.</span></div>
+    <div class="card ch-card">
+      <div class="ch-base">
+        <span class="ch-k">${escapeHtml(c.base.label || "Base")}</span>
+        <span class="ch-run">${Number(c.base.value).toFixed(decimals)}</span>
+        ${blend ? `<span class="ch-why">${escapeHtml(blend)}${
+          c.base.sample_games != null
+            ? ` · ${c.base.sample_games} game${c.base.sample_games === 1 ? "" : "s"} of his own`
+            : ""}</span>` : ""}
+        ${c.base.form_mean != null && Math.abs(c.base.form_mean - c.base.value) > 1e-9
+          ? `<span class="ch-why ch-quiet">The recency blend would have said ${
+              Number(c.base.form_mean).toFixed(decimals)}; for a rare event that
+              blend swings on WHEN the last one happened, so a rate is used
+              instead.</span>` : ""}
+      </div>
+      ${rows.join("")}
+      ${still.length ? `<div class="ch-still">${still.length} factor${
+        still.length === 1 ? "" : "s"} looked and changed nothing: ${
+        escapeHtml(still.map((s) => (s.label || s.key).toLowerCase()).join(", "))}.</div>` : ""}
+      <div class="ch-end">
+        <span class="ch-k">Projection</span>
+        <span class="ch-run">${Number(c.mean).toFixed(decimals)}</span>
+        ${isFinite(line) ? `<span class="ch-why">The book’s line is ${
+          escapeHtml(String(line))}, so the model is ${
+          Math.abs(gap).toFixed(decimals)} ${gap >= 0 ? "above" : "below"} it.
+          That gap, not the projection, is what the price is compared with.</span>` : ""}
+      </div>
+      <p class="ch-foot">${moved.length} of ${steps.length} factor${
+        steps.length === 1 ? "" : "s"} moved this number. Multiply the base by
+        each one in this order and you get the projection above — that is the
+        whole model, not a summary of it.</p>
+    </div>`;
+}
+
+const CHAIN_WINDOWS = {
+  last1: "last game", last3: "last 3", last5: "last 5", last10: "last 10",
+  season: "season", career: "career", vs_opp: "vs this opponent",
+};
+
+/* ---- What it had to clear -------------------------------------------
+   Every rule, passed or failed. The board has only ever shown the
+   failures — a rule writes a warning when it blocks and leaves no trace
+   when it does not — so "no warnings" and "cleared six conditions" looked
+   identical on screen, and only one of them is a statement. */
+function checksHTML(r) {
+  const cs = r.checks || [];
+  if (!cs.length) return "";
+  const failed = cs.filter((c) => !c.passed);
+  return `
+    <div class="section-title minor">What it had to clear
+      <span class="sub">— every condition this pick was held to, with the
+      threshold and its own number beside it.</span></div>
+    <div class="card ck-card">
+      ${cs.map((c) => `<div class="ck-row ${c.passed ? "ok" : "no"}">
+        <span class="ck-mark">${icon(c.passed ? "check" : "cross", 13)}</span>
+        <span class="ck-k">${escapeHtml(c.label || c.key)}</span>
+        <span class="ck-v">${escapeHtml(c.value || "")}</span>
+        <span class="ck-lim">${c.limit ? `needs ${escapeHtml(c.limit)}` : ""}</span>
+      </div>`).join("")}
+      <p class="ck-foot">${failed.length
+        ? `${failed.length} of ${cs.length} not met, which is why this is not
+           a recommended pick tonight. It stays on the board so you can see
+           the reasoning that was rejected.`
+        : `All ${cs.length} met. That is what a recommended pick means here —
+           not a feeling about the matchup.`}</p>
+    </div>`;
+}
+
+/* ---- Similar spots --------------------------------------------------
+   The empirical record of past bets with this line and a player in this
+   form band, from our own settled history. Attached to every prop since
+   the comps shipped and never rendered anywhere.
+
+   Reported from the side WE hold, because the stored rate is always the
+   over's — and quoting an over rate under an under pick is the classic
+   way to print a report exactly upside down. */
+function compsHTML(r) {
+  const c = r.comps;
+  if (!c || !c.n) return "";
+  const over = String(r.side || "OVER").toUpperCase() === "OVER";
+  const rate = c.side_rate != null ? Number(c.side_rate)
+    : (over ? Number(c.hit_rate) : 1 - Number(c.hit_rate));
+  const model = r.hit_prob != null ? Number(r.hit_prob) : null;
+  const w = Math.max(0, Math.min(100, rate * 100));
+  const agree = model == null ? null : Math.abs(rate - model) < 0.08;
+  return `
+    <div class="section-title minor">Similar spots
+      <span class="sub">— our own settled history: past bets on this market
+      at this number, with the player in a comparable form band.</span></div>
+    <div class="card cp-card">
+      <div class="cp-bar"><i style="width:${w.toFixed(1)}%"></i>${
+        model != null ? `<b style="left:${
+          Math.max(0, Math.min(100, model * 100)).toFixed(1)}%"></b>` : ""}</div>
+      <div class="cp-legend">
+        <span><b>${(rate * 100).toFixed(0)}%</b> of ${c.n.toLocaleString()} past
+          spots went to the ${escapeHtml(String(r.side || "over").toLowerCase())}</span>
+        ${model != null ? `<span class="cp-tick">model says ${pct(model)}</span>` : ""}
+      </div>
+      <p class="cp-foot">Form band ${Number(c.form_lo).toFixed(2)}–${
+        Number(c.form_hi).toFixed(2)}${c.push ? ` · ${c.push} push${
+        c.push === 1 ? "" : "es"} excluded` : ""}${c.own ? ` · ${c.own} of them
+        his own` : ""}. ${agree === null ? ""
+        : agree
+          ? `The history and the model agree here, which is the ordinary case
+             and is worth no extra confidence on its own.`
+          : `The history and the model disagree by more than eight points.
+             That is a flag, not a verdict — a comp set is a coarse match and
+             the model sees this specific matchup.`}</p>
+    </div>`;
+}
+
 function renderPropPage() {
   const host = document.getElementById("prop-body");
   if (!host) return;
@@ -4478,7 +4694,16 @@ function renderPropPage() {
     <div class="card pp-forms">${propFormRows(r.form, line, over)}</div>` : ""}
 
     ${reasons ? `<div class="section-title minor">Why this pick</div>
-      <div class="card"><ul class="reasons">${reasons}</ul></div>` : ""}`;
+      <div class="card"><ul class="reasons">${reasons}</ul></div>` : ""}
+
+    ${/* The three sections that answer "how does this thing think", in the
+          order the question is actually asked: where the number came from,
+          what it had to survive, and what happened the last time we were
+          here. Each draws nothing when its data is absent, so a slate
+          built before they existed renders exactly as it did. */
+      chainHTML(r)}
+    ${checksHTML(r)}
+    ${compsHTML(r)}`;
   const b = document.getElementById("pp-back");
   if (b) b.addEventListener("click", () => switchView("recommended"));
   if (typeof fillMeters === "function") fillMeters(host);
@@ -16794,7 +17019,7 @@ load();
    Convergent by construction: U+2212 does not match RE_SIGN, so a pass over
    already-converted text is a no-op and the observer cannot chase its own
    writes. */
-const NUM_SEL = "td.num, .tile .v, .metric-value, .fx-edge, .agate .num";
+const NUM_SEL = "td.num, .tile .v, .metric-value, .fx-edge, .agate .num, .ck-v, .ch-run, .ch-d";
 
 function applyTrueMinus(root) {
   if (!root || !root.querySelectorAll) return 0;

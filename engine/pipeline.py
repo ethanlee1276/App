@@ -81,6 +81,13 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "trend_delta": round(proj.form.trend_delta, 1),
         "recommended": decision.recommend,
         "warnings": decision.warnings,
+        # HOW THIS NUMBER WAS BUILT, and what it had to clear. Both were
+        # computed on every pick this site has ever made and both were
+        # thrown away at the end of the function that computed them —
+        # which left the card able to state a projection and unable to
+        # show its arithmetic. See engine/chain.py.
+        "chain": proj.chain,
+        "checks": decision.checks,
         "headline": headline(rec),
         "summary": summary(rec),
         "reasons": bullet_reasons(rec),

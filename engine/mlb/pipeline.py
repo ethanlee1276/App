@@ -346,6 +346,10 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "recent_values": vals[:12],
         "trend_delta": round(proj.form.trend_delta, 2),
         "recommended": decision.recommend, "warnings": decision.warnings,
+        # HOW THIS NUMBER WAS BUILT, and what it had to clear — see
+        # engine/chain.py and engine/rules.RuleDecision.
+        "chain": proj.chain,
+        "checks": decision.checks,
         "headline": f"{rec.player} {rec.side} {rec.line:g} {label}",
         "summary": (
             f"Model projects {rec.projection:g} "

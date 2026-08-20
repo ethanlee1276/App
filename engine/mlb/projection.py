@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 
 from ..form import (compute_form, FormResult, MLB_WINDOW_WEIGHTS,
                     CAREER_PRIOR_GAMES)
+from .. import chain
 from ..models import GameLog
 from ..statmath import clamp
 from .models import (MLBProp, MLBGame, TOTAL_BASES, HITS, HOME_RUNS,
@@ -46,6 +47,8 @@ class MLBProjection:
     matchup: MatchupEffect
     reasons: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    #: The arithmetic that produced `mean` — see engine/chain.py.
+    chain: dict = field(default_factory=dict)
 
 
 # Markets where the per-game outcome is a rare 0/1 event rather than a
@@ -237,22 +240,45 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None,
         from .ml import extract_features, vectorize
         feat = vectorize(extract_features(prop, game))
         total_mult = model.predict_multiplier(feat, prop.market)
+        mult_steps = [chain.step(
+            "learned", total_mult,
+            "Magnitude learned from settled results, which replaces the "
+            "hand-tuned park, weather, matchup and contact dials.")]
         learned_reason = [f"Learned model adjustment ×{total_mult:.2f} "
                           f"(trained on historical data)"]
     else:
         # Tight overall clamp: books price parks and platoons in, so real edges
         # come from small compounding angles. Slightly wider than the NFL clamp
         # because park effects (Coors) genuinely run bigger.
-        total_mult = clamp(park_mult * weather_mult * matchup.multiplier
-                           * statcast_mult * ump_mult,
-                           0.78, 1.28)
+        raw_mult = (park_mult * weather_mult * matchup.multiplier
+                    * statcast_mult * ump_mult)
+        total_mult = clamp(raw_mult, 0.78, 1.28)
+        mult_steps = [
+            chain.step("park", park_mult, "; ".join(park.reasons)),
+            chain.step("weather", weather_mult, "; ".join(weather.reasons)),
+            chain.step("matchup", matchup.multiplier, "; ".join(matchup.reasons)),
+            chain.step("statcast", statcast_mult, "; ".join(statcast_reasons)),
+            chain.step("ump", ump_mult,
+                       f"Plate umpire {game.plate_umpire}, measured over his "
+                       f"own games." if game.plate_umpire
+                       else "No plate umpire announced yet."),
+            chain.cap_step(raw_mult, total_mult, 0.78, 1.28),
+        ]
     if prop.market in RARE_EVENT_MARKETS:
         # Half-strength environment for rare events, learned path included
         # — the tail is where every one of these effects is worst-measured
         # and where the long-shot board's selection bites hardest. See
         # RARE_EVENT_ENV_DAMP; the calibration boundary was the receipt.
         lo, hi = RARE_EVENT_ENV_CLAMP
+        _pre_damp = total_mult
         total_mult = clamp(total_mult ** RARE_EVENT_ENV_DAMP, lo, hi)
+        if _pre_damp > 0 and abs(total_mult / _pre_damp - 1.0) > 1e-9:
+            mult_steps.append(chain.step(
+                "rare", total_mult / _pre_damp,
+                f"A home run or a strikeout title is a rare event, and every "
+                f"one of these effects is worst-measured in the tail — so "
+                f"the environment runs at half strength here (×{_pre_damp:.2f} "
+                f"became ×{total_mult:.2f})."))
     # Recency shade toward recent form (bounded in form.py) — a cold bat's
     # number comes down instead of riding a stale season line.
     base_mean = form.mean
@@ -301,8 +327,28 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None,
             f"(projection shaded {form.trend_mult - 1:+.0%})"
         )
 
+    # THE CHAIN, in the order the code multiplied it.
+    steps = list(mult_steps)
+    steps.append(chain.step(
+        "trend", trend_mult,
+        f"Last 3 games {form.trend_delta:+.1f} against prior form."
+        if trend_mult != 1.0 else
+        ("Recency blending is switched off for rare events — one homer three "
+         "days ago is not a hot streak." if prop.market in RARE_EVENT_MARKETS
+         else "Recent games sit where the longer sample does.")))
+    steps.append(chain.step(
+        "player", player_mult,
+        "The record's own correction for players this blend persistently "
+        "misreads." if abs(player_mult - 1.0) >= 0.005
+        else "Nothing in the record says this blend misreads him."))
+    _src = "rate" if prop.market in RARE_EVENT_MARKETS else "form"
     return MLBProjection(
         mean=mean, std=adj_std, form=form,
         park=park, weather=weather, matchup=matchup,
         reasons=reasons, warnings=list(weather.warnings),
+        chain=chain.build(base_mean, _src, steps, mean,
+                          weights=dict(form_weights or MLB_WINDOW_WEIGHTS),
+                          sample_games=form.sample_games,
+                          form_mean=round(float(form.mean), 4),
+                          shrunk_to=form.shrunk_to),
     )
