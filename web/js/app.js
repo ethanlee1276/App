@@ -663,9 +663,83 @@ const REFERENCE_VIEWS = ["why", "about"];
    the loop being dead — the doctor runs INSIDE the refresh cycle, which
    is why nine days went by unnoticed. The page can always tell, because
    it is holding the timestamp. */
+/* ============================================================
+   Did the wire answer, or are we just empty?
+   ============================================================ */
+/* THE MOST DANGEROUS THING THIS SITE CAN SAY IS A VERDICT IT DID NOT
+   REACH. Measured 2026-08-20 by aborting every board payload and reading
+   what each page then printed:
+
+       Tonight's bets   "Nothing clears the bar right now"
+       Edge board       "Nothing clears the bar right now"
+       Record           "No graded picks yet"
+       Fantasy          "No NFL usage data yet"
+
+   Every one of those is a statement about the MODEL. The truth was that
+   the fetch failed. Twenty call sites each did `try { fetch } catch { null }`,
+   which collapses "the wire refused us" into the same value as "the
+   payload was empty" — and from there nothing downstream can tell them
+   apart. It is the same distinction cfb_build draws with `_has_board`
+   and rendercheck draws with its no-data verdict, missing from the one
+   place a reader actually sees.
+
+   A 404 IS NOT A WIRE FAILURE. A board that has never been built has no
+   file, and "no data yet" is the honest thing to say about it. Only a
+   THROWN fetch — DNS, abort, offline, TLS — means we could not ask. So
+   only that is counted, and a later success for the same URL clears it,
+   which makes the signal self-correcting without any reset discipline. */
+const _wire = new Map();
+
+async function boardFetch(url, opts) {
+  const key = String(url).split("?")[0];
+  try {
+    const res = await fetch(url, opts);
+    _wire.set(key, true);          // answered, even if 404 — see above
+    return res;
+  } catch (e) {
+    const first = !_wire.has(key) || _wire.get(key);
+    _wire.set(key, false);
+    // A LAZY VIEW'S FETCH FAILS LONG AFTER THE LOAD CYCLE DREW THE BAR.
+    // Without this the banner only ever appears if the very first pull
+    // failed, which is the least likely case — most boards are fetched
+    // when their view is opened. Re-drawn on the first failure for a
+    // given URL only, so a flapping feed cannot spin the renderer.
+    if (first) { try { refreshStaleBar(); } catch (e2) {} }
+    throw e;
+  }
+}
+
+/* The URLs whose most recent attempt never reached the server. */
+function wireDown() {
+  return [..._wire.entries()].filter(([, ok]) => !ok).map(([u]) => u);
+}
+
+/* The last age the load cycle reported, so anything that needs to redraw
+   the bar out of band does not have to invent one. */
+let _staleArgs = [null, ""];
+
+function refreshStaleBar() { renderStaleBar(_staleArgs[0], _staleArgs[1]); }
+
 function renderStaleBar(ageMs, ago) {
+  _staleArgs = [ageMs, ago];
   const host = document.getElementById("stalebar");
   if (!host) return;
+  // UNREACHABLE OUTRANKS STALE. Old numbers are a fact about the build;
+  // a refused fetch means the empty states below are not verdicts at
+  // all, and that is the more urgent sentence. Checked first for that
+  // reason, and it is the only thing on the page that can say it —
+  // every individual board can only report what it managed to load.
+  const down = wireDown();
+  if (down.length) {
+    host.hidden = false;
+    host.innerHTML = `${icon("warn", 15)}
+      <span><b>We could not reach the data for this page.</b>
+      ${down.length === 1 ? "One board" : `${down.length} boards`} failed to
+      load, so anything below that says “nothing qualifies” or “no data yet”
+      is describing the connection, not the model. Check your network and
+      reload.</span>`;
+    return;
+  }
   const bad = ageMs != null && ageMs > STALE_LOUD_MS;
   host.hidden = !bad;
   if (!bad) { host.innerHTML = ""; return; }
@@ -914,7 +988,7 @@ async function renderFutures() {
   if (d === undefined) {
     host.innerHTML = `<p class="loading">Simulating the season…</p>`;
     try {
-      const res = await fetch(`data/futures_${sport}.json?t=` + Date.now());
+      const res = await boardFetch(`data/futures_${sport}.json?t=` + Date.now());
       d = res.ok ? await res.json() : null;
     } catch (e) { d = null; }
     _futuresCache[sport] = d;
@@ -1140,7 +1214,7 @@ let _recordCache = null;
 async function loadRecordOnce() {
   if (_recordCache !== null) return _recordCache;
   try {
-    const res = await fetch("data/record.json?t=" + (Date.now() / 60000 | 0));
+    const res = await boardFetch("data/record.json?t=" + (Date.now() / 60000 | 0));
     _recordCache = res.ok ? await res.json() : {};
   } catch (e) { _recordCache = {}; }
   return _recordCache;
@@ -2025,7 +2099,7 @@ let _preseasonCache;
 async function loadPreseason() {
   if (_preseasonCache !== undefined) return _preseasonCache;
   try {
-    const res = await fetch("data/nfl_preseason.json?t=" + (Date.now() / 60000 | 0));
+    const res = await boardFetch("data/nfl_preseason.json?t=" + (Date.now() / 60000 | 0));
     _preseasonCache = res.ok ? await res.json() : null;
   } catch (e) { _preseasonCache = null; }
   return _preseasonCache;
@@ -2363,7 +2437,7 @@ async function renderInjuryWatch() {
   if (!host) return;
   if (Date.now() - _injCache.at > 10 * 60e3) {
     try {
-      const res = await fetch("data/injuries.json?t=" + Date.now());
+      const res = await boardFetch("data/injuries.json?t=" + Date.now());
       if (res.ok) _injCache = { at: Date.now(), data: await res.json() };
     } catch (e) {}
   }
@@ -7083,7 +7157,7 @@ async function renderLab() {
   if (!host) return;
   let d = null;
   try {
-    const res = await fetch("data/backtest.json?t=" + Date.now());
+    const res = await boardFetch("data/backtest.json?t=" + Date.now());
     if (res.ok) d = await res.json();
   } catch (e) {}
   if (!d || !d.sports) {
@@ -7215,11 +7289,11 @@ async function renderRecord() {
   if (!host) return;
   let d = null, pmv = null;
   try {
-    const res = await fetch("data/record.json?t=" + Date.now());
+    const res = await boardFetch("data/record.json?t=" + Date.now());
     if (res.ok) d = await res.json();
   } catch (e) {}
   try {
-    const res = await fetch("data/predmarkets.json?t=" + Date.now());
+    const res = await boardFetch("data/predmarkets.json?t=" + Date.now());
     if (res.ok) pmv = ((await res.json()) || {}).validation;
   } catch (e) {}
   if (!d || !d.overall || (!d.overall.settled && !d.overall.open)) {
@@ -8706,11 +8780,11 @@ async function renderIntel() {
   if (!host) return;
   let d = null, kx = null;
   try {
-    const res = await fetch("data/predmarkets.json?t=" + Date.now());
+    const res = await boardFetch("data/predmarkets.json?t=" + Date.now());
     if (res.ok) d = await res.json();
   } catch (e) {}
   try {
-    const res = await fetch("data/kalshi.json?t=" + Date.now());
+    const res = await boardFetch("data/kalshi.json?t=" + Date.now());
     if (res.ok) kx = await res.json();
   } catch (e) {}
   // Polymarket silent does not mean the page is empty: Kalshi is half of
@@ -10175,14 +10249,14 @@ async function renderMemes() {
   if (!host) return;
   let d = null;
   try {
-    const res = await fetch("data/memecoins.json?t=" + Date.now());
+    const res = await boardFetch("data/memecoins.json?t=" + Date.now());
     if (res.ok) d = await res.json();
   } catch (e) {}
   // The record is its own file and its own failure: a board with no
   // record still draws, and a record with no board is still readable.
   let rec = null;
   try {
-    const res = await fetch("data/memerecord.json?t=" + Date.now());
+    const res = await boardFetch("data/memerecord.json?t=" + Date.now());
     if (res.ok) rec = await res.json();
   } catch (e) {}
 
@@ -11759,7 +11833,7 @@ async function loadRosters(sport) {
   const key = sport || state.sport || "nfl";
   if (_rosterCache[key] !== undefined) return _rosterCache[key];
   try {
-    const res = await fetch(`data/rosters_${key}.json?t=` + (Date.now() / 60000 | 0));
+    const res = await boardFetch(`data/rosters_${key}.json?t=` + (Date.now() / 60000 | 0));
     _rosterCache[key] = res.ok ? await res.json() : {};
   } catch (e) { _rosterCache[key] = {}; }
   return _rosterCache[key];
@@ -11927,7 +12001,7 @@ async function loadStandings(sport) {
   const key = sport || state.sport || "nfl";
   if (_standingsCache[key] !== undefined) return _standingsCache[key];
   try {
-    const res = await fetch(`data/standings_${key}.json?t=` + (Date.now() / 60000 | 0));
+    const res = await boardFetch(`data/standings_${key}.json?t=` + (Date.now() / 60000 | 0));
     _standingsCache[key] = res.ok ? await res.json() : {};
   } catch (e) { _standingsCache[key] = {}; }
   return _standingsCache[key];
@@ -12075,7 +12149,7 @@ let _injBoardAt = 0;
 async function loadInjuryBoard() {
   if (_injBoard && Date.now() - _injBoardAt < 5 * 60e3) return _injBoard;
   try {
-    const res = await fetch("data/injuries.json?t=" + Date.now());
+    const res = await boardFetch("data/injuries.json?t=" + Date.now());
     if (res.ok) { _injBoard = await res.json(); _injBoardAt = Date.now(); }
   } catch (e) {}
   return _injBoard;
@@ -12151,7 +12225,7 @@ async function renderInjuries() {
   if (!host) return;
   let d = null;
   try {
-    const res = await fetch("data/injuries.json?t=" + Date.now());
+    const res = await boardFetch("data/injuries.json?t=" + Date.now());
     if (res.ok) d = await res.json();
   } catch (e) {}
   const sport = state.sport || "nfl";
@@ -14565,7 +14639,7 @@ async function renderLiveFights(host) {
   if (!host) return false;
   let d = null;
   try {
-    const res = await fetch("data/ufc_live.json?t=" + Date.now());
+    const res = await boardFetch("data/ufc_live.json?t=" + Date.now());
     if (res.ok) d = await res.json();
   } catch (e) {}
   if (!d || !(d.bouts || []).length) { host.innerHTML = ""; return false; }
@@ -14617,7 +14691,7 @@ async function renderUFC() {
   }, 10000);
   let d = null;
   try {
-    const res = await fetch("data/ufc.json?t=" + Date.now());
+    const res = await boardFetch("data/ufc.json?t=" + Date.now());
     if (res.ok) d = await res.json();
   } catch (e) {}
   if (!d) {
@@ -15417,7 +15491,7 @@ async function renderWhy() {
   // Live receipts — the claims below link to real, current numbers.
   let rec = null;
   try {
-    const res = await fetch("data/record.json?t=" + Date.now());
+    const res = await boardFetch("data/record.json?t=" + Date.now());
     if (res.ok) rec = await res.json();
   } catch (e) {}
   const o = rec && rec.overall;
@@ -16417,7 +16491,7 @@ async function renderHomePerf() {
   if (!host) return;
   try {
     if (!_perfCache) {
-      const r = await fetch("data/record.json", { cache: "no-store" });
+      const r = await boardFetch("data/record.json", { cache: "no-store" });
       if (!r.ok) throw new Error(String(r.status));
       _perfCache = await r.json();
     }
@@ -16773,7 +16847,7 @@ async function renderRailDesk() {
   if (!host) return;
   if (!_railDeskCache || Date.now() - _railDeskAt > 300000) {
     try {
-      const res = await fetch("data/kalshi.json?t=" + Date.now());
+      const res = await boardFetch("data/kalshi.json?t=" + Date.now());
       if (res.ok) { _railDeskCache = await res.json(); _railDeskAt = Date.now(); }
     } catch (e) { /* the rail just stays quiet */ }
   }

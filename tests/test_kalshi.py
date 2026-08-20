@@ -198,7 +198,9 @@ def test_the_page_shows_both_venues_and_names_their_roles():
     # thing"). The Kalshi-only section it replaced is gone.
     assert "function predBoardHTML" in app
     assert "function kalshiSectionHTML" not in app
-    assert 'fetch("data/kalshi.json' in app
+    # boardFetch since 2026-08-20 — the wrapper that tells a refused
+    # wire apart from an empty payload. Same URL, same caching.
+    assert 'boardFetch("data/kalshi.json' in app
     # Named phone columns — every cell is a <span>, and :nth-of-type counts
     # tags, so positional selectors grab the sport chip or nothing.
     css = open(os.path.join(ROOT, "web", "css", "styles.css"),

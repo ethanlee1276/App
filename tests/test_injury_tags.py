@@ -39,7 +39,9 @@ def test_the_board_is_fetched_once_and_cached():
     i = APP.index("async function loadInjuryBoard(")
     body = APP[i:i + 600]
     assert "_injBoard && Date.now() - _injBoardAt" in body
-    assert 'fetch("data/injuries.json?t="' in body
+    # boardFetch since 2026-08-20 — the wrapper that tells a refused
+    # wire apart from an empty payload. Same URL, same caching.
+    assert 'boardFetch("data/injuries.json?t="' in body
 
 
 def test_a_return_notice_never_tags():

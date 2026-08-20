@@ -382,7 +382,11 @@ def test_the_dashboard_reads_the_real_journal():
     renders, shows losses in red, and links to the full record."""
     fn = APP[APP.index("async function renderHomePerf("):]
     fn = fn[:fn.index("\n}")]
-    assert 'fetch("data/record.json"' in fn
+    # boardFetch, not fetch, since 2026-08-20: every board payload goes
+    # through the wrapper that tells "the wire refused us" apart from
+    # "the payload was empty". The claim here is unchanged — this panel
+    # reads the SAME record.json the Record page renders.
+    assert 'boardFetch("data/record.json"' in fn
     assert "net_units" in fn and "roi" in fn
     assert 'href="#record"' in fn
     # No invented numbers: an empty journal renders NOTHING, not zeros.
