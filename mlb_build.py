@@ -453,6 +453,22 @@ def main() -> None:
                     print(line)
         except Exception as exc:
             print(f"⚠️  Line-movement stamps skipped: {exc}")
+    # THE LINE, AS A PICTURE. Ethan, 2026-08-20: "applying the same tape to
+    # sportsbook lines — open → now, with our pick's entry marked — turns
+    # CLV from a number on a page into something you can see. The data is
+    # already collected." It is: lineledger.record above has been writing a
+    # row per observed minute since it shipped, and nothing read it back.
+    # Costs no API credit and no extra fetch.
+    try:
+        from engine import linetape, db as _tdb
+        _tc = _tdb.connect()
+        _n_tape = linetape.attach_tapes(
+            _tc, result["recommendations"] + result.get("game_bets", []), "mlb")
+        _tc.close()
+        if _n_tape:
+            print(f"Line tape: {_n_tape} pick(s) carry their own movement.")
+    except Exception as exc:                                   # noqa: BLE001
+        print(f"⚠️  Line tape skipped: {exc}")
 
     # Live picks: journaled pre-game picks whose games are in progress,
     # with each player's current stat line from the live boxscore. The

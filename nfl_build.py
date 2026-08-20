@@ -520,6 +520,20 @@ def main() -> None:
         except Exception as exc:
             print(f"⚠️  Line-movement stamps skipped: {exc}")
 
+    # THE LINE, AS A PICTURE — see the same block in mlb_build.py.
+    # lineledger.record has been writing a row per observed minute since it
+    # shipped and nothing read it back. No API credit, no extra fetch.
+    try:
+        from engine import linetape, db as _tdb
+        _tc = _tdb.connect()
+        _n_tape = linetape.attach_tapes(
+            _tc, result["recommendations"] + result.get("game_bets", []), "nfl")
+        _tc.close()
+        if _n_tape:
+            print(f"Line tape: {_n_tape} pick(s) carry their own movement.")
+    except Exception as exc:                                   # noqa: BLE001
+        print(f"⚠️  Line tape skipped: {exc}")
+
     c = result["counts"]
     print(f"\nAnalyzed {c['props_analyzed']} props → {c['recommended']} recommended")
     if not real_odds:

@@ -3458,6 +3458,13 @@ function cardHTML(r) {
       ${propAnalysis(r)}
       <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${booksChip(r)}${stakeChip}</div>
       ${corr}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
+      ${/* THE LINE ITSELF, under the reasons. Below them on purpose: the
+            reasons are why we took it, this is what the market did about
+            it afterwards, and that is the order the argument runs in.
+            Draws nothing at all when fewer than two minutes were
+            recorded — which is most props most nights, and is why this
+            has to degrade to silence rather than to an empty box. */
+        lineTapeHTML(r)}
     </article>`;
 }
 
@@ -8684,6 +8691,106 @@ const PM_GATE = { edge: 6.0, vol: 250.0, spread: 6.0 };
    gets — so it draws the same two real series, to scale, and reads as a
    chart on its own. mountEChartsPanels upgrades it in place when the
    library arrives. */
+/* ============================================================
+   The sportsbook line, as a picture — CLV you can see
+   ============================================================ */
+/* Ethan, 2026-08-20: "applying the same tape to sportsbook lines — open →
+   now, with our pick's entry marked — turns CLV from a number on a page
+   into something you can see."
+
+   CLV is the most load-bearing number on the site: it is the only
+   evidence about the PROCESS that arrives before the results do. As
+   "+0.34 pts" it is inert. As a line that starts where we bet and ends
+   where the market went, with the entry marked, it is the argument.
+
+   PLOTTED IN PAYOUT SPACE, NOT AMERICAN POINTS, and this is the whole
+   reason it is a separate function from pmTapeSVG rather than a reuse of
+   it. American odds are not a linear scale and they are discontinuous at
+   the origin: -110 to +110 is a large move, +110 to +330 is a larger one,
+   and the gap between -101 and +101 is almost nothing while the labels
+   jump 202. Drawing the raw numbers would put the biggest visual step in
+   the place where the least happened. Profit-per-unit is monotone across
+   the boundary, so the line's shape means what it looks like it means.
+
+   GAPS ARE NOT BRIDGED. The build runs on a timer and the odds budget
+   paces the paid pulls, so a flat stretch is a stretch we did not sample.
+   The points are joined in order and the caption says how many there
+   were; a smooth curve through unsampled hours is a picture of a market
+   that did not exist. */
+function oddsPayout(o) {
+  const v = Number(o);
+  if (!isFinite(v) || v === 0) return null;
+  return v > 0 ? v / 100 : 100 / Math.abs(v);
+}
+
+function lineTapeSVG(pts, entry, w, h) {
+  const ys = pts.map((p) => oddsPayout(p.over_odds)).filter((v) => v != null);
+  if (ys.length < 2) return "";
+  const eY = entry == null ? null : oddsPayout(entry);
+  const lo = Math.min(...ys, eY == null ? Infinity : eY);
+  const hi = Math.max(...ys, eY == null ? -Infinity : eY);
+  const span = (hi - lo) || 1;
+  // A flat tape should read as flat, not fill the box with noise — so the
+  // band is padded rather than fitted tight to the data.
+  const pad = span * 0.18;
+  const y = (v) => h - 3 - ((v - (lo - pad)) / (span + pad * 2)) * (h - 6);
+  const x = (i) => 1 + (i / Math.max(1, pts.length - 1)) * (w - 2);
+  let d = "", n = 0;
+  pts.forEach((p, i) => {
+    const v = oddsPayout(p.over_odds);
+    if (v == null) return;
+    d += `${n++ ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
+  });
+  const last = pts[pts.length - 1];
+  const lastV = oddsPayout(last.over_odds);
+  return `<svg class="lt-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"
+      role="img" aria-label="how this line moved while we watched it">
+    ${eY == null ? "" : `<line x1="0" y1="${y(eY).toFixed(1)}" x2="${w}"
+      y2="${y(eY).toFixed(1)}" stroke="var(--text-mute)" stroke-width="1"
+      stroke-dasharray="3 3" opacity=".7"/>`}
+    <path d="${d}" fill="none" stroke="var(--brand-2)" stroke-width="2"
+      stroke-linejoin="round"/>
+    ${lastV == null ? "" : `<circle cx="${x(pts.length - 1).toFixed(1)}"
+      cy="${y(lastV).toFixed(1)}" r="3" fill="var(--brand-2)"/>`}
+  </svg>`;
+}
+
+/* The sentence under the chart. Derived, like every other reading on this
+   site: "moved our way" is a comparison, not an opinion. */
+function lineTapeHTML(r) {
+  const pts = (r.line_tape || []).filter((p) => p && p.over_odds != null);
+  if (pts.length < 2) return "";
+  const entry = (r.tape_entry || {}).odds != null
+    ? r.tape_entry.odds : (r.odds != null ? r.odds : null);
+  const first = pts[0].over_odds, last = pts[pts.length - 1].over_odds;
+  const ref = entry == null ? first : entry;
+  const drift = oddsPayout(last) - oddsPayout(ref);
+  // A WINDOW WE CANNOT COMPUTE IS OMITTED, NOT PRINTED. Caught by a
+  // malformed fixture during review — a stamp the parser rejects made
+  // this read "last NaNm · 6 quotes" to a user, which is worse than
+  // saying nothing about the window at all. The quote count survives
+  // either way because it needs no clock.
+  const t0 = Date.parse(pts[0].at), t1 = Date.parse(pts[pts.length - 1].at);
+  const mins = (isFinite(t0) && isFinite(t1))
+    ? Math.max(1, Math.round((t1 - t0) / 60000)) : null;
+  const win = mins == null ? "" : (mins >= 90 ? `${Math.round(mins / 60)}h` : `${mins}m`);
+  const moved = Math.abs(drift) < 0.004
+    ? `The number has not moved since we took it.`
+    : drift > 0
+      ? `<b class="lt-good">The price drifted our way</b> — we came in at
+         ${american(ref)} and it is ${american(last)} now.`
+      : `<b class="lt-bad">The price moved against us</b> — we came in at
+         ${american(ref)} and it is ${american(last)} now.`;
+  return `<div class="lt-wrap">
+    <div class="lt-head"><span class="lt-t">How this line moved</span>
+      <span class="lt-win">${win ? `last ${win} · ` : ""}${pts.length} quotes</span></div>
+    ${lineTapeSVG(pts, entry, 300, 62)}
+    <p class="lt-cap">${moved} The dashed line is our entry. Only minutes we
+    actually recorded are drawn — a flat stretch is a stretch we did not
+    sample, never an interpolation.</p>
+  </div>`;
+}
+
 function pmTapeSVG(pts, w, h) {
   const xs = pts.map((p) => p[0]);
   const t0 = Math.min(...xs), t1 = Math.max(...xs);

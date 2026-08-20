@@ -4487,6 +4487,21 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .pick-moved svg { vertical-align: -1px; margin-right: 3px; }
 
+/* ---------------- The line tape — CLV you can see ---------------------- */
+.lt-wrap { margin-top: 14px; padding-top: 12px;
+  border-top: var(--hairline) solid var(--border-soft); }
+.lt-head { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin-bottom: 7px; }
+.lt-t { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--text-mute); }
+.lt-win { font-size: var(--fs-xs); color: var(--text-mute);
+  font-variant-numeric: tabular-nums; }
+.lt-svg { display: block; width: 100%; height: 62px; }
+.lt-cap { margin: 7px 0 0; font-size: var(--fs-xs); color: var(--text-mute);
+  line-height: var(--lh-snug); }
+.lt-good { color: var(--good); }
+.lt-bad { color: var(--bad); }
+
 /* ---------------- Soft radii for the system's shared shapes ---------------- */
 .card, .controls, .stats .tile, .btn, .empty-slate { border-radius: var(--radius); }
 .btn { border-color: var(--border); }
