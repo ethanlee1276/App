@@ -471,6 +471,55 @@ def test_there_is_no_countdown_clock():
         assert bad not in room, f"a clock crept into the draft room: {bad!r}"
 
 
+def test_the_clock_became_a_real_picks_until_you_counter():
+    """Ethan, 2026-08-20: "make the clock a real picks-until-your-turn
+    counter." Same box, same question ("how long have I got?"), answered
+    in the unit a draft actually has.
+
+    IT COUNTS PICKS THAT HAPPEN. A keeper-held slot is skipped rather than
+    drafted, so counting the raw index gap would promise twenty-two
+    players coming off the board when three of those slots are keepers and
+    only nineteen do. `_mockNextTurn` already skips them and this counts
+    the same way, so the two cannot disagree about one draft.
+
+    Verified in Chromium against an independent recount that walks the
+    draft forward: 26 of 26 steps agreed, through the snake turn."""
+    fn = APP[APP.index("function _mockPicksUntil("):]
+    fn = fn[:fn.index("\n}")]
+    assert "_mockSkipSet(" in fn and "skip.has(" in fn, \
+        "the counter counts index positions, not picks that happen"
+    assert "_mockNextTurn(" in fn, "it no longer agrees with the draft's own turn order"
+    assert "picks: null" in fn or "picks == null" in APP, \
+        "no state for 'you have no turn left', which reads as zero"
+    # And the button reads the same counter rather than recomputing it.
+    room = APP[APP.index("function mockDraftHTML("):]
+    room = room[:room.index("\nfunction _mockRender(")]
+    assert "until.picks" in room, "the hero or the button grew a second counter"
+
+
+def test_the_advice_bar_only_appears_when_it_disagrees_with_the_card():
+    """Ethan, 2026-08-20, circling the band under the hero: "it feels very
+    crouded in the area i slecected." The cause was duplication, not
+    spacing: at pick 1.01 the bar read "Best value on the board: Christian
+    McCaffrey (RB, VORP +13.6, Tier 1)" while the card beside it showed
+    McCaffrey, RB, +13.6, Tier 1. Two full-width bands spent on one fact.
+
+    It now renders only when it has something the card does not — you are
+    looking at somebody other than the board's best, or your thinnest slot
+    points at a third man. Measured in a browser: absent on open, present
+    after clicking the sixth row."""
+    fn = APP[APP.index("function _mockAdvice("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert "selected" in fn.split("{")[0], \
+        "the advice cannot know what the card is showing"
+    assert "return parts.length ? parts.join(\" \") : null" in fn, \
+        "it no longer reports having nothing to say"
+    room = APP[APP.index("function mockDraftHTML("):]
+    room = room[:room.index("\nfunction _mockRender(")]
+    assert "yourTurn && advice ?" in room, \
+        "the bar renders even when _mockAdvice returned null"
+
+
 def test_there_is_no_opposing_defence_panel():
     """The render had "Matchup vs Opponent" — defensive ranks, yards
     allowed, a "+8% Fantasy Boost". There is no opponent in a draft.

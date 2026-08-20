@@ -15132,6 +15132,37 @@ function _mockNextTurn(from, teams, you, rounds, skip) {
   return null;
 }
 
+/* HOW LONG UNTIL YOU ARE UP, in the only unit a draft has.
+
+   Ethan, 2026-08-20: "make the clock a real picks-until-your-turn
+   counter." The render had a ticking "00:47" and there is no clock here
+   to tick — a CPU pick is computed in under a millisecond, so a
+   countdown would have been an animation pretending somebody is
+   deciding. This is the same box answering the same question ("how long
+   have I got?") with the number that is actually true.
+
+   IT COUNTS PICKS THAT HAPPEN, not index positions. A keeper-held slot
+   is skipped rather than drafted, so counting the raw gap would promise
+   twenty-two players coming off the board when three of those slots are
+   keepers and only nineteen do. `_mockNextTurn` already skips them; this
+   counts the same way, so the two can never disagree about the same
+   draft.
+
+   Returns null for "you have no turn left", which is a real state at the
+   end of a draft and reads differently from zero. */
+function _mockPicksUntil(m) {
+  const onClock = _mockPicker(m.pick, m.teams) === m.you
+    && !_mockSkipped(m, m.pick);
+  const skip = _mockSkipSet(m);
+  const next = _mockNextTurn(m.pick + (onClock ? 1 : 0),
+                             m.teams, m.you, m.rounds, skip);
+  if (onClock) return { onClock: true, picks: 0, next: m.pick };
+  if (next == null) return { onClock: false, picks: null, next: null };
+  let picks = 0;
+  for (let i = m.pick; i < next; i++) if (!skip.has(i)) picks += 1;
+  return { onClock: false, picks, next };
+}
+
 /* Market order, sorted once per run rather than per simulated pick. The
    rooms draft off the market board; our VORP order is what the human is
    shown, and the survival map is keyed by name so the caller never has to
@@ -15449,21 +15480,47 @@ function _mockStartersPPG(roster) {
   return _mockLineup(roster).ppg;
 }
 
-function _mockAdvice() {
+/* THE ADVICE BAR ONLY EARNS ITS ROW WHEN IT DISAGREES WITH THE CARD.
+
+   Ethan, 2026-08-20, circling the band under the hero: "it feels very
+   crouded in the area i slecected." He was right and the cause was
+   duplication rather than spacing. At pick 1.01 the bar read "Best value
+   on the board: Christian McCaffrey (RB, VORP +13.6, Tier 1)" while the
+   card two inches to its right showed McCaffrey, RB, +13.6, Tier 1. Two
+   full-width bands were being spent saying one thing.
+
+   So the bar is now about the DIFFERENCE. If you are looking at the best
+   value and it also fills your thinnest slot, there is nothing to add and
+   it does not render at all — the card is the answer. It reappears the
+   moment you click somebody else, or when the board's best and your
+   roster's need point at different men, which is exactly when a drafter
+   wants a second opinion.
+
+   Returns null for "nothing to say", which the caller renders as
+   nothing rather than as an empty box. */
+function _mockAdvice(selected) {
   const roster = _mock.rosters[_mock.you];
   const best = _mock.pool[0];
+  if (!best) return null;
   const count = (pos) => roster.filter((p) => p.position === pos).length;
   const thin = ["RB", "WR", "TE", "QB"].find((pos) =>
     count(pos) < (MOCK_SLOTS[pos] || 1));
   const bestThin = thin && _mock.pool.find((p) => p.position === thin);
-  let line = `Best value on the board: <b>${escapeHtml(best.player)}</b>
-    (${escapeHtml(best.position)}, VORP +${(best.vorp || 0).toFixed(1)},
-    Tier ${best.tier || "—"}).`;
-  if (bestThin && bestThin !== best) {
-    line += ` Your thinnest spot is ${thin} — best left there:
-      <b>${escapeHtml(bestThin.player)}</b> (+${(bestThin.vorp || 0).toFixed(1)}).`;
+  const parts = [];
+  const looking = selected && selected.player !== best.player;
+  if (looking) {
+    const gap = (best.vorp || 0) - (selected.vorp || 0);
+    parts.push(`You are looking at <b>${escapeHtml(selected.player)}</b>. The
+      board’s best is <b>${escapeHtml(best.player)}</b>
+      (${escapeHtml(best.position)}, +${(best.vorp || 0).toFixed(1)})${
+      gap > 0.05 ? `, worth ${gap.toFixed(1)} more over replacement` : ""}.`);
   }
-  return line;
+  if (bestThin && bestThin.player !== best.player
+      && (!selected || bestThin.player !== selected.player)) {
+    parts.push(`Your thinnest spot is ${thin} — best left there:
+      <b>${escapeHtml(bestThin.player)}</b> (+${(bestThin.vorp || 0).toFixed(1)}).`);
+  }
+  return parts.length ? parts.join(" ") : null;
 }
 
 /* The keeper editor, in the setup panel. A player, the room that keeps
@@ -16260,6 +16317,8 @@ function mockDraftHTML() {
      Falls back the moment the selection is drafted by somebody else —
      a card describing a man who is off the board is worse than no card. */
   let selected = m.pool.find((x) => x.player === _mockSel) || m.pool[0];
+  const until = _mockPicksUntil(m);
+  const advice = yourTurn ? _mockAdvice(selected) : null;
 
   /* EVERY PICK MADE, newest last, as a drafter reads a board. The render
      showed a scrolling list of the round in progress; this is the same
@@ -16320,14 +16379,19 @@ function mockDraftHTML() {
         <div class="mk-hs"><span class="k">Overall</span>
           <span class="v">${m.pick + 1}<i>/${total}</i></span></div>
         <div class="mk-hs ${yourTurn ? "you" : ""}"><span class="k">On the clock</span>
-          <span class="v">${yourTurn ? "You" : "Team " + (_mockPicker(m.pick, m.teams) + 1)}</span></div>
+          <span class="v">${yourTurn ? "You" : "Team " + (_mockPicker(m.pick, m.teams) + 1)}</span>
+          <span class="s">${
+            until.onClock ? "it is your pick"
+            : until.picks == null ? "no turn left this draft"
+            : until.picks === 1 ? `you are up next \u2014 at ${_mockPickNo(until.next, m.teams)}`
+            : `${until.picks} picks until you \u2014 at ${_mockPickNo(until.next, m.teams)}`}</span></div>
       </div>
       <div class="mk-prog"><i style="width:${(m.pick / total * 100).toFixed(1)}%"></i></div>
     </div>
     ${_mockKeeperNote(m)}
-    ${yourTurn ? `<div class="card mk-advice">
-      <div class="mk-advice-head">Your pick — round ${round}</div>
-      <div>${_mockAdvice()}</div></div>` : ""}
+    ${yourTurn && advice ? `<div class="card mk-advice">
+      <div class="mk-advice-head">Worth a second look</div>
+      <div>${advice}</div></div>` : ""}
     <div class="mk-stage">
       <div class="mk-left">
         <div class="mk-tabs">${tab("pool", "Player pool")}${
@@ -16339,9 +16403,10 @@ function mockDraftHTML() {
         <button class="btn primary mk-draftbtn" data-mkp="${escapeAttr(selected.player)}"
           ${yourTurn ? "" : "disabled"}>${yourTurn
             ? `Draft ${escapeHtml(selected.player)}`
-            : `${escapeHtml(onClock)} — you pick at ${
-                _mockPickNo(_mockNextTurn(m.pick, m.teams, m.you, m.rounds,
-                  _mockSkipSet(m)), m.teams)}`}</button>
+            : until.picks == null
+              ? `${escapeHtml(onClock)} — your draft is done`
+              : `${escapeHtml(onClock)} — ${until.picks} pick${
+                  until.picks === 1 ? "" : "s"} until you`}</button>
       </div>
     </div>
     ${yourTurn ? _mockWaitHTML(sim) : ""}

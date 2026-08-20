@@ -2452,7 +2452,7 @@ select.calc-in { width: auto; font-weight: 600; }
   min-width: 3em; flex: none; }
 .mk-room { flex: none; min-width: 4.2em; }
 .mk-slotchip { min-width: 3.4em; text-align: center; flex: none; }
-.mk-advice { display: block; padding: 12px 16px;
+.mk-advice { display: block; padding: 12px 16px; margin-bottom: 16px;
   border-left: 3px solid var(--brand-2); font-size: var(--fs-sm); }
 .mk-advice-head { font-size: var(--fs-xs); text-transform: uppercase;
   letter-spacing: .06em; color: var(--text-mute); margin-bottom: 6px; }
@@ -5379,16 +5379,25 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   font-variant-numeric: tabular-nums; line-height: var(--lh-tight); }
 .mk-hs .v i { font-style: normal; color: var(--text-mute);
   font-size: var(--fs-sm); font-weight: 600; }
+/* The counter line under the seat on the clock. Where the render put a
+   ticking countdown; this says the same thing in the unit a draft has. */
+.mk-hs .s { display: block; color: var(--text-mute); font-size: var(--fs-2xs);
+  margin-top: 1px; }
+.mk-hs.you .s { color: color-mix(in oklab, var(--brand-2) 70%, var(--text-mute)); }
 .mk-hs.you { border-color: color-mix(in oklab, var(--brand) 55%, var(--border-soft));
   background: color-mix(in oklab, var(--brand) 12%, var(--panel-2)); }
 .mk-hs.you .v { color: var(--brand-2); }
 .mk-hero .mk-prog { flex: 1 0 100%; margin-top: 2px; }
 
 /* Board column + card. */
-.mk-stage { display: grid; gap: 18px; align-items: start;
+/* 18px of air above the stage, because when the advice bar has nothing
+   to say (the common case now) the tabs would otherwise sit straight
+   under the hero's bottom edge with only its own 16px margin between
+   them — three banded rows touching, which is what "crowded" was. */
+.mk-stage { display: grid; gap: 18px; align-items: start; margin-top: 18px;
   grid-template-columns: minmax(0, 380px) minmax(0, 1fr); }
 .mk-left, .mk-right { min-width: 0; }
-.mk-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.mk-tabs { display: flex; gap: 5px; margin-bottom: 10px; }
 .mk-tab { flex: 1; padding: 7px 10px; border-radius: var(--radius-sm);
   background: var(--panel-2); color: var(--text-mute);
   border: var(--hairline) solid var(--border-soft);
@@ -5397,8 +5406,8 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .mk-tab.active { background: color-mix(in oklab, var(--brand) 16%, var(--panel-2));
   color: var(--text); border-color: color-mix(in oklab, var(--brand) 48%, var(--border-soft)); }
 .mk-list { padding: 0; max-height: 620px; overflow-y: auto; }
-.mk-brow { display: flex; align-items: center; gap: 8px;
-  padding: 7px 12px; border-bottom: var(--hairline) solid var(--border-soft); }
+.mk-brow { display: flex; align-items: center; gap: 9px;
+  padding: 9px 12px; border-bottom: var(--hairline) solid var(--border-soft); }
 .mk-brow:last-child { border-bottom: 0; }
 .mk-brow.you { background: color-mix(in oklab, var(--brand) 9%, transparent); }
 .mk-poolrow { cursor: pointer; }
