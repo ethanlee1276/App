@@ -90,6 +90,13 @@ def test_my_bets_and_fantasy_show_a_strip_not_a_second_sign_in_form():
     assert APP.count("acctStripHTML()") >= 2
     assert "${acctCardHTML()}\n    ${form}" not in APP, \
         "My Bets still mounts the full sign-in card"
+    # The builder itself is gone, not merely unmounted. It sat there for
+    # some time with no caller, still carrying a comment claiming it was
+    # "mounted on both My Bets and Fantasy" — which is how a superseded
+    # function gets re-adopted by someone who reads the comment and
+    # believes it. `acctScreenHTML` covers all three of its branches.
+    assert "function acctCardHTML" not in APP, \
+        "the superseded sign-in card builder is back"
 
 
 def test_the_form_stacks_at_a_sign_in_measure():

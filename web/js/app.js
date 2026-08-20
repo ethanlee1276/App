@@ -12290,26 +12290,6 @@ function acctStripHTML() {
   </div>`;
 }
 
-function acctCardHTML() {
-  // The email/password account is the front door now. `_acctUser` is the
-  // SERVER's answer, fetched at boot; until it lands we draw the sign-in
-  // form, which is the honest default — claiming "signed in" before the
-  // server has confirmed it is how a stale card ends up offering Sync now
-  // on an expired session.
-  if (_acctUser && _acctUser.signed_in) {
-    // Filled a tick later, once whoever asked for this string has actually
-    // put it in the DOM. Hooked here rather than at each caller because
-    // this card is mounted on both My Bets and Fantasy, and a second call
-    // site is a second place to forget.
-    setTimeout(renderBilling, 0);
-    return acctSignedInHTML(_acctUser);
-  }
-  if (!acctState()) return acctSignInHTML();
-  // A legacy PIN profile is still signed in on this device: show its card
-  // AND the new one, so nothing disappears and the upgrade is visible.
-  return acctLegacyCardHTML() + acctSignInHTML();
-}
-
 function acctLegacyCardHTML() {
   const a = acctState();
   if (a) {
