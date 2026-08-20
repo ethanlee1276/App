@@ -289,6 +289,25 @@ def main() -> None:
                   f"offseason; flagged on the card, not discarded "
                   f"(see engine/carry.py for why).")
 
+    # THE BOARD MUST RECORD WHETHER §7 ACTUALLY RAN, not just whether it
+    # was asked to. Found by the Phase 3 rehearsal, 2026-08-20: building
+    # real Week 1 printed "⚠️  Injury feed unavailable — projecting
+    # without it", priced all 16 games anyway, and left NOTHING in the
+    # payload to say so. `odds_status` has recorded exactly this for the
+    # price layer since the beginning; the injury layer had no equivalent,
+    # so a prop on a player listed OUT was indistinguishable from a prop
+    # on a healthy one.
+    #
+    # It is not hypothetical for Week 1. nflverse publishes
+    # injuries_<season>.csv during the season, so before a season's first
+    # games the file is a 404 — verified here, 2026-08-20: 2026 → HTTP
+    # 404, 2025 → 6,068 rows including 197 for its own Week 1. The data
+    # is not missing in principle, it simply is not published yet, and
+    # exactly when it appears is nflverse's call and not ours. So the
+    # board says which of the two states it is in rather than guessing.
+    injury_status = {"asked": bool(args.injuries), "applied": False,
+                     "total": 0, "holds": 0, "by_status": {},
+                     "source": "nflverse", "error": None}
     if args.injuries:
         try:
             ir = injuries_feed.attach_injuries_to_slate(slate, args.season, args.week)
@@ -297,8 +316,11 @@ def main() -> None:
             if ir.holds:
                 print(f"  Holding {len(ir.holds)} prop(s) on injured players: "
                       f"{', '.join(ir.holds)}")
+            injury_status.update(applied=True, total=ir.total,
+                                 holds=len(ir.holds), by_status=dict(ir.by_status))
         except DataUnavailable as exc:
             print(f"\n⚠️  Injury feed unavailable — projecting without it.\n   {exc}")
+            injury_status["error"] = str(exc)
 
     # §5's reset rule: a traded player, a new head coach or a snap-share
     # promotion makes the older games evidence about a job that no longer
@@ -580,6 +602,7 @@ def main() -> None:
         result["generated_from"] = "live-odds" if real_odds else "live"
         odds_status["at"] = _dt.datetime.now().strftime("%H:%M")
         result["odds_status"] = odds_status
+        result["injury_status"] = injury_status
         result["built_at"] = _dt.datetime.now().isoformat(timespec="seconds")
         # NFL_MODEL §2.3: label the knowledge tier of every reason, so a
         # post-mortem can tell a stale feed from a bad inference. Reads
@@ -628,7 +651,18 @@ def main() -> None:
             from engine import db as _sdb
             from engine import teamshape as _ts
             _sconn = _sdb.connect()
-            _season = _ts.latest_shaped_season(_sconn, "nfl", args.year)
+            # args.SEASON, not the calendar year and not args.year —
+            # which never existed. argparse defines `season`, so this line
+            # raised AttributeError on every NFL build ever run, the broad
+            # except below turned it into one warning line, and the radar
+            # has therefore never appeared on the board. Found by the
+            # Phase 3 rehearsal, 2026-08-20, building real Week 1.
+            #
+            # The board's own season is the right argument even though
+            # today's calendar year would also work in August. A build of
+            # `nfl_build.py 2024 5` must rank 2024/2023 shapes, not this
+            # year's — the panel describes the teams on THIS board.
+            _season = _ts.latest_shaped_season(_sconn, "nfl", args.season)
             if _season:
                 result["team_shapes"] = _ts.team_shapes(_sconn, "nfl", _season)
                 result["team_shapes_season"] = _season

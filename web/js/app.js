@@ -2526,6 +2526,44 @@ function injAbbrIndex() {
   return idx;
 }
 
+/* Did §7 actually run on this board? The box above lists who is
+   designated; it does not say whether the PRICES know. Those are two
+   different facts and the reader cannot tell them apart.
+
+   Found by the Phase 3 rehearsal, 2026-08-20, building real NFL Week 1:
+   nflverse publishes injuries_<season>.csv during a season, so before its
+   first games the file is a 404 (verified — 2026 → HTTP 404, 2025 → 6,068
+   rows). The build printed a warning to a terminal nobody reads, priced
+   all 16 games anyway, and published nothing to say so. Meanwhile this box
+   reads ESPN's LIVE feed, which is current all summer — so on Week 1 it
+   would have listed a man as Questionable directly above a card priced as
+   though he were fine.
+
+   That is the exact disagreement this box's own header says it exists to
+   prevent, one level up: not two caches of one file, but two sources with
+   different knowledge and no label saying which fed the number.
+
+   Silent on every board that does not publish injury_status — MLB and the
+   rest own their own injury handling, and a note about a layer they never
+   declared would be a guess. */
+function injuryLayerNote() {
+  const is = (state.data || {}).injury_status;
+  if (!is || !is.asked || is.applied) return "";
+  // NOT "the designations above" — measured in Chromium, 2026-08-20: on
+  // the real Week 1 board the list above was EMPTY (nobody on those teams
+  // had filed with ESPN in ten days), and the note pointed at a list that
+  // was not there. Two independent facts get confused by that phrasing:
+  // the list is empty because of ESPN, the layer is absent because of
+  // nflverse. This sentence is about the second one only, and has to read
+  // true whether or not anyone is listed.
+  return `<p class="inj-nolayer"><b>These prices do not account for
+      injuries.</b> This board\u2019s injury layer did not run \u2014 the
+      ${escapeHtml(is.source || "injury")} report for this week has not been
+      published yet \u2014 so every projection here treats every player as
+      available. Any designation shown on this page is information these
+      numbers do not have.</p>`;
+}
+
 async function renderInjuryWatch() {
   const host = document.getElementById("injury-watch");
   if (!host) return;
@@ -2557,7 +2595,14 @@ async function renderInjuryWatch() {
   const fresh = listed.filter((r) => r.ts >= cutoff)
     .sort((a, b) => b.ts - a.ts);
   const older = listed.length - fresh.length;
-  if (!listed.length) { host.innerHTML = ""; return; }
+  if (!listed.length) {
+    // The note outlives the list. No designation on tonight's teams does
+    // not mean the prices knew about designations — say which it is.
+    const only = injuryLayerNote();
+    host.innerHTML = only
+      ? `<div class="card" style="padding:0">${only}</div>` : "";
+    return;
+  }
 
   const body = fresh.length ? fresh.map((r) => `
     <div style="display:flex;gap:12px;align-items:baseline;padding:8px 14px;
@@ -2579,6 +2624,7 @@ async function renderInjuryWatch() {
       tonight. A fresh listing is the one a price may not know yet; long-term
       entries are already in every number here.</span></div>
     <div class="card" style="padding:0">${body}
+      ${injuryLayerNote()}
       <p style="padding:10px 14px;margin:0;font-size:var(--fs-sm);color:var(--text-mute);
           border-top:1px solid rgba(255,255,255,.05)">
         ${older ? `${older} longer-term entr${older === 1 ? "y" : "ies"} on these teams · ` : ""}

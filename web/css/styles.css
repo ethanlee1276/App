@@ -3752,6 +3752,16 @@ body.ffd-open { overflow: hidden; }
   object-fit: cover; background: var(--fill-subtle); flex: none; }
 .inj-pos { color: var(--text-mute); font-size: var(--fs-xs);
   font-weight: 600; }
+/* "These designations are not in these prices." Amber rather than red:
+   the board is not broken and nothing here is a fault — a layer the model
+   normally applies had no data to apply, and the reader is being handed
+   the difference. Sits inside the injury card, above its footer, so it is
+   read as a caveat on the list rather than as a separate alarm. */
+.inj-nolayer { margin: 0; padding: 10px 14px; font-size: var(--fs-sm);
+  color: var(--text-mute);
+  border-top: var(--hairline) solid rgba(255, 255, 255, .05);
+  border-left: 2px solid var(--warn); background: var(--fill-subtle); }
+.inj-nolayer b { color: var(--text); }
 .inj-team-head { display: flex; align-items: baseline; gap: 8px;
   font-weight: 800; margin: 18px 0 8px; }
 .inj-team-n { color: var(--text-mute); font-weight: 600;
